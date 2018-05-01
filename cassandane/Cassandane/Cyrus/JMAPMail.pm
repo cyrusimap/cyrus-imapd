@@ -3919,6 +3919,64 @@ sub test_email_set_move
     assert_move({$d => JSON::true});
 }
 
+sub test_email_set_move_keywords
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    xlog "Generate an email via IMAP";
+    my %exp_sub;
+    $exp_sub{A} = $self->make_message(
+        "foo", body => "a email",
+    );
+    xlog "Set flags on message";
+    $store->set_folder('INBOX');
+    $talk->store('1', '+flags', '($foo \\Flagged)');
+
+    xlog "get email";
+    my $res = $jmap->CallMethods([
+        ['Email/query', {}, 'R1'],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids'},
+            properties => [ 'keywords', 'mailboxIds' ],
+        }, 'R2' ]
+    ]);
+    my $msg = $res->[1][1]->{list}[0];
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+    my $msgId = $msg->{id};
+    my $inboxId = (keys %{$msg->{mailboxIds}})[0];
+    $self->assert_not_null($inboxId);
+    my $keywords = $msg->{keywords};
+
+    xlog "create Archive mailbox";
+    $res = $jmap->CallMethods([ ['Mailbox/get', {}, 'R1'], ]);
+    my $mboxState = $res->[0][1]{state};
+    $talk->create("INBOX.Archive", "(USE (\\Archive))") || die;
+    $res = $jmap->CallMethods([
+        ['Mailbox/changes', {sinceState => $mboxState }, 'R1'],
+    ]);
+    my $archiveId = $res->[0][1]{changed}[0];
+    $self->assert_not_null($archiveId);
+
+    xlog "move email to Archive";
+    xlog "update email";
+    $res = $jmap->CallMethods([
+        ['Email/set', { update => {
+            $msgId => {
+                mailboxIds => { $archiveId => JSON::true }
+            },
+        }}, "R1"],
+        ['Email/get', { ids => [ $msgId ], properties => ['keywords'] }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$msgId});
+    $self->assert_deep_equals($keywords, $res->[1][1]{list}[0]{keywords});
+}
+
 sub test_email_set_update
     :JMAP :min_version_3_1
 {
