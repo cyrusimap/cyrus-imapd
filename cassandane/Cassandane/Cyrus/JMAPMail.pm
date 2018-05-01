@@ -6439,6 +6439,69 @@ sub test_email_querychanges_skipdeleted
     $self->assert_str_equals($new->{removed}[0], $old->{ids}[$new->{added}[0]{index}]);
 }
 
+sub test_email_querychanges_deletedcopy
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $state;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inboxid = $self->getinbox()->{id};
+
+    xlog "Generate some email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
+    $self->make_message("Email B") || die;
+    $self->make_message("Email C") || die;
+    $self->make_message("Email D") || die;
+
+    $res = $jmap->CallMethods([['Email/query', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+        filter => { inMailbox => $inboxid },
+        collapseThreads => $JSON::true,
+    }, 'R1']]);
+
+    $talk->create("INBOX.foo");
+    $talk->select("INBOX");
+    $talk->move("2", "INBOX.foo");
+    $talk->select("INBOX.foo");
+    $talk->move("1", "INBOX");
+    $talk->select("INBOX");
+    $talk->store("2", "+flags", "(\\Flagged)");
+
+    # order is now A (B) C D B, and (B), C and B are "changed"
+
+    my $old = $res->[0][1];
+
+    $res = $jmap->CallMethods([['Email/queryChanges', {
+        sort => [
+         {
+           property =>  "subject",
+           isAscending => $JSON::true,
+         }
+        ],
+        filter => { inMailbox => $inboxid },
+        collapseThreads => $JSON::true,
+        sinceState => $old->{state},
+    }, 'R2']]);
+
+    my $new = $res->[0][1];
+    $self->assert_str_equals($old->{state}, $new->{oldState});
+    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    # with collased threads we have to check
+    $self->assert_num_equals(2, scalar @{$new->{added}});
+    $self->assert_num_equals(2, scalar @{$new->{removed}});
+    $self->assert_str_equals($new->{added}[0]{id}, $old->{ids}[$new->{added}[0]{index}]);
+    $self->assert_str_equals($new->{added}[1]{id}, $old->{ids}[$new->{added}[1]{index}]);
+}
+
 sub test_email_changes
     :JMAP :min_version_3_1
 {
