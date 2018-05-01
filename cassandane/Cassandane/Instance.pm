@@ -198,7 +198,7 @@ sub get_version
     if ($version =~ m/^cyrus-imapd (\d+)\.(\d+).(\d+)(?:-(.*))?$/) {
 	my ($maj, $min, $rev, $extra) = ($1, $2, $3, $4);
 	my $pluscommits = 0;
-	if ($extra =~ m/(\d+)-g[a-fA-F0-9]+(?:-dirty)?$/) {
+	if (defined $extra && $extra =~ m/(\d+)-g[a-fA-F0-9]+(?:-dirty)?$/) {
 	    $pluscommits = $1;
 	}
 	$cached_version{$installation} = [ 0 + $maj,
