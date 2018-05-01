@@ -10261,7 +10261,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     const char *creation_id;
     json_object_foreach(set.create, creation_id, jsubmission) {
         json_t *set_err = NULL;
-        json_t *new_submission;
+        json_t *new_submission = NULL;
         _emailsubmission_create(req, jsubmission, &new_submission, &set_err);
         if (set_err) {
             json_object_set_new(set.not_created, creation_id, set_err);
