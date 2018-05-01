@@ -593,7 +593,6 @@ HIDDEN int message_create_record(struct index_record *record,
 
     record->size = body->filesize;
     record->header_size = body->header_size;
-    record->content_lines = body->content_lines;
     message_guid_copy(&record->guid, &body->guid);
 
     message_write_cache(record, body);
@@ -2254,6 +2253,7 @@ static void message_write_nocharset(struct buf *buf, const struct body *body)
     else memset(&guidbuf, 0, MESSAGE_GUID_SIZE);
     buf_appendmap(buf, guidbuf, MESSAGE_GUID_SIZE);
     buf_appendbit32(buf, body ? body->decoded_content_size : 0);
+    buf_appendbit32(buf, body ? body->content_lines : 0);
 }
 
 /*
@@ -2400,11 +2400,15 @@ static void message_write_charset(struct buf *buf, const struct body *body)
     }
     charset_free(&charset);
 
+    /* NOTE - this stuff doesn't really belong in a method called
+     * message_write_charset, but it's the fields that are always
+     * written immediately after the charset! */
     char guidbuf[MESSAGE_GUID_SIZE];
     if (body) message_guid_export(&body->content_guid, guidbuf);
     else memset(&guidbuf, 0, MESSAGE_GUID_SIZE);
     buf_appendmap(buf, guidbuf, MESSAGE_GUID_SIZE);
     buf_appendbit32(buf, body ? body->decoded_content_size : 0);
+    buf_appendbit32(buf, body ? body->content_lines : 0);
 }
 
 /*
@@ -3052,6 +3056,8 @@ static void message_read_binarybody(struct body *body, const char **sect,
             p += MESSAGE_GUID_SIZE;
         if (cache_version >= 8)
             p += CACHE_ITEM_SIZE_SKIP;
+        if (cache_version >= 9)
+            p += CACHE_ITEM_SIZE_SKIP;
     }
     else {
         /* read header part */
@@ -3086,6 +3092,10 @@ static void message_read_binarybody(struct body *body, const char **sect,
 
         if (cache_version >= 8) {
             body->decoded_content_size = CACHE_ITEM_BIT32(p);
+            p += CACHE_ITEM_SIZE_SKIP;
+        }
+        if (cache_version >= 9) {
+            body->content_lines = CACHE_ITEM_BIT32(p);
             p += CACHE_ITEM_SIZE_SKIP;
         }
     }
@@ -3123,6 +3133,10 @@ static void message_read_binarybody(struct body *body, const char **sect,
 
         if (cache_version >= 8) {
             subpart[i].decoded_content_size = CACHE_ITEM_BIT32(p);
+            p += CACHE_ITEM_SIZE_SKIP;
+        }
+        if (cache_version >= 9) {
+            subpart[i].content_lines = CACHE_ITEM_BIT32(p);
             p += CACHE_ITEM_SIZE_SKIP;
         }
     }
@@ -4030,6 +4044,11 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
                 *cachestrp += CACHE_ITEM_SIZE_SKIP;
             }
 
+            if (cache_version >= 9) {
+                body->subpart->content_lines = CACHE_ITEM_BIT32(*cachestrp);
+                *cachestrp += CACHE_ITEM_SIZE_SKIP;
+            }
+
             for (part = 0; part < body->subpart->numparts; part++) {
                 this = &body->subpart->subpart[part];
                 this->header_offset = CACHE_ITEM_BIT32(*cachestrp+0*4);
@@ -4053,6 +4072,12 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
                 /* CACHE_MINOR_VERSION 8 adds the decoded content size after sha1 */
                 if (cache_version >= 8) {
                     this->decoded_content_size = CACHE_ITEM_BIT32(*cachestrp);
+                    *cachestrp += CACHE_ITEM_SIZE_SKIP;
+                }
+
+                /* CACHE_MINOR_VERSION 9 adds the number of content lines after the decoded size */
+                if (cache_version >= 9) {
+                    this->content_lines = CACHE_ITEM_BIT32(*cachestrp);
                     *cachestrp += CACHE_ITEM_SIZE_SKIP;
                 }
             }
@@ -4085,6 +4110,8 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
                 *cachestrp += MESSAGE_GUID_SIZE;
             if (cache_version >= 8)
                 *cachestrp += 1*4;
+            if (cache_version >= 9)
+                *cachestrp += 1*4;
             *cachestrp += 4*4;
 
             if (strcmp(body->subpart->type, "MULTIPART") == 0) {
@@ -4111,6 +4138,11 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
                 *cachestrp += CACHE_ITEM_SIZE_SKIP;
             }
 
+            if (cache_version >= 9) {
+                body->subpart->content_lines = CACHE_ITEM_BIT32(*cachestrp);
+                *cachestrp += CACHE_ITEM_SIZE_SKIP;
+            }
+
             /* and parse subpart */
             if (parse_bodystructure_sections(cachestrp, cacheend, body->subpart, cache_version))
                 return IMAP_MAILBOX_BADFORMAT;
@@ -4127,6 +4159,8 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
         if (cache_version >= 5)
             *cachestrp += MESSAGE_GUID_SIZE;
         if (cache_version >= 8)
+            *cachestrp += 4;
+        if (cache_version >= 9)
             *cachestrp += 4;
         for (part = 0; part < body->numparts; part++) {
             this = &body->subpart[part];
@@ -4145,6 +4179,11 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
 
             if (cache_version >= 8) {
                 body->subpart->decoded_content_size = CACHE_ITEM_BIT32(*cachestrp);
+                *cachestrp += CACHE_ITEM_SIZE_SKIP;
+            }
+
+            if (cache_version >= 9) {
+                body->subpart->content_lines = CACHE_ITEM_BIT32(*cachestrp);
                 *cachestrp += CACHE_ITEM_SIZE_SKIP;
             }
         }
@@ -4518,6 +4557,22 @@ EXPORTED int message_get_indexflags(message_t *m, uint32_t *flagsp)
     int r = message_need(m, M_INDEX);
     if (r) return r;
     *flagsp = m->indexflags;
+    return 0;
+}
+
+EXPORTED int message_get_savedate(message_t *m, time_t *datep)
+{
+    int r = message_need(m, M_RECORD);
+    if (r) return r;
+    *datep = m->record.savedate;
+    return 0;
+}
+
+EXPORTED int message_get_indexversion(message_t *m, uint32_t *versionp)
+{
+    int r = message_need(m, M_MAILBOX);
+    if (r) return r;
+    *versionp = m->mailbox->i.minor_version;
     return 0;
 }
 

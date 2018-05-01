@@ -341,8 +341,9 @@ static struct capa_struct base_capabilities[] = {
     { "CREATE-SPECIAL-USE",    2 },
     { "DIGEST=SHA1",           2 }, /* not standard */
     { "X-REPLICATION",         2 }, /* not standard */
-    { "STATUS=SIZE",           2 }, /* draft-bosch-imap-status-size */
-    { "OBJECTID",              2 }, /* draft-gondwana-imap-uniqueid */
+    { "STATUS=SIZE",           2 }, /* draft-ietf-extra-imap-status-size */
+    { "OBJECTID",              2 }, /* draft-ietf-extra-imap-objectid */
+    { "SAVEDATE",              2 }, /* draft-ietf-extra-imap-savedate */
 
 #ifdef HAVE_SSL
     { "URLAUTH",               2 },
@@ -4937,6 +4938,13 @@ badannotation:
                     goto freeargs;
                 }
                 c = prot_getc(imapd_in);
+            }
+            else goto badatt;
+            break;
+
+        case 'S':
+            if (!strcmp(fetchatt.s, "SAVEDATE")) {
+                fa->fetchitems |= FETCH_SAVEDATE;
             }
             else goto badatt;
             break;

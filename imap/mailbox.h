@@ -74,8 +74,8 @@
  * make sure all the mailbox upgrade and downgrade code in mailbox.c is
  * changed to be able to convert both backwards and forwards between the
  * new version and all supported previous versions */
-#define MAILBOX_MINOR_VERSION   14
-#define MAILBOX_CACHE_MINOR_VERSION 8
+#define MAILBOX_MINOR_VERSION   15
+#define MAILBOX_CACHE_MINOR_VERSION 9
 
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"
@@ -150,7 +150,7 @@ struct index_record {
     time_t last_updated;
     uint32_t system_flags;
     uint32_t user_flags[MAX_USER_FLAGS/32];
-    uint32_t content_lines;
+    time_t savedate;
     uint16_t cache_version;
     struct message_guid guid;
     modseq_t modseq;
@@ -366,7 +366,7 @@ struct mailbox_iter {
 #define OFFSET_LAST_UPDATED 28
 #define OFFSET_SYSTEM_FLAGS 32
 #define OFFSET_USER_FLAGS 36
-#define OFFSET_CONTENT_LINES 52 /* added for nntpd */
+#define OFFSET_SAVEDATE 52 /* added in v15 */
 #define OFFSET_CACHE_VERSION 56
 #define OFFSET_MESSAGE_GUID 60
 #define OFFSET_MODSEQ 80 /* CONDSTORE (64-bit modseq) */

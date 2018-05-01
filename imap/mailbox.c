@@ -1534,6 +1534,7 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
         headerlen = 128;
         break;
     case 14:
+    case 15:
         headerlen = 160;
         break;
     default:
@@ -1691,13 +1692,19 @@ static int mailbox_buf_to_index_record(const char *buf,
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
         record->user_flags[n] = ntohl(*((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)));
     }
-    record->content_lines = ntohl(*((bit32 *)(buf+OFFSET_CONTENT_LINES)));
     uint64_t cache_version_field = ntohl(*((bit32 *)(buf+OFFSET_CACHE_VERSION)));
 
     /* keep the low bits of the version field for the version */
     record->cache_version = cache_version_field & 0xffff;
     /* use the high bits of the version field to extend the cache offset */
     record->cache_offset = cache_offset_field | ((cache_version_field & 0xffff0000) << 16);
+
+    if (version > 14) {
+        record->savedate = ntohl(*((bit32 *)(buf+OFFSET_SAVEDATE)));
+    }
+    else {
+        record->savedate = record->internaldate;
+    }
 
     if (version < 8)
         return 0;
@@ -2638,7 +2645,12 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
         *((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)) = htonl(record->user_flags[n]);
     }
-    *((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(record->content_lines);
+    if (version > 14) {
+        *((bit32 *)(buf+OFFSET_SAVEDATE)) = htonl(record->savedate);
+    }
+    else {
+        *((bit32 *)(buf+OFFSET_SAVEDATE)) = 0; // blank out old content_lines
+    }
     *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(cache_version_field);
 
     /* versions less than 8 had no modseq */
@@ -3648,6 +3660,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
         mailbox_modseq_dirty(mailbox);
         record->modseq = mailbox->i.highestmodseq;
         record->last_updated = mailbox->last_updated;
+        record->savedate = time(NULL); // always the time of actual append
     }
 
     int object_storage_enabled = 0 ;
@@ -3862,6 +3875,8 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
         repack->i.record_size = 104;
         break;
     case 14:
+        /* version 15 just repurposed a field */
+    case 15:
         repack->i.start_offset = 160;
         repack->i.record_size = 104;
         break;
@@ -5804,8 +5819,8 @@ static int records_match(const char *mboxname,
                mboxname, new->uid);
         match = 0;
     }
-    if (old->content_lines != new->content_lines) {
-        printf("%s uid %u mismatch: content_lines\n",
+    if (old->savedate != new->savedate) {
+        printf("%s uid %u mismatch: savedate\n",
                mboxname, new->uid);
         match = 0;
     }

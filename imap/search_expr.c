@@ -2459,6 +2459,34 @@ EXPORTED void search_attr_init(void)
             /*free*/NULL,
             (void *)message_get_internaldate
         },{
+            "savedate",
+            /*flags*/0,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            /*internalise*/NULL,
+            search_time_t_cmp,
+            search_time_t_match,
+            search_time_t_serialise,
+            search_time_t_unserialise,
+            /*get_countability*/NULL,
+            /*duplicate*/NULL,
+            /*free*/NULL,
+            (void *)message_get_savedate
+        },{
+            "indexversion",
+            /*flags*/0,
+            SEARCH_PART_NONE,
+            SEARCH_COST_NONE,
+            /*internalise*/NULL,
+            search_uint32_cmp,
+            search_uint32_match,
+            search_uint32_serialise,
+            search_uint32_unserialise,
+            /*get_countability*/NULL,
+            /*duplicate*/NULL,
+            /*free*/NULL,
+            (void *)message_get_indexversion
+        },{
             "sentdate",
             /*flags*/0,
             SEARCH_PART_NONE,

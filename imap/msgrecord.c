@@ -590,6 +590,16 @@ EXPORTED int msgrecord_set_internaldate(msgrecord_t *mr, time_t internaldate)
     return 0;
 }
 
+EXPORTED int msgrecord_set_savedate(msgrecord_t *mr, time_t savedate)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    mr->record.savedate = savedate;
+    return 0;
+}
+
 EXPORTED int msgrecord_set_bodystructure(msgrecord_t *mr, struct body *body)
 {
     return message_create_record(&mr->record, body);

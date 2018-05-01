@@ -132,7 +132,8 @@ enum {
     FETCH_UIDVALIDITY =         (1<<20),
     FETCH_BASECID =             (1<<21),
     FETCH_EMAILID =             (1<<22),
-    FETCH_THREADID =            (1<<23)
+    FETCH_THREADID =            (1<<23),
+    FETCH_SAVEDATE =            (1<<24)
 };
 
 enum {

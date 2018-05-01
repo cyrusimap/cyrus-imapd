@@ -281,8 +281,6 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
         printf("      > HDRSIZE:%-6u LASTUPD :%lu SYSFLAGS:%08X",
                record->header_size, record->last_updated,
                record->system_flags);
-        if (mailbox->i.minor_version >= 5)
-            printf("   LINES:%-6u\n", record->content_lines);
 
         if (mailbox->i.minor_version >= 6)
             printf("      > CACHEVER:%-2u", record->cache_version);

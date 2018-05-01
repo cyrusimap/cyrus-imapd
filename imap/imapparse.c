@@ -1142,7 +1142,35 @@ static int get_search_criterion(struct protstream *pin,
         break;
 
     case 's':
-        if (!strcmp(criteria.s, "seen")) {              /* RFC 3501 */
+        if (!strcmp(criteria.s, "savedatesupported")) {   /* draft-ietf-extra-imap-savedate */
+            // savedate is supported in index version 15+
+            e = search_expr_new(parent, SEOP_GE);
+            e->attr = search_attr_find("indexversion");
+            e->value.u = 15;
+        }
+        else if (!strcmp(criteria.s, "savedbefore")) {   /* draft-ietf-extra-imap-savedate */
+            if (c != ' ') goto missingarg;
+            c = get_search_date(pin, &start, &end);
+            if (c == EOF) goto baddate;
+            e = search_expr_new(parent, SEOP_LT);
+            e->attr = search_attr_find("savedate");
+            e->value.u = start;
+        }
+        else if (!strcmp(criteria.s, "savedon")) {   /* draft-ietf-extra-imap-savedate */
+            if (c != ' ') goto missingarg;
+            c = get_search_date(pin, &start, &end);
+            if (c == EOF) goto baddate;
+            date_range(parent, "savedate", start, end);
+        }
+        else if (!strcmp(criteria.s, "savedsince")) {    /* draft-ietf-extra-imap-savedate */
+            if (c != ' ') goto missingarg;
+            c = get_search_date(pin, &start, &end);
+            if (c == EOF) goto baddate;
+            e = search_expr_new(parent, SEOP_GE);
+            e->attr = search_attr_find("savedate");
+            e->value.u = start;
+        }
+        else if (!strcmp(criteria.s, "seen")) {              /* RFC 3501 */
             indexflag_match(parent, MESSAGE_SEEN, /*not*/0);
         }
         else if (!strcmp(criteria.s, "sentbefore")) {   /* RFC 3501 */

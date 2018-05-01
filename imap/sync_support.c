@@ -1972,6 +1972,17 @@ void encode_annotations(struct dlist *parent,
         dlist_setnum64(aa, "MODSEQ", 0);
         dlist_sethex64(aa, "VALUE", record->cid);
     }
+
+    if (record && record->savedate) {
+        if (!annots)
+            annots = dlist_newlist(parent, "ANNOTATIONS");
+        aa = dlist_newkvlist(annots, NULL);
+        dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "savedate");
+        dlist_setatom(aa, "USERID", NULL);
+        dlist_setnum64(aa, "MODSEQ", 0);
+        dlist_setnum32(aa, "VALUE", record->savedate);
+    }
+
 }
 
 /*
@@ -2011,6 +2022,14 @@ int decode_annotations(/*const*/struct dlist *annots,
                 const char *p = buf_cstring(&value);
                 parsehex(p, &p, 16, &record->cid);
                 /* XXX - check on p? */
+            }
+        }
+        else if (!strcmp(entry, IMAP_ANNOT_NS "savedate")) {
+            if (record) {
+                const char *p = buf_cstring(&value);
+                bit64 newval;
+                parsenum(p, &p, 0, &newval);
+                record->savedate = newval;
             }
         }
         else if (record && !strcmp(entry, IMAP_ANNOT_NS "basethrid")) {
@@ -2481,6 +2500,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             copy.modseq = mrecord.modseq;
             copy.last_updated = mrecord.last_updated;
             copy.internaldate = mrecord.internaldate;
+            copy.savedate = mrecord.savedate;
             copy.system_flags = (mrecord.system_flags & FLAGS_GLOBAL) |
                                 (rrecord->system_flags & FLAGS_LOCAL);
             for (i = 0; i < MAX_USER_FLAGS/32; i++)
@@ -4837,6 +4857,8 @@ static int compare_one_record(struct mailbox *mailbox,
     if (mp->cid != rp->cid)
         goto diff;
     if (mp->basecid != rp->basecid)
+        goto diff;
+    if (mp->savedate != rp->savedate)
         goto diff;
     if (diff_annotations(mannots, rannots))
         goto diff;

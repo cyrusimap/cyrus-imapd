@@ -272,6 +272,8 @@ extern message_t *message_new_from_index(struct mailbox *,
                                          uint32_t indexflags);
 extern message_t *message_new_from_filename(const char *filename);
 
+extern int message_get_indexversion(message_t *m, uint32_t *versionp);
+
 extern message_t *message_ref(message_t *m);
 extern void message_unref(message_t **m);
 
@@ -301,6 +303,7 @@ extern int message_get_cid(message_t *m, conversation_id_t *cidp);
 extern int message_get_guid(message_t *m, const struct message_guid **guidp);
 extern int message_get_internaldate(message_t *m, time_t *);
 extern int message_get_spamscore(message_t *m, uint32_t *scorep);
+extern int message_get_savedate(message_t *m, time_t *);
 extern int message_get_sentdate(message_t *m, time_t *);
 extern int message_get_modseq(message_t *m, modseq_t *modseqp);
 extern int message_get_systemflags(message_t *m, uint32_t *);
