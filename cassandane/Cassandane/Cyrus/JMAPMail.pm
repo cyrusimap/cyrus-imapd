@@ -8643,4 +8643,34 @@ sub test_email_get_size
     $self->assert_num_equals(15, $msg->{bodyStructure}{size});
 }
 
+sub test_email_get_references
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $rawReferences = '<bar>, <baz>';
+    my $parsedReferences = [ 'bar', 'baz' ];
+
+    $self->make_message("foo",
+        mime_type => 'text/plain',
+        extra_headers => [
+            ['References', $rawReferences],
+        ],
+        body => 'foo',
+    ) || die;
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => ['references', 'header:references', 'header:references:asMessageIds'],
+        }, 'R2' ],
+    ]);
+    my $msg = $res->[1][1]{list}[0];
+    $self->assert_str_equals(' ' . $rawReferences, $msg->{'header:references'});
+    $self->assert_deep_equals($parsedReferences, $msg->{'header:references:asMessageIds'});
+    $self->assert_deep_equals($parsedReferences, $msg->{references});
+
+}
+
 1;
