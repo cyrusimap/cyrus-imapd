@@ -6201,8 +6201,15 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
     }
     /* references */
     if (_wantprop(props, "references")) {
-        json_object_set_new(msg, "references",
-                _header_as_messageids(body->references));
+        /* Read from the mailbox cache */
+        json_t *references = json_null();
+        struct buf buf = BUF_INITIALIZER;
+        message_get_field(m, "References", MESSAGE_DECODED|MESSAGE_TRIM, &buf);
+        if (buf_len(&buf)) {
+            references = _header_as_messageids(buf_cstring(&buf));
+        }
+        buf_free(&buf);
+        json_object_set_new(msg, "references", references);
     }
     /* from */
     if (_wantprop(props, "from")) {
