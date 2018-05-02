@@ -685,6 +685,7 @@ sub test_subject_isutf8
 sub test_noindex_multipartheaders
 {
     my ($self) = @_;
+    return if not $self->{test_fuzzy_search};
 
     my $talk = $self->{store}->get_client();
 
@@ -756,6 +757,7 @@ sub test_noindex_multipartheaders
 sub test_xattachmentname
 {
     my ($self) = @_;
+    return if not $self->{test_fuzzy_search};
 
     my $talk = $self->{store}->get_client();
 
