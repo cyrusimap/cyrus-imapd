@@ -2639,6 +2639,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
                     json_object_set(set_err, "properties", parser.invalid);
                     json_object_set_new(set.not_created, creation_id, set_err);
                     jmap_parser_fini(&parser);
+                    _mbox_setargs_fini(&args);
                     free(strarray_remove(&todo, i--));
                     continue;
                 }
