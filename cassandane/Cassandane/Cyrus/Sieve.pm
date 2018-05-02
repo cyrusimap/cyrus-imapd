@@ -1318,4 +1318,121 @@ EOF
     $self->assert_num_equals(0, $imaptalk->get_response_code('exists'));
 }
 
+sub test_specialuse_exists
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    xlog "Testing the \"specialuse_exists\" test";
+
+    my $talk = $self->{store}->get_client();
+
+    # Cassandane using altnamespace
+    my $hitfolder = "newfolder";
+    my $testfolder = "testfolder";
+    my $missfolder = "INBOX";
+
+    xlog "Install the sieve script";
+    my $scriptname = 'flatPack';
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "special-use"];
+if specialuse_exists "\\\\Junk" {
+    fileinto "$hitfolder";
+}
+EOF
+    );
+
+    $talk->create($hitfolder);
+
+    my %uid = ($hitfolder => 1, $missfolder => 1);
+    my %exp;
+    xlog "Deliver a message";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg1");
+        $msg->set_attribute(uid => $uid{$missfolder});
+        $uid{$missfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$missfolder}->{"msg1"} = $msg;
+    }
+
+    xlog "Create the test folder";
+    $talk->create($testfolder, "(USE (\\Junk))");
+
+    xlog "Deliver a message now that the folder exists";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg2");
+        $msg->set_attribute(uid => $uid{$hitfolder});
+        $uid{$hitfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$hitfolder}->{"msg2"} = $msg;
+    }
+
+    xlog "Check that the messages made it";
+    foreach my $folder (keys %exp)
+    {
+	$self->{store}->set_folder($folder);
+	$self->check_messages($exp{$folder}, check_guid => 0);
+    }
+}
+
+sub test_specialuse
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    xlog "Testing the \":specialuse\" argument";
+
+    # Cassandane using altnamespace
+    my $hitfolder = "newfolder";
+    my $missfolder = "INBOX";
+
+    xlog "Install the sieve script";
+    my $scriptname = 'flatPack';
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "special-use"];
+fileinto :specialuse "\\\\Junk" "$missfolder";
+EOF
+    );
+
+    xlog "Create the hit folder";
+    my $talk = $self->{store}->get_client();
+    $talk->create($hitfolder, "(USE (\\Junk))");
+
+    xlog "Deliver a message now that the folder exists";
+    my $msg = $self->{gen}->generate(subject => "msg1");
+    $self->{instance}->deliver($msg);
+
+    xlog "Check that the message made it";
+    $talk->select($hitfolder);
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+}
+
+sub test_specialuse_create
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    xlog "Testing the \":specialuse\" + \":create\" arguments";
+
+    # Cassandane using altnamespace
+    my $hitfolder = "newfolder";
+
+    xlog "Install the sieve script";
+    my $scriptname = 'flatPack';
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "special-use", "mailbox"];
+fileinto :specialuse "\\\\Junk" :create "$hitfolder";
+EOF
+    );
+
+    xlog "Deliver a message";
+    my $msg = $self->{gen}->generate(subject => "msg1");
+    $self->{instance}->deliver($msg);
+
+    xlog "Check that the message made it";
+    my $talk = $self->{store}->get_client();
+    $talk->select($hitfolder);
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+}
+
 1;
