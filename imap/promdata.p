@@ -62,6 +62,7 @@ metric counter cyrus_imap_sort_total                    The total number of IMAP
 metric counter cyrus_imap_status_total                  The total number of IMAP STATUSs
 metric counter cyrus_imap_scan_total                    The total number of IMAP SCANs
 metric counter cyrus_imap_thread_total                  The total number of IMAP THREADs
+metric counter cyrus_imap_unauthenticate_total          The total number of IMAP UNAUTHENTICATEs
 metric counter cyrus_imap_unsubscribe_total             The total number of IMAP UNSUBSCRIBEs
 metric counter cyrus_imap_unselect_total                The total number of IMAP UNSELECTs
 metric counter cyrus_imap_xbackup_total                 The total number of IMAP XBACKUPs

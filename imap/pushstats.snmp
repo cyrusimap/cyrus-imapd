@@ -131,5 +131,6 @@ C,SETQUOTA_COUNT,"Number of setquota", auto
 C,STATUS_COUNT,"Number of status", auto
 C,SORT_COUNT,"Number of sort", auto
 C,THREAD_COUNT,"Number of thread", auto
+C,UNAUTHENTICATE_COUNT,"Number of unauthenticate", auto
 C,UNSUBSCRIBE_COUNT,"Number of unsubscribe", auto
 C,UNSELECT_COUNT,"Number of unselect", auto

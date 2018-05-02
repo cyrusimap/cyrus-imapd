@@ -245,6 +245,9 @@ int prot_setisclient(struct protstream *s, int val);
 #ifdef HAVE_ZLIB
 /* Enable (de)compression for a given protstream */
 int prot_setcompress(struct protstream *s);
+
+/* Disable (de)compression for a given protstream */
+void prot_unsetcompress(struct protstream *s);
 #endif /* HAVE_ZLIB */
 
 /* Tell the protstream that the type of data is about to change. */

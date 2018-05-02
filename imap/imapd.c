@@ -361,6 +361,7 @@ void fatal(const char *s, int code);
 static void cmdloop(void);
 static void cmd_login(char *tag, char *user);
 static void cmd_authenticate(char *tag, char *authtype, char *resp);
+static void cmd_unauthenticate(char *tag);
 static void cmd_noop(char *tag, char *cmd);
 static void capa_response(int flags);
 static void cmd_capability(char *tag);
@@ -2172,6 +2173,15 @@ static void cmdloop(void)
                     eatline(imapd_in, c);
                 }
             }
+            else if (!strcmp(cmd.s, "Unauthenticate")) {
+                if (c == '\r') c = prot_getc(imapd_in);
+                if (c != '\n') goto extraargs;
+
+                cmd_unauthenticate(tag.s);
+
+                prometheus_increment(CYRUS_IMAP_UNAUTHENTICATE_TOTAL);
+                snmp_increment(UNAUTHENTICATE_COUNT, 1);
+            }
             else if (!strcmp(cmd.s, "Unsubscribe")) {
                 if (c != ' ') goto missingargs;
                 havenamespace = 0;
@@ -2936,6 +2946,81 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
 }
 
 /*
+ * Perform an UNAUTHENTICATE command
+ */
+static void cmd_unauthenticate(char *tag)
+{
+    /* Unselect any open mailbox */
+    if (backend_current) {
+        /* remote mailbox */
+        char mytag[128];
+
+        proxy_gentag(mytag, sizeof(mytag));
+        prot_printf(backend_current->out, "%s Unselect\r\n", mytag);
+        /* do not fatal() here, because we don't really care about this
+         * server anymore anyway */
+        pipe_until_tag(backend_current, mytag, 1);
+
+        /* remove backend_current from the protgroup */
+        protgroup_delete(protin, backend_current->in);
+
+        backend_current = NULL;
+    }
+    else if (imapd_index) index_close(&imapd_index);
+
+    /* Reset authentication state */
+    if (imapd_userid != NULL) {
+        free(imapd_userid);
+        imapd_userid = NULL;
+    }
+    if (proxy_userid != NULL) {
+        free(proxy_userid);
+        proxy_userid = NULL;
+    }
+    if (imapd_magicplus != NULL) {
+        free(imapd_magicplus);
+        imapd_magicplus = NULL;
+    }
+    if (imapd_authstate) {
+        auth_freestate(imapd_authstate);
+        imapd_authstate = NULL;
+    }
+    imapd_userisadmin = 0;
+    imapd_userisproxyadmin = 0;
+    plaintextloginalert = NULL;
+    saslprops_reset(&saslprops);
+    clear_id();
+
+    /* Reset client-enabled extensions */
+    client_capa = 0;
+
+    /* Send response
+       (MUST be done with current SASL and/or commpression layer still active) */
+    prot_printf(imapd_out, "%s OK [CAPABILITY ", tag);
+    capa_response(CAPA_PREAUTH);
+    prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
+    prot_flush(imapd_out);
+
+    /* Reset connection state (other than TLS) */
+#ifdef HAVE_ZLIB
+    if (imapd_compress_done) {
+        /* disable (de)compression on the prot layer */
+        prot_unsetcompress(imapd_in);
+        prot_unsetcompress(imapd_out);
+
+        imapd_compress_done = 0;
+    }
+#endif
+    if (imapd_saslconn) {
+        /* disable SASL on the prot layer */
+        prot_unsetsasl(imapd_out);
+        prot_unsetsasl(imapd_in);
+
+        reset_saslconn(&imapd_saslconn);
+    }
+}
+
+/*
  * Perform a NOOP command
  */
 static void cmd_noop(char *tag, char *cmd)
@@ -3380,6 +3465,10 @@ static void capa_response(int flags)
     }
 
     if (!(flags & CAPA_POSTAUTH)) return;
+
+    if (imapd_authstate) {
+        prot_printf(imapd_out, " UNAUTHENTICATE");
+    }
 
     if (config_getswitch(IMAPOPT_CONVERSATIONS))
         prot_printf(imapd_out, " XCONVERSATIONS");

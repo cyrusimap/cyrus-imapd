@@ -417,6 +417,21 @@ error:
     return EOF;
 }
 
+EXPORTED void prot_unsetcompress(struct protstream *s)
+{
+    if (s->zstrm) {
+        if (s->write) deflateEnd(s->zstrm);
+        else inflateEnd(s->zstrm);
+
+        free(s->zstrm);
+        s->zstrm = NULL;
+    }
+    if (s->zbuf) {
+        free(s->zbuf);
+        s->zbuf = NULL;
+    }
+}
+
 /* Table of incompressible file type signatures */
 static struct file_sig {
     const char *type;
