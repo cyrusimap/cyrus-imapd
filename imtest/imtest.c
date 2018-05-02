@@ -222,6 +222,7 @@ struct protocol_t {
                         /* [OPTIONAL] perform protocol-specific authentication;
                            based on rock, login_enabled, mech, mechlist */
     struct logout_cmd_t logout_cmd;
+    char *unauth_cmd;
 
     /* these 3 are used for maintaining connection state */
     void *(*init_conn)(void); /* generate a context (if needed). This context
@@ -1348,6 +1349,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
     signal(SIGINT, sigint_handler);
 
     /* loop reading from network and from stdin as applicable */
+    int unauth = 0;
     while (1) {
         rset = read_set;
         wset = write_set;
@@ -1377,6 +1379,14 @@ static void interactive(struct protocol_t *protocol, char *filename)
                     count++;
                 }
                 prot_write(pout, buf, count);
+
+                if (protocol->unauth_cmd) {
+                    /* Check if unauthenticate command was sent */
+                    char *p = stristr(buf, protocol->unauth_cmd);
+
+                    if (p && !strcmp("\r\n", p + strlen(protocol->unauth_cmd)))
+                        unauth = 1;
+                }
             }
             prot_flush(pout);
         } else if (FD_ISSET(sock, &rset) && (FD_ISSET(fd_out, &wset))) {
@@ -1402,6 +1412,23 @@ static void interactive(struct protocol_t *protocol, char *filename)
                     /* use the stream API */
                     buf[count] = '\0';
                     printf("%s", buf);
+                }
+
+                if (unauth) {
+                    /* Reset auth and connection state (other than TLS) */
+                    sasl_dispose(&conn);
+                    if (init_sasl(protocol->service, NULL,
+                                  0, 128, 0) != IMTEST_OK) {
+                        imtest_fatal("SASL initialization");
+                    }
+                    unauth = 0;
+
+#ifdef HAVE_ZLIB
+                    prot_unsetcompress(pout);
+                    prot_unsetcompress(pin);
+#endif
+                    prot_unsetsasl(pout);
+                    prot_unsetsasl(pin);
                 }
             } while (haveinput(pin) > 0);
         } else if ((FD_ISSET(fd, &rset)) && (FD_ISSET(sock, &wset))
@@ -2706,7 +2733,7 @@ static struct protocol_t protocols[] = {
       { "A01 AUTHENTICATE", 0,  /* no init resp until SASL-IR advertised */
         0, "A01 OK", "A01 NO", "+ ", "*", NULL, 0 },
       { "Z01 COMPRESS DEFLATE", "Z01 OK", "Z01 NO" },
-      &imap_do_auth, { "Q01 LOGOUT", "Q01 " },
+      &imap_do_auth, { "Q01 LOGOUT", "Q01 " }, " UNAUTHENTICATE",
       &imap_init_conn, &generic_pipe, &imap_reset
     },
     { "pop3", "pop3s", "pop", 0,   /* USER unavailable until advertised */
@@ -2715,7 +2742,7 @@ static struct protocol_t protocols[] = {
       { "STLS", "+OK", "-ERR", 0 },
       { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL, 0 },
       { NULL, NULL, NULL, },
-      &pop3_do_auth, { "QUIT", "+OK" }, NULL, NULL, NULL
+      &pop3_do_auth, { "QUIT", "+OK" }, NULL, NULL, NULL, NULL
     },
     { "nntp", "nntps", "nntp", 0,  /* AUTHINFO USER unavail until advertised */
       { 0, "20", NULL },
@@ -2725,7 +2752,7 @@ static struct protocol_t protocols[] = {
       { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*",
         &nntp_parse_success, 0 },
       { "COMPRESS DEFLATE", "206", "403", },
-      &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL
+      &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL, NULL
     },
     { "lmtp", NULL, "lmtp", 0,
       { 0, "220 ", NULL },
@@ -2733,7 +2760,7 @@ static struct protocol_t protocols[] = {
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
       { NULL, NULL, NULL, },
-      &xmtp_do_auth, { "QUIT", "221" },
+      &xmtp_do_auth, { "QUIT", "221" }, NULL,
       &xmtp_init_conn, &generic_pipe, &xmtp_reset
     },
     { "smtp", "smtps", "smtp", 0,
@@ -2742,7 +2769,7 @@ static struct protocol_t protocols[] = {
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
       { NULL, NULL, NULL, },
-      &xmtp_do_auth, { "QUIT", "221" },
+      &xmtp_do_auth, { "QUIT", "221" }, NULL,
       &xmtp_init_conn, &generic_pipe, &xmtp_reset
     },
     { "mupdate", NULL, "mupdate", 0,
@@ -2751,7 +2778,7 @@ static struct protocol_t protocols[] = {
       { "S01 STARTTLS", "S01 OK", "S01 NO", 1 },
       { "A01 AUTHENTICATE", USHRT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL, 0 },
       { "Z01 COMPRESS \"DEFLATE\"", "Z01 OK", "Z01 NO" },
-      NULL, { "Q01 LOGOUT", "Q01 " }, NULL, NULL, NULL
+      NULL, { "Q01 LOGOUT", "Q01 " }, NULL, NULL, NULL, NULL
     },
     { "sieve", NULL, SIEVE_SERVICE_NAME, 0,
       { 1, "OK", NULL },
@@ -2760,7 +2787,7 @@ static struct protocol_t protocols[] = {
       { "AUTHENTICATE", USHRT_MAX, 1, "OK", "NO", NULL, "*",
         &sieve_parse_success, 1 },
       { NULL, NULL, NULL, },
-      NULL, { "LOGOUT", "OK" }, NULL, NULL, NULL
+      NULL, { "LOGOUT", "OK" }, "UNAUTHENTICATE", NULL, NULL, NULL
     },
     { "csync", NULL, "csync", 0,
       { 1, "* OK", NULL },
@@ -2768,7 +2795,7 @@ static struct protocol_t protocols[] = {
       { "STARTTLS", "OK", "NO", 1 },
       { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
       { "COMPRESS DEFLATE", "OK", "NO" },
-      NULL, { "EXIT", "OK" }, NULL, NULL, NULL
+      NULL, { "EXIT", "OK" }, NULL, NULL, NULL, NULL
     },
     { "http", "https", "HTTP", 0,  /* Basic unavail until advertised */
       { 0, NULL, NULL },
@@ -2777,7 +2804,7 @@ static struct protocol_t protocols[] = {
       { HTTP_STARTTLS, HTTP_101, HTTP_5xx, 1 },
       { NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, 0 },
       { NULL, NULL, NULL, },
-      &http_do_auth, { NULL, NULL }, NULL, NULL, NULL
+      &http_do_auth, { NULL, NULL }, NULL, NULL, NULL, NULL
     },
     { NULL, NULL, NULL, 0,
       { 0, NULL, NULL },
@@ -2785,7 +2812,7 @@ static struct protocol_t protocols[] = {
       { NULL, NULL, NULL, 0 },
       { NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, 0 },
       { NULL, NULL, NULL, },
-      NULL, { NULL, NULL }, NULL, NULL, NULL
+      NULL, { NULL, NULL }, NULL, NULL, NULL, NULL
     }
 };
 
