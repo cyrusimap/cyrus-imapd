@@ -632,12 +632,14 @@ extern int reset_saslconn(sasl_conn_t **conn);
 static void cmd_unauthenticate(struct protstream *sieved_out,
                               struct protstream *sieved_in)
 {
+    prot_printf(sieved_out, "OK\r\n");
+    prot_flush(sieved_out);
+
     if (chdir("/tmp/"))
         syslog(LOG_ERR, "Failed to chdir to /tmp/");
     reset_saslconn(&sieved_saslconn);
     prot_unsetsasl(sieved_out);
     prot_unsetsasl(sieved_in);
-    prot_printf(sieved_out, "OK\r\n");
     authenticated = 0;
 }
 
