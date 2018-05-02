@@ -6251,9 +6251,10 @@ sub test_email_querychanges_basic_mb
     my $new = $res->[0][1];
     $self->assert_str_equals($old->{state}, $new->{oldState});
     $self->assert_str_not_equals($old->{state}, $new->{newState});
-    # nothing added or removed here
-    $self->assert_num_equals(0, scalar @{$new->{added}});
-    $self->assert_num_equals(0, scalar @{$new->{removed}});
+    $self->assert_num_equals(1, scalar @{$new->{added}});
+    $self->assert_num_equals(1, scalar @{$new->{removed}});
+    $self->assert_str_equals($new->{removed}[0], $new->{added}[0]{id});
+    $self->assert_str_equals($new->{removed}[0], $old->{ids}[$new->{added}[0]{index}]);
 }
 
 sub test_email_querychanges_basic_mb_collapse
