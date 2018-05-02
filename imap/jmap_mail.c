@@ -5280,14 +5280,20 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
         if (!(rights & ACL_READ))
             continue;
 
-        /* Check if the message is expunged in all mailboxes */
-        int r = conversations_guid_foreach(req->cstate, _guid_from_id(email_id),
-                                           _email_is_expunged_cb, req);
-        if (r && r != IMAP_OK_COMPLETED) {
-            *err = json_pack("{s:s}", "type", "serverError");
-            goto done;
+        int is_expunged = md->system_flags & (FLAG_EXPUNGED|FLAG_DELETED);
+
+        if (is_expunged) {
+            /* Check if the message exists somewhere else */
+            int r = conversations_guid_foreach(req->cstate, _guid_from_id(email_id),
+                                               _email_is_expunged_cb, req);
+            if (r == IMAP_OK_COMPLETED) {
+                is_expunged = 0;
+            }
+            else if (r) {
+                *err = json_pack("{s:s}", "type", "serverError");
+                goto done;
+            }
         }
-        int is_expunged = r != IMAP_OK_COMPLETED;
 
         /* Apply limit, if any */
         int is_seen = hash_lookup(email_id, &seen_ids) != NULL;
