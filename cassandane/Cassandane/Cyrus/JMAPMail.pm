@@ -6789,7 +6789,7 @@ sub test_email_querychanges_thread
     # assert that IDA got destroyed
     $self->assert_not_null(grep { $_ eq $ida } map { $_ } @{$res->[0][1]->{removed}});
     # and not recreated
-    $self->assert_null(grep { $_ eq $ida } map { $_->{id} } @{$res->[0][1]->{created}});
+    $self->assert_null(grep { $_ eq $ida } map { $_->{id} } @{$res->[0][1]->{added}});
 
     $talk->select("INBOX");
     $talk->store('3', "+flags", '\\Deleted');
@@ -6892,24 +6892,16 @@ sub test_email_querychanges_implementation
     $self->make_message("EmailA") || die;
     $self->make_message("EmailB") || die;
 
-    # The JMAP implementation in Cyrus uses three strategies
+    # The JMAP implementation in Cyrus uses two strategies
     # for processing an Email/queryChanges request, depending
     # on the query arguments:
     #
-    # (1) 'trivial': if collapseThreads is false and the
-    #      mailboxIds filter argument is either not set or
-    #      contains multiple mailbox ids
+    # (1) 'trivial': if collapseThreads is false
     #
     # (2) 'collapse': if collapseThreads is true
     #
-    # (3) 'concise': if collapseThreads is false and the
-    #     mailboxIds filter argument contains exactly
-    #     one mailboxId
-    #
     #  The results should be the same for (1) and (2), where
     #  updated message are reported as both 'added' and 'removed'.
-    #  The result for (3) only should report new messages in
-    #  'added'.
 
     my $inboxid = $self->getinbox()->{id};
 
@@ -6927,15 +6919,6 @@ sub test_email_querychanges_implementation
             ],
             collapseThreads => JSON::true,
         }, "R2"],
-        ['Email/query', {
-            filter => {
-                inMailbox => $inboxid
-            },
-            sort => [
-                { isAscending => JSON::true, property => 'subject' }
-            ],
-            collapseThreads => JSON::false,
-        }, "R3"],
     ]);
     my $msgidA = $res->[0][1]->{ids}[0];
     $self->assert_not_null($msgidA);
@@ -6946,8 +6929,6 @@ sub test_email_querychanges_implementation
     $self->assert_not_null($state_trivial);
     my $state_collapsed = $res->[1][1]->{state};
     $self->assert_not_null($state_collapsed);
-    my $state_concise = $res->[2][1]->{state};
-    $self->assert_not_null($state_concise);
 
 	xlog "update email B";
 	$res = $jmap->CallMethods([['Email/set', {
@@ -6988,17 +6969,6 @@ sub test_email_querychanges_implementation
             collapseThreads => JSON::true,
             upToId => $msgidC,
         }, "R2"],
-        ['Email/queryChanges', {
-            filter => {
-                inMailbox => $inboxid
-            },
-            sort => [
-                { isAscending => JSON::true, property => 'subject' }
-            ],
-            sinceState => $state_concise,
-            collapseThreads => JSON::false,
-            upToId => $msgidC,
-        }, "R3"],
     ]);
 
     # 'trivial' case
@@ -7021,14 +6991,6 @@ sub test_email_querychanges_implementation
     $self->assert_num_equals(4, $res->[0][1]{total});
     $state_collapsed = $res->[1][1]{newState};
 
-    # 'concise' case
-    $self->assert_num_equals(1, scalar @{$res->[2][1]{added}});
-    $self->assert_str_equals($msgidC, $res->[2][1]{added}[0]{id});
-    $self->assert_num_equals(2, $res->[2][1]{added}[0]{index});
-    $self->assert_deep_equals([], $res->[2][1]{removed});
-    $self->assert_num_equals(4, $res->[0][1]{total});
-    $state_concise = $res->[2][1]{newState};
-
     xlog "delete email C ($msgidC)";
     $res = $jmap->CallMethods([['Email/set', { destroy => [ $msgidC ] }, "R1"]]);
     $self->assert_str_equals($msgidC, $res->[0][1]->{destroyed}[0]);
@@ -7049,37 +7011,16 @@ sub test_email_querychanges_implementation
             sinceState => $state_collapsed,
             collapseThreads => JSON::true,
         }, "R2"],
-        ['Email/queryChanges', {
-            filter => {
-                inMailbox => $inboxid
-            },
-            sort => [
-                { isAscending => JSON::true, property => 'subject' }
-            ],
-            sinceState => $state_concise,
-            collapseThreads => JSON::false,
-        }, "R3"],
     ]);
 
     # 'trivial' case
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
-    $self->assert_str_equals($msgidD, $res->[0][1]{added}[0]{id});
-    $self->assert_num_equals(2, $res->[0][1]{added}[0]{index});
-    $self->assert_deep_equals([$msgidC, $msgidD], $res->[0][1]{removed});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{added}});
+    $self->assert_deep_equals([$msgidC], $res->[0][1]{removed});
     $self->assert_num_equals(3, $res->[0][1]{total});
 
     # 'collapsed' case
-    $self->assert_num_equals(1, scalar @{$res->[1][1]{added}});
-    $self->assert_str_equals($msgidD, $res->[1][1]{added}[0]{id});
-    $self->assert_num_equals(2, $res->[1][1]{added}[0]{index});
-    $self->assert_deep_equals([$msgidC, $msgidD], $res->[1][1]{removed});
-    $self->assert_num_equals(3, $res->[0][1]{total});
-
-    # 'concise' case
-    $self->assert_num_equals(1, scalar @{$res->[2][1]{added}});
-    $self->assert_str_equals($msgidD, $res->[2][1]{added}[0]{id});
-    $self->assert_num_equals(2, $res->[2][1]{added}[0]{index});
-    $self->assert_deep_equals([$msgidC], $res->[2][1]{removed});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{added}});
+    $self->assert_deep_equals([$msgidC], $res->[1][1]{removed});
     $self->assert_num_equals(3, $res->[0][1]{total});
 }
 
