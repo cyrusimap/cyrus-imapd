@@ -5264,6 +5264,15 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
 
         // if it's changed, tell about that
         if ((touched_id & 1)) {
+            if (!search->is_mutable && touched_id == 1 && md->modseq <= since_modseq) {
+                // this is the exemplar, and it's unchanged,
+                // and we haven't told a removed yet, so we
+                // can just suppress everything
+                new_touched_id |= 4 | 8;
+                goto doneloop;
+            }
+
+            // otherwise we're going to have to tell both, if we haven't already
             if (!(touched_id & 4)) {
                 _email_querychanges_destroyed(query, email_id);
                 new_touched_id |= 4;
