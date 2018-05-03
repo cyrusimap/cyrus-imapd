@@ -1327,9 +1327,8 @@ sub test_specialuse_exists
 
     my $talk = $self->{store}->get_client();
 
-    # Cassandane using altnamespace
-    my $hitfolder = "newfolder";
-    my $testfolder = "testfolder";
+    my $hitfolder = "INBOX.newfolder";
+    my $testfolder = "INBOX.testfolder";
     my $missfolder = "INBOX";
 
     xlog "Install the sieve script";
@@ -1382,8 +1381,7 @@ sub test_specialuse
 
     xlog "Testing the \":specialuse\" argument";
 
-    # Cassandane using altnamespace
-    my $hitfolder = "newfolder";
+    my $hitfolder = "INBOX.newfolder";
     my $missfolder = "INBOX";
 
     xlog "Install the sieve script";
@@ -1414,8 +1412,7 @@ sub test_specialuse_create
 
     xlog "Testing the \":specialuse\" + \":create\" arguments";
 
-    # Cassandane using altnamespace
-    my $hitfolder = "newfolder";
+    my $hitfolder = "INBOX.newfolder";
 
     xlog "Install the sieve script";
     my $scriptname = 'flatPack';
