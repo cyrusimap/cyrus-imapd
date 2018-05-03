@@ -593,6 +593,8 @@ sub _build_skeleton
 	'conf/log/foo',
 	'conf/log/postman',
 	'conf/log/repluser',
+	'conf/log/smtpclient.sendmail',
+	'conf/log/smtpclient.host',
 	'lock',
 	'data',
 	'meta',
