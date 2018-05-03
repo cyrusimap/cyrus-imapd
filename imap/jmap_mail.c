@@ -3115,6 +3115,20 @@ static json_t *_emailaddresses_from_addr(struct address *addr)
     while (addr) {
         json_t *e = json_pack("{}");
 
+        const char *domain = addr->domain;
+        if (!strcmpsafe(domain, "unspecified-domain")) {
+            domain = NULL;
+        }
+
+        if (!addr->name && addr->mailbox && !domain) {
+            /* That's a group */
+            json_object_set_new(e, "name", json_string(addr->mailbox));
+            json_object_set_new(e, "email", json_null());
+            json_array_append_new(addresses, e);
+            addr = addr->next;
+            continue;
+        }
+
         /* name */
         if (addr->name) {
             char *tmp = charset_decode_mimeheader(addr->name, CHARSET_SNIPPET);
@@ -3125,13 +3139,8 @@ static json_t *_emailaddresses_from_addr(struct address *addr)
         }
 
         /* email */
-        const char *mailbox = addr->mailbox;
-        if (mailbox) {
-            buf_setcstr(&buf, mailbox);
-            const char *domain = addr->domain;
-            if (!strcmpsafe(domain, "unspecified-domain")) {
-                domain = NULL;
-            }
+        if (addr->mailbox) {
+            buf_setcstr(&buf, addr->mailbox);
             if (domain) {
                 buf_putc(&buf, '@');
                 buf_appendcstr(&buf, domain);
