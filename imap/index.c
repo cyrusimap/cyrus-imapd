@@ -4061,6 +4061,9 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         time_t msgdate = record.savedate;
         char datebuf[RFC3501_DATETIME_MAX+1];
 
+        // handle internaldate
+        if (!msgdate) msgdate = record.internaldate;
+
         time_to_rfc3501(msgdate, datebuf, sizeof(datebuf));
 
         prot_printf(state->out, "%cSAVEDATE \"%s\"",

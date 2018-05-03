@@ -4565,6 +4565,7 @@ EXPORTED int message_get_savedate(message_t *m, time_t *datep)
     int r = message_need(m, M_RECORD);
     if (r) return r;
     *datep = m->record.savedate;
+    if (!*datep) *datep = m->record.internaldate;
     return 0;
 }
 

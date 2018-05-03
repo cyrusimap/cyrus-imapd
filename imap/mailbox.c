@@ -1699,13 +1699,6 @@ static int mailbox_buf_to_index_record(const char *buf,
     /* use the high bits of the version field to extend the cache offset */
     record->cache_offset = cache_offset_field | ((cache_version_field & 0xffff0000) << 16);
 
-    if (version > 14) {
-        record->savedate = ntohl(*((bit32 *)(buf+OFFSET_SAVEDATE)));
-    }
-    else {
-        record->savedate = record->internaldate;
-    }
-
     if (version < 8)
         return 0;
 
@@ -1732,6 +1725,10 @@ static int mailbox_buf_to_index_record(const char *buf,
 
     record->cid = ntohll(*(bit64 *)(buf+OFFSET_THRID));
     record->cache_crc = ntohl(*((bit32 *)(buf+OFFSET_CACHE_CRC)));
+
+    if (version > 14) {
+        record->savedate = ntohl(*((bit32 *)(buf+OFFSET_SAVEDATE)));
+    }
 
     /* check CRC32 */
     crc = crc32_map(buf, OFFSET_RECORD_CRC);
