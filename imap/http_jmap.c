@@ -655,9 +655,9 @@ static int validate_request(struct transaction_t *txn, json_t *req)
     return 0;
 }
 
-static int _is_valid_id(const char *id)
+EXPORTED int jmap_is_valid_id(const char *id)
 {
-    if (*id == '\0') return 0;
+    if (!id || *id == '\0') return 0;
     const char *p;
     for (p = id; *p; p++) {
         if (('0' <= *p && *p <= '9'))
@@ -744,7 +744,7 @@ static int jmap_post(struct transaction_t *txn,
                 goto done;
             }
             const char *id = json_string_value(jval);
-            if (!_is_valid_id(creation_id) || !_is_valid_id(id)) {
+            if (!jmap_is_valid_id(creation_id) || !jmap_is_valid_id(id)) {
                 txn->error.desc = "Invalid creationIds argument";
                 ret = HTTP_BAD_REQUEST;
                 goto done;

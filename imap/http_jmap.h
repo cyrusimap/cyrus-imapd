@@ -106,6 +106,7 @@ extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
 /* Creation ids */
 extern const char *jmap_lookup_id(jmap_req_t *req, const char *creation_id);
 extern void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id);
+extern int jmap_is_valid_id(const char *id);
 
 /* usermbox-like mailbox tree traversal, scoped by accountid.
  * Reports only active (not deleted) mailboxes. Checks presence

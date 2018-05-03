@@ -1165,247 +1165,6 @@ overrides_from_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     return overrides;
 }
 
-static json_t *alertaction_from_ical(context_t *ctx, hash_table *snoozes,
-                                     icalcomponent *alarm)
-{
-    json_t *action = NULL;
-    icalproperty* prop;
-    icalparameter *param;
-    icalvalue* val;
-    icalproperty_action icalaction;
-    const char *s, *uid;
-
-    prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
-    if (!prop) goto done;
-
-    val = icalproperty_get_value(prop);
-    if (!val) goto done;
-
-    icalaction = icalvalue_get_action(val);
-
-    if (icalaction == ICAL_ACTION_EMAIL) {
-        json_t *to = json_pack("[]");
-
-        for (prop = icalcomponent_get_first_property(alarm,
-                                                     ICAL_ATTENDEE_PROPERTY);
-                prop;
-                prop = icalcomponent_get_next_property(alarm,
-                                                       ICAL_ATTENDEE_PROPERTY)) {
-
-            const char *name = NULL;
-            char *email;
-
-            /* email */
-            email = mailaddr_from_uri(icalproperty_get_value_as_string(prop));
-            if (!email) {
-                continue;
-            }
-
-            /* name */
-            param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
-            if (param) {
-                name = icalparameter_get_cn(param);
-            }
-
-            json_array_append_new(to, json_pack("{s:s s:s}",
-                        "name", name ? name : "",
-                        "email", email));
-            free(email);
-        }
-        if (!json_array_size(to)) {
-            json_decref(to);
-            goto done;
-        }
-        action = json_pack("{s:s s:o}", "type", "email", "to", to);
-
-        /* subject */
-        prop = icalcomponent_get_first_property(alarm, ICAL_SUMMARY_PROPERTY);
-        if (prop && (s = icalproperty_get_summary(prop))) {
-            json_object_set_new(action, "subject", json_string(s));
-            localizations_from_icalprop(ctx, "subject", prop);
-        }
-        /* textBody */
-        prop = icalcomponent_get_first_property(alarm,
-                                                ICAL_DESCRIPTION_PROPERTY);
-        if (prop && (s = icalproperty_get_description(prop))) {
-            json_object_set_new(action, "textBody", json_string(s));
-            localizations_from_icalprop(ctx, "textBody", prop);
-        }
-
-    } else if (icalaction == ICAL_ACTION_DISPLAY) {
-        action = json_pack("{s:s}", "type", "display");
-    } else {
-        goto done;
-    }
-
-    /* acknowledged */
-    if ((prop = icalcomponent_get_acknowledged_property(alarm))) {
-        icaltimetype t = icalproperty_get_acknowledged(prop);
-        if (icaltime_is_valid_time(t)) {
-            char *val = utcdate_from_icaltime_r(t);
-            json_object_set_new(action, "acknowledged", json_string(val));
-            free(val);
-        }
-    }
-
-    /* snoozed */
-    icalcomponent *snooze;
-    if ((uid = icalcomponent_get_uid(alarm)) &&
-        (snooze = hash_lookup(uid, snoozes)) &&
-        (prop = icalcomponent_get_first_property(snooze,
-                                                 ICAL_TRIGGER_PROPERTY))) {
-
-        icaltimetype t = icalproperty_get_trigger(prop).time;
-        if (!icaltime_is_null_time(t) && icaltime_is_valid_time(t)) {
-            char *val = utcdate_from_icaltime_r(t);
-            json_object_set_new(action, "snoozed", json_string(val));
-            free(val);
-        }
-    }
-
-done:
-    return action;
-}
-
-/* Convert the VALARMS in the VEVENT comp to CalendarEvent alerts. */
-static json_t*
-alerts_from_ical(context_t *ctx, icalcomponent *comp)
-{
-    json_t* alerts = json_pack("{}");
-    icalcomponent* alarm;
-    hash_table snoozes;
-    ptrarray_t alarms = PTRARRAY_INITIALIZER;
-
-    construct_hash_table(&snoozes, 32, 0);
-
-    /* Split VALARMS into regular alerst and their snoozing VALARMS */
-    for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
-         alarm;
-         alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
-
-        icalproperty* prop = NULL;
-        icalparameter *param = NULL;
-        const char *uid = NULL;
-
-        /* Check for RELATED-TO property... */
-        prop = icalcomponent_get_first_property(alarm, ICAL_RELATEDTO_PROPERTY);
-        if (!prop) {
-            ptrarray_push(&alarms, alarm);
-            continue;
-        }
-        /* .. that has a UID value... */
-        uid = icalproperty_get_value_as_string(prop);
-        if (!uid || !strlen(uid)) {
-            ptrarray_push(&alarms, alarm);
-            continue;
-        }
-        /* ... and it's RELTYPE is set to SNOOZE */
-        param = icalproperty_get_first_parameter(prop, ICAL_RELTYPE_PARAMETER);
-        if (!param || strcasecmp(icalparameter_get_xvalue(param), "SNOOZE")) {
-            ptrarray_push(&alarms, alarm);
-            continue;
-        }
-
-        /* Must be a SNOOZE alarm */
-        hash_insert(uid, alarm, &snoozes);
-    }
-
-    while ((alarm = (icalcomponent*) ptrarray_pop(&alarms))) {
-        icalproperty* prop;
-        icalparameter *param;
-        struct icaltriggertype trigger;
-        icalparameter_related related = ICAL_RELATED_START;
-
-        json_t *action, *alert;
-        const char *relativeTo;
-        char *id, *offset;
-        struct icaldurationtype duration;
-
-        relativeTo = offset = id = NULL;
-
-        /* alert id */
-        id = (char *) icalcomponent_get_uid(alarm);
-        if (!id) {
-            id = hexkey(icalcomponent_as_ical_string(alarm));
-        } else {
-            id = xstrdup(id);
-        }
-        beginprop_key(ctx, "alerts", id);
-
-        /* Determine TRIGGER */
-        prop = icalcomponent_get_first_property(alarm, ICAL_TRIGGER_PROPERTY);
-        if (!prop) {
-            goto done;
-        }
-        trigger = icalproperty_get_trigger(prop);
-
-        /* Determine RELATED parameter */
-        param = icalproperty_get_first_parameter(prop, ICAL_RELATED_PARAMETER);
-        if (param) {
-            related = icalparameter_get_related(param);
-            if (related != ICAL_RELATED_START && related != ICAL_RELATED_END) {
-                goto done;
-            }
-        }
-
-        /* Determine duration between alarm and start/end */
-        if (!icaldurationtype_is_null_duration(trigger.duration)) {
-            duration = trigger.duration;
-        } else {
-            icaltimetype ttrg, tref;
-            icaltimezone *utc = icaltimezone_get_utc_timezone();
-
-            ttrg = icaltime_convert_to_zone(trigger.time, utc);
-            if (related == ICAL_RELATED_START) {
-                tref = icaltime_convert_to_zone(dtstart_from_ical(comp), utc);
-            } else {
-                tref = icaltime_convert_to_zone(dtend_from_ical(comp), utc);
-            }
-            duration = icaltime_subtract(ttrg, tref);
-        }
-
-        /* action */
-        beginprop(ctx, "action");
-        action = alertaction_from_ical(ctx, &snoozes, alarm);
-        endprop(ctx);
-        if (!action) {
-            goto done;
-        }
-
-        /* relativeTo */
-        if (duration.is_neg) {
-            relativeTo = related == ICAL_RELATED_START ?
-                "before-start" : "before-end";
-        } else {
-            relativeTo = related == ICAL_RELATED_START ?
-                "after-start" : "after-end";
-        }
-
-        /* offset*/
-        duration.is_neg = 0;
-        offset = icaldurationtype_as_ical_string_r(duration);
-        alert = json_pack("{s:s s:s s:o}",
-                "relativeTo", relativeTo,
-                "offset", offset,
-                "action", action);
-        json_object_set_new(alerts, id, alert);
-        free(offset);
-done:
-        endprop(ctx);
-        free(id);
-    }
-
-    if (!json_object_size(alerts)) {
-        json_decref(alerts);
-        alerts = json_null();
-    }
-
-    ptrarray_fini(&alarms);
-    free_hash_table(&snoozes, NULL);
-    return alerts;
-}
-
-
 static json_t*
 replyto_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
 {
@@ -1743,78 +1502,121 @@ done:
 }
 
 static json_t*
-links_from_ical(context_t *ctx, icalcomponent *comp)
+link_from_ical(context_t *ctx, icalproperty *prop)
+{
+    /* href */
+    const char *href = NULL;
+    if (icalproperty_isa(prop) == ICAL_ATTACH_PROPERTY) {
+        icalattach *attach = icalproperty_get_attach(prop);
+        /* Ignore ATTACH properties with value BINARY. */
+        if (!attach || !icalattach_get_is_url(attach)) {
+            return NULL;
+        }
+        href = icalattach_get_url(attach);
+    }
+    else if (icalproperty_isa(prop) == ICAL_X_PROPERTY) {
+        href = icalproperty_get_value_as_string(prop);
+    }
+    if (!href || *href == '\0') return NULL;
+
+    json_t *link = json_pack("{s:s}", "href", href);
+    icalparameter *param = NULL;
+    const char *s;
+
+    /* cid */
+    if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_CID))) {
+        json_object_set_new(link, "cid", json_string(s));
+    }
+
+    /* type */
+    param = icalproperty_get_first_parameter(prop, ICAL_FMTTYPE_PARAMETER);
+    if (param && ((s = icalparameter_get_fmttype(param)))) {
+        json_object_set_new(link, "type", json_string(s));
+    }
+
+    /* title - reuse the same x-param as Apple does for their locations  */
+    if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE))) {
+        json_object_set_new(link, "title", json_string(s));
+        localizations_from_icalprop(ctx, "title", prop);
+    }
+
+    /* properties */
+    if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_PROPERTIES))) {
+        json_t *p = decode_base64_json(s);
+        json_object_set_new(link, "properties", p ? p : json_null());
+    }
+
+    /* size */
+    json_int_t size = -1;
+    param = icalproperty_get_size_parameter(prop);
+    if (param) {
+        if ((s = icalparameter_get_size(param))) {
+            char *ptr;
+            size = strtol(s, &ptr, 10);
+            json_object_set_new(link, "size",
+                    ptr && *ptr == '\0' ? json_integer(size) : json_null());
+        }
+    }
+
+    /* rel */
+    if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_REL))) {
+        json_object_set_new(link, "rel", json_string(s));
+    }
+
+    return link;
+}
+
+static json_t*
+links_from_ical(context_t *ctx, icalcomponent *comp, const char *idprefix)
 {
     icalproperty* prop;
     json_t *ret = json_pack("{}");
-    const char *s;
+    struct buf buf = BUF_INITIALIZER;
 
+    /* Read iCalendar ATTACH properties */
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTACH_PROPERTY);
          prop;
          prop = icalcomponent_get_next_property(comp, ICAL_ATTACH_PROPERTY)) {
 
-        icalattach *attach = icalproperty_get_attach(prop);
-        icalparameter *param = NULL;
-        json_t *link = NULL;
-
-        /* Ignore ATTACH properties with value BINARY. */
-        if (!attach || !icalattach_get_is_url(attach)) {
-            continue;
+        const char *id;
+        if (!(id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID))) {
+            buf_reset(&buf);
+            buf_printf(&buf, "%s%zu", idprefix, json_object_size(ret) + 1);
+            id = buf_cstring(&buf);
         }
 
-        /* href */
-        const char *url = icalattach_get_url(attach);
-        if (!url || !strlen(url)) {
-            continue;
-        }
-
-        link = json_pack("{s:s}", "href", url);
-        beginprop_key(ctx, "links", url);
-
-        /* cid */
-        if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_CID))) {
-            json_object_set_new(link, "cid", json_string(s));
-        }
-
-        /* type */
-        param = icalproperty_get_first_parameter(prop, ICAL_FMTTYPE_PARAMETER);
-        if (param && ((s = icalparameter_get_fmttype(param)))) {
-            json_object_set_new(link, "type", json_string(s));
-        }
-
-        /* title - reuse the same x-param as Apple does for their locations  */
-        if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE))) {
-            json_object_set_new(link, "title", json_string(s));
-            localizations_from_icalprop(ctx, "title", prop);
-        }
-
-        /* properties */
-        if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_PROPERTIES))) {
-            json_t *p = decode_base64_json(s);
-            json_object_set_new(link, "properties", p ? p : json_null());
-        }
-
-        /* size */
-        json_int_t size = -1;
-        param = icalproperty_get_size_parameter(prop);
-        if (param) {
-            if ((s = icalparameter_get_size(param))) {
-                char *ptr;
-                size = strtol(s, &ptr, 10);
-                json_object_set_new(link, "size",
-                        ptr && *ptr == '\0' ? json_integer(size) : json_null());
-            }
-        }
-
-        /* rel */
-        if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_REL))) {
-            json_object_set_new(link, "rel", json_string(s));
-        }
-
-        /* use custom JMAP id or url as link id */
-        s = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID);
-        json_object_set_new(ret, s ? s : url, link);
+        beginprop_key(ctx, "links", id);
+        json_t *link = link_from_ical(ctx, prop);
+        if (!link) continue;
         endprop(ctx);
+
+        json_object_set_new(ret, id, link);
+    }
+
+    /* Read iCalendar X-ATTACH properties. They look the same as ATTACH,
+     * but might occur at places where ATTACH is forbidden or restricted
+     * to a single occurence. */
+    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY)) {
+
+        if (strcasecmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_ATTACH)) {
+            continue;
+        }
+
+        const char *id;
+        if (!(id = get_icalxparam_value(prop, JMAPICAL_XPARAM_ID))) {
+            buf_reset(&buf);
+            buf_printf(&buf, "%s%zu", idprefix, json_object_size(ret) + 1);
+            id = buf_cstring(&buf);
+        }
+
+        beginprop_key(ctx, "links", id);
+        json_t *link = link_from_ical(ctx, prop);
+        if (!link) continue;
+        endprop(ctx);
+
+        json_object_set_new(ret, id, link);
     }
 
     if (!json_object_size(ret)) {
@@ -1822,8 +1624,294 @@ links_from_ical(context_t *ctx, icalcomponent *comp)
         ret = json_null();
     }
 
+    buf_free(&buf);
     return ret;
 }
+
+static json_t*
+htmldescription_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
+{
+   icalproperty *prop =icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
+   if (!prop) return json_null();
+
+    icalparameter *altrep = icalproperty_get_first_parameter(prop, ICAL_ALTREP_PARAMETER);
+    if (!altrep) return json_null();
+
+    const char *uri = icalparameter_get_altrep(altrep);
+    if (strncasecmp(uri, "data:text/html;", 15)) return json_null();
+    char *tmp = decode_base64_uri(uri);
+    json_t *htmldesc = tmp ? json_string(tmp) : json_null();
+    free(tmp);
+    return htmldesc;
+}
+
+static json_t *alert_emailaction_from_ical(context_t *ctx, icalcomponent *alarm)
+{
+    json_t *to = json_pack("[]");
+    icalproperty *prop = NULL;
+    icalparameter *param = NULL;
+    json_t *action = NULL;
+    const char *s = NULL;
+
+    for (prop = icalcomponent_get_first_property(alarm, ICAL_ATTENDEE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(alarm, ICAL_ATTENDEE_PROPERTY)) {
+
+        const char *name = NULL;
+        char *email;
+
+        /* email */
+        email = mailaddr_from_uri(icalproperty_get_value_as_string(prop));
+        if (!email) {
+            continue;
+        }
+
+        /* name */
+        param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
+        if (param) {
+            name = icalparameter_get_cn(param);
+        }
+
+        json_array_append_new(to, json_pack("{s:s s:s}", "name", name ? name : "", "email", email));
+        free(email);
+    }
+    if (!json_array_size(to)) {
+        json_decref(to);
+        goto done;
+    }
+    action = json_pack("{s:s s:o}", "type", "email", "to", to);
+
+    /* subject */
+    prop = icalcomponent_get_first_property(alarm, ICAL_SUMMARY_PROPERTY);
+    if (prop && (s = icalproperty_get_summary(prop))) {
+        json_object_set_new(action, "subject", json_string(s));
+        localizations_from_icalprop(ctx, "subject", prop);
+    }
+    /* textBody */
+    prop = icalcomponent_get_first_property(alarm, ICAL_DESCRIPTION_PROPERTY);
+    if (prop && (s = icalproperty_get_description(prop))) {
+        json_object_set_new(action, "textBody", json_string(s));
+        localizations_from_icalprop(ctx, "textBody", prop);
+    }
+
+    /* htmlBody */
+    json_t *htmlBody = htmldescription_from_ical(ctx, alarm);
+    if (JNOTNULL(htmlBody)) {
+        json_object_set_new(action, "htmlBody", htmlBody);
+    }
+
+    /* attachments */
+    json_t *attachments = links_from_ical(ctx, alarm, "alertAttachment");
+    if (JNOTNULL(attachments)) {
+        json_object_set_new(action, "attachments", attachments);
+    }
+
+done:
+    return action;
+}
+
+static json_t *alertaction_from_ical(context_t *ctx,
+                                     hash_table *snoozes,
+                                     icalcomponent *alarm)
+{
+    json_t *action = NULL;
+    icalproperty* prop;
+    icalvalue* val;
+    icalproperty_action icalaction;
+    const char *uid;
+
+    prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
+    if (!prop) goto done;
+
+    val = icalproperty_get_value(prop);
+    if (!val) goto done;
+
+    icalaction = icalvalue_get_action(val);
+
+    if (icalaction == ICAL_ACTION_EMAIL) {
+        action = alert_emailaction_from_ical(ctx, alarm);
+    } else if (icalaction == ICAL_ACTION_DISPLAY || icalaction == ICAL_ACTION_AUDIO) {
+        action = json_pack("{s:s}", "type", "display");
+        /* mediaLinks */
+        json_t *mediaLinks = links_from_ical(ctx, alarm, "alertMediaLink");
+        if (JNOTNULL(mediaLinks)) {
+            json_object_set_new(action, "mediaLinks", mediaLinks);
+        }
+    }
+    if (!action) {
+        goto done;
+    }
+
+    /* acknowledged */
+    if ((prop = icalcomponent_get_acknowledged_property(alarm))) {
+        icaltimetype t = icalproperty_get_acknowledged(prop);
+        if (icaltime_is_valid_time(t)) {
+            char *val = utcdate_from_icaltime_r(t);
+            json_object_set_new(action, "acknowledged", json_string(val));
+            free(val);
+        }
+    }
+
+    /* snoozed */
+    icalcomponent *snooze;
+    if ((uid = icalcomponent_get_uid(alarm)) &&
+        (snooze = hash_lookup(uid, snoozes)) &&
+        (prop = icalcomponent_get_first_property(snooze,
+                                                 ICAL_TRIGGER_PROPERTY))) {
+
+        icaltimetype t = icalproperty_get_trigger(prop).time;
+        if (!icaltime_is_null_time(t) && icaltime_is_valid_time(t)) {
+            char *val = utcdate_from_icaltime_r(t);
+            json_object_set_new(action, "snoozed", json_string(val));
+            free(val);
+        }
+    }
+
+done:
+    return action;
+}
+
+/* Convert the VALARMS in the VEVENT comp to CalendarEvent alerts.
+ * Adds any ATTACH properties found in VALARM components to the
+ * event 'links' property. */
+static json_t*
+alerts_from_ical(context_t *ctx, icalcomponent *comp)
+{
+    json_t* alerts = json_pack("{}");
+    icalcomponent* alarm;
+    hash_table snoozes;
+    ptrarray_t alarms = PTRARRAY_INITIALIZER;
+
+    construct_hash_table(&snoozes, 32, 0);
+
+    /* Split VALARMS into regular alerst and their snoozing VALARMS */
+    for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
+         alarm;
+         alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
+
+        icalproperty* prop = NULL;
+        icalparameter *param = NULL;
+        const char *uid = NULL;
+
+        /* Check for RELATED-TO property... */
+        prop = icalcomponent_get_first_property(alarm, ICAL_RELATEDTO_PROPERTY);
+        if (!prop) {
+            ptrarray_push(&alarms, alarm);
+            continue;
+        }
+        /* .. that has a UID value... */
+        uid = icalproperty_get_value_as_string(prop);
+        if (!uid || !strlen(uid)) {
+            ptrarray_push(&alarms, alarm);
+            continue;
+        }
+        /* ... and it's RELTYPE is set to SNOOZE */
+        param = icalproperty_get_first_parameter(prop, ICAL_RELTYPE_PARAMETER);
+        if (!param || strcasecmp(icalparameter_get_xvalue(param), "SNOOZE")) {
+            ptrarray_push(&alarms, alarm);
+            continue;
+        }
+
+        /* Must be a SNOOZE alarm */
+        hash_insert(uid, alarm, &snoozes);
+    }
+
+    while ((alarm = (icalcomponent*) ptrarray_pop(&alarms))) {
+        icalproperty* prop;
+        icalparameter *param;
+        struct icaltriggertype trigger;
+        icalparameter_related related = ICAL_RELATED_START;
+
+        json_t *action, *alert;
+        const char *relativeTo;
+        char *id, *offset;
+        struct icaldurationtype duration;
+
+        relativeTo = offset = id = NULL;
+
+        /* alert id */
+        id = (char *) icalcomponent_get_uid(alarm);
+        if (!id) {
+            id = hexkey(icalcomponent_as_ical_string(alarm));
+        } else {
+            id = xstrdup(id);
+        }
+        beginprop_key(ctx, "alerts", id);
+
+        /* Determine TRIGGER */
+        prop = icalcomponent_get_first_property(alarm, ICAL_TRIGGER_PROPERTY);
+        if (!prop) {
+            goto done;
+        }
+        trigger = icalproperty_get_trigger(prop);
+
+        /* Determine RELATED parameter */
+        param = icalproperty_get_first_parameter(prop, ICAL_RELATED_PARAMETER);
+        if (param) {
+            related = icalparameter_get_related(param);
+            if (related != ICAL_RELATED_START && related != ICAL_RELATED_END) {
+                goto done;
+            }
+        }
+
+        /* Determine duration between alarm and start/end */
+        if (!icaldurationtype_is_null_duration(trigger.duration)) {
+            duration = trigger.duration;
+        } else {
+            icaltimetype ttrg, tref;
+            icaltimezone *utc = icaltimezone_get_utc_timezone();
+
+            ttrg = icaltime_convert_to_zone(trigger.time, utc);
+            if (related == ICAL_RELATED_START) {
+                tref = icaltime_convert_to_zone(dtstart_from_ical(comp), utc);
+            } else {
+                tref = icaltime_convert_to_zone(dtend_from_ical(comp), utc);
+            }
+            duration = icaltime_subtract(ttrg, tref);
+        }
+
+        /* action */
+        beginprop(ctx, "action");
+        action = alertaction_from_ical(ctx, &snoozes, alarm);
+        endprop(ctx);
+        if (!action) {
+            goto done;
+        }
+
+        /* relativeTo */
+        if (duration.is_neg) {
+            relativeTo = related == ICAL_RELATED_START ?
+                "before-start" : "before-end";
+        } else {
+            relativeTo = related == ICAL_RELATED_START ?
+                "after-start" : "after-end";
+        }
+
+        /* offset*/
+        duration.is_neg = 0;
+        offset = icaldurationtype_as_ical_string_r(duration);
+        alert = json_pack("{s:s s:s s:o}",
+                "relativeTo", relativeTo,
+                "offset", offset,
+                "action", action);
+        json_object_set_new(alerts, id, alert);
+        free(offset);
+done:
+        endprop(ctx);
+        free(id);
+    }
+
+    if (!json_object_size(alerts)) {
+        json_decref(alerts);
+        alerts = json_null();
+    }
+
+    ptrarray_fini(&alarms);
+    free_hash_table(&snoozes, NULL);
+    return alerts;
+}
+
+
 
 /* Convert a VEVENT ical component to CalendarEvent keywords */
 static json_t*
@@ -2209,23 +2297,6 @@ locale_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
     return lang ? json_string(lang) : json_null();
 }
 
-static json_t*
-htmldescription_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
-{
-   icalproperty *prop =icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
-   if (!prop) return json_null();
-
-    icalparameter *altrep = icalproperty_get_first_parameter(prop, ICAL_ALTREP_PARAMETER);
-    if (!altrep) return json_null();
-
-    const char *uri = icalparameter_get_altrep(altrep);
-    if (strncasecmp(uri, "data:text/html;", 15)) return json_null();
-    char *tmp = decode_base64_uri(uri);
-    json_t *htmldesc = tmp ? json_string(tmp) : json_null();
-    free(tmp);
-    return htmldesc;
-}
-
 /* Convert the libical VEVENT comp to a CalendarEvent 
  *
  * parent: if not NULL, treat comp as a VEVENT exception
@@ -2384,7 +2455,7 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
 
     /* links */
     if (wantprop(ctx, "links") || wantprop(ctx, "localizations")) {
-        json_object_set_new(event, "links", links_from_ical(ctx, comp));
+        json_object_set_new(event, "links", links_from_ical(ctx, comp, "link"));
         if (!wantprop(ctx, "links")) {
             json_object_del(event, "links");
         }
@@ -3217,6 +3288,154 @@ participants_to_ical(context_t *ctx, icalcomponent *comp, json_t *participants)
 }
 
 static void
+links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links,
+              const char *propname, icalproperty_kind icalkind)
+{
+    icalproperty *prop;
+    struct buf buf = BUF_INITIALIZER;
+
+    /* Purge existing attachments */
+    remove_icalprop(comp, icalkind);
+
+    const char *id;
+    json_t *link;
+    json_object_foreach(links, id, link) {
+        int pe;
+        const char *href = NULL;
+        const char *type = NULL;
+        const char *title = NULL;
+        const char *rel = NULL;
+        const char *cid = NULL;
+        json_int_t size = -1;
+        json_t *properties = NULL;
+
+        beginprop_key(ctx, propname, id);
+
+        pe = readprop(ctx, link, "href", 1, "s", &href);
+        if (pe > 0) {
+            if (!strlen(href)) {
+                invalidprop(ctx, "href");
+                href = NULL;
+            }
+        }
+        if (JNOTNULL(json_object_get(link, "type"))) {
+            readprop(ctx, link, "type", 0, "s", &type);
+        }
+        if (JNOTNULL(json_object_get(link, "title"))) {
+            readprop(ctx, link, "title", 0, "s", &title);
+        }
+        if (JNOTNULL(json_object_get(link, "cid"))) {
+            readprop(ctx, link, "cid", 0, "s", &cid);
+        }
+        if (JNOTNULL(json_object_get(link, "size"))) {
+            pe = readprop(ctx, link, "size", 0, "I", &size);
+            if (pe > 0 && size < 0) {
+                invalidprop(ctx, "size");
+            }
+        }
+        if (JNOTNULL(json_object_get(link, "properties"))) {
+            pe = readprop(ctx, link, "properties", 0, "o", &properties);
+            if (pe > 0 && !json_object_size(properties)) {
+                invalidprop(ctx, "properties");
+            }
+        }
+        readprop(ctx, link, "rel", 0, "s", &rel);
+
+        if (href && !have_invalid_props(ctx)) {
+
+            /* Build iCalendar property */
+            if (icalkind == ICAL_ATTACH_PROPERTY) {
+                icalattach *icalatt = icalattach_new_from_url(href);
+                prop = icalproperty_new_attach(icalatt);
+                icalattach_unref(icalatt);
+            }
+            else {
+                prop = icalproperty_new(ICAL_X_PROPERTY);
+                icalproperty_set_x_name(prop, JMAPICAL_XPROP_ATTACH);
+                icalproperty_set_value(prop, icalvalue_new_uri(href));
+            }
+
+            /* type */
+            if (type) {
+                icalproperty_add_parameter(prop,
+                        icalparameter_new_fmttype(type));
+            }
+
+            /* title */
+            if (title) {
+                set_icalxparam(prop, JMAPICAL_XPARAM_TITLE, title, 1);
+            }
+            localizations_to_icalprop(ctx, "title", prop);
+
+            /* cid */
+            if (cid) set_icalxparam(prop, JMAPICAL_XPARAM_CID, cid, 1);
+
+            /* size */
+            if (size >= 0) {
+                buf_printf(&buf, "%"JSON_INTEGER_FORMAT, size);
+                icalproperty_add_parameter(prop,
+                        icalparameter_new_size(buf_cstring(&buf)));
+                buf_reset(&buf);
+            }
+
+            /* rel */
+            if (rel && strcmp(rel, "rel")) {
+                set_icalxparam(prop, JMAPICAL_XPARAM_REL, rel, 1);
+            }
+
+            /* properties */
+            if (properties) {
+                char *tmp = encode_base64_json(properties);
+                set_icalxparam(prop, JMAPICAL_XPARAM_PROPERTIES, tmp, 1);
+                free(tmp);
+            }
+
+            /* Set custom id */
+            set_icalxparam(prop, JMAPICAL_XPARAM_ID, id, 1);
+
+            /* Add ATTACH property. */
+            icalcomponent_add_property(comp, prop);
+        }
+        endprop(ctx);
+        buf_free(&buf);
+    }
+}
+
+static void
+htmldescription_to_ical(context_t *ctx __attribute__((unused)),
+                        icalcomponent *comp, json_t *htmldesc)
+{
+    icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
+
+    /* Purge existing ALTREP, no matter what */
+    if (prop) icalproperty_remove_parameter_by_kind(prop, ICAL_ALTREP_PARAMETER);
+
+    if (htmldesc == json_null())
+        return;
+
+    if (!prop) {
+        prop = icalproperty_new_description("");
+        icalcomponent_add_property(comp, prop);
+    }
+
+    /* Set HTML description in ALTREP parameter */
+    const char *html = json_string_value(htmldesc);
+    char *uri = encode_base64_uri(html, strlen(html), "text/html");
+    icalparameter *altrep = icalparameter_new_altrep(uri);
+    icalproperty_add_parameter(prop, altrep);
+    free(uri);
+
+    /* Convert HTML to plain */
+    /* libical returns NULL for empty string */
+    const char *s = icalproperty_get_description(prop);
+    if (!s || *s == '\0') {
+        char *plain = charset_extract_plain(html);
+        if (html) icalproperty_set_description(prop, plain);
+        free(plain);
+    }
+}
+
+static void
 alertaction_to_ical(context_t *ctx, icalcomponent *comp, icalcomponent *alarm,
                     json_t *action, int *is_unknown)
 {
@@ -3290,9 +3509,36 @@ alertaction_to_ical(context_t *ctx, icalcomponent *comp, icalcomponent *alarm,
         readprop(ctx, action, "textBody", 0, "s", &s);
         prop = icalproperty_new_description(s ? s : "");
         icalcomponent_add_property(alarm, prop);
+
+        /* htmlBody - must come after setting textBody */
+        json_t *htmlBody = json_object_get(action, "htmlBody");
+        if (json_is_null(htmlBody) || json_is_string(htmlBody)) {
+            htmldescription_to_ical(ctx, alarm, htmlBody);
+        }
+        else if (JNOTNULL(htmlBody)) {
+            invalidprop(ctx, "htmlBody");
+        }
+
+        /* attachments */
+        json_t *attachments = json_object_get(action, "attachments");
+        if (json_is_null(attachments) || json_is_object(attachments)) {
+            links_to_ical(ctx, alarm, attachments, "attachments", ICAL_ATTACH_PROPERTY);
+        }
+        else if (JNOTNULL(attachments)) {
+            invalidprop(ctx, "attachments");
+        }
     } else {
+        /* A DISPLAY alert */
         prop = icalproperty_new_description("");
         icalcomponent_add_property(alarm, prop);
+
+        json_t *mediaLinks = json_object_get(action, "mediaLinks");
+        if (json_is_null(mediaLinks) || json_is_object(mediaLinks)) {
+            links_to_ical(ctx, alarm, mediaLinks, "mediaLinks", ICAL_X_PROPERTY);
+        }
+        else if (JNOTNULL(mediaLinks)) {
+            invalidprop(ctx, "mediaLinks");
+        }
     }
 
     /* snoozed */
@@ -3753,147 +3999,6 @@ recurrence_to_ical(context_t *ctx, icalcomponent *comp, json_t *recur)
 
     endprop(ctx);
     buf_free(&buf);
-}
-
-static void
-htmldescription_to_ical(context_t *ctx __attribute__((unused)),
-                        icalcomponent *comp, json_t *htmldesc)
-{
-    icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
-
-    /* Purge existing ALTREP, no matter what */
-    if (prop) icalproperty_remove_parameter_by_kind(prop, ICAL_ALTREP_PARAMETER);
-
-    if (htmldesc == json_null())
-        return;
-
-    if (!prop) {
-        prop = icalproperty_new_description("");
-        icalcomponent_add_property(comp, prop);
-    }
-
-    /* Set HTML description in ALTREP parameter */
-    const char *html = json_string_value(htmldesc);
-    char *uri = encode_base64_uri(html, strlen(html), "text/html");
-    icalparameter *altrep = icalparameter_new_altrep(uri);
-    icalproperty_add_parameter(prop, altrep);
-    free(uri);
-
-    /* Convert HTML to plain */
-    /* libical returns NULL for empty string */
-    const char *s = icalproperty_get_description(prop);
-    if (!s || *s == '\0') {
-        char *plain = charset_extract_plain(html);
-        if (html) icalproperty_set_description(prop, plain);
-        free(plain);
-    }
-}
-
-static void
-links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links)
-{
-    icalproperty *prop;
-    struct buf buf = BUF_INITIALIZER;
-
-    /* Purge existing ATTACHments */
-    remove_icalprop(comp, ICAL_ATTACH_PROPERTY);
-
-    const char *id;
-    json_t *link;
-    json_object_foreach(links, id, link) {
-        int pe;
-        const char *href = NULL;
-        const char *type = NULL;
-        const char *title = NULL;
-        const char *rel = NULL;
-        const char *cid = NULL;
-        json_int_t size = -1;
-        json_t *properties = NULL;
-
-        beginprop_key(ctx, "links", id);
-
-        pe = readprop(ctx, link, "href", 1, "s", &href);
-        if (pe > 0) {
-            if (!strlen(href)) {
-                invalidprop(ctx, "href");
-                href = NULL;
-            }
-        }
-        if (JNOTNULL(json_object_get(link, "type"))) {
-            readprop(ctx, link, "type", 0, "s", &type);
-        }
-        if (JNOTNULL(json_object_get(link, "title"))) {
-            readprop(ctx, link, "title", 0, "s", &title);
-        }
-        if (JNOTNULL(json_object_get(link, "cid"))) {
-            readprop(ctx, link, "cid", 0, "s", &cid);
-        }
-        if (JNOTNULL(json_object_get(link, "size"))) {
-            pe = readprop(ctx, link, "size", 0, "I", &size);
-            if (pe > 0 && size < 0) {
-                invalidprop(ctx, "size");
-            }
-        }
-        if (JNOTNULL(json_object_get(link, "properties"))) {
-            pe = readprop(ctx, link, "properties", 0, "o", &properties);
-            if (pe > 0 && !json_object_size(properties)) {
-                invalidprop(ctx, "properties");
-            }
-        }
-        readprop(ctx, link, "rel", 0, "s", &rel);
-
-        if (href && !have_invalid_props(ctx)) {
-            /* href */
-            icalattach *icalatt = icalattach_new_from_url(href);
-            prop = icalproperty_new_attach(icalatt);
-            icalattach_unref(icalatt);
-
-            /* type */
-            if (type) {
-                icalproperty_add_parameter(prop,
-                        icalparameter_new_fmttype(type));
-            }
-
-            /* title */
-            if (title) {
-                set_icalxparam(prop, JMAPICAL_XPARAM_TITLE, title, 1);
-            }
-            localizations_to_icalprop(ctx, "title", prop);
-
-            /* cid */
-            if (cid) set_icalxparam(prop, JMAPICAL_XPARAM_CID, cid, 1);
-
-            /* size */
-            if (size >= 0) {
-                buf_printf(&buf, "%"JSON_INTEGER_FORMAT, size);
-                icalproperty_add_parameter(prop,
-                        icalparameter_new_size(buf_cstring(&buf)));
-                buf_reset(&buf);
-            }
-
-            /* rel */
-            if (rel && strcmp(rel, "rel")) {
-                set_icalxparam(prop, JMAPICAL_XPARAM_REL, rel, 1);
-            }
-
-            /* properties */
-            if (properties) {
-                char *tmp = encode_base64_json(properties);
-                set_icalxparam(prop, JMAPICAL_XPARAM_PROPERTIES, tmp, 1);
-                free(tmp);
-            }
-
-            /* Set custom id if it doesn't match href */
-            if (strcmp(id, href)) {
-                set_icalxparam(prop, JMAPICAL_XPARAM_ID, id, 1);
-            }
-
-            /* Add ATTACH property. */
-            icalcomponent_add_property(comp, prop);
-        }
-        endprop(ctx);
-        buf_free(&buf);
-    }
 }
 
 /* Create or overwrite JMAP keywords in comp */
@@ -4520,7 +4625,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         localizations_to_icalprop(ctx, "description", prop);
     }
 
-    /* htmlDescription - must come after setting DESCRIPTION property */
+    /* htmlDescription - must come after description property */
     json_t *htmldesc = json_object_get(event, "htmlDescription");
     if (htmldesc == json_null() || json_is_string(htmldesc)) {
         htmldescription_to_ical(ctx, comp, htmldesc);
@@ -4551,7 +4656,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     pe = readprop(ctx, event, "links", 0, "o", &links);
     if (pe > 0) {
         if (json_is_null(links) || json_object_size(links)) {
-            links_to_ical(ctx, comp, links);
+            links_to_ical(ctx, comp, links, "links", ICAL_ATTACH_PROPERTY);
         } else {
             invalidprop(ctx, "links");
         }
