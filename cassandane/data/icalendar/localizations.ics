@@ -14,7 +14,7 @@ X-APPLE-EWS-BUSYSTATUS:BUSY
 DESCRIPTION;X-JMAP-LOCALIZATION="de:Beschreibung";X-JMAP-LOCALIZATION="fr:legende":description
 SUMMARY;LANGUAGE=en;X-JMAP-LOCALIZATION="de:Titel":title
 LOCATION;X-JMAP-ID=loc1;X-JMAP-LOCALIZATION="de:Am Planet Erde":On planet Earth
-ATTACH;FMTTYPE=text/html;SIZE=4480;X-TITLE="the spec";X-JMAP-LOCALIZATION="de:die Spezifikation":http://jmap.io/spec.html#calendar-events
+ATTACH;FMTTYPE=text/html;SIZE=4480;X-TITLE="the spec";X-JMAP-LOCALIZATION="de:die Spezifikation";X-JMAP-ID=link1:http://jmap.io/spec.html#calendar-events
 DTSTART;TZID=Europe/Vienna:20160914T111500
 X-APPLE-TRAVEL-ADVISORY-BEHAVIOR:AUTOMATIC
 CREATED:20160914T081528Z

@@ -978,7 +978,7 @@ sub test_calendarevent_get_links
     my $uri = "http://jmap.io/spec.html#calendar-events";
 
     my $links = {
-        $uri => {
+        'link1' => {
             href => $uri,
             type => "text/html",
             size => 4480,
@@ -1215,6 +1215,7 @@ sub test_calendarevent_get_alerts
         action => {
             type => "display",
             snoozed => "2016-09-28T15:00:05Z",
+
         },
     };
 
@@ -1223,6 +1224,17 @@ sub test_calendarevent_get_alerts
     $self->assert_deep_equals($alert1, $event->{alerts}{$aid1});
     $self->assert_deep_equals($alert2, $event->{alerts}{$aid2});
     $self->assert_deep_equals($alert3, $event->{alerts}{$aid3});
+
+    # Check AUDIO VALARM
+    my $alert4 = $event->{alerts}{"0CF835D0-CFEB-44AE-904A-C26AB62B73BB-4"};
+    $self->assert_str_equals('display', $alert4->{action}{type});
+    my $mediaLinks = {
+        'alertMediaLink1' => {
+            href => 'https://local/foo.ogg',
+            type => 'audio/ogg',
+        }
+    };
+    $self->assert_deep_equals($mediaLinks, $alert4->{action}{mediaLinks});
 }
 
 sub test_calendarevent_get_locations
@@ -1322,7 +1334,7 @@ sub test_calendarevent_get_localizations
     $self->assert_str_equals("Beschreibung", $locs->{de}{description});
     $self->assert_str_equals("legende", $locs->{fr}{description});
     $self->assert_str_equals("Am Planet Erde", $locs->{de}{"locations/loc1/name"});
-    $self->assert_str_equals("die Spezifikation", $locs->{de}{"links/http:~1~1jmap.io~1spec.html#calendar-events/title"});
+    $self->assert_str_equals("die Spezifikation", $locs->{de}{"links/link1/title"});
     $self->assert_str_equals("Ihr Alarm", $locs->{de}{"alerts/43910EF2-F4D9-43F9-AEDD-1CADC38B05FB/action/subject"});
 
     my $o = $event->{recurrenceOverrides};
@@ -2182,7 +2194,14 @@ sub test_calendarevent_set_alerts
                     }],
                 subject => "foo",
                 textBody => "bar",
+                htmlBody => "<html><body>baz</body></html>",
                 acknowledged => "2015-11-07T08:57:00Z",
+                attachments => {
+                    att1 => {
+                        href => "https://local/some.jpg",
+                        type => "image/jpeg",
+                    }
+                },
             },
         },
         alert2 => {
@@ -2191,6 +2210,12 @@ sub test_calendarevent_set_alerts
             action => {
                 type => "display",
                 snoozed => "2015-11-07T10:05:00Z",
+                mediaLinks => {
+                    alertLink1 => {
+                        type => 'video/ogg',
+                        href => 'https://local/bar.ogg'
+                    }
+                },
             },
         },
     };
