@@ -8675,7 +8675,45 @@ sub test_email_get_references
     $self->assert_str_equals(' ' . $rawReferences, $msg->{'header:references'});
     $self->assert_deep_equals($parsedReferences, $msg->{'header:references:asMessageIds'});
     $self->assert_deep_equals($parsedReferences, $msg->{references});
+}
 
+sub test_email_get_groupaddr
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # Straight from Appendix A.1.3 of RFC 5322
+    my $rawTo = 'A Group:Ed Jones <c@a.test>,joe@where.test,John <jdoe@one.test>';
+    my $wantTo = [{
+        name => 'A Group',
+        email => undef,
+    }, {
+        name => 'Ed Jones',
+        email => 'c@a.test',
+    }, {
+        name => undef,
+        email => 'joe@where.test'
+    }, {
+        name => 'John',
+        email => 'jdoe@one.test',
+    }, {
+        name => undef,
+        email => undef
+    }];
+
+    my $msg = $self->{gen}->generate();
+    $msg->set_headers('To', ($rawTo));
+    $self->_save_message($msg);
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => ['to'],
+        }, 'R2' ],
+    ]);
+    $self->assert_deep_equals($wantTo, $res->[1][1]{list}[0]->{to});
 }
 
 1;
