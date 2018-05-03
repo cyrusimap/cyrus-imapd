@@ -1,5 +1,4 @@
 #!/usr/bin/perl -c
-
 package Cyrus::IndexFile;
 
 use strict;
@@ -211,12 +210,12 @@ SKIPPED VERSION 11 - Fastmail internal only
  19: FirstExpunged         time_t 4
  20: LastCleanup           time_t 4
  21: HeaderFileCRC         int32  4
- 22: SyncCRC               int32  4
+ 22: SyncCRCsBasic         int32  4
  23: RecentUid             int32  4
  24: RecentTime            time_t 4
- 25: Spare0                int32  4
- 26: Spare1                int32  4
- 27: Spare2                int32  4
+ 25: Pop3ShowAfter         int32  4
+ 26: QuotaAnnotUsed        int32  4
+ 27: SyncCRCsAnnot         int32  4
  28: HeaderCRC             int32  4
 
  Record:
@@ -231,6 +230,128 @@ SKIPPED VERSION 11 - Fastmail internal only
   8: SystemFlags           bitmap 4
   9: UserFlags             bitmap 16
  10: ContentLines          int32  4
+ 11: CacheVersion          int32  4
+ 12: MessageGuid           hex    20
+ 13: Modseq                int64  8
+ 14: CID                   hex    8
+ 15: CacheCRC              int32  4
+ 16: RecordCRC             int32  4
+
+ Version 14:
+ ===========
+
+ Header:
+  0: Generation            int32  4
+  1: Format                int32  4
+  2: MinorVersion          int32  4
+  3: StartOffset           int32  4
+  4: RecordSize            int32  4
+  5: Exists                int32  4
+  6: LastAppenddate        time_t 4
+  7: LastUid               int32  4
+  8: QuotaUsed             int64  8
+  9: Pop3LastLogin         time_t 4
+ 10: UidValidity           int32  4
+ 11: Deleted               int32  4
+ 12: Answered              int32  4
+ 13: Flagged               int32  4
+ 14: Options               bitmap 4
+ 15: LeakedCache           int32  4
+ 16: HighestModseq         int64  8
+ 17: DeletedModseq         int64  8
+ 18: Exists                int32  4
+ 19: FirstExpunged         time_t 4
+ 20: LastCleanup           time_t 4
+ 21: HeaderFileCRC         int32  4
+ 22: SyncCRC               int32  4
+ 23: RecentUid             int32  4
+ 24: RecentTime            time_t 4
+ 25: Pop3ShowAfter         int32  4
+ 26: QuotaAnnotUsed        int32  4
+ 27: SyncCRCsAnnot         int32  4
+ 28: Unseen                int32  4
+ 29: Spare0                int32  4
+ 30: Spare1                int32  4
+ 31: Spare2                int32  4
+ 32: Spare3                int32  4
+ 33: Spare4                int32  4
+ 34: Spare5                int32  4
+ 34: Spare6                int32  4
+ 35: HeaderCRC             int32  4
+
+ Record:
+  0: Uid                   int32  4
+  1: InternalDate          time_t 4
+  2: SentDate              time_t 4
+  3: Size                  int32  4
+  4: HeaderSize            int32  4
+  5: GmTime                time_t  4
+  6: CacheOffset           int32  4
+  7: LastUpdated           time_t 4
+  8: SystemFlags           bitmap 4
+  9: UserFlags             bitmap 16
+ 10: ContentLines          int32  4
+ 11: CacheVersion          int32  4
+ 12: MessageGuid           hex    20
+ 13: Modseq                int64  8
+ 14: CID                   hex    8
+ 15: CacheCRC              int32  4
+ 16: RecordCRC             int32  4
+
+ Version 15:
+ ===========
+
+ Header:
+  0: Generation            int32  4
+  1: Format                int32  4
+  2: MinorVersion          int32  4
+  3: StartOffset           int32  4
+  4: RecordSize            int32  4
+  5: Exists                int32  4
+  6: LastAppenddate        time_t 4
+  7: LastUid               int32  4
+  8: QuotaUsed             int64  8
+  9: Pop3LastLogin         time_t 4
+ 10: UidValidity           int32  4
+ 11: Deleted               int32  4
+ 12: Answered              int32  4
+ 13: Flagged               int32  4
+ 14: Options               bitmap 4
+ 15: LeakedCache           int32  4
+ 16: HighestModseq         int64  8
+ 17: DeletedModseq         int64  8
+ 18: Exists                int32  4
+ 19: FirstExpunged         time_t 4
+ 20: LastCleanup           time_t 4
+ 21: HeaderFileCRC         int32  4
+ 22: SyncCRC               int32  4
+ 23: RecentUid             int32  4
+ 24: RecentTime            time_t 4
+ 25: Pop3ShowAfter         int32  4
+ 26: QuotaAnnotUsed        int32  4
+ 27: SyncCRCsAnnot         int32  4
+ 28: Unseen                int32  4
+ 29: Spare0                int32  4
+ 30: Spare1                int32  4
+ 31: Spare2                int32  4
+ 32: Spare3                int32  4
+ 33: Spare4                int32  4
+ 34: Spare5                int32  4
+ 34: Spare6                int32  4
+ 35: HeaderCRC             int32  4
+
+ Record:
+  0: Uid                   int32  4
+  1: InternalDate          time_t 4
+  2: SentDate              time_t 4
+  3: Size                  int32  4
+  4: HeaderSize            int32  4
+  5: GmTime                time_t  4
+  6: CacheOffset           int32  4
+  7: LastUpdated           time_t 4
+  8: SystemFlags           bitmap 4
+  9: UserFlags             bitmap 16
+ 10: SaveDate              time_t  4
  11: CacheVersion          int32  4
  12: MessageGuid           hex    20
  13: Modseq                int64  8
@@ -456,12 +577,12 @@ Exists                int32  4
 FirstExpunged         time_t 4
 LastCleanup           time_t 4
 HeaderFileCRC         int32  4
-SyncCRC               int32  4
+SyncCRCsBasic         int32  4
 RecentUid             int32  4
 RecentTime            time_t 4
 Pop3ShowAfter         int32  4
 QuotaAnnotUsed        int32  4
-SyncCRCVersion        int32  4
+SyncCRCsAnnot         int32  4
 HeaderCrc             int32  4
 EOF
     RecordSize => 104, # defined in file too, check it!
@@ -485,6 +606,131 @@ CacheCrc              int32  4
 RecordCrc             int32  4
 EOF
   },
+  14 => {
+    HeaderSize => 160,
+    _make_fields('Header',<<EOF),
+Generation            int32  4
+Format                int32  4
+MinorVersion          int32  4
+StartOffset           int32  4
+RecordSize            int32  4
+NumRecords            int32  4
+LastAppenddate        time_t 4
+LastUid               int32  4
+QuotaUsed             int64  8
+Pop3LastLogin         time_t 4
+UidValidity           int32  4
+Deleted               int32  4
+Answered              int32  4
+Flagged               int32  4
+Options               bitmap 4
+LeakedCache           int32  4
+HighestModseq         int64  8
+DeletedModseq         int64  8
+Exists                int32  4
+FirstExpunged         time_t 4
+LastCleanup           time_t 4
+HeaderFileCRC         int32  4
+SyncCRCsBasic         int32  4
+RecentUid             int32  4
+RecentTime            time_t 4
+Pop3ShowAfter         int32  4
+QuotaAnnotUsed        int32  4
+SyncCRCsAnnot         int32  4
+Unseen                int32  4
+Spare0                int32  4
+Spare1                int32  4
+Spare2                int32  4
+Spare3                int32  4
+Spare4                int32  4
+Spare5                int32  4
+Spare6                int32  4
+HeaderCrc             int32  4
+EOF
+    RecordSize => 104, # defined in file too, check it!
+    _make_fields('Record', <<EOF),
+Uid                   int32  4
+InternalDate          time_t 4
+SentDate              time_t 4
+Size                  int32  4
+HeaderSize            int32  4
+GmTime                time_t 4
+CacheOffset           int32  4
+LastUpdated           time_t 4
+SystemFlags           bitmap 4
+UserFlags             bitmap 16
+ContentLines          int32  4
+CacheVersion          int32  4
+MessageGuid           hex    20
+Modseq                int64  8
+CID                   hex    8
+CacheCrc              int32  4
+RecordCrc             int32  4
+EOF
+  },
+  15 => {
+    HeaderSize => 160,
+    _make_fields('Header',<<EOF),
+Generation            int32  4
+Format                int32  4
+MinorVersion          int32  4
+StartOffset           int32  4
+RecordSize            int32  4
+NumRecords            int32  4
+LastAppenddate        time_t 4
+LastUid               int32  4
+QuotaUsed             int64  8
+Pop3LastLogin         time_t 4
+UidValidity           int32  4
+Deleted               int32  4
+Answered              int32  4
+Flagged               int32  4
+Options               bitmap 4
+LeakedCache           int32  4
+HighestModseq         int64  8
+DeletedModseq         int64  8
+Exists                int32  4
+FirstExpunged         time_t 4
+LastCleanup           time_t 4
+HeaderFileCRC         int32  4
+SyncCRCsBasic         int32  4
+RecentUid             int32  4
+RecentTime            time_t 4
+Pop3ShowAfter         int32  4
+QuotaAnnotUsed        int32  4
+SyncCRCsAnnot         int32  4
+Unseen                int32  4
+Spare0                int32  4
+Spare1                int32  4
+Spare2                int32  4
+Spare3                int32  4
+Spare4                int32  4
+Spare5                int32  4
+Spare6                int32  4
+HeaderCrc             int32  4
+EOF
+    RecordSize => 104, # defined in file too, check it!
+    _make_fields('Record', <<EOF),
+Uid                   int32  4
+InternalDate          time_t 4
+SentDate              time_t 4
+Size                  int32  4
+HeaderSize            int32  4
+GmTime                time_t 4
+CacheOffset           int32  4
+LastUpdated           time_t 4
+SystemFlags           bitmap 4
+UserFlags             bitmap 16
+SaveDate              time_t 4
+CacheVersion          int32  4
+MessageGuid           hex    20
+Modseq                int64  8
+CID                   hex    8
+CacheCrc              int32  4
+RecordCrc             int32  4
+EOF
+
+  },
 };
 
 my %SystemFlagMap = (
@@ -493,6 +739,8 @@ my %SystemFlagMap = (
    2 => "\\Deleted",
    3 => "\\Draft",
    4 => "\\Seen",
+  27 => "[SPLITCONVERSATION]",
+  28 => "[NEEDS-CLEANUP]",
   29 => "[ARCHIVED]",
   30 => "[UNLINKED]",
   31 => "[EXPUNGED]",
@@ -550,8 +798,6 @@ sub _make_pack {
 # }}}
 
 =head1 PUBLIC API
-
-=over
 
 =item Cyrus::IndexFile->new($fh)
 
@@ -915,34 +1161,6 @@ sub record {
   return $record;
 }
 
-sub record_hash {
-  my $Self = shift;
-  unless (exists $Self->{record}{hash}) {
-    $Self->{record}{hash} = $Self->_record_a2h($Self->record_array(@_));
-  }
-  return $Self->{record}{hash};
-}
-
-sub record_array {
-  my $Self = shift;
-  unless (exists $Self->{record}{array}) {
-    $Self->{record}{array} = $Self->_record_b2a($Self->{rawrecord});
-  }
-  return $Self->{record}{array};
-}
-
-sub record_raw {
-   my $Self = shift;
-   return $Self->{rawrecord};
-}
-
-=item $index->system_flags([$Key])
-
-Returns a hash of the system flags set on the current record, or just the
-named flag if a Key is passed.
-
-=cut
-
 sub system_flags {
   my $Self = shift;
   my $Field = shift;
@@ -961,12 +1179,7 @@ sub system_flags {
   return wantarray ? %hash : \%hash;
 }
 
-=item $index->flagslist($Header)
-
-Given a Cyrus::HeaderFile object to name the UserFlags, return an array of all
-flags, both SystemFlags and UserFlags set on the record.
-
-=cut
+# arg is a Cyrus::HeaderFile to give us names for user flags
 sub flagslist {
   my $Self = shift;
   my $Header = shift;
@@ -991,6 +1204,27 @@ sub flagslist {
   }
 
   return wantarray ? @flags : \@flags;
+}
+
+sub record_hash {
+  my $Self = shift;
+  unless (exists $Self->{record}{hash}) {
+    $Self->{record}{hash} = $Self->_record_a2h($Self->record_array(@_));
+  }
+  return $Self->{record}{hash};
+}
+
+sub record_array {
+  my $Self = shift;
+  unless (exists $Self->{record}{array}) {
+    $Self->{record}{array} = $Self->_record_b2a($Self->{rawrecord});
+  }
+  return $Self->{record}{array};
+}
+
+sub record_raw {
+   my $Self = shift;
+   return $Self->{rawrecord};
 }
 
 =item $index->field_number($Field)
@@ -1459,11 +1693,9 @@ sub _record_h2a {
   return \@array;
 }
 
-=back
+=item AUTHOR AND COPYRIGHT
 
-=head1 AUTHOR AND COPYRIGHT
-
-Bron Gondwana <brong@fastmail.fm> - Copyright 2008 FastMail
+Bron Gondwana <brong@fastmailteam.com> - Copyright 2018 FastMail
 
 Licenced under the same terms as Cyrus IMAPd.
 
