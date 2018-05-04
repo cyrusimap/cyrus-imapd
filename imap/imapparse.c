@@ -1144,9 +1144,14 @@ static int get_search_criterion(struct protstream *pin,
     case 's':
         if (!strcmp(criteria.s, "savedatesupported")) {   /* draft-ietf-extra-imap-savedate */
             // savedate is supported in index version 15+
-            e = search_expr_new(parent, SEOP_GE);
-            e->attr = search_attr_find("indexversion");
-            e->value.u = 15;
+            if (config_getswitch(IMAPOPT_SAVEDATE)) {
+                e = search_expr_new(parent, SEOP_FALSE);
+            }
+            else {
+                e = search_expr_new(parent, SEOP_GE);
+                e->attr = search_attr_find("indexversion");
+                e->value.u = 15;
+            }
         }
         else if (!strcmp(criteria.s, "savedbefore")) {   /* draft-ietf-extra-imap-savedate */
             if (c != ' ') goto missingarg;
