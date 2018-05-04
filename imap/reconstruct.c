@@ -453,11 +453,13 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     /* don't repeat */
     if (hash_lookup(name, &rrock->visited)) return 0;
 
-    r = mailbox_reconstruct(name, reconstruct_flags);
-    if (r) {
-        com_err(name, r, "%s",
-                (r == IMAP_IOERROR) ? error_message(errno) : "Failed to reconstruct mailbox");
-        return 0;
+    if (!setversion) {
+        r = mailbox_reconstruct(name, reconstruct_flags);
+        if (r) {
+            com_err(name, r, "%s",
+                    (r == IMAP_IOERROR) ? error_message(errno) : "Failed to reconstruct mailbox");
+            return 0;
+        }
     }
 
     r = mailbox_open_iwl(name, &mailbox);
