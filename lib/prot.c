@@ -1771,22 +1771,6 @@ EXPORTED inline int prot_getc(struct protstream *s)
     return prot_fill(s);
 }
 
-EXPORTED int prot_peek(struct protstream *s)
-{
-    int c;
-    assert(!s->write);
-
-    if (s->cnt > 0) {
-        c = *(s->ptr);
-    }
-    else {
-        c = prot_fill(s);
-        if (c != EOF) prot_ungetc(c, s);
-    }
-
-    return c;
-}
-
 EXPORTED size_t prot_lookahead(struct protstream *s,
                                const char *str,
                                size_t len,
@@ -1795,10 +1779,7 @@ EXPORTED size_t prot_lookahead(struct protstream *s,
     assert(!s->write);
     int short_match = 0;
 
-    if (s->cnt == 0) {
-        int c = prot_fill(s);
-        prot_ungetc(c, s);
-    }
+    if (prot_peek(s) == EOF) return 0;
 
     if (len >= s->cnt) {
         len = s->cnt;
@@ -1816,7 +1797,9 @@ EXPORTED size_t prot_lookahead(struct protstream *s,
     return 0;
 }
 
-EXPORTED int prot_ungetc(int c, struct protstream *s)
+EXPORTED inline int prot_ungetc(int c, struct protstream *s)
+    __attribute__((always_inline,optimize("-O3")));
+EXPORTED inline int prot_ungetc(int c, struct protstream *s)
 {
     assert(!s->write);
 

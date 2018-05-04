@@ -163,9 +163,10 @@ int prot_flush_internal(struct protstream *s, int force);
 struct protgroup; /* Opaque protgroup structure */
 
 extern int prot_getc(struct protstream *s);
-extern int prot_peek(struct protstream *s);
 extern int prot_ungetc(int c, struct protstream *s);
 extern int prot_putc(int c, struct protstream *s);
+
+#define prot_peek(s) (prot_ungetc(prot_getc(s), s))
 
 /* prot_lookahead checks whether the next several buffered bytes match
  * the string str (of length len).
