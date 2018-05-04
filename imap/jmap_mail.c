@@ -10490,6 +10490,8 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     changes.new_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     jmap_ok(req, jmap_changes_reply(&changes));
+    jmap_changes_fini(&changes);
+    jmap_parser_fini(&parser);
     return 0;
 }
 
