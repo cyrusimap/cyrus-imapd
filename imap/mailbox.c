@@ -1769,6 +1769,7 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
         mailbox->index_changes[mailbox->index_change_count-1].mapnext = mailbox->index_change_map[pos];
         mailbox->index_change_map[pos] = mailbox->index_change_count; /* always non-zero */
         change = &mailbox->index_changes[mailbox->index_change_count-1];
+        memset(change, 0, sizeof(struct index_change));
     }
 
     /* finally always copy the data into place */
@@ -1777,6 +1778,7 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
 
     if (mailbox_cacherecord(mailbox, record)) {
         /* failed to load cache record */
+        free(change->msgid);
         change->msgid = xstrdup("unknown");
     }
     else {
@@ -1784,6 +1786,7 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
                                cacheitem_size(record, CACHE_ENVELOPE) - 2);
         char *envtokens[NUMENVTOKENS];
         parse_cached_envelope(c_env, envtokens, NUMENVTOKENS);
+        free(change->msgid);
         change->msgid = xstrdup(envtokens[ENV_MSGID] ? envtokens[ENV_MSGID] : "unknown");
         free(c_env);
     }
