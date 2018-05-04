@@ -1908,6 +1908,11 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The mechanism used by the server to verify plaintext passwords.
    Possible values include "auxprop", "saslauthd", and "pwcheck". */
 
+{ "savedate", 0, SWITCH }
+/* If turned on, enable the SAVEDATE extension.  Note, if savedate is
+ * enabled then replicating to versions of Cyrus which don't support
+ * savedate will create annotations which aren't easily upgraded from. */
+
 { "search_batchsize", 20, INT }
 /* The number of messages to be indexed in one batch (default 20).
    Note that long batches may delay user commands or mail delivery. */

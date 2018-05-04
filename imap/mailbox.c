@@ -3657,7 +3657,9 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
         mailbox_modseq_dirty(mailbox);
         record->modseq = mailbox->i.highestmodseq;
         record->last_updated = mailbox->last_updated;
-        record->savedate = time(NULL); // always the time of actual append
+        // store the time of actual append if requested
+        if (config_getswitch(IMAPOPT_SAVEDATE))
+            record->savedate = mailbox->last_updated;
     }
 
     int object_storage_enabled = 0 ;
