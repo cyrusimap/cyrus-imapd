@@ -2866,8 +2866,6 @@ static int message_read_envelope(struct protstream *strm, struct body *body)
  */
 static int message_read_body(struct protstream *strm, struct body *body, const char *part_id)
 {
-#define prot_peek(strm) prot_ungetc(prot_getc(strm), strm)
-
     int c;
     struct buf buf = BUF_INITIALIZER;
 
