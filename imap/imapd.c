@@ -2175,6 +2175,8 @@ static void cmdloop(void)
                 }
             }
             else if (!strcmp(cmd.s, "Unauthenticate")) {
+                if (!imapd_userisadmin) goto badcmd;
+
                 if (c == '\r') c = prot_getc(imapd_in);
                 if (c != '\n') goto extraargs;
 
@@ -3467,7 +3469,7 @@ static void capa_response(int flags)
 
     if (!(flags & CAPA_POSTAUTH)) return;
 
-    if (imapd_authstate) {
+    if (imapd_authstate && imapd_userisadmin) {
         prot_printf(imapd_out, " UNAUTHENTICATE");
     }
 
