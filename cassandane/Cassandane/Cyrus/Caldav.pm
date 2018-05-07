@@ -2876,7 +2876,7 @@ EOF
 }
 
 sub test_supports_event
-    :min_version_3_0
+    :min_version_3_1
 {
     my ($self) = @_;
 
