@@ -105,9 +105,6 @@ typedef struct context {
 
     int mode;               /* Flags indicating the current context mode. */
 
-    /* Common context */
-    json_t *localizations;
-
     /* Property context */
     json_t *invalid;        /* A JSON array of any invalid properties. */
     strarray_t propstr;
@@ -999,86 +996,6 @@ override_exdate_from_ical(context_t *ctx, icalproperty *prop)
     return override;
 }
 
-static void localizations_to_icalprop(context_t *ctx, const char *name,
-                                     icalproperty *prop)
-{
-    char *encname;
-    const char *tag;
-    json_t *locs;
-    struct buf buf = BUF_INITIALIZER;
-
-    if (!ctx->localizations)
-        return;
-
-    remove_icalxparam(prop, JMAPICAL_XPARAM_LOCALIZATION);
-
-    if (json_is_null(ctx->localizations))
-        return;
-
-    encname = encodeprop(ctx, name);
-    json_object_foreach(ctx->localizations, tag, locs) {
-        const char *s = json_string_value(json_object_get(locs, encname));
-        if (!s) continue;
-
-        buf_setcstr(&buf, tag);
-        buf_appendcstr(&buf, ":");
-        buf_appendcstr(&buf, s);
-
-        set_icalxparam(prop, JMAPICAL_XPARAM_LOCALIZATION, buf_cstring(&buf), 0);
-    }
-
-    buf_free(&buf);
-    free (encname);
-}
-
-
-static void localizations_from_icalprop(context_t *ctx, const char *name,
-                                       icalproperty *prop)
-{
-    icalparameter *param;
-
-    if (!ctx->localizations)
-        return;
-
-    for (param = icalproperty_get_first_parameter(prop, ICAL_X_PARAMETER);
-         param;
-         param = icalproperty_get_next_parameter(prop, ICAL_X_PARAMETER)) {
-
-        if (strcasecmp(icalparameter_get_xname(param),
-                       JMAPICAL_XPARAM_LOCALIZATION)) {
-            continue;
-        }
-
-        const char *xval, *sep;
-        char *tag, *val, *p;
-        json_t *loc;
-
-        xval = icalparameter_get_xvalue(param);
-        if (!xval) continue;
-
-        sep = strchr(xval, ':');
-        if (!sep) continue;
-
-        p = encodeprop(ctx, name);
-        if (!p) continue;
-
-        tag = xstrndup(xval, sep-xval);
-        val = xstrdup(sep+1);
-
-        loc = json_object_get(ctx->localizations, tag);
-        if (!loc) {
-            json_object_set_new(ctx->localizations, tag,
-                    json_pack("{s:s}", p, val));
-        } else {
-            json_object_set_new(loc, p, json_string(val));
-        }
-
-        free(tag);
-        free(val);
-        free(p);
-    }
-}
-
 static json_t*
 overrides_from_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 {
@@ -1502,7 +1419,7 @@ done:
 }
 
 static json_t*
-link_from_ical(context_t *ctx, icalproperty *prop)
+link_from_ical(context_t *ctx __attribute__((unused)), icalproperty *prop)
 {
     /* href */
     const char *href = NULL;
@@ -1537,7 +1454,6 @@ link_from_ical(context_t *ctx, icalproperty *prop)
     /* title - reuse the same x-param as Apple does for their locations  */
     if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_TITLE))) {
         json_object_set_new(link, "title", json_string(s));
-        localizations_from_icalprop(ctx, "title", prop);
     }
 
     /* properties */
@@ -1682,13 +1598,11 @@ static json_t *alert_emailaction_from_ical(context_t *ctx, icalcomponent *alarm)
     prop = icalcomponent_get_first_property(alarm, ICAL_SUMMARY_PROPERTY);
     if (prop && (s = icalproperty_get_summary(prop))) {
         json_object_set_new(action, "subject", json_string(s));
-        localizations_from_icalprop(ctx, "subject", prop);
     }
     /* textBody */
     prop = icalcomponent_get_first_property(alarm, ICAL_DESCRIPTION_PROPERTY);
     if (prop && (s = icalproperty_get_description(prop))) {
         json_object_set_new(action, "textBody", json_string(s));
-        localizations_from_icalprop(ctx, "textBody", prop);
     }
 
     /* htmlBody */
@@ -1992,7 +1906,7 @@ static json_t *location_features_from_ical(icalparameter *param)
     return features;
 }
 
-static json_t* location_from_ical(context_t *ctx, icalproperty *prop)
+static json_t* location_from_ical(context_t *ctx __attribute__((unused)), icalproperty *prop)
 {
     icalparameter *param;
     json_t *loc = json_object();
@@ -2016,7 +1930,6 @@ static json_t* location_from_ical(context_t *ctx, icalproperty *prop)
     if (!rel) rel = "unknown";
 
     json_object_set_new(loc, "name", json_string(name ? name : ""));
-    localizations_from_icalprop(ctx, "name", prop);
     json_object_set_new(loc, "uri", uri ? json_string(uri) : json_null());
     json_object_set_new(loc, "rel", json_string(rel));
 
@@ -2315,9 +2228,6 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
     }
 
     event = json_pack("{s:s}", "@type", "jsevent");
-    if (wantprop(ctx, "localizations") && !ctx->localizations) {
-        ctx->localizations = json_pack("{}");
-    }
 
     /* Always determine the event's start timezone. */
     ctx->tzid_start = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
@@ -2399,12 +2309,11 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
     }
 
     /* title */
-    if (wantprop(ctx, "title") || wantprop(ctx, "localizations")) {
+    if (wantprop(ctx, "title")) {
         prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
         if (prop) {
             json_object_set_new(event, "title",
                                 json_string(icalproperty_get_summary(prop)));
-            localizations_from_icalprop(ctx, "title", prop);
         } else {
             json_object_set_new(event, "title", json_string(""));
         }
@@ -2414,7 +2323,7 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
     }
 
     /* description */
-    if (wantprop(ctx, "description") || wantprop(ctx, "localizations")) {
+    if (wantprop(ctx, "description")) {
         const char *desc = "";
         prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
         if (prop) {
@@ -2422,14 +2331,13 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
             if (!desc) desc = "";
         }
         json_object_set_new(event, "description", json_string(desc));
-        localizations_from_icalprop(ctx, "description", prop);
         if (!wantprop(ctx, "description")) {
             json_object_del(event, "description");
         }
     }
 
     /* htmlDescription */
-    if (wantprop(ctx, "htmlDescription") || wantprop(ctx, "localizations")) {
+    if (wantprop(ctx, "htmlDescription")) {
         json_t *desc = htmldescription_from_ical(ctx, comp);
         json_object_set_new(event, "htmlDescription", desc);
         if (!wantprop(ctx, "htmlDescription"))
@@ -2451,7 +2359,7 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
     }
 
     /* links */
-    if (wantprop(ctx, "links") || wantprop(ctx, "localizations")) {
+    if (wantprop(ctx, "links")) {
         json_object_set_new(event, "links", links_from_ical(ctx, comp, "link"));
         if (!wantprop(ctx, "links")) {
             json_object_del(event, "links");
@@ -2464,7 +2372,7 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
     }
 
     /* locations */
-    if (wantprop(ctx, "locations") || wantprop(ctx, "localizations")) {
+    if (wantprop(ctx, "locations")) {
         json_object_set_new(event, "locations", locations_from_ical(ctx, comp));
         if (!wantprop(ctx, "locations")) {
             json_object_del(event, "locations");
@@ -2567,21 +2475,11 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
     }
 
     /* alerts */
-    if (wantprop(ctx, "alerts") || wantprop(ctx, "localizations")) {
+    if (wantprop(ctx, "alerts")) {
         json_object_set_new(event, "alerts", alerts_from_ical(ctx, comp));
         if (!wantprop(ctx, "alerts")) {
             json_object_del(event, "alerts");
         }
-    }
-
-    /* localizations */
-    if (wantprop(ctx, "localizations")) {
-        if (!json_object_size(ctx->localizations)) {
-            json_decref(ctx->localizations);
-            ctx->localizations = NULL;
-        }
-        json_object_set_new(event, "localizations",
-                            ctx->localizations ? ctx->localizations : json_null());
     }
 
     /* recurrenceOverrides - must be last to generate patches */
@@ -3362,7 +3260,6 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links,
             if (title) {
                 set_icalxparam(prop, JMAPICAL_XPARAM_TITLE, title, 1);
             }
-            localizations_to_icalprop(ctx, "title", prop);
 
             /* cid */
             if (cid) set_icalxparam(prop, JMAPICAL_XPARAM_CID, cid, 1);
@@ -3498,9 +3395,6 @@ alertaction_to_ical(context_t *ctx, icalcomponent *comp, icalcomponent *alarm,
         s = NULL;
         readprop(ctx, action, "subject", 0, "s", &s);
         prop = icalproperty_new_summary(s ? s : "");
-        if (ctx->localizations) {
-            localizations_to_icalprop(ctx, "subject", prop);
-        }
         icalcomponent_add_property(alarm, prop);
 
         /* textBody */
@@ -4158,7 +4052,7 @@ validate_location(context_t *ctx, json_t *loc)
 }
 
 static void
-location_to_ical(context_t *ctx, icalcomponent *comp, const char *id, json_t *loc)
+location_to_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp, const char *id, json_t *loc)
 {
     const char *name = json_string_value(json_object_get(loc, "name"));
     const char *uri = json_string_value(json_object_get(loc, "uri"));
@@ -4195,7 +4089,6 @@ location_to_ical(context_t *ctx, icalcomponent *comp, const char *id, json_t *lo
         if (uri) icalproperty_add_parameter(prop, icalparameter_new_altrep(uri));
         if (rel) set_icalxparam(prop, JMAPICAL_XPARAM_REL, rel, 0);
     }
-    localizations_to_icalprop(ctx, "name", prop);
 
     /* description, timeZone, coordinates */
     const char *s = json_string_value(json_object_get(loc, "description"));
@@ -4511,17 +4404,6 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         json_incref(event);
     }
 
-    /* Initialize localizations */
-    ctx->localizations = json_object_get(event, "localizations");
-    if (json_is_null(ctx->localizations)) {
-        /* Remove any localizations from the current component */
-        for (prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
-             prop;
-             prop = icalcomponent_get_next_property(comp, ICAL_ANY_PROPERTY)) {
-            remove_icalxparam(prop, JMAPICAL_XPARAM_LOCALIZATION);
-        }
-    }
-
     icaltimezone *utc = icaltimezone_get_utc_timezone();
     icaltimetype now = icaltime_current_time_with_zone(utc);
 
@@ -4609,19 +4491,11 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     if (pe > 0) {
         icalcomponent_set_summary(comp, val);
     }
-    if (ctx->localizations) {
-        prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
-        localizations_to_icalprop(ctx, "title", prop);
-    }
 
     /* description */
     pe = readprop(ctx, event, "description", 0, "s", &val);
     if (pe > 0 && strlen(val)) {
         icalcomponent_set_description(comp, val);
-    }
-    if (ctx->localizations) {
-        prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
-        localizations_to_icalprop(ctx, "description", prop);
     }
 
     /* htmlDescription - must come after description property */
