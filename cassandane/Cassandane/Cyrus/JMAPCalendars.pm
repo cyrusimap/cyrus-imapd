@@ -1703,7 +1703,7 @@ sub test_calendarevent_set_description
         "timeZone"=> "Etc/UTC",
         "isAllDay"=> JSON::false,
         "description"=> "A text description",
-        "htmlDescription"=> "<html><body>Some HTML</body></html>",
+        "htmlDescription"=> '<html><body>HTML with special chars : and ; and "</body></html>',
         "privacy" => "secret",
     };
 
@@ -1712,7 +1712,7 @@ sub test_calendarevent_set_description
 
     delete $event->{description};
     $ret = $self->createandget_event($event);
-    $event->{description} = "Some HTML";
+    $event->{description} = 'HTML with special chars : and ; and "';
     $self->assert_normalized_event_equals($event, $ret);
 }
 
