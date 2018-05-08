@@ -174,6 +174,22 @@ sub test_blob_download
     $resp = $jmap->Download({ accept => 'text/plain;q=0.9, text/html' }, 'cassandane', $data->{blobId});
     $self->assert_str_equals('text/html', $resp->{headers}{'content-type'});
     $self->assert_str_equals('some test', $resp->{content});
+
+    $resp = $jmap->Download({ accept => '*/*' }, 'cassandane', $data->{blobId});
+    $self->assert_str_equals('application/octet-stream', $resp->{headers}{'content-type'});
+    $self->assert_str_equals('some test', $resp->{content});
+
+    $resp = $jmap->Download({ accept => 'foo' }, 'cassandane', $data->{blobId});
+    $self->assert_str_equals('application/octet-stream', $resp->{headers}{'content-type'});
+    $self->assert_str_equals('some test', $resp->{content});
+
+    $resp = $jmap->Download({ accept => 'foo*/bar' }, 'cassandane', $data->{blobId});
+    $self->assert_str_equals('application/octet-stream', $resp->{headers}{'content-type'});
+    $self->assert_str_equals('some test', $resp->{content});
+
+    $resp = $jmap->Download({ accept => 'foo/(bar)' }, 'cassandane', $data->{blobId});
+    $self->assert_str_equals('application/octet-stream', $resp->{headers}{'content-type'});
+    $self->assert_str_equals('some test', $resp->{content});
 }
 
 sub test_creationids
