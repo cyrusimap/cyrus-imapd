@@ -753,9 +753,6 @@ sub normalize_event
             }
         }
     }
-    if (not exists $event->{localizations}) {
-        $event->{localizations} = undef;
-    }
     if (not exists $event->{keywords}) {
         $event->{keywords} = undef;
     }
@@ -1318,29 +1315,6 @@ sub test_calendarevent_get_locations_conference
     $self->assert_str_equals('chat', $loc2->{features}[0]);
 }
 
-sub test_calendarevent_get_localizations
-    :JMAP :min_version_3_1
-{
-    my ($self) = @_;
-
-    my ($id, $ical) = $self->icalfile('localizations');
-
-    my $event = $self->putandget_vevent($id, $ical);
-
-    my $locs = $event->{localizations};
-    $self->assert_not_null($locs);
-
-    $self->assert_str_equals("Titel", $locs->{de}{title});
-    $self->assert_str_equals("Beschreibung", $locs->{de}{description});
-    $self->assert_str_equals("legende", $locs->{fr}{description});
-    $self->assert_str_equals("Am Planet Erde", $locs->{de}{"locations/loc1/name"});
-    $self->assert_str_equals("die Spezifikation", $locs->{de}{"links/link1/title"});
-    $self->assert_str_equals("Ihr Alarm", $locs->{de}{"alerts/43910EF2-F4D9-43F9-AEDD-1CADC38B05FB/action/subject"});
-
-    my $o = $event->{recurrenceOverrides};
-    $self->assert_str_equals("eine Ausnahme", $o->{"2016-09-15T11:15:00"}{"localizations/de/title"});
-}
-
 sub test_calendarevent_get_infinite_delegates
     :JMAP :min_version_3_1
 {
@@ -1761,75 +1735,6 @@ sub test_calendarevent_set_links
     $ret = $self->createandget_event($event);
     $event->{id} = $ret->{id};
     $event->{calendarId} = $ret->{calendarId};
-    $self->assert_normalized_event_equals($ret, $event);
-}
-
-sub test_calendarevent_set_localizations
-    :JMAP :min_version_3_1
-{
-    my ($self) = @_;
-
-    my $jmap = $self->{jmap};
-    my $calid = "Default";
-
-    my $event =  {
-        "calendarId" => $calid,
-        "title"=> "title",
-        "description"=> "description",
-        "start"=> "2015-11-07T09:00:00",
-        "duration"=> "PT1H",
-        "timeZone" => "Europe/London",
-        "isAllDay"=> JSON::false,
-        "freeBusyStatus"=> "busy",
-        "alerts" => {
-            "alert1" => {
-                relativeTo => "before-start",
-                offset => "PT5M",
-                "action" => {
-                    type => "email",
-                    to => [{
-                            email => "foo\@local",
-                            name => "",
-                    }],
-                    subject => "A subject",
-                },
-            },
-        },
-        "locations" => {
-            loc1 => { name => "on planet earth" },
-        },
-        "links" => {
-            "http://info.cern.ch/" => {
-                href => "http://info.cern.ch/",
-                title => "the mother of all websites",
-            },
-        },
-        "localizations" => {
-            de => {
-                title => "Titel",
-                description => "Beschreibung",
-                "alerts/alert1/action/subject" => "Betreff",
-                "links/http:~1~1info.cern.ch~1/title" =>
-                    "die Mutter aller Websites",
-            },
-            fr => {
-                description => "la description",
-                "locations/loc1/name" => "sur la planète terre",
-            }
-        },
-    };
-
-    my $ret = $self->createandget_event($event);
-    $event->{id} = $ret->{id};
-    $event->{calendarId} = $ret->{calendarId};
-    $self->assert_normalized_event_equals($ret, $event);
-
-    $event->{localizations} = undef;
-    $ret = $self->updateandget_event({
-            id => $event->{id},
-            calendarId => $event->{calendarId},
-            localizations => undef,
-    });
     $self->assert_normalized_event_equals($ret, $event);
 }
 
