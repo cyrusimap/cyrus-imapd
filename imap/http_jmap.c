@@ -1169,6 +1169,29 @@ EXPORTED int jmap_findblob(jmap_req_t *req, const char *blobid,
     return _findblob(req, blobid, req->accountid, mbox, mr, body, part);
 }
 
+static char *parse_accept_header(const char **hdr)
+{
+    char *val = NULL;
+    struct accept *accept = parse_accept(hdr);
+    if (accept) {
+        char *type = NULL;
+        char *subtype = NULL;
+        struct param *params = NULL;
+        message_parse_type(accept->token, &type, &subtype, &params);
+        if (type && subtype && !strchr(type, '*') && !strchr(subtype, '*'))
+            val = xstrdup(accept->token);
+        free(type);
+        free(subtype);
+        param_free(&params);
+        struct accept *tmp;
+        for (tmp = accept; tmp && tmp->token; tmp++) {
+            free(tmp->token);
+        }
+        free(accept);
+    }
+    return val;
+}
+
 
 EXPORTED int jmap_download(struct transaction_t *txn)
 {
@@ -1281,15 +1304,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
 
     const char **hdr;
     if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
-        struct accept *accept = parse_accept(hdr);
-        if (accept) {
-            accept_mime = xstrdup(accept->token);
-            struct accept *tmp;
-            for (tmp = accept; tmp && tmp->token; tmp++) {
-                free(tmp->token);
-            }
-            free(accept);
-        }
+        accept_mime = parse_accept_header(hdr);
     }
     if (!accept_mime) accept_mime = xstrdup("application/octet-stream");
 
