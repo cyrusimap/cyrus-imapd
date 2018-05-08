@@ -1638,11 +1638,8 @@ htmldescription_from_ical(context_t *ctx __attribute__((unused)), icalcomponent 
     if (!altrep) return json_null();
 
     const char *uri = icalparameter_get_altrep(altrep);
-    if (strncasecmp(uri, "data:text/html;", 15)) return json_null();
-    char *tmp = decode_base64_uri(uri);
-    json_t *htmldesc = tmp ? json_string(tmp) : json_null();
-    free(tmp);
-    return htmldesc;
+    if (strncasecmp(uri, "data:text/html,", 15)) return json_null();
+    return json_string(uri + 15);
 }
 
 static json_t *alert_emailaction_from_ical(context_t *ctx, icalcomponent *alarm)
@@ -3420,10 +3417,12 @@ htmldescription_to_ical(context_t *ctx __attribute__((unused)),
 
     /* Set HTML description in ALTREP parameter */
     const char *html = json_string_value(htmldesc);
-    char *uri = encode_base64_uri(html, strlen(html), "text/html");
-    icalparameter *altrep = icalparameter_new_altrep(uri);
+    struct buf buf = BUF_INITIALIZER;
+    buf_setcstr(&buf, "data:text/html,");
+    buf_appendcstr(&buf, html);
+    icalparameter *altrep = icalparameter_new_altrep(buf_cstring(&buf));
     icalproperty_add_parameter(prop, altrep);
-    free(uri);
+    buf_free(&buf);
 
     /* Convert HTML to plain */
     /* libical returns NULL for empty string */
