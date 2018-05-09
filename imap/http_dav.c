@@ -4515,7 +4515,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
             /* Expunge the source message */
             if (src_rec.uid) {
                 /* Mapped URL */
-                src_rec.system_flags |= FLAG_EXPUNGED;
+                src_rec.internal_flags |= FLAG_INTERNAL_EXPUNGED;
                 if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
                     syslog(LOG_ERR, "expunging src record (%s) failed: %s",
                            txn->req_tgt.mbentry->name, error_message(r));
@@ -4827,7 +4827,7 @@ int meth_delete(struct transaction_t *txn, void *params)
         if (dparams->delete) dparams->delete(txn, mailbox, &record, ddata);
 
         /* Expunge the resource */
-        record.system_flags |= FLAG_EXPUNGED;
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
 
         mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
 
@@ -8707,7 +8707,7 @@ int dav_store_resource(struct transaction_t *txn,
                     r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
                     if (!r) {
                         oldrecord->user_flags[userflag/32] |= 1 << (userflag & 31);
-                        oldrecord->system_flags |= FLAG_EXPUNGED;
+                        oldrecord->internal_flags |= FLAG_INTERNAL_EXPUNGED;
                         r = mailbox_rewrite_index_record(mailbox, oldrecord);
                     }
                     if (r) {

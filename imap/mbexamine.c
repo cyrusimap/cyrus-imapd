@@ -299,19 +299,24 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
 
         printf("\n");
 
-    	printf("      > SYSTEMFLAGS:");
-    	if (record->system_flags & FLAG_EXPUNGED) printf(" FLAG_EXPUNGED");
-    	if (record->system_flags & FLAG_UNLINKED) printf(" FLAG_UNLINKED");
-    	if (record->system_flags & FLAG_ARCHIVED) printf(" FLAG_ARCHIVED");
-    	if (record->system_flags & FLAG_NEEDS_CLEANUP) printf(" FLAG_NEEDS_CLEANUP");
+        printf("      > INTERNALFLAGS:");
+        if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
+            printf(" FLAG_INTERNAL_EXPUNGED");
+        if (record->internal_flags & FLAG_INTERNAL_UNLINKED)
+            printf(" FLAG_INTERNAL_UNLINKED");
+        if (record->internal_flags & FLAG_INTERNAL_ARCHIVED)
+            printf(" FLAG_INTERNAL_ARCHIVED");
+        if (record->internal_flags & FLAG_INTERNAL_NEEDS_CLEANUP)
+            printf(" FLAG_INTERNAL_NEEDS_CLEANUP");
 
-    	if (record->system_flags & FLAG_SEEN) printf(" FLAG_SEEN");
-    	if (record->system_flags & FLAG_DRAFT) printf(" FLAG_DRAFT");
-    	if (record->system_flags & FLAG_DELETED) printf(" FLAG_DELETED");
-    	if (record->system_flags & FLAG_FLAGGED) printf(" FLAG_FLAGGED");
-    	if (record->system_flags & FLAG_ANSWERED) printf(" FLAG_ANSWERED");
+        printf("      > SYSTEMFLAGS:");
+        if (record->system_flags & FLAG_SEEN) printf(" FLAG_SEEN");
+        if (record->system_flags & FLAG_DRAFT) printf(" FLAG_DRAFT");
+        if (record->system_flags & FLAG_DELETED) printf(" FLAG_DELETED");
+        if (record->system_flags & FLAG_FLAGGED) printf(" FLAG_FLAGGED");
+        if (record->system_flags & FLAG_ANSWERED) printf(" FLAG_ANSWERED");
 
-    	printf("\n");
+        printf("\n");
 
         printf("      > USERFLAGS:");
         for (j=(MAX_USER_FLAGS/32)-1; j>=0; j--) {

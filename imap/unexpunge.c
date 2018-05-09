@@ -121,7 +121,7 @@ static void list_expunged(const char *mboxname)
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* still active */
-        if (!(record->system_flags & FLAG_EXPUNGED))
+        if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED))
             continue;
 
         /* pre-allocate more space */
@@ -186,7 +186,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* still active */
-        if (!(record->system_flags & FLAG_EXPUNGED))
+        if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED))
             continue;
 
         if (mode == MODE_UID) {
@@ -213,7 +213,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
 
         /* bump the UID, strip the flags */
         newrecord.uid = mailbox->i.last_uid + 1;
-        newrecord.system_flags &= ~FLAG_EXPUNGED;
+        newrecord.internal_flags &= ~FLAG_INTERNAL_EXPUNGED;
         if (unsetdeleted)
             newrecord.system_flags &= ~FLAG_DELETED;
 
@@ -252,7 +252,8 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
 
         /* mark the old one unlinked so we don't see it again */
         struct index_record oldrecord = *record;
-        oldrecord.system_flags |= FLAG_UNLINKED | FLAG_NEEDS_CLEANUP;
+        oldrecord.internal_flags |= FLAG_INTERNAL_UNLINKED |
+            FLAG_INTERNAL_NEEDS_CLEANUP;
         r = mailbox_rewrite_index_record(mailbox, &oldrecord);
         if (r) break;
 

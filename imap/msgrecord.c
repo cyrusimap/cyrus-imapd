@@ -242,6 +242,16 @@ EXPORTED int msgrecord_get_systemflags(msgrecord_t *mr, uint32_t *flags)
     return 0;
 }
 
+EXPORTED int msgrecord_get_internalflags(msgrecord_t *mr, uint32_t *flags)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    *flags = mr->record.internal_flags;
+    return 0;
+}
+
 EXPORTED int msgrecord_get_userflags(msgrecord_t *mr,
                                      uint32_t flags[MAX_USER_FLAGS/32])
 {
@@ -517,6 +527,12 @@ EXPORTED int msgrecord_add_systemflags(msgrecord_t *mr, uint32_t system_flags)
     return 0;
 }
 
+EXPORTED int msgrecord_add_internalflags(msgrecord_t *mr, uint32_t internal_flags)
+{
+    mr->record.internal_flags |= internal_flags;
+    return 0;
+}
+
 EXPORTED int msgrecord_set_uid(msgrecord_t *mr, uint32_t uid)
 {
     assert(mr->isappend);
@@ -545,9 +561,18 @@ EXPORTED int msgrecord_set_systemflags(msgrecord_t *mr, uint32_t system_flags)
     return 0;
 }
 
+EXPORTED int msgrecord_set_internalflags(msgrecord_t *mr, uint32_t internal_flags)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    mr->record.internal_flags = internal_flags;
+    return 0;
+}
+
 EXPORTED int msgrecord_set_userflags(msgrecord_t *mr,
                                      uint32_t user_flags[MAX_USER_FLAGS/32])
- 
 {
     if (!mr->isappend) {
         int r = msgrecord_need(mr, M_RECORD);
