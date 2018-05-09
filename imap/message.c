@@ -3504,7 +3504,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
 
     /* mark that it's split so basecid gets saved */
     if (record->basecid != record->cid)
-        record->system_flags |= FLAG_SPLITCONVERSATION;
+        record->internal_flags |= FLAG_INTERNAL_SPLITCONVERSATION;
 
 out:
     free(msgid);

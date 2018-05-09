@@ -200,7 +200,7 @@ An example of iterating through a mailbox
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
         if (mailbox_read_index_record(mailbox, recno, &record))
             fatal("invalid record", EC_SOFTWARE); // or return an error
-        if (record.system_flags & FLAG_EXPUNGED)
+        if (record.internal_flags & FLAG_INTERNAL_EXPUNGED)
             continue; // skip expunged records
         make_changes = do_stuff(mailbox, &record);
         if (make_changes)
@@ -285,7 +285,7 @@ those fields in the mailbox internal format documentation.
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
         if (mailbox_read_index_record(mailbox, recno, &record))
             fatal("invalid record", EC_SOFTWARE); // or return an error
-        if (record.system_flags & FLAG_EXPUNGED)
+        if (record.internal_flags & FLAG_INTERNAL_EXPUNGED)
             continue; // skip expunged records
         if (mailbox_cacherecord(mailbox, &record))
             fatal("failed to read cache", EC_SOFTWARE);

@@ -1842,7 +1842,7 @@ static int setcalendarevents_update(jmap_req_t *req,
 
     if (dstmbox) {
         /* Expunge the resource from mailbox. */
-        record.system_flags |= FLAG_EXPUNGED;
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
         mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
         r = mailbox_rewrite_index_record(mbox, &record);
         if (r) {
@@ -1975,7 +1975,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
 
 
     /* Expunge the resource from mailbox. */
-    record.system_flags |= FLAG_EXPUNGED;
+    record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
     mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
     r = mailbox_rewrite_index_record(mbox, &record);
     if (r) {

@@ -513,7 +513,7 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
             continue;
 
         /* can happen if we didn't "tellchanges" yet */
-        if ((im->system_flags & FLAG_EXPUNGED) && !query->want_expunged)
+        if ((im->internal_flags & FLAG_INTERNAL_EXPUNGED) && !query->want_expunged)
             continue;
 
         /* run the search program */
@@ -682,7 +682,7 @@ static int subquery_run_one_folder(search_query_t *query,
         if (r) goto out;
 
         /* can happen if we didn't "tellchanges" yet */
-        if ((im->system_flags & FLAG_EXPUNGED) && !query->want_expunged)
+        if ((im->internal_flags & FLAG_INTERNAL_EXPUNGED) && !query->want_expunged)
             continue;
 
         /* run the search program */

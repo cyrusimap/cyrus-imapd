@@ -96,11 +96,12 @@ struct index_init {
 struct index_map {
     modseq_t modseq;
     modseq_t told_modseq;
+    uint64_t cache_offset;
+    uint32_t user_flags[MAX_USER_FLAGS/32];
     uint32_t uid;
     uint32_t recno;
     uint32_t system_flags;
-    uint64_t cache_offset;
-    uint32_t user_flags[MAX_USER_FLAGS/32];
+    uint32_t internal_flags;
     unsigned int isseen:1;
     unsigned int isrecent:1;
 };
@@ -159,6 +160,7 @@ typedef struct msgdata {
     bit32 hasflag;              /* hasflag values (up to 32 of them) */
     struct message_guid guid;   /* message guid */
     uint32_t system_flags;      /* system flags */
+    uint32_t internal_flags;    /* internal flags */
 
     /* items from the conversations database */
     modseq_t convmodseq;        /* modseq of conversation */

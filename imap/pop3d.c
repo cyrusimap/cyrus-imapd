@@ -802,11 +802,12 @@ static int expunge_deleted(void)
         if (r) break;
 
         /* already expunged? skip */
-        if (record.system_flags & FLAG_EXPUNGED)
+        if (record.internal_flags & FLAG_INTERNAL_EXPUNGED)
             continue;
 
         /* mark expunged */
-        record.system_flags |= FLAG_DELETED | FLAG_EXPUNGED;
+        record.system_flags |= FLAG_DELETED;
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
         numexpunged++;
 
         /* store back to the mailbox */
@@ -2111,7 +2112,7 @@ static int update_seen(void)
         record.recno = popd_map[msgno-1].recno;
         if (mailbox_reload_index_record(popd_mailbox, &record))
             continue;
-        if (record.system_flags & FLAG_EXPUNGED)
+        if (record.internal_flags & FLAG_INTERNAL_EXPUNGED)
             continue; /* already expunged */
         if (record.system_flags & FLAG_SEEN)
             continue; /* already seen */

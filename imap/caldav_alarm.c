@@ -825,7 +825,7 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
         caldav_alarm_delete_record(mailbox->name, imap_uid);
         goto done_item;
     }
-    if (record.system_flags & FLAG_EXPUNGED) {
+    if (record.internal_flags & FLAG_INTERNAL_EXPUNGED) {
         syslog(LOG_ERR, "already expunged mailbox %s uid %u",
                mailbox->name, imap_uid);
         /* no longer exists?  nothing to do */

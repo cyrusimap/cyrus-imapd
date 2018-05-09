@@ -1861,7 +1861,7 @@ static int export_calendar(struct transaction_t *txn)
                 /* Don't duplicate any VTIMEZONEs in our iCalendar */
                 if (kind == ICAL_VTIMEZONE_COMPONENT) {
                     if (syncmodseq) continue;
-                    if (record->system_flags & FLAG_EXPUNGED) continue;
+                    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) continue;
 
                     icalproperty *prop =
                         icalcomponent_get_first_property(comp,
@@ -1873,7 +1873,7 @@ static int export_calendar(struct transaction_t *txn)
                     if (hash_lookup(tzid, &tzid_table)) continue;
                     else hash_insert(tzid, (void *)0xDEADBEEF, &tzid_table);
                 }
-                else if (record->system_flags & FLAG_EXPUNGED) {
+                else if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
                     /* Resource was deleted - remove non-mandatory properties */
                     icalproperty *prop, *next;
 
@@ -2625,7 +2625,7 @@ static void decrement_refcount(const char *managed_id,
         struct index_record record;
 
         mailbox_find_index_record(attachments, wdata->dav.imap_uid, &record);
-        record.system_flags |= FLAG_EXPUNGED;
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
 
         r = mailbox_rewrite_index_record(attachments, &record);
 

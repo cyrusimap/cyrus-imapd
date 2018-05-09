@@ -149,6 +149,7 @@ struct index_record {
     size_t cache_offset;
     time_t last_updated;
     uint32_t system_flags;
+    uint32_t internal_flags;
     uint32_t user_flags[MAX_USER_FLAGS/32];
     time_t savedate;
     uint16_t cache_version;
@@ -383,18 +384,22 @@ typedef enum _MsgFlags {
     FLAG_DELETED            = (1<<2),
     FLAG_DRAFT              = (1<<3),
     FLAG_SEEN               = (1<<4),
-    FLAG_SPLITCONVERSATION  = (1<<27),
-    FLAG_NEEDS_CLEANUP      = (1<<28),
-    FLAG_ARCHIVED           = (1<<29),
-    FLAG_UNLINKED           = (1<<30),
-    FLAG_EXPUNGED           = (1U<<31),
 } MsgFlags;
 
+typedef enum _MsgInternalFlags {
+    FLAG_INTERNAL_SPLITCONVERSATION  = (1<<27),
+    FLAG_INTERNAL_NEEDS_CLEANUP      = (1<<28),
+    FLAG_INTERNAL_ARCHIVED           = (1<<29),
+    FLAG_INTERNAL_UNLINKED           = (1<<30),
+    FLAG_INTERNAL_EXPUNGED           = (1U<<31),
+} MsgInternalFlags;
+
 #define FLAGS_SYSTEM   (FLAG_ANSWERED|FLAG_FLAGGED|FLAG_DELETED|FLAG_DRAFT|FLAG_SEEN)
-#define FLAGS_INTERNAL (FLAG_SPLITCONVERSATION|FLAG_NEEDS_CLEANUP|FLAG_ARCHIVED|FLAG_UNLINKED|FLAG_EXPUNGED)
-/* for replication */
-#define FLAGS_LOCAL    (FLAG_SPLITCONVERSATION|FLAG_NEEDS_CLEANUP|FLAG_ARCHIVED|FLAG_UNLINKED)
-#define FLAGS_GLOBAL   (FLAGS_SYSTEM|FLAG_EXPUNGED)
+#define FLAGS_INTERNAL (FLAG_INTERNAL_SPLITCONVERSATION |       \
+                        FLAG_INTERNAL_NEEDS_CLEANUP |           \
+                        FLAG_INTERNAL_ARCHIVED |                \
+                        FLAG_INTERNAL_UNLINKED |                \
+                        FLAG_INTERNAL_EXPUNGED)
 
 #define OPT_POP3_NEW_UIDL (1<<0)        /* added for Outlook stupidity */
 /* NOTE: not used anymore - but don't reuse it */

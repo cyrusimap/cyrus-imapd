@@ -232,6 +232,7 @@ EXPORTED int index_reload_record(struct index_state *state,
     /* restore mutable fields */
     record->modseq = im->modseq;
     record->system_flags = im->system_flags;
+    record->internal_flags = im->internal_flags;
     record->cache_offset = im->cache_offset;
     for (i = 0; i < MAX_USER_FLAGS/32; i++)
         record->user_flags[i] = im->user_flags[i];
@@ -257,6 +258,7 @@ static int index_rewrite_record(struct index_state *state,
     /* update tracking of mutable fields */
     im->modseq = record->modseq;
     im->system_flags = record->system_flags;
+    im->internal_flags = record->internal_flags;
     im->cache_offset = record->cache_offset;
     for (i = 0; i < MAX_USER_FLAGS/32; i++)
         im->user_flags[i] = record->user_flags[i];
@@ -404,7 +406,7 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
     for (msgno = 1; msgno <= state->exists; msgno++) {
         im = &state->map[msgno-1];
 
-        if (im->system_flags & FLAG_EXPUNGED)
+        if (im->internal_flags & FLAG_INTERNAL_EXPUNGED)
             continue; /* already expunged */
 
         if (need_deleted && !(im->system_flags & FLAG_DELETED))
@@ -431,7 +433,8 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
         }
 
         /* set the flags */
-        record.system_flags |= FLAG_DELETED | FLAG_EXPUNGED;
+        record.system_flags |= FLAG_DELETED;
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
         numexpunged++;
         state->num_expunged++;
 
@@ -662,7 +665,7 @@ static void index_refresh_locked(struct index_state *state)
             /* NOTE: this same logic is repeated below for messages
              * past the end of recno (repack removing the trailing
              * records).  Make sure to keep them in sync */
-            if (!(im->system_flags & FLAG_EXPUNGED)) {
+            if (!(im->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
                 /* we don't even know the modseq of when it was wiped,
                  * but we can be sure it's since the last given highestmodseq,
                  * so simulate the lowest possible value.  This is fine for
@@ -677,7 +680,8 @@ static void index_refresh_locked(struct index_state *state)
             /* simulate expunged flag so we get an EXPUNGE response and
              * tell about unlinked so we don't get IO errors trying to
              * find the file */
-            im->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+            im->internal_flags |= FLAG_INTERNAL_EXPUNGED |
+                FLAG_INTERNAL_UNLINKED;
             im = &state->map[msgno++];
 
             /* this one is expunged */
@@ -689,7 +693,7 @@ static void index_refresh_locked(struct index_state *state)
          * get its own msgno */
         if (!state->want_expunged
             && (msgno > state->exists || record->uid < im->uid)
-            && (record->system_flags & FLAG_EXPUNGED))
+            && (record->internal_flags & FLAG_INTERNAL_EXPUNGED))
             continue;
 
         /* make sure our UID map is consistent */
@@ -704,12 +708,13 @@ static void index_refresh_locked(struct index_state *state)
         im->recno = record->recno;
         im->modseq = record->modseq;
         im->system_flags = record->system_flags;
+        im->internal_flags = record->internal_flags;
         im->cache_offset = record->cache_offset;
         for (i = 0; i < MAX_USER_FLAGS/32; i++)
             im->user_flags[i] = record->user_flags[i];
 
         /* for expunged records, just track the modseq */
-        if (im->system_flags & FLAG_EXPUNGED) {
+        if (im->internal_flags & FLAG_INTERNAL_EXPUNGED) {
             num_expunged++;
             /* http://www.rfc-editor.org/errata_search.php?rfc=5162
              * Errata ID: 1809 - if there are expunged records we
@@ -770,12 +775,12 @@ static void index_refresh_locked(struct index_state *state)
         /* this is the same logic as the block above in the main loop,
          * see comments up there, and make sure the blocks are kept
          * in sync! */
-        if (!(im->system_flags & FLAG_EXPUNGED))
+        if (!(im->internal_flags & FLAG_INTERNAL_EXPUNGED))
             im->modseq = state->highestmodseq + 1;
         if (!delayed_modseq || im->modseq < delayed_modseq)
             delayed_modseq = im->modseq - 1;
         im->recno = 0;
-        im->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+        im->internal_flags |= FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED;
         im = &state->map[msgno++];
         num_expunged++;
     }
@@ -950,7 +955,7 @@ struct seqset *index_vanished(struct index_state *state,
         struct mailbox_iter *iter = mailbox_iter_init(mailbox, params->modseq, 0);
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
-            if (!(record->system_flags & FLAG_EXPUNGED))
+            if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED))
                 continue;
             if (!params->sequence || seqset_ismember(seq, record->uid))
                 seqset_add(outlist, record->uid, 1);
@@ -1269,7 +1274,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
             continue;
 
         /* if it's expunged already, skip it now */
-        if ((im->system_flags & FLAG_EXPUNGED))
+        if ((im->internal_flags & FLAG_INTERNAL_EXPUNGED))
             continue;
 
         /* if it's changed already, skip it now */
@@ -1448,7 +1453,7 @@ EXPORTED int index_run_annotator(struct index_state *state,
             continue;
 
         /* if it's expunged already, skip it now */
-        if ((im->system_flags & FLAG_EXPUNGED))
+        if ((im->internal_flags & FLAG_INTERNAL_EXPUNGED))
             continue;
 
         r = index_reload_record(state, msgno, &record);
@@ -2133,7 +2138,7 @@ EXPORTED int index_convsort(struct index_state *state,
         struct index_map *im = &state->map[msg->msgno-1];
 
         /* can happen if we didn't "tellchanges" yet */
-        if (im->system_flags & FLAG_EXPUNGED)
+        if (im->internal_flags & FLAG_INTERNAL_EXPUNGED)
             continue;
 
         /* run the search program against all messages */
@@ -2642,7 +2647,7 @@ EXPORTED int index_convupdates(struct index_state *state,
         int in_search = 0;
 
         in_search = index_search_evaluate(state, searchargs->root, msg->msgno);
-        is_deleted = !!(im->system_flags & FLAG_EXPUNGED);
+        is_deleted = !!(im->internal_flags & FLAG_INTERNAL_EXPUNGED);
         is_new = (im->uid >= windowargs->uidnext);
         was_deleted = is_deleted && (im->modseq <= windowargs->modseq);
 
@@ -3675,7 +3680,7 @@ static void index_tellexpunge(struct index_state *state)
         im = &state->map[oldmsgno-1];
 
         /* inform about expunges */
-        if (im->system_flags & FLAG_EXPUNGED) {
+        if (im->internal_flags & FLAG_INTERNAL_EXPUNGED) {
             state->exists--;
             state->num_expunged--;
             /* they never knew about this one, skip */
@@ -4541,15 +4546,19 @@ static int index_storeflag(struct index_state *state,
     }
 
     uint32_t system_flags;
+    uint32_t internal_flags;
     uint32_t user_flags[MAX_USER_FLAGS/32];
 
     r = msgrecord_get_systemflags(msgrec, &system_flags);
     if (r) return r;
 
+    r = msgrecord_get_internalflags(msgrec, &internal_flags);
+    if (r) return r;
+
     r = msgrecord_get_userflags(msgrec, user_flags);
     if (r) return r;
 
-    keep = system_flags & FLAGS_INTERNAL;
+    keep = internal_flags;
     old = system_flags & FLAGS_SYSTEM;
     new = storeargs->system_flags & FLAGS_SYSTEM;
 
@@ -4666,6 +4675,8 @@ static int index_storeflag(struct index_state *state,
         modified_flags->removed_flags++;
 
     r = msgrecord_set_systemflags(msgrec, system_flags);
+    if (r) return r;
+    r = msgrecord_set_internalflags(msgrec, internal_flags);
     if (r) return r;
     r = msgrecord_set_userflags(msgrec, user_flags);
     if (r) return r;
@@ -5144,6 +5155,7 @@ MsgData **index_msgdata_load(struct index_state *state,
         cur->uid = record.uid;
         cur->cid = record.cid;
         cur->system_flags = record.system_flags;
+        cur->internal_flags = record.internal_flags;
         message_guid_copy(&cur->guid, &record.guid);
         if (found_anchor && record.uid == anchor)
             *found_anchor = 1;

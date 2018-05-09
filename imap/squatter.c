@@ -385,7 +385,8 @@ static int index_single_message(const char *mboxname, uint32_t uid)
     r = mailbox_find_index_record(mailbox, uid, &record);
     if (r) goto out;
 
-    if (record.system_flags & (FLAG_EXPUNGED|FLAG_UNLINKED)) goto out;
+    if (record.internal_flags & (FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED))
+        goto out;
 
     msg = message_new_from_record(mailbox, &record);
     if (!msg) goto out;

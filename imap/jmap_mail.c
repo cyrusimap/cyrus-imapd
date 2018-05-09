@@ -3442,7 +3442,7 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
     jmap_req_t *req = data->req;
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
-    uint32_t flags;
+    uint32_t system_flags, internal_flags;
     int r;
 
     if (rec->part) return 0;
@@ -3453,10 +3453,13 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
     r = msgrecord_find(mbox, rec->uid, &mr);
     if (r) goto done;
 
-    r = msgrecord_get_systemflags(mr, &flags);
+    r = msgrecord_get_systemflags(mr, &system_flags);
     if (r) goto done;
 
-    if (!r && !(flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
+    r = msgrecord_get_internalflags(mr, &internal_flags);
+    if (r) goto done;
+
+    if (!r && !(system_flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED)) {
         json_object_set_new(mboxs, mbox->uniqueid, json_string(mbox->name));
     }
 
@@ -4050,7 +4053,7 @@ static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *rock)
     jmap_req_t *req = data->req;
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
-    uint32_t system_flags;
+    uint32_t system_flags, internal_flags;
 
     if (rec->part) return 0;
 
@@ -4063,7 +4066,11 @@ static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *rock)
 
     r = msgrecord_get_systemflags(mr, &system_flags);
     if (r) goto done;
-    if (system_flags & (FLAG_EXPUNGED|FLAG_DELETED)) goto done;
+
+    r = msgrecord_get_internalflags(mr, &internal_flags);
+    if (r) goto done;
+
+    if (system_flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED) goto done;
 
     /* Count that message */
     data->message_count++;
@@ -4154,8 +4161,10 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
 
         r = msgrecord_find(mbox, rec->uid, &mr);
         if (!r) {
+            uint32_t internal_flags;
             r = msgrecord_get_systemflags(mr, &flags);
-            if (!r && !(flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
+            if (!r) msgrecord_get_internalflags(mr, &internal_flags);
+            if (!r && !(flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED)) {
                 if (d->mboxname) {
                     free(d->mboxname);
                     r = IMAP_OK_COMPLETED;
@@ -4212,8 +4221,10 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
 
     r = msgrecord_find(mbox, rec->uid, &mr);
     if (!r) {
+        uint32_t internal_flags;
         r = msgrecord_get_systemflags(mr, &flags);
-        if (!r && !(flags & (FLAG_EXPUNGED|FLAG_DELETED))) {
+        if (!r) msgrecord_get_internalflags(mr, &internal_flags);
+        if (!r && !(flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED)) {
             r = IMAP_OK_COMPLETED;
         }
         msgrecord_unref(&mr);
@@ -4894,7 +4905,8 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
         if (!folder) continue;
 
         /* Skip expunged or hidden messages */
-        if (md->system_flags & (FLAG_EXPUNGED|FLAG_DELETED))
+        if (md->system_flags & FLAG_DELETED ||
+            md->internal_flags & FLAG_INTERNAL_EXPUNGED)
             continue;
         int rights = jmap_myrights_byname(req, folder->mboxname);
         if (!(rights & ACL_READ))
@@ -5107,7 +5119,8 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
         free(email_id);
         email_id = _email_id_from_guid(&md->guid);
 
-        int is_expunged = md->system_flags & (FLAG_EXPUNGED|FLAG_DELETED);
+        int is_expunged = (md->system_flags & FLAG_DELETED) ||
+                (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
 
         size_t touched_id = (size_t)hash_lookup(email_id, &touched_ids);
         size_t new_touched_id = touched_id;
@@ -5279,7 +5292,8 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
         free(email_id);
         email_id = _email_id_from_guid(&md->guid);
 
-        int is_expunged = md->system_flags & (FLAG_EXPUNGED|FLAG_DELETED);
+        int is_expunged = (md->system_flags & FLAG_DELETED) ||
+                (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
 
         size_t touched_id = (size_t)hash_lookup(email_id, &touched_ids);
         size_t new_touched_id = touched_id;
@@ -5436,7 +5450,8 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
         if (!(rights & ACL_READ))
             continue;
 
-        int is_expunged = md->system_flags & (FLAG_EXPUNGED|FLAG_DELETED);
+        int is_expunged = (md->system_flags & FLAG_DELETED) ||
+                (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
 
         if (is_expunged) {
             /* Check if the message exists somewhere else */
@@ -7385,21 +7400,27 @@ static int _email_expunge(jmap_req_t *req, struct mailbox *mbox, uint32_t uid)
     int r;
     struct mboxevent *mboxevent = NULL;
     msgrecord_t *mrw = NULL;
-    uint32_t flags;
+    uint32_t system_flags, internal_flags;
 
     r = msgrecord_find(mbox, uid, &mrw);
     if (r) return r;
 
-    r = msgrecord_get_systemflags(mrw, &flags);
+    r = msgrecord_get_systemflags(mrw, &system_flags);
     if (r) goto done;
 
-    if (flags & FLAG_EXPUNGED) {
+    r = msgrecord_get_internalflags(mrw, &internal_flags);
+    if (r) goto done;
+
+    if (internal_flags & FLAG_INTERNAL_EXPUNGED) {
         r = 0;
         goto done;
     }
 
     /* Expunge index record */
-    r = msgrecord_add_systemflags(mrw, FLAG_DELETED | FLAG_EXPUNGED);
+    r = msgrecord_add_systemflags(mrw, FLAG_DELETED);
+    if (r) goto done;
+
+    r = msgrecord_add_internalflags(mrw, FLAG_INTERNAL_EXPUNGED);
     if (r) goto done;
 
     r = msgrecord_rewrite(mrw);
@@ -9400,7 +9421,7 @@ static int _email_flagupdate_cb(const conv_guidrec_t *rec, void *rock)
     /* Fetch record */
     struct mailbox *mbox = NULL;
     msgrecord_t *mrw = NULL;
-    uint32_t system_flags = 0;
+    uint32_t system_flags = 0, internal_flags = 0;
 
     int r = jmap_openmbox(req, rec->mboxname, &mbox, /*write*/1);
     if (r) return r;
@@ -9408,7 +9429,10 @@ static int _email_flagupdate_cb(const conv_guidrec_t *rec, void *rock)
     if (r) goto done;
     r = msgrecord_get_systemflags(mrw, &system_flags);
     if (r) goto done;
-    if (system_flags & (FLAG_EXPUNGED|FLAG_DELETED)) goto done;
+    r = msgrecord_get_internalflags(mrw, &internal_flags);
+    if (r) goto done;
+    if ((system_flags & FLAG_DELETED) ||
+        (internal_flags & FLAG_INTERNAL_EXPUNGED)) goto done;
 
     /* Determine if to patch or reset flags */
     uint32_t user_flags[MAX_USER_FLAGS/32];
