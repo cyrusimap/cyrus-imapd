@@ -164,6 +164,12 @@ static json_t *buildinfo()
 #else
     json_object_set_new(component, "snmp", json_false());
 #endif
+#ifdef CYRUS_TIMEZONES_ZONEINFO_DIR
+    json_object_set_new(component, "default_zoneinfo_dir",
+                        json_string(CYRUS_TIMEZONES_ZONEINFO_DIR));
+#else
+    json_object_set_new(component, "default_zoneinfo_dir", json_null());
+#endif
 
     /* Build dependencies */
 #ifdef HAVE_LDAP
