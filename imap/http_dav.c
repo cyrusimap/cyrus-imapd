@@ -6775,6 +6775,11 @@ static int dav_post_import(struct transaction_t *txn,
         goto done;
     }
 
+    /* Parse and validate the resources */
+    obj = mime->to_object(&txn->req_body.payload);
+    ret = pparams->post.bulk.import(txn, obj, NULL, NULL, NULL, NULL, 0);
+    if (ret) goto done;
+
     /* Start construction of our multistatus response */
     root = init_xml_response("multistatus", NS_DAV, NULL, ns);
     if (!root) {
@@ -6797,8 +6802,7 @@ static int dav_post_import(struct transaction_t *txn,
     /* Begin XML response */
     xml_response(HTTP_MULTI_STATUS, txn, outdoc);
 
-    /* Parse, validate, and store the resource */
-    obj = mime->to_object(&txn->req_body.payload);
+    /* Store the resources */
     ret = pparams->post.bulk.import(txn, obj, mailbox, davdb,
                                     root, ns, get_preferences(txn));
 

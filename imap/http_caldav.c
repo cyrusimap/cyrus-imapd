@@ -3371,22 +3371,47 @@ static int caldav_import(struct transaction_t *txn, void *obj,
     const char *uid;
     ptrarray_t *comps;
     struct import_rock irock = { txn, ical, mailbox, destdb, root, ns, flags,
-                                 ptrarray_new(), 0, 0, NULL };
+                                 NULL, 0, 0, NULL };
 
-    /* Validate the iCal data */
-    if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
-        txn->error.precond = CALDAV_VALID_DATA;
-        return HTTP_FORBIDDEN;
-    }
-    icalrestriction_check(ical);
-    if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
-        buf_setcstr(&txn->buf, txn->error.desc);
-        txn->error.desc = buf_cstring(&txn->buf);
-        txn->error.precond = CALDAV_VALID_DATA;
-        return HTTP_FORBIDDEN;
+    if (!root) {
+        /* Validate the iCal data */
+        if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
+            txn->error.precond = CALDAV_VALID_DATA;
+            return HTTP_FORBIDDEN;
+        }
+        icalrestriction_check(ical);
+        if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
+            buf_setcstr(&txn->buf, txn->error.desc);
+            txn->error.desc = buf_cstring(&txn->buf);
+            txn->error.precond = CALDAV_VALID_DATA;
+            return HTTP_FORBIDDEN;
+        }
+
+        /* Make sure each "real" component has a UID */
+        for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
+             comp;
+             comp = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT)) {
+
+            icalcomponent_kind kind = icalcomponent_isa(comp);
+
+            if (kind == ICAL_VTIMEZONE_COMPONENT) continue;
+
+            uid = icalcomponent_get_uid(comp);
+            if (!uid) {
+                buf_reset(&txn->buf);
+                buf_printf(&txn->buf, "Missing UID property in %s",
+                           icalcomponent_kind_to_string(kind));
+                txn->error.desc = buf_cstring(&txn->buf);
+                txn->error.precond = CALDAV_VALID_DATA;
+                return HTTP_FORBIDDEN;
+            }
+        }
+
+        return 0;
     }
 
     /* Fetch important properties from VCALENDAR */
+    irock.props = ptrarray_new();
     for (prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY);
          prop; prop = icalcomponent_get_next_property(ical, ICAL_ANY_PROPERTY)) {
 
