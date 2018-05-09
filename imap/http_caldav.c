@@ -2866,17 +2866,41 @@ static int caldav_import(struct transaction_t *txn, void *obj,
     xmlNodePtr resp, propstat, prop, error;
     unsigned post_count = 0;
 
-    /* Validate the iCal data */
-    if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
-        txn->error.precond = CALDAV_VALID_DATA;
-        return HTTP_FORBIDDEN;
-    }
-    icalrestriction_check(ical);
-    if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
-        buf_setcstr(&txn->buf, txn->error.desc);
-        txn->error.desc = buf_cstring(&txn->buf);
-        txn->error.precond = CALDAV_VALID_DATA;
-        return HTTP_FORBIDDEN;
+    if (!root) {
+        /* Validate the iCal data */
+        if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
+            txn->error.precond = CALDAV_VALID_DATA;
+            return HTTP_FORBIDDEN;
+        }
+        icalrestriction_check(ical);
+        if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
+            buf_setcstr(&txn->buf, txn->error.desc);
+            txn->error.desc = buf_cstring(&txn->buf);
+            txn->error.precond = CALDAV_VALID_DATA;
+            return HTTP_FORBIDDEN;
+        }
+
+        /* Make sure each "real" component has a UID */
+        for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
+             comp;
+             comp = icalcomponent_get_next_component(ical, ICAL_ANY_COMPONENT)) {
+
+            icalcomponent_kind kind = icalcomponent_isa(comp);
+
+            if (kind == ICAL_VTIMEZONE_COMPONENT) continue;
+
+            uid = icalcomponent_get_uid(comp);
+            if (!uid) {
+                buf_reset(&txn->buf);
+                buf_printf(&txn->buf, "Missing UID property in %s",
+                           icalcomponent_kind_to_string(kind));
+                txn->error.desc = buf_cstring(&txn->buf);
+                txn->error.precond = CALDAV_VALID_DATA;
+                return HTTP_FORBIDDEN;
+            }
+        }
+
+        return 0;
     }
 
     ensure_ns(ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
