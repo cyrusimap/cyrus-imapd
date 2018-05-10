@@ -106,6 +106,14 @@ sub test_calendar_get
     $self->assert_num_equals(0, scalar(@{$res->[0][1]{list}}));
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{notFound}}));
     $self->assert_str_equals($unknownId, $res->[0][1]{notFound}[0]);
+
+    xlog "get all calendars";
+    $res = $jmap->CallMethods([['Calendar/get', {ids => undef}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_num_equals(2, scalar(@{$res->[0][1]{list}}));
+    $res = $jmap->CallMethods([['Calendar/get', {}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_num_equals(2, scalar(@{$res->[0][1]{list}}));
 }
 
 sub test_calendar_get_shared
