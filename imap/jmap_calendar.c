@@ -382,7 +382,7 @@ static int getCalendars(struct jmap_req *req)
 
     json_t *want = json_object_get(req->args, "ids");
     json_t *notfound = json_array();
-    if (want) {
+    if (JNOTNULL(want)) {
         size_t i;
         json_t *jval;
         rock.skip_hidden = 0; /* complain about missing ACL rights */
