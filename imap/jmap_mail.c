@@ -2075,7 +2075,7 @@ static void _mbox_setargs_parse(json_t *jargs,
             jmap_parser_invalid(parser, "name");
         }
     }
-    else if (jname) {
+    else if (is_create) {
         jmap_parser_invalid(parser, "name");
     }
 
