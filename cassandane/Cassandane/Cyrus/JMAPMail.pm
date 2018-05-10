@@ -789,6 +789,28 @@ sub test_mailbox_set
     $self->assert_str_equals($res->[0][1]{notFound}[0], $id);
 }
 
+sub test_mailbox_set_name_missing
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create mailbox";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', { create => {
+                "1" => { role => undef },
+                "2" => { role => undef, name => "\t " },
+        }}, "R1"]
+    ]);
+    $self->assert_str_equals($res->[0][0], 'Mailbox/set');
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{1}{type});
+    $self->assert_str_equals('name', $res->[0][1]{notCreated}{1}{properties}[0]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{2}{type});
+    $self->assert_str_equals('name', $res->[0][1]{notCreated}{2}{properties}[0]);
+}
+
+
 sub test_mailbox_set_name_collision
     :JMAP :min_version_3_1
 {
