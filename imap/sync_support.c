@@ -369,7 +369,7 @@ void sync_print_flags(struct dlist *kl,
         dlist_setflag(fl, "FLAG", "\\Flagged");
     if (record->system_flags & FLAG_DRAFT)
         dlist_setflag(fl, "FLAG", "\\Draft");
-    if (record->system_flags & FLAG_EXPUNGED)
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
         dlist_setflag(fl, "FLAG", "\\Expunged");
     if (record->system_flags & FLAG_SEEN)
         dlist_setflag(fl, "FLAG", "\\Seen");
@@ -400,7 +400,7 @@ int sync_getflags(struct dlist *kl,
             if (!strcmp(s, "\\seen")) {
                 record->system_flags |= FLAG_SEEN;
             } else if (!strcmp(s, "\\expunged")) {
-                record->system_flags |= FLAG_EXPUNGED;
+                record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
             } else if (!strcmp(s, "\\answered")) {
                 record->system_flags |= FLAG_ANSWERED;
             } else if (!strcmp(s, "\\flagged")) {
@@ -1595,7 +1595,7 @@ static int sync_send_file(struct mailbox *mailbox,
     msgid->size = record->size;
     if (!msgid->fname) msgid->fname = xstrdup(fname);
     msgid->need_upload = 0;
-    msgid->is_archive = record->system_flags & FLAG_ARCHIVED ? 1 : 0;
+    msgid->is_archive = (record->internal_flags & FLAG_INTERNAL_ARCHIVED) ? 1 : 0;
     part_list->toupload--;
 
     return 0;
@@ -1705,7 +1705,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
                 send_file = 0;
 
             /* if we don't HAVE the file we can't send it */
-            if (record->system_flags & FLAG_UNLINKED)
+            if (record->internal_flags & FLAG_INTERNAL_UNLINKED)
                 send_file = 0;
 
             if (send_file) {
@@ -1845,9 +1845,9 @@ int sync_append_copyfile(struct mailbox *mailbox,
 
     if (r) {
         /* deal with unlinked master records */
-        if (record->system_flags & FLAG_EXPUNGED) {
+        if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
             /* no need to set 'needs cleanup' here, it's already expunged */
-            record->system_flags |= FLAG_UNLINKED;
+            record->internal_flags |= FLAG_INTERNAL_UNLINKED;
             goto just_write;
         }
         syslog(LOG_ERR, "IOERROR: failed to parse %s: %s",
@@ -1865,11 +1865,11 @@ int sync_append_copyfile(struct mailbox *mailbox,
 
     /* put back to archive if original was archived, gain single instance store  */
     if (item->is_archive)
-        record->system_flags |= FLAG_ARCHIVED;
+        record->internal_flags |= FLAG_INTERNAL_ARCHIVED;
 
     /* push it to archive if it should be archived now anyway */
     if (mailbox_should_archive(mailbox, record, NULL))
-        record->system_flags |= FLAG_ARCHIVED;
+        record->internal_flags |= FLAG_INTERNAL_ARCHIVED;
 
     destname = mailbox_record_fname(mailbox, record);
     cyrus_mkdir(destname, 0755);
@@ -2266,7 +2266,8 @@ redo:
 
         /* Attempt to reserve this message */
         mailbox_msg_path = mailbox_record_fname(mailbox, record);
-        stage_msg_path = dlist_reserve_path(part, record->system_flags & FLAG_ARCHIVED, 0, &record->guid);
+        stage_msg_path = dlist_reserve_path(part, record->internal_flags & FLAG_INTERNAL_ARCHIVED,
+                                            0, &record->guid);
 
         /* check that the sha1 of the file on disk is correct */
         struct index_record record2;
@@ -2291,7 +2292,7 @@ redo:
 
         item->size = record->size;
         item->fname = xstrdup(stage_msg_path); /* track the correct location */
-        item->is_archive = record->system_flags & FLAG_ARCHIVED ? 1 : 0;
+        item->is_archive = (record->internal_flags & FLAG_INTERNAL_ARCHIVED) ? 1 : 0;
         item->need_upload = 0;
         part_list->toupload--;
         num_reserved++;
@@ -2454,8 +2455,8 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
         /* found a match, check for updates */
         if (rrecord && rrecord->uid == mrecord.uid) {
             /* if they're both EXPUNGED then ignore everything else */
-            if ((mrecord.system_flags & FLAG_EXPUNGED) &&
-                (rrecord->system_flags & FLAG_EXPUNGED))
+            if (mrecord.internal_flags & FLAG_INTERNAL_EXPUNGED &&
+                rrecord->internal_flags & FLAG_INTERNAL_EXPUNGED)
                 continue;
 
             /* GUID mismatch is an error straight away, it only ever happens if we
@@ -2483,8 +2484,8 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
 
             /* if it's already expunged on the replica, but alive on the master,
              * that's bad */
-            if (!(mrecord.system_flags & FLAG_EXPUNGED) &&
-                 (rrecord->system_flags & FLAG_EXPUNGED)) {
+            if (!(mrecord.internal_flags & FLAG_INTERNAL_EXPUNGED) &&
+                (rrecord->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
                 syslog(LOG_ERR, "SYNCNOTICE: expunged on replica %s %u",
                        mailbox->name, mrecord.uid);
                 r = IMAP_SYNC_CHECKSUM;
@@ -2501,8 +2502,11 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             copy.last_updated = mrecord.last_updated;
             copy.internaldate = mrecord.internaldate;
             copy.savedate = mrecord.savedate;
-            copy.system_flags = (mrecord.system_flags & FLAGS_GLOBAL) |
-                                (rrecord->system_flags & FLAGS_LOCAL);
+            copy.system_flags = (mrecord.system_flags) |
+                                (rrecord->system_flags);
+            copy.internal_flags = rrecord->internal_flags;
+            copy.internal_flags |= mrecord.internal_flags & FLAG_INTERNAL_EXPUNGED;
+
             for (i = 0; i < MAX_USER_FLAGS/32; i++)
                 copy.user_flags[i] = mrecord.user_flags[i];
 
@@ -2533,7 +2537,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
         /* not found and less than LAST_UID, bogus */
         else if (mrecord.uid <= mailbox->i.last_uid) {
             /* Expunged, just skip it */
-            if (!(mrecord.system_flags & FLAG_EXPUNGED)) {
+            if (!(mrecord.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
                 r = IMAP_SYNC_CHECKSUM;
                 goto out;
             }
@@ -3533,7 +3537,7 @@ int sync_apply_expunge(struct dlist *kin,
         struct index_record oldrecord;
         r = mailbox_find_index_record(mailbox, dlist_num(ui), &oldrecord);
         if (r) continue; /* skip */
-        oldrecord.system_flags |= FLAG_EXPUNGED;
+        oldrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
         oldrecord.silent = 1; /* so the next sync will succeed */
         r = mailbox_rewrite_index_record(mailbox, &oldrecord);
         if (r) goto done;
@@ -4571,7 +4575,7 @@ static int copy_local(struct mailbox *mailbox, unsigned uid)
     if (r) return r;
 
     /* and expunge the old record */
-    oldrecord.system_flags |= FLAG_EXPUNGED;
+    oldrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
     r = mailbox_rewrite_index_record(mailbox, &oldrecord);
 
     /* done - return */
@@ -4680,7 +4684,7 @@ static int copyback_one_record(struct mailbox *mailbox,
     int r;
 
     /* don't want to copy back expunged records! */
-    if (rp->system_flags & FLAG_EXPUNGED)
+    if (rp->internal_flags & FLAG_INTERNAL_EXPUNGED)
         return 0;
 
     /* if the UID is lower than master's last_uid,
@@ -4723,7 +4727,7 @@ static int renumber_one_record(const struct index_record *mp,
                                struct dlist *kaction)
 {
     /* don't want to renumber expunged records */
-    if (mp->system_flags & FLAG_EXPUNGED)
+    if (mp->internal_flags & FLAG_INTERNAL_EXPUNGED)
         return 0;
 
     if (kaction)
@@ -4754,7 +4758,7 @@ static const char *make_flags(struct mailbox *mailbox, struct index_record *reco
         snprintf(buf, 4096, "%s\\Draft", sep);
         sep = " ";
     }
-    if (record->system_flags & FLAG_EXPUNGED) {
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
         snprintf(buf, 4096, "%s\\Expunged", sep);
         sep = " ";
     }
@@ -4816,7 +4820,8 @@ static int compare_one_record(struct mailbox *mailbox,
      * moving the message up.  I guess we could force UNLINK immediately
      * too... hmm.  Not today. */
 
-    if ((mp->system_flags & FLAG_EXPUNGED) && (rp->system_flags & FLAG_EXPUNGED))
+    if ((mp->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
+        (rp->internal_flags & FLAG_INTERNAL_EXPUNGED))
         return 0;
 
     /* first of all, check that GUID matches.  If not, we have had a split
@@ -4852,7 +4857,10 @@ static int compare_one_record(struct mailbox *mailbox,
         goto diff;
     if (mp->internaldate != rp->internaldate)
         goto diff;
-    if ((mp->system_flags & FLAGS_GLOBAL) != rp->system_flags)
+    if (mp->system_flags != rp->system_flags)
+        goto diff;
+    if ((mp->internal_flags & FLAG_INTERNAL_EXPUNGED) !=
+        (rp->internal_flags & FLAG_INTERNAL_EXPUNGED)) /* XXX: Is this correct? */
         goto diff;
     if (mp->cid != rp->cid)
         goto diff;
@@ -4875,14 +4883,14 @@ static int compare_one_record(struct mailbox *mailbox,
      * so that regular replication will cause an update */
 
     /* interesting case - expunged locally */
-    if (mp->system_flags & FLAG_EXPUNGED) {
+    if (mp->internal_flags & FLAG_INTERNAL_EXPUNGED) {
         /* if expunged, fall through - the rewrite will lift
          * the modseq to force the change to stick */
     }
-    else if (rp->system_flags & FLAG_EXPUNGED) {
+    else if (rp->internal_flags & FLAG_INTERNAL_EXPUNGED) {
         /* mark expunged - rewrite will cause both sides to agree
          * again */
-        mp->system_flags |= FLAG_EXPUNGED;
+        mp->internal_flags |= FLAG_INTERNAL_EXPUNGED;
     }
 
     /* otherwise, is the replica "newer"?  Better grab those flags */
@@ -4891,8 +4899,14 @@ static int compare_one_record(struct mailbox *mailbox,
             rp->last_updated >= mp->last_updated) {
             log_mismatch("more recent on replica", mailbox, mp, rp);
             /* then copy all the flag data over from the replica */
-            mp->system_flags = (rp->system_flags & FLAGS_GLOBAL) |
-                               (mp->system_flags & FLAGS_LOCAL);
+            mp->system_flags = (rp->system_flags) |
+                               (mp->system_flags);
+            mp->internal_flags = (rp->internal_flags & FLAG_INTERNAL_EXPUNGED) |
+                                  (mp->internal_flags &
+                                   (FLAG_INTERNAL_SPLITCONVERSATION |
+                                    FLAG_INTERNAL_NEEDS_CLEANUP |
+                                    FLAG_INTERNAL_ARCHIVED |
+                                    FLAG_INTERNAL_UNLINKED));
             mp->cid = rp->cid;
             for (i = 0; i < MAX_USER_FLAGS/32; i++)
                 mp->user_flags[i] = rp->user_flags[i];
@@ -4957,7 +4971,7 @@ static int mailbox_update_loop(struct mailbox *mailbox,
             }
             else if (rrecord.uid > mrecord->uid) {
                 /* record only exists on the master */
-                if (!(mrecord->system_flags & FLAG_EXPUNGED)) {
+                if (!(mrecord->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
                     syslog(LOG_ERR, "SYNCNOTICE: only exists on master %s %u (%s)",
                            mailbox->name, mrecord->uid,
                            message_guid_encode(&mrecord->guid));
@@ -4970,7 +4984,7 @@ static int mailbox_update_loop(struct mailbox *mailbox,
             }
             else {
                 /* record only exists on the replica */
-                if (!(rrecord.system_flags & FLAG_EXPUNGED)) {
+                if (!(rrecord.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
                     if (kaction)
                         syslog(LOG_ERR, "SYNCNOTICE: only exists on replica %s %u (%s)",
                                mailbox->name, rrecord.uid,

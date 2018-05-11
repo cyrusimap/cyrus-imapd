@@ -779,7 +779,7 @@ static int append_apply_flags(struct appendstate *as,
                               const strarray_t *flags)
 {
     int userflag;
-    uint32_t system_flags = 0;
+    uint32_t system_flags = 0, internal_flags = 0;
     int i, r = 0;
 
     assert(flags);
@@ -794,7 +794,7 @@ static int append_apply_flags(struct appendstate *as,
         else if (!strcasecmp(flag, "\\expunged")) {
             /* NOTE - this is a fake internal name */
             if (as->myrights & ACL_DELETEMSG) {
-                system_flags |= FLAG_EXPUNGED;
+                internal_flags |= FLAG_INTERNAL_EXPUNGED;
             }
         }
         else if (!strcasecmp(flag, "\\deleted")) {
@@ -831,6 +831,9 @@ static int append_apply_flags(struct appendstate *as,
     }
 
     r = msgrecord_add_systemflags(msgrec, system_flags);
+    if (r) goto out;
+
+    r = msgrecord_add_internalflags(msgrec, internal_flags);
     if (r) goto out;
 
 out:
@@ -949,7 +952,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 
     /* should we archive it straight away? */
     if (msgrecord_should_archive(msgrec, NULL)) {
-        r = msgrecord_add_systemflags(msgrec, FLAG_ARCHIVED);
+        r = msgrecord_add_internalflags(msgrec, FLAG_INTERNAL_ARCHIVED);
         if (r) goto out;
     }
 
@@ -992,11 +995,11 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 
     if (object_storage_enabled)
     {
-        uint32_t system_flags;
-        r = msgrecord_get_systemflags(msgrec, &system_flags);
+        uint32_t internal_flags;
+        r = msgrecord_get_internalflags(msgrec, &internal_flags);
         if (r) goto out;
 
-        if (system_flags & FLAG_ARCHIVED) {
+        if (internal_flags & FLAG_INTERNAL_ARCHIVED) {
             struct index_record record;
             r = msgrecord_get_index_record(msgrec, &record);
             if (!r) {
@@ -1007,8 +1010,8 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
                 }
                 else {
                     // didn't manage to store it, so remove the ARCHIVED flag
-                    system_flags &= ~FLAG_ARCHIVED;
-                    r = msgrecord_set_systemflags(msgrec, system_flags);
+                    internal_flags &= ~FLAG_INTERNAL_ARCHIVED;
+                    r = msgrecord_set_internalflags(msgrec, internal_flags);
                     if (r) goto out;
                 }
             }
@@ -1255,8 +1258,17 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     uint32_t system_flags;
     r = msgrecord_get_systemflags(msgrec, &system_flags);
     if (!r) {
-        system_flags &= (FLAG_SEEN | FLAGS_INTERNAL);
+        system_flags &= (FLAG_SEEN);
         r = msgrecord_set_systemflags(msgrec, system_flags);
+    }
+    if (r) goto out;
+
+    /* Reset internal flags */
+    uint32_t internal_flags;
+    r = msgrecord_get_internalflags(msgrec, &internal_flags);
+    if (!r) {
+        internal_flags &= (FLAGS_INTERNAL);
+        r = msgrecord_set_internalflags(msgrec, internal_flags);
     }
     if (r) goto out;
 
@@ -1351,10 +1363,13 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         msgrecord_t *src_msgrec = ptrarray_nth(msgrecs, msg);
         uint32_t src_uid;
         uint32_t src_system_flags;
+        uint32_t src_internal_flags;
 
         r = msgrecord_get_uid(src_msgrec, &src_uid);
         if (r) goto out;
         r = msgrecord_get_systemflags(src_msgrec, &src_system_flags);
+        if (r) goto out;
+        r = msgrecord_get_internalflags(src_msgrec, &src_internal_flags);
         if (r) goto out;
         /* read in existing cache record BEFORE we copy data, so that the
          * mmap will be up to date even if it's the same mailbox for source
@@ -1435,6 +1450,10 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         r = msgrecord_set_systemflags(dst_msgrec, dst_system_flags);
         if (r) goto out;
 
+        /* set internal flags */
+        r = msgrecord_set_internalflags(dst_msgrec, src_internal_flags);
+        if (r) goto out;
+
         /* should this message be marked \Seen? */
         if (src_system_flags & FLAG_SEEN) {
             append_setseen(as, dst_msgrec);
@@ -1453,13 +1472,15 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         if (r) goto out;
         destfname = xstrdup(tmp);
 
-        if (!(object_storage_enabled && src_system_flags & FLAG_ARCHIVED))   // if object storage do not move file
+        if (!(object_storage_enabled &&
+              src_internal_flags & FLAG_INTERNAL_ARCHIVED))   // if object storage do not move file
            r = mailbox_copyfile(srcfname, destfname, nolink);
 
         if (r) goto out;
 
 #if defined ENABLE_OBJECTSTORE
-        if (object_storage_enabled && src_system_flags & FLAG_ARCHIVED) {
+        if (object_storage_enabled &&
+            src_internal_flags & FLAG_INTERNAL_ARCHIVED) {
             struct index_record record;
             r = msgrecord_get_index_record(dst_msgrec, &record);
             if (!r) r = objectstore_put(as->mailbox, &record, destfname);   // put should just add the refcount.

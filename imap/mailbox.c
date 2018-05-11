@@ -150,14 +150,18 @@ static struct MsgFlagMap msgflagmap[] = {
     {"DE", FLAG_DELETED},
     {"DR", FLAG_DRAFT},
     {"SE", FLAG_SEEN},
-    {"SP", FLAG_SPLITCONVERSATION},
-    {"NC", FLAG_NEEDS_CLEANUP},
-    {"AR", FLAG_ARCHIVED},
-    {"UN", FLAG_UNLINKED},
-    {"EX", FLAG_EXPUNGED}
+    {"SP", FLAG_INTERNAL_SPLITCONVERSATION},
+    {"NC", FLAG_INTERNAL_NEEDS_CLEANUP},
+    {"AR", FLAG_INTERNAL_ARCHIVED},
+    {"UN", FLAG_INTERNAL_UNLINKED},
+    {"EX", FLAG_INTERNAL_EXPUNGED}
 };
-/* The length of the msgflagmap list * 2 + (total number of separators possible ) */
-#define FLAGMAPSTR_MAXLEN (sizeof(msgflagmap) / sizeof(struct MsgFlagMap) * 2 + 10 + 1)
+/* The length of the msgflagmap list * 2 +
+ * Total number of separators possible
+ * = 30 bytes
+ */
+#define FLAGMAPSTR_MAXLEN ((sizeof(msgflagmap) / sizeof(struct MsgFlagMap) * 2) + \
+                           (10 + 1))
 
 static int mailbox_index_unlink(struct mailbox *mailbox);
 static int mailbox_index_repack(struct mailbox *mailbox, int version);
@@ -174,7 +178,7 @@ static int mailbox_abort_dav(struct mailbox *mailbox);
 static int mailbox_delete_dav(struct mailbox *mailbox);
 #endif
 
-static void flags_to_str(MsgFlags flags, char *flagstr)
+static inline void flags_to_str_internal(uint32_t flags, char *flagstr)
 {
     size_t i, len = 0;
     size_t map_size;
@@ -196,6 +200,13 @@ static void flags_to_str(MsgFlags flags, char *flagstr)
             len += 2;
         }
     }
+}
+
+static void flags_to_str(struct index_record *record, char *flagstr)
+{
+    uint32_t flags = record->system_flags | record->internal_flags;
+
+    flags_to_str_internal(flags, flagstr);
 }
 
 static struct mailboxlist *create_listitem(const char *name)
@@ -310,7 +321,7 @@ EXPORTED const char *mailbox_record_fname(struct mailbox *mailbox,
     object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
 #endif
 
-    if (!object_storage_enabled && (record->system_flags & FLAG_ARCHIVED))
+    if (!object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED))
         return mailbox_archive_fname(mailbox, record->uid);
     else
         return mailbox_spool_fname(mailbox, record->uid);
@@ -581,7 +592,7 @@ static struct mappedfile *mailbox_cachefile(struct mailbox *mailbox,
 {
     const char *fname;
 
-    if (record->system_flags & FLAG_ARCHIVED)
+    if (record->internal_flags & FLAG_INTERNAL_ARCHIVED)
         fname = mailbox_meta_fname(mailbox, META_ARCHIVECACHE);
     else
         fname = mailbox_meta_fname(mailbox, META_CACHE);
@@ -594,7 +605,7 @@ static struct mappedfile *repack_cachefile(struct mailbox_repack *repack,
 {
     const char *fname;
 
-    if (record->system_flags & FLAG_ARCHIVED)
+    if (record->internal_flags & FLAG_INTERNAL_ARCHIVED)
         fname = mailbox_meta_newfname(repack->mailbox, META_ARCHIVECACHE);
     else
         fname = mailbox_meta_newfname(repack->mailbox, META_CACHE);
@@ -1674,6 +1685,7 @@ static int mailbox_buf_to_index_record(const char *buf,
                                        struct index_record *record)
 {
     uint32_t crc;
+    uint32_t stored_system_flags = 0;
     int n;
 
     /* tracking fields - initialise */
@@ -1688,7 +1700,12 @@ static int mailbox_buf_to_index_record(const char *buf,
     record->gmtime = ntohl(*((bit32 *)(buf+OFFSET_GMTIME)));
     uint64_t cache_offset_field = ntohl(*((bit32 *)(buf+OFFSET_CACHE_OFFSET)));
     record->last_updated = ntohl(*((bit32 *)(buf+OFFSET_LAST_UPDATED)));
-    record->system_flags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
+    stored_system_flags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
+
+    /* de-serialise system flags and internal flags */
+    record->system_flags = stored_system_flags & 0x000000ff;
+    record->internal_flags = stored_system_flags & 0xff000000;
+
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
         record->user_flags[n] = ntohl(*((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)));
     }
@@ -1835,7 +1852,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
     /* audit logging */
     if (config_auditlog) {
         char flagstr[FLAGMAPSTR_MAXLEN];
-        flags_to_str(record->system_flags, flagstr);
+        flags_to_str(record, flagstr);
         if (change->flags & CHANGE_ISAPPEND)
             /* note: messageid doesn't have <> wrappers because it already includes them */
             syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> "
@@ -1845,7 +1862,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
                    record->modseq, flagstr,
                    message_guid_encode(&record->guid), change->msgid);
 
-        if ((record->system_flags & FLAG_EXPUNGED) && !(change->flags & CHANGE_WASEXPUNGED))
+        if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && !(change->flags & CHANGE_WASEXPUNGED))
             syslog(LOG_NOTICE, "auditlog: expunge sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> "
                    "sysflags=<%s> guid=<%s>",
@@ -1853,7 +1870,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
                    record->modseq, flagstr,
                    message_guid_encode(&record->guid));
 
-        if ((record->system_flags & FLAG_UNLINKED) && !(change->flags & CHANGE_WASUNLINKED))
+        if ((record->internal_flags & FLAG_INTERNAL_UNLINKED) && !(change->flags & CHANGE_WASUNLINKED))
             syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
                    "mailbox=<%s> uniqueid=<%s> uid=<%u> modseq=<%llu> "
                    "sysflags=<%s> guid=<%s>",
@@ -1960,7 +1977,7 @@ EXPORTED int mailbox_read_basecid(struct mailbox *mailbox, const struct index_re
 {
     if (record->basecid) return 0;
 
-    if ((record->system_flags & FLAG_SPLITCONVERSATION)) {
+    if (record->internal_flags & FLAG_INTERNAL_SPLITCONVERSATION) {
         struct buf annotval = BUF_INITIALIZER;
         annotatemore_msg_lookup(mailbox->name, record->uid, IMAP_ANNOT_NS "basethrid", "", &annotval);
         if (annotval.len == 16) {
@@ -2619,6 +2636,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
 {
     int n;
     bit32 crc;
+    uint32_t system_flags = 0;
 
     memset(buf, 0, INDEX_RECORD_SIZE);
 
@@ -2641,7 +2659,11 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
     }
     *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(cache_offset_field);
     *((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(record->last_updated);
-    *((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)) = htonl(record->system_flags);
+
+    /* serialise system flags and internal flags */
+    system_flags = record->system_flags | record->internal_flags;
+    *((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)) = htonl(system_flags);
+
     for (n = 0; n < MAX_USER_FLAGS/32; n++) {
         *((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)) = htonl(record->user_flags[n]);
     }
@@ -2705,7 +2727,7 @@ static void header_update_counts(struct index_header *i,
     int num = is_add ? 1 : -1;
 
     /* we don't track counts for EXPUNGED records */
-    if (record->system_flags & FLAG_EXPUNGED)
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
         return;
 
     /* update mailbox header fields */
@@ -2753,7 +2775,7 @@ static uint32_t crc_basic(const struct mailbox *mailbox,
     int flag;
 
     /* expunged flags have no sync CRC */
-    if (record->system_flags & FLAG_EXPUNGED)
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
         return 0;
 
     /* calculate an XORed CRC32 over all the flags on the message, so no
@@ -2809,7 +2831,7 @@ static uint32_t crc_virtannot(struct mailbox *mailbox __attribute__((unused)),
 {
     uint32_t crc = 0;
 
-    if (record->system_flags & FLAG_EXPUNGED)
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
         return 0;
 
     if (record->cid) {
@@ -2834,7 +2856,7 @@ EXPORTED void mailbox_annot_changed(struct mailbox *mailbox,
         /* check that the record isn't already expunged */
         struct index_record record;
         int r = mailbox_find_index_record(mailbox, uid, &record);
-        if (r || record.system_flags & FLAG_EXPUNGED)
+        if (r || record.internal_flags & FLAG_INTERNAL_EXPUNGED)
             return;
         if (oldval->len)
             mailbox->i.synccrcs.annot ^= crc_annot(uid, entry, userid, oldval);
@@ -2886,7 +2908,7 @@ static void mailbox_annot_update_counts(struct mailbox *mailbox,
     struct annot_calc_rock cr = { 0, 0 };
 
     /* expunged records don't count */
-    if (record && record->system_flags & FLAG_EXPUNGED) return;
+    if (record && record->internal_flags & FLAG_INTERNAL_EXPUNGED) return;
 
     annotatemore_findall(mailbox->name, record ? record->uid : 0, /* all entries*/"*",
                          /*modseq*/0, calc_one_annot, &cr, /*flags*/0);
@@ -3021,7 +3043,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     if (!new) goto done;
 
     /* phantom record - never really existed here */
-    if (!old && (new->system_flags & FLAG_UNLINKED))
+    if (!old && (new->internal_flags & FLAG_INTERNAL_UNLINKED))
         goto done;
 
     r = mailbox_cacherecord(mailbox, new);
@@ -3045,7 +3067,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     /* does it still come from this UID? */
     if (cdata->dav.imap_uid > new->uid) goto done;
 
-    if (new->system_flags & FLAG_UNLINKED) {
+    if (new->internal_flags & FLAG_INTERNAL_UNLINKED) {
         /* is there an existing record? */
         if (!cdata->dav.imap_uid) goto done;
 
@@ -3055,7 +3077,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     else if (cdata->dav.imap_uid == new->uid) {
         /* just a flag change on an existing record */
         cdata->dav.modseq = new->modseq;
-        cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+        cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
         r = carddav_write(carddavdb, cdata);
     }
     else {
@@ -3075,7 +3097,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
         cdata->dav.resource = resource;
         cdata->dav.imap_uid = new->uid;
         cdata->dav.modseq = new->modseq;
-        cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+        cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
 
         if (!cdata->dav.creationdate)
             cdata->dav.creationdate = new->internaldate;
@@ -3109,7 +3131,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     if (!new) goto done;
 
     /* phantom record - never really existed at all */
-    if (!old && (new->system_flags & FLAG_UNLINKED))
+    if (!old && (new->internal_flags & FLAG_INTERNAL_UNLINKED))
         goto done;
 
     r = mailbox_cacherecord(mailbox, new);
@@ -3140,7 +3162,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     /* has this record already been replaced?  Don't write anything */
     if (cdata->dav.imap_uid > new->uid) goto done;
 
-    if (new->system_flags & FLAG_UNLINKED) {
+    if (new->internal_flags & FLAG_INTERNAL_UNLINKED) {
         /* is there an existing record? */
         if (!cdata->dav.imap_uid) goto done;
 
@@ -3151,7 +3173,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         r = caldav_delete(caldavdb, cdata->dav.rowid);
     }
     else if (cdata->dav.imap_uid == new->uid) {
-        if (new->system_flags & FLAG_EXPUNGED) {
+        if (new->internal_flags & FLAG_INTERNAL_EXPUNGED) {
             /* remove associated alarms */
             caldav_alarm_delete_record(cdata->dav.mailbox, cdata->dav.imap_uid);
         }
@@ -3162,7 +3184,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
 
         /* just a flags update to an existing record */
         cdata->dav.modseq = new->modseq;
-        cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+        cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
         r = caldav_write(caldavdb, cdata);
     }
     else {
@@ -3186,7 +3208,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         cdata->dav.mailbox = mailbox->name;
         cdata->dav.imap_uid = new->uid;
         cdata->dav.modseq = new->modseq;
-        cdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+        cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
         cdata->dav.resource = resource;
         cdata->sched_tag = sched_tag;
         cdata->comp_flags.tzbyref = tzbyref;
@@ -3226,7 +3248,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     if (!new) goto done;
 
     /* phantom record - never really existed here */
-    if (!old && (new->system_flags & FLAG_EXPUNGED))
+    if (!old && new->internal_flags & FLAG_INTERNAL_EXPUNGED)
         goto done;
 
     r = mailbox_cacherecord(mailbox, new);
@@ -3248,7 +3270,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     /* if updated by a newer UID, skip - this record doesn't refer to the current item */
     if (wdata->dav.imap_uid > new->uid) goto done;
 
-    if (new->system_flags & FLAG_UNLINKED) {
+    if (new->internal_flags & FLAG_INTERNAL_UNLINKED) {
         /* is there an existing record? */
         if (!wdata->dav.imap_uid) goto done;
 
@@ -3258,7 +3280,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     else if (wdata->dav.imap_uid == new->uid) {
         /* just a flags update to an existing record */
         wdata->dav.modseq = new->modseq;
-        wdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+        wdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
         wdata->ref_count *= wdata->dav.alive;
         r = webdav_write(webdavdb, wdata);
     }
@@ -3279,7 +3301,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
         wdata->dav.mailbox = mailbox->name;
         wdata->dav.imap_uid = new->uid;
         wdata->dav.modseq = new->modseq;
-        wdata->dav.alive = (new->system_flags & FLAG_EXPUNGED) ? 0 : 1;
+        wdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
         wdata->ref_count *= wdata->dav.alive;
         wdata->dav.resource = resource;
         wdata->filename = body->description;
@@ -3395,8 +3417,8 @@ static int mailbox_update_conversations(struct mailbox *mailbox,
         return 0;
 
     /* handle unlinked items as if they didn't exist */
-    if (old && (old->system_flags & FLAG_UNLINKED)) old = NULL;
-    if (new && (new->system_flags & FLAG_UNLINKED)) new = NULL;
+    if (old && (old->internal_flags & FLAG_INTERNAL_UNLINKED)) old = NULL;
+    if (new && (new->internal_flags & FLAG_INTERNAL_UNLINKED)) new = NULL;
 
     if (!old && !new)
         return 0;
@@ -3512,12 +3534,12 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
      * 3) basecid is zero, system flag is zero - keep zero
      * we only need code for case #2
      */
-    if (!record->basecid && (record->system_flags & FLAG_SPLITCONVERSATION))
+    if (!record->basecid && (record->internal_flags & FLAG_INTERNAL_SPLITCONVERSATION))
         record->basecid = oldrecord.basecid;
 
-    if (oldrecord.system_flags & FLAG_EXPUNGED)
+    if (oldrecord.internal_flags & FLAG_INTERNAL_EXPUNGED)
         changeflags |= CHANGE_WASEXPUNGED;
-    if (oldrecord.system_flags & FLAG_UNLINKED)
+    if (oldrecord.internal_flags & FLAG_INTERNAL_UNLINKED)
         changeflags |= CHANGE_WASUNLINKED;
 
     /* the UID has to match, of course, for it to be the same
@@ -3526,25 +3548,26 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     assert(record->uid == oldrecord.uid);
     assert(message_guid_equal(&oldrecord.guid, &record->guid));
 
-    if (oldrecord.system_flags & FLAG_EXPUNGED) {
+    if (oldrecord.internal_flags & FLAG_INTERNAL_EXPUNGED) {
         /* it is a sin to unexpunge a message.  unexpunge.c copies
          * the data from the old record and appends it with a new
          * UID, which is righteous in the eyes of the IMAP client */
-        assert(record->system_flags & FLAG_EXPUNGED);
+        assert(record->internal_flags & FLAG_INTERNAL_EXPUNGED);
     }
 
-    if (oldrecord.system_flags & FLAG_ARCHIVED) {
+    if (oldrecord.internal_flags & FLAG_INTERNAL_ARCHIVED) {
         /* it is also a sin to unarchive a message, except in the
          * the very odd case of a reconstruct.  So let's see about
          * that */
-        if (!(record->system_flags & FLAG_ARCHIVED))
+        if (!(record->internal_flags & FLAG_INTERNAL_ARCHIVED))
             syslog(LOG_ERR, "IOERROR: bogus removal of archived flag for %s %u",
                    mailbox->name, record->uid);
     }
 
     /* handle immediate expunges here... */
-    if (immediate && (record->system_flags & FLAG_EXPUNGED))
-        record->system_flags |= FLAG_UNLINKED | FLAG_NEEDS_CLEANUP;
+    if (immediate && (record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        record->internal_flags |= FLAG_INTERNAL_UNLINKED | FLAG_INTERNAL_NEEDS_CLEANUP;
+    }
 
     /* make sure highestmodseq gets updated unless we're
      * being silent about it (i.e. marking an already EXPUNGED
@@ -3560,7 +3583,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     }
     assert(record->modseq >= oldrecord.modseq);
 
-    if (record->system_flags & FLAG_UNLINKED) {
+    if (record->internal_flags & FLAG_INTERNAL_UNLINKED) {
         /* mark required actions */
         if (expunge_mode == IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE
             || mailbox->i.minor_version < 12)
@@ -3576,7 +3599,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     r = mailbox_update_indexes(mailbox, &oldrecord, record);
     if (r) return r;
 
-    if ((record->system_flags & FLAG_EXPUNGED) && !(changeflags & CHANGE_WASEXPUNGED)) {
+    if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && !(changeflags & CHANGE_WASEXPUNGED)) {
         if (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated)
             mailbox->i.first_expunged = record->last_updated;
         mailbox_annot_update_counts(mailbox, &oldrecord, 0);
@@ -3587,8 +3610,8 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
 
     if (config_auditlog) {
         char oldflags[FLAGMAPSTR_MAXLEN], sysflags[FLAGMAPSTR_MAXLEN];
-        flags_to_str(oldrecord.system_flags, oldflags);
-        flags_to_str(record->system_flags, sysflags);
+        flags_to_str(&oldrecord, oldflags);
+        flags_to_str(record, sysflags);
         syslog(LOG_NOTICE, "auditlog: touched sessionid=<%s> "
                "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> "
                "modseq=<" MODSEQ_FMT "> oldflags=<%s> sysflags=<%s>",
@@ -3599,7 +3622,7 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
     }
 
     /* expunged tracking */
-    if (record->system_flags & FLAG_EXPUNGED && (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated))
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED && (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated))
         mailbox->i.first_expunged = record->last_updated;
 
     return 0;
@@ -3670,10 +3693,10 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
 #endif
 
-    if (!(record->system_flags & FLAG_UNLINKED)) {
+    if (!(record->internal_flags & FLAG_INTERNAL_UNLINKED)) {
         /* make the file timestamp correct */
         settime.actime = settime.modtime = record->internaldate;
-        if (!(object_storage_enabled && record->system_flags & FLAG_ARCHIVED ))  // mabe there is no file in directory.
+        if (!(object_storage_enabled && (record->internal_flags & FLAG_INTERNAL_ARCHIVED)))  // mabe there is no file in directory.
             if (utime(mailbox_record_fname(mailbox, record), &settime) == -1)
                 return IMAP_IOERROR;
 
@@ -3695,7 +3718,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     if (r) return r;
 
     /* expunged tracking */
-    if (record->system_flags & FLAG_EXPUNGED && (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated))
+    if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) && (!mailbox->i.first_expunged || mailbox->i.first_expunged > record->last_updated))
         mailbox->i.first_expunged = record->last_updated;
 
     return 0;
@@ -3715,22 +3738,22 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
     if (object_storage_enabled) {
 #if defined ENABLE_OBJECTSTORE
         /* we always remove the spool file here, because we've archived it */
-        if (record->system_flags & FLAG_ARCHIVED)
+        if (record->system_flags & FLAG_INTERNAL_ARCHIVED)
             unlink(spoolfname);
 
         /* if the record is also deleted, we remove the objectstore copy */
-        if (record->system_flags & FLAG_UNLINKED)
+        if (record->system_flags & FLAG_INTERNAL_UNLINKED)
             objectstore_delete(mailbox, record);
 #endif
     }
 
-    else if (record->system_flags & FLAG_UNLINKED) {
+    else if (record->internal_flags & FLAG_INTERNAL_UNLINKED) {
         /* try to delete both */
 
         if (unlink(spoolfname) == 0) {
             if (config_auditlog) {
                 char flagstr[FLAGMAPSTR_MAXLEN];
-                flags_to_str(record->system_flags, flagstr);
+                flags_to_str(record, flagstr);
                 syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
                        "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
                        session_id(), mailbox->name, mailbox->uniqueid,
@@ -3742,7 +3765,7 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
             if (unlink(archivefname) == 0) {
                 if (config_auditlog) {
                     char flagstr[FLAGMAPSTR_MAXLEN];
-                    flags_to_str(record->system_flags, flagstr);
+                    flags_to_str(record, flagstr);
                     syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
                            "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
                            session_id(), mailbox->name, mailbox->uniqueid,
@@ -3767,7 +3790,7 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
     }
 
     else if (strcmp(spoolfname, archivefname)) {
-        if (record->system_flags & FLAG_ARCHIVED) {
+        if (record->internal_flags & FLAG_INTERNAL_ARCHIVED) {
             /* XXX - stat to make sure the other file exists first? - we mostly
             *  trust that we didn't do stupid things everywhere else, so maybe not */
             unlink(spoolfname);
@@ -3796,12 +3819,13 @@ static int mailbox_index_unlink(struct mailbox *mailbox)
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
-        /* still gotta check for FLAG_UNLINKED, because it may have been
+        /* still gotta check for FLAG_INTERNAL_UNLINKED, because it may have been
          * created by old code.  Woot */
-        if (record->system_flags & (FLAG_NEEDS_CLEANUP | FLAG_UNLINKED)) {
+        if ((record->internal_flags & FLAG_INTERNAL_NEEDS_CLEANUP) ||
+            record->internal_flags & FLAG_INTERNAL_UNLINKED) {
             struct index_record copyrecord = *record;
             mailbox_record_cleanup(mailbox, &copyrecord);
-            copyrecord.system_flags &= ~FLAG_NEEDS_CLEANUP;
+            copyrecord.internal_flags &= ~FLAG_INTERNAL_NEEDS_CLEANUP;
             copyrecord.silent = 1;
             /* XXX - error handling */
             mailbox_rewrite_index_record(mailbox, &copyrecord);
@@ -4147,7 +4171,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
                 /* failed to parse, don't try to write out record */
                 copyrecord.crec.len = 0;
                 /* and the record is expunged too! */
-                copyrecord.system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+                copyrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED;
                 syslog(LOG_ERR, "IOERROR: FATAL - failed to parse file for %s %u, expunging",
                        repack->mailbox->name, copyrecord.uid);
             }
@@ -4159,16 +4183,16 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
         }
 
         /* better handle the cleanup just in case it's unlinked too */
-        /* still gotta check for FLAG_UNLINKED, because it may have been
+        /* still gotta check for FLAG_INTERNAL_UNLINKED, because it may have been
          * created by old code.  Woot */
-        if (copyrecord.system_flags & (FLAG_NEEDS_CLEANUP | FLAG_UNLINKED)) {
+        if (copyrecord.internal_flags & (FLAG_INTERNAL_NEEDS_CLEANUP | FLAG_INTERNAL_UNLINKED)) {
             mailbox_record_cleanup(mailbox, &copyrecord);
-            copyrecord.system_flags &= ~FLAG_NEEDS_CLEANUP;
+            copyrecord.internal_flags &= ~FLAG_INTERNAL_NEEDS_CLEANUP;
             /* no need to rewrite - it's already being written to the new file */
         }
 
         /* we aren't keeping unlinked files, that's kind of the point */
-        if (copyrecord.system_flags & FLAG_UNLINKED) {
+        if (copyrecord.internal_flags & FLAG_INTERNAL_UNLINKED) {
             /* track the modseq for QRESYNC purposes */
             if (copyrecord.modseq > repack->i.deletedmodseq)
                 repack->i.deletedmodseq = copyrecord.modseq;
@@ -4231,7 +4255,7 @@ EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
     int keepflagged = config_getswitch(IMAPOPT_ARCHIVE_KEEPFLAGGED);
 
     /* never pull messages back from the archives */
-    if (record->system_flags & FLAG_ARCHIVED)
+    if (record->internal_flags & FLAG_INTERNAL_ARCHIVED)
         return 1;
 
     /* first check if we're archiving anything */
@@ -4247,7 +4271,7 @@ EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
         return 1;
 
     /* anything already deleted */
-    if (record->system_flags & FLAG_EXPUNGED)
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
         return 1;
 
     /* Calendar and Addressbook are small files and need to be hot */
@@ -4303,7 +4327,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
         const struct index_record *record = msg_record(msg);
         const char *action = NULL;
         if (decideproc(mailbox, record, deciderock)) {
-            if (record->system_flags & FLAG_ARCHIVED)
+            if (record->internal_flags & FLAG_INTERNAL_ARCHIVED)
                 continue;
             copyrecord = *record;
             srcname = mailbox_spool_fname(mailbox, copyrecord.uid);
@@ -4331,12 +4355,12 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
                     syslog(LOG_ERR, "unlink(%s) failed: %m", srcname);
             }
 #endif
-            copyrecord.system_flags |= FLAG_ARCHIVED | FLAG_NEEDS_CLEANUP;
+            copyrecord.internal_flags |= FLAG_INTERNAL_ARCHIVED | FLAG_INTERNAL_NEEDS_CLEANUP;
             action = "archive";
         }
         else
         {
-            if (!(record->system_flags & FLAG_ARCHIVED))
+            if (!(record->internal_flags & FLAG_INTERNAL_ARCHIVED))
                 continue;
             copyrecord = *record;
             destname = mailbox_spool_fname(mailbox, copyrecord.uid);
@@ -4363,8 +4387,8 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
             }
 #endif
 
-            copyrecord.system_flags &= ~FLAG_ARCHIVED;
-            copyrecord.system_flags |= FLAG_NEEDS_CLEANUP;
+            copyrecord.internal_flags &= ~FLAG_INTERNAL_ARCHIVED;
+            copyrecord.internal_flags |= FLAG_INTERNAL_NEEDS_CLEANUP;
             action = "unarchive";
         }
 
@@ -4397,7 +4421,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
 
         if (config_auditlog) {
             char flagstr[FLAGMAPSTR_MAXLEN];
-            flags_to_str(copyrecord.system_flags, flagstr);
+            flags_to_str(&copyrecord, flagstr);
             syslog(LOG_NOTICE, "auditlog: %s sessionid=<%s> mailbox=<%s> "
                    "uniqueid=<%s> uid=<%u> guid=<%s> cid=<%s> sysflags=<%s>",
                    action, session_id(), mailbox->name, mailbox->uniqueid,
@@ -4427,7 +4451,7 @@ EXPORTED void mailbox_remove_files_from_object_storage(struct mailbox *mailbox,
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, flags);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
-        if (!(record->system_flags & FLAG_ARCHIVED))
+        if (!(record->internal_flags & FLAG_INTERNAL_ARCHIVED))
             continue;
 #if defined ENABLE_OBJECTSTORE
         if (object_storage_enabled)
@@ -4477,7 +4501,7 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
 
             struct index_record copyrecord = *record;
             /* mark deleted */
-            copyrecord.system_flags |= FLAG_EXPUNGED;
+            copyrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
 
             r = mailbox_rewrite_index_record(mailbox, &copyrecord);
             if (r) {
@@ -4522,13 +4546,13 @@ EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mar
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         /* already unlinked, skip it (but dirty so we mark a repack is needed) */
-        if (record->system_flags & FLAG_UNLINKED) {
+        if (record->internal_flags & FLAG_INTERNAL_UNLINKED) {
             dirty = 1;
             continue;
         }
 
         /* not actually expunged, skip it */
-        if (!(record->system_flags & FLAG_EXPUNGED))
+        if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED))
             continue;
 
         /* not stale enough yet, skip it - but track the updated time
@@ -4544,7 +4568,7 @@ EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mar
         numdeleted++;
 
         struct index_record copyrecord = *record;
-        copyrecord.system_flags |= FLAG_UNLINKED;
+        copyrecord.internal_flags |= FLAG_INTERNAL_UNLINKED;
         copyrecord.silent = 1;
         if (mailbox_rewrite_index_record(mailbox, &copyrecord)) {
             syslog(LOG_ERR, "IOERROR: failed to mark unlinked %s %u (recno %d)",
@@ -5215,20 +5239,20 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
         const struct index_record *record = msg_record(msg);
         xstrncpy(oldbuf, mailbox_record_fname(mailbox, record),
                 MAX_MAILBOX_PATH);
-        if (!object_storage_enabled && record->system_flags & FLAG_ARCHIVED)
+        if (!object_storage_enabled && record->internal_flags & FLAG_INTERNAL_ARCHIVED)
             xstrncpy(newbuf, mboxname_archivepath(newpart, newname, newuniqueid, record->uid),
                     MAX_MAILBOX_PATH);
         else
             xstrncpy(newbuf, mboxname_datapath(newpart, newname, newuniqueid, record->uid),
                     MAX_MAILBOX_PATH);
 
-        if (!(object_storage_enabled && record->system_flags & FLAG_ARCHIVED ))    // if object storage do not move file
+        if (!(object_storage_enabled && record->internal_flags & FLAG_INTERNAL_ARCHIVED))    // if object storage do not move file
            r = mailbox_copyfile(oldbuf, newbuf, 0);
 
         if (r) break;
 
 #if defined ENABLE_OBJECTSTORE
-        if (object_storage_enabled && record->system_flags & FLAG_ARCHIVED) {
+        if (object_storage_enabled && record->internal_flags & FLAG_INTERNAL_ARCHIVED) {
             static struct mailbox new_mailbox;
             memset(&new_mailbox, 0, sizeof(struct mailbox));
             new_mailbox.name = (char*) newname;
@@ -5634,7 +5658,7 @@ static void cleanup_stale_expunged(struct mailbox *mailbox)
         struct index_record record;
         bufp = expunge_base + eoffset + (erecno-1)*expungerecord_size;
         mailbox_buf_to_index_record(bufp, eversion, &record);
-        record.system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED;
         mailbox_record_cleanup(mailbox, &record);
     }
 
@@ -5891,7 +5915,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 #if defined ENABLE_OBJECTSTORE
     int object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED) ;
 
-    if (object_storage_enabled && record->system_flags & FLAG_ARCHIVED){  // put the file on spool temporarily
+    if (object_storage_enabled && record->system_flags & FLAG_INTERNAL_ARCHIVED){  // put the file on spool temporarily
         remove_temp_spool_file = 1;
         r = objectstore_get(mailbox, record, fname);
     }
@@ -5910,7 +5934,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
     if (!have_file) {
         /* well, that's OK if it's supposed to be missing! */
-        if (record->system_flags & FLAG_UNLINKED){
+        if (record->internal_flags & FLAG_INTERNAL_UNLINKED) {
             r = 0 ;
             goto out;
         }
@@ -5925,7 +5949,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
         /* otherwise we have issues, mark it unlinked */
         unlink(fname);
-        record->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+        record->internal_flags |= FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED;
         mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
         r = mailbox_rewrite_index_record(mailbox, record);
         goto out;
@@ -5969,7 +5993,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
                 goto out;
             }
 
-            if (record->system_flags & FLAG_EXPUNGED) {
+            if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
                 /* already expunged, just unlink it */
                 printf("%s uid %u already expunged, unlinking\n",
                        mailbox->name, record->uid);
@@ -5979,7 +6003,8 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
             }
             else if (flags & RECONSTRUCT_GUID_REWRITE) {
                 /* treat this file as discovered */
-                add_found(discovered, record->uid, record->system_flags & FLAG_ARCHIVED);
+                add_found(discovered, record->uid,
+                          (record->internal_flags & FLAG_INTERNAL_ARCHIVED));
                 printf("%s uid %u marking for uid upgrade\n",
                        mailbox->name, record->uid);
                 syslog(LOG_ERR, "%s uid %u marking for uid upgrade",
@@ -5997,7 +6022,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
             if (do_unlink) {
                 /* rewrite with the original so we don't break the
                  * expectation that GUID never changes */
-                copy.system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+                copy.internal_flags |= FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED;
                 mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
                 r = mailbox_rewrite_index_record(mailbox, &copy);
                 goto out;
@@ -6025,7 +6050,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
         /* otherwise we have issues, mark it unlinked */
         unlink(fname);
-        record->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+        record->internal_flags |= FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED;
         mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
         r = mailbox_rewrite_index_record(mailbox, record);
         goto out;
@@ -6176,7 +6201,7 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid, int
     if (r) goto out;
 
     if (isarchive)
-        record.system_flags |= FLAG_ARCHIVED;
+        record.internal_flags |= FLAG_INTERNAL_ARCHIVED;
 
     /* copy the timestamp from the file if not calculated */
     if (!record.internaldate)
@@ -6308,7 +6333,7 @@ static int mailbox_wipe_index_record(struct mailbox *mailbox,
            record->recno <= mailbox->i.num_records);
 
     record->uid = 0;
-    record->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+    record->internal_flags |= FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED;
 
     mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
     mailbox_index_dirty(mailbox);
@@ -6523,17 +6548,17 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
             }
             else {
                 if (files.found[files.pos].isarchive) {
-                    if (!(record.system_flags & FLAG_ARCHIVED)) {
+                    if (!(record.internal_flags & FLAG_INTERNAL_ARCHIVED)) {
                         /* oops, it's really archived - let's fix that right now */
-                        record.system_flags |= FLAG_ARCHIVED;
+                        record.internal_flags |= FLAG_INTERNAL_ARCHIVED;
                         printf("Marking file as archived %s %u\n", mailbox->name, record.uid);
                         mailbox_rewrite_index_record(mailbox, &record);
                     }
                 }
                 else {
-                    if (record.system_flags & FLAG_ARCHIVED) {
+                    if (record.internal_flags & FLAG_INTERNAL_ARCHIVED) {
                         /* oops, non-archived copy exists, let's use that */
-                        record.system_flags &= ~FLAG_ARCHIVED;
+                        record.internal_flags &= ~FLAG_INTERNAL_ARCHIVED;
                         printf("Marking file as not archived %s %u\n", mailbox->name, record.uid);
                         mailbox_rewrite_index_record(mailbox, &record);
                     }
@@ -6654,9 +6679,9 @@ EXPORTED struct mailbox_iter *mailbox_iter_init(struct mailbox *mailbox,
 
     /* calculate which system_flags to skip over */
     if (flags & ITER_SKIP_UNLINKED)
-        iter->skipflags |= FLAG_UNLINKED;
+        iter->skipflags |= FLAG_INTERNAL_UNLINKED;
     if (flags & ITER_SKIP_EXPUNGED)
-        iter->skipflags |= FLAG_EXPUNGED;
+        iter->skipflags |= FLAG_INTERNAL_EXPUNGED;
     if (flags & ITER_SKIP_DELETED)
         iter->skipflags |= FLAG_DELETED;
 
@@ -6677,6 +6702,7 @@ EXPORTED const message_t *mailbox_iter_step(struct mailbox_iter *iter)
         const struct index_record *record = msg_record(iter->msg);
         if (!record->uid) continue; /* can happen on damaged mailboxes */
         if ((record->system_flags & iter->skipflags)) continue;
+        if ((record->internal_flags & iter->skipflags)) continue;
         if (record->modseq <= iter->changedsince) continue;
         return iter->msg;
     }

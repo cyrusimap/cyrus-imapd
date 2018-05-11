@@ -696,7 +696,8 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
     record->uid = uid;
     r = mailbox_reload_index_record(mailbox, record);
     if ((r == CYRUSDB_NOTFOUND) ||
-        (record->system_flags & (FLAG_DELETED|FLAG_EXPUNGED))) {
+        ((record->system_flags & FLAG_DELETED) ||
+         record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
         txn->error.desc = "Message has been removed\r\n";
 
         /* Fill in Expires */

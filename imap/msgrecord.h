@@ -74,6 +74,7 @@ extern int msgrecord_get_message(msgrecord_t *mr, message_t **msg);
 extern int msgrecord_get_size(msgrecord_t *mr, uint32_t *size);
 extern int msgrecord_get_header_size(msgrecord_t *mr, uint32_t *header_size);
 extern int msgrecord_get_systemflags(msgrecord_t *mr, uint32_t *flags);
+extern int msgrecord_get_internalflags(msgrecord_t *mr, uint32_t *flags);
 extern int msgrecord_hasflag(msgrecord_t *mr, const char *flag, int *has);
 extern int msgrecord_get_index_record(msgrecord_t *mr, struct index_record *record);
 extern int msgrecord_get_index_record_rw(msgrecord_t *mr, struct index_record **record);
@@ -91,6 +92,8 @@ extern int msgrecord_load_cache(msgrecord_t *mr);
 // TODO(rsto): also strarray variant */
 extern int msgrecord_set_systemflags(msgrecord_t *mr, uint32_t system_flags);
 extern int msgrecord_add_systemflags(msgrecord_t *mr, uint32_t system_flags);
+extern int msgrecord_set_internalflags(msgrecord_t *mr, uint32_t internal_flags);
+extern int msgrecord_add_internalflags(msgrecord_t *mr, uint32_t internal_flags);
 extern int msgrecord_set_userflags(msgrecord_t *mr, uint32_t user_flags[MAX_USER_FLAGS/32]);
 extern int msgrecord_set_userflag(msgrecord_t *mr, uint32_t user_flag, int bit);
 extern int msgrecord_set_uid(msgrecord_t *mr, uint32_t uid);

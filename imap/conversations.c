@@ -1865,8 +1865,8 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         assert(old->modseq <= new->modseq);
 
         /* this flag cannot go away */
-        if ((old->system_flags & FLAG_EXPUNGED))
-            assert((new->system_flags & FLAG_EXPUNGED));
+        if (old->internal_flags & FLAG_INTERNAL_EXPUNGED)
+                assert(new->internal_flags & FLAG_INTERNAL_EXPUNGED);
 
         /* we're changing the CID for any reason at all, treat as
          * a removal and re-add, so cache gets parsed and msgids
@@ -1925,7 +1925,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     /* calculate the changes */
     if (old) {
         /* decrease any relevent counts */
-        if (!(old->system_flags & FLAG_EXPUNGED)) {
+        if (!(old->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
             delta_exists--;
             delta_size -= old->size;
             /* drafts don't update the 'unseen' counter so that
@@ -1950,7 +1950,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
     if (new) {
         /* add any counts */
-        if (!(new->system_flags & FLAG_EXPUNGED)) {
+        if (!(new->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
             delta_exists++;
             delta_size += new->size;
             /* drafts don't update the 'unseen' counter so that

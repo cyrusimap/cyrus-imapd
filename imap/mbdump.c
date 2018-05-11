@@ -238,7 +238,7 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
         /* we have to make sure expunged records don't get the
          * file copied, or a reconstruct could bring them back
          * to life!  It we're not creating an expunged file... */
-        if (record->system_flags & FLAG_EXPUNGED) {
+        if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
             if (oldversion < 9) seqset_add(expunged_seq, record->uid, 1);
             continue;
         }
@@ -274,7 +274,7 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
         while ((msg = mailbox_iter_step(iter))) {
             const struct index_record *record = msg_record(msg);
             /* ignore non-expunged records */
-            if (!(record->system_flags & FLAG_EXPUNGED))
+            if (!(record->internal_flags & FLAG_INTERNAL_EXPUNGED))
                 continue;
             downgrade_record(record, rbuf, oldversion);
             n = retry_write(oldindex_fd, rbuf, record_size);
