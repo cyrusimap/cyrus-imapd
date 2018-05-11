@@ -211,6 +211,7 @@ extern size_t prot_lookahead(struct protstream *s,
 #define prot_NONBLOCK(s) ((s)->dontblock = 1)
 #define prot_IS_BLOCKING(s) ((s)->dontblock == 0)
 #define prot_IS_EOF(s) ((s)->eof != 0)
+#define prot_IS_ERROR(s) ((s)->error != NULL)
 
 /* Allocate/free the protstream structure */
 extern struct protstream *prot_new(int fd, int write);
