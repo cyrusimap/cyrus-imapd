@@ -2840,6 +2840,14 @@ static uint32_t crc_virtannot(struct mailbox *mailbox __attribute__((unused)),
         crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "thrid", NULL, &buf);
         buf_free(&buf);
     }
+
+    if (record->savedate) {
+        struct buf buf = BUF_INITIALIZER;
+        buf_printf(&buf, "%llx", record->cid);
+        crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "savedate", NULL, &buf);
+        buf_free(&buf);
+    }
+
     return crc;
 }
 
