@@ -352,120 +352,6 @@ static int sync_getline(struct protstream *in, struct buf *buf)
     return c;
 }
 
-/* ====================================================================== */
-
-void sync_print_flags(struct dlist *kl,
-                      struct mailbox *mailbox,
-                      const struct index_record *record)
-{
-    int flag;
-    struct dlist *fl = dlist_newlist(kl, "FLAGS");
-
-    if (record->system_flags & FLAG_DELETED)
-        dlist_setflag(fl, "FLAG", "\\Deleted");
-    if (record->system_flags & FLAG_ANSWERED)
-        dlist_setflag(fl, "FLAG", "\\Answered");
-    if (record->system_flags & FLAG_FLAGGED)
-        dlist_setflag(fl, "FLAG", "\\Flagged");
-    if (record->system_flags & FLAG_DRAFT)
-        dlist_setflag(fl, "FLAG", "\\Draft");
-    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
-        dlist_setflag(fl, "FLAG", "\\Expunged");
-    if (record->system_flags & FLAG_SEEN)
-        dlist_setflag(fl, "FLAG", "\\Seen");
-
-    /* print user flags in mailbox order */
-    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-        if (!mailbox->flagname[flag])
-            continue;
-        if (!(record->user_flags[flag/32] & (1<<(flag&31))))
-            continue;
-        dlist_setflag(fl, "FLAG", mailbox->flagname[flag]);
-    }
-}
-
-int sync_getflags(struct dlist *kl,
-                  struct mailbox *mailbox,
-                  struct index_record *record)
-{
-    struct dlist *ki;
-    int userflag;
-
-    for (ki = kl->head; ki; ki = ki->next) {
-        char *s = xstrdup(ki->sval);
-
-        if (s[0] == '\\') {
-            /* System flags */
-            lcase(s);
-            if (!strcmp(s, "\\seen")) {
-                record->system_flags |= FLAG_SEEN;
-            } else if (!strcmp(s, "\\expunged")) {
-                record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
-            } else if (!strcmp(s, "\\answered")) {
-                record->system_flags |= FLAG_ANSWERED;
-            } else if (!strcmp(s, "\\flagged")) {
-                record->system_flags |= FLAG_FLAGGED;
-            } else if (!strcmp(s, "\\deleted")) {
-                record->system_flags |= FLAG_DELETED;
-            } else if (!strcmp(s, "\\draft")) {
-                record->system_flags |= FLAG_DRAFT;
-            } else {
-                syslog(LOG_ERR, "Unknown system flag: %s", s);
-            }
-        }
-        else {
-            if (mailbox_user_flag(mailbox, s, &userflag, /*allow all*/2)) {
-                syslog(LOG_ERR, "Unable to record user flag: %s", s);
-                free(s);
-                return IMAP_IOERROR;
-            }
-            record->user_flags[userflag/32] |= 1<<(userflag&31);
-        }
-
-        free(s);
-    }
-
-    return 0;
-}
-
-int parse_upload(struct dlist *kr, struct mailbox *mailbox,
-                 struct index_record *record,
-                 struct sync_annot_list **salp)
-{
-    struct dlist *fl;
-    struct message_guid *tmpguid;
-    int r;
-
-    memset(record, 0, sizeof(struct index_record));
-
-    if (!dlist_getnum32(kr, "UID", &record->uid))
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getnum64(kr, "MODSEQ", &record->modseq))
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getdate(kr, "LAST_UPDATED", &record->last_updated))
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getlist(kr, "FLAGS", &fl))
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getdate(kr, "INTERNALDATE", &record->internaldate))
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getnum32(kr, "SIZE", &record->size))
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getguid(kr, "GUID", &tmpguid))
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
-
-    record->guid = *tmpguid;
-
-    /* parse the flags */
-    r = sync_getflags(fl, mailbox, record);
-    if (r) return r;
-
-    /* the ANNOTATIONS list is optional too */
-    if (salp && dlist_getlist(kr, "ANNOTATIONS", &fl))
-        r = decode_annotations(fl, salp, record);
-
-    return r;
-}
-
 
 /* ====================================================================== */
 
@@ -1486,6 +1372,422 @@ void sync_action_list_free(struct sync_action_list **lp)
     *lp = NULL;
 }
 
+/* ====================================================================== */
+
+static int read_one_annot(const char *mailbox __attribute__((unused)),
+                          uint32_t uid __attribute__((unused)),
+                          const char *entry,
+                          const char *userid,
+                          const struct buf *value,
+                          const struct annotate_metadata *mdata,
+                          void *rock)
+{
+    struct sync_annot_list **salp = (struct sync_annot_list **)rock;
+
+    if (!*salp)
+        *salp = sync_annot_list_create();
+    sync_annot_list_add(*salp, entry, userid, value, mdata->modseq);
+    return 0;
+}
+
+/*
+ * Read all the annotations in the local annotations database
+ * for the message given by @mailbox and @record, returning them
+ * as a new sync_annot_list.  The caller should free the new
+ * list with sync_annot_list_free().
+ * If record is NULL, return the mailbox annotations
+ * If since_modseq is greated than zero, return annotations
+ * add or changed since modseq (exclusively since_modseq).
+ * If flags is set to ANNOTATE_TOMBSTONES, also return
+ * deleted annotations. Deleted annotations have a zero value.
+ *
+ * Returns: non-zero on error,
+ *          resulting sync_annot_list in *@resp
+ */
+int read_annotations(const struct mailbox *mailbox,
+                     const struct index_record *record,
+                     struct sync_annot_list **resp,
+                     modseq_t since_modseq __attribute__((unused)),
+                     int flags)
+{
+    *resp = NULL;
+    return annotatemore_findall(mailbox->name, record ? record->uid : 0,
+                                /* all entries*/"*", /*XXX since_modseq*/0,
+                                read_one_annot, (void *)resp, flags);
+}
+
+/*
+ * Encode the given list of annotations @sal as a dlist
+ * structure with the given @parent.
+ */
+void encode_annotations(struct dlist *parent,
+                        const struct index_record *record,
+                        const struct sync_annot_list *sal)
+{
+    const struct sync_annot *sa;
+    struct dlist *annots = NULL;
+    struct dlist *aa;
+
+    if (sal) {
+        for (sa = sal->head ; sa ; sa = sa->next) {
+            if (!annots)
+                annots = dlist_newlist(parent, "ANNOTATIONS");
+
+            aa = dlist_newkvlist(annots, NULL);
+            dlist_setatom(aa, "ENTRY", sa->entry);
+            dlist_setatom(aa, "USERID", sa->userid);
+            dlist_setnum64(aa, "MODSEQ", sa->modseq);
+            dlist_setmap(aa, "VALUE", sa->value.s, sa->value.len);
+        }
+    }
+
+    if (record && record->cid) {
+        if (!annots)
+            annots = dlist_newlist(parent, "ANNOTATIONS");
+        aa = dlist_newkvlist(annots, NULL);
+        dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "thrid");
+        dlist_setatom(aa, "USERID", NULL);
+        dlist_setnum64(aa, "MODSEQ", 0);
+        dlist_sethex64(aa, "VALUE", record->cid);
+    }
+
+    if (record && record->savedate) {
+        if (!annots)
+            annots = dlist_newlist(parent, "ANNOTATIONS");
+        aa = dlist_newkvlist(annots, NULL);
+        dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "savedate");
+        dlist_setatom(aa, "USERID", NULL);
+        dlist_setnum64(aa, "MODSEQ", 0);
+        dlist_setnum32(aa, "VALUE", record->savedate);
+    }
+
+}
+
+/*
+ * Decode the given list of encoded annotations @annots and create
+ * a new sync_annot_list in *@salp, which the caller should free
+ * with sync_annot_list_free().
+ *
+ * Returns: zero on success or Cyrus error code.
+ */
+int decode_annotations(/*const*/struct dlist *annots,
+                       struct sync_annot_list **salp,
+                       struct index_record *record)
+{
+    struct dlist *aa;
+    const char *entry;
+    const char *userid;
+    modseq_t modseq;
+
+    *salp = NULL;
+    if (strcmp(annots->name, "ANNOTATIONS"))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    for (aa = annots->head ; aa ; aa = aa->next) {
+        struct buf value = BUF_INITIALIZER;
+        if (!*salp)
+            *salp = sync_annot_list_create();
+        if (!dlist_getatom(aa, "ENTRY", &entry))
+            return IMAP_PROTOCOL_BAD_PARAMETERS;
+        if (!dlist_getatom(aa, "USERID", &userid))
+            return IMAP_PROTOCOL_BAD_PARAMETERS;
+        if (!dlist_getnum64(aa, "MODSEQ", &modseq))
+            return IMAP_PROTOCOL_BAD_PARAMETERS;
+        if (!dlist_getbuf(aa, "VALUE", &value))
+            return IMAP_PROTOCOL_BAD_PARAMETERS;
+        if (!strcmp(entry, IMAP_ANNOT_NS "thrid")) {
+            if (record) {
+                const char *p = buf_cstring(&value);
+                parsehex(p, &p, 16, &record->cid);
+                /* XXX - check on p? */
+            }
+        }
+        else if (!strcmp(entry, IMAP_ANNOT_NS "savedate")) {
+            if (record) {
+                const char *p = buf_cstring(&value);
+                bit64 newval;
+                parsenum(p, &p, 0, &newval);
+                record->savedate = newval;
+            }
+        }
+        else if (record && !strcmp(entry, IMAP_ANNOT_NS "basethrid")) {
+                /* this might double-apply the annotation, but oh well.  It does mean that
+                 * basethrid is paired in here when we do a comparison against new values
+                 * from the replica later! */
+                const char *p = buf_cstring(&value);
+                parsehex(p, &p, 16, &record->basecid);
+                /* XXX - check on p? */
+
+                /* "basethrid" is special, since it is written during mailbox
+                 * appends and rewrites, using whatever modseq the index_record
+                 * has at this moment. This might differ from the modseq we
+                 * just parsed here, causing master and replica annotations
+                 * to get out of sync.
+                 * The fix is to set the basecid field both on the index
+                 * record *and* adding the annotation to the annotation list.
+                 * That way the local modseq of basethrid always gets over-
+                 * written by whoever wins to be master of this annotation */
+                sync_annot_list_add(*salp, entry, userid, &value, modseq);
+        }
+        else {
+            sync_annot_list_add(*salp, entry, userid, &value, modseq);
+        }
+        buf_free(&value);
+    }
+    return 0;
+}
+
+/*
+ * Merge a local and remote list of annotations, and apply the resulting
+ * list of annotations to the local annotation database, storing new values
+ * or deleting old values as necessary.  Manages its own annotations
+ * transaction.
+ * Record may be null, to process mailbox annotations.
+ */
+
+static int diff_annotation(const struct sync_annot *a,
+                           const struct sync_annot *b,
+                           int diff_value)
+{
+    int diff = 0;
+
+    if (!a && !b) return 0;
+
+    if (a)
+        diff--;
+    if (b)
+        diff++;
+
+    if (!diff)
+        diff = strcmpnull(a->entry, b->entry);
+    if (!diff)
+        diff = strcmpnull(a->userid, b->userid);
+    if (!diff && diff_value)
+        diff = buf_cmp(&a->value, &b->value);
+
+    return diff;
+}
+
+int diff_annotations(const struct sync_annot_list *local_annots,
+                     const struct sync_annot_list *remote_annots)
+{
+    const struct sync_annot *local = (local_annots ? local_annots->head : NULL);
+    const struct sync_annot *remote = (remote_annots ? remote_annots->head : NULL);
+    while (local || remote) {
+        int r = diff_annotation(local, remote, 1);
+        if (r) return r;
+        if (local) local = local->next;
+        if (remote) remote = remote->next;
+    }
+
+    return 0;
+}
+
+int apply_annotations(struct mailbox *mailbox,
+                      const struct index_record *record,
+                      const struct sync_annot_list *local_annots,
+                      const struct sync_annot_list *remote_annots,
+                      int local_wins)
+{
+    const struct sync_annot *local = (local_annots ? local_annots->head : NULL);
+    const struct sync_annot *remote = (remote_annots ? remote_annots->head : NULL);
+    const struct sync_annot *chosen;
+    static const struct buf novalue = BUF_INITIALIZER;
+    const struct buf *value;
+    int r = 0;
+    int diff;
+    annotate_state_t *astate = NULL;
+
+    if (record) {
+        r = mailbox_get_annotate_state(mailbox, record->uid, &astate);
+    }
+    else {
+        astate = annotate_state_new();
+        r = annotate_state_set_mailbox(astate, mailbox);
+    }
+    if (r) goto out;
+
+    /*
+     * We rely here on the database scan order resulting in lists
+     * of annotations that are ordered lexically on entry then userid.
+     * We walk over both lists at once, choosing an annotation from
+     * either the local list only (diff < 0), the remote list only
+     * (diff > 0), or both lists (diff == 0).
+     */
+    while (local || remote) {
+        diff = diff_annotation(local, remote, 0);
+        chosen = 0;
+        if (diff < 0) {
+            chosen = local;
+            value = (local_wins ? &local->value : &novalue);
+            local = local->next;
+        }
+        else if (diff > 0) {
+            chosen = remote;
+            value = (local_wins ? &novalue : &remote->value);
+            remote = remote->next;
+        }
+        else {
+            chosen = remote;
+            value = (local_wins ? &local->value : &remote->value);
+            diff = buf_cmp(&local->value, &remote->value);
+            local = local->next;
+            remote = remote->next;
+            if (!diff)
+                continue;   /* same value, skip */
+        }
+
+        /* Replicate the modseq of this record from master */
+        struct annotate_metadata mdata = {
+            chosen->modseq, /* modseq */
+            0               /* flags - is determined by value */
+        };
+        r = annotate_state_writemdata(astate, chosen->entry,
+                                      chosen->userid, value, &mdata);
+        if (r)
+            break;
+    }
+
+out:
+
+    if (record) {
+#ifdef USE_CALALARMD
+        if (mailbox->mbtype & MBTYPE_CALENDAR) {
+            // NOTE: this is because we don't pass the annotations through
+            // with the record as we create it, so we can't update the alarm
+            // database properly.  Instead, we don't set anything when we append
+            // by checking for .silent, and instead update the database by touching
+            // the alarm AFTER writing the record.
+            caldav_alarm_sync_nextcheck(mailbox, record);
+        }
+#endif
+    }
+    else {
+        /* need to manage our own txn for the global db */
+        if (!r)
+            r = annotate_state_commit(&astate);
+        else
+            annotate_state_abort(&astate);
+    }
+    /* else, the struct mailbox manages it for us */
+
+    return r;
+}
+
+/* =========================================================================== */
+
+void sync_print_flags(struct dlist *kl,
+                      struct mailbox *mailbox,
+                      const struct index_record *record)
+{
+    int flag;
+    struct dlist *fl = dlist_newlist(kl, "FLAGS");
+
+    if (record->system_flags & FLAG_DELETED)
+        dlist_setflag(fl, "FLAG", "\\Deleted");
+    if (record->system_flags & FLAG_ANSWERED)
+        dlist_setflag(fl, "FLAG", "\\Answered");
+    if (record->system_flags & FLAG_FLAGGED)
+        dlist_setflag(fl, "FLAG", "\\Flagged");
+    if (record->system_flags & FLAG_DRAFT)
+        dlist_setflag(fl, "FLAG", "\\Draft");
+    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
+        dlist_setflag(fl, "FLAG", "\\Expunged");
+    if (record->system_flags & FLAG_SEEN)
+        dlist_setflag(fl, "FLAG", "\\Seen");
+
+    /* print user flags in mailbox order */
+    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+        if (!mailbox->flagname[flag])
+            continue;
+        if (!(record->user_flags[flag/32] & (1<<(flag&31))))
+            continue;
+        dlist_setflag(fl, "FLAG", mailbox->flagname[flag]);
+    }
+}
+
+int sync_getflags(struct dlist *kl,
+                  struct mailbox *mailbox,
+                  struct index_record *record)
+{
+    struct dlist *ki;
+    int userflag;
+
+    for (ki = kl->head; ki; ki = ki->next) {
+        char *s = xstrdup(ki->sval);
+
+        if (s[0] == '\\') {
+            /* System flags */
+            lcase(s);
+            if (!strcmp(s, "\\seen")) {
+                record->system_flags |= FLAG_SEEN;
+            } else if (!strcmp(s, "\\expunged")) {
+                record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
+            } else if (!strcmp(s, "\\answered")) {
+                record->system_flags |= FLAG_ANSWERED;
+            } else if (!strcmp(s, "\\flagged")) {
+                record->system_flags |= FLAG_FLAGGED;
+            } else if (!strcmp(s, "\\deleted")) {
+                record->system_flags |= FLAG_DELETED;
+            } else if (!strcmp(s, "\\draft")) {
+                record->system_flags |= FLAG_DRAFT;
+            } else {
+                syslog(LOG_ERR, "Unknown system flag: %s", s);
+            }
+        }
+        else {
+            if (mailbox_user_flag(mailbox, s, &userflag, /*allow all*/2)) {
+                syslog(LOG_ERR, "Unable to record user flag: %s", s);
+                free(s);
+                return IMAP_IOERROR;
+            }
+            record->user_flags[userflag/32] |= 1<<(userflag&31);
+        }
+
+        free(s);
+    }
+
+    return 0;
+}
+
+int parse_upload(struct dlist *kr, struct mailbox *mailbox,
+                 struct index_record *record,
+                 struct sync_annot_list **salp)
+{
+    struct dlist *fl;
+    struct message_guid *tmpguid;
+    int r;
+
+    memset(record, 0, sizeof(struct index_record));
+
+    if (!dlist_getnum32(kr, "UID", &record->uid))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getnum64(kr, "MODSEQ", &record->modseq))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getdate(kr, "LAST_UPDATED", &record->last_updated))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getlist(kr, "FLAGS", &fl))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getdate(kr, "INTERNALDATE", &record->internaldate))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getnum32(kr, "SIZE", &record->size))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getguid(kr, "GUID", &tmpguid))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    record->guid = *tmpguid;
+
+    /* parse the flags */
+    r = sync_getflags(fl, mailbox, record);
+    if (r) return r;
+
+    /* the ANNOTATIONS list is optional too */
+    if (salp && dlist_getlist(kr, "ANNOTATIONS", &fl))
+        r = decode_annotations(fl, salp, record);
+
+    return r;
+}
+
 /* NOTE - we don't prot_flush here, as we always send an OK at the
  * end of a response anyway */
 void sync_send_response(struct dlist *kl, struct protstream *out)
@@ -1894,307 +2196,7 @@ int sync_append_copyfile(struct mailbox *mailbox,
     return r;
 }
 
-/* ====================================================================== */
-
-static int read_one_annot(const char *mailbox __attribute__((unused)),
-                          uint32_t uid __attribute__((unused)),
-                          const char *entry,
-                          const char *userid,
-                          const struct buf *value,
-                          const struct annotate_metadata *mdata,
-                          void *rock)
-{
-    struct sync_annot_list **salp = (struct sync_annot_list **)rock;
-
-    if (!*salp)
-        *salp = sync_annot_list_create();
-    sync_annot_list_add(*salp, entry, userid, value, mdata->modseq);
-    return 0;
-}
-
-/*
- * Read all the annotations in the local annotations database
- * for the message given by @mailbox and @record, returning them
- * as a new sync_annot_list.  The caller should free the new
- * list with sync_annot_list_free().
- * If record is NULL, return the mailbox annotations
- * If since_modseq is greated than zero, return annotations
- * add or changed since modseq (exclusively since_modseq).
- * If flags is set to ANNOTATE_TOMBSTONES, also return
- * deleted annotations. Deleted annotations have a zero value.
- *
- * Returns: non-zero on error,
- *          resulting sync_annot_list in *@resp
- */
-int read_annotations(const struct mailbox *mailbox,
-                     const struct index_record *record,
-                     struct sync_annot_list **resp,
-                     modseq_t since_modseq __attribute__((unused)),
-                     int flags)
-{
-    *resp = NULL;
-    return annotatemore_findall(mailbox->name, record ? record->uid : 0,
-                                /* all entries*/"*", /*XXX since_modseq*/0,
-                                read_one_annot, (void *)resp, flags);
-}
-
-/*
- * Encode the given list of annotations @sal as a dlist
- * structure with the given @parent.
- */
-void encode_annotations(struct dlist *parent,
-                        const struct index_record *record,
-                        const struct sync_annot_list *sal)
-{
-    const struct sync_annot *sa;
-    struct dlist *annots = NULL;
-    struct dlist *aa;
-
-    if (sal) {
-        for (sa = sal->head ; sa ; sa = sa->next) {
-            if (!annots)
-                annots = dlist_newlist(parent, "ANNOTATIONS");
-
-            aa = dlist_newkvlist(annots, NULL);
-            dlist_setatom(aa, "ENTRY", sa->entry);
-            dlist_setatom(aa, "USERID", sa->userid);
-            dlist_setnum64(aa, "MODSEQ", sa->modseq);
-            dlist_setmap(aa, "VALUE", sa->value.s, sa->value.len);
-        }
-    }
-
-    if (record && record->cid) {
-        if (!annots)
-            annots = dlist_newlist(parent, "ANNOTATIONS");
-        aa = dlist_newkvlist(annots, NULL);
-        dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "thrid");
-        dlist_setatom(aa, "USERID", NULL);
-        dlist_setnum64(aa, "MODSEQ", 0);
-        dlist_sethex64(aa, "VALUE", record->cid);
-    }
-
-    if (record && record->savedate) {
-        if (!annots)
-            annots = dlist_newlist(parent, "ANNOTATIONS");
-        aa = dlist_newkvlist(annots, NULL);
-        dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "savedate");
-        dlist_setatom(aa, "USERID", NULL);
-        dlist_setnum64(aa, "MODSEQ", 0);
-        dlist_setnum32(aa, "VALUE", record->savedate);
-    }
-
-}
-
-/*
- * Decode the given list of encoded annotations @annots and create
- * a new sync_annot_list in *@salp, which the caller should free
- * with sync_annot_list_free().
- *
- * Returns: zero on success or Cyrus error code.
- */
-int decode_annotations(/*const*/struct dlist *annots,
-                       struct sync_annot_list **salp,
-                       struct index_record *record)
-{
-    struct dlist *aa;
-    const char *entry;
-    const char *userid;
-    modseq_t modseq;
-
-    *salp = NULL;
-    if (strcmp(annots->name, "ANNOTATIONS"))
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
-
-    for (aa = annots->head ; aa ; aa = aa->next) {
-        struct buf value = BUF_INITIALIZER;
-        if (!*salp)
-            *salp = sync_annot_list_create();
-        if (!dlist_getatom(aa, "ENTRY", &entry))
-            return IMAP_PROTOCOL_BAD_PARAMETERS;
-        if (!dlist_getatom(aa, "USERID", &userid))
-            return IMAP_PROTOCOL_BAD_PARAMETERS;
-        if (!dlist_getnum64(aa, "MODSEQ", &modseq))
-            return IMAP_PROTOCOL_BAD_PARAMETERS;
-        if (!dlist_getbuf(aa, "VALUE", &value))
-            return IMAP_PROTOCOL_BAD_PARAMETERS;
-        if (!strcmp(entry, IMAP_ANNOT_NS "thrid")) {
-            if (record) {
-                const char *p = buf_cstring(&value);
-                parsehex(p, &p, 16, &record->cid);
-                /* XXX - check on p? */
-            }
-        }
-        else if (!strcmp(entry, IMAP_ANNOT_NS "savedate")) {
-            if (record) {
-                const char *p = buf_cstring(&value);
-                bit64 newval;
-                parsenum(p, &p, 0, &newval);
-                record->savedate = newval;
-            }
-        }
-        else if (record && !strcmp(entry, IMAP_ANNOT_NS "basethrid")) {
-                /* this might double-apply the annotation, but oh well.  It does mean that
-                 * basethrid is paired in here when we do a comparison against new values
-                 * from the replica later! */
-                const char *p = buf_cstring(&value);
-                parsehex(p, &p, 16, &record->basecid);
-                /* XXX - check on p? */
-
-                /* "basethrid" is special, since it is written during mailbox
-                 * appends and rewrites, using whatever modseq the index_record
-                 * has at this moment. This might differ from the modseq we
-                 * just parsed here, causing master and replica annotations
-                 * to get out of sync.
-                 * The fix is to set the basecid field both on the index
-                 * record *and* adding the annotation to the annotation list.
-                 * That way the local modseq of basethrid always gets over-
-                 * written by whoever wins to be master of this annotation */
-                sync_annot_list_add(*salp, entry, userid, &value, modseq);
-        }
-        else {
-            sync_annot_list_add(*salp, entry, userid, &value, modseq);
-        }
-        buf_free(&value);
-    }
-    return 0;
-}
-
-/*
- * Merge a local and remote list of annotations, and apply the resulting
- * list of annotations to the local annotation database, storing new values
- * or deleting old values as necessary.  Manages its own annotations
- * transaction.
- * Record may be null, to process mailbox annotations.
- */
-
-static int diff_annotation(const struct sync_annot *a,
-                           const struct sync_annot *b,
-                           int diff_value)
-{
-    int diff = 0;
-
-    if (!a && !b) return 0;
-
-    if (a)
-        diff--;
-    if (b)
-        diff++;
-
-    if (!diff)
-        diff = strcmpnull(a->entry, b->entry);
-    if (!diff)
-        diff = strcmpnull(a->userid, b->userid);
-    if (!diff && diff_value)
-        diff = buf_cmp(&a->value, &b->value);
-
-    return diff;
-}
-
-int diff_annotations(const struct sync_annot_list *local_annots,
-                     const struct sync_annot_list *remote_annots)
-{
-    const struct sync_annot *local = (local_annots ? local_annots->head : NULL);
-    const struct sync_annot *remote = (remote_annots ? remote_annots->head : NULL);
-    while (local || remote) {
-        int r = diff_annotation(local, remote, 1);
-        if (r) return r;
-        if (local) local = local->next;
-        if (remote) remote = remote->next;
-    }
-
-    return 0;
-}
-
-int apply_annotations(struct mailbox *mailbox,
-                      const struct index_record *record,
-                      const struct sync_annot_list *local_annots,
-                      const struct sync_annot_list *remote_annots,
-                      int local_wins)
-{
-    const struct sync_annot *local = (local_annots ? local_annots->head : NULL);
-    const struct sync_annot *remote = (remote_annots ? remote_annots->head : NULL);
-    const struct sync_annot *chosen;
-    static const struct buf novalue = BUF_INITIALIZER;
-    const struct buf *value;
-    int r = 0;
-    int diff;
-    annotate_state_t *astate = NULL;
-
-    if (record) {
-        r = mailbox_get_annotate_state(mailbox, record->uid, &astate);
-    }
-    else {
-        astate = annotate_state_new();
-        r = annotate_state_set_mailbox(astate, mailbox);
-    }
-    if (r) goto out;
-
-    /*
-     * We rely here on the database scan order resulting in lists
-     * of annotations that are ordered lexically on entry then userid.
-     * We walk over both lists at once, choosing an annotation from
-     * either the local list only (diff < 0), the remote list only
-     * (diff > 0), or both lists (diff == 0).
-     */
-    while (local || remote) {
-        diff = diff_annotation(local, remote, 0);
-        chosen = 0;
-        if (diff < 0) {
-            chosen = local;
-            value = (local_wins ? &local->value : &novalue);
-            local = local->next;
-        }
-        else if (diff > 0) {
-            chosen = remote;
-            value = (local_wins ? &novalue : &remote->value);
-            remote = remote->next;
-        }
-        else {
-            chosen = remote;
-            value = (local_wins ? &local->value : &remote->value);
-            diff = buf_cmp(&local->value, &remote->value);
-            local = local->next;
-            remote = remote->next;
-            if (!diff)
-                continue;   /* same value, skip */
-        }
-
-        /* Replicate the modseq of this record from master */
-        struct annotate_metadata mdata = {
-            chosen->modseq, /* modseq */
-            0               /* flags - is determined by value */
-        };
-        r = annotate_state_writemdata(astate, chosen->entry,
-                                      chosen->userid, value, &mdata);
-        if (r)
-            break;
-    }
-
-out:
-
-    if (record) {
-#ifdef USE_CALALARMD
-        if (mailbox->mbtype & MBTYPE_CALENDAR) {
-            // NOTE: this is because we don't pass the annotations through
-            // with the record as we create it, so we can't update the alarm
-            // database properly.  Instead, we don't set anything when we append
-            // by checking for .silent, and instead update the database by touching
-            // the alarm AFTER writing the record.
-            caldav_alarm_sync_nextcheck(mailbox, record);
-        }
-#endif
-    }
-    else {
-        /* need to manage our own txn for the global db */
-        if (!r)
-            r = annotate_state_commit(&astate);
-        else
-            annotate_state_abort(&astate);
-    }
-    /* else, the struct mailbox manages it for us */
-
-    return r;
-}
+/* ==================================================================== */
 
 int sync_mailbox_version_check(struct mailbox **mailboxp)
 {

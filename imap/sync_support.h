@@ -59,25 +59,9 @@ extern struct protocol_t csync_protocol;
 #define SYNC_MESSAGE_LIST_HASH_SIZE      (65536)
 #define SYNC_MESSAGE_LIST_MAX_OPEN_FILES (64)
 
-void sync_printdate(struct protstream *out, time_t time);
-time_t sync_parsedate(const char *s);
-int sync_getflags(struct dlist *kl,
-                  struct mailbox *mailbox,
-                  struct index_record *record);
-
-void sync_print_flags(struct dlist *kl,
-                      struct mailbox *mailbox,
-                      const struct index_record *record);
-
 const char *sync_get_config(const char *channel, const char *val);
 int sync_get_intconfig(const char *channel, const char *val);
 int sync_get_switchconfig(const char *channel, const char *val);
-
-char *sync_encode_options(int options);
-int sync_parse_options(const char *source);
-
-char *sync_encode_type(int type);
-int sync_parse_type(const char *source);
 
 /* ====================================================================== */
 
@@ -433,19 +417,6 @@ int read_annotations(const struct mailbox *,
                      struct sync_annot_list **,
                      modseq_t since_modseq,
                      int flags);
-void encode_annotations(struct dlist *parent,
-                        const struct index_record *record,
-                        const struct sync_annot_list *);
-int decode_annotations(/*const*/struct dlist *,
-                       struct sync_annot_list **,
-                       struct index_record *);
-int apply_annotations(struct mailbox *mailbox,
-                      const struct index_record *record,
-                      const struct sync_annot_list *local_annots,
-                      const struct sync_annot_list *remote_annots,
-                      int local_wins);
-int diff_annotations(const struct sync_annot_list *local_annots,
-                     const struct sync_annot_list *remote_annots);
 
 /* ====================================================================== */
 
