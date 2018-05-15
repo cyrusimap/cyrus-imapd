@@ -207,7 +207,13 @@ sub test_reconstruct_splitconv
 
     $self->check_messages(\%exp, keyed_on => 'uid');
 
+    # first run WITHOUT splitting
     $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-R', '-r');
+
+    $self->check_messages(\%exp, keyed_on => 'uid');
+
+    # then run WITH splitting, and see the changed CIDs
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-R', '-r', '-S');
 
     for (5..9) {
       $exp{"A$_"}->set_attributes(cid => $exp{"A5"}->make_cid(), basecid => $exp{A}->make_cid());
@@ -320,7 +326,7 @@ sub test_replication_reconstruct
     $self->check_replication('cassandane');
     $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
 
-    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-R', '-r');
+    $self->{instance}->run_command({ cyrus => 1 }, 'ctl_conversationsdb', '-R', '-r', '-S');
 
     for (5..9) {
       $exp{"A$_"}->set_attributes(cid => $exp{"A5"}->make_cid(), basecid => $exp{A}->make_cid());
