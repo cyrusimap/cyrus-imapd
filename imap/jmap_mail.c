@@ -8468,6 +8468,29 @@ static struct emailpart *_email_buildbody(struct emailpart *text_body,
                                           ptrarray_t *attached_emails,
                                           ptrarray_t *attached_files)
 {
+    struct emailpart *root = NULL;
+
+    ptrarray_t my_attached_files = PTRARRAY_INITIALIZER;
+    ptrarray_t my_inlined_files = PTRARRAY_INITIALIZER;
+    int i;
+    if (text_body || html_body) {
+        /* Split files into inlined and other attachments */
+        for (i = 0; i < attached_files->count; i++) {
+            struct emailpart *part = ptrarray_nth(attached_files, i);
+            if (part->disposition && !strcasecmp(part->disposition, "INLINE"))
+                ptrarray_append(&my_inlined_files, part);
+            else
+                ptrarray_append(&my_attached_files, part);
+        }
+    }
+    else {
+        /* Treat all attachments the same */
+        for (i = 0; i < attached_files->count; i++) {
+            struct emailpart *part = ptrarray_nth(attached_files, i);
+            ptrarray_append(&my_attached_files, part);
+        }
+    }
+
     /* Make MIME part for embedded emails. */
     struct emailpart *emails = NULL;
     if (attached_emails->count >= 2)
@@ -8489,28 +8512,37 @@ static struct emailpart *_email_buildbody(struct emailpart *text_body,
     else if (html_body)
         text = html_body;
 
+    /* Make MIME part for inlined attachments, if any. */
+    if (text && my_inlined_files.count) {
+        struct emailpart *related = _emailpart_new_multi("related", &my_inlined_files);
+        ptrarray_insert(&related->subparts, 0, text);
+        text = related;
+    }
+
     /* Choose top-level MIME part. */
-    if (attached_files->count) {
-        struct emailpart *mixed = _emailpart_new_multi("mixed", attached_files);
+    if (my_attached_files.count) {
+        struct emailpart *mixed = _emailpart_new_multi("mixed", &my_attached_files);
         if (emails) ptrarray_insert(&mixed->subparts, 0, emails);
         if (text) ptrarray_insert(&mixed->subparts, 0, text);
-        return mixed;
+        root = mixed;
     }
     else if (text && emails) {
-        struct emailpart *wrapper = NULL;
         ptrarray_t wrapped = PTRARRAY_INITIALIZER;
         ptrarray_append(&wrapped, text);
         ptrarray_append(&wrapped, emails);
-        wrapper = _emailpart_new_multi("mixed", &wrapped);
+        root = _emailpart_new_multi("mixed", &wrapped);
         ptrarray_fini(&wrapped);
-        return wrapper;
     }
     else if (text)
-        return text;
+        root = text;
     else if (emails)
-        return emails;
+        root = emails;
     else
-        return NULL;
+        root = NULL;
+
+    ptrarray_fini(&my_attached_files);
+    ptrarray_fini(&my_inlined_files);
+    return root;
 }
 
 
@@ -8692,11 +8724,23 @@ static void _email_parse_bodies(json_t *jemail,
             size_t i;
             json_t *jpart;
             struct emailpart *attpart;
+            int have_inlined = 0;
             json_array_foreach(jattachedFiles, i, jpart) {
                 jmap_parser_push_index(parser, "attachedFiles", i);
                 attpart = _emailpart_parse(jpart, parser, bodyValues);
-                if (attpart) ptrarray_append(&attached_files, attpart);
+                if (attpart) {
+                    if (!have_inlined && attpart->disposition) {
+                        have_inlined = !strcasecmp(attpart->disposition, "INLINE");
+                    }
+                    ptrarray_append(&attached_files, attpart);
+                }
                 jmap_parser_pop(parser);
+            }
+            if (have_inlined && !html_body) {
+                /* Reject inlined attachments without a HTML body. The client
+                 * is free to produce whatever it wants by setting bodyStructure,
+                 * but for the convenience properties we require sane inputs. */
+                jmap_parser_invalid(parser, "htmlBody");
             }
         }
         else if (JNOTNULL(jattachedFiles)) {
