@@ -1766,7 +1766,8 @@ alerts_from_ical(context_t *ctx, icalcomponent *comp)
         }
 
         /* Determine duration between alarm and start/end */
-        if (!icaldurationtype_is_null_duration(trigger.duration)) {
+        if (!icaldurationtype_is_null_duration(trigger.duration) ||
+             icaltime_is_null_time(trigger.time)) {
             duration = trigger.duration;
         } else {
             icaltimetype ttrg, tref;
