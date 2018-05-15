@@ -2504,9 +2504,8 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             copy.last_updated = mrecord.last_updated;
             copy.internaldate = mrecord.internaldate;
             copy.savedate = mrecord.savedate;
-            copy.system_flags = (mrecord.system_flags) |
-                                (rrecord->system_flags);
-            copy.internal_flags = rrecord->internal_flags;
+            copy.system_flags = mrecord.system_flags;
+            /* FLAG_INTERNAL_EXPUNGED is a syncable flag, but it's internal */
             copy.internal_flags |= mrecord.internal_flags & FLAG_INTERNAL_EXPUNGED;
 
             for (i = 0; i < MAX_USER_FLAGS/32; i++)
