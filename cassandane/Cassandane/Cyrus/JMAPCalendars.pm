@@ -725,6 +725,9 @@ sub normalize_event
     if (not exists $event->{priority}) {
         $event->{priority} = 0;
     }
+    if (not exists $event->{title}) {
+        $event->{title} = '';
+    }
     if (not exists $event->{description}) {
         $event->{description} = '';
     }
@@ -773,6 +776,10 @@ sub normalize_event
     if (not exists $event->{relatedTo}) {
         $event->{relatedTo} = undef;
     }
+    if (not exists $event->{participantId}) {
+        # non-standard
+        $event->{participantId} = undef;
+    }
     if (not exists $event->{participants}) {
         $event->{participants} = undef;
     } elsif (defined $event->{participants}) {
@@ -803,6 +810,9 @@ sub normalize_event
     }
     if (not exists $event->{alerts}) {
         $event->{alerts} = undef;
+    }
+    if (not exists $event->{useDefaultAlerts}) {
+        $event->{useDefaultAlerts} = JSON::false;
     }
     if (not exists $event->{prodId}) {
         $event->{prodId} = undef;
@@ -1493,6 +1503,47 @@ sub test_calendarevent_set_simple
     my $ret = $self->createandget_event($event);
     $self->assert_normalized_event_equals($event, $ret);
     $self->assert_num_equals(42, $event->{sequence});
+}
+
+sub test_calendarevent_set_bymonth
+:JMAP :min_version_3_1
+{
+	my ($self) = @_;
+
+	my $jmap = $self->{jmap};
+	my $calid = "Default";
+
+	my $event =  {
+		"calendarId"=> $calid,
+		"start"=> "2010-02-12T00:00:00",
+		"recurrenceRule"=> {
+			"frequency"=> "monthly",
+			"interval"=> 13,
+			"byMonth"=> [
+				"4L"
+			],
+			"count"=> 3
+		},
+		"\@type"=> "jsevent",
+		"title"=> "",
+		"description"=> "",
+		"locations"=> undef,
+		"links"=> undef,
+		"isAllDay"=> JSON::false,
+		"duration"=> "P0D",
+		"timeZone"=> undef,
+		"recurrenceOverrides"=> undef,
+		"status"=> "confirmed",
+		"freeBusyStatus"=> "busy",
+		"replyTo"=> undef,
+		"participants"=> undef,
+		"participantId"=> undef,
+		"useDefaultAlerts"=> JSON::false,
+		"alerts"=> undef
+	};
+
+	my $ret = $self->createandget_event($event);
+	$self->assert_normalized_event_equals($event, $ret);
 }
 
 sub test_calendarevent_set_relatedto
