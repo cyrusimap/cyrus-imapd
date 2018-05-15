@@ -871,10 +871,10 @@ recurrence_from_ical(context_t *ctx, icalcomponent *comp)
                 recurrence_byX_fromical(rrule.by_year_day,
                     ICAL_BY_YEARDAY_SIZE, &identity_int));
     }
-    if (rrule.by_month[0] != ICAL_RECURRENCE_ARRAY_MAX) {
+    if (rrule.by_week_no[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(recur, "byWeekNo",
-                recurrence_byX_fromical(rrule.by_month,
-                    ICAL_BY_MONTH_SIZE, &identity_int));
+                recurrence_byX_fromical(rrule.by_week_no,
+                    ICAL_BY_WEEKNO_SIZE, &identity_int));
     }
     if (rrule.by_hour[0] != ICAL_RECURRENCE_ARRAY_MAX) {
         json_object_set_new(recur, "byHour",
@@ -3565,10 +3565,6 @@ alerts_to_ical(context_t *ctx, icalcomponent *comp, json_t *alerts)
     }
 }
 
-static void month_to_ical(struct buf *buf, int val) {
-    buf_printf(buf, "%d", val+1);
-}
-
 static void int_to_ical(struct buf *buf, int val) {
     buf_printf(buf, "%d", val);
 }
@@ -3770,13 +3766,34 @@ recurrence_to_ical(context_t *ctx, icalcomponent *comp, json_t *recur)
 
     /* byMonth */
     json_t *bymonth = NULL;
-    lower = 0;
-    upper = 11;
     pe = readprop(ctx, recur, "byMonth", 0, "o", &bymonth);
     if (pe > 0) {
-        recurrence_byX_to_ical(ctx, bymonth, &buf, "BYMONTH",
-                &lower, &upper, 0 /* allowZero */,
-                "byMonth", month_to_ical);
+        if (json_array_size(bymonth) > 0) {
+            size_t i;
+            json_t *jval;
+            buf_printf(&buf, ";BYMONTH=");
+            json_array_foreach(bymonth, i, jval) {
+                const char *s = json_string_value(jval);
+                if (!s) {
+                    beginprop_idx(ctx,"byMonth", i);
+                    invalidprop(ctx, NULL);
+                    endprop(ctx);
+                    continue;
+                }
+                int val;
+                char leap = 0, dummy = 0;
+                int matched = sscanf(s, "%2d%c%c", &val, &leap, &dummy);
+                if (matched < 1 || matched > 2 || (leap && leap != 'L') || val < 1) {
+                    beginprop_idx(ctx,"byMonth", i);
+                    invalidprop(ctx, NULL);
+                    endprop(ctx);
+                    continue;
+                }
+                if (i) buf_putc(&buf, ',');
+                buf_printf(&buf, "%d", val);
+                if (leap) buf_putc(&buf, 'L');
+            }
+        }
     }
 
     /* byYearDay */
