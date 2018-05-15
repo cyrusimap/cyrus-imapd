@@ -139,7 +139,6 @@ struct mailbox_repack {
     struct index_header i;
     struct seqset *seqset;
     char *userid;
-    int old_version;
     int newindex_fd;
     ptrarray_t caches;
 };
@@ -3876,7 +3875,6 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
     repack->i.generation_no++;
 
     /* track the version number */
-    repack->old_version = repack->i.minor_version;
     repack->i.minor_version = version;
     switch (version) {
     case 6:
@@ -3919,7 +3917,7 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
     }
 
     /* upgrades or downgrades across version 12 boundary?  Sort out seen state */
-    if (version >= 12 && repack->old_version < 12) {
+    if (version >= 12 && mailbox->i.minor_version < 12) {
         /* we need to read the current seen state for the owner */
         struct seendata sd = SEENDATA_INITIALIZER;
         int r = IMAP_MAILBOX_NONEXISTENT;
@@ -3942,7 +3940,7 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
             seen_freedata(&sd);
         }
     }
-    else if (version < 12 && repack->old_version >= 12) {
+    else if (version < 12 && mailbox->i.minor_version >= 12) {
         if (mailbox->i.options & OPT_IMAP_SHAREDSEEN)
             repack->userid = xstrdup("anyone");
         else
@@ -4064,7 +4062,7 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
     assert(repack->i.synccrcs.basic == repack->mailbox->i.synccrcs.basic);
     assert(repack->i.synccrcs.annot == repack->mailbox->i.synccrcs.annot);
 
-    if (repack->old_version >= 12 && repack->i.minor_version < 12
+    if (repack->mailbox->i.minor_version >= 12 && repack->i.minor_version < 12
         && repack->seqset && repack->userid) {
         struct seendata sd = SEENDATA_INITIALIZER;
         struct seen *seendb = NULL;
@@ -4166,7 +4164,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
         struct index_record copyrecord = *record;
 
         /* version changes? */
-        if (repack->old_version < 12 && repack->i.minor_version >= 12) {
+        if (mailbox->i.minor_version < 12 && repack->i.minor_version >= 12) {
             const char *fname = mailbox_record_fname(mailbox, &copyrecord);
 
             if (seqset_ismember(repack->seqset, copyrecord.uid))
@@ -4184,7 +4182,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
                        repack->mailbox->name, copyrecord.uid);
             }
         }
-        if (repack->old_version >= 12 && repack->i.minor_version < 12) {
+        if (mailbox->i.minor_version >= 12 && repack->i.minor_version < 12) {
             if (repack->seqset)
                 seqset_add(repack->seqset, copyrecord.uid, copyrecord.system_flags & FLAG_SEEN ? 1 : 0);
             copyrecord.system_flags &= ~FLAG_SEEN;
