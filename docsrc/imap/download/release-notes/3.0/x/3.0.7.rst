@@ -1,0 +1,38 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.0.7 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 3.0 series.
+
+    Refer to the Cyrus IMAP 3.0.0 Release Notes for important information
+    about the 3.0 series, including upgrading instructions.
+
+Download via HTTPS:
+
+    *   https://www.cyrusimap.org/releases/cyrus-imapd-3.0.7.tar.gz
+    *   https://www.cyrusimap.org/releases/cyrus-imapd-3.0.7.tar.gz.sig
+
+Download via FTP:
+
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-3.0.7.tar.gz
+    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-3.0.7.tar.gz.sig
+
+
+.. _relnotes-3.0.7-changes:
+
+Changes Since 3.0.6
+===================
+
+Bug fixes
+---------
+
+* Fixed :issue:`2346`: :cyrusman:`httpd(8)` no longer crashes on upload of
+  calendar entries that are missing the UID property.
+* Fixed :issue:`2350`: :cyrusman:`imapd(8)` no longer gets stuck in an
+  infinite loop when client connections drop out during APPEND.
+* Fixed :issue:`2348`: XSNIPPETS now properly supports the cyruslibs fork of
+  Xapian.
