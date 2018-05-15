@@ -1630,6 +1630,12 @@ static int setcalendarevents_create(jmap_req_t *req,
     if (r) {
         syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
                 mboxname, error_message(r));
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            json_array_append_new(invalid, json_string("calendarId"));
+            r = 0;
+        }
+        free(uid);
+        *uidptr = NULL;
         goto done;
     }
 
@@ -2022,9 +2028,6 @@ static int setCalendarEvents(struct jmap_req *req)
         goto done;
     }
 
-    set = json_pack("{s:s}", "accountId", req->accountid);
-    json_object_set_new(set, "oldState", jmap_getstate(req, MBTYPE_CALENDAR));
-
     r = caldav_create_defaultcalendars(req->accountid);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* The account exists but does not have a root mailbox. */
@@ -2040,6 +2043,10 @@ static int setCalendarEvents(struct jmap_req *req)
         r = IMAP_INTERNAL;
         goto done;
     }
+
+    set = json_pack("{s:s}", "accountId", req->accountid);
+
+    json_object_set_new(set, "oldState", jmap_getstate(req, MBTYPE_CALENDAR));
 
     json_t *create = json_object_get(req->args, "create");
     if (create) {
@@ -2062,7 +2069,7 @@ static int setCalendarEvents(struct jmap_req *req)
             json_t *invalid = json_pack("[]");
             r = setcalendarevents_create(req, arg, db, &uid, invalid);
             if (r) {
-                json_t *err = json_pack("{s:s, s:o}",
+                json_t *err = json_pack("{s:s s:s}",
                         "type", "internalError", "message", error_message(r));
                 json_object_set_new(notCreated, key, err);
                 r = 0;
@@ -2070,7 +2077,7 @@ static int setCalendarEvents(struct jmap_req *req)
                 continue;
             }
             if (json_array_size(invalid)) {
-                json_t *err = json_pack("{s:s, s:o}",
+                json_t *err = json_pack("{s:s s:o}",
                         "type", "invalidProperties", "properties", invalid);
                 json_object_set_new(notCreated, key, err);
                 free(uid);
