@@ -3500,192 +3500,131 @@ static void _emailbodies_fini(struct emailbodies *bodies)
     ptrarray_fini(&bodies->htmllist);
 }
 
+static int _email_extract_bodies_internal(struct body *parts,
+                                          int nparts,
+                                          const char *multipart_type,
+                                          int in_alternative,
+                                          ptrarray_t *textlist,
+                                          ptrarray_t *htmllist,
+                                          ptrarray_t *msgslist,
+                                          ptrarray_t *attslist,
+                                          struct buf *msg_buf)
+{
+    int i;
+
+    enum parttype { OTHER, PLAIN, HTML, MULTIPART, INLINE_MEDIA, MESSAGE };
+
+    int textlist_count = textlist ? textlist->count : -1;
+    int htmllist_count = htmllist ? htmllist->count : -1;
+
+    for (i = 0; i < nparts; i++) {
+        struct body *part = parts + i;
+
+        /* Determine part type */
+        enum parttype parttype;
+        if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "PLAIN"))
+            parttype = PLAIN;
+        else if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "HTML"))
+            parttype = HTML;
+        else if (!strcmp(part->type, "MULTIPART"))
+            parttype = MULTIPART;
+        else if (!strcmp(part->type, "IMAGE") || !strcmp(part->type, "AUDIO") || !strcmp(part->type, "VIDEO"))
+            parttype = INLINE_MEDIA;
+        else if (!strcmp(part->type, "MESSAGE") && (!strcmp(part->subtype, "RFC822") || !strcmp(part->subtype, "GLOBAL")))
+            parttype = MESSAGE;
+        else
+            parttype = OTHER;
+
+        /* Determine disposition name, if any. */
+        const char *dispname = NULL;
+        struct param *param;
+        for (param = part->disposition_params; param; param = param->next) {
+            if (!strncasecmp(param->attribute, "filename", 8)) {
+                dispname = param->value;
+                break;
+            }
+        }
+        if (!dispname) {
+            for (param = part->params; param; param = param->next) {
+                if (!strncasecmp(param->attribute, "name", 4)) {
+                    dispname = param->value;
+                    break;
+                }
+            }
+        }
+        /* Determine if it's an inlined part */
+        int is_inline =
+            (!part->disposition || strcmp(part->disposition, "ATTACHMENT")) &&
+            /* Must be one of the allowed body types */
+            (parttype == PLAIN || parttype == HTML || parttype == INLINE_MEDIA) &&
+             /* If multipart/related, only the first part can be inline
+              * If a text part with a filename, and not the first item in the
+              * multipart, assume it is an attachment */
+             (i == 0 || (strcmp(multipart_type, "RELATED") &&
+                         (parttype == INLINE_MEDIA || !dispname)));
+        /* Handle by part type */
+        if (parttype == MULTIPART) {
+            _email_extract_bodies_internal(part->subpart, part->numparts,
+                    part->subtype,
+                    in_alternative || !strcmp(part->subtype, "ALTERNATIVE"),
+                    textlist, htmllist, msgslist, attslist, msg_buf);
+        }
+        else if (is_inline) {
+            if (!strcmp(multipart_type, "ALTERNATIVE")) {
+                switch (parttype) {
+                    case PLAIN:
+                        ptrarray_append(textlist, part);
+                        break;
+                    case HTML:
+                        ptrarray_append(htmllist, part);
+                        break;
+                    default:
+                        ptrarray_append(attslist, part);
+                }
+                continue;
+            }
+            else if (in_alternative) {
+                if (parttype == PLAIN)
+                    htmllist = NULL;
+                if (parttype == HTML)
+                    textlist = NULL;
+            }
+            if (textlist)
+                ptrarray_append(textlist, part);
+            if (htmllist)
+                ptrarray_append(htmllist, part);
+            if ((!textlist || !htmllist) && parttype == INLINE_MEDIA)
+                ptrarray_append(attslist, part);
+        }
+        else if (parttype == MESSAGE) {
+            ptrarray_append(msgslist, part);
+        }
+        else {
+            ptrarray_append(attslist, part);
+        }
+        if (!strcmp(multipart_type, "ALTERNATIVE")) {
+            int j;
+            /* Found HTML part only */
+            if (textlist && textlist_count == textlist->count) {
+                for (j = htmllist_count; j < htmllist->count; j++)
+                    ptrarray_append(textlist, ptrarray_nth(htmllist, j));
+            }
+            /* Found TEXT part only */
+            if (htmllist && htmllist_count == htmllist->count) {
+                for (j = htmllist_count; j < htmllist->count; j++)
+                    ptrarray_append(htmllist, ptrarray_nth(textlist, j));
+            }
+        }
+    }
+    return 0;
+}
 
 static int _email_extract_bodies(struct body *root, struct buf *msg_buf,
                                  struct emailbodies *bodies)
 {
-    /* Dissect a message into its best text and html bodies, attachments
-     * and embedded messages. Based on the IMAPTalk find_message function.
-     * See
-     * https://github.com/robmueller/mail-imaptalk/blob/master/IMAPTalk.pm
-     */
-
-    ptrarray_t *work = ptrarray_new();
-    int i;
-
-    struct partrec {
-        int inside_alt;
-        int inside_enc;
-        int inside_rel;
-        int partno;
-        struct body *part;
-        struct body *parent;
-    } *rec;
-
-    ptrarray_t *altlist = NULL;
-
-    rec = xzmalloc(sizeof(struct partrec));
-    rec->part = root;
-    rec->partno = 1;
-    ptrarray_push(work, rec);
-
-    while ((rec = ptrarray_shift(work))) {
-        char *disp = NULL, *dispfile = NULL;
-        struct body *part = rec->part;
-        struct param *param;
-        int is_inline = 0;
-        int is_attach = 1;
-
-        /* Determine content disposition */
-        if (part->disposition) {
-            disp = ucase(xstrdup(part->disposition));
-        }
-        for (param = part->disposition_params; param; param = param->next) {
-            if (!strncasecmp(param->attribute, "filename", 8)) {
-                dispfile = ucase(xstrdup(param->value));
-                break;
-            }
-        }
-
-        /* Search for inline text */
-        if ((!strcmp(part->type, "TEXT")) &&
-            (!strcmp(part->subtype, "PLAIN") ||
-             !strcmp(part->subtype, "TEXT")  ||
-             !strcmp(part->subtype, "ENRICHED") ||
-             !strcmp(part->subtype, "HTML")) &&
-             (!disp || strcmp(disp, "ATTACHMENT"))) {
-            /* Text that isn't an attachment */
-            is_inline = 1;
-        }
-        if ((!strcmp(part->type, "APPLICATION")) &&
-            (!strcmp(part->subtype, "OCTET-STREAM")) &&
-            (rec->inside_enc && strstr(dispfile, "ENCRYPTED"))) {
-            /* PGP octet-stream inside an pgp-encrypted part */
-            is_inline = 1;
-        }
-        /* If not the first part and has filename, assume attachment */
-        if (rec->partno > 0 && dispfile) {
-            is_inline = 0;
-        }
-
-        if (is_inline) {
-            /* The IMAPTalk code is a bit more sophisticated in determining
-             * if a body is text or html (see its KnownTextParts variable).
-             * But we don't care here: anything that is inlined and isn't
-             * HTML is treated as text. */
-            int is_html = !strcasecmp(part->subtype, "HTML");
-            struct body **bodyp = is_html ? &bodies->html : &bodies->text;
-
-            if (*bodyp == NULL) {
-                /* Haven't yet found a body for this type */
-                if (!is_html || rec->partno <= 1 || !rec->parent ||
-                    strcmp(rec->parent->type, "MULTIPART") ||
-                    strcmp(rec->parent->subtype, "MIXED")) {
-
-                    /* Don't treat html parts in a multipart/mixed as an
-                       alternative representation unless the first part */
-                    *bodyp = part;
-                }
-            } else if ((*bodyp)->content_size <= 10 && part->content_size > 10) {
-                /* Override very small parts e.g. five blank lines */
-                *bodyp = part;
-            } else if (msg_buf) {
-                /* Override parts with zero lines with multi-lines */
-                const char *base = msg_buf->s + (*bodyp)->content_offset;
-                size_t len = (*bodyp)->content_size;
-
-                if (!memchr(base, '\n', len)) {
-                    base = msg_buf->s + part->content_offset;
-                    len = part->content_size;
-                    if (memchr(base, '\n', len)) {
-                        *bodyp = part;
-                    }
-                }
-            }
-
-            /* Add to textlist/htmllist */
-            if (!is_html || !rec->inside_alt) {
-                ptrarray_append(&bodies->textlist, part);
-                altlist = &bodies->textlist;
-            }
-            if (is_html || !rec->inside_alt) {
-                ptrarray_append(&bodies->htmllist, part);
-                altlist = &bodies->htmllist;
-            }
-
-            is_attach = 0;
-        }
-        else if (!strcmp(part->type, "IMAGE") &&
-                (!disp || strcmp(disp, "ATTACHMENT")) &&
-                altlist) {
-            /* Add inline images in alternative parts, but
-             * only to the alternative (text or html) we're in */
-            ptrarray_append(altlist, part);
-        }
-        else if (!strcmp(part->type, "MULTIPART")) {
-            int prio = 0;
-            is_attach = 0;
-
-            /* Determine the multipart type and priority */
-            if (!strcmp(part->subtype, "SIGNED")) {
-                prio = 1;
-            }
-            else if (!strcmp(part->subtype, "ALTERNATIVE")) {
-                rec->inside_alt = 1;
-                prio = 1;
-            }
-            else if (!strcmp(part->subtype, "RELATED")) {
-                rec->inside_rel = 1;
-                prio = 1;
-            }
-            else if (!disp || strcmp(disp, "ATTACHMENT")) {
-                prio = 1;
-            }
-            else if (!strcmp(part->subtype, "ENCRYPTED")) {
-                rec->inside_enc = 1;
-            }
-
-            /* Prioritize signed/alternative/related sub-parts, otherwise
-             * look at it once we've seen all other parts at current level */
-            for (i = 0; i < part->numparts; i++) {
-                struct partrec *subrec;
-
-                subrec = xzmalloc(sizeof(struct partrec));
-                *subrec = *rec;
-                subrec->parent = part;
-
-
-                if (prio) {
-                    subrec->partno = part->numparts - i;
-                    subrec->part = part->subpart + subrec->partno - 1;
-                    ptrarray_insert(work, 0, subrec);
-                } else  {
-                    subrec->partno = i + 1;
-                    subrec->part = part->subpart + subrec->partno - 1;
-                    ptrarray_push(work, subrec);
-                }
-            }
-        }
-
-        if (is_attach) {
-            if (!strcmp(part->type, "MESSAGE") &&
-                !strcmp(part->subtype, "RFC822") &&
-                part != root) {
-                ptrarray_push(&bodies->msgs, part);
-            } else {
-                ptrarray_push(&bodies->atts, part);
-            }
-        }
-
-        if (disp) free(disp);
-        if (dispfile) free(dispfile);
-        free(rec);
-    }
-
-    assert(work->count == 0);
-    ptrarray_free(work);
-
-    return 0;
+    return _email_extract_bodies_internal(root, 1, "MIXED", 0,
+            &bodies->textlist, &bodies->htmllist,
+            &bodies->msgs, &bodies->atts, msg_buf);
 }
 
 static char *_emailbodies_to_plain(struct emailbodies *bodies, struct buf *msg_buf)
