@@ -104,6 +104,12 @@ Options
     subset of **-b**; in particular it does not create conversations or
     assign messages to conversations.
 
+.. option:: -S
+
+    If given with **-b**, allows splitting of conversations during the
+    rewrite.   Only do this is changing the maximum conversation size
+    and you need to split those existing conversations.
+
 Examples
 ========
 

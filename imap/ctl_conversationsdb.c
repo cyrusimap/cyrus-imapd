@@ -77,7 +77,7 @@ int verbose = 0;
 int mode = UNKNOWN;
 static const char *audit_temp_directory;
 
-int recalc_silent = 0;
+int recalc_silent = 1;
 
 static int do_dump(const char *fname, const char *userid)
 {
@@ -163,6 +163,8 @@ static int zero_cid_cb(const mbentry_t *mbentry,
 
         struct index_record oldrecord = *record;
         oldrecord.cid = NULLCONVERSATION;
+        oldrecord.basecid = NULLCONVERSATION;
+        oldrecord.internal_flags &= ~FLAG_INTERNAL_SPLITCONVERSATION;
         r = mailbox_rewrite_index_record(mailbox, &oldrecord);
         if (r) break;
     }
@@ -181,9 +183,15 @@ static int do_zero(const char *userid)
     if (r) return r;
 
     r = mboxlist_usermboxtree(userid, zero_cid_cb, NULL, 0);
+    if (r) goto done;
 
+    /* XXX:
+     * annotatemore_findall(state->annotmboxname, IMAP_ANNOT_NS "basecid/%", &deleteannot);
+     * remove all the basecid mappings so they don't create bad splits on rebuild
+     */
+
+done:
     conversations_commit(&state);
-
     return r;
 }
 
@@ -809,7 +817,7 @@ int main(int argc, char **argv)
     int r = 0;
     int recursive = 0;
 
-    while ((c = getopt(argc, argv, "durzsAbvRFC:T:")) != EOF) {
+    while ((c = getopt(argc, argv, "durzSAbvRFC:T:")) != EOF) {
         switch (c) {
         case 'd':
             if (mode != UNKNOWN)
@@ -869,8 +877,8 @@ int main(int argc, char **argv)
             audit_temp_directory = optarg;
             break;
 
-        case 's':
-            recalc_silent = 1;
+        case 'S':
+            recalc_silent = 0;
             break;
 
         default:
