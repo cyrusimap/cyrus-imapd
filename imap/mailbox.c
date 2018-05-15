@@ -4162,31 +4162,27 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         struct index_record copyrecord = *record;
+        int needs_cache_upgrade = 0;
 
         /* version changes? */
         if (mailbox->i.minor_version < 12 && repack->i.minor_version >= 12) {
-            const char *fname = mailbox_record_fname(mailbox, &copyrecord);
-
             if (seqset_ismember(repack->seqset, copyrecord.uid))
                 copyrecord.system_flags |= FLAG_SEEN;
             else
                 copyrecord.system_flags &= ~FLAG_SEEN;
 
-            /* XXX - re-parse the record iff upgrading past 12 */
-            if (message_parse(fname, &copyrecord)) {
-                /* failed to parse, don't try to write out record */
-                copyrecord.crec.len = 0;
-                /* and the record is expunged too! */
-                copyrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED;
-                syslog(LOG_ERR, "IOERROR: FATAL - failed to parse file for %s %u, expunging",
-                       repack->mailbox->name, copyrecord.uid);
-            }
+            needs_cache_upgrade = 1;
+
         }
         if (mailbox->i.minor_version >= 12 && repack->i.minor_version < 12) {
             if (repack->seqset)
                 seqset_add(repack->seqset, copyrecord.uid, copyrecord.system_flags & FLAG_SEEN ? 1 : 0);
             copyrecord.system_flags &= ~FLAG_SEEN;
         }
+
+        /* force cache upgrade across version 15 repack */
+        if (repack->i.minor_version >= 15 && record->cache_version < 9)
+            needs_cache_upgrade = 1;
 
         /* better handle the cleanup just in case it's unlinked too */
         /* still gotta check for FLAG_INTERNAL_UNLINKED, because it may have been
@@ -4203,6 +4199,19 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
             if (copyrecord.modseq > repack->i.deletedmodseq)
                 repack->i.deletedmodseq = copyrecord.modseq;
             continue;
+        }
+
+        if (needs_cache_upgrade) {
+            const char *fname = mailbox_record_fname(mailbox, &copyrecord);
+
+            if (message_parse(fname, &copyrecord)) {
+                /* failed to parse, don't try to write out record */
+                copyrecord.crec.len = 0;
+                /* and the record is expunged too! */
+                copyrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED;
+                syslog(LOG_ERR, "IOERROR: FATAL - failed to parse file for %s %u, expunging",
+                       repack->mailbox->name, copyrecord.uid);
+            }
         }
 
         /* read in the old cache record */
