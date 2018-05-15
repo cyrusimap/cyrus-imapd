@@ -3069,7 +3069,6 @@ sub test_misc_download
         body => ""
           . "--sub\r\n"
           . "Content-Type: text/plain; charset=UTF-8\r\n"
-          . "Content-Disposition: inline\r\n" . "\r\n"
           . "some text"
           . "\r\n--sub\r\n"
           . "Content-Type: image/jpeg\r\n"
@@ -3088,12 +3087,14 @@ sub test_misc_download
     my $ids = $res->[0][1]->{ids};
 
     xlog "get email";
-    $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => $ids,
+        properties => ['bodyStructure'],
+    }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    my %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachedFiles}};
-    my $blobid1 = $m{"image/jpeg"}->{blobId};
-    my $blobid2 = $m{"image/png"}->{blobId};
+    my $blobid1 = $msg->{bodyStructure}{subParts}[1]{blobId};
+    my $blobid2 = $msg->{bodyStructure}{subParts}[2]{blobId};
     $self->assert_not_null($blobid1);
     $self->assert_not_null($blobid2);
 
@@ -3273,35 +3274,63 @@ sub test_email_set_attachments
         keywords => { '$Draft' => JSON::true },
     };
 
+    my $wantBodyStructure = {
+        type => 'multipart/mixed',
+        name => undef,
+        cid => undef,
+        disposition => undef,
+        subParts => [{
+            type => 'multipart/related',
+            name => undef,
+            cid => undef,
+            disposition => undef,
+            subParts => [{
+                type => 'text/html',
+                name => undef,
+                cid => undef,
+                disposition => undef,
+                subParts => [],
+            },{
+                type => 'image/png',
+                cid => "foo\@local",
+                disposition => 'inline',
+                name => undef,
+                subParts => [],
+            }],
+        },{
+            type => 'image/jpeg',
+            name => $shortfname,
+            cid => undef,
+            disposition => 'attachment',
+            subParts => [],
+        },{
+            type => 'application/test',
+            name => $longfname,
+            cid => undef,
+            disposition => 'attachment',
+            subParts => [],
+        },{
+            type => 'application/test2',
+            name => 'simple',
+            cid => undef,
+            disposition => 'attachment',
+            subParts => [],
+        }]
+    };
+
     xlog "Create a draft";
     $res = $jmap->CallMethods([['Email/set', { create => { "1" => $draft }}, "R1"]]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
     xlog "Get draft $id";
-    $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/get', {
+            ids => [$id],
+            properties => ['bodyStructure'],
+            bodyProperties => ['type', 'name', 'cid','disposition', 'subParts'],
+    }, "R1"]]);
     $msg = $res->[0][1]->{list}[0];
 
-    %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachedFiles}};
-
-    my $att = $m{"image/jpeg"};
-    $self->assert_not_null($att);
-    $self->assert_str_equals($shortfname, $att->{name});
-    $self->assert_num_equals($att->{size}, 6);
-    $self->assert_null($att->{cid});
-
-    $att = $m{"image/png"};
-    $self->assert_not_null($att);
-    $self->assert_num_equals($att->{size}, 4);
-    $self->assert_str_equals("foo\@local", $att->{cid});
-    $self->assert_str_equals("inline", $att->{disposition});
-
-    $att = $m{"application/test"};
-    $self->assert_not_null($att);
-    $self->assert_str_equals($longfname, $att->{name});
-
-    $att = $m{"application/test2"};
-    $self->assert_not_null($att);
-    $self->assert_str_equals("simple", $att->{name});
+    $self->assert_deep_equals($wantBodyStructure, $msg->{bodyStructure});
 }
 
 sub test_email_set_flagged
