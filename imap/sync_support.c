@@ -2505,7 +2505,10 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             copy.internaldate = mrecord.internaldate;
             copy.savedate = mrecord.savedate;
             copy.system_flags = mrecord.system_flags;
-            /* FLAG_INTERNAL_EXPUNGED is a syncable flag, but it's internal */
+            /* FLAG_INTERNAL_EXPUNGED is a syncable flag, but it's internal.
+             * The `internal_flags` contain replica's internal_flags for
+             * non-EXPUNGED, but master's internal_flags for EXPUNGED */
+            copy.internal_flags = rrecord->internal_flags & ~FLAG_INTERNAL_EXPUNGED;
             copy.internal_flags |= mrecord.internal_flags & FLAG_INTERNAL_EXPUNGED;
 
             for (i = 0; i < MAX_USER_FLAGS/32; i++)
@@ -4861,7 +4864,7 @@ static int compare_one_record(struct mailbox *mailbox,
     if (mp->system_flags != rp->system_flags)
         goto diff;
     if ((mp->internal_flags & FLAG_INTERNAL_EXPUNGED) !=
-        (rp->internal_flags & FLAG_INTERNAL_EXPUNGED)) /* XXX: Is this correct? */
+        (rp->internal_flags & FLAG_INTERNAL_EXPUNGED))
         goto diff;
     if (mp->cid != rp->cid)
         goto diff;
@@ -4900,14 +4903,10 @@ static int compare_one_record(struct mailbox *mailbox,
             rp->last_updated >= mp->last_updated) {
             log_mismatch("more recent on replica", mailbox, mp, rp);
             /* then copy all the flag data over from the replica */
-            mp->system_flags = (rp->system_flags) |
-                               (mp->system_flags);
-            mp->internal_flags = (rp->internal_flags & FLAG_INTERNAL_EXPUNGED) |
-                                  (mp->internal_flags &
-                                   (FLAG_INTERNAL_SPLITCONVERSATION |
-                                    FLAG_INTERNAL_NEEDS_CLEANUP |
-                                    FLAG_INTERNAL_ARCHIVED |
-                                    FLAG_INTERNAL_UNLINKED));
+            mp->system_flags = rp->system_flags;
+            mp->internal_flags &= ~FLAG_INTERNAL_EXPUNGED;
+            mp->internal_flags |= rp->internal_flags & FLAG_INTERNAL_EXPUNGED;
+
             mp->cid = rp->cid;
             for (i = 0; i < MAX_USER_FLAGS/32; i++)
                 mp->user_flags[i] = rp->user_flags[i];
