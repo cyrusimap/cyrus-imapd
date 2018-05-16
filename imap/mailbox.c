@@ -2299,16 +2299,6 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
     }
 }
 
-EXPORTED int mailbox_yield_index(struct mailbox *mailbox)
-{
-    int locktype = mailbox->index_locktype;
-
-    if (!locktype) return 0;
-
-    mailbox_unlock_index(mailbox, NULL);
-    return mailbox_lock_index(mailbox, locktype);
-}
-
 /*
  * Write the header file for 'mailbox'
  */
