@@ -208,6 +208,11 @@ static void flags_to_str(struct index_record *record, char *flagstr)
     flags_to_str_internal(flags, flagstr);
 }
 
+EXPORTED int open_mailboxes_exist()
+{
+    return open_mailboxes ? 1 : 0;
+}
+
 static struct mailboxlist *create_listitem(const char *name)
 {
     struct mailboxlist *item = xmalloc(sizeof(struct mailboxlist));

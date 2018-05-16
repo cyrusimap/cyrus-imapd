@@ -516,6 +516,8 @@ extern unsigned mailbox_should_archive(struct mailbox *mailbox,
                                        const struct index_record *record,
                                        void *rock);
 
+extern int open_mailboxes_exist();
+
 /* map individual messages in */
 extern int mailbox_map_record(struct mailbox *mailbox, const struct index_record *record, struct buf *buf);
 
