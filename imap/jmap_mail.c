@@ -4757,10 +4757,7 @@ done:
 
 static void _email_search_free(struct email_search *search)
 {
-    if (search->state) {
-        search->state->mailbox = NULL;
-        index_close(&search->state);
-    }
+    index_close(&search->state);
     search_query_free(search->query);
     freesearchargs(search->args);
     freesortcrit(search->sortcrit);
@@ -5748,10 +5745,7 @@ done:
     if (mboxname) free(mboxname);
     if (mbox) jmap_closembox(req, &mbox);
     if (searchargs) freesearchargs(searchargs);
-    if (state) {
-        state->mailbox = NULL;
-        index_close(&state);
-    }
+    index_close(&state);
 
     return r;
 }
