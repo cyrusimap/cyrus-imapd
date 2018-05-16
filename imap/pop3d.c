@@ -623,6 +623,9 @@ void shut_down(int code)
 
     idle_done();
 
+    /* make sure we didn't leak */
+    assert(!open_mailboxes_exist());
+
     if (popd_in) {
         prot_NONBLOCK(popd_in);
         prot_fill(popd_in);

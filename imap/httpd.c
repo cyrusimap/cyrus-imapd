@@ -1692,6 +1692,9 @@ static void cmdloop(struct http_connection *conn)
         /* Reset txn state */
         transaction_reset(&txn);
 
+        /* make sure nothing leaked */
+        assert(!open_mailboxes_exist());
+
         /* Check for input from client */
         do {
             /* Flush any buffered output */
