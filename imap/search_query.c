@@ -545,6 +545,14 @@ out:
     if (r) query->error = r;
 }
 
+static void subquery_clear_unchecked(const char *key __attribute__((unused)),
+                                     void *data,
+                                     void *rock __attribute__((unused)))
+{
+    search_folder_t *folder = data;
+    bv_clearall(&folder->unchecked_uids);
+}
+
 EXPORTED void search_build_query(search_builder_t *bx, search_expr_t *e)
 {
     search_expr_t *child;
@@ -628,6 +636,7 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
     qr.query = query;
     qr.sub = sub;
     hash_enumerate(&query->folders_by_name, subquery_post_indexed, &qr);
+    hash_enumerate(&query->folders_by_name, subquery_clear_unchecked, NULL);
 
 out:
     if (r) query->error = r;
