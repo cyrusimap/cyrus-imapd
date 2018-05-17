@@ -1923,7 +1923,7 @@ static json_t* location_from_ical(context_t *ctx __attribute__((unused)), icalpr
         if (param) name = icalparameter_get_label(param);
         if (!rel) rel = "virtual";
     } else {
-        name = icalproperty_get_value_as_string(prop);
+        name = icalvalue_get_text(icalproperty_get_value(prop));
         param = icalproperty_get_first_parameter(prop, ICAL_ALTREP_PARAMETER);
         if (param) uri = icalparameter_get_altrep(param);
         if (!rel) rel = "unknown";
