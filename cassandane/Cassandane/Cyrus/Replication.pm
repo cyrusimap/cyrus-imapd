@@ -914,7 +914,6 @@ sub test_replication_with_modified_seen_flag
     $replica_store->_select();
     $res = $rtalk->fetch("3", "(flags)");
     $flags = $res->{3}->{flags};
-    xlog(Dumper $res);
     $self->assert(not grep { $_ eq "\\Seen"} @$flags);
 }
 
