@@ -1262,7 +1262,7 @@ sub test_calendarevent_get_locations
     my $event = $self->putandget_vevent($id, $ical);
     my @locations = values %{$event->{locations}};
     $self->assert_num_equals(1, scalar @locations);
-    $self->assert_str_equals("On planet Earth", $locations[0]{name});
+    $self->assert_str_equals("A location with a comma,\nand a newline.", $locations[0]{name});
 }
 
 sub test_calendarevent_get_locations_uri
@@ -1849,6 +1849,12 @@ sub test_calendarevent_set_locations
             coordinates => "geo:48.2010,16.3695,183",
             uri => "https://somewhere.local",
             linkIds =>  [ 'link1', 'link2' ],
+        },
+        # A location with name that needs escaping
+        locH => {
+            "name" => "location H,\nhas funny chars.",
+            "description" => "some boring\tdescription",
+            timeZone => "Europe/Vienna",
         },
     };
 
