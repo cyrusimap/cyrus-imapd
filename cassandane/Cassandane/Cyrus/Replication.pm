@@ -835,4 +835,87 @@ sub test_replication_repair_zero_msgs
     $self->run_replication(user => 'cassandane');
 }
 
+sub test_replication_with_modified_seen_flag
+{
+    my ($self) = @_;
+
+    my $master_store = $self->{master_store};
+    $master_store->set_fetch_attributes(qw(uid flags));
+
+    my $replica_store = $self->{replica_store};
+    $replica_store->set_fetch_attributes(qw(uid flags));
+
+
+    xlog "generating messages A & B";
+    my %exp;
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{A}->set_attributes(id => 1, uid => 1, flags => []);
+    $exp{B} = $self->make_message("Message B", store => $master_store);
+    $exp{B}->set_attributes(id => 2, uid => 2, flags => []);
+
+    xlog "Before replication: Ensure that master has two messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "Before replication: Ensure that replica has no messages";
+    $self->check_messages({}, store => $replica_store);
+
+    xlog "Run Replication!";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog "After replication: Ensure that master has two messages";
+    $self->check_messages(\%exp, store => $master_store);
+    xlog "After replication: Ensure replica now has two messages";
+    $self->check_messages(\%exp, store => $replica_store);
+
+    xlog "Set \\Seen on Message B";
+    my $mtalk = $master_store->get_client();
+    $master_store->_select();
+    $mtalk->store('2', '+flags', '(\\Seen)');
+    $exp{B}->set_attributes(flags => ['\\Seen']);
+    $mtalk->unselect();
+    xlog "Before replication: Ensure that master has two messages and flags are set";
+    $self->check_messages(\%exp, store => $master_store);
+
+    xlog "Before replication: Ensure that replica does not have the \\Seen flag set on Message B";
+    my $rtalk = $replica_store->get_client();
+    $replica_store->_select();
+    my $res = $rtalk->fetch("2", "(flags)");
+    my $flags = $res->{2}->{flags};
+    $self->assert(not grep { $_ eq "\\Seen"} @$flags);
+
+    xlog "Run Replication!";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog "After replication: Ensure that replica does have the \\Seen flag set on Message B";
+    $rtalk = $replica_store->get_client();
+    $replica_store->_select();
+    $res = $rtalk->fetch("2", "(flags)");
+    $flags = $res->{2}->{flags};
+    $self->assert(grep { $_ eq "\\Seen"} @$flags);
+
+    xlog "Clear \\Seen flag on Message B on master.";
+    $mtalk = $master_store->get_client();
+    $master_store->_select();
+    $mtalk->store('2', '-flags', '(\\Seen)');
+
+    xlog "Run Replication!";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog "After replication: Check both master and replica has no \\Seen flag on Message C";
+    $mtalk = $master_store->get_client();
+    $master_store->_select();
+    $res = $mtalk->fetch("2", "(flags)");
+    $flags = $res->{2}->{flags};
+    $self->assert(not grep { $_ eq "\\Seen"} @$flags);
+
+    $rtalk = $replica_store->get_client();
+    $replica_store->_select();
+    $res = $rtalk->fetch("3", "(flags)");
+    $flags = $res->{3}->{flags};
+    xlog(Dumper $res);
+    $self->assert(not grep { $_ eq "\\Seen"} @$flags);
+}
+
 1;
