@@ -4195,6 +4195,81 @@ static void _email_search_string(search_expr_t *parent, const char *s, const cha
     charset_free(&utf8);
 }
 
+static void _email_search_type(search_expr_t *parent, const char *s)
+{
+    strarray_t types = STRARRAY_INITIALIZER;
+
+    /* Handle type wildcards */
+    if (!strcasecmp(s, "image")) {
+        strarray_add(&types, "image_gif");
+        strarray_add(&types, "image_jpeg");
+        strarray_add(&types, "image_pjpeg");
+        strarray_add(&types, "image_jpg");
+        strarray_add(&types, "image_png");
+        strarray_add(&types, "image_bmp");
+        strarray_add(&types, "image_tiff");
+    }
+    else if (!strcasecmp(s, "document")) {
+        strarray_add(&types, "application_msword");
+        strarray_add(&types, "application_vnd.openxmlformats-officedocument.wordprocessingml.document");
+        strarray_add(&types, "application_vnd.openxmlformats-officedocument.wordprocessingml.template");
+        strarray_add(&types, "application_vnd.sun.xml.writer");
+        strarray_add(&types, "application_vnd.sun.xml.writer.template");
+        strarray_add(&types, "application_vnd.oasis.opendocument.text");
+        strarray_add(&types, "application_vnd.oasis.opendocument.text-template");
+        strarray_add(&types, "application_x-iwork-pages-sffpages");
+        strarray_add(&types, "application_vnd.apple.pages");
+    }
+    else if (!strcasecmp(s, "spreadsheet")) {
+        strarray_add(&types, "application_vnd.ms-excel");
+        strarray_add(&types, "application_vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        strarray_add(&types, "application_vnd.openxmlformats-officedocument.spreadsheetml.template");
+        strarray_add(&types, "application_vnd.sun.xml.calc");
+        strarray_add(&types, "application_vnd.sun.xml.calc.template");
+        strarray_add(&types, "application_vnd.oasis.opendocument.spreadsheet");
+        strarray_add(&types, "application_vnd.oasis.opendocument.spreadsheet-template");
+        strarray_add(&types, "application_x-iwork-numbers-sffnumbers");
+        strarray_add(&types, "application_vnd.apple.numbers");
+    }
+    else if (!strcasecmp(s, "presentation")) {
+        strarray_add(&types, "application_vnd.ms-powerpoint");
+        strarray_add(&types, "application_vnd.openxmlformats-officedocument.presentationml.presentation");
+        strarray_add(&types, "application_vnd.openxmlformats-officedocument.presentationml.template");
+        strarray_add(&types, "application_vnd.openxmlformats-officedocument.presentationml.slideshow");
+        strarray_add(&types, "application_vnd.sun.xml.impress");
+        strarray_add(&types, "application_vnd.sun.xml.impress.template");
+        strarray_add(&types, "application_vnd.oasis.opendocument.presentation");
+        strarray_add(&types, "application_vnd.oasis.opendocument.presentation-template");
+        strarray_add(&types, "application_x-iwork-keynote-sffkey");
+        strarray_add(&types, "application_vnd.apple.keynote");
+    }
+    else if (!strcasecmp(s, "email")) {
+        strarray_add(&types, "message_rfc822");
+    }
+    else if (!strcasecmp(s, "pdf")) {
+        strarray_add(&types, "application_pdf");
+    }
+    else {
+        /* FUZZY contenttype is indexed as `type_subtype` */
+        char *tmp = xstrdup(s);
+        char *p = strchr(tmp, '/');
+        if (p) *p = '_';
+        strarray_add(&types, tmp);
+        free(tmp);
+    }
+
+    /* Build expression */
+    search_expr_t *p = (types.count > 1) ? search_expr_new(parent, SEOP_OR) : parent;
+    const search_attr_t *attr = search_attr_find("contenttype");
+    do {
+        search_expr_t *e = search_expr_new(p, SEOP_FUZZYMATCH);
+        e->attr = attr;
+        e->value.s = strarray_pop(&types); // Takes ownership
+    } while (types.count);
+
+    strarray_fini(&types);
+}
+
 static void _email_search_mbox(jmap_req_t *req, search_expr_t *parent,
                           json_t *mailbox, int is_not)
 {
@@ -4350,6 +4425,9 @@ static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
         if ((s = json_string_value(json_object_get(filter, "attachmentName")))) {
             _email_search_string(this, s, "attachmentname");
         }
+        if ((s = json_string_value(json_object_get(filter, "attachmentType")))) {
+            _email_search_type(this, s);
+        }
         if (JNOTNULL((val = json_object_get(filter, "header")))) {
             const char *k, *v;
             charset_t utf8 = charset_lookupname("utf-8");
@@ -4497,6 +4575,10 @@ static void _email_parse_filter(json_t *filter, struct jmap_parser *parser,
     arg = json_object_get(filter, "attachmentName");
     if (arg && !json_is_string(arg)) {
         jmap_parser_invalid(parser, "attachmentName");
+    }
+    arg = json_object_get(filter, "attachmentType");
+    if (arg && !json_is_string(arg)) {
+        jmap_parser_invalid(parser, "attachmentType");
     }
     arg = json_object_get(filter, "text");
     if (arg && !json_is_string(arg)) {
