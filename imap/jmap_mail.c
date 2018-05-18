@@ -58,6 +58,7 @@
 #include "http_dav.h"
 #include "http_jmap.h"
 #include "http_proxy.h"
+#include "jmap_ical.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mappedfile.h"
@@ -6982,6 +6983,35 @@ static int _email_get_bodies(jmap_req_t *req,
         json_object_set_new(email, "attachedFiles", attached_files);
     }
 
+    /* calendarEvents -- non-standard */
+    if (_wantprop(props, "calendarEvents")) {
+        json_t *calendar_events = json_object();
+        struct buf buf = BUF_INITIALIZER;
+        int i;
+        for (i = 0; i < bodies.atts.count; i++) {
+            struct body *part = ptrarray_nth(&bodies.atts, i);
+            if (strcmp(part->type, "TEXT") || strcmp(part->subtype, "CALENDAR"))
+                continue;
+            /* Parse raw iCalendar data to iCalendar object */
+            buf_setmap(&buf, buf_base(msg->raw) + part->content_offset,
+                    part->content_size);
+            icalcomponent *ical = ical_string_as_icalcomponent(&buf);
+            if (!ical) continue;
+            /* Parse iCalendar object to JSCalendar */
+            json_t *jsevent = jmapical_tojmap(ical, NULL, NULL);
+            if (jsevent) {
+                json_object_set_new(calendar_events, part->part_id, jsevent);
+            }
+            icalcomponent_free(ical);
+        }
+        buf_free(&buf);
+        if (!json_object_size(calendar_events)) {
+            json_decref(calendar_events);
+            calendar_events = json_null();
+        }
+        json_object_set_new(email, "calendarEvents", calendar_events);
+    }
+
     int is_toplevel = msg->part == NULL;
 
     /* hasAttachment */
@@ -8822,6 +8852,11 @@ static void _email_parse_bodies(json_t *jemail,
         else if (JNOTNULL(jattachedFiles)) {
             jmap_parser_invalid(parser, "attachedFiles");
         }
+    }
+
+    /* calendarEvents is read-only */
+    if (JNOTNULL(json_object_get(jemail, "calendarEvents"))) {
+        jmap_parser_invalid(parser, "calendarEvents");
     }
 
     if (!email->body) {
