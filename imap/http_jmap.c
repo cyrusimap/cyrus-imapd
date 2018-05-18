@@ -935,6 +935,9 @@ static void jmap_finireq(jmap_req_t *req)
         mailbox_close(&rec->mbox);
         free(rec);
     }
+    /* Fail after cleaning up open mailboxes */
+    assert(!req->mboxes->count);
+
     ptrarray_free(req->mboxes);
     req->mboxes = NULL;
 }
