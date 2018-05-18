@@ -2201,6 +2201,14 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
         }
     }
 
+    /* release caches */
+    int i;
+    for (i = 0; i < mailbox->caches.count; i++) {
+        struct mappedfile *cachefile = ptrarray_nth(&mailbox->caches, i);
+        mappedfile_close(&cachefile);
+    }
+    ptrarray_fini(&mailbox->caches);
+
     /* note: it's guaranteed by our outer cyrus.lock lock that the
      * cyrus.index and cyrus.cache files are never rewritten, so
      * we're safe to just extend the map if needed */
