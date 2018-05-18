@@ -5996,6 +5996,106 @@ sub test_email_query_attachmentname
     $self->assert_str_equals($id1, $res->[0][1]->{ids}[0]);
 }
 
+sub test_email_query_attachmenttype
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $blobId = $jmap->Upload('some_data', "application/octet")->{blobId};
+
+    my $inboxid = $self->getinbox()->{id};
+
+    my $res = $jmap->CallMethods([
+      ['Email/set', { create => {
+        "1" => {
+          mailboxIds => {$inboxid => JSON::true},
+          from => [ { name => "", email => "sam\@acme.local" } ] ,
+          to => [ { name => "", email => "bugs\@acme.local" } ],
+          subject => "foo",
+          textBody => [{ partId => '1' }],
+          bodyValues => { '1' => { value => "foo" } },
+          attachedFiles => [{
+            blobId => $blobId,
+            type => 'image/gif',
+          }],
+      },
+      "2" => {
+          mailboxIds => {$inboxid => JSON::true},
+          from => [ { name => "", email => "tweety\@acme.local" } ] ,
+          to => [ { name => "", email => "duffy\@acme.local" } ],
+          subject => "bar",
+          textBody => [{ partId => '1' }],
+          bodyValues => { '1' => { value => "bar" } },
+      },
+      "3" => {
+          mailboxIds => {$inboxid => JSON::true},
+          from => [ { name => "", email => "elmer\@acme.local" } ] ,
+          to => [ { name => "", email => "porky\@acme.local" } ],
+          subject => "baz",
+          textBody => [{ partId => '1' }],
+          bodyValues => { '1' => { value => "baz" } },
+          attachedFiles => [{
+            blobId => $blobId,
+            type => 'application/msword',
+          }],
+      }
+      }}, 'R1']
+    ]);
+    my $idGif = $res->[0][1]{created}{"1"}{id};
+    my $idTxt = $res->[0][1]{created}{"2"}{id};
+    my $idDoc = $res->[0][1]{created}{"3"}{id};
+    $self->assert_not_null($idGif);
+    $self->assert_not_null($idTxt);
+    $self->assert_not_null($idDoc);
+
+    xlog "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my @testCases = ({
+        filter => {
+            attachmentType => 'image/gif',
+        },
+        wantIds => [$idGif],
+    }, {
+        filter => {
+            attachmentType => 'image',
+        },
+        wantIds => [$idGif],
+    }, {
+        filter => {
+            attachmentType => 'application/msword',
+        },
+        wantIds => [$idDoc],
+    }, {
+        filter => {
+            attachmentType => 'document',
+        },
+        wantIds => [$idDoc],
+    }, {
+        filter => {
+            operator => 'NOT',
+            conditions => [{
+                attachmentType => 'image',
+            }, {
+                attachmentType => 'document',
+            }],
+        },
+        wantIds => [$idTxt],
+    });
+
+    foreach (@testCases) {
+        my $filter = $_->{filter};
+        my $wantIds = $_->{wantIds};
+        $res = $jmap->CallMethods([['Email/query', {
+            filter => $filter,
+        }, "R1"]]);
+        my @wantIds = sort @{$wantIds};
+        my @gotIds = sort @{$res->[0][1]->{ids}};
+        $self->assert_deep_equals(\@wantIds, \@gotIds);
+    }
+}
+
 sub test_thread_get
     :JMAP :min_version_3_1
 {
