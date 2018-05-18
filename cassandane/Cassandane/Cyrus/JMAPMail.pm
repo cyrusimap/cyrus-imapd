@@ -9257,4 +9257,80 @@ sub test_email_get_bodystructure
 
 }
 
+sub test_email_get_calendarevents
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    $self->make_message("foo",
+        mime_type => "multipart/related",
+        mime_boundary => "boundary_1",
+        body => ""
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "\r\n"
+          . "txt body"
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/calendar;charset=utf-8\r\n"
+          . "\r\n"
+          . "BEGIN:VCALENDAR\r\n"
+          . "VERSION:2.0\r\n"
+          . "PRODID:-//CyrusIMAP.org/Cyrus 3.1.3-606//EN\r\n"
+          . "CALSCALE:GREGORIAN\r\n"
+          . "BEGIN:VTIMEZONE\r\n"
+          . "TZID:Europe/Vienna\r\n"
+          . "BEGIN:STANDARD\r\n"
+          . "DTSTART:19700101T000000\r\n"
+          . "RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\n"
+          . "TZOFFSETFROM:+0200\r\n"
+          . "TZOFFSETTO:+0100\r\n"
+          . "END:STANDARD\r\n"
+          . "BEGIN:DAYLIGHT\r\n"
+          . "DTSTART:19700101T000000\r\n"
+          . "RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\n"
+          . "TZOFFSETFROM:+0100\r\n"
+          . "TZOFFSETTO:+0200\r\n"
+          . "END:DAYLIGHT\r\n"
+          . "END:VTIMEZONE\r\n"
+          . "BEGIN:VEVENT\r\n"
+          . "CREATED:20180518T090306Z\r\n"
+          . "DTEND;TZID=Europe/Vienna:20180518T100000\r\n"
+          . "DTSTAMP:20180518T090306Z\r\n"
+          . "DTSTART;TZID=Europe/Vienna:20180518T090000\r\n"
+          . "LAST-MODIFIED:20180518T090306Z\r\n"
+          . "SEQUENCE:1\r\n"
+          . "SUMMARY:foobarbaz\r\n"
+          . "TRANSP:OPAQUE\r\n"
+          . "UID:d9e7f7d6-ce1a-4a71-94c0-b4edd41e5959\r\n"
+          . "END:VEVENT\r\n"
+          . "END:VCALENDAR\r\n"
+          . "\r\n--boundary_1--\r\n"
+    ) || die;
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => ['textBody', 'attachedFiles', 'calendarEvents'],
+        }, 'R2' ],
+    ]);
+    my $msg = $res->[1][1]{list}[0];
+
+    $self->assert_num_equals(1, scalar @{$msg->{attachedFiles}});
+    $self->assert_str_equals('text/calendar', $msg->{attachedFiles}[0]{type});
+
+    $self->assert_num_equals(1, scalar keys %{$msg->{calendarEvents}});
+    my $partId = $msg->{attachedFiles}[0]{partId};
+    my $jsevent =$msg->{calendarEvents}{$partId};
+    $self->assert_not_null($jsevent);
+    $self->assert_str_equals('foobarbaz', $jsevent->{title});
+    $self->assert_str_equals('2018-05-18T09:00:00', $jsevent->{start});
+    $self->assert_str_equals('Europe/Vienna', $jsevent->{timeZone});
+    $self->assert_str_equals('PT1H', $jsevent->{duration});
+}
+
 1;
