@@ -89,9 +89,9 @@ int caladdress_lookup(const char *addr,
     if (myuserid) {
         const char *annotname =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-        char *mailboxname = caldav_mboxname(myuserid, NULL);
+        char *mboxname = caldav_mboxname(myuserid, NULL);
         struct buf mybuf = BUF_INITIALIZER;
-        int r = annotatemore_lookupmask(mailboxname, annotname,
+        int r = annotatemore_lookupmask(mboxname, annotname,
                                         myuserid, &mybuf);
 
         if (!r && mybuf.len) {
@@ -107,7 +107,7 @@ int caladdress_lookup(const char *addr,
             testuser = strconcat(myuserid, "@", httpd_extradomain, (char *)NULL);
         }
 
-        free(mailboxname);
+        free(mboxname);
         buf_free(&mybuf);
     }
 
@@ -787,7 +787,6 @@ int sched_busytime_query(struct transaction_t *txn,
     int ret = 0;
     static const char *calendarprefix = NULL;
     icalcomponent *comp;
-    char mailboxname[MAX_MAILBOX_BUFFER];
     icalproperty *prop = NULL, *next;
     const char *uid = NULL, *organizer = NULL;
     struct caldav_sched_param sparam;
@@ -920,30 +919,29 @@ int sched_busytime_query(struct transaction_t *txn,
                                       ns[NS_DAV] : NULL,
                                       BAD_CAST attendee, NULL);
 
-            /* XXX - BROKEN WITH DOMAIN SPLIT, POS */
             /* Check ACL of ORGANIZER on attendee's Scheduling Inbox */
-            snprintf(mailboxname, sizeof(mailboxname),
-                     "user.%s.%s.Inbox", userid, calendarprefix);
+            char *inboxname = caldav_mboxname(userid, SCHED_INBOX);
 
-            r = mboxlist_lookup(mailboxname, NULL, NULL);
+            r = mboxlist_lookup(inboxname, NULL, NULL);
             if (r) {
                 syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-                       mailboxname, error_message(r));
+                       inboxname, error_message(r));
                 xmlNewChild(resp, NULL, BAD_CAST "request-status",
                             BAD_CAST REQSTAT_REJECTED);
             }
             else {
                 /* Start query at attendee's calendar-home-set */
-                snprintf(mailboxname, sizeof(mailboxname),
-                         "user.%s.%s", userid, calendarprefix);
+                char *mboxname = caldav_mboxname(userid, NULL);
 
                 fctx.davdb = NULL;
                 fctx.req_tgt->collection = NULL;
                 calfilter.freebusy.len = 0;
-                busy = busytime_query_local(txn, &fctx, mailboxname,
+                busy = busytime_query_local(txn, &fctx, mboxname,
                                             ICAL_METHOD_REPLY, uid,
                                             organizer, attendee);
+                free(mboxname);
             }
+            free(inboxname);
 
             if (busy) {
                 xmlNodePtr cdata;
