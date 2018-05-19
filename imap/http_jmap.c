@@ -245,30 +245,15 @@ static int mymblist(const char *userid,
                     void *rock,
                     int all)
 {
-    if (!strcmp(userid, accountid)) {
-        int flags = all ? (MBOXTREE_TOMBSTONES|MBOXTREE_DELETED) : 0;
+    int flags = all ? (MBOXTREE_TOMBSTONES|MBOXTREE_DELETED) : 0;
+
+    /* skip ACL checks if account owner */
+    if (!strcmp(userid, accountid))
         return mboxlist_usermboxtree(userid, proc, rock, flags);
-    }
 
     /* Open the INBOX first */
     struct mymblist_rock myrock = { proc, rock, authstate, mboxrights, all };
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, "user%c%s", jmap_namespace.hier_sep, accountid);
-    mbentry_t *mbentry = NULL;
-
-    int r = mboxlist_lookup(buf_cstring(&buf), &mbentry, NULL);
-    if (r) goto done;
-    r = mymblist_cb(mbentry, &myrock);
-    if (r) goto done;
-
-    /* Visit any mailboxes underneath the INBOX */
-    buf_putc(&buf, jmap_namespace.hier_sep);
-    r = mboxlist_allmbox(buf_cstring(&buf), mymblist_cb, &myrock, all);
-
-done:
-    mboxlist_entry_free(&mbentry);
-    buf_free(&buf);
-    return r;
+    return mboxlist_usermboxtree(accountid, mymblist_cb, &myrock, flags);
 }
 
 EXPORTED int jmap_mboxlist(jmap_req_t *req, mboxlist_cb *proc, void *rock)
