@@ -1475,4 +1475,108 @@ EOF
 #    warn Dumper($msg2);
 }
 
+sub test_github_issue_complex_variables
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    xlog "Install a sieve script with complex variable work";
+    $self->{instance}->install_sieve_script(<<'EOF');
+require ["fileinto", "reject", "vacation", "notify", "envelope", "body", "relational", "regex", "subaddress", "copy", "mailbox", "mboxmetadata", "servermetadata", "date", "index", "comparator-i;ascii-numeric", "variables", "imap4flags", "editheader", "duplicate", "vacation-seconds"];
+
+### BEGIN USER SIEVE
+### GitHub
+if allof (
+  address :is :domain "Message-ID" "github.com",
+  address :regex :localpart "Message-ID" "^([^/]*)/([^/]*)/(pull|issues|issue|commit)/(.*)"
+) {
+  # Message-IDs:
+
+  set :lower "org" "${1}";
+  set :lower "repo" "${2}";
+  set :lower "type" "${3}";
+  set "tail" "${4}";
+  if anyof(
+    string :matches "${org}/${repo}" "foo/bar*",
+    string :is "${org}" ["foo", "bar", "baz"]
+  ) {
+    set "ghflags" "";
+
+    # Mark all issue events as seen.
+    if address :regex :localpart "Message-ID" "^[^/]+/[^/]+/(pull|issue)/[^/]+/issue_event/" {
+      addflag "ghflags" "\\Seen";
+      set "type" "issues";
+    }
+
+    # Flag comments on things I authored
+    if header :is ["X-GitHub-Reason"] "author" {
+      addflag "ghflags" "\\Flagged";
+    }
+
+    if string :matches "${org}/${repo}" "foo/bar*" {
+      # change the mailbox name for foo emails
+      set "org" "foo";
+      if string :matches "${repo}" "foo-corelibs-*" {
+        set "repo" "${1}";
+      } elsif string :matches "${repo}" "foo-*" {
+        set "repo" "${1}";
+      }
+    }
+    set "mbprefix" "INBOX.GitHub.${org}.${repo}";
+
+    if string :is "${type}" "pull" {
+      # PRs
+      set "mbname" "${mbprefix}.pulls";
+    } elsif string :is "${type}" "issues" {
+      # Issues
+      set "mbname" "${mbprefix}.issues";
+    } elsif string :is "${type}" "commit" {
+      # Commit comments
+      set "mbname" "${mbprefix}.comments";
+      # Disable replies sorting
+      set "tail" "";
+    } else {
+      set "mbname" "${mbprefix}.unknown";
+    }
+
+    if string :matches "${tail}" "*/*" {
+      set "oldmbname" "${mbname}";
+      set "mbname" "${oldmbname}.replies";
+    }
+
+    if header :is ["X-GitHub-Reason"] ["subscribed", "push"] {
+      fileinto :create :flags "${ghflags}" "${mbname}";
+    } else {
+      fileinto :create :copy :flags "${ghflags}" "${mbname}";
+    }
+  }
+}
+EOF
+
+    my $raw = << 'EOF';
+Date: Wed, 16 May 2018 22:06:18 -0700
+From: Some Person <notifications@github.com>
+To: foo/bar <bar@noreply.github.com>
+Cc: Subscribed <subscribed@noreply.github.com>
+Message-ID: <foo/bar/pull/1234/abcdef01234@github.com>
+X-GitHub-Reason: subscribed
+
+foo bar
+EOF
+    xlog "Deliver a message";
+    my $msg1 = Cassandane::Message->new(raw => $raw);
+    $self->{instance}->deliver($msg1);
+
+    # if there's a delivery failure, it will be in the Inbox
+    xlog "Check there there are no messages in the Inbox";
+    my $talk = $self->{store}->get_client();
+    $talk->select("INBOX");
+    $self->assert_num_equals(0, $talk->get_response_code('exists'));
+
+    # if there's no delivery failure, this folder will be created!
+    $talk->select("INBOX.GitHub.foo.bar.pulls.replies");
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+}
+
+
 1;
