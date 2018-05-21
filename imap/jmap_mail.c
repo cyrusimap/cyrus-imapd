@@ -52,6 +52,8 @@
 #include <assert.h>
 #include <sys/mman.h>
 
+#include <sasl/saslutil.h>
+
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
@@ -9118,23 +9120,46 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     /* Fetch blob contents and headers */
     const char *base = blob_buf.s;
     size_t len = blob_buf.len;
+    const char *encoding = NULL;
+    int encode_base64 = 0;
 
     if (part) {
         /* Map into body part */
         base += part->content_offset;
         len = part->content_size;
 
-        /* Write encoding, if required */
+        /* Determine encoding, if any */
         if (part->charset_enc & 0xff) {
-            fputs("Content-Transfer-Encoding: ", fp);
-            fputs(encoding_name(part->charset_enc & 0xff), fp);
-            fputs("\r\n", fp);
+            encoding = encoding_name(part->charset_enc & 0xff);
+        }
+        else if (!emailpart->type || strcmp(emailpart->type, "MESSAGE")) {
+            encoding = "BASE64";
+            encode_base64 = 1;
         }
     }
 
+    /* Write encoding header, if required */
+    if (encoding) {
+        fputs("Content-Transfer-Encoding: ", fp);
+        fputs(encoding, fp);
+        fputs("\r\n", fp);
+    }
+
     /* Write body */
+    char *tmp = NULL;
+    if (encode_base64) {
+        size_t len64 = 0;
+        /* Pre-flight base64 encoder to determine length */
+        charset_encode_mimebody(NULL, len, NULL, &len64, NULL);
+        /* Now encode the body */
+        tmp = xmalloc(len64);
+        charset_encode_mimebody(base, len, tmp, &len64, NULL);
+        base = tmp;
+        len = len64;
+    }
     fputs("\r\n", fp);
     fwrite(base, 1, len, fp);
+    free(tmp);
 
 done:
     if (r) json_array_append_new(missing_blobs, json_string(emailpart->blob_id));
