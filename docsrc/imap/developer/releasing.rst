@@ -22,6 +22,9 @@ You will need a GPG key that you can use for signing.  Ellie doesn't remember
 off the top of her head how to create one of these, so for now just read the
 manual like she did. :)
 
+Once you have a GPG key, it's helpful to upload your public key to
+`the MIT key-server <http://pgp.mit.edu>`_
+
 You also need a shell account on www.cyrusimap.org and ftp.cyrusimap.org,
 with SSH key authentication.  You need to be in the "admin" group on each,
 and also the "cyrupload" group on the latter.
