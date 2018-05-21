@@ -14,7 +14,7 @@ export PATH=$PREFIX/bin:$PATH
 git submodule init
 git submodule update
 
-if [ ! $ITEM ] || [ $ITEM = icu ] ; then
+if [ ! $ITEM ] || [ $ITEM == icu ] ; then
 (
   cd icu4c
   git clean -f -x -d
@@ -25,7 +25,7 @@ if [ ! $ITEM ] || [ $ITEM = icu ] ; then
 )
 fi
 
-if [ ! $ITEM ] || [ $ITEM = jansson ] ; then
+if [ ! $ITEM ] || [ $ITEM == jansson ] ; then
 (
   cd jansson
   git clean -f -x -d
@@ -36,19 +36,8 @@ if [ ! $ITEM ] || [ $ITEM = jansson ] ; then
 )
 fi
 
-if [ ! $ITEM ] || [ $ITEM = dkim ] ; then
-(
-  cd opendkim
-  git clean -f -x -d
-  autoreconf -v -i
-  ./configure --enable-silent-rules --prefix=$PREFIX
-  make $MAKEOPTS
-  sudo make install
-)
-fi
-
 # XXX - can we find the platform?
-if [ ! $ITEM ] || [ $ITEM = libical ] ; then
+if [ ! $ITEM ] || [ $ITEM == libical ] ; then
 (
   cd libical
   git clean -f -x -d
@@ -62,7 +51,7 @@ if [ ! $ITEM ] || [ $ITEM = libical ] ; then
 )
 fi
 
-if [ ! $ITEM ] || [ "$ITEM" = "cyrus-timezones" ] ; then
+if [ ! $ITEM ] || [ $ITEM == timezones ] ; then
 (
   cd cyrus-timezones
   git clean -f -x -d
@@ -73,7 +62,7 @@ if [ ! $ITEM ] || [ "$ITEM" = "cyrus-timezones" ] ; then
 )
 fi
 
-if [ ! $ITEM ] || [ $ITEM = xapian ] ; then
+if [ ! $ITEM ] || [ $ITEM == xapian ] ; then
 (
   cd xapian
   git clean -f -x -d
