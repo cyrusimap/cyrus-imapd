@@ -292,6 +292,7 @@ if test "$with_mysql" != "no"; then
     LIBS="${LIBS} ${MYSQL_LIBADD}"
     CPPFLAGS="${MYSQL_INCADD} ${CPPFLAGS}"
     AC_DEFINE(HAVE_MYSQL,[],[Build in MySQL support?])
+    AC_SUBST(MYSQL_LIBADD)
 fi
 AC_MSG_RESULT($with_mysql)
 
@@ -337,6 +338,7 @@ if test "$use_pgsql" != "no"; then
   CPPFLAGS="${PGSQL_INCADD} ${CPPFLAGS}"
 
   AC_DEFINE(HAVE_PGSQL,[],[Build in PgSQL support?])
+  AC_SUBST(PGSQL_LIBADD)
 fi
 
 dnl End PgSQL Detection
