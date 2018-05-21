@@ -10,10 +10,6 @@
 	path = libical
 	url = https://github.com/cyrusimap/libical.git
 	branch = cyrus
-[submodule "opendkim"]
-	path = opendkim
-	url = https://github.com/cyrusimap/opendkim.git
-	branch = cyrus
 [submodule "icu4c"]
 	path = icu4c
 	url = https://github.com/cyrusimap/icu4c.git
