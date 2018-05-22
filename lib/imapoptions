@@ -1791,6 +1791,12 @@ If all partitions are over that limit, this feature is not used anymore.
 { "search_engine", "none", ENUM("none", "squat", "sphinx", "xapian") }
 /* The indexing engine used to speed up searching.  */
 
+{ "search_fuzzy_always", 0, SWITCH }
+/* Whether to enable RFC 6203 FUZZY search for all IMAP SEARCH. If turned
+   on, search attributes will be searched using FUZZY search by default.
+   If turned off, clients have to explicitly use the FUZZY search key to
+   enable fuzzy search for regular SEARCH commands. */
+
 { "search_index_headers", 1, SWITCH }
 /* Whether to index headers other than From, To, Cc, Bcc, and Subject.
    Experiment shows that some headers such as Received and DKIM-Signature
