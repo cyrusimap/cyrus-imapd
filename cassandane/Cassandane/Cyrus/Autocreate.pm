@@ -72,7 +72,7 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
-    if (not $self->{instance}->{buildinfo}->{component}->{autocreate}) {
+    if (not $self->{instance}->{buildinfo}->get('component', 'autocreate')) {
         xlog "autocreate not enabled. Skipping tests.";
         return;
     }

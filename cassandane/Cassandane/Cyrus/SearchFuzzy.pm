@@ -61,7 +61,7 @@ sub set_up
     my ($self) = @_;
     $self->SUPER::set_up();
 
-    if (not $self->{instance}->{buildinfo}->{search}->{xapian}) {
+    if (not $self->{instance}->{buildinfo}->get('search', 'xapian')) {
         xlog "No xapian support enabled. Skipping tests.";
         return;
     }
@@ -71,7 +71,7 @@ sub set_up
     # if using our fork of xapian, or "none" if the Cyrus being tested isn't
     # new enough to know the difference.
     $self->{xapian_flavor} =
-        $self->{instance}->{buildinfo}->{search}->{xapian_flavor} || "none";
+        $self->{instance}->{buildinfo}->get('search', 'xapian_flavor') || "none";
 
     xlog "Xapian flavor '$self->{xapian_flavor}' detected.\n";
 

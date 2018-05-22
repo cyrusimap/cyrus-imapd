@@ -84,7 +84,7 @@ sub set_up
 	expandurl => 1,
     );
 
-    if (not $self->{instance}->{buildinfo}->{component}->{calalarmd}) {
+    if (not $self->{instance}->{buildinfo}->get('component', 'calalarmd')) {
         xlog "calalarmd not enabled. Skipping tests.";
         return;
     }
