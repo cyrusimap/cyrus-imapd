@@ -41,6 +41,7 @@ package Cassandane::Cyrus::TestCase;
 use strict;
 use warnings;
 use attributes;
+use Data::Dumper;
 use Mail::JMAPTalk;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.03;
@@ -124,6 +125,42 @@ sub new
     $self->{_instance_params} = $instance_params;
 
     return $self;
+}
+
+sub list_tests
+{
+    my ($class) = @_;
+
+    my %tests;
+    @tests{$class->SUPER::list_tests()} = undef;
+
+    # filter the list for tests that require cyr_buildinfo features
+    # which aren't currently enabled
+    #
+    # XXX could probably do the skip_version stuff here too actually
+    foreach my $name (keys %tests) {
+	my $sub = $class->can($name);
+	if (defined $sub) {
+	    foreach my $a (attributes::get($sub)) {
+		my $m = lc($a);
+		next if $a !~ m/^needs_(\w+)_([\w_]+)$/;
+		xlog "found attributed test: $name $a";
+
+		my $buildinfo = Cassandane::BuildInfo->new();
+
+		if (not $buildinfo) {
+		    xlog "Cyrus build info unreadable, " .
+			 "cannot skip tests for missing features";
+		}
+		elsif (not $buildinfo->get($1, $2)) {
+		    xlog "$1.$2 not enabled, $name will be skipped";
+		    delete $tests{$name};
+		}
+	    }
+	}
+    }
+
+    return sort keys %tests;
 }
 
 # will magically cause some special actions to be taken during test
@@ -268,6 +305,8 @@ sub _run_magic
 	    my $m = lc($a);
 	    # ignore min/max version attribution here
 	    next if $a =~ m/^(?:min|max)_version_/;
+	    # ignore feature test attribution here
+	    next if $a =~ m/^needs_/;
 	    die "Unknown attribute $a"
 		unless defined $magic_handlers{$m};
 	    next if $seen{$m};
