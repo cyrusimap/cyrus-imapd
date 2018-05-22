@@ -84,6 +84,13 @@ sub set_up
         $skipdiacrit = 0;
     }
     $self->{skipdiacrit} = $skipdiacrit;
+
+    my $fuzzyalways = $self->{instance}->{config}->get('search_fuzzy_always');
+    if ($fuzzyalways ~~ ['yes', 'on', 't', 'true', '1']) {
+        $self->{fuzzyalways} = 1;
+    } else {
+        $self->{fuzzyalways} = 0 ;
+    }
 }
 
 sub tear_down
@@ -163,7 +170,11 @@ sub test_stem_verbs
 
     xlog 'SEARCH for subject "runs"';
     $r = $talk->search('subject', { Quote => "runs" }) || die;
-    $self->assert_num_equals(1, scalar @$r);
+    if ($self->{fuzzyalways}) {
+        $self->assert_num_equals(3, scalar @$r);
+    } else {
+        $self->assert_num_equals(1, scalar @$r);
+    }
 
     xlog 'SEARCH for FUZZY subject "runs"';
     $r = $talk->search('fuzzy', ['subject', { Quote => "runs" }]) || die;
@@ -192,7 +203,12 @@ sub test_stem_any
     my $r;
     xlog 'SEARCH for body "connection"';
     $r = $talk->search('body', { Quote => "connection" }) || die;
-    $self->assert_num_equals(1, scalar @$r);
+    if ($self->{fuzzyalways})  {
+        $self->assert_num_equals(3, scalar @$r);
+    } else {
+        $self->assert_num_equals(1, scalar @$r);
+    }
+
 
     xlog "SEARCH for FUZZY body \"connection\"";
     $r = $talk->search(
