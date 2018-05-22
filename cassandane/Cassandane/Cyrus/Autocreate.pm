@@ -117,7 +117,7 @@ sub test_autocreate_specialuse
 }
 
 sub test_autocreate_sieve_script_generation
-    :min_version_3_0
+    :min_version_3_0 :needs_component_sieve
 {
     my ($self) = @_;
     return unless $self->{test_autocreate};
