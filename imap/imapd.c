@@ -5969,9 +5969,12 @@ static void cmd_search(char *tag, int usinguid)
                                 &imapd_namespace, imapd_userid, imapd_authstate,
                                 imapd_userisadmin || imapd_userisproxyadmin);
 
-    /* special case quirk for iPhones */
-    if (imapd_id.quirks & QUIRK_SEARCHFUZZY)
+    /* Set FUZZY search according to config and quirks */
+    if (config_getswitch(IMAPOPT_SEARCH_FUZZY_ALWAYS) ||
+        (imapd_id.quirks & QUIRK_SEARCHFUZZY)) {
         searchargs->fuzzy_depth++;
+    }
+
 
     c = get_search_program(imapd_in, imapd_out, searchargs);
     if (c == EOF) {
