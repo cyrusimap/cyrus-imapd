@@ -657,19 +657,21 @@ if test "$enable_sieve" != "no"; then
         if test -z "$ac_cv_prog_LEX"; then
             AC_MSG_ERROR([Sieve requires flex/lex, but none is installed])
         fi
+fi
 
-        if test "$enable_pcre" != "no"; then
-            AC_CHECK_HEADER(pcreposix.h)
-            if test "$ac_cv_header_pcreposix_h" = "yes"; then
-                    AC_MSG_CHECKING(for utf8 enabled pcre)
-                    AC_CACHE_VAL(cyrus_cv_pcre_utf8, AC_TRY_CPP([#include <pcreposix.h>
+AM_CONDITIONAL([SIEVE], [test "${enable_sieve}" != "no"])
+
+if test "$enable_pcre" != "no"; then
+        AC_CHECK_HEADER(pcreposix.h)
+        if test "$ac_cv_header_pcreposix_h" = "yes"; then
+            AC_MSG_CHECKING(for utf8 enabled pcre)
+            AC_CACHE_VAL(cyrus_cv_pcre_utf8, AC_TRY_CPP([#include <pcreposix.h>
 #ifndef REG_UTF8
 #include </nonexistent>
 #endif],cyrus_cv_pcre_utf8=yes,cyrus_cv_pcre_utf8=no))
-                    AC_MSG_RESULT($cyrus_cv_pcre_utf8)
-            else
-                    cyrus_cv_pcre_utf8="no"
-            fi
+            AC_MSG_RESULT($cyrus_cv_pcre_utf8)
+        else
+            cyrus_cv_pcre_utf8="no"
         fi
 
         if test "$cyrus_cv_pcre_utf8" = "yes"; then
@@ -689,8 +691,6 @@ if test "$enable_sieve" != "no"; then
                 fi
         fi
 fi
-
-AM_CONDITIONAL([SIEVE], [test "${enable_sieve}" != "no"])
 
 dnl look for an option to disable sign-comparison warnings (needed for
 dnl flex-generated sieve sources when building with -Werror)
