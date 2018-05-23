@@ -2044,19 +2044,33 @@ struct findaccounts_data {
     json_t *accounts;
     struct buf userid;
     int rw;
+    int has_mail;
+    int has_contact;
+    int has_calendar;
 };
 
-static void findaccounts_add(json_t *accounts, const char *userid, int rw)
+static void findaccounts_add(struct findaccounts_data *ctx)
 {
-    if (!userid || !strlen(userid)) {
+    if (!buf_len(&ctx->userid))
         return;
-    }
 
-    json_object_set_new(accounts, userid, json_pack("{s:s s:b s:b s:[s]}",
-                "name", userid,
-                "isPrimary", 0,
-                "isReadOnly", !rw,
-                "hasDataFor", "mail"));
+    const char *userid = buf_cstring(&ctx->userid);
+
+    json_t *has_data_for = json_array();
+    if (ctx->has_mail)
+        json_array_append_new(has_data_for, json_string("mail"));
+    if (ctx->has_contact)
+        json_array_append_new(has_data_for, json_string("contact"));
+    if (ctx->has_calendar)
+        json_array_append_new(has_data_for, json_string("calendar"));
+
+    json_t *account = json_object();
+    json_object_set_new(account, "name", json_string(userid));
+    json_object_set_new(account, "isPrimary", json_false());
+    json_object_set_new(account, "isReadOnly", json_boolean(!ctx->rw));
+    json_object_set_new(account, "hasDataFor", has_data_for);
+
+    json_object_set_new(ctx->accounts, userid, account);
 }
 
 static int findaccounts_cb(struct findall_data *data, void *rock)
@@ -2064,20 +2078,39 @@ static int findaccounts_cb(struct findall_data *data, void *rock)
     if (!data || !data->mbentry)
         return 0;
 
-    mbname_t *mbname = mbname_from_intname(data->mbentry->name);
+    const mbentry_t *mbentry = data->mbentry;
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
     const char *userid = mbname_userid(mbname);
     struct findaccounts_data *ctx = rock;
+    const strarray_t *boxes = mbname_boxes(mbname);
 
     if (strcmp(buf_cstring(&ctx->userid), userid)) {
-        /* We haven't yet seen this account */
-        findaccounts_add(ctx->accounts, buf_cstring(&ctx->userid), ctx->rw);
+        /* We haven't yet seen this account. Add any previous account and reset state */
+        findaccounts_add(ctx);
         buf_setcstr(&ctx->userid, userid);
-        ctx->rw =
-            httpd_myrights(httpd_authstate, data->mbentry) & ACL_READ_WRITE;
-    } else if (!ctx->rw) {
-        /* Already seen this account, but it's read-only so far */
-        ctx->rw =
-            httpd_myrights(httpd_authstate, data->mbentry) & ACL_READ_WRITE;
+        ctx->rw = 0;
+        ctx->has_mail = 0;
+        ctx->has_contact = 0;
+        ctx->has_calendar = 0;
+    }
+
+    if (!ctx->rw) {
+        ctx->rw = httpd_myrights(httpd_authstate, data->mbentry) & ACL_READ_WRITE;
+    }
+    if (!ctx->has_mail) {
+        ctx->has_mail = mbentry->mbtype == MBTYPE_EMAIL;
+    }
+    if (!ctx->has_contact) {
+        /* Only count children of user.foo.#addressbooks */
+        const char *prefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
+        ctx->has_contact =
+            strarray_size(boxes) > 1 && !strcmpsafe(prefix, strarray_nth(boxes, 0));
+    }
+    if (!ctx->has_calendar) {
+        /* Only count children of user.foo.#calendars */
+        const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+        ctx->has_calendar =
+            strarray_size(boxes) > 1 && !strcmpsafe(prefix, strarray_nth(boxes, 0));
     }
 
     mbname_free(&mbname);
@@ -2086,18 +2119,21 @@ static int findaccounts_cb(struct findall_data *data, void *rock)
 
 static json_t *user_settings(const char *userid)
 {
-    json_t *accounts = json_pack("{s:{s:s s:b s:b s:[s]}}",
+    json_t *accounts = json_pack("{s:{s:s s:b s:b s:[s,s,s]}}",
             userid, "name", userid,
             "isPrimary", 1,
             "isReadOnly", 0,
-            "hasDataFor", "mail");
+            /* JMAP autoprovisions calendars and contacts,
+             * so these JMAP types always are available
+             * for the primary account */
+            "hasDataFor", "mail", "calendar", "contact");
 
     /* Find all shared accounts */
     strarray_t patterns = STRARRAY_INITIALIZER;
     char *userpat = xstrdup("user.*");
     userpat[4] = jmap_namespace.hier_sep;
     strarray_append(&patterns, userpat);
-    struct findaccounts_data ctx = { accounts, BUF_INITIALIZER, 0 };
+    struct findaccounts_data ctx = { accounts, BUF_INITIALIZER, 0, 0, 0, 0 };
     int r = mboxlist_findallmulti(&jmap_namespace, &patterns, 0, userid,
                                   httpd_authstate, findaccounts_cb, &ctx);
     free(userpat);
@@ -2106,7 +2142,8 @@ static json_t *user_settings(const char *userid)
         syslog(LOG_ERR, "Can't determine shared JMAP accounts for user %s: %s",
                 userid, error_message(r));
     }
-    findaccounts_add(ctx.accounts, buf_cstring(&ctx.userid), ctx.rw);
+    /* Finalise last seen account */
+    findaccounts_add(&ctx);
     buf_free(&ctx.userid);
 
     return json_pack("{s:s s:o s:O s:s s:s s:s}",
