@@ -343,13 +343,28 @@ sub test_mailbox_get_shared
     # Get our own Inbox id
     my $inbox = $self->getinbox();
 
+    my $foostore = Cassandane::IMAPMessageStore->new(
+        host => $self->{store}->{host},
+        port => $self->{store}->{port},
+        username => 'foo',
+        password => 'testpw',
+        verbose => $self->{store}->{verbose},
+    );
+    my $footalk = $foostore->get_client();
+
+    $footalk->setmetadata("INBOX.box1", "/private/specialuse", "\\Trash");
+    $self->assert_equals('ok', $footalk->get_last_completion_response());
+
     xlog "get mailboxes for foo account";
     my $res = $jmap->CallMethods([['Mailbox/get', { accountId => "foo" }, "R1"]]);
-    $self->assert_str_not_equals($inbox->{id}, $res->[0][1]{list}[0]{id});
-
-    # Make sure that accountIds are matched verbatim, not by prefix, e.g.
-    # we don't want to find mailboxes for the 'foobar' account here.
     $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
+
+    my %m = map { lc($_->{name}) => $_ } @{$res->[0][1]{list}};
+    my $fooInbox = $m{'inbox'};
+    $self->assert_str_not_equals($inbox->{id}, $fooInbox->{id});
+    $self->assert_str_equals('inbox', $fooInbox->{role});
+    my $box1 = $m{'box1'};
+    $self->assert_str_equals('trash', $box1->{role});
 
     xlog "get mailboxes for inaccessible bar account";
     $res = $jmap->CallMethods([['Mailbox/get', { accountId => "bar" }, "R1"]]);
@@ -1432,7 +1447,7 @@ sub test_mailbox_set_shared
                     create => { "1" => {
                             name => "x",
                             parentId => $inbox->{id},
-                            role => undef
+                            role => 'trash',
              }}}, "R1"];
 
     my $update = ['Mailbox/set', {
