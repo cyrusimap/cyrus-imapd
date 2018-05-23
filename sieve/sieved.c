@@ -464,7 +464,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
         switch (cmd.type) {
         case B_STOP:
-            printf("STOP\n");
+            printf("STOP");
             break;
 
             
@@ -475,12 +475,11 @@ static void dump2(bytecode_input_t *d, int bc_len)
             if (cmd.type >= B_KEEP_COPY) {
                 print_stringlist(" FLAGS", cmd.u.k.flags);
             }
-            printf("\n");
             break;
 
 
         case B_DISCARD:
-            printf("DISCARD\n");
+            printf("DISCARD");
             break;
 
 
@@ -491,7 +490,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
         case B_REJECT:
             print_string("REJECT ", cmd.u.str);
-            printf("\n");
             break;
 
 
@@ -522,7 +520,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
                 }
             }
             print_string(" FOLDER", cmd.u.f.folder);
-            printf("\n");
             break;
 
 
@@ -547,7 +544,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
                 }
             }
             print_string(" ADDRESS", cmd.u.r.address);
-            printf("\n");
             break;
 
 
@@ -558,12 +554,12 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
 
         case B_MARK:
-            printf("MARK\n");
+            printf("MARK");
             break;
 
 
         case B_UNMARK:
-            printf("UNMARK\n");
+            printf("UNMARK");
             break;
 
 
@@ -573,7 +569,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
             if (cmd.type >= B_ADDFLAG)
                 print_string(" VARIABLE", cmd.u.fl.variable);
             print_stringlist(" FLAGS", cmd.u.fl.flags);
-            printf("\n");
             break;
 
 
@@ -583,7 +578,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
             if (cmd.type >= B_SETFLAG)
                 print_string(" VARIABLE", cmd.u.fl.variable);
             print_stringlist(" FLAGS", cmd.u.fl.flags);
-            printf("\n");
             break;
 
 
@@ -593,7 +587,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
             if (cmd.type >= B_REMOVEFLAG)
                 print_string(" VARIABLE", cmd.u.fl.variable);
             print_stringlist(" FLAGS", cmd.u.fl.flags);
-            printf("\n");
             break;
 
 
@@ -603,7 +596,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
                 print_comparator(&cmd.u.d.comp);
                 print_string("\n\tPATTERN", cmd.u.d.pattern);
             }
-            printf("\n");
             break;
 
 
@@ -625,7 +617,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
             }
             print_stringlist(" OPTIONS", cmd.u.n.options);
             print_string("\n\tMESSAGE", cmd.u.n.message);
-            printf("\n");
             break;
 
 
@@ -659,17 +650,16 @@ static void dump2(bytecode_input_t *d, int bc_len)
                     }
                 }
             }
-            printf("\n");
             break;
 
 
         case B_NULL:
-            printf("NULL\n");
+            printf("NULL");
             break;
 
 
         case B_JUMP:
-            printf("JUMP %d\n", cmd.u.jump);
+            printf("JUMP %d", cmd.u.jump);
             break;
 
 
@@ -713,7 +703,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
 
         case B_RETURN:
-            printf("RETURN\n");
+            printf("RETURN");
             break;
 
 
@@ -721,6 +711,8 @@ static void dump2(bytecode_input_t *d, int bc_len)
             printf("%d (NOT AN OP)\n", cmd.type);
             exit(1);
         }
+
+        printf("\n");
     }
 
     printf("full len is: %d\n", bc_len);
