@@ -76,6 +76,22 @@ sub test_settings
     $admintalk->setacl("user.foo", "cassandane", "lr") or die;
     $self->{instance}->create_user("bar");
     $admintalk->setacl("user.bar", "cassandane", "lrswp") or die;
+
+	my $service = $self->{instance}->get_service("http");
+	my $fooCalDAVTalk = Net::CalDAVTalk->new(
+		user => "foo",
+		password => 'pass',
+		host => $service->host(),
+		port => $service->port(),
+		scheme => 'http',
+		url => '/',
+		expandurl => 1,
+	);
+	my $CalendarId = $fooCalDAVTalk->NewCalendar({name => 'foo'});
+	$self->assert_not_null($CalendarId);
+	$admintalk->setacl("user.foo.#calendars.$CalendarId", "cassandane" => 'lr') or die;
+	$admintalk->setacl("user.foo.#addressbooks.Default", "cassandane" => '') or die;
+
     # Make sure that isReadOnly is false if ANY mailbox is read-writeable
     $self->{instance}->create_user("baz");
     $admintalk->create("user.baz.box1") or die;
@@ -122,6 +138,8 @@ sub test_settings
     $self->assert($cap->{maxObjectsInSet} > 0);
 
     my $acc;
+    my @wantHasDataFor;
+    my @gotHasDataFor;
 	my $accounts =  $settings->{accounts};
     $self->assert_num_equals(4, scalar keys %{$accounts});
 
@@ -129,15 +147,17 @@ sub test_settings
     $self->assert_str_equals("cassandane", $acc->{name});
     $self->assert_equals(JSON::true, $acc->{isPrimary});
     $self->assert_equals(JSON::false, $acc->{isReadOnly});
-    $self->assert_num_equals(1, scalar @{$acc->{hasDataFor}});
-    $self->assert_str_equals('mail', $acc->{hasDataFor}[0]);
+    @wantHasDataFor = sort ('mail','contact','calendar');
+    @gotHasDataFor = sort @{$acc->{hasDataFor}};
+    $self->assert_deep_equals(\@wantHasDataFor, \@gotHasDataFor);
 
     $acc = $accounts->{foo};
     $self->assert_str_equals("foo", $acc->{name});
     $self->assert_equals(JSON::false, $acc->{isPrimary});
     $self->assert_equals(JSON::true, $acc->{isReadOnly});
-    $self->assert_num_equals(1, scalar @{$acc->{hasDataFor}});
-    $self->assert_str_equals('mail', $acc->{hasDataFor}[0]);
+    @wantHasDataFor = sort ('mail','calendar');
+    @gotHasDataFor = sort @{$acc->{hasDataFor}};
+    $self->assert_deep_equals(\@wantHasDataFor, \@gotHasDataFor);
 
     $acc = $accounts->{bar};
     $self->assert_str_equals("bar", $acc->{name});
