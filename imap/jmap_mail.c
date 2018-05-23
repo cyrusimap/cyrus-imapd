@@ -1011,6 +1011,7 @@ static char *_mbox_find_uniqueid(jmap_req_t *req, const char *id)
 struct _mbox_find_specialuse_rock {
     const char *use;
     const char *userid;
+    const char *accountid;
     char *mboxname;
 };
 
@@ -1019,7 +1020,7 @@ static int _mbox_find_specialuse_cb(const mbentry_t *mbentry, void *rock)
     struct _mbox_find_specialuse_rock *d = (struct _mbox_find_specialuse_rock *)rock;
     struct buf attrib = BUF_INITIALIZER;
 
-    annotatemore_lookup(mbentry->name, "/specialuse", d->userid, &attrib);
+    annotatemore_lookup(mbentry->name, "/specialuse", d->accountid, &attrib);
 
     if (attrib.len) {
         strarray_t *uses = strarray_split(buf_cstring(&attrib), " ", 0);
@@ -1041,7 +1042,9 @@ static char *_mbox_find_specialuse(jmap_req_t *req, const char *use)
     if (!strcasecmp(use, "\\Inbox"))
         return mboxname_user_mbox(req->accountid, NULL);
 
-    struct _mbox_find_specialuse_rock rock = { use, req->userid, NULL };
+    struct _mbox_find_specialuse_rock rock = {
+        use, req->userid, req->accountid, NULL
+    };
     jmap_mboxlist(req, _mbox_find_specialuse_cb, &rock);
     return rock.mboxname;
 }
@@ -1060,7 +1063,7 @@ static char *_mbox_get_role(jmap_req_t *req, const mbname_t *mbname)
 
     /* Does this mailbox have an IMAP special use role? */
     annotatemore_lookup(mbname_intname(mbname), "/specialuse",
-                        req->userid, &buf);
+                        req->accountid, &buf);
     if (buf.len) {
         strarray_t *uses = strarray_split(buf_cstring(&buf), " ", STRARRAY_TRIM);
         if (uses->count) {
@@ -1088,7 +1091,7 @@ static char *_mbox_get_role(jmap_req_t *req, const mbname_t *mbname)
     if (!role) {
         buf_reset(&buf);
         annotatemore_lookup(mbname_intname(mbname),
-                            IMAP_ANNOT_NS "x-role", req->userid, &buf);
+                            IMAP_ANNOT_NS "x-role", req->accountid, &buf);
         if (buf.len) {
             role = buf_cstring(&buf);
         }
@@ -1107,7 +1110,7 @@ static char *_mbox_get_name(jmap_req_t *req, const mbname_t *mbname)
 
     int r = annotatemore_lookup(mbname_intname(mbname),
                                 IMAP_ANNOT_NS "displayname",
-            req->userid, &attrib);
+            req->accountid, &attrib);
     if (!r && attrib.len) {
         /* We got a mailbox with a displayname annotation. Use it. */
         char *name = buf_release(&attrib);
@@ -1148,7 +1151,7 @@ static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
 
     /* Ignore lookup errors here. */
     annotatemore_lookup(mbname_intname(mbname),
-                        IMAP_ANNOT_NS "sortOrder", req->userid, &attrib);
+                        IMAP_ANNOT_NS "sortOrder", req->accountid, &attrib);
     if (attrib.len) {
         uint64_t t = str2uint64(buf_cstring(&attrib));
         if (t < INT_MAX) {
@@ -1979,6 +1982,7 @@ done:
 struct _mbox_find_xrole_rock {
     const char *xrole;
     const char *userid;
+    const char *accountid;
     char *mboxname;
 };
 
@@ -1987,7 +1991,7 @@ static int _mbox_find_xrole_cb(const mbentry_t *mbentry, void *rock)
     struct _mbox_find_xrole_rock *d = (struct _mbox_find_xrole_rock *)rock;
     struct buf attrib = BUF_INITIALIZER;
 
-    annotatemore_lookup(mbentry->name, IMAP_ANNOT_NS "x-role", d->userid, &attrib);
+    annotatemore_lookup(mbentry->name, IMAP_ANNOT_NS "x-role", d->accountid, &attrib);
 
     if (attrib.len && !strcmp(buf_cstring(&attrib), d->xrole)) {
         d->mboxname = xstrdup(mbentry->name);
@@ -2001,7 +2005,9 @@ static int _mbox_find_xrole_cb(const mbentry_t *mbentry, void *rock)
 
 static char *_mbox_find_xrole(jmap_req_t *req, const char *xrole)
 {
-    struct _mbox_find_xrole_rock rock = { xrole, req->userid, NULL };
+    struct _mbox_find_xrole_rock rock = {
+        xrole, req->userid, req->accountid, NULL
+    };
     /* INBOX can never have an x-role. */
     jmap_mboxlist(req, _mbox_find_xrole_cb, &rock);
     return rock.mboxname;
@@ -2199,7 +2205,7 @@ static int _mbox_set_annots(jmap_req_t *req,
         /* Set displayname annotation on mailbox. */
         buf_setcstr(&buf, args->name);
         static const char *displayname_annot = IMAP_ANNOT_NS "displayname";
-        r = annotatemore_write(mboxname, displayname_annot, req->userid, &buf);
+        r = annotatemore_write(mboxname, displayname_annot, req->accountid, &buf);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     displayname_annot, error_message(r));
@@ -2212,7 +2218,7 @@ static int _mbox_set_annots(jmap_req_t *req,
     if (args->specialuse) {
         buf_setcstr(&buf, args->specialuse);
         static const char *annot = "/specialuse";
-        r = annotatemore_write(mboxname, annot, req->userid, &buf);
+        r = annotatemore_write(mboxname, annot, req->accountid, &buf);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     annot, error_message(r));
@@ -2223,7 +2229,7 @@ static int _mbox_set_annots(jmap_req_t *req,
     else if (args->role) {
         buf_setcstr(&buf, args->role);
         static const char *annot = IMAP_ANNOT_NS "x-role";
-        r = annotatemore_write(mboxname, annot, req->userid, &buf);
+        r = annotatemore_write(mboxname, annot, req->accountid, &buf);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     annot, error_message(r));
@@ -2236,7 +2242,7 @@ static int _mbox_set_annots(jmap_req_t *req,
         /* Set sortOrder annotation on mailbox. */
         buf_printf(&buf, "%d", args->sortorder);
         static const char *sortorder_annot = IMAP_ANNOT_NS "sortOrder";
-        r = annotatemore_write(mboxname, sortorder_annot, req->userid, &buf);
+        r = annotatemore_write(mboxname, sortorder_annot, req->accountid, &buf);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     sortorder_annot, error_message(r));
