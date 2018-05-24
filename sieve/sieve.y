@@ -1875,6 +1875,8 @@ static int verify_addrheader(sieve_script_t *sscript, char *hdr)
     const char **h, *hdrs[] = {
         "from", "sender", "reply-to",   /* RFC5322 originator fields */
         "to", "cc", "bcc",              /* RFC5322 destination fields */
+        "message-id", "in-reply-to",    /* RFC5322 identification fields */
+        "references"
         "resent-from", "resent-sender", /* RFC5322 resent fields */
         "resent-to", "resent-cc", "resent-bcc",
         "return-path",                  /* RFC5322 trace fields */
