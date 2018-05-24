@@ -787,8 +787,8 @@ envelope_err:
         int numneedles = strarray_size(test.u.hhs.pl); // number of search flags
 
         int match = test.u.hhs.comp.match;
-        int relation = test.u.hhs.comp.match;
-        int comparator = test.u.hhs.comp.match;
+        int relation = test.u.hhs.comp.relation;
+        int comparator = test.u.hhs.comp.collation;
         int count = 0;
         int ctag = 0;
 
