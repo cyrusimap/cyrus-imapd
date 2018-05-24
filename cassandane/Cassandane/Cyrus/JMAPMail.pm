@@ -9291,6 +9291,7 @@ sub test_email_get_calendarevents
           . "txt body"
           . "\r\n--boundary_1\r\n"
           . "Content-Type: text/calendar;charset=utf-8\r\n"
+          . "Content-Transfer-Encoding: quoted-printable\r\n"
           . "\r\n"
           . "BEGIN:VCALENDAR\r\n"
           . "VERSION:2.0\r\n"
@@ -9318,7 +9319,7 @@ sub test_email_get_calendarevents
           . "DTSTART;TZID=Europe/Vienna:20180518T090000\r\n"
           . "LAST-MODIFIED:20180518T090306Z\r\n"
           . "SEQUENCE:1\r\n"
-          . "SUMMARY:foobarbaz\r\n"
+          . "SUMMARY:K=C3=A4se\r\n"
           . "TRANSP:OPAQUE\r\n"
           . "UID:d9e7f7d6-ce1a-4a71-94c0-b4edd41e5959\r\n"
           . "END:VEVENT\r\n"
@@ -9342,7 +9343,7 @@ sub test_email_get_calendarevents
     my $partId = $msg->{attachedFiles}[0]{partId};
     my $jsevent =$msg->{calendarEvents}{$partId};
     $self->assert_not_null($jsevent);
-    $self->assert_str_equals('foobarbaz', $jsevent->{title});
+    $self->assert_str_equals("K\N{LATIN SMALL LETTER A WITH DIAERESIS}se", $jsevent->{title});
     $self->assert_str_equals('2018-05-18T09:00:00', $jsevent->{start});
     $self->assert_str_equals('Europe/Vienna', $jsevent->{timeZone});
     $self->assert_str_equals('PT1H', $jsevent->{duration});
