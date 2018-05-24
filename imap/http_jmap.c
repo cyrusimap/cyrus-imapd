@@ -2045,9 +2045,13 @@ struct findaccounts_data {
     struct buf userid;
     int rw;
     int has_mail;
-    int has_contact;
-    int has_calendar;
+    int has_contacts;
+    int has_calendars;
 };
+
+#define JMAP_HAS_DATA_FOR_MAIL "urn:ietf:params:jmap:mail"
+#define JMAP_HAS_DATA_FOR_CONTACTS "urn:ietf:params:jmap:contacts"
+#define JMAP_HAS_DATA_FOR_CALENDARS "urn:ietf:params:jmap:calendars"
 
 static void findaccounts_add(struct findaccounts_data *ctx)
 {
@@ -2058,11 +2062,11 @@ static void findaccounts_add(struct findaccounts_data *ctx)
 
     json_t *has_data_for = json_array();
     if (ctx->has_mail)
-        json_array_append_new(has_data_for, json_string("mail"));
-    if (ctx->has_contact)
-        json_array_append_new(has_data_for, json_string("contact"));
-    if (ctx->has_calendar)
-        json_array_append_new(has_data_for, json_string("calendar"));
+        json_array_append_new(has_data_for, json_string(JMAP_HAS_DATA_FOR_MAIL));
+    if (ctx->has_contacts)
+        json_array_append_new(has_data_for, json_string(JMAP_HAS_DATA_FOR_CONTACTS));
+    if (ctx->has_calendars)
+        json_array_append_new(has_data_for, json_string(JMAP_HAS_DATA_FOR_CALENDARS));
 
     json_t *account = json_object();
     json_object_set_new(account, "name", json_string(userid));
@@ -2090,8 +2094,8 @@ static int findaccounts_cb(struct findall_data *data, void *rock)
         buf_setcstr(&ctx->userid, userid);
         ctx->rw = 0;
         ctx->has_mail = 0;
-        ctx->has_contact = 0;
-        ctx->has_calendar = 0;
+        ctx->has_contacts = 0;
+        ctx->has_calendars = 0;
     }
 
     if (!ctx->rw) {
@@ -2100,16 +2104,16 @@ static int findaccounts_cb(struct findall_data *data, void *rock)
     if (!ctx->has_mail) {
         ctx->has_mail = mbentry->mbtype == MBTYPE_EMAIL;
     }
-    if (!ctx->has_contact) {
+    if (!ctx->has_contacts) {
         /* Only count children of user.foo.#addressbooks */
         const char *prefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
-        ctx->has_contact =
+        ctx->has_contacts =
             strarray_size(boxes) > 1 && !strcmpsafe(prefix, strarray_nth(boxes, 0));
     }
-    if (!ctx->has_calendar) {
+    if (!ctx->has_calendars) {
         /* Only count children of user.foo.#calendars */
         const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
-        ctx->has_calendar =
+        ctx->has_calendars =
             strarray_size(boxes) > 1 && !strcmpsafe(prefix, strarray_nth(boxes, 0));
     }
 
@@ -2126,7 +2130,10 @@ static json_t *user_settings(const char *userid)
             /* JMAP autoprovisions calendars and contacts,
              * so these JMAP types always are available
              * for the primary account */
-            "hasDataFor", "mail", "calendar", "contact");
+            "hasDataFor",
+            JMAP_HAS_DATA_FOR_MAIL,
+            JMAP_HAS_DATA_FOR_CONTACTS,
+            JMAP_HAS_DATA_FOR_CALENDARS);
 
     /* Find all shared accounts */
     strarray_t patterns = STRARRAY_INITIALIZER;
