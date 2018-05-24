@@ -6994,16 +6994,22 @@ static int _email_get_bodies(jmap_req_t *req,
     /* calendarEvents -- non-standard */
     if (_wantprop(props, "calendarEvents")) {
         json_t *calendar_events = json_object();
-        struct buf buf = BUF_INITIALIZER;
         int i;
         for (i = 0; i < bodies.atts.count; i++) {
             struct body *part = ptrarray_nth(&bodies.atts, i);
             if (strcmp(part->type, "TEXT") || strcmp(part->subtype, "CALENDAR"))
                 continue;
-            /* Parse raw iCalendar data to iCalendar object */
-            buf_setmap(&buf, buf_base(msg->raw) + part->content_offset,
-                    part->content_size);
+            /* Parse decoded data to iCalendar object */
+            char *tmp;
+            size_t tmp_size;
+            charset_decode_mimebody(buf_base(msg->raw) + part->content_offset,
+                    part->content_size, part->charset_enc, &tmp, &tmp_size);
+            if (!tmp) continue;
+            struct buf buf = BUF_INITIALIZER;
+            buf_init_ro_cstr(&buf, tmp);
             icalcomponent *ical = ical_string_as_icalcomponent(&buf);
+            buf_free(&buf);
+            free(tmp);
             if (!ical) continue;
             /* Parse iCalendar object to JSCalendar */
             json_t *jsevent = jmapical_tojmap(ical, NULL, NULL);
@@ -7012,7 +7018,6 @@ static int _email_get_bodies(jmap_req_t *req,
             }
             icalcomponent_free(ical);
         }
-        buf_free(&buf);
         if (!json_object_size(calendar_events)) {
             json_decref(calendar_events);
             calendar_events = json_null();
