@@ -804,6 +804,44 @@ sub test_mailbox_set
     $self->assert_str_equals($res->[0][1]{notFound}[0], $id);
 }
 
+sub test_mailbox_get_shared_parents
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # Create shared account and mailboxes
+    $self->{instance}->create_user("foo");
+    $admintalk->create("user.foo.box1") or die;
+    $admintalk->create("user.foo.box1.box11") or die;
+    $admintalk->create("user.foo.box1.box11.box111") or die;
+    $admintalk->create("user.foo.box1.box12") or die;
+    $admintalk->create("user.foo.box2") or die;
+    $admintalk->create("user.foo.box3") or die;
+    $admintalk->create("user.foo.box3.box31") or die;
+    $admintalk->create("user.foo.box3.box32") or die;
+
+    # Share mailboxes
+    $admintalk->setacl("user.foo.box1.box11", "cassandane", "lr") or die;
+    $admintalk->setacl("user.foo.box3.box32", "cassandane", "lr") or die;
+
+    xlog "get mailboxes for foo account";
+    my $res = $jmap->CallMethods([['Mailbox/get', { accountId => "foo" }, "R1"]]);
+    $self->assert_num_equals(5, scalar @{$res->[0][1]{list}});
+
+    # Assert rights
+    my %m = map { lc($_->{name}) => $_ } @{$res->[0][1]{list}};
+    $self->assert_equals(JSON::false, $m{inbox}->{myRights}->{mayReadItems});
+    $self->assert_equals(JSON::false, $m{box1}->{myRights}->{mayReadItems});
+    $self->assert_equals(JSON::true, $m{box11}->{myRights}->{mayReadItems});
+    $self->assert_equals(JSON::false, $m{box3}->{myRights}->{mayReadItems});
+    $self->assert_equals(JSON::true, $m{box32}->{myRights}->{mayReadItems});
+}
+
 sub test_mailbox_set_name_missing
     :JMAP :min_version_3_1
 {
