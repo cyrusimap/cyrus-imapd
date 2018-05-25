@@ -2786,10 +2786,7 @@ static int jmapevent_search(jmap_req_t *req, json_t *filter,
     }
 
 done:
-    if (state) {
-        state->mailbox = NULL;
-        index_close(&state);
-    }
+    index_close(&state);
     if (search_timerange) {
         free_hash_table(search_timerange, NULL);
         free(search_timerange);
