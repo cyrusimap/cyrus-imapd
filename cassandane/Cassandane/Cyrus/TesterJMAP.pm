@@ -63,6 +63,11 @@ sub cyrus_version_supports_jmap
 
     return 0 if ($maj < 3);  # not supported before 3.x
     return 0 if ($maj == 3 && $min == 0); # not supported in 3.0.x
+
+    # not supported if configured out
+    my $buildinfo = Cassandane::BuildInfo->new();
+    return 0 if not $buildinfo->get('component', 'jmap');
+
     return 1; # supported in everything newer
 }
 
