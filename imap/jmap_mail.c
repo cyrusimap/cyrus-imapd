@@ -3730,20 +3730,22 @@ static int _email_extract_bodies_internal(struct body *parts,
         else {
             ptrarray_append(attslist, part);
         }
-        if (!strcmp(multipart_type, "ALTERNATIVE")) {
-            int j;
-            /* Found HTML part only */
-            if (textlist && textlist_count == textlist->count) {
-                for (j = htmllist_count; j < htmllist->count; j++)
-                    ptrarray_append(textlist, ptrarray_nth(htmllist, j));
-            }
-            /* Found TEXT part only */
-            if (htmllist && htmllist_count == htmllist->count) {
-                for (j = textlist_count; j < textlist->count; j++)
-                    ptrarray_append(htmllist, ptrarray_nth(textlist, j));
-            }
+    }
+
+    if (!strcmp(multipart_type, "ALTERNATIVE")) {
+        int j;
+        /* Found HTML part only */
+        if (textlist && textlist_count == textlist->count) {
+            for (j = htmllist_count; j < htmllist->count; j++)
+                ptrarray_append(textlist, ptrarray_nth(htmllist, j));
+        }
+        /* Found TEXT part only */
+        if (htmllist && htmllist_count == htmllist->count) {
+            for (j = textlist_count; j < textlist->count; j++)
+                ptrarray_append(htmllist, ptrarray_nth(textlist, j));
         }
     }
+
     return 0;
 }
 
