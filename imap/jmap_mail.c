@@ -3739,7 +3739,7 @@ static int _email_extract_bodies_internal(struct body *parts,
             }
             /* Found TEXT part only */
             if (htmllist && htmllist_count == htmllist->count) {
-                for (j = htmllist_count; j < htmllist->count; j++)
+                for (j = textlist_count; j < textlist->count; j++)
                     ptrarray_append(htmllist, ptrarray_nth(textlist, j));
             }
         }
