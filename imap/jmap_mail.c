@@ -2736,7 +2736,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
     if (json_object_size(set.create)) {
         strarray_t todo = STRARRAY_INITIALIZER;
         /* Process keys topologically */
-        const char *creation_id;
+        const char *creation_id = NULL;
         json_t *jarg;
         json_object_foreach(set.create, creation_id, jarg) {
             strarray_append(&todo, creation_id);
@@ -2745,7 +2745,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
             int didsome = 0;
             int i;
             for (i = 0; i < strarray_size(&todo); i++) {
-                const char *creation_id = strarray_nth(&todo, i);
+                creation_id = strarray_nth(&todo, i);
                 json_t *jmbox = json_object_get(set.create, creation_id);
 
                 /* Skip this mailbox if it parent hasn't been created, yet. */
@@ -2791,9 +2791,12 @@ static int jmap_mailbox_set(jmap_req_t *req)
                 free(strarray_remove(&todo, i--));
             }
             if (!didsome) {
-                json_object_set_new(set.not_created, creation_id,
-                        json_pack("{s:s s:[s]}", "type", "invalidProperties",
-                            "properties", "parentId"));
+                if (creation_id) {
+                    json_object_set_new(set.not_created, creation_id,
+                            json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                                "properties", "parentId"));
+                }
+                break;
             }
         }
         strarray_fini(&todo);
