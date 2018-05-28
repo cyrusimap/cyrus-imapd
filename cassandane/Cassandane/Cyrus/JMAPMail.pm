@@ -59,7 +59,19 @@ use charnames ':full';
 sub new
 {
     my ($class, @args) = @_;
-    return $class->SUPER::new({}, @args);
+
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(caldav_realm => 'Cassandane',
+		 conversations => 'yes',
+		 httpmodules => 'carddav caldav jmap',
+		 httpallowcompress => 'no');
+
+    return $class->SUPER::new({
+	config => $config,
+	jmap => 1,
+	adminstore => 1,
+	services => [ 'imap', 'http' ]
+    }, @args);
 }
 
 sub set_up
@@ -90,7 +102,7 @@ sub getinbox
 }
 
 sub test_mailbox_get
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -168,7 +180,7 @@ sub test_mailbox_get
 }
 
 sub test_mailbox_get_specialuse
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -216,7 +228,7 @@ sub test_mailbox_get_specialuse
 }
 
 sub test_mailbox_get_properties
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -244,7 +256,7 @@ sub test_mailbox_get_properties
 }
 
 sub test_mailbox_get_ids
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -282,7 +294,7 @@ sub test_mailbox_get_ids
 }
 
 sub test_mailbox_get_nocalendars
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -317,7 +329,7 @@ sub test_mailbox_get_nocalendars
 }
 
 sub test_mailbox_get_shared
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -378,7 +390,7 @@ sub test_mailbox_get_shared
 }
 
 sub test_mailbox_query
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -519,7 +531,7 @@ sub test_mailbox_query
 }
 
 sub test_mailbox_query_parentname
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -562,7 +574,7 @@ sub test_mailbox_query_parentname
 }
 
 sub test_mailbox_query_limit_zero
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -577,7 +589,7 @@ sub test_mailbox_query_limit_zero
 }
 
 sub test_mailbox_query_parentid_null
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -610,7 +622,7 @@ sub test_mailbox_query_parentid_null
 }
 
 sub test_mailbox_query_filteroperator
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     return;
@@ -685,7 +697,7 @@ sub test_mailbox_query_filteroperator
 }
 
 sub test_mailbox_query_issue2286
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -699,7 +711,7 @@ sub test_mailbox_query_issue2286
 }
 
 sub test_mailbox_querychanges
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -723,7 +735,7 @@ sub test_mailbox_querychanges
 }
 
 sub test_mailbox_set
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -805,7 +817,7 @@ sub test_mailbox_set
 }
 
 sub test_mailbox_get_shared_parents
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -843,7 +855,7 @@ sub test_mailbox_get_shared_parents
 }
 
 sub test_mailbox_set_name_missing
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -865,7 +877,7 @@ sub test_mailbox_set_name_missing
 
 
 sub test_mailbox_set_name_collision
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -968,7 +980,7 @@ sub test_mailbox_set_name_collision
 }
 
 sub test_mailbox_set_name_interop
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -1024,7 +1036,7 @@ sub test_mailbox_set_name_interop
 }
 
 sub test_mailbox_set_name_unicode_nfc
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -1056,7 +1068,7 @@ sub test_mailbox_set_name_unicode_nfc
 
 
 sub test_mailbox_set_role
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -1191,7 +1203,7 @@ sub test_mailbox_set_role
 }
 
 sub test_mailbox_set_no_outbox_role
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1209,7 +1221,7 @@ sub test_mailbox_set_no_outbox_role
 
 
 sub test_mailbox_set_parent
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -1303,7 +1315,7 @@ sub test_mailbox_set_parent
 }
 
 sub test_mailbox_set_parent_acl
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -1336,7 +1348,7 @@ sub test_mailbox_set_parent_acl
 }
 
 sub test_mailbox_set_destroy_empty
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1405,7 +1417,7 @@ sub test_mailbox_set_destroy_empty
 }
 
 sub test_mailbox_set_destroy_removemsgs
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1462,7 +1474,7 @@ sub test_mailbox_set_destroy_removemsgs
 }
 
 sub test_mailbox_set_shared
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1529,7 +1541,7 @@ sub test_mailbox_set_shared
 }
 
 sub test_mailbox_changes
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -1676,7 +1688,7 @@ sub test_mailbox_changes
 }
 
 sub test_mailbox_changes_counts
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1791,7 +1803,7 @@ sub test_mailbox_changes_counts
 
 
 sub test_mailbox_changes_shared
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -1868,7 +1880,7 @@ sub defaultprops_for_email_get
 }
 
 sub test_email_get
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -1970,7 +1982,7 @@ sub test_email_get
 }
 
 sub test_email_get_mimeencode
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2038,7 +2050,7 @@ sub test_email_get_mimeencode
 }
 
 sub test_email_get_multimailboxes
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2079,7 +2091,7 @@ sub test_email_get_multimailboxes
 }
 
 sub test_email_get_body_both
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2129,7 +2141,7 @@ sub test_email_get_body_both
 }
 
 sub test_email_get_body_plain
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2163,7 +2175,7 @@ sub test_email_get_body_plain
 }
 
 sub test_email_get_body_html
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2197,7 +2209,7 @@ sub test_email_get_body_html
 }
 
 sub test_email_get_attachment_name
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2302,7 +2314,7 @@ sub test_email_get_attachment_name
 }
 
 sub test_email_get_body_notext
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2331,7 +2343,7 @@ sub test_email_get_body_notext
 
 
 sub test_email_get_preview
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2362,7 +2374,7 @@ sub test_email_get_preview
 }
 
 sub test_email_get_shared
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2403,7 +2415,7 @@ sub test_email_get_shared
 }
 
 sub test_email_set_draft
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2477,7 +2489,7 @@ sub test_email_set_draft
 }
 
 sub test_email_set_issue2293
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2554,7 +2566,7 @@ sub test_email_set_issue2293
 }
 
 sub test_email_set_inreplyto
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2617,7 +2629,7 @@ sub test_email_set_inreplyto
 }
 
 sub test_email_set_attachedemails
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2685,7 +2697,7 @@ sub test_email_set_attachedemails
 }
 
 sub test_email_set_bodystructure
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2798,7 +2810,7 @@ sub test_email_set_bodystructure
 }
 
 sub test_email_set_shared
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -2859,7 +2871,7 @@ sub test_email_set_shared
 }
 
 sub test_email_set_userkeywords
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2931,7 +2943,7 @@ sub test_email_set_userkeywords
 }
 
 sub test_misc_upload_zero
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -2980,7 +2992,7 @@ sub test_misc_upload_zero
 }
 
 sub test_misc_upload
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3033,7 +3045,7 @@ sub test_misc_upload
 }
 
 sub test_misc_upload_multiaccount
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3056,7 +3068,7 @@ sub test_misc_upload_multiaccount
 }
 
 sub test_misc_upload_bin
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3105,7 +3117,7 @@ sub test_misc_upload_bin
 }
 
 sub test_misc_download
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3170,7 +3182,7 @@ sub download
 }
 
 sub test_blob_copy
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3232,7 +3244,7 @@ sub test_blob_copy
 }
 
 sub test_email_set_attachments
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3387,7 +3399,7 @@ sub test_email_set_attachments
 }
 
 sub test_email_set_flagged
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3425,7 +3437,7 @@ sub test_email_set_flagged
 }
 
 sub test_email_set_mailboxids
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3479,7 +3491,7 @@ sub test_email_set_mailboxids
 }
 
 sub test_email_get_keywords
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3556,7 +3568,7 @@ sub test_email_get_keywords
 }
 
 sub test_email_get_keywords_case_insensitive
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3589,7 +3601,7 @@ sub test_email_get_keywords_case_insensitive
 }
 
 sub test_email_set_keywords
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3721,7 +3733,7 @@ sub test_email_set_keywords
 }
 
 sub test_emailsubmission_set
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3773,7 +3785,7 @@ sub test_emailsubmission_set
 }
 
 sub test_emailsubmission_set_with_envelope
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3813,7 +3825,7 @@ sub test_emailsubmission_set_with_envelope
 }
 
 sub test_emailsubmission_set_issue2285
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3876,7 +3888,7 @@ sub test_emailsubmission_set_issue2285
 }
 
 sub test_emailsubmission_changes
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3925,7 +3937,7 @@ sub test_emailsubmission_changes
 }
 
 sub test_emailsubmission_query
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3946,7 +3958,7 @@ sub test_emailsubmission_query
 }
 
 sub test_emailsubmission_querychanges
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -3967,7 +3979,7 @@ sub test_emailsubmission_querychanges
 }
 
 sub test_email_set_move
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4027,7 +4039,7 @@ sub test_email_set_move
 }
 
 sub test_email_set_move_keywords
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4085,7 +4097,7 @@ sub test_email_set_move_keywords
 }
 
 sub test_email_set_update
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4140,7 +4152,7 @@ sub test_email_set_update
 }
 
 sub test_email_set_seen
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4179,7 +4191,7 @@ sub test_email_set_seen
 }
 
 sub test_email_set_destroy
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4255,7 +4267,7 @@ sub test_email_set_destroy
 }
 
 sub test_email_query
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4582,7 +4594,7 @@ sub test_email_query
 }
 
 sub test_email_query_shared
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -4935,7 +4947,7 @@ sub test_email_query_shared
 }
 
 sub test_email_query_keywords
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5033,7 +5045,7 @@ sub test_email_query_keywords
 }
 
 sub test_email_query_userkeywords
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5102,7 +5114,7 @@ sub test_email_query_userkeywords
 }
 
 sub test_email_query_threadkeywords
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -5283,7 +5295,7 @@ sub test_email_query_threadkeywords
 }
 
 sub test_email_query_empty
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5303,7 +5315,7 @@ sub test_email_query_empty
 }
 
 sub test_email_query_collapse
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -5355,7 +5367,7 @@ sub test_email_query_collapse
 }
 
 sub test_email_query_inmailbox_null
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5373,7 +5385,7 @@ sub test_email_query_inmailbox_null
 }
 
 sub test_misc_collapsethreads_issue2024
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -5414,7 +5426,7 @@ sub test_misc_collapsethreads_issue2024
 }
 
 sub test_email_query_window
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -5504,7 +5516,7 @@ sub test_email_query_window
 }
 
 sub test_email_query_long
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -5548,7 +5560,7 @@ sub test_email_query_long
 }
 
 sub test_email_query_acl
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5607,7 +5619,7 @@ sub test_email_query_acl
 }
 
 sub test_email_query_unknown_mailbox
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -5631,7 +5643,7 @@ sub test_email_query_unknown_mailbox
 
 
 sub test_searchsnippet_get
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5740,7 +5752,7 @@ sub test_searchsnippet_get
 }
 
 sub test_searchsnippet_get_shared
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5803,7 +5815,7 @@ sub test_searchsnippet_get_shared
 }
 
 sub test_email_query_snippets
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -5888,7 +5900,7 @@ sub test_email_query_snippets
 }
 
 sub test_email_query_attachments
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5991,7 +6003,7 @@ sub test_email_query_attachments
 }
 
 sub test_email_query_attachmentname
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6050,7 +6062,7 @@ sub test_email_query_attachmentname
 }
 
 sub test_email_query_attachmenttype
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6150,7 +6162,7 @@ sub test_email_query_attachmenttype
 }
 
 sub test_thread_get
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -6257,7 +6269,7 @@ sub test_thread_get
 }
 
 sub test_identity_get
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6281,7 +6293,7 @@ sub test_identity_get
 }
 
 sub test_misc_emptyids
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -6308,7 +6320,7 @@ sub test_misc_emptyids
 }
 
 sub test_email_querychanges_basic
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6359,7 +6371,7 @@ sub test_email_querychanges_basic
 }
 
 sub test_email_querychanges_basic_collapse
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6412,7 +6424,7 @@ sub test_email_querychanges_basic_collapse
 }
 
 sub test_email_querychanges_basic_mb
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6465,7 +6477,7 @@ sub test_email_querychanges_basic_mb
 }
 
 sub test_email_querychanges_basic_mb_collapse
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6586,7 +6598,7 @@ sub test_email_querychanges_basic_mb_collapse
 }
 
 sub test_email_querychanges_skipdeleted
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6648,7 +6660,7 @@ sub test_email_querychanges_skipdeleted
 }
 
 sub test_email_querychanges_deletedcopy
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6711,7 +6723,7 @@ sub test_email_querychanges_deletedcopy
 }
 
 sub test_email_changes
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6872,7 +6884,7 @@ sub test_email_changes
 }
 
 sub test_email_querychanges
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6910,7 +6922,7 @@ sub test_email_querychanges
 }
 
 sub test_email_querychanges_zerosince
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6948,7 +6960,7 @@ sub test_email_querychanges_zerosince
 
 
 sub test_email_querychanges_thread
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7026,7 +7038,7 @@ sub test_email_querychanges_thread
 }
 
 sub test_email_querychanges_order
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7085,7 +7097,7 @@ sub test_email_querychanges_order
 }
 
 sub test_email_querychanges_implementation
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7232,7 +7244,7 @@ sub test_email_querychanges_implementation
 }
 
 sub test_email_changes_shared
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7321,7 +7333,7 @@ sub test_email_changes_shared
 }
 
 sub test_misc_upload_download822
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7347,7 +7359,7 @@ EOF
 }
 
 sub test_misc_upload_sametype
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7364,7 +7376,7 @@ sub test_misc_upload_sametype
 }
 
 sub test_misc_brokenrfc822_badendline
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7412,7 +7424,7 @@ EOF
 }
 
 sub test_email_import_zerobyte
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7460,7 +7472,7 @@ EOF
 
 
 sub test_email_import_setdate
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7520,7 +7532,7 @@ EOF
 }
 
 sub test_thread_get_onemsg
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -7589,7 +7601,7 @@ EOF
 }
 
 sub test_thread_changes
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my %exp;
@@ -7809,7 +7821,7 @@ sub test_thread_changes
 }
 
 sub test_email_import
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7907,7 +7919,7 @@ sub test_email_import
 }
 
 sub test_email_import_error
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7943,7 +7955,7 @@ sub test_email_import_error
 
 
 sub test_email_import_shared
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -7989,7 +8001,7 @@ EOF
 }
 
 sub test_misc_refobjects_simple
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8024,7 +8036,7 @@ sub test_misc_refobjects_simple
 }
 
 sub test_email_import_no_keywords
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8061,7 +8073,7 @@ EOF
 }
 
 sub test_misc_refobjects_extended
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8102,7 +8114,7 @@ sub test_misc_refobjects_extended
 }
 
 sub test_email_set_patch
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8180,7 +8192,7 @@ sub test_email_set_patch
 }
 
 sub test_capability
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
@@ -8210,7 +8222,7 @@ sub test_capability
 }
 
 sub test_misc_set_oldstate
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8264,7 +8276,7 @@ sub test_misc_set_oldstate
 }
 
 sub test_email_set_text_crlf
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8296,7 +8308,7 @@ sub test_email_set_text_crlf
 }
 
 sub test_email_set_text_split
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8326,7 +8338,7 @@ sub test_email_set_text_split
 }
 
 sub test_email_get_attachedemails
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8383,7 +8395,7 @@ sub test_email_get_attachedemails
 }
 
 sub test_email_get_maxbodyvaluebytes_utf8
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8432,7 +8444,7 @@ sub test_email_get_maxbodyvaluebytes_utf8
 }
 
 sub test_email_get_header_all
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8464,7 +8476,7 @@ sub test_email_get_header_all
 }
 
 sub test_email_set_nullheader
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8499,7 +8511,7 @@ sub test_email_set_nullheader
 }
 
 sub test_email_set_headers
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8641,7 +8653,7 @@ sub test_email_set_headers
 }
 
 sub test_email_download
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8687,7 +8699,7 @@ sub test_email_download
 }
 
 sub test_email_embedded_download
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8738,7 +8750,7 @@ sub test_email_embedded_download
 }
 
 sub test_blob_download
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8757,7 +8769,7 @@ sub test_blob_download
 }
 
 sub test_email_set_filename
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8833,7 +8845,7 @@ sub test_email_set_filename
 }
 
 sub test_email_get_size
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8856,7 +8868,7 @@ sub test_email_get_size
 }
 
 sub test_email_get_references
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8885,7 +8897,7 @@ sub test_email_get_references
 }
 
 sub test_email_get_groupaddr
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8924,7 +8936,7 @@ sub test_email_get_groupaddr
 }
 
 sub test_email_parse
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -8998,7 +9010,7 @@ sub test_email_parse
 }
 
 sub test_email_parse_digest
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9040,7 +9052,7 @@ sub test_email_parse_digest
 }
 
 sub test_email_parse_blob822
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9068,7 +9080,7 @@ EOF
 }
 
 sub test_email_parse_notparsable
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9088,7 +9100,7 @@ EOF
 }
 
 sub test_email_get_bodystructure
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9311,7 +9323,7 @@ sub test_email_get_bodystructure
 }
 
 sub test_email_get_calendarevents
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9388,7 +9400,7 @@ sub test_email_get_calendarevents
 }
 
 sub test_email_set_blobencoding
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9461,7 +9473,7 @@ EOF
 }
 
 sub test_email_body_alternative_without_html
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -9509,7 +9521,7 @@ sub test_email_body_alternative_without_html
 }
 
 sub test_mailbox_set_issue2377
-    :JMAP :min_version_3_1
+    :min_version_3_1
 {
     my ($self) = @_;
 
