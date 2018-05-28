@@ -9508,4 +9508,29 @@ sub test_email_body_alternative_without_html
     $self->assert_str_equals($msg->{textBody}[0]->{partId}, $msg->{htmlBody}[0]->{partId});
 }
 
+sub test_mailbox_set_issue2377
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "get inbox";
+    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
+    my $inbox = $res->[0][1]{list}[0];
+    $self->assert_str_equals($inbox->{name}, "Inbox");
+
+    my $state = $res->[0][1]{state};
+
+    xlog "create mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "foo",
+                            parentId => "#",
+                            role => undef
+             }}}, "R1"]
+    ]);
+    $self->assert_not_null($res->[0][1]{notCreated}{'1'});
+}
+
 1;
