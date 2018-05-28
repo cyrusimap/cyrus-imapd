@@ -75,7 +75,7 @@ sub new
 }
 
 sub test_settings
-    :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -191,7 +191,7 @@ sub test_settings
 }
 
 sub test_blob_download
-    :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -229,7 +229,7 @@ sub test_blob_download
 }
 
 sub test_creationids
-    :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
