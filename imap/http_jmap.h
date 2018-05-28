@@ -113,10 +113,6 @@ extern int jmap_is_valid_id(const char *id);
  * of ACL_LOOKUP for shared accounts. */
 extern int  jmap_mboxlist(jmap_req_t *req, mboxlist_cb *proc, void *rock);
 
-/* allmbox-like mailbox tree traversal, scoped by accountid.
- * Reports all mailboxes and does not check permissions. */
-extern int  jmap_allmbox(jmap_req_t *req, mboxlist_cb *proc, void *rock);
-
 /* Request-scoped cache of mailbox rights for authenticated user */
 
 extern int  jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry);

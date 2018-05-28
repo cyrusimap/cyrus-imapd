@@ -57,6 +57,7 @@
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
+#include "bsearch.h"
 #include "http_dav.h"
 #include "http_jmap.h"
 #include "http_proxy.h"
@@ -982,6 +983,96 @@ static int _wantprop(hash_table *props, const char *name)
  * Mailboxes
  */
 
+struct shared_mboxes {
+    int is_owner;
+    strarray_t mboxes;
+    jmap_req_t *req;
+};
+
+/*
+ * We distinguish shared mailboxes by the following types:
+ *
+ * - _MBOX_HIDDEN: this mailbox is not visible at all to the
+ *                 currently authenticated account
+ * - _MBOX_PARENT: this mailbox is not readable, but it is
+ *                 the parent mailbox of a shared mailbox.
+ *                 E.g. it is reported in Mailbox/get but
+ *                 some of its properties are anonymised.
+ * - _MBOX_SHARED: this mailbox is fully readable by the current
+ *                 user, that is, its ACL provides at least
+ *                 ACL_LOOKUP and ACL_READ rights
+ *
+ * If the mailbox is a child of the authenticated user's INBOX,
+ * it is trivially _MBOX_SHARED, without checking ACL rights.
+ */
+enum shared_mbox_type { _MBOX_HIDDEN, _MBOX_PARENT, _MBOX_SHARED };
+
+static int _shared_mboxes_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct shared_mboxes *sm = rock;
+
+    int rights = jmap_myrights(sm->req, mbentry);
+    if ((rights & (ACL_LOOKUP|ACL_READ)) == (ACL_LOOKUP|ACL_READ)) {
+        strarray_add(&sm->mboxes, mbentry->name);
+    }
+
+    return 0;
+}
+
+struct shared_mboxes *_shared_mboxes_new(jmap_req_t *req, int flags)
+{
+    struct shared_mboxes *sm = xzmalloc(sizeof(struct shared_mboxes));
+    sm->req = req;
+
+    if (!strcmp(req->userid, req->accountid)) {
+        /* Trivial - all mailboxes are visible */
+        sm->is_owner = 1;
+        return sm;
+    }
+
+    /* Gather shared mailboxes */
+    int r = mboxlist_usermboxtree(req->accountid, _shared_mboxes_cb, sm, flags);
+    if (r) {
+        free(sm);
+        sm = NULL;
+    }
+    strarray_sort(&sm->mboxes, cmpstringp_mbox);
+    return sm;
+}
+
+static void _shared_mboxes_free(struct shared_mboxes *sm)
+{
+    if (!sm) return;
+    strarray_fini(&sm->mboxes);
+    free(sm);
+}
+
+static enum shared_mbox_type _shared_mbox_type(struct shared_mboxes *sm,
+                                               const char *name)
+{
+    /* Handle trivial cases */
+    if (sm->is_owner)
+        return _MBOX_SHARED;
+    if (sm->mboxes.count == 0)
+        return _MBOX_HIDDEN;
+
+    /* This is a worst case O(n) search, which *could* turn out to
+     * be an issue if caller iterates over all mailboxes of an
+     * account with lots of mailboxes. */
+    int i = 0;
+    for (i = 0; i < sm->mboxes.count; i++) {
+        const char *sharedname = strarray_nth(&sm->mboxes, i);
+        int cmp = bsearch_compare_mbox(sharedname, name);
+        if (!cmp)
+            return _MBOX_SHARED;
+        else if (cmp > 0 && mboxname_is_prefix(sharedname, name))
+            return _MBOX_PARENT;
+    }
+
+    return _MBOX_HIDDEN;
+}
+
+
 struct _mbox_find_uniqueid_rock {
     const char *uniqueid;
     char **name;
@@ -1169,13 +1260,14 @@ static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
 static json_t *_mbox_get(jmap_req_t *req,
                          const mbentry_t *mbentry,
                          hash_table *roles,
-                         hash_table *props)
+                         hash_table *props,
+                         enum shared_mbox_type share_type)
 {
     unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
     struct statusdata sdata;
     int rights;
     int is_inbox = 0, parent_is_inbox = 0;
-    int r;
+    int r = 0;
     mbname_t *mbname = mbname_from_intname(mbentry->name);
     mbentry_t *parent = NULL;
 
@@ -1203,12 +1295,9 @@ static json_t *_mbox_get(jmap_req_t *req,
         mboxlist_findparent(mbname_intname(mbname), &parent);
     }
 
-    /* Lookup status. */
-    r = status_lookup(mbname_intname(mbname), req->userid, statusitems, &sdata);
-    if (r) goto done;
-
     /* Build JMAP mailbox response. */
-    obj = json_pack("{}");
+    obj = json_object();
+
     json_object_set_new(obj, "id", json_string(mbentry->uniqueid));
     if (_wantprop(props, "name")) {
         char *name = _mbox_get_name(req, mbname);
@@ -1252,29 +1341,6 @@ static json_t *_mbox_get(jmap_req_t *req,
 
         json_object_set_new(obj, "myRights", jrights);
     }
-
-    if (_wantprop(props, "totalEmails")) {
-        json_object_set_new(obj, "totalEmails", json_integer(sdata.messages));
-    }
-    if (_wantprop(props, "unreadEmails")) {
-        json_object_set_new(obj, "unreadEmails", json_integer(sdata.unseen));
-    }
-
-    if (_wantprop(props, "totalThreads") || _wantprop(props, "unreadThreads")) {
-        conv_status_t xconv = CONV_STATUS_INIT;
-        if ((r = conversation_getstatus(req->cstate,
-                                        mbname_intname(mbname), &xconv))) {
-            syslog(LOG_ERR, "conversation_getstatus(%s): %s",
-                   mbname_intname(mbname), error_message(r));
-            goto done;
-        }
-        if (_wantprop(props, "totalThreads")) {
-            json_object_set_new(obj, "totalThreads", json_integer(xconv.exists));
-        }
-        if (_wantprop(props, "unreadThreads")) {
-            json_object_set_new(obj, "unreadThreads", json_integer(xconv.unseen));
-        }
-    }
     if (_wantprop(props, "role")) {
         if (role && !hash_lookup(role, roles)) {
             /* In JMAP, only one mailbox have a role. First one wins. */
@@ -1284,9 +1350,55 @@ static json_t *_mbox_get(jmap_req_t *req,
             json_object_set_new(obj, "role", json_null());
         }
     }
-    if (_wantprop(props, "sortOrder")) {
-        int sortOrder = _mbox_get_sortorder(req, mbname);
-        json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
+
+    if (share_type == _MBOX_SHARED) {
+        /* Lookup status. */
+        r = status_lookup(mbname_intname(mbname), req->userid, statusitems, &sdata);
+        if (r) goto done;
+
+        if (_wantprop(props, "totalEmails")) {
+            json_object_set_new(obj, "totalEmails", json_integer(sdata.messages));
+        }
+        if (_wantprop(props, "unreadEmails")) {
+            json_object_set_new(obj, "unreadEmails", json_integer(sdata.unseen));
+        }
+
+        if (_wantprop(props, "totalThreads") || _wantprop(props, "unreadThreads")) {
+            conv_status_t xconv = CONV_STATUS_INIT;
+            if ((r = conversation_getstatus(req->cstate,
+                            mbname_intname(mbname), &xconv))) {
+                syslog(LOG_ERR, "conversation_getstatus(%s): %s",
+                        mbname_intname(mbname), error_message(r));
+                goto done;
+            }
+            if (_wantprop(props, "totalThreads")) {
+                json_object_set_new(obj, "totalThreads", json_integer(xconv.exists));
+            }
+            if (_wantprop(props, "unreadThreads")) {
+                json_object_set_new(obj, "unreadThreads", json_integer(xconv.unseen));
+            }
+        }
+        if (_wantprop(props, "sortOrder")) {
+            int sortOrder = _mbox_get_sortorder(req, mbname);
+            json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
+        }
+    }
+    else {
+        if (_wantprop(props, "totalEmails")) {
+            json_object_set_new(obj, "totalEmails", json_integer(0));
+        }
+        if (_wantprop(props, "unreadEmails")) {
+            json_object_set_new(obj, "unreadEmails", json_integer(0));
+        }
+        if (_wantprop(props, "totalThreads")) {
+            json_object_set_new(obj, "totalThreads", json_integer(0));
+        }
+        if (_wantprop(props, "unreadThreads")) {
+            json_object_set_new(obj, "unreadThreads", json_integer(0));
+        }
+        if (_wantprop(props, "sortOrder")) {
+            json_object_set_new(obj, "sortOrder", json_integer(0));
+        }
     }
 
 done:
@@ -1314,6 +1426,7 @@ struct jmap_mailbox_get_cb_rock {
     struct jmap_get *get;
     hash_table *roles;
     hash_table *want;
+    struct shared_mboxes *shared_mboxes;
 };
 
 static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
@@ -1321,7 +1434,6 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     struct jmap_mailbox_get_cb_rock *rock = _rock;
     jmap_req_t *req = rock->req;
     json_t *list = (json_t *) rock->get->list, *obj;
-    int r = 0, rights;
 
     /* Don't list special-purpose mailboxes. */
     if ((mbentry->mbtype & MBTYPE_DELETED) ||
@@ -1329,7 +1441,7 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
         (mbentry->mbtype & MBTYPE_REMOTE) ||  /* XXX ?*/
         (mbentry->mbtype & MBTYPE_RESERVE) || /* XXX ?*/
         (mbentry->mbtype & MBTYPES_NONIMAP)) {
-        goto done;
+        return 0;
     }
 
     /* Do we need to process this mailbox? */
@@ -1340,18 +1452,17 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     if (rock->want && !hash_numrecords(rock->want))
         return IMAP_OK_COMPLETED;
 
-    /* Check ACL on mailbox for current user */
-    rights = jmap_myrights(req, mbentry);
-    if ((rights & (ACL_LOOKUP | ACL_READ)) != (ACL_LOOKUP | ACL_READ)) {
-        goto done;
-    }
+    /* Check share_type for this mailbox */
+    enum shared_mbox_type share_type =
+        _shared_mbox_type(rock->shared_mboxes, mbentry->name);
+    if (share_type == _MBOX_HIDDEN)
+        return 0;
 
     /* Convert mbox to JMAP object. */
-    obj = _mbox_get(req, mbentry, rock->roles, rock->get->props);
+    obj = _mbox_get(req, mbentry, rock->roles, rock->get->props, share_type);
     if (!obj) {
         syslog(LOG_INFO, "could not convert mailbox %s to JMAP", mbentry->name);
-        r = IMAP_INTERNAL;
-        goto done;
+        return IMAP_INTERNAL;
     }
     json_array_append_new(list, obj);
 
@@ -1360,8 +1471,7 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
         hash_del(mbentry->uniqueid, rock->want);
     }
 
-  done:
-    return r;
+    return 0;
 }
 
 static void jmap_mailbox_get_notfound(const char *id, void *data __attribute__((unused)), void *rock)
@@ -1375,17 +1485,18 @@ static int jmap_mailbox_get(jmap_req_t *req)
     struct jmap_get get;
     json_t *err = NULL;
 
-    /* Build callback data */
-    struct jmap_mailbox_get_cb_rock rock = { req, &get, NULL, NULL };
-    rock.roles = (hash_table *) xmalloc(sizeof(hash_table));
-    construct_hash_table(rock.roles, 8, 0);
-
     /* Parse request */
     jmap_get_parse(req->args, &parser, req, &get, &err);
     if (err) {
         jmap_error(req, err);
-        goto done;
+        return 0;
     }
+
+    /* Build callback data */
+    struct shared_mboxes *shared_mboxes = _shared_mboxes_new(req, /*flags*/0);
+    struct jmap_mailbox_get_cb_rock rock = { req, &get, NULL, NULL, shared_mboxes };
+    rock.roles = (hash_table *) xmalloc(sizeof(hash_table));
+    construct_hash_table(rock.roles, 8, 0);
 
     /* Does the client request specific mailboxes? */
     if (JNOTNULL(get.ids)) {
@@ -1407,7 +1518,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
      * but will degrade if clients just fetch a small subset of
      * all mailbox ids. XXX Optimise this codepath if the ids[] array
      * length is small */
-    jmap_mboxlist(req, jmap_mailbox_get_cb, &rock);
+    mboxlist_usermboxtree(req->accountid, jmap_mailbox_get_cb, &rock, 0);
 
     /* Report if any requested mailbox has not been found */
     if (rock.want) {
@@ -1420,7 +1531,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
     json_decref(jstate);
     jmap_ok(req, jmap_get_reply(&get));
 
-done:
+    _shared_mboxes_free(shared_mboxes);
     free_hash_table(rock.want, NULL);
     free(rock.want);
     free_hash_table(rock.roles, NULL);
@@ -1453,6 +1564,7 @@ typedef struct {
     mboxquery_filter_t *filter;
     ptrarray_t sort;    /* Sort criteria (mboxquery_sort_t) */
     ptrarray_t result;  /* Result records (mboxquery_record_t) */
+    struct shared_mboxes *shared_mboxes;
 
     int _need_name;
     int _need_utf8mboxname;
@@ -1478,6 +1590,7 @@ static mboxquery_t *_mboxquery_new(jmap_req_t *req)
 {
     mboxquery_t *q = xzmalloc(sizeof(mboxquery_t));
     q->req = req;
+    q->shared_mboxes = _shared_mboxes_new(req, /*flags*/0);
     return q;
 }
 
@@ -1526,6 +1639,7 @@ static void _mboxquery_free(mboxquery_t **qptr)
         free(crit);
     }
     ptrarray_fini(&q->sort);
+    _shared_mboxes_free(q->shared_mboxes);
 
     free(q);
     *qptr = NULL;
@@ -1652,10 +1766,14 @@ static int _mboxquery_compar(const void **a, const void **b, void *rock)
 
 static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
 {
+    mboxquery_t *q = rock;
+
     if (mbentry->mbtype & (MBTYPES_NONIMAP|MBTYPE_DELETED))
         return 0;
 
-    mboxquery_t *q = rock;
+    if (_shared_mbox_type(q->shared_mboxes, mbentry->name) == _MBOX_HIDDEN)
+        return 0;
+
     mbname_t *_mbname = mbname_from_intname(mbentry->name);
 
     int r = 0;
@@ -2873,7 +2991,8 @@ static int _mbox_changes(jmap_req_t *req,
 
 
     /* Search for updates */
-    r = jmap_allmbox(req, _mbox_changes_cb, &data);
+    r = mboxlist_usermboxtree(req->accountid, _mbox_changes_cb, &data,
+                              MBOXTREE_TOMBSTONES|MBOXTREE_DELETED);
     if (r) goto done;
 
     /* Sort updates by modseq */

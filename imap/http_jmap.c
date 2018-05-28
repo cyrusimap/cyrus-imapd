@@ -262,12 +262,6 @@ EXPORTED int jmap_mboxlist(jmap_req_t *req, mboxlist_cb *proc, void *rock)
                     req->mboxrights, proc, rock, 0/*all*/);
 }
 
-EXPORTED int jmap_allmbox(jmap_req_t *req, mboxlist_cb *proc, void *rock)
-{
-    return mymblist(req->userid, req->accountid, req->authstate,
-                    req->mboxrights, proc, rock, 1/*all*/);
-}
-
 static long jmap_max_size_upload = 0;
 static long jmap_max_concurrent_upload = 0;
 static long jmap_max_size_request = 0;
