@@ -9460,4 +9460,52 @@ EOF
     $self->assert_null($gotPart->{'header:Content-Transfer-Encoding'});
 }
 
+sub test_email_body_alternative_without_html
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my %exp_sub;
+    $store->set_folder("INBOX");
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+
+    my $body = "".
+    "--sub\r\n".
+    "Content-Type: text/plain\r\n".
+    "\r\n" .
+    "plain text".
+    "\r\n--sub\r\n".
+    "Content-Type: some/part\r\n".
+    "Content-Transfer-Encoding: base64\r\n".
+    "\r\n" .
+    "abc=".
+    "\r\n--sub--\r\n";
+
+    $exp_sub{A} = $self->make_message("foo",
+        mime_type => "multipart/alternative",
+        mime_boundary => "sub",
+        body => $body
+    );
+
+    xlog "get email list";
+    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $ids = $res->[0][1]->{ids};
+
+    xlog "get email";
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => $ids,
+        properties => ['textBody', 'htmlBody', 'bodyStructure'],
+        fetchAllBodyValues => JSON::true
+    }, "R1"]]);
+    my $msg = $res->[0][1]{list}[0];
+    $self->assert_num_equals(1, scalar @{$msg->{textBody}});
+    $self->assert_num_equals(1, scalar @{$msg->{htmlBody}});
+    $self->assert_str_equals($msg->{textBody}[0]->{partId}, $msg->{htmlBody}[0]->{partId});
+}
+
 1;
