@@ -966,8 +966,6 @@ override_rdate_from_ical(context_t *ctx __attribute__((unused)),
 static json_t*
 override_exdate_from_ical(context_t *ctx, icalproperty *prop)
 {
-    /* returns a JSON object with a single key value pair. value is
-     * always JSON null */
     json_t *override = json_pack("{}");
     icaltimetype id = icalproperty_get_exdate(prop);
     const char *tzid_xdate;
@@ -984,7 +982,7 @@ override_exdate_from_ical(context_t *ctx, icalproperty *prop)
 
     if (!icaltime_is_null_time(id)) {
         char *t = localdate_from_icaltime_r(id);
-        json_object_set_new(override, t, json_null());
+        json_object_set_new(override, t, json_pack("{s:b}", "excluded", 1));
         free(t);
     }
 
@@ -4316,9 +4314,17 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
             continue;
         }
 
-        if (json_is_null(override)) {
-            /* Add EXDATE */
-            dtprop_to_ical(comp, start, ctx->tzstart, 0, ICAL_EXDATE_PROPERTY);
+        json_t *excluded = json_object_get(override, "excluded");
+        if (excluded) {
+            if (json_object_size(override) == 1 && excluded == json_true()) {
+                /* Add EXDATE */
+                dtprop_to_ical(comp, start, ctx->tzstart, 0, ICAL_EXDATE_PROPERTY);
+            }
+            else {
+                invalidprop(ctx, id);
+                endprop(ctx);
+                continue;
+            }
         } else if (!json_object_size(override)) {
             /* Add RDATE */
             dtprop_to_ical(comp, start, ctx->tzstart, 0, ICAL_RDATE_PROPERTY);
@@ -4424,6 +4430,11 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 
     icaltimezone *utc = icaltimezone_get_utc_timezone();
     icaltimetype now = icaltime_current_time_with_zone(utc);
+
+    json_t *excluded = json_object_get(event, "excluded");
+    if (excluded && excluded != json_false()) {
+        invalidprop(ctx, "excluded");
+    }
 
     /* uid */
     icalcomponent_set_uid(comp, ctx->uid);
