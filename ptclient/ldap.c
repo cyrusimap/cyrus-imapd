@@ -964,7 +964,7 @@ static int ptsmodule_get_dn(
                 for (entry = ldap_first_entry(ptsm->ld, res); entry != NULL; entry = ldap_next_entry(ptsm->ld, entry)) {
                     if ((vals = ldap_get_values(ptsm->ld, entry, ptsm->domain_name_attribute)) != NULL) {
                         syslog(LOG_DEBUG, "we have a domain %s", vals[0]);
-                        ptsmodule_standard_root_dn(vals[0], &temp_base);
+                        ptsmodule_standard_root_dn(vals[0], (const char **) &temp_base);
                         rc = ldap_search_st(ptsm->ld, temp_base, ptsm->scope, filter, attrs, 0, &(ptsm->timeout), &res2);
                         if (rc == LDAP_SUCCESS && ldap_count_entries(ptsm->ld, res2) == 1) {
                             syslog(LOG_DEBUG, "Found %s in %s", canon_id, temp_base);
