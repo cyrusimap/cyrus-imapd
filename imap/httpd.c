@@ -2688,6 +2688,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             buf_printf(&log, "%sjmap=%s", sep, hdr[0]);
             sep = "; ";
         }
+        if ((hdr = spool_getheader(txn->req_hdrs, ":dblookup"))) {
+            buf_printf(&log, "%slookup=%s", sep, hdr[0]);
+            sep = "; ";
+        }
         if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
             buf_printf(&log, "%sdepth=%s", sep, hdr[0]);
             sep = "; ";

@@ -44,6 +44,7 @@
 
 #include "carddav_db.h"
 #include "http_dav.h"
+#include "spool.h"
 #include "util.h"
 #include "xstrlcpy.h"
 
@@ -280,6 +281,11 @@ static int meth_get_db(struct transaction_t *txn,
 
     if (userhdrs[1]) return HTTP_NOT_ALLOWED;
     if (keyhdrs[1]) return HTTP_NOT_ALLOWED;
+
+    spool_cache_header(xstrdup(":dblookup"),
+                      strconcat(userhdrs[0], "/", keyhdrs[0], (char *)NULL),
+                      txn->req_hdrs);
+
 
     if (!strcmp(txn->req_uri->path, "/dblookup/email"))
         return get_email(txn, userhdrs[0], keyhdrs[0]);
