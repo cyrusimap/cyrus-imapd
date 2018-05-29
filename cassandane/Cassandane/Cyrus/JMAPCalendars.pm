@@ -1176,7 +1176,7 @@ sub test_calendarevent_get_recurrenceoverrides
     $self->assert_not_null($o);
 
     $self->assert(exists $event->{recurrenceOverrides}->{"2016-02-01T13:00:00"});
-    $self->assert_null($event->{recurrenceOverrides}->{"2016-02-01T13:00:00"});
+    $self->assert_equals(JSON::true, $event->{recurrenceOverrides}->{"2016-02-01T13:00:00"}{excluded});
 
     $o = $event->{recurrenceOverrides}->{"2016-05-01T13:00:00"};
     $self->assert_not_null($o);
@@ -2005,7 +2005,7 @@ sub test_calendarevent_set_recurrenceoverrides
         },
         "recurrenceRule" => $recurrence,
         "recurrenceOverrides" => {
-            "2016-02-01T09:00:00" => undef,
+            "2016-02-01T09:00:00" => { excluded => JSON::true },
             "2016-02-03T09:00:00" => {},
             "2016-04-01T10:00:00" => {
                 "description" => "don't come in without an April's joke!",
