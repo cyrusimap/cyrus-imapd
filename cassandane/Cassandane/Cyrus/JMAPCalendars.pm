@@ -3349,6 +3349,48 @@ sub test_calendarevent_query_text
     }
 }
 
+sub test_calendarevent_query_unixepoch
+    :JMAP :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $calid = 'Default';
+
+    xlog "create events";
+    my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+      "1" => {
+        "calendarId" => $calid,
+        "title" => "Establish first ARPANET link between UCLA and SRI",
+        "description" => "",
+        "freeBusyStatus" => "busy",
+        "isAllDay" => JSON::false,
+        "start" => "1969-11-21T17:00:00",
+        "timeZone" => "America/Los_Angeles",
+        "duration" => "PT1H",
+      },
+    }}, "R1"]]);
+
+    xlog "Run squatter";
+
+    $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    "filter" => {
+                        "after" =>  "1969-01-01T00:00:00Z",
+                        "before" => "1969-12-31T23:59:59Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(1, $res->[0][1]{total});
+
+    $res = $jmap->CallMethods([['CalendarEvent/query', {
+                    "filter" => {
+                        "after" =>  "1949-06-20T00:00:00Z",
+                        "before" => "1968-10-14T00:00:00Z",
+                    },
+                }, "R1"]]);
+    $self->assert_num_equals(0, $res->[0][1]{total});
+}
+
 
 sub test_calendarevent_set_caldav
     :JMAP :min_version_3_1
