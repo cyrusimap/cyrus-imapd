@@ -468,7 +468,7 @@ EXPORTED int time_from_iso8601(const char *s, time_t *tp)
     exp.tm_mon--; /* normalize to months since January */
 
     /* sanity check the date/time (including leap day & second) */
-    if (exp.tm_year < 70 || exp.tm_mon < 0 || exp.tm_mon > 11 ||
+    if (exp.tm_mon < 0 || exp.tm_mon > 11 ||
         exp.tm_mday < 1 ||
         exp.tm_mday > monthdays(exp.tm_year, exp.tm_mon) ||
         exp.tm_hour > 23 || exp.tm_min > 59 || exp.tm_sec > 60) {
