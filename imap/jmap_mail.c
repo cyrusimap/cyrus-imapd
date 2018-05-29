@@ -7431,7 +7431,9 @@ static int jmap_email_parse(jmap_req_t *req)
         int r = jmap_findblob(req, blobid, &mbox, &mr, &body, &part);
         if (r) {
             json_array_append_new(notFound, json_string(blobid));
+            continue;
         }
+
         json_t *email = NULL;
         if (part && strcmp(part->type, "MESSAGE")) {
             _email_from_blob(req, &getargs, mr, body, part, &email);
