@@ -1785,12 +1785,13 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
             mailbox->index_changes = xrealloc(mailbox->index_changes, sizeof(struct index_change) * mailbox->index_change_alloc);
         }
 
-        /* stitch into place */
-        uint32_t pos = record->recno % INDEX_MAP_SIZE;
-        mailbox->index_changes[mailbox->index_change_count-1].mapnext = mailbox->index_change_map[pos];
-        mailbox->index_change_map[pos] = mailbox->index_change_count; /* always non-zero */
         change = &mailbox->index_changes[mailbox->index_change_count-1];
         memset(change, 0, sizeof(struct index_change));
+
+        /* stitch into place */
+        uint32_t pos = record->recno % INDEX_MAP_SIZE;
+        change->mapnext = mailbox->index_change_map[pos];
+        mailbox->index_change_map[pos] = mailbox->index_change_count; /* always non-zero */
     }
 
     /* finally always copy the data into place */
