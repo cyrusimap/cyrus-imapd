@@ -775,8 +775,8 @@ static void _make_created_ids(const char *creation_id, void *val, void *rock)
     json_object_set_new(jcreatedIds, creation_id, json_string(id));
 }
 
-/* Perform a POST request */
-static int _jmap_post(struct transaction_t *txn, json_t **res)
+/* Perform an API request */
+static int jmap_api(struct transaction_t *txn, json_t **res)
 {
     json_t *jreq = NULL, *resp = NULL;
     size_t i;
@@ -788,7 +788,6 @@ static int _jmap_post(struct transaction_t *txn, json_t **res)
     hash_table mboxrights = HASH_TABLE_INITIALIZER;
     strarray_t methods = STRARRAY_INITIALIZER;
 
-    /* Regular JMAP POST request */
     ret = parse_json_body(txn, &jreq);
     if (ret) return json_error_response(txn, ret);
 
@@ -810,7 +809,8 @@ static int _jmap_post(struct transaction_t *txn, json_t **res)
     construct_hash_table(&mboxrights, 64, 0);
 
     /* Set up creation ids */
-    long max_creation_ids = (jmap_max_calls_in_request + 1) * jmap_max_objects_in_set;
+    long max_creation_ids =
+        (jmap_max_calls_in_request + 1) * jmap_max_objects_in_set;
     new_creation_ids = xzmalloc(sizeof(hash_table));
     construct_hash_table(new_creation_ids, max_creation_ids, 0);
 
@@ -978,6 +978,7 @@ static int _jmap_post(struct transaction_t *txn, json_t **res)
     return ret;
 }
 
+/* Perform a POST request */
 static int jmap_post(struct transaction_t *txn,
                      void *params __attribute__((unused)))
 {
@@ -996,8 +997,8 @@ static int jmap_post(struct transaction_t *txn,
         return jmap_upload(txn);
     }
 
-    /* Regular JMAP POST request */
-    ret = _jmap_post(txn, &res);
+    /* Regular JMAP API request */
+    ret = jmap_api(txn, &res);
 
     if (!ret) {
         /* Output the JSON object */
@@ -1078,7 +1079,7 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
     buf_init_ro(&txn->req_body.payload, buf_base(inbuf), buf_len(inbuf));
 
     /* Process the API request */
-    ret = _jmap_post(txn, &res);
+    ret = jmap_api(txn, &res);
 
     /* Free request payload */
     buf_free(&txn->req_body.payload);
@@ -2332,6 +2333,18 @@ static int jmap_settings(struct transaction_t *txn)
         syslog(LOG_ERR, "JMAP auth: cannot determine user settings for %s",
                 httpd_userid);
         return HTTP_SERVER_ERROR;
+    }
+
+    if (ws_enabled()) {
+        const char *proto = NULL, *host = NULL;
+
+        http_proto_host(txn->req_hdrs, &proto, &host);
+
+        buf_reset(&txn->buf);
+        buf_printf(&txn->buf, "ws%s://%s%s", proto+4, host, JMAP_BASE_URL);
+
+        json_object_set_new(res, "wsUrl",
+                            json_string(buf_cstring(&txn->buf)));
     }
 
     /* Write the JSON response */
