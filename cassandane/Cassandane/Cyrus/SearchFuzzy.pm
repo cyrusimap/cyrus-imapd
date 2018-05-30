@@ -1035,4 +1035,82 @@ sub test_search_subjectsnippet
     $self->assert_matches(qr/^\[plumbing\]/, $m{subject});
 }
 
+sub test_audit_unindexed
+    :min_version_3_0
+{
+    # This test does some sneaky things to cyrus.indexed.db to force squatter
+    # report audit errors. It assumes a specific format for cyrus.indexed.db
+    # and Cyrus to preserve UIDVALDITY across two consecutive APPENDs.
+    # As such, it's likely to break for internal changes.
+
+    my ($self) = @_;
+    return if not $self->{test_fuzzy_search};
+
+    my $talk = $self->{store}->get_client();
+
+    my $basedir = $self->{instance}->{basedir};
+    my $outfile = "$basedir/audit.tmp";
+
+    *_readfile = sub {
+        open FH, '<', $outfile
+            or die "Cannot open $outfile for reading: $!";
+        my @entries = readline(FH);
+        close FH;
+        return @entries;
+    };
+
+    xlog "Create message UID 1 and index it in Xapian and cyrus.indexed.db.";
+    $self->make_message() || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "Create message UID 2 but *don't* index it.";
+    $self->make_message() || die;
+
+    xlog "Read current cyrus.indexed.db.";
+    my $result = $self->{instance}->run_command(
+        {
+            cyrus => 1,
+            redirects => { stdout => $outfile },
+        },
+        'cyr_dbtool',
+        "$basedir/search/c/user/cassandane/xapian/cyrus.indexed.db",
+        'twoskip',
+        'show'
+    );
+    my @entries = _readfile();
+    $self->assert_num_equals(1, scalar @entries);
+
+    xlog "Add UID 2 to sequence set in cyrus.indexed.db";
+    my($key, $val) = split(/\s/, $entries[0], 2);
+    $val =~ s/\s+$//;
+    $result = $self->{instance}->run_command(
+        {
+            cyrus => 1,
+            handlers => {
+                exited_normally => sub { return 'ok'; },
+                exited_abnormally => sub { return 'failure'; },
+            },
+        },
+        'cyr_dbtool',
+        "$basedir/search/c/user/cassandane/xapian/cyrus.indexed.db",
+        'twoskip',
+        'set',
+        $key,
+        $val . ':2'
+    );
+    $self->assert_str_equals('ok', $result);
+
+    xlog "Run squatter audit";
+    $result = $self->{instance}->run_command(
+        {
+            cyrus => 1,
+            redirects => { stdout => $outfile },
+        },
+        'squatter', '-A'
+    );
+    my @audits = _readfile();
+    $self->assert_num_equals(1, scalar @audits);
+    $self->assert_str_equals("Unindexed message(s) in user.cassandane: 2 \n", $audits[0]);
+}
+
 1;
