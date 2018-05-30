@@ -47,6 +47,7 @@
 #include "message_guid.h"
 #include "util.h"
 #include "strarray.h"
+#include "bitvector.h"
 
 #include "search_part.h"
 
@@ -108,6 +109,7 @@ struct search_text_receiver {
     int (*end_mailbox)(search_text_receiver_t *,
                        struct mailbox *);
     int (*flush)(search_text_receiver_t *);
+    int (*audit_mailbox)(search_text_receiver_t *, bitvector_t *unindexed);
 };
 
 #define SEARCH_FLAG_CAN_BATCH   (1<<0)
@@ -161,6 +163,7 @@ extern void search_end_search(search_builder_t *);
 #define SEARCH_UPDATE_NONBLOCKING (1<<1)
 #define SEARCH_UPDATE_BATCH (1<<2)
 #define SEARCH_UPDATE_XAPINDEXED (1<<3)
+#define SEARCH_UPDATE_AUDIT (1<<4)
 search_text_receiver_t *search_begin_update(int verbose);
 int search_update_mailbox(search_text_receiver_t *rx,
                           struct mailbox *mailbox,

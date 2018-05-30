@@ -1630,6 +1630,47 @@ out:
     return r;
 }
 
+static int audit_mailbox(search_text_receiver_t *rx, bitvector_t *unindexed)
+{
+    xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
+    struct mailbox_iter *iter = NULL;
+    const message_t *msg = NULL;
+    int r = 0;
+
+    if (tr->mode != XAPIAN_DBW_XAPINDEXED) {
+        syslog(LOG_ERR, "search_xapian: require XAPIAN_DBW_XAPINDEXED mode");
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    iter = mailbox_iter_init(tr->super.mailbox, 0, ITER_SKIP_UNLINKED);
+
+    while ((msg = mailbox_iter_step(iter))) {
+        uint32_t uid;
+        r = message_get_uid((message_t*) msg, &uid);
+        if (r) goto done;
+
+        if (!seqset_ismember(tr->oldindexed, uid)) {
+            if (tr->super.verbose)
+                syslog(LOG_INFO, "search_xapian: ignoring %s:%d during audit",
+                        tr->super.mailbox->name, uid);
+            continue;
+        }
+
+        const struct message_guid *guid;
+        r = message_get_guid((message_t*) msg, &guid);
+        if (r) goto done;
+
+        if (!xapian_dbw_is_indexed(tr->dbw, make_cyrusid(guid))) {
+            bv_set(unindexed, uid);
+        }
+    }
+
+done:
+    mailbox_iter_done(&iter);
+    return r;
+}
+
 static void free_segments(xapian_receiver_t *tr)
 {
     int i;
@@ -1824,8 +1865,8 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
         goto out;
     }
 
-    tr->mode = (flags & SEARCH_UPDATE_XAPINDEXED) ? XAPIAN_DBW_XAPINDEXED
-                                                  : XAPIAN_DBW_CONVINDEXED;
+    tr->mode = (flags & (SEARCH_UPDATE_XAPINDEXED|SEARCH_UPDATE_AUDIT)) ?
+        XAPIAN_DBW_XAPINDEXED : XAPIAN_DBW_CONVINDEXED;
 
     /* doesn't matter if the first one doesn't exist yet, we'll create it. Only stat the others if we're going
      * to be opening them */
@@ -1848,7 +1889,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     /* read the indexed data from every directory so know what still needs indexing */
     tr->oldindexed = seqset_init(0, SEQ_MERGE);
 
-    if ((flags & SEARCH_UPDATE_INCREMENTAL)) {
+    if ((flags & (SEARCH_UPDATE_INCREMENTAL|SEARCH_UPDATE_AUDIT))) {
         r = read_indexed(tr->activedirs, tr->activetiers, mailbox->name, mailbox->i.uidvalidity,
                         tr->oldindexed, /*do_cache*/1, tr->super.verbose);
         if (r) goto out;
@@ -2047,6 +2088,7 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.end_message = end_message_update;
     tr->super.super.end_mailbox = end_mailbox_update;
     tr->super.super.flush = flush;
+    tr->super.super.audit_mailbox = audit_mailbox;
 
     tr->super.verbose = verbose;
 

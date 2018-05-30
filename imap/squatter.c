@@ -64,6 +64,7 @@
 
 #include "annotate.h"
 #include "assert.h"
+#include "bitvector.h"
 #include "bsearch.h"
 #include "mboxlist.h"
 #include "global.h"
@@ -765,6 +766,73 @@ static void do_rolling(const char *channel)
     sync_log_reader_free(slr);
 }
 
+static int audit_one(const char *mboxname, bitvector_t *unindexed)
+{
+    int r2, r = 0;
+    struct mailbox *mailbox = NULL;
+
+    r = mailbox_open_irl(mboxname, &mailbox);
+    if (r) goto done;
+
+    r = rx->begin_mailbox(rx, mailbox, SEARCH_UPDATE_AUDIT);
+    if (r) goto done;
+
+    r = rx->audit_mailbox(rx, unindexed);
+    if (r) goto done;
+
+done:
+    r2 = rx->end_mailbox(rx, mailbox);
+    mailbox_close(&mailbox);
+    if (!r) r = r2;
+    return r;
+}
+
+
+static int do_audit(const strarray_t *mboxnames)
+{
+    rx = search_begin_update(verbose);
+    if (rx == NULL)
+        return 0;       /* no indexer defined */
+
+    int r = 0;
+    if (!rx->audit_mailbox) {
+        syslog(LOG_ERR, "squatter: indexer does not support audits");
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    bitvector_t unindexed = BV_INITIALIZER;
+    int i;
+    for (i = 0 ; i < mboxnames->count ; i++) {
+        const char *mboxname = strarray_nth(mboxnames, i);
+        r = audit_one(mboxname, &unindexed);
+        if (r == IMAP_MAILBOX_NONEXISTENT)
+            r = 0;
+        if (r == IMAP_MAILBOX_LOCKED)
+            r = 0; /* XXX - try again? */
+        if (r) break;
+        if (sleepmicroseconds)
+            usleep(sleepmicroseconds);
+
+        if (bv_count(&unindexed)) {
+            printf("Unindexed message(s) in %s: ", mboxname);
+            int uid;
+            for (uid = bv_next_set(&unindexed, 0);
+                 uid != -1;
+                 uid = bv_next_set(&unindexed, uid+1)) {
+                printf("%d ", uid);
+            }
+            printf("\n");
+        }
+        bv_clearall(&unindexed);
+    }
+    bv_free(&unindexed);
+
+done:
+    search_end_update(rx);
+    return r;
+}
+
 static void shut_down(int code)
 {
     seen_done();
@@ -793,12 +861,17 @@ int main(int argc, char **argv)
     const char *desttier = NULL;
     char *errstr = NULL;
     enum { UNKNOWN, INDEXER, INDEXFROM, SEARCH, ROLLING, SYNCLOG,
-           COMPACT } mode = UNKNOWN;
+           COMPACT, AUDIT } mode = UNKNOWN;
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:N:RUXZT:S:Fde:f:mn:riavz:t:ouh")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:I:N:RUXZT:S:Fde:f:mn:riavAz:t:ouh")) != EOF) {
         switch (opt) {
+        case 'A':
+            if (mode != UNKNOWN) usage(argv[0]);
+            mode = AUDIT;
+            break;
+
         case 'C':               /* alt config file */
             alt_config = optarg;
             break;
@@ -883,9 +956,9 @@ int main(int argc, char **argv)
             break;
 
         case 'r':               /* recurse */
-            if (mode != UNKNOWN && mode != INDEXER) usage(argv[0]);
+            if (mode != UNKNOWN && mode != INDEXER && mode != AUDIT) usage(argv[0]);
             recursive_flag = 1;
-            mode = INDEXER;
+            if (mode == UNKNOWN) mode = INDEXER;
             break;
 
         case 'i':               /* incremental mode */
@@ -984,6 +1057,11 @@ int main(int argc, char **argv)
         if (recursive_flag && optind == argc) usage(argv[0]);
         expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
         r = do_compact(&mboxnames, srctiers, desttier, compact_flags);
+        break;
+    case AUDIT:
+        if (recursive_flag && optind == argc) usage(argv[0]);
+        expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
+        r = do_audit(&mboxnames);
         break;
     }
 
