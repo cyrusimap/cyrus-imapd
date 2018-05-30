@@ -1,0 +1,19 @@
+dn: cn=internal,ou=domains,o=cyrus
+objectclass: domainrelatedobject
+associateddomain: internal.
+
+dn: uid=admin,dc=internal
+objectclass: user
+uid: admin
+dc: internal
+
+dn: uid=cassandane,dc=internal
+objectclass: user
+uid: cassandane
+dc: internal
+
+dn: cn=foo,ou=groups,o=cyrus
+objectclass: group
+cn: foo
+ou: groups
+o: cyrus

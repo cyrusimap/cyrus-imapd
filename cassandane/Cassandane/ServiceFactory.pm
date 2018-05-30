@@ -109,6 +109,14 @@ sub create
 				argv => ['pop3d'],
 				%params);
     }
+    elsif ($name =~ m/ptloader/)
+    {
+	return Cassandane::Service->new(
+				type => 'ptloader',
+				argv => ['ptloader', '-d', '99'],
+				port => '@basedir@/conf/ptsock',
+				%params);
+    }
     else
     {
 	die "No command specified and cannot guess a default";
