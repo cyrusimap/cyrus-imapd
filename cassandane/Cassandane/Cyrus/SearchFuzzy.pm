@@ -1036,7 +1036,7 @@ sub test_search_subjectsnippet
 }
 
 sub test_audit_unindexed
-    :min_version_3_0
+    :min_version_3_1
 {
     # This test does some sneaky things to cyrus.indexed.db to force squatter
     # report audit errors. It assumes a specific format for cyrus.indexed.db
