@@ -41,6 +41,7 @@ package Cassandane::Cyrus::TestCase;
 use strict;
 use warnings;
 use attributes;
+use Data::Dumper;
 use Mail::JMAPTalk;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.03;
@@ -96,6 +97,7 @@ sub new
 	adminstore => 0,
 	gen => 1,
 	deliver => 0,
+	jmap => 0,
     };
     map {
 	$want->{$_} = delete $params->{$_}
@@ -231,18 +233,6 @@ magic(MagicPlus => sub {
 magic(FastMailSharing => sub {
     shift->config_set('fastmailsharing' => 'true');
 });
-magic(JMAP => sub {
-    my $self = shift;
-    $self->want('jmap');
-    $self->want('adminstore');
-    $self->want('services' => [ 'imap', 'http' ]);
-    $self->config_set(caldav_realm => 'Cassandane');
-    $self->config_set(conversations => 'yes');
-    $self->config_set(httpmodules => 'carddav caldav jmap');
-    $self->config_set(httpallowcompress => 'no');
-});
-
-
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
@@ -268,6 +258,8 @@ sub _run_magic
 	    my $m = lc($a);
 	    # ignore min/max version attribution here
 	    next if $a =~ m/^(?:min|max)_version_/;
+	    # ignore feature test attribution here
+	    next if $a =~ m/^needs_/;
 	    die "Unknown attribute $a"
 		unless defined $magic_handlers{$m};
 	    next if $seen{$m};

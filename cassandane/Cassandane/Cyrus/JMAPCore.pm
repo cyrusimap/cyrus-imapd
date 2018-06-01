@@ -59,11 +59,23 @@ use charnames ':full';
 sub new
 {
     my ($class, @args) = @_;
-    return $class->SUPER::new({}, @args);
+
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(caldav_realm => 'Cassandane',
+		 conversations => 'yes',
+		 httpmodules => 'carddav caldav jmap',
+		 httpallowcompress => 'no');
+
+    return $class->SUPER::new({
+	config => $config,
+	jmap => 1,
+	adminstore => 1,
+	services => [ 'imap', 'http' ]
+    }, @args);
 }
 
 sub test_settings
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -179,7 +191,7 @@ sub test_settings
 }
 
 sub test_blob_download
-:JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -217,7 +229,7 @@ sub test_blob_download
 }
 
 sub test_creationids
-:JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

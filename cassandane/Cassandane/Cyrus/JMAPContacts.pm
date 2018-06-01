@@ -57,14 +57,18 @@ use charnames ':full';
 sub new
 {
     my ($class, @args) = @_;
+
     my $config = Cassandane::Config->default()->clone();
-    $config->set(caldav_realm => 'Cassandane');
-    $config->set(httpmodules => 'carddav jmap');
-    $config->set(httpallowcompress => 'no');
+    $config->set(caldav_realm => 'Cassandane',
+		 conversations => 'yes',
+		 httpmodules => 'carddav caldav jmap',
+		 httpallowcompress => 'no');
+
     return $class->SUPER::new({
-        adminstore => 1,
-        config => $config,
-        services => ['imap', 'http'],
+	config => $config,
+	jmap => 1,
+	adminstore => 1,
+	services => [ 'imap', 'http' ]
     }, @args);
 }
 
@@ -75,7 +79,7 @@ sub set_up
 }
 
 sub test_contact_set_multicontact
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -123,7 +127,7 @@ sub test_contact_set_multicontact
 }
 
 sub test_contact_changes
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -246,7 +250,7 @@ sub test_contact_changes
 }
 
 sub test_contact_changes_shared
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -407,7 +411,7 @@ sub test_contact_changes_shared
 }
 
 sub test_contact_set_nickname
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -434,7 +438,7 @@ sub test_contact_set_nickname
 }
 
 sub test_contactgroup_set
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
 
     my ($self) = @_;
@@ -500,7 +504,7 @@ sub test_contactgroup_set
 }
 
 sub test_contact_query
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -673,7 +677,7 @@ sub test_contact_query
 
 
 sub test_contact_query_shared
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -881,7 +885,7 @@ sub test_contact_query_shared
 }
 
 sub test_contactgroup_changes
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1014,7 +1018,7 @@ sub test_contactgroup_changes
 }
 
 sub test_contactgroup_changes_shared
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1184,7 +1188,7 @@ sub test_contactgroup_changes_shared
 }
 
 sub test_contact_set
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1498,7 +1502,7 @@ sub test_contact_set
 }
 
 sub test_contact_set_emaillabel
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1549,7 +1553,7 @@ sub test_contact_set_emaillabel
 
 
 sub test_contact_set_state
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1616,7 +1620,7 @@ sub test_contact_set_state
 }
 
 sub test_contact_set_importance_later
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1651,7 +1655,7 @@ sub test_contact_set_importance_later
 }
 
 sub test_contact_set_importance_upfront
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1686,7 +1690,7 @@ sub test_contact_set_importance_upfront
 }
 
 sub test_contact_set_importance_multiedit
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1721,7 +1725,7 @@ sub test_contact_set_importance_multiedit
 }
 
 sub test_contact_set_importance_zero_multi
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1756,7 +1760,7 @@ sub test_contact_set_importance_zero_multi
 }
 
 sub test_contact_set_importance_zero_byself
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1791,7 +1795,7 @@ sub test_contact_set_importance_zero_byself
 }
 
 sub test_misc_creationids
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1814,7 +1818,7 @@ sub test_misc_creationids
 }
 
 sub test_misc_categories
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1873,7 +1877,7 @@ EOF
 }
 
 sub test_contact_get_issue2292
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
@@ -1899,7 +1903,7 @@ sub test_contact_get_issue2292
 }
 
 sub test_contactgroup_get_issue2292
-    :JMAP :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 

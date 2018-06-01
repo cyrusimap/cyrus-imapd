@@ -83,13 +83,6 @@ sub set_up
 	url => '/',
 	expandurl => 1,
     );
-
-    if (not $self->{instance}->{buildinfo}->{component}->{calalarmd}) {
-        xlog "calalarmd not enabled. Skipping tests.";
-        return;
-    }
-    $self->{test_calalarmd} = 1;
-
 }
 
 sub _can_match {
@@ -159,10 +152,9 @@ sub tear_down
 }
 
 sub test_simple
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 
@@ -241,10 +233,9 @@ EOF
 }
 
 sub test_simple_reconstruct
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 
@@ -329,10 +320,9 @@ EOF
 }
 
 sub test_reschedule_later
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 
@@ -431,10 +421,9 @@ EOF
 }
 
 sub test_override
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 
@@ -539,10 +528,9 @@ EOF
 }
 
 sub test_override_exception
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 
@@ -649,10 +637,9 @@ EOF
 }
 
 sub test_floating_notz
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 
@@ -721,10 +708,9 @@ EOF
 }
 
 sub test_floating_sametz
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 
@@ -806,7 +792,7 @@ EOF
 }
 
 sub test_floating_differenttz
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
     return if not $self->{test_calalarmd};
@@ -902,10 +888,9 @@ EOF
 }
 
 sub test_replication_at1
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     $self->assert_not_null($self->{replica});
 
@@ -1035,10 +1020,9 @@ EOF
 }
 
 sub test_override_double
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 
@@ -1147,10 +1131,9 @@ EOF
 }
 
 sub test_allday_notz
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 
@@ -1220,10 +1203,9 @@ EOF
 }
 
 sub test_allday_sametz
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 
@@ -1306,10 +1288,9 @@ EOF
 }
 
 sub test_replication_withalarms_in_tz_with_dst
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 
@@ -1413,10 +1394,9 @@ EOF
 }
 
 sub test_replication_withalarms_in_tz_without_dst
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 
@@ -1512,10 +1492,9 @@ EOF
 }
 
 sub test_reschedule_exception
-    :min_version_3_0
+    :min_version_3_0 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     # FIXME disable this test until calalarmd is fixed
     return;
@@ -1698,10 +1677,9 @@ EOF
 }
 
 sub test_simple_multiuser
-    :min_version_3_1
+    :min_version_3_1 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 
@@ -1851,10 +1829,9 @@ EOF
 }
 
 sub test_override_multiuser
-    :min_version_3_1
+    :min_version_3_1 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 
@@ -2036,10 +2013,9 @@ EOF
 }
 
 sub test_simple_multiuser_sametime
-    :min_version_3_1
+    :min_version_3_1 :needs_component_calalarmd
 {
     my ($self) = @_;
-    return if not $self->{test_calalarmd};
 
     my $CalDAV = $self->{caldav};
 

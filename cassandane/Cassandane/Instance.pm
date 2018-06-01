@@ -72,6 +72,7 @@ use Cassandane::MasterEvent;
 use Cassandane::Cassini;
 use Cassandane::PortManager;
 use Cassandane::Net::SMTPServer;
+use Cassandane::BuildInfo;
 require Cyrus::DList;
 
 my $__cached_rootdir;
@@ -646,7 +647,7 @@ sub _generate_imapd_conf
 	    event_groups => 'mailbox message flags',
 	);
     }
-    if ($self->{buildinfo}->{search}->{xapian}) {
+    if ($self->{buildinfo}->get('search', 'xapian')) {
         my %xapian_defaults = (
             search_engine => 'xapian',
             search_index_headers => 'no',
@@ -661,30 +662,6 @@ sub _generate_imapd_conf
         }
     }
     $self->{config}->generate($self->_imapd_conf());
-}
-
-sub _read_buildinfo
-{
-    my ($self) = @_;
-
-    # don't choke if we don't have cyr_buildinfo
-    eval {
-	$self->_find_binary('cyr_buildinfo');
-    };
-    return if $@;
-
-    my $filename = $self->{basedir} .  "/buildinfo.out";
-    $self->run_command({
-            cyrus => 1,
-            redirects => { stdout => $filename }
-    }, 'cyr_buildinfo');
-
-    local $/;
-    open FH, '<', $filename
-        or die "Cannot open $filename for reading: $!";
-    my $str = <FH>;
-    $self->{buildinfo} = JSON::decode_json($str);
-    close FH;
 }
 
 sub _emit_master_entry
@@ -1086,7 +1063,8 @@ sub start
 	$self->_build_skeleton();
 	# TODO: system("echo 1 >/proc/sys/kernel/core_uses_pid");
 	# TODO: system("echo 1 >/proc/sys/fs/suid_dumpable");
-	$self->_read_buildinfo();
+	$self->{buildinfo} = Cassandane::BuildInfo->new($self->{cyrus_destdir},
+						        $self->{cyrus_prefix});
 	$self->_generate_imapd_conf();
 	$self->_generate_master_conf();
 	$self->_fix_ownership();

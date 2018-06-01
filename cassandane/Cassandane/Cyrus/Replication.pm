@@ -444,6 +444,7 @@ sub assert_sieve_matches
 }
 
 sub test_sieve_replication
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -487,6 +488,7 @@ EOF
 }
 
 sub test_sieve_replication_exists
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -531,6 +533,7 @@ EOF
 }
 
 sub test_sieve_replication_different
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -592,6 +595,7 @@ EOF
 }
 
 sub test_sieve_replication_stale
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -657,6 +661,7 @@ EOF
 }
 
 sub test_sieve_replication_delete_unactivate
+    :needs_component_sieve
 {
     my ($self) = @_;
 

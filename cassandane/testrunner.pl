@@ -108,28 +108,27 @@ my @names;
     };
 };
 
-
 my %runners =
 (
     tap => sub
     {
 	my ($plan, $fh) = @_;
 	my $runner = Cassandane::Unit::Runner->new($fh);
-	$runner->filter('x', 'skip_version');
+	$runner->filter('x', 'skip_version', 'skip_missing_features');
 	return $runner->do_run($plan, 0);
     },
     pretty => sub
     {
 	my ($plan, $fh) = @_;
 	my $runner = Cassandane::Unit::RunnerPretty->new({}, $fh);
-	$runner->filter('x', 'skip_version');
+	$runner->filter('x', 'skip_version', 'skip_missing_features');
 	return $runner->do_run($plan, 0);
     },
     prettier => sub
     {
 	my ($plan, $fh) = @_;
 	my $runner = Cassandane::Unit::RunnerPretty->new({quiet=>1}, $fh);
-	$runner->filter('x', 'skip_version');
+	$runner->filter('x', 'skip_version', 'skip_missing_features');
 	return $runner->do_run($plan, 0);
     },
 );

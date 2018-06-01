@@ -72,11 +72,6 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
-    if (not $self->{instance}->{buildinfo}->{component}->{autocreate}) {
-        xlog "autocreate not enabled. Skipping tests.";
-        return;
-    }
-    $self->{test_autocreate} = 1;
 }
 
 sub tear_down
@@ -86,10 +81,9 @@ sub tear_down
 }
 
 sub test_autocreate_specialuse
-     :min_version_3_0
+     :min_version_3_0 :needs_component_autocreate
 {
     my ($self) = @_;
-    return unless $self->{test_autocreate};
 
     my $svc = $self->{instance}->get_service('imap');
     my $store = $svc->create_store(username => 'foo');
@@ -117,10 +111,9 @@ sub test_autocreate_specialuse
 }
 
 sub test_autocreate_sieve_script_generation
-    :min_version_3_0
+    :min_version_3_0 :needs_component_autocreate :needs_component_sieve
 {
     my ($self) = @_;
-    return unless $self->{test_autocreate};
 
     my $basedir = $self->{instance}->get_basedir();
     my $sieve_script_path = $basedir . "/conf/foo_sieve.script";

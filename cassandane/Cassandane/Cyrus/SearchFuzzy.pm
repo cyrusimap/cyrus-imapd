@@ -61,17 +61,11 @@ sub set_up
     my ($self) = @_;
     $self->SUPER::set_up();
 
-    if (not $self->{instance}->{buildinfo}->{search}->{xapian}) {
-        xlog "No xapian support enabled. Skipping tests.";
-        return;
-    }
-    $self->{test_fuzzy_search} = 1;
-
     # This will be "vanilla" if using a standard/distro xapian, "cyruslibs"
     # if using our fork of xapian, or "none" if the Cyrus being tested isn't
     # new enough to know the difference.
     $self->{xapian_flavor} =
-        $self->{instance}->{buildinfo}->{search}->{xapian_flavor} || "none";
+        $self->{instance}->{buildinfo}->get('search', 'xapian_flavor') || "none";
 
     xlog "Xapian flavor '$self->{xapian_flavor}' detected.\n";
 
@@ -140,6 +134,7 @@ sub create_testmessages
 }
 
 sub test_copy_messages
+    :needs_search_xapian
 {
     my ($self) = @_;
 
@@ -155,10 +150,9 @@ sub test_copy_messages
 }
 
 sub test_stem_verbs
-    :min_version_3_0
+    :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
     $self->create_testmessages();
 
     my $talk = $self->{store}->get_client();
@@ -189,10 +183,9 @@ sub test_stem_verbs
 }
 
 sub test_stem_any
-    :min_version_3_0
+    :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
     $self->create_testmessages();
 
     my $talk = $self->{store}->get_client();
@@ -218,10 +211,9 @@ sub test_stem_any
 }
 
 sub test_snippet_wildcard
-    :min_version_3_0
+    :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
 
     # Set up Xapian database
     xlog "Generate and index test messages";
@@ -267,10 +259,9 @@ sub test_snippet_wildcard
 }
 
 sub test_mix_fuzzy_and_nonfuzzy
-    :min_version_3_0
+    :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
     $self->create_testmessages();
     my $talk = $self->{store}->get_client();
 
@@ -286,7 +277,7 @@ sub test_mix_fuzzy_and_nonfuzzy
 }
 
 sub test_weird_crasher
-    :Conversations :min_version_3_0
+    :Conversations :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
     return if not $self->{test_fuzzy_search};
@@ -303,10 +294,9 @@ sub test_weird_crasher
 }
 
 sub test_stopwords
-    :min_version_3_0
+    :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
 
     # This test assumes that "the" is a stopword and is configured with
     # the search_stopword_path in cassandane.ini. If the option is not
@@ -368,10 +358,9 @@ sub test_stopwords
 }
 
 sub test_normalize_snippets
-    :min_version_3_0
+    :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
 
     # Set up test message with funny characters
     my $body = "foo gären советской diĝir naïve léger";
@@ -417,10 +406,9 @@ sub test_normalize_snippets
 }
 
 sub test_skipdiacrit
-    :min_version_3_0
+    :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
 
     # Set up test messages
     my $body = "Die Trauben gären.";
@@ -469,10 +457,9 @@ sub test_skipdiacrit
 }
 
 sub test_snippets_termcover
-    :min_version_3_0
+    :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
 
     my $body =
     "The 'charset' portion of an 'encoded-word' specifies the character ".
@@ -553,10 +540,9 @@ sub test_snippets_termcover
 }
 
 sub test_cjk_words
-    :min_version_3_0
+    :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
 
     xlog "Generate and index test messages.";
 
@@ -635,10 +621,9 @@ sub test_cjk_words
 }
 
 sub test_subject_isutf8
-    :min_version_3_0
+    :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
 
     xlog "Generate and index test messages.";
     # that's: "nuff réunion critères duff"
@@ -699,9 +684,9 @@ sub test_subject_isutf8
 }
 
 sub test_noindex_multipartheaders
+    :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
 
     my $talk = $self->{store}->get_client();
 
@@ -771,9 +756,9 @@ sub test_noindex_multipartheaders
 }
 
 sub test_xattachmentname
+    :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
 
     my $talk = $self->{store}->get_client();
 
@@ -825,10 +810,9 @@ sub test_xattachmentname
 
 
 sub test_xapianv2
-    :min_version_3_0
+    :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
 
     my $talk = $self->{store}->get_client();
 
@@ -906,10 +890,9 @@ sub test_xapianv2
 }
 
 sub test_snippets_escapehtml
-    :min_version_3_0
+    :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
 
     xlog "Generate and index test messages.";
     $self->make_message("Test1 subject with an unescaped & in it",
@@ -953,10 +936,9 @@ sub test_snippets_escapehtml
 }
 
 sub test_search_exactmatch
-    :min_version_3_0
+    :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
 
     xlog "Generate and index test messages.";
     $self->make_message("test1",
@@ -995,10 +977,9 @@ sub test_search_exactmatch
 }
 
 sub test_search_subjectsnippet
-    :min_version_3_0
+    :min_version_3_0 :needs_search_xapian
 {
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
 
     xlog "Generate and index test messages.";
     $self->make_message("[plumbing] Re: log server v0 live",
@@ -1036,7 +1017,7 @@ sub test_search_subjectsnippet
 }
 
 sub test_audit_unindexed
-    :min_version_3_1
+    :min_version_3_1 :needs_component_jmap
 {
     # This test does some sneaky things to cyrus.indexed.db to force squatter
     # report audit errors. It assumes a specific format for cyrus.indexed.db
@@ -1044,7 +1025,6 @@ sub test_audit_unindexed
     # As such, it's likely to break for internal changes.
 
     my ($self) = @_;
-    return if not $self->{test_fuzzy_search};
 
     my $talk = $self->{store}->get_client();
 

@@ -48,10 +48,14 @@ use lib '.';
 use Cassandane::Util::Log;
 
 my $enabled;
+my $buildinfo;
 
 sub new
 {
     my $class = shift;
+    if (not $buildinfo) {
+	$buildinfo = Cassandane::BuildInfo->new();
+    }
     return $class->SUPER::new(@_);
 }
 
@@ -128,6 +132,20 @@ sub filter
 	    }
 	    return;
 	},
+	skip_missing_features => sub
+	{
+	    return if not exists $self->{_name};
+	    my $sub = $self->can($self->{_name});
+	    return if not defined $sub;
+	    foreach my $attr (attributes::get($sub)) {
+		next if $attr !~ m/^needs_(\w+)_([\w_]+)$/;
+		if (not $buildinfo->get($1, $2)) {
+		    xlog "$1.$2 not enabled, $self->{_name} will be skipped";
+		    return 1;
+		}
+	    }
+	    return;
+	}
     };
 }
 

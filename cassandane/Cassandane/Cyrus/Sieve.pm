@@ -205,7 +205,9 @@ sub compile_sieve_script
     return $self->$meth($name, $script);
 }
 
-sub test_vacation_with_following_rules {
+sub test_vacation_with_following_rules
+    :needs_component_sieve
+{
     my ($self) = @_;
 
     my $target = "INBOX.target";
@@ -246,6 +248,7 @@ EOF
 }
 
 sub test_deliver
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -285,6 +288,7 @@ EOF
 
 sub test_deliver_specialuse
     :min_version_3_0
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -320,6 +324,7 @@ EOF
 
 sub test_deliver_compile
     :min_version_3_0
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -429,6 +434,7 @@ sub badscript_common
 }
 
 sub test_badscript_sievec
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -438,6 +444,7 @@ sub test_badscript_sievec
 }
 
 sub test_badscript_timsieved
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -447,6 +454,7 @@ sub test_badscript_timsieved
 }
 
 sub test_dup_keep_keep
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -474,6 +482,7 @@ EOF
 # tested for here.
 
 sub test_dup_keep_fileinto
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -497,6 +506,7 @@ EOF
 
 sub test_deliver_fileinto_dot
     :UnixHierarchySep
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -543,6 +553,7 @@ EOF
 # on shared mailboxes in 2.5.
 sub XXXtest_shared_delivery_addflag
     :Admin
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -594,6 +605,7 @@ EOF
 
 sub test_rfc5490_create
     :min_version_3_0
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -645,6 +657,7 @@ EOF
 
 sub test_rfc5490_mailboxexists
     :min_version_3_0
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -701,6 +714,7 @@ EOF
 
 sub test_rfc5490_mailboxexists_variables
     :min_version_3_0
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -758,6 +772,7 @@ EOF
 
 sub test_rfc5490_metadata
     :min_version_3_0
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -812,6 +827,7 @@ EOF
 
 sub test_rfc5490_metadata_matches
     :min_version_3_0
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -869,6 +885,7 @@ EOF
 
 sub test_rfc5490_metadataexists
     :min_version_3_0 :AnnotationAllowUndefined
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -923,6 +940,7 @@ EOF
 
 sub test_rfc5490_servermetadata
     :min_version_3_0 :AnnotationAllowUndefined
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -981,6 +999,7 @@ EOF
 
 sub test_rfc5490_servermetadataexists
     :min_version_3_0 :AnnotationAllowUndefined
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -1037,6 +1056,7 @@ EOF
 
 sub test_variables_basic
     :min_version_3_0
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -1092,6 +1112,7 @@ EOF
 
 sub test_sieve_setflag
     :min_version_3_0
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -1132,6 +1153,7 @@ EOF
 
 sub test_variables_regex
     :min_version_3_0
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -1186,6 +1208,7 @@ EOF
 }
 
 sub test_nested_tests_and_discard
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -1213,6 +1236,7 @@ EOF
 
 sub test_editheader
     :min_version_3_1
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -1248,6 +1272,7 @@ EOF
 
 sub test_duplicate
     :min_version_3_1
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -1295,6 +1320,7 @@ EOF
 
 sub test_ereject
     :min_version_3_1
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -1320,6 +1346,7 @@ EOF
 
 sub test_specialuse_exists
     :min_version_3_1
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -1376,6 +1403,7 @@ EOF
 
 sub test_specialuse
     :min_version_3_1
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -1407,6 +1435,7 @@ EOF
 
 sub test_specialuse_create
     :min_version_3_1
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -1434,6 +1463,7 @@ EOF
 
 sub test_vacation_with_fcc
     :min_version_3_1
+    :needs_component_sieve
 {
     my ($self) = @_;
 
@@ -1477,6 +1507,7 @@ EOF
 
 sub test_github_issue_complex_variables
     :min_version_3_1
+    :needs_component_sieve
 {
     my ($self) = @_;
 
