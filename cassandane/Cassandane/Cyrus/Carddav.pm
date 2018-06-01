@@ -92,6 +92,7 @@ sub tear_down
 
 
 sub test_carddavcreate
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -102,7 +103,7 @@ sub test_carddavcreate
 }
 
 sub test_counters
-    :Conversations :min_version_3_0
+    :Conversations :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
     my $KEY = "/private/vendor/cmu/cyrus-imapd/usercounters";
@@ -162,6 +163,7 @@ EOF
 }
 
 sub test_many_emails
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -192,7 +194,7 @@ EOF
 }
 
 sub test_homeset_extradomain
-    :ReverseACLs :min_version_3_0
+    :ReverseACLs :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -211,6 +213,7 @@ sub test_homeset_extradomain
 }
 
 sub test_no_filter
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -250,6 +253,7 @@ EOF
 }
 
 sub test_empty_filter
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -291,6 +295,7 @@ EOF
 
 sub test_sharing_samedomain
     :VirtDomains :FastMailSharing :ReverseACLs :min_version_3_0
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -338,6 +343,7 @@ sub test_sharing_samedomain
 
 sub test_sharing_crossdomain
     :VirtDomains :CrossDomains :FastMailSharing :ReverseACLs :min_version_3_0
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -385,6 +391,7 @@ sub test_sharing_crossdomain
 
 sub test_sharing_contactpaths
     :VirtDomains :CrossDomains :FastMailSharing :ReverseACLs :min_version_3_0
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -463,7 +470,7 @@ EOF
 }
 
 sub test_control_chars
-    :min_version_3_0
+    :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
