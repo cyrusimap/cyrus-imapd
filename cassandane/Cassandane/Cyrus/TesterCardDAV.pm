@@ -169,6 +169,13 @@ sub new
 {
     my $class = shift;
 
+    my $buildinfo = Cassandane::BuildInfo->new();
+
+    if (not $buildinfo->get('component', 'httpd')) {
+	# don't bother setting up, we're not running tests anyway
+	return $class->SUPER::new({}, @_);
+    }
+
     my $config = Cassandane::Config->default()->clone();
     $config->set(servername => "127.0.0.1"); # urlauth needs matching servername
     $config->set(caldav_realm => 'Cassandane');
@@ -186,6 +193,11 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
+
+    if (not $self->{instance}->{buildinfo}->get('component', 'httpd')) {
+	# don't bother setting up further, we're not running tests anyway
+	return;
+    }
 
     my $admintalk = $self->{adminstore}->get_client();
 
