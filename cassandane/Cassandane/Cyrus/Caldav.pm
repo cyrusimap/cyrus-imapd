@@ -211,6 +211,7 @@ sub assert_caldav_notified
 }
 
 sub test_caldavcreate
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -221,6 +222,7 @@ sub test_caldavcreate
 }
 
 sub test_rename
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -250,6 +252,7 @@ sub test_rename
 }
 
 sub test_url_nodomains
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -270,7 +273,7 @@ sub test_url_nodomains
 }
 
 sub test_url_virtdom_nodomain
-    :VirtDomains
+    :VirtDomains :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -291,7 +294,7 @@ sub test_url_virtdom_nodomain
 }
 
 sub test_url_virtdom_extradomain
-    :VirtDomains :min_version_3_0
+    :VirtDomains :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -321,7 +324,7 @@ sub test_url_virtdom_extradomain
 }
 
 sub test_url_virtdom_domain
-    :VirtDomains
+    :VirtDomains :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -354,7 +357,7 @@ sub test_url_virtdom_domain
 }
 
 sub test_user_rename
-    :AllowMoves
+    :AllowMoves :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -396,7 +399,7 @@ sub test_user_rename
 }
 
 sub test_user_rename_dom
-    :AllowMoves :VirtDomains
+    :AllowMoves :VirtDomains :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -449,6 +452,7 @@ sub test_user_rename_dom
 }
 
 sub test_put_nouid
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -481,6 +485,7 @@ EOF
 }
 
 sub test_apple_location_notz
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -524,6 +529,7 @@ EOF
 }
 
 sub test_apple_location_tz
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -584,6 +590,7 @@ EOF
 }
 
 sub test_empty_summary
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -633,7 +640,7 @@ EOF
 }
 
 sub test_invite
-    :VirtDomains :min_version_3_0
+    :VirtDomains :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -699,7 +706,7 @@ EOF
 }
 
 sub test_invite_add_another
-    :VirtDomains :min_version_3_0
+    :VirtDomains :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -773,7 +780,7 @@ EOF
 }
 
 sub test_invite_from_nonsched
-    :VirtDomains :min_version_3_0
+    :VirtDomains :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -847,7 +854,7 @@ EOF
 }
 
 sub test_invite_withheader
-    :VirtDomains :min_version_3_0
+    :VirtDomains :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -917,7 +924,7 @@ EOF
 }
 
 sub test_invite_fullvirtual
-    :VirtDomains :min_version_3_0
+    :VirtDomains :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -991,6 +998,7 @@ EOF
 }
 
 sub test_changes_add
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1049,6 +1057,7 @@ EOF
 }
 
 sub test_changes_remove
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1109,6 +1118,7 @@ EOF
 }
 
 sub test_propfind_principal
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1158,7 +1168,7 @@ EOF
 }
 
 sub test_freebusy
-    :min_version_3_0
+    :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1187,7 +1197,7 @@ sub test_freebusy
 }
 
 sub test_freebusy_floating
-    :min_version_3_1
+    :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1216,7 +1226,7 @@ sub test_freebusy_floating
 }
 
 sub test_imap_plusdav_novirt
-    :MagicPlus :min_version_3_0
+    :MagicPlus :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1234,7 +1244,7 @@ sub test_imap_plusdav_novirt
 }
 
 sub test_imap_plusdav
-    :MagicPlus :VirtDomains :min_version_3_0
+    :MagicPlus :VirtDomains :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1252,7 +1262,7 @@ sub test_imap_plusdav
 }
 
 sub test_imap_magicplus_withdomain
-    :MagicPlus :VirtDomains :min_version_3_0
+    :MagicPlus :VirtDomains :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1282,6 +1292,7 @@ sub test_imap_magicplus_withdomain
 }
 
 sub test_bad_event_hex01
+    :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1337,7 +1348,7 @@ EOF
 }
 
 sub test_fastmailsharing
-    :FastmailSharing :ReverseACLs :min_version_3_0
+    :FastmailSharing :ReverseACLs :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1412,6 +1423,7 @@ sub test_fastmailsharing
 }
 
 sub test_multiinvite_add_person_changes
+    :needs_component_httpd
 {
   my ($self) = @_;
 
@@ -1554,6 +1566,7 @@ EOF
 }
 
 sub test_multiinvite_add_person_only
+    :needs_component_httpd
 {
   my ($self) = @_;
 
@@ -1657,6 +1670,7 @@ EOF
 }
 
 sub test_multiinvite_remove_person_only
+    :needs_component_httpd
 {
   my ($self) = @_;
 
@@ -1807,6 +1821,7 @@ EOF
 }
 
 sub test_rfc6638_3_2_1_setpartstat_agentclient
+    :needs_component_httpd
 {
   my ($self) = @_;
   my $CalDAV = $self->{caldav};
@@ -1849,6 +1864,7 @@ EOF
 }
 
 sub test_rfc6638_3_2_1_1_create
+    :needs_component_httpd
 {
   my ($self) = @_;
   my $CalDAV = $self->{caldav};
@@ -1900,6 +1916,7 @@ EOF
 }
 
 sub test_rfc6638_3_2_1_2_modify
+    :needs_component_httpd
 {
   my ($self) = @_;
   my $CalDAV = $self->{caldav};
@@ -2231,6 +2248,7 @@ EOF
 }
 
 sub test_rfc6638_3_2_1_3_remove
+    :needs_component_httpd
 {
   my ($self) = @_;
   my $CalDAV = $self->{caldav};
@@ -2296,6 +2314,7 @@ EOF
 }
 
 sub test_rfc6638_3_2_2_1_attendee_allowed_changes
+    :needs_component_httpd
 {
   my ($self) = @_;
   my $CalDAV = $self->{caldav};
@@ -2343,6 +2362,7 @@ EOF
 }
 
 sub test_rfc6638_3_2_2_2_attendee_create
+    :needs_component_httpd
 {
   my ($self) = @_;
   my $CalDAV = $self->{caldav};
@@ -2400,6 +2420,7 @@ EOF
 }
 
 sub test_rfc6638_3_2_2_3_attendee_modify
+    :needs_component_httpd
 {
   my ($self) = @_;
   my $CalDAV = $self->{caldav};
@@ -2462,6 +2483,7 @@ EOF
 }
 
 sub test_attendee_exdate
+    :needs_component_httpd
 {
   my ($self) = @_;
   my $CalDAV = $self->{caldav};
@@ -2503,6 +2525,7 @@ EOF
 }
 
 sub test_remove_oneattendee_recurring
+    :needs_component_httpd
 {
   my ($self) = @_;
   my $CalDAV = $self->{caldav};
@@ -2603,6 +2626,7 @@ EOF
 }
 
 sub test_delete_recur_extraattendee
+    :needs_component_httpd
 {
   my ($self) = @_;
   my $CalDAV = $self->{caldav};
@@ -2706,7 +2730,7 @@ EOF
 ############ REPLIES #############
 
 sub test_reply
-    :VirtDomains :min_version_3_0
+    :VirtDomains :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2790,7 +2814,7 @@ EOF
 }
 
 sub test_reply_withothers
-    :VirtDomains :min_version_3_0
+    :VirtDomains :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2876,7 +2900,7 @@ EOF
 }
 
 sub test_supports_event
-    :min_version_3_1
+    :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2910,7 +2934,7 @@ sub _safeeq {
 
 
 sub test_netcaldavtalktests_fromical
-    :min_version_3_1
+    :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2953,7 +2977,7 @@ sub test_netcaldavtalktests_fromical
 }
 
 sub test_netcaldavtalktests_fromje
-    :min_version_3_1
+    :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -2995,7 +3019,7 @@ sub test_netcaldavtalktests_fromje
 }
 
 sub test_invite_change_organizer
-    :VirtDomains :min_version_3_0
+    :VirtDomains :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3119,7 +3143,7 @@ EOF
 }
 
 sub test_reply_scheduleaddress
-    :VirtDomains :min_version_3_0
+    :VirtDomains :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3203,7 +3227,7 @@ EOF
 }
 
 sub test_recurring_freebusy
-    :VirtDomains :min_version_3_0
+    :VirtDomains :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -3291,7 +3315,7 @@ EOF
 }
 
 sub test_invite_samelocalpart
-    :VirtDomains :min_version_3_0
+    :VirtDomains :min_version_3_0 :needs_component_httpd
 {
     my ($self) = @_;
 
