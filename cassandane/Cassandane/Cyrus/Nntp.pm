@@ -86,6 +86,7 @@ sub tear_down
 my $stack_slosh = 256;
 
 sub test_cve_2011_3208_list_newsgroups
+    :needs_component_nttpd
 {
     my ($self) = @_;
 
@@ -102,6 +103,7 @@ sub test_cve_2011_3208_list_newsgroups
 }
 
 sub test_cve_2011_3208_list_active
+    :needs_component_nttpd
 {
     my ($self) = @_;
 
@@ -123,7 +125,7 @@ Cassandane::Cyrus::TestCase::magic(AllowNewNews => sub {
 });
 
 sub test_cve_2011_3208_newnews
-    :AllowNewNews
+    :AllowNewNews :needs_component_nttpd
 {
     my ($self) = @_;
 
