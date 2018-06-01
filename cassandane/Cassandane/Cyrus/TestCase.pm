@@ -42,9 +42,6 @@ use strict;
 use warnings;
 use attributes;
 use Data::Dumper;
-use Mail::JMAPTalk;
-use Net::CalDAVTalk 0.09;
-use Net::CardDAVTalk 0.03;
 use Scalar::Util qw(refaddr);
 
 use lib '.';
@@ -511,6 +508,10 @@ sub _create_instances
 sub _jmap_setup
 {
     my ($self) = @_;
+
+    use Mail::JMAPTalk;
+    use Net::CalDAVTalk 0.09;
+    use Net::CardDAVTalk 0.03;
 
     my $service = $self->{instance}->get_service("http");
     $ENV{DEBUGJMAP} = 1;
