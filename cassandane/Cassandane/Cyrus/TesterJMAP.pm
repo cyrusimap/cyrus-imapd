@@ -100,13 +100,16 @@ sub new
 
     if (cyrus_version_supports_jmap()) {
         $config->set(httpmodules => 'jmap');
-    }
 
-    return $class->SUPER::new({
-        config => $config,
-        adminstore => 1,
-        services => ['imap', 'http'],
-    }, @_);
+        return $class->SUPER::new({
+            config => $config,
+            adminstore => 1,
+            services => ['imap', 'http'],
+        }, @_);
+    }
+    else {
+        return $class->SUPER::new({}, @_);
+    }
 }
 
 sub set_up
