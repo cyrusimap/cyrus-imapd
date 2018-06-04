@@ -5774,8 +5774,10 @@ static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
     else {
         types = -1;  /* ALL components types */
 
+#ifndef IOPTEST  /* CalConnect ioptest */
         /* Apple clients don't like VPOLL */
         types &= ~CAL_COMP_VPOLL;
+#endif
     }
 
     buf_free(&attrib);
