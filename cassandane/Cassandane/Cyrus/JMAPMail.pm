@@ -3711,6 +3711,8 @@ sub test_email_set_keywords
     };
     $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
 
+    $self->assert_str_not_equals($res->[0][1]{oldState}, $res->[0][1]{newState});
+
     xlog "Set \\Seen on message in mailbox C";
     $store->set_folder('INBOX.C');
     $store->_select();
