@@ -1495,4 +1495,99 @@ sub test_dotuser_gh1875_novirt_altns
     });
 }
 
+sub test_otherusers_pattern
+{
+    my ($self) = @_;
+    $self->{instance}->create_user("foo");
+
+    my $foostore = $self->{instance}->get_service('imap')->create_store(
+			username => "foo");
+    my $footalk = $foostore->get_client();
+
+    $footalk->create('INBOX.mytest');
+    $self->assert_str_equals('ok', $footalk->get_last_completion_response());
+    $footalk->create('INBOX.mytest.mysubtest');
+    $self->assert_str_equals('ok', $footalk->get_last_completion_response());
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->setacl("user.foo",
+	'cassandane' => 'lrswipkxtecd');
+    $self->assert_str_equals('ok',
+	$admintalk->get_last_completion_response());
+    $admintalk->setacl("user.foo.mytest",
+	'cassandane' => 'lrswipkxtecd');
+    $self->assert_str_equals('ok',
+	$admintalk->get_last_completion_response());
+    $admintalk->setacl("user.foo.mytest.mysubtest",
+	'cassandane' => 'lrswipkxtecd');
+    $self->assert_str_equals('ok',
+	$admintalk->get_last_completion_response());
+
+    my $casstalk = $self->{store}->get_client();
+    my $data;
+
+    $data = $casstalk->list("", "user.%");
+    $self->_assert_list_data($data, '.', {
+	'user.foo'		    => [qw( \\HasChildren )],
+    });
+
+    $data = $casstalk->list("", "user.foo.%");
+    $self->_assert_list_data($data, '.', {
+	'user.foo.mytest'           => [qw( \\HasChildren )],
+    });
+
+    $data = $casstalk->list("", "user.foo.mytest.%");
+    $self->_assert_list_data($data, '.', {
+	'user.foo.mytest.mysubtest' => [qw( \\HasNoChildren )],
+    });
+}
+
+sub test_otherusers_pattern_unixhs
+    :UnixHierarchySep
+{
+    my ($self) = @_;
+    $self->{instance}->create_user("foo");
+
+    my $foostore = $self->{instance}->get_service('imap')->create_store(
+			username => "foo");
+    my $footalk = $foostore->get_client();
+
+    $footalk->create('INBOX/mytest');
+    $self->assert_str_equals('ok', $footalk->get_last_completion_response());
+    $footalk->create('INBOX/mytest/mysubtest');
+    $self->assert_str_equals('ok', $footalk->get_last_completion_response());
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->setacl("user/foo",
+	'cassandane' => 'lrswipkxtecd');
+    $self->assert_str_equals('ok',
+	$admintalk->get_last_completion_response());
+    $admintalk->setacl("user/foo/mytest",
+	'cassandane' => 'lrswipkxtecd');
+    $self->assert_str_equals('ok',
+	$admintalk->get_last_completion_response());
+    $admintalk->setacl("user/foo/mytest/mysubtest",
+	'cassandane' => 'lrswipkxtecd');
+    $self->assert_str_equals('ok',
+	$admintalk->get_last_completion_response());
+
+    my $casstalk = $self->{store}->get_client();
+    my $data;
+
+    $data = $casstalk->list("", "user/%");
+    $self->_assert_list_data($data, '/', {
+	'user/foo'		    => [qw( \\HasChildren )],
+    });
+
+    $data = $casstalk->list("", "user/foo/%");
+    $self->_assert_list_data($data, '/', {
+	'user/foo/mytest'           => [qw( \\HasChildren )],
+    });
+
+    $data = $casstalk->list("", "user/foo/mytest/%");
+    $self->_assert_list_data($data, '/', {
+	'user/foo/mytest/mysubtest' => [qw( \\HasNoChildren )],
+    });
+}
+
 1;
