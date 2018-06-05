@@ -547,7 +547,7 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
     json_t *toplevel = json_pack("{}");
     json_object_set_new(toplevel, "accountId", json_string(req->accountid));
     json_object_set_new(toplevel, "state",
-                        jmap_getstate(req, MBTYPE_ADDRESSBOOK));
+                        jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0));
     json_object_set_new(toplevel, "list", rock.array);
     if (json_array_size(notFound)) {
         json_object_set_new(toplevel, "notFound", notFound);
@@ -806,7 +806,7 @@ static int setContactGroups(struct jmap_req *req)
     }
 
     json_t *set = json_pack("{s:o,s:s}",
-                            "oldState", jmap_getstate(req, MBTYPE_ADDRESSBOOK),
+                            "oldState", jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0),
                             "accountId", req->accountid);
 
     r = carddav_create_defaultaddressbook(req->accountid);
@@ -1132,14 +1132,7 @@ static int setContactGroups(struct jmap_req *req)
     /* force modseq to stable */
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
-    if (json_object_get(set, "created") ||
-        json_object_get(set, "updated") ||
-        json_object_get(set, "destroyed")) {
-
-        r = jmap_bumpstate(req, MBTYPE_ADDRESSBOOK);
-        if (r) goto done;
-    }
-    json_object_set_new(set, "newState", jmap_getstate(req, MBTYPE_ADDRESSBOOK));
+    json_object_set_new(set, "newState", jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/1));
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("ContactGroup/set"));
@@ -2226,7 +2219,7 @@ static int getContactsList(struct jmap_req *req)
     json_t *contactList = json_pack("{}");
     json_object_set_new(contactList, "accountId", json_string(req->accountid));
     json_object_set_new(contactList, "state",
-                        jmap_getstate(req, MBTYPE_ADDRESSBOOK));
+                        jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0));
     json_object_set_new(contactList, "position", json_integer(rock.position));
     json_object_set_new(contactList, "total", json_integer(rock.total));
     json_object_set(contactList, "contactIds", rock.contacts);
@@ -2885,7 +2878,7 @@ static int setContacts(struct jmap_req *req)
         goto done;
     }
     json_t *set = json_pack("{s:o,s:s}",
-                            "oldState", jmap_getstate(req, MBTYPE_ADDRESSBOOK),
+                            "oldState", jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0),
                             "accountId", req->accountid);
 
     r = carddav_create_defaultaddressbook(req->accountid);
@@ -3218,16 +3211,7 @@ static int setContacts(struct jmap_req *req)
     /* force modseq to stable */
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
-    /* read the modseq again every time, just in case something changed it
-     * in our actions */
-    if (json_object_get(set, "created") ||
-        json_object_get(set, "updated") ||
-        json_object_get(set, "destroyed")) {
-
-        r = jmap_bumpstate(req, MBTYPE_ADDRESSBOOK);
-        if (r) goto done;
-    }
-    json_object_set_new(set, "newState", jmap_getstate(req, MBTYPE_ADDRESSBOOK));
+    json_object_set_new(set, "newState", jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/1));
 
     json_t *item = json_pack("[]");
     json_array_append_new(item, json_string("Contact/set"));

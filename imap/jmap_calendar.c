@@ -436,7 +436,7 @@ doneloop:
     json_t *calendars = json_pack("{}");
     json_incref(rock.found);
     json_object_set_new(calendars, "accountId", json_string(req->accountid));
-    json_object_set_new(calendars, "state", jmap_getstate(req, MBTYPE_CALENDAR));
+    json_object_set_new(calendars, "state", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
     json_object_set_new(calendars, "list", rock.found);
     if (json_array_size(notfound)) {
         json_object_set_new(calendars, "notFound", notfound);
@@ -589,7 +589,7 @@ static int getCalendarsUpdates(struct jmap_req *req)
                         json_string(req->accountid));
     json_object_set_new(calendarUpdates, "oldState", json_string(since));
     json_object_set_new(calendarUpdates, "newState",
-                        jmap_getstate(req, MBTYPE_CALENDAR));
+                        jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
 
     json_object_set_new(calendarUpdates, "changed", rock.changed);
     json_object_set_new(calendarUpdates, "destroyed", rock.destroyed);
@@ -776,7 +776,7 @@ static int setCalendars(struct jmap_req *req)
         goto done;
     }
     set = json_pack("{s:s}", "accountId", req->accountid);
-    json_object_set_new(set, "oldState", jmap_getstate(req, MBTYPE_CALENDAR));
+    json_object_set_new(set, "oldState", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
 
     r = caldav_create_defaultcalendars(req->accountid);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -1163,14 +1163,7 @@ static int setCalendars(struct jmap_req *req)
     }
 
     /* Set newState field in calendarsSet. */
-    if (json_object_get(set, "created") ||
-        json_object_get(set, "updated") ||
-        json_object_get(set, "destroyed")) {
-
-        r = jmap_bumpstate(req, MBTYPE_CALENDAR);
-        if (r) goto done;
-    }
-    json_object_set_new(set, "newState", jmap_getstate(req, MBTYPE_CALENDAR));
+    json_object_set_new(set, "newState", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/1));
 
     json_incref(set);
     json_t *item = json_pack("[]");
@@ -1439,7 +1432,7 @@ static int getCalendarEvents(struct jmap_req *req)
     }
 
     json_t *events = json_pack("{}");
-    json_object_set_new(events, "state", jmap_getstate(req, MBTYPE_CALENDAR));
+    json_object_set_new(events, "state", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
 
     json_incref(rock.found);
     json_object_set_new(events, "accountId", json_string(req->accountid));
@@ -2046,7 +2039,7 @@ static int setCalendarEvents(struct jmap_req *req)
 
     set = json_pack("{s:s}", "accountId", req->accountid);
 
-    json_object_set_new(set, "oldState", jmap_getstate(req, MBTYPE_CALENDAR));
+    json_object_set_new(set, "oldState", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
 
     json_t *create = json_object_get(req->args, "create");
     if (create) {
@@ -2231,14 +2224,7 @@ static int setCalendarEvents(struct jmap_req *req)
     }
 
     /* Set newState field in calendarsSet. */
-    if (json_object_get(set, "created") ||
-        json_object_get(set, "updated") ||
-        json_object_get(set, "destroyed")) {
-
-        r = jmap_bumpstate(req, MBTYPE_CALENDAR);
-        if (r) goto done;
-    }
-    json_object_set_new(set, "newState", jmap_getstate(req, MBTYPE_CALENDAR));
+    json_object_set_new(set, "newState", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/1));
 
     json_incref(set);
     json_t *item = json_pack("[]");
@@ -2958,7 +2944,7 @@ static int getCalendarEventsList(struct jmap_req *req)
     /* Prepare response. */
     json_t *eventList = json_pack("{}");
     json_object_set_new(eventList, "accountId", json_string(req->accountid));
-    json_object_set_new(eventList, "state", jmap_getstate(req, MBTYPE_CALENDAR));
+    json_object_set_new(eventList, "state", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
     json_object_set_new(eventList, "position", json_integer(pos));
     json_object_set_new(eventList, "total", json_integer(total));
     json_object_set(eventList, "ids", events);

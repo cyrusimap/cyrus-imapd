@@ -1526,7 +1526,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
     }
 
     /* Build response */
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
     get.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     jmap_ok(req, jmap_get_reply(&get));
@@ -2026,7 +2026,7 @@ static int jmap_mailbox_query(jmap_req_t *req)
         jmap_error(req, json_pack("{s:s}", "type", "serverError"));
         goto done;
     }
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
     query.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
@@ -2727,7 +2727,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
         set.old_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
     }
@@ -2866,13 +2866,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
         json_array_append_new(set.destroyed, json_string(mbox_id));
     }
 
-    if (json_object_size(set.created) ||
-        json_object_size(set.updated) ||
-        json_array_size(set.destroyed)) {
-        /* Bump folders modseq */
-        jmap_bumpstate(req, 0);
-    }
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
     set.new_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
@@ -5650,7 +5644,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
         json_decref(val);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
         changes->new_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
     }
@@ -5771,7 +5765,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
         json_decref(val);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
         changes->new_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
     }
@@ -6156,7 +6150,7 @@ static int jmap_thread_get(jmap_req_t *req)
         goto done;
     }
 
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
     get.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     jmap_ok(req, jmap_get_reply(&get));
@@ -7365,14 +7359,14 @@ static int jmap_email_get(jmap_req_t *req)
         msgrecord_unref(&mr);
     }
 
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
     get.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
-	_email_getargs_fini(&args);
+    _email_getargs_fini(&args);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
     return 0;
@@ -10097,7 +10091,7 @@ static int jmap_email_set(jmap_req_t *req)
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
         set.old_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
     }
@@ -10164,7 +10158,7 @@ static int jmap_email_set(jmap_req_t *req)
 
     // TODO refactor jmap_getstate to return a string, once
     // all code has been migrated to the new JMAP parser.
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
     set.new_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
@@ -10877,7 +10871,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
         json_array_append(get.not_found, val);
     }
 
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
     get.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
@@ -11028,7 +11022,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     }
 
     /* Trivially find no message submission updates at all. */
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
     changes.new_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     jmap_ok(req, jmap_changes_reply(&changes));
@@ -11123,7 +11117,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
     }
 
     /* We don't store EmailSubmissions */
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL);
+    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
     query.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     query.position = 0;

@@ -817,7 +817,7 @@ static int jmap_post(struct transaction_t *txn,
         /* Initialize request context */
         jmap_initreq(&req);
 
-        /* Read the modseq counters again, just in case something changed. */
+        /* Read the current state data in */
         r = mboxname_read_counters(inboxname, &req.counters);
         if (r) goto done;
 
@@ -1953,8 +1953,10 @@ EXPORTED modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype)
     return modseq;
 }
 
-EXPORTED json_t* jmap_getstate(jmap_req_t *req, int mbtype)
+EXPORTED json_t* jmap_getstate(jmap_req_t *req, int mbtype, int refresh)
 {
+    if (refresh)
+        assert (!mboxname_read_counters(req->inboxname, &req->counters));
     struct buf buf = BUF_INITIALIZER;
     json_t *state = NULL;
     modseq_t modseq = jmap_highestmodseq(req, mbtype);
@@ -1966,39 +1968,6 @@ EXPORTED json_t* jmap_getstate(jmap_req_t *req, int mbtype)
     return state;
 }
 
-EXPORTED int jmap_bumpstate(jmap_req_t *req, int mbtype)
-{
-    int r = 0;
-    modseq_t modseq;
-    char *mboxname = mboxname_user_mbox(req->accountid, NULL);
-
-    /* Read counters. */
-    r = mboxname_read_counters(mboxname, &req->counters);
-    if (r) goto done;
-
-    /* Determine current counter by mailbox type. */
-    switch (mbtype) {
-        case MBTYPE_CALENDAR:
-            modseq = req->counters.caldavmodseq;
-            break;
-        case MBTYPE_ADDRESSBOOK:
-            modseq = req->counters.carddavmodseq;
-            break;
-        case 0:
-            modseq = req->counters.mailmodseq;
-            break;
-        default:
-            modseq = req->counters.highestmodseq;
-    }
-
-    modseq = mboxname_nextmodseq(mboxname, modseq, mbtype, 1);
-    r = mboxname_read_counters(mboxname, &req->counters);
-    if (r) goto done;
-
-done:
-    free(mboxname);
-    return r;
-}
 
 EXPORTED char *jmap_xhref(const char *mboxname, const char *resource)
 {
