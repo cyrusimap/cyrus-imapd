@@ -5024,7 +5024,7 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
         *err = json_pack("{s:s}", "type", "serverError");
         goto done;
     }
-    query->can_calculate_changes = 1;
+    query->can_calculate_changes = search->is_mutable ? 0 : 1;
 
     // TODO cache emailId -> threadId on the request context
     // TODO support negative positions
