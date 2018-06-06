@@ -2774,6 +2774,10 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             const char *pat = strarray_nth(patterns, i);
             if (pat[prefixlen] != c) break;
         }
+        if (rock->namespace->hier_sep == '/') {
+            if (c == '/') c = '.';
+            else if (c == '.') c = DOTCHAR;
+        }
         if (i < patterns->count) break;
         if (c == '*' || c == '%' || c == '?') break;
         commonpat[prefixlen] = c;
