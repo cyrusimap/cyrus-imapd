@@ -9563,18 +9563,35 @@ sub test_implementation_email_query
     my $uid = $res->{attrs}->{uid};
     my $msg;
 
+    my $inbox = $self->getinbox();
+
     xlog "non-filtered query can calculate changes";
     $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
     $self->assert($res->[0][1]{canCalculateChanges});
 
     xlog "inMailbox query can calculate changes";
-    my $inbox = $self->getinbox();
     $res = $jmap->CallMethods([
         ['Email/query', {
           filter => { inMailbox => $inbox->{id} },
           sort => [ {
             isAscending => $JSON::false,
             property => 'receivedAt',
+          } ],
+        }, "R1"],
+    ]);
+    $self->assert($res->[0][1]{canCalculateChanges});
+
+    xlog "inMailbox query can calculate changes with mutable sort";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+          filter => { inMailbox => $inbox->{id} },
+          sort => [ {
+            property => "someInThreadHaveKeyword",
+            keyword => "\$seen",
+            isAscending => $JSON::false,
+          }, {
+            property => 'receivedAt',
+            isAscending => $JSON::false,
           } ],
         }, "R1"],
     ]);
