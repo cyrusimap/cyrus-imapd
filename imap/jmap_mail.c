@@ -7052,7 +7052,7 @@ static int _email_get_bodies(jmap_req_t *req,
             struct body *part = ptrarray_nth(&parts, i);
             if (strcmp("TEXT", part->type))
                 continue;
-            if (json_object_get(body_values, part->part_id))
+            if (part->part_id && json_object_get(body_values, part->part_id))
                 continue;
             json_object_set_new(body_values, part->part_id,
                     _email_get_bodyvalue(part, msg->raw, args->max_body_bytes,
@@ -7255,7 +7255,6 @@ static int _email_from_body(jmap_req_t *req,
 static int _email_from_blob(jmap_req_t *req,
                             struct email_getargs *args,
                             msgrecord_t *mr,
-                            struct body *body,
                             const struct body *part,
                             json_t **emailptr)
 {
@@ -7266,16 +7265,30 @@ static int _email_from_blob(jmap_req_t *req,
     if (r) return r;
 
     struct buf buf = BUF_INITIALIZER;
-    buf_setcstr(&buf, "Content-Type: message/rfc822\r\n\r\n");
+    buf_setcstr(&buf, "Content-Type: message/rfc822\r\n");
+    if (part->encoding) {
+        buf_appendcstr(&buf, "Content-Transfer-Encoding: ");
+        buf_appendcstr(&buf, part->encoding);
+        buf_appendcstr(&buf, "\r\n");
+    }
+    buf_appendcstr(&buf, "\r\n");
     buf_appendmap(&buf, buf_base(&msg_buf) + part->content_offset, part->content_size);
 
     struct body *mypart = xzmalloc(sizeof(struct body));
     r = message_parse_mapped(buf_base(&buf), buf_len(&buf), mypart);
-    if (r || !mypart->subtype || !mypart->subpart->from) {
+    if (r || !mypart->subpart || !mypart->subpart->from) {
         /* That's not a valid RFC822 message */
         goto done;
     }
-    struct cyrusmsg msg = { body, mypart, &msg_buf, mr, NULL };
+
+    /* For regular messages, the message parser takes care of assigning
+     * proper part ids while reading the body structure from file. But
+     * we don't have that for arbitrary blobs, so let's make sure that
+     * non-multipart top-level bodies got their part_id field set. */
+    if (strcmp(mypart->subpart->type, "MULTIPART") && !mypart->subpart->part_id)
+        mypart->subpart->part_id = xstrdup("1");
+
+    struct cyrusmsg msg = { mypart, mypart, &buf, mr, NULL };
     r = _email_from_msg(req, args, &msg, emailptr);
     _cyrusmsg_fini(&msg);
 
@@ -7431,7 +7444,7 @@ static int jmap_email_parse(jmap_req_t *req)
 
         json_t *email = NULL;
         if (part && strcmp(part->type, "MESSAGE")) {
-            _email_from_blob(req, &getargs, mr, body, part, &email);
+            _email_from_blob(req, &getargs, mr, part, &email);
         }
         else {
             _email_from_body(req, &getargs, mr, body, part, &email);
