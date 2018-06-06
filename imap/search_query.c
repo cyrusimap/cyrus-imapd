@@ -933,18 +933,21 @@ static int is_mutable_sort(struct sortcrit *sortcrit)
     return 0;
 }
 
-/* This function will return a TRUE value if anything in the
- * sort or search criteria returns a MUTABLE ordering, i.e.
- * the user can take actions which will change the order in
- * which the results are returned.  For example, the base
+/* This function will return 2 if the search criteria are mutable
+ * but the sort is not,
+ * 1 if the sort is mutable but the search isn't, 3 if both, and
+ * zero if nither are mutable.
+ * i.e. the user can/can't take actions which will change the order
+ * in which the results are returned.  For example, the base
  * case of UID sort and all messages is NOT mutable */
 EXPORTED int search_is_mutable(struct sortcrit *sortcrit,
                                struct searchargs *searchargs)
 {
-    if (is_mutable_sort(sortcrit))
-        return 1;
+    int res = 0;
     if (search_expr_is_mutable(searchargs->root))
-        return 1;
-    return 0;
+        res |= 2;
+    if (is_mutable_sort(sortcrit))
+        res |= 1;
+    return res;
 }
 
