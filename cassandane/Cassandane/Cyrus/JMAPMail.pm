@@ -9547,4 +9547,58 @@ sub test_mailbox_set_issue2377
     $self->assert_not_null($res->[0][1]{notCreated}{'1'});
 }
 
+sub test_implementation_email_query
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $now = DateTime->now();
+
+    xlog "Generate a email in INBOX via IMAP";
+    my $res = $self->make_message("foo") || die;
+    my $uid = $res->{attrs}->{uid};
+    my $msg;
+
+    xlog "non-filtered query can calculate changes";
+    $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    $self->assert($res->[0][1]{canCalculateChanges});
+
+    xlog "inMailbox query can calculate changes";
+    my $inbox = $self->getinbox();
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+          filter => { inMailbox => $inbox->{id} },
+          sort => [ {
+            isAscending => $JSON::false,
+            property => 'receivedAt',
+          } ],
+        }, "R1"],
+    ]);
+    $self->assert($res->[0][1]{canCalculateChanges});
+
+    xlog "inMailbox query with keyword can not calculate changes";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+          filter => {
+            conditions => [
+              { inMailbox => $inbox->{id} },
+              { conditions => [ { allInThreadHaveKeyword => "\$seen" } ],
+                operator => 'NOT',
+              },
+            ],
+            operator => 'AND',
+          },
+            sort => [ {
+                isAscending => $JSON::false,
+                property => 'receivedAt',
+            } ],
+        }, "R1"],
+    ]);
+    $self->assert(not $res->[0][1]{canCalculateChanges});
+}
+
 1;
