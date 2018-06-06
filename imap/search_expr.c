@@ -1830,8 +1830,12 @@ static void search_convflags_internalise(struct index_state *state,
         conv_rock_new(state->mailbox, rockp);
         rock = *rockp;
         if (rock->cstate) {
-            if (!strcasecmp(v->s, "\\Seen"))
+            if (!strcasecmp(v->s, "\\Seen")) {
                 rock->num = 0;
+            }
+            else if (!rock->cstate->counted_flags) {
+                rock->num = -1;
+            }
             else {
                 rock->num = strarray_find_case(rock->cstate->counted_flags, v->s, 0);
                 /* rock->num might be -1 invalid */

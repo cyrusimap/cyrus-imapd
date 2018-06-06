@@ -5280,7 +5280,9 @@ MsgData **index_msgdata_load(struct index_state *state,
             }
             case SORT_HASCONVFLAG: {
                 const char *name = sortcrit[j].args.flag.name;
-                int idx = strarray_find_case(cstate->counted_flags, name, 0);
+                int idx = -1;
+                if (cstate->counted_flags)
+                    idx = strarray_find_case(cstate->counted_flags, name, 0);
                 /* flag exists in the conversation at all */
                 if (idx >= 0 && conv->counts[idx] > 0 && j < 31)
                     cur->hasconvflag |= (1<<j);
