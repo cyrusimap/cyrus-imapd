@@ -9077,8 +9077,22 @@ EOF
     my $data = $jmap->Upload($rawEmail, "application/data");
     my $blobId = $data->{blobId};
 
-    my $res = $jmap->CallMethods([['Email/parse', { blobIds => [ $blobId ] }, 'R1']]);
-    $self->assert_not_null($res->[0][1]{parsed}{$blobId});
+    my @props = $self->defaultprops_for_email_get();
+    push @props, "bodyStructure";
+    push @props, "bodyValues";
+
+    my $res = $jmap->CallMethods([['Email/parse', {
+        blobIds => [ $blobId ],
+        properties => \@props,
+        fetchAllBodyValues => JSON::true,
+    }, 'R1']]);
+    my $email = $res->[0][1]{parsed}{$blobId};
+
+    $self->assert_not_null($email);
+    $self->assert_deep_equals([{name=>'Some Example Sender', email=>'example@example.com'}], $email->{from});
+
+    my $bodyValue = $email->{bodyValues}{$email->{bodyStructure}{partId}};
+    $self->assert_str_equals("This is a test email.\n", $bodyValue->{value});
 }
 
 sub test_email_parse_notparsable
