@@ -979,7 +979,7 @@ envelope_err:
         }
 
         /* find the part(s) of the body that we want */
-        content_types = (const char **) strarray_takevf(test.u.b.content_types);
+        content_types = (const char **) strarray_safetakevf(test.u.b.content_types);
         res = interp->getbody(m, content_types, &val);
         free(content_types);
 
@@ -1176,7 +1176,7 @@ envelope_err:
                 goto alldone;
         }
 
-        keylist = (const char **) strarray_takevf(test.u.dt.kl);
+        keylist = (const char **) strarray_safetakevf(test.u.dt.kl);
         for (key = keylist; *key; ++key) {
             switch (date_part) {
             case B_YEAR:
@@ -1894,7 +1894,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             }
 
             res = do_notify(notify_list, cmd.u.n.id, cmd.u.n.from, cmd.u.n.method,
-                            (const char **) strarray_takevf(cmd.u.n.options),
+                            (const char **) strarray_safetakevf(cmd.u.n.options),
                             priority, message);
 
             break;
