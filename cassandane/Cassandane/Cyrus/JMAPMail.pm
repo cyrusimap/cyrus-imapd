@@ -9551,7 +9551,7 @@ EOF
     $self->assert_str_equals(' BASE64', uc($gotPart->{'header:Content-Transfer-Encoding'}));
     $gotPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[2];
     $self->assert_str_equals('message/rfc822', $gotPart->{type});
-    $self->assert_null($gotPart->{'header:Content-Transfer-Encoding'});
+    $self->assert_str_equals(' 7BIT', $gotPart->{'header:Content-Transfer-Encoding'});
 }
 
 sub test_email_body_alternative_without_html
