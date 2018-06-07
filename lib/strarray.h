@@ -100,6 +100,7 @@ void strarray_sort(strarray_t *, strarray_cmp_fn_t *);
 
 void strarray_uniq(strarray_t *);
 
+char **strarray_safetakevf(strarray_t *sa);
 char **strarray_takevf(strarray_t *sa);
 
 int strarray_find(const strarray_t *sa, const char *match,

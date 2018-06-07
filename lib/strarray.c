@@ -381,6 +381,12 @@ EXPORTED char **strarray_takevf(strarray_t *sa)
     return d;
 }
 
+EXPORTED char **strarray_safetakevf(strarray_t *sa)
+{
+    ensure_alloc(sa, 1); // never return NULL
+    return strarray_takevf(sa);
+}
+
 EXPORTED void strarray_sort(strarray_t *sa, strarray_cmp_fn_t *cmp)
 {
     qsort(sa->data, sa->count, sizeof(char *), cmp);
