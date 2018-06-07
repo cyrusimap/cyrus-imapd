@@ -9300,12 +9300,12 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
         len = part->content_size;
 
         /* Determine encoding, if any */
-        if (part->charset_enc & 0xff) {
-            encoding = encoding_name(part->charset_enc & 0xff);
-        }
-        else if (!emailpart->type || strcmp(emailpart->type, "MESSAGE")) {
+        if (!emailpart->type || strcmp(emailpart->type, "MESSAGE")) {
             encoding = "BASE64";
             encode_base64 = 1;
+        }
+        else {
+            encoding = part->encoding;
         }
     }
 
