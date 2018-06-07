@@ -6351,8 +6351,8 @@ static void _email_getargs_parse(json_t *req_args,
 struct cyrusmsg {
     struct body *body;       /* top-level body of message record */
     const struct body *part; /* NULL for top-level message, or rfc822 subpart */
-    struct buf *raw;         /* mmap()ed buffer with raw message */
-    msgrecord_t *mr;         /* message record containing this message */
+    struct buf *raw;         /* buffer with raw message */
+    msgrecord_t *mr;         /* message record containing this message, or NULL if embedded */
     struct headers *headers; /* parsed headers of part 0, or NULL */
 };
 
@@ -7252,30 +7252,43 @@ static int _email_from_body(jmap_req_t *req,
     return r;
 }
 
-static int _email_from_blob(jmap_req_t *req,
-                            struct email_getargs *args,
-                            msgrecord_t *mr,
-                            const struct body *part,
-                            json_t **emailptr)
+static int _email_from_buf(jmap_req_t *req,
+                           struct email_getargs *args,
+                           const struct buf *buf,
+                           const char *encoding,
+                           json_t **emailptr)
 {
-    struct buf msg_buf = BUF_INITIALIZER;
-    int r;
-
-    r = msgrecord_get_body(mr, &msg_buf);
-    if (r) return r;
-
-    struct buf buf = BUF_INITIALIZER;
-    buf_setcstr(&buf, "Content-Type: message/rfc822\r\n");
-    if (part->encoding) {
-        buf_appendcstr(&buf, "Content-Transfer-Encoding: ");
-        buf_appendcstr(&buf, part->encoding);
-        buf_appendcstr(&buf, "\r\n");
+    struct buf mybuf = BUF_INITIALIZER;
+    buf_setcstr(&mybuf, "Content-Type: message/rfc822\r\n");
+    if (encoding) {
+        if (!strcasecmp(encoding, "BASE64")) {
+            char *tmp = NULL;
+            size_t tmp_size = 0;
+            charset_decode_mimebody(buf_base(buf), buf_len(buf),
+                    ENCODING_BASE64, &tmp, &tmp_size);
+            buf_appendcstr(&mybuf, "Content-Transfer-Encoding: binary\r\n");
+            /* Append base64-decoded body */
+            buf_appendcstr(&mybuf, "\r\n");
+            buf_appendmap(&mybuf, tmp, tmp_size);
+            free(tmp);
+        }
+        else {
+            buf_appendcstr(&mybuf, "Content-Transfer-Encoding: ");
+            buf_appendcstr(&mybuf, encoding);
+            buf_appendcstr(&mybuf, "\r\n");
+            /* Append encoded body */
+            buf_appendcstr(&mybuf, "\r\n");
+            buf_append(&mybuf, buf);
+        }
     }
-    buf_appendcstr(&buf, "\r\n");
-    buf_appendmap(&buf, buf_base(&msg_buf) + part->content_offset, part->content_size);
+    else {
+        /* Append raw body */
+        buf_appendcstr(&mybuf, "\r\n");
+        buf_append(&mybuf, buf);
+    }
 
     struct body *mypart = xzmalloc(sizeof(struct body));
-    r = message_parse_mapped(buf_base(&buf), buf_len(&buf), mypart);
+    int r = message_parse_mapped(buf_base(&mybuf), buf_len(&mybuf), mypart);
     if (r || !mypart->subpart || !mypart->subpart->from) {
         /* That's not a valid RFC822 message */
         goto done;
@@ -7288,15 +7301,14 @@ static int _email_from_blob(jmap_req_t *req,
     if (strcmp(mypart->subpart->type, "MULTIPART") && !mypart->subpart->part_id)
         mypart->subpart->part_id = xstrdup("1");
 
-    struct cyrusmsg msg = { mypart, mypart, &buf, mr, NULL };
+    struct cyrusmsg msg = { mypart, mypart, &mybuf, NULL, NULL };
     r = _email_from_msg(req, args, &msg, emailptr);
     _cyrusmsg_fini(&msg);
 
 done:
     message_free_body(mypart);
     free(mypart);
-    buf_free(&msg_buf);
-    buf_free(&buf);
+    buf_free(&mybuf);
     return r;
 }
 
@@ -7443,8 +7455,22 @@ static int jmap_email_parse(jmap_req_t *req)
         }
 
         json_t *email = NULL;
-        if (part && strcmp(part->type, "MESSAGE")) {
-            _email_from_blob(req, &getargs, mr, part, &email);
+        if (part && (strcmp(part->type, "MESSAGE") || !strcmpnull(part->encoding, "BASE64"))) {
+            struct buf msg_buf = BUF_INITIALIZER;
+            r = msgrecord_get_body(mr, &msg_buf);
+            if (!r) {
+                struct buf buf = BUF_INITIALIZER;
+                buf_init_ro(&buf, buf_base(&msg_buf) + part->content_offset,
+                        part->content_size);
+                r = _email_from_buf(req, &getargs, &buf, part->encoding, &email);
+                buf_free(&buf);
+            }
+            buf_free(&msg_buf);
+            if (r) {
+                syslog(LOG_ERR, "jmap: Email/parse(%s): %s", blobid, error_message(r));
+                json_array_append_new(notParsable, json_string(blobid));
+                continue;
+            }
         }
         else {
             _email_from_body(req, &getargs, mr, body, part, &email);
