@@ -69,13 +69,16 @@ sub _read_buildinfo
     my ($destdir, $prefix) = @_;
 
     my $cyr_buildinfo = "$destdir$prefix/sbin/cyr_buildinfo";
-    return if not -x $cyr_buildinfo;
+    if (not -x $cyr_buildinfo) {
+        xlog "Cannot execute $cyr_buildinfo: ".
+             "don't know what features Cyrus supports";
+        return;
+    }
 
     my $jsondata = qx($cyr_buildinfo);
     return if not $jsondata;
 
     return JSON::decode_json($jsondata);
-
 }
 
 sub get
