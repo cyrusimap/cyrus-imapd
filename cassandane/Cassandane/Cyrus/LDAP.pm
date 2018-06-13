@@ -42,8 +42,6 @@ use strict;
 use warnings;
 use Cwd qw(realpath);
 use Data::Dumper;
-use Net::LDAP::Server::Test;
-use Net::LDAP::Entry;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
