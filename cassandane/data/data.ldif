@@ -17,3 +17,9 @@ objectclass: group
 cn: foo
 ou: groups
 o: cyrus
+
+dn: cn=this group name has spaces,ou=groups,o=cyrus
+objectclass: group
+cn: this group name has spaces
+ou: groups
+o: cyrus

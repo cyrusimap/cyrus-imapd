@@ -261,4 +261,6 @@ sub test_setacl_badrights
     $self->assert_deep_equals($origacl, $newacl);
 }
 
+# see also LDAP.pm for groupid tests
+
 1;

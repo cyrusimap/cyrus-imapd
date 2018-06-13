@@ -109,7 +109,7 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-sub test_aaasetup
+sub test_setacl_groupid
     :needs_dependency_ldap
 {
     my ($self) = @_;
@@ -123,6 +123,37 @@ sub test_aaasetup
     $admintalk->setacl("user.cassandane.groupid",
                        "group:foo",
                        "lrswipkxtecdan");
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+}
+
+sub test_setacl_groupid_spaces
+    :needs_dependency_ldap
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.cassandane.groupid_spaces");
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    $admintalk->setacl("user.cassandane.groupid_spaces",
+                       "group:this group name has spaces",
+                       "lrswipkxtecdan");
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $data = $admintalk->getacl("user.cassandane.groupid_spaces");
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    $self->assert(scalar @{$data} % 2 == 0);
+    my %acl = @{$data};
+    $self->assert_str_equals($acl{"group:this group name has spaces"},
+                             "lrswipkxtecdan");
+
+    $admintalk->select("user.cassandane.groupid_spaces");
     $self->assert_str_equals('ok',
         $admintalk->get_last_completion_response());
 }
