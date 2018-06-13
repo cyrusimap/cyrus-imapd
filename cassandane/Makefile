@@ -47,7 +47,7 @@ PERL=	perl
 all::
 	@echo ./utils/annotator.pl syntax check SKIPPED
 	@ e=0; \
-	for script in `find . -type f -name '*.pl' | grep -v 'utils\/annotator.pl' | sort` ;\
+	for script in ./utils/fakeldapd `find . -type f -name '*.pl' | grep -v 'utils\/annotator.pl' | sort` ;\
 	do \
 		$(PERL) -c $$script || e=1 ;\
 	done ;\
