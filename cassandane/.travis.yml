@@ -47,6 +47,7 @@ install:
 - cpanm --notest XML::Fast
 - cpanm --notest XML::Generator
 - cpanm --notest XML::Spice
+- cpanm --notest Net::LDAP::Server::Test
 - cpanm --notest https://github.com/cyrusimap/Mail-JMAPTalk.git
 - cpanm --notest https://github.com/cyrusimap/Net-DAVTalk.git
 - cpanm --notest https://github.com/cyrusimap/Net-CalDAVTalk.git
