@@ -2959,7 +2959,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
         if (resp_body->fname) {
             simple_hdr(txn, "Content-Disposition",
-                       "attachment; filename=\"%s\"", resp_body->fname);
+                       "inline; filename=\"%s\"", resp_body->fname);
         }
         if (txn->resp_body.enc) {
             /* Construct Content-Encoding header */
