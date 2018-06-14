@@ -1609,5 +1609,145 @@ EOF
     $self->assert_num_equals(1, $talk->get_response_code('exists'));
 }
 
+sub test_discard_match_on_body_raw
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    xlog "Install the sieve script";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["body"];
+
+if body :raw :contains "One-Click Additions" {
+  discard;
+  stop;
+}
+EOF
+    );
+
+    my $raw = << 'EOF';
+Date: Wed, 16 May 2018 22:06:18 -0700
+From: Some Person <some@person.com>
+To: foo/bar <foo@bar.com>
+Message-ID: <fake.1528862927.58376@person.com>
+Subject: Confirmation of your order
+MIME-Version: 1.0
+Content-Type: multipart/mixed; 
+  boundary="----=_Part_91374_1856076643.1527870431792"
+
+------=_Part_91374_1856076643.1527870431792
+Content-Type: multipart/alternative; 
+  boundary="----=_Part_91373_1043761677.1527870431791"
+
+------=_Part_91373_1043761677.1527870431791
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+Dear Mr Foo Bar,
+
+Thank you for using Blah to do your shopping.
+
+
+ORDER DETAILS=20
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+
+One-Click Additions
+-------------------
+1 Oven Pride Oven Cleaning System
+
+Total (estimated):             777.70 GBP
+Note: The total cost is estimated because some of the items you might have =
+ordered, such as meat and cheese, are sold by weight. The exact cost will b=
+e shown on your receipt when your order is delivered. This cost includes th=
+e delivery charge if any.
+
+
+CHANGING YOUR ORDER
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D
+If you want to change any items on your order or change the delivery, simpl=
+y go to www.blah.com and the Orders page; from here, click on the order re=
+ference number and make the appropriate changes.
+
+The last time you can change this order is: 17:40 on 1st June 2018.
+
+
+ICALENDAR EMAIL ATTACHMENTS
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D=3D=3D
+Order confirmation emails have an ICalendar event file attached to help you.
+
+YOUR COMPLETE SATISFACTION
+=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=3D=
+=3D
+We want to make sure that you are completely satisfied with your Blah deli=
+very; if for any reason you are not, then please advise the Customer Servic=
+es Team Member at the door and they will ensure that any issues are resolve=
+d for you.
+
+Thank you for shopping with BLAH.
+Yours sincerely,
+
+BLAH Customer Service Team
+
+------=_Part_91373_1043761677.1527870431791
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html>
+</html>
+
+------=_Part_91373_1043761677.1527870431791--
+
+------=_Part_91374_1856076643.1527870431792
+Content-Type: text/calendar; charset=us-ascii; name=BlahDelivery.ics
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename=BlahDelivery.ics
+
+BEGIN:VCALENDAR
+VERSION:2.0
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VTIMEZONE
+TZID:Europe/London
+LAST-MODIFIED:20180601T172711
+BEGIN:STANDARD
+DTSTART:20071028T010000
+RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10
+TZOFFSETTO:+0000
+TZOFFSETFROM:+0100
+TZNAME:GMT
+END:STANDARD
+BEGIN:DAYLIGHT
+DTSTART:20070325T010000
+RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3
+TZOFFSETTO:+0100
+TZOFFSETFROM:+0000
+TZNAME:BST
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+LOCATION:Home
+DTSTAMP:20180601T172711
+UID:36496743@foo.com
+LAST-MODIFIED:20180601T172711
+SEQUENCE:1
+DTSTART;TZID=Europe/London:20180602T080000
+SUMMARY:Blah delivery
+DTEND;TZID=Europe/London:20180602T090000
+DESCRIPTION:
+END:VEVENT
+END:VCALENDAR
+------=_Part_91374_1856076643.1527870431792--
+EOF
+    xlog "Deliver a message";
+    my $msg1 = Cassandane::Message->new(raw => $raw);
+    $self->{instance}->deliver($msg1);
+
+    # should fail to deliver and NOT appear in INBOX
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select("INBOX");
+    $self->assert_num_equals(0, $imaptalk->get_response_code('exists'));
+}
 
 1;
