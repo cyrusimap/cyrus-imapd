@@ -987,7 +987,7 @@ envelope_err:
 
         /* bodypart(s) exist, now to test them */
 
-        for (y = 0; val && val[y]; y++) {
+        for (y = 0; val && val[y] && !res; y++) {
 
             if (match == B_COUNT) {
                 count++;
