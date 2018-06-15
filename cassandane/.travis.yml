@@ -35,6 +35,7 @@ install:
 - cpanm --notest MIME::Types
 - cpanm --notest Mail::IMAPTalk
 - cpanm --notest Math::Int64
+- cpanm --notest Net::LDAP::Server
 - cpanm --notest Net::Server
 - cpanm --notest News::NNTPClient
 - cpanm --notest String::CRC32
@@ -47,7 +48,6 @@ install:
 - cpanm --notest XML::Fast
 - cpanm --notest XML::Generator
 - cpanm --notest XML::Spice
-- cpanm --notest Net::LDAP::Server
 - cpanm --notest https://github.com/cyrusimap/Mail-JMAPTalk.git
 - cpanm --notest https://github.com/cyrusimap/Net-DAVTalk.git
 - cpanm --notest https://github.com/cyrusimap/Net-CalDAVTalk.git
