@@ -21,7 +21,7 @@ of which is specified by the ``davdriveprefix`` option. The public storage hiera
 lives at the toplevel of the shared mailbox namespace. A user's personal
 storage hierarchy will be a child of their Inbox.
 
-For example, using the default value for davdriveprefix, an collection named photos
+For example, using the default value for davdriveprefix, a collection named photos
 for user "murch" would reside in the mailbox named ``user.murch.#drive.photos``.
 A user would access their storage at
 ``https://<servername>/dav/<davdriveprefix>/user/<userid>``, which for

@@ -22,7 +22,7 @@ Description
 ===========
 
 **httpd** is an HTTP server. It accepts commands on its standard input
-and responds on its standard output. It MUST invoked by
+and responds on its standard output. It MUST be invoked by
 :cyrusman:`master(8)` with those descriptors attached to a remote client
 connection.
 
