@@ -241,12 +241,12 @@ DAEMON section.
 
     On old install, prior to migration::
 
-       cvt_cyrusdb /<confdir>mailboxes.db berkeley /tmp/new-mailboxes.db skiplist
+       cvt_cyrusdb /<configdirectory>mailboxes.db berkeley /tmp/new-mailboxes.db skiplist
 
     If you don't want to use flat or skiplist for 3.0, you can use the
     new 3.0 :cyrusman:`cvt_cyrusdb(8)` to swap to new format::
 
-       cvt_cyrusdb /tmp/new-mailboxes.db skiplist /<confdir>/mailboxes.db <new file format>
+       cvt_cyrusdb /tmp/new-mailboxes.db skiplist /<configdirectory>/mailboxes.db <new file format>
 
 .. note::
     The :cyrusman:`cvt_cyrusdb(8)` command does not accept relative paths.

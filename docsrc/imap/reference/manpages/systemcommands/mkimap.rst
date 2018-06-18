@@ -28,7 +28,7 @@ directories that Cyrus IMAP would need to operate.
 
 Among these directories are:
 
-    *   the ``configdir`` (from :cyrusman:`imapd.conf(5)`)
+    *   the ``configdirectory`` (from :cyrusman:`imapd.conf(5)`)
 
     *   the ``partition-$name`` directories (from :cyrusman:`imapd.conf(5)`)
 

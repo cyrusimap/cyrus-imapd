@@ -185,7 +185,7 @@ are listed with ``<none>''.
 
 { "annotation_db_path", NULL, STRING }
 /* The absolute path to the annotations db file.  If not specified,
-   will be confdir/annotations.db */
+   will be configdirectory/annotations.db */
 
 { "anyoneuseracl", 1, SWITCH }
 /* Should non-admin users be allowed to set ACLs for the 'anyone'
@@ -481,7 +481,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "backup_db_path", NULL, STRING }
 /* The absolute path to the backup db file.  If not specified,
-   will be confdir/backups.db */
+   will be configdirectory/backups.db */
 
 { "backup_keep_previous", 0, SWITCH }
 /* Whether the \fBctl_backups compact\fR and \fBctl_backups reindex\fR
@@ -734,7 +734,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "duplicate_db_path", NULL, STRING }
 /* The absolute path to the duplicate db file.  If not specified,
-   will be confdir/deliver.db */
+   will be configdirectory/deliver.db */
 
 { "duplicatesuppression", 1, SWITCH }
 /* If enabled, lmtpd will suppress delivery of a message to a mailbox if
@@ -1255,7 +1255,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "mboxlist_db_path", NULL, STRING }
 /* The absolute path to the mailboxes db file.  If not specified
-   will be confdir/mailboxes.db */
+   will be configdirectory/mailboxes.db */
 
 { "mboxname_lockpath", NULL, STRING }
 /* Path to mailbox name lock files (default $conf/lock) */
@@ -1413,7 +1413,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "newsrc_db_path", NULL, STRING }
 /* The absolute path to the newsrc db file.  If not specified,
-   will be confdir/fetchnews.db */
+   will be configdirectory/fetchnews.db */
 
 { "nntptimeout", 3, INT }
 /* Set the length of the NNTP server's inactivity autologout timer,
@@ -1575,7 +1575,7 @@ If all partitions are over that limit, this feature is not used anymore.
 
 { "proc_path", NULL, STRING }
 /* Path to proc directory.  Default is NULL - must be an absolute path
-   if specified.  If not specified, the path $confdir/proc/ will be
+   if specified.  If not specified, the path $configdirectory/proc/ will be
    used. */
 
 { "proxy_authname", "proxy", STRING }
@@ -1622,14 +1622,14 @@ If all partitions are over that limit, this feature is not used anymore.
 
 { "ptloader_sock", NULL, STRING }
 /* Unix domain socket that ptloader listens on.
-   (defaults to configdir/ptclient/ptsock) */
+   (defaults to configdirectory/ptclient/ptsock) */
 
 { "ptscache_db", "twoskip", STRINGLIST("skiplist", "twoskip", "lmdb")}
 /* The cyrusdb backend to use for the pts cache. */
 
 { "ptscache_db_path", NULL, STRING }
 /* The absolute path to the ptscache db file.  If not specified,
-   will be confdir/ptscache.db */
+   will be configdirectory/ptscache.db */
 
 { "ptscache_timeout", 10800, INT }
 /* The timeout (in seconds) for the PTS cache database when using the
@@ -1655,7 +1655,7 @@ If all partitions are over that limit, this feature is not used anymore.
 { "quota_db_path", NULL, STRING }
 /* The absolute path for the quota database (if you choose a single-file
    quota DB type - or the base path if you choose quotalegacy).  If
-   not specified will be confdir/quotas.db or confdir/quota/ */
+   not specified will be configdirectory/quotas.db or configdirectory/quota/ */
 
 { "quotawarn", 90, INT }
 /* The percent of quota utilization over which the server generates
@@ -2082,7 +2082,7 @@ product version in the capabilities
 
 { "statuscache_db_path", NULL, STRING }
 /* The absolute path to the statuscache db file.  If not specified,
-   will be confdir/statuscache.db */
+   will be configdirectory/statuscache.db */
 
 { "sync_authname", NULL, STRING }
 /* The authentication name to use when authenticating to a sync server.
@@ -2282,7 +2282,7 @@ product version in the capabilities
 
 { "tls_sessions_db_path", NULL, STRING }
 /* The absolute path to the TLS sessions db file. If not specified,
-   will be confdir/tls_sessions.db */
+   will be configdirectory/tls_sessions.db */
 
 { "tls_session_timeout", 1440, INT }
 /* The length of time (in minutes) that a TLS session will be cached
@@ -2309,7 +2309,7 @@ product version in the capabilities
 
 { "userdeny_db_path", NULL, STRING }
 /* The absolute path to the userdeny db file.  If not specified,
-   will be confdir/user_deny.db */
+   will be configdirectory/user_deny.db */
 
 { "username_tolower", 1, SWITCH }
 /* Convert usernames to all lowercase before login/authentication.  This
@@ -2369,7 +2369,7 @@ product version in the capabilities
 
 { "zoneinfo_db_path", NULL, STRING }
 /* The absolute path to the zoneinfo db file.  If not specified,
-   will be confdir/zoneinfo.db */
+   will be configdirectory/zoneinfo.db */
 
 { "object_storage_enabled", 0, SWITCH }
 /* Is Object storage enabled for this server.  You also need to have
