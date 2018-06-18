@@ -1,5 +1,5 @@
-Is it safe to put configdir/proc and configdir/lock on a tmpfs filesystem?
---------------------------------------------------------------------------
+Is it safe to put <configdirectory>/proc and <configdirectory>/lock on a tmpfs filesystem?
+------------------------------------------------------------------------------------------
 
 It's safe to put both of these in tmpfs, and since they're fairly busy 
 it's a good idea for performance reasons. Further, nothing ever removes 

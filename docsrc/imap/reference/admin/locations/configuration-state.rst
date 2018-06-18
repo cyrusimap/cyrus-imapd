@@ -13,8 +13,8 @@ configuration file to use.  For example:
 
     **ctl_mboxlist** **-C** */usr/local/etc/imapd.conf*  **-d** **-f** *mailboxes.dump*
 
-The main configuration directory is referred to as ``<confdir>`` in
-most Cyrus IMAP documentation, and is set via the ``configdirectory``
+The main configuration directory is referred to as ``<configdirectory>``
+in Cyrus IMAP documentation, and is set via the ``configdirectory``
 entry in :cyrusman:`imapd.conf(5)`:
 
 .. include:: /imap/reference/manpages/configs/imapd.conf.rst
@@ -26,7 +26,7 @@ distributions use ``/var/lib/imap`` or ``/var/lib/cyrus``.
 
 State Databases
 ---------------
-Despite the name, most of what's stored in ``<confdir>`` is state
+Despite the name, most of what's stored in ``<configdirectory>`` is state
 information.  Here's a list of files typically located therein:
 
     * :ref:`imap-concepts-deployment-db-annotations`
@@ -179,7 +179,7 @@ Per-user State Directories
 
 There are several things tracked per-user, and the data files for these
 items, such as subscriptions and seen state, are stored in
-<confdir>/user.  These files may not be relocated from <confdir>.  They
+<configdirectory>/user.  These files may not be relocated from <configdirectory>.  They
 are:
 
     * :ref:`imap-concepts-deployment-db-seen`

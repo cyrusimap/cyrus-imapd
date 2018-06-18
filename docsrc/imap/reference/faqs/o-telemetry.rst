@@ -10,8 +10,8 @@ The directory path is:
 
 .. code-block:: bash
 
-    mkdir $confdir/log/$userid/             # for example /var/imap/log/darth
-    chown cyrus $confdir/log/$userid/       # The cyrus user needs write access to this directory.
+    mkdir $configdirectory/log/$userid/             # for example /var/imap/log/darth
+    chown cyrus $configdirectory/log/$userid/       # The cyrus user needs write access to this directory.
 
 If you have virtdomains enabled, then the username is the login name. In this case if you login as ``darth@vader.net``, then the path is ``/var/imap/log/darth@vader.net/``
 

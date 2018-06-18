@@ -23,7 +23,7 @@ Changes to the Cyrus IMAP Server since 2.4.6
 *   Fixed bug #3423 - STARTTLS plaintext command injection vulnerability
 *   Bug #3382 Added "failedloginpause" config option
 *   Bugs #3383/3385 Removed some obsolete config options
-*   Bug #3389 $confdir/proc not created on the fly
+*   Bug #3389 $configdirectory/proc not created on the fly
 *   Bug #3394 fix imtest parsing of MECHLIST
 *   Bug #3399 fix with_ldap option default
 *   Bug #3307 fix mbpath crash on remote mailbox

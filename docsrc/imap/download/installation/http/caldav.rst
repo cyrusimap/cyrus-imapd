@@ -346,7 +346,7 @@ Configuration
        :end-before: endblob zoneinfo_db
 
 This module stores time zone data in the ``zoneinfo/`` subdirectory of the Cyrus
-configuration directory (as specified by the ``configdir`` option). The data is
+configuration directory (as specified by the ``configdirectory`` option). The data is
 indexed by a database whose location is specified by the ``zoneinfo_db_path``
 option, using the format specified by the ``zoneinfo_db`` option.
 
@@ -371,14 +371,14 @@ The steps to populate the Cyrus ``zoneinfo/`` directory are:
 
 3. Expand the downloaded time zone data into a temporary directory of your choice.
 
-4. Populate ``configdir/zoneinfo/`` with iCalendar data:
+4. Populate ``<configdirectory>/zoneinfo/`` with iCalendar data:
 
    *Initial Install Only*
 
    a. Convert the raw data into iCalendar format by running vzic as follows:
-      ``vzic --pure --olson-dir <location-of-raw-data> --output-dir <configdir>/zoneinfo``
+      ``vzic --pure --olson-dir <location-of-raw-data> --output-dir <configdirectory>/zoneinfo``
 
-      This will create and install iCalendar data directly into the configdir/zoneinfo/ directory.
+      This will create and install iCalendar data directly into the ``<configdirectory>/zoneinfo/`` directory.
 
    *Updating Data Only*
 
@@ -388,7 +388,7 @@ The steps to populate the Cyrus ``zoneinfo/`` directory are:
       This will create a zoneinfo/ subdirectory in your current location
       (which should be `tools/vzic/`).
 
-   c. Merge new/updated iCalendar data into the configdir/zoneinfo/ directory
+   c. Merge new/updated iCalendar data into the ``<configdirectory>/zoneinfo/`` directory
       by running vzic-merge.pl in your current location:
       ``vzic-merge.pl``
 

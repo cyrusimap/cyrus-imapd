@@ -42,7 +42,7 @@ the local server would never see it existing.
 Implementation
 --------------
 
-It's a simple matter of having a file under $confdir/lock - in a
+It's a simple matter of having a file under $configdirectory/lock - in a
 directory tree using the same hashing structure as the mailbox tree.
 This directory can be symlinked or mounted to a tmpfs since the locks
 need not persist across restarts. Due to race conditions while cleaning
