@@ -68,7 +68,7 @@ static int debugmode = 0;
 
 EXPORTED void fatal(const char *msg, int err)
 {
-    if (debugmode) fprintf(stderr, "dying with %s %d\n",msg,err);
+    if (debugmode) fprintf(stderr, "dying with %s %d\n", msg, err);
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");
 
@@ -166,4 +166,3 @@ int main(int argc, char **argv)
     /* NOTREACHED */
     shut_down(1);
 }
-
