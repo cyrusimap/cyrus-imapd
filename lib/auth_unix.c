@@ -280,6 +280,10 @@ static void myfreestate(struct auth_state *auth_state)
     free(auth_state);
 }
 
+static strarray_t *mygroups(const struct auth_state *auth_state)
+{
+    return strarray_dup(&auth_state->groups);
+}
 
 HIDDEN struct auth_mech auth_unix =
 {
@@ -289,4 +293,5 @@ HIDDEN struct auth_mech auth_unix =
     &mymemberof,
     &mynewstate,
     &myfreestate,
+    &mygroups,
 };

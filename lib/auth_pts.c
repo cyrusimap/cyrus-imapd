@@ -524,6 +524,23 @@ static void myfreestate(struct auth_state *auth_state)
     free(auth_state);
 }
 
+static strarray_t *mygroups(const struct auth_state *auth_state)
+{
+    strarray_t *sa;
+    int i;
+
+    if (!auth_state->ngroups)
+        return NULL;
+
+    sa = strarray_new();
+    strarray_truncate(sa, auth_state->ngroups);
+    for (i = 0; i < auth_state->ngroups; i++) {
+        strarray_append(sa, auth_state->groups[i].id);
+    }
+
+    return sa;
+}
+
 HIDDEN struct auth_mech auth_pts =
 {
     "pts",              /* name */
@@ -532,4 +549,5 @@ HIDDEN struct auth_mech auth_pts =
     &mymemberof,
     &mynewstate,
     &myfreestate,
+    &mygroups,
 };

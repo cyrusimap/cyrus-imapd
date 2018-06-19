@@ -43,6 +43,8 @@
 #ifndef INCLUDED_AUTH_H
 #define INCLUDED_AUTH_H
 
+#include "lib/strarray.h"
+
 struct auth_state;
 
 struct auth_mech {
@@ -53,6 +55,7 @@ struct auth_mech {
              const char *identifier);
     struct auth_state *(*newstate)(const char *identifier);
     void (*freestate)(struct auth_state *auth_state);
+    strarray_t *(*groups)(const struct auth_state *auth_state);
 };
 
 extern struct auth_mech *auth_mechs[];
@@ -75,5 +78,6 @@ int auth_memberof(const struct auth_state *auth_state,
          const char *identifier);
 struct auth_state *auth_newstate(const char *identifier);
 void auth_freestate(struct auth_state *auth_state);
+strarray_t *auth_groups(const struct auth_state *auth_state);
 
 #endif /* INCLUDED_AUTH_H */

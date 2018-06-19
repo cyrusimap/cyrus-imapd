@@ -330,6 +330,12 @@ static void myfreestate(struct auth_state *auth_state)
     free((char *)auth_state);
 }
 
+static strarray_t *mygroups(const struct auth_state *auth_state)
+{
+    syslog(LOG_WARN, "Authentication mechanism (krb) does not support groups");
+    return NULL;
+}
+
 #else /* HAVE_KRB */
 
 static int mymemberof(
@@ -361,6 +367,12 @@ static void myfreestate(
         fatal("Authentication mechanism (krb) not compiled in", EC_CONFIG);
 }
 
+static strarray_t *mygroups(
+    const struct auth_state *auth_state __attribute__((unused)))
+{
+        fatal("Authentication mechanism (krb) not compiled in", EC_CONFIG);
+}
+
 #endif
 
 HIDDEN struct auth_mech auth_krb =
@@ -371,4 +383,5 @@ HIDDEN struct auth_mech auth_krb =
     &mymemberof,
     &mynewstate,
     &myfreestate,
+    &mygroups,
 };

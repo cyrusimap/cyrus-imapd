@@ -110,3 +110,10 @@ EXPORTED void auth_freestate(struct auth_state *auth_state)
 
     if (auth_state) auth->freestate(auth_state);
 }
+
+EXPORTED strarray_t *auth_groups(const struct auth_state *auth_state)
+{
+    struct auth_mech *auth = auth_fromname();
+
+    return auth->groups(auth_state);
+}
