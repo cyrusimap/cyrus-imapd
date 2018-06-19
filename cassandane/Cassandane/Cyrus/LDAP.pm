@@ -57,7 +57,7 @@ sub new
         ldap_group_base => "ou=groups,o=cyrus",
         ldap_domain_base_dn => "ou=domains,o=cyrus",
         ldap_user_attribute => "uid",
-        ldap_member_attribute => "member",
+        ldap_member_attribute => "memberof",
         ldap_sasl => "no",
         auth_mech => 'pts',
         pts_module => 'ldap',
@@ -98,6 +98,8 @@ sub set_up
     );
 
     $self->_start_instances();
+
+    $self->{instance}->create_user("otheruser");
 }
 
 sub tear_down
@@ -154,6 +156,64 @@ sub test_setacl_groupid_spaces
     $admintalk->select("user.cassandane.groupid_spaces");
     $self->assert_str_equals('ok',
         $admintalk->get_last_completion_response());
+}
+
+sub test_list_groupaccess_noracl
+    :needs_dependency_ldap
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $imaptalk = $self->{store}->get_client();
+
+    $admintalk->create("user.otheruser.groupaccess");
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    $admintalk->setacl("user.otheruser.groupaccess",
+                       "group:group co", "lrswipkxtecdan");
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $list = $imaptalk->list("", "*");
+    my @boxes = sort map { $_->[2] } @{$list};
+
+    $self->assert_deep_equals(\@boxes,
+                              ['INBOX', 'user.otheruser.groupaccess']);
+}
+
+sub test_list_groupaccess_racl
+    :needs_dependency_ldap :ReverseACLs
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $imaptalk = $self->{store}->get_client();
+
+    $admintalk->create("user.otheruser.groupaccess");
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    $admintalk->setacl("user.otheruser.groupaccess",
+                       "group:group co", "lrswipkxtecdn");
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    if (get_verbose()) {
+        $self->{instance}->run_command(
+            { cyrus => 1, },
+            'cyr_dbtool',
+            "$self->{instance}->{basedir}/conf/mailboxes.db",
+            'twoskip',
+            'show'
+        );
+    }
+
+    my $list = $imaptalk->list("", "*");
+    my @boxes = sort map { $_->[2] } @{$list};
+
+    $self->assert_deep_equals(\@boxes,
+                              ['INBOX', 'user.otheruser.groupaccess']);
 }
 
 1;
