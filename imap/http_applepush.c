@@ -122,7 +122,8 @@ static int meth_get_applepush(struct transaction_t *txn,
     mailbox_uniqueid = strarray_nth(keyparts, 1);
 
     /* lookup mailbox */
-    mboxname = mboxlist_find_uniqueid(mailbox_uniqueid, mailbox_userid);
+    mboxname = mboxlist_find_uniqueid(mailbox_uniqueid, mailbox_userid,
+                                      httpd_authstate);
     if (!mboxname) {
         syslog(LOG_ERR,
                "meth_get_applepush: mboxlist_find_uniqueid(%s, %s) not found",

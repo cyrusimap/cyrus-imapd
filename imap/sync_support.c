@@ -3171,7 +3171,7 @@ int sync_get_user(struct dlist *kin, struct sync_state *sstate)
     mrock.qrl = quotaroots;
     mrock.pout = sstate->pout;
 
-    r = mboxlist_usermboxtree(userid, mailbox_cb, &mrock, MBOXTREE_DELETED);
+    r = mboxlist_usermboxtree(userid, NULL, mailbox_cb, &mrock, MBOXTREE_DELETED);
     if (r) goto bail;
 
     for (qr = quotaroots->head; qr; qr = qr->next) {
@@ -3470,7 +3470,7 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
     }
 
     strarray_truncate(list, 0);
-    r = mboxlist_usermboxtree(userid, addmbox_cb, list, MBOXTREE_DELETED);
+    r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, list, MBOXTREE_DELETED);
     if (r) goto done;
 
     /* delete in reverse so INBOX is last */
@@ -6002,7 +6002,7 @@ static int do_user_main(const char *user, const char *topart,
     info.mboxlist = sync_name_list_create();
     info.quotalist = sync_name_list_create();
 
-    r = mboxlist_usermboxtree(user, do_mailbox_info, &info, MBOXTREE_DELETED);
+    r = mboxlist_usermboxtree(user, NULL, do_mailbox_info, &info, MBOXTREE_DELETED);
 
     /* we know all the folders present on the master, so it's safe to delete
      * anything not mentioned here on the replica - at least until we get

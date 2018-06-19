@@ -1037,7 +1037,8 @@ struct shared_mboxes *_shared_mboxes_new(jmap_req_t *req, int flags)
     }
 
     /* Gather shared mailboxes */
-    int r = mboxlist_usermboxtree(req->accountid, _shared_mboxes_cb, sm, flags);
+    int r = mboxlist_usermboxtree(req->accountid, req->authstate,
+                                  _shared_mboxes_cb, sm, flags);
     if (r) {
         free(sm);
         sm = NULL;
@@ -1573,7 +1574,8 @@ static int jmap_mailbox_get(jmap_req_t *req)
      * but will degrade if clients just fetch a small subset of
      * all mailbox ids. XXX Optimise this codepath if the ids[] array
      * length is small */
-    mboxlist_usermboxtree(req->accountid, jmap_mailbox_get_cb, &rock, MBOXTREE_INTERMEDIATES);
+    mboxlist_usermboxtree(req->accountid, req->authstate,
+                          jmap_mailbox_get_cb, &rock, MBOXTREE_INTERMEDIATES);
 
     /* Report if any requested mailbox has not been found */
     if (rock.want) {
@@ -3327,7 +3329,7 @@ static int _mboxset_state_is_valid(const char *account_id, struct mboxset_ops *o
     state->siblings_by_parent_id = siblings_by_parent_id;
 
     /* Map current mailboxes by IMAP name to id */
-    mboxlist_usermboxtree(account_id, _mboxset_state_mboxlist_cb, state, 0);
+    mboxlist_usermboxtree(account_id, NULL, _mboxset_state_mboxlist_cb, state, 0);
 
     /* Create entries for current mailboxes */
     hash_enumerate(id_by_imapname, _mboxset_state_mkentry_cb, state);
@@ -3707,7 +3709,8 @@ static int _mbox_changes(jmap_req_t *req,
 
 
     /* Search for updates */
-    r = mboxlist_usermboxtree(req->accountid, _mbox_changes_cb, &data,
+    r = mboxlist_usermboxtree(req->accountid, req->authstate,
+                              _mbox_changes_cb, &data,
                               MBOXTREE_TOMBSTONES|MBOXTREE_DELETED);
     if (r) goto done;
 

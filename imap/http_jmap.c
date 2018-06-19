@@ -337,11 +337,11 @@ static int mymblist(const char *userid,
 
     /* skip ACL checks if account owner */
     if (!strcmp(userid, accountid))
-        return mboxlist_usermboxtree(userid, proc, rock, flags);
+        return mboxlist_usermboxtree(userid, authstate, proc, rock, flags);
 
     /* Open the INBOX first */
     struct mymblist_rock myrock = { proc, rock, authstate, mboxrights, all };
-    return mboxlist_usermboxtree(accountid, mymblist_cb, &myrock, flags);
+    return mboxlist_usermboxtree(accountid, authstate, mymblist_cb, &myrock, flags);
 }
 
 EXPORTED int jmap_mboxlist(jmap_req_t *req, mboxlist_cb *proc, void *rock)

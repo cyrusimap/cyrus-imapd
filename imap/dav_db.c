@@ -286,7 +286,7 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
 
     sqldb_t *userdb = dav_open_userid(userid);
     sqldb_begin(userdb, "reconstruct");
-    int r = mboxlist_usermboxtree(userid, _dav_reconstruct_mb, NULL, 0);
+    int r = mboxlist_usermboxtree(userid, NULL, _dav_reconstruct_mb, NULL, 0);
     if (r)
         sqldb_rollback(userdb, "reconstruct");
     else

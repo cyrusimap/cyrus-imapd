@@ -124,7 +124,8 @@ int mboxlist_lookup_allow_all(const char *name,
                                    struct txn **tid);
 
 char *mboxlist_find_specialuse(const char *use, const char *userid);
-char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid);
+char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
+                             const struct auth_state *auth_state);
 
 
 /* insert/delete stub entries */
@@ -258,7 +259,7 @@ typedef int mboxlist_cb(const mbentry_t *mbentry, void *rock);
 #define MBOXTREE_INTERMEDIATES (1<<6)
 int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock, int flags);
 int mboxlist_mboxtree(const char *mboxname, mboxlist_cb *proc, void *rock, int flags);
-int mboxlist_usermboxtree(const char *userid, /* const struct auth_state *auth_state, */
+int mboxlist_usermboxtree(const char *userid, const struct auth_state *auth_state,
                           mboxlist_cb *proc, void *rock, int flags);
 int mboxlist_usersubs(const char *userid, mboxlist_cb *proc, void *rock, int flags);
 

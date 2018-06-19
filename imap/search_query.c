@@ -866,7 +866,8 @@ EXPORTED int search_query_run(search_query_t *query)
          * Walk over every folder, applying the scan expression. */
         if (query->multiple) {
             char *userid = mboxname_to_userid(index_mboxname(query->state));
-            r = mboxlist_usermboxtree(userid, subquery_run_global_cb, query, /*flags*/0);
+            r = mboxlist_usermboxtree(userid, NULL, subquery_run_global_cb,
+                                      query, /*flags*/0);
             free(userid);
         }
         else {

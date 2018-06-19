@@ -7201,7 +7201,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     if (!r && !localonly && mboxname_isusermailbox(intname, 1)) {
         char *userid = mboxname_to_userid(intname);
         if (userid) {
-            r = mboxlist_usermboxtree(userid, delmbox, NULL, 0);
+            r = mboxlist_usermboxtree(userid, NULL, delmbox, NULL, 0);
             if (!r) r = user_deletedata(userid, 1);
             free(userid);
         }
@@ -11154,7 +11154,7 @@ static int xfer_initialsync(struct xfer_header *xfer)
         }
         xfer->items = NULL;
 
-        r = mboxlist_usermboxtree(xfer->userid, xfer_addusermbox,
+        r = mboxlist_usermboxtree(xfer->userid, NULL, xfer_addusermbox,
                                   xfer, MBOXTREE_DELETED);
     }
     else {
@@ -11771,7 +11771,7 @@ static void cmd_xfer(const char *tag, const char *name,
                 }
             }
 
-            r = mboxlist_usermboxtree(xfer->userid, xfer_addusermbox,
+            r = mboxlist_usermboxtree(xfer->userid, NULL, xfer_addusermbox,
                                       xfer, MBOXTREE_DELETED);
 
             /* NOTE: mailboxes were added in reverse, so the inbox is

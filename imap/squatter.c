@@ -331,7 +331,7 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
 
     for (i = 0; i < nmboxnames; i++) {
         if (user_mode) {
-            mboxlist_usermboxtree(mboxnames[i], addmbox, sa, 0);
+            mboxlist_usermboxtree(mboxnames[i], NULL, addmbox, sa, 0);
         }
         else {
             /* Translate any separators in mailboxname */
@@ -647,7 +647,7 @@ static strarray_t *read_sync_log_items(sync_log_reader_t *slr)
                 strarray_add(folders, args[1]);
         }
         else if (!strcmp(args[0], "USER"))
-            mboxlist_usermboxtree(args[1], addmbox, folders, /*flags*/0);
+            mboxlist_usermboxtree(args[1], NULL, addmbox, folders, /*flags*/0);
     }
 
     return folders;

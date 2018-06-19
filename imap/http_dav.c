@@ -6029,7 +6029,8 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
             }
             else if (config_getswitch(IMAPOPT_FASTMAILSHARING)) {
                 /* Add responses for all visible collections */
-                mboxlist_usermboxtree(httpd_userid, propfind_by_collection,
+                mboxlist_usermboxtree(httpd_userid, httpd_authstate,
+                                      propfind_by_collection,
                                       &fctx, MBOXTREE_PLUS_RACL);
             }
             else if (txn->req_tgt.mbentry) {

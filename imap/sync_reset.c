@@ -140,7 +140,7 @@ static int reset_single(const char *userid)
         (void)mboxlist_changesub(name, userid, sync_authstate, 0, 0, 0);
     }
 
-    r = mboxlist_usermboxtree(userid, addmbox_cb, mblist, MBOXTREE_DELETED);
+    r = mboxlist_usermboxtree(userid, NULL, addmbox_cb, mblist, MBOXTREE_DELETED);
     if (r) goto fail;
 
     for (i = mblist->count; i; i--) {

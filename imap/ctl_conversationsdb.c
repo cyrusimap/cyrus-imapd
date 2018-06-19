@@ -182,7 +182,7 @@ static int do_zero(const char *userid)
     r = conversations_open_user(userid, &state);
     if (r) return r;
 
-    r = mboxlist_usermboxtree(userid, zero_cid_cb, NULL, 0);
+    r = mboxlist_usermboxtree(userid, NULL, zero_cid_cb, NULL, 0);
     if (r) goto done;
 
     /* XXX:
@@ -251,7 +251,7 @@ static int do_build(const char *userid)
     r = conversations_open_user(userid, &state);
     if (r) return r;
 
-    r = mboxlist_usermboxtree(userid, build_cid_cb, NULL, 0);
+    r = mboxlist_usermboxtree(userid, NULL, build_cid_cb, NULL, 0);
 
     conversations_commit(&state);
     return r;
@@ -304,7 +304,7 @@ static int do_recalc(const char *userid)
     r = conversations_zero_counts(state);
     if (r) goto err;
 
-    r = mboxlist_usermboxtree(userid, recalc_counts_cb, NULL, 0);
+    r = mboxlist_usermboxtree(userid, NULL, recalc_counts_cb, NULL, 0);
     if (r) goto err;
 
     r = conversations_cleanup_zero(state);
@@ -681,7 +681,7 @@ static int do_audit(const char *userid)
     conversations_set_suffix(temp_suffix);
     conversations_set_directory(audit_temp_directory);
 
-    r = mboxlist_usermboxtree(userid, audit_counts_cb, NULL, 0);
+    r = mboxlist_usermboxtree(userid, NULL, audit_counts_cb, NULL, 0);
     if (r) {
         fprintf(stderr, "Failed to recalculate counts in %s: %s\n",
                 filename_temp, error_message(r));

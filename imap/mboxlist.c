@@ -604,7 +604,7 @@ EXPORTED char *mboxlist_find_specialuse(const char *use, const char *userid)
         return mboxname_user_mbox(userid, NULL);
 
     struct _find_specialuse_data rock = { use, userid, NULL };
-    mboxlist_usermboxtree(userid, _find_specialuse, &rock, MBOXTREE_SKIP_ROOT);
+    mboxlist_usermboxtree(userid, NULL, _find_specialuse, &rock, MBOXTREE_SKIP_ROOT);
     return rock.mboxname;
 }
 
@@ -623,13 +623,14 @@ static int _find_uniqueid(const mbentry_t *mbentry, void *rock) {
     return r;
 }
 
-EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid)
+EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
+                                      const struct auth_state *auth_state)
 {
     struct _find_uniqueid_data rock = { uniqueid, NULL };
 
     init_internal();
 
-    mboxlist_usermboxtree(userid, _find_uniqueid, &rock, MBOXTREE_PLUS_RACL);
+    mboxlist_usermboxtree(userid, auth_state, _find_uniqueid, &rock, MBOXTREE_PLUS_RACL);
     return rock.mboxname;
 }
 
@@ -3015,12 +3016,12 @@ static int mboxlist_racl_matches(struct db *db,
     return 0;
 }
 
+/* auth_state parameter is optional, but is needed for proper expansion
+ * of group RACLs if flags contains MBOXTREE_PLUS_RACL */
 EXPORTED int mboxlist_usermboxtree(const char *userid,
-                                   /*const struct auth_state *auth_state, */
+                                   const struct auth_state *auth_state,
                                    mboxlist_cb *proc, void *rock, int flags)
 {
-    const struct auth_state *auth_state = NULL; /* XXX pass this in */
-
     char *inbox = mboxname_user_mbox(userid, 0);
     int r = mboxlist_mboxtree(inbox, proc, rock, flags);
 

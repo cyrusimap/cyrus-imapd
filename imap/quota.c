@@ -641,7 +641,7 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
     for (i = 0; i < nroots; i++) {
         if (isuser) {
             char *inbox = mboxname_user_mbox(roots[i], NULL);
-            r = mboxlist_usermboxtree(roots[i], cb, inbox, /*flags*/0);
+            r = mboxlist_usermboxtree(roots[i], NULL, cb, inbox, /*flags*/0);
             free(inbox);
         }
         else {

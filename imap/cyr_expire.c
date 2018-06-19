@@ -631,7 +631,7 @@ static int do_archive(struct cyr_expire_ctx *ctx)
         ctx->arock.archive_mark = time(0) - ctx->args.archive_seconds;
 
         if (ctx->args.userid)
-            mboxlist_usermboxtree(ctx->args.userid, archive,
+            mboxlist_usermboxtree(ctx->args.userid, NULL, archive,
                                   &ctx->arock, MBOXTREE_DELETED);
         else
             mboxlist_allmbox(ctx->args.mbox_prefix, archive, &ctx->arock, 0);
@@ -661,7 +661,7 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
         }
 
         if (ctx->args.userid)
-            mboxlist_usermboxtree(ctx->args.userid, expire,
+            mboxlist_usermboxtree(ctx->args.userid, NULL, expire,
                                   &ctx->erock, MBOXTREE_DELETED);
         else
             mboxlist_allmbox(ctx->args.mbox_prefix, expire, &ctx->erock, 0);
@@ -703,7 +703,7 @@ static int do_cid_expire(struct cyr_expire_ctx *ctx)
                        (double)(cid_expire_seconds/SECS_IN_A_DAY));
 
         if (ctx->args.userid)
-            mboxlist_usermboxtree(ctx->args.userid, expire_conversations,
+            mboxlist_usermboxtree(ctx->args.userid, NULL, expire_conversations,
                                   &ctx->crock, MBOXTREE_DELETED);
         else
             mboxlist_allmbox(ctx->args.mbox_prefix, expire_conversations,
@@ -740,7 +740,7 @@ static int do_delete(struct cyr_expire_ctx *ctx)
         ctx->drock.delete_mark = time(0) - ctx->args.delete_seconds;
 
         if (ctx->args.userid)
-            mboxlist_usermboxtree(ctx->args.userid, delete,
+            mboxlist_usermboxtree(ctx->args.userid, NULL, delete,
                                   &ctx->drock, MBOXTREE_DELETED);
         else
             mboxlist_allmbox(ctx->args.mbox_prefix, delete, &ctx->drock, 0);
