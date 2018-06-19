@@ -258,7 +258,8 @@ typedef int mboxlist_cb(const mbentry_t *mbentry, void *rock);
 #define MBOXTREE_INTERMEDIATES (1<<6)
 int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock, int flags);
 int mboxlist_mboxtree(const char *mboxname, mboxlist_cb *proc, void *rock, int flags);
-int mboxlist_usermboxtree(const char *userid, mboxlist_cb *proc, void *rock, int flags);
+int mboxlist_usermboxtree(const char *userid, /* const struct auth_state *auth_state, */
+                          mboxlist_cb *proc, void *rock, int flags);
 int mboxlist_usersubs(const char *userid, mboxlist_cb *proc, void *rock, int flags);
 
 strarray_t *mboxlist_sublist(const char *userid);

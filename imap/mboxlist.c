@@ -2967,40 +2967,80 @@ static int racl_cb(void *rock,
     return 0;
 }
 
-EXPORTED int mboxlist_usermboxtree(const char *userid, mboxlist_cb *proc,
-                                   void *rock, int flags)
+static int mboxlist_racl_matches(struct db *db,
+                                 int isuser, const char *userid,
+                                 const struct auth_state *auth_state,
+                                 const char *mboxprefix, size_t len,
+                                 strarray_t *matches)
 {
+    struct buf raclprefix = BUF_INITIALIZER;
+    strarray_t *groups = NULL;
+    struct raclrock raclrock = { 0, matches };
+    int i;
+
+    /* direct access by userid */
+    mboxlist_racl_key(isuser, userid, NULL, &raclprefix);
+    /* this is the prefix */
+    raclrock.prefixlen = buf_len(&raclprefix);
+    /* we only need to look inside the prefix still, but we keep the length
+     * in raclrock pointing to the start of the mboxname part of the key so
+     * we get correct names in matches */
+    if (len) buf_appendmap(&raclprefix, mboxprefix, len);
+    cyrusdb_foreach(db,
+                    buf_cstring(&raclprefix),
+                    buf_len(&raclprefix),
+                    NULL, racl_cb, &raclrock, NULL);
+
+    /* indirect access via group membership: same logic as userid, but per group */
+    if (auth_state)
+        groups = auth_groups(auth_state);
+    if (groups) {
+        for (i = 0; i < strarray_size(groups); i++) {
+            mboxlist_racl_key(isuser, strarray_nth(groups, i), NULL, &raclprefix);
+            raclrock.prefixlen = buf_len(&raclprefix);
+            if (len) buf_appendmap(&raclprefix, mboxprefix, len);
+
+            cyrusdb_foreach(db,
+                            buf_cstring(&raclprefix),
+                            buf_len(&raclprefix),
+                            NULL, racl_cb, &raclrock, NULL);
+        }
+
+        strarray_free(groups);
+    }
+
+    /* XXX sort and uniq matches */
+
+    buf_free(&raclprefix);
+    return 0;
+}
+
+EXPORTED int mboxlist_usermboxtree(const char *userid,
+                                   /*const struct auth_state *auth_state, */
+                                   mboxlist_cb *proc, void *rock, int flags)
+{
+    const struct auth_state *auth_state = NULL; /* XXX pass this in */
+
     char *inbox = mboxname_user_mbox(userid, 0);
     int r = mboxlist_mboxtree(inbox, proc, rock, flags);
 
     if (flags & MBOXTREE_PLUS_RACL) {
-        struct allmb_rock mbrock = { NULL, proc, rock, flags };
         /* we're using reverse ACLs */
-        struct buf buf = BUF_INITIALIZER;
+        struct allmb_rock mbrock = { NULL, proc, rock, flags };
+        int i;
         strarray_t matches = STRARRAY_INITIALIZER;
 
         /* user items */
-        mboxlist_racl_key(1, userid, NULL, &buf);
-        /* this is the prefix */
-        struct raclrock raclrock = { buf.len, &matches };
-        /* we only need to look inside the prefix still, but we keep the length
-         * in raclrock pointing to the start of the mboxname part of the key so
-         * we get correct names in matches */
-        r = cyrusdb_foreach(mbdb, buf.s, buf.len, NULL, racl_cb, &raclrock, NULL);
-        buf_reset(&buf);
-
+        mboxlist_racl_matches(mbdb, 1, userid, auth_state, NULL, 0, &matches);
         /* shared items */
-        mboxlist_racl_key(0, userid, NULL, &buf);
-        raclrock.prefixlen = buf.len;
-        if (!r) r = cyrusdb_foreach(mbdb, buf.s, buf.len, NULL, racl_cb, &raclrock, NULL);
+        mboxlist_racl_matches(mbdb, 0, userid, auth_state, NULL, 0, &matches);
 
-        /* XXX - later we need to sort the array when we've added groups */
-        int i;
         for (i = 0; !r && i < strarray_size(&matches); i++) {
             const char *mboxname = strarray_nth(&matches, i);
-            r = cyrusdb_forone(mbdb, mboxname, strlen(mboxname), allmbox_p, allmbox_cb, &mbrock, 0);
+            r = cyrusdb_forone(mbdb, mboxname, strlen(mboxname),
+                               allmbox_p, allmbox_cb, &mbrock, 0);
         }
-        buf_free(&buf);
+
         strarray_fini(&matches);
         mboxlist_entry_free(&mbrock.mbentry);
     }
@@ -3017,38 +3057,15 @@ static int mboxlist_find_category(struct find_rock *rock, const char *prefix, si
 
     if (!rock->issubs && !rock->isadmin && !cyrusdb_fetch(rock->db, "$RACL", 5, NULL, NULL, NULL)) {
         /* we're using reverse ACLs */
-        struct buf buf = BUF_INITIALIZER;
         strarray_t matches = STRARRAY_INITIALIZER;
-        strarray_t *groups = NULL;
         int i;
 
-        mboxlist_racl_key(rock->mb_category == MBNAME_OTHERUSER,
-                          rock->userid, NULL, &buf);
-        /* this is the prefix */
-        struct raclrock raclrock = { buf.len, &matches };
-        /* we only need to look inside the prefix still, but we keep the length
-         * in raclrock pointing to the start of the mboxname part of the key so
-         * we get correct names in matches */
-        if (len) buf_appendmap(&buf, prefix, len);
-        r = cyrusdb_foreach(rock->db, buf.s, buf.len, NULL, racl_cb, &raclrock, NULL);
-
-        /* look for matches from group memberships: same logic as above, but
-         * for each group */
-        if (rock->auth_state)
-            groups = auth_groups(rock->auth_state);
-        if (groups) {
-            for (i = 0; i < strarray_size(groups); i++) {
-                mboxlist_racl_key(rock->mb_category == MBNAME_OTHERUSER,
-                                  strarray_nth(groups, i), NULL, &buf);
-                raclrock.prefixlen = buf.len;
-                raclrock.list = &matches;
-                if (len) buf_appendmap(&buf, prefix, len);
-
-                r = cyrusdb_foreach(rock->db, buf.s, buf.len,
-                                    NULL, racl_cb, &raclrock, NULL);
-            }
-            strarray_free(groups);
-        }
+        mboxlist_racl_matches(rock->db,
+                              (rock->mb_category == MBNAME_OTHERUSER),
+                              rock->userid,
+                              rock->auth_state,
+                              prefix, len,
+                              &matches);
 
         /* now call the callbacks */
         for (i = 0; !r && i < strarray_size(&matches); i++) {
