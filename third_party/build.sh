@@ -14,6 +14,33 @@ export PATH=$PREFIX/bin:$PATH
 git submodule init
 git submodule update
 
+if [ ! $ITEM ] || [ $ITEM == re2 ] ; then
+(
+  cd re2
+  git clean -f -x -d
+  make -e prefix=$PREFIX $MAKEOPTS
+  make -e prefix=$PREFIX $MAKEOPTS test
+  sudo make -e prefix=$PREFIX $MAKEOPTS install
+  make -e prefix=$PREFIX testinstall
+  
+)
+fi
+
+if [ ! $ITEM ] || [ $ITEM == cre2 ] ; then
+(
+  cd cre2
+  git clean -f -x -d
+  sh autogen.sh
+  mkdir build
+  cd build
+  ../configure --enable-silent-rules --enable-maintainer-mode --prefix=$PREFIX
+  make $MAKEOPTS
+  make $MAKEOPTS check
+  sudo make $MAKEOPTS install
+  make $MAKEOPTS installcheck
+)
+fi
+
 if [ ! $ITEM ] || [ $ITEM == icu ] ; then
 (
   cd icu4c
