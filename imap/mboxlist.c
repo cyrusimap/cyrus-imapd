@@ -59,6 +59,7 @@
 
 #include "acl.h"
 #include "annotate.h"
+#include "bsearch.h"
 #include "glob.h"
 #include "assert.h"
 #include "global.h"
@@ -3010,7 +3011,8 @@ static int mboxlist_racl_matches(struct db *db,
         strarray_free(groups);
     }
 
-    /* XXX sort and uniq matches */
+    strarray_sort(matches, cmpstringp_mbox);
+    strarray_uniq(matches);
 
     buf_free(&raclprefix);
     return 0;
