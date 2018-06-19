@@ -662,7 +662,12 @@ HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
 static void mboxlist_racl_key(int isuser, const char *keyuser, const char *mbname, struct buf *buf)
 {
     buf_setcstr(buf, "$RACL$");
-    buf_putc(buf, isuser ? 'U' : 'S');
+    if (strncmp(keyuser, "group:", 6) == 0) {
+        buf_putc(buf, 'G');
+    }
+    else {
+        buf_putc(buf, isuser ? 'U' : 'S');
+    }
     buf_putc(buf, '$');
     if (keyuser) {
         buf_appendcstr(buf, keyuser);
