@@ -3019,7 +3019,11 @@ static int mboxlist_find_category(struct find_rock *rock, const char *prefix, si
         /* we're using reverse ACLs */
         struct buf buf = BUF_INITIALIZER;
         strarray_t matches = STRARRAY_INITIALIZER;
-        mboxlist_racl_key(rock->mb_category == MBNAME_OTHERUSER, rock->userid, NULL, &buf);
+        strarray_t *groups = NULL;
+        int i;
+
+        mboxlist_racl_key(rock->mb_category == MBNAME_OTHERUSER,
+                          rock->userid, NULL, &buf);
         /* this is the prefix */
         struct raclrock raclrock = { buf.len, &matches };
         /* we only need to look inside the prefix still, but we keep the length
@@ -3027,8 +3031,26 @@ static int mboxlist_find_category(struct find_rock *rock, const char *prefix, si
          * we get correct names in matches */
         if (len) buf_appendmap(&buf, prefix, len);
         r = cyrusdb_foreach(rock->db, buf.s, buf.len, NULL, racl_cb, &raclrock, NULL);
-        /* XXX - later we need to sort the array when we've added groups */
-        int i;
+
+        /* look for matches from group memberships: same logic as above, but
+         * for each group */
+        if (rock->auth_state)
+            groups = auth_groups(rock->auth_state);
+        if (groups) {
+            for (i = 0; i < strarray_size(groups); i++) {
+                mboxlist_racl_key(rock->mb_category == MBNAME_OTHERUSER,
+                                  strarray_nth(groups, i), NULL, &buf);
+                raclrock.prefixlen = buf.len;
+                raclrock.list = &matches;
+                if (len) buf_appendmap(&buf, prefix, len);
+
+                r = cyrusdb_foreach(rock->db, buf.s, buf.len,
+                                    NULL, racl_cb, &raclrock, NULL);
+            }
+            strarray_free(groups);
+        }
+
+        /* now call the callbacks */
         for (i = 0; !r && i < strarray_size(&matches); i++) {
             const char *key = strarray_nth(&matches, i);
             r = cyrusdb_forone(rock->db, key, strlen(key), &find_p, &find_cb, rock, NULL);
