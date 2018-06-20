@@ -1306,7 +1306,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     }
 
     txn->resp_body.len = len;
-    txn->resp_body.fname = name;
+    txn->resp_body.dispo.fname = name;
 
     write_body(HTTP_OK, txn, base, len);
 

@@ -726,7 +726,7 @@ static int export_addressbook(struct transaction_t *txn)
 
     buf_reset(&txn->buf);
     buf_printf(&txn->buf, "%s.%s", buf_cstring(&attrib), mime->file_ext);
-    txn->resp_body.fname = buf_cstring(&txn->buf);
+    txn->resp_body.dispo.fname = buf_cstring(&txn->buf);
 
     /* Short-circuit for HEAD request */
     if (txn->meth == METH_HEAD) {

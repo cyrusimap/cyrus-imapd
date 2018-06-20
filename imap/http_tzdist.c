@@ -1915,7 +1915,7 @@ static int action_get(struct transaction_t *txn)
         /* Set Content-Disposition filename */
         buf_reset(&pathbuf);
         buf_printf(&pathbuf, "%s.%s", tzid, mime->file_ext);
-        resp_body->fname = buf_cstring(&pathbuf);
+        resp_body->dispo.fname = buf_cstring(&pathbuf);
 
         txn->flags.vary |= VARY_ACCEPT;
 

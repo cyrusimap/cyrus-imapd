@@ -2497,9 +2497,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     if (resp_body->type) {
         simple_hdr(txn, "Content-Type", resp_body->type);
 
-        if (resp_body->fname) {
-            simple_hdr(txn, "Content-Disposition",
-                       "attachment; filename=\"%s\"", resp_body->fname);
+        if (resp_body->dispo.fname) {
+            simple_hdr(txn, "Content-Disposition", "%s; filename=\"%s\"",
+                       resp_body->dispo.attach ? "attachment" : "inline",
+                       resp_body->dispo.fname);
         }
         if (txn->resp_body.enc) {
             /* Construct Content-Encoding header */

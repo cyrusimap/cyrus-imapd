@@ -544,7 +544,7 @@ static int webdav_get(struct transaction_t *txn,
         assert(!buf_len(&txn->buf));
         buf_printf(&txn->buf, "%s/%s", wdata->type, wdata->subtype);
         txn->resp_body.type = buf_cstring(&txn->buf);
-        txn->resp_body.fname = wdata->filename;
+        txn->resp_body.dispo.fname = wdata->filename;
         return HTTP_CONTINUE;
     }
 

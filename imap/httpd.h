@@ -273,7 +273,10 @@ struct patch_doc_t {
 struct resp_body_t {
     ulong len;                          /* Content-Length   */
     struct range *range;                /* Content-Range    */
-    const char *fname;                  /* Content-Dispo    */
+    struct {
+        const char *fname;
+        unsigned attach : 1;
+    } dispo;                            /* Content-Dispo    */
     unsigned char enc;                  /* Content-Encoding */
     const char *lang;                   /* Content-Language */
     const char *loc;                    /* Content-Location */

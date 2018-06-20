@@ -1717,7 +1717,7 @@ static int export_calendar(struct transaction_t *txn)
 
     buf_reset(&txn->buf);
     buf_printf(&txn->buf, "%s.%s", buf_cstring(&attrib), mime->file_ext);
-    txn->resp_body.fname = buf_cstring(&txn->buf);
+    txn->resp_body.dispo.fname = buf_cstring(&txn->buf);
 
     /* Add subscription upgrade links */
     buf_printf(&link, "<%s>; rel=\"subscribe-caldav_auth\"", txn->req_tgt.path);
@@ -8018,7 +8018,7 @@ static int meth_get_head_fb(struct transaction_t *txn, void *params)
         buf_printf(&txn->buf, "%s.%s",
                    txn->req_tgt.userid,
                    mime->file_ext);
-        txn->resp_body.fname = buf_cstring(&txn->buf);
+        txn->resp_body.dispo.fname = buf_cstring(&txn->buf);
 
         txn->resp_body.type = mime->content_type;
 
