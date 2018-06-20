@@ -1621,10 +1621,14 @@ static int examine_request(struct transaction_t *txn)
     }
     else if (!httpd_tls_done && txn->flags.ver == VER_1_1) {
         /* Advertise available upgrade protocols */
+#ifdef HAVE_NGHTTP2
         txn->flags.conn |= CONN_UPGRADE;
         txn->flags.upgrade = UPGRADE_HTTP2;
-        if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS))
+#endif
+        if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS)) {
             txn->flags.upgrade |= UPGRADE_TLS;
+            txn->flags.conn |= CONN_UPGRADE;
+        }
     }
 
     query = URI_QUERY(txn->req_uri);
