@@ -205,6 +205,8 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
         buf_putc(&buf, 'b');
     if (mbtype & MBTYPE_ADDRESSBOOK)
         buf_putc(&buf, 'a');
+    if (mbtype & MBTYPE_INTERMEDIATE)
+        buf_putc(&buf, 'i');
 
     return buf_cstring(&buf);
 }
@@ -314,6 +316,9 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
 
     for (; *string; string++) {
         switch (*string) {
+        case 'i':
+            mbtype |= MBTYPE_INTERMEDIATE;
+            break;
         case 'a':
             mbtype |= MBTYPE_ADDRESSBOOK;
             break;
@@ -540,6 +545,12 @@ EXPORTED int mboxlist_lookup(const char *name, mbentry_t **entryptr,
 
     /* Ignore "deleted" entries, like they aren't there */
     if (entry->mbtype & MBTYPE_DELETED) {
+        mboxlist_entry_free(&entry);
+        return IMAP_MAILBOX_NONEXISTENT;
+    }
+
+    /* Ignore "intermediate" entries, like they aren't there */
+    if (entry->mbtype & MBTYPE_INTERMEDIATE) {
         mboxlist_entry_free(&entry);
         return IMAP_MAILBOX_NONEXISTENT;
     }
@@ -1060,6 +1071,39 @@ EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribut
     return r;
 }
 
+static int mboxlist_create_intermediaries(const char *mboxname,
+                                          struct txn *tid)
+{
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    int r = 0;
+
+    while (!r && strarray_size(mbname_boxes(mbname))) {
+        const char *parent;
+        const char *data;
+        size_t datalen;
+
+        free(mbname_pop_boxes(mbname));
+
+        parent = mbname_intname(mbname);
+        if (!*parent) break;  /* root of hierarchy ("") */
+
+        r = mboxlist_read(parent, &data, &datalen, &tid, 0);
+        if (r != IMAP_MAILBOX_NONEXISTENT) break;  /* mailbox exists */
+
+        mbentry_t *newmbentry = mboxlist_entry_create();
+        newmbentry->mbtype = MBTYPE_INTERMEDIATE;
+        newmbentry->uniqueid = xstrdupnull(makeuuid());
+
+        r = mboxlist_update_entry(parent, newmbentry, &tid);
+
+        mboxlist_entry_free(&newmbentry);
+    }
+
+    mbname_free(&mbname);
+
+    return r;
+}
+
 /*
  * Create a mailbox
  *
@@ -1088,6 +1132,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     struct mailbox *newmailbox = NULL;
     int isremote = mbtype & MBTYPE_REMOTE;
     mbentry_t *newmbentry = NULL;
+    struct txn *tid = NULL;
 
     r = mboxlist_create_namecheck(mboxname, userid, auth_state,
                                   isadmin, forceuser);
@@ -1124,7 +1169,13 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
         newmbentry->createdmodseq = newmailbox->i.createdmodseq;
         newmbentry->foldermodseq = newmailbox->i.highestmodseq;
     }
-    r = mboxlist_update_entry(mboxname, newmbentry, NULL);
+    r = mboxlist_update_entry(mboxname, newmbentry, &tid);
+
+    /* create any missing intermediaries */
+    if (!r) r = mboxlist_create_intermediaries(mboxname, tid);
+
+    if (r) cyrusdb_abort(mbdb, tid);
+    else r = cyrusdb_commit(mbdb, tid);
 
     if (r) {
         syslog(LOG_ERR, "DBERROR: failed to insert to mailboxes list %s: %s",

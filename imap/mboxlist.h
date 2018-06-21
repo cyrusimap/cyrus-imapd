@@ -69,6 +69,7 @@
 #define MBTYPE_CALENDAR (1<<5) /* CalDAV Calendar Mailbox */
 #define MBTYPE_ADDRESSBOOK (1<<6) /* CardDAV Addressbook Mailbox */
 #define MBTYPE_COLLECTION (1<<7) /* WebDAV Collection Mailbox */
+#define MBTYPE_INTERMEDIATE (1<<8) /* Place holder for non-existent ancestor mailboxes */
 
 #define MBTYPES_DAV (MBTYPE_CALENDAR|MBTYPE_ADDRESSBOOK|MBTYPE_COLLECTION)
 #define MBTYPES_NONIMAP (MBTYPE_NETNEWS|MBTYPES_DAV)
