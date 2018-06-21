@@ -2228,6 +2228,9 @@ static int myrights_byname(struct auth_state *authstate,
 
 EXPORTED int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
 {
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+        return 0;
+    }
     if (!req->is_shared_account) {
         return -1;
     }
