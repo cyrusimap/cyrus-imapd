@@ -4929,7 +4929,7 @@ static int chkchildren(const mbentry_t *mbentry,
 {
     const char *part = (const char *)rock;
 
-    if (!strcmp(part, mbentry->partition))
+    if (!strcmpnull(part, mbentry->partition))
         return CYRUSDB_DONE;
 
     return 0;
