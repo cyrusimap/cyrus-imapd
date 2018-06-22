@@ -49,7 +49,21 @@ use Cassandane::Util::Log;
 sub new
 {
     my $class = shift;
+    my $config = Cassandane::Config->default()->clone();
+
+    my ($maj, $min) = Cassandane::Instance->get_version();
+    if ($maj == 3 && $min == 0) {
+	# need to explicitly add 'body' to sieve_extensions for 3.0
+	# XXX and earlier
+	$config->set(sieve_extensions =>
+	    "fileinto reject vacation vacation-seconds imapflags notify " .
+	    "envelope relational regex subaddress copy date index " .
+	    "imap4flags mailbox mboxmetadata servermetadata variables " .
+	    "body");
+    }
+
     return $class->SUPER::new({
+	    config => $config,
 	    deliver => 1,
 	    services => [ 'imap', 'sieve' ],
             adminstore => 1,
