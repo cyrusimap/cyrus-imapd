@@ -509,9 +509,9 @@ sub _jmap_setup
 {
     my ($self) = @_;
 
-    use Mail::JMAPTalk;
-    use Net::CalDAVTalk 0.09;
-    use Net::CardDAVTalk 0.03;
+    require Mail::JMAPTalk;
+    require Net::CalDAVTalk;
+    require Net::CardDAVTalk;
 
     my $service = $self->{instance}->get_service("http");
     $ENV{DEBUGJMAP} = 1;
