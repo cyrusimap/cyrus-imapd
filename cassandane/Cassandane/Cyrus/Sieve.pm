@@ -54,12 +54,18 @@ sub new
     my ($maj, $min) = Cassandane::Instance->get_version();
     if ($maj == 3 && $min == 0) {
 	# need to explicitly add 'body' to sieve_extensions for 3.0
-	# XXX and earlier
 	$config->set(sieve_extensions =>
 	    "fileinto reject vacation vacation-seconds imapflags notify " .
 	    "envelope relational regex subaddress copy date index " .
 	    "imap4flags mailbox mboxmetadata servermetadata variables " .
 	    "body");
+    }
+    elsif ($maj < 3) {
+	# also for 2.5 (the earliest Cyrus that Cassandane can test)
+        $config->set(sieve_extensions =>
+	    "fileinto reject vacation vacation-seconds imapflags notify " .
+	    "envelope relational regex subaddress copy date index " .
+	    "imap4flags body");
     }
 
     return $class->SUPER::new({
