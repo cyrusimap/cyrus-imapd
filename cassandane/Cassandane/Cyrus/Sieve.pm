@@ -226,7 +226,7 @@ sub compile_sieve_script
 }
 
 sub test_vacation_with_following_rules
-    :needs_component_sieve
+    :needs_component_sieve :min_version_3_0
 {
     my ($self) = @_;
 
