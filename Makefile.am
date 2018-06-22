@@ -150,6 +150,7 @@ user_PROGRAMS += \
 	imap/ctl_deliver \
 	imap/ctl_mboxlist \
 	imap/cvt_cyrusdb \
+	imap/cyr_buildinfo \
 	imap/cyr_df \
 	imap/cyrdump \
 	imap/cyr_dbtool \
@@ -756,6 +757,9 @@ imap_cvt_cyrusdb_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyrdump_SOURCES = imap/cli_fatal.c imap/cyrdump.c imap/mutex_fake.c
 imap_cyrdump_LDADD = $(LD_UTILITY_ADD)
+
+imap_cyr_buildinfo_SOURCES = imap/cli_fatal.c imap/cyr_buildinfo.c imap/mutex_fake.c
+imap_cyr_buildinfo_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_dbtool_SOURCES = imap/cli_fatal.c imap/cyr_dbtool.c imap/mutex_fake.c
 imap_cyr_dbtool_LDADD = $(LD_UTILITY_ADD)

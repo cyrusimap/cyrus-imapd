@@ -58,6 +58,7 @@ imap/ctl_mboxlist
 imap/ctl_zoneinfo
 imap/cvt_cyrusdb
 imap/cyr_charset
+imap/cyr_buildinfo
 imap/cyr_dbtool
 imap/cyr_deny
 imap/cyr_df
