@@ -68,9 +68,17 @@ sub _read_buildinfo
 {
     my ($destdir, $prefix) = @_;
 
-    my $cyr_buildinfo = "$destdir$prefix/sbin/cyr_buildinfo";
-    if (not -x $cyr_buildinfo) {
-        xlog "Cannot execute $cyr_buildinfo: ".
+    my $cyr_buildinfo;
+    foreach my $bindir (qw(sbin cyrus/bin)) {
+        my $p = "$destdir$prefix/$bindir/cyr_buildinfo";
+        if (-x $p) {
+            $cyr_buildinfo = $p;
+            last;
+        }
+    }
+
+    if (not defined $cyr_buildinfo) {
+        xlog "Couldn't find cyr_buildinfo: ".
              "don't know what features Cyrus supports";
         return;
     }
