@@ -1259,6 +1259,43 @@ static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
     return sort_order;
 }
 
+static int jmap_mboxlist_findparent(const char *mboxname,
+                                    mbentry_t **mbentryp)
+{
+    mbentry_t *mbentry = NULL;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    int r = IMAP_MAILBOX_NONEXISTENT;
+
+    while (strarray_size(mbname_boxes(mbname))) {
+        free(mbname_pop_boxes(mbname));
+        mboxlist_entry_free(&mbentry);
+        r = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry, NULL);
+        if (!r) {
+            /* Ignore "reserved" entries, like they aren't there */
+            if (mbentry->mbtype & MBTYPE_RESERVE) {
+                r = IMAP_MAILBOX_RESERVED;
+            }
+
+            /* Ignore "deleted" entries, like they aren't there */
+            else if (mbentry->mbtype & MBTYPE_DELETED) {
+                r = IMAP_MAILBOX_NONEXISTENT;
+            }
+        }
+
+        if (r != IMAP_MAILBOX_NONEXISTENT)
+            break;
+    }
+
+    if (r)
+        mboxlist_entry_free(&mbentry);
+    else
+        *mbentryp = mbentry;
+
+    mbname_free(&mbname);
+
+    return r;
+}
+
 static json_t *_mbox_get(jmap_req_t *req,
                          const mbentry_t *mbentry,
                          hash_table *roles,
@@ -1294,7 +1331,7 @@ static json_t *_mbox_get(jmap_req_t *req,
 
     if (_wantprop(props, "myRights") || _wantprop(props, "parentId")) {
         /* Need to lookup parent mailbox */
-        mboxlist_findparent(mbname_intname(mbname), &parent);
+        jmap_mboxlist_findparent(mbname_intname(mbname), &parent);
     }
 
     /* Build JMAP mailbox response. */
@@ -1686,7 +1723,7 @@ static int _mboxquery_eval_filter(mboxquery_t *query,
                 int matches_parentid = 0;
                 if (field->val.s) {
                     mbentry_t *mbparent = NULL;
-                    if (!mboxlist_findparent(mbentry->name, &mbparent)) {
+                    if (!jmap_mboxlist_findparent(mbentry->name, &mbparent)) {
                         matches_parentid = !strcmp(mbparent->uniqueid, field->val.s);
                     }
                     mboxlist_entry_free(&mbparent);
@@ -2591,9 +2628,9 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             result->err = json_pack("{s:s}", "type", "notFound");
             goto done;
         }
-        r = mboxlist_findparent(mboxname, &mbparent);
+        r = jmap_mboxlist_findparent(mboxname, &mbparent);
         if (r) {
-            syslog(LOG_INFO, "mboxlist_findparent(%s) failed: %s",
+            syslog(LOG_INFO, "jmap_mboxlist_findparent(%s) failed: %s",
                     mboxname, error_message(r));
             goto done;
         }
