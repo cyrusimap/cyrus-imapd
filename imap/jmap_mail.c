@@ -6689,7 +6689,7 @@ static json_t *_email_get_bodypart(struct body *part,
     /* partId */
     if (_wantprop(bodyprops, "partId")) {
         json_t *jpart_id = json_null();
-        if (!strcasecmp(part->type, "TEXT"))
+        if (strcasecmp(part->type, "MULTIPART"))
             jpart_id = json_string(part->part_id);
         json_object_set_new(jbodypart, "partId", jpart_id);
     }
