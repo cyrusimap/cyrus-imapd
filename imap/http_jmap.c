@@ -2228,13 +2228,28 @@ static int myrights_byname(struct auth_state *authstate,
 
 EXPORTED int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
 {
-    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-        return 0;
+    int res = -1;
+
+    if (req->is_shared_account) {
+        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+            // if it's an intermediate mailbox, we get rights from the parent
+            mbentry_t *parententry = NULL;
+            if (mboxlist_findparent(mbentry->name, &parententry))
+                res = 0;
+            else
+                res = myrights(req->authstate, parententry, req->mboxrights);
+            mboxlist_entry_free(&parententry);
+        }
+        else
+            res = myrights(req->authstate, mbentry, req->mboxrights);
     }
-    if (!req->is_shared_account) {
-        return -1;
-    }
-    return myrights(req->authstate, mbentry, req->mboxrights);
+
+    // intermediate mailboxes have limited rights, just see, create sub,
+    // rename and delete:
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE)
+        res &= ACL_LOOKUP | ACL_CREATE | ACL_DELETEMBOX;
+
+    return res;
 }
 
 EXPORTED int jmap_myrights_byname(jmap_req_t *req, const char *mboxname)
