@@ -196,7 +196,6 @@ sub run_test
     my $configfile = "$self->{instance}->{basedir}/testerconfig.json";
     my $errfile = $self->{instance}->{basedir} .  "/$name.errors";
     my $outfile = $self->{instance}->{basedir} .  "/$name.stdout";
-    my $logdir = $self->{instance}->{basedir} .  "/logdir";
 
     my $service = $self->{instance}->get_service("http");
     my $imap = $self->{instance}->get_service("imap");
@@ -226,8 +225,6 @@ sub run_test
 
     my $status = 0;
 
-    mkdir($logdir);
-
     $name =~ s{:}{/}g;
 
     local $ENV{JMTS_TEST_OUTPUT_TO_STDERR} = 1 if get_verbose;
@@ -235,7 +232,7 @@ sub run_test
 
     $self->{instance}->run_command({
             redirects => { stderr => $errfile, stdout => $outfile },
-            workingdir => $logdir,
+            workingdir => $basedir,
             handlers => {
                 exited_normally => sub { $status = 1; },
                 exited_abnormally => sub { $status = 0; },
@@ -254,16 +251,6 @@ sub run_test
                 xlog $_;
             }
             close FH;
-        }
-        opendir(DH, $logdir) or die "Can't open logdir $logdir";
-        while (my $item = readdir(DH)) {
-            next unless $item =~ m/^rawlog\./;
-            print "============> $item <=============\n";
-            open(FH, '<', "$logdir/$item") or die "Can't open $logdir/$item";
-            while (readline FH) {
-                print $_;
-            }
-            close(FH);
         }
     }
 
