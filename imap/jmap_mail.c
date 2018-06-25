@@ -5596,6 +5596,21 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
         if (!(rights & ACL_READ))
             continue;
 
+        /* Skip already seen messages */
+        if (hash_lookup(email_id, &seen_ids)) continue;
+        hash_insert(email_id, (void*)1, &seen_ids);
+
+        /* Apply limit, if any */
+        if (changes->max_changes && ++changes_count > changes->max_changes) {
+            changes->has_more_changes = 1;
+            break;
+        }
+
+        /* Keep track of the highest modseq */
+        if (highest_modseq < md->modseq)
+            highest_modseq = md->modseq;
+
+        /* Calculcate if message is expunged */
         int is_expunged = (md->system_flags & FLAG_DELETED) ||
                 (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
 
@@ -5612,23 +5627,6 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
             }
         }
 
-        /* Apply limit, if any */
-        int is_seen = hash_lookup(email_id, &seen_ids) != NULL;
-        if (!is_seen) {
-            if (changes->max_changes && ++changes_count > changes->max_changes) {
-                changes->has_more_changes = 1;
-                break;
-            }
-        }
-
-        /* Keep track of the highest modseq */
-        if (highest_modseq < md->modseq)
-            highest_modseq = md->modseq;
-
-        /* Skip already seen messages */
-        if (is_seen) continue;
-        hash_insert(email_id, (void*)1, &seen_ids);
-
         /* Report message */
         if (is_expunged)
             json_array_append_new(changes->destroyed, json_string(email_id));
@@ -5639,13 +5637,13 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     free(email_id);
 
     /* Set new state */
-    if (changes_count) {
+    if (changes->has_more_changes) {
         json_t *val = jmap_fmtstate(highest_modseq);
         changes->new_state = xstrdup(json_string_value(val));
         json_decref(val);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
+        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
         changes->new_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
     }
@@ -5727,29 +5725,26 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
         if (!(rights & ACL_READ))
             continue;
 
-        /* Determine if the thread got changed or destroyed */
-        conversation_t *conv = NULL;
-        if (conversation_load(req->cstate, md->cid, &conv) || !conv)
-            continue;
-        int has_thread = conv->thread != NULL;
-        conversation_free(conv);
+        /* Skip already seen threads */
+        if (hashu64_lookup(md->cid, &seen_cids)) continue;
+        hashu64_insert(md->cid, (void*)1, &seen_cids);
 
         /* Apply limit, if any */
-        int is_seen = hashu64_lookup(md->cid, &seen_cids) != NULL;
-        if (!is_seen) {
-            if (changes->max_changes && ++changes_count > changes->max_changes) {
-                changes->has_more_changes = 1;
-                break;
-            }
+        if (changes->max_changes && ++changes_count > changes->max_changes) {
+            changes->has_more_changes = 1;
+            break;
         }
 
         /* Keep track of the highest modseq */
         if (highest_modseq < md->modseq)
             highest_modseq = md->modseq;
 
-        /* Skip already seen threads */
-        if (is_seen) continue;
-        hashu64_insert(md->cid, (void*)1, &seen_cids);
+        /* Determine if the thread got changed or destroyed */
+        conversation_t *conv = NULL;
+        if (conversation_load(req->cstate, md->cid, &conv) || !conv)
+            continue;
+        int has_thread = conv->thread != NULL;
+        conversation_free(conv);
 
         /* Report thread */
         json_t *to = has_thread ? changes->changed : changes->destroyed;
@@ -5760,13 +5755,13 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     free_hashu64_table(&seen_cids, NULL);
 
     /* Set new state */
-    if (changes_count) {
+    if (changes->has_more_changes) {
         json_t *val = jmap_fmtstate(highest_modseq);
         changes->new_state = xstrdup(json_string_value(val));
         json_decref(val);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/1);
+        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
         changes->new_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
     }
