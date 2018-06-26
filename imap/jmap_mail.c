@@ -9313,7 +9313,7 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
              * email to only be sent verbatim to 8BITMIME-enabled
              * mail servers. So base64-encode the blob if it isn't
              * using a safe encoding already. */
-            if (!encoding || !strcmp(encoding, "BINARY")) {
+            if (!encoding || !strcmp(encoding, "BINARY") || !strcmp(encoding, "8BIT")) {
                 encoding = "BASE64";
                 encode_base64 = 1;
             }
