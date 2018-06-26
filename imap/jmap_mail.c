@@ -3600,8 +3600,6 @@ struct attachment {
 };
 
 struct emailbodies {
-    struct body *text;
-    struct body *html;
     ptrarray_t atts;
     ptrarray_t msgs;
     ptrarray_t textlist;
@@ -3609,8 +3607,6 @@ struct emailbodies {
 };
 
 #define EMAILBODIES_INITIALIZER { \
-    NULL, \
-    NULL, \
     PTRARRAY_INITIALIZER, \
     PTRARRAY_INITIALIZER, \
     PTRARRAY_INITIALIZER, \
@@ -3847,9 +3843,10 @@ static void _html_concat_div(struct buf *buf, const char *t)
 static char *_emailbodies_to_html(struct emailbodies *bodies, struct buf *msg_buf)
 {
     if (bodies->htmllist.count == 1) {
-        charset_t cs = charset_lookupname(bodies->html->charset_id);
-        char *html = charset_to_utf8(msg_buf->s + bodies->html->content_offset,
-                bodies->html->content_size, cs, bodies->html->charset_enc);
+        const struct body *part = ptrarray_nth(&bodies->htmllist, 0);
+        charset_t cs = charset_lookupname(part->charset_id);
+        char *html = charset_to_utf8(msg_buf->s + part->content_offset,
+                part->content_size, cs, part->charset_enc);
         charset_free(&cs);
         return html;
     }
@@ -7164,14 +7161,16 @@ static int _email_get_bodies(jmap_req_t *req,
             char *text = _emailbodies_to_plain(&bodies, msg->raw);
             if (!text) {
                 char *html = _emailbodies_to_html(&bodies, msg->raw);
-                text = _html_to_plain(html);
+                if (html) text = _html_to_plain(html);
                 free(html);
             }
-            size_t len = config_getint(IMAPOPT_JMAP_PREVIEW_LENGTH);
-            char *preview = _email_extract_preview(text, len);
-            json_object_set_new(email, "preview", json_string(preview));
-            free(preview);
-            free(text);
+            if (text) {
+                size_t len = config_getint(IMAPOPT_JMAP_PREVIEW_LENGTH);
+                char *preview = _email_extract_preview(text, len);
+                json_object_set_new(email, "preview", json_string(preview));
+                free(preview);
+                free(text);
+            }
         }
     }
 
