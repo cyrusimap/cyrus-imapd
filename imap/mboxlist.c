@@ -1104,6 +1104,52 @@ static int mboxlist_create_intermediaries(const char *mboxname,
     return r;
 }
 
+static int mboxlist_delete_intermediaries(const char *mboxname,
+                                          modseq_t modseq)
+{
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    struct txn *tid = NULL;
+    int r = 0;
+
+    while (!r && strarray_size(mbname_boxes(mbname))) {
+        const char *parent;
+        mbentry_t *mbentry = NULL;
+
+        free(mbname_pop_boxes(mbname));
+
+        parent = mbname_intname(mbname);
+        if (!*parent) break;  /* root of hierarchy ("") */
+
+        r = mboxlist_mylookup(parent, &mbentry, &tid, 1);
+        if (mbentry) {
+            if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+                mbentry->mbtype = MBTYPE_DELETED;
+                mbentry->foldermodseq = modseq;
+
+                r = mboxlist_update_entry(parent, mbentry, &tid);
+            }
+            else r = IMAP_OK_COMPLETED;
+
+            mboxlist_entry_free(&mbentry);
+        }
+    }
+
+    switch (r) {
+    case 0:
+    case IMAP_OK_COMPLETED:
+        r = cyrusdb_commit(mbdb, tid);
+        break;
+
+    default:
+        cyrusdb_abort(mbdb, tid);
+        break;
+    }
+
+    mbname_free(&mbname);
+
+    return r;
+}
+
 /*
  * Create a mailbox
  *
@@ -1486,6 +1532,10 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                localonly /* local_only */,
                                force, 1);
 
+    if (!r) {
+        r = mboxlist_delete_intermediaries(name, mbentry->foldermodseq+1);
+    }
+
 done:
     strarray_fini(&existing);
     mboxlist_entry_free(&mbentry);
@@ -1609,6 +1659,11 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
             newmbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
         }
         r = mboxlist_update(newmbentry, /*localonly*/1);
+
+        if (!r) {
+            r = mboxlist_delete_intermediaries(name, newmbentry->foldermodseq);
+        }
+
         mboxlist_entry_free(&newmbentry);
     }
     else {
