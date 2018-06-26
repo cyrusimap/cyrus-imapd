@@ -565,12 +565,6 @@ static time_t process_alarms(const char *mboxname, uint32_t imap_uid,
                              const char *userid, icaltimezone *floatingtz,
                              icalcomponent *ical, time_t lastrun, time_t runtime)
 {
-    /* we don't send alarms for anything except VEVENTS */
-    icalcomponent *comp = icalcomponent_get_first_real_component(ical);
-    icalcomponent_kind kind = icalcomponent_isa(comp);
-    if (kind != ICAL_VEVENT_COMPONENT)
-        return 0;
-
     struct get_alarm_rock rock =
         { userid, mboxname, imap_uid, floatingtz, lastrun, runtime, 0 };
     struct icalperiodtype range = icalperiodtype_null_period();
