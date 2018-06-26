@@ -7246,6 +7246,39 @@ static int _email_from_body(jmap_req_t *req,
     return r;
 }
 
+static void _email_set_partids(struct body *body, const char *part_id)
+{
+    if (!body) return;
+
+    if (!strcmp(body->type, "MULTIPART")) {
+        struct buf buf = BUF_INITIALIZER;
+        int i;
+        for (i = 0; i < body->numparts; i++) {
+            struct body *subpart = body->subpart + i;
+            if (part_id) buf_printf(&buf, "%s.", part_id);
+            buf_printf(&buf, "%d", i + 1);
+            subpart->part_id = buf_release(&buf);
+            _email_set_partids(subpart, subpart->part_id);
+        }
+        free(body->part_id);
+        buf_free(&buf);
+    }
+    else {
+        struct buf buf = BUF_INITIALIZER;
+        if (!body->part_id) {
+            if (part_id) buf_printf(&buf, "%s.", part_id);
+            buf_printf(&buf, "%d", 1);
+            body->part_id = buf_release(&buf);
+        }
+        buf_free(&buf);
+
+        if (!strcmp(body->type, "MESSAGE") &&
+            !strcmp(body->subtype, "RFC822")) {
+            _email_set_partids(body->subpart, body->part_id);
+        }
+    }
+}
+
 static int _email_from_buf(jmap_req_t *req,
                            struct email_getargs *args,
                            const struct buf *buf,
@@ -7288,12 +7321,8 @@ static int _email_from_buf(jmap_req_t *req,
         goto done;
     }
 
-    /* For regular messages, the message parser takes care of assigning
-     * proper part ids while reading the body structure from file. But
-     * we don't have that for arbitrary blobs, so let's make sure that
-     * non-multipart top-level bodies got their part_id field set. */
-    if (strcmp(mypart->subpart->type, "MULTIPART") && !mypart->subpart->part_id)
-        mypart->subpart->part_id = xstrdup("1");
+    /* parse_mapped doesn't set part ids */
+    _email_set_partids(mypart->subpart, NULL);
 
     struct cyrusmsg msg = { mypart, mypart, &mybuf, NULL, NULL };
     r = _email_from_msg(req, args, &msg, emailptr);
