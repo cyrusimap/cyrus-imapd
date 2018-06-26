@@ -51,8 +51,10 @@ use Cassandane::Cassini;
 use Cassandane::Instance;
 
 use Data::Dumper;
+$Data::Dumper::Deepcopy = 1;
 $Data::Dumper::Indent = 1;
 $Data::Dumper::Sortkeys = 1;
+$Data::Dumper::Trailingcomma = 1;
 
 my $format = 'prettier';
 my $output_dir = 'reports';
