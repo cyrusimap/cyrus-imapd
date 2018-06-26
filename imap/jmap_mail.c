@@ -7261,6 +7261,7 @@ static void _email_set_partids(struct body *body, const char *part_id)
             _email_set_partids(subpart, subpart->part_id);
         }
         free(body->part_id);
+        body->part_id = NULL;
         buf_free(&buf);
     }
     else {
