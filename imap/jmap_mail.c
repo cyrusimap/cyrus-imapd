@@ -7540,7 +7540,10 @@ static void _mime_write_xparam(struct buf *buf, const char *name, const char *va
     char *xvalue = is_7bit ? xstrdup(value) : charset_encode_mimexvalue(value, NULL);
 
     if (strlen(name) + strlen(xvalue) + 1 < MIME_MAX_HEADER_LENGTH) {
-        buf_printf(buf, ";%s%s=%s", name, is_7bit ? "" : "*", xvalue);
+        if (is_7bit)
+            buf_printf(buf, ";%s=\"%s\"", name, xvalue);
+        else
+            buf_printf(buf, ";%s*=%s", name, xvalue);
         goto done;
     }
 
@@ -7552,8 +7555,10 @@ static void _mime_write_xparam(struct buf *buf, const char *name, const char *va
     while (*p) {
         /* Build parameter continuation line. */
         buf_printf(&line, "%s*%d*=", name, section);
-        int n = buf_len(&line) + 1;
         /* Write at least one character of the value */
+        if (is_7bit)
+            buf_putc(&line, '"');
+        int n = buf_len(&line) + 1;
         do {
             buf_putc(&line, *p);
             n++;
@@ -7561,6 +7566,8 @@ static void _mime_write_xparam(struct buf *buf, const char *name, const char *va
             if (!is_7bit && *p == '%' && n >= MIME_MAX_HEADER_LENGTH - 2)
                 break;
         } while (*p && n < MIME_MAX_HEADER_LENGTH);
+        if (is_7bit)
+            buf_putc(&line, '"');
         /* Write line */
         buf_append(buf, &line);
         /* Prepare next iteration */
