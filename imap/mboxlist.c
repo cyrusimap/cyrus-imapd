@@ -1072,6 +1072,7 @@ EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribut
 }
 
 static int mboxlist_create_intermediaries(const char *mboxname,
+                                          modseq_t modseq,
                                           struct txn *tid)
 {
     mbname_t *mbname = mbname_from_intname(mboxname);
@@ -1079,20 +1080,26 @@ static int mboxlist_create_intermediaries(const char *mboxname,
 
     while (!r && strarray_size(mbname_boxes(mbname))) {
         const char *parent;
-        const char *data;
-        size_t datalen;
+        mbentry_t *newmbentry = NULL;
 
         free(mbname_pop_boxes(mbname));
 
         parent = mbname_intname(mbname);
         if (!*parent) break;  /* root of hierarchy ("") */
 
-        r = mboxlist_read(parent, &data, &datalen, &tid, 0);
-        if (r != IMAP_MAILBOX_NONEXISTENT) break;  /* mailbox exists */
+        r = mboxlist_mylookup(parent, &newmbentry, &tid, 1);
+        if (newmbentry) {
+            if (!(newmbentry->mbtype & MBTYPE_DELETED)) {
+                mboxlist_entry_free(&newmbentry);
+                break;  /* mailbox exists */
+            }
+        }
+        else if (r != IMAP_MAILBOX_NONEXISTENT) break;
+        else newmbentry = mboxlist_entry_create();
 
-        mbentry_t *newmbentry = mboxlist_entry_create();
         newmbentry->mbtype = MBTYPE_INTERMEDIATE;
         newmbentry->uniqueid = xstrdupnull(makeuuid());
+        newmbentry->foldermodseq = modseq;
 
         r = mboxlist_update_entry(parent, newmbentry, &tid);
 
@@ -1218,7 +1225,8 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     r = mboxlist_update_entry(mboxname, newmbentry, &tid);
 
     /* create any missing intermediaries */
-    if (!r) r = mboxlist_create_intermediaries(mboxname, tid);
+    if (!r) r = mboxlist_create_intermediaries(mboxname,
+                                               newmbentry->foldermodseq, tid);
 
     if (r) cyrusdb_abort(mbdb, tid);
     else r = cyrusdb_commit(mbdb, tid);
