@@ -9288,19 +9288,35 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     size_t len = blob_buf.len;
     const char *encoding = NULL;
     int encode_base64 = 0;
+    int decode_base64 = 0;
 
     if (part) {
         /* Map into body part */
         base += part->content_offset;
         len = part->content_size;
 
-        /* Determine encoding, if any */
-        if (!emailpart->type || strcmp(emailpart->type, "MESSAGE")) {
-            encoding = "BASE64";
-            encode_base64 = 1;
+        /* Determine encoding. */
+        encoding = part->encoding;
+
+        if (!strcmpnull(emailpart->type, "MESSAGE")) {
+            /* This is a MESSAGE and hence it is only allowed
+             * to be in 7bit, 8bit or binary encoding. Base64
+             * is not allowed, so let's decode the blob and
+             * assume it to be in binary encoding. */
+            if (!strcmpnull(encoding, "BASE64")) {
+                encoding = "BINARY";
+                decode_base64 = 1;
+            }
         }
         else {
-            encoding = part->encoding;
+            /* This isn't a MESSAGE, and we can't guarantee this
+             * email to only be sent verbatim to 8BITMIME-enabled
+             * mail servers. So base64-encode the blob if it isn't
+             * using a safe encoding already. */
+            if (!encoding || !strcmp(encoding, "BINARY")) {
+                encoding = "BASE64";
+                encode_base64 = 1;
+            }
         }
     }
 
@@ -9322,6 +9338,9 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
         charset_encode_mimebody(base, len, tmp, &len64, NULL);
         base = tmp;
         len = len64;
+    }
+    else if (decode_base64) {
+        base = charset_decode_mimebody(base, len, ENCODING_BASE64, &tmp, &len);
     }
     fputs("\r\n", fp);
     fwrite(base, 1, len, fp);
