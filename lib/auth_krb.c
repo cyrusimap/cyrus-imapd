@@ -332,6 +332,11 @@ static void myfreestate(struct auth_state *auth_state)
 
 static strarray_t *mygroups(const struct auth_state *auth_state)
 {
+    /* XXX this is kind of a lie: mymemberof() can return 2 (is member of group)
+     * but I don't understand how krb works.  If you actually use this and
+     * understand it, please submit a patch to implement this function.
+     * Thanks! :)
+     */
     syslog(LOG_WARN, "Authentication mechanism (krb) does not support groups");
     return NULL;
 }
