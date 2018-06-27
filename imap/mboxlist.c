@@ -3035,9 +3035,16 @@ EXPORTED int mboxlist_usermboxtree(const char *userid,
 
         /* user items */
         mboxlist_racl_matches(mbdb, 1, userid, auth_state, NULL, 0, &matches);
-        /* shared items */
-        mboxlist_racl_matches(mbdb, 0, userid, auth_state, NULL, 0, &matches);
+        for (i = 0; !r && i < strarray_size(&matches); i++) {
+            const char *mboxname = strarray_nth(&matches, i);
+            r = cyrusdb_forone(mbdb, mboxname, strlen(mboxname),
+                               allmbox_p, allmbox_cb, &mbrock, 0);
+        }
 
+        /* shared items */
+        strarray_fini(&matches);
+        strarray_init(&matches);
+        mboxlist_racl_matches(mbdb, 0, userid, auth_state, NULL, 0, &matches);
         for (i = 0; !r && i < strarray_size(&matches); i++) {
             const char *mboxname = strarray_nth(&matches, i);
             r = cyrusdb_forone(mbdb, mboxname, strlen(mboxname),
