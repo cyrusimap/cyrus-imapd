@@ -285,6 +285,8 @@ int mboxlist_setquotas(const char *root,
                        quota_t newquotas[QUOTA_NUMRESOURCES], int force);
 int mboxlist_unsetquota(const char *root);
 
+int mboxlist_haschildren(const char *mboxname);
+
 /* open the mailboxes db */
 void mboxlist_open(const char *name);
 
