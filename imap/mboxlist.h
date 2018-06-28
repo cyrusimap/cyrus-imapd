@@ -285,6 +285,9 @@ int mboxlist_setquotas(const char *root,
                        quota_t newquotas[QUOTA_NUMRESOURCES], int force);
 int mboxlist_unsetquota(const char *root);
 
+/* handle interemediates */
+int mboxlist_create_intermediaries(const char *mboxname,
+                                   modseq_t modseq, struct txn **tid);
 int mboxlist_haschildren(const char *mboxname);
 
 /* open the mailboxes db */

@@ -1071,9 +1071,8 @@ EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribut
     return r;
 }
 
-static int mboxlist_create_intermediaries(const char *mboxname,
-                                          modseq_t modseq,
-                                          struct txn *tid)
+EXPORTED int mboxlist_create_intermediaries(const char *mboxname,
+                                            modseq_t modseq, struct txn **tid)
 {
     mbname_t *mbname = mbname_from_intname(mboxname);
     int r = 0;
@@ -1087,7 +1086,7 @@ static int mboxlist_create_intermediaries(const char *mboxname,
         parent = mbname_intname(mbname);
         if (!*parent) break;  /* root of hierarchy ("") */
 
-        r = mboxlist_mylookup(parent, &newmbentry, &tid, 1);
+        r = mboxlist_mylookup(parent, &newmbentry, tid, 1);
         if (newmbentry) {
             if (!(newmbentry->mbtype & MBTYPE_DELETED)) {
                 mboxlist_entry_free(&newmbentry);
@@ -1101,12 +1100,15 @@ static int mboxlist_create_intermediaries(const char *mboxname,
         newmbentry->uniqueid = xstrdupnull(makeuuid());
         newmbentry->foldermodseq = modseq;
 
-        r = mboxlist_update_entry(parent, newmbentry, &tid);
+        r = mboxlist_update_entry(parent, newmbentry, tid);
 
         mboxlist_entry_free(&newmbentry);
     }
 
     mbname_free(&mbname);
+
+    if (r) cyrusdb_abort(mbdb, *tid);
+    else r = cyrusdb_commit(mbdb, *tid);
 
     return r;
 }
@@ -1224,12 +1226,12 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     }
     r = mboxlist_update_entry(mboxname, newmbentry, &tid);
 
-    /* create any missing intermediaries */
-    if (!r) r = mboxlist_create_intermediaries(mboxname,
-                                               newmbentry->foldermodseq, tid);
-
     if (r) cyrusdb_abort(mbdb, tid);
-    else r = cyrusdb_commit(mbdb, tid);
+    else {
+        /* create any missing intermediaries */
+        r = mboxlist_create_intermediaries(mboxname,
+                                           newmbentry->foldermodseq, &tid);
+    }
 
     if (r) {
         syslog(LOG_ERR, "DBERROR: failed to insert to mailboxes list %s: %s",
