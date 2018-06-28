@@ -1550,6 +1550,7 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
         break;
     case 14:
     case 15:
+    case 16:
         headerlen = 160;
         break;
     default:
@@ -1597,6 +1598,10 @@ static int mailbox_buf_to_index_header(const char *buf, size_t len,
     if (i->minor_version < 14) goto crc;
 
     i->unseen = ntohl(*((bit32 *)(buf+OFFSET_UNSEEN)));
+
+    if (i->minor_version < 16) goto crc;
+
+    i->createdmodseq = align_ntohll(buf+OFFSET_MAILBOX_CREATEDMODSEQ);
 
 crc:
     /* CRC is always the last 4 bytes */
@@ -1745,11 +1750,21 @@ static int mailbox_buf_to_index_record(const char *buf,
     }
 
     record->cid = ntohll(*(bit64 *)(buf+OFFSET_THRID));
-    record->cache_crc = ntohl(*((bit32 *)(buf+OFFSET_CACHE_CRC)));
-
     if (version > 14) {
         record->savedate = ntohl(*((bit32 *)(buf+OFFSET_SAVEDATE)));
     }
+
+    /* createdmodseq was added in version 16, pushing the CRCs down */
+    if (version < 16) {
+        record->cache_crc = ntohl(*((bit32 *)(buf+96)));
+        /* check CRC32 */
+        crc = crc32_map(buf, 100);
+        if (crc != ntohl(*((bit32 *)(buf+100))))
+            return IMAP_MAILBOX_CHECKSUM;
+    }
+
+    record->createdmodseq = ntohll(*(bit64 *)(buf+OFFSET_CREATEDMODSEQ));
+    record->cache_crc = ntohl(*((bit32 *)(buf+OFFSET_CACHE_CRC)));
 
     /* check CRC32 */
     crc = crc32_map(buf, OFFSET_RECORD_CRC);
@@ -2476,6 +2491,10 @@ static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *
         headerlen = 128;
     }
 
+    if (i->minor_version > 15) {
+        align_htonll(buf+OFFSET_MAILBOX_CREATEDMODSEQ, i->createdmodseq);
+    }
+
     /* Update checksum */
     crc = htonl(crc32_map((char *)buf, headerlen-4));
     *((bit32 *)(buf+headerlen-4)) = crc;
@@ -2704,6 +2723,16 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
     }
 
     *((bit64 *)(buf+OFFSET_THRID)) = htonll(record->cid);
+
+    /* version 16 added createdmodseq, pushing the CRCs down */
+    if (version < 16) {
+        *((bit32 *)(buf+96)) = htonl(record->cache_crc);
+        crc = crc32_map((char *)buf, 100);
+        *((bit32 *)(buf+100)) = htonl(crc);
+        return crc;
+    }
+
+    *((bit64 *)(buf+OFFSET_CREATEDMODSEQ)) = htonll(record->createdmodseq);
     *((bit32 *)(buf+OFFSET_CACHE_CRC)) = htonl(record->cache_crc);
 
     /* calculate the checksum */
@@ -3693,6 +3722,8 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     else {
         mailbox_modseq_dirty(mailbox);
         record->modseq = mailbox->i.highestmodseq;
+        if (!record->createdmodseq || record->createdmodseq > record->modseq)
+            record->createdmodseq = record->modseq;
         record->last_updated = mailbox->last_updated;
         // store the time of actual append if requested
         if (config_getswitch(IMAPOPT_SAVEDATE))
@@ -3917,6 +3948,10 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
     case 15:
         repack->i.start_offset = 160;
         repack->i.record_size = 104;
+        break;
+    case 16:
+        repack->i.start_offset = 160;
+        repack->i.record_size = 112;
         break;
     default:
         fatal("index version not supported", EC_SOFTWARE);
@@ -4219,6 +4254,9 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
                        repack->mailbox->name, copyrecord.uid);
             }
         }
+
+        if (!copyrecord.createdmodseq)
+            copyrecord.createdmodseq = 1;
 
         /* read in the old cache record */
         r = mailbox_cacherecord(mailbox, &copyrecord);
@@ -4662,6 +4700,7 @@ EXPORTED int mailbox_create(const char *name,
                    const char *uniqueid,
                    int options,
                    unsigned uidvalidity,
+                   modseq_t createdmodseq,
                    modseq_t highestmodseq,
                    struct mailbox **mailboxptr)
 {
@@ -4777,6 +4816,10 @@ EXPORTED int mailbox_create(const char *name,
     else
         mboxname_setmodseq(mailbox->name, highestmodseq, mbtype, /*dofolder*/1);
 
+    /* and created modseq */
+    if (!createdmodseq || createdmodseq > highestmodseq)
+        createdmodseq = highestmodseq;
+
     /* init non-zero fields */
     mailbox_index_dirty(mailbox);
     mailbox->i.minor_version = MAILBOX_MINOR_VERSION;
@@ -4784,6 +4827,7 @@ EXPORTED int mailbox_create(const char *name,
     mailbox->i.record_size = INDEX_RECORD_SIZE;
     mailbox->i.options = options;
     mailbox->i.uidvalidity = uidvalidity;
+    mailbox->i.createdmodseq = createdmodseq;
     mailbox->i.highestmodseq = highestmodseq;
 
     /* initialise header size field so appends calculate the
@@ -5325,6 +5369,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     r = mailbox_create(newname, oldmailbox->mbtype, newpartition,
                        oldmailbox->acl, (userid ? NULL : oldmailbox->uniqueid),
                        oldmailbox->i.options, uidvalidity,
+                       oldmailbox->i.createdmodseq,
                        oldmailbox->i.highestmodseq, &newmailbox);
 
     if (r) return r;
@@ -5736,7 +5781,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
          * no point trying to rescue anything else... */
         mailbox_close(&mailbox);
         r = mailbox_create(name, mbentry->mbtype, mbentry->partition, mbentry->acl,
-                           mbentry->uniqueid, options, 0, 0, mbptr);
+                           mbentry->uniqueid, options, 0, 0, 0, mbptr);
         mboxlist_entry_free(&mbentry);
         return r;
     }
@@ -5868,6 +5913,11 @@ static int records_match(const char *mboxname,
     }
     if (old->savedate != new->savedate) {
         printf("%s uid %u mismatch: savedate\n",
+               mboxname, new->uid);
+        match = 0;
+    }
+    if (old->createdmodseq != new->createdmodseq) {
+        printf("%s uid %u mismatch: createdmodseq\n",
                mboxname, new->uid);
         match = 0;
     }

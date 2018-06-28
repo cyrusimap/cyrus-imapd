@@ -1952,6 +1952,7 @@ static int set_up(void)
     r = mailbox_create(MBOXNAME1_INT, /*mbtype*/0, PARTITION, ACL,
                        /*uniqueid*/NULL,
                        /*options*/0, /*uidvalidity*/0,
+                       /*createdmodseq*/0,
                        /*highestmodseq*/0, &mailbox);
     if (r)
         return r;
@@ -1973,6 +1974,7 @@ static int set_up(void)
     r = mailbox_create(MBOXNAME2_INT, /*mbtype*/0, PARTITION, ACL,
                        /*uniqueid*/NULL,
                        /*options*/0, /*uidvalidity*/0,
+                       /*createdmodseq*/0,
                        /*highestmodseq*/0, &mailbox);
     if (r)
         return r;
@@ -1994,6 +1996,7 @@ static int set_up(void)
     r = mailbox_create(MBOXNAME3_INT, /*mbtype*/0, PARTITION, ACL,
                        /*uniqueid*/NULL,
                        /*options*/0, /*uidvalidity*/0,
+                       /*createdmodseq*/0,
                        /*highestmodseq*/0, &mailbox);
     if (r)
         return r;

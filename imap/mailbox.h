@@ -74,7 +74,7 @@
  * make sure all the mailbox upgrade and downgrade code in mailbox.c is
  * changed to be able to convert both backwards and forwards between the
  * new version and all supported previous versions */
-#define MAILBOX_MINOR_VERSION   15
+#define MAILBOX_MINOR_VERSION   16
 #define MAILBOX_CACHE_MINOR_VERSION 9
 
 #define FNAME_HEADER "/cyrus.header"
@@ -156,6 +156,7 @@ struct index_record {
     struct message_guid guid;
     modseq_t modseq;
     bit64 cid;
+    modseq_t createdmodseq;
     bit32 cache_crc;
 
     /* metadata */
@@ -199,6 +200,8 @@ struct index_header {
     uint32_t exists;
     time_t first_expunged;
     time_t last_repack_time;
+
+    modseq_t createdmodseq;
 
     bit32 header_file_crc;
     struct synccrcs synccrcs;
@@ -342,13 +345,12 @@ struct mailbox_iter {
  * value which counts the total size of all files included expunged
  * files. We've created the header space now, but will also need code
  * changes, so holding off */
-#define OFFSET_SPARE0 128
-#define OFFSET_SPARE1 132
-#define OFFSET_SPARE2 136
-#define OFFSET_SPARE3 140
-#define OFFSET_SPARE4 144
-#define OFFSET_SPARE5 148
-#define OFFSET_SPARE6 152
+#define OFFSET_MAILBOX_CREATEDMODSEQ 128 /* MODSEQ at creation time */
+#define OFFSET_SPARE0 136
+#define OFFSET_SPARE1 140
+#define OFFSET_SPARE2 144
+#define OFFSET_SPARE3 148
+#define OFFSET_SPARE4 152
 #define OFFSET_HEADER_CRC 156 /* includes all zero for the spares! */
 
 /* Offsets of index_record fields in index/expunge file
@@ -372,8 +374,9 @@ struct mailbox_iter {
 #define OFFSET_MESSAGE_GUID 60
 #define OFFSET_MODSEQ 80 /* CONDSTORE (64-bit modseq) */
 #define OFFSET_THRID 88       /* conversation id, added in v13 */
-#define OFFSET_CACHE_CRC 96 /* CRC32 of cache record */
-#define OFFSET_RECORD_CRC 100
+#define OFFSET_CREATEDMODSEQ 96 /* modseq of creation time, added in v16 */
+#define OFFSET_CACHE_CRC 104 /* CRC32 of cache record */
+#define OFFSET_RECORD_CRC 108
 
 #define INDEX_HEADER_SIZE (OFFSET_HEADER_CRC+4)
 #define INDEX_RECORD_SIZE (OFFSET_RECORD_CRC+4)
@@ -605,7 +608,7 @@ extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd)
 
 extern int mailbox_create(const char *name, uint32_t mbtype, const char *part, const char *acl,
                           const char *uniqueid, int options, unsigned uidvalidity,
-                          modseq_t highestmodseq,
+                          modseq_t createdmodseq, modseq_t highestmodseq,
                           struct mailbox **mailboxptr);
 
 extern int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,

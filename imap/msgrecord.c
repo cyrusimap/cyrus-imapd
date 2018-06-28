@@ -344,6 +344,16 @@ EXPORTED int msgrecord_get_modseq(msgrecord_t *mr, modseq_t *modseq)
     return 0;
 }
 
+EXPORTED int msgrecord_get_createdmodseq(msgrecord_t *mr, modseq_t *modseq)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    *modseq = mr->record.createdmodseq;
+    return 0;
+}
+
 EXPORTED int msgrecord_load_cache(msgrecord_t *mr)
 {
     return msgrecord_need(mr, M_CACHE);
@@ -628,6 +638,16 @@ EXPORTED int msgrecord_set_savedate(msgrecord_t *mr, time_t savedate)
 EXPORTED int msgrecord_set_bodystructure(msgrecord_t *mr, struct body *body)
 {
     return message_create_record(&mr->record, body);
+}
+
+EXPORTED int msgrecord_set_createdmodseq(msgrecord_t *mr, modseq_t modseq)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    mr->record.createdmodseq = modseq;
+    return 0;
 }
 
 EXPORTED int msgrecord_should_archive(msgrecord_t *mr, void *rock)

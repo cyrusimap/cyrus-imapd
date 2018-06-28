@@ -117,6 +117,7 @@ EXPORTED mbentry_t *mboxlist_entry_copy(const mbentry_t *src)
     copy->mtime = src->mtime;
     copy->uidvalidity = src->uidvalidity;
     copy->mbtype = src->mbtype;
+    copy->createdmodseq = src->createdmodseq;
     copy->foldermodseq = src->foldermodseq;
 
     copy->partition = xstrdupnull(src->partition);
@@ -230,6 +231,9 @@ static char *mboxlist_entry_cstring(const mbentry_t *mbentry)
 
     if (mbentry->uidvalidity)
         dlist_setnum32(dl, "V", mbentry->uidvalidity);
+
+    if (mbentry->createdmodseq)
+        dlist_setnum64(dl, "C", mbentry->createdmodseq);
 
     if (mbentry->foldermodseq)
         dlist_setnum64(dl, "F", mbentry->foldermodseq);
@@ -370,6 +374,9 @@ int parseentry_cb(int type, struct dlistsax_data *d)
             const char *key = buf_cstring(&d->kbuf);
             if (!strcmp(key, "F")) {
                 rock->mbentry->foldermodseq = atoll(buf_cstring(&d->buf));
+            }
+            else if (!strcmp(key, "C")) {
+                rock->mbentry->createdmodseq = atoll(buf_cstring(&d->buf));
             }
             else if (!strcmp(key, "I")) {
                 rock->mbentry->uniqueid = buf_newcstring(&d->buf);
@@ -1067,6 +1074,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
                                 int isadmin, const char *userid,
                                 const struct auth_state *auth_state,
                                 int options, unsigned uidvalidity,
+                                modseq_t createdmodseq,
                                 modseq_t highestmodseq,
                                 const char *copyacl, const char *uniqueid,
                                 int localonly, int forceuser, int dbonly,
@@ -1097,7 +1105,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     if (!dbonly && !isremote) {
         /* Filesystem Operations */
         r = mailbox_create(mboxname, mbtype, newpartition, acl, uniqueid,
-                           options, uidvalidity, highestmodseq, &newmailbox);
+                           options, uidvalidity, createdmodseq, highestmodseq, &newmailbox);
         if (r) goto done; /* CREATE failed */
         r = mailbox_add_conversations(newmailbox, /*silent*/0);
         if (r) goto done;
@@ -1111,6 +1119,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     if (newmailbox) {
         newmbentry->uniqueid = xstrdupnull(newmailbox->uniqueid);
         newmbentry->uidvalidity = newmailbox->i.uidvalidity;
+        newmbentry->createdmodseq = newmailbox->i.createdmodseq;
         newmbentry->foldermodseq = newmailbox->i.highestmodseq;
     }
     r = mboxlist_update_entry(mboxname, newmbentry, NULL);
@@ -1179,7 +1188,7 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
 
     r = mboxlist_createmailbox_full(name, mbtype, partition,
                                     isadmin, userid, auth_state,
-                                    options, uidvalidity, 0, NULL, NULL, localonly,
+                                    options, uidvalidity, 0, 0, NULL, NULL, localonly,
                                     forceuser, dbonly, &mailbox);
 
     if (notify && !r) {
@@ -1202,6 +1211,7 @@ EXPORTED int mboxlist_createsync(const char *name, int mbtype,
                         const char *partition,
                         const char *userid, const struct auth_state *auth_state,
                         int options, unsigned uidvalidity,
+                        modseq_t createdmodseq,
                         modseq_t highestmodseq,
                         const char *acl, const char *uniqueid,
                         int local_only, struct mailbox **mboxptr)
@@ -1209,6 +1219,7 @@ EXPORTED int mboxlist_createsync(const char *name, int mbtype,
     return mboxlist_createmailbox_full(name, mbtype, partition,
                                        1, userid, auth_state,
                                        options, uidvalidity,
+                                       createdmodseq,
                                        highestmodseq, acl, uniqueid,
                                        local_only, 1, 0, mboxptr);
 }
@@ -1541,6 +1552,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         if (mailbox) {
             newmbentry->uniqueid = xstrdupnull(mailbox->uniqueid);
             newmbentry->uidvalidity = mailbox->i.uidvalidity;
+            newmbentry->createdmodseq = mailbox->i.createdmodseq;
             newmbentry->foldermodseq = mailbox_modseq_dirty(mailbox);
         }
         r = mboxlist_update(newmbentry, /*localonly*/1);
@@ -1697,6 +1709,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
         newmbentry->acl = xstrdupnull(oldmailbox->acl);
         newmbentry->uidvalidity = oldmailbox->i.uidvalidity;
         newmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
+        newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
         newmbentry->foldermodseq = oldmailbox->i.highestmodseq; /* bump regardless, it's rare */
 
         r = mboxlist_update_entry(newname, newmbentry, &tid);
@@ -1765,6 +1778,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
     newmbentry->acl = xstrdupnull(newmailbox->acl);
     newmbentry->uidvalidity = newmailbox->i.uidvalidity;
     newmbentry->uniqueid = xstrdupnull(newmailbox->uniqueid);
+    newmbentry->createdmodseq = newmailbox->i.createdmodseq;
     newmbentry->foldermodseq = newmailbox->i.highestmodseq;
 
     do {
@@ -1778,6 +1792,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
             oldmbentry->mbtype = MBTYPE_DELETED;
             oldmbentry->uidvalidity = oldmailbox->i.uidvalidity;
             oldmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
+            newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
             oldmbentry->foldermodseq = mailbox_modseq_dirty(oldmailbox);
 
             r = mboxlist_update_entry(oldname, oldmbentry, &tid);

@@ -2425,6 +2425,7 @@ static int _mbox_create(jmap_req_t *req,
             NULL /* partition */,
             req->userid, req->authstate,
             0 /* options */, 0 /* uidvalidity */,
+            0 /* createdmodseq */,
             0 /* highestmodseq */, mbparent->acl,
             NULL /* uniqueid */, 0 /* local_only */,
             NULL /* mboxptr */);

@@ -905,7 +905,7 @@ EXPORTED int undump_mailbox(const char *mbname,
         r = mboxlist_lookup(mbname, &mbentry, NULL);
         if (!r) r = mailbox_create(mbname, mbentry->mbtype,
                                    mbentry->partition, mbentry->acl,
-                                   mbentry->uniqueid, 0, 0, 0, &mailbox);
+                                   mbentry->uniqueid, 0, 0, 0, 0, &mailbox);
         mboxlist_entry_free(&mbentry);
     }
     if(r) goto done;

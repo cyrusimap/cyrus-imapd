@@ -84,6 +84,7 @@ struct mboxlist_entry {
     char *ext_name;
     time_t mtime;
     uint32_t uidvalidity;
+    modseq_t createdmodseq;
     modseq_t foldermodseq;
     int mbtype;
     char *partition;
@@ -158,6 +159,7 @@ int mboxlist_createmailbox(const char *name, int mbtype,
 int mboxlist_createsync(const char *name, int mbtype, const char *partition,
                         const char *userid, const struct auth_state *auth_state,
                         int options, unsigned uidvalidity,
+                        modseq_t createdmodseq,
                         modseq_t highestmodseq, const char *acl,
                         const char *uniqueid, int local_only,
                         struct mailbox **mboxptr);

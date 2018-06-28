@@ -901,6 +901,7 @@ static int setCalendars(struct jmap_req *req)
                     NULL /* partition */,
                     req->userid, req->authstate,
                     0 /* options */, 0 /* uidvalidity */,
+                    0 /* createdmodseq */,
                     0 /* highestmodseq */, buf_cstring(&acl),
                     NULL /* uniqueid */, 0 /* local_only */,
                     NULL /* mboxptr */);

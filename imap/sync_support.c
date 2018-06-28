@@ -1461,6 +1461,16 @@ void encode_annotations(struct dlist *parent,
         dlist_setnum32(aa, "VALUE", record->savedate);
     }
 
+    if (record && record->createdmodseq) {
+        if (!annots)
+            annots = dlist_newlist(parent, "ANNOTATIONS");
+        aa = dlist_newkvlist(annots, NULL);
+        dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "createdmodseq");
+        dlist_setatom(aa, "USERID", NULL);
+        dlist_setnum64(aa, "MODSEQ", 0);
+        dlist_setnum64(aa, "VALUE", record->createdmodseq);
+    }
+
 }
 
 /*
@@ -1508,6 +1518,14 @@ int decode_annotations(/*const*/struct dlist *annots,
                 bit64 newval;
                 parsenum(p, &p, 0, &newval);
                 record->savedate = newval;
+            }
+        }
+        else if (!strcmp(entry, IMAP_ANNOT_NS "createdmodseq")) {
+            if (record) {
+                const char *p = buf_cstring(&value);
+                bit64 newval;
+                parsenum(p, &p, 0, &newval);
+                record->createdmodseq = newval;
             }
         }
         else if (record && !strcmp(entry, IMAP_ANNOT_NS "basethrid")) {
@@ -1961,6 +1979,9 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     dlist_setatom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
     if (mailbox->quotaroot)
         dlist_setatom(kl, "QUOTAROOT", mailbox->quotaroot);
+
+    if (mailbox->i.createdmodseq)
+        dlist_setnum64(kl, "CRETATEDMODSEQ", mailbox->i.createdmodseq);
 
     /* always send mailbox annotations */
     r = read_annotations(mailbox, NULL, &annots, 0, 0);
@@ -2615,6 +2636,7 @@ int sync_apply_mailbox(struct dlist *kin,
 
     /* optional fields */
     modseq_t xconvmodseq = 0;
+    modseq_t createdmodseq = 0;
 
     struct mailbox *mailbox = NULL;
     struct dlist *kr;
@@ -2663,6 +2685,8 @@ int sync_apply_mailbox(struct dlist *kin,
     dlist_getnum32(kin, "SYNC_CRC", &synccrcs.basic);
     dlist_getnum32(kin, "SYNC_CRC_ANNOT", &synccrcs.annot);
 
+    dlist_getnum64(kin, "CREATEDMODSEQ", &createdmodseq);
+
     options = sync_parse_options(options_str);
     mbtype = mboxlist_string_to_mbtype(mboxtype);
 
@@ -2671,7 +2695,7 @@ int sync_apply_mailbox(struct dlist *kin,
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         r = mboxlist_createsync(mboxname, mbtype, partition,
                                 sstate->userid, sstate->authstate,
-                                options, uidvalidity,
+                                options, uidvalidity, createdmodseq,
                                 highestmodseq, acl,
                                 uniqueid, sstate->local_only, &mailbox);
         /* set a highestmodseq of 0 so ALL changes are future
@@ -2760,6 +2784,20 @@ int sync_apply_mailbox(struct dlist *kin,
         }
     }
 
+    /* skip out now, it's going to mismatch for sure! */
+    if (createdmodseq > mailbox->i.createdmodseq) {
+        if (opt_force) {
+            syslog(LOG_NOTICE, "forcesync: lower createdmodseq on replica %s - %llu > %llu",
+                   mboxname, createdmodseq, mailbox->i.createdmodseq);
+        }
+        else {
+            syslog(LOG_ERR, "lower createdmodseq on replica %s - %llu > %llu",
+                   mboxname, createdmodseq, mailbox->i.createdmodseq);
+            r = IMAP_SYNC_CHECKSUM;
+            goto done;
+        }
+    }
+
     /* NOTE - this is optional */
     if (mailbox_has_conversations(mailbox) && xconvmodseq) {
         modseq_t ourxconvmodseq = 0;
@@ -2832,6 +2870,7 @@ int sync_apply_mailbox(struct dlist *kin,
     mailbox->i.last_appenddate = last_appenddate;
     mailbox->i.pop3_last_login = pop3_last_login;
     mailbox->i.pop3_show_after = pop3_show_after;
+    mailbox->i.createdmodseq = createdmodseq;
     /* only alter the syncable options */
     mailbox->i.options = (options & MAILBOX_OPTIONS_MASK) |
                          (mailbox->i.options & ~MAILBOX_OPTIONS_MASK);
@@ -3602,6 +3641,7 @@ int sync_restore_mailbox(struct dlist *kin,
     struct dlist *kr = NULL;
     struct dlist *ka = NULL;
     modseq_t xconvmodseq = 0;
+    modseq_t createdmodseq = 0;
 
     /* derived fields */
     uint32_t options = 0;
@@ -3660,6 +3700,7 @@ int sync_restore_mailbox(struct dlist *kin,
         dlist_getatom(kin, "UNIQUEID", &uniqueid);
         dlist_getnum64(kin, "HIGHESTMODSEQ", &highestmodseq);
         dlist_getnum32(kin, "UIDVALIDITY", &uidvalidity);
+        dlist_getnum64(kin, "CREATEDMODSEQ", &createdmodseq);
 
         /* if any of these three weren't set, disregard the others too */
         if (!uniqueid || !highestmodseq || !uidvalidity) {
@@ -3670,7 +3711,7 @@ int sync_restore_mailbox(struct dlist *kin,
 
         r = mboxlist_createsync(mboxname, mbtype, partition,
                                 sstate->userid, sstate->authstate,
-                                options, uidvalidity,
+                                options, uidvalidity, createdmodseq,
                                 highestmodseq, acl,
                                 uniqueid, sstate->local_only, &mailbox);
         syslog(LOG_DEBUG, "%s: mboxlist_createsync %s: %s",
