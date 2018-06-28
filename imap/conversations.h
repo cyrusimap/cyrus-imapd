@@ -144,6 +144,7 @@ struct conversation {
     conv_sender_t   *senders;
     conv_thread_t   *thread;
     char            *subject;
+    modseq_t        createdmodseq;
     int             dirty;
 };
 
@@ -240,7 +241,8 @@ extern void conversation_update(struct conversations_state *state,
                                 int delta_unseen,
                                 int delta_size,
                                 int *delta_counts,
-                                modseq_t modseq);
+                                modseq_t modseq,
+                                modseq_t createdmodseq);
 extern conv_folder_t *conversation_find_folder(struct conversations_state *state,
                                                conversation_t *,
                                                const char *mboxname);

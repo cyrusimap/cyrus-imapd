@@ -402,11 +402,13 @@ static void test_folder_rename(void)
     conversation_update(state, conv, FOLDER1, /*num_records*/3,
                         /*exists*/3, /*unseen*/0,
                         /*size*/0, /*counts*/NULL,
-                        /*modseq*/1);
+                        /*modseq*/1,
+                        /*createdmodseq*/1);
     conversation_update(state, conv, FOLDER2, /*num_records*/3,
                         /*exists*/2, /*unseen*/0,
                         /*size*/0, /*counts*/NULL,
-                        /*modseq*/8);
+                        /*modseq*/8,
+                        /*createdmodseq*/1);
 
     r = conversation_save(state, C_CID, conv);
     CU_ASSERT_EQUAL(r, 0);
@@ -500,7 +502,8 @@ static void test_folders(void)
     conversation_update(state, conv, FOLDER1, /*num_records*/13,
                         /*exists*/7, /*unseen*/5,
                         /*size*/0, counts,
-                        /*modseq*/4);
+                        /*modseq*/4,
+                        /*createdmodseq*/1);
 
     /* make sure the data we just passed to conversation_update()
      * is present in the structure */
@@ -564,7 +567,8 @@ static void test_folders(void)
     conversation_update(state, conv, FOLDER2,/*num_records*/2,
                         /*exists*/1, /*unseen*/0,
                         /*size*/0, counts,
-                        /*modseq*/7);
+                        /*modseq*/7,
+                        /*createdmodseq*/1);
 
     CU_ASSERT_EQUAL(conv->dirty, 1);
     CU_ASSERT_EQUAL(conv->num_records, 15);
@@ -596,7 +600,8 @@ static void test_folders(void)
     conversation_update(state, conv, FOLDER3,/*num_records*/10,
                         /*exists*/10, /*unseen*/0,
                         /*size*/0, counts,
-                        /*modseq*/55);
+                        /*modseq*/55,
+                        /*createdmodseq*/1);
 
     CU_ASSERT_EQUAL(conv->dirty, 1);
     CU_ASSERT_EQUAL(conv->num_records, 25);
@@ -713,7 +718,8 @@ static void test_folders(void)
     conversation_update(state, conv, FOLDER1,/*num_records*/-13,
                         /*exists*/-7, /*unseen*/0,
                         /*size*/0, counts,
-                        /*modseq*/56);
+                        /*modseq*/56,
+                        /*createdmodseq*/1);
 
     CU_ASSERT_EQUAL(conv->num_records, 12);
     CU_ASSERT_EQUAL(conv->exists, 11);
@@ -820,9 +826,9 @@ static void test_folder_ordering(void)
 
     /* set up the folder names in order - we are going to discard
      * this conversation, but the folder_number call will persist */
-    conversation_update(state, conv, FOLDER1, 0, 0, 0, 0, 0, 0);
-    conversation_update(state, conv, FOLDER2, 0, 0, 0, 0, 0, 0);
-    conversation_update(state, conv, FOLDER3, 0, 0, 0, 0, 0, 0);
+    conversation_update(state, conv, FOLDER1, 0, 0, 0, 0, 0, 0, 0);
+    conversation_update(state, conv, FOLDER2, 0, 0, 0, 0, 0, 0, 0);
+    conversation_update(state, conv, FOLDER3, 0, 0, 0, 0, 0, 0, 0);
 
     /* discard and recreate */
     conversation_free(conv);
@@ -831,13 +837,15 @@ static void test_folder_ordering(void)
     conversation_update(state, conv, FOLDER1, /*num_records*/1,
                         /*exists*/1, /*unseen*/0,
                         /*size*/0, counts,
-                        /*modseq*/1);
+                        /*modseq*/1,
+                        /*createdmodseq*/0);
 
     /* add folders out of order */
     conversation_update(state, conv, FOLDER3,/*num_records*/10,
                         /*exists*/10, /*unseen*/0,
                         /*size*/0, counts,
-                        /*modseq*/55);
+                        /*modseq*/55,
+                        /*createdmodseq*/0);
 
     /* save and reload here just to be sure */
     r = conversation_save(state, C_CID, conv);
@@ -851,7 +859,8 @@ static void test_folder_ordering(void)
     conversation_update(state, conv, FOLDER2,/*num_records*/2,
                         /*exists*/1, /*unseen*/0,
                         /*size*/0, counts,
-                        /*modseq*/7);
+                        /*modseq*/7,
+                        /*createdmodseq*/0);
 
     CU_ASSERT_EQUAL(conv->dirty, 1);
 
@@ -976,7 +985,8 @@ static void __test_senders(void)
     conversation_update(state, conv, FOLDER, /*num_records*/1,
                         /*exists*/1, /*unseen*/0,
                         /*size*/0, counts,
-                        /*modseq*/1);
+                        /*modseq*/1,
+                        /*createdmodseq*/0);
 
     /* there's no function for getting sender data, oh well */
     sender1 = conv->senders;
@@ -1166,7 +1176,8 @@ static void test_dump(void)
                                 /*num_records*/1,
                                 /*exists*/1, /*unseen*/0,
                                 /*size*/0, /*counts*/NULL,
-                                /*modseq*/100);
+                                /*modseq*/100,
+                                /*createdmodseq*/0);
         }
         r = conversation_save(state, cid, conv);
         CU_ASSERT_EQUAL(r, 0);

@@ -830,6 +830,8 @@ EXPORTED int conversation_store(struct conversations_state *state,
         if (thread->inreplyto) dlist_setnum32(nn, "INREPLYTO", thread->inreplyto);
     }
 
+    dlist_setnum64(dl, "CREATEDMODSEQ", conv->createdmodseq);
+
     buf_printf(&buf, "%d ", version);
     dlist_printbuf(dl, 0, &buf);
     dlist_free(&dl);
@@ -1197,6 +1199,10 @@ EXPORTED int conversation_parse(struct conversations_state *state,
 
     n = dlist_getchildn(dl, 9);
     if (n) conv->thread = parse_thread(n);
+
+    n = dlist_getchildn(dl, 10);
+    if (n)
+        conv->createdmodseq = dlist_num(n);
 
     conv->prev_unseen = conv->unseen;
 
@@ -2014,7 +2020,8 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     conversation_update(cstate, conv, mailbox->name,
                         delta_num_records,
                         delta_exists, delta_unseen,
-                        delta_size, delta_counts, modseq);
+                        delta_size, delta_counts, modseq,
+                        record->createdmodseq);
 
     r = conversation_save(cstate, record->cid, conv);
 
@@ -2029,7 +2036,7 @@ EXPORTED void conversation_update(struct conversations_state *state,
                          int delta_num_records,
                          int delta_exists, int delta_unseen,
                          int delta_size, int *delta_counts,
-                         modseq_t modseq)
+                         modseq_t modseq, modseq_t createdmodseq)
 {
     conv_folder_t *folder;
     int number = folder_number(state, mboxname, /*create*/1);
@@ -2070,6 +2077,10 @@ EXPORTED void conversation_update(struct conversations_state *state,
     }
     if (modseq > folder->modseq) {
         folder->modseq = modseq;
+        conv->dirty = 1;
+    }
+    if (createdmodseq && (!conv->createdmodseq || createdmodseq < conv->createdmodseq)) {
+        conv->createdmodseq = createdmodseq;
         conv->dirty = 1;
     }
 }
