@@ -559,6 +559,11 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP LIST Extension for Special-Use Mailboxes
 
+    .. NOTE::
+
+        The LIST and LSUB commands return the special-use flags, unless the
+	``specialusealways`` configuration variable is explicitly turned off.
+
 :rfc:`6321`
 
     xCal: The XML Format for iCalendar
