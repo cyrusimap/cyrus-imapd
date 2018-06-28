@@ -116,12 +116,14 @@ static int JNOTNULL(json_t *item)
 
 struct updates_rock {
     jmap_req_t *req;
+    json_t *added;
     json_t *changed;
     json_t *destroyed;
 
     size_t seen_records;
     size_t max_records;
 
+    modseq_t since_modseq;
     modseq_t highestmodseq;
 };
 
@@ -160,9 +162,13 @@ static void updates_rock_update(struct updates_rock *rock,
 
     /* Report item as updated or destroyed. */
     if (dav.alive) {
-        json_array_append_new(rock->changed, json_string(uid));
+        if (dav.createdmodseq <= rock->since_modseq)
+            json_array_append_new(rock->changed, json_string(uid));
+        else
+            json_array_append_new(rock->added, json_string(uid));
     } else {
-        json_array_append_new(rock->destroyed, json_string(uid));
+        if (dav.createdmodseq <= rock->since_modseq)
+            json_array_append_new(rock->destroyed, json_string(uid));
     }
 
     /* Fetch record to determine modseq. */
@@ -658,8 +664,8 @@ static int getContactsGroupUpdates(struct jmap_req *req)
     if (r) goto done;
 
     /* Lookup updates. */
-    struct updates_rock rock = { req, json_array(), json_array(),
-                                 0, max_records, 0 };
+    struct updates_rock rock = { req, json_array(), json_array(), json_array(),
+                                 0, max_records, oldmodseq, 0 };
     r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_GROUP,
                             -1 /*max_records*/, &getcontactupdates_cb, &rock);
     if (r) goto done;
@@ -686,6 +692,7 @@ static int getContactsGroupUpdates(struct jmap_req *req)
     json_object_set_new(contactGroupUpdates, "oldState", json_string(since));
     json_object_set_new(contactGroupUpdates, "hasMoreUpdates",
                         json_boolean(more));
+    json_object_set(contactGroupUpdates, "added", rock.added);
     json_object_set(contactGroupUpdates, "changed", rock.changed);
     json_object_set(contactGroupUpdates, "destroyed", rock.destroyed);
 
@@ -709,6 +716,7 @@ static int getContactsGroupUpdates(struct jmap_req *req)
         json_decref(subreq.args);
     }
 
+    json_decref(rock.added);
     json_decref(rock.changed);
     json_decref(rock.destroyed);
 
@@ -1736,8 +1744,8 @@ static int getContactsUpdates(struct jmap_req *req)
     if (r) goto done;
 
     /* Lookup updates. */
-    struct updates_rock rock = { req, json_array(), json_array(),
-                                 0, max_records, 0 };
+    struct updates_rock rock = { req, json_array(), json_array(), json_array(),
+                                 0, max_records, oldmodseq, 0 };
     r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_CONTACT,
                             -1 /*max_records*/, &getcontactupdates_cb, &rock);
     if (r) goto done;
@@ -1762,6 +1770,7 @@ static int getContactsUpdates(struct jmap_req *req)
                         json_string(req->accountid));
     json_object_set_new(contactUpdates, "oldState", json_string(since));
     json_object_set_new(contactUpdates, "hasMoreUpdates", json_boolean(more));
+    json_object_set(contactUpdates, "added", rock.added);
     json_object_set(contactUpdates, "changed", rock.changed);
     json_object_set(contactUpdates, "destroyed", rock.destroyed);
 
@@ -1787,6 +1796,7 @@ static int getContactsUpdates(struct jmap_req *req)
         json_decref(subreq.args);
     }
 
+    json_decref(rock.added);
     json_decref(rock.changed);
     json_decref(rock.destroyed);
 

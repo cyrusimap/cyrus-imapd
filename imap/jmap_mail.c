@@ -184,6 +184,7 @@ struct jmap_changes {
     /* Response fields */
     char *new_state;
     short has_more_changes;
+    json_t *added;
     json_t *changed;
     json_t *destroyed;
 };
@@ -645,6 +646,7 @@ static void jmap_changes_parse(json_t *jargs,
                                json_t **err)
 {
     memset(changes, 0, sizeof(struct jmap_changes));
+    changes->added = json_array();
     changes->changed = json_array();
     changes->destroyed = json_array();
 
@@ -673,6 +675,7 @@ static void jmap_changes_parse(json_t *jargs,
 static void jmap_changes_fini(struct jmap_changes *changes)
 {
     free(changes->new_state);
+    json_decref(changes->added);
     json_decref(changes->changed);
     json_decref(changes->destroyed);
 }
@@ -684,6 +687,7 @@ static json_t *jmap_changes_reply(struct jmap_changes *changes)
     json_object_set_new(res, "newState", json_string(changes->new_state));
     json_object_set_new(res, "hasMoreChanges",
             json_boolean(changes->has_more_changes));
+    json_object_set(res, "added", changes->added);
     json_object_set(res, "changed", changes->changed);
     json_object_set(res, "destroyed", changes->destroyed);
     return res;
@@ -2880,6 +2884,7 @@ done:
 }
 
 struct _mbox_changes_data {
+    json_t *added;          /* maps mailbox ids to {id:foldermodseq} */
     json_t *changed;        /* maps mailbox ids to {id:foldermodseq} */
     json_t *destroyed;      /* maps mailbox ids to {id:foldermodseq} */
     modseq_t since_modseq;
@@ -2890,7 +2895,6 @@ struct _mbox_changes_data {
 static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
 {
     struct _mbox_changes_data *data = rock;
-    json_t *updates, *update;
     struct statusdata sdata;
     modseq_t modseq, mbmodseq;
     jmap_req_t *req = data->req;
@@ -2915,39 +2919,47 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
         return 0;
     }
 
-    /* Is this a more recent update for an id that we have already seen? */
-    if ((update = json_object_get(data->destroyed, mbentry->uniqueid))) {
-        modseq = (modseq_t)json_integer_value(json_object_get(update, "modseq"));
-        if (modseq <= mbmodseq) {
-            json_object_del(data->destroyed, mbentry->uniqueid);
-        } else {
-            return 0;
-        }
-    }
-    if ((update = json_object_get(data->changed, mbentry->uniqueid))) {
-        modseq = (modseq_t)json_integer_value(json_object_get(update, "modseq"));
-        if (modseq <= mbmodseq) {
-            json_object_del(data->changed, mbentry->uniqueid);
-        } else {
-            return 0;
-        }
-    }
-
     /* Did any of the mailbox metadata change? */
     if (mbentry->foldermodseq > data->since_modseq) {
         *(data->only_counts_changed) = 0;
     }
 
+    /* Is this a more recent update for an id that we have already seen?
+     * (check all three) */
+    json_t *old[3];
+    old[0] = data->added;
+    old[1] = data->changed;
+    old[2] = data->destroyed;
+    int i;
+    for (i = 0; i < 3; i++) {
+        json_t *val = json_object_get(old[i], mbentry->uniqueid);
+        if (!val) continue;
+        modseq = (modseq_t)json_integer_value(json_object_get(val, "modseq"));
+        if (modseq <= mbmodseq) {
+            json_object_del(old[i], mbentry->uniqueid);
+        } else {
+            return 0;
+        }
+    }
+
     /* OK, report that update. Note that we even report hidden mailboxes
      * in order to allow clients remove unshared and deleted mailboxes */
-    update = json_pack("{s:s s:i}", "id", mbentry->uniqueid, "modseq", mbmodseq);
     int rights = jmap_myrights(req, mbentry);
+    json_t *dest = NULL;
+
     if ((mbentry->mbtype & MBTYPE_DELETED) || !(rights & ACL_LOOKUP)) {
-        updates = data->destroyed;
+        if (mbentry->createdmodseq <= data->since_modseq)
+            dest = data->destroyed;
     } else {
-        updates = data->changed;
+        if (mbentry->createdmodseq <= data->since_modseq)
+            dest = data->changed;
+        else
+            dest = data->added;
     }
-    json_object_set_new(updates, mbentry->uniqueid, update);
+
+    if (dest)
+        json_object_set_new(dest, mbentry->uniqueid,
+                            json_pack("{s:s s:i}", "id", mbentry->uniqueid, "modseq", mbmodseq));
 
     return 0;
 }
@@ -2978,6 +2990,7 @@ static int _mbox_changes(jmap_req_t *req,
     struct _mbox_changes_data data = {
         json_pack("{}"),
         json_pack("{}"),
+        json_pack("{}"),
         since_modseq,
         only_counts_changed,
         req
@@ -2994,6 +3007,9 @@ static int _mbox_changes(jmap_req_t *req,
     if (r) goto done;
 
     /* Sort updates by modseq */
+    json_object_foreach(data.added, id, val) {
+        ptrarray_add(&updates, val);
+    }
     json_object_foreach(data.changed, id, val) {
         ptrarray_add(&updates, val);
     }
@@ -3018,14 +3034,16 @@ static int _mbox_changes(jmap_req_t *req,
         if (windowmodseq < modseq)
             windowmodseq = modseq;
 
-        if (json_object_get(data.changed, id)) {
+        if (json_object_get(data.added, id)) {
+            json_array_append_new(changes->added, json_string(id));
+        } else if (json_object_get(data.changed, id)) {
             json_array_append_new(changes->changed, json_string(id));
         } else {
             json_array_append_new(changes->destroyed, json_string(id));
         }
     }
 
-    if (!json_array_size(changes->changed) && !json_array_size(changes->destroyed)) {
+    if (!json_array_size(changes->added) && !json_array_size(changes->changed) && !json_array_size(changes->destroyed)) {
         *only_counts_changed = 0;
     }
 
@@ -4270,9 +4288,15 @@ static int _email_find(jmap_req_t *req, const char *msgid,
     return r;
 }
 
+struct email_expunge_check {
+    jmap_req_t *req;
+    modseq_t since_modseq;
+    int status;
+};
+
 static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
 {
-    jmap_req_t *req = rock;
+    struct email_expunge_check *check = rock;
     msgrecord_t *mr = NULL;
     struct mailbox *mbox = NULL;
     uint32_t flags;
@@ -4280,22 +4304,28 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
 
     if (rec->part) return 0;
 
-    r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
+    r = jmap_openmbox(check->req, rec->mboxname, &mbox, 0);
     if (r) return r;
 
     r = msgrecord_find(mbox, rec->uid, &mr);
     if (!r) {
         uint32_t internal_flags;
+        modseq_t createdmodseq;
         r = msgrecord_get_systemflags(mr, &flags);
         if (!r) msgrecord_get_internalflags(mr, &internal_flags);
-        if (!r && !(flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-            r = IMAP_OK_COMPLETED;
+        if (!r) msgrecord_get_createdmodseq(mr, &createdmodseq);
+        if (!r) {
+            /* OK, this is a legit record, let's check it out */
+            if (createdmodseq <= check->since_modseq)
+                check->status |= 1;  /* contains old messages */
+            if (!((flags & FLAG_DELETED) || (internal_flags & FLAG_INTERNAL_EXPUNGED)))
+                check->status |= 2;  /* contains alive messages */
         }
         msgrecord_unref(&mr);
     }
 
-    jmap_closembox(req, &mbox);
-    return r;
+    jmap_closembox(check->req, &mbox);
+    return 0;
 }
 
 static void _email_search_string(search_expr_t *parent, const char *s, const char *name)
@@ -5575,6 +5605,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     char *email_id = NULL;
     size_t changes_count = 0;
     modseq_t highest_modseq = 0;
+    modseq_t since_modseq = atomodseq_t(changes->since_state);
     int i;
     hash_table seen_ids = HASH_TABLE_INITIALIZER;
     memset(&seen_ids, 0, sizeof(hash_table));
@@ -5608,28 +5639,37 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
         if (highest_modseq < md->modseq)
             highest_modseq = md->modseq;
 
-        /* Calculcate if message is expunged */
-        int is_expunged = (md->system_flags & FLAG_DELETED) ||
-                (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
-
-        if (is_expunged) {
-            /* Check if the message exists somewhere else */
-            int r = conversations_guid_foreach(req->cstate, _guid_from_id(email_id),
-                                               _email_is_expunged_cb, req);
-            if (r == IMAP_OK_COMPLETED) {
-                is_expunged = 0;
-            }
-            else if (r) {
-                *err = json_pack("{s:s}", "type", "serverError");
-                goto done;
-            }
+        struct email_expunge_check rock = { req, since_modseq, 0 };
+        int r = conversations_guid_foreach(req->cstate, _guid_from_id(email_id),
+                                           _email_is_expunged_cb, &rock);
+        if (r) {
+            *err = json_pack("{s:s}", "type", "serverError");
+            goto done;
         }
 
-        /* Report message */
-        if (is_expunged)
+        /* Check the message status - status is a bitfield with:
+         * 1: a message exists which was created on or before since_modseq
+         * 2: a message exists which is not deleted
+         *
+         * from those facts we can determine ephemeral / destroyed / added / updated
+         * and we don't need to tell about ephemeral (all created since last time, but none left)
+         */
+        switch (rock.status) {
+        default:
+            break; /* all messages were created AND deleted since previous state! */
+        case 1:
+            /* only expunged messages exist */
             json_array_append_new(changes->destroyed, json_string(email_id));
-        else
+            break;
+        case 2:
+            /* alive, and all messages are created since previous modseq */
+            json_array_append_new(changes->added, json_string(email_id));
+            break;
+        case 3:
+            /* alive, and old */
             json_array_append_new(changes->changed, json_string(email_id));
+            break;
+        }
     }
     free_hash_table(&seen_ids, NULL);
     free(email_id);
@@ -5704,6 +5744,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     /* Process results */
     size_t changes_count = 0;
     modseq_t highest_modseq = 0;
+    modseq_t since_modseq = atomodseq_t(changes->since_state);
     int i;
 
     size_t mdcount = search->query->merged_msgdata.count;
@@ -5741,14 +5782,21 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
         conversation_t *conv = NULL;
         if (conversation_load(req->cstate, md->cid, &conv) || !conv)
             continue;
-        int has_thread = conv->thread != NULL;
-        conversation_free(conv);
 
         /* Report thread */
-        json_t *to = has_thread ? changes->changed : changes->destroyed;
         char *thread_id = _thread_id_from_cid(md->cid);
-        json_array_append_new(to, json_string(thread_id));
+        if (conv->exists) {
+            if (conv->createdmodseq <= since_modseq)
+                json_array_append_new(changes->changed, json_string(thread_id));
+            else
+                json_array_append_new(changes->added, json_string(thread_id));
+        }
+        else {
+            if (conv->createdmodseq <= since_modseq)
+                json_array_append_new(changes->destroyed, json_string(thread_id));
+        }
         free(thread_id);
+        conversation_free(conv);
     }
     free_hashu64_table(&seen_cids, NULL);
 
