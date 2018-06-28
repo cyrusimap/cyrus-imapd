@@ -1280,22 +1280,30 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
     int r;
     struct mailbox *mailbox = NULL;
     uint32_t uidvalidity = 0;
+    const char *uniqueid = NULL;
 
     init_internal();
 
-    /* check if a previous deleted mailbox existed */
+    /* check if a mailbox tombstone or intermediate record exists */
     mbentry_t *oldmbentry = NULL;
     r = mboxlist_lookup_allow_all(name, &oldmbentry, NULL);
-    if (!r && oldmbentry->mbtype == MBTYPE_DELETED) {
-        /* then the UIDVALIDITY must be higher than before */
-        if (uidvalidity <= oldmbentry->uidvalidity)
-            uidvalidity = oldmbentry->uidvalidity+1;
+    if (!r) {
+        if (oldmbentry->mbtype == MBTYPE_DELETED) {
+            /* then the UIDVALIDITY must be higher than before */
+            if (uidvalidity <= oldmbentry->uidvalidity)
+                uidvalidity = oldmbentry->uidvalidity+1;
+        }
+        else if (oldmbentry->mbtype == MBTYPE_INTERMEDIATE) {
+            /* then use the existing mailbox ID */
+            uniqueid = xstrdupnull(oldmbentry->uniqueid);
+        }
     }
     mboxlist_entry_free(&oldmbentry);
 
     r = mboxlist_createmailbox_full(name, mbtype, partition,
                                     isadmin, userid, auth_state,
-                                    options, uidvalidity, 0, 0, NULL, NULL, localonly,
+                                    options, uidvalidity, 0, 0, NULL,
+                                    uniqueid, localonly,
                                     forceuser, dbonly, &mailbox);
 
     if (notify && !r) {
