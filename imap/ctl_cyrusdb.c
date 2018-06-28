@@ -127,9 +127,10 @@ static void usage(void)
 
 /* Callback for use by process_mboxlist */
 static int fixmbox(const mbentry_t *mbentry,
-                   void *rock __attribute__((unused)))
+                   void *rock)
 {
     int r;
+    char **last_name = (char **) rock;
 
     if (mbentry->legacy_specialuse) {
         char *userid = mboxname_to_userid(mbentry->name);
@@ -162,14 +163,52 @@ static int fixmbox(const mbentry_t *mbentry,
                    mbentry->name);
         }
     }
+    else {
+        if (!(mbentry->mbtype & MBTYPE_INTERMEDIATE) &&
+            !mboxname_isdeletedmailbox(mbentry->name, NULL)) {
+            size_t last_len = (*last_name ? strlen(*last_name) : 0);
+            int last_name_is_parent = *last_name
+                && strlen(mbentry->name) >= last_len
+                && mbentry->name[last_len] == '.'
+                && !memcmp(mbentry->name, *last_name, last_len)
+                && !strchr(mbentry->name+last_len+1, '.');
+
+            if (!last_name_is_parent) {
+                struct txn *tid = NULL;
+                int r;
+
+                syslog(LOG_NOTICE,
+                       "inserting intermediaries to mailboxes list for %s",
+                       mbentry->name);
+
+                r = mboxlist_create_intermediaries(
+                    mbentry->name,
+                    mboxname_nextmodseq(mbentry->name, 0 /* last */,
+                                        mbentry->mbtype, 1 /* dofolder */),
+                    &tid);
+
+                if (r) {
+                    syslog(LOG_ERR,
+                           "failed to insert intermediaries to mailboxes list for %s: %s",
+                           mbentry->name, cyrusdb_strerror(r));
+                }
+            }
+        }
+
+        free(*last_name);
+        *last_name = xstrdupnull(mbentry->name);
+    }
 
     return 0;
 }
 
 static void process_mboxlist(void)
 {
+    char *last_name = NULL;
+
     /* build a list of mailboxes - we're using internal names here */
-    mboxlist_allmbox(NULL, fixmbox, NULL, 0);
+    mboxlist_allmbox(NULL, fixmbox, &last_name, 0);
+    free(last_name);
 
     /* enable or disable RACLs per config */
     mboxlist_set_racls(config_getswitch(IMAPOPT_REVERSEACLS));
