@@ -1899,8 +1899,8 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
     newmbentry->foldermodseq = newmailbox->i.highestmodseq;
 
     /* is this delayed delete of a mailbox with a children? */
-    int is_deleted_ancestor = (mboxname_isdeletedmailbox(newmbentry->name, NULL)
-                               && mboxlist_haschildren(oldmbentry->name));
+    int is_deleted_ancestor = (mboxname_isdeletedmailbox(newname, NULL)
+                               && mboxlist_haschildren(oldname));
 
     do {
         r = 0;
