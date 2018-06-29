@@ -657,6 +657,20 @@ static int message_parse_body(struct msg *msg, struct body *body,
     sawboundary = message_parse_headers(msg, body, defaultContentType,
                                         boundaries);
 
+    /* Charset id and encoding id are stored in the binary
+     * bodystructure, but we don't have that one here. */
+    struct param *param = body->params;
+    while (param) {
+        if (!strcasecmp(param->attribute, "CHARSET")) {
+            body->charset_id = xstrdupnull(param->value);
+            break;
+        }
+        param = param->next;
+    }
+    if (body->encoding) {
+        body->charset_enc = encoding_lookupname(body->encoding);
+    }
+
     /* Recurse according to type */
     if (strcmp(body->type, "MULTIPART") == 0) {
         if (!sawboundary) {
