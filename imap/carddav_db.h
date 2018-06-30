@@ -160,7 +160,7 @@ int carddav_abort(struct carddav_db *carddavdb);
 
 /* store a vcard to mailbox/resource */
 int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
-                  const char *resource,
+                  const char *resource, modseq_t createdmodseq,
                   strarray_t *flags, struct entryattlist *annots,
                   const char *userid, struct auth_state *authstate,
                   int ignorequota);

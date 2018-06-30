@@ -1862,7 +1862,7 @@ static int create_messages(struct mailbox *mailbox, int count)
                     strerror(errno));
             return r;
         }
-        r = append_fromstage(&as, &body, stage, internaldate, NULL, 0, NULL);
+        r = append_fromstage(&as, &body, stage, internaldate, 0, NULL, 0, NULL);
         if (r) {
             fprintf(stderr, "append_fromstage(%s) failed: %s", mailbox->name,
                     error_message(r));

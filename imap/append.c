@@ -849,6 +849,7 @@ out:
  */
 EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
                      struct stagemsg *stage, time_t internaldate,
+                     modseq_t createdmodseq,
                      const strarray_t *flags, int nolink,
                      struct entryattlist *user_annots)
 {
@@ -940,6 +941,8 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     r = msgrecord_set_uid(msgrec, as->baseuid + as->nummsg);
     if (r) goto out;
     r = msgrecord_set_internaldate(msgrec, internaldate);
+    if (r) goto out;
+    r = msgrecord_set_createdmodseq(msgrec, createdmodseq);
     if (r) goto out;
     r = msgrecord_set_bodystructure(msgrec, *body);
     if (r) goto out;

@@ -7831,7 +7831,7 @@ static int _email_append(jmap_req_t *req,
     r = append_setup_mbox(&as, mbox, req->userid, httpd_authstate,
             0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
     if (r) goto done;
-    r = append_fromstage(&as, &body, stage, internaldate, NULL, 0, NULL);
+    r = append_fromstage(&as, &body, stage, internaldate, 0, NULL, 0, NULL);
     if (r) {
         append_abort(&as);
         goto done;

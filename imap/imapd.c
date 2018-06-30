@@ -4067,7 +4067,7 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
             }
             if (!r) {
                 r = append_fromstage(&appendstate, &body, curstage->stage,
-                                     curstage->internaldate,
+                                     curstage->internaldate, /*createdmodseq*/0,
                                      &curstage->flags, 0,
                                      curstage->annotations);
             }

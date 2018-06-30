@@ -119,6 +119,7 @@ extern FILE *append_newstage(const char *mailboxname, time_t internaldate,
 /* adds a new mailbox to the stage initially created by append_newstage() */
 extern int append_fromstage(struct appendstate *mailbox, struct body **body,
                             struct stagemsg *stage, time_t internaldate,
+                            modseq_t createdmodseq,
                             const strarray_t *flags, int nolink,
                             struct entryattlist *annotations);
 

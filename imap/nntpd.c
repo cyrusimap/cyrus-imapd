@@ -3296,7 +3296,7 @@ static int deliver(message_data_t *msg)
             if (!r) {
                 prot_rewind(msg->data);
                 if (stage) {
-                    r = append_fromstage(&as, &body, stage, 0,
+                    r = append_fromstage(&as, &body, stage, 0, 0,
                                          NULL, !singleinstance,
                                          /*annotations*/NULL);
                 } else {

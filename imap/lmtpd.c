@@ -539,7 +539,8 @@ int deliver_mailbox(FILE *f,
 
     if (!r) {
         r = append_fromstage(&as, &content->body, stage,
-                             internaldate, flags, !singleinstance,
+                             internaldate, /*createdmodseq*/0,
+                             flags, !singleinstance,
                              /*annotations*/NULL);
 
         if (r) {

@@ -881,7 +881,7 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
 }
 
 EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
-                           const char *resource,
+                           const char *resource, modseq_t createdmodseq,
                            strarray_t *flags, struct entryattlist *annots,
                            const char *userid, struct auth_state *authstate,
                            int ignorequota)
@@ -963,7 +963,7 @@ EXPORTED int carddav_store(struct mailbox *mailbox, struct vparse_card *vcard,
 
     struct body *body = NULL;
 
-    r = append_fromstage(&as, &body, stage, now, flags, 0, annots);
+    r = append_fromstage(&as, &body, stage, now, createdmodseq, flags, 0, annots);
     if (body) {
         message_free_body(body);
         free(body);

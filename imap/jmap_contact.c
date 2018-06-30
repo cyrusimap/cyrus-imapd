@@ -887,7 +887,7 @@ static int setContactGroups(struct jmap_req *req)
                    req->accountid, mboxname, uid, name);
             free(mboxname);
 
-            if (!r) r = carddav_store(mailbox, card, NULL, NULL, NULL,
+            if (!r) r = carddav_store(mailbox, card, NULL, 0, NULL, NULL,
                                       req->accountid, req->authstate, ignorequota);
             vparse_free_card(card);
 
@@ -1043,7 +1043,7 @@ static int setContactGroups(struct jmap_req *req)
                    req->accountid, resource);
 
             r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource,
-                              NULL, NULL, req->accountid, req->authstate,
+                              0, NULL, NULL, req->accountid, req->authstate,
                               ignorequota);
             if (!r)
                 r = carddav_remove(mailbox, olduid,
@@ -2953,7 +2953,7 @@ static int setContacts(struct jmap_req *req)
 
             syslog(LOG_NOTICE, "jmap: create contact %s/%s (%s)",
                    req->accountid, mboxname, uid);
-            r = carddav_store(mailbox, card, NULL, flags, annots,
+            r = carddav_store(mailbox, card, NULL, 0, flags, annots,
                               req->accountid, req->authstate, ignorequota);
             vparse_free_card(card);
             free(mboxname);
@@ -3121,7 +3121,7 @@ static int setContacts(struct jmap_req *req)
             syslog(LOG_NOTICE, "jmap: update contact %s/%s",
                    req->accountid, resource);
             r = carddav_store(newmailbox ? newmailbox : mailbox,
-                              card, resource, flags, annots, req->accountid,
+                              card, resource, 0, flags, annots, req->accountid,
                               req->authstate, ignorequota);
             if (!r)
                 r = carddav_remove(mailbox, olduid,

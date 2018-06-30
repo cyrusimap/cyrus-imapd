@@ -1334,7 +1334,7 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
             fclose(f);
 
             r = append_fromstage(&as, &body, stage,
-                                 0, fcc->imapflags, 0, /* annotations */ NULL);
+                                 0, 0, fcc->imapflags, 0, /* annotations */ NULL);
             if (!r) r = append_commit(&as);
 
             if (body) {

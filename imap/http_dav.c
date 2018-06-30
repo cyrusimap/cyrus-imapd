@@ -8649,10 +8649,13 @@ int dav_store_resource(struct transaction_t *txn,
         strarray_t *flaglist = NULL;
         struct entryattlist *annots = NULL;
 
+        modseq_t createdmodseq = 0;
+
         if (oldrecord) {
             flaglist = mailbox_extract_flags(mailbox, oldrecord, httpd_userid);
             mailbox_get_annotate_state(mailbox, oldrecord->uid, NULL);
             annots = mailbox_extract_annots(mailbox, oldrecord);
+            createdmodseq = oldrecord->createdmodseq;
         }
 
         /* XXX - casemerge?  Doesn't matter with flags */
@@ -8664,7 +8667,7 @@ int dav_store_resource(struct transaction_t *txn,
         }
 
         /* Append the message to the mailbox */
-        if ((r = append_fromstage(&as, &body, stage, now, flaglist, 0, annots))) {
+        if ((r = append_fromstage(&as, &body, stage, now, createdmodseq, flaglist, 0, annots))) {
             syslog(LOG_ERR, "append_fromstage(%s) failed: %s",
                    mailbox->name, error_message(r));
             ret = HTTP_SERVER_ERROR;

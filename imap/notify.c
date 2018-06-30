@@ -204,7 +204,7 @@ EXPORTED int notify_at(time_t when, const char *method,
     if (r) goto done;
 
     struct body *body = NULL;
-    r = append_fromstage(&as, &body, stage, when, 0, 0, 0);
+    r = append_fromstage(&as, &body, stage, when, 0, 0, 0, 0);
     if (body) {
         message_free_body(body);
         free(body);

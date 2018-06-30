@@ -1605,7 +1605,7 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     /* Append the message to the mailbox */
     strarray_append(&flags, "\\Deleted");
     strarray_append(&flags, "\\Expunged");  // custom flag to insta-expunge!
-    r = append_fromstage(&as, &body, stage, now, &flags, 0, /*annots*/NULL);
+    r = append_fromstage(&as, &body, stage, now, 0, &flags, 0, /*annots*/NULL);
 
     if (r) {
         append_abort(&as);
@@ -1759,7 +1759,7 @@ static int jmap_copyblob(jmap_req_t *req,
     strarray_t flags = STRARRAY_INITIALIZER;
     strarray_append(&flags, "\\Deleted");
     strarray_append(&flags, "\\Expunged");  // custom flag to insta-expunge!
-	r = append_fromstage(&as, &to_body, stage, internaldate, &flags, 0, NULL);
+	r = append_fromstage(&as, &to_body, stage, 0, internaldate, &flags, 0, NULL);
     strarray_fini(&flags);
 	if (r) {
         syslog(LOG_ERR, "jmap_copyblob(%s): append_fromstage: %s",
