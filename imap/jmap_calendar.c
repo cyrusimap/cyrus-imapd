@@ -2944,7 +2944,7 @@ static int getCalendarEventsList(struct jmap_req *req)
     /* Prepare response. */
     json_t *eventList = json_pack("{}");
     json_object_set_new(eventList, "accountId", json_string(req->accountid));
-    json_object_set_new(eventList, "state", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
+    json_object_set_new(eventList, "queryState", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
     json_object_set_new(eventList, "position", json_integer(pos));
     json_object_set_new(eventList, "total", json_integer(total));
     json_object_set(eventList, "ids", events);

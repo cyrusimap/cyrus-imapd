@@ -198,7 +198,7 @@ struct jmap_query {
     size_t limit;
     int have_limit;
     /* Response fields */
-    char *state;
+    char *queryState;
     int can_calculate_changes;
     size_t result_position;
     size_t total;
@@ -209,11 +209,11 @@ struct jmap_querychanges {
     /* Request arguments */
     json_t *filter;
     json_t *sort;
-    const char *since_state;
+    const char *since_queryState;
     size_t max_changes;
     const char *up_to_id;
     /* Response fields */
-    char *new_state;
+    char *new_queryState;
     size_t total;
     json_t *removed;
     json_t *added;
@@ -787,7 +787,7 @@ static void jmap_query_parse(json_t *jargs,
 
 static void jmap_query_fini(struct jmap_query *query)
 {
-    free(query->state);
+    free(query->queryState);
     json_decref(query->ids);
 }
 
@@ -797,7 +797,7 @@ static json_t *jmap_query_reply(struct jmap_query *query)
     json_t *res = json_object();
     json_object_set(res, "filter", query->filter);
     json_object_set(res, "sort", query->sort);
-    json_object_set_new(res, "state", json_string(query->state));
+    json_object_set_new(res, "queryState", json_string(query->queryState));
     json_object_set_new(res, "canCalculateChanges", json_boolean(query->can_calculate_changes));
     json_object_set_new(res, "position", json_integer(query->position));
     json_object_set_new(res, "total", json_integer(query->total));
@@ -866,12 +866,12 @@ static void jmap_querychanges_parse(json_t *jargs,
         jmap_parser_invalid(parser, "sort");
     }
 
-    /* sinceState */
-    arg = json_object_get(jargs, "sinceState");
+    /* sinceQueryState */
+    arg = json_object_get(jargs, "sinceQueryState");
     if (json_is_string(arg)) {
-        query->since_state = json_string_value(arg);
+        query->since_queryState = json_string_value(arg);
     } else {
-        jmap_parser_invalid(parser, "sinceState");
+        jmap_parser_invalid(parser, "sinceQueryState");
     }
 
     /* maxChanges */
@@ -909,7 +909,7 @@ static void jmap_querychanges_parse(json_t *jargs,
 
 static void jmap_querychanges_fini(struct jmap_querychanges *query)
 {
-    free(query->new_state);
+    free(query->new_queryState);
     json_decref(query->removed);
     json_decref(query->added);
 }
@@ -919,8 +919,8 @@ static json_t *jmap_querychanges_reply(struct jmap_querychanges *query)
     json_t *res = json_object();
     json_object_set(res, "filter", query->filter);
     json_object_set(res, "sort", query->sort);
-    json_object_set_new(res, "oldState", json_string(query->since_state));
-    json_object_set_new(res, "newState", json_string(query->new_state));
+    json_object_set_new(res, "oldQueryState", json_string(query->since_queryState));
+    json_object_set_new(res, "newQueryState", json_string(query->new_queryState));
     json_object_set_new(res, "upToId", query->up_to_id ?
             json_string(query->up_to_id) : json_null());
     json_object_set(res, "removed", query->removed);
@@ -2027,7 +2027,7 @@ static int jmap_mailbox_query(jmap_req_t *req)
         goto done;
     }
     json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-    query.state = xstrdup(json_string_value(jstate));
+    query.queryState = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
     /* Build response */
@@ -5124,7 +5124,7 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     // XXX: if (JNOTNULL(json_object_get(query->filter, "inMailbox"))) {
     // XXX:    uid = mailbox->i.lastuid;
     // XXX: }
-    query->state = _email_make_querystate(modseq, uid);
+    query->queryState = _email_make_querystate(modseq, uid);
 
 done:
     _email_search_free(search);
@@ -5189,7 +5189,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     modseq_t since_modseq;
     uint32_t since_uid;
 
-    if (!_email_read_querystate(query->since_state, &since_modseq, &since_uid)) {
+    if (!_email_read_querystate(query->since_queryState, &since_modseq, &since_uid)) {
         *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
         return;
     }
@@ -5361,7 +5361,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     free(email_id);
 
     modseq_t modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
-    query->new_state = _email_make_querystate(modseq, 0);
+    query->new_queryState = _email_make_querystate(modseq, 0);
 
 done:
     _email_search_free(search);
@@ -5374,7 +5374,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     modseq_t since_modseq;
     uint32_t since_uid;
 
-    if (!_email_read_querystate(query->since_state, &since_modseq, &since_uid)) {
+    if (!_email_read_querystate(query->since_queryState, &since_modseq, &since_uid)) {
         *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
         return;
     }
@@ -5502,7 +5502,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     free(email_id);
 
     modseq_t modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
-    query->new_state = _email_make_querystate(modseq, 0);
+    query->new_queryState = _email_make_querystate(modseq, 0);
 
 done:
     _email_search_free(search);
@@ -11208,7 +11208,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
 
     /* We don't store EmailSubmissions */
     json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-    query.state = xstrdup(json_string_value(jstate));
+    query.queryState = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     query.position = 0;
     query.total = 0;
