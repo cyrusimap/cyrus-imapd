@@ -720,14 +720,14 @@ sub test_mailbox_querychanges
 
     xlog "get current mailbox state";
     my $res = $jmap->CallMethods([['Mailbox/query', { }, "R1"]]);
-    my $state = $res->[0][1]->{state};
+    my $state = $res->[0][1]->{queryState};
     $self->assert_not_null($state);
     $self->assert_equals(JSON::false, $res->[0][1]->{canCalculateChanges});
 
     xlog "get mailbox list updates";
     $res = $jmap->CallMethods([['Mailbox/queryChanges', {
         filter => {},
-        sinceState => $state,
+        sinceQueryState => $state,
     }, "R1"]]);
     $self->assert_str_equals("error", $res->[0][0]);
     $self->assert_str_equals("cannotCalculateChanges", $res->[0][1]{type});
@@ -4010,7 +4010,7 @@ sub test_emailsubmission_changes
     $self->assert_not_null($identityid);
 
     xlog "get current email submission state";
-    $res = $jmap->CallMethods([['EmailSubmission/query', { }, "R1"]]);
+    $res = $jmap->CallMethods([['EmailSubmission/get', { }, "R1"]]);
     my $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
 
@@ -4058,7 +4058,7 @@ sub test_emailsubmission_query
     my $res = $jmap->CallMethods([['EmailSubmission/query', { }, "R1"]]);
     $self->assert_null($res->[0][1]{filter});
     $self->assert_null($res->[0][1]{sort});
-    $self->assert_not_null($res->[0][1]{state});
+    $self->assert_not_null($res->[0][1]{queryState});
     $self->assert_equals(JSON::false, $res->[0][1]{canCalculateChanges});
     $self->assert_num_equals(0, $res->[0][1]{position});
     $self->assert_num_equals(0, $res->[0][1]{total});
@@ -4077,13 +4077,13 @@ sub test_emailsubmission_querychanges
 
     xlog "get current email submission state";
     my $res = $jmap->CallMethods([['EmailSubmission/query', { }, "R1"]]);
-    my $state = $res->[0][1]->{state};
+    my $state = $res->[0][1]->{queryState};
     $self->assert_not_null($state);
 
     xlog "get email submission list updates (empty filter)";
     $res = $jmap->CallMethods([['EmailSubmission/queryChanges', {
         filter => {},
-        sinceState => $state,
+        sinceQueryState => $state,
     }, "R1"]]);
     $self->assert_str_equals("error", $res->[0][0]);
     $self->assert_str_equals("cannotCalculateChanges", $res->[0][1]{type});
@@ -6470,12 +6470,12 @@ sub test_email_querychanges_basic
            isAscending => $JSON::true,
          }
         ],
-        sinceState => $old->{state},
+        sinceQueryState => $old->{queryState},
     }, 'R2']]);
 
     my $new = $res->[0][1];
-    $self->assert_str_equals($old->{state}, $new->{oldState});
-    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    $self->assert_str_equals($old->{queryState}, $new->{oldQueryState});
+    $self->assert_str_not_equals($old->{queryState}, $new->{newQueryState});
     $self->assert_num_equals(1, scalar @{$new->{added}});
     $self->assert_num_equals(1, scalar @{$new->{removed}});
     $self->assert_str_equals($new->{removed}[0], $new->{added}[0]{id});
@@ -6523,12 +6523,12 @@ sub test_email_querychanges_basic_collapse
          }
         ],
         collapseThreads => $JSON::true,
-        sinceState => $old->{state},
+        sinceQueryState => $old->{queryState},
     }, 'R2']]);
 
     my $new = $res->[0][1];
-    $self->assert_str_equals($old->{state}, $new->{oldState});
-    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    $self->assert_str_equals($old->{queryState}, $new->{oldQueryState});
+    $self->assert_str_not_equals($old->{queryState}, $new->{newQueryState});
     $self->assert_num_equals(1, scalar @{$new->{added}});
     $self->assert_num_equals(1, scalar @{$new->{removed}});
     $self->assert_str_equals($new->{removed}[0], $new->{added}[0]{id});
@@ -6576,12 +6576,12 @@ sub test_email_querychanges_basic_mb
          }
         ],
         filter => { inMailbox => $inboxid },
-        sinceState => $old->{state},
+        sinceQueryState => $old->{queryState},
     }, 'R2']]);
 
     my $new = $res->[0][1];
-    $self->assert_str_equals($old->{state}, $new->{oldState});
-    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    $self->assert_str_equals($old->{queryState}, $new->{oldQueryState});
+    $self->assert_str_not_equals($old->{queryState}, $new->{newQueryState});
     $self->assert_num_equals(1, scalar @{$new->{added}});
     $self->assert_num_equals(1, scalar @{$new->{removed}});
     $self->assert_str_equals($new->{removed}[0], $new->{added}[0]{id});
@@ -6631,13 +6631,13 @@ sub test_email_querychanges_basic_mb_collapse
         ],
         filter => { inMailbox => $inboxid },
         collapseThreads => $JSON::true,
-        sinceState => $old->{state},
+        sinceQueryState => $old->{queryState},
         ##upToId => $old->{ids}[3],
     }, 'R2']]);
 
     my $new = $res->[0][1];
-    $self->assert_str_equals($old->{state}, $new->{oldState});
-    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    $self->assert_str_equals($old->{queryState}, $new->{oldQueryState});
+    $self->assert_str_not_equals($old->{queryState}, $new->{newQueryState});
     # with collased threads we have to check
     $self->assert_num_equals(1, scalar @{$new->{added}});
     $self->assert_num_equals(1, scalar @{$new->{removed}});
@@ -6654,13 +6654,13 @@ sub test_email_querychanges_basic_mb_collapse
         ],
         filter => { inMailbox => $inboxid },
         collapseThreads => $JSON::true,
-        sinceState => $old->{state},
+        sinceQueryState => $old->{queryState},
         upToId => $old->{ids}[3],
     }, 'R2']]);
 
     $new = $res->[0][1];
-    $self->assert_str_equals($old->{state}, $new->{oldState});
-    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    $self->assert_str_equals($old->{queryState}, $new->{oldQueryState});
+    $self->assert_str_not_equals($old->{queryState}, $new->{newQueryState});
     $self->assert_num_equals(1, scalar @{$new->{added}});
     $self->assert_num_equals(1, scalar @{$new->{removed}});
     $self->assert_str_equals($new->{removed}[0], $new->{added}[0]{id});
@@ -6676,13 +6676,13 @@ sub test_email_querychanges_basic_mb_collapse
         ],
         filter => { inMailbox => $inboxid },
         collapseThreads => $JSON::true,
-        sinceState => $old->{state},
+        sinceQueryState => $old->{queryState},
         upToId => $old->{ids}[2],
     }, 'R2']]);
 
     $new = $res->[0][1];
-    $self->assert_str_equals($old->{state}, $new->{oldState});
-    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    $self->assert_str_equals($old->{queryState}, $new->{oldQueryState});
+    $self->assert_str_not_equals($old->{queryState}, $new->{newQueryState});
     $self->assert_num_equals(1, scalar @{$new->{added}});
     $self->assert_num_equals(1, scalar @{$new->{removed}});
     $self->assert_str_equals($new->{removed}[0], $new->{added}[0]{id});
@@ -6698,13 +6698,13 @@ sub test_email_querychanges_basic_mb_collapse
         ],
         filter => { inMailbox => $inboxid },
         collapseThreads => $JSON::true,
-        sinceState => $old->{state},
+        sinceQueryState => $old->{queryState},
         upToId => $old->{ids}[1],
     }, 'R2']]);
 
     $new = $res->[0][1];
-    $self->assert_str_equals($old->{state}, $new->{oldState});
-    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    $self->assert_str_equals($old->{queryState}, $new->{oldQueryState});
+    $self->assert_str_not_equals($old->{queryState}, $new->{newQueryState});
     $self->assert_num_equals(0, scalar @{$new->{added}});
     $self->assert_num_equals(0, scalar @{$new->{removed}});
 }
@@ -6758,12 +6758,12 @@ sub test_email_querychanges_skipdeleted
         ],
         filter => { inMailbox => $inboxid },
         collapseThreads => $JSON::true,
-        sinceState => $old->{state},
+        sinceQueryState => $old->{queryState},
     }, 'R2']]);
 
     my $new = $res->[0][1];
-    $self->assert_str_equals($old->{state}, $new->{oldState});
-    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    $self->assert_str_equals($old->{queryState}, $new->{oldQueryState});
+    $self->assert_str_not_equals($old->{queryState}, $new->{newQueryState});
     # with collased threads we have to check
     $self->assert_num_equals(1, scalar @{$new->{added}});
     $self->assert_num_equals(1, scalar @{$new->{removed}});
@@ -6821,12 +6821,12 @@ sub test_email_querychanges_deletedcopy
         ],
         filter => { inMailbox => $inboxid },
         collapseThreads => $JSON::true,
-        sinceState => $old->{state},
+        sinceQueryState => $old->{queryState},
     }, 'R2']]);
 
     my $new = $res->[0][1];
-    $self->assert_str_equals($old->{state}, $new->{oldState});
-    $self->assert_str_not_equals($old->{state}, $new->{newState});
+    $self->assert_str_equals($old->{queryState}, $new->{oldQueryState});
+    $self->assert_str_not_equals($old->{queryState}, $new->{newQueryState});
     # with collased threads we have to check
     $self->assert_num_equals(2, scalar @{$new->{added}});
     $self->assert_num_equals(2, scalar @{$new->{removed}});
@@ -7014,7 +7014,7 @@ sub test_email_querychanges
     my $ida = $res->[0][1]->{ids}[0];
     $self->assert_not_null($ida);
 
-    $state = $res->[0][1]->{state};
+    $state = $res->[0][1]->{queryState};
 
     $self->make_message("Email B") || die;
 
@@ -7023,12 +7023,12 @@ sub test_email_querychanges
     my ($idb) = grep { $_ ne $ida } @{$res->[0][1]->{ids}};
 
     xlog "get email list updates";
-    $res = $jmap->CallMethods([['Email/queryChanges', { sinceState => $state }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state }, "R1"]]);
 
     $self->assert_equals($res->[0][1]{added}[0]{id}, $idb);
 
     xlog "get email list updates with threads collapsed";
-    $res = $jmap->CallMethods([['Email/queryChanges', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, collapseThreads => JSON::true }, "R1"]]);
 
     $self->assert_equals($res->[0][1]{added}[0]{id}, $idb);
 }
@@ -7052,7 +7052,7 @@ sub test_email_querychanges_zerosince
     my $ida = $res->[0][1]->{ids}[0];
     $self->assert_not_null($ida);
 
-    $state = $res->[0][1]->{state};
+    $state = $res->[0][1]->{queryState};
 
     $self->make_message("Email B") || die;
 
@@ -7061,12 +7061,12 @@ sub test_email_querychanges_zerosince
     my ($idb) = grep { $_ ne $ida } @{$res->[0][1]->{ids}};
 
     xlog "get email list updates";
-    $res = $jmap->CallMethods([['Email/queryChanges', { sinceState => $state }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state }, "R1"]]);
 
     $self->assert_equals($res->[0][1]{added}[0]{id}, $idb);
 
     xlog "get email list updates with threads collapsed";
-    $res = $jmap->CallMethods([['Email/queryChanges', { sinceState => "0", collapseThreads => JSON::true }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => "0", collapseThreads => JSON::true }, "R1"]]);
     $self->assert_equals('error', $res->[0][0]);
 }
 
@@ -7095,7 +7095,7 @@ sub test_email_querychanges_thread
     my $ida = $res->[0][1]->{ids}[0];
     $self->assert_not_null($ida);
 
-    $state = $res->[0][1]->{state};
+    $state = $res->[0][1]->{queryState};
 
     xlog "generating email B";
     $exp{B} = $self->make_message("Email B", body => "b");
@@ -7113,8 +7113,8 @@ sub test_email_querychanges_thread
     $exp{D} = $self->make_message("Re: Email A", references => [ $exp{A} ], date => $dt, body => "d");
     $exp{D}->set_attributes(uid => 4, cid => $exp{A}->get_attribute('cid'));
 
-    $res = $jmap->CallMethods([['Email/queryChanges', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
-    $state = $res->[0][1]{newState};
+    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, collapseThreads => JSON::true }, "R1"]]);
+    $state = $res->[0][1]{newQueryState};
 
     $self->assert_num_equals(2, $res->[0][1]{total});
     # assert that IDA got destroyed
@@ -7126,8 +7126,8 @@ sub test_email_querychanges_thread
     $talk->store('3', "+flags", '\\Deleted');
     $talk->expunge();
 
-    $res = $jmap->CallMethods([['Email/queryChanges', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
-    $state = $res->[0][1]{newState};
+    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, collapseThreads => JSON::true }, "R1"]]);
+    $state = $res->[0][1]{newQueryState};
 
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert(ref($res->[0][1]{added}) eq 'ARRAY');
@@ -7138,7 +7138,7 @@ sub test_email_querychanges_thread
     $talk->store('3', "+flags", '\\Deleted');
     $talk->expunge();
 
-    $res = $jmap->CallMethods([['Email/queryChanges', { sinceState => $state, collapseThreads => JSON::true }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, collapseThreads => JSON::true }, "R1"]]);
 
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{added}}));
@@ -7172,7 +7172,7 @@ sub test_email_querychanges_order
     $res = $jmap->CallMethods([['Email/query', { sort => $sort }, "R1"]]);
     my $ida = $res->[0][1]->{ids}[0];
     $self->assert_not_null($ida);
-    $state = $res->[0][1]->{state};
+    $state = $res->[0][1]->{queryState};
 
     xlog "Generate a email in INBOX via IMAP";
     $self->make_message("B") || die;
@@ -7183,7 +7183,7 @@ sub test_email_querychanges_order
     $self->assert_str_not_equals($ida, $idb);
 
     xlog "get email list updates";
-    $res = $jmap->CallMethods([['Email/queryChanges', { sinceState => $state, sort => $sort }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, sort => $sort }, "R1"]]);
     $self->assert_equals($idb, $res->[0][1]{added}[0]{id});
     $self->assert_num_equals(0, $res->[0][1]{added}[0]{index});
 
@@ -7196,13 +7196,13 @@ sub test_email_querychanges_order
     $ida = $res->[0][1]->{ids}[0];
     $self->assert_str_not_equals($ida, $idb);
     $idb = $res->[0][1]->{ids}[1];
-    $state = $res->[0][1]->{state};
+    $state = $res->[0][1]->{queryState};
 
     xlog "Generate a email in INBOX via IMAP";
     $self->make_message("C") || die;
 
     xlog "get email list updates";
-    $res = $jmap->CallMethods([['Email/queryChanges', { sinceState => $state, sort => $sort }, "R1"]]);
+    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, sort => $sort }, "R1"]]);
     $self->assert_str_not_equals($ida, $res->[0][1]{added}[0]{id});
     $self->assert_str_not_equals($idb, $res->[0][1]{added}[0]{id});
     $self->assert_num_equals(2, $res->[0][1]{added}[0]{index});
@@ -7256,9 +7256,9 @@ sub test_email_querychanges_implementation
     my $msgidB = $res->[0][1]->{ids}[1];
     $self->assert_not_null($msgidB);
 
-    my $state_trivial = $res->[0][1]->{state};
+    my $state_trivial = $res->[0][1]->{queryState};
     $self->assert_not_null($state_trivial);
-    my $state_collapsed = $res->[1][1]->{state};
+    my $state_collapsed = $res->[1][1]->{queryState};
     $self->assert_not_null($state_collapsed);
 
 	xlog "update email B";
@@ -7288,7 +7288,7 @@ sub test_email_querychanges_implementation
             sort => [
                 { isAscending => JSON::true, property => 'subject' }
             ],
-            sinceState => $state_trivial,
+            sinceQueryState => $state_trivial,
             collapseThreads => JSON::false,
             upToId => $msgidC,
         }, "R1"],
@@ -7296,7 +7296,7 @@ sub test_email_querychanges_implementation
             sort => [
                 { isAscending => JSON::true, property => 'subject' }
             ],
-            sinceState => $state_collapsed,
+            sinceQueryState => $state_collapsed,
             collapseThreads => JSON::true,
             upToId => $msgidC,
         }, "R2"],
@@ -7310,7 +7310,7 @@ sub test_email_querychanges_implementation
     $self->assert_num_equals(2, $res->[0][1]{added}[1]{index});
     $self->assert_deep_equals([$msgidB, $msgidC], $res->[0][1]{removed});
     $self->assert_num_equals(4, $res->[0][1]{total});
-    $state_trivial = $res->[0][1]{newState};
+    $state_trivial = $res->[0][1]{newQueryState};
 
     # 'collapsed' case
     $self->assert_num_equals(2, scalar @{$res->[1][1]{added}});
@@ -7320,7 +7320,7 @@ sub test_email_querychanges_implementation
     $self->assert_num_equals(2, $res->[1][1]{added}[1]{index});
     $self->assert_deep_equals([$msgidB, $msgidC], $res->[1][1]{removed});
     $self->assert_num_equals(4, $res->[0][1]{total});
-    $state_collapsed = $res->[1][1]{newState};
+    $state_collapsed = $res->[1][1]{newQueryState};
 
     xlog "delete email C ($msgidC)";
     $res = $jmap->CallMethods([['Email/set', { destroy => [ $msgidC ] }, "R1"]]);
@@ -7332,14 +7332,14 @@ sub test_email_querychanges_implementation
             sort => [
                 { isAscending => JSON::true, property => 'subject' }
             ],
-            sinceState => $state_trivial,
+            sinceQueryState => $state_trivial,
             collapseThreads => JSON::false,
         }, "R1"],
         ['Email/queryChanges', {
             sort => [
                 { isAscending => JSON::true, property => 'subject' }
             ],
-            sinceState => $state_collapsed,
+            sinceQueryState => $state_collapsed,
             collapseThreads => JSON::true,
         }, "R2"],
     ]);
@@ -8167,7 +8167,7 @@ sub test_misc_refobjects_simple
 
     xlog "get email state";
     my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
-    my $state = $res->[0][1]->{state};
+    my $state = $res->[0][1]->{queryState};
     $self->assert_not_null($state);
 
     xlog "Generate a email in INBOX via IMAP";
@@ -8176,7 +8176,7 @@ sub test_misc_refobjects_simple
     xlog "get email updates and email using reference";
     $res = $jmap->CallMethods([
         ['Email/changes', {
-            sinceState => $state,
+            sinceQueryState => $state,
         }, 'R1'],
         ['Email/get', {
             '#ids' => {
