@@ -151,6 +151,7 @@ HIDDEN void statuscache_fill(struct statusdata *sdata, const char *userid,
     sdata->uidvalidity = mailbox->i.uidvalidity;
     sdata->unseen = numunseen;
     sdata->size = mailbox->i.quota_mailbox_used;
+    sdata->createdmodseq = mailbox->i.createdmodseq;
     sdata->highestmodseq = mailbox->i.highestmodseq;
 }
 
@@ -418,6 +419,8 @@ EXPORTED int statuscache_lookup(const char *mboxname, const char *userid,
     if (p < dend) sdata->uidnext = strtoul(p, &p, 10);
     if (p < dend) sdata->uidvalidity = strtoul(p, &p, 10);
     if (p < dend) sdata->unseen = strtoul(p, &p, 10);
+    if (p < dend) sdata->size = strtoul(p, &p, 10);
+    if (p < dend) sdata->createdmodseq = strtoull(p, &p, 10);
     if (p < dend) sdata->highestmodseq = strtoull(p, &p, 10);
 
     /* Sanity check the data */
@@ -453,11 +456,13 @@ static int statuscache_store(const char *mboxname,
      * Any non-digit char would be fine, but whitespace
      * looks less ugly in dbtool output */
     datalen = snprintf(data, sizeof(data),
-                       "%u %u %u %u %u %u %u " MODSEQ_FMT " ",
+                       "%u %u %u %u %u %u %u %u "
+                       MODSEQ_FMT " " MODSEQ_FMT " ",
                        STATUSCACHE_VERSION,
                        sdata->statusitems, sdata->messages,
                        sdata->recent, sdata->uidnext,
                        sdata->uidvalidity, sdata->unseen,
+                       sdata->size, sdata->createdmodseq,
                        sdata->highestmodseq);
 
     r = cyrusdb_store(statuscachedb, key, keylen, data, datalen, tidptr);

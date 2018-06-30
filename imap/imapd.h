@@ -133,7 +133,8 @@ enum {
     FETCH_BASECID =             (1<<21),
     FETCH_EMAILID =             (1<<22),
     FETCH_THREADID =            (1<<23),
-    FETCH_SAVEDATE =            (1<<24)
+    FETCH_SAVEDATE =            (1<<24),
+    FETCH_CREATEDMODSEQ =       (1<<25)
 };
 
 enum {
@@ -324,7 +325,8 @@ enum {
     STATUS_HIGHESTMODSEQ =      (1<<7),
     STATUS_XCONVEXISTS =        (1<<8),
     STATUS_XCONVUNSEEN =        (1<<9),
-    STATUS_XCONVMODSEQ =        (1<<10)
+    STATUS_XCONVMODSEQ =        (1<<10),
+    STATUS_CREATEDMODSEQ =      (1<<11)
     /* New items MUST be handled in imapd.c:list_data_remote() */
 };
 

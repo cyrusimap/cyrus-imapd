@@ -47,7 +47,7 @@
 
 /* name of the statuscache database */
 #define FNAME_STATUSCACHEDB "/statuscache.db"
-#define STATUSCACHE_VERSION 4
+#define STATUSCACHE_VERSION 5
 
 /* Return the filename of the statuscache database,
  * used for XWARMUP.  Returns a new string which must

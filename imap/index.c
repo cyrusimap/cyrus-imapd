@@ -4075,6 +4075,11 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                     sepchar, datebuf);
         sepchar = ' ';
     }
+    if (fetchitems & FETCH_CREATEDMODSEQ) {
+        prot_printf(state->out, "%cCREATEDMODSEQ (" MODSEQ_FMT ")",
+                    sepchar, record.createdmodseq);
+        sepchar = ' ';
+    }
 
     if ((fetchitems & FETCH_BASECID) &&
         config_getswitch(IMAPOPT_CONVERSATIONS)) {

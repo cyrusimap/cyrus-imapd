@@ -344,6 +344,7 @@ static struct capa_struct base_capabilities[] = {
     { "STATUS=SIZE",           2 }, /* draft-ietf-extra-imap-status-size */
     { "OBJECTID",              2 }, /* draft-ietf-extra-imap-objectid */
     { "SAVEDATE",              2 }, /* draft-ietf-extra-imap-savedate */
+    { "X-CREATEDMODSEQ",       2 }, /* not standard */
 
 #ifdef HAVE_SSL
     { "URLAUTH",               2 },
@@ -4819,6 +4820,9 @@ badannotation:
                 config_getswitch(IMAPOPT_CONVERSATIONS)) {
                 fa->fetchitems |= FETCH_CID;
             }
+            else if (!strcmp(fetchatt.s, "CREATEDMODSEQ")) {
+                fa->fetchitems |= FETCH_CREATEDMODSEQ;
+            }
             else goto badatt;
             break;
 
@@ -8875,6 +8879,9 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         else if (!strcmp(arg.s, "highestmodseq")) {
             statusitems |= STATUS_HIGHESTMODSEQ;
         }
+        else if (!strcmp(arg.s, "createdmodseq")) {
+            statusitems |= STATUS_CREATEDMODSEQ;
+        }
         else if (hasconv && !strcmp(arg.s, "xconvexists")) {
             statusitems |= STATUS_XCONVEXISTS;
         }
@@ -8946,6 +8953,11 @@ static int print_statusline(const char *extname, unsigned statusitems,
     }
     if (statusitems & STATUS_SIZE) {
         prot_printf(imapd_out, "%cSIZE %u", sepchar, sd->size);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_CREATEDMODSEQ) {
+        prot_printf(imapd_out, "%cCREATEDMODSEQ " MODSEQ_FMT,
+                    sepchar, sd->createdmodseq);
         sepchar = ' ';
     }
     if (statusitems & STATUS_HIGHESTMODSEQ) {
@@ -13242,7 +13254,8 @@ static int list_data_remote(struct backend *be, char *tag,
                     /* XXX  MUST be in same order as STATUS_* bitmask */
                     "messages", "recent", "uidnext", "uidvalidity",
                     "unseen", "uniqueid", "size", "highestmodseq",
-                    "xconvexists", "xconvunseen", "xconvmodseq", NULL
+                    "xconvexists", "xconvunseen", "xconvmodseq",
+                    "createdmodseq", NULL
                 };
 
                 c = '(';
