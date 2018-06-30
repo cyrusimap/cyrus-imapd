@@ -8166,8 +8166,8 @@ sub test_misc_refobjects_simple
     my $talk = $store->get_client();
 
     xlog "get email state";
-    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
-    my $state = $res->[0][1]->{queryState};
+    my $res = $jmap->CallMethods([['Email/get', { ids => [] }, "R1"]]);
+    my $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
 
     xlog "Generate a email in INBOX via IMAP";
@@ -8176,7 +8176,7 @@ sub test_misc_refobjects_simple
     xlog "get email updates and email using reference";
     $res = $jmap->CallMethods([
         ['Email/changes', {
-            sinceQueryState => $state,
+            sinceState => $state,
         }, 'R1'],
         ['Email/get', {
             '#ids' => {
