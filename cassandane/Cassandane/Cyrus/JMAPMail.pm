@@ -1572,6 +1572,7 @@ sub test_mailbox_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{changedProperties});
@@ -1591,8 +1592,9 @@ sub test_mailbox_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
-    $self->assert_str_equals($foo, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
+    $self->assert_str_equals($foo, $res->[0][1]{added}[0]);
+    $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
@@ -1613,8 +1615,9 @@ sub test_mailbox_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
-    $self->assert_str_equals($drafts, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
+    $self->assert_str_equals($drafts, $res->[0][1]{added}[0]);
+    $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{changedProperties});
     $state = $res->[0][1]->{newState};
@@ -1633,6 +1636,7 @@ sub test_mailbox_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($foo, $res->[0][1]{changed}[0]);
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
@@ -1660,6 +1664,7 @@ sub test_mailbox_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($foo, $res->[0][1]{destroyed}[0]);
@@ -1671,6 +1676,7 @@ sub test_mailbox_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($drafts, $res->[0][1]{changed}[0]);
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
@@ -1682,6 +1688,7 @@ sub test_mailbox_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{changedProperties});
@@ -1745,7 +1752,9 @@ sub test_mailbox_changes_counts
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{changedProperties});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 
     xlog "update mailbox";
@@ -1755,7 +1764,9 @@ sub test_mailbox_changes_counts
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_null($res->[0][1]{changedProperties});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 
     xlog "update email";
@@ -1767,7 +1778,9 @@ sub test_mailbox_changes_counts
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{changedProperties});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 
     xlog "update mailbox";
@@ -1777,14 +1790,18 @@ sub test_mailbox_changes_counts
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_null($res->[0][1]{changedProperties});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{changed}});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 
     xlog "get mailbox updates (expect no changes)";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]{newState});
     $self->assert_null($res->[0][1]{changedProperties});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 
     $draft->{subject} = "memo2";
@@ -1797,7 +1814,9 @@ sub test_mailbox_changes_counts
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{changedProperties});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_num_not_equals(0, scalar $res->[0][1]{changed});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 }
 
@@ -1833,9 +1852,11 @@ sub test_mailbox_changes_shared
     $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{changed}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{added}});
+    $self->assert_deep_equals([], $res->[0][1]{changed});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
-    my $box1 = $res->[0][1]->{changed}[0];
+    my $box1 = $res->[0][1]->{added}[0];
 
     xlog "destroy mailbox via JMAP";
     $res = $jmap->CallMethods([['Mailbox/set', { accountId => "foo", destroy => [ $box1 ] }, 'R1' ]]);
@@ -1845,6 +1866,8 @@ sub test_mailbox_changes_shared
     $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_deep_equals([], $res->[0][1]{added});
+    $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{destroyed}});
     $self->assert_str_equals($box1, $res->[0][1]->{destroyed}[0]);
     $state = $res->[0][1]->{newState};
@@ -1857,10 +1880,12 @@ sub test_mailbox_changes_shared
     $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{changed}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{added}});
+    $self->assert_deep_equals([], $res->[0][1]{changed});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
-    my $box2 = $res->[0][1]->{changed}[0];
+    my $box2 = $res->[0][1]->{added}[0];
 
     xlog "Remove lookup rights on box2";
     $admintalk->setacl("user.foo.box2", "cassandane", "") or die;
@@ -1869,6 +1894,8 @@ sub test_mailbox_changes_shared
     $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_deep_equals([], $res->[0][1]{added});
+    $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{destroyed}});
     $self->assert_str_equals($box2, $res->[0][1]->{destroyed}[0]);
     $state = $res->[0][1]->{newState};
@@ -4018,6 +4045,7 @@ sub test_emailsubmission_changes
     $res = $jmap->CallMethods( [ [ 'EmailSubmission/changes', {
         sinceState => $state,
     }, "R1" ] ] );
+    $self->assert_deep_equals([], $res->[0][1]->{added});
     $self->assert_deep_equals([], $res->[0][1]->{changed});
     $self->assert_deep_equals([], $res->[0][1]->{destroyed});
 
@@ -4042,8 +4070,7 @@ sub test_emailsubmission_changes
     $res = $jmap->CallMethods( [ [ 'EmailSubmission/changes', {
         sinceState => $state,
     }, "R1" ] ] );
-    $self->assert(exists $res->[0][1]->{changed});
-    $self->assert(exists $res->[0][1]->{destroyed});
+    $self->assert_deep_equals([], $res->[0][1]->{added});
     $self->assert_deep_equals([], $res->[0][1]->{changed});
     $self->assert_deep_equals([], $res->[0][1]->{destroyed});
 }
@@ -4191,8 +4218,10 @@ sub test_email_set_move_keywords
     $res = $jmap->CallMethods([
         ['Mailbox/changes', {sinceState => $mboxState }, 'R1'],
     ]);
-    my $archiveId = $res->[0][1]{changed}[0];
+    my $archiveId = $res->[0][1]{added}[0];
     $self->assert_not_null($archiveId);
+    $self->assert_deep_equals([], $res->[0][1]->{changed});
+    $self->assert_deep_equals([], $res->[0][1]->{destroyed});
 
     xlog "move email to Archive";
     xlog "update email";
@@ -6871,6 +6900,7 @@ sub test_email_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
 
@@ -6887,8 +6917,9 @@ sub test_email_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
-    $self->assert_str_equals($ida, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
+    $self->assert_str_equals($ida, $res->[0][1]{added}[0]);
+    $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
@@ -6897,6 +6928,7 @@ sub test_email_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
 
@@ -6911,6 +6943,7 @@ sub test_email_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($ida, $res->[0][1]{changed}[0]);
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
@@ -6925,6 +6958,7 @@ sub test_email_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($ida, $res->[0][1]{destroyed}[0]);
@@ -6935,6 +6969,7 @@ sub test_email_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
 
@@ -6971,8 +7006,9 @@ sub test_email_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreChanges});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
-    $self->assert_str_equals($idb, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
+    $self->assert_str_equals($idb, $res->[0][1]{added}[0]);
+    $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
@@ -6981,8 +7017,9 @@ sub test_email_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
-    $self->assert_str_equals($idc, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
+    $self->assert_str_equals($idc, $res->[0][1]{added}[0]);
+    $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
@@ -6991,6 +7028,7 @@ sub test_email_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
 }
@@ -7386,6 +7424,7 @@ sub test_email_changes_shared
     # unshared modseqs (but not the according mail!).
     $self->assert_not_null($res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
 
@@ -7398,10 +7437,11 @@ sub test_email_changes_shared
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
+    $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
-    my $ida = $res->[0][1]{changed}[0];
+    my $ida = $res->[0][1]{added}[0];
 
     xlog "create email in non-shared mailbox";
     $self->{adminstore}->set_folder('user.foo.box1');
@@ -7414,6 +7454,7 @@ sub test_email_changes_shared
     # unshared modseqs (but not the according mail!).
     $self->assert_not_null($res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
 
@@ -7425,7 +7466,8 @@ sub test_email_changes_shared
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
+    $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
 
@@ -7438,6 +7480,7 @@ sub test_email_changes_shared
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($ida, $res->[0][1]{destroyed}[0]);
@@ -7803,6 +7846,7 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
 
@@ -7817,10 +7861,11 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
+    $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
-    $threadA = $res->[0][1]{changed}[0];
+    $threadA = $res->[0][1]{added}[0];
 
     xlog "generating email C referencing A";
     $dt = DateTime->now();
@@ -7833,6 +7878,7 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
@@ -7843,6 +7889,7 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
 
@@ -7867,17 +7914,19 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::true, $res->[0][1]->{hasMoreChanges});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
-    $self->assert_str_not_equals($threadA, $res->[0][1]{changed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
+    $self->assert_str_not_equals($threadA, $res->[0][1]{added}[0]);
+    $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]->{newState};
-    $threadB = $res->[0][1]{changed}[0];
+    $threadB = $res->[0][1]{added}[0];
 
     xlog "get max 2 thread updates";
     $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state, maxChanges => 2 }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
@@ -7922,6 +7971,7 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
@@ -7942,6 +7992,7 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{changed}});
     $self->assert_str_equals($threadA, $res->[0][1]{changed}[0]);
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
@@ -7962,6 +8013,7 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($threadA, $res->[0][1]{destroyed}[0]);
@@ -7972,6 +8024,7 @@ sub test_thread_changes
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
+    $self->assert_deep_equals([], $res->[0][1]{added});
     $self->assert_deep_equals([], $res->[0][1]{changed});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
 }
@@ -8182,13 +8235,13 @@ sub test_misc_refobjects_simple
             '#ids' => {
                 resultOf => 'R1',
                 name => 'Email/changes',
-                path => '/changed',
+                path => '/added',
             },
         }, 'R2'],
     ]);
 
     # assert that the changed id equals the id of the returned email
-    $self->assert_str_equals($res->[0][1]{changed}[0], $res->[1][1]{list}[0]{id});
+    $self->assert_str_equals($res->[0][1]{added}[0], $res->[1][1]{list}[0]{id});
 }
 
 sub test_email_import_no_keywords
