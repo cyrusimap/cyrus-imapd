@@ -1968,6 +1968,31 @@ EXPORTED int mboxname_make_parent(char *name)
     return 1;
 }
 
+EXPORTED int mboxname_contains_parent(const char *mboxname, const char *prev)
+{
+    /* no names, definitely can't be parent! */
+    if (!mboxname) return 0;
+    if (!prev) return 0;
+
+    char *parent = xstrdup(mboxname);
+
+    /* this mailbox is just "user"? prev will always contain that */
+    if (!mboxname_make_parent(parent)) {
+        free(parent);
+        return 1;
+    }
+
+    if (mboxname_is_prefix(prev, parent)) {
+        /* it's not different?  Great - there's no missing intermediate */
+        free(parent);
+        return 1;
+    }
+
+    /* OK, it doesn't contain the parent for sure */
+    free(parent);
+    return 0;
+}
+
 /* NOTE: caller must free, which is different from almost every
  * other interface in the whole codebase.  Grr */
 EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)

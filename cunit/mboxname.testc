@@ -767,6 +767,21 @@ static void test_toexternal_alt(void)
     toexternal_helper("shared.quux", "Chaired.shared.quux");
 }
 
+static void test_contains_parent(void)
+{
+    CU_ASSERT_EQUAL(0, mboxname_contains_parent("user.foo.B", "user"));
+    CU_ASSERT_EQUAL(1, mboxname_contains_parent("user.foo.B", "user.foo"));
+    CU_ASSERT_EQUAL(1, mboxname_contains_parent("user.foo.B", "user.foo.A"));
+    CU_ASSERT_EQUAL(1, mboxname_contains_parent("user.foo.B", "user.foo.A.sub"));
+    CU_ASSERT_EQUAL(0, mboxname_contains_parent("user.foo.B.sub", "user.foo"));
+    CU_ASSERT_EQUAL(0, mboxname_contains_parent("user.foo.B.sub", "user.foo.A"));
+    CU_ASSERT_EQUAL(0, mboxname_contains_parent("user.foo.B.sub", "user.foo.A.sub"));
+    CU_ASSERT_EQUAL(0, mboxname_contains_parent("user.foo.BA.sub", "user.foo.B.sub"));
+    CU_ASSERT_EQUAL(0, mboxname_contains_parent("user.foo.B.A", "user.foo.BA"));
+    // this one is a bit fun - shared has no parent, so should be OK anywhere
+    CU_ASSERT_EQUAL(0, mboxname_contains_parent("shared", "user.foo.A"));
+}
+
 static void test_nextmodseq(void)
 {
     static const char FREDNAME[] = "bloggs.com!user.fred";

@@ -184,6 +184,8 @@ int mboxname_isoutbox(const char *name);
 
 /* check if one mboxname is a parent or same as the other */
 int mboxname_is_prefix(const char *longstr, const char *shortstr);
+/* check if one mboxname contains the parent of the other mboxname */
+int mboxname_contains_parent(const char *mboxname, const char *prev);
 
 void mboxname_hash(char *buf, size_t buf_len,
                    const char *root,
@@ -244,6 +246,7 @@ void mboxname_todeleted(const char *name, char *result, int withtime);
  * Returns 0 if no more truncation is possible, 1 otherwise.
  */
 int mboxname_make_parent(char *namebuf);
+
 
 char *mboxname_conf_getpath(const mbname_t *mbname,
                             const char *suffix);
