@@ -56,6 +56,7 @@ struct dav_data {
     const char *resource;
     uint32_t imap_uid;          /* zero (0) until URL is mapped */
     modseq_t modseq;
+    modseq_t createdmodseq;
     const char *lock_token;
     const char *lock_owner;
     const char *lock_ownerid;

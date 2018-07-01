@@ -385,10 +385,12 @@ EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const char *mailbox,
 #define CMD_INSERT                                                      \
     "INSERT INTO dav_objs ("                                            \
     "  creationdate, mailbox, resource, imap_uid, modseq,"              \
+    "  createdmodseq,"                                                  \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
     "  filename, type, subtype, res_uid, ref_count, alive )"            \
     " VALUES ("                                                         \
     "  :creationdate, :mailbox, :resource, :imap_uid, :modseq,"         \
+    "  :createdmodseq,"                                                 \
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"          \
     "  :filename, :type, :subtype, :res_uid, :ref_count, :alive );"
 
@@ -396,6 +398,7 @@ EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const char *mailbox,
     "UPDATE dav_objs SET"               \
     "  imap_uid     = :imap_uid,"       \
     "  modseq       = :modseq,"         \
+    "  createdmodseq = :createdmodseq," \
     "  lock_token   = :lock_token,"     \
     "  lock_owner   = :lock_owner,"     \
     "  lock_ownerid = :lock_ownerid,"   \
@@ -413,6 +416,7 @@ EXPORTED int webdav_write(struct webdav_db *webdavdb, struct webdav_data *wdata)
     struct sqldb_bindval bval[] = {
         { ":imap_uid",     SQLITE_INTEGER, { .i = wdata->dav.imap_uid     } },
         { ":modseq",       SQLITE_INTEGER, { .i = wdata->dav.modseq       } },
+        { ":createdmodseq", SQLITE_INTEGER, { .i = wdata->dav.createdmodseq } },
         { ":lock_token",   SQLITE_TEXT,    { .s = wdata->dav.lock_token   } },
         { ":lock_owner",   SQLITE_TEXT,    { .s = wdata->dav.lock_owner   } },
         { ":lock_ownerid", SQLITE_TEXT,    { .s = wdata->dav.lock_ownerid } },

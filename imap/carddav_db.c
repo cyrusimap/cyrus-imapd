@@ -190,7 +190,7 @@ static const char *column_text_to_buf(const char *text, struct buf *buf)
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"          \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
     "  version, vcard_uid, kind, fullname, name, nickname, alive,"      \
-    "  modseq" \
+    "  modseq, createdmodseq" \
     " FROM vcard_objs"
 
 static int read_cb(sqlite3_stmt *stmt, void *rock)
@@ -204,6 +204,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
     cdata->dav.alive = sqlite3_column_int(stmt, 15);
     cdata->dav.modseq = sqlite3_column_int(stmt, 16);
+    cdata->dav.createdmodseq = sqlite3_column_int(stmt, 17);
     if (!rrock->tombstones && !cdata->dav.alive)
         return 0;
 
@@ -629,10 +630,12 @@ static int carddav_write_groups(struct carddav_db *carddavdb, int rowid, const s
 #define CMD_INSERT                                                      \
     "INSERT INTO vcard_objs ("                                          \
     "  alive, creationdate, mailbox, resource, imap_uid, modseq,"       \
+    "  createdmodseq,"                                                  \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
     "  version, vcard_uid, kind, fullname, name, nickname)"             \
     " VALUES ("                                                         \
     "  :alive, :creationdate, :mailbox, :resource, :imap_uid, :modseq," \
+    "  :createdmodseq,"                                                 \
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"          \
     "  :version, :vcard_uid, :kind, :fullname, :name, :nickname );"
 
@@ -642,6 +645,7 @@ static int carddav_write_groups(struct carddav_db *carddavdb, int rowid, const s
     "  creationdate = :creationdate,"   \
     "  imap_uid     = :imap_uid,"       \
     "  modseq       = :modseq,"         \
+    "  createdmodseq = :createdmodseq," \
     "  lock_token   = :lock_token,"     \
     "  lock_owner   = :lock_owner,"     \
     "  lock_ownerid = :lock_ownerid,"   \
@@ -665,6 +669,7 @@ EXPORTED int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cd
         { ":resource",     SQLITE_TEXT,    { .s = cdata->dav.resource     } },
         { ":imap_uid",     SQLITE_INTEGER, { .i = cdata->dav.imap_uid     } },
         { ":modseq",       SQLITE_INTEGER, { .i = cdata->dav.modseq       } },
+        { ":createdmodseq", SQLITE_INTEGER, { .i = cdata->dav.createdmodseq } },
         { ":lock_token",   SQLITE_TEXT,    { .s = cdata->dav.lock_token   } },
         { ":lock_owner",   SQLITE_TEXT,    { .s = cdata->dav.lock_owner   } },
         { ":lock_ownerid", SQLITE_TEXT,    { .s = cdata->dav.lock_ownerid } },

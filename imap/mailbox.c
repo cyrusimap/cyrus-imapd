@@ -3137,6 +3137,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
         cdata->dav.resource = resource;
         cdata->dav.imap_uid = new->uid;
         cdata->dav.modseq = new->modseq;
+        cdata->dav.createdmodseq = new->createdmodseq;
         cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
 
         if (!cdata->dav.creationdate)
@@ -3248,6 +3249,7 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         cdata->dav.mailbox = mailbox->name;
         cdata->dav.imap_uid = new->uid;
         cdata->dav.modseq = new->modseq;
+        cdata->dav.createdmodseq = new->createdmodseq;
         cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
         cdata->dav.resource = resource;
         cdata->sched_tag = sched_tag;
@@ -3341,6 +3343,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
         wdata->dav.mailbox = mailbox->name;
         wdata->dav.imap_uid = new->uid;
         wdata->dav.modseq = new->modseq;
+        wdata->dav.createdmodseq = new->createdmodseq;
         wdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
         wdata->ref_count *= wdata->dav.alive;
         wdata->dav.resource = resource;

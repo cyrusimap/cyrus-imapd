@@ -262,7 +262,7 @@ static unsigned _comp_flags_to_num(struct comp_flags *flags)
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"          \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
     "  comp_type, ical_uid, organizer, dtstart, dtend,"                 \
-    "  comp_flags, sched_tag, alive, modseq"                            \
+    "  comp_flags, sched_tag, alive, modseq, createdmodseq"             \
     " FROM ical_objs"                                                   \
 
 static int read_cb(sqlite3_stmt *stmt, void *rock)
@@ -276,6 +276,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
     cdata->dav.alive = sqlite3_column_int(stmt, 16);
     cdata->dav.modseq = sqlite3_column_int(stmt, 17);
+    cdata->dav.createdmodseq = sqlite3_column_int(stmt, 18);
     if (!(rrock->flags && RROCK_FLAG_TOMBSTONES) && !cdata->dav.alive)
         return 0;
 
@@ -492,11 +493,13 @@ EXPORTED int caldav_foreach_timerange(struct caldav_db *caldavdb,
 #define CMD_INSERT                                                      \
     "INSERT INTO ical_objs ("                                           \
     "  alive, mailbox, resource, creationdate, imap_uid, modseq,"       \
+    "  createdmodseq,"                                                  \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
     "  comp_type, ical_uid, organizer, dtstart, dtend,"                 \
     "  comp_flags, sched_tag )"                                         \
     " VALUES ("                                                         \
     "  :alive, :mailbox, :resource, :creationdate, :imap_uid, :modseq," \
+    "  :createdmodseq,"                                                 \
     "  :lock_token, :lock_owner, :lock_ownerid, :lock_expire,"          \
     "  :comp_type, :ical_uid, :organizer, :dtstart, :dtend,"            \
     "  :comp_flags, :sched_tag );"
@@ -507,6 +510,7 @@ EXPORTED int caldav_foreach_timerange(struct caldav_db *caldavdb,
     "  creationdate = :creationdate,"   \
     "  imap_uid     = :imap_uid,"       \
     "  modseq       = :modseq,"         \
+    "  createdmodseq = :createdmoseq,"  \
     "  lock_token   = :lock_token,"     \
     "  lock_owner   = :lock_owner,"     \
     "  lock_ownerid = :lock_ownerid,"   \
@@ -531,6 +535,7 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
         { ":creationdate", SQLITE_INTEGER, { .i = cdata->dav.creationdate } },
         { ":imap_uid",     SQLITE_INTEGER, { .i = cdata->dav.imap_uid     } },
         { ":modseq",       SQLITE_INTEGER, { .i = cdata->dav.modseq       } },
+        { ":createdmodseq", SQLITE_INTEGER, { .i = cdata->dav.createdmodseq } },
         { ":lock_token",   SQLITE_TEXT,    { .s = cdata->dav.lock_token   } },
         { ":lock_owner",   SQLITE_TEXT,    { .s = cdata->dav.lock_owner   } },
         { ":lock_ownerid", SQLITE_TEXT,    { .s = cdata->dav.lock_ownerid } },

@@ -70,6 +70,7 @@
     " resource TEXT NOT NULL,"                                          \
     " imap_uid INTEGER,"                                                \
     " modseq INTEGER,"                                                  \
+    " createdmodseq INTEGER,"                                           \
     " lock_token TEXT,"                                                 \
     " lock_owner TEXT,"                                                 \
     " lock_ownerid TEXT,"                                               \
@@ -93,6 +94,7 @@
     " resource TEXT NOT NULL,"                                          \
     " imap_uid INTEGER,"                                                \
     " modseq INTEGER,"                                                  \
+    " createdmodseq INTEGER,"                                           \
     " lock_token TEXT,"                                                 \
     " lock_owner TEXT,"                                                 \
     " lock_ownerid TEXT,"                                               \
@@ -135,6 +137,7 @@
     " resource TEXT NOT NULL,"                                          \
     " imap_uid INTEGER,"                                                \
     " modseq INTEGER,"                                                  \
+    " createdmodseq INTEGER,"                                           \
     " lock_token TEXT,"                                                 \
     " lock_owner TEXT,"                                                 \
     " lock_ownerid TEXT,"                                               \
@@ -176,16 +179,26 @@
 
 #define CMD_DBUPGRADEv6 CMD_CREATE_OBJS
 
+#define CMD_DBUPGRADEv7                                         \
+    "ALTER TABLE ical_objs ADD COLUMN createdmodseq INTEGER;"   \
+    "UPDATE ical_objs SET createdmodseq = 1;"                   \
+    "ALTER TABLE vcard_objs ADD COLUMN createdmodseq INTEGER;"  \
+    "UPDATE vcard_objs SET createdmodseq = 1;"                  \
+    "ALTER TABLE dav_objs ADD COLUMN createdmodseq INTEGER;"    \
+    "UPDATE dav_objs SET createdmodseq = 1;"
+
+
 struct sqldb_upgrade davdb_upgrade[] = {
   { 2, CMD_DBUPGRADEv2, NULL },
   { 3, CMD_DBUPGRADEv3, NULL },
   { 4, CMD_DBUPGRADEv4, NULL },
   { 5, CMD_DBUPGRADEv5, NULL },
   { 6, CMD_DBUPGRADEv6, NULL },
+  { 7, CMD_DBUPGRADEv7, NULL },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 6
+#define DB_VERSION 7
 
 static int in_reconstruct = 0;
 
