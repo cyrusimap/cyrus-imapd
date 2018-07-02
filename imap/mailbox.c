@@ -1739,7 +1739,7 @@ static int mailbox_buf_to_index_record(const char *buf,
     if (version < 12)
         return 0;
 
-    /* THRID got inserted before cache_crc32 in version 13 */
+    /* THRID got inserted before cache_crc32 in version 12 */
     if (version < 13) {
         record->cache_crc = ntohl(*((bit32 *)(buf+88)));
 
