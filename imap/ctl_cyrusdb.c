@@ -165,33 +165,25 @@ static int fixmbox(const mbentry_t *mbentry,
     }
     else {
         if (!(mbentry->mbtype & MBTYPE_INTERMEDIATE) &&
-            !mboxname_isdeletedmailbox(mbentry->name, NULL)) {
-            size_t last_len = (*last_name ? strlen(*last_name) : 0);
-            int last_name_is_parent = *last_name
-                && strlen(mbentry->name) >= last_len
-                && mbentry->name[last_len] == '.'
-                && !memcmp(mbentry->name, *last_name, last_len)
-                && !strchr(mbentry->name+last_len+1, '.');
+            !mboxname_isdeletedmailbox(mbentry->name, NULL) &&
+            !mboxname_contains_parent(mbentry->name, *last_name)) {
+            struct txn *tid = NULL;
+            int r;
 
-            if (!last_name_is_parent) {
-                struct txn *tid = NULL;
-                int r;
+            syslog(LOG_NOTICE,
+                   "inserting intermediaries to mailboxes list for %s",
+                   mbentry->name);
 
-                syslog(LOG_NOTICE,
-                       "inserting intermediaries to mailboxes list for %s",
-                       mbentry->name);
+            r = mboxlist_create_intermediaries(
+                mbentry->name,
+                mboxname_nextmodseq(mbentry->name, 0 /* last */,
+                                    mbentry->mbtype, 1 /* dofolder */),
+                &tid);
 
-                r = mboxlist_create_intermediaries(
-                    mbentry->name,
-                    mboxname_nextmodseq(mbentry->name, 0 /* last */,
-                                        mbentry->mbtype, 1 /* dofolder */),
-                    &tid);
-
-                if (r) {
-                    syslog(LOG_ERR,
-                           "failed to insert intermediaries to mailboxes list for %s: %s",
-                           mbentry->name, cyrusdb_strerror(r));
-                }
+            if (r) {
+                syslog(LOG_ERR,
+                       "failed to insert intermediaries to mailboxes list for %s: %s",
+                       mbentry->name, cyrusdb_strerror(r));
             }
         }
 
