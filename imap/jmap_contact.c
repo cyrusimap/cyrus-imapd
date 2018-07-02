@@ -1051,8 +1051,8 @@ static int setContactGroups(struct jmap_req *req)
                    req->accountid, resource);
 
             r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource,
-                              0, NULL, NULL, req->accountid, req->authstate,
-                              ignorequota);
+                              record.createdmodseq, NULL, NULL, req->accountid,
+                              req->authstate, ignorequota);
             if (!r)
                 r = carddav_remove(mailbox, olduid,
                                    /*isreplace*/!newmailbox, req->accountid);
@@ -3130,8 +3130,8 @@ static int setContacts(struct jmap_req *req)
 
             syslog(LOG_NOTICE, "jmap: update contact %s/%s",
                    req->accountid, resource);
-            r = carddav_store(newmailbox ? newmailbox : mailbox,
-                              card, resource, 0, flags, annots, req->accountid,
+            r = carddav_store(newmailbox ? newmailbox : mailbox, card, resource,
+                              record.createdmodseq, flags, annots, req->accountid,
                               req->authstate, ignorequota);
             if (!r)
                 r = carddav_remove(mailbox, olduid,
