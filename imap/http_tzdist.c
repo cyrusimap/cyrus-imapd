@@ -124,11 +124,11 @@ static struct mime_type_t tz_mime_types[] = {
       (struct buf* (*)(void *)) &icalcomponent_as_jcal_string,
       NULL, NULL, NULL, NULL
     },
-    { "application/tzif", NULL, "tz",
+    { "application/tzif", NULL, NULL,
       (struct buf* (*)(void *)) &icaltimezone_as_tzif,
       NULL, NULL, NULL, NULL
     },
-    { "application/tzif+leap", NULL, "tz",
+    { "application/tzif-leap", NULL, NULL,
       (struct buf* (*)(void *)) &icaltimezone_as_tzif_leap,
       NULL, NULL, NULL, NULL
     },
@@ -660,11 +660,11 @@ static void tzdist_init(struct buf *serverinfo __attribute__((unused)))
 
     read_leap_seconds();
     if (!leap_seconds || leap_seconds->count < 2) {
-        /* Disable application/tzif+leap */
+        /* Disable application/tzif-leap */
         struct mime_type_t *mime;
 
         for (mime = tz_mime_types; mime->content_type; mime++) {
-            if (!strcmp(mime->content_type, "application/tzif+leap")) {
+            if (!strcmp(mime->content_type, "application/tzif-leap")) {
                 mime->content_type = NULL;
                 break;
             }
@@ -1913,8 +1913,8 @@ static int action_get(struct transaction_t *txn)
         buf_destroy(buf);
 
         /* Set Content-Disposition filename */
-        buf_reset(&pathbuf);
-        buf_printf(&pathbuf, "%s.%s", tzid, mime->file_ext);
+        buf_setcstr(&pathbuf, tzid);
+        if (mime->file_ext) buf_printf(&pathbuf, ".%s", mime->file_ext);
         resp_body->dispo.fname = buf_cstring(&pathbuf);
 
         txn->flags.vary |= VARY_ACCEPT;
