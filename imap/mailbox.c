@@ -1761,6 +1761,7 @@ static int mailbox_buf_to_index_record(const char *buf,
         crc = crc32_map(buf, 100);
         if (crc != ntohl(*((bit32 *)(buf+100))))
             return IMAP_MAILBOX_CHECKSUM;
+        return 0;
     }
 
     record->createdmodseq = ntohll(*(bit64 *)(buf+OFFSET_CREATEDMODSEQ));
