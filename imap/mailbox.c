@@ -1864,7 +1864,7 @@ static int _commit_one(struct mailbox *mailbox, struct index_change *change)
         return IMAP_IOERROR;
     }
 
-    if (retry_write(mailbox->index_fd, buf, INDEX_RECORD_SIZE) != INDEX_RECORD_SIZE) {
+    if (retry_write(mailbox->index_fd, buf, mailbox->i.record_size) != mailbox->i.record_size) {
         syslog(LOG_ERR, "IOERROR: writing index record %u for %s: %m",
                recno, mailbox->name);
         return IMAP_IOERROR;
