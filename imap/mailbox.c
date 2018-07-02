@@ -1739,8 +1739,8 @@ static int mailbox_buf_to_index_record(const char *buf,
     if (version < 12)
         return 0;
 
-    /* THRID got inserted before cache_crc32 in version 12 */
-    if (version == 12) {
+    /* THRID got inserted before cache_crc32 in version 13 */
+    if (version < 13) {
         record->cache_crc = ntohl(*((bit32 *)(buf+88)));
 
         crc = crc32_map(buf, 92);
@@ -2706,7 +2706,7 @@ static bit32 mailbox_index_record_to_buf(struct index_record *record, int versio
     /* versions 8 and 9 only had a smaller UUID, which we will ignore,
      * but the modseq existed and was at offset 72 and 76 */
     if (version < 10) {
-        *((bit32 *)(buf+72)) = htonl(record->modseq);
+        *((bit64 *)(buf+72)) = htonll(record->modseq);
         return 0;
     }
 
