@@ -1290,7 +1290,8 @@ static int caldav_copy(struct transaction_t *txn, void *obj,
 
     /* Store source resource at destination */
     /* XXX - set calendar-user-address based on original message? */
-    r = caldav_store_resource(txn, ical, dest_mbox, dest_rsrc,
+    /* XXX - get createdmodseq from source */
+    r = caldav_store_resource(txn, ical, dest_mbox, dest_rsrc, 0,
                               db, flags, httpd_userid, NULL);
 
     return r;
@@ -2525,7 +2526,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
             *obj = ical = record_to_ical(mailbox, record, &schedule_address);
 
             caldav_store_resource(txn, ical, mailbox,
-                                  cdata->dav.resource, caldavdb,
+                                  cdata->dav.resource, cdata->dav.createdmodseq, caldavdb,
                                   TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0),
                                   NULL, schedule_address);
             free(schedule_address);
@@ -3072,6 +3073,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
     /* Store updated calendar resource */
     ret = caldav_store_resource(txn, ical, calendar, txn->req_tgt.resource,
+                                record.createdmodseq,
                                 caldavdb, return_rep, NULL, schedule_address);
 
     if (ret == HTTP_NO_CONTENT) {
@@ -4328,7 +4330,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
     /* Store resource at target */
     if (!ret) {
-        ret = caldav_store_resource(txn, ical, mailbox, resource,
+        ret = caldav_store_resource(txn, ical, mailbox, resource, cdata->dav.createdmodseq,
                                     db, flags, httpd_userid, schedule_address);
     }
 
@@ -5070,7 +5072,8 @@ static int caldav_propfind_by_resource(void *rock, void *data)
             txn.req_hdrs = spool_new_hdrcache();
 
             caldav_store_resource(&txn, ical, fctx->mailbox,
-                                  cdata->dav.resource, fctx->davdb,
+                                  cdata->dav.resource, cdata->dav.createdmodseq,
+                                  fctx->davdb,
                                   TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0),
                                   NULL, schedule_address);
             spool_free_hdrcache(txn.req_hdrs);
@@ -7583,6 +7586,7 @@ static void strip_vtimezones(icalcomponent *ical)
 /* Store the iCal data in the specified calendar/resource */
 int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                           struct mailbox *mailbox, const char *resource,
+                          modseq_t createdmodseq,
                           struct caldav_db *caldavdb, unsigned flags,
                           const char *userid, const char *schedule_address)
 {
@@ -7755,7 +7759,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     /* Store the resource */
     ret = dav_store_resource(txn, icalcomponent_as_ical_string(store_ical), 0,
-                             mailbox, oldrecord, &imapflags);
+                             mailbox, oldrecord, createdmodseq, &imapflags);
     strarray_fini(&imapflags);
 
     newuid = mailbox->i.last_uid;

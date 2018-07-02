@@ -8535,7 +8535,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
 int dav_store_resource(struct transaction_t *txn,
                        const char *data, size_t datalen,
                        struct mailbox *mailbox, struct index_record *oldrecord,
-                       strarray_t *imapflags)
+                       modseq_t createdmodseq, strarray_t *imapflags)
 {
     int ret = HTTP_CREATED, r;
     hdrcache_t hdrcache = txn->req_hdrs;
@@ -8649,13 +8649,10 @@ int dav_store_resource(struct transaction_t *txn,
         strarray_t *flaglist = NULL;
         struct entryattlist *annots = NULL;
 
-        modseq_t createdmodseq = 0;
-
         if (oldrecord) {
             flaglist = mailbox_extract_flags(mailbox, oldrecord, httpd_userid);
             mailbox_get_annotate_state(mailbox, oldrecord->uid, NULL);
             annots = mailbox_extract_annots(mailbox, oldrecord);
-            createdmodseq = oldrecord->createdmodseq;
         }
 
         /* XXX - casemerge?  Doesn't matter with flags */
@@ -9853,7 +9850,7 @@ static int notify_put(struct transaction_t *txn, void *obj,
     else {
         /* Store the resource */
         r = dav_store_resource(txn, buf_cstring(xmlbuf), buf_len(xmlbuf),
-                               mailbox, oldrecord, NULL);
+                               mailbox, oldrecord, wdata->dav.createdmodseq, NULL);
     }
 
     buf_destroy(xmlbuf);

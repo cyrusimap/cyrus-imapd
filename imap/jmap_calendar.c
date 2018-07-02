@@ -1679,7 +1679,7 @@ static int setcalendarevents_create(jmap_req_t *req,
         syslog(LOG_ERR, "mlookup(%s) failed: %s", mbox->name, error_message(r));
     }
     else {
-        r = caldav_store_resource(&txn, ical, mbox, resource,
+        r = caldav_store_resource(&txn, ical, mbox, resource, 0,
                                   db, 0, httpd_userid, schedule_address);
     }
     mboxlist_entry_free(&txn.req_tgt.mbentry);
@@ -1888,7 +1888,7 @@ static int setcalendarevents_update(jmap_req_t *req,
         syslog(LOG_ERR, "mlookup(%s) failed: %s", mbox->name, error_message(r));
     }
     else {
-        r = caldav_store_resource(&txn, ical, mbox, resource,
+        r = caldav_store_resource(&txn, ical, mbox, resource, record.createdmodseq,
                                   db, 0, httpd_userid, schedule_address);
     }
     transaction_free(&txn);

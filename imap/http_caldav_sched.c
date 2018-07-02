@@ -1952,8 +1952,8 @@ static void sched_deliver_local(const char *recipient,
 
     /* Store the (updated) object in the recipients's calendar */
     if (!r) r = caldav_store_resource(&txn, ical, mailbox,
-                                      buf_cstring(&resource), caldavdb, NEW_STAG,
-                                      recipient, recipient);
+                                      buf_cstring(&resource), cdata->dav.createdmodseq,
+                                      caldavdb, NEW_STAG, recipient, recipient);
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
         sched_data->status =
@@ -1977,7 +1977,7 @@ static void sched_deliver_local(const char *recipient,
 
         /* Store the message in the recipient's Inbox */
         r = caldav_store_resource(&txn, sched_data->itip, inbox,
-                                  buf_cstring(&resource), caldavdb, 0, NULL, NULL);
+                                  buf_cstring(&resource), 0, caldavdb, 0, NULL, NULL);
         /* XXX  What do we do if storing to Inbox fails? */
     }
 

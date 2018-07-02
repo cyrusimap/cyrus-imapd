@@ -644,7 +644,7 @@ static int store_resource(struct transaction_t *txn,
     /* Store the resource */
     struct buf *buf = vcard_as_buf(vcard);
     int r = dav_store_resource(txn, buf_cstring(buf), 0,
-                              mailbox, oldrecord, NULL);
+                              mailbox, oldrecord, cdata->dav.createdmodseq, NULL);
     buf_destroy(buf);
     return r;
 }

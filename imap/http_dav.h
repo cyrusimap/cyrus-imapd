@@ -695,7 +695,7 @@ int dav_check_precond(struct transaction_t *txn, struct meth_params *params,
 int dav_store_resource(struct transaction_t *txn,
                        const char *data, size_t datalen,
                        struct mailbox *mailbox, struct index_record *oldrecord,
-                       strarray_t *imapflags);
+                       modseq_t createdmodseq, strarray_t *imapflags);
 int dav_premethod(struct transaction_t *txn);
 unsigned get_preferences(struct transaction_t *txn);
 struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types);
