@@ -330,15 +330,64 @@ static void myfreestate(struct auth_state *auth_state)
     free((char *)auth_state);
 }
 
+static char *make_krb_wildcard(const char *aname, const char *inst, const char *realm)
+{
+    return strconcat(
+        (aname ? aname : "*"),
+        ".",
+        (inst ? inst : "*"),
+        "@",
+        (realm ? realm : "*"),
+        NULL
+    );
+}
+
+/* KRB4 groups are just principals with wildcarded components.
+ * XXX This hasn't even been so much as compile-tested for lack of
+ * a kerberos test environment!  If you use this, please provide
+ * feedback.
+ */
 static strarray_t *mygroups(const struct auth_state *auth_state)
 {
-    /* XXX this is kind of a lie: mymemberof() can return 2 (is member of group)
-     * but I don't understand how krb works.  If you actually use this and
-     * understand it, please submit a patch to implement this function.
-     * Thanks! :)
-     */
-    syslog(LOG_WARN, "Authentication mechanism (krb) does not support groups");
-    return NULL;
+    strarray_t *sa = strarray_new();
+    char *tmp = NULL;
+
+    /* *.*@* */
+    tmp = make_krb_wildcard(NULL, NULL, NULL);
+    strarray_appendm(sa, tmp);
+
+    /* *.*@realm */
+    if (auth_state->realm) {
+        tmp = make_krb_wildcard(NULL, NULL, auth_state->realm);
+        strarray_appendm(sa, tmp);
+    }
+
+    /* *.inst@* */
+    if (auth_state->inst) {
+        tmp = make_krb_wildcard(NULL, auth_state->inst, NULL);
+        strarray_appendm(sa, tmp);
+        if (auth_state->realm) {
+            tmp = make_krb_wildcard(NULL, auth_state->inst, auth_state->realm);
+            strarray_appendm(sa, tmp);
+        }
+    }
+
+    /* aname.*@* */
+    if (auth_state->aname) {
+        tmp = make_krb_wildcard(auth_state->aname, NULL, NULL);
+        strarray_appendm(sa, tmp);
+        if (auth_state->realm) {
+            tmp = make_krb_wildcard(auth_state->aname, NULL, auth_state->realm);
+            strarray_appendm(sa, tmp);
+        }
+        if (auth_state->inst) {
+            tmp = make_krb_wildcard(auth_state->aname, auth_state->inst, NULL);
+            strarray_appendm(sa, tmp);
+        }
+        /* n.b. non-wildcard "aname.inst@realm" is NOT a group! */
+    }
+
+    return sa;
 }
 
 #else /* HAVE_KRB */
