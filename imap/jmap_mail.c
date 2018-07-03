@@ -3614,13 +3614,8 @@ done:
     return r;
 }
 
-struct attachment {
-    struct body *body;
-};
-
 struct emailbodies {
-    ptrarray_t atts;
-    ptrarray_t msgs;
+    ptrarray_t attslist;
     ptrarray_t textlist;
     ptrarray_t htmllist;
 };
@@ -3628,14 +3623,12 @@ struct emailbodies {
 #define EMAILBODIES_INITIALIZER { \
     PTRARRAY_INITIALIZER, \
     PTRARRAY_INITIALIZER, \
-    PTRARRAY_INITIALIZER, \
     PTRARRAY_INITIALIZER \
 }
 
 static void _emailbodies_fini(struct emailbodies *bodies)
 {
-    ptrarray_fini(&bodies->atts);
-    ptrarray_fini(&bodies->msgs);
+    ptrarray_fini(&bodies->attslist);
     ptrarray_fini(&bodies->textlist);
     ptrarray_fini(&bodies->htmllist);
 }
@@ -3646,7 +3639,6 @@ static int _email_extract_bodies_internal(struct body *parts,
                                           int in_alternative,
                                           ptrarray_t *textlist,
                                           ptrarray_t *htmllist,
-                                          ptrarray_t *msgslist,
                                           ptrarray_t *attslist,
                                           struct buf *msg_buf)
 {
@@ -3670,8 +3662,6 @@ static int _email_extract_bodies_internal(struct body *parts,
             parttype = MULTIPART;
         else if (!strcmp(part->type, "IMAGE") || !strcmp(part->type, "AUDIO") || !strcmp(part->type, "VIDEO"))
             parttype = INLINE_MEDIA;
-        else if (!strcmp(part->type, "MESSAGE") && (!strcmp(part->subtype, "RFC822") || !strcmp(part->subtype, "GLOBAL")))
-            parttype = MESSAGE;
         else
             parttype = OTHER;
 
@@ -3707,7 +3697,7 @@ static int _email_extract_bodies_internal(struct body *parts,
             _email_extract_bodies_internal(part->subpart, part->numparts,
                     part->subtype,
                     in_alternative || !strcmp(part->subtype, "ALTERNATIVE"),
-                    textlist, htmllist, msgslist, attslist, msg_buf);
+                    textlist, htmllist, attslist, msg_buf);
         }
         else if (is_inline) {
             if (!strcmp(multipart_type, "ALTERNATIVE")) {
@@ -3736,9 +3726,6 @@ static int _email_extract_bodies_internal(struct body *parts,
             if ((!textlist || !htmllist) && parttype == INLINE_MEDIA)
                 ptrarray_append(attslist, part);
         }
-        else if (parttype == MESSAGE) {
-            ptrarray_append(msgslist, part);
-        }
         else {
             ptrarray_append(attslist, part);
         }
@@ -3766,7 +3753,7 @@ static int _email_extract_bodies(struct body *root, struct buf *msg_buf,
 {
     return _email_extract_bodies_internal(root, 1, "MIXED", 0,
             &bodies->textlist, &bodies->htmllist,
-            &bodies->msgs, &bodies->atts, msg_buf);
+            &bodies->attslist, msg_buf);
 }
 
 static char *_emailbodies_to_plain(struct emailbodies *bodies, struct buf *msg_buf)
@@ -6282,8 +6269,7 @@ static void _email_getargs_parse(json_t *req_args,
         if (_email_get_default_props.size == 0) {
             /* Initialize process-owned default property list */
             construct_hash_table(&_email_get_default_props, 32, 0);
-            hash_insert("attachedEmails", (void*)1, &_email_get_default_props);
-            hash_insert("attachedFiles", (void*)1, &_email_get_default_props);
+            hash_insert("attachments", (void*)1, &_email_get_default_props);
             hash_insert("bcc", (void*)1, &_email_get_default_props);
             hash_insert("blobId", (void*)1, &_email_get_default_props);
             hash_insert("bodyValues", (void*)1, &_email_get_default_props);
@@ -7127,36 +7113,24 @@ static int _email_get_bodies(jmap_req_t *req,
         json_object_set_new(email, "htmlBody", html_body);
     }
 
-    /* attachedEmails */
-    if (_wantprop(props, "attachedEmails")) {
-        json_t *attached_emails = json_array();
+    /* attachments */
+    if (_wantprop(props, "attachments")) {
+        json_t *attachments = json_array();
         int i;
-        for (i = 0; i < bodies.msgs.count; i++) {
-            struct body *part = ptrarray_nth(&bodies.msgs, i);
-            json_array_append_new(attached_emails,
+        for (i = 0; i < bodies.attslist.count; i++) {
+            struct body *part = ptrarray_nth(&bodies.attslist, i);
+            json_array_append_new(attachments,
                     _email_get_bodypart(part, args, msg->raw));
         }
-        json_object_set_new(email, "attachedEmails", attached_emails);
-    }
-
-    /* attachedFiles */
-    if (_wantprop(props, "attachedFiles")) {
-        json_t *attached_files = json_array();
-        int i;
-        for (i = 0; i < bodies.atts.count; i++) {
-            struct body *part = ptrarray_nth(&bodies.atts, i);
-            json_array_append_new(attached_files,
-                    _email_get_bodypart(part, args, msg->raw));
-        }
-        json_object_set_new(email, "attachedFiles", attached_files);
+        json_object_set_new(email, "attachments", attachments);
     }
 
     /* calendarEvents -- non-standard */
     if (_wantprop(props, "calendarEvents")) {
         json_t *calendar_events = json_object();
         int i;
-        for (i = 0; i < bodies.atts.count; i++) {
-            struct body *part = ptrarray_nth(&bodies.atts, i);
+        for (i = 0; i < bodies.attslist.count; i++) {
+            struct body *part = ptrarray_nth(&bodies.attslist, i);
             if (strcmp(part->type, "TEXT") || strcmp(part->subtype, "CALENDAR"))
                 continue;
             /* Parse decoded data to iCalendar object */
@@ -7193,7 +7167,7 @@ static int _email_get_bodies(jmap_req_t *req,
         if (is_toplevel)
             msgrecord_hasflag(msg->mr, JMAP_HAS_ATTACHMENT_FLAG, &has_att);
         else
-            has_att = bodies.atts.count > 0;
+            has_att = bodies.attslist.count > 0;
 
         json_object_set_new(email, "hasAttachment", json_boolean(has_att));
     }
@@ -8824,38 +8798,35 @@ static struct emailpart *_emailpart_new_multi(const char *subtype,
 
 static struct emailpart *_email_buildbody(struct emailpart *text_body,
                                           struct emailpart *html_body,
-                                          ptrarray_t *attached_emails,
-                                          ptrarray_t *attached_files)
+                                          ptrarray_t *attachments)
 {
     struct emailpart *root = NULL;
 
-    ptrarray_t my_attached_files = PTRARRAY_INITIALIZER;
-    ptrarray_t my_inlined_files = PTRARRAY_INITIALIZER;
+    /* Split attachments into inlined, emails and other files */
+    ptrarray_t attached_emails = PTRARRAY_INITIALIZER;
+    ptrarray_t attached_files = PTRARRAY_INITIALIZER;
+    ptrarray_t inlined_files = PTRARRAY_INITIALIZER;
     int i;
-    if (text_body || html_body) {
-        /* Split files into inlined and other attachments */
-        for (i = 0; i < attached_files->count; i++) {
-            struct emailpart *part = ptrarray_nth(attached_files, i);
-            if (part->disposition && !strcasecmp(part->disposition, "INLINE"))
-                ptrarray_append(&my_inlined_files, part);
-            else
-                ptrarray_append(&my_attached_files, part);
+    for (i = 0; i < attachments->count; i++) {
+        struct emailpart *part = ptrarray_nth(attachments, i);
+        if (part->type && !strcasecmp(part->type, "MESSAGE")) {
+            ptrarray_append(&attached_emails, part);
         }
-    }
-    else {
-        /* Treat all attachments the same */
-        for (i = 0; i < attached_files->count; i++) {
-            struct emailpart *part = ptrarray_nth(attached_files, i);
-            ptrarray_append(&my_attached_files, part);
+        else if (part->disposition && !strcasecmp(part->disposition, "INLINE") &&
+                 (text_body || html_body)) {
+            ptrarray_append(&inlined_files, part);
+        }
+        else {
+            ptrarray_append(&attached_files, part);
         }
     }
 
     /* Make MIME part for embedded emails. */
     struct emailpart *emails = NULL;
-    if (attached_emails->count >= 2)
-        emails = _emailpart_new_multi("digest", attached_emails);
-    else if (attached_emails->count == 1)
-        emails = ptrarray_nth(attached_emails, 0);
+    if (attached_emails.count >= 2)
+        emails = _emailpart_new_multi("digest", &attached_emails);
+    else if (attached_emails.count == 1)
+        emails = ptrarray_nth(&attached_emails, 0);
 
     /* Make MIME part for text bodies. */
     struct emailpart *text = NULL;
@@ -8872,15 +8843,15 @@ static struct emailpart *_email_buildbody(struct emailpart *text_body,
         text = html_body;
 
     /* Make MIME part for inlined attachments, if any. */
-    if (text && my_inlined_files.count) {
-        struct emailpart *related = _emailpart_new_multi("related", &my_inlined_files);
+    if (text && inlined_files.count) {
+        struct emailpart *related = _emailpart_new_multi("related", &inlined_files);
         ptrarray_insert(&related->subparts, 0, text);
         text = related;
     }
 
     /* Choose top-level MIME part. */
-    if (my_attached_files.count) {
-        struct emailpart *mixed = _emailpart_new_multi("mixed", &my_attached_files);
+    if (attached_files.count) {
+        struct emailpart *mixed = _emailpart_new_multi("mixed", &attached_files);
         if (emails) ptrarray_insert(&mixed->subparts, 0, emails);
         if (text) ptrarray_insert(&mixed->subparts, 0, text);
         root = mixed;
@@ -8899,8 +8870,9 @@ static struct emailpart *_email_buildbody(struct emailpart *text_body,
     else
         root = NULL;
 
-    ptrarray_fini(&my_attached_files);
-    ptrarray_fini(&my_inlined_files);
+    ptrarray_fini(&attached_emails);
+    ptrarray_fini(&attached_files);
+    ptrarray_fini(&inlined_files);
     return root;
 }
 
@@ -8969,13 +8941,11 @@ static void _email_parse_bodies(json_t *jemail,
 
     json_t *jtextBody = json_object_get(jemail, "textBody");
     json_t *jhtmlBody = json_object_get(jemail, "htmlBody");
-    json_t *jattachedEmails = json_object_get(jemail, "attachedEmails");
-    json_t *jattachedFiles = json_object_get(jemail, "attachedFiles");
+    json_t *jattachments = json_object_get(jemail, "attachments");
 
     struct emailpart *text_body = NULL;
     struct emailpart *html_body = NULL;
-    ptrarray_t attached_emails = PTRARRAY_INITIALIZER; /* array of struct emailpart* */
-    ptrarray_t attached_files = PTRARRAY_INITIALIZER;  /* array of struct emailpart* */
+    ptrarray_t attachments = PTRARRAY_INITIALIZER; /* array of struct emailpart* */
 
     if (JNOTNULL(jbody)) {
         /* bodyStructure and fooBody are mutually exclusive */
@@ -8985,11 +8955,8 @@ static void _email_parse_bodies(json_t *jemail,
         if (JNOTNULL(jhtmlBody)) {
             jmap_parser_invalid(parser, "htmlBody");
         }
-        if (JNOTNULL(jattachedEmails)) {
-            jmap_parser_invalid(parser, "attachedEmails");
-        }
-        if (JNOTNULL(jattachedFiles)) {
-            jmap_parser_invalid(parser, "attachedFiles");
+        if (JNOTNULL(jattachments)) {
+            jmap_parser_invalid(parser, "attachments");
         }
     }
     else {
@@ -9043,55 +9010,20 @@ static void _email_parse_bodies(json_t *jemail,
         else if (JNOTNULL(jhtmlBody)) {
             jmap_parser_invalid(parser, "htmlBody");
         }
-        /* attachedEmails */
-        if (json_is_array(jattachedEmails)) {
-            size_t i;
-            json_t *jpart;
-            struct emailpart *attpart;
-            json_array_foreach(jattachedEmails, i, jpart) {
-                jmap_parser_push_index(parser, "attachedEmails", i);
-                attpart = _emailpart_parse(jpart, parser, bodyValues);
-                if (attpart) {
-                    if (attpart->type && !strcasecmp(attpart->type, "message") &&
-                        (!strcasecmp(attpart->subtype, "rfc822") ||
-                         !strcasecmp(attpart->subtype, "global"))) {
-                        /* It's aegit part */
-                        ptrarray_append(&attached_emails, attpart);
-                    }
-                    else if (!attpart->type) {
-                        /* Set default type */
-                        attpart->type = xstrdup("message");
-                        attpart->subtype = xstrdup("rfc822");
-                        struct buf val = BUF_INITIALIZER;
-                        buf_setcstr(&val, "message/rfc822");
-                        _headers_add_new(&attpart->headers,
-                                _header_make("Content-Type", NULL, &val));
-                        ptrarray_append(&attached_emails, attpart);
-                    }
-                    else {
-                        jmap_parser_invalid(parser, NULL);
-                    }
-                }
-                jmap_parser_pop(parser);
-            }
-        }
-        else if (JNOTNULL(jattachedEmails)) {
-            jmap_parser_invalid(parser, "attachedEmails");
-        }
-        /* attachedFiles */
-        if (json_is_array(jattachedFiles)) {
+        /* attachments */
+        if (json_is_array(jattachments)) {
             size_t i;
             json_t *jpart;
             struct emailpart *attpart;
             int have_inlined = 0;
-            json_array_foreach(jattachedFiles, i, jpart) {
-                jmap_parser_push_index(parser, "attachedFiles", i);
+            json_array_foreach(jattachments, i, jpart) {
+                jmap_parser_push_index(parser, "attachments", i);
                 attpart = _emailpart_parse(jpart, parser, bodyValues);
                 if (attpart) {
                     if (!have_inlined && attpart->disposition) {
                         have_inlined = !strcasecmp(attpart->disposition, "INLINE");
                     }
-                    ptrarray_append(&attached_files, attpart);
+                    ptrarray_append(&attachments, attpart);
                 }
                 jmap_parser_pop(parser);
             }
@@ -9102,8 +9034,8 @@ static void _email_parse_bodies(json_t *jemail,
                 jmap_parser_invalid(parser, "htmlBody");
             }
         }
-        else if (JNOTNULL(jattachedFiles)) {
-            jmap_parser_invalid(parser, "attachedFiles");
+        else if (JNOTNULL(jattachments)) {
+            jmap_parser_invalid(parser, "attachments");
         }
     }
 
@@ -9114,12 +9046,10 @@ static void _email_parse_bodies(json_t *jemail,
 
     if (!email->body) {
         /* Build email body from convenience body properties */
-        email->body = _email_buildbody(text_body, html_body,
-                &attached_emails, &attached_files);
+        email->body = _email_buildbody(text_body, html_body, &attachments);
     }
 
-    ptrarray_fini(&attached_emails);
-    ptrarray_fini(&attached_files);
+    ptrarray_fini(&attachments);
 
     /* Look through all parts if any part is an attachment.
      * If so, set the hasAttachment flag. */
@@ -10399,7 +10329,7 @@ int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     if (r) goto done;
     r = _email_extract_bodies(bodystructure, &content.buf, &bodies);
     if (r) goto done;
-    has_attachment = bodies.atts.count + bodies.msgs.count;
+    has_attachment = bodies.attslist.count;
     jmap_closembox(req, &mbox);
     msgrecord_unref(&mr);
 
@@ -10443,8 +10373,7 @@ int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     jmap_closembox(req, &mbox);
 
 done:
-    ptrarray_fini(&bodies.atts);
-    ptrarray_fini(&bodies.msgs);
+    ptrarray_fini(&bodies.attslist);
     ptrarray_fini(&bodies.textlist);
     ptrarray_fini(&bodies.htmllist);
     strarray_fini(&keywords);
