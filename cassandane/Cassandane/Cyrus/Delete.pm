@@ -634,4 +634,75 @@ sub test_cyr_expire_delete_with_annotation
     $self->assert(!-d "$basedir/data/DELETED/user/cassandane/$subfoldername");
 }
 
+# https://github.com/cyrusimap/cyrus-imapd/issues/2413
+sub test_cyr_expire_dont_resurrect_convdb
+    :Conversations :DelayedDelete :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $store = $self->{store};
+    my $adminstore = $self->{adminstore};
+    my $talk = $store->get_client();
+    my $admintalk = $adminstore->get_client();
+
+    my $basedir = $self->{instance}->{basedir};
+
+    my $inbox = 'INBOX';
+    my $subfoldername = 'foo';
+    my $subfolder = 'INBOX.foo';
+    $talk->create($subfolder)
+        or $self->fail("Cannot create folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Append a messages to $inbox";
+    my %msg_inbox;
+    $msg_inbox{A} = $self->make_message('Message A in $inbox');
+    $self->check_messages(\%msg_inbox);
+
+    xlog "Append 3 messages to $subfolder";
+    my %msg_sub;
+    $store->set_folder($subfolder);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+    $msg_sub{A} = $self->make_message('Message A in $subfolder');
+    $msg_sub{B} = $self->make_message('Message B in $subfolder');
+    $msg_sub{C} = $self->make_message('Message C in $subfolder');
+    $self->check_messages(\%msg_sub);
+
+    $self->check_folder_ondisk($inbox, expected => \%msg_inbox);
+    $self->check_folder_ondisk($subfolder, expected => \%msg_sub);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    # expect user has a conversations database
+    $self->assert(-f "$basedir/conf/user/c/cassandane.conversations");
+
+    # log cassandane user out before it gets thrown out anyway
+    undef $talk;
+    $store->disconnect();
+
+    xlog "Delete cassandane user";
+    $admintalk->delete("user.cassandane");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # expect user does not have a conversations database
+    $self->assert(!-f "$basedir/conf/user/c/cassandane.conversations");
+    $self->check_folder_not_ondisk($inbox);
+    $self->check_folder_ondisk($inbox, deleted => 1);
+
+    xlog "Run cyr_expire -E now.";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-E' => '1' );
+    $self->check_folder_ondisk($inbox, deleted => 1);
+
+    # expect user does not have a conversations database
+    $self->assert(!-f "$basedir/conf/user/c/cassandane.conversations");
+
+    xlog "Run cyr_expire -D now.";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0' );
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+
+    # expect user does not have a conversations database
+    $self->assert(!-f "$basedir/conf/user/c/cassandane.conversations");
+}
+
 1;
