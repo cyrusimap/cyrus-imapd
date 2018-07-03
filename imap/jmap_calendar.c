@@ -465,8 +465,8 @@ done:
 struct calendarupdates_rock {
     jmap_req_t *req;
     modseq_t oldmodseq;
-    json_t *added;
-    json_t *changed;
+    json_t *created;
+    json_t *updated;
     json_t *destroyed;
 };
 
@@ -514,16 +514,16 @@ static int getcalendarupdates_cb(const mbentry_t *mbentry, void *vrock)
     const strarray_t *boxes = mbname_boxes(mbname);
     const char *id = strarray_nth(boxes, boxes->count-1);
 
-    /* Report this calendar as added, changed or destroyed. */
+    /* Report this calendar as created, updated or destroyed. */
     if (mbentry->mbtype & MBTYPE_DELETED) {
         if (mbentry->createdmodseq <= rock->oldmodseq)
             json_array_append_new(rock->destroyed, json_string(id));
     }
     else {
         if (mbentry->createdmodseq <= rock->oldmodseq)
-            json_array_append_new(rock->changed, json_string(id));
+            json_array_append_new(rock->updated, json_string(id));
         else
-            json_array_append_new(rock->added, json_string(id));
+            json_array_append_new(rock->created, json_string(id));
     }
 
 done:
@@ -585,8 +585,8 @@ static int getCalendarsUpdates(struct jmap_req *req)
         json_t *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
         json_array_append_new(req->response,
                               json_pack("[s,o,s]", "error", err, req->tag));
-        json_decref(rock.added);
-        json_decref(rock.changed);
+        json_decref(rock.created);
+        json_decref(rock.updated);
         json_decref(rock.destroyed);
         goto done;
     }
@@ -599,8 +599,8 @@ static int getCalendarsUpdates(struct jmap_req *req)
     json_object_set_new(calendarUpdates, "newState",
                         jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
 
-    json_object_set_new(calendarUpdates, "added", rock.added);
-    json_object_set_new(calendarUpdates, "changed", rock.changed);
+    json_object_set_new(calendarUpdates, "created", rock.created);
+    json_object_set_new(calendarUpdates, "updated", rock.updated);
     json_object_set_new(calendarUpdates, "destroyed", rock.destroyed);
 
     json_t *item = json_pack("[]");
@@ -612,7 +612,7 @@ static int getCalendarsUpdates(struct jmap_req *req)
     if (dofetch) {
         struct jmap_req subreq = *req; // struct copy, woot
         subreq.args = json_pack("{}");
-        json_object_set(subreq.args, "ids", rock.changed);
+        json_object_set(subreq.args, "ids", rock.updated);
         r = getCalendars(&subreq);
         json_decref(subreq.args);
     }
@@ -1518,7 +1518,7 @@ static int setcalendarevents_schedule(jmap_req_t *req,
 
     /* Validate create/update. */
     if (oldical && (mode & (JMAP_CREATE|JMAP_UPDATE))) {
-        /* Don't allow ORGANIZER to be changed */
+        /* Don't allow ORGANIZER to be updated */
         const char *oldorganizer = NULL;
 
         icalcomponent *oldcomp = NULL;
@@ -2251,8 +2251,8 @@ done:
 
 struct geteventupdates_rock {
     jmap_req_t *req;
-    json_t *added;
-    json_t *changed;
+    json_t *created;
+    json_t *updated;
     json_t *destroyed;
     size_t seen_records;
     size_t max_records;
@@ -2272,9 +2272,9 @@ static void strip_spurious_deletes(struct geteventupdates_rock *urock)
     for (i = 0; i < json_array_size(urock->destroyed); i++) {
         const char *del = json_string_value(json_array_get(urock->destroyed, i));
 
-        for (j = 0; j < json_array_size(urock->changed); j++) {
+        for (j = 0; j < json_array_size(urock->updated); j++) {
             const char *up =
-                json_string_value(json_array_get(urock->changed, j));
+                json_string_value(json_array_get(urock->updated, j));
             if (!strcmpsafe(del, up)) {
                 json_array_remove(urock->destroyed, i--);
                 break;
@@ -2301,9 +2301,9 @@ static int geteventupdates_cb(void *vrock, struct caldav_data *cdata)
     /* Report item as updated or destroyed. */
     if (cdata->dav.alive) {
         if (cdata->dav.createdmodseq <= rock->since_modseq)
-            json_array_append_new(rock->changed, json_string(cdata->ical_uid));
+            json_array_append_new(rock->updated, json_string(cdata->ical_uid));
         else
-            json_array_append_new(rock->added, json_string(cdata->ical_uid));
+            json_array_append_new(rock->created, json_string(cdata->ical_uid));
     } else {
         if (cdata->dav.createdmodseq <= rock->since_modseq)
             json_array_append_new(rock->destroyed, json_string(cdata->ical_uid));
@@ -2362,8 +2362,8 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
     /* Lookup updates. */
     struct geteventupdates_rock rock = {
         req,
-        json_array() /*added*/,
-        json_array() /*changed*/,
+        json_array() /*created*/,
+        json_array() /*updated*/,
         json_array() /*destroyed*/,
         0            /*seen_records*/,
         maxChanges   /*max_records*/,
@@ -2397,8 +2397,8 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
     buf_reset(&buf);
 
     json_object_set_new(eventUpdates, "hasMoreUpdates", json_boolean(more));
-    json_object_set(eventUpdates, "added", rock.added);
-    json_object_set(eventUpdates, "changed", rock.changed);
+    json_object_set(eventUpdates, "created", rock.created);
+    json_object_set(eventUpdates, "updated", rock.updated);
     json_object_set(eventUpdates, "destroyed", rock.destroyed);
 
     json_t *item = json_pack("[]");
@@ -2412,7 +2412,7 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
         json_t *props = json_object_get(req->args, "fetchRecordProperties");
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
-        json_object_set(subreq.args, "ids", rock.changed);
+        json_object_set(subreq.args, "ids", rock.updated);
         if (props) json_object_set(subreq.args, "properties", props);
         r = getCalendarEvents(&subreq);
         json_decref(subreq.args);
@@ -2420,8 +2420,8 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
 
   done:
     buf_free(&buf);
-    if (rock.added) json_decref(rock.added);
-    if (rock.changed) json_decref(rock.changed);
+    if (rock.created) json_decref(rock.created);
+    if (rock.updated) json_decref(rock.updated);
     if (rock.destroyed) json_decref(rock.destroyed);
     if (rock.mboxrights) {
         free_hash_table(rock.mboxrights, free);

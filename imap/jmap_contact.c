@@ -116,8 +116,8 @@ static int JNOTNULL(json_t *item)
 
 struct updates_rock {
     jmap_req_t *req;
-    json_t *added;
-    json_t *changed;
+    json_t *created;
+    json_t *updated;
     json_t *destroyed;
 
     size_t seen_records;
@@ -137,9 +137,9 @@ static void strip_spurious_deletes(struct updates_rock *urock)
     for (i = 0; i < json_array_size(urock->destroyed); i++) {
         const char *del = json_string_value(json_array_get(urock->destroyed, i));
 
-        for (j = 0; j < json_array_size(urock->changed); j++) {
+        for (j = 0; j < json_array_size(urock->updated); j++) {
             const char *up =
-                json_string_value(json_array_get(urock->changed, j));
+                json_string_value(json_array_get(urock->updated, j));
             if (!strcmpsafe(del, up)) {
                 json_array_remove(urock->destroyed, i--);
                 break;
@@ -163,9 +163,9 @@ static void updates_rock_update(struct updates_rock *rock,
     /* Report item as updated or destroyed. */
     if (dav.alive) {
         if (dav.createdmodseq <= rock->since_modseq)
-            json_array_append_new(rock->changed, json_string(uid));
+            json_array_append_new(rock->updated, json_string(uid));
         else
-            json_array_append_new(rock->added, json_string(uid));
+            json_array_append_new(rock->created, json_string(uid));
     } else {
         if (dav.createdmodseq <= rock->since_modseq)
             json_array_append_new(rock->destroyed, json_string(uid));
@@ -692,8 +692,8 @@ static int getContactsGroupUpdates(struct jmap_req *req)
     json_object_set_new(contactGroupUpdates, "oldState", json_string(since));
     json_object_set_new(contactGroupUpdates, "hasMoreUpdates",
                         json_boolean(more));
-    json_object_set(contactGroupUpdates, "added", rock.added);
-    json_object_set(contactGroupUpdates, "changed", rock.changed);
+    json_object_set(contactGroupUpdates, "created", rock.created);
+    json_object_set(contactGroupUpdates, "updated", rock.updated);
     json_object_set(contactGroupUpdates, "destroyed", rock.destroyed);
 
     json_t *item = json_pack("[]");
@@ -708,7 +708,7 @@ static int getContactsGroupUpdates(struct jmap_req *req)
         subreq.args = json_pack("{}");
         json_object_set_new(subreq.args, "accountId",
                             json_string(req->accountid));
-        json_object_set(subreq.args, "ids", rock.changed);
+        json_object_set(subreq.args, "ids", rock.updated);
         if (abookid) {
             json_object_set(subreq.args, "addressbookId", abookid);
         }
@@ -716,8 +716,8 @@ static int getContactsGroupUpdates(struct jmap_req *req)
         json_decref(subreq.args);
     }
 
-    json_decref(rock.added);
-    json_decref(rock.changed);
+    json_decref(rock.created);
+    json_decref(rock.updated);
     json_decref(rock.destroyed);
 
   done:
@@ -1770,8 +1770,8 @@ static int getContactsUpdates(struct jmap_req *req)
                         json_string(req->accountid));
     json_object_set_new(contactUpdates, "oldState", json_string(since));
     json_object_set_new(contactUpdates, "hasMoreUpdates", json_boolean(more));
-    json_object_set(contactUpdates, "added", rock.added);
-    json_object_set(contactUpdates, "changed", rock.changed);
+    json_object_set(contactUpdates, "created", rock.created);
+    json_object_set(contactUpdates, "updated", rock.updated);
     json_object_set(contactUpdates, "destroyed", rock.destroyed);
 
     json_t *item = json_pack("[]");
@@ -1787,7 +1787,7 @@ static int getContactsUpdates(struct jmap_req *req)
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
         json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
-        json_object_set(subreq.args, "ids", rock.changed);
+        json_object_set(subreq.args, "ids", rock.updated);
         if (doprops) json_object_set(subreq.args, "properties", doprops);
         if (abookid) {
             json_object_set(subreq.args, "addressbookId", abookid);
@@ -1796,8 +1796,8 @@ static int getContactsUpdates(struct jmap_req *req)
         json_decref(subreq.args);
     }
 
-    json_decref(rock.added);
-    json_decref(rock.changed);
+    json_decref(rock.created);
+    json_decref(rock.updated);
     json_decref(rock.destroyed);
 
   done:
