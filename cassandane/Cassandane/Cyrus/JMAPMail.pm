@@ -2312,7 +2312,7 @@ sub test_email_get_attachment_name
     $self->assert_equals(JSON::true, $msg->{hasAttachment});
 
     # Assert embedded email support
-    my %m = map { $_->{type} => $_ } @{$msg->{attachedFiles}};
+    my %m = map { $_->{type} => $_ } @{$msg->{attachments}};
     my $att;
 
     $att = $m{"image/tiff"};
@@ -2655,74 +2655,6 @@ sub test_email_set_inreplyto
     $self->assert_equals(JSON::true, $orig_msg->{keywords}->{'$answered'});
 }
 
-sub test_email_set_attachedemails
-    :min_version_3_1 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-
-    my $store = $self->{store};
-    my $talk = $store->get_client();
-
-    xlog "Generate email in INBOX via IMAP";
-    $self->make_message("Email A") || die;
-
-    xlog "get email";
-    my $res = $jmap->CallMethods([
-        ['Email/query', { }, 'R1'],
-        ['Email/get', {
-            '#ids' => {
-                resultOf => 'R1',
-                name => 'Email/query',
-                path => '/ids'
-            },
-            properties => [ 'blobId' ],
-        }, 'R2']
-    ]);
-    my $msg = $res->[1][1]->{list}[0];
-    $self->assert_not_null($msg);
-    my $blobId = $msg->{blobId};
-    my $blob = $jmap->Download('cassandane', $blobId);
-
-    xlog "Attach the email to a new email";
-    my $inboxid = $self->getinbox()->{id};
-    my $email = {
-        mailboxIds => { $inboxid => JSON::true },
-        from => [{ name => "Test", email => q{foo@bar} }],
-        subject => "test",
-        textBody => [{
-            partId => "1",
-        }],
-        htmlBody => [{
-            partId => "2",
-        }],
-        attachedEmails => [{
-            blobId => $blobId,
-        }],
-        bodyValues => {
-            "1" => {
-                value => "A text body",
-            },
-            "2" => {
-                value => "<p>A HTML body</p>",
-            },
-        },
-    };
-    $res = $jmap->CallMethods([
-        ['Email/set', { create => { '1' => $email } }, 'R1'],
-        ['Email/get', {
-            ids => [ '#1' ],
-            properties => [ "textBody", "attachedEmails", "bodyValues" ],
-            bodyProperties => [ 'partId', 'blobId' ],
-            fetchAllBodyValues => JSON::true,
-        }, 'R2' ],
-    ]);
-
-    my $attachedBlobId = $res->[1][1]{list}[0]{attachedEmails}[0]{blobId};
-    my $attachedBlob = $jmap->Download('cassandane', $attachedBlobId);
-    $self->assert_str_equals($blob->{content}, $attachedBlob->{content});
-}
-
 sub test_email_set_bodystructure
     :min_version_3_1 :needs_component_jmap
 {
@@ -2761,11 +2693,11 @@ sub test_email_set_bodystructure
         ['Email/query', { }, "R1"],
         ['Email/get', {
             '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
-            properties => ['attachedEmails', 'blobId'],
+            properties => ['attachments', 'blobId'],
         }, 'R2' ],
     ]);
     my $emailBlobId = $res->[1][1]->{list}[0]->{blobId};
-    my $embeddedEmailBlobId = $res->[1][1]->{list}[0]->{attachedEmails}[0]{blobId};
+    my $embeddedEmailBlobId = $res->[1][1]->{list}[0]->{attachments}[0]{blobId};
 
     xlog "Upload a data blob";
     my $binary = pack "H*", "beefcode";
@@ -3422,7 +3354,7 @@ sub test_email_set_attachments
     $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    my %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachedFiles}};
+    my %m = map { $_->{type} => $_ } @{$res->[0][1]{list}[0]->{attachments}};
     my $blobJpeg = $m{"image/jpeg"}->{blobId};
     my $blobPng = $m{"image/png"}->{blobId};
     $self->assert_not_null($blobJpeg);
@@ -3455,7 +3387,7 @@ sub test_email_set_attachments
                          "<img src=\"cid:foo\@local\"></html>",
             },
         },
-        attachedFiles => [{
+        attachments => [{
             blobId => $blobJpeg,
             name => $shortfname,
             type => 'image/jpeg',
@@ -6078,7 +6010,7 @@ sub test_email_query_attachments
                       subject => "Memo",
                       textBody => [{ partId => '1' }],
                       bodyValues => {'1' => { value => "I'm givin' ya one last chance ta surrenda!" }},
-                      attachedFiles => [{
+                      attachments => [{
                               blobId => $data->{blobId},
                               name => "logo.gif",
                       }],
@@ -6093,7 +6025,7 @@ sub test_email_query_attachments
                       subject => "Memo 2",
                       textBody => [{ partId => '1' }],
                       bodyValues => {'1' => { value => "I'm givin' ya *one* last chance ta surrenda!" }},
-                      attachedFiles => [{
+                      attachments => [{
                               blobId => $data->{blobId},
                               name => "somethingelse.gif",
                       }],
@@ -6179,7 +6111,7 @@ sub test_email_query_attachmentname
                       subject => "msg1",
                       textBody => [{ partId => '1' }],
                       bodyValues => { '1' => { value => "foo" } },
-                      attachedFiles => [{
+                      attachments => [{
                               blobId => $data->{blobId},
                               name => "R\N{LATIN SMALL LETTER U WITH DIAERESIS}bezahl.txt",
                       }],
@@ -6221,7 +6153,7 @@ sub test_email_query_attachmenttype
           subject => "foo",
           textBody => [{ partId => '1' }],
           bodyValues => { '1' => { value => "foo" } },
-          attachedFiles => [{
+          attachments => [{
             blobId => $blobId,
             type => 'image/gif',
           }],
@@ -6241,7 +6173,7 @@ sub test_email_query_attachmenttype
           subject => "baz",
           textBody => [{ partId => '1' }],
           bodyValues => { '1' => { value => "baz" } },
-          attachedFiles => [{
+          attachments => [{
             blobId => $blobId,
             type => 'application/msword',
           }],
@@ -8073,10 +8005,10 @@ sub test_email_import
         ['Email/query', { }, "R1"],
         ['Email/get', {
             '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
-            properties => ['attachedEmails'],
+            properties => ['attachments'],
         }, 'R2' ],
     ]);
-    my $blobid = $res->[1][1]->{list}[0]->{attachedEmails}[0]{blobId};
+    my $blobid = $res->[1][1]->{list}[0]->{attachments}[0]{blobId};
     $self->assert_not_null($blobid);
 
     xlog "create drafts mailbox";
@@ -8599,8 +8531,8 @@ sub test_email_get_attachedemails
     $res = $jmap->CallMethods([['Email/get', { ids => $ids }, "R1"]]);
     my $msg = $res->[0][1]{list}[0];
 
-    $self->assert_num_equals(1, scalar @{$msg->{attachedEmails}});
-    $self->assert_str_equals("message/rfc822", $msg->{attachedEmails}[0]{type});
+    $self->assert_num_equals(1, scalar @{$msg->{attachments}});
+    $self->assert_str_equals("message/rfc822", $msg->{attachments}[0]{type});
 }
 
 sub test_email_get_maxbodyvaluebytes_utf8
@@ -8948,10 +8880,10 @@ sub test_email_embedded_download
         ['Email/query', { }, "R1"],
         ['Email/get', {
             '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
-            properties => ['attachedEmails'],
+            properties => ['attachments'],
         }, 'R2' ],
     ]);
-    my $blobId = $res->[1][1]->{list}[0]->{attachedEmails}[0]{blobId};
+    my $blobId = $res->[1][1]->{list}[0]->{attachments}[0]{blobId};
 
     my $blob = $jmap->Download({ accept => 'message/rfc822' }, 'cassandane', $blobId);
     $self->assert_str_equals('message/rfc822', $blob->{headers}->{'content-type'});
@@ -9181,10 +9113,10 @@ sub test_email_parse
         ['Email/query', { }, "R1"],
         ['Email/get', {
             '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
-            properties => ['attachedEmails'],
+            properties => ['attachments'],
         }, 'R2' ],
     ]);
-    my $blobId = $res->[1][1]{list}[0]{attachedEmails}[0]{blobId};
+    my $blobId = $res->[1][1]{list}[0]{attachments}[0]{blobId};
 
     my @props = $self->defaultprops_for_email_get();
     push @props, "bodyStructure";
@@ -9344,10 +9276,10 @@ EOF
         ['Email/query', { }, "R1"],
         ['Email/get', {
             '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
-            properties => ['attachedEmails'],
+            properties => ['attachments'],
         }, 'R2' ],
     ]);
-    my $blobId = $res->[1][1]{list}[0]{attachedEmails}[0]{blobId};
+    my $blobId = $res->[1][1]{list}[0]{attachments}[0]{blobId};
 
     my @props = $self->defaultprops_for_email_get();
     push @props, "bodyStructure";
@@ -9686,14 +9618,13 @@ sub test_email_get_bodystructure
 
     my $wantTextBody = [ $bodyA, $bodyB, $bodyC, $bodyD, $bodyK ];
     my $wantHtmlBody = [ $bodyA, $bodyE, $bodyK ];
-    my $wantAttachedEmails = [ $bodyJ ];
-    my $wantAttachedFiles = [ $bodyC, $bodyF, $bodyG, $bodyH ];
+    my $wantAttachments = [ $bodyC, $bodyF, $bodyG, $bodyH, $bodyJ ];
 
     my $res = $jmap->CallMethods([
         ['Email/query', { }, "R1"],
         ['Email/get', {
             '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
-            properties => ['bodyStructure', 'textBody', 'htmlBody', 'attachedEmails', 'attachedFiles'],
+            properties => ['bodyStructure', 'textBody', 'htmlBody', 'attachments' ],
             bodyProperties => ['type', 'disposition', 'header:x-body-id'],
         }, 'R2' ],
     ]);
@@ -9701,9 +9632,7 @@ sub test_email_get_bodystructure
     $self->assert_deep_equals($wantBodyStructure, $msg->{bodyStructure});
     $self->assert_deep_equals($wantTextBody, $msg->{textBody});
     $self->assert_deep_equals($wantHtmlBody, $msg->{htmlBody});
-    $self->assert_deep_equals($wantAttachedEmails, $msg->{attachedEmails});
-    $self->assert_deep_equals($wantAttachedFiles, $msg->{attachedFiles});
-
+    $self->assert_deep_equals($wantAttachments, $msg->{attachments});
 }
 
 sub test_email_get_calendarevents
@@ -9765,16 +9694,16 @@ sub test_email_get_calendarevents
         ['Email/query', { }, "R1"],
         ['Email/get', {
             '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
-            properties => ['textBody', 'attachedFiles', 'calendarEvents'],
+            properties => ['textBody', 'attachments', 'calendarEvents'],
         }, 'R2' ],
     ]);
     my $msg = $res->[1][1]{list}[0];
 
-    $self->assert_num_equals(1, scalar @{$msg->{attachedFiles}});
-    $self->assert_str_equals('text/calendar', $msg->{attachedFiles}[0]{type});
+    $self->assert_num_equals(1, scalar @{$msg->{attachments}});
+    $self->assert_str_equals('text/calendar', $msg->{attachments}[0]{type});
 
     $self->assert_num_equals(1, scalar keys %{$msg->{calendarEvents}});
-    my $partId = $msg->{attachedFiles}[0]{partId};
+    my $partId = $msg->{attachments}[0]{partId};
     my $jsevent =$msg->{calendarEvents}{$partId};
     $self->assert_not_null($jsevent);
     $self->assert_str_equals("K\N{LATIN SMALL LETTER A WITH DIAERESIS}se", $jsevent->{title});
@@ -9831,7 +9760,7 @@ EOF
                 value => "A text body",
             },
         },
-        attachedFiles => [{
+        attachments => [{
             type => 'image/gif',
             blobId => $dataBlobId,
         }, {
@@ -9848,12 +9777,13 @@ EOF
         }, 'R2' ],
     ]);
 
-    my $gotPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[1];
-    $self->assert_str_equals('image/gif', $gotPart->{type});
-    $self->assert_str_equals(' BASE64', uc($gotPart->{'header:Content-Transfer-Encoding'}));
-    $gotPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[2];
+    my $gotPart;
+    $gotPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[1];
     $self->assert_str_equals('message/rfc822', $gotPart->{type});
     $self->assert_str_equals(' 7BIT', $gotPart->{'header:Content-Transfer-Encoding'});
+    $gotPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[2];
+    $self->assert_str_equals('image/gif', $gotPart->{type});
+    $self->assert_str_equals(' BASE64', uc($gotPart->{'header:Content-Transfer-Encoding'}));
 }
 
 sub test_email_body_alternative_without_html
