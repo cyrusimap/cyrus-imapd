@@ -420,6 +420,9 @@ static int expire_conversations(const mbentry_t *mbentry, void *rock)
     if (mbentry->mbtype & MBTYPE_REMOTE)
         goto done;
 
+    if (mboxname_isdeletedmailbox(mbentry->name, NULL))
+        goto done;
+
     filename = conversations_getmboxpath(mbentry->name);
     if (!filename)
         goto done;
