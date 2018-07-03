@@ -10241,7 +10241,6 @@ done:
 
 struct _email_import_rock {
     struct buf buf;
-    const struct body *part;
 };
 
 static int _email_import_cb(jmap_req_t *req __attribute__((unused)),
@@ -10252,15 +10251,8 @@ static int _email_import_cb(jmap_req_t *req __attribute__((unused)),
     // we never need to pre-decode rfc822 messages, they're always 7bit (right?)
     const char *base = data->buf.s;
     size_t len = data->buf.len;
-    if (data->part) {
-        base += data->part->content_offset;
-        len = data->part->content_size;
-    }
-
     struct protstream *stream = prot_readmap(base, len);
-
     int r = message_copy_strict(stream, out, len, 0);
-
     prot_free(stream);
 
     return r;
@@ -10308,30 +10300,64 @@ int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     }
 
     /* Start import */
-    struct _email_import_rock content = { BUF_INITIALIZER, NULL };
-    hash_table props = HASH_TABLE_INITIALIZER;
-    struct body *bodystructure = NULL;
-    struct mailbox *mbox = NULL;
     char *msgid = NULL;
     char *mboxname = NULL;
     uint32_t uid;
     time_t internaldate = 0;
     strarray_t keywords = STRARRAY_INITIALIZER;
-    struct emailbodies bodies = EMAILBODIES_INITIALIZER;
+    struct _email_import_rock content = { BUF_INITIALIZER };
+
+    /* Lookup blob */
+    const char *blobid = json_string_value(json_object_get(msg, "blobId"));
+    struct mailbox *mbox = NULL;
+    struct body *body = NULL;
+    const struct body *subpart = NULL;
+    msgrecord_t *mr = NULL;
+    struct buf msg_buf = BUF_INITIALIZER;
+
+    r = jmap_findblob(req, blobid, &mbox, &mr, &body, &subpart);
+    if (r) goto done;
+
+    r = msgrecord_get_body(mr, &msg_buf);
+    if (r) goto done;
+
+    /* Decode blob */
+    struct body *part = subpart ? (struct body*) subpart : body;
+    const char *blob_base = buf_base(&msg_buf) + part->content_offset;
+    size_t blob_len = part->content_size;
+    if (part->encoding && strcasecmp(part->encoding, "NONE")) {
+        int enc = encoding_lookupname(part->encoding);
+        char *tmp;
+        size_t dec_len;
+        const char *dec = charset_decode_mimebody(blob_base, blob_len, enc, &tmp, &dec_len);
+        buf_setmap(&content.buf, dec, dec_len);
+        free(tmp);
+    }
+    else {
+        buf_setmap(&content.buf, blob_base, blob_len);
+    }
+
+    /* Parse email - need this for hasAttachment flag */
     int has_attachment = 0;
 
-    /* Lookup blob and check if it has any attachments */
-    msgrecord_t *mr = NULL;
-    const char *blobid = json_string_value(json_object_get(msg, "blobId"));
-    r = jmap_findblob(req, blobid, &mbox, &mr, &bodystructure, &content.part);
-    if (r) goto done;
-    r = msgrecord_get_body(mr, &content.buf);
-    if (r) goto done;
-    r = _email_extract_bodies(bodystructure, &content.buf, &bodies);
-    if (r) goto done;
-    has_attachment = bodies.attslist.count;
-    jmap_closembox(req, &mbox);
+    json_t *email = NULL;
+    struct email_getargs getargs = _EMAIL_GET_ARGS_INITIALIZER;
+    getargs.props = xzmalloc(sizeof(hash_table));
+    construct_hash_table(getargs.props, 1, 0);
+    hash_insert("hasAttachment", (void*)1, getargs.props);
+    _email_from_buf(req, &getargs, &content.buf, NULL, &email);
+    has_attachment = json_boolean_value(json_object_get(email, "hasAttachment"));
+    free_hash_table(getargs.props, NULL);
+    free(getargs.props);
+    getargs.props = NULL;
+    _email_getargs_fini(&getargs);
+
+    json_decref(email);
+
     msgrecord_unref(&mr);
+    jmap_closembox(req, &mbox);
+    message_free_body(body);
+    free(body);
 
     /* Gather keywords */
     const json_t *val;
@@ -10351,7 +10377,7 @@ int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
                       has_attachment, _email_import_cb, &content, &msgid);
     if (r) goto done;
 
-    /* Load its index record and convert to JMAP */
+    /* Load its index record */
     r = _email_find(req, msgid, &mboxname, &uid);
     if (r) goto done;
 
@@ -10359,32 +10385,25 @@ int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     if (r) goto done;
 
     r = msgrecord_find(mbox, uid, &mr);
-    if (r) goto done;
-
-    construct_hash_table(&props, 4, 0);
-    hash_insert("id", (void*)1, &props);
-    hash_insert("blobId", (void*)1, &props);
-    hash_insert("threadId", (void*)1, &props);
-    hash_insert("size", (void*)1, &props);
-
-    r = _email_get_with_props(req, &props, mr, createdmsg);
-    if (r) goto done;
+    if (!r) {
+        /* Convert new message to JMAP */
+        hash_table props = HASH_TABLE_INITIALIZER;
+        construct_hash_table(&props, 4, 0);
+        hash_insert("id", (void*)1, &props);
+        hash_insert("blobId", (void*)1, &props);
+        hash_insert("threadId", (void*)1, &props);
+        hash_insert("size", (void*)1, &props);
+        r = _email_get_with_props(req, &props, mr, createdmsg);
+        free_hash_table(&props, NULL);
+    }
 
     jmap_closembox(req, &mbox);
 
 done:
-    ptrarray_fini(&bodies.attslist);
-    ptrarray_fini(&bodies.textlist);
-    ptrarray_fini(&bodies.htmllist);
     strarray_fini(&keywords);
-    free_hash_table(&props, NULL);
     buf_free(&content.buf);
     if (mr) msgrecord_unref(&mr);
     if (mbox) jmap_closembox(req, &mbox);
-    if (bodystructure) {
-        message_free_body(bodystructure);
-        free(bodystructure);
-    }
     free(mboxname);
     free(msgid);
     return r;
