@@ -216,4 +216,96 @@ sub test_list_groupaccess_racl
                               ['INBOX', 'user.otheruser.groupaccess']);
 }
 
+sub do_test_list_order
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.zzz");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    $imaptalk->create("INBOX.aaa");
+    $self->assert_str_equals('ok',
+        $imaptalk->get_last_completion_response());
+
+    my %adminfolders = (
+        'user.otheruser.order-user' => 'cassandane',
+        'user.otheruser.order-co' => 'group:group co',
+        'user.otheruser.order-c' => 'group:group c',
+        'user.otheruser.order-o' => 'group:group o',
+        'shared.order-co' => 'group:group co',
+        'shared.order-c' => 'group:group c',
+        'shared.order-o' => 'group:group o',
+    );
+
+    while (my ($folder, $identifier) = each %adminfolders) {
+        $admintalk->create($folder);
+        $self->assert_str_equals('ok',
+            $admintalk->get_last_completion_response(),
+            "created folder $folder successfully");
+
+        $admintalk->setacl($folder, $identifier, "lrswipkxtecdn");
+        $self->assert_str_equals('ok',
+            $admintalk->get_last_completion_response(),
+            "setacl folder $folder for $identifier successfully");
+
+		if ($folder =~ m/^shared/) {
+		    # subvert default permissions on shared namespace for
+            # purpose of testing ordering
+            $admintalk->setacl($folder, "anyone", "p");
+            $self->assert_str_equals('ok',
+                $admintalk->get_last_completion_response(),
+                "setacl folder $folder for anyone successfully");
+        }
+    }
+
+    if (get_verbose()) {
+        $self->{instance}->run_command(
+            { cyrus => 1, },
+            'cyr_dbtool',
+            "$self->{instance}->{basedir}/conf/mailboxes.db",
+            'twoskip',
+            'show'
+        );
+    }
+
+    my $list = $imaptalk->list("", "*");
+    my @boxes = map { $_->[2] } @{$list};
+
+    # Note: order is
+    # * mine, alphabetically,
+    # * other users', alphabetically,
+    # * shared, alphabetically
+    # ... which is not the order we created them ;)
+    # Also, the "order-o" folders are not returned, because cassandane
+    # is not a member of that group
+    $self->assert_deep_equals(\@boxes, [qw(
+        INBOX
+        INBOX.aaa
+        INBOX.zzz
+        user.otheruser.order-c
+        user.otheruser.order-co
+        user.otheruser.order-user
+        shared.order-c
+        shared.order-co
+    )]);
+}
+
+sub test_list_order_noracl
+    :needs_dependency_ldap
+{
+    my $self = shift;
+    return $self->do_test_list_order(@_);
+}
+
+sub test_list_order_racl
+    :needs_dependency_ldap :ReverseACLs
+{
+    my $self = shift;
+    return $self->do_test_list_order(@_);
+}
+
 1;
