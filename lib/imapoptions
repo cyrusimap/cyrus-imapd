@@ -1073,6 +1073,12 @@ Blank lines and lines beginning with ``#'' are ignored.
    property of the JMAP \"ietf:jmapmail\" capabilities object. The Cyrus
    JMAP implementation does not enforce this size limit. Default is 10 Mb.*/
 
+{ "jmap_set_has_attachment", 1, SWITCH }
+/* If enabled, the $hasAttachment flag is determined and set for new messages
+   created with the JMAP Email/set or Email/import methods. This option should
+   typically be enabled, but installations using Cyrus-external message
+   annatotors to determine the $hasAttachment flag might want to disable it. */
+
 { "jmapuploadfolder", "#jmap", STRING }
 /* the name of the folder for JMAP uploads (#jmap) */
 

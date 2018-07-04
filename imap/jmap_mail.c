@@ -9580,7 +9580,8 @@ static void _email_create(jmap_req_t *req,
     json_t *jmailboxids = json_object_get(jemail, "mailboxIds");
     struct email_to_mime_rock rock = { &email, set_err };
     r = _email_append(req, jmailboxids, &keywords, time(NULL),
-                      email.has_attachment, _email_to_mime,
+                      config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT) ?
+                      email.has_attachment : 0, _email_to_mime,
                       &rock, &emailid);
     if (r || *set_err) goto done;
 
@@ -10337,22 +10338,25 @@ int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
         buf_setmap(&content.buf, blob_base, blob_len);
     }
 
-    /* Parse email - need this for hasAttachment flag */
+    /* Determine $hasAttachment flag */
     int has_attachment = 0;
+    if (config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT)) {
+        /* Parse email */
+        json_t *email = NULL;
+        struct email_getargs getargs = _EMAIL_GET_ARGS_INITIALIZER;
+        getargs.props = xzmalloc(sizeof(hash_table));
+        construct_hash_table(getargs.props, 1, 0);
 
-    json_t *email = NULL;
-    struct email_getargs getargs = _EMAIL_GET_ARGS_INITIALIZER;
-    getargs.props = xzmalloc(sizeof(hash_table));
-    construct_hash_table(getargs.props, 1, 0);
-    hash_insert("hasAttachment", (void*)1, getargs.props);
-    _email_from_buf(req, &getargs, &content.buf, NULL, &email);
-    has_attachment = json_boolean_value(json_object_get(email, "hasAttachment"));
-    free_hash_table(getargs.props, NULL);
-    free(getargs.props);
-    getargs.props = NULL;
-    _email_getargs_fini(&getargs);
+        hash_insert("hasAttachment", (void*)1, getargs.props);
+        _email_from_buf(req, &getargs, &content.buf, NULL, &email);
+        has_attachment = json_boolean_value(json_object_get(email, "hasAttachment"));
 
-    json_decref(email);
+        free_hash_table(getargs.props, NULL);
+        free(getargs.props);
+        getargs.props = NULL;
+        _email_getargs_fini(&getargs);
+        json_decref(email);
+    }
 
     msgrecord_unref(&mr);
     jmap_closembox(req, &mbox);
