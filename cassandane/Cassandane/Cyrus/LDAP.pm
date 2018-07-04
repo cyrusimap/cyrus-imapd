@@ -93,7 +93,7 @@ sub set_up
         argv => [
             realpath('utils/fakeldapd'),
             '-p', $self->{ldapport},
-            '-l', realpath('data/data.ldif'),
+            '-l', realpath('data/directory.ldif'),
         ],
     );
 
