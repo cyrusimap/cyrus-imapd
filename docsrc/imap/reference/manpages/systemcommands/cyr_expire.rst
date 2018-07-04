@@ -19,6 +19,7 @@ Synopsis
     **cyr_expire** [ **-C** *config-file* ] [ **-A** *archive-duration* ]
     [ **-D** *delete-duration* ] [ **-E** *expire-duration* ] [ **-X** *expunge-duration* ]
     [ **-p** *mailbox-pre‐fix* ] [ **-u** *username* ] [ **-t** ] [ **-v** ]
+    [ **-a** ] [ **-c** ] [ **-x** ]
 
 Description
 ===========
