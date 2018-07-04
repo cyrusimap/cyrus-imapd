@@ -2465,9 +2465,9 @@ static int find_cb(void *rockp,
 
 struct allmb_rock {
     struct mboxlist_entry *mbentry;
-    int flags;
     mboxlist_cb *proc;
     void *rock;
+    int flags;
 };
 
 static int allmbox_cb(void *rock,
@@ -2510,14 +2510,13 @@ static int allmbox_p(void *rock,
     return 1; /* process this record */
 }
 
-EXPORTED int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock, int incdel)
+EXPORTED int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock, int flags)
 {
-    struct allmb_rock mbrock = { NULL, 0, proc, rock };
+    struct allmb_rock mbrock = { NULL, proc, rock, flags };
     int r = 0;
 
     init_internal();
 
-    if (incdel) mbrock.flags |= MBOXTREE_TOMBSTONES;
     if (!prefix) prefix = "";
 
     r = cyrusdb_foreach(mbdb, prefix, strlen(prefix),
@@ -2530,7 +2529,7 @@ EXPORTED int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock,
 
 EXPORTED int mboxlist_mboxtree(const char *mboxname, mboxlist_cb *proc, void *rock, int flags)
 {
-    struct allmb_rock mbrock = { NULL, flags, proc, rock };
+    struct allmb_rock mbrock = { NULL, proc, rock, flags };
     int r = 0;
 
     init_internal();
@@ -2598,7 +2597,7 @@ EXPORTED int mboxlist_set_racls(int enabled)
     }
     else if (enabled && !now) {
         /* add */
-        struct allmb_rock mbrock = { NULL, 0, racls_add_cb, &tid };
+        struct allmb_rock mbrock = { NULL, racls_add_cb, &tid, 0 };
         /* we can't use mboxlist_allmbox because it doesn't do transactions */
         syslog(LOG_NOTICE, "adding reverse acl support");
         r = cyrusdb_foreach(mbdb, "", 0, allmbox_p, allmbox_cb, &mbrock, &tid);
@@ -2679,7 +2678,7 @@ EXPORTED int mboxlist_usermboxtree(const char *userid, mboxlist_cb *proc,
     int r = mboxlist_mboxtree(inbox, proc, rock, flags);
 
     if (flags & MBOXTREE_PLUS_RACL) {
-        struct allmb_rock mbrock = { NULL, flags, proc, rock };
+        struct allmb_rock mbrock = { NULL, proc, rock, flags };
         /* we're using reverse ACLs */
         struct buf buf = BUF_INITIALIZER;
         strarray_t matches = STRARRAY_INITIALIZER;

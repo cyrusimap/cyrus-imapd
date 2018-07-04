@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
     cyrus_init(alt_config, "cyr_userseen", 0, 0);
 
     /* build a list of mailboxes - we're using internal names here */
-    mboxlist_allmbox("", deluserseen, NULL, /*incdel*/0);
+    mboxlist_allmbox("", deluserseen, NULL, /*flags*/0);
 
     cyrus_done();
 

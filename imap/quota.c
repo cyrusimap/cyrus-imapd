@@ -628,7 +628,7 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
 
     /* basic case - everything (potentially limited by domain still) */
     if (!nroots) {
-        r = mboxlist_allmbox(buf, cb, buf, /*incdel*/0);
+        r = mboxlist_allmbox(buf, cb, buf, /*flags*/0);
         if (r) {
             errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);
         }
@@ -641,12 +641,12 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
     for (i = 0; i < nroots; i++) {
         if (isuser) {
             char *inbox = mboxname_user_mbox(roots[i], NULL);
-            r = mboxlist_usermboxtree(roots[i], cb, inbox, /*incdel*/0);
+            r = mboxlist_usermboxtree(roots[i], cb, inbox, /*flags*/0);
             free(inbox);
         }
         else {
             strlcpy(tail, roots[i], sizeof(buf) - domainlen);
-            r = mboxlist_allmbox(buf, cb, buf, /*incdel*/0);
+            r = mboxlist_allmbox(buf, cb, buf, /*flags*/0);
         }
         if (r) {
             errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);

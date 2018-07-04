@@ -818,7 +818,7 @@ static int cleanup_seen_subfolders(const char *mbname)
     snprintf(buf, sizeof(buf), "%s.", mbname);
 
     r = seen_open(userid, SEEN_SILENT, &seendb);
-    if (!r) mboxlist_allmbox(buf, cleanup_seen_cb, seendb, /*incdel*/0);
+    if (!r) mboxlist_allmbox(buf, cleanup_seen_cb, seendb, /*flags*/0);
     seen_close(&seendb);
 
     free(userid);

@@ -241,15 +241,14 @@ int mboxlist_alluser(user_cb *proc, void *rock);
 
 typedef int mboxlist_cb(const mbentry_t *mbentry, void *rock);
 
-int mboxlist_visible(const char *userid, const struct auth_state *auth_state,
-                     mboxlist_cb *proc, void *rock, int incdel);
-int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock, int incdel);
 #define MBOXTREE_TOMBSTONES (1<<0)
 #define MBOXTREE_DELETED (1<<1)
 #define MBOXTREE_SKIP_ROOT (1<<2)
 #define MBOXTREE_SKIP_CHILDREN (1<<3)
 #define MBOXTREE_SKIP_PERSONAL (1<<4)
 #define MBOXTREE_PLUS_RACL (1<<5)
+#define MBOXTREE_INTERMEDIATES (1<<6)
+int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock, int flags);
 int mboxlist_mboxtree(const char *mboxname, mboxlist_cb *proc, void *rock, int flags);
 int mboxlist_usermboxtree(const char *userid, mboxlist_cb *proc, void *rock, int flags);
 int mboxlist_usersubs(const char *userid, mboxlist_cb *proc, void *rock, int flags);

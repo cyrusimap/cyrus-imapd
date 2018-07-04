@@ -1863,7 +1863,7 @@ static void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
     if (C->list_prefix) C->list_prefix_len = strlen(C->list_prefix);
     else C->list_prefix_len = 0;
 
-    mboxlist_allmbox("", sendupdate, (void*)C, /*incdel*/0);
+    mboxlist_allmbox("", sendupdate, (void*)C, /*flags*/0);
 
     C->streaming = NULL;
     C->list_prefix = NULL;
@@ -1910,7 +1910,7 @@ static void cmd_startupdate(struct conn *C, const char *tag,
     C->streaming_hosts = partial;
 
     /* dump initial list */
-    mboxlist_allmbox("", sendupdate, (void*)C, /*incdel*/0);
+    mboxlist_allmbox("", sendupdate, (void*)C, /*flags*/0);
 
     pthread_mutex_unlock(&mailboxes_mutex); /* UNLOCK */
 
@@ -2356,7 +2356,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 
     rock.boxes = &local_boxes;
 
-    mboxlist_allmbox("", sync_findall_cb, (void*)&rock, /*incdel*/0);
+    mboxlist_allmbox("", sync_findall_cb, (void*)&rock, /*flags*/0);
 
     /* Traverse both lists, compare the names */
     /* If they match, ensure that location and acl are correct, if so,

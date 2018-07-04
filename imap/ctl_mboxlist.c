@@ -460,7 +460,7 @@ static void do_dump(enum mboxop op, const char *part, int purge)
     }
 
     /* Dump Database */
-    mboxlist_allmbox("", &dump_cb, &d, /*incdel*/1);
+    mboxlist_allmbox("", &dump_cb, &d, MBOXTREE_TOMBSTONES);
 
     if (op == M_POPULATE) {
         /* Remove MBTYPE_MOVING flags (unflag_head) */
@@ -867,7 +867,7 @@ static void do_verify(void)
 
     qsort(found.data, found.size, sizeof(struct found_data), compar_mbox);
 
-    mboxlist_allmbox("", &verify_cb, &found, /*incdel*/1);
+    mboxlist_allmbox("", &verify_cb, &found, MBOXTREE_TOMBSTONES);
 }
 
 static void usage(void)
