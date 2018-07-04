@@ -187,7 +187,7 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
         return NULL;
     }
 
-    rc = sqlite3_exec(open->db, "BEGIN IMMEDIATE;", NULL, NULL, NULL);
+    rc = sqlite3_exec(open->db, "BEGIN EXCLUSIVE;", NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
         syslog(LOG_ERR, "DBERROR: sqldb_open(%s) begin: %s",
                open->fname, sqlite3_errmsg(open->db));
