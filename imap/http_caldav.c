@@ -66,6 +66,7 @@
 #include "append.h"
 #include "caldav_db.h"
 #include "charset.h"
+#include "css3_color.h"
 #include "exitcodes.h"
 #include "global.h"
 #include "hash.h"
@@ -276,7 +277,8 @@ static int report_fb_query(struct transaction_t *txn,
                            xmlNodePtr inroot, struct propfind_ctx *fctx);
 
 static const char *begin_icalendar(struct buf *buf, struct mailbox *mailbox,
-                                   const char *prodid, const char *name);
+                                   const char *prodid, const char *name,
+                                   const char *desc, const char *color);
 static void end_icalendar(struct buf *buf);
 
 #define ICALENDAR_CONTENT_TYPE "text/calendar; charset=utf-8"
@@ -1594,16 +1596,25 @@ static int caldav_delete_cal(struct transaction_t *txn,
 }
 
 static const char *begin_icalendar(struct buf *buf, struct mailbox *mailbox,
-                                   const char *prodid, const char *name)
+                                   const char *prodid, const char *name,
+                                   const char *desc, const char *color)
 {
+    icalcomponent *ical;
+    icalproperty *prop;
+
     /* Begin iCalendar stream */
     buf_setcstr(buf, "BEGIN:VCALENDAR\r\n");
-    buf_printf(buf, "PRODID:%s\r\n", prodid);
-    buf_appendcstr(buf, "VERSION:2.0\r\n");
-    buf_printf(buf, "UID:%x-%s-%u\r\n", strhash(config_servername),
-               mailbox->uniqueid, mailbox->i.uidvalidity);
-    buf_printf(buf, "NAME:%s\r\n", name);
-    buf_printf(buf, "X-WR-CALNAME:%s\r\n", name);
+
+    /* Add toplevel properties */
+    ical = icalcomponent_new_stream(mailbox, prodid, name, desc, color);
+
+    for (prop = icalcomponent_get_first_property(ical, ICAL_ANY_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(ical, ICAL_ANY_PROPERTY)) {
+
+        buf_printf(buf, icalproperty_as_ical_string(prop));
+    }
+    icalcomponent_free(ical);
 
     return "";
 }
@@ -1656,7 +1667,12 @@ static int export_calendar(struct transaction_t *txn)
     struct hash_table tzid_table;
     static const char *displayname_annot =
         DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-    struct buf attrib = BUF_INITIALIZER, link = BUF_INITIALIZER;
+    static const char *description_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-description";
+    static const char *color_annot =
+        DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
+    struct buf name = BUF_INITIALIZER, link = BUF_INITIALIZER;
+    struct buf desc = BUF_INITIALIZER, color = BUF_INITIALIZER;
     const char **hdr, *sep;
     struct mime_type_t *mime = NULL;
     modseq_t syncmodseq = 0;
@@ -1712,12 +1728,12 @@ static int export_calendar(struct transaction_t *txn)
 
     /* Set filename of resource */
     r = annotatemore_lookupmask(mailbox->name, displayname_annot,
-                                httpd_userid, &attrib);
+                                httpd_userid, &name);
     /* fall back to last part of mailbox name */
-    if (r || !attrib.len) buf_setcstr(&attrib, strrchr(mailbox->name, '.') + 1);
+    if (r || !name.len) buf_setcstr(&name, strrchr(mailbox->name, '.') + 1);
 
     buf_reset(&txn->buf);
-    buf_printf(&txn->buf, "%s.%s", buf_cstring(&attrib), mime->file_ext);
+    buf_printf(&txn->buf, "%s.%s", buf_cstring(&name), mime->file_ext);
     txn->resp_body.dispo.fname = buf_cstring(&txn->buf);
 
     /* Add subscription upgrade links */
@@ -1787,8 +1803,16 @@ static int export_calendar(struct transaction_t *txn)
     /* Create hash table for TZIDs */
     construct_hash_table(&tzid_table, 10, 1);
 
+    /* Get description and color of calendar */
+    r = annotatemore_lookupmask(mailbox->name, description_annot,
+                                httpd_userid, &desc);
+    r = annotatemore_lookupmask(mailbox->name, color_annot,
+                                httpd_userid, &color);
+
     /* Begin (converted) iCalendar stream */
-    sep = mime->begin_stream(buf, mailbox, ical_prodid, buf_cstring(&attrib));
+    sep = mime->begin_stream(buf, mailbox, ical_prodid, buf_cstring(&name),
+                             buf_cstringnull(&desc),
+                             css3_color_hex_to_name(buf_cstringnull(&color)));
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 
     struct mailbox_iter *iter =
@@ -1935,7 +1959,9 @@ static int export_calendar(struct transaction_t *txn)
     write_body(0, txn, NULL, 0);
 
   done:
-    buf_free(&attrib);
+    buf_free(&name);
+    buf_free(&desc);
+    buf_free(&color);
     mailbox_close(&mailbox);
 
     return ret;

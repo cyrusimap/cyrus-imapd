@@ -484,7 +484,8 @@ struct mime_type_t {
     void* (*to_object)(const struct buf *);
     void (*free)(void *);
     const char* (*begin_stream)(struct buf *, struct mailbox *mailbox,
-                                const char *prodid, const char *name);
+                                const char *prodid, const char *name,
+                                const char *desc, const char *color);
     void (*end_stream)(struct buf *);
 };
 

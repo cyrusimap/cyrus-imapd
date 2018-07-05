@@ -738,7 +738,8 @@ static int export_addressbook(struct transaction_t *txn)
     txn->flags.cc |= CC_NOTRANSFORM;
 
     /* Begin (converted) vCard stream */
-    if (mime->begin_stream) sep = mime->begin_stream(buf, mailbox, NULL, NULL);
+    if (mime->begin_stream)
+        sep = mime->begin_stream(buf, mailbox, NULL, NULL, NULL, NULL);
     else buf_reset(buf);
     write_body(HTTP_OK, txn, buf_cstring(buf), buf_len(buf));
 

@@ -443,6 +443,47 @@ EXPORTED int icalcomponent_myforeach(icalcomponent *ical,
     return 0;
 }
 
+EXPORTED icalcomponent *icalcomponent_new_stream(struct mailbox *mailbox,
+                                                 const char *prodid,
+                                                 const char *name,
+                                                 const char *desc,
+                                                 const char *color)
+{
+    struct buf buf = BUF_INITIALIZER;
+    icalcomponent *ical;
+    icalproperty *prop;
+
+    buf_printf(&buf, "%x-%s-%u", strhash(config_servername),
+               mailbox->uniqueid, mailbox->i.uidvalidity);
+
+    ical = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
+                               icalproperty_new_version("2.0"),
+                               icalproperty_new_prodid(prodid),
+                               icalproperty_new_uid(buf_cstring(&buf)),
+                               icalproperty_new_lastmodified(
+                                   icaltime_from_timet_with_zone(mailbox->index_mtime,
+                                                                 0, NULL)),
+                               icalproperty_new_name(name),
+                               0);
+
+    buf_free(&buf);
+
+    prop = icalproperty_new_x(name);
+    icalproperty_set_x_name(prop, "X-WR-CALNAME");
+    icalcomponent_add_property(ical, prop);
+
+    if (desc) {
+        prop = icalproperty_new_description(desc);
+        icalcomponent_add_property(ical, prop);
+    }
+
+    if (color) {
+        prop = icalproperty_new_color(color);
+        icalcomponent_add_property(ical, prop);
+    }
+
+    return ical;
+}
 
 EXPORTED icalcomponent *ical_string_as_icalcomponent(const struct buf *buf)
 {

@@ -97,6 +97,12 @@ extern int icalcomponent_myforeach(icalcomponent *comp,
                                    void *callback_data);
 
 
+extern icalcomponent *icalcomponent_new_stream(struct mailbox *mailbox,
+                                               const char *prodid,
+                                               const char *name,
+                                               const char *desc,
+                                               const char *color);
+
 extern icalcomponent *ical_string_as_icalcomponent(const struct buf *buf);
 extern struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp);
 
