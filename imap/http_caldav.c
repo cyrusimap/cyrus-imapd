@@ -1612,7 +1612,7 @@ static const char *begin_icalendar(struct buf *buf, struct mailbox *mailbox,
          prop;
          prop = icalcomponent_get_next_property(ical, ICAL_ANY_PROPERTY)) {
 
-        buf_printf(buf, icalproperty_as_ical_string(prop));
+        buf_appendcstr(buf, icalproperty_as_ical_string(prop));
     }
     icalcomponent_free(ical);
 
