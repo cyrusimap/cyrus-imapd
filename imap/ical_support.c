@@ -1776,6 +1776,27 @@ icalproperty_get_acknowledged(const icalproperty *prop)
 #endif /* HAVE_VALARM_EXT_PROPS */
 
 
+#ifndef HAVE_RFC7986_PROPS
+
+/* Functions to replace those not available in libical < v2.0 */
+
+EXPORTED icalproperty *icalproperty_new_name(const char *v)
+{
+    icalproperty *prop = icalproperty_new_x(v);
+    icalproperty_set_x_name(prop, "NAME");
+    return prop;
+}
+
+EXPORTED icalproperty *icalproperty_new_color(const char *v)
+{
+    icalproperty *prop = icalproperty_new_x(v);
+    icalproperty_set_x_name(prop, "COLOR");
+    return prop;
+}
+
+#endif /* HAVE_RFC7986_PROPS */
+
+
 #ifdef HAVE_IANA_PARAMS
 
 #ifndef HAVE_MANAGED_ATTACH_PARAMS

@@ -192,6 +192,16 @@ extern struct icaltimetype icalproperty_get_acknowledged(const icalproperty *pro
 #endif /* HAVE_VALARM_EXT_PROPS */
 
 
+#ifndef HAVE_RFC7986_PROPS
+
+/* Functions to replace those not available in libical < v2.0 */
+
+extern icalproperty *icalproperty_new_name(const char *v);
+extern icalproperty *icalproperty_new_color(const char *v);
+
+#endif /* HAVE_RFC7986_PROPS */
+
+
 #ifndef HAVE_RSCALE
 
 /* Functions to replace those not available in libical < v1.0 */

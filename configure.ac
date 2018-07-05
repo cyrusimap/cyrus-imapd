@@ -1513,9 +1513,17 @@ dnl
                         [Does icaltimetype have is_utc field?]),
                         [], [#include <libical/ical.h>])
 
+        AC_CHECK_LIB(ical, icalproperty_new_tzuntil,
+                AC_DEFINE(HAVE_TZDIST_PROPS,[],
+                        [Do we have built-in support for TZdist props?]))
+
         AC_CHECK_LIB(ical, icalproperty_new_acknowledged,
                 AC_DEFINE(HAVE_VALARM_EXT_PROPS,[],
                         [Do we have built-in support for VALARM extensions props?]))
+
+        AC_CHECK_LIB(ical, icalproperty_new_name,
+                AC_DEFINE(HAVE_RFC7986_PROPS,[],
+                        [Do we have built-in support for RFC7986 props?]))
 
         AC_CHECK_LIB(ical, icalparameter_new_iana, [
                 AC_DEFINE(HAVE_IANA_PARAMS,[],
@@ -1528,10 +1536,6 @@ dnl
                 AC_CHECK_LIB(ical, icalparameter_new_managedid,
                         AC_DEFINE(HAVE_MANAGED_ATTACH_PARAMS,[],
                                 [Do we have built-in support for managed attachment params?]))
-
-                AC_CHECK_LIB(ical, icalproperty_new_tzuntil,
-                        AC_DEFINE(HAVE_TZDIST_PROPS,[],
-                                [Do we have built-in support for TZdist props?]))
                 ],
                 AC_MSG_NOTICE([Your version of libical can not support scheduling or managed attachments.  Consider upgrading to libical >= 0.48]))
 
