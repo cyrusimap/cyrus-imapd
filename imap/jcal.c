@@ -52,7 +52,6 @@
 #include "json_support.h"
 #include "jcal.h"
 #include "xcal.h"
-#include "strhash.h"
 #include "tok.h"
 #include "util.h"
 #include "version.h"

@@ -51,7 +51,6 @@
 
 #include "httpd.h"
 #include "ical_support.h"
-#include "strhash.h"
 #include "tok.h"
 #include "util.h"
 #include "version.h"

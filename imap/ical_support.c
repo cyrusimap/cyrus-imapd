@@ -51,6 +51,7 @@
 #include "global.h"
 #include "ical_support.h"
 #include "message.h"
+#include "strhash.h"
 #include "util.h"
 
 #ifdef HAVE_ICAL
