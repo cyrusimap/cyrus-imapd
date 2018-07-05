@@ -1571,7 +1571,6 @@ dist_man8_MANS = \
 	man/quota.8 \
 	man/reconstruct.8 \
 	man/restore.8 \
-	man/rmnews.8 \
 	man/smmapd.8 \
 	man/timsieved.8 \
 	man/tls_prune.8 \
