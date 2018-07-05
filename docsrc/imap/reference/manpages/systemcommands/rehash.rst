@@ -17,7 +17,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **rehash** [**-v**] [**-n**] [**-f**|**-F**] [**-i**|**-I**] imapd.conf
+    **rehash** [**-v**] [**-n**] [**-f**\|\ **-F**] [**-i**\|\ **-I**] imapd.conf
 
 Description
 ===========
