@@ -235,9 +235,18 @@ EXPORTED int cmpstringp_mbox(const void *p1, const void *p2)
         s2++;
     }
 
-    return cmp;
-}
+    /* found a mismatch */
+    if (cmp) return cmp;
 
+    /* Walked off the end of one (or both strings), in which case one
+     * (or both) of these will be zero, and the string with bytes remaining
+     * is the greater.
+     * XXX Arguably we don't need to TOCOMPARE() them here cause it's
+     * always a comparison against zero, but if this turns into a perf
+     * problem we can always optimise it then!
+     */
+    return TOCOMPARE(*s1) - TOCOMPARE(*s2);
+}
 
 HIDDEN int bsearch_ncompare_raw(const char *s1, int l1, const char *s2, int l2)
 {
