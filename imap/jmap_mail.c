@@ -3054,6 +3054,7 @@ static int _mbox_changes(jmap_req_t *req,
     json_decref(jstate);
 
 done:
+    if (data.created) json_decref(data.created);
     if (data.updated) json_decref(data.updated);
     if (data.destroyed) json_decref(data.destroyed);
     ptrarray_fini(&updates);
