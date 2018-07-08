@@ -407,7 +407,9 @@ int parseentry_cb(int type, struct dlistsax_data *d)
  *
  * full dlist format is:
  *  A: _a_cl
+ *  C  _c_reatedmodseq
  *  I: unique_i_d
+ *  F: _f_oldermodseq
  *  M: _m_time
  *  P: _p_artition
  *  S: _s_erver
