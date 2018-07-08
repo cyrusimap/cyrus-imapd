@@ -1098,6 +1098,7 @@ EXPORTED int mboxlist_create_intermediaries(const char *mboxname,
 
         newmbentry->mbtype = MBTYPE_INTERMEDIATE;
         newmbentry->uniqueid = xstrdupnull(makeuuid());
+        newmbentry->createdmodseq = modseq;
         newmbentry->foldermodseq = modseq;
 
         r = mboxlist_update_entry(parent, newmbentry, tid);
@@ -1283,6 +1284,7 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
     struct mailbox *mailbox = NULL;
     uint32_t uidvalidity = 0;
     const char *uniqueid = NULL;
+    modseq_t createdmodseq = 0;
 
     init_internal();
 
@@ -1296,15 +1298,16 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
                 uidvalidity = oldmbentry->uidvalidity+1;
         }
         else if (oldmbentry->mbtype == MBTYPE_INTERMEDIATE) {
-            /* then use the existing mailbox ID */
+            /* then use the existing mailbox ID and createdmodseq */
             uniqueid = xstrdupnull(oldmbentry->uniqueid);
+            createdmodseq = oldmbentry->createdmodseq;
         }
     }
     mboxlist_entry_free(&oldmbentry);
 
     r = mboxlist_createmailbox_full(name, mbtype, partition,
                                     isadmin, userid, auth_state,
-                                    options, uidvalidity, 0, 0, NULL,
+                                    options, uidvalidity, createdmodseq, 0, NULL,
                                     uniqueid, localonly,
                                     forceuser, dbonly, &mailbox);
 
