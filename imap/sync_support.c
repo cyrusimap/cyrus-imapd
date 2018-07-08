@@ -1981,7 +1981,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
         dlist_setatom(kl, "QUOTAROOT", mailbox->quotaroot);
 
     if (mailbox->i.createdmodseq)
-        dlist_setnum64(kl, "CRETATEDMODSEQ", mailbox->i.createdmodseq);
+        dlist_setnum64(kl, "CREATEDMODSEQ", mailbox->i.createdmodseq);
 
     /* always send mailbox annotations */
     r = read_annotations(mailbox, NULL, &annots, 0, 0);
