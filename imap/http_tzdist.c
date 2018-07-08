@@ -132,7 +132,7 @@ static struct mime_type_t tz_mime_types[] = {
 /* Namespace for tzdist service */
 struct namespace_t namespace_tzdist = {
     URL_NS_TZDIST, 0, "tzdist", "/tzdist", TZDIST_WELLKNOWN_URI,
-    http_allow_noauth, /*authschemes*/0,
+    /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
     tzdist_init, NULL, NULL, tzdist_shutdown, NULL,

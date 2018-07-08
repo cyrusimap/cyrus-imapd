@@ -259,7 +259,7 @@ struct meth_params webdav_params = {
 /* Namespace for Webdav collections */
 struct namespace_t namespace_drive = {
     URL_NS_DRIVE, 0, "drive", "/dav/drive", NULL,
-    http_allow_noauth_get, /*authschemes*/0,
+    /*authschemes*/0,
     MBTYPE_COLLECTION,
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_MKCOL | ALLOW_ACL),

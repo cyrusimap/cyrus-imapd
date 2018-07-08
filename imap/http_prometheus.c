@@ -47,7 +47,6 @@
 #include "imap/http_err.h"
 #include "imap/prometheus.h"
 
-static int prom_need_auth(struct transaction_t *txn);
 static void prom_init(struct buf *);
 static int prom_auth(const char *);
 static void prom_reset(void);
@@ -60,7 +59,6 @@ struct namespace_t namespace_prometheus = {
     "prometheus",
     "/metrics",
     /* XXX .well-known url*/ NULL,
-    prom_need_auth,
     /* XXX auth schemes*/ 0,
     /*mboxtype*/ 0,
     (ALLOW_READ),
@@ -94,16 +92,6 @@ struct namespace_t namespace_prometheus = {
         { NULL,                 NULL },                 /* UNLOCK       */
     },
 };
-
-static int prom_need_auth(struct transaction_t *txn __attribute__((unused)))
-{
-    const char *need_auth = config_getstring(IMAPOPT_PROMETHEUS_NEED_AUTH);
-
-    if (!strcmp(need_auth, "none"))
-        return 0;
-
-    return HTTP_UNAUTHORIZED;
-}
 
 static void prom_init(struct buf *serverinfo __attribute__((unused)))
 {

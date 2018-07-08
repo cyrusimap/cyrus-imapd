@@ -72,7 +72,7 @@ static int meth_post(struct transaction_t *txn, void *params);
 /* Namespace for CGI */
 struct namespace_t namespace_cgi = {
     URL_NS_CGI, 0, "cgi", "/cgi-bin", NULL,
-    http_allow_noauth, /*authschemes*/0,
+    /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ | ALLOW_POST,
     cgi_init, NULL, NULL, NULL, NULL,

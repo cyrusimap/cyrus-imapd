@@ -507,7 +507,6 @@ struct namespace_t {
     const char *name;           /* Text name of this namespace ([A-Z][a-z][0-9]+) */
     const char *prefix;         /* Prefix of URL path denoting namespace */
     const char *well_known;     /* Any /.well-known/ URI */
-    int (*need_auth)(txn_t *);  /* Function run prior to unauthorized requests */
     unsigned auth_schemes;      /* Bitmask of allowed auth schemes, 0 for any */
     uint32_t mboxtype;          /* What mbtype can be seen in this namespace? */
     unsigned long allow;        /* Bitmask of allowed features/methods */
@@ -628,8 +627,6 @@ extern int process_request(struct transaction_t *txn);
 extern void transaction_free(struct transaction_t *txn);
 
 extern int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbentry);
-extern int http_allow_noauth(struct transaction_t *txn);
-extern int http_allow_noauth_get(struct transaction_t *txn);
 extern int http_read_req_body(struct transaction_t *txn);
 
 extern void zlib_init(struct transaction_t *txn);

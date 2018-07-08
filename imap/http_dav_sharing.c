@@ -271,7 +271,7 @@ static struct meth_params notify_params = {
 /* Namespace for WebDAV notification collections */
 struct namespace_t namespace_notify = {
     URL_NS_NOTIFY, 0, "notify", "/dav/notifications", NULL,
-    http_allow_noauth_get, /*authschemes*/0,
+    /*authschemes*/0,
     MBTYPE_COLLECTION,
     (ALLOW_READ | ALLOW_POST | ALLOW_DELETE |
      ALLOW_DAV | ALLOW_PROPPATCH | ALLOW_ACL),

@@ -551,7 +551,7 @@ static struct connect_params ws_params = {
 /* Namespace to fetch static content from filesystem */
 static struct namespace_t namespace_default = {
     URL_NS_DEFAULT, 1, "default", "", NULL,
-    http_allow_noauth, /*authschemes*/0,
+    /*authschemes*/0,
     /*mbtype*/0,
     ALLOW_READ,
     NULL, NULL, NULL, NULL, NULL,
@@ -1986,11 +1986,6 @@ EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
     proc_settitle(buf_cstring(&txn->buf), txn->conn->clienthost, httpd_userid,
                   txn->req_tgt.path, txn->req_line.meth);
     buf_reset(&txn->buf);
-
-    /* Request authentication, if necessary */
-    if (!httpd_userid && namespace->need_auth(txn)) {
-        ret = HTTP_UNAUTHORIZED;
-    }
 
     if (ret) return client_need_auth(txn, sasl_result);
 
@@ -5251,27 +5246,6 @@ EXPORTED int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbent
 
     return rights;
 }
-
-/* Allow unauthenticated GET/HEAD, deny all other unauthenticated requests */
-EXPORTED int http_allow_noauth_get(struct transaction_t *txn)
-{
-    /* Inverse logic: True means we *require* authentication */
-    switch (txn->meth) {
-    case METH_GET:
-    case METH_HEAD:
-        /* Let method processing function decide if auth is needed */
-        return 0;
-    default:
-        return 1;
-    }
-}
-
-/* Allow unauthenticated requests */
-EXPORTED int http_allow_noauth(struct transaction_t *txn __attribute__((unused)))
-{
-    return 0;
-}
-
 
 /* Read the body of a request */
 EXPORTED int http_read_req_body(struct transaction_t *txn)
