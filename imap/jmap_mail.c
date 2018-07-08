@@ -3576,12 +3576,12 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
     jmap_req_t *req = data->req;
 
     /* Ignore anything but regular mailboxes */
-    if (mbentry->mbtype & ~(MBTYPE_DELETED)) {
+    if (mbentry->mbtype & ~(MBTYPE_DELETED | MBTYPE_INTERMEDIATE)) {
         return 0;
     }
 
     /* Lookup status. */
-    if (!(mbentry->mbtype & MBTYPE_DELETED)) {
+    if (!(mbentry->mbtype & (MBTYPE_DELETED | MBTYPE_INTERMEDIATE))) {
         int r = status_lookup(mbentry->name, data->req->userid,
                               STATUS_HIGHESTMODSEQ, &sdata);
         if (r) return r;
