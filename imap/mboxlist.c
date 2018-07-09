@@ -2533,6 +2533,10 @@ static int find_p(void *rockp,
     if (rock->mbentry->mbtype & MBTYPE_DELETED)
         goto nomatch;
 
+    /* nobody sees intermediates */
+    if (rock->mbentry->mbtype & MBTYPE_INTERMEDIATE)
+        goto nomatch;
+
     /* check acl */
     if (!rock->isadmin) {
         /* always suppress deleted for non-admin */
