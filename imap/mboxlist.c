@@ -1075,6 +1075,7 @@ EXPORTED int mboxlist_create_intermediaries(const char *mboxname,
                                             modseq_t modseq, struct txn **tid)
 {
     mbname_t *mbname = mbname_from_intname(mboxname);
+    strarray_t inter = STRARRAY_INITIALIZER;
     int r = 0;
 
     while (!r && strarray_size(mbname_boxes(mbname))) {
@@ -1102,6 +1103,7 @@ EXPORTED int mboxlist_create_intermediaries(const char *mboxname,
         newmbentry->foldermodseq = modseq;
 
         r = mboxlist_update_entry(parent, newmbentry, tid);
+        if (!r) strarray_push(&inter, parent);
 
         mboxlist_entry_free(&newmbentry);
     }
@@ -1109,7 +1111,21 @@ EXPORTED int mboxlist_create_intermediaries(const char *mboxname,
     mbname_free(&mbname);
 
     if (r) cyrusdb_abort(mbdb, *tid);
-    else r = cyrusdb_commit(mbdb, *tid);
+    else {
+        r = cyrusdb_commit(mbdb, *tid);
+
+        if (!r) {
+            /* Sync log intermediaries */
+            char *name;
+
+            while ((name = strarray_pop(&inter))) {
+                sync_log_mailbox(name);
+                free(name);
+            }
+        }
+    }
+
+    strarray_fini(&inter);
 
     return r;
 }

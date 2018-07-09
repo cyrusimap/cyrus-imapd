@@ -2650,13 +2650,36 @@ int sync_apply_mailbox(struct dlist *kin,
 
     if (!dlist_getatom(kin, "UNIQUEID", &uniqueid))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getatom(kin, "PARTITION", &partition))
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "MBOXNAME", &mboxname))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getnum32(kin, "LAST_UID", &last_uid))
-        return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getnum64(kin, "HIGHESTMODSEQ", &highestmodseq))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    dlist_getnum64(kin, "CREATEDMODSEQ", &createdmodseq);
+
+    dlist_getatom(kin, "MBOXTYPE", &mboxtype);
+    mbtype = mboxlist_string_to_mbtype(mboxtype);
+
+    if (mbtype & MBTYPE_INTERMEDIATE) {
+        mbentry_t *newmbentry = NULL;
+
+        newmbentry = mboxlist_entry_create();
+        newmbentry->name = xstrdupnull(mboxname);
+        newmbentry->mbtype = mbtype;
+        newmbentry->uniqueid = xstrdupnull(uniqueid);
+        newmbentry->foldermodseq = highestmodseq;
+        newmbentry->createdmodseq = createdmodseq;
+
+        r = mboxlist_update(newmbentry, /*localonly*/1);
+        mboxlist_entry_free(&newmbentry);
+
+        return r;
+    }
+
+
+    if (!dlist_getatom(kin, "PARTITION", &partition))
+        return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getnum32(kin, "LAST_UID", &last_uid))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getnum32(kin, "RECENTUID", &recentuid))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -2678,17 +2701,13 @@ int sync_apply_mailbox(struct dlist *kin,
     /* optional */
     dlist_getlist(kin, "ANNOTATIONS", &ka);
     dlist_getdate(kin, "POP3_SHOW_AFTER", &pop3_show_after);
-    dlist_getatom(kin, "MBOXTYPE", &mboxtype);
     dlist_getnum64(kin, "XCONVMODSEQ", &xconvmodseq);
 
     /* Get the CRCs */
     dlist_getnum32(kin, "SYNC_CRC", &synccrcs.basic);
     dlist_getnum32(kin, "SYNC_CRC_ANNOT", &synccrcs.annot);
 
-    dlist_getnum64(kin, "CREATEDMODSEQ", &createdmodseq);
-
     options = sync_parse_options(options_str);
-    mbtype = mboxlist_string_to_mbtype(mboxtype);
 
     r = mailbox_open_iwl(mboxname, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
@@ -5689,13 +5708,46 @@ static int do_folders(struct sync_name_list *mboxname_list, const char *topart,
                       const char **channelp,
                       unsigned flags)
 {
-    int r;
+    int r = 0;
     struct sync_folder_list *master_folders;
     struct sync_rename_list *rename_folders;
     struct sync_reserve_list *reserve_list;
     struct sync_folder *mfolder, *rfolder;
     const char *part;
     uint32_t batchsize = 0;
+    struct sync_name *mbox;
+
+    /* Look for intermediate mailboxes */
+    for (mbox = mboxname_list->head; !r && mbox; mbox = mbox->next) {
+        mbentry_t *mbentry = NULL;
+
+        if (mboxlist_lookup_allow_all(mbox->name, &mbentry, NULL))
+            continue;
+
+        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+            struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
+
+            dlist_setatom(kl, "UNIQUEID", mbentry->uniqueid);
+            dlist_setatom(kl, "MBOXNAME", mbentry->name);
+            dlist_setatom(kl, "MBOXTYPE",
+                          mboxlist_mbtype_to_string(mbentry->mbtype));
+            dlist_setnum64(kl, "HIGHESTMODSEQ", mbentry->foldermodseq);
+            dlist_setnum64(kl, "CREATEDMODSEQ", mbentry->createdmodseq);
+
+            sync_send_apply(kl, sync_be->out);
+            r = sync_parse_response("MAILBOX", sync_be->in, NULL);
+
+            dlist_free(&kl);
+        }
+
+        mboxlist_entry_free(&mbentry);
+    }
+
+    if (r) {
+        syslog(LOG_ERR, "apply intermediates: failed: %s", error_message(r));
+        goto bail;
+    }
+
 
     if (channelp) {
         batchsize = config_getint(IMAPOPT_SYNC_BATCHSIZE);
@@ -5876,6 +5928,11 @@ static int do_mailbox_info(const mbentry_t *mbentry, void *rock)
     int r = 0;
 
     /* XXX - check for deleted? */
+
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+        sync_name_list_add(info->mboxlist, mbentry->name);
+        return 0;
+    }
 
     r = mailbox_open_irl(mbentry->name, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
