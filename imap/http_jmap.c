@@ -139,6 +139,31 @@ struct namespace_t namespace_jmap = {
     }
 };
 
+
+static int json_response(int code, struct transaction_t *txn, json_t *root)
+{
+    size_t flags = JSON_PRESERVE_ORDER;
+    char *buf;
+
+    /* Dump JSON object into a text buffer */
+    flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
+    buf = json_dumps(root, flags);
+    json_decref(root);
+
+    if (!buf) {
+        txn->error.desc = "Error dumping JSON object";
+        return HTTP_SERVER_ERROR;
+    }
+
+    /* Output the JSON object */
+    txn->resp_body.type = "application/json; charset=utf-8";
+    write_body(code, txn, buf, strlen(buf));
+    free(buf);
+
+    return 0;
+}
+
+
 enum {
     JMAP_ENDPOINT_API,
     JMAP_ENDPOINT_UPLOAD,
@@ -662,9 +687,9 @@ static int jmap_post(struct transaction_t *txn,
                      void *params __attribute__((unused)))
 {
     json_t *jreq = NULL, *resp = NULL;
-    size_t i, flags = JSON_PRESERVE_ORDER;
+    size_t i;
     int ret;
-    char *buf, *inboxname = NULL;
+    char *inboxname = NULL;
     hash_table *client_creation_ids = NULL;
     hash_table *new_creation_ids = NULL;
     hash_table accounts = HASH_TABLE_INITIALIZER;
@@ -849,21 +874,8 @@ static int jmap_post(struct transaction_t *txn,
         json_object_set_new(res, "createdIds", jcreatedIds);
     }
 
-    /* Dump JSON object into a text buffer */
-    flags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
-    buf = json_dumps(res, flags);
-    json_decref(res);
-
-    if (!buf) {
-        txn->error.desc = "Error dumping JSON response object";
-        ret = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
     /* Output the JSON object */
-    txn->resp_body.type = "application/json; charset=utf-8";
-    write_body(HTTP_OK, txn, buf, strlen(buf));
-    free(buf);
+    ret = json_response(HTTP_OK, txn, res);
 
   done:
     free_hash_table(client_creation_ids, free);
@@ -1642,22 +1654,8 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     json_object_set_new(resp, "type", json_string(normalisedtype));
     free(normalisedtype);
 
-    /* Dump JSON object into a text buffer */
-    size_t jflags = JSON_PRESERVE_ORDER;
-    jflags |= (config_httpprettytelemetry ? JSON_INDENT(2) : JSON_COMPACT);
-    char *buf = json_dumps(resp, jflags);
-    json_decref(resp);
-    if (!buf) {
-        txn->error.desc = "Error dumping JSON response object";
-        ret = HTTP_SERVER_ERROR;
-        goto done;
-    }
-
     /* Output the JSON object */
-    txn->resp_body.type = "application/json; charset=utf-8";
-    write_body(HTTP_CREATED, txn, buf, strlen(buf));
-    free(buf);
-    ret = 0;
+    ret = json_response(HTTP_CREATED, txn, resp);
 
 done:
     free(accountid);
@@ -2140,17 +2138,7 @@ static int jmap_settings(struct transaction_t *txn)
     }
 
     /* Write the JSON response */
-    char *sbuf = json_dumps(res, 0);
-    if (!sbuf) {
-        txn->error.desc = "Error dumping JSON response object";
-        return HTTP_SERVER_ERROR;
-    }
-    txn->resp_body.type = "application/json; charset=utf-8";
-    write_body(HTTP_OK, txn, sbuf, strlen(sbuf));
-
-    free(sbuf);
-    json_decref(res);
-    return 0;
+    return json_response(HTTP_OK, txn, res);
 }
 
 static int myrights(struct auth_state *authstate,
