@@ -1509,7 +1509,7 @@ static void apply_patch_component(struct path_segment_t *path_seg,
 
         /* Check comp-match */
         if (path_seg->match.comp.uid &&
-            strcmp(path_seg->match.comp.uid, icalcomponent_get_uid(comp))) {
+            strcmpnull(path_seg->match.comp.uid, icalcomponent_get_uid(comp))) {
             continue;  /* UID doesn't match */
         }
 
