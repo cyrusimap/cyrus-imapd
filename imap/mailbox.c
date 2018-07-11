@@ -970,7 +970,8 @@ static int mailbox_open_advanced(const char *name,
     if (r) {
         /* locked is not an error - just means we asked for NONBLOCKING */
         if (r != IMAP_MAILBOX_LOCKED)
-            syslog(LOG_ERR, "IOERROR: locking %s: %m", mailbox->name);
+            syslog(LOG_ERR, "IOERROR: locking %s: %s",
+                   mailbox->name, error_message(r));
         goto done;
     }
 
@@ -2211,8 +2212,8 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
     if (sbuf.st_ino != mailbox->header_file_ino) {
         r = mailbox_read_header(mailbox, NULL);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: reading header for %s: %m",
-                   mailbox->name);
+            syslog(LOG_ERR, "IOERROR: reading header for %s: %s",
+                   mailbox->name, error_message(r));
             mailbox_unlock_index(mailbox, NULL);
             return r;
         }
@@ -2231,8 +2232,8 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
      * we're safe to just extend the map if needed */
     r = mailbox_read_index_header(mailbox);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: refreshing index for %s: %m",
-               mailbox->name);
+        syslog(LOG_ERR, "IOERROR: refreshing index for %s: %s",
+               mailbox->name, error_message(r));
         mailbox_unlock_index(mailbox, NULL);
         return r;
     }
