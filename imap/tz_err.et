@@ -1,4 +1,4 @@
-# timezone_err.et -- Error codes for the Cyrus Timezone Service
+# tz_err.et -- Error codes for the Cyrus Timezone Service
 #
 # Copyright (c) 1994-2014 Carnegie Mellon University.  All rights reserved.
 #
