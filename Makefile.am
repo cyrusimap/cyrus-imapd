@@ -83,6 +83,8 @@ DISTCLEANFILES = \
 	imap/http_err.h \
 	imap/imap_err.c \
 	imap/imap_err.h \
+	imap/jmap_err.c \
+	imap/jmap_err.h \
 	imap/lmtp_err.c \
 	imap/lmtp_err.h \
 	imap/mupdate_err.c \
@@ -225,6 +227,8 @@ BUILT_SOURCES += \
 	imap/http_carddav_js.h \
 	imap/http_err.c \
 	imap/http_err.h \
+	imap/jmap_err.c \
+	imap/jmap_err.h \
 	imap/tz_err.c \
 	imap/tz_err.h
 
@@ -275,6 +279,8 @@ if !HTTPD
 EXTRA_DIST += \
 	imap/http_err.c \
 	imap/http_err.h \
+	imap/jmap_err.c \
+	imap/jmap_err.h \
 	imap/tz_err.c \
 	imap/tz_err.h
 endif # HTTPD
@@ -366,6 +372,7 @@ EXTRA_DIST += \
 	imap/http_carddav.js \
 	imap/http_err.et \
 	imap/imap_err.et \
+	imap/jmap_err.et \
 	imap/lmtp_err.et \
 	imap/mupdate_err.et \
 	imap/nntp_err.et \
@@ -1183,6 +1190,8 @@ nodist_imap_httpd_SOURCES = \
 	imap/http_carddav_js.h \
 	imap/http_err.c \
 	imap/http_err.h \
+	imap/jmap_err.c \
+	imap/jmap_err.h \
 	imap/tz_err.c \
 	imap/tz_err.h
 

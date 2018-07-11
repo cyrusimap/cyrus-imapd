@@ -69,6 +69,7 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
+#include "imap/jmap_err.h"
 
 #include "http_jmap.h"
 
@@ -156,11 +157,53 @@ static int json_response(int code, struct transaction_t *txn, json_t *root)
     }
 
     /* Output the JSON object */
-    txn->resp_body.type = "application/json; charset=utf-8";
+    switch (code) {
+    case HTTP_OK:
+    case HTTP_CREATED:
+        txn->resp_body.type = "application/json; charset=utf-8";
+        break;
+    default:
+        txn->resp_body.type = "application/problem+json; charset=utf-8";
+        break;
+    }
+
     write_body(code, txn, buf, strlen(buf));
     free(buf);
 
     return 0;
+}
+
+static int json_error_response(struct transaction_t *txn, long code)
+{
+    long http_code = HTTP_BAD_REQUEST;
+    const char *type, *title;
+    json_t *root;
+
+    switch (code) {
+    case JMAP_NOT_JSON:
+    case JMAP_NOT_REQUEST:
+    case JMAP_UNKNOWN_CAPABILITY:
+        /* Error string is encoded as type NUL title */
+        type = error_message(code);
+        title = type + strlen(type) + 1;
+        break;
+
+    default:
+        return code;
+    }
+
+    root = json_pack("{s:s s:s s:i}", "type", type, "title", title,
+                     "status", atoi(error_message(http_code)));
+    if (!root) {
+        txn->error.desc = "Unable to create JSON response";
+        return HTTP_SERVER_ERROR;
+    }
+
+    if (txn->error.desc) {
+        json_object_set_new(root, "detail", json_string(txn->error.desc));
+    }
+
+    return json_response(http_code, txn, root);
 }
 
 
@@ -303,6 +346,8 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
     if (!namespace_jmap.enabled) return;
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
+
+    initialize_JMAP_error_table();
 
 #define _read_opt(val, optkey) \
     val = config_getint(optkey); \
@@ -580,7 +625,7 @@ static int parse_json_body(struct transaction_t *txn, json_t **req)
         buf_printf(&txn->buf,
                    "Unable to parse JSON request body: %s", jerr.text);
         txn->error.desc = buf_cstring(&txn->buf);
-        return HTTP_BAD_REQUEST;
+        return JMAP_NOT_JSON;
     }
 
     return 0;
@@ -592,8 +637,7 @@ static int validate_request(struct transaction_t *txn, json_t *req)
     json_t *calls = json_object_get(req, "methodCalls");
 
     if (!json_is_array(using) || !json_is_array(calls)) {
-        txn->error.desc = "JSON request body is not a JMAP Request object";
-        return HTTP_BAD_REQUEST;
+        return JMAP_NOT_REQUEST;
     }
 
     /*
@@ -614,8 +658,7 @@ static int validate_request(struct transaction_t *txn, json_t *req)
                 !json_is_string(json_array_get(val, 0)) ||
                 !json_is_object(json_array_get(val, 1)) ||
                 !json_is_string(json_array_get(val, 2))) {
-            txn->error.desc = "JSON request body is not a JMAP Request object";
-            return HTTP_BAD_REQUEST;
+            return JMAP_NOT_REQUEST;
         }
         if (i >= (size_t) jmap_max_calls_in_request) {
             txn->error.desc = "JSON request calls exceeds maxCallsInRequest";
@@ -647,12 +690,10 @@ static int validate_request(struct transaction_t *txn, json_t *req)
     json_array_foreach(using, i, val) {
         const char *s = json_string_value(val);
         if (!s) {
-            txn->error.desc = "JSON request body is not a JMAP Request object";
-            return HTTP_BAD_REQUEST;
+            return JMAP_NOT_REQUEST;
         }
         if (!json_object_get(jmap_capabilities, s)) {
-            txn->error.desc = "JSON request uses unsupported capabilities";
-            return HTTP_BAD_REQUEST;
+            return JMAP_UNKNOWN_CAPABILITY;
         }
     }
 
@@ -710,11 +751,11 @@ static int jmap_post(struct transaction_t *txn,
 
     /* Regular JMAP POST request */
     ret = parse_json_body(txn, &jreq);
-    if (ret) goto done;
+    if (ret) return json_error_response(txn, ret);
 
     /* Validate Request object */
     if ((ret = validate_request(txn, jreq))) {
-        goto done;
+        return json_error_response(txn, ret);
     }
 
     /* Start JSON response */
