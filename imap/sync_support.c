@@ -2785,17 +2785,10 @@ int sync_apply_mailbox(struct dlist *kin,
     }
 
     /* skip out now, it's going to mismatch for sure! */
-    if (createdmodseq > mailbox->i.createdmodseq) {
-        if (opt_force) {
-            syslog(LOG_NOTICE, "forcesync: lower createdmodseq on replica %s - %llu > %llu",
-                   mboxname, createdmodseq, mailbox->i.createdmodseq);
-        }
-        else {
-            syslog(LOG_ERR, "lower createdmodseq on replica %s - %llu > %llu",
-                   mboxname, createdmodseq, mailbox->i.createdmodseq);
-            r = IMAP_SYNC_CHECKSUM;
-            goto done;
-        }
+    /* 0 is the default case, and should always be overwritten with the real value */
+    if (createdmodseq > mailbox->i.createdmodseq && mailbox->i.createdmodseq != 0) {
+        syslog(LOG_NOTICE, "SYNCNOTICE: lower createdmodseq on replica %s - %llu > %llu",
+               mboxname, createdmodseq, mailbox->i.createdmodseq);
     }
 
     /* NOTE - this is optional */
