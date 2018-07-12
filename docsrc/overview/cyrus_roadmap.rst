@@ -14,7 +14,7 @@ High Level Roadmap
 Future
 ------
 
-* Improved JMAP support
+* JMAP support (Contacts, calendars and emails)
 * Improved CalDAV and CardDAV support
 * Improved backup support
 * Multi-master replication
@@ -22,11 +22,9 @@ Future
 3.0.x
 -----
 
-* Better calendaring support through jmap
 * Cross-folder conversations
 * Support for fuzzy Xapian search.
 * CalDAV and CardDAV support
-* JMAP support
 * Better backup support - initial release
 * Basic object storage
 * Archive partition support
