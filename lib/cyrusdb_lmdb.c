@@ -285,7 +285,7 @@ static int begin_txn(struct dbengine *db, struct txn **tidptr, int readonly)
 fail:
     r = my_mdberror(mr);
     if (tid->mtxn) abort_txn(db, tid);
-    syslog(LOG_ERR, "cryusdb_lmdb(%s): %s", db->fname, mdb_strerror(mr));
+    syslog(LOG_ERR, "cyrusdb_lmdb(%s): %s", db->fname, mdb_strerror(mr));
     return r;
 }
 
@@ -413,7 +413,7 @@ static int myopen(const char *fname, int flags, struct dbengine **ret,
 
 fail:
     if (mr)
-        syslog(LOG_ERR, "cryusdb_lmdb(%s): %s", db->fname, mdb_strerror(mr));
+        syslog(LOG_ERR, "cyrusdb_lmdb(%s): %s", db->fname, mdb_strerror(mr));
     if (db->env)
         mdb_env_close(db->env);
     free(db->fname);
@@ -481,7 +481,7 @@ static int fetch(struct dbengine *db, const char *key, size_t keylen,
         if (data) *data = NULL;
     } else if (mr) {
         /* That's an error */
-        syslog(LOG_ERR, "cryusdb_lmdb(%s): %s", db->fname, mdb_strerror(mr));
+        syslog(LOG_ERR, "cyrusdb_lmdb(%s): %s", db->fname, mdb_strerror(mr));
         r = CYRUSDB_INTERNAL;
         goto fail;
     } else if (data && datalen) {
@@ -597,7 +597,7 @@ fail:
     if (tid && (!tidptr || !*tidptr))
         abort_txn(db, tid);
     if (mr) {
-        syslog(LOG_ERR, "cryusdb_lmdb(%s): %s", db->fname, mdb_strerror(mr));
+        syslog(LOG_ERR, "cyrusdb_lmdb(%s): %s", db->fname, mdb_strerror(mr));
         r = my_mdberror(mr);
     }
     return r;
@@ -628,7 +628,7 @@ static int put(struct dbengine *db, const char *key, size_t keylen,
     mr = mdb_put(tid->mtxn, tid->dbi, &mkey, &mval, mflags);
     if (mr) {
         /* Return the appropriate error code for existing key overwrites */
-        syslog(LOG_ERR, "cryusdb_lmdb(%s): %s", db->fname, mdb_strerror(mr));
+        syslog(LOG_ERR, "cyrusdb_lmdb(%s): %s", db->fname, mdb_strerror(mr));
         r = (mr == MDB_KEYEXIST && (mflags & MDB_NOOVERWRITE)) ? \
             CYRUSDB_EXISTS : CYRUSDB_INTERNAL;
         goto fail;
@@ -697,7 +697,7 @@ static int delete(struct dbengine *db, const char *key, size_t keylen,
         r = force ? CYRUSDB_OK : CYRUSDB_NOTFOUND;
         if (r) goto fail;
     } else if (mr) {
-        syslog(LOG_ERR, "cryusdb_lmdb(%s): %s", db->fname, mdb_strerror(mr));
+        syslog(LOG_ERR, "cyrusdb_lmdb(%s): %s", db->fname, mdb_strerror(mr));
         r = CYRUSDB_INTERNAL;
         goto fail;
     }
@@ -902,7 +902,7 @@ static int archive(const strarray_t *fnames, const char *dirname)
         /* Archive the current database */
         PDEBUG("cyrusdb_lmdb(%s): archiving to %s", l->db->fname, dstname);
         if ((mr = mdb_env_copy(l->db->env, dstname))) {
-            syslog(LOG_ERR, "cryusdb_lmdb(%s): archive: %s", dstname, mdb_strerror(mr));
+            syslog(LOG_ERR, "cyrusdb_lmdb(%s): archive: %s", dstname, mdb_strerror(mr));
             r = mr == EEXIST ? CYRUSDB_EXISTS : CYRUSDB_INTERNAL;
             break;
         }
