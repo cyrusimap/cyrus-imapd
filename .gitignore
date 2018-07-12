@@ -98,6 +98,8 @@ imap/imap_err.c
 imap/imap_err.h
 imap/imapd
 imap/ipurge
+imap/jmap_err.c
+imap/jmap_err.h
 imap/lmtp_err.c
 imap/lmtp_err.h
 imap/lmtpd
