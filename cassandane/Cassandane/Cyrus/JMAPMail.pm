@@ -816,6 +816,231 @@ sub test_mailbox_set
     $self->assert_str_equals($res->[0][1]{notFound}[0], $id);
 }
 
+sub test_mailbox_set_order
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Assert mailboxes are created in the right order.
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+        },
+        content => '{
+            "using" : ["ietf:jmapmail"],
+            "methodCalls" : [["Mailbox/set", {
+                "create" : {
+                    "C" : {
+                        "name" : "C", "parentId" : "#B", "role" : null
+                    },
+                    "B" : {
+                        "name" : "B", "parentId" : "#A", "role" : null
+                    },
+                    "A" : {
+                        "name" : "A", "parentId" : null, "role" : null
+                    }
+                }
+            }, "R1"]]
+        }',
+    };
+    my $RawResponse = $jmap->ua->post($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert($RawResponse->{success});
+
+    my $res = eval { decode_json($RawResponse->{content}) };
+    $res = $res->{methodResponses};
+    $self->assert_not_null($res->[0][1]{created}{A});
+    $self->assert_not_null($res->[0][1]{created}{B});
+    $self->assert_not_null($res->[0][1]{created}{C});
+
+    # Assert mailboxes are destroyed in the right order.
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        destroy => [
+            $res->[0][1]{created}{A}{id},
+            $res->[0][1]{created}{B}{id},
+            $res->[0][1]{created}{C}{id},
+        ]
+    }, "R1"]]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_null($res->[0][1]{notDestroyed});
+}
+
+sub test_mailbox_set_name_swap
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            A => {
+                name => 'A', parentId => undef, role => undef,
+            },
+            B => {
+                name => 'B', parentId => undef, role => undef,
+            },
+        },
+    }, "R1"]]);
+    my $idA =$res->[0][1]{created}{A}{id};
+    my $idB =$res->[0][1]{created}{B}{id};
+    $self->assert_not_null($idA);
+    $self->assert_not_null($idB);
+
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $idA => { name => 'B' },
+            $idB => { name => 'A' },
+        },
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{updated}{$idA});
+    $self->assert(exists $res->[0][1]{updated}{$idB});
+}
+
+sub test_mailbox_set_order2
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    # Create and get mailbox tree.
+    $imaptalk->create("INBOX.A") or die;
+    $imaptalk->create("INBOX.A.B") or die;
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my ($idA, $idB) = ($m{"A"}{id}, $m{"B"}{id});
+
+    # Use a non-trivial, but correct operations order: this
+    # asserts that name clashes and mailboxHasChild conflicts
+    # are resolved appropriately: the create depends on the
+    # deletion of current mailbox A, which depends on the
+    # update to move away the child from A, which requires
+    # the create to set the parentId. Fun times.
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            Anew => {
+                name => 'A',
+                parentId => undef,
+                role => undef,
+            },
+        },
+        update => {
+            $idB => {
+                parentId => '#Anew',
+            },
+        },
+        destroy => [
+            $idA,
+        ]
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{created}{'Anew'});
+    $self->assert(exists $res->[0][1]{updated}{$idB});
+    $self->assert_str_equals($idA, $res->[0][1]{destroyed}[0]);
+}
+
+sub test_mailbox_set_cycle_in_create
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # Attempt to create cyclic mailboxes. This should fail.
+    my $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            A => {
+                name => 'A',
+                parentId => '#C',
+                role => undef,
+            },
+            B => {
+                name => 'B',
+                parentId => '#A',
+                role => undef,
+            },
+            C => {
+                name => 'C',
+                parentId => '#B',
+                role => undef,
+            }
+        }
+    }, "R1"]]);
+    $self->assert_num_equals(3, scalar keys %{$res->[0][1]{notCreated}});
+    $self->assert(exists $res->[0][1]{notCreated}{'A'});
+    $self->assert(exists $res->[0][1]{notCreated}{'B'});
+    $self->assert(exists $res->[0][1]{notCreated}{'C'});
+}
+
+sub test_mailbox_set_cycle_in_update
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    # Create and get mailbox tree.
+    $imaptalk->create("INBOX.A") or die;
+    $imaptalk->create("INBOX.B") or die;
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my ($idA, $idB) = ($m{"A"}{id}, $m{"B"}{id});
+
+    # Introduce a cycle in the mailbox tree. Since both
+    # operations could create the cycle, one operation must
+    # fail and the other succeed. It's not deterministic
+    # which will, resulting in mailboxes (A, A.B) or (B, B.A).
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $idB => {
+                parentId => $idA,
+            },
+            $idA => {
+                parentId => $idB,
+            },
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{notUpdated}});
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
+    $self->assert(
+        (exists $res->[0][1]{notUpdated}{$idA} and exists $res->[0][1]{updated}{$idB}) or
+        (exists $res->[0][1]{notUpdated}{$idB} and exists $res->[0][1]{updated}{$idA})
+    );
+}
+
+sub test_mailbox_set_cycle_in_mboxtree
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    # Create and get mailbox tree.
+    $imaptalk->create("INBOX.A") or die;
+    $imaptalk->create("INBOX.A.B") or die;
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my ($idA, $idB) = ($m{"A"}{id}, $m{"B"}{id});
+
+    # Introduce a cycle in the mailbox tree. This should fail.
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $idA => {
+                parentId => $idB,
+            },
+        },
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{notUpdated}{$idA});
+}
+
 sub test_mailbox_get_shared_parents
     :min_version_3_1 :needs_component_jmap
 {
@@ -931,7 +1156,7 @@ sub test_mailbox_set_name_collision
 
     # This MUST work per spec, but Cyrus /set does not support
     # invalid interim states...
-    xlog "rename bar to foo and foo to bar (should fail)";
+    xlog "rename bar to foo and foo to bar";
     $res = $jmap->CallMethods([
         ['Mailbox/set', { update => {
             $fooid => {
@@ -942,30 +1167,7 @@ sub test_mailbox_set_name_collision
             },
         }}, 'R1'],
     ]);
-    $self->assert_num_equals(2, scalar keys %{$res->[0][1]{notUpdated}});
-
-    # ... so clients have to come up with their own sequence of renames.
-    xlog "rename bar to foo and foo to bar (should fail)";
-    $res = $jmap->CallMethods([
-        ['Mailbox/set', { update => {
-            $fooid => {
-                name => "bam",
-            },
-        }}, 'R1'],
-        ['Mailbox/set', { update => {
-            $barid => {
-                name => "foo",
-            },
-        }}, 'R2'],
-        ['Mailbox/set', { update => {
-            $fooid => {
-                name => "bar",
-            },
-        }}, 'R3'],
-    ]);
-    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
-    $self->assert_num_equals(1, scalar keys %{$res->[1][1]{updated}});
-    $self->assert_num_equals(1, scalar keys %{$res->[2][1]{updated}});
+    $self->assert_num_equals(2, scalar keys %{$res->[0][1]{updated}});
 
     xlog "get mailboxes";
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$fooid, $barid] }, "R1"]]);
@@ -1229,23 +1431,35 @@ sub test_mailbox_set_parent
 
     # Create mailboxes
     xlog "create mailbox foo";
-    my $res = $jmap->CallMethods([['Mailbox/set', { create => {
-                        "1" => { name => "foo", parentId => undef, role => undef }
-                    }}, "R1"]]);
+    my $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            "1" => {
+                name => "foo",
+                parentId => undef,
+                role => undef }
+        }
+    }, "R1"]]);
     my $id1 = $res->[0][1]{created}{"1"}{id};
     xlog "create mailbox foo.bar";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { create => {
-                        "2" => { name => "bar", parentId => $id1, role => undef }
-                    }}, "R1"]
-        ]);
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            "2" => {
+                name => "bar",
+                parentId => $id1,
+                role => undef }
+        }
+    }, "R1"]]);
     my $id2 = $res->[0][1]{created}{"2"}{id};
     xlog "create mailbox foo.bar.baz";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { create => {
-                        "3" => { name => "baz", parentId => $id2, role => undef }
-                    }}, "R1"]
-        ]);
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            "3" => {
+                name => "baz",
+                parentId => $id2,
+                role => undef
+            }
+        }
+    }, "R1"]]);
     my $id3 = $res->[0][1]{created}{"3"}{id};
 
     # All set up?
@@ -1257,38 +1471,53 @@ sub test_mailbox_set_parent
     $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id2);
 
     xlog "move foo.bar to bar";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { update => {
-                        $id2 => { name => "bar", parentId => undef, role => undef }
-                    }}, "R1"]
-        ]);
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $id2 => {
+                name => "bar",
+                parentId => undef,
+                role => undef }
+        }
+    }, "R1"]]);
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id2] }, "R1"]]);
     $self->assert_null($res->[0][1]{list}[0]->{parentId});
 
     xlog "move bar.baz to foo.baz";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { update => {
-                        $id3 => { name => "baz", parentId => $id1, role => undef }
-                    }}, "R1"]
-        ]);
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $id3 => {
+                name => "baz",
+                parentId => $id1,
+                role => undef
+            }
+        }
+    }, "R1"]]);
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id3] }, "R1"]]);
     $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id1);
 
     xlog "move foo to bar.foo";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { update => {
-                        $id1 => { name => "foo", parentId => $id2, role => undef }
-                    }}, "R1"]
-        ]);
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $id1 => {
+                name => "foo",
+                parentId => $id2,
+                role => undef
+            }
+        }
+    }, "R1"]]);
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id1] }, "R1"]]);
     $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id2);
 
     xlog "move foo to non-existent parent";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { update => {
-                        $id1 => { name => "foo", parentId => "nope", role => undef }
-                    }}, "R1"]
-        ]);
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $id1 => {
+                name => "foo",
+                parentId => "nope",
+                role => undef
+            }
+        }
+    }, "R1"]]);
     my $errType = $res->[0][1]{notUpdated}{$id1}{type};
     my $errProp = $res->[0][1]{notUpdated}{$id1}{properties};
     $self->assert_str_equals($errType, "invalidProperties");
@@ -1297,21 +1526,22 @@ sub test_mailbox_set_parent
     $self->assert_str_equals($res->[0][1]{list}[0]->{parentId}, $id2);
 
     xlog "attempt to destroy bar (which has child foo)";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { destroy => [$id2] }, "R1"]
-        ]);
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        destroy => [$id2]
+    }, "R1"]]);
     $errType = $res->[0][1]{notDestroyed}{$id2}{type};
     $self->assert_str_equals($errType, "mailboxHasChild");
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id2] }, "R1"]]);
     $self->assert_null($res->[0][1]{list}[0]->{parentId});
 
     xlog "destroy all";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { destroy => [$id3, $id1, $id2] }, "R1"]
-        ]);
-    $self->assert_str_equals($res->[0][1]{destroyed}[0], $id3);
-    $self->assert_str_equals($res->[0][1]{destroyed}[1], $id1);
-    $self->assert_str_equals($res->[0][1]{destroyed}[2], $id2);
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        destroy => [$id3, $id1, $id2]
+    }, "R1"]]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{destroyed}});
+    $self->assert(grep {$_ eq $id1} @{$res->[0][1]{destroyed}});
+    $self->assert(grep {$_ eq $id2} @{$res->[0][1]{destroyed}});
+    $self->assert(grep {$_ eq $id3} @{$res->[0][1]{destroyed}});
 }
 
 sub test_mailbox_set_parent_acl
@@ -1490,52 +1720,63 @@ sub test_mailbox_set_shared
 
     xlog "get mailboxes for foo account";
     my $res = $jmap->CallMethods([['Mailbox/get', { accountId => "foo" }, "R1"]]);
-    my $inbox = $res->[0][1]{list}[0];
-
-    my $create = ['Mailbox/set', {
-                    accountId => "foo",
-                    create => { "1" => {
-                            name => "x",
-                            parentId => $inbox->{id},
-                            role => 'trash',
-             }}}, "R1"];
+    my $inboxId = $res->[0][1]{list}[0]{id};
 
     my $update = ['Mailbox/set', {
-                    accountId => "foo",
-                    update => { $inbox->{id} => {
-                            id => $inbox->{id},
-                            name => "y",
-             }}}, "R1"];
+        accountId => "foo",
+        update => {
+            $inboxId => {
+                name => "UpdatedInbox",
+            }
+        }
+    }, "R1"];
 
-    xlog "create mailbox as child of shared mailbox (should fail)";
+    xlog "update shared INBOX (should fail)";
+    $res = $jmap->CallMethods([ $update ]);
+    $self->assert(exists $res->[0][1]{notUpdated}{$inboxId});
+
+    xlog "Add update ACL rights to shared INBOX";
+    $admintalk->setacl("user.foo", "cassandane", "lrw") or die;
+
+    xlog "update shared INBOX (should succeed)";
+    $res = $jmap->CallMethods([ $update ]);
+    $self->assert(exists $res->[0][1]{updated}{$inboxId});
+
+    my $create = ['Mailbox/set', {
+        accountId => "foo",
+        create => {
+            "1" => {
+                name => "x",
+                parentId => $inboxId,
+            }
+        }
+    }, "R1"];
+
+    xlog "create mailbox child (should fail)";
     $res = $jmap->CallMethods([ $create ]);
     $self->assert_not_null($res->[0][1]{notCreated}{1});
 
-    xlog "update shared mailbox (should fail)";
-    $res = $jmap->CallMethods([ $update ]);
-    $self->assert(exists $res->[0][1]{notUpdated}{$inbox->{id}});
-
-    xlog "create mailbox as child of shared mailbox (should succeed)";
+    xlog "Add update ACL rights to shared INBOX";
     $admintalk->setacl("user.foo", "cassandane", "lrwk") or die;
+
+    xlog "create mailbox child (should succeed)";
     $res = $jmap->CallMethods([ $create ]);
     $self->assert_not_null($res->[0][1]{created}{1});
-    my $id = $res->[0][1]{created}{1}{id};
+    my $childId = $res->[0][1]{created}{1}{id};
 
     my $destroy = ['Mailbox/set', {
-            accountId => "foo",
-            destroy => [ $id ],
-        }, 'R1' ];
+        accountId => "foo",
+        destroy => [ $childId ],
+    }, 'R1' ];
 
-    xlog "update shared mailbox (should succeed)";
-    $res = $jmap->CallMethods([ $update ]);
-    $self->assert(exists $res->[0][1]{updated}{$inbox->{id}});
-
-    xlog "destroy shared mailbox (should fail)";
+    xlog "destroy shared mailbox child (should fail)";
     $res = $jmap->CallMethods([ $destroy ]);
-    $self->assert(exists $res->[0][1]{notDestroyed}{$id});
+    $self->assert(exists $res->[0][1]{notDestroyed}{$childId});
 
-    xlog "destroy shared mailbox (should succeed)";
+    xlog "Add delete ACL rights";
     $admintalk->setacl("user.foo.x", "cassandane", "lrwkx") or die;
+
+    xlog "destroy shared mailbox child (should succeed)";
     $res = $jmap->CallMethods([ $destroy ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
 }
