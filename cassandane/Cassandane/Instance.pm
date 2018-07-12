@@ -1293,7 +1293,7 @@ sub stop
     return if ($self->{_stopped});
     $self->{_stopped} = 1;
 
-    xlog "stop";
+    xlog "stop $self->{description}: basedir $self->{basedir}";
 
     foreach my $name ($self->_list_pid_files())
     {
