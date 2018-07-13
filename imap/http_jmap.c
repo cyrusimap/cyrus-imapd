@@ -176,19 +176,32 @@ static int json_response(int code, struct transaction_t *txn, json_t *root)
 static int json_error_response(struct transaction_t *txn, long code)
 {
     long http_code = HTTP_BAD_REQUEST;
-    const char *type, *title;
+    const char *type, *title, *limit = NULL;
     json_t *root;
+
+    /* Error string is encoded as type NUL title [ NUL limit ] */
+    type = error_message(code);
+    title = type + strlen(type) + 1;
 
     switch (code) {
     case JMAP_NOT_JSON:
     case JMAP_NOT_REQUEST:
     case JMAP_UNKNOWN_CAPABILITY:
-        /* Error string is encoded as type NUL title */
-        type = error_message(code);
-        title = type + strlen(type) + 1;
+        break;
+
+    case JMAP_LIMIT_SIZE:
+        http_code = HTTP_PAYLOAD_TOO_LARGE;
+
+        GCC_FALLTHROUGH
+
+    case JMAP_LIMIT_CALLS:
+    case JMAP_LIMIT_OBJS_GET:
+    case JMAP_LIMIT_OBJS_SET:
+        limit = title + strlen(title) + 1;
         break;
 
     default:
+        /* Actually an HTTP code, not a JMAP error code */
         return code;
     }
 
@@ -197,6 +210,10 @@ static int json_error_response(struct transaction_t *txn, long code)
     if (!root) {
         txn->error.desc = "Unable to create JSON response";
         return HTTP_SERVER_ERROR;
+    }
+
+    if (limit) {
+        json_object_set_new(root, "limit", json_string(limit));
     }
 
     if (txn->error.desc) {
@@ -647,8 +664,7 @@ static int validate_request(struct transaction_t *txn, json_t *req)
      */
 
     if (txn->req_body.len > (size_t) jmap_max_size_request) {
-        txn->error.desc = "JSON request byte size exceeds maxSizeRequest";
-        return HTTP_PAYLOAD_TOO_LARGE;
+        return JMAP_LIMIT_SIZE;
     }
 
     size_t i;
@@ -661,8 +677,7 @@ static int validate_request(struct transaction_t *txn, json_t *req)
             return JMAP_NOT_REQUEST;
         }
         if (i >= (size_t) jmap_max_calls_in_request) {
-            txn->error.desc = "JSON request calls exceeds maxCallsInRequest";
-            return HTTP_BAD_REQUEST;
+            return JMAP_LIMIT_CALLS;
         }
         const char *mname = json_string_value(json_array_get(val, 0));
         mname = strchr(mname, '/');
@@ -671,8 +686,7 @@ static int validate_request(struct transaction_t *txn, json_t *req)
         if (!strcmp(mname, "get")) {
             json_t *ids = json_object_get(json_array_get(val, 1), "ids");
             if (json_array_size(ids) > (size_t) jmap_max_objects_in_get) {
-                txn->error.desc = "JSON request calls exceeds maxObjectsInGet";
-                return HTTP_BAD_REQUEST;
+                return JMAP_LIMIT_OBJS_GET;
             }
         }
         else if (!strcmp(mname, "set")) {
@@ -681,8 +695,7 @@ static int validate_request(struct transaction_t *txn, json_t *req)
             size += json_object_size(json_object_get(args, "update"));
             size += json_array_size(json_object_get(args, "destroy"));
             if (size > (size_t) jmap_max_objects_in_set) {
-                txn->error.desc = "JSON request calls exceeds maxObjectsInSet";
-                return HTTP_BAD_REQUEST;
+                return JMAP_LIMIT_OBJS_SET;
             }
         }
     }
