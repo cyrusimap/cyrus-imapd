@@ -7267,6 +7267,11 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
     int r = 0;
     uint32_t uidvalidity = mbentry->uidvalidity;
 
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+        /* ignore intermediates - will be created on new branch as needed */
+        goto done;
+    }
+
     if((text->nl + strlen(mbentry->name + text->ol)) >= MAX_MAILBOX_BUFFER)
         goto done;
 
