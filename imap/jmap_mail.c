@@ -3242,7 +3242,7 @@ static void _mboxset_state_conflict_cb(const char *id, void *data, void *rock)
     }
 }
 
-static struct mboxset_state *_mboxset_newstate(const char *account_id, struct mboxset_ops *ops)
+static int _mboxset_state_is_valid(const char *account_id, struct mboxset_ops *ops)
 {
     /* Create in-memory mailbox tree */
     struct mboxset_state *state = xzmalloc(sizeof(struct mboxset_state));
@@ -3301,12 +3301,8 @@ static struct mboxset_state *_mboxset_newstate(const char *account_id, struct mb
 
     /* Check state for conflicts. */
     hash_enumerate(entry_by_id, _mboxset_state_conflict_cb, state);
+    int is_valid = !state->has_conflict;
 
-    return state;
-}
-
-static void _mboxset_state_free(struct mboxset_state *state)
-{
     free_hash_table(state->entry_by_id, _mboxset_entry_free);
     free(state->entry_by_id);
     free_hash_table(state->id_by_imapname, free);
@@ -3314,7 +3310,10 @@ static void _mboxset_state_free(struct mboxset_state *state)
     free_hash_table(state->siblings_by_parent_id, (void(*)(void*))strarray_free);
     free(state->siblings_by_parent_id);
     free(state);
+
+    return is_valid;
 }
+
 
 static void _mboxset(jmap_req_t *req, struct mboxset *set)
 {
@@ -3365,14 +3364,12 @@ static void _mboxset(jmap_req_t *req, struct mboxset *set)
     }
     _mboxset_run(req, set, ops, _MBOXSET_SKIP);
     if (ptrarray_size(ops->put) || strarray_size(ops->del)) {
-        struct mboxset_state *state = _mboxset_newstate(req->accountid, ops);
-        if (state->has_conflict) {
-            _mboxset_run(req, set, ops, _MBOXSET_FAIL);
-        }
-        else {
+        if (_mboxset_state_is_valid(req->accountid, ops)) {
             _mboxset_run(req, set, ops, _MBOXSET_TMPNAME);
         }
-        _mboxset_state_free(state);
+        else {
+            _mboxset_run(req, set, ops, _MBOXSET_FAIL);
+        }
     }
 
 done:
