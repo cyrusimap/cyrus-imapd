@@ -663,7 +663,7 @@ static int validate_request(struct transaction_t *txn, json_t *req)
      * maxConcurrentRequests
      */
 
-    if (txn->req_body.len > (size_t) jmap_max_size_request) {
+    if (buf_len(&txn->req_body.payload) > (size_t) jmap_max_size_request) {
         return JMAP_LIMIT_SIZE;
     }
 
