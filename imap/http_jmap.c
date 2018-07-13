@@ -186,11 +186,11 @@ static int json_response(int code, struct transaction_t *txn, json_t *root)
     return 0;
 }
 
-static int json_error_response(struct transaction_t *txn, long code)
+static int json_error_response(struct transaction_t *txn,
+                               long code, json_t **res)
 {
     long http_code = HTTP_BAD_REQUEST;
     const char *type, *title, *limit = NULL;
-    json_t *root;
 
     /* Error string is encoded as type NUL title [ NUL limit ] */
     type = error_message(code);
@@ -218,22 +218,22 @@ static int json_error_response(struct transaction_t *txn, long code)
         return code;
     }
 
-    root = json_pack("{s:s s:s s:i}", "type", type, "title", title,
+    *res = json_pack("{s:s s:s s:i}", "type", type, "title", title,
                      "status", atoi(error_message(http_code)));
-    if (!root) {
+    if (!*res) {
         txn->error.desc = "Unable to create JSON response";
         return HTTP_SERVER_ERROR;
     }
 
     if (limit) {
-        json_object_set_new(root, "limit", json_string(limit));
+        json_object_set_new(*res, "limit", json_string(limit));
     }
 
     if (txn->error.desc) {
-        json_object_set_new(root, "detail", json_string(txn->error.desc));
+        json_object_set_new(*res, "detail", json_string(txn->error.desc));
     }
 
-    return json_response(http_code, txn, root);
+    return 0;
 }
 
 
@@ -789,11 +789,11 @@ static int jmap_api(struct transaction_t *txn, json_t **res)
     strarray_t methods = STRARRAY_INITIALIZER;
 
     ret = parse_json_body(txn, &jreq);
-    if (ret) return json_error_response(txn, ret);
+    if (ret) return json_error_response(txn, ret, res);
 
     /* Validate Request object */
     if ((ret = validate_request(txn, jreq, &do_perf))) {
-        return json_error_response(txn, ret);
+        return json_error_response(txn, ret, res);
     }
 
     /* Start JSON response */
@@ -960,7 +960,7 @@ static int jmap_api(struct transaction_t *txn, json_t **res)
     if (client_creation_ids) {
         json_t *jcreatedIds = json_object();
         hash_enumerate(new_creation_ids, _make_created_ids, jcreatedIds);
-        json_object_set_new(res, "createdIds", jcreatedIds);
+        json_object_set_new(*res, "createdIds", jcreatedIds);
     }
 
   done:
