@@ -167,7 +167,6 @@ static int fixmbox(const mbentry_t *mbentry,
         if (!(mbentry->mbtype & MBTYPE_INTERMEDIATE) &&
             !mboxname_isdeletedmailbox(mbentry->name, NULL) &&
             !mboxname_contains_parent(mbentry->name, *last_name)) {
-            struct txn *tid = NULL;
             int r;
 
             syslog(LOG_NOTICE,
@@ -178,7 +177,7 @@ static int fixmbox(const mbentry_t *mbentry,
                 mbentry->name,
                 mboxname_nextmodseq(mbentry->name, 0 /* last */,
                                     mbentry->mbtype, 1 /* dofolder */),
-                &tid);
+                NULL /* inter */, NULL /* tid */);
 
             if (r) {
                 syslog(LOG_ERR,

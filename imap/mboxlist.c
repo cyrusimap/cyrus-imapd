@@ -1071,12 +1071,30 @@ EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribut
     return r;
 }
 
+static void sync_log_intermediaries(strarray_t *sa)
+{
+    char *name;
+
+    while ((name = strarray_pop(sa))) {
+        sync_log_mailbox(name);
+        free(name);
+    }
+}
+
 EXPORTED int mboxlist_create_intermediaries(const char *mboxname,
-                                            modseq_t modseq, struct txn **tid)
+                                            modseq_t modseq,
+                                            strarray_t *inter,
+                                            struct txn **tid)
 {
     mbname_t *mbname = mbname_from_intname(mboxname);
-    strarray_t inter = STRARRAY_INITIALIZER;
+    strarray_t myinter = STRARRAY_INITIALIZER;
+    struct txn *mytid = NULL;
     int r = 0;
+
+    if (!tid) {
+        tid = &mytid;
+        inter = &myinter;
+    }
 
     while (!r && strarray_size(mbname_boxes(mbname))) {
         const char *parent;
@@ -1103,39 +1121,40 @@ EXPORTED int mboxlist_create_intermediaries(const char *mboxname,
         newmbentry->foldermodseq = modseq;
 
         r = mboxlist_update_entry(parent, newmbentry, tid);
-        if (!r) strarray_push(&inter, parent);
+        if (!r) strarray_push(inter, parent);
 
         mboxlist_entry_free(&newmbentry);
     }
 
     mbname_free(&mbname);
 
-    if (r) cyrusdb_abort(mbdb, *tid);
-    else {
-        r = cyrusdb_commit(mbdb, *tid);
-
-        if (!r) {
-            /* Sync log intermediaries */
-            char *name;
-
-            while ((name = strarray_pop(&inter))) {
-                sync_log_mailbox(name);
-                free(name);
-            }
+    if (mytid) {
+        if (r) cyrusdb_abort(mbdb, mytid);
+        else {
+            r = cyrusdb_commit(mbdb, mytid);
+            if (!r) sync_log_intermediaries(&myinter);
         }
-    }
 
-    strarray_fini(&inter);
+        strarray_fini(&myinter);
+    }
 
     return r;
 }
 
 static int mboxlist_delete_intermediaries(const char *mboxname,
-                                          modseq_t modseq)
+                                          modseq_t modseq,
+                                          strarray_t *inter,
+                                          struct txn **tid)
 {
     mbname_t *mbname = mbname_from_intname(mboxname);
-    struct txn *tid = NULL;
+    strarray_t myinter = STRARRAY_INITIALIZER;
+    struct txn *mytid = NULL;
     int r = 0;
+
+    if (!tid) {
+        tid = &mytid;
+        inter = &myinter;
+    }
 
     while (!r && strarray_size(mbname_boxes(mbname))) {
         const char *parent;
@@ -1146,13 +1165,14 @@ static int mboxlist_delete_intermediaries(const char *mboxname,
         parent = mbname_intname(mbname);
         if (!*parent) break;  /* root of hierarchy ("") */
 
-        r = mboxlist_mylookup(parent, &mbentry, &tid, 1);
+        r = mboxlist_mylookup(parent, &mbentry, tid, 1);
         if (mbentry) {
             if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-                mbentry->mbtype = MBTYPE_DELETED;
+                mbentry->mbtype |= MBTYPE_DELETED;
                 mbentry->foldermodseq = modseq;
 
-                r = mboxlist_update_entry(parent, mbentry, &tid);
+                r = mboxlist_update_entry(parent, mbentry, tid);
+                if (!r) strarray_push(inter, parent);
             }
             else r = IMAP_OK_COMPLETED;
 
@@ -1160,18 +1180,19 @@ static int mboxlist_delete_intermediaries(const char *mboxname,
         }
     }
 
-    switch (r) {
-    case 0:
-    case IMAP_OK_COMPLETED:
-        r = cyrusdb_commit(mbdb, tid);
-        break;
-
-    default:
-        cyrusdb_abort(mbdb, tid);
-        break;
-    }
-
     mbname_free(&mbname);
+
+    if (r == IMAP_OK_COMPLETED) r = 0;
+
+    if (mytid) {
+        if (r) cyrusdb_abort(mbdb, mytid);
+        else {
+            r = cyrusdb_commit(mbdb, mytid);
+            if (!r) sync_log_intermediaries(&myinter);
+        }
+
+        strarray_fini(&myinter);
+    }
 
     return r;
 }
@@ -1204,6 +1225,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     struct mailbox *newmailbox = NULL;
     int isremote = mbtype & MBTYPE_REMOTE;
     mbentry_t *newmbentry = NULL;
+    strarray_t inter = STRARRAY_INITIALIZER;
     struct txn *tid = NULL;
 
     r = mboxlist_create_namecheck(mboxname, userid, auth_state,
@@ -1243,12 +1265,19 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     }
     r = mboxlist_update_entry(mboxname, newmbentry, &tid);
 
+    if (!r) {
+        /* create any missing intermediaries */
+        r = mboxlist_create_intermediaries(mboxname, newmbentry->foldermodseq,
+                                           &inter, &tid);
+    }
+
     if (r) cyrusdb_abort(mbdb, tid);
     else {
-        /* create any missing intermediaries */
-        r = mboxlist_create_intermediaries(mboxname,
-                                           newmbentry->foldermodseq, &tid);
+        r = cyrusdb_commit(mbdb, tid);
+        if (!r) sync_log_intermediaries(&inter);
     }
+
+    strarray_fini(&inter);
 
     if (r) {
         syslog(LOG_ERR, "DBERROR: failed to insert to mailboxes list %s: %s",
@@ -1570,7 +1599,8 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                force, 1);
 
     if (!r && !mboxlist_haschildren(name)) {
-        r = mboxlist_delete_intermediaries(name, mbentry->foldermodseq+1);
+        r = mboxlist_delete_intermediaries(name, mbentry->foldermodseq+1,
+                                           NULL /* inter */, NULL /* tid */);
     }
 
 done:
@@ -1699,7 +1729,8 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         r = mboxlist_update(newmbentry, /*localonly*/1);
 
         if (!r && !haschildren) {
-            r = mboxlist_delete_intermediaries(name, newmbentry->foldermodseq);
+            r = mboxlist_delete_intermediaries(name, newmbentry->foldermodseq,
+                                               NULL /* inter */, NULL /* tid */);
         }
 
         mboxlist_entry_free(&newmbentry);
@@ -1783,6 +1814,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
     int partitionmove = 0;
     struct mailbox *oldmailbox = NULL;
     struct mailbox *newmailbox = NULL;
+    strarray_t inter = STRARRAY_INITIALIZER;
     struct txn *tid = NULL;
     const char *root = NULL;
     char *newpartition = NULL;
@@ -1948,12 +1980,25 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 
             r = mboxlist_update_entry(oldname, oldmbentry, &tid);
 
+            if (!r && !mboxname_isdeletedmailbox(newname, NULL)) {
+                r = mboxlist_delete_intermediaries(oldname,
+                                                   oldmbentry->foldermodseq,
+                                                   &inter, &tid);
+            }
+
             mboxlist_entry_free(&oldmbentry);
         }
 
         /* create a new entry */
         if (!r) {
             r = mboxlist_update_entry(newname, newmbentry, &tid);
+
+            /* create any missing intermediaries */
+            if (!r && !mboxname_isdeletedmailbox(newname, NULL)) {
+                r = mboxlist_create_intermediaries(newname,
+                                                   newmbentry->foldermodseq,
+                                                   &inter, &tid);
+            }
         }
 
         switch (r) {
@@ -1975,6 +2020,8 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 
     /* 3. Commit transaction */
     r = cyrusdb_commit(mbdb, tid);
+    if (!r) sync_log_intermediaries(&inter);
+
     tid = NULL;
     if (r) {
         syslog(LOG_ERR, "DBERROR: rename failed on commit %s %s: %s",
@@ -2095,6 +2142,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
     }
 
     /* free memory */
+    strarray_fini(&inter);
     free(newpartition);
     mboxlist_entry_free(&newmbentry);
 
