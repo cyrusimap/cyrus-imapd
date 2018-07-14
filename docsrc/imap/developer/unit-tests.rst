@@ -286,7 +286,7 @@ debugging a failing test somewhat challenging. The solution is:
     Reading symbols from /home/me/cyrus-imapd/cunit/.libs/lt-unit...done.
     (gdb) list crc32.testc:1
     1       /* Unit test for lib/crc32.c */
-    2       #include "cunit/cunit.h"
+    2       #include "cunit/cyrunit.h"
     3       #include "crc32.h"
     ...
     (gdb) break test_map
@@ -350,7 +350,7 @@ The file should contain something like this.
 ::
 
     /* Unit test for lib/crc32.c */
-    #include "cunit/cunit.h"  (a)
+    #include "cunit/cyrunit.h"  (a)
     #include "crc32.h"  (b)
 
     static void test_map(void)  (c)
@@ -366,7 +366,7 @@ The file should contain something like this.
 Here's an explanation of what all these bits are for.
 
 (a)
-    You need to include the header ``"cunit/cunit.h"``, which is a thin
+    You need to include the header ``"cunit/cyrunit.h"``, which is a thin
     Cyrus wrapper around the CUnit's library's header,
     ``<CUnit/CUnit.h>`` with some extra conveniences.
 (b)

@@ -1,5 +1,5 @@
 #include <malloc.h>
-#include "cunit/cunit.h"
+#include "cunit/cyrunit.h"
 #include "util.h"
 
 static void test_null(void)

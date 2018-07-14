@@ -613,7 +613,7 @@ check_PROGRAMS += cunit/unit
 
 cunit_FRAMEWORK = \
 	cunit/unit.c \
-	cunit/cunit.h \
+	cunit/cyrunit.h \
 	cunit/syslog.c \
 	cunit/cunit-syslog.h \
 	cunit/timeout.c \

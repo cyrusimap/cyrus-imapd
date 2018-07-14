@@ -40,7 +40,7 @@
 
 #include <unistd.h>
 
-#include "cunit/cunit.h"
+#include "cunit/cyrunit.h"
 
 #include "lib/exitcodes.h"
 #include "lib/libconfig.h"

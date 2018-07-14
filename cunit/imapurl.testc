@@ -1,6 +1,6 @@
 #include <malloc.h>
 #include <time.h>
-#include "cunit/cunit.h"
+#include "cunit/cyrunit.h"
 #include "imapurl.h"
 
 static void test_fromurl_cclient(void)

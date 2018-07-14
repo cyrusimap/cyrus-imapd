@@ -1,5 +1,5 @@
 #include "config.h"
-#include "cunit/cunit.h"
+#include "cunit/cyrunit.h"
 #include "prot.h"
 #include "imap/dlist.h"
 #include "util.h"

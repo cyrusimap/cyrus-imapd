@@ -1,4 +1,4 @@
-#include "cunit/cunit.h"
+#include "cunit/cyrunit.h"
 #include "util.h"
 
 static void test_bin_to_hex(void)

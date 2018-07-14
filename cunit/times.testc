@@ -49,7 +49,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <assert.h>
-#include "cunit/cunit.h"
+#include "cunit/cyrunit.h"
 #include "times.h"
 #include "cunit/timezones.h"
 

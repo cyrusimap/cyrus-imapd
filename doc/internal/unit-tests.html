@@ -309,7 +309,7 @@ a failing test somewhat challenging.  The solution is:</p>
 Reading symbols from /home/me/cyrus-imapd/cunit/.libs/lt-unit...done.
 (gdb) <b>list crc32.testc:1</b>
 1       /* Unit test for lib/crc32.c */
-2       #include "cunit/cunit.h"
+2       #include "cunit/cyrunit.h"
 3       #include "crc32.h"
 ...
 (gdb) <b>break test_map</b>
@@ -371,7 +371,7 @@ in <tt>lib/crc32.c</tt>.</p>
 <p>The file should contain something like this.</p>
 
 <blockquote class="src">/* Unit test for lib/crc32.c */
-#include "cunit/cunit.h"  <span class="note">(a)</span>
+#include "cunit/cyrunit.h"  <span class="note">(a)</span>
 #include "crc32.h"  <span class="note">(b)</span>
 
 static void test_map(void)  <span class="note">(c)</span>
@@ -390,7 +390,7 @@ static void test_map(void)  <span class="note">(c)</span>
 <dl>
 
 <dt><span class="note">(a)</span></dt>
-<dd>You need to include the header <tt>"cunit/cunit.h"</tt>,
+<dd>You need to include the header <tt>"cunit/cyrunit.h"</tt>,
 which is a thin Cyrus wrapper around the CUnit's library's
 header, <tt>&lt;CUnit/CUnit.h&gt;</tt> with some extra
 conveniences.</dd>

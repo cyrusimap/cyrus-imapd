@@ -52,7 +52,7 @@
 #endif
 #include <setjmp.h>
 #include "timeout.h"
-#include "cunit.h"
+#include "cyrunit.h"
 #include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */

@@ -1,6 +1,6 @@
 #include <stdlib.h>
 
-#include "cunit/cunit.h"
+#include "cunit/cyrunit.h"
 #include "charset.h"
 
 extern int charset_debug;

@@ -1,4 +1,4 @@
-#include "cunit/cunit.h"
+#include "cunit/cyrunit.h"
 #include "xmalloc.h"
 #include "bsearch.h"
 #include "strarray.h"

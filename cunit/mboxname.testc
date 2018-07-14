@@ -2,7 +2,7 @@
 #include <config.h>
 #endif
 #include <assert.h>
-#include "cunit/cunit.h"
+#include "cunit/cyrunit.h"
 #include "libconfig.h"
 #include "imap/mboxname.h"
 #include "imap/mailbox.h"

@@ -1,5 +1,5 @@
 /* Unit test for lib/crc32.c */
-#include "cunit/cunit.h"
+#include "cunit/cyrunit.h"
 #include "crc32.h"
 #include "crc32c.h"
 

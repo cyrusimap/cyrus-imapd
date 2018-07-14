@@ -1,6 +1,6 @@
 #include "config.h"
 #include <stdio.h>
-#include "cunit/cunit.h"
+#include "cunit/cyrunit.h"
 #include <sys/stat.h>
 #include "command.h"
 

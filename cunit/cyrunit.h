@@ -1,4 +1,4 @@
-/* cunit.h - wrapper for CUnit assert macros
+/* cyrunit.h - wrapper for CUnit assert macros
  *
  * Copyright (c) 1994-2010 Carnegie Mellon University.  All rights reserved.
  *

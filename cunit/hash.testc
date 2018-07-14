@@ -1,4 +1,4 @@
-#include "cunit/cunit.h"
+#include "cunit/cyrunit.h"
 #include "strarray.h"
 #include "util.h"
 #include "hash.h"
