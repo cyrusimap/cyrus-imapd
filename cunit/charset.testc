@@ -294,6 +294,8 @@ static void test_encode_mimeheader(void)
 static void test_decode_mimeheader(void)
 {
     char *s;
+    static const char ERR_1[] = "=?ISO-8859-1?B?SWYgeW91IGNhbiByZWFkIHRoaXMgeW8=?= =?ISO-8859-2?B?dSB1bmRlcnN0YW5kIHRoZSBleGFtcGxlLg==?=";
+    static const char EXP_1[]= "IF YOU CAN READ THIS YOU UNDERSTAND THE EXAMPLE.";
     static const char ASCII_1[] = "Lorem IPSUM dolor \t \t  sit amet";
     static const char SEARCH_1[] = "LOREM IPSUM DOLOR SIT AMET";
     static const char ASCII_B64_2[] = "Lorem =?us-ascii?q?ipsum?= dolor "
@@ -324,6 +326,11 @@ static void test_decode_mimeheader(void)
     s = charset_decode_mimeheader(ASCII_1, flags);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, SEARCH_1);
+    free(s);
+
+    s = charset_decode_mimeheader(ERR_1, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, EXP_1);
     free(s);
 
     s = charset_decode_mimeheader(ASCII_B64_2, flags);
