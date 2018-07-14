@@ -2284,15 +2284,28 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
     while ((start = (const char*) strchr(start, '=')) != 0) {
         start++;
         if (*start != '?') continue;
-        encoding = (const char*) strchr(start+1, '?');
-        if (!encoding) continue;
-        endcharset =
-            (const char*) strchr(start+1, '*'); /* Language code delimiter */
-        if (!endcharset || endcharset > encoding) endcharset = encoding;
-        if (encoding[1] != 'b' && encoding[1] != 'B' &&
-            encoding[1] != 'q' && encoding[1] != 'Q') continue;
-        if (encoding[2] != '?') continue;
-        end = (const char*) strchr(encoding+3, '?');
+        endcharset = NULL;
+        for (p = start + 1; *p && *p != '=' && *p != '?'; ++p)
+            if ('*' == *p && !endcharset) endcharset = p;
+        if (*p != '?') {
+            start = p;
+            continue;
+        }
+        encoding = p;
+        if (!endcharset) endcharset = p;
+        if ((encoding[1] != 'b' && encoding[1] != 'B' &&
+             encoding[1] != 'q' && encoding[1] != 'Q')
+            || (encoding[2] != '?')) {
+            start = p;
+            continue;
+        }
+        for (p = encoding + 3; *p && *p != '?'; ++p)
+            if ('=' == *p && p[1] == '?') break;
+        if (*p != '?' || p[1] != '=') {
+            start = p;
+            continue;
+        }
+        end = p;
         if (!end || end[1] != '=') continue;
 
         /*
