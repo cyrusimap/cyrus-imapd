@@ -100,6 +100,8 @@
 
 #define CONVERSATIONS_VERSION 0
 
+struct conversations_open *open_conversations;
+
 static conv_status_t NULLSTATUS = { 0, 0, 0};
 
 static char *convdir = NULL;
