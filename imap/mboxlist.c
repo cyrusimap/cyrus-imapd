@@ -2710,6 +2710,9 @@ static int allmbox_p(void *rock,
     if (!(mbrock->flags & MBOXTREE_TOMBSTONES) && (mbrock->mbentry->mbtype & MBTYPE_DELETED))
         return 0;
 
+    if (!(mbrock->flags & MBOXTREE_INTERMEDIATES) && (mbrock->mbentry->mbtype & MBTYPE_INTERMEDIATE))
+        return 0;
+
     return 1; /* process this record */
 }
 
