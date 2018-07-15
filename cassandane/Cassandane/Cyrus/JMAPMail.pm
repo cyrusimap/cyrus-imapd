@@ -831,7 +831,7 @@ sub test_mailbox_set_order
             'Accept' => 'application/json',
         },
         content => '{
-            "using" : ["ietf:jmapmail"],
+            "using" : ["urn:ietf:params:jmap:mail"],
             "methodCalls" : [["Mailbox/set", {
                 "create" : {
                     "C" : {
@@ -8666,7 +8666,7 @@ sub test_capability
     my $settings;
     $settings = eval { decode_json($Response->{content}) } if $Response->{success};
 
-    my $cap = $settings->{capabilities}->{"ietf:jmapmail"};
+    my $cap = $settings->{capabilities}->{"urn:ietf:params:jmap:mail"};
     $self->assert($cap->{maxSizeAttachmentsPerEmail} > 0);
 }
 

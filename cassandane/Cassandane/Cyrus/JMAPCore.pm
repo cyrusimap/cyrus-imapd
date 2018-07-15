@@ -137,10 +137,10 @@ sub test_settings
     $self->assert_not_null($settings->{apiUrl});
     $self->assert_not_null($settings->{downloadUrl});
     $self->assert_not_null($settings->{uploadUrl});
-    $self->assert(exists $settings->{capabilities}->{"ietf:jmap"});
-    $self->assert(exists $settings->{capabilities}->{"ietf:jmapmail"});
+    $self->assert(exists $settings->{capabilities}->{"urn:ietf:params:jmap:core"});
+    $self->assert(exists $settings->{capabilities}->{"urn:ietf:params:jmap:mail"});
 
-    my $cap = $settings->{capabilities}->{"ietf:jmap"};
+    my $cap = $settings->{capabilities}->{"urn:ietf:params:jmap:core"};
     $self->assert($cap->{maxSizeUpload} > 0);
     $self->assert($cap->{maxConcurrentUpload} > 0);
     $self->assert($cap->{maxSizeRequest} > 0);
@@ -242,7 +242,7 @@ sub test_creationids
             'Accept' => 'application/json',
         },
         content => encode_json({
-            using => ['ietf:jmapmail'],
+            using => ['urn:ietf:params:jmap:mail'],
             methodCalls => [['Identity/get', {}, 'R1']],
             creationIds => 'bogus',
         }),
@@ -255,7 +255,7 @@ sub test_creationids
 
     xlog "create a mailbox without any client-supplied creation ids";
     my $JMAPRequest = {
-        using => ['ietf:jmapmail'],
+        using => ['urn:ietf:params:jmap:mail'],
         methodCalls => [['Mailbox/set', {
             create => {
                 "1" => {
@@ -273,7 +273,7 @@ sub test_creationids
 
     xlog "get mailbox using client-supplied creation id";
     $JMAPRequest = {
-        using => ['ietf:jmapmail'],
+        using => ['urn:ietf:params:jmap:mail'],
         methodCalls => [['Mailbox/get', { ids => ['#1'] }, 'R1']],
         creationIds => { 1 => $mboxid1 },
     };
@@ -283,7 +283,7 @@ sub test_creationids
 
     xlog "create a mailbox with empty client-supplied creation ids";
     $JMAPRequest = {
-        using => ['ietf:jmapmail'],
+        using => ['urn:ietf:params:jmap:mail'],
         methodCalls => [['Mailbox/set', {
             create => {
                 "2" => {
