@@ -7089,7 +7089,9 @@ static int _email_get_meta(jmap_req_t *req,
 
     if (msg->part) {
         /* It's an embedded message. */
-        json_object_set_new(email, "id", json_null());
+        if (_wantprop(props, "id")) {
+            json_object_set_new(email, "id", json_null());
+        }
         if (_wantprop(props, "blobId")) {
             char *blobid = jmap_blobid(&msg->part->content_guid);
             json_object_set_new(email, "blobId", json_string(blobid));
@@ -7119,7 +7121,9 @@ static int _email_get_meta(jmap_req_t *req,
     emailid = _email_id_from_guid(&guid);
 
     /* id */
-    json_object_set_new(email, "id", json_string(emailid));
+    if (_wantprop(props, "id")) {
+        json_object_set_new(email, "id", json_string(emailid));
+    }
 
     /* blobId */
     if (_wantprop(props, "blobId")) {
