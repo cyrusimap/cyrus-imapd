@@ -385,7 +385,7 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
 #undef _read_opt
 
     jmap_capabilities = json_pack("{s:{s:i s:i s:i s:i s:i s:i s:i s:o}}",
-        "ietf:jmap",
+        "urn:ietf:params:jmap:core",
         "maxSizeUpload", jmap_max_size_upload,
         "maxConcurrentUpload", jmap_max_concurrent_upload,
         "maxSizeRequest", jmap_max_size_request,

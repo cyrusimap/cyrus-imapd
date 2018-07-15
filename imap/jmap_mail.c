@@ -966,7 +966,7 @@ int jmap_mail_init(hash_table *methods, json_t *capabilities)
             "emailsListSortOptions", sortopts,
             "submissionExtensions", json_object());
 
-    json_object_set_new(capabilities, "ietf:jmapmail", my_capabilities);
+    json_object_set_new(capabilities, "urn:ietf:params:jmap:mail", my_capabilities);
     return 0;
 }
 
