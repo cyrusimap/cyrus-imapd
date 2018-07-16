@@ -317,6 +317,8 @@ static void jmap_ok(jmap_req_t *req, json_t *res)
     json_array_append_new(item, res);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
+
+    jmap_add_perf(req, res);
 }
 
 static void jmap_error(jmap_req_t *req, json_t *err)

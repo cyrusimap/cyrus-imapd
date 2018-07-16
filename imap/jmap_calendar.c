@@ -453,6 +453,8 @@ doneloop:
 
     json_array_append_new(req->response, item);
 
+    jmap_add_perf(req, calendars);
+
 done:
     if (rock.props) {
         free_hash_table(rock.props, NULL);
@@ -616,6 +618,8 @@ static int getCalendarsUpdates(struct jmap_req *req)
         r = getCalendars(&subreq);
         json_decref(subreq.args);
     }
+
+    jmap_add_perf(req, calendarUpdates);
 
   done:
     buf_free(&buf);
@@ -1182,6 +1186,8 @@ static int setCalendars(struct jmap_req *req)
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
 
+    jmap_add_perf(req, set);
+
 done:
     if (set) json_decref(set);
     return r;
@@ -1460,6 +1466,8 @@ static int getCalendarEvents(struct jmap_req *req)
     json_array_append_new(item, json_string(req->tag));
 
     json_array_append_new(req->response, item);
+
+    jmap_add_perf(req, events);
 
 done:
     if (rock.props) {
@@ -2243,6 +2251,8 @@ static int setCalendarEvents(struct jmap_req *req)
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
 
+    jmap_add_perf(req, set);
+
 done:
     if (db) caldav_close(db);
     if (set) json_decref(set);
@@ -2417,6 +2427,8 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
         r = getCalendarEvents(&subreq);
         json_decref(subreq.args);
     }
+
+    jmap_add_perf(req, eventUpdates);
 
   done:
     buf_free(&buf);
@@ -2987,6 +2999,8 @@ static int getCalendarEventsList(struct jmap_req *req)
         json_decref(subreq.args);
     }
 
+    jmap_add_perf(req, eventList);
+
 done:
     if (events) json_decref(events);
     return r;
@@ -3002,5 +3016,8 @@ static int getCalendarPreferences(struct jmap_req *req)
     json_object_set_new(res, "accountId", json_string(req->accountid));
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
+
+    jmap_add_perf(req, res);
+
     return 0;
 }

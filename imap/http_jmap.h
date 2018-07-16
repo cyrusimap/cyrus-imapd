@@ -67,6 +67,11 @@ typedef struct jmap_req {
     struct transaction_t *txn;
     struct mboxname_counters counters;
 
+    int do_perf;
+    double real_start;
+    double user_start;
+    double sys_start;
+
     /* The JMAP request keeps its own cache of opened mailboxes,
      * which can be used by calling jmap_openmbox. If the
      * force_openmboxrw is set, this causes all following
@@ -142,5 +147,8 @@ extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch);
 
 /* Create a patch-object that transforms a to b. */
 extern json_t *jmap_patchobject_create(json_t *a, json_t *b);
+
+/* Add performance stats to method response */
+extern void jmap_add_perf(jmap_req_t *req, json_t *res);
 
 #endif /* HTTP_JMAP_H */

@@ -570,6 +570,8 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
 
     json_array_append_new(req->response, item);
 
+    jmap_add_perf(req, toplevel);
+
   done:
     free(mboxname);
     mailbox_close(&rock.mailbox);
@@ -715,6 +717,8 @@ static int getContactsGroupUpdates(struct jmap_req *req)
         r = getContactGroups(&subreq);
         json_decref(subreq.args);
     }
+
+    jmap_add_perf(req, contactGroupUpdates);
 
     json_decref(rock.created);
     json_decref(rock.updated);
@@ -1148,6 +1152,8 @@ static int setContactGroups(struct jmap_req *req)
     json_array_append_new(item, json_string(req->tag));
 
     json_array_append_new(req->response, item);
+
+    jmap_add_perf(req, set);
 
 done:
     mailbox_close(&newmailbox);
@@ -1796,6 +1802,8 @@ static int getContactsUpdates(struct jmap_req *req)
         json_decref(subreq.args);
     }
 
+    jmap_add_perf(req, contactUpdates);
+
     json_decref(rock.created);
     json_decref(rock.updated);
     json_decref(rock.destroyed);
@@ -2251,6 +2259,8 @@ static int getContactsList(struct jmap_req *req)
         r = getContacts(&subreq);
         json_decref(subreq.args);
     }
+
+    jmap_add_perf(req, contactList);
 
 done:
     if (rock.filter) jmap_filter_free(rock.filter, contact_filter_free);
@@ -3229,6 +3239,8 @@ static int setContacts(struct jmap_req *req)
     json_array_append_new(item, json_string(req->tag));
 
     json_array_append_new(req->response, item);
+
+    jmap_add_perf(req, set);
 
 done:
     mailbox_close(&newmailbox);

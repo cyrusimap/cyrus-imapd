@@ -43,6 +43,9 @@
 
 #include <config.h>
 
+#include <sys/time.h>
+#include <sys/resource.h>
+
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 
@@ -402,6 +405,9 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
     jmap_contact_init(&jmap_methods, jmap_capabilities);
     jmap_calendar_init(&jmap_methods, jmap_capabilities);
 
+    json_object_set_new(jmap_capabilities,
+                        XML_NS_CYRUS "performance", json_object());
+
     static jmap_method_t blobcopy = { "Blob/copy", &jmap_blob_copy };
     hash_insert(blobcopy.name, &blobcopy, &jmap_methods);
 }
@@ -648,7 +654,7 @@ static int parse_json_body(struct transaction_t *txn, json_t **req)
     return 0;
 }
 
-static int validate_request(struct transaction_t *txn, json_t *req)
+static int validate_request(struct transaction_t *txn, json_t *req, int *do_perf)
 {
     json_t *using = json_object_get(req, "using");
     json_t *calls = json_object_get(req, "methodCalls");
@@ -705,7 +711,10 @@ static int validate_request(struct transaction_t *txn, json_t *req)
         if (!s) {
             return JMAP_NOT_REQUEST;
         }
-        if (!json_object_get(jmap_capabilities, s)) {
+        if (!strcmp(s, XML_NS_CYRUS "performance")) {
+            *do_perf = 1;
+        }
+        else if (!json_object_get(jmap_capabilities, s)) {
             return JMAP_UNKNOWN_CAPABILITY;
         }
     }
@@ -742,7 +751,7 @@ static int jmap_post(struct transaction_t *txn,
 {
     json_t *jreq = NULL, *resp = NULL;
     size_t i;
-    int ret;
+    int ret, do_perf = 0;
     char *inboxname = NULL;
     hash_table *client_creation_ids = NULL;
     hash_table *new_creation_ids = NULL;
@@ -767,7 +776,7 @@ static int jmap_post(struct transaction_t *txn,
     if (ret) return json_error_response(txn, ret);
 
     /* Validate Request object */
-    if ((ret = validate_request(txn, jreq))) {
+    if ((ret = validate_request(txn, jreq, &do_perf))) {
         return json_error_response(txn, ret);
     }
 
@@ -892,6 +901,16 @@ static int jmap_post(struct transaction_t *txn,
         req.mboxrights = &mboxrights;
         req.is_shared_account = strcmp(accountid, httpd_userid);
         req.force_openmbox_rw = 0;
+
+        if (do_perf) {
+            struct rusage usage;
+
+            getrusage(RUSAGE_SELF, &usage);
+            req.user_start = timeval_get_double(&usage.ru_utime);
+            req.sys_start = timeval_get_double(&usage.ru_stime);
+            req.real_start = now_ms() / 1000.0;
+            req.do_perf = 1;
+        }
 
         /* Initialize request context */
         jmap_initreq(&req);
@@ -2341,4 +2360,20 @@ EXPORTED json_t *jmap_patchobject_create(json_t *a, json_t *b)
     jmap_patchobject_diff(patch, &buf, a, b);
     buf_free(&buf);
     return patch;
+}
+
+EXPORTED void jmap_add_perf(jmap_req_t *req, json_t *res)
+{
+    if (req->do_perf) {
+        struct rusage usage;
+
+        getrusage(RUSAGE_SELF, &usage);
+
+        json_t *perf = json_pack("{s:f s:f s:f}",
+            "real", (now_ms() / 1000.0) - req->real_start,
+            "user", timeval_get_double(&usage.ru_utime) - req->user_start,
+            "sys", timeval_get_double(&usage.ru_stime) - req->sys_start);
+
+        json_object_set_new(res, "performance", perf);
+    }
 }
