@@ -1350,8 +1350,13 @@ EXPORTED int jmap_download(struct transaction_t *txn)
         goto done;
     }
 
+    struct strlist *param;
+    if ((param = hash_lookup("accept", &txn->req_qparams))) {
+        accept_mime = xstrdup(param->s);
+    }
+
     const char **hdr;
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
+    if (!accept_mime && (hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
         accept_mime = parse_accept_header(hdr);
     }
     if (!accept_mime) accept_mime = xstrdup("application/octet-stream");
