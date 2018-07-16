@@ -663,7 +663,7 @@ static int cmdtime_enabled = 0;
 static struct timeval cmdtime_start, cmdtime_end, nettime_start, nettime_end;
 static double totaltime, cmdtime, nettime, search_maxtime;
 
-double timeval_get_double(const struct timeval *tv)
+EXPORTED double timeval_get_double(const struct timeval *tv)
 {
     return (double)tv->tv_sec + (double)tv->tv_usec/1000000.0;
 }
