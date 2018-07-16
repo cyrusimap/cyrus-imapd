@@ -9685,6 +9685,69 @@ EOF
     $self->assert_str_equals("This is a test email.\n", $bodyValue->{value});
 }
 
+sub test_email_parse_contenttype_default
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $emailWithoutContentType = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: test email
+Date: Wed, 7 Dec 2016 00:21:50 -0500
+MIME-Version: 1.0
+
+This is a test email.
+EOF
+
+    my $emailWithoutCharset = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: test email
+Date: Wed, 7 Dec 2016 00:21:50 -0500
+Content-Type: text/plain
+MIME-Version: 1.0
+
+This is a test email.
+EOF
+
+    my @testCases = ({
+        desc => "Email without Content-Type header",
+        rawEmail => $emailWithoutContentType,
+        wantContentType => 'text/plain',
+        wantCharset => 'us-ascii',
+    }, {
+        desc => "Email without charset parameter",
+        rawEmail => $emailWithoutCharset,
+        wantContentType => 'text/plain',
+        wantCharset => undef,
+    });
+
+    foreach (@testCases) {
+        xlog "Running test: $_->{desc}";
+        my $rawEmail = $_->{rawEmail};
+        $rawEmail =~ s/\r?\n/\r\n/gs;
+        my $data = $jmap->Upload($rawEmail, "application/data");
+        my $blobId = $data->{blobId};
+
+        my $res = $jmap->CallMethods([['Email/parse', {
+            blobIds => [ $blobId ],
+            properties => ['bodyStructure'],
+        }, 'R1']]);
+        my $email = $res->[0][1]{parsed}{$blobId};
+        $self->assert_str_equals($_->{wantContentType}, $email->{bodyStructure}{type});
+        if (defined $_->{wantCharset}) {
+            $self->assert_str_equals($_->{wantCharset}, $email->{bodyStructure}{charset});
+        } else {
+            $self->assert_null($email->{bodyStructure}{charset});
+        }
+    }
+}
+
 sub test_email_parse_encoding
     :min_version_3_1 :needs_component_jmap
 {
