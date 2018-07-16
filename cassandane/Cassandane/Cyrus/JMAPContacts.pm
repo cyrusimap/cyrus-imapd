@@ -44,7 +44,7 @@ use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.03;
-use Mail::JMAPTalk 0.10;
+use Mail::JMAPTalk 0.12;
 use Data::Dumper;
 use Storable 'dclone';
 
