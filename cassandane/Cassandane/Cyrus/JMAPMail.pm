@@ -3142,6 +3142,79 @@ sub test_email_set_userkeywords
     $self->assert_num_equals(3, scalar keys %{$msg->{keywords}});
 }
 
+sub test_email_set_keywords_bogus_values
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # See https://github.com/cyrusimap/cyrus-imapd/issues/2439
+
+    $self->make_message("foo") || die;
+    my $res = $jmap->CallMethods([['Email/query', { }, "R1"]]);
+    my $emailId = $res->[0][1]{ids}[0];
+    $self->assert_not_null($res);
+
+    $res = $jmap->CallMethods([['Email/set', {
+        'update' => { $emailId => {
+            keywords => {
+                'foo' => JSON::false,
+            },
+        }},
+    }, 'R1' ]]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$emailId});
+
+    $res = $jmap->CallMethods([['Email/set', {
+        'update' => { $emailId => {
+            'keywords/foo' => JSON::false,
+            },
+        },
+    }, 'R1' ]]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$emailId});
+
+    $res = $jmap->CallMethods([['Email/set', {
+        'update' => { $emailId => {
+            keywords => {
+                'foo' => 1,
+            },
+        }},
+    }, 'R1' ]]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$emailId});
+
+    $res = $jmap->CallMethods([['Email/set', {
+        'update' => { $emailId => {
+            'keywords/foo' => 1,
+            },
+        },
+    }, 'R1' ]]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$emailId});
+
+    $res = $jmap->CallMethods([['Email/set', {
+        'update' => { $emailId => {
+            keywords => {
+                'foo' => 'true',
+            },
+        }},
+    }, 'R1' ]]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$emailId});
+
+    $res = $jmap->CallMethods([['Email/set', {
+        'update' => { $emailId => {
+            'keywords/foo' => 'true',
+            },
+        },
+    }, 'R1' ]]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$emailId});
+
+    $res = $jmap->CallMethods([['Email/set', {
+        'update' => { $emailId => {
+            keywords => {
+                'foo' => JSON::true,
+            },
+        }},
+    }, 'R1' ]]);
+    $self->assert(exists $res->[0][1]{updated}{$emailId});
+}
+
 sub test_misc_upload_zero
     :min_version_3_1 :needs_component_jmap
 {
