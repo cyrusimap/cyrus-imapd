@@ -10743,6 +10743,10 @@ static void _email_update(jmap_req_t *req,
     *new_email = json_pack("{s:s}", "id", msgid);
 
 done:
+    if (json_array_size(parser.invalid)) {
+        *set_err = json_pack("{s:s}", "type", "invalidProperties");
+        json_object_set(*set_err, "properties", parser.invalid);
+    }
     jmap_parser_fini(&parser);
     jmap_closembox(req, &mbox);
     msgrecord_unref(&mrw);
