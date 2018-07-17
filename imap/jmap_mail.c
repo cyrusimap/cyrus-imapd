@@ -4767,12 +4767,13 @@ static json_t *_email_read_annot(const jmap_req_t *req, msgrecord_t *mr,
         msgrecord_annot_lookup(mr, annot+7, req->userid, &buf);
     }
     else {
-        msgrecord_annot_lookup(mr, annot+7, "", &buf);
+        msgrecord_annot_lookup(mr, annot, "", &buf);
     }
+
     if (buf_len(&buf)) {
         if (structured) {
             json_error_t jerr;
-            annotvalue = json_loads(buf_base(&buf), JSON_DECODE_ANY, &jerr);
+            annotvalue = json_loads(buf_cstring(&buf), JSON_DECODE_ANY, &jerr);
             /* XXX - log error? */
         }
         else {
@@ -7071,6 +7072,7 @@ struct cyrusmsg {
     struct buf *raw;         /* buffer with raw message */
     msgrecord_t *mr;         /* message record containing this message, or NULL if embedded */
     struct headers *headers; /* parsed headers of part 0, or NULL */
+    json_t *imagesize_by_part; /* FastMail vendor-extension for image attachments */
 };
 
 static void _cyrusmsg_fini(struct cyrusmsg *msg)
@@ -7080,6 +7082,7 @@ static void _cyrusmsg_fini(struct cyrusmsg *msg)
         free(msg->headers);
         msg->headers = NULL;
     }
+    json_decref(msg->imagesize_by_part);
 }
 
 static void _cyrusmsg_parse_headers(struct cyrusmsg *msg)
@@ -7395,8 +7398,10 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
     return r;
 }
 
-static json_t *_email_get_bodypart(struct body *part,
+static json_t *_email_get_bodypart(jmap_req_t *req,
+                                   struct body *part,
                                    struct email_getargs *args,
+                                   struct cyrusmsg *msg,
                                    struct buf *msg_buf)
 {
     struct buf buf = BUF_INITIALIZER;
@@ -7603,13 +7608,34 @@ static json_t *_email_get_bodypart(struct body *part,
         for (i = 0; i < part->numparts; i++) {
             struct body *subpart = part->subpart + i;
             json_array_append_new(subparts,
-                    _email_get_bodypart(subpart, args, msg_buf));
+                    _email_get_bodypart(req, subpart, args, msg, msg_buf));
 
         }
         json_object_set_new(jbodypart, "subParts", subparts);
     }
     else if (_wantprop(bodyprops, "subParts")) {
         json_object_set_new(jbodypart, "subParts", json_array());
+    }
+
+    /* FastMail extension properties */
+    if (_wantprop(bodyprops, "imageSize")) {
+        if (msg->imagesize_by_part == NULL) {
+            /* This is the first attempt to read the vendor annotation.
+             * Load the annotation value, if any, for top-level messages.
+             * Use JSON null for an unsuccessful attempt, so we know not
+             * to try again. */
+            if (msg->mr) {
+                msg->imagesize_by_part = _email_read_annot(req, msg->mr,
+                        "/vendor/messagingengine.com/imagesize", 1);
+            }
+            if (!msg->imagesize_by_part) msg->imagesize_by_part = json_null();
+        }
+        json_t *imagesize = NULL;
+        if (part->part_id) {
+            imagesize = json_object_get(msg->imagesize_by_part, part->part_id);
+        }
+        json_object_set(jbodypart, "imageSize", imagesize ?
+                imagesize : json_null());
     }
 
     buf_free(&buf);
@@ -7751,7 +7777,7 @@ static int _email_get_bodies(jmap_req_t *req,
     /* bodyStructure */
     if (_wantprop(props, "bodyStructure")) {
         json_object_set_new(email, "bodyStructure",
-                _email_get_bodypart(msg_body, args, msg->raw));
+                _email_get_bodypart(req, msg_body, args, msg, msg->raw));
     }
 
     /* bodyValues */
@@ -7790,7 +7816,7 @@ static int _email_get_bodies(jmap_req_t *req,
         for (i = 0; i < bodies.textlist.count; i++) {
             struct body *part = ptrarray_nth(&bodies.textlist, i);
             json_array_append_new(text_body,
-                    _email_get_bodypart(part, args, msg->raw));
+                    _email_get_bodypart(req, part, args, msg, msg->raw));
         }
         json_object_set_new(email, "textBody", text_body);
     }
@@ -7802,7 +7828,7 @@ static int _email_get_bodies(jmap_req_t *req,
         for (i = 0; i < bodies.htmllist.count; i++) {
             struct body *part = ptrarray_nth(&bodies.htmllist, i);
             json_array_append_new(html_body,
-                    _email_get_bodypart(part, args, msg->raw));
+                    _email_get_bodypart(req, part, args, msg, msg->raw));
         }
         json_object_set_new(email, "htmlBody", html_body);
     }
@@ -7814,7 +7840,7 @@ static int _email_get_bodies(jmap_req_t *req,
         for (i = 0; i < bodies.attslist.count; i++) {
             struct body *part = ptrarray_nth(&bodies.attslist, i);
             json_array_append_new(attachments,
-                    _email_get_bodypart(part, args, msg->raw));
+                    _email_get_bodypart(req, part, args, msg, msg->raw));
         }
         json_object_set_new(email, "attachments", attachments);
     }
@@ -7932,7 +7958,7 @@ static int _email_from_record(jmap_req_t *req,
     r = msgrecord_get_bodystructure(mr, &body);
     if (r) return r;
 
-    struct cyrusmsg msg = { body, NULL, &msg_buf, mr, NULL };
+    struct cyrusmsg msg = { body, NULL, &msg_buf, mr, NULL, NULL };
     r = _email_from_msg(req, args, &msg, emailptr);
 
     _cyrusmsg_fini(&msg);
@@ -7955,7 +7981,7 @@ static int _email_from_body(jmap_req_t *req,
     r = msgrecord_get_body(mr, &msg_buf);
     if (r) return r;
 
-    struct cyrusmsg msg = { body, part, &msg_buf, mr, NULL };
+    struct cyrusmsg msg = { body, part, &msg_buf, mr, NULL, NULL };
     r = _email_from_msg(req, args, &msg, emailptr);
 
     _cyrusmsg_fini(&msg);
@@ -8042,7 +8068,7 @@ static int _email_from_buf(jmap_req_t *req,
     /* parse_mapped doesn't set part ids */
     _email_set_partids(mypart->subpart, NULL);
 
-    struct cyrusmsg msg = { mypart, mypart, &mybuf, NULL, NULL };
+    struct cyrusmsg msg = { mypart, mypart, &mybuf, NULL, NULL, NULL };
     r = _email_from_msg(req, args, &msg, emailptr);
     _cyrusmsg_fini(&msg);
 
