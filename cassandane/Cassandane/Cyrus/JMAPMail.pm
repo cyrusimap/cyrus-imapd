@@ -10689,6 +10689,26 @@ sub test_mailbox_intermediate_folders
     $self->assert_null($a->{parentId});
     $self->assert_str_equals($b->{parentId}, $a->{id});
     $self->assert_str_equals($c->{parentId}, $b->{id});
+
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "A",
+             }}}, "R1"]
+    ]);
+
+    $self->assert_not_null($res->[0][1]{created}{1});
+
+    $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'Mailbox/get');
+    $self->assert_str_equals($res->[0][2], 'R1');
+    %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(scalar keys %m, 4);
+    $a = $m{"A"};
+    $b = $m{"B"};
+
+    $self->assert_null($a->{parentId});
+    $self->assert_str_equals($b->{parentId}, $a->{id});
 }
 
 sub test_implementation_email_query
