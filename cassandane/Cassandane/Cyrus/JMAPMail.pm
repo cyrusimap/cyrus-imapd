@@ -830,7 +830,6 @@ sub test_mailbox_set
     $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "foo",
-                            parentId => $inbox->{id},
                             role => undef
              }}}, "R1"]
     ]);
@@ -1718,7 +1717,6 @@ sub test_mailbox_set_parent_acl
     $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "foo",
-                            parentId => $inbox->{id},
                             role => undef
              }}}, "R1"]
     ]);
@@ -1901,7 +1899,6 @@ sub test_mailbox_set_shared
         create => {
             "1" => {
                 name => "x",
-                parentId => $inboxId,
             }
         }
     }, "R1"];
