@@ -1490,6 +1490,14 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
         return 0;
     }
 
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    /* skip INBOX.INBOX magic intermediate */
+    if (strarray_size(mbname_boxes(mbname)) == 1 && !strcmp(strarray_nth(mbname_boxes(mbname), 0), "INBOX")) {
+        mbname_free(&mbname);
+        return 0;
+    }
+    mbname_free(&mbname);
+
     /* Do we need to process this mailbox? */
     if (rock->want && !hash_lookup(mbentry->uniqueid, rock->want))
         return 0;
@@ -1497,6 +1505,7 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     /* Are we done with looking up mailboxes by id? */
     if (rock->want && !hash_numrecords(rock->want))
         return IMAP_OK_COMPLETED;
+
 
     /* Check share_type for this mailbox */
     enum shared_mbox_type share_type =
@@ -1564,7 +1573,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
      * but will degrade if clients just fetch a small subset of
      * all mailbox ids. XXX Optimise this codepath if the ids[] array
      * length is small */
-    mboxlist_usermboxtree(req->accountid, jmap_mailbox_get_cb, &rock, 0);
+    mboxlist_usermboxtree(req->accountid, jmap_mailbox_get_cb, &rock, MBOXTREE_INTERMEDIATES);
 
     /* Report if any requested mailbox has not been found */
     if (rock.want) {
