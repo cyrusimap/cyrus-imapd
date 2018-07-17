@@ -179,6 +179,84 @@ sub test_mailbox_get
     $self->assert_num_equals($bar->{unreadThreads}, 0);
 }
 
+sub test_mailbox_get_inbox_sub
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.INBOX.foo")
+        or die "Cannot create mailbox INBOX.INBOX.foo: $@";
+
+    $imaptalk->create("INBOX.INBOX.foo.bar")
+        or die "Cannot create mailbox INBOX.INBOX.foo.bar: $@";
+
+    xlog "get existing mailboxes";
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'Mailbox/get');
+    $self->assert_str_equals($res->[0][2], 'R1');
+
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(scalar keys %m, 3);
+    my $inbox = $m{"Inbox"};
+    my $foo = $m{"foo"};
+    my $bar = $m{"bar"};
+
+    # INBOX
+    $self->assert_str_equals($inbox->{name}, "Inbox");
+    $self->assert_null($inbox->{parentId});
+    $self->assert_str_equals($inbox->{role}, "inbox");
+    $self->assert_num_equals($inbox->{sortOrder}, 0);
+    $self->assert_equals($inbox->{myRights}->{mayReadItems}, JSON::true);
+    $self->assert_equals($inbox->{myRights}->{mayAddItems}, JSON::true);
+    $self->assert_equals($inbox->{myRights}->{mayRemoveItems}, JSON::true);
+    $self->assert_equals($inbox->{myRights}->{mayCreateChild}, JSON::true);
+    $self->assert_equals($inbox->{myRights}->{mayRename}, JSON::false);
+    $self->assert_equals($inbox->{myRights}->{mayDelete}, JSON::false);
+    $self->assert_equals($inbox->{myRights}->{maySetSeen}, JSON::true);
+    $self->assert_equals($inbox->{myRights}->{maySetKeywords}, JSON::true);
+    $self->assert_equals($inbox->{myRights}->{maySubmit}, JSON::true);
+    $self->assert_num_equals($inbox->{totalEmails}, 0);
+    $self->assert_num_equals($inbox->{unreadEmails}, 0);
+    $self->assert_num_equals($inbox->{totalThreads}, 0);
+    $self->assert_num_equals($inbox->{unreadThreads}, 0);
+
+    # INBOX.INBOX.foo
+    $self->assert_str_equals($foo->{name}, "foo");
+    $self->assert_str_equals($foo->{parentId}, $inbox->{id});
+    $self->assert_null($foo->{role});
+    $self->assert_num_equals($foo->{sortOrder}, 0);
+    $self->assert_equals($foo->{myRights}->{mayReadItems}, JSON::true);
+    $self->assert_equals($foo->{myRights}->{mayAddItems}, JSON::true);
+    $self->assert_equals($foo->{myRights}->{mayRemoveItems}, JSON::true);
+    $self->assert_equals($foo->{myRights}->{mayCreateChild}, JSON::true);
+    $self->assert_equals($foo->{myRights}->{mayRename}, JSON::true);
+    $self->assert_equals($foo->{myRights}->{mayDelete}, JSON::true);
+    $self->assert_num_equals($foo->{totalEmails}, 0);
+    $self->assert_num_equals($foo->{unreadEmails}, 0);
+    $self->assert_num_equals($foo->{totalThreads}, 0);
+    $self->assert_num_equals($foo->{unreadThreads}, 0);
+
+    # INBOX.INBOX.foo.bar
+    $self->assert_str_equals($bar->{name}, "bar");
+    $self->assert_str_equals($bar->{parentId}, $foo->{id});
+    $self->assert_null($bar->{role});
+    $self->assert_num_equals($bar->{sortOrder}, 0);
+    $self->assert_equals($bar->{myRights}->{mayReadItems}, JSON::true);
+    $self->assert_equals($bar->{myRights}->{mayAddItems}, JSON::true);
+    $self->assert_equals($bar->{myRights}->{mayRemoveItems}, JSON::true);
+    $self->assert_equals($bar->{myRights}->{mayCreateChild}, JSON::true);
+    $self->assert_equals($bar->{myRights}->{mayRename}, JSON::true);
+    $self->assert_equals($bar->{myRights}->{mayDelete}, JSON::true);
+    $self->assert_num_equals($bar->{totalEmails}, 0);
+    $self->assert_num_equals($bar->{unreadEmails}, 0);
+    $self->assert_num_equals($bar->{totalThreads}, 0);
+    $self->assert_num_equals($bar->{unreadThreads}, 0);
+}
+
 sub test_mailbox_get_specialuse
     :min_version_3_1 :needs_component_jmap
 {
