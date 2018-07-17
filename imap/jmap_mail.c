@@ -1271,6 +1271,11 @@ static int jmap_mboxlist_findparent(const char *mboxname,
     while (strarray_size(mbname_boxes(mbname))) {
         free(mbname_pop_boxes(mbname));
         mboxlist_entry_free(&mbentry);
+        /* skip exactly INBOX */
+        if (strarray_size(mbname_boxes(mbname)) == 1 &&
+            !strcmp(strarray_nth(mbname_boxes(mbname), 0), "INBOX")) {
+            free(mbname_pop_boxes(mbname));
+        }
         r = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry, NULL);
         if (!r) {
             /* Ignore "reserved" entries, like they aren't there */
@@ -2109,7 +2114,7 @@ done:
  * name to a IMAP mailbox name. Does not check for uniqueness.
  *
  * Return the malloced, combined name, or NULL on error. */
-static char *_mbox_newname(const char *name, const char *parentname)
+static char *_mbox_newname(const char *name, const char *parentname, int is_toplevel)
 {
     charset_t cs = CHARSET_UNKNOWN_CHARSET;
     char *mboxname = NULL;
@@ -2128,6 +2133,8 @@ static char *_mbox_newname(const char *name, const char *parentname)
         goto done;
     }
     mbname_t *mbname = mbname_from_intname(parentname);
+    if (!is_toplevel && !strarray_size(mbname_boxes(mbname)))
+        mbname_push_boxes(mbname, "INBOX");
     mbname_push_boxes(mbname, s);
     free(s);
     mboxname = xstrdup(mbname_intname(mbname));
@@ -2138,14 +2145,14 @@ done:
     return mboxname;
 }
 
-static char *_mbox_tmpname(const char *name, const char *parentname)
+static char *_mbox_tmpname(const char *name, const char *parentname, int is_toplevel)
 {
     int retries = 0;
     do {
         /* Make temporary name */
         struct buf buf = BUF_INITIALIZER;
         buf_printf(&buf, "tmp_%s_%s", name, makeuuid());
-        char *mboxname = _mbox_newname(buf_cstring(&buf), parentname);
+        char *mboxname = _mbox_newname(buf_cstring(&buf), parentname, is_toplevel);
         buf_free(&buf);
         /* Make sure no such mailbox exists */
         mbentry_t *mbentry = NULL;
@@ -2217,6 +2224,7 @@ struct mboxset_args {
     char *parent_id;
     char *role;
     char *specialuse;
+    int is_toplevel;
     int sortorder;
 };
 
@@ -2288,10 +2296,7 @@ static void _mbox_setargs_parse(json_t *jargs,
             jmap_parser_invalid(parser, "parentId");
         }
     } else if (jparentId == json_null() || (is_create && !jparentId)) {
-        mbentry_t *inboxentry = NULL;
-        mboxlist_lookup(req->inboxname, &inboxentry, NULL);
-        args->parent_id = xstrdup(inboxentry->uniqueid);
-        mboxlist_entry_free(&inboxentry);
+        args->is_toplevel = 1;
     }
 
     /* role */
@@ -2493,12 +2498,9 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
             goto done;
         }
     }
-    else if (!parent_id) {
-        parent_id = mbinbox->uniqueid;
-    }
 
     /* Check parent exists and has the proper ACL. */
-    parentname = _mbox_find(req, parent_id);
+    parentname = _mbox_find(req, args->is_toplevel ? mbinbox->uniqueid : parent_id);
     if (!parentname) {
         jmap_parser_invalid(&parser, "parentId");
         goto done;
@@ -2516,7 +2518,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     }
 
     /* Encode the mailbox name for IMAP. */
-    mboxname = _mbox_newname(args->name, parentname);
+    mboxname = _mbox_newname(args->name, parentname, args->is_toplevel);
     if (!mboxname) {
         syslog(LOG_ERR, "could not encode mailbox name");
         r = IMAP_INTERNAL;
@@ -2535,7 +2537,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
         else if (mode == _MBOXSET_TMPNAME) {
             result->new_imapname = xstrdup(mboxname);
             result->old_imapname = NULL;
-            result->tmp_imapname = _mbox_tmpname(args->name, parentname);
+            result->tmp_imapname = _mbox_tmpname(args->name, parentname, args->is_toplevel);
             if (!result->tmp_imapname) {
                 syslog(LOG_ERR, "jmap: no mailbox tmpname for %s", mboxname);
                 r = IMAP_INTERNAL;
@@ -2622,31 +2624,47 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     }
 
     /* Determine current mailbox and parent names */
-    char *mboxname = NULL;
-    char *parentname = NULL;
+    char *oldmboxname = NULL;
+    char *oldparentname = NULL;
+    int was_toplevel = 0;
     if (strcmp(args->mbox_id, mbinbox->uniqueid)) {
-        mboxname = _mbox_find(req, args->mbox_id);
-        if (!mboxname) {
+        oldmboxname = _mbox_find(req, args->mbox_id);
+        if (!oldmboxname) {
             result->err = json_pack("{s:s}", "type", "notFound");
             goto done;
         }
-        r = jmap_mboxlist_findparent(mboxname, &mbparent);
+        r = jmap_mboxlist_findparent(oldmboxname, &mbparent);
         if (r) {
             syslog(LOG_INFO, "jmap_mboxlist_findparent(%s) failed: %s",
-                    mboxname, error_message(r));
+                    oldmboxname, error_message(r));
             goto done;
         }
-        parentname = xstrdup(mbparent->name);
-    } else {
-        parentname = NULL;
-        mboxname = xstrdup(mbinbox->name);
-        mboxlist_lookup(mboxname, &mbparent, NULL);
+        oldparentname = xstrdup(mbparent->name);
+        ptrarray_append(&strpool, oldparentname);
+
+        // calculate whether mailbox is toplevel
+        mbname_t *mbname = mbname_from_intname(oldmboxname);
+        was_toplevel = strarray_size(mbname_boxes(mbname)) == 1;
+        mbname_free(&mbname);
     }
-    ptrarray_append(&strpool, mboxname);
-    ptrarray_append(&strpool, parentname);
-    mboxlist_lookup(mboxname, &mbentry, NULL);
+    else {
+        if (parent_id || args->is_toplevel) {
+            // thou shalt not move INBOX
+           jmap_parser_invalid(&parser, "parentId");
+           goto done;
+        }
+
+        if (args->name) {
+            // thou shalt not rename INBOX
+            jmap_parser_invalid(&parser, "name");
+            goto done;
+        }
+        oldmboxname = xstrdup(mbinbox->name);
+    }
 
     /* Check ACL */
+    ptrarray_append(&strpool, oldmboxname);
+    mboxlist_lookup(oldmboxname, &mbentry, NULL);
     rights = jmap_myrights(req, mbentry);
     if (!(rights & ACL_WRITE)) {
         result->err = json_pack("{s:s}", "type", "readOnly");
@@ -2654,16 +2672,14 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     }
 
     /* Do we need to move this mailbox to a new parent? */
+    const char *parentname = oldparentname;
+    int is_toplevel = was_toplevel;
     int force_rename = 0;
 
-    if (parent_id) {
+    if (parent_id || args->is_toplevel) {
         /* Compare old parent with new parent. */
-        char *newparentname = NULL;
-        if (strcmpsafe(parent_id, mbinbox->uniqueid)) {
-            newparentname = _mbox_find(req, parent_id);
-        } else {
-            newparentname = xstrdup(mbinbox->name);
-        }
+        char *newparentname = _mbox_find(req, args->is_toplevel ? mbinbox->uniqueid : parent_id);
+        int new_toplevel = args->is_toplevel;
         if (!newparentname) {
             jmap_parser_invalid(&parser, "parentId");
             goto done;
@@ -2687,7 +2703,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         free(pname);
 
         /* Is this a move ot a new parent? */
-        if (strcmpsafe(parentname, newparentname)) {
+        if (strcmpsafe(oldparentname, newparentname) || was_toplevel != new_toplevel) {
             /* Check ACL of mailbox */
             if (!(rights & ACL_DELETEMBOX)) {
                 result->err = json_pack("{s:s}", "type", "readOnly");
@@ -2696,9 +2712,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 
             /* Reset pointers to parent */
             mboxlist_entry_free(&mbparent);
-            parentname = newparentname;
-            mboxlist_lookup(mboxname, &mbparent, NULL);
-            force_rename = 1;
+            mboxlist_lookup(newparentname, &mbparent, NULL);
 
             /* Check ACL of new parent */
             int parent_rights = jmap_myrights(req, mbparent);
@@ -2706,27 +2720,35 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                 jmap_parser_invalid(&parser, "parentId");
                 goto done;
             }
+
+            force_rename = 1;
+            parentname = newparentname;
+            is_toplevel = new_toplevel;
         }
     }
 
+    const char *mboxname = oldmboxname;
+
     /* Do we need to rename the mailbox? But only if it isn't the INBOX! */
-    if ((args->name || force_rename) && strcmpsafe(mboxname, mbinbox->name)) {
-        mbname_t *mbname = mbname_from_intname(mboxname);
+    if ((args->name || force_rename)) {
+        mbname_t *mbname = mbname_from_intname(oldmboxname);
         char *oldname = _mbox_get_name(req->accountid, mbname);
-        ptrarray_append(&strpool, oldname);
         mbname_free(&mbname);
-        char *name = xstrdup(args->name ? args->name : oldname);
-        ptrarray_append(&strpool, name);
+        ptrarray_append(&strpool, oldname);
+        char *name = oldname;
+        if (args->name && strcmp(name, args->name)) {
+            name = args->name;
+            force_rename = 1;
+        }
 
         /* Do old and new mailbox names differ? */
-        if (force_rename || strcmpsafe(oldname, name)) {
+        if (force_rename) {
 
             /* Determine the unique IMAP mailbox name. */
-            char *newmboxname = _mbox_newname(name, parentname);
+            char *newmboxname = _mbox_newname(name, parentname, is_toplevel);
             if (!newmboxname) {
                 syslog(LOG_ERR, "_mbox_newname returns NULL: can't rename %s", mboxname);
                 r = IMAP_INTERNAL;
-                free(oldname);
                 goto done;
             }
             ptrarray_append(&strpool, newmboxname);
@@ -2741,10 +2763,10 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                 }
                 else if (mode == _MBOXSET_TMPNAME) {
                     result->new_imapname = xstrdup(newmboxname);
-                    result->old_imapname = xstrdup(mboxname);
-                    result->tmp_imapname = _mbox_tmpname(name, parentname);
+                    result->old_imapname = xstrdup(oldmboxname);
+                    result->tmp_imapname = _mbox_tmpname(name, parentname, is_toplevel);
                     if (!result->tmp_imapname) {
-                        syslog(LOG_ERR, "jmap: no mailbox tmpname for %s", mboxname);
+                        syslog(LOG_ERR, "jmap: no mailbox tmpname for %s", newmboxname);
                         r = IMAP_INTERNAL;
                         goto done;
                     }
@@ -2753,7 +2775,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                     /* Keep on processing with tmpname */
                 }
                 else {
-                    syslog(LOG_ERR, "jmap: mailbox already exists: %s", mboxname);
+                    syslog(LOG_ERR, "jmap: mailbox already exists: %s", newmboxname);
                     jmap_parser_invalid(&parser, "name");
                     goto done;
                 }
@@ -2764,7 +2786,6 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             r = 0;
 
             /* Rename the mailbox. */
-            const char *oldmboxname = mboxname;
             struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
             r = mboxlist_renametree(oldmboxname, newmboxname,
                     NULL /* partition */, 0 /* uidvalidity */,
@@ -2777,7 +2798,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                         oldmboxname, newmboxname, error_message(r));
                 goto done;
             }
-            mboxname = newmboxname;
+            mboxname = newmboxname;  // cheap and nasty change!
         }
     }
 
