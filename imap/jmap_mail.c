@@ -2636,6 +2636,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     char *oldmboxname = NULL;
     char *oldparentname = NULL;
     int was_toplevel = 0;
+    int is_inbox = 0;
     if (strcmp(args->mbox_id, mbinbox->uniqueid)) {
         oldmboxname = _mbox_find(req, args->mbox_id);
         if (!oldmboxname) {
@@ -2662,12 +2663,8 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
            jmap_parser_invalid(&parser, "parentId");
            goto done;
         }
+        is_inbox = 1;
 
-        if (args->name) {
-            // thou shalt not rename INBOX
-            jmap_parser_invalid(&parser, "name");
-            goto done;
-        }
         oldmboxname = xstrdup(mbinbox->name);
     }
 
@@ -2685,7 +2682,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     int is_toplevel = was_toplevel;
     int force_rename = 0;
 
-    if (parent_id || args->is_toplevel) {
+    if (!is_inbox && (parent_id || args->is_toplevel)) {
         /* Compare old parent with new parent. */
         char *newparentname = _mbox_find(req, args->is_toplevel ? mbinbox->uniqueid : parent_id);
         int new_toplevel = args->is_toplevel;
@@ -2739,7 +2736,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     const char *mboxname = oldmboxname;
 
     /* Do we need to rename the mailbox? But only if it isn't the INBOX! */
-    if ((args->name || force_rename)) {
+    if (!is_inbox && (args->name || force_rename)) {
         mbname_t *mbname = mbname_from_intname(oldmboxname);
         char *oldname = _mbox_get_name(req->accountid, mbname);
         mbname_free(&mbname);
