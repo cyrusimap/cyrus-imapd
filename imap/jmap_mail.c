@@ -11834,6 +11834,8 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
 
             json_t *jsubmission = json_object_get(set.create, id+1);
             if (!jsubmission) continue;
+            json_t *jsuccess = json_object_get(set.created, id+1);
+            if (!jsuccess) continue;
             json_t *jemailId = json_object_get(jsubmission, "emailId");
             if (!jemailId) continue;
             json_object_set(updateEmails, json_string_value(jemailId), jemail);
@@ -11850,6 +11852,8 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
 
             json_t *jsubmission = json_object_get(set.create, id+1);
             if (!jsubmission) continue;
+            json_t *jsuccess = json_object_get(set.created, id+1);
+            if (!jsuccess) continue;
             json_t *jemailId = json_object_get(jsubmission, "emailId");
             if (!jemailId) continue;
             json_array_append(destroyEmails, jemailId);
