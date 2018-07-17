@@ -2641,6 +2641,86 @@ sub test_email_get_preview
     $self->assert_str_equals('A plain text email.', $msg->{preview});
 }
 
+sub test_email_get_imagesize
+    :min_version_3_1 :needs_component_jmap
+{
+    # This is a FastMail-extension
+
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    $store->set_folder('INBOX');
+
+    # Part 1 has no imagesize defined, part 2 defines no EXIF
+    # orientation, part 3 defines all image size properties.
+    my $imageSize = {
+        '2' => [1,2],
+        '3' => [1,2,3],
+    };
+
+    # Generate an email with image MIME parts.
+    xlog "Generate an email via IMAP";
+    my $msg = $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => ""
+          . "--sub\r\n"
+          . "Content-Type: text/plain; charset=UTF-8\r\n"
+          . "some text"
+          . "\r\n--sub\r\n"
+          . "Content-Type: image/png\r\n"
+          . "Content-Transfer-Encoding: base64\r\n"
+          . "\r\n"
+          . "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVQYV2NgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII="
+          . "\r\n--sub\r\n"
+          . "Content-Type: image/png\r\n"
+          . "Content-Transfer-Encoding: base64\r\n"
+          . "\r\n"
+          . "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVQYV2NgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII="
+          . "\r\n--sub\r\n"
+          . "Content-Type: image/png\r\n"
+          . "Content-Transfer-Encoding: base64\r\n"
+          . "\r\n"
+          . "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVQYV2NgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII="
+          . "\r\n--sub--\r\n",
+    );
+    xlog "set imagesize annotation";
+    my $annot = '/vendor/messagingengine.com/imagesize';
+    my $ret = $talk->store('1', 'annotation', [
+        $annot, ['value.shared', { Quote => encode_json($imageSize) }]
+    ]);
+    if (not $ret) {
+        xlog "Could not set $annot annotation. Aborting.";
+        return;
+    }
+
+    xlog "get email list";
+    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $ids = $res->[0][1]->{ids};
+
+    xlog "get email";
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => $ids,
+        properties => ['bodyStructure'],
+        bodyProperties => ['partId', 'imageSize' ],
+    }, "R1"]]);
+    my $email = $res->[0][1]{list}[0];
+
+    my $part = $email->{bodyStructure}{subParts}[0];
+    $self->assert_str_equals('1', $part->{partId});
+    $self->assert_null($part->{imageSize});
+
+    $part = $email->{bodyStructure}{subParts}[1];
+    $self->assert_str_equals('2', $part->{partId});
+    $self->assert_deep_equals($imageSize->{2}, $part->{imageSize});
+
+    $part = $email->{bodyStructure}{subParts}[2];
+    $self->assert_str_equals('3', $part->{partId});
+    $self->assert_deep_equals($imageSize->{3}, $part->{imageSize});
+}
+
 sub test_email_get_shared
     :min_version_3_1 :needs_component_jmap
 {
