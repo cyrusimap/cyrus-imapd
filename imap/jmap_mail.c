@@ -7637,6 +7637,11 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
         json_object_set(jbodypart, "imageSize", imagesize ?
                 imagesize : json_null());
     }
+    if (_wantprop(bodyprops, "isDeleted")) {
+        json_object_set_new(jbodypart, "isDeleted",
+                json_boolean(!strcmp(part->type, "TEXT") &&
+                             !strcmp(part->subtype, "X-ME-REMOVED-FILE")));
+    }
 
     buf_free(&buf);
     return jbodypart;
