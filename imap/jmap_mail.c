@@ -2766,14 +2766,14 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             /* Rename the mailbox. */
             const char *oldmboxname = mboxname;
             struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
-            r = mboxlist_renamemailbox(oldmboxname, newmboxname,
+            r = mboxlist_renametree(oldmboxname, newmboxname,
                     NULL /* partition */, 0 /* uidvalidity */,
                     httpd_userisadmin, req->userid, httpd_authstate,
                     mboxevent,
                     0 /* local_only */, 0 /* forceuser */, 0 /* ignorequota */);
             mboxevent_free(&mboxevent);
             if (r) {
-                syslog(LOG_ERR, "mboxlist_renamemailbox(old=%s new=%s): %s",
+                syslog(LOG_ERR, "mboxlist_renametree(old=%s new=%s): %s",
                         oldmboxname, newmboxname, error_message(r));
                 goto done;
             }
@@ -3156,7 +3156,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
     for (i = 0; i < ptrarray_size(&tmp_renames); i++) {
         struct tmp_rename *tmp = ptrarray_nth(&tmp_renames, i);
         struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_RENAME);
-        int r = mboxlist_renamemailbox(tmp->tmp_imapname, tmp->new_imapname,
+        int r = mboxlist_renametree(tmp->tmp_imapname, tmp->new_imapname,
                 NULL /* partition */, 0 /* uidvalidity */,
                 httpd_userisadmin, req->userid, httpd_authstate,
                 mboxevent,

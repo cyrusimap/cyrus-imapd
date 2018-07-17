@@ -1805,11 +1805,11 @@ struct renmboxdata {
     int local_only;
     int ignorequota;
     int found;
-}
+};
 
 static int renamecheck(const mbentry_t *mbentry, void *rock)
 {
-    struct renmboxdata *text = (struct renrock *)rock;
+    struct renmboxdata *text = (struct renmboxdata *)rock;
     int r;
 
     text->found++;
@@ -1828,7 +1828,7 @@ static int renamecheck(const mbentry_t *mbentry, void *rock)
 
 static int dorename(const mbentry_t *mbentry, void *rock)
 {
-    struct renmboxdata *text = (struct renrock *)rock;
+    struct renmboxdata *text = (struct renmboxdata *)rock;
     int r;
 
     if((text->nl + strlen(mbentry->name + text->ol)) >= MAX_MAILBOX_NAME)
@@ -1855,9 +1855,9 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
 {
     struct renmboxdata rock;
     memset(&rock, 0, sizeof(struct renmboxdata));
-    rock.olen = strlen(oldname);
-    rock.nlen = strlen(newname);
-    memcpy(rock.newname, newname, nlen);
+    rock.ol = strlen(oldname);
+    rock.nl = strlen(newname);
+    memcpy(rock.newname, newname, rock.nl);
     rock.partition = partition;
     rock.authstate = auth_state;
     rock.userid = userid;
@@ -1877,7 +1877,7 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
                                mboxevent,
                                local_only, forceuser, ignorequota);
     // special-case only children exist
-    if (r == IMAP_MAILBOX_NONEXISTENT && rock->found) r = 0;
+    if (r == IMAP_MAILBOX_NONEXISTENT && rock.found) r = 0;
     if (r) return r;
 
     // now the children
