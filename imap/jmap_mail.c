@@ -6886,6 +6886,7 @@ struct email_getargs {
 /* Initialized in email_get_parse. *Not* thread-safe */
 static hash_table _email_get_default_props = HASH_TABLE_INITIALIZER;
 static hash_table _email_get_default_bodyprops = HASH_TABLE_INITIALIZER;
+static hash_table _email_parse_default_props = HASH_TABLE_INITIALIZER;
 
 static void _email_getargs_fini(struct email_getargs *args)
 {
@@ -6932,7 +6933,8 @@ static void _email_parse_wantheaders(json_t *jprops,
     }
 }
 
-static void _email_getargs_parse(json_t *req_args,
+static void _email_getargs_parse(int is_get,
+                                 json_t *req_args,
                                  struct jmap_parser *parser,
                                  struct email_getargs *args,
                                  hash_table *props,
@@ -6945,35 +6947,44 @@ static void _email_getargs_parse(json_t *req_args,
     args->props = props;
     /* set default props, if not set by client */
     if (props == NULL) {
-        if (_email_get_default_props.size == 0) {
+        args->props =
+            is_get ? &_email_get_default_props : &_email_parse_default_props;
+
+        if (args->props->size == 0) {
             /* Initialize process-owned default property list */
-            construct_hash_table(&_email_get_default_props, 32, 0);
-            hash_insert("attachments", (void*)1, &_email_get_default_props);
-            hash_insert("bcc", (void*)1, &_email_get_default_props);
-            hash_insert("blobId", (void*)1, &_email_get_default_props);
-            hash_insert("bodyValues", (void*)1, &_email_get_default_props);
-            hash_insert("cc", (void*)1, &_email_get_default_props);
-            hash_insert("from", (void*)1, &_email_get_default_props);
-            hash_insert("hasAttachment", (void*)1, &_email_get_default_props);
-            hash_insert("htmlBody", (void*)1, &_email_get_default_props);
-            hash_insert("id", (void*)1, &_email_get_default_props);
-            hash_insert("inReplyTo", (void*)1, &_email_get_default_props);
-            hash_insert("keywords", (void*)1, &_email_get_default_props);
-            hash_insert("mailboxIds", (void*)1, &_email_get_default_props);
-            hash_insert("messageId", (void*)1, &_email_get_default_props);
-            hash_insert("preview", (void*)1, &_email_get_default_props);
-            hash_insert("receivedAt", (void*)1, &_email_get_default_props);
-            hash_insert("references", (void*)1, &_email_get_default_props);
-            hash_insert("replyTo", (void*)1, &_email_get_default_props);
-            hash_insert("sender", (void*)1, &_email_get_default_props);
-            hash_insert("sentAt", (void*)1, &_email_get_default_props);
-            hash_insert("size", (void*)1, &_email_get_default_props);
-            hash_insert("subject", (void*)1, &_email_get_default_props);
-            hash_insert("textBody", (void*)1, &_email_get_default_props);
-            hash_insert("threadId", (void*)1, &_email_get_default_props);
-            hash_insert("to", (void*)1, &_email_get_default_props);
+            construct_hash_table(args->props, 32, 0);
+            if (is_get) {
+                hash_insert("blobId", (void*)1, args->props);
+                hash_insert("id", (void*)1, args->props);
+                hash_insert("keywords", (void*)1, args->props);
+                hash_insert("mailboxIds", (void*)1, args->props);
+                hash_insert("receivedAt", (void*)1, args->props);
+                hash_insert("size", (void*)1, args->props);
+                hash_insert("threadId", (void*)1, args->props);
+            }
+
+            hash_insert("attachments", (void*)1, args->props);
+            hash_insert("bcc", (void*)1, args->props);
+            hash_insert("bodyValues", (void*)1, args->props);
+            hash_insert("cc", (void*)1, args->props);
+            hash_insert("from", (void*)1, args->props);
+            hash_insert("hasAttachment", (void*)1, args->props);
+            hash_insert("htmlBody", (void*)1, args->props);
+            hash_insert("inReplyTo", (void*)1, args->props);
+            hash_insert("messageId", (void*)1, args->props);
+            hash_insert("preview", (void*)1, args->props);
+            hash_insert("references", (void*)1, args->props);
+            hash_insert("replyTo", (void*)1, args->props);
+            hash_insert("sender", (void*)1, args->props);
+            hash_insert("sentAt", (void*)1, args->props);
+            hash_insert("subject", (void*)1, args->props);
+            hash_insert("textBody", (void*)1, args->props);
+            hash_insert("to", (void*)1, args->props);
         }
-        args->props = &_email_get_default_props;
+    }
+    else if (is_get) {
+        /* 'id' is ALWAYS returned, even if not explicitly requested */
+        hash_insert("id", (void*)1, args->props);
     }
 
     /* bodyProperties */
@@ -8068,11 +8079,12 @@ static int jmap_email_get(jmap_req_t *req)
         jmap_error(req, err);
         goto done;
     }
-	_email_getargs_parse(req->args, &parser, &args, get.props, &err);
-	if (err) {
-		jmap_error(req, err);
-		goto done;
-	}
+    _email_getargs_parse(1 /* is_get */,
+                         req->args, &parser, &args, get.props, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
 
     /* Refuse to fetch *all* Email */
     if (!JNOTNULL(get.ids)) {
@@ -8159,11 +8171,12 @@ static int jmap_email_parse(jmap_req_t *req)
     else if (JNOTNULL(jprops)) {
         jmap_parser_invalid(&parser, "properties");
     }
-	_email_getargs_parse(req->args, &parser, &getargs, props, &err);
-	if (err) {
-		jmap_error(req, err);
-		goto done;
-	}
+    _email_getargs_parse(0 /* is_get */,
+                         req->args, &parser, &getargs, props, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
 
     /* Process request */
     json_t *parsed = json_object();
