@@ -4754,21 +4754,27 @@ static const char *jmap_keyword_to_imap(const char *keyword)
     return NULL;
 }
 
-static json_t *_email_read_annot(const jmap_req_t *req, msgrecord_t *mr,
-                                const char *annot, int structured)
+static void _email_read_annot(const jmap_req_t *req, msgrecord_t *mr,
+                              const char *annot, struct buf *buf)
+{
+    if (!strncmp(annot, "/shared/", 8)) {
+        msgrecord_annot_lookup(mr, annot+7, /*userid*/"", buf);
+    }
+    else if (!strncmp(annot, "/private/", 9)) {
+        msgrecord_annot_lookup(mr, annot+7, req->userid, buf);
+    }
+    else {
+        msgrecord_annot_lookup(mr, annot, "", buf);
+    }
+}
+
+static json_t *_email_read_jannot(const jmap_req_t *req, msgrecord_t *mr,
+                                  const char *annot, int structured)
 {
     struct buf buf = BUF_INITIALIZER;
     json_t *annotvalue = NULL;
 
-    if (!strncmp(annot, "/shared/", 8)) {
-        msgrecord_annot_lookup(mr, annot+7, /*userid*/"", &buf);
-    }
-    else if (!strncmp(annot, "/private/", 9)) {
-        msgrecord_annot_lookup(mr, annot+7, req->userid, &buf);
-    }
-    else {
-        msgrecord_annot_lookup(mr, annot, "", &buf);
-    }
+    _email_read_annot(req, mr, annot, &buf);
 
     if (buf_len(&buf)) {
         if (structured) {
@@ -4784,11 +4790,10 @@ static json_t *_email_read_annot(const jmap_req_t *req, msgrecord_t *mr,
             syslog(LOG_ERR, "jmap: annotation %s has bogus value", annot);
         }
     }
-
     buf_free(&buf);
-
     return annotvalue;
 }
+
 
 struct _email_get_keywords_rock {
     jmap_req_t *req;
@@ -7191,11 +7196,29 @@ static int _email_get_meta(jmap_req_t *req,
         char datestr[RFC3339_DATETIME_MAX];
         time_t t;
         r = msgrecord_get_internaldate(msg->mr, &t);
-        if (r) return r;
+        if (r) goto done;
         time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
         json_object_set_new(email, "receivedAt", json_string(datestr));
     }
 
+    /* FastMail-extension properties */
+    if (_wantprop(props, "trustedSender")) {
+        json_t *trusted_sender = NULL;
+        int has_trusted_flag = 0;
+        r = msgrecord_hasflag(msg->mr, "$IsTrusted", &has_trusted_flag);
+        if (r) goto done;
+        if (has_trusted_flag) {
+            struct buf buf = BUF_INITIALIZER;
+            _email_read_annot(req, msg->mr,
+                    "/vendor/messagingengine.com/trusted", &buf);
+            if (buf_len(&buf)) {
+                trusted_sender = json_string(buf_cstring(&buf));
+            }
+            buf_free(&buf);
+        }
+        json_object_set_new(email, "trustedSender", trusted_sender ?
+                trusted_sender : json_null());
+    }
 
 done:
     free(emailid);
@@ -7625,7 +7648,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
              * Use JSON null for an unsuccessful attempt, so we know not
              * to try again. */
             if (msg->mr) {
-                msg->imagesize_by_part = _email_read_annot(req, msg->mr,
+                msg->imagesize_by_part = _email_read_jannot(req, msg->mr,
                         "/vendor/messagingengine.com/imagesize", 1);
             }
             if (!msg->imagesize_by_part) msg->imagesize_by_part = json_null();
@@ -7901,7 +7924,7 @@ static int _email_get_bodies(jmap_req_t *req,
     if (_wantprop(props, "preview")) {
         const char *preview_annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
         if (preview_annot && is_toplevel) {
-            json_t *preview = _email_read_annot(req, msg->mr, preview_annot, /*structured*/0);
+            json_t *preview = _email_read_jannot(req, msg->mr, preview_annot, /*structured*/0);
             json_object_set_new(email, "preview", preview ? preview : json_string(""));
         }
         else {
