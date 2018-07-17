@@ -949,6 +949,74 @@ sub test_mailbox_set_order
     $self->assert_null($res->[0][1]{notDestroyed});
 }
 
+sub test_mailbox_set_inbox_children
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.top")
+        or die "Cannot create mailbox INBOX.top: $@";
+
+    $imaptalk->create("INBOX.INBOX.foo")
+        or die "Cannot create mailbox INBOX.INBOX.foo: $@";
+
+    $imaptalk->create("INBOX.INBOX.foo.bar")
+        or die "Cannot create mailbox INBOX.INBOX.foo.bar: $@";
+
+    xlog "get existing mailboxes";
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'Mailbox/get');
+    $self->assert_str_equals($res->[0][2], 'R1');
+
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(scalar keys %m, 4);
+    my $inbox = $m{"Inbox"};
+    my $top = $m{"top"};
+    my $foo = $m{"foo"};
+    my $bar = $m{"bar"};
+
+    # INBOX
+    $self->assert_null($inbox->{parentId});
+    $self->assert_null($top->{parentId});
+    $self->assert_str_equals($foo->{parentId}, $inbox->{id});
+    $self->assert_str_equals($bar->{parentId}, $foo->{id});
+
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $top->{id} => { name => 'B', parentId => $inbox->{id} },
+            $foo->{id} => { name => 'C', parentId => undef },
+        },
+    }, "R1"]]);
+
+    $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'Mailbox/get');
+    $self->assert_str_equals($res->[0][2], 'R1');
+
+    %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(scalar keys %m, 4);
+    $inbox = $m{"Inbox"};
+    my $b = $m{"B"};
+    my $c = $m{"C"};
+    $bar = $m{"bar"};
+
+    # INBOX
+    $self->assert_null($inbox->{parentId});
+    $self->assert_str_equals($b->{parentId}, $inbox->{id});
+    $self->assert_null($c->{parentId});
+    $self->assert_str_equals($bar->{parentId}, $c->{id});
+
+    my $list = $imaptalk->list("", "*");
+
+    my $mb = join(',', sort map { $_->[2] } @$list);
+
+    $self->assert_str_equals("INBOX,INBOX.C,INBOX.C.bar,INBOX.INBOX.B", $mb);
+}
+
 sub test_mailbox_set_name_swap
     :min_version_3_1 :needs_component_jmap
 {
