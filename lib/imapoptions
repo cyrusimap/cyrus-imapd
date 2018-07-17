@@ -1030,29 +1030,29 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "jmap_max_size_upload", 1048576, INT }
 /* The maximum size (in kilobytes) that the JMAP API accepts
    for blob uploads. Returned as the maxSizeUpload property
-   value of the JMAP \"ietf:jmap\" capabilities object.
+   value of the JMAP \"urn:ietf:params:jmap:core\" capabilities object.
    Default is 1Gb. */
 
 { "jmap_max_concurrent_upload", 5, INT }
 /* The value to return for the maxConcurrentUpload property of
-   the JMAP \"ietf:jmap\" capabilities object. The Cyrus JMAP
+   the JMAP \"urn:ietf:params:jmap:core\" capabilities object. The Cyrus JMAP
    implementation does not enforce this rate-limit. */
 
 { "jmap_max_size_request", 10240, INT }
 /* The maximum size (in kilobytes) that the JMAP API accepts
    for requests at the API endpoint. Returned as the
-   maxSizeRequest property value of the JMAP \"ietf:jmap\"
+   maxSizeRequest property value of the JMAP \"urn:ietf:params:jmap:core\"
    capabilities object. Default is 10Mb. */
 
 { "jmap_max_concurrent_requests", 5, INT }
 /* The value to return for the maxConcurrentRequests property of
-   the JMAP \"ietf:jmap\" capabilities object. The Cyrus JMAP
+   the JMAP \"urn:ietf:params:jmap:core\" capabilities object. The Cyrus JMAP
    implementation does not enforce this rate-limit. */
 
 { "jmap_max_calls_in_request", 50, INT }
 /* The maximum number of calls per JMAP request object.
    Returned as the maxCallsInRequest property value of the
-   JMAP \"ietf:jmap\" capabilities object. */
+   JMAP \"urn:ietf:params:jmap:core\" capabilities object. */
 
 { "jmap_max_objects_in_get", 4096, INT }
 /* The maximum number of ids that a JMAP client may request in
@@ -1060,17 +1060,17 @@ Blank lines and lines beginning with ``#'' are ignored.
    of returned objects in the response may exceed this number
    if the JMAP object type supports unbounded \"/get\" calls.
    Returned as the maxObjectsInGet property value of the
-   JMAP \"ietf:jmap\" capabilities object. */
+   JMAP \"urn:ietf:params:jmap:core\" capabilities object. */
 
 { "jmap_max_objects_in_set", 4096, INT }
 /* The maximum number of objects a JMAP client may send to create,
    update or destroy in a single /set type method call.
    Returned as the maxObjectsInSet property value of the
-   JMAP \"ietf:jmap\" capabilities object. */
+   JMAP \"urn:ietf:params:jmap:core\" capabilities object. */
 
 { "jmap_mail_max_size_attachments_per_email", 10240, INT }
 /* The value (in kilobytes) to return for the maxSizeAttachmentsPerEmail
-   property of the JMAP \"ietf:jmapmail\" capabilities object. The Cyrus
+   property of the JMAP \"urn:ietf:params:jmap:mail\" capabilities object. The Cyrus
    JMAP implementation does not enforce this size limit. Default is 10 Mb.*/
 
 { "jmap_set_has_attachment", 1, SWITCH }
