@@ -384,7 +384,7 @@ static void smtp_params_set_extra(ptrarray_t *params, ptrarray_t *extra,
     int i;
     for (i = 0; i < params->count; i++) {
         smtp_param_t *param = ptrarray_nth(params, i);
-        if (!strcasecmp(param->key, "AUTH")) {
+        if (!strcasecmp(param->key, key)) {
             break;
         }
     }
