@@ -986,6 +986,10 @@ sub test_mailbox_set_inbox_children
     $self->assert_str_equals($bar->{parentId}, $foo->{id});
 
     $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+           'a' => { name => 'tl', parentId => undef },
+           'b' => { name => 'sl', parentId => $inbox->{id} },
+        },
         update => {
             $top->{id} => { name => 'B', parentId => $inbox->{id} },
             $foo->{id} => { name => 'C', parentId => undef },
@@ -998,23 +1002,27 @@ sub test_mailbox_set_inbox_children
     $self->assert_str_equals($res->[0][2], 'R1');
 
     %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    $self->assert_num_equals(scalar keys %m, 4);
+    $self->assert_num_equals(scalar keys %m, 6);
     $inbox = $m{"Inbox"};
     my $b = $m{"B"};
     my $c = $m{"C"};
     $bar = $m{"bar"};
+    my $tl = $m{"tl"};
+    my $sl = $m{"sl"};
 
     # INBOX
     $self->assert_null($inbox->{parentId});
     $self->assert_str_equals($b->{parentId}, $inbox->{id});
     $self->assert_null($c->{parentId});
     $self->assert_str_equals($bar->{parentId}, $c->{id});
+    $self->assert_str_equals($sl->{parentId}, $inbox->{id});
+    $self->assert_null($tl->{parentId});
 
     my $list = $imaptalk->list("", "*");
 
     my $mb = join(',', sort map { $_->[2] } @$list);
 
-    $self->assert_str_equals("INBOX,INBOX.C,INBOX.C.bar,INBOX.INBOX.B", $mb);
+    $self->assert_str_equals("INBOX,INBOX.C,INBOX.C.bar,INBOX.INBOX.B,INBOX.INBOX.sl,INBOX.tl", $mb);
 }
 
 sub test_mailbox_set_name_swap
@@ -10654,6 +10662,36 @@ sub test_mailbox_set_issue2377
              }}}, "R1"]
     ]);
     $self->assert_not_null($res->[0][1]{notCreated}{'1'});
+}
+
+sub test_mailbox_intermediate_folders
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.A.B.C");
+
+    xlog "get existing mailboxes";
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals($res->[0][0], 'Mailbox/get');
+    $self->assert_str_equals($res->[0][2], 'R1');
+
+    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(scalar keys %m, 4);
+    my $inbox = $m{"Inbox"};
+    my $a = $m{"A"};
+    my $b = $m{"B"};
+    my $c = $m{"C"};
+
+    $self->assert_null($inbox->{parentId});
+    $self->assert_null($a->{parentId});
+    $self->assert_str_equals($b->{parentId}, $a->{id});
+    $self->assert_str_equals($c->{parentId}, $b->{id});
 }
 
 sub test_implementation_email_query
