@@ -2768,6 +2768,86 @@ sub test_email_get_isdeleted
     $self->assert_equals(JSON::true, $part->{isDeleted});
 }
 
+sub test_email_get_trustedsender
+    :min_version_3_1 :needs_component_jmap
+{
+    # This is a FastMail-extension
+
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    $store->set_folder('INBOX');
+
+    my $msg = $self->make_message("foo");
+
+    xlog "Assert trustedSender isn't set";
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => [ 'id', 'trustedSender', 'keywords' ],
+        }, 'R2'],
+    ]);
+    my $emailId = $res->[0][1]{ids}[0];
+    my $email = $res->[1][1]{list}[0];
+    $self->assert_null($email->{trustedSender});
+
+    xlog "Set IsTrusted flag";
+    $talk->store('1', '+flags', '($IsTrusted)');
+
+    xlog "Assert trustedSender isn't set";
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => [$emailId], properties => [ 'id', 'trustedSender', 'keywords' ],
+    }, 'R1']]);
+    $email = $res->[0][1]{list}[0];
+    $self->assert_null($email->{trustedSender});
+
+    xlog "Set zero-length trusted annotation";
+    my $annot = '/vendor/messagingengine.com/trusted';
+    my $ret = $talk->store('1', 'annotation', [
+        $annot, ['value.shared', { Quote => '' }]
+    ]);
+    if (not $ret) {
+        xlog "Could not set $annot annotation. Aborting.";
+        return;
+    }
+
+    xlog "Assert trustedSender isn't set";
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => [$emailId], properties => [ 'id', 'trustedSender', 'keywords' ],
+    }, 'R1']]);
+    $email = $res->[0][1]{list}[0];
+    $self->assert_null($email->{trustedSender});
+
+    xlog "Set trusted annotation";
+    $ret = $talk->store('1', 'annotation', [
+        $annot, ['value.shared', { Quote => 'bar' }]
+    ]);
+    if (not $ret) {
+        xlog "Could not set $annot annotation. Aborting.";
+        return;
+    }
+
+    xlog "Assert trustedSender is set";
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => [$emailId], properties => [ 'id', 'trustedSender', 'keywords' ],
+    }, 'R1']]);
+    $email = $res->[0][1]{list}[0];
+    $self->assert_str_equals('bar', $email->{trustedSender});
+
+    xlog "Remove IsTrusted flag";
+    $talk->store('1', '-flags', '($IsTrusted)');
+
+    xlog "Assert trustedSender isn't set";
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => [$emailId], properties => [ 'id', 'trustedSender', 'keywords' ],
+    }, 'R1']]);
+    $email = $res->[0][1]{list}[0];
+    $self->assert_null($email->{trustedSender});
+}
+
 sub test_email_get_shared
     :min_version_3_1 :needs_component_jmap
 {
