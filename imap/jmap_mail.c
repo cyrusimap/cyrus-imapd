@@ -11615,6 +11615,11 @@ static int _emailsubmission_create(jmap_req_t *req,
     smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;
     _emailsubmission_envelope_to_smtp(&smtpenv, envelope);
 
+    /* Set size */
+    struct stat stat;
+    fstat(fd_msg, &stat);
+    smtpclient_set_size(sm, stat.st_size);
+
     /* Send message */
     struct protstream *data = prot_new(fd_msg, /*write*/0);
     r = smtpclient_sendprot(sm, &smtpenv, data);
