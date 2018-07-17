@@ -1795,6 +1795,96 @@ static int _rename_check_specialuse(const char *oldname, const char *newname)
     return r;
 }
 
+struct renmboxdata {
+    size_t ol;
+    size_t nl;
+    char newname[MAX_MAILBOX_NAME+1];
+    const struct auth_state *authstate;
+    const char *partition;
+    const char *userid;
+    int local_only;
+    int ignorequota;
+    int found;
+}
+
+static int renamecheck(const mbentry_t *mbentry, void *rock)
+{
+    struct renmboxdata *text = (struct renrock *)rock;
+    int r;
+
+    text->found++;
+
+    if((text->nl + strlen(mbentry->name + text->ol)) >= MAX_MAILBOX_NAME)
+        return IMAP_MAILBOX_BADNAME;
+
+    strcpy(text->newname + text->nl, mbentry->name + text->ol);
+
+    /* force create, but don't ignore policy.  This is a filthy hack that
+       will go away when we refactor this code */
+    r = mboxlist_createmailboxcheck(text->newname, 0, text->partition, 1,
+                                    text->userid, text->authstate, NULL, NULL, 2);
+    return r;
+}
+
+static int dorename(const mbentry_t *mbentry, void *rock)
+{
+    struct renmboxdata *text = (struct renrock *)rock;
+    int r;
+
+    if((text->nl + strlen(mbentry->name + text->ol)) >= MAX_MAILBOX_NAME)
+        return IMAP_MAILBOX_BADNAME;
+
+    strcpy(text->newname + text->nl, mbentry->name + text->ol);
+
+    r = mboxlist_renamemailbox(mbentry->name, text->newname,
+                               text->partition, /*uidvalidity*/0,
+                               /*isadmin*/1, text->userid,
+                               text->authstate,
+                               /*mboxevent*/NULL,
+                               text->local_only, /*forceuser*/1, text->ignorequota);
+
+    return r;
+}
+
+EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
+                                 const char *partition, unsigned uidvalidity,
+                                 int isadmin, const char *userid,
+                                 const struct auth_state *auth_state,
+                                 struct mboxevent *mboxevent,
+                                 int local_only, int forceuser, int ignorequota)
+{
+    struct renmboxdata rock;
+    memset(&rock, 0, sizeof(struct renmboxdata));
+    rock.olen = strlen(oldname);
+    rock.nlen = strlen(newname);
+    memcpy(rock.newname, newname, nlen);
+    rock.partition = partition;
+    rock.authstate = auth_state;
+    rock.userid = userid;
+    rock.local_only = local_only;
+    rock.ignorequota = ignorequota;
+    int r;
+
+    /* first check that we can rename safely */
+    r = mboxlist_mboxtree(oldname, renamecheck, &rock, 0);
+    if (r) return r;
+
+    // rename the root mailbox
+    r = mboxlist_renamemailbox(oldname, newname,
+                               partition, uidvalidity,
+                               isadmin, userid,
+                               auth_state,
+                               mboxevent,
+                               local_only, forceuser, ignorequota);
+    // special-case only children exist
+    if (r == IMAP_MAILBOX_NONEXISTENT && rock->found) r = 0;
+    if (r) return r;
+
+    // now the children
+    r = mboxlist_mboxtree(oldname, dorename, &rock, MBOXTREE_SKIP_ROOT);
+    return r;
+}
+
 /*
  * Rename/move a single mailbox (recursive renames are handled at a
  * higher level).  This only supports local mailboxes.  Remote

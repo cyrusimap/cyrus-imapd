@@ -188,6 +188,13 @@ int mboxlist_deletemailbox(const char *name, int isadmin, const char *userid,
                            int checkacl,
                            int local_only, int force);
 
+/* rename a tree of mailboxes - renames mailbox plus any children */
+int mboxlist_renametree(const char *oldname, const char *newname,
+                        const char *partition, unsigned uidvalidity,
+                        int isadmin, const char *userid,
+                        const struct auth_state *auth_state,
+                        struct mboxevent *mboxevent,
+                        int local_only, int forceuser, int ignorequota);
 /* Rename/move a mailbox (hierarchical) */
 /* prepare MailboxRename notification if mboxevent is not NULL */
 int mboxlist_renamemailbox(const char *oldname, const char *newname,
