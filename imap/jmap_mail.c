@@ -2204,16 +2204,16 @@ static char *_mbox_find_xrole(jmap_req_t *req, const char *xrole)
     return rock.mboxname;
 }
 
-static int _mbox_is_parent_cb(const mbentry_t *mbentry __attribute__ ((unused)), void *rock) {
+static int _mbox_has_children_cb(const mbentry_t *mbentry __attribute__ ((unused)), void *rock) {
     int *has_child = (int *) rock;
     *has_child = 1;
     return IMAP_OK_COMPLETED;
 }
 
-static int _mbox_is_parent(const char *mboxname)
+static int _mbox_has_children(const char *mboxname)
 {
     int has_child = 0;
-    mboxlist_mboxtree(mboxname, _mbox_is_parent_cb, &has_child, MBOXTREE_SKIP_ROOT);
+    mboxlist_mboxtree(mboxname, _mbox_has_children_cb, &has_child, MBOXTREE_SKIP_ROOT);
     return has_child;
 }
 
@@ -2853,7 +2853,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
     }
 
     /* Check if the mailbox has any children. */
-    if (_mbox_is_parent(mboxname)) {
+    if (_mbox_has_children(mboxname)) {
         if (mode == _MBOXSET_SKIP) {
             result->skipped = 1;
         }
