@@ -2721,6 +2721,53 @@ sub test_email_get_imagesize
     $self->assert_deep_equals($imageSize->{3}, $part->{imageSize});
 }
 
+sub test_email_get_isdeleted
+    :min_version_3_1 :needs_component_jmap
+{
+    # This is a FastMail-extension
+
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    $store->set_folder('INBOX');
+
+    my $msg = $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => ""
+          . "--sub\r\n"
+          . "Content-Type: text/plain; charset=UTF-8\r\n"
+          . "some text"
+          . "\r\n--sub\r\n"
+          . "Content-Type: text/x-me-removed-file\r\n"
+          . "\r\n"
+          . "deleted"
+          . "\r\n--sub--\r\n",
+    );
+
+    xlog "get email list";
+    my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $ids = $res->[0][1]->{ids};
+
+    xlog "get email";
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => $ids,
+        properties => ['bodyStructure'],
+        bodyProperties => ['partId', 'isDeleted' ],
+    }, "R1"]]);
+    my $email = $res->[0][1]{list}[0];
+
+    my $part = $email->{bodyStructure}{subParts}[0];
+    $self->assert_str_equals('1', $part->{partId});
+    $self->assert_equals(JSON::false, $part->{isDeleted});
+
+    $part = $email->{bodyStructure}{subParts}[1];
+    $self->assert_str_equals('2', $part->{partId});
+    $self->assert_equals(JSON::true, $part->{isDeleted});
+}
+
 sub test_email_get_shared
     :min_version_3_1 :needs_component_jmap
 {
