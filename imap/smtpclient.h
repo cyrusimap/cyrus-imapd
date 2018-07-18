@@ -56,6 +56,7 @@ typedef struct {
 typedef struct {
     char *addr;
     ptrarray_t params; /* Array of smtp_param_t */
+    int completed;
 } smtp_addr_t;
 
 /* A SMTP envelope with the MAIL FROM address and one
@@ -66,7 +67,7 @@ typedef struct {
 } smtp_envelope_t;
 
 /* The empty SMTP envelope */
-#define SMTP_ENVELOPE_INITIALIZER { { NULL, PTRARRAY_INITIALIZER }, PTRARRAY_INITIALIZER }
+#define SMTP_ENVELOPE_INITIALIZER { { NULL, PTRARRAY_INITIALIZER, 0 }, PTRARRAY_INITIALIZER }
 
 /* Set the MAIL FROM address in env and return the new value.
  * Any existing address is deallocated. */
@@ -142,6 +143,11 @@ extern void smtpclient_set_by(smtpclient_t *sm, const char *value);
  *
  * Setting this to 0 resets the value. */
 extern void smtpclient_set_size(smtpclient_t *sm, unsigned long value);
+
+/* Return the SIZE SMTP extension value.
+ *
+ * Return 0 if the extension has no value or is not supported. */
+extern unsigned long smtpclient_get_maxsize(smtpclient_t *sm);
 
 /* Return the argument string of SMTP extension 'name' as returned
  * in response to the EHLO command, excluding the extension name.

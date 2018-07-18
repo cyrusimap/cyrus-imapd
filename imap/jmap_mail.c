@@ -11713,15 +11713,50 @@ static int _emailsubmission_create(jmap_req_t *req,
     /* Send message */
     struct protstream *data = prot_new(fd_msg, /*write*/0);
     r = smtpclient_sendprot(sm, &smtpenv, data);
-    smtp_envelope_fini(&smtpenv);
     prot_free(data);
-    smtpclient_close(&sm);
     if (r) {
+        int i, max = 0;
+        json_t *invalid = NULL;
+
         syslog(LOG_ERR, "jmap: can't create message submission: %s",
                 error_message(r));
-        *set_err = json_pack("{s:s}", "type", "smtpProtocolError");
-        goto done;
+
+        switch (r) {
+        case IMAP_MESSAGE_TOO_LARGE:
+            *set_err = json_pack("{s:s s:i}", "type", "tooLarge",
+                                 "maxSize", smtpclient_get_maxsize(sm));
+            break;
+
+        case IMAP_REMOTE_DENIED:
+            for (i = 0; i < smtpenv.rcpts.count; i++) {
+                smtp_addr_t *addr = ptrarray_nth(&smtpenv.rcpts, i);
+                max += addr->completed;
+            }
+            *set_err = json_pack("{s:s s:i}", "type", "tooManyRecipients",
+                                 "maxRecipients", max);
+            break;
+
+        case IMAP_MAILBOX_NONEXISTENT:
+            invalid = json_array();
+            for (i = 0; i < smtpenv.rcpts.count; i++) {
+                smtp_addr_t *addr = ptrarray_nth(&smtpenv.rcpts, i);
+                if (!addr->completed) {
+                    json_array_append_new(invalid, json_string(addr->addr));
+                }
+            }
+            *set_err = json_pack("{s:s s:o}", "type", "invalidRecipients",
+                                 "invalidRecipients", invalid);
+            break;
+
+        default:
+            *set_err = json_pack("{s:s}", "type", "smtpProtocolError");
+            break;
+        }
     }
+    smtp_envelope_fini(&smtpenv);
+    smtpclient_close(&sm);
+
+    if (r) goto done;
 
     /* All done */
     char *new_id = xstrdup(makeuuid());

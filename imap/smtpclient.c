@@ -80,7 +80,7 @@ struct smtpclient {
     char *notify;
     char *ret;
     char *by;
-    unsigned long size;
+    unsigned long msgsize;
 };
 
 enum {
@@ -122,7 +122,7 @@ typedef struct {
     int is_last;
 } smtp_resp_t;
 
-typedef int smtp_readcb_t(const smtp_resp_t *resp, void *rock);
+typedef int smtp_readcb_t(smtpclient_t *sm, const smtp_resp_t *resp, void *rock);
 
 static int smtpclient_read(smtpclient_t *sm, smtp_readcb_t *cb, void *rock);
 
@@ -208,7 +208,7 @@ EXPORTED int smtpclient_close(smtpclient_t **smp)
  *
  * Return IMAP_PROTOCOL_ERROR on mismatch, 0 on success.
  */
-static int expect_code_cb(const smtp_resp_t *resp, void *rock)
+static int expect_code_cb(smtpclient_t *sm, const smtp_resp_t *resp, void *rock)
 {
     size_t i;
     const char *code = rock;
@@ -216,6 +216,31 @@ static int expect_code_cb(const smtp_resp_t *resp, void *rock)
         if (code[i] != resp->code[i]) {
             syslog(LOG_ERR, "smtpclient: unexpected response: code=%c%c%c text=%s",
                     resp->code[0], resp->code[1], resp->code[2], resp->text);
+
+            /* Try to glean specific error from response */
+            if (CAPA(sm->backend, SMTPCLIENT_CAPA_STATUS)) {
+                double substatus = atof(resp->text+2);
+
+                if (substatus >= 1.1 && substatus <= 1.3)
+                    return IMAP_MAILBOX_NONEXISTENT;
+                else if (substatus == 3.4)
+                    return IMAP_MESSAGE_TOO_LARGE;
+                else if (substatus == 5.3)
+                    return IMAP_REMOTE_DENIED;
+            }
+            else {
+                switch (atoi(resp->code)) {
+                case 450:
+                case 550:
+                    return IMAP_REMOTE_DENIED;
+                case 452:
+                case 552:
+                    return IMAP_MESSAGE_TOO_LARGE;
+                case 553:
+                    return IMAP_MAILBOX_NONEXISTENT;
+                }
+            }
+
             return IMAP_PROTOCOL_ERROR;
         }
     }
@@ -256,20 +281,20 @@ static int smtpclient_read(smtpclient_t *sm, smtp_readcb_t *cb, void *rock)
         memcpy(resp.code, buf, 3);
         resp.text = buf + 4;
         resp.is_last = isspace(buf[3]);
-        r = cb(&resp, rock);
+        r = cb(sm, &resp, rock);
     } while (!r && !resp.is_last);
 
     return r;
 }
 
-static int ehlo_cb(const smtp_resp_t *resp, void *rock)
+static int ehlo_cb(smtpclient_t *sm, const smtp_resp_t *resp,
+                   void *rock __attribute__((unused)))
 {
-    hash_table **extsptr = rock;
 
     /* Is this the first response line? */
-    if (*extsptr == NULL) {
-        *extsptr = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(*extsptr, 16, 0);
+    if (sm->have_exts == NULL) {
+        sm->have_exts = xzmalloc(sizeof(struct hash_table));
+        construct_hash_table(sm->have_exts, 16, 0);
         return 0;
     }
 
@@ -280,7 +305,7 @@ static int ehlo_cb(const smtp_resp_t *resp, void *rock)
     }
     const char *args = isspace(*p) ? p + 1 : "";
     *p = '\0';
-    hash_insert(resp->text, xstrdup(args), *extsptr);
+    hash_insert(resp->text, xstrdup(args), sm->have_exts);
 
     return 0;
 }
@@ -307,10 +332,7 @@ static int smtpclient_ehlo(smtpclient_t *sm)
     buf_reset(&sm->buf);
 
     /* Process response */
-    hash_table *exts = NULL;
-    r = smtpclient_read(sm, ehlo_cb, &exts);
-    if (r) goto done;
-    sm->have_exts = exts;
+    r = smtpclient_read(sm, ehlo_cb, NULL);
 
 done:
     return r;
@@ -421,9 +443,9 @@ static int smtpclient_from(smtpclient_t *sm, smtp_addr_t *addr)
     if (sm->by && CAPA(sm->backend, SMTPCLIENT_CAPA_DELIVERBY)) {
         smtp_params_set_extra(&addr->params, &extra_params, "BY", sm->by);
     }
-    if (sm->size && CAPA(sm->backend, SMTPCLIENT_CAPA_SIZE)) {
+    if (sm->msgsize && CAPA(sm->backend, SMTPCLIENT_CAPA_SIZE)) {
         char szbuf[21];
-        snprintf(szbuf, sizeof(szbuf), "%lu", sm->size);
+        snprintf(szbuf, sizeof(szbuf), "%lu", sm->msgsize);
         smtp_params_set_extra(&addr->params, &extra_params, "SIZE", szbuf);
     }
     int r = write_addr(sm, "MAIL FROM", addr, &extra_params);
@@ -434,7 +456,7 @@ static int smtpclient_from(smtpclient_t *sm, smtp_addr_t *addr)
 /* Write a RCPT TO command for all addresses in rcpt. */
 static int smtpclient_rcpt_to(smtpclient_t *sm, ptrarray_t *rcpts)
 {
-    int i, r = IMAP_INTERNAL;
+    int i, r = 0;
 
     for (i = 0; i < rcpts->count; i++) {
         smtp_addr_t *addr = ptrarray_nth(rcpts, i);
@@ -442,9 +464,10 @@ static int smtpclient_rcpt_to(smtpclient_t *sm, ptrarray_t *rcpts)
         if (sm->notify && CAPA(sm->backend, SMTPCLIENT_CAPA_DSN)) {
             smtp_params_set_extra(&addr->params, &extra_params, "NOTIFY", sm->notify);
         }
-        r = write_addr(sm, "RCPT TO", addr, &extra_params);
+        int r1 = write_addr(sm, "RCPT TO", addr, &extra_params);
         smtp_params_fini(&extra_params);
-        if (r) break;
+        if (!r1) addr->completed = 1;
+        else if (!r) r = r1;
     }
 
     return r;
@@ -538,6 +561,15 @@ EXPORTED int smtpclient_sendprot(smtpclient_t *sm, smtp_envelope_t *env, struct 
 {
     int r = 0;
 
+    if (sm->msgsize) {
+        unsigned long maxsize = smtpclient_get_maxsize(sm);
+
+        if (maxsize && maxsize < sm->msgsize) {
+            r = IMAP_MESSAGE_TOO_LARGE;
+            goto done;
+        }
+    }
+
     r = validate_envelope(env);
     if (r) goto done;
 
@@ -589,7 +621,19 @@ EXPORTED void smtpclient_set_by(smtpclient_t *sm, const char *value)
 
 EXPORTED void smtpclient_set_size(smtpclient_t *sm, unsigned long value)
 {
-    sm->size = value;
+    sm->msgsize = value;
+}
+
+EXPORTED unsigned long smtpclient_get_maxsize(smtpclient_t *sm)
+{
+    unsigned long maxsize = 0;
+
+    if (CAPA(sm->backend, SMTPCLIENT_CAPA_SIZE)) {
+        const char *sizestr = smtpclient_has_ext(sm, "SIZE");
+        if (sizestr) maxsize = strtoul(sizestr, NULL, 10);
+    }
+
+    return maxsize;
 }
 
 /* SMTP backend implementations */
