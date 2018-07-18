@@ -8524,6 +8524,13 @@ done:
     return r;
 }
 
+struct email_append_detail {
+    char *email_id;
+    char *blob_id;
+    char *thread_id;
+    size_t size;
+};
+
 static int _email_append(jmap_req_t *req,
                        json_t *mailboxids,
                        strarray_t *keywords,
@@ -8531,7 +8538,7 @@ static int _email_append(jmap_req_t *req,
                        int has_attachment,
                        int(*writecb)(jmap_req_t*, FILE*, void*),
                        void *rock,
-                       char **msgid)
+                       struct email_append_detail *detail)
 {
     int fd;
     void *addr;
@@ -8610,7 +8617,9 @@ static int _email_append(jmap_req_t *req,
     if ((addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, 0))) {
         struct message_guid guid;
         message_guid_generate(&guid, addr, len);
-        *msgid = _email_id_from_guid(&guid);
+        detail->email_id = _email_id_from_guid(&guid);
+        detail->blob_id = jmap_blobid(&guid);
+        detail->size = len;
         munmap(addr, len);
     } else {
         r = IMAP_IOERROR;
@@ -8623,7 +8632,7 @@ static int _email_append(jmap_req_t *req,
      *  visible for the authenticated user. */
     char *exist_mboxname = NULL;
     uint32_t exist_uid;
-    r = _email_find(req, *msgid, &exist_mboxname, &exist_uid);
+    r = _email_find(req, detail->email_id, &exist_mboxname, &exist_uid);
     free(exist_mboxname);
     if (r != IMAP_NOTFOUND) {
         if (!r) r = IMAP_MAILBOX_EXISTS;
@@ -8653,6 +8662,11 @@ static int _email_append(jmap_req_t *req,
     /* Set system and user flags for new record */
     r = msgrecord_find(mbox, mbox->i.last_uid, &mr);
     if (r) goto done;
+
+    bit64 cid;
+    r = msgrecord_get_cid(mr, &cid);
+    if (r) goto done;
+    detail->thread_id = _thread_id_from_cid(cid);
 
     uint32_t system_flags = 0;
     uint32_t user_flags[MAX_USER_FLAGS/32];
@@ -10336,7 +10350,8 @@ static void _email_create(jmap_req_t *req,
     strarray_t keywords = STRARRAY_INITIALIZER;
     int r = 0;
     *set_err = NULL;
-    char *emailid = NULL;
+    struct email_append_detail detail;
+    memset(&detail, 0, sizeof(struct email_append_detail));
 
     /* Parse Email object into internal representation */
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -10368,7 +10383,7 @@ static void _email_create(jmap_req_t *req,
     r = _email_append(req, jmailboxids, &keywords, time(NULL),
                       config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT) ?
                       email.has_attachment : 0, _email_to_mime,
-                      &rock, &emailid);
+                      &rock, &detail);
     if (r || *set_err) goto done;
 
     /* Update ANSWERED flags of replied-to messages */
@@ -10384,7 +10399,11 @@ static void _email_create(jmap_req_t *req,
     }
 
     /* Return newly created Email object */
-    *new_email = json_pack("{s:s}", "id", emailid);
+    *new_email = json_pack("{s:s, s:s, s:s, s:i}",
+         "id", detail.email_id,
+         "blobId", detail.blob_id,
+         "threadId", detail.thread_id,
+         "size", detail.size);
     *set_err = NULL;
 
 done:
@@ -10399,7 +10418,9 @@ done:
     strarray_fini(&keywords);
     jmap_parser_fini(&parser);
     _email_fini(&email);
-    free(emailid);
+    free(detail.email_id);
+    free(detail.blob_id);
+    free(detail.thread_id);
 }
 
 struct _email_update_checkacl_rock {
@@ -11091,9 +11112,9 @@ int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     }
 
     /* Start import */
-    char *msgid = NULL;
+    struct email_append_detail detail;
+    memset(&detail, 0, sizeof(struct email_append_detail));
     char *mboxname = NULL;
-    uint32_t uid;
     time_t internaldate = 0;
     strarray_t keywords = STRARRAY_INITIALIZER;
     struct _email_import_rock content = { BUF_INITIALIZER };
@@ -11168,38 +11189,22 @@ int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
 
     /* Write the message to the file system */
     r = _email_append(req, mailboxids, &keywords, internaldate,
-                      has_attachment, _email_import_cb, &content, &msgid);
+                      has_attachment, _email_import_cb, &content, &detail);
     if (r) goto done;
 
-    /* Load its index record */
-    r = _email_find(req, msgid, &mboxname, &uid);
-    if (r) goto done;
-
-    r = jmap_openmbox(req, mboxname, &mbox, 0);
-    if (r) goto done;
-
-    r = msgrecord_find(mbox, uid, &mr);
-    if (!r) {
-        /* Convert new message to JMAP */
-        hash_table props = HASH_TABLE_INITIALIZER;
-        construct_hash_table(&props, 4, 0);
-        hash_insert("id", (void*)1, &props);
-        hash_insert("blobId", (void*)1, &props);
-        hash_insert("threadId", (void*)1, &props);
-        hash_insert("size", (void*)1, &props);
-        r = _email_get_with_props(req, &props, mr, createdmsg);
-        free_hash_table(&props, NULL);
-    }
-
-    jmap_closembox(req, &mbox);
+    *createdmsg = json_pack("{s:s, s:s, s:s, s:i}",
+         "id", detail.email_id,
+         "blobId", detail.blob_id,
+         "threadId", detail.thread_id,
+         "size", detail.size);
 
 done:
     strarray_fini(&keywords);
     buf_free(&content.buf);
-    if (mr) msgrecord_unref(&mr);
-    if (mbox) jmap_closembox(req, &mbox);
     free(mboxname);
-    free(msgid);
+    free(detail.email_id);
+    free(detail.blob_id);
+    free(detail.thread_id);
     return r;
 }
 
