@@ -4618,6 +4618,159 @@ sub test_emailsubmission_set_with_envelope
     $self->assert_not_null($msgsubid);
 }
 
+sub test_emailsubmission_set_too_many_recipients
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    xlog "Generate a email via IMAP";
+    $self->make_message("foo", body => "a email\r\nwith 11 recipients\r\n") or die;
+
+    xlog "get email id";
+    $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R1" ] ] );
+    my $emailid = $res->[0][1]->{ids}[0];
+
+    xlog "create email submission";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost',
+                    }, {
+                        email => 'rcpt2@localhost',
+                    }, {
+                        email => 'rcpt3@localhost',
+                    }, {
+                        email => 'rcpt4@localhost',
+                    }, {
+                        email => 'rcpt5@localhost',
+                    }, {
+                        email => 'rcpt6@localhost',
+                    }, {
+                        email => 'rcpt7@localhost',
+                    }, {
+                        email => 'rcpt8@localhost',
+                    }, {
+                        email => 'rcpt9@localhost',
+                    }, {
+                        email => 'rcpt10@localhost',
+                    }, {
+                        email => 'rcpt11@localhost',
+                    }],
+                },
+            }
+       }
+    }, "R1" ] ] );
+    my $errType = $res->[0][1]->{notCreated}{1}{type};
+    $self->assert_str_equals($errType, "tooManyRecipients");
+}
+
+sub test_emailsubmission_set_fail_some_recipients
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    xlog "Generate a email via IMAP";
+    $self->make_message("foo", body => "a email\r\nwith 10 recipients\r\n") or die;
+
+    xlog "get email id";
+    $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R1" ] ] );
+    my $emailid = $res->[0][1]->{ids}[0];
+
+    xlog "create email submission";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost',
+                    }, {
+                        email => 'rcpt2@localhost',
+                    }, {
+                        email => 'rcpt3@fail.to.deliver',
+                    }, {
+                        email => 'rcpt4@localhost',
+                    }, {
+                        email => 'rcpt5@fail.to.deliver',
+                    }, {
+                        email => 'rcpt6@fail.to.deliver',
+                    }, {
+                        email => 'rcpt7@localhost',
+                    }, {
+                        email => 'rcpt8@localhost',
+                    }, {
+                        email => 'rcpt9@fail.to.deliver',
+                    }, {
+                        email => 'rcpt10@localhost',
+                    }],
+                },
+            }
+       }
+    }, "R1" ] ] );
+    my $errType = $res->[0][1]->{notCreated}{1}{type};
+    $self->assert_str_equals($errType, "invalidRecipients");
+}
+
+sub test_emailsubmission_set_message_too_large
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    xlog "Generate a email via IMAP";
+    my $x = "x";
+    $self->make_message("foo", body => "a email\r\nwith 10k+ octet body\r\n" . $x x 10000) or die;
+
+    xlog "get email id";
+    $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R1" ] ] );
+    my $emailid = $res->[0][1]->{ids}[0];
+
+    xlog "create email submission";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost',
+                    }],
+                },
+            }
+       }
+    }, "R1" ] ] );
+    my $errType = $res->[0][1]->{notCreated}{1}{type};
+    $self->assert_str_equals($errType, "tooLarge");
+}
+
 sub test_emailsubmission_set_issue2285
     :min_version_3_1 :needs_component_jmap
 {
