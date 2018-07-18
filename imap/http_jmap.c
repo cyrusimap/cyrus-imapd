@@ -714,10 +714,10 @@ static int validate_request(struct transaction_t *txn, json_t *req, int *do_perf
         if (!strcmp(s, XML_NS_CYRUS "performance")) {
             *do_perf = 1;
         }
-        else if (strcmp(s, "ietf:jmap")) {
+        else if (!strcmp(s, "ietf:jmap")) {
             syslog(LOG_DEBUG, "old capability %s used", s);
         }
-        else if (strcmp(s, "ietf:jmapmail")) {
+        else if (!strcmp(s, "ietf:jmapmail")) {
             syslog(LOG_DEBUG, "old capability %s used", s);
         }
         else if (!json_object_get(jmap_capabilities, s)) {
