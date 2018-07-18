@@ -379,57 +379,6 @@ static char *mailaddr_to_uri(const char *addr)
     return buf_release(&buf);
 }
 
-static char*
-encode_base64_uri(const char *data, size_t len, const char *type)
-{
-    /* base64 encode data */
-    size_t len64 = (4 * ((len + 3) / 3)) + 1;
-    char *data64 = xzmalloc(len64);
-    sasl_encode64(data, len, data64, len64, NULL);
-
-    /* Make data URI */
-    char *uri = strconcat("data:", type, ";base64,", data64, NULL);
-    free(data64);
-    return uri;
-}
-
-
-static char*
-encode_base64_json(json_t *src)
-{
-    /* base64 encode JSON */
-    char *data = json_dumps(src, JSON_COMPACT);
-    char *uri = encode_base64_uri(data, strlen(data), "application/json");
-    free(data);
-    return uri;
-}
-
-static char*
-decode_base64_uri(const char *uri)
-{
-    const char *data = strstr(uri, ";base64,");
-    if (!data) {
-        return NULL;
-    }
-    data += 8;
-    struct buf buf = BUF_INITIALIZER;
-    if (charset_decode(&buf, data, strlen(data), ENCODING_BASE64) < 0) {
-        buf_free(&buf);
-        return NULL;
-    }
-    return buf_release(&buf);
-}
-
-static json_t *
-decode_base64_json(const char *uri)
-{
-    char *raw = decode_base64_uri(uri);
-    if (!raw) return NULL;
-    json_t *jdata = json_loads(raw, 0, NULL);
-    free(raw);
-    return jdata;
-}
-
 static void remove_icalxparam(icalproperty *prop, const char *name)
 {
     icalparameter *param, *next;
@@ -1454,12 +1403,6 @@ link_from_ical(context_t *ctx __attribute__((unused)), icalproperty *prop)
         json_object_set_new(link, "title", json_string(s));
     }
 
-    /* properties */
-    if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_PROPERTIES))) {
-        json_t *p = decode_base64_json(s);
-        json_object_set_new(link, "properties", p ? p : json_null());
-    }
-
     /* size */
     json_int_t size = -1;
     param = icalproperty_get_size_parameter(prop);
@@ -1476,6 +1419,12 @@ link_from_ical(context_t *ctx __attribute__((unused)), icalproperty *prop)
     if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_REL))) {
         json_object_set_new(link, "rel", json_string(s));
     }
+
+    /* display */
+    if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_DISPLAY))) {
+        json_object_set_new(link, "display", json_string(s));
+    }
+
 
     return link;
 }
@@ -3200,8 +3149,8 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links,
         const char *title = NULL;
         const char *rel = NULL;
         const char *cid = NULL;
+        const char *display = NULL;
         json_int_t size = -1;
-        json_t *properties = NULL;
 
         beginprop_key(ctx, propname, id);
 
@@ -3221,16 +3170,13 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links,
         if (JNOTNULL(json_object_get(link, "cid"))) {
             readprop(ctx, link, "cid", 0, "s", &cid);
         }
+        if (JNOTNULL(json_object_get(link, "display"))) {
+            readprop(ctx, link, "display", 0, "s", &display);
+        }
         if (JNOTNULL(json_object_get(link, "size"))) {
             pe = readprop(ctx, link, "size", 0, "I", &size);
             if (pe > 0 && size < 0) {
                 invalidprop(ctx, "size");
-            }
-        }
-        if (JNOTNULL(json_object_get(link, "properties"))) {
-            pe = readprop(ctx, link, "properties", 0, "o", &properties);
-            if (pe > 0 && !json_object_size(properties)) {
-                invalidprop(ctx, "properties");
             }
         }
         readprop(ctx, link, "rel", 0, "s", &rel);
@@ -3276,15 +3222,11 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links,
                 set_icalxparam(prop, JMAPICAL_XPARAM_REL, rel, 1);
             }
 
-            /* properties */
-            if (properties) {
-                char *tmp = encode_base64_json(properties);
-                set_icalxparam(prop, JMAPICAL_XPARAM_PROPERTIES, tmp, 1);
-                free(tmp);
-            }
-
             /* Set custom id */
             set_icalxparam(prop, JMAPICAL_XPARAM_ID, id, 1);
+
+            /* display */
+            if (display) set_icalxparam(prop, JMAPICAL_XPARAM_DISPLAY, display, 1);
 
             /* Add ATTACH property. */
             icalcomponent_add_property(comp, prop);
