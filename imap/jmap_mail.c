@@ -3802,7 +3802,7 @@ static int jmap_mailbox_changes(jmap_req_t *req)
         changed_props = json_pack("[s,s,s,s]",
                 "totalEmails", "unreadEmails", "totalThreads", "unreadThreads");
     }
-    json_object_set_new(res, "changedProperties", changed_props);
+    json_object_set_new(res, "updatedProperties", changed_props);
     jmap_ok(req, res);
 
 done:
