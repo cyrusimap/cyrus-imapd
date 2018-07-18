@@ -10094,6 +10094,40 @@ EOF
     $self->assert_str_equals("This is a test email.\n", $bodyValue->{value});
 }
 
+sub test_email_parse_blob822_lenient
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    # This isn't a valid RFC822 message, as it neither contains
+    # a Date nor a From header. But there's wild stuff out there,
+    # so let's be lenient.
+    my $rawEmail = <<'EOF';
+To: foo@bar.local
+MIME-Version: 1.0
+
+Some illegit mail.
+EOF
+    $rawEmail =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($rawEmail, "application/data");
+    my $blobId = $data->{blobId};
+
+    my $res = $jmap->CallMethods([['Email/parse', {
+        blobIds => [ $blobId ],
+        fetchAllBodyValues => JSON::true,
+    }, 'R1']]);
+    my $email = $res->[0][1]{parsed}{$blobId};
+
+    $self->assert_not_null($email);
+    $self->assert_null($email->{from});
+    $self->assert_null($email->{sentAt});
+    $self->assert_deep_equals([{name=>undef, email=>'foo@bar.local'}], $email->{to});
+}
+
 sub test_email_parse_contenttype_default
     :min_version_3_1 :needs_component_jmap
 {
@@ -10257,10 +10291,12 @@ sub test_email_parse_notparsable
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    my $rawEmail = <<'EOF';
-This is a test email.
-EOF
-    $rawEmail =~ s/\r?\n/\r\n/gs;
+    my $rawEmail = ""
+    ."To:foo\@bar.local\r\n"
+    ."Date: Date: Wed, 7 Dec 2016 00:21:50 -0500\r\n"
+    ."\r\n"
+    ."Some\nbogus\nbody";
+
     my $data = $jmap->Upload($rawEmail, "application/data");
     my $blobId = $data->{blobId};
 
