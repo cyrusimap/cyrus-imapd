@@ -165,8 +165,9 @@ static char *message_ucase(char *s)
 }
 
 /*
- * Copy a message of 'size' bytes from 'from' to 'to',
- * ensuring minimal RFC-822 compliance.
+ * Check a message 'from' of 'size' bytes for minimal RFC-822 compliance.
+ * The message is read from 'from'. If 'to' is not NULL, the message
+ * is copied to 'to', otherwise an in-memory buffer of 'from' is checked.
  *
  * Caller must have initialized config_* routines (with cyrus_init) to read
  * imapd.conf before calling.
@@ -182,6 +183,7 @@ EXPORTED int message_copy_strict(struct protstream *from, FILE *to,
     int reject8bit = config_getswitch(IMAPOPT_REJECT8BIT);
     int munge8bit = config_getswitch(IMAPOPT_MUNGE8BIT);
     int inheader = 1, blankline = 1;
+    struct buf tmp = BUF_INITIALIZER;
 
     while (size) {
         n = prot_read(from, buf, size > 4096 ? 4096 : size);
@@ -234,33 +236,76 @@ EXPORTED int message_copy_strict(struct protstream *from, FILE *to,
             }
         }
 
-        fwrite(buf, 1, n, to);
+        if (to)
+            fwrite(buf, 1, n, to);
+        else
+            buf_appendmap(&tmp, buf, n);
     }
 
-    if (r) return r;
-    fflush(to);
-    if (ferror(to) || fsync(fileno(to))) {
-        syslog(LOG_ERR, "IOERROR: writing message: %m");
-        return IMAP_IOERROR;
+    if (r) goto done;
+
+    if (to) {
+        fflush(to);
+        if (ferror(to) || fsync(fileno(to))) {
+            syslog(LOG_ERR, "IOERROR: writing message: %m");
+            r = IMAP_IOERROR;
+            goto done;
+        }
+        rewind(to);
     }
-    rewind(to);
 
     /* Go back and check headers */
     sawnl = 1;
+    const char *cur = buf_base(&tmp);
+    const char *top = buf_base(&tmp) + buf_len(&tmp);
     for (;;) {
-        if (!fgets(buf, sizeof(buf), to)) {
-            return sawnl ? 0 : IMAP_MESSAGE_BADHEADER;
+        /* Read headers into buffer */
+        if (to) {
+            if (!fgets(buf, sizeof(buf), to)) {
+                r = sawnl ? 0 : IMAP_MESSAGE_BADHEADER;
+                goto done;
+            }
+        }
+        else {
+            if (cur >= top) {
+                r = sawnl ? 0 : IMAP_MESSAGE_BADHEADER;
+                goto done;
+            }
+            const char *q = strchr(cur, '\n');
+            if (q == NULL) {
+                q = cur + sizeof(buf);
+                if (q > top) q = top;
+            }
+            else {
+                q++;
+            }
+            if (q > cur + sizeof(buf) - 1) {
+                q = cur + sizeof(buf) - 1;
+            }
+            memcpy(buf, cur, q - cur);
+            buf[q-cur] = '\0';
+            cur = q;
         }
 
         /* End of header section */
-        if (sawnl && buf[0] == '\r') return 0;
+        if (sawnl && buf[0] == '\r') {
+            r = 0;
+            goto done;
+        }
 
         /* Check for valid header name */
         if (sawnl && buf[0] != ' ' && buf[0] != '\t') {
-            if (buf[0] == ':') return IMAP_MESSAGE_BADHEADER;
-      if (strstr(buf, "From ") != buf)
-            for (p = (unsigned char *)buf; *p != ':'; p++) {
-                if (*p <= ' ') return IMAP_MESSAGE_BADHEADER;
+            if (buf[0] == ':') {
+                r = IMAP_MESSAGE_BADHEADER;
+                goto done;
+            }
+            if (strstr(buf, "From ") != buf) {
+                for (p = (unsigned char *)buf; *p && *p != ':'; p++) {
+                    if (*p <= ' ') {
+                        r = IMAP_MESSAGE_BADHEADER;
+                        goto done;
+                    }
+                }
             }
         }
 
@@ -271,6 +316,9 @@ EXPORTED int message_copy_strict(struct protstream *from, FILE *to,
 
         sawnl = (p > (unsigned char *)buf) && (p[-1] == '\n');
     }
+done:
+    buf_free(&tmp);
+    return r;
 }
 
 EXPORTED int message_parse(const char *fname, struct index_record *record)
