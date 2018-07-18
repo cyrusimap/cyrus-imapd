@@ -1210,58 +1210,29 @@ sub test_calendarevent_get_alerts
 
     my ($id, $ical) = $self->icalfile('alerts');
 
-    my $aid1 = "0CF835D0-CFEB-44AE-904A-C26AB62B73BB-1";
-    my $alert1 = {
-        relativeTo => "before-start",
-        offset => "PT5M",
-        action => {
-            type => "email",
-            to => [{
-                    name => "",
-                    email => "foo\@example.com"
-                }],
-            subject => "Event alert: 'Yep' starts soon.",
-            textBody => "Your event 'Yep' starts soon.",
+    my $alerts = {
+        '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-1' => {
+            relativeTo => "before-start",
+            offset => "PT5M",
+            action => "email",
         },
-    };
-
-    my $aid2 = "0CF835D0-CFEB-44AE-904A-C26AB62B73BB-2";
-    my $alert2 = {
-        relativeTo => "after-start",
-        offset => "PT1H",
-        action => {
-            type => "display",
-            acknowledged => "2016-09-28T15:00:05Z",
+        '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-2' => {
+            relativeTo => "before-start",
+            offset => "PT5M",
+            acknowledged => "2016-09-28T14:00:05Z",
+            action => "display",
         },
-    };
-
-    my $aid3 = "0CF835D0-CFEB-44AE-904A-C26AB62B73BB-3";
-    my $alert3 = {
-        relativeTo => "after-start",
-        offset => "PT1H",
-        action => {
-            type => "display",
+        '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-3' => {
+            relativeTo => "after-start",
+            offset => "PT10M",
+            action => "display",
             snoozed => "2016-09-28T15:00:05Z",
-
         },
     };
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_str_equals(JSON::true, $event->{useDefaultAlerts});
-    $self->assert_deep_equals($alert1, $event->{alerts}{$aid1});
-    $self->assert_deep_equals($alert2, $event->{alerts}{$aid2});
-    $self->assert_deep_equals($alert3, $event->{alerts}{$aid3});
-
-    # Check AUDIO VALARM
-    my $alert4 = $event->{alerts}{"0CF835D0-CFEB-44AE-904A-C26AB62B73BB-4"};
-    $self->assert_str_equals('display', $alert4->{action}{type});
-    my $mediaLinks = {
-        'alertMediaLink1' => {
-            href => 'https://local/foo.ogg',
-            type => 'audio/ogg',
-        }
-    };
-    $self->assert_deep_equals($mediaLinks, $alert4->{action}{mediaLinks});
+    $self->assert_deep_equals($alerts, $event->{alerts});
 }
 
 sub test_calendarevent_get_locations
@@ -2166,37 +2137,17 @@ sub test_calendarevent_set_alerts
         alert1 => {
             relativeTo => "before-start",
             offset => "PT5M",
-            action => {
-                type => "email",
-                to => [{
-                        name => "",
-                        email => "foo\@example.com"
-                    }],
-                subject => "foo",
-                textBody => "bar",
-                htmlBody => "<html><body>baz</body></html>",
-                acknowledged => "2015-11-07T08:57:00Z",
-                attachments => {
-                    att1 => {
-                        href => "https://local/some.jpg",
-                        type => "image/jpeg",
-                    }
-                },
-            },
+            acknowledged => "2015-11-07T08:57:00Z",
+            action => "email",
         },
         alert2 => {
             relativeTo => "after-start",
             offset => "PT1H",
-            action => {
-                type => "display",
-                snoozed => "2015-11-07T10:05:00Z",
-                mediaLinks => {
-                    alertLink1 => {
-                        type => 'video/ogg',
-                        href => 'https://local/bar.ogg'
-                    }
-                },
-            },
+            snoozed => "2015-11-07T10:05:00Z",
+            action => "display",
+        },
+        alert3 => {
+            offset => "PT1S",
         },
     };
 
@@ -2217,6 +2168,8 @@ sub test_calendarevent_set_alerts
     my $ret = $self->createandget_event($event);
     $event->{id} = $ret->{id};
     $event->{calendarId} = $ret->{calendarId};
+    $event->{alerts}{alert3}{relativeTo} = 'before-start';
+    $event->{alerts}{alert3}{action} = 'display';
     $self->assert_normalized_event_equals($ret, $event);
 }
 
