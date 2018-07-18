@@ -8113,10 +8113,17 @@ static int _email_from_buf(jmap_req_t *req,
         buf_append(&mybuf, buf);
     }
 
+    /* No more return from here */
     struct body *mypart = xzmalloc(sizeof(struct body));
-    int r = message_parse_mapped(buf_base(&mybuf), buf_len(&mybuf), mypart);
-    if (r || !mypart->subpart || !mypart->subpart->from) {
-        /* That's not a valid RFC822 message */
+    struct protstream *pr = prot_readmap(buf_base(&mybuf), buf_len(&mybuf));
+
+    /* Pre-run compliance check */
+    int r = message_copy_strict(pr, /*to*/NULL, buf_len(&mybuf), /*allow_null*/0);
+    if (r) goto done;
+
+    /* Parse message */
+    r = message_parse_mapped(buf_base(&mybuf), buf_len(&mybuf), mypart);
+    if (r || !mypart->subpart) {
         goto done;
     }
 
@@ -8128,8 +8135,11 @@ static int _email_from_buf(jmap_req_t *req,
     _cyrusmsg_fini(&msg);
 
 done:
-    message_free_body(mypart);
-    free(mypart);
+    if (pr) prot_free(pr);
+    if (mypart) {
+        message_free_body(mypart);
+        free(mypart);
+    }
     buf_free(&mybuf);
     return r;
 }
@@ -8292,13 +8302,12 @@ static int jmap_email_parse(jmap_req_t *req)
             buf_free(&msg_buf);
             if (r) {
                 syslog(LOG_ERR, "jmap: Email/parse(%s): %s", blobid, error_message(r));
-                json_array_append_new(notParsable, json_string(blobid));
-                continue;
             }
         }
         else {
             _email_from_body(req, &getargs, mr, body, part, &email);
         }
+
         if (email) {
             json_object_set_new(parsed, blobid, email);
         }
