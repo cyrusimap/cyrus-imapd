@@ -30,19 +30,29 @@ sub new_connection {
 sub helo {
     my ($Self) = @_;
     $Self->mylog("SMTP: HELO");
-    $Self->send_client_resp(250, "localhost", "AUTH", "DSN");
+    $Self->send_client_resp(250, "localhost",
+                            "AUTH", "DSN", "SIZE 10000", "ENHANCEDSTATUSCODES");
 }
 
 sub mail_from {
-    my ($Self, $From, $FromExtra) = @_;
-    $Self->mylog("SMTP: MAIL FROM $From $FromExtra");
+    my ($Self, $From, @FromExtra) = @_;
+    $Self->mylog("SMTP: MAIL FROM $From @FromExtra");
     $Self->send_client_resp(250, "ok");
 }
 
 sub rcpt_to {
-    my ($Self, $To, $ToExtra) = @_;
-    $Self->mylog("SMTP: RCPT TO $To $ToExtra");
-    $Self->send_client_resp(250, "ok");
+    my ($Self, $To, @ToExtra) = @_;
+    $Self->mylog("SMTP: RCPT TO $To @ToExtra");
+
+    $Self->{_rcpt_to_count}++;
+    if ($Self->{_rcpt_to_count} > 10) {
+        $Self->send_client_resp(550, "5.5.3 Too many recipients");
+    } elsif ($To =~ /@fail\.to\.deliver$/i) {
+        $Self->send_client_resp(553, "5.1.1 Bad destination mailbox address");
+        $Self->mylog("SMTP: 553 5.1.1");
+    } else {
+        $Self->send_client_resp(250, "ok");
+    }
 }
 
 sub begin_data {
