@@ -1777,14 +1777,14 @@ static json_t*
 keywords_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
 {
     icalproperty* prop;
-    json_t *ret = json_array();
+    json_t *ret = json_object();
 
     for (prop = icalcomponent_get_first_property(comp, ICAL_CATEGORIES_PROPERTY);
          prop;
          prop = icalcomponent_get_next_property(comp, ICAL_CATEGORIES_PROPERTY)) {
-        json_array_append_new(ret, json_string(icalproperty_get_categories(prop)));
+        json_object_set_new(ret, icalproperty_get_categories(prop), json_true());
     }
-    if (!json_array_size(ret)) {
+    if (!json_object_size(ret)) {
         json_decref(ret);
         ret = json_null();
     }
@@ -3858,6 +3858,8 @@ keywords_to_ical(context_t *ctx, icalcomponent *comp, json_t *keywords)
 {
     icalproperty *prop, *next;
 
+    // FIXME should support patch here
+
     /* Purge existing keywords from component */
     for (prop = icalcomponent_get_first_property(comp, ICAL_CATEGORIES_PROPERTY);
          prop;
@@ -3869,14 +3871,12 @@ keywords_to_ical(context_t *ctx, icalcomponent *comp, json_t *keywords)
     }
 
     /* Add keywords */
-    struct buf buf = BUF_INITIALIZER;
     json_t *jval;
-    size_t i;
-    json_array_foreach(keywords, i, jval) {
-        const char *keyword = json_string_value(jval);
-        if (!keyword) {
-            beginprop_idx(ctx, "keywords", i);
-            invalidprop(ctx, NULL);
+    const char *keyword;
+    json_object_foreach(keywords, keyword, jval) {
+        if (jval != json_true()) {
+            beginprop(ctx, "keywords");
+            invalidprop(ctx, keyword);
             endprop(ctx);
             continue;
         }
@@ -3886,9 +3886,6 @@ keywords_to_ical(context_t *ctx, icalcomponent *comp, json_t *keywords)
         prop = icalproperty_new_categories(keyword);
         icalcomponent_add_property(comp, prop);
     }
-    if (buf_len(&buf)) {
-    }
-    buf_free(&buf);
 }
 
 /* Create or overwrite JMAP relatedTo in comp */
@@ -4488,7 +4485,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     json_t *keywords = NULL;
     pe = readprop(ctx, event, "keywords", 0, "o", &keywords);
     if (pe > 0) {
-        if (json_is_null(keywords) || json_array_size(keywords)) {
+        if (json_is_null(keywords) || json_is_object(keywords)) {
             keywords_to_ical(ctx, comp, keywords);
         } else {
             invalidprop(ctx, "keywords");
