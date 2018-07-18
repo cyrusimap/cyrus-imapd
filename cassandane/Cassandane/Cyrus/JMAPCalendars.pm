@@ -849,9 +849,6 @@ sub normalize_event
             if (not exists $att->{title}) {
                 $att->{title} = undef;
             }
-            if (not exists $att->{properties}) {
-                $att->{properties} = undef;
-            }
         }
     }
     if (not exists $event->{status}) {
@@ -1786,18 +1783,12 @@ sub test_calendarevent_set_links
             "rfc5545" => {
                href => "https://tools.ietf.org/html/rfc5545",
                rel => "describedby",
-               properties => {
-                   "https://tools.ietf.org/html/rfc4791/" => "the related CalDAV spec",
-                   "https://tools.ietf.org/html/rfc2445/" => undef,
-               },
             },
             "image" => {
                href => "https://foo.local/favicon.png",
                rel => "icon",
                cid => '123456789asd',
-               properties => {
-                   display => 'badge',
-               },
+               display => 'badge',
             },
         },
     };
