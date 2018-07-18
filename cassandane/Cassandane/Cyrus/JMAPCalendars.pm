@@ -1062,10 +1062,12 @@ sub test_calendarevent_get_keywords
     my ($id, $ical) = $self->icalfile('keywords');
 
     my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_num_equals(3, scalar @{$event->{keywords}});
-    $self->assert_str_equals('foo', $event->{keywords}[0]);
-    $self->assert_str_equals('bar', $event->{keywords}[1]);
-    $self->assert_str_equals('baz', $event->{keywords}[2]);
+    my $keywords = {
+        'foo' => JSON::true,
+        'bar' => JSON::true,
+        'baz' => JSON::true,
+    };
+    $self->assert_deep_equals($keywords, $event->{keywords});
 }
 
 sub test_calendarevent_get_description
@@ -1680,7 +1682,11 @@ sub test_calendarevent_set_keywords
         "timeZone"=> "Etc/UTC",
         "isAllDay"=> JSON::false,
         "locale" => "en",
-        "keywords" => [ 'foo', 'bar', 'baz' ],
+        "keywords" => {
+            'foo' => JSON::true,
+            'bar' => JSON::true,
+            'baz' => JSON::true,
+        },
     };
 
     my $ret = $self->createandget_event($event);
