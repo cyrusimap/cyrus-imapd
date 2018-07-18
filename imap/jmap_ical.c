@@ -1505,130 +1505,6 @@ htmldescription_from_ical(context_t *ctx __attribute__((unused)), icalcomponent 
     return json_string(uri + 15);
 }
 
-static json_t *alert_emailaction_from_ical(context_t *ctx, icalcomponent *alarm)
-{
-    json_t *to = json_pack("[]");
-    icalproperty *prop = NULL;
-    icalparameter *param = NULL;
-    json_t *action = NULL;
-    const char *s = NULL;
-
-    for (prop = icalcomponent_get_first_property(alarm, ICAL_ATTENDEE_PROPERTY);
-         prop;
-         prop = icalcomponent_get_next_property(alarm, ICAL_ATTENDEE_PROPERTY)) {
-
-        const char *name = NULL;
-        char *email;
-
-        /* email */
-        email = mailaddr_from_uri(icalproperty_get_value_as_string(prop));
-        if (!email) {
-            continue;
-        }
-
-        /* name */
-        param = icalproperty_get_first_parameter(prop, ICAL_CN_PARAMETER);
-        if (param) {
-            name = icalparameter_get_cn(param);
-        }
-
-        json_array_append_new(to, json_pack("{s:s s:s}", "name", name ? name : "", "email", email));
-        free(email);
-    }
-    if (!json_array_size(to)) {
-        json_decref(to);
-        goto done;
-    }
-    action = json_pack("{s:s s:o}", "type", "email", "to", to);
-
-    /* subject */
-    prop = icalcomponent_get_first_property(alarm, ICAL_SUMMARY_PROPERTY);
-    if (prop && (s = icalproperty_get_summary(prop))) {
-        json_object_set_new(action, "subject", json_string(s));
-    }
-    /* textBody */
-    prop = icalcomponent_get_first_property(alarm, ICAL_DESCRIPTION_PROPERTY);
-    if (prop && (s = icalproperty_get_description(prop))) {
-        json_object_set_new(action, "textBody", json_string(s));
-    }
-
-    /* htmlBody */
-    json_t *htmlBody = htmldescription_from_ical(ctx, alarm);
-    if (JNOTNULL(htmlBody)) {
-        json_object_set_new(action, "htmlBody", htmlBody);
-    }
-
-    /* attachments */
-    json_t *attachments = links_from_ical(ctx, alarm, "alertAttachment");
-    if (JNOTNULL(attachments)) {
-        json_object_set_new(action, "attachments", attachments);
-    }
-
-done:
-    return action;
-}
-
-static json_t *alertaction_from_ical(context_t *ctx,
-                                     hash_table *snoozes,
-                                     icalcomponent *alarm)
-{
-    json_t *action = NULL;
-    icalproperty* prop;
-    icalvalue* val;
-    icalproperty_action icalaction;
-    const char *uid;
-
-    prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
-    if (!prop) goto done;
-
-    val = icalproperty_get_value(prop);
-    if (!val) goto done;
-
-    icalaction = icalvalue_get_action(val);
-
-    if (icalaction == ICAL_ACTION_EMAIL) {
-        action = alert_emailaction_from_ical(ctx, alarm);
-    } else if (icalaction == ICAL_ACTION_DISPLAY || icalaction == ICAL_ACTION_AUDIO) {
-        action = json_pack("{s:s}", "type", "display");
-        /* mediaLinks */
-        json_t *mediaLinks = links_from_ical(ctx, alarm, "alertMediaLink");
-        if (JNOTNULL(mediaLinks)) {
-            json_object_set_new(action, "mediaLinks", mediaLinks);
-        }
-    }
-    if (!action) {
-        goto done;
-    }
-
-    /* acknowledged */
-    if ((prop = icalcomponent_get_acknowledged_property(alarm))) {
-        icaltimetype t = icalproperty_get_acknowledged(prop);
-        if (icaltime_is_valid_time(t)) {
-            char *val = utcdate_from_icaltime_r(t);
-            json_object_set_new(action, "acknowledged", json_string(val));
-            free(val);
-        }
-    }
-
-    /* snoozed */
-    icalcomponent *snooze;
-    if ((uid = icalcomponent_get_uid(alarm)) &&
-        (snooze = hash_lookup(uid, snoozes)) &&
-        (prop = icalcomponent_get_first_property(snooze,
-                                                 ICAL_TRIGGER_PROPERTY))) {
-
-        icaltimetype t = icalproperty_get_trigger(prop).time;
-        if (!icaltime_is_null_time(t) && icaltime_is_valid_time(t)) {
-            char *val = utcdate_from_icaltime_r(t);
-            json_object_set_new(action, "snoozed", json_string(val));
-            free(val);
-        }
-    }
-
-done:
-    return action;
-}
-
 /* Convert the VALARMS in the VEVENT comp to CalendarEvent alerts.
  * Adds any ATTACH properties found in VALARM components to the
  * event 'links' property. */
@@ -1677,18 +1553,11 @@ alerts_from_ical(context_t *ctx, icalcomponent *comp)
     while ((alarm = (icalcomponent*) ptrarray_pop(&alarms))) {
         icalproperty* prop;
         icalparameter *param;
-        struct icaltriggertype trigger;
-        icalparameter_related related = ICAL_RELATED_START;
 
-        json_t *action, *alert;
-        const char *relativeTo;
-        char *id, *offset;
-        struct icaldurationtype duration;
-
-        relativeTo = offset = id = NULL;
+        json_t *alert = json_object();
 
         /* alert id */
-        id = (char *) icalcomponent_get_uid(alarm);
+        char *id = (char *) icalcomponent_get_uid(alarm);
         if (!id) {
             id = hexkey(icalcomponent_as_ical_string(alarm));
         } else {
@@ -1696,23 +1565,27 @@ alerts_from_ical(context_t *ctx, icalcomponent *comp)
         }
         beginprop_key(ctx, "alerts", id);
 
-        /* Determine TRIGGER */
+        /* Determine TRIGGER and RELATED parameter */
+        struct icaltriggertype trigger = {
+            icaltime_null_time(), icaldurationtype_null_duration()
+        };
+        icalparameter_related related = ICAL_RELATED_START;
         prop = icalcomponent_get_first_property(alarm, ICAL_TRIGGER_PROPERTY);
-        if (!prop) {
-            goto done;
-        }
-        trigger = icalproperty_get_trigger(prop);
-
-        /* Determine RELATED parameter */
-        param = icalproperty_get_first_parameter(prop, ICAL_RELATED_PARAMETER);
-        if (param) {
-            related = icalparameter_get_related(param);
-            if (related != ICAL_RELATED_START && related != ICAL_RELATED_END) {
-                goto done;
+        if (prop) {
+            trigger = icalproperty_get_trigger(prop);
+            param = icalproperty_get_first_parameter(prop, ICAL_RELATED_PARAMETER);
+            if (param) {
+                related = icalparameter_get_related(param);
+                if (related != ICAL_RELATED_START && related != ICAL_RELATED_END) {
+                    endprop(ctx);
+                    free(id);
+                    continue;
+                }
             }
         }
 
         /* Determine duration between alarm and start/end */
+        struct icaldurationtype duration;
         if (!icaldurationtype_is_null_duration(trigger.duration) ||
              icaltime_is_null_time(trigger.time)) {
             duration = trigger.duration;
@@ -1729,34 +1602,60 @@ alerts_from_ical(context_t *ctx, icalcomponent *comp)
             duration = icaltime_subtract(ttrg, tref);
         }
 
-        /* action */
-        beginprop(ctx, "action");
-        action = alertaction_from_ical(ctx, &snoozes, alarm);
-        endprop(ctx);
-        if (!action) {
-            goto done;
+        /*  action */
+        const char *action = "display";
+        prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
+        if (prop) {
+            icalvalue* val = icalproperty_get_value(prop);
+            if (val && icalvalue_get_action(val) == ICAL_ACTION_EMAIL) {
+                action = "email";
+            }
         }
+        json_object_set_new(alert, "action", json_string(action));
 
         /* relativeTo */
+        const char *relative_to = "before-start";
         if (duration.is_neg) {
-            relativeTo = related == ICAL_RELATED_START ?
+            relative_to = related == ICAL_RELATED_START ?
                 "before-start" : "before-end";
         } else {
-            relativeTo = related == ICAL_RELATED_START ?
+            relative_to = related == ICAL_RELATED_START ?
                 "after-start" : "after-end";
         }
+        json_object_set_new(alert, "relativeTo", json_string(relative_to));
 
         /* offset*/
         duration.is_neg = 0;
-        offset = icaldurationtype_as_ical_string_r(duration);
-        alert = json_pack("{s:s s:s s:o}",
-                "relativeTo", relativeTo,
-                "offset", offset,
-                "action", action);
+        char *offset = icaldurationtype_as_ical_string_r(duration);
+        json_object_set_new(alert, "offset", json_string(offset));
         json_object_set_new(alerts, id, alert);
         free(offset);
-done:
-        endprop(ctx);
+
+        /* acknowledged */
+        if ((prop = icalcomponent_get_acknowledged_property(alarm))) {
+            icaltimetype t = icalproperty_get_acknowledged(prop);
+            if (icaltime_is_valid_time(t)) {
+                char *val = utcdate_from_icaltime_r(t);
+                json_object_set_new(alert, "acknowledged", json_string(val));
+                free(val);
+            }
+        }
+
+        /* snoozed */
+        icalcomponent *snooze;
+        const char *uid;
+        if ((uid = icalcomponent_get_uid(alarm)) &&
+            (snooze = hash_lookup(uid, &snoozes)) &&
+            (prop = icalcomponent_get_first_property(snooze,
+                                        ICAL_TRIGGER_PROPERTY))) {
+            icaltimetype t = icalproperty_get_trigger(prop).time;
+            if (!icaltime_is_null_time(t) && icaltime_is_valid_time(t)) {
+                char *val = utcdate_from_icaltime_r(t);
+                json_object_set_new(alert, "snoozed", json_string(val));
+                free(val);
+            }
+        }
+
         free(id);
     }
 
@@ -3272,159 +3171,12 @@ htmldescription_to_ical(context_t *ctx __attribute__((unused)),
     }
 }
 
-static void
-alertaction_to_ical(context_t *ctx, icalcomponent *comp, icalcomponent *alarm,
-                    json_t *action, int *is_unknown)
-{
-    const char *s;
-    int pe;
-    icalproperty *prop;
-    icalparameter *param;
-
-    /* type */
-    icalproperty_action type = ICAL_ACTION_NONE;
-    pe = readprop(ctx, action, "type", 1, "s", &s);
-    if (pe > 0) {
-        if (!strcmp(s, "email")) {
-            type = ICAL_ACTION_EMAIL;
-        } else if (!strcmp(s, "display")) {
-            type = ICAL_ACTION_DISPLAY;
-        }
-    }
-    *is_unknown = type == ICAL_ACTION_NONE;
-    if (have_invalid_props(ctx) || *is_unknown) {
-        return;
-    }
-
-    /* action */
-    prop = icalproperty_new_action(type);
-    icalcomponent_add_property(alarm, prop);
-
-    /* alert contents */
-    if (type == ICAL_ACTION_EMAIL) {
-        json_t *to, *t;
-        size_t i;
-
-        pe = readprop(ctx, action, "to", 1, "o", &to);
-        if (pe > 0 && json_array_size(to)) {
-            json_array_foreach(to, i, t) {
-
-                beginprop_idx(ctx, "to", i);
-
-                /* email */
-                pe = readprop(ctx, t, "email", 1, "s", &s);
-                if (pe > 0) {
-                    char *addr = mailaddr_to_uri(s);
-                    prop = icalproperty_new_attendee(addr);
-                    free(addr);
-                }
-                pe = readprop(ctx, t, "name", 0, "s", &s);
-                if (pe > 0) {
-                    param = icalparameter_new_cn(s);
-                    icalproperty_add_parameter(prop, param);
-                }
-                if (!have_invalid_props(ctx)) {
-                    icalcomponent_add_property(alarm, prop);
-                }
-                endprop(ctx);
-            }
-        } else if (!pe || (pe > 0 && json_typeof(to) != JSON_ARRAY)) {
-            invalidprop(ctx, "to");
-        }
-
-        /* summary */
-        s = NULL;
-        readprop(ctx, action, "subject", 0, "s", &s);
-        prop = icalproperty_new_summary(s ? s : "");
-        icalcomponent_add_property(alarm, prop);
-
-        /* textBody */
-        s = NULL;
-        readprop(ctx, action, "textBody", 0, "s", &s);
-        prop = icalproperty_new_description(s ? s : "");
-        icalcomponent_add_property(alarm, prop);
-
-        /* htmlBody - must come after setting textBody */
-        json_t *htmlBody = json_object_get(action, "htmlBody");
-        if (json_is_null(htmlBody) || json_is_string(htmlBody)) {
-            htmldescription_to_ical(ctx, alarm, htmlBody);
-        }
-        else if (JNOTNULL(htmlBody)) {
-            invalidprop(ctx, "htmlBody");
-        }
-
-        /* attachments */
-        json_t *attachments = json_object_get(action, "attachments");
-        if (json_is_null(attachments) || json_is_object(attachments)) {
-            links_to_ical(ctx, alarm, attachments, "attachments", ICAL_ATTACH_PROPERTY);
-        }
-        else if (JNOTNULL(attachments)) {
-            invalidprop(ctx, "attachments");
-        }
-    } else {
-        /* A DISPLAY alert */
-        prop = icalproperty_new_description("");
-        icalcomponent_add_property(alarm, prop);
-
-        json_t *mediaLinks = json_object_get(action, "mediaLinks");
-        if (json_is_null(mediaLinks) || json_is_object(mediaLinks)) {
-            links_to_ical(ctx, alarm, mediaLinks, "mediaLinks", ICAL_X_PROPERTY);
-        }
-        else if (JNOTNULL(mediaLinks)) {
-            invalidprop(ctx, "mediaLinks");
-        }
-    }
-
-    /* snoozed */
-    pe = readprop(ctx, action, "snoozed", 0, "s", &s);
-    if (pe > 0) {
-        icaltimetype t;
-        if (utcdate_to_icaltime(s, &t)) {
-            const char *uid = icalcomponent_get_uid(alarm);
-            icalcomponent *snooze = icalcomponent_new_clone(alarm);
-            struct icaltriggertype trigger;
-
-            /* Add RELATED-TO */
-            remove_icalprop(snooze, ICAL_UID_PROPERTY);
-            prop = icalproperty_new_relatedto(uid);
-            param = icalparameter_new(ICAL_RELTYPE_PARAMETER);
-            icalparameter_set_xvalue(param, "SNOOZE");
-            icalproperty_add_parameter(prop, param);
-            icalcomponent_add_property(snooze, prop);
-
-            /* Add TRIGGER */
-            trigger.duration = icaldurationtype_null_duration();
-            trigger.time = t;
-            prop = icalproperty_new_trigger(trigger);
-            icalcomponent_add_property(snooze, prop);
-            icalcomponent_add_component(comp, snooze);
-        } else {
-            invalidprop(ctx, "snoozed");
-        }
-    }
-
-    /* acknowledged */
-    pe = readprop(ctx, action, "acknowledged", 0, "s", &s);
-    if (pe > 0) {
-        icaltimetype t;
-        if (utcdate_to_icaltime(s, &t)) {
-            prop = icalproperty_new_acknowledged(t);
-            icalcomponent_add_property(alarm, prop);
-        } else {
-            invalidprop(ctx, "acknowledged");
-        }
-    }
-}
-
 /* Create or update the VALARMs in the VEVENT component comp as defined by the
  * JMAP alerts. */
 static void
 alerts_to_ical(context_t *ctx, icalcomponent *comp, json_t *alerts)
 {
-    const char *id;
-    json_t *alert;
     icalcomponent *alarm, *next;
-    int pe;
 
     /* Purge all VALARMs. */
     for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
@@ -3439,13 +3191,13 @@ alerts_to_ical(context_t *ctx, icalcomponent *comp, json_t *alerts)
         return;
     }
 
+    int pe;
+    const char *id;
+    json_t *alert;
     json_object_foreach(alerts, id, alert) {
         const char *s;
-        struct icaltriggertype trigger;
-        icalparameter_related rel;
         icalproperty *prop;
         icalparameter *param;
-        json_t *action;
 
         alarm = icalcomponent_new_valarm();
         icalcomponent_set_uid(alarm, id);
@@ -3453,7 +3205,9 @@ alerts_to_ical(context_t *ctx, icalcomponent *comp, json_t *alerts)
         beginprop_key(ctx, "alerts", id);
 
         /* offset */
-        trigger.time = icaltime_null_time();
+        struct icaltriggertype trigger = {
+            icaltime_null_time(), icaldurationtype_null_duration()
+        };
         pe = readprop(ctx, alert, "offset", 1, "s", &s);
         if (pe > 0) {
             trigger.duration = icaldurationtype_from_string(s);
@@ -3463,42 +3217,82 @@ alerts_to_ical(context_t *ctx, icalcomponent *comp, json_t *alerts)
         }
 
         /* relativeTo */
-        rel = ICAL_RELATED_NONE;
-        pe = readprop(ctx, alert, "relativeTo", 1, "s", &s);
+        icalparameter_related rel = ICAL_RELATED_START;
+        trigger.duration.is_neg = 1;
+        pe = readprop(ctx, alert, "relativeTo", 0, "s", &s);
         if (pe > 0) {
             if (!strcmp(s, "before-start")) {
                 rel = ICAL_RELATED_START;
-                trigger.duration.is_neg = 1;
             } else if (!strcmp(s, "after-start")) {
                 rel = ICAL_RELATED_START;
+                trigger.duration.is_neg = 0;
             } else if (!strcmp(s, "before-end")) {
                 rel = ICAL_RELATED_END;
-                trigger.duration.is_neg = 1;
             } else if (!strcmp(s, "after-end")) {
                 rel = ICAL_RELATED_END;
+                trigger.duration.is_neg = 0;
             } else {
                 invalidprop(ctx, "relativeTo");
             }
-        }
-
-        /* action */
-        int is_unknown_action = 0;
-        if (readprop(ctx, alert, "action", 1, "o", &action) > 0) {
-            beginprop(ctx, "action");
-            alertaction_to_ical(ctx, comp, alarm, action, &is_unknown_action);
-            endprop(ctx);
-        }
-
-        if (is_unknown_action || have_invalid_props(ctx)) {
-            icalcomponent_free(alarm);
-            endprop(ctx);
-            continue;
         }
 
         /* Add TRIGGER */
         prop = icalproperty_new_trigger(trigger);
         param = icalparameter_new_related(rel);
         icalproperty_add_parameter(prop, param);
+        icalcomponent_add_property(alarm, prop);
+
+        /* snoozed */
+        pe = readprop(ctx, alert, "snoozed", 0, "s", &s);
+        if (pe > 0) {
+            struct icaltriggertype snooze_trigger = {
+                icaltime_null_time(), icaldurationtype_null_duration()
+            };
+            if (utcdate_to_icaltime(s, &snooze_trigger.time)) {
+                icalcomponent *snooze = icalcomponent_new_valarm();
+
+                /* Add RELATED-TO */
+                remove_icalprop(snooze, ICAL_UID_PROPERTY);
+                prop = icalproperty_new_relatedto(id);
+                param = icalparameter_new(ICAL_RELTYPE_PARAMETER);
+                icalparameter_set_xvalue(param, "SNOOZE");
+                icalproperty_add_parameter(prop, param);
+                icalcomponent_add_property(snooze, prop);
+
+                /* Add TRIGGER */
+                prop = icalproperty_new_trigger(snooze_trigger);
+                icalcomponent_add_property(snooze, prop);
+                icalcomponent_add_component(comp, snooze);
+            } else {
+                invalidprop(ctx, "snoozed");
+            }
+        }
+
+        /* acknowledged */
+        pe = readprop(ctx, alert, "acknowledged", 0, "s", &s);
+        if (pe > 0) {
+            icaltimetype t;
+            if (utcdate_to_icaltime(s, &t)) {
+                prop = icalproperty_new_acknowledged(t);
+                icalcomponent_add_property(alarm, prop);
+            } else {
+                invalidprop(ctx, "acknowledged");
+            }
+        }
+
+        /* action */
+        icalproperty_action action = ICAL_ACTION_DISPLAY;
+        pe = readprop(ctx, alert, "action", 0, "s", &s);
+        if (pe > 0) {
+            if (!strcmp(s, "email")) {
+                action = ICAL_ACTION_EMAIL;
+            } else if (!strcmp(s, "display")) {
+                action = ICAL_ACTION_DISPLAY;
+            } else {
+                invalidprop(ctx, "action");
+            }
+        }
+        prop = icalproperty_new_action(action);
         icalcomponent_add_property(alarm, prop);
 
         icalcomponent_add_component(comp, alarm);
