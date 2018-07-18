@@ -3798,6 +3798,57 @@ sub test_misc_download
     $self->assert_str_equals(encode_base64($res->{content}, ''), "beefc0de");
 }
 
+sub test_misc_download_shared
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "Create shared mailboxes";
+    $self->{instance}->create_user("foo");
+    $admintalk->create("user.foo.A") or die;
+    $admintalk->setacl("user.foo.A", "cassandane", "lr") or die;
+    $admintalk->create("user.foo.B") or die;
+    $admintalk->setacl("user.foo.B", "cassandane", "lr") or die;
+
+    xlog "Create email in shared mailbox";
+    $self->{adminstore}->set_folder('user.foo.B');
+    $self->make_message("foo", store => $self->{adminstore}) or die;
+
+    xlog "get email blobId";
+    my $res = $jmap->CallMethods([
+        ['Email/query', { accountId => 'foo'}, 'R1'],
+        ['Email/get', {
+            accountId => 'foo',
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['blobId'],
+        }, 'R2'],
+    ]);
+    my $blobId = $res->[1][1]->{list}[0]{blobId};
+
+    xlog "download email as blob";
+    $res = $jmap->Download('foo', $blobId);
+
+    xlog "Unshare mailbox";
+    $admintalk->setacl("user.foo.B", "cassandane", "") or die;
+
+    my %Headers;
+    $Headers{'Authorization'} = $jmap->auth_header();
+    my %getopts = (headers => \%Headers);
+    my $httpRes = $jmap->ua->get($jmap->downloaduri('foo', $blobId));
+    $self->assert_str_equals('404', $httpRes->{status});
+}
+
 sub test_base64_forward
     :min_version_3_1 :needs_component_jmap
 {
