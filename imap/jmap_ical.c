@@ -1136,9 +1136,8 @@ static json_t *participant_from_ical(icalproperty *prop, hash_table *hatts,
 
     /* roles */
     json_t *roles = json_array();
-    int seen_owner = 0;
-    if (ical_role == ICAL_ROLE_CHAIR)
-        json_array_append_new(roles, json_string("chair"));
+    int seen_owner_role = 0;
+    int seen_attendee_role = 0;
     for (param = icalproperty_get_first_parameter(prop, ICAL_X_PARAMETER);
          param;
          param = icalproperty_get_next_parameter(prop, ICAL_X_PARAMETER)) {
@@ -1148,15 +1147,18 @@ static json_t *participant_from_ical(icalproperty *prop, hash_table *hatts,
 
         buf_setcstr(&buf, icalparameter_get_xvalue(param));
         json_array_append_new(roles, json_string(buf_lcase(&buf)));
-        if (!seen_owner) seen_owner = !strcmp(buf_cstring(&buf), "owner");
+        if (!seen_owner_role) seen_owner_role = !strcmp(buf_cstring(&buf), "owner");
     }
-    if (!seen_owner && orga) {
+    if (!seen_owner_role) {
         const char *o = icalproperty_get_organizer(orga);
         const char *a = icalproperty_get_attendee(prop);
-        if (!strcasecmp(o, a))
+        if (!strcasecmp(o, a)) {
             json_array_append_new(roles, json_string("owner"));
+        }
     }
-    if (!json_array_size(roles)) {
+    if (ical_role == ICAL_ROLE_CHAIR)
+        json_array_append_new(roles, json_string("chair"));
+    if (!json_array_size(roles) || !seen_attendee_role) {
         json_array_append_new(roles, json_string("attendee"));
     }
     json_object_set_new(p, "roles", roles);
