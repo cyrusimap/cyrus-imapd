@@ -2107,6 +2107,15 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
         }
     }
 
+    /* method */
+    if (wantprop(ctx, "method")) {
+        icalproperty_method icalmethod = icalcomponent_get_method(comp);
+        if (icalmethod != ICAL_METHOD_NONE) {
+            const char *method = icalenum_method_to_string(icalmethod);
+            json_object_set_new(event, "method", json_string(method));
+        }
+    }
+
     /* color */
     if (wantprop(ctx, "color")) {
         prop = icalcomponent_get_first_property(comp, ICAL_COLOR_PROPERTY);
@@ -4197,6 +4206,18 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     pe = readprop(ctx, event, "description", 0, "s", &desc);
     if (pe > 0 && strlen(desc)) {
         description_to_ical(ctx, comp, desc, desc_content_type);
+    }
+
+    const char *method = NULL;
+    pe = readprop(ctx, event, "method", 0, "s", &method);
+    if (pe > 0) {
+        icalproperty_method icalmethod = icalenum_string_to_method(method);
+        if (icalmethod != ICAL_METHOD_NONE) {
+            icalcomponent_set_method(comp, icalmethod);
+        }
+        else {
+            invalidprop(ctx, "method");
+        }
     }
 
     /* color */
