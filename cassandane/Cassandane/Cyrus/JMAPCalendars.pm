@@ -744,8 +744,8 @@ sub normalize_event
     if (not exists $event->{description}) {
         $event->{description} = '';
     }
-    if (not exists $event->{htmlDescription}) {
-        $event->{htmlDescription} = undef;
+    if (not exists $event->{descriptionContentType}) {
+        $event->{descriptionContentType} = 'text/plain';
     }
     if (not exists $event->{locations}) {
         $event->{locations} = undef;
@@ -946,6 +946,7 @@ sub test_calendarevent_get_simple
     $self->assert_str_equals("en", $event->{locale});
     $self->assert_str_equals("turquoise", $event->{color});
     $self->assert_str_equals("double yo", $event->{description});
+    $self->assert_str_equals("text/plain", $event->{descriptionContentType});
     $self->assert_equals($event->{freeBusyStatus}, "free");
     $self->assert_equals($event->{isAllDay}, JSON::false);
     $self->assert_str_equals("2016-09-28T16:00:00", $event->{start});
@@ -1088,8 +1089,8 @@ sub test_calendarevent_get_description
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event);
-    $self->assert_str_equals("Hello, from plain text.", $event->{description});
-    $self->assert_str_equals("<html><body>Hello, from HTML!</body></html>", $event->{htmlDescription});
+    $self->assert_str_equals("Hello, world!", $event->{description});
+    $self->assert_str_equals("text/plain", $event->{descriptionContentType});
 }
 
 sub test_calendarevent_get_participants
@@ -1709,7 +1710,7 @@ sub test_calendarevent_set_endtimezone_recurrence
     $self->assert_normalized_event_equals($ret, $event);
 }
 
-sub test_calendarevent_set_description
+sub test_calendarevent_set_htmldescription
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
@@ -1725,18 +1726,15 @@ sub test_calendarevent_set_description
         "sequence"=> 42,
         "timeZone"=> "Etc/UTC",
         "isAllDay"=> JSON::false,
-        "description"=> "A text description",
-        "htmlDescription"=> '<html><body>HTML with special chars : and ; and "</body></html>',
+        "description"=> '<html><body>HTML with special chars : and ; and "</body></html>',
+        "descriptionContentType" => 'text/html',
         "privacy" => "secret",
     };
 
+    # Cyrus always format HTML descriptions to plain text.
     my $ret = $self->createandget_event($event);
-    $self->assert_normalized_event_equals($event, $ret);
-
-    delete $event->{description};
-    $ret = $self->createandget_event($event);
-    $event->{description} = 'HTML with special chars : and ; and "';
-    $self->assert_normalized_event_equals($event, $ret);
+    $self->assert_str_equals('HTML with special chars : and ; and "', $ret->{description});
+    $self->assert_str_equals('text/plain', $ret->{descriptionContentType});
 }
 
 sub test_calendarevent_set_links
