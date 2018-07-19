@@ -1100,38 +1100,51 @@ sub test_calendarevent_get_participants
 
     my ($id, $ical) = $self->icalfile('participants');
 
+    my $participants = {
+        'smithers@example.com' => {
+            name => 'Monty Burns',
+            email => 'smithers@example.com',
+            roles => ['owner', 'attendee'],
+            rsvpResponse => 'accepted',
+            participation => 'required',
+        },
+        'homer@example.com' => {
+            name => 'Homer Simpson',
+            rsvpResponse => 'accepted',
+            participation => 'optional',
+            email => 'homer@example.com',
+            roles => ['attendee'],
+            locationId => 'loc1',
+        },
+        'carl' => {
+            name => 'Carl Carlson',
+            rsvpResponse => 'tentative',
+            email => 'carl@example.com',
+            roles => ['attendee'],
+            scheduleSequence => 3,
+            scheduleUpdated => '2017-01-02T03:04:05Z',
+            delegatedFrom => [ 'lenny@example.com' ],
+        },
+        'lenny@example.com' => {
+            name => 'Lenny Leonard',
+            rsvpResponse => 'tentative',
+            email => 'lenny@example.com',
+            roles => ['attendee'],
+            delegatedTo => [ 'carl' ],
+        },
+        'larry@example.com' => {
+            name => 'Larry Burns',
+            rsvpResponse => 'declined',
+            email => 'larry@example.com',
+            roles => ['attendee'],
+            memberOf => ['projectA@example.com'],
+            participation => 'required',
+            scheduleUpdated => '2015-09-29T14:44:23Z',
+        },
+    };
+
     my $event = $self->putandget_vevent($id, $ical);
-
-    $self->assert_not_null($event->{replyTo});
-    $self->assert_str_equals("mailto:smithers\@example.com", $event->{replyTo}{imip});
-
-    $self->assert_not_null($event->{participants});
-    $self->assert_num_equals(5, scalar values %{$event->{participants}});
-    $self->assert_str_equals("Monty Burns", $event->{participants}{"smithers\@example.com"}{name});
-    $self->assert_str_equals("smithers\@example.com", $event->{participants}{"smithers\@example.com"}{email});
-    $self->assert_str_equals("owner", $event->{participants}{"smithers\@example.com"}{roles}[0]);
-    $self->assert_str_equals("Homer Simpson", $event->{participants}{"homer\@example.com"}{name});
-    $self->assert_str_equals("accepted", $event->{participants}{"homer\@example.com"}{rsvpResponse});
-    $self->assert_str_equals("optional", $event->{participants}{"homer\@example.com"}{participation});
-    $self->assert_str_equals("homer\@example.com", $event->{participants}{"homer\@example.com"}{email});
-    $self->assert_str_equals("attendee", $event->{participants}{"homer\@example.com"}{roles}[0]);
-    $self->assert_str_equals("loc1", $event->{participants}{"homer\@example.com"}{locationId});
-    $self->assert_str_equals("Carl Carlson", $event->{participants}{"carl"}{name});
-    $self->assert_str_equals("tentative", $event->{participants}{"carl"}{rsvpResponse});
-    $self->assert_str_equals("carl\@example.com", $event->{participants}{"carl"}{email});
-    $self->assert_str_equals("attendee", $event->{participants}{"carl"}{roles}[0]);
-    $self->assert_num_equals(3, $event->{participants}{"carl"}{scheduleSequence});
-    $self->assert_str_equals("2017-01-02T03:04:05Z", $event->{participants}{"carl"}{scheduleUpdated});
-    $self->assert_str_equals("Lenny Leonard", $event->{participants}{"lenny\@example.com"}{name});
-    $self->assert_str_equals("tentative", $event->{participants}{"lenny\@example.com"}{rsvpResponse});
-    $self->assert_str_equals("lenny\@example.com", $event->{participants}{"lenny\@example.com"}{email});
-    $self->assert_str_equals("attendee", $event->{participants}{"lenny\@example.com"}{roles}[0]);
-    $self->assert_str_equals("Larry Burns", $event->{participants}{"larry\@example.com"}{name});
-    $self->assert_str_equals("declined", $event->{participants}{"larry\@example.com"}{rsvpResponse});
-    $self->assert_str_equals("larry\@example.com", $event->{participants}{"larry\@example.com"}{email});
-    $self->assert_str_equals("attendee", $event->{participants}{"larry\@example.com"}{roles}[0]);
-    $self->assert_str_equals("projectA\@example.com", $event->{participants}{"larry\@example.com"}{memberOf}[0]);
-    $self->assert_str_equals("tentative", $event->{status});
+    $self->assert_deep_equals($participants, $event->{participants});
 }
 
 sub test_calendarevent_get_recurrence
@@ -1997,7 +2010,7 @@ sub test_calendarevent_set_participants
                 name => 'Foo',
                 email => 'foo@local',
                 kind => 'individual',
-                roles => [ 'owner', 'chair' ],
+                roles => [ 'owner', 'chair', 'attendee' ],
                 locationId => 'loc1',
                 rsvpResponse => 'accepted',
                 participation => 'required',
@@ -2131,7 +2144,7 @@ sub test_calendarevent_set_participantid
         "you" => {
             name => "Cassandane",
             email => "cassandane\@example.com",
-            roles => ["owner"],
+            roles => ["owner", "attendee"],
         },
     };
 
