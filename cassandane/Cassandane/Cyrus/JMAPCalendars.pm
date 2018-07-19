@@ -1977,9 +1977,6 @@ sub test_calendarevent_set_participants
     my $jmap = $self->{jmap};
     my $calid = "Default";
 
-=pod
-=cut
-
     my $event =  {
         "calendarId" => $calid,
         "title"=> "title",
@@ -2061,6 +2058,7 @@ sub test_calendarevent_set_participants
                 href => 'https://somelink.local',
             },
         },
+        method => 'REQUEST',
     };
 
     my $ret = $self->createandget_event($event);
