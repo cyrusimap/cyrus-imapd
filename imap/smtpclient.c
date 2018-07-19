@@ -219,13 +219,12 @@ static int expect_code_cb(smtpclient_t *sm, const smtp_resp_t *resp, void *rock)
 
             /* Try to glean specific error from response */
             if (CAPA(sm->backend, SMTPCLIENT_CAPA_STATUS)) {
-                double substatus = atof(resp->text+2);
-
-                if (substatus >= 1.1 && substatus <= 1.3)
+                if (resp->text[2] == '1' &&
+                    resp->text[4] >= '1' && resp->text[4] <= '3')
                     return IMAP_MAILBOX_NONEXISTENT;
-                else if (substatus == 3.4)
+                else if (resp->text[2] == '3' && resp->text[4] == '4')
                     return IMAP_MESSAGE_TOO_LARGE;
-                else if (substatus == 5.3)
+                else if (resp->text[2] == '5' && resp->text[4] == '3')
                     return IMAP_REMOTE_DENIED;
             }
             else {
