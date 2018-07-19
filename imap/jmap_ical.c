@@ -1491,20 +1491,6 @@ links_from_ical(context_t *ctx, icalcomponent *comp, const char *idprefix)
     return ret;
 }
 
-static json_t*
-htmldescription_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
-{
-   icalproperty *prop =icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
-   if (!prop) return json_null();
-
-    icalparameter *altrep = icalproperty_get_first_parameter(prop, ICAL_ALTREP_PARAMETER);
-    if (!altrep) return json_null();
-
-    const char *uri = icalparameter_get_altrep(altrep);
-    if (strncasecmp(uri, "data:text/html,", 15)) return json_null();
-    return json_string(uri + 15);
-}
-
 /* Convert the VALARMS in the VEVENT comp to CalendarEvent alerts.
  * Adds any ATTACH properties found in VALARM components to the
  * event 'links' property. */
@@ -2106,25 +2092,19 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
     }
 
     /* description */
-    if (wantprop(ctx, "description")) {
+    if (wantprop(ctx, "description") || wantprop(ctx, "descriptionContentType")) {
         const char *desc = "";
         prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
         if (prop) {
             desc = icalproperty_get_description(prop);
             if (!desc) desc = "";
         }
-        json_object_set_new(event, "description", json_string(desc));
-        if (!wantprop(ctx, "description")) {
-            json_object_del(event, "description");
+        if (wantprop(ctx, "description")) {
+            json_object_set_new(event, "description", json_string(desc));
         }
-    }
-
-    /* htmlDescription */
-    if (wantprop(ctx, "htmlDescription")) {
-        json_t *desc = htmldescription_from_ical(ctx, comp);
-        json_object_set_new(event, "htmlDescription", desc);
-        if (!wantprop(ctx, "htmlDescription"))
-            json_object_del(event, "htmlDescription");
+        if (wantprop(ctx, "descriptionContentType")) {
+            json_object_set_new(event, "descriptionContentType", json_string("text/plain"));
+        }
     }
 
     /* color */
@@ -3083,38 +3063,30 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links,
 }
 
 static void
-htmldescription_to_ical(context_t *ctx __attribute__((unused)),
-                        icalcomponent *comp, json_t *htmldesc)
+description_to_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp,
+                    const char *desc, const char *content_type)
 {
-    icalproperty *prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
+    remove_icalprop(comp, ICAL_DESCRIPTION_PROPERTY);
 
-    /* Purge existing ALTREP, no matter what */
-    if (prop) icalproperty_remove_parameter_by_kind(prop, ICAL_ALTREP_PARAMETER);
-
-    if (htmldesc == json_null())
-        return;
-
-    if (!prop) {
-        prop = icalproperty_new_description("");
-        icalcomponent_add_property(comp, prop);
+    if (content_type && strcasecmp(content_type, "TEXT/PLAIN")) {
+        if (!strcasecmp(content_type, "TEXT/HTML")) {
+            /* XXX We should keep the original HTML contents, but can't
+             * rely on iCalendar clients to handle HTML properly. To
+             * avoid HTML descriptions and their plain-text representation
+             * go out of sync, always store HTML descriptions in plain
+             * text, after stripping all tags. */
+            icalproperty *prop = icalproperty_new(ICAL_DESCRIPTION_PROPERTY);
+            char *plain = charset_extract_plain(desc);
+            icalproperty_set_description(prop, plain);
+            free(plain);
+            icalcomponent_add_property(comp, prop);
+        }
+        else {
+            invalidprop(ctx, "descriptionContentType");
+        }
     }
-
-    /* Set HTML description in ALTREP parameter */
-    const char *html = json_string_value(htmldesc);
-    struct buf buf = BUF_INITIALIZER;
-    buf_setcstr(&buf, "data:text/html,");
-    buf_appendcstr(&buf, html);
-    icalparameter *altrep = icalparameter_new_altrep(buf_cstring(&buf));
-    icalproperty_add_parameter(prop, altrep);
-    buf_free(&buf);
-
-    /* Convert HTML to plain */
-    /* libical returns NULL for empty string */
-    const char *s = icalproperty_get_description(prop);
-    if (!s || *s == '\0') {
-        char *plain = charset_extract_plain(html);
-        if (html) icalproperty_set_description(prop, plain);
-        free(plain);
+    else {
+        icalcomponent_set_description(comp, desc);
     }
 }
 
@@ -4218,18 +4190,13 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         icalcomponent_set_summary(comp, val);
     }
 
-    /* description */
-    pe = readprop(ctx, event, "description", 0, "s", &val);
-    if (pe > 0 && strlen(val)) {
-        icalcomponent_set_description(comp, val);
-    }
-
-    /* htmlDescription - must come after description property */
-    json_t *htmldesc = json_object_get(event, "htmlDescription");
-    if (htmldesc == json_null() || json_is_string(htmldesc)) {
-        htmldescription_to_ical(ctx, comp, htmldesc);
-    } else if (htmldesc) {
-        invalidprop(ctx, "htmlDescription");
+    /* description and descriptionContentType */
+    const char *desc = NULL;
+    const char *desc_content_type = NULL;
+    pe = readprop(ctx, event, "descriptionContentType", 0, "s", &desc_content_type);
+    pe = readprop(ctx, event, "description", 0, "s", &desc);
+    if (pe > 0 && strlen(desc)) {
+        description_to_ical(ctx, comp, desc, desc_content_type);
     }
 
     /* color */
