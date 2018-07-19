@@ -1728,125 +1728,34 @@ relatedto_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
     return ret;
 }
 
-static json_t *location_features_from_ical(icalparameter *param)
-{
-    const char *val = icalparameter_get_xvalue(param);
-    if (!val) return json_array();
-
-    struct buf buf = BUF_INITIALIZER;
-    json_t *features = json_array();
-    if (strchr(val, ',')) {
-        /* libical doesn't split a comma-separatured list of features,
-         * so it's treated as x-value. Split by our own */
-        strarray_t *icalfeatures = strarray_split(val, ",", STRARRAY_TRIM);
-        int i;
-        for (i = 0; i < icalfeatures->count; i++) {
-            buf_setcstr(&buf, strarray_nth(icalfeatures, i));
-            json_array_append_new(features, json_string(buf_lcase(&buf)));
-        }
-        strarray_free(icalfeatures);
-    } else {
-        buf_setcstr(&buf, val);
-        json_array_append_new(features, json_string(buf_lcase(&buf)));
-    }
-    buf_free(&buf);
-    return features;
-}
-
-static json_t* location_from_ical(context_t *ctx __attribute__((unused)), icalproperty *prop)
+static json_t* location_from_ical(context_t *ctx __attribute__((unused)),
+                                  icalproperty *prop, json_t *links)
 {
     icalparameter *param;
     json_t *loc = json_object();
 
-    /* name, uri and rel */
-    const char *name = NULL;
-    const char *uri = NULL;
-    const char *rel = get_icalxparam_value(prop, JMAPICAL_XPARAM_REL);
-
-    if (icalproperty_isa(prop) == ICAL_CONFERENCE_PROPERTY) {
-        uri = icalproperty_get_value_as_string(prop);
-        param = icalproperty_get_first_parameter(prop, ICAL_LABEL_PARAMETER);
-        if (param) name = icalparameter_get_label(param);
-        if (!rel) rel = "virtual";
-    } else {
-        name = icalvalue_get_text(icalproperty_get_value(prop));
-        param = icalproperty_get_first_parameter(prop, ICAL_ALTREP_PARAMETER);
-        if (param) uri = icalparameter_get_altrep(param);
-        if (!rel) rel = "unknown";
-    }
-    if (!rel) rel = "unknown";
-
+    /* name */
+    const char *name = icalvalue_get_text(icalproperty_get_value(prop));
     json_object_set_new(loc, "name", json_string(name ? name : ""));
-    json_object_set_new(loc, "uri", uri ? json_string(uri) : json_null());
+
+    /* rel */
+    const char *rel = get_icalxparam_value(prop, JMAPICAL_XPARAM_REL);
+    if (!rel) rel = "unknown";
     json_object_set_new(loc, "rel", json_string(rel));
-
-    /* features */
-    json_t *features = json_array();
-    if (icalproperty_isa(prop) == ICAL_CONFERENCE_PROPERTY) {
-        /* Read from FEATUREs parameter */
-        for (param = icalproperty_get_first_parameter(prop, ICAL_FEATURE_PARAMETER);
-             param;
-             param = icalproperty_get_next_parameter(prop, ICAL_FEATURE_PARAMETER)) {
-            const char *val = NULL;
-            switch (icalparameter_get_feature(param)) {
-                case ICAL_FEATURE_AUDIO:
-                    val = "audio";
-                    break;
-                case ICAL_FEATURE_CHAT:
-                    val = "chat";
-                    break;
-                case ICAL_FEATURE_FEED:
-                    val = "feed";
-                    break;
-                case ICAL_FEATURE_MODERATOR:
-                    val = "moderator";
-                    break;
-                case ICAL_FEATURE_PHONE:
-                    val = "phone";
-                    break;
-                case ICAL_FEATURE_SCREEN:
-                    val = "screen";
-                    break;
-                case ICAL_FEATURE_VIDEO:
-                    val = "video";
-                    break;
-                case ICAL_FEATURE_X:
-                case ICAL_FEATURE_NONE:
-                default:
-                    val = NULL;
-            }
-            if (val) {
-                json_array_append_new(features, json_string(val));
-            } else {
-                json_t *l = location_features_from_ical(param);
-                json_array_extend(features, l);
-                json_decref(l);
-            }
-        }
-    } else {
-        /* Read features from X-JMAP-FEATURE parameters */
-        for (param = icalproperty_get_first_parameter(prop, ICAL_X_PARAMETER);
-             param;
-             param = icalproperty_get_next_parameter(prop, ICAL_X_PARAMETER)) {
-
-            if (strcmp(icalparameter_get_xname(param), JMAPICAL_XPARAM_FEATURE))
-                continue;
-            json_t *l = location_features_from_ical(param);
-            json_array_extend(features, l);
-            json_decref(l);
-        }
-    }
-    if (!json_array_size(features)) {
-        json_decref(features);
-        features = json_null();
-    }
-    json_object_set_new(loc, "features", features);
 
     /* description */
     const char *desc = get_icalxparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
     json_object_set_new(loc, "description", desc ? json_string(desc) : json_null());
 
-    /* linkIds */
+    /* timeZone */
+    const char *tzid = get_icalxparam_value(prop, JMAPICAL_XPARAM_TZID);
+    json_object_set_new(loc, "timeZone", tzid ? json_string(tzid) : json_null());
+
+    /* coordinates */
+    const char *coord = get_icalxparam_value(prop, JMAPICAL_XPARAM_GEO);
+    json_object_set_new(loc, "coordinates", coord ? json_string(coord) : json_null());
+
+    /* linkIds (including altrep) */
     json_t *linkids = json_array();
     for (param = icalproperty_get_first_parameter(prop, ICAL_X_PARAMETER);
          param;
@@ -1859,19 +1768,20 @@ static json_t* location_from_ical(context_t *ctx __attribute__((unused)), icalpr
         if (!s) continue;
         json_array_append_new(linkids, json_string(s));
     }
+    const char *altrep = NULL;
+    param = icalproperty_get_first_parameter(prop, ICAL_ALTREP_PARAMETER);
+    if (param) altrep = icalparameter_get_altrep(param);
+    if (altrep) {
+        char *tmp = hexkey(altrep);
+        json_object_set_new(links, tmp, json_pack("{s:s}", "href", altrep));
+        json_array_append_new(linkids, json_string(tmp));
+        free(tmp);
+    }
     if (!json_array_size(linkids)) {
         json_decref(linkids);
         linkids = json_null();
     }
     json_object_set_new(loc, "linkIds", linkids);
-
-    /* timeZone */
-    const char *tzid = get_icalxparam_value(prop, JMAPICAL_XPARAM_TZID);
-    json_object_set_new(loc, "timeZone", tzid ? json_string(tzid) : json_null());
-
-    /* coordinates */
-    const char *coord = get_icalxparam_value(prop, JMAPICAL_XPARAM_GEO);
-    json_object_set_new(loc, "coordinates", coord ? json_string(coord) : json_null());
 
     return loc;
 }
@@ -1898,7 +1808,7 @@ static json_t *coordinates_from_ical(icalproperty *prop)
 }
 
 static json_t*
-locations_from_ical(context_t *ctx, icalcomponent *comp)
+locations_from_ical(context_t *ctx, icalcomponent *comp, json_t *links)
 {
     icalproperty* prop;
     json_t *loc, *locations = json_pack("{}");
@@ -1920,7 +1830,7 @@ locations_from_ical(context_t *ctx, icalcomponent *comp)
     if ((prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY))) {
         id = xjmapid_from_ical(prop);
         beginprop_key(ctx, "locations", id);
-        if ((loc = location_from_ical(ctx, prop))) {
+        if ((loc = location_from_ical(ctx, prop, links))) {
             json_object_set_new(locations, id, loc);
         }
         endprop(ctx);
@@ -1936,20 +1846,6 @@ locations_from_ical(context_t *ctx, icalcomponent *comp)
             json_object_set_new(locations, id, loc);
             free(id);
         }
-    }
-
-    /* CONFERENCE */
-    for (prop = icalcomponent_get_first_property(comp, ICAL_CONFERENCE_PROPERTY);
-         prop;
-         prop = icalcomponent_get_next_property(comp, ICAL_CONFERENCE_PROPERTY)) {
-
-        id = xjmapid_from_ical(prop);
-        beginprop_key(ctx, "locations", id);
-        if ((loc = location_from_ical(ctx, prop))) {
-            json_object_set_new(locations, id, loc);
-        }
-        endprop(ctx);
-        free(id);
     }
 
     /* Lookup X-property locations */
@@ -1991,10 +1887,50 @@ locations_from_ical(context_t *ctx, icalcomponent *comp)
         /* X-JMAP-LOCATION */
         id = xjmapid_from_ical(prop);
         beginprop_key(ctx, "locations", id);
-        loc = location_from_ical(ctx, prop);
+        loc = location_from_ical(ctx, prop, links);
         if (loc) json_object_set_new(locations, id, loc);
         free(id);
         endprop(ctx);
+    }
+
+    if (!json_object_size(locations)) {
+        json_decref(locations);
+        locations = json_null();
+    }
+
+    return locations;
+}
+
+static json_t*
+virtuallocations_from_ical(context_t *ctx, icalcomponent *comp)
+{
+    icalproperty* prop;
+    json_t *locations = json_pack("{}");
+
+    for (prop = icalcomponent_get_first_property(comp, ICAL_CONFERENCE_PROPERTY);
+         prop;
+         prop = icalcomponent_get_next_property(comp, ICAL_CONFERENCE_PROPERTY)) {
+
+        char *id = xjmapid_from_ical(prop);
+        beginprop_key(ctx, "locations", id);
+
+        json_t *loc = json_object();
+
+        const char *uri = icalproperty_get_value_as_string(prop);
+        if (uri) json_object_set_new(loc, "uri", json_string(uri));
+
+        const char *name = NULL;
+        icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_LABEL_PARAMETER);
+        if (param) name = icalparameter_get_label(param);
+        if (name) json_object_set_new(loc, "name", json_string(name));
+
+        const char *desc = get_icalxparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
+        if (desc) json_object_set_new(loc, "description", json_string(desc));
+
+        if (uri) json_object_set_new(locations, id, loc);
+
+        endprop(ctx);
+        free(id);
     }
 
     if (!json_object_size(locations)) {
@@ -2220,10 +2156,21 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
 
     /* locations */
     if (wantprop(ctx, "locations")) {
-        json_object_set_new(event, "locations", locations_from_ical(ctx, comp));
-        if (!wantprop(ctx, "locations")) {
-            json_object_del(event, "locations");
+        json_t *links = json_object();
+        json_object_set_new(event, "locations", locations_from_ical(ctx, comp, links));
+        if (json_object_size(links)) {
+            if (JNOTNULL(json_object_get(event, "links"))) {
+                json_object_update(json_object_get(event, "links"), links);
+            } else {
+                json_object_set(event, "links", links);
+            }
         }
+        json_decref(links);
+    }
+
+    /* virtualLocations */
+    if (wantprop(ctx, "virtualLocations")) {
+        json_object_set_new(event, "virtualLocations", virtuallocations_from_ical(ctx, comp));
     }
 
     /* start */
@@ -3731,8 +3678,9 @@ validate_location(context_t *ctx, json_t *loc)
     json_t *jval;
     size_t i;
 
-    /* At least one property MUST be set */
-    if (json_object_size(loc) == 0) {
+    /* At least one property other than rel MUST be set */
+    if (json_object_size(loc) == 0 ||
+        (json_object_size(loc) == 1 && json_object_get(loc, "rel"))) {
         invalidprop(ctx, NULL);
         return 0;
     }
@@ -3752,10 +3700,6 @@ validate_location(context_t *ctx, json_t *loc)
     jval = json_object_get(loc, "coordinates");
     if (JNOTNULL(jval) && !json_is_string(jval))
         invalidprop(ctx, "coordinates");
-
-    jval = json_object_get(loc, "uri");
-    if (JNOTNULL(jval) && !json_is_string(jval))
-        invalidprop(ctx, "uri");
 
     jval = json_object_get(loc, "timeZone");
     if (json_is_string(jval)) {
@@ -3781,21 +3725,6 @@ validate_location(context_t *ctx, json_t *loc)
         invalidprop(ctx, "linkIds");
     }
 
-    /* features */
-    json_t *features = json_object_get(loc, "features");
-    if (JNOTNULL(features) && json_is_array(features)) {
-        json_array_foreach(features, i, jval) {
-            if (!json_is_string(jval)) {
-                beginprop_idx(ctx, "features", i);
-                invalidprop(ctx, NULL);
-                endprop(ctx);
-            }
-        }
-    }
-    else if (JNOTNULL(features)) {
-        invalidprop(ctx, "features");
-    }
-
     /* Location is invalid, if any invalid property has been added */
     return invalid_prop_count(ctx) == invalid_cnt;
 }
@@ -3804,7 +3733,6 @@ static void
 location_to_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp, const char *id, json_t *loc)
 {
     const char *name = json_string_value(json_object_get(loc, "name"));
-    const char *uri = json_string_value(json_object_get(loc, "uri"));
     const char *rel = json_string_value(json_object_get(loc, "rel"));
 
     /* Gracefully handle bogus values */
@@ -3816,9 +3744,6 @@ location_to_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp, co
     icalproperty *prop;
     if (!icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY)) {
         prop = icalproperty_new(ICAL_LOCATION_PROPERTY);
-    }
-    else if (uri && (rel && !strcmp(rel, "virtual"))) {
-        prop = icalproperty_new(ICAL_CONFERENCE_PROPERTY);
     } else {
         prop = icalproperty_new(ICAL_X_PROPERTY);
         icalproperty_set_x_name(prop, JMAPICAL_XPROP_LOCATION);
@@ -3827,17 +3752,10 @@ location_to_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp, co
     /* Keep user-supplied location id */
     xjmapid_to_ical(prop, id);
 
-    /* name, uri, rel */
-    if (icalproperty_isa(prop) == ICAL_CONFERENCE_PROPERTY) {
-        icalvalue *val = icalvalue_new_from_string(ICAL_URI_VALUE, uri);
-        icalproperty_set_value(prop, val);
-        icalproperty_add_parameter(prop, icalparameter_new_label(name));
-    } else {
-        icalvalue *val = icalvalue_new_from_string(ICAL_TEXT_VALUE, name);
-        icalproperty_set_value(prop, val);
-        if (uri) icalproperty_add_parameter(prop, icalparameter_new_altrep(uri));
-        if (rel) set_icalxparam(prop, JMAPICAL_XPARAM_REL, rel, 0);
-    }
+    /* name, rel */
+    icalvalue *val = icalvalue_new_from_string(ICAL_TEXT_VALUE, name);
+    icalproperty_set_value(prop, val);
+    if (rel) set_icalxparam(prop, JMAPICAL_XPARAM_REL, rel, 0);
 
     /* description, timeZone, coordinates */
     const char *s = json_string_value(json_object_get(loc, "description"));
@@ -3855,21 +3773,6 @@ location_to_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp, co
         const char *linkid = json_string_value(jval);
         set_icalxparam(prop, JMAPICAL_XPARAM_LINKID, linkid, 0);
     }
-
-    /* feature */
-    struct buf buf = BUF_INITIALIZER;
-    json_array_foreach(json_object_get(loc, "features"), i, jval) {
-        if (i) buf_appendcstr(&buf, ",");
-        buf_appendcstr(&buf, json_string_value(jval));
-    }
-    if (buf_len(&buf)) {
-        const char *pname =
-            (icalproperty_isa(prop) == ICAL_CONFERENCE_PROPERTY) ?
-            "FEATURE" : JMAPICAL_XPARAM_FEATURE;
-        // FIXME libical quotes X-values with commas
-        set_icalxparam(prop, pname, buf_ucase(&buf), 0);
-    }
-    buf_free(&buf);
 
     icalcomponent_add_property(comp, prop);
 }
@@ -3916,6 +3819,67 @@ locations_to_ical(context_t *ctx, icalcomponent *comp, json_t *locations)
 
         /* Add location */
         location_to_ical(ctx, comp, id, loc);
+        endprop(ctx);
+    }
+}
+
+/* Create or overwrite the JMAP virtualLocations in comp */
+static void
+virtuallocations_to_ical(context_t *ctx, icalcomponent *comp, json_t *locations)
+{
+    json_t *loc;
+    const char *id;
+
+    remove_icalprop(comp, ICAL_CONFERENCE_PROPERTY);
+    if (!JNOTNULL(locations)) {
+        return;
+    }
+
+    json_object_foreach(locations, id, loc) {
+        beginprop_key(ctx, "virtualLocations", id);
+        if (!strlen(id)) {
+            invalidprop(ctx, NULL);
+            endprop(ctx);
+            continue;
+        }
+
+        icalproperty *prop = icalproperty_new(ICAL_CONFERENCE_PROPERTY);
+        xjmapid_to_ical(prop, id);
+
+        /* uri */
+        json_t *juri = json_object_get(loc, "uri");
+        if (json_is_string(juri)) {
+            const char *uri = json_string_value(juri);
+            icalvalue *val = icalvalue_new_from_string(ICAL_URI_VALUE, uri);
+            icalproperty_set_value(prop, val);
+        }
+        else {
+            invalidprop(ctx, "uri");
+        }
+
+        /* name */
+        json_t *jname = json_object_get(loc, "name");
+        if (json_is_string(juri)) {
+            const char *name = json_string_value(jname);
+            icalproperty_add_parameter(prop, icalparameter_new_label(name));
+        }
+        else {
+            invalidprop(ctx, "uri");
+        }
+
+
+        /* description */
+        json_t *jdescription = json_object_get(loc, "description");
+        if (json_is_string(jdescription)) {
+            const char *desc = json_string_value(jdescription);
+            set_icalxparam(prop, JMAPICAL_XPARAM_DESCRIPTION, desc, 0);
+        }
+        else if (JNOTNULL(jdescription)) {
+            invalidprop(ctx, "description");
+        }
+
+        icalcomponent_add_property(comp, prop);
+
         endprop(ctx);
     }
 }
@@ -4320,6 +4284,17 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
             locations_to_ical(ctx, comp, locations);
         } else {
             invalidprop(ctx, "locations");
+        }
+    }
+
+    /* virtualLocations */
+    json_t *virtualLocations = NULL;
+    pe = readprop(ctx, event, "virtualLocations", 0, "o", &virtualLocations);
+    if (pe > 0) {
+        if (json_is_null(virtualLocations) || json_object_size(virtualLocations)) {
+            virtuallocations_to_ical(ctx, comp, virtualLocations);
+        } else {
+            invalidprop(ctx, "virtualLocations");
         }
     }
 
