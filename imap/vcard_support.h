@@ -49,6 +49,7 @@
 #include "vparse.h"
 
 #include "mailbox.h"
+#include "message_guid.h"
 #include "util.h"
 
 extern struct vparse_card *vcard_parse_string(const char *str, int repair);
@@ -57,5 +58,9 @@ extern struct buf *vcard_as_buf(struct vparse_card *vcard);
 
 extern struct vparse_card *record_to_vcard(struct mailbox *mailbox,
                                            const struct index_record *record);
+
+extern unsigned vcard_prop_decode_value(struct vparse_entry *prop,
+                                        struct buf *value,
+                                        struct message_guid *guid);
 
 #endif /* VCARD_SUPPORT_H */

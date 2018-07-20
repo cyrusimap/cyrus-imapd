@@ -1651,6 +1651,30 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
                             item ? json_true() : json_false());
     }
 
+    if (_wantprop(props, "avatar")) {
+        struct vparse_entry *photo = vparse_get_entry(card, NULL, "photo");
+        struct message_guid guid;
+        unsigned size;
+
+        if (photo && (size = vcard_prop_decode_value(photo, NULL, &guid))) {
+            struct vparse_param *type = vparse_get_param(photo, "type");
+
+            json_t *file = json_pack("{s:s s:i}",
+                                     "blobId", jmap_blobid(&guid),
+                                     "size", size);
+
+            /* Construct content-type */
+            buf_reset(&buf);
+            if (type) buf_printf(&buf, "image/%s", lcase(type->value));
+
+            json_object_set_new(file, "type", buf_len(&buf) ?
+                                json_string(buf_cstring(&buf)) : json_null());
+            json_object_set_new(file, "name", json_null());
+            json_object_set_new(obj, "avatar", file);
+        }
+        else json_object_set_new(obj, "avatar", json_null());
+    }
+
     /* XXX - other fields */
 
     buf_free(&buf);

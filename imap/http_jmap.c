@@ -68,6 +68,8 @@
 #include "times.h"
 #include "syslog.h"
 #include "xstrlcpy.h"
+#include "vparse.h"
+#include "vcard_support.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
@@ -1167,7 +1169,8 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
 static int _findblob(jmap_req_t *req, const char *blobid,
                      const char *accountid,
                      struct mailbox **mbox, msgrecord_t **mr,
-                     struct body **body, const struct body **part)
+                     struct body **body, const struct body **part,
+                     struct buf *msg_buf)
 {
 
     struct findblob_data data = {
@@ -1203,8 +1206,33 @@ static int _findblob(jmap_req_t *req, const char *blobid,
 
         ptrarray_push(&parts, mybody);
         while ((mypart = ptrarray_shift(&parts))) {
+            const char *proppath = NULL;
+
             if (!message_guid_cmp(&content_guid, &mypart->content_guid)) {
                 break;
+            }
+            else if ((proppath = strstr(data.part_id, "/VCARD#"))) {
+                struct index_record record;
+                struct vparse_card *vcard;
+
+                msgrecord_get_index_record(data.mr, &record);
+
+                vcard = record_to_vcard(data.mbox, &record);
+                if (vcard) {
+                    int match = 0;
+                    struct message_guid guid;
+                    struct vparse_entry *entry =
+                        vparse_get_entry(vcard->objects, NULL, proppath+7);
+
+                    if (entry && vcard_prop_decode_value(entry, msg_buf, &guid)) {
+                        match = !message_guid_cmp(&content_guid, &guid);
+                    }
+                    vparse_free_card(vcard);
+                    
+                    if (match) break;
+                    if (msg_buf) buf_free(msg_buf);
+                }
+                proppath = NULL;
             }
             if (!mypart->subpart) continue;
             ptrarray_push(&parts, mypart->subpart);
@@ -1239,7 +1267,7 @@ EXPORTED int jmap_findblob(jmap_req_t *req, const char *blobid,
                            struct mailbox **mbox, msgrecord_t **mr,
                            struct body **body, const struct body **part)
 {
-    return _findblob(req, blobid, req->accountid, mbox, mr, body, part);
+    return _findblob(req, blobid, req->accountid, mbox, mr, body, part, NULL);
 }
 
 static char *parse_accept_header(const char **hdr)
@@ -1360,19 +1388,25 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     char *accept_mime = NULL;
 
     /* Find part containing blob */
-    r = _findblob(&req, blobid, accountid, &mbox, &mr, &body, &part);
+    r = _findblob(&req, blobid, accountid, &mbox, &mr, &body, &part, &msg_buf);
     if (r) {
         res = HTTP_NOT_FOUND; // XXX errors?
         txn->error.desc = "failed to find blob by id";
         goto done;
     }
 
-    /* Map the message into memory */
-    r = msgrecord_get_body(mr, &msg_buf);
-    if (r) {
-        res = HTTP_NOT_FOUND; // XXX errors?
-        txn->error.desc = "failed to map record";
-        goto done;
+    if (buf_base(&msg_buf)) {
+        /* Already have the data at offset zero */
+        part = NULL;
+    }
+    else {
+        /* Map the message into memory */
+        r = msgrecord_get_body(mr, &msg_buf);
+        if (r) {
+            res = HTTP_NOT_FOUND; // XXX errors?
+            txn->error.desc = "failed to map record";
+            goto done;
+        }
     }
 
     struct strlist *param;
@@ -1778,7 +1812,7 @@ static int jmap_copyblob(jmap_req_t *req,
     FILE *to_fp = NULL;
     struct stagemsg *stage = NULL;
 
-    int r = _findblob(req, blobid, from_accountid, &mbox, &mr, &body, &part);
+    int r = _findblob(req, blobid, from_accountid, &mbox, &mr, &body, &part, NULL);
     if (r) return r;
 
     if (!part)

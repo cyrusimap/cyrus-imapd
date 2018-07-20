@@ -43,6 +43,8 @@
 
 #include <config.h>
 
+#include <sasl/saslutil.h>
+
 #include "vcard_support.h"
 #include "syslog.h"
 
@@ -127,3 +129,42 @@ EXPORTED struct vparse_card *record_to_vcard(struct mailbox *mailbox,
 
     return vcard;
 }
+
+/* Decode a base64-encoded binary vCard property and calculate a GUID.
+
+   XXX  This currently assumes vCard v3.
+*/
+EXPORTED unsigned vcard_prop_decode_value(struct vparse_entry *prop,
+                                          struct buf *value,
+                                          struct message_guid *guid)
+{
+    struct vparse_param *param;
+    unsigned size = 0;
+
+    if (!prop) return 0;
+
+    /* Make sure value=binary (default) and encoding=b (base64) */
+    if ((!(param = vparse_get_param(prop, "value")) ||
+         !strcasecmp("binary", param->value)) &&
+        ((param = vparse_get_param(prop, "encoding")) &&
+         !strcasecmp("b", param->value))) {
+
+        struct buf buf = BUF_INITIALIZER;
+
+        /* Generate GUID from decoded property value */
+        buf_setcstr(&buf, prop->v.value);
+        if (sasl_decode64(buf_base(&buf), buf_len(&buf),
+                          (char *) buf_base(&buf), buf_len(&buf),
+                          &size) != SASL_OK) return 0;
+
+        if (guid) message_guid_generate(guid, buf_base(&buf), size);
+        if (value) {
+            buf_truncate(&buf, size);
+            buf_move(value, &buf);
+        }
+        else buf_free(&buf);
+    }
+
+    return size;
+}
+

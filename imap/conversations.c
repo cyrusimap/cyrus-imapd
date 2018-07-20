@@ -82,6 +82,8 @@
 #include "xstrlcat.h"
 #include "xstats.h"
 #include "times.h"
+#include "vparse.h"
+#include "vcard_support.h"
 
 #include "conversations.h"
 
@@ -1842,6 +1844,26 @@ static int conversations_set_guid(struct conversations_state *state,
     r = conversations_guid_setitem(state, message_guid_encode(&record->guid),
                                    base, record->cid, add);
     if (!r) r = _guid_addbody(state, body, base, add);
+
+    if (!r && (mailbox->mbtype == MBTYPE_ADDRESSBOOK) &&
+        !strcmp(body->type, "TEXT") && !strcmp(body->subtype, "VCARD")) {
+
+        struct vparse_card *vcard = record_to_vcard(mailbox, record);
+
+        if (vcard) {
+            struct message_guid guid;
+            struct vparse_entry *photo =
+                vparse_get_entry(vcard->objects, NULL, "photo");
+
+            if (photo && vcard_prop_decode_value(photo, NULL, &guid)) {
+                buf_printf(&item, "[%s/VCARD#PHOTO]", body->part_id);
+                r = conversations_guid_setitem(state, message_guid_encode(&guid),
+                                               buf_cstring(&item), 0 /*cid*/, add);
+            }
+
+            vparse_free_card(vcard);
+        }
+    }
 
     message_free_body(body);
     free(body);
