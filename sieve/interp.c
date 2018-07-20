@@ -172,6 +172,12 @@ EXPORTED strarray_t *sieve_listextensions(sieve_interp_t *i)
             strarray_append(i->extensions, "EXTLISTS");
             strarray_append(i->extensions, "urn:ietf:params:sieve:addrbook");
         }
+
+        if (i->notify &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY)) {
+            strarray_append(i->extensions, "NOTIFY");
+            strarray_append(i->extensions, "mailto");
+        }
     }
 
     return i->extensions;
