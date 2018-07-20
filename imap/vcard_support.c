@@ -43,8 +43,6 @@
 
 #include <config.h>
 
-#include <sasl/saslutil.h>
-
 #include "vcard_support.h"
 #include "syslog.h"
 
@@ -134,12 +132,12 @@ EXPORTED struct vparse_card *record_to_vcard(struct mailbox *mailbox,
 
    XXX  This currently assumes vCard v3.
 */
-EXPORTED unsigned vcard_prop_decode_value(struct vparse_entry *prop,
-                                          struct buf *value,
-                                          struct message_guid *guid)
+EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
+                                        struct buf *value,
+                                        struct message_guid *guid)
 {
     struct vparse_param *param;
-    unsigned size = 0;
+    size_t size = 0;
 
     if (!prop) return 0;
 
@@ -149,20 +147,23 @@ EXPORTED unsigned vcard_prop_decode_value(struct vparse_entry *prop,
         ((param = vparse_get_param(prop, "encoding")) &&
          !strcasecmp("b", param->value))) {
 
-        struct buf buf = BUF_INITIALIZER;
+        char *decbuf = NULL;
 
-        /* Generate GUID from decoded property value */
-        buf_setcstr(&buf, prop->v.value);
-        if (sasl_decode64(buf_base(&buf), buf_len(&buf),
-                          (char *) buf_base(&buf), buf_len(&buf),
-                          &size) != SASL_OK) return 0;
+        /* Decode property value */
+        if (charset_decode_mimebody(prop->v.value, strlen(prop->v.value),
+                                    ENCODING_BASE64,
+                                    &decbuf, &size) == prop->v.value) return 0;
 
-        if (guid) message_guid_generate(guid, buf_base(&buf), size);
-        if (value) {
-            buf_truncate(&buf, size);
-            buf_move(value, &buf);
+        if (guid) {
+            /* Generate GUID from decoded property value */
+            message_guid_generate(guid, decbuf, size);
         }
-        else buf_free(&buf);
+
+        if (value) {
+            /* Return the value in the specified buffer */
+            buf_setmap(value, decbuf, size);
+        }
+        free(decbuf);
     }
 
     return size;
