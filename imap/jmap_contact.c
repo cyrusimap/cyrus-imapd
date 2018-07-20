@@ -1658,10 +1658,11 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
 
         if (photo && (size = vcard_prop_decode_value(photo, NULL, &guid))) {
             struct vparse_param *type = vparse_get_param(photo, "type");
+            char *blobid = jmap_blobid(&guid);
 
             json_t *file = json_pack("{s:s s:i}",
-                                     "blobId", jmap_blobid(&guid),
-                                     "size", size);
+                                     "blobId", blobid, "size", size);
+            free(blobid);
 
             /* Construct content-type */
             buf_reset(&buf);
