@@ -95,11 +95,21 @@ typedef struct {
  *
  * Does not set the id, calendarId, participantId or any extension properties.
  *
- * ical:  must contain one VEVENT, and any number of recurrences
+ * ical:  must contain exactly one main VEVENT, and any number of recurrences
  * props: optional JSON object whose keys name the properties to be converted
  * err:   optional error receiver
  */
 json_t* jmapical_tojmap(icalcomponent *ical, json_t *props, jmapical_err_t *err);
+
+/* Converts the iCalendar component ical to an array of JMAP events.
+ *
+ * Does not set the id, calendarId, participantId or any extension properties.
+ *
+ * ical:  scontain at least one main VEVENT, and any number of recurrences
+ * props: optional JSON object whose keys name the properties to be converted
+ * err:   optional error receiver
+ */
+json_t *jmapical_tojmap_all(icalcomponent *ical, json_t *props, jmapical_err_t *err);
 
 /* Convert the JMAP object obj to iCalendar.
  *

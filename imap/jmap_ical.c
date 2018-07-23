@@ -984,6 +984,10 @@ overrides_from_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 
         if (excomp == comp) continue; /* skip toplevel promoted object */
 
+        /* Skip unrelated VEVENTs */
+        const char *exuid = icalcomponent_get_uid(excomp);
+        if (!exuid || strcmp(exuid, ctx->uid)) continue;
+
         context_t *myctx;
         json_t *ex, *diff;
         struct icaltimetype recurid;
@@ -2028,6 +2032,7 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
     if (uid && !is_exc) {
         json_object_set_new(event, "uid", json_string(uid));
     }
+    if (!ctx->uid) ctx->uid = uid;
 
     /* relatedTo */
     if (wantprop(ctx, "relatedTo") && !is_exc) {
@@ -2300,36 +2305,58 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
 }
 
 json_t*
-jmapical_tojmap(icalcomponent *ical, json_t *props, jmapical_err_t *err)
+jmapical_tojmap_all(icalcomponent *ical, json_t *props, jmapical_err_t *err)
 {
     icalcomponent* comp;
-    json_t *obj = NULL;
-    context_t *ctx = context_new(props, err, JMAPICAL_READ_MODE);
 
-    /* Locate the main VEVENT. */
+    /* Locate all main VEVENTs. */
+    ptrarray_t todo = PTRARRAY_INITIALIZER;
     icalcomponent *firstcomp =
         icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
     for (comp = firstcomp;
          comp;
          comp = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT)) {
-        if (!icalcomponent_get_first_property(comp,
-                                              ICAL_RECURRENCEID_PROPERTY)) {
-            break;
-        }
+
+        icalproperty *recurid = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY);
+        if (recurid) continue;
+
+        if (icalcomponent_get_uid(comp) == NULL) continue;
+
+        ptrarray_append(&todo, comp);
     }
     /* magic promote to toplevel for the first item */
-    if (!comp) comp = firstcomp;
-    if (!comp) {
-        goto done;
+    if (firstcomp && !ptrarray_size(&todo)) {
+        ptrarray_append(&todo, firstcomp);
+    }
+    else if (!ptrarray_size(&todo)) {
+        return json_array();
     }
 
-    /* Convert main VEVENT to JMAP. */
-    obj = calendarevent_from_ical(ctx, comp);
-    if (!obj) goto done;
+    // FIXME merge this with tthe jmapical_tojmap fucntion
 
-done:
-    context_free(ctx);
-    return obj;
+    /* Convert the VEVENTs to JMAP. */
+    json_t *events = json_array();
+    while ((comp = ptrarray_pop(&todo))) {
+        context_t *ctx = context_new(props, err, JMAPICAL_READ_MODE);
+        json_t *obj = calendarevent_from_ical(ctx, comp);
+        context_free(ctx);
+        if (obj) json_array_append_new(events, obj);
+    }
+
+    ptrarray_fini(&todo);
+    return events;
+}
+
+json_t*
+jmapical_tojmap(icalcomponent *ical, json_t *props, jmapical_err_t *err)
+{
+    json_t *jsevents = jmapical_tojmap_all(ical, props, err);
+    json_t *ret = NULL;
+    if (json_array_size(jsevents)) {
+        ret = json_incref(json_array_get(jsevents, 0));
+    }
+    json_decref(jsevents);
+    return ret;
 }
 
 /*
