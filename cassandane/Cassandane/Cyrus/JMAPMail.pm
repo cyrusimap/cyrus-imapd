@@ -1967,7 +1967,7 @@ sub test_mailbox_changes
     $self->assert_deep_equals([], $res->[0][1]{created});
     $self->assert_deep_equals([], $res->[0][1]{updated});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
-    $self->assert_null($res->[0][1]{changedProperties});
+    $self->assert_null($res->[0][1]{updatedProperties});
 
     xlog "create mailbox via IMAP";
     $imaptalk->create("INBOX.foo")
@@ -1988,7 +1988,7 @@ sub test_mailbox_changes
     $self->assert_str_equals($foo, $res->[0][1]{created}[0]);
     $self->assert_deep_equals([], $res->[0][1]{updated});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
-    $self->assert_null($res->[0][1]{changedProperties});
+    $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
     xlog "create drafts mailbox";
@@ -2011,7 +2011,7 @@ sub test_mailbox_changes
     $self->assert_str_equals($drafts, $res->[0][1]{created}[0]);
     $self->assert_deep_equals([], $res->[0][1]{updated});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
-    $self->assert_null($res->[0][1]{changedProperties});
+    $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
     xlog "rename mailbox foo to bar";
@@ -2032,7 +2032,7 @@ sub test_mailbox_changes
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($foo, $res->[0][1]{updated}[0]);
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
-    $self->assert_null($res->[0][1]{changedProperties});
+    $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
     xlog "delete mailbox bar";
@@ -2060,7 +2060,7 @@ sub test_mailbox_changes
     $self->assert_deep_equals([], $res->[0][1]{updated});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($foo, $res->[0][1]{destroyed}[0]);
-    $self->assert_null($res->[0][1]{changedProperties});
+    $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
     xlog "get mailbox updates, limit to 1";
@@ -2072,7 +2072,7 @@ sub test_mailbox_changes
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($drafts, $res->[0][1]{updated}[0]);
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
-    $self->assert_null($res->[0][1]{changedProperties});
+    $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
     xlog "get mailbox updates (expect no changes)";
@@ -2083,7 +2083,7 @@ sub test_mailbox_changes
     $self->assert_deep_equals([], $res->[0][1]{created});
     $self->assert_deep_equals([], $res->[0][1]{updated});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
-    $self->assert_null($res->[0][1]{changedProperties});
+    $self->assert_null($res->[0][1]{updatedProperties});
 }
 
 sub test_mailbox_changes_counts
@@ -2143,7 +2143,7 @@ sub test_mailbox_changes_counts
     xlog "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_not_null($res->[0][1]{changedProperties});
+    $self->assert_not_null($res->[0][1]{updatedProperties});
     $self->assert_deep_equals([], $res->[0][1]{created});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
@@ -2155,7 +2155,7 @@ sub test_mailbox_changes_counts
     xlog "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_null($res->[0][1]{changedProperties});
+    $self->assert_null($res->[0][1]{updatedProperties});
     $self->assert_deep_equals([], $res->[0][1]{created});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
@@ -2169,7 +2169,7 @@ sub test_mailbox_changes_counts
     xlog "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_not_null($res->[0][1]{changedProperties});
+    $self->assert_not_null($res->[0][1]{updatedProperties});
     $self->assert_deep_equals([], $res->[0][1]{created});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
@@ -2181,7 +2181,7 @@ sub test_mailbox_changes_counts
     xlog "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_null($res->[0][1]{changedProperties});
+    $self->assert_null($res->[0][1]{updatedProperties});
     $self->assert_deep_equals([], $res->[0][1]{created});
     $self->assert_num_not_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
@@ -2190,7 +2190,7 @@ sub test_mailbox_changes_counts
     xlog "get mailbox updates (expect no changes)";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_null($res->[0][1]{changedProperties});
+    $self->assert_null($res->[0][1]{updatedProperties});
     $self->assert_deep_equals([], $res->[0][1]{created});
     $self->assert_deep_equals([], $res->[0][1]{updated});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
@@ -2205,7 +2205,7 @@ sub test_mailbox_changes_counts
     xlog "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_not_null($res->[0][1]{changedProperties});
+    $self->assert_not_null($res->[0][1]{updatedProperties});
     $self->assert_deep_equals([], $res->[0][1]{created});
     $self->assert_num_not_equals(0, scalar $res->[0][1]{updated});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
