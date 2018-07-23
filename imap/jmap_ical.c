@@ -3114,26 +3114,21 @@ description_to_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp,
 {
     remove_icalprop(comp, ICAL_DESCRIPTION_PROPERTY);
 
+    /* FIXME
+     * We'd like to support HTML descriptions, but with iCalendar being
+     * our storage format there really isn't a good way to deal with
+     * that. We can't rely on iCalendar clients correctly handling the
+     * ALTREP parameters on DESCRIPTION, and we don't want to make the
+     * CalDAV PUT code deal with comparing old vs new descriptions to
+     * try figuring out what the client did.
+     * This should become more sane to handle if we start using
+     * JSCalendar for storage.
+     */
     if (content_type && strcasecmp(content_type, "TEXT/PLAIN")) {
-        if (!strcasecmp(content_type, "TEXT/HTML")) {
-            /* XXX We should keep the original HTML contents, but can't
-             * rely on iCalendar clients to handle HTML properly. To
-             * avoid HTML descriptions and their plain-text representation
-             * go out of sync, always store HTML descriptions in plain
-             * text, after stripping all tags. */
-            icalproperty *prop = icalproperty_new(ICAL_DESCRIPTION_PROPERTY);
-            char *plain = charset_extract_plain(desc);
-            icalproperty_set_description(prop, plain);
-            free(plain);
-            icalcomponent_add_property(comp, prop);
-        }
-        else {
-            invalidprop(ctx, "descriptionContentType");
-        }
+        invalidprop(ctx, "descriptionContentType");
     }
-    else {
-        icalcomponent_set_description(comp, desc);
-    }
+
+    icalcomponent_set_description(comp, desc);
 }
 
 /* Create or update the VALARMs in the VEVENT component comp as defined by the
