@@ -1348,7 +1348,11 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
             buf_appendcstr(&buf, addr);
 
             bzero(&sparam, sizeof(struct caldav_sched_param));
-            if (caladdress_lookup(addr, &sparam, userid) || !sparam.isyou) {
+            if (caladdress_lookup(addr, &sparam, userid)) {
+                sched_param_fini(&sparam);
+                continue;
+            }
+            if (!sparam.isyou) {
                 sched_param_fini(&sparam);
                 continue;
             }
