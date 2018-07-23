@@ -1744,10 +1744,12 @@ sub test_calendarevent_set_htmldescription
         "privacy" => "secret",
     };
 
-    # Cyrus always format HTML descriptions to plain text.
-    my $ret = $self->createandget_event($event);
-    $self->assert_str_equals('HTML with special chars : and ; and "', $ret->{description});
-    $self->assert_str_equals('text/plain', $ret->{descriptionContentType});
+    # This actually tests that Cyrus doesn't support HTML descriptions!
+    my $res = $jmap->CallMethods([['CalendarEvent/set', {
+        create => { "1" => $event, }
+    }, "R1"]]);
+    $self->assert_str_equals("invalidProperties", $res->[0][1]{notCreated}{"1"}{type});
+    $self->assert_str_equals("descriptionContentType", $res->[0][1]{notCreated}{"1"}{properties}[0]);
 }
 
 sub test_calendarevent_set_links
