@@ -10703,6 +10703,9 @@ sub test_email_get_calendarevents
     my $store = $self->{store};
     my $talk = $store->get_client();
 
+    my $uid1 = "d9e7f7d6-ce1a-4a71-94c0-b4edd41e5959";
+    my $uid2 = "caf7f7d6-ce1a-4a71-94c0-b4edd41e5959";
+
     $self->make_message("foo",
         mime_type => "multipart/related",
         mime_boundary => "boundary_1",
@@ -10743,7 +10746,18 @@ sub test_email_get_calendarevents
           . "SEQUENCE:1\r\n"
           . "SUMMARY:K=C3=A4se\r\n"
           . "TRANSP:OPAQUE\r\n"
-          . "UID:d9e7f7d6-ce1a-4a71-94c0-b4edd41e5959\r\n"
+          . "UID:$uid1\r\n"
+          . "END:VEVENT\r\n"
+          . "BEGIN:VEVENT\r\n"
+          . "CREATED:20180718T090306Z\r\n"
+          . "DTEND;TZID=Europe/Vienna:20180718T100000\r\n"
+          . "DTSTAMP:20180518T090306Z\r\n"
+          . "DTSTART;TZID=Europe/Vienna:20180718T190000\r\n"
+          . "LAST-MODIFIED:20180718T090306Z\r\n"
+          . "SEQUENCE:1\r\n"
+          . "SUMMARY:Foo\r\n"
+          . "TRANSP:OPAQUE\r\n"
+          . "UID:$uid2\r\n"
           . "END:VEVENT\r\n"
           . "END:VCALENDAR\r\n"
           . "\r\n--boundary_1--\r\n"
@@ -10763,12 +10777,20 @@ sub test_email_get_calendarevents
 
     $self->assert_num_equals(1, scalar keys %{$msg->{calendarEvents}});
     my $partId = $msg->{attachments}[0]{partId};
-    my $jsevent =$msg->{calendarEvents}{$partId};
-    $self->assert_not_null($jsevent);
-    $self->assert_str_equals("K\N{LATIN SMALL LETTER A WITH DIAERESIS}se", $jsevent->{title});
-    $self->assert_str_equals('2018-05-18T09:00:00', $jsevent->{start});
-    $self->assert_str_equals('Europe/Vienna', $jsevent->{timeZone});
-    $self->assert_str_equals('PT1H', $jsevent->{duration});
+
+    my %jsevents_by_uid = map { $_->{uid} => $_ } @{$msg->{calendarEvents}{$partId}};
+    $self->assert_num_equals(2, scalar keys %jsevents_by_uid);
+    my $jsevent1 = $jsevents_by_uid{$uid1};
+    my $jsevent2 = $jsevents_by_uid{$uid2};
+
+    $self->assert_not_null($jsevent1);
+    $self->assert_str_equals("K\N{LATIN SMALL LETTER A WITH DIAERESIS}se", $jsevent1->{title});
+    $self->assert_str_equals('2018-05-18T09:00:00', $jsevent1->{start});
+    $self->assert_str_equals('Europe/Vienna', $jsevent1->{timeZone});
+    $self->assert_str_equals('PT1H', $jsevent1->{duration});
+
+    $self->assert_not_null($jsevent2);
+    $self->assert_str_equals("Foo", $jsevent2->{title});
 }
 
 sub test_email_set_blobencoding
