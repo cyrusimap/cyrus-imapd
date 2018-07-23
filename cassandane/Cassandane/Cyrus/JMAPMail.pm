@@ -10311,6 +10311,18 @@ MIME-Version: 1.0
 This is a test email.
 EOF
 
+    my $emailWithNonTextContentType = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: test email
+Date: Wed, 7 Dec 2016 00:21:50 -0500
+Content-Type: application/data
+MIME-Version: 1.0
+
+This is a test email.
+EOF
+
+
     my @testCases = ({
         desc => "Email without Content-Type header",
         rawEmail => $emailWithoutContentType,
@@ -10320,6 +10332,11 @@ EOF
         desc => "Email without charset parameter",
         rawEmail => $emailWithoutCharset,
         wantContentType => 'text/plain',
+        wantCharset => 'us-ascii',
+    }, {
+        desc => "Email with non-text Content-Type",
+        rawEmail => $emailWithNonTextContentType,
+        wantContentType => 'application/data',
         wantCharset => undef,
     });
 
