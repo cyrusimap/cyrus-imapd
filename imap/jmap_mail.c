@@ -7916,8 +7916,22 @@ static int _email_get_bodies(jmap_req_t *req,
         int i;
         for (i = 0; i < bodies.attslist.count; i++) {
             struct body *part = ptrarray_nth(&bodies.attslist, i);
-            if (strcmp(part->type, "TEXT") || strcmp(part->subtype, "CALENDAR"))
-                continue;
+            /* Process text/calendar attachments and files ending with .ics */
+            if (strcmp(part->type, "TEXT") || strcmp(part->subtype, "CALENDAR")) {
+                int has_ics_attachment = 0;
+                struct param *param = part->disposition_params;
+                while (param) {
+                    if (!strcasecmp(param->attribute, "FILENAME")) {
+                        size_t len = strlen(param->value);
+                        if (len > 4 && !strcasecmp(param->value + len-4, ".ICS")) {
+                            has_ics_attachment = 1;
+                        }
+                    }
+                    param = param->next;
+                }
+                if (!has_ics_attachment)
+                    continue;
+            }
             /* Parse decoded data to iCalendar object */
             char *tmp;
             size_t tmp_size;
