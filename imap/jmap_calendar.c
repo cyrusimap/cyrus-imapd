@@ -1333,10 +1333,11 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     /* Add participant id */
     if (_wantprop(rock->props, "participantId") && rock->req->userid) {
         const char *userid = rock->req->userid;
-        const char *id;
-        json_t *p;
+        char *participant_id = NULL;
         struct buf buf = BUF_INITIALIZER;
 
+        const char *id;
+        json_t *p;
         json_object_foreach(json_object_get(obj, "participants"), id, p) {
             struct caldav_sched_param sparam;
             const char *addr;
@@ -1352,17 +1353,20 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
                 sched_param_fini(&sparam);
                 continue;
             }
-            if (!sparam.isyou) {
-                sched_param_fini(&sparam);
-                continue;
-            }
 
             /* First participant that matches isyou wins */
-            json_object_set_new(obj, "participantId", json_string(id));
+            if (sparam.isyou) {
+                participant_id = xstrdup(id);
+                sched_param_fini(&sparam);
+                break;
+            }
+
             sched_param_fini(&sparam);
-            break;
         }
 
+        json_object_set_new(obj, "participantId", participant_id ?
+                json_string(participant_id) : json_null());
+        free(participant_id);
         buf_free(&buf);
     }
 
