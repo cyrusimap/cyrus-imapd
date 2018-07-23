@@ -7574,8 +7574,15 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
 
     /* charset */
     if (_wantprop(bodyprops, "charset")) {
-        json_object_set_new(jbodypart, "charset", part->charset_id ?
-                json_string(part->charset_id) : json_null());
+        const char *charset_id = NULL;
+        if (part->charset_id) {
+            charset_id = part->charset_id;
+        }
+        else if (!strcasecmp(part->type, "TEXT")) {
+            charset_id = "us-ascii";
+        }
+        json_object_set_new(jbodypart, "charset", charset_id ?
+                json_string(charset_id) : json_null());
     }
 
     /* disposition */
