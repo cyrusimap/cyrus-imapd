@@ -1790,7 +1790,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
 
         /* Determine encoded size */
         charset_encode_mimebody(NULL, body->content_size, NULL,
-                                &b64_size, NULL);
+                                &b64_size, NULL, 1 /* wrap */);
 
         delta = b64_size - body->content_size;
 
@@ -1805,7 +1805,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
         charset_encode_mimebody(msg->base + s_offset + delta,
                                 body->content_size,
                                 (char*) msg->base + s_offset,
-                                NULL, &b64_lines);
+                                NULL, &b64_lines, 1 /* wrap */);
 
         /* Adjust buffer position and length to account for encoding */
         msg->offset += delta;

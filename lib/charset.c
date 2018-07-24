@@ -2849,7 +2849,8 @@ static char base_64[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
-    char *retval, size_t *outlen, int *outlines)
+                                       char *retval, size_t *outlen,
+                                       int *outlines, int wrap)
 {
     const unsigned char *s;
     unsigned char s0, s1, s2;
@@ -2857,10 +2858,13 @@ EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
     int b64_len, b64_lines, cnt;
 
     b64_len = ((len + 2) / 3) * 4;
-    b64_lines = (b64_len + BASE64_MAX_LINE_LEN - 1) / BASE64_MAX_LINE_LEN;
+    if (wrap) {
+        b64_lines = (b64_len + BASE64_MAX_LINE_LEN - 1) / BASE64_MAX_LINE_LEN;
 
-    /* account for CRLF added to each line */
-    b64_len += 2 * b64_lines;
+        /* account for CRLF added to each line */
+        b64_len += 2 * b64_lines;
+    }
+    else b64_lines = 1;
 
     if (outlen) *outlen = b64_len;
     if (outlines) *outlines = b64_lines;
@@ -2869,7 +2873,7 @@ EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
 
     for (s = (const unsigned char*) msg_base, d = retval, cnt = 0; len;
          s += 3, d += 4, cnt += 4) { /* process tuplets */
-        if (cnt == BASE64_MAX_LINE_LEN) {
+        if (wrap && cnt == BASE64_MAX_LINE_LEN) {
             /* reset line len count, add CRLF */
             cnt = 0;
             *d++ = '\r';
@@ -2900,9 +2904,11 @@ EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
         }
     }
 
-    /* add final CRLF */
-    *d++ = '\r';
-    *d++ = '\n';
+    if (wrap) {
+        /* add final CRLF */
+        *d++ = '\r';
+        *d++ = '\n';
+    }
 
     return (b64_len ? retval : NULL);
 }
