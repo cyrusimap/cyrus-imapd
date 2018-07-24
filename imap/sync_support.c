@@ -2660,7 +2660,7 @@ int sync_apply_mailbox(struct dlist *kin,
     dlist_getatom(kin, "MBOXTYPE", &mboxtype);
     mbtype = mboxlist_string_to_mbtype(mboxtype);
 
-    if (mbtype & MBTYPE_INTERMEDIATE) {
+    if (mbtype & MBTYPE_INTERMEDIATE|MBTYPE_DELETED) {
         mbentry_t *newmbentry = NULL;
 
         newmbentry = mboxlist_entry_create();
