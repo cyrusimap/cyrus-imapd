@@ -103,7 +103,7 @@ Optional: Install sample JMAP client
 
 You can set up the `JMAP Proxy (perl) <https://github.com/jmapio/jmap-perl>`_ to sit in front of a standard IMAP server and query that over a custom JMAP client.
 
-Or you can install a sample `JMAP web client <https://github.com/jmapio/jmap-demo-webmail>`_ which requires the `Overture.js library <https://github.com/fastmail/overture>`_ and `JMAP JS library <https://github.com/jmapio/jmap-js>`_ to talk to a JMAP-enabled Cyrus server and build from there (subject to the `MIT license <https://tldrlegal.com/license/mit-license>`_.
+Or you can install a sample `JMAP web client <https://github.com/jmapio/jmap-demo-webmail>`_ which requires the `Overture.js library <https://github.com/fastmail/overture>`_ and `JMAP JS library <https://github.com/jmapio/jmap-js>`_ to talk to a JMAP-enabled Cyrus server and build from there (subject to the `MIT license <https://tldrlegal.com/license/mit-license>`_).
 
 The web client is a simple example (no compose, contacts or calendars). When you create your account, the most recent 50 emails will be downloaded in their entirety, so the first page should be snappy immediately. After that, you are redirected to the landing page. A background task will continue to pull in batches of messages and add them to your account, so you will see older messages appear while you are using the interface.
 
