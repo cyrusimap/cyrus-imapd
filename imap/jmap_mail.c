@@ -8318,7 +8318,7 @@ static int jmap_email_parse(jmap_req_t *req)
         struct body *body = NULL;
         const struct body *part = NULL;
 
-        int r = jmap_findblob(req, blobid, &mbox, &mr, &body, &part);
+        int r = jmap_findblob(req, blobid, &mbox, &mr, &body, &part, NULL);
         if (r) {
             json_array_append_new(notFound, json_string(blobid));
             continue;
@@ -10114,7 +10114,7 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     const struct body *part = NULL;
 
     /* Find body part containing blob */
-    int r = jmap_findblob(req, emailpart->blob_id, &mbox, &mr, &body, &part);
+    int r = jmap_findblob(req, emailpart->blob_id, &mbox, &mr, &body, &part, NULL);
     if (r) goto done;
 
     /* Map the blob into memory */
@@ -11167,7 +11167,7 @@ int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     msgrecord_t *mr = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
 
-    r = jmap_findblob(req, blobid, &mbox, &mr, &body, &subpart);
+    r = jmap_findblob(req, blobid, &mbox, &mr, &body, &subpart, NULL);
     if (r) goto done;
 
     r = msgrecord_get_body(mr, &msg_buf);

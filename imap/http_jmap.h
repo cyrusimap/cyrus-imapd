@@ -129,7 +129,8 @@ extern int jmap_upload(struct transaction_t *txn);
 extern int jmap_download(struct transaction_t *txn);
 extern int jmap_findblob(jmap_req_t *req, const char *blobid,
                          struct mailbox **mbox, msgrecord_t **mr,
-                         struct body **body, const struct body **part);
+                         struct body **body, const struct body **part,
+                         struct buf *blob);
 extern const struct body *jmap_contact_findblob(struct message_guid *content_guid,
                                                 const char *part_id,
                                                 struct mailbox *mbox,

@@ -1247,9 +1247,10 @@ done:
 
 EXPORTED int jmap_findblob(jmap_req_t *req, const char *blobid,
                            struct mailbox **mbox, msgrecord_t **mr,
-                           struct body **body, const struct body **part)
+                           struct body **body, const struct body **part,
+                           struct buf *blob)
 {
-    return _findblob(req, blobid, req->accountid, mbox, mr, body, part, NULL);
+    return _findblob(req, blobid, req->accountid, mbox, mr, body, part, blob);
 }
 
 static char *parse_accept_header(const char **hdr)
