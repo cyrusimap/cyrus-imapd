@@ -1245,6 +1245,7 @@ sub test_contact_set
     $contact->{addresses} = [];
     $contact->{emails} = [];
     $contact->{notes} = '';
+    $contact->{avatar} = JSON::null;
 
     # Non-JMAP properties.
     $contact->{"x-importance"} = 0;
