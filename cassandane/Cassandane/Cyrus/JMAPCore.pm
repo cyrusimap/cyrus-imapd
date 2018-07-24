@@ -228,7 +228,7 @@ sub test_blob_download
     $self->assert_str_equals('some test', $resp->{content});
 }
 
-sub test_creationids
+sub test_created_ids
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
@@ -244,7 +244,7 @@ sub test_creationids
         content => encode_json({
             using => ['urn:ietf:params:jmap:mail'],
             methodCalls => [['Identity/get', {}, 'R1']],
-            creationIds => 'bogus',
+            createdIds => 'bogus',
         }),
     };
     my $RawResponse = $jmap->ua->post($jmap->uri(), $RawRequest);
@@ -275,7 +275,7 @@ sub test_creationids
     $JMAPRequest = {
         using => ['urn:ietf:params:jmap:mail'],
         methodCalls => [['Mailbox/get', { ids => ['#1'] }, 'R1']],
-        creationIds => { 1 => $mboxid1 },
+        createdIds => { 1 => $mboxid1 },
     };
     $JMAPResponse = $jmap->Request($JMAPRequest);
     $self->assert_str_equals($mboxid1, $JMAPResponse->{methodResponses}->[0][1]{list}[0]{id});
@@ -293,7 +293,7 @@ sub test_creationids
                 }
             }
         }, "R1"]],
-        creationIds => {},
+        createdIds => {},
     };
     $JMAPResponse = $jmap->Request($JMAPRequest);
     my $mboxid2 = $JMAPResponse->{methodResponses}->[0][1]{created}{2}{id};
