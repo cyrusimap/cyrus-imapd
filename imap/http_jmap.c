@@ -1170,7 +1170,7 @@ static int _findblob(jmap_req_t *req, const char *blobid,
                      const char *accountid,
                      struct mailbox **mbox, msgrecord_t **mr,
                      struct body **body, const struct body **part,
-                     struct buf *msg_buf)
+                     struct buf *blob)
 {
 
     struct findblob_data data = {
@@ -1206,35 +1206,17 @@ static int _findblob(jmap_req_t *req, const char *blobid,
 
         ptrarray_push(&parts, mybody);
         while ((mypart = ptrarray_shift(&parts))) {
-            const char *proppath = NULL;
-
             if (!message_guid_cmp(&content_guid, &mypart->content_guid)) {
                 break;
             }
-            else if ((proppath = strstr(data.part_id, "/VCARD#"))) {
-                struct index_record record;
-                struct vparse_card *vcard;
-
-                msgrecord_get_index_record(data.mr, &record);
-
-                vcard = record_to_vcard(data.mbox, &record);
-                if (vcard) {
-                    int match = 0;
-                    struct message_guid guid;
-                    struct vparse_entry *entry =
-                        vparse_get_entry(vcard->objects, NULL, proppath+7);
-
-                    if (entry && vcard_prop_decode_value(entry, msg_buf, &guid)) {
-                        match = !message_guid_cmp(&content_guid, &guid);
-                    }
-                    vparse_free_card(vcard);
-                    
-                    if (match) break;
-                    if (msg_buf) buf_free(msg_buf);
+            if (!mypart->subpart) {
+                if (data.mbox->mbtype == MBTYPE_ADDRESSBOOK &&
+                    (mypart = jmap_contact_findblob(&content_guid, data.part_id,
+                                                    data.mbox, data.mr, blob))) {
+                    break;
                 }
-                proppath = NULL;
+                continue;
             }
-            if (!mypart->subpart) continue;
             ptrarray_push(&parts, mypart->subpart);
             for (i = 1; i < mypart->numparts; i++)
                 ptrarray_push(&parts, mypart->subpart + i);
@@ -1395,11 +1377,7 @@ EXPORTED int jmap_download(struct transaction_t *txn)
         goto done;
     }
 
-    if (buf_base(&msg_buf)) {
-        /* Already have the data at offset zero */
-        part = NULL;
-    }
-    else {
+    if (!buf_base(&msg_buf)) {
         /* Map the message into memory */
         r = msgrecord_get_body(mr, &msg_buf);
         if (r) {

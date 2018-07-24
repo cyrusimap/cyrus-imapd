@@ -3275,3 +3275,40 @@ done:
     return r;
 }
 
+const struct body *jmap_contact_findblob(struct message_guid *content_guid,
+                                         const char *part_id,
+                                         struct mailbox *mbox,
+                                         msgrecord_t *mr,
+                                         struct buf *blob)
+{
+    const struct body *ret = NULL;
+    struct index_record record;
+    struct vparse_card *vcard;
+    const char *proppath = strstr(part_id, "/VCARD#");
+
+    if (!proppath) return NULL;
+
+    msgrecord_get_index_record(mr, &record);
+    vcard = record_to_vcard(mbox, &record);
+
+    if (vcard) {
+        static struct body subpart;
+        struct vparse_entry *entry =
+            vparse_get_entry(vcard->objects, NULL, proppath+7);
+
+        if (entry &&
+            vcard_prop_decode_value(entry, blob, &subpart.content_guid) &&
+            !message_guid_cmp(content_guid, &subpart.content_guid)) {
+            /* Build a body part for the property */
+            subpart.charset_enc = 0;
+            subpart.content_offset = 0;
+            subpart.content_size = buf_len(blob);
+            ret = &subpart;
+        }
+        else buf_free(blob);
+
+        vparse_free_card(vcard);
+    }
+
+    return ret;
+}
