@@ -1180,6 +1180,12 @@ static char *_mbox_get_role(jmap_req_t *req, const mbname_t *mbname)
                 role = "sent";
             } else if (!strcmp(use, "\\Trash")) {
                 role = "trash";
+            } else if (!strcmp(use, "\\XChats")) {
+                role = "xchats";
+            } else if (!strcmp(use, "\\XTemplates")) {
+                role = "xtemplates";
+            } else if (!strcmp(use, "\\XNotes")) {
+                role = "xnotes";
             }
         }
         strarray_free(uses);
@@ -2331,6 +2337,12 @@ static void _mbox_setargs_parse(json_t *jargs,
             specialuse = "\\Sent";
         } else if (!strcmp(role, "trash")) {
             specialuse = "\\Trash";
+        } else if (!strcmp(role, "xchats")) {
+            specialuse = "\\XChats";
+        } else if (!strcmp(role, "xtemplates")) {
+            specialuse = "\\XTemplates";
+        } else if (!strcmp(role, "xnotes")) {
+            specialuse = "\\XNotes";
         } else if (strncmp(role, "x-", 2)) {
             /* Does it start with an "x-"? If not, reject it. */
             is_valid = 0;
