@@ -804,29 +804,29 @@ static int jmap_post(struct transaction_t *txn,
     construct_hash_table(new_creation_ids, max_creation_ids, 0);
 
     /* Parse client-supplied creation ids */
-    json_t *jcreationIds = json_object_get(jreq, "creationIds");
-    if (json_is_object(jcreationIds)) {
+    json_t *jcreatedIds = json_object_get(jreq, "createdIds");
+    if (json_is_object(jcreatedIds)) {
         client_creation_ids = xzmalloc(sizeof(hash_table));
-        construct_hash_table(client_creation_ids, json_object_size(jcreationIds)+1, 0);
+        construct_hash_table(client_creation_ids, json_object_size(jcreatedIds)+1, 0);
         const char *creation_id;
         json_t *jval;
-        json_object_foreach(jcreationIds, creation_id, jval) {
+        json_object_foreach(jcreatedIds, creation_id, jval) {
             if (!json_is_string(jval)) {
-                txn->error.desc = "Invalid creationIds argument";
+                txn->error.desc = "Invalid createdIds argument";
                 ret = HTTP_BAD_REQUEST;
                 goto done;
             }
             const char *id = json_string_value(jval);
             if (!jmap_is_valid_id(creation_id) || !jmap_is_valid_id(id)) {
-                txn->error.desc = "Invalid creationIds argument";
+                txn->error.desc = "Invalid createdIds argument";
                 ret = HTTP_BAD_REQUEST;
                 goto done;
             }
             hash_insert(creation_id, xstrdup(id), client_creation_ids);
         }
     }
-    else if (jcreationIds && jcreationIds != json_null()) {
-        txn->error.desc = "Invalid creationIds argument";
+    else if (jcreatedIds && jcreatedIds != json_null()) {
+        txn->error.desc = "Invalid createdIds argument";
         ret = HTTP_BAD_REQUEST;
         goto done;
     }
