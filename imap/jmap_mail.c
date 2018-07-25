@@ -142,13 +142,6 @@ jmap_method_t jmap_mail_methods[] = {
     { NULL,                           NULL}
 };
 
-static int JNOTNULL(json_t *item)
-{
-   if (!item) return 0;
-   if (json_is_null(item)) return 0;
-   return 1;
-}
-
 struct jmap_get {
     /* Request arguments */
     json_t *ids;
@@ -978,12 +971,6 @@ typedef enum MsgType {
         MSG_IS_ROOT = 0,
         MSG_IS_ATTACHED = 1,
 } MsgType;
-
-static int _wantprop(hash_table *props, const char *name)
-{
-    if (!props) return 1;
-    return hash_lookup(name, props) != NULL;
-}
 
 /*
  * Mailboxes

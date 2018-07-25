@@ -104,20 +104,6 @@ int jmap_calendar_init(hash_table *methods, json_t *capabilities __attribute__((
     return 0;
 }
 
-static int _wantprop(hash_table *props, const char *name)
-{
-    if (!props) return 1;
-    if (hash_lookup(name, props)) return 1;
-    return 0;
-}
-
-static int JNOTNULL(json_t *item)
-{
-   if (!item) return 0;
-   if (json_is_null(item)) return 0;
-   return 1;
-}
-
 static int readprop_full(json_t *root,
                          const char *prefix,
                          const char *name,

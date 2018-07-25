@@ -130,13 +130,6 @@ typedef struct context {
 static json_t *calendarevent_from_ical(context_t *, icalcomponent *);
 static void calendarevent_to_ical(context_t *, icalcomponent *, json_t*);
 
-static int JNOTNULL(json_t *item)
-{
-   if (!item) return 0;
-   if (json_is_null(item)) return 0;
-   return 1;
-}
-
 static char *hexkey(const char *val)
 {
     unsigned char dest[SHA1_DIGEST_LENGTH];

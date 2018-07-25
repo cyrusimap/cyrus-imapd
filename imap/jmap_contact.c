@@ -99,22 +99,6 @@ int jmap_contact_init(hash_table *methods, json_t *capabilities __attribute__((u
     return 0;
 }
 
-/* FIXME DUPLICATE START */
-
-static int _wantprop(hash_table *props, const char *name)
-{
-    if (!props) return 1;
-    if (hash_lookup(name, props)) return 1;
-    return 0;
-}
-
-static int JNOTNULL(json_t *item)
-{
-   if (!item) return 0;
-   if (json_is_null(item)) return 0;
-   return 1;
-}
-
 struct updates_rock {
     jmap_req_t *req;
     json_t *created;

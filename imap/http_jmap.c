@@ -1771,13 +1771,6 @@ done:
     return ret;
 }
 
-static int JNOTNULL(json_t *item)
-{
-   if (!item) return 0;
-   if (json_is_null(item)) return 0;
-   return 1;
-}
-
 static int jmap_copyblob(jmap_req_t *req,
                          const char *blobid,
                          const char *from_accountid,

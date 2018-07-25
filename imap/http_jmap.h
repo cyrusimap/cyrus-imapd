@@ -52,6 +52,8 @@
 #include "mboxname.h"
 #include "msgrecord.h"
 
+#define _wantprop(props, name) ((props) ? (hash_lookup(name, props) != NULL) : 1)
+
 extern struct namespace jmap_namespace;
 
 typedef struct jmap_req {
