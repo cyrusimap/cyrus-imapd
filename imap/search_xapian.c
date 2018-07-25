@@ -1874,6 +1874,8 @@ static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
 {
     xapian_update_receiver_t *tr = rock;
 
+    if (rec->part) return 0;
+
     /* Is this GUID record in the mailbox we are currently indexing? */
     if (!strcmp(tr->super.mailbox->name, rec->mboxname)) {
         if (seqset_ismember(tr->indexed, rec->uid) ||
