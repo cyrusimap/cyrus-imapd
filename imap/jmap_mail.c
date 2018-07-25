@@ -8547,6 +8547,8 @@ static int _email_expunge_cb(const conv_guidrec_t *rec, void *rock)
     struct mailbox *mbox = NULL;
     int r = 0;
 
+    if (rec->part) return 0;
+
     r = jmap_openmbox(req, rec->mboxname, &mbox, 1);
     if (r) goto done;
 
@@ -10580,6 +10582,8 @@ static int _email_flagupdate_cb(const conv_guidrec_t *rec, void *rock)
     struct email_flagupdate *update = rock;
     jmap_req_t *req = update->_req;
     json_t *cur_mailboxes = update->_cur_mailboxes;
+
+    if (rec->part) return 0;
 
     /* Fetch record */
     struct mailbox *mbox = NULL;
