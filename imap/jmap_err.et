@@ -47,13 +47,13 @@
 error_table JMAP
 
 ec JMAP_NOT_JSON,
-   "urn:ietf:params:jmap:error:notjson\0Request body did not parse as I-JSON"
+   "urn:ietf:params:jmap:error:notJSON\0Request body did not parse as I-JSON"
 
 ec JMAP_NOT_REQUEST,
-   "urn:ietf:params:jmap:error:notrequest\0JSON request body is not a JMAP Request object"
+   "urn:ietf:params:jmap:error:notRequest\0JSON request body is not a JMAP Request object"
 
 ec JMAP_UNKNOWN_CAPABILITY,
-   "urn:ietf:params:jmap:error:unknowncapability\0JMAP request uses unsupported capabilities"
+   "urn:ietf:params:jmap:error:unknownCapability\0JMAP request uses unsupported capabilities"
 
 ec JMAP_LIMIT_SIZE,
    "urn:ietf:params:jmap:error:limit\0JMAP request exceeds a server limit\0maxSizeRequest"
