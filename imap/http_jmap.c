@@ -2327,15 +2327,8 @@ static int jmap_settings(struct transaction_t *txn)
 {
     assert(httpd_userid);
 
-    /* Create the response object */
-    json_t *res = user_settings(httpd_userid);
-    if (!res) {
-        syslog(LOG_ERR, "JMAP auth: cannot determine user settings for %s",
-                httpd_userid);
-        return HTTP_SERVER_ERROR;
-    }
-
-    if (ws_enabled()) {
+    if (ws_enabled() &&
+        !json_object_get(jmap_capabilities, "urn:ietf:params:jmap:websocket")) {
         const char *proto = NULL, *host = NULL;
 
         http_proto_host(txn->req_hdrs, &proto, &host);
@@ -2343,8 +2336,16 @@ static int jmap_settings(struct transaction_t *txn)
         buf_reset(&txn->buf);
         buf_printf(&txn->buf, "ws%s://%s%s", proto+4, host, JMAP_BASE_URL);
 
-        json_object_set_new(res, "wsUrl",
-                            json_string(buf_cstring(&txn->buf)));
+        json_object_set_new(jmap_capabilities, "urn:ietf:params:jmap:websocket",
+                            json_pack("{s:s}", "wsUrl", buf_cstring(&txn->buf)));
+    }
+
+    /* Create the response object */
+    json_t *res = user_settings(httpd_userid);
+    if (!res) {
+        syslog(LOG_ERR, "JMAP auth: cannot determine user settings for %s",
+                httpd_userid);
+        return HTTP_SERVER_ERROR;
     }
 
     /* Write the JSON response */
