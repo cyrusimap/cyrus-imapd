@@ -2646,6 +2646,95 @@ static int _kv_to_card(struct vparse_card *card, const char *key, json_t *jval)
     return 0;
 }
 
+static int _blob_to_card(struct jmap_req *req,
+                         struct vparse_card *card, const char *key, json_t *file)
+{
+    struct buf blob_buf = BUF_INITIALIZER;
+    msgrecord_t *mr = NULL;
+    struct mailbox *mbox = NULL;
+    struct body *body = NULL;
+    const struct body *part = NULL;
+    json_t *val;
+    const char *blobid = NULL;
+    int r;
+
+    if (!file) return -1;
+
+    /* Extract blobId */
+    val = json_object_get(file, "blobId");
+    if (val) blobid = json_string_value(val);
+    if (!blobid) return -1;
+
+    /* Find body part containing blob */
+    r = jmap_findblob(req, blobid, &mbox, &mr, &body, &part, &blob_buf);
+    if (r) goto done;
+
+    if (!buf_base(&blob_buf)) {
+        /* Map the blob into memory */
+        r = msgrecord_get_body(mr, &blob_buf);
+        if (r) goto done;
+    }
+
+    /* Fetch blob contents and encoding */
+    const char *base = blob_buf.s;
+    size_t len = blob_buf.len;
+    int encode_base64 = 0;
+
+    if (part) {
+        /* Map into body part */
+        base += part->content_offset;
+        len = part->content_size;
+
+        /* Determine encoding. */
+        if (!part->encoding || strcmp(part->encoding, "BASE64")) {
+            encode_base64 = 1;
+        }
+    }
+
+    char *tmp = NULL;
+    if (encode_base64) {
+        size_t len64 = 0;
+        /* Pre-flight base64 encoder to determine length */
+        charset_encode_mimebody(NULL, len, NULL, &len64, NULL, 0 /* no wrap */);
+        /* Now encode the body */
+        tmp = xmalloc(len64+1);
+        charset_encode_mimebody(base, len, tmp, &len64, NULL, 0 /* no wrap */);
+        tmp[len64] = '\0';
+        base = tmp;
+        len = len64;
+    }
+
+    /* (Re)write vCard property */
+    vparse_delete_entries(card, NULL, key);
+
+    struct vparse_entry *entry = vparse_add_entry(card, NULL, key, base);
+
+    vparse_add_param(entry, "ENCODING", "b");
+
+    val = json_object_get(file, "type");
+    if (val) {
+        const char *type = json_string_value(val);
+        char *subtype = xstrdup(strchr(type, '/'));
+
+        vparse_add_param(entry, "TYPE", ucase(subtype+1));
+        free(subtype);
+    }
+
+    free(tmp);
+    r = 0;
+
+  done:
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+    msgrecord_unref(&mr);
+    jmap_closembox(req, &mbox);
+    buf_free(&blob_buf);
+
+    return r;
+}
+
 static void _make_fn(struct vparse_card *card)
 {
     struct vparse_entry *n = vparse_get_entry(card, NULL, "N");
@@ -2685,7 +2774,8 @@ static void _make_fn(struct vparse_card *card)
     free(fn);
 }
 
-static int _json_to_card(const char *uid,
+static int _json_to_card(struct jmap_req *req,
+                         const char *uid,
                          struct vparse_card *card,
                          json_t *arg, strarray_t *flags,
                          struct entryattlist **annotsp,
@@ -2737,7 +2827,12 @@ static int _json_to_card(const char *uid,
             buf_free(&buf);
         }
         else if (!strcmp(key, "avatar")) {
-            /* XXX - file handling */
+            int r = _blob_to_card(req, card, "PHOTO", jval);
+            if (r) {
+                json_array_append_new(invalid, json_string("avatar"));
+                return r;
+            }
+            record_is_dirty = 1;
         }
         else if (!strcmp(key, "prefix")) {
             const char *val = json_string_value(jval);
@@ -2968,8 +3063,8 @@ static int setContacts(struct jmap_req *req)
 
             /* we need to create and append a record */
             if (!mailbox || strcmp(mailbox->name, mboxname)) {
-                mailbox_close(&mailbox);
-                r = mailbox_open_iwl(mboxname, &mailbox);
+                jmap_closembox(req, &mailbox);
+                r = jmap_openmbox(req, mboxname, &mailbox, 1);
                 if (r) {
                     free(mboxname);
                     vparse_free_card(card);
@@ -2979,7 +3074,7 @@ static int setContacts(struct jmap_req *req)
 
             strarray_t *flags = strarray_new();
             json_t *invalid = json_pack("[]");
-            r = _json_to_card(uid, card, arg, flags, &annots, invalid);
+            r = _json_to_card(req, uid, card, arg, flags, &annots, invalid);
             if (r || json_array_size(invalid)) {
                 /* this is just a failure */
                 r = 0;
@@ -3056,8 +3151,8 @@ static int setContacts(struct jmap_req *req)
             }
 
             if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
-                mailbox_close(&mailbox);
-                r = mailbox_open_iwl(cdata->dav.mailbox, &mailbox);
+                jmap_closembox(req, &mailbox);
+                r = jmap_openmbox(req, cdata->dav.mailbox, &mailbox, 1);
                 if (r) {
                     syslog(LOG_ERR, "IOERROR: failed to open %s",
                            cdata->dav.mailbox);
@@ -3077,10 +3172,10 @@ static int setContacts(struct jmap_req *req)
                                                 "type", "invalidProperties",
                                 "properties", "addressbookId");
                         json_object_set_new(notUpdated, uid, err);
-                        mailbox_close(&mailbox);
+                        jmap_closembox(req, &mailbox);
                         continue;
                     }
-                    r = mailbox_open_iwl(mboxname, &newmailbox);
+                    r = jmap_openmbox(req, mboxname, &newmailbox, 1);
                     if (r) {
                         syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
                         goto done;
@@ -3113,7 +3208,7 @@ static int setContacts(struct jmap_req *req)
                 vparse_free_card(vcard);
                 strarray_free(flags);
                 freeentryatts(annots);
-                mailbox_close(&newmailbox);
+                jmap_closembox(req, &newmailbox);
                 free(resource);
                 continue;
             }
@@ -3123,7 +3218,7 @@ static int setContacts(struct jmap_req *req)
 
             json_t *invalid = json_pack("[]");
 
-            r = _json_to_card(uid, card, arg, flags, &annots, invalid);
+            r = _json_to_card(req, uid, card, arg, flags, &annots, invalid);
             if (r == 204) {
                 r = 0;
                 if (!newmailbox) {
@@ -3157,7 +3252,7 @@ static int setContacts(struct jmap_req *req)
                 vparse_free_card(vcard);
                 strarray_free(flags);
                 freeentryatts(annots);
-                mailbox_close(&newmailbox);
+                jmap_closembox(req, &newmailbox);
                 free(resource);
                 continue;
             }
@@ -3173,7 +3268,7 @@ static int setContacts(struct jmap_req *req)
                                    /*isreplace*/!newmailbox, req->accountid);
 
          finish:
-            mailbox_close(&newmailbox);
+            jmap_closembox(req, &newmailbox);
             strarray_free(flags);
             freeentryatts(annots);
 
@@ -3228,8 +3323,8 @@ static int setContacts(struct jmap_req *req)
             }
 
             if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
-                mailbox_close(&mailbox);
-                r = mailbox_open_iwl(cdata->dav.mailbox, &mailbox);
+                jmap_closembox(req, &mailbox);
+                r = jmap_openmbox(req, cdata->dav.mailbox, &mailbox, 1);
                 if (r) goto done;
             }
 
@@ -3268,8 +3363,8 @@ static int setContacts(struct jmap_req *req)
     jmap_add_perf(req, set);
 
 done:
-    mailbox_close(&newmailbox);
-    mailbox_close(&mailbox);
+    jmap_closembox(req, &newmailbox);
+    jmap_closembox(req, &mailbox);
 
     carddav_close(db);
     return r;
@@ -3300,7 +3395,8 @@ const struct body *jmap_contact_findblob(struct message_guid *content_guid,
             vcard_prop_decode_value(entry, blob, &subpart.content_guid) &&
             !message_guid_cmp(content_guid, &subpart.content_guid)) {
             /* Build a body part for the property */
-            subpart.charset_enc = 0;
+            subpart.charset_enc = ENCODING_NONE;
+            subpart.encoding = "BINARY";
             subpart.content_offset = 0;
             subpart.content_size = buf_len(blob);
             ret = &subpart;
