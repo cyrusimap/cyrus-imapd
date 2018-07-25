@@ -1855,7 +1855,7 @@ static int conversations_set_guid(struct conversations_state *state,
             struct vparse_entry *photo =
                 vparse_get_entry(vcard->objects, NULL, "photo");
 
-            if (photo && vcard_prop_decode_value(photo, NULL, &guid)) {
+            if (photo && vcard_prop_decode_value(photo, NULL, NULL, &guid)) {
                 buf_printf(&item, "[%s/VCARD#PHOTO]", body->part_id);
                 r = conversations_guid_setitem(state, message_guid_encode(&guid),
                                                buf_cstring(&item), 0 /*cid*/, add);

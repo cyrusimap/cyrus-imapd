@@ -1654,26 +1654,23 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     if (_wantprop(props, "avatar")) {
         struct vparse_entry *photo = vparse_get_entry(card, NULL, "photo");
         struct message_guid guid;
+        char *type = NULL;
         unsigned size;
+        json_t *file;
 
-        if (photo && (size = vcard_prop_decode_value(photo, NULL, &guid))) {
-            struct vparse_param *type = vparse_get_param(photo, "type");
+        if (photo &&
+            (size = vcard_prop_decode_value(photo, NULL, &type, &guid))) {
             char *blobid = jmap_blobid(&guid);
 
-            json_t *file = json_pack("{s:s s:i}",
-                                     "blobId", blobid, "size", size);
+            file = json_pack("{s:s s:i s:s? s:n}",
+                             "blobId", blobid, "size", size,
+                             "type", type, "name");
             free(blobid);
-
-            /* Construct content-type */
-            buf_reset(&buf);
-            if (type) buf_printf(&buf, "image/%s", lcase(type->value));
-
-            json_object_set_new(file, "type", buf_len(&buf) ?
-                                json_string(buf_cstring(&buf)) : json_null());
-            json_object_set_new(file, "name", json_null());
-            json_object_set_new(obj, "avatar", file);
         }
-        else json_object_set_new(obj, "avatar", json_null());
+        else file = json_null();
+
+        json_object_set_new(obj, "avatar", file);
+        free(type);
     }
 
     /* XXX - other fields */
@@ -3389,7 +3386,7 @@ const struct body *jmap_contact_findblob(struct message_guid *content_guid,
             vparse_get_entry(vcard->objects, NULL, proppath+7);
 
         if (entry &&
-            vcard_prop_decode_value(entry, blob, &subpart.content_guid) &&
+            vcard_prop_decode_value(entry, blob, NULL, &subpart.content_guid) &&
             !message_guid_cmp(content_guid, &subpart.content_guid)) {
             /* Build a body part for the property */
             subpart.charset_enc = ENCODING_NONE;

@@ -61,6 +61,7 @@ extern struct vparse_card *record_to_vcard(struct mailbox *mailbox,
 
 extern size_t vcard_prop_decode_value(struct vparse_entry *prop,
                                       struct buf *value,
+                                      char **content_type,
                                       struct message_guid *guid);
 
 #endif /* VCARD_SUPPORT_H */

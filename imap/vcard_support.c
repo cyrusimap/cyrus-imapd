@@ -134,6 +134,7 @@ EXPORTED struct vparse_card *record_to_vcard(struct mailbox *mailbox,
 */
 EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
                                         struct buf *value,
+                                        char **content_type,
                                         struct message_guid *guid)
 {
     struct vparse_param *param;
@@ -153,6 +154,22 @@ EXPORTED size_t vcard_prop_decode_value(struct vparse_entry *prop,
         if (charset_decode_mimebody(prop->v.value, strlen(prop->v.value),
                                     ENCODING_BASE64,
                                     &decbuf, &size) == prop->v.value) return 0;
+
+        if (content_type) {
+            struct vparse_param *type = vparse_get_param(prop, "type");
+
+            if (!type) *content_type = NULL;
+            else {
+                struct buf buf = BUF_INITIALIZER;
+
+                lcase(type->value);
+                if (strncmp(type->value, "image/", 6))
+                    buf_setcstr(&buf, "image/");
+                buf_appendcstr(&buf, type->value);
+
+                *content_type = buf_release(&buf);
+            }
+        }
 
         if (guid) {
             /* Generate GUID from decoded property value */
