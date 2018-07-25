@@ -2654,8 +2654,8 @@ static int _blob_to_card(struct jmap_req *req,
     struct mailbox *mbox = NULL;
     struct body *body = NULL;
     const struct body *part = NULL;
-    json_t *val;
     const char *blobid = NULL;
+    json_t *val;
     int r;
 
     if (!file) return -1;
@@ -2675,34 +2675,30 @@ static int _blob_to_card(struct jmap_req *req,
         if (r) goto done;
     }
 
-    /* Fetch blob contents and encoding */
-    const char *base = blob_buf.s;
-    size_t len = blob_buf.len;
-    int encode_base64 = 0;
+    /* Fetch blob contents and decode */
+    const char *base = buf_base(&blob_buf);
+    size_t len = buf_len(&blob_buf);
 
+    char *decbuf = NULL;
     if (part) {
         /* Map into body part */
         base += part->content_offset;
         len = part->content_size;
 
-        /* Determine encoding. */
-        if (!part->encoding || strcmp(part->encoding, "BASE64")) {
-            encode_base64 = 1;
-        }
+        /* Determine encoding */
+        int encoding = part->charset_enc & 0xff;
+        base = charset_decode_mimebody(base, len, encoding, &decbuf, &len);
     }
 
-    char *tmp = NULL;
-    if (encode_base64) {
-        size_t len64 = 0;
-        /* Pre-flight base64 encoder to determine length */
-        charset_encode_mimebody(NULL, len, NULL, &len64, NULL, 0 /* no wrap */);
-        /* Now encode the body */
-        tmp = xmalloc(len64+1);
-        charset_encode_mimebody(base, len, tmp, &len64, NULL, 0 /* no wrap */);
-        tmp[len64] = '\0';
-        base = tmp;
-        len = len64;
-    }
+    /* Pre-flight base64 encoder to determine length */
+    size_t len64 = 0;
+    charset_encode_mimebody(NULL, len, NULL, &len64, NULL, 0 /* no wrap */);
+
+    /* Now encode the blob */
+    char *encbuf = xmalloc(len64+1);
+    charset_encode_mimebody(base, len, encbuf, &len64, NULL, 0 /* no wrap */);
+    encbuf[len64] = '\0';
+    base = encbuf;
 
     /* (Re)write vCard property */
     vparse_delete_entries(card, NULL, key);
@@ -2720,7 +2716,8 @@ static int _blob_to_card(struct jmap_req *req,
         free(subtype);
     }
 
-    free(tmp);
+    free(decbuf);
+    free(encbuf);
     r = 0;
 
   done:
