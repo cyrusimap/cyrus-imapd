@@ -11,6 +11,7 @@
 extern "C" {
 #include <assert.h>
 #include "libconfig.h"
+#include "util.h"
 #include "search_part.h"
 #include "xmalloc.h"
 #include "xapian_wrap.h"
@@ -802,35 +803,68 @@ void xapian_query_free(xapian_query_t *qq)
     }
 }
 
+int bincmp20(const void *a, const void *b)
+{
+    return memcmp(a, b, 20);
+}
+
 int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq,
                      int (*cb)(const char *cyrusid, void *rock), void *rock)
 {
     const Xapian::Query *query = (const Xapian::Query *)qq;
     int r = 0;
+    uint8_t *data = NULL;
+    size_t n = 0;
 
     try {
         Xapian::Enquire enquire(*db->database);
         enquire.set_query(*query);
         Xapian::MSet matches = enquire.get_mset(0, db->database->get_doccount());
+        data = (uint8_t *)xzmalloc(matches.size() * 20);
         for (Xapian::MSetIterator i = matches.begin() ; i != matches.end() ; ++i) {
             Xapian::Document d = i.get_document();
             std::string cyrusid = d.get_value(SLOT_CYRUSID);
             /* ignore documents with no cyrusid.  Shouldn't happen, but has been seen */
-            if (cyrusid.length() == 0) {
+            if (cyrusid.length() != 43) {
                 syslog(LOG_ERR, "IOERROR: Xapian: zero length cyrusid for document id %u in index files %s",
                                 d.get_docid(), db->paths->c_str());
                 continue;
             }
-            r = cb(cyrusid.c_str(), rock);
-            if (r) break;
+            const char *cstr = cyrusid.c_str();
+            if (memcmp(cstr, "*G*", 3)) {
+                syslog(LOG_ERR, "IOERROR: Xapian: cyrusid not G key for document id %u in index files %s",
+                                d.get_docid(), db->paths->c_str());
+                continue;
+            }
+            hex_to_bin(cstr+3, 40, data + (20*n));
+            n++;
         }
     }
     catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception query_run: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
         r = IMAP_IOERROR;
+        goto done;
     }
 
+    if (!n) goto done;  // no matches
+
+    qsort((void *)data, n, 20, bincmp20);
+
+    char cyrusid[44];
+    cyrusid[0] = '*';
+    cyrusid[1] = 'G';
+    cyrusid[2] = '*';
+    cyrusid[43] = '\0';
+    int i;
+    for (i = 0; i < n; i++) {
+        bin_to_hex(data + (i*20), 20, cyrusid+3, BH_LOWER);
+        r = cb(cyrusid, rock);
+        if (r) goto done;
+    }
+
+done:
+    free(data);
     return r;
 }
 
