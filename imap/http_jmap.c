@@ -1787,29 +1787,24 @@ static int jmap_copyblob(jmap_req_t *req,
     msgrecord_t *mr = NULL;
     struct body *body = NULL;
     const struct body *part = NULL;
-    FILE *fp = NULL;
+    struct buf msg_buf = BUF_INITIALIZER;
     FILE *to_fp = NULL;
     struct stagemsg *stage = NULL;
 
-    int r = _findblob(req, blobid, from_accountid, &mbox, &mr, &body, &part, NULL);
+    int r = _findblob(req, blobid, from_accountid, &mbox, &mr, &body, &part, &msg_buf);
     if (r) return r;
 
     if (!part)
         part = body;
 
-    /* Open source file */
-    const char *fname = NULL;
-    r = msgrecord_get_fname(mr, &fname);
-    if (r) {
-        syslog(LOG_ERR, "jmap_copyblob(%s): msgrecord_get_fname: %s",
-                blobid, error_message(r));
-        goto done;
-    }
-    fp = fopen(fname, "r");
-    if (!fp) {
-        syslog(LOG_ERR, "jmap_copyblob(%s): fopen(%s): %s",
-                blobid, fname, strerror(errno));
-        goto done;
+    if (!buf_base(&msg_buf)) {
+        /* Map the message into memory */
+        r = msgrecord_get_body(mr, &msg_buf);
+        if (r) {
+            syslog(LOG_ERR, "jmap_copyblob(%s): msgrecord_get_body: %s",
+                   blobid, error_message(r));
+            goto done;
+        }
     }
 
     /* Create staging file */
@@ -1823,21 +1818,14 @@ static int jmap_copyblob(jmap_req_t *req,
 
     /* Copy blob. Keep the original MIME headers, we wouldn't really
      * know which ones are safe to rewrite for arbitrary blobs. */
-    size_t nread = 0;
-    char cbuf[4096];
-    fseek(fp, part->header_offset, SEEK_SET);
-    while (nread < part->header_size + part->content_size) {
-        nread += fread(cbuf, 1, 4096, fp);
-        fwrite(cbuf, 1, nread, to_fp);
-        if (ferror(fp) || ferror(to_fp)) {
-            syslog(LOG_ERR, "jmap_copyblob(%s): fromfp=%s tofp=%s: %s",
-                    blobid, fname, append_stagefname(stage), strerror(errno));
-            r = IMAP_IOERROR;
-            goto done;
-        }
+    fwrite(buf_base(&msg_buf) + part->header_offset,
+           part->header_size + part->content_size, 1, to_fp);
+    if (ferror(to_fp)) {
+        syslog(LOG_ERR, "jmap_copyblob(%s): tofp=%s: %s",
+               blobid, append_stagefname(stage), strerror(errno));
+        r = IMAP_IOERROR;
+        goto done;
     }
-    fclose(fp);
-    fp = NULL;
     fclose(to_fp);
     to_fp = NULL;
 
@@ -1873,8 +1861,8 @@ static int jmap_copyblob(jmap_req_t *req,
 
 done:
     if (stage) append_removestage(stage);
-    if (fp) fclose(fp);
     if (to_fp) fclose(to_fp);
+    buf_free(&msg_buf);
     message_free_body(body);
     free(body);
     msgrecord_unref(&mr);

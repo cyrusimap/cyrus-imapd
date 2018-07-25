@@ -62,6 +62,7 @@
 #include "mailbox.h"
 #include "mboxname.h"
 #include "stristr.h"
+#include "times.h"
 #include "util.h"
 #include "vcard_support.h"
 #include "xmalloc.h"
@@ -3382,21 +3383,64 @@ const struct body *jmap_contact_findblob(struct message_guid *content_guid,
 
     if (vcard) {
         static struct body subpart;
+        struct buf propval = BUF_INITIALIZER;
+        char *type = NULL;
         struct vparse_entry *entry =
             vparse_get_entry(vcard->objects, NULL, proppath+7);
 
-        if (entry &&
-            vcard_prop_decode_value(entry, blob, NULL, &subpart.content_guid) &&
+        memset(&subpart, 0, sizeof(struct body));
+
+        if (entry && vcard_prop_decode_value(entry, &propval,
+                                             &type, &subpart.content_guid) &&
             !message_guid_cmp(content_guid, &subpart.content_guid)) {
             /* Build a body part for the property */
             subpart.charset_enc = ENCODING_NONE;
             subpart.encoding = "BINARY";
-            subpart.content_offset = 0;
-            subpart.content_size = buf_len(blob);
+            subpart.header_offset = 0;
+            subpart.content_size = buf_len(&propval);
             ret = &subpart;
-        }
-        else buf_free(blob);
 
+            buf_reset(blob);
+            buf_printf(blob, "User-Agent: Cyrus-JMAP/%s\r\n", CYRUS_VERSION);
+
+            struct buf from = BUF_INITIALIZER;
+            if (strchr(httpd_userid, '@')) {
+                /* XXX  This needs to be done via an LDAP/DB lookup */
+                buf_printf(&from, "<%s>", httpd_userid);
+            }
+            else {
+                buf_printf(&from, "<%s@%s>", httpd_userid, config_servername);
+            }
+            
+            char *mimehdr = charset_encode_mimeheader(buf_cstring(&from),
+                                                      buf_len(&from), 0);
+
+            buf_printf(blob, "From: %s\r\n", mimehdr);
+            free(mimehdr);
+            buf_free(&from);
+
+            char datestr[80];
+            time_to_rfc5322(time(NULL), datestr, sizeof(datestr));
+            buf_printf(blob, "Date: %s\r\n", datestr);
+
+            if (!type) type = xstrdup("application/octet-stream");
+            buf_printf(blob, "Content-Type: %s\r\n", type);
+
+            buf_printf(blob, "Content-Transfer-Encoding: %s\r\n",
+                       subpart.encoding);
+
+            buf_printf(blob, "Content-Length: %u\r\n", subpart.content_size);
+
+            buf_appendcstr(blob, "MIME-Version: 1.0\r\n\r\n");
+
+            subpart.content_offset = subpart.header_size = buf_len(blob);
+
+            buf_append(blob, &propval);
+            buf_free(&propval);
+        }
+        else buf_free(&propval);
+
+        free(type);
         vparse_free_card(vcard);
     }
 
