@@ -809,18 +809,17 @@ int bincmp20(const void *a, const void *b)
 }
 
 int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq,
-                     int (*cb)(const char *cyrusid, void *rock), void *rock)
+                     int (*cb)(void *data, size_t n, void *rock), void *rock)
 {
     const Xapian::Query *query = (const Xapian::Query *)qq;
-    int r = 0;
-    uint8_t *data = NULL;
+    void *data = NULL;
     size_t n = 0;
 
     try {
         Xapian::Enquire enquire(*db->database);
         enquire.set_query(*query);
         Xapian::MSet matches = enquire.get_mset(0, db->database->get_doccount());
-        data = (uint8_t *)xzmalloc(matches.size() * 20);
+        data = xzmalloc(matches.size() * 20);
         for (Xapian::MSetIterator i = matches.begin() ; i != matches.end() ; ++i) {
             Xapian::Document d = i.get_document();
             std::string cyrusid = d.get_value(SLOT_CYRUSID);
@@ -836,36 +835,20 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq,
                                 d.get_docid(), db->paths->c_str());
                 continue;
             }
-            hex_to_bin(cstr+3, 40, data + (20*n));
+            hex_to_bin(cstr+3, 40, (uint8_t *)data + (20*n));
             n++;
         }
     }
     catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception query_run: %s: %s",
                     err.get_context().c_str(), err.get_description().c_str());
-        r = IMAP_IOERROR;
-        goto done;
+        free(data);
+        return IMAP_IOERROR;
     }
 
-    if (!n) goto done;  // no matches
+    if (n) qsort(data, n, 20, bincmp20);
 
-    qsort((void *)data, n, 20, bincmp20);
-
-    char cyrusid[44];
-    cyrusid[0] = '*';
-    cyrusid[1] = 'G';
-    cyrusid[2] = '*';
-    cyrusid[43] = '\0';
-    int i;
-    for (i = 0; i < n; i++) {
-        bin_to_hex(data + (i*20), 20, cyrusid+3, BH_LOWER);
-        r = cb(cyrusid, rock);
-        if (r) goto done;
-    }
-
-done:
-    free(data);
-    return r;
+    return cb(data, n, rock);
 }
 
 struct xapian_snipgen

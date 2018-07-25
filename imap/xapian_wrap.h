@@ -76,7 +76,7 @@ extern xapian_query_t *xapian_query_new_compound(const xapian_db_t *, int is_or,
 extern xapian_query_t *xapian_query_new_not(const xapian_db_t *, xapian_query_t *);
 extern void xapian_query_free(xapian_query_t *);
 extern int xapian_query_run(const xapian_db_t *, const xapian_query_t *,
-                            int (*cb)(const char *cyrusid, void *rock), void *rock);
+                            int (*cb)(void *base, size_t n, void *rock), void *rock);
 
 /* snippets interface */
 extern xapian_snipgen_t *xapian_snipgen_new(const char *hi_start, const char *hi_end, const char *omit);

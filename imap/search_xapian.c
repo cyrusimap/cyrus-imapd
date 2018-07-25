@@ -934,36 +934,6 @@ out:
 
 /* ====================================================================== */
 
-/* FIXME remove when legacy cyrusid are deprecated */
-static int parse_legacy_cyrusid(const char *cyrusid,
-                                const char **mboxnamep,
-                                unsigned int *uidvalidityp,
-                                unsigned int *uidp)
-{
-    // user.cassandane.1320711192.196715
-    static struct buf buf = BUF_INITIALIZER;
-    char *p;
-
-    buf_reset(&buf);
-    buf_appendcstr(&buf, cyrusid);
-
-    p = strrchr(buf_cstring(&buf), '.');
-    if (!p)
-        return 0;
-    *p++ = '\0';
-    *uidp = strtoul(p, NULL, 10);
-
-    p = strrchr(buf.s, '.');
-    if (!p)
-        return 0;
-    *p++ = '\0';
-    *uidvalidityp = strtoul(p, NULL, 10);
-
-    *mboxnamep = buf.s;
-
-    return 1;
-}
-
 static const char *make_cyrusid(const struct message_guid *guid)
 {
     static struct buf buf = BUF_INITIALIZER;
@@ -1159,51 +1129,35 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
     return bb->proc(rec->mboxname, /*uidvalidity*/0, rec->uid, bb->rock);
 }
 
-static int xapian_run_cb(const char *cyrusid, void *rock)
+static int xapian_run_cb(void *data, size_t n, void *rock)
 {
     xapian_builder_t *bb = (xapian_builder_t *)rock;
 
     int r = cmd_cancelled();
-    if (r) return r;
+    if (r) goto done;
 
-    if (!strncmp(cyrusid, "*G*", 3)) {
-        /* Current cyrus ids: *G*<encoded message guid> */
-        struct conversations_state *cstate;
-        const char *guid = cyrusid + 3;
+    struct conversations_state *cstate;
 
-        cstate = mailbox_get_cstate(bb->mailbox);
-        if (!cstate) {
-            syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-                    bb->mailbox->name);
-            return IMAP_NOTFOUND;
-        }
-
-        r = conversations_guid_foreach(cstate, guid, xapian_run_guid_cb, bb);
-        return r;
-
-    } else {
-        /* FIXME remove block when legacy cyrusid are deprecated */
-        /* Legacy cyrus ids: user.cassandane.1320711192.196715 */
-        const char *mboxname;
-        unsigned int uidvalidity;
-        unsigned int uid;
-
-        r = parse_legacy_cyrusid(cyrusid, &mboxname, &uidvalidity, &uid);
-        if (!r) {
-            syslog(LOG_ERR, "IOERROR: Cannot parse \"%s\" as cyrusid", cyrusid);
-            return IMAP_IOERROR;
-        }
-
-        if (!(bb->opts & SEARCH_MULTIPLE)) {
-            if (strcmp(mboxname, bb->mailbox->name))
-                return 0;
-            if (uidvalidity != bb->mailbox->i.uidvalidity)
-                return 0;
-        }
-
-        r = bb->proc(mboxname, uidvalidity, uid, bb->rock);
-        return r;
+    cstate = mailbox_get_cstate(bb->mailbox);
+    if (!cstate) {
+        syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
+                bb->mailbox->name);
+        r = IMAP_NOTFOUND;
+        goto done;
     }
+
+    char guid[41];
+    guid[40] = '\0';
+    size_t i;
+    for (i = 0; i < n; i++) {
+        bin_to_hex(data + (i*20), 20, guid, BH_LOWER);
+        r = conversations_guid_foreach(cstate, guid, xapian_run_guid_cb, bb);
+        if (r) goto done;
+    }
+
+done:
+    free(data);
+    return r;
 }
 
 static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
