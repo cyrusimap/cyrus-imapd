@@ -1524,6 +1524,32 @@ sub test_contact_set
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+
+    # avatar
+    xlog "upload avatar";
+    $res = $jmap->Upload("some photo", "image/jpeg");
+    $contact->{"x-hasPhoto"} = JSON::true;
+    $contact->{avatar} = {
+        blobId => "$res->{blobId}",
+        size => 10,
+        type => "image/jpeg",
+        name => JSON::null
+    };
+
+    xlog "update avatar";
+    $res = $jmap->CallMethods([['Contact/set', {update => {$id =>
+                            {avatar => {
+                                blobId => "$res->{blobId}",
+                                size => 10,
+                                type => "image/jpeg",
+                                name => JSON::null
+                             }
+                     } }}, "R1"]]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    xlog "get avatar $id";
+    $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
+    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
 }
 
 sub test_contact_set_emaillabel
