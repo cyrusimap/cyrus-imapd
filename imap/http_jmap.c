@@ -390,7 +390,7 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
 #undef _read_opt
 
     jmap_capabilities = json_pack("{s:{s:i s:i s:i s:i s:i s:i s:i s:o}}",
-        "urn:ietf:params:jmap:core",
+        JMAP_URN_CORE,
         "maxSizeUpload", jmap_max_size_upload,
         "maxConcurrentUpload", jmap_max_concurrent_upload,
         "maxSizeRequest", jmap_max_size_request,
@@ -2088,10 +2088,6 @@ struct findaccounts_data {
     int has_calendars;
 };
 
-#define JMAP_HAS_DATA_FOR_MAIL "urn:ietf:params:jmap:mail"
-#define JMAP_HAS_DATA_FOR_CONTACTS "urn:ietf:params:jmap:contacts"
-#define JMAP_HAS_DATA_FOR_CALENDARS "urn:ietf:params:jmap:calendars"
-
 static void findaccounts_add(struct findaccounts_data *ctx)
 {
     if (!buf_len(&ctx->userid))
@@ -2101,11 +2097,11 @@ static void findaccounts_add(struct findaccounts_data *ctx)
 
     json_t *has_data_for = json_array();
     if (ctx->has_mail)
-        json_array_append_new(has_data_for, json_string(JMAP_HAS_DATA_FOR_MAIL));
+        json_array_append_new(has_data_for, json_string(JMAP_URN_MAIL));
     if (ctx->has_contacts)
-        json_array_append_new(has_data_for, json_string(JMAP_HAS_DATA_FOR_CONTACTS));
+        json_array_append_new(has_data_for, json_string(JMAP_URN_CONTACTS));
     if (ctx->has_calendars)
-        json_array_append_new(has_data_for, json_string(JMAP_HAS_DATA_FOR_CALENDARS));
+        json_array_append_new(has_data_for, json_string(JMAP_URN_CALENDARS));
 
     json_t *account = json_object();
     json_object_set_new(account, "name", json_string(userid));
@@ -2170,9 +2166,9 @@ static json_t *user_settings(const char *userid)
              * so these JMAP types always are available
              * for the primary account */
             "hasDataFor",
-            JMAP_HAS_DATA_FOR_MAIL,
-            JMAP_HAS_DATA_FOR_CONTACTS,
-            JMAP_HAS_DATA_FOR_CALENDARS);
+            JMAP_URN_MAIL,
+            JMAP_URN_CONTACTS,
+            JMAP_URN_CALENDARS);
 
     /* Find all shared accounts */
     strarray_t patterns = STRARRAY_INITIALIZER;
