@@ -1154,7 +1154,7 @@ static json_t *participant_from_ical(icalproperty *prop,
     if (!seen_owner_role) {
         const char *o = icalproperty_get_organizer(orga);
         const char *a = icalproperty_get_attendee(prop);
-        if (!strcasecmp(o, a)) {
+        if (!strcasecmpsafe(o, a)) {
             json_array_append_new(roles, json_string("owner"));
         }
     }
