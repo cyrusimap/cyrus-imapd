@@ -5936,7 +5936,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     /* Run search */
     struct email_search *search = _email_runsearch(req, query->filter, query->sort, /*want_expunged*/1);
     if (search->err) {
-        *err = search->err;
+        *err = jmap_server_error(search->err);
         goto done;
     }
 
@@ -6121,7 +6121,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     /* Run search */
     struct email_search *search = _email_runsearch(req, query->filter, query->sort, /*want_expunged*/1);
     if (search->err) {
-        *err = search->err;
+        *err = jmap_server_error(search->err);
         goto done;
     }
 
@@ -6305,7 +6305,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
     struct email_search *search = _email_runsearch(req, filter, sort, /*want_expunged*/1);
     if (search->err) {
-        *err = search->err;
+        *err = jmap_server_error(search->err);
         goto done;
     }
 
@@ -6445,7 +6445,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
     struct email_search *search = _email_runsearch(req, filter, sort, /*want_expunged*/1);
     if (search->err) {
-        *err = search->err;
+        *err = jmap_server_error(search->err);
         goto done;
     }
 
