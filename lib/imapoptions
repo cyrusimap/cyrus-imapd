@@ -991,6 +991,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    the same has to be done (cyr_dbtool) for each subscription database
    See improved_mboxlist_sort.html.*/
 
+{ "jmap_emailsearch_db_path", NULL, STRING }
+/* The absolute path to the JMAP email search cache file.  If not
+   specified, JMAP Email/query and Email/queryChanges will not
+   cache email search results. */
+
 { "jmap_preview_annot", NULL, STRING }
 /* The name of the per-message annotation, if any, to store message
    previews. */
