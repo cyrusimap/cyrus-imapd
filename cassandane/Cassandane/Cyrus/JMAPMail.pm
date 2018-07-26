@@ -6342,7 +6342,7 @@ sub test_email_query_cached
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    my $search_db = $self->{instance}->{config}->get('jmap_emailsearch_db');
+    my $search_db = $self->{instance}->{config}->get('jmap_emailsearch_db_path');
     if (not defined $search_db) {
         return;
     }
