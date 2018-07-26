@@ -2053,6 +2053,13 @@ static void _mbox_parse_filter(json_t *filter, struct jmap_parser *parser,
     buf_free(&path);
 }
 
+static json_t *jmap_server_error(int r)
+{
+    return json_pack("{s:s, s:s}",
+                     "type", "serverError",
+                     "description", error_message(r));
+}
+
 
 static int jmap_mailbox_query(jmap_req_t *req)
 {
@@ -2073,7 +2080,7 @@ static int jmap_mailbox_query(jmap_req_t *req)
     /* Search for the mailboxes */
     int r = _mbox_query(req, &query);
     if (r) {
-        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
+        jmap_error(req, jmap_server_error(r));
         goto done;
     }
     json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
@@ -2598,7 +2605,7 @@ done:
         json_object_set(result->err, "properties", parser.invalid);
     }
     else if (r) {
-        result->err = json_pack("{s:s}", "type", "serverError");
+        result->err = jmap_server_error(r);
     }
     free(mboxname);
     free(parentname);
@@ -2819,7 +2826,7 @@ done:
         json_object_set(result->err, "properties", parser.invalid);
     }
     else if (r) {
-        result->err = json_pack("{s:s}", "type", "serverError");
+        result->err = jmap_server_error(r);
     }
     jmap_parser_fini(&parser);
     while (strpool.count) free(ptrarray_pop(&strpool));
@@ -2919,9 +2926,9 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
 done:
     if (r) {
         if (result->err == NULL)
-            result->err = json_pack("{s:s}", "type", "serverError");
+            result->err = jmap_server_error(r);
         syslog(LOG_ERR, "failed to delete mailbox(%s): %s",
-                mboxname, error_message(r));
+               mboxname, error_message(r));
     }
     mboxlist_entry_free(&mbinbox);
     mboxlist_entry_free(&mbentry);
@@ -3793,7 +3800,7 @@ static int jmap_mailbox_changes(jmap_req_t *req)
     int r = _mbox_changes(req, since_modseq, &changes, &only_counts_changed);
     if (r) {
         syslog(LOG_ERR, "jmap: Mailbox/changes: %s", error_message(r));
-        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
+        jmap_error(req, jmap_server_error(r));
         goto done;
     }
 
@@ -5750,7 +5757,7 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
 {
     struct email_search *search = _email_runsearch(req, query->filter, query->sort, 0);
     if (search->err) {
-        *err = json_pack("{s:s}", "type", "serverError");
+        *err = jmap_server_error(IMAP_INTERNAL);  // XXX: runSearch error?
         goto done;
     }
     /* can calculate changes for mutable sort, but not mutable search */
@@ -5898,7 +5905,7 @@ static int jmap_email_query(jmap_req_t *req)
     /* Run query */
     _email_query(req, &query, collapse_threads, &err);
     if (err) {
-        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
+        jmap_error(req, err);
         goto done;
     }
 
@@ -5929,7 +5936,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     /* Run search */
     struct email_search *search = _email_runsearch(req, query->filter, query->sort, /*want_expunged*/1);
     if (search->err) {
-        *err = json_pack("{s:s}", "type", "serverError");
+        *err = search->err;
         goto done;
     }
 
@@ -6114,7 +6121,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     /* Run search */
     struct email_search *search = _email_runsearch(req, query->filter, query->sort, /*want_expunged*/1);
     if (search->err) {
-        *err = json_pack("{s:s}", "type", "serverError");
+        *err = search->err;
         goto done;
     }
 
@@ -6298,7 +6305,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
     struct email_search *search = _email_runsearch(req, filter, sort, /*want_expunged*/1);
     if (search->err) {
-        *err = json_pack("{s:s}", "type", "serverError");
+        *err = search->err;
         goto done;
     }
 
@@ -6344,7 +6351,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
         int r = conversations_guid_foreach(req->cstate, _guid_from_id(email_id),
                                            _email_is_expunged_cb, &rock);
         if (r) {
-            *err = json_pack("{s:s}", "type", "serverError");
+            *err = jmap_server_error(r);
             goto done;
         }
 
@@ -6438,7 +6445,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
     struct email_search *search = _email_runsearch(req, filter, sort, /*want_expunged*/1);
     if (search->err) {
-        *err = json_pack("{s:s}", "type", "serverError");
+        *err = search->err;
         goto done;
     }
 
@@ -6889,7 +6896,7 @@ static int jmap_thread_get(jmap_req_t *req)
     int r = _thread_get(req, get.ids, get.list, get.not_found);
     if (r) {
         syslog(LOG_ERR, "jmap: Thread/get: %s", error_message(r));
-        jmap_error(req, json_pack("{s:s}", "type", "serverError"));
+        jmap_error(req, jmap_server_error(r));
         goto done;
     }
 
@@ -10437,8 +10444,7 @@ done:
         if (r == IMAP_QUOTA_EXCEEDED)
             *set_err = json_pack("{s:s}", "type", "maxQuotaReached");
         else
-            *set_err = json_pack("{s:s s:s}", "type", "serverError",
-                    "description", error_message(r));
+            *set_err = jmap_server_error(r);
     }
     strarray_fini(&keywords);
     jmap_parser_fini(&parser);
@@ -10916,11 +10922,11 @@ done:
     json_decref(mailboxids);
     free(mboxname);
     buf_free(&buf);
-    if (r) {
-        const char *errType = "serverError";
+    if (r && *set_err == NULL) {
         if (r == IMAP_NOTFOUND)
-            errType = "notFound";
-        *set_err = json_pack("{s:s}", "type", errType);
+            *set_err = json_pack("{s:s}", "type", "notFound");
+        else
+            *set_err = jmap_server_error(r);
     }
 }
 
@@ -10971,8 +10977,7 @@ done:
         *set_err = json_pack("{s:s}", "type", "notFound");
     }
     else if (r) {
-        *set_err = json_pack("{s:s s:s}", "type", "serverError",
-                "description", error_message(r));
+        *set_err = jmap_server_error(r);
     }
 }
 
@@ -11505,7 +11510,7 @@ static void _emailsubmission_envelope_to_smtp(smtp_envelope_t *smtpenv, json_t *
     }
 }
 
-static int _emailsubmission_create(jmap_req_t *req,
+static void _emailsubmission_create(jmap_req_t *req,
                                    json_t *emailsubmission,
                                    json_t **new_submission,
                                    json_t **set_err)
@@ -11602,7 +11607,7 @@ static int _emailsubmission_create(jmap_req_t *req,
         *set_err = json_pack("{s:s}", "type", "invalidProperties");
         json_object_set(*set_err, "properties", parser.invalid);
         jmap_parser_fini(&parser);
-        return 0;
+        return;
     }
     jmap_parser_fini(&parser);
 
@@ -11796,6 +11801,9 @@ static int _emailsubmission_create(jmap_req_t *req,
     free(new_id);
 
 done:
+    if (r && *set_err == NULL) {
+       *set_err = jmap_server_error(r);
+    }
     if (fd_msg != -1) close(fd_msg);
     if (msg) json_decref(msg);
     if (mr) msgrecord_unref(&mr);
@@ -11803,7 +11811,6 @@ done:
     if (myenvelope) json_decref(myenvelope);
     free(mboxname);
     buf_free(&buf);
-    return r;
 }
 
 static int jmap_emailsubmission_get(jmap_req_t *req)
