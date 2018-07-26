@@ -6086,15 +6086,17 @@ static struct emailsearch* _emailsearch_run(jmap_req_t *req,
     /* Determine cache key for lookups */
     cache_key = _emailsearch_cachekey(req->accountid, search);
 
-    /* Open cache */
-    cache_fname = emailsearch_getcachepath(req->accountid);
-    if (cache_fname) {
-        int flags = CYRUSDB_CREATE|CYRUSDB_CONVERT;
-        r = cyrusdb_open(EMAILSEARCH_DB, cache_fname, flags, &cache_db);
-        if (r) {
-            syslog(LOG_WARNING, "jmap: can't open email search cache %s: %s",
-                    cache_fname, cyrusdb_strerror(r));
-            r = 0;
+   /* Use cache, but only if not looking up expunged messages  */
+    if (!want_expunged) {
+        cache_fname = emailsearch_getcachepath(req->accountid);
+        if (cache_fname) {
+            int flags = CYRUSDB_CREATE|CYRUSDB_CONVERT;
+            r = cyrusdb_open(EMAILSEARCH_DB, cache_fname, flags, &cache_db);
+            if (r) {
+                syslog(LOG_WARNING, "jmap: can't open email search cache %s: %s",
+                        cache_fname, cyrusdb_strerror(r));
+                r = 0;
+            }
         }
     }
 
