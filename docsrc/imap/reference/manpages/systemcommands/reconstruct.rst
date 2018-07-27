@@ -21,7 +21,11 @@ Synopsis
 
     **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-x** ] [ **-r** ]
         [ **-f** ] [ **-U** ] [ **-s** ] [ **-q** ] [ **-G** ] [ **-R** ] [ **-o** ]
-        [ **-O** ] [ **-M** ] [ -u ] [ **-V**  *version* ] *users*...
+        [ **-O** ] [ **-M** ] [ **-u** ] *users*...
+
+    **reconstruct** [ **-C** *config-file* ] [ **-p** *partition* ] [ **-x** ] [ **-r** ]
+        [ **-f** ] [ **-U** ] [ **-s** ] [ **-q** ] [ **-G** ] [ **-R** ] [ **-o** ]
+        [ **-O** ] [ **-M** ] **-V** *<version>* [ **-u** *users* ]
 
     **reconstruct** [ **-C** *config-file* ] **-m**
 
@@ -47,6 +51,10 @@ assumed to be in news format.
 root files.  After running **reconstruct**, it is advisable to run
 :manpage:`quota(8)` with the **-f** switch in order to fix the quota
 root files.
+
+When upgrading versions of Cyrus software, it may be necessary to run
+**reconstruct** with the **-V** option, to rebuild indexes to a
+given version, (or *max* for the most recent).
 
 Options
 =======
