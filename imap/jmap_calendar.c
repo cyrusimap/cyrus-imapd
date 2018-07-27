@@ -165,9 +165,7 @@ static int jmap_calendar_isspecial(mbname_t *mbname) {
 
 struct getcalendars_rock {
     struct jmap_req *req;
-    json_t *found;
-    struct hash_table *props;
-    struct mailbox *mailbox;
+    struct jmap_get *get;
     int skip_hidden;
 };
 
@@ -215,7 +213,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     const char *id = strarray_nth(boxes, boxes->count-1);
     json_object_set_new(obj, "id", json_string(id));
 
-    if (_wantprop(rock->props, "x-href")) {
+    if (_wantprop(rock->get->props, "x-href")) {
         // FIXME - should the x-ref for a shared calendar point
         // to the authenticated user's calendar home?
         char *xhref = jmap_xhref(mbentry->name, NULL);
@@ -223,7 +221,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         free(xhref);
     }
 
-    if (_wantprop(rock->props, "name")) {
+    if (_wantprop(rock->get->props, "name")) {
         struct buf attrib = BUF_INITIALIZER;
         static const char *displayname_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
@@ -235,7 +233,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (_wantprop(rock->props, "color")) {
+    if (_wantprop(rock->get->props, "color")) {
         struct buf attrib = BUF_INITIALIZER;
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
@@ -246,7 +244,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (_wantprop(rock->props, "sortOrder")) {
+    if (_wantprop(rock->get->props, "sortOrder")) {
         struct buf attrib = BUF_INITIALIZER;
         static const char *order_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order";
@@ -267,7 +265,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (_wantprop(rock->props, "isVisible")) {
+    if (_wantprop(rock->get->props, "isVisible")) {
         struct buf attrib = BUF_INITIALIZER;
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
@@ -289,126 +287,96 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (_wantprop(rock->props, "mayReadFreeBusy")) {
+    if (_wantprop(rock->get->props, "mayReadFreeBusy")) {
         json_object_set_new(obj, "mayReadFreeBusy",
                             rights & DACL_READFB ? json_true() : json_false());
     }
 
-    if (_wantprop(rock->props, "mayReadItems")) {
+    if (_wantprop(rock->get->props, "mayReadItems")) {
         json_object_set_new(obj, "mayReadItems",
                             rights & DACL_READ ? json_true() : json_false());
     }
 
-    if (_wantprop(rock->props, "mayAddItems")) {
+    if (_wantprop(rock->get->props, "mayAddItems")) {
         json_object_set_new(obj, "mayAddItems",
                             rights & DACL_WRITECONT ? json_true() : json_false());
     }
 
-    if (_wantprop(rock->props, "mayModifyItems")) {
+    if (_wantprop(rock->get->props, "mayModifyItems")) {
         json_object_set_new(obj, "mayModifyItems",
                             rights & DACL_WRITECONT ? json_true() : json_false());
     }
 
-    if (_wantprop(rock->props, "mayRemoveItems")) {
+    if (_wantprop(rock->get->props, "mayRemoveItems")) {
         json_object_set_new(obj, "mayRemoveItems",
                             rights & DACL_RMRSRC ? json_true() : json_false());
     }
 
-    if (_wantprop(rock->props, "mayRename")) {
+    if (_wantprop(rock->get->props, "mayRename")) {
         json_object_set_new(obj, "mayRename",
                             rights & DACL_RMCOL ? json_true() : json_false());
     }
 
-    if (_wantprop(rock->props, "mayDelete")) {
+    if (_wantprop(rock->get->props, "mayDelete")) {
         json_object_set_new(obj, "mayDelete",
                             rights & DACL_RMCOL ? json_true() : json_false());
     }
 
-    json_array_append_new(rock->found, obj);
+    json_array_append_new(rock->get->list, obj);
 
 done:
     mbname_free(&mbname);
     return r;
 }
 
-
 static int getCalendars(struct jmap_req *req)
 {
-    struct getcalendars_rock rock = {
-        req,
-        json_pack("[]") /*found*/,
-        NULL            /*props*/,
-        NULL            /*mailbox*/,
-        1               /*skiphidden */
-    };
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    json_t *err = NULL;
     int r = 0;
 
     r = caldav_create_defaultcalendars(req->accountid);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* The account exists but does not have a root mailbox. */
-        json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
-        json_array_append_new(req->response, json_pack("[s,o,s]",
-                    "error", err, req->tag));
+        jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
         return 0;
     } else if (r) return r;
 
-    json_t *properties = json_object_get(req->args, "properties");
-    if (properties && json_array_size(properties)) {
-        rock.props = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(rock.props, json_array_size(properties), 0);
-        int i;
-        int size = json_array_size(properties);
-        for (i = 0; i < size; i++) {
-            const char *id = json_string_value(json_array_get(properties, i));
-            if (id == NULL) continue;
-            /* 1 == properties */
-            hash_insert(id, (void *)1, rock.props);
-        }
+    /* Parse request */
+    jmap_get_parse(req->args, &parser, req, &get, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
     }
 
-    json_t *want = json_object_get(req->args, "ids");
-    json_t *notfound = json_array();
-    if (JNOTNULL(want)) {
+    /* Build callback data */
+    struct getcalendars_rock rock = { req, &get, 1 /*skiphidden*/ };
+
+    /* Does the client request specific mailboxes? */
+    if (JNOTNULL(get.ids)) {
         size_t i;
         json_t *jval;
-        rock.skip_hidden = 0; /* complain about missing ACL rights */
-        json_array_foreach(want, i, jval) {
-            const char *id = json_string_value(jval);
-            /* FIXME - this should probably done everywhere */
-            if (!id) {
-                json_t *err = json_pack("{s:s, s:[s]}",
-                        "type", "invalidArguments", "arguments", "ids");
-                json_array_append_new(req->response, json_pack("[s,o,s]",
-                            "error", err, req->tag));
-                r = 0;
-                goto done;
-            }
-            if (id && id[0] == '#') {
-                id = jmap_lookup_id(req, id + 1);
-            }
-            if (!id) {
-                json_array_append(notfound, jval);
-                continue;
-            }
 
+        rock.skip_hidden = 0; /* complain about missing ACL rights */
+        json_array_foreach(get.ids, i, jval) {
+            const char *id = json_string_value(jval);
             char *mboxname = caldav_mboxname(req->accountid, id);
             mbentry_t *mbentry = NULL;
 
             r = mboxlist_lookup(mboxname, &mbentry, NULL);
             if (r == IMAP_NOTFOUND || !mbentry) {
-                json_array_append(notfound, jval);
+                json_array_append(get.not_found, jval);
                 r = 0;
-                goto doneloop;
+            }
+            else {
+                r = getcalendars_cb(mbentry, &rock);
+                if (r == IMAP_PERMISSION_DENIED) {
+                    json_array_append(get.not_found, jval);
+                    r = 0;
+                }
             }
 
-            r = getcalendars_cb(mbentry, &rock);
-            if (r == IMAP_PERMISSION_DENIED) {
-                json_array_append(notfound, jval);
-                r = 0;
-                goto doneloop;
-            }
-
-doneloop:
             if (mbentry) mboxlist_entry_free(&mbentry);
             free(mboxname);
             if (r) goto done;
@@ -419,34 +387,15 @@ doneloop:
         if (r) goto done;
     }
 
-    json_t *calendars = json_pack("{}");
-    json_incref(rock.found);
-    json_object_set_new(calendars, "accountId", json_string(req->accountid));
-    json_object_set_new(calendars, "state", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
-    json_object_set_new(calendars, "list", rock.found);
-    if (json_array_size(notfound)) {
-        json_object_set_new(calendars, "notFound", notfound);
-    }
-    else {
-        json_decref(notfound);
-        json_object_set_new(calendars, "notFound", json_null());
-    }
-
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("Calendar/get"));
-    json_array_append_new(item, calendars);
-    json_array_append_new(item, json_string(req->tag));
-
-    json_array_append_new(req->response, item);
-
-    jmap_add_perf(req, calendars);
+    /* Build response */
+    json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
+    get.state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
+    jmap_ok(req, jmap_get_reply(&get));
 
 done:
-    if (rock.props) {
-        free_hash_table(rock.props, NULL);
-        free(rock.props);
-    }
-    json_decref(rock.found);
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
     return r;
 }
 
@@ -1254,8 +1203,7 @@ static int utcdate_to_icaltime(const char *src,
 
 struct getcalendarevents_rock {
     struct jmap_req *req;
-    json_t *found;
-    struct hash_table *props;
+    struct jmap_get *get;
     struct mailbox *mailbox;
     int check_acl;
 };
@@ -1296,10 +1244,10 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
 
     /* Convert to JMAP */
     memset(&err, 0, sizeof(jmapical_err_t));
-    if (rock->props) {
+    if (rock->get->props) {
         /* XXX That's clumsy: the JMAP properties have already been converted
          * to a Cyrus hash, but the jmapical API requires a JSON object. */
-        strarray_t *keys = hash_keys(rock->props);
+        strarray_t *keys = hash_keys(rock->get->props);
         int i;
         jprops = json_pack("{}");
         for (i = 0; i < strarray_size(keys); i++) {
@@ -1317,7 +1265,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     ical = NULL;
 
     /* Add participant id */
-    if (_wantprop(rock->props, "participantId") && rock->req->userid) {
+    if (_wantprop(rock->get->props, "participantId") && rock->req->userid) {
         const char *userid = rock->req->userid;
         char *participant_id = NULL;
         struct buf buf = BUF_INITIALIZER;
@@ -1357,19 +1305,19 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     }
 
     /* Add JMAP-only fields. */
-    if (_wantprop(rock->props, "x-href")) {
+    if (_wantprop(rock->get->props, "x-href")) {
         char *xhref = jmap_xhref(cdata->dav.mailbox, cdata->dav.resource);
         json_object_set_new(obj, "x-href", json_string(xhref));
         free(xhref);
     }
-    if (_wantprop(rock->props, "calendarId")) {
+    if (_wantprop(rock->get->props, "calendarId")) {
         json_object_set_new(obj, "calendarId",
                             json_string(strrchr(cdata->dav.mailbox, '.')+1));
     }
     json_object_set_new(obj, "id", json_string(cdata->ical_uid));
 
     /* Add JMAP event to response */
-    json_array_append_new(rock->found, obj);
+    json_array_append_new(rock->get->list, obj);
 
 done:
     if (ical) icalcomponent_free(ical);
@@ -1379,61 +1327,46 @@ done:
 
 static int getCalendarEvents(struct jmap_req *req)
 {
-    struct getcalendarevents_rock rock = {
-        req,
-        json_pack("[]") /*found*/,
-        NULL            /*props*/,
-        NULL            /*mailbox*/,
-        strcmp(req->accountid, req->userid) /*checkacl*/,
-    };
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    json_t *err = NULL;
     int r = 0;
 
     r = caldav_create_defaultcalendars(req->accountid);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* The account exists but does not have a root mailbox. */
-        json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
-        json_array_append_new(req->response, json_pack("[s,o,s]",
-                    "error", err, req->tag));
+        jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
         return 0;
     } else if (r) return r;
-
-    json_t *properties = json_object_get(req->args, "properties");
-    if (properties && json_array_size(properties)) {
-        rock.props = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(rock.props, json_array_size(properties), 0);
-        int i;
-        int size = json_array_size(properties);
-        for (i = 0; i < size; i++) {
-            const char *id = json_string_value(json_array_get(properties, i));
-            if (id == NULL) continue;
-            /* 1 == properties */
-            hash_insert(id, (void *)1, rock.props);
-        }
-    }
 
     struct caldav_db *db = caldav_open_userid(req->accountid);
     if (!db) {
         syslog(LOG_ERR,
                "caldav_open_mailbox failed for user %s", req->accountid);
-        r = IMAP_INTERNAL;
+        return IMAP_INTERNAL;
+    }
+
+    /* Build callback data */
+    int checkacl = strcmp(req->accountid, req->userid);
+    struct getcalendarevents_rock rock = { req, &get, NULL /*mbox*/, checkacl };
+
+    /* Parse request */
+    jmap_get_parse(req->args, &parser, req, &get, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
 
-    json_t *want = json_object_get(req->args, "ids");
-    json_t *notfound = json_array();
-    if (want) {
+    /* Does the client request specific events? */
+    if (JNOTNULL(get.ids)) {
         size_t i;
         json_t *jval;
-        json_array_foreach(want, i, jval) {
+        json_array_foreach(get.ids, i, jval) {
             const char *id = json_string_value(jval);
-            if (id && id[0] == '#') {
-                id = jmap_lookup_id(req, id + 1);
-            }
-            if (!id) continue;
-            size_t nfound = json_array_size(rock.found);
+            size_t nfound = json_array_size(get.list);
             r = caldav_get_events(db, NULL, id, &getcalendarevents_cb, &rock);
-            if (r || nfound == json_array_size(rock.found)) {
-                json_array_append_new(notfound, json_string(id));
+            if (r || nfound == json_array_size(get.list)) {
+                json_array_append(get.not_found, jval);
             }
         }
     } else {
@@ -1441,34 +1374,15 @@ static int getCalendarEvents(struct jmap_req *req)
         if (r) goto done;
     }
 
-    json_t *events = json_pack("{}");
-    json_object_set_new(events, "state", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
-
-    json_incref(rock.found);
-    json_object_set_new(events, "accountId", json_string(req->accountid));
-    json_object_set_new(events, "list", rock.found);
-    if (json_array_size(notfound)) {
-        json_object_set_new(events, "notFound", notfound);
-    } else {
-        json_decref(notfound);
-        json_object_set_new(events, "notFound", json_null());
-    }
-
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("CalendarEvent/get"));
-    json_array_append_new(item, events);
-    json_array_append_new(item, json_string(req->tag));
-
-    json_array_append_new(req->response, item);
-
-    jmap_add_perf(req, events);
+    /* Build response */
+    json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
+    get.state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
+    jmap_ok(req, jmap_get_reply(&get));
 
 done:
-    if (rock.props) {
-        free_hash_table(rock.props, NULL);
-        free(rock.props);
-    }
-    json_decref(rock.found);
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
     if (db) caldav_close(db);
     if (rock.mailbox) mailbox_close(&rock.mailbox);
     return r;

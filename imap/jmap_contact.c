@@ -381,8 +381,7 @@ static jmap_filter *jmap_filter_parse(json_t *arg,
 
 struct cards_rock {
     struct jmap_req *req;
-    json_t *array;
-    struct hash_table *props;
+    struct jmap_get *get;
     struct mailbox *mailbox;
     int rows;
 };
@@ -465,18 +464,33 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
     json_object_set_new(obj, "contactIds", contactids);
     json_object_set_new(obj, "otherAccountContactIds", otherids);
 
-    json_array_append_new(crock->array, obj);
+    json_array_append_new(crock->get->list, obj);
 
     vparse_free_card(vcard);
 
     return 0;
 }
 
-static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
-                             int kind, const char *resname)
+static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
 {
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    json_t *err = NULL;
+    int r = 0;
+
+    r = carddav_create_defaultaddressbook(req->accountid);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        /* The account exists but does not have a root mailbox. */
+        jmap_error(req, json_pack("{s:s}", "type", "accountNoAddressbooks"));
+        return 0;
+    } else if (r) return r;
+
     struct carddav_db *db = carddav_open_userid(req->accountid);
-    if (!db) return -1;
+    if (!db) {
+        syslog(LOG_ERR,
+               "caldav_open_mailbox failed for user %s", req->accountid);
+        return IMAP_INTERNAL;
+    }
 
     char *mboxname = NULL;
     json_t *abookid = json_object_get(req->args, "addressbookId");
@@ -486,42 +500,27 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
         mboxname = carddav_mboxname(req->accountid, addressbookId);
     }
 
-    struct cards_rock rock = { req, json_pack("[]"), NULL, NULL, 0 };
-    int r = 0;
+    /* Build callback data */
+    struct cards_rock rock = { req, &get, NULL /*mailbox*/, 0 /*rows */ };
 
-    r = carddav_create_defaultaddressbook(req->accountid);
-    if (r) goto done;
-
-    json_t *properties = json_object_get(req->args, "properties");
-    if (properties && json_array_size(properties)) {
-        rock.props = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(rock.props, json_array_size(properties), 0);
-        int i;
-        int size = json_array_size(properties);
-        for (i = 0; i < size; i++) {
-            const char *id = json_string_value(json_array_get(properties, i));
-            if (id == NULL) continue;
-            /* 1 == properties */
-            hash_insert(id, (void *)1, rock.props);
-        }
+    /* Parse request */
+    jmap_get_parse(req->args, &parser, req, &get, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
     }
 
-    json_t *want = json_object_get(req->args, "ids");
-    json_t *notFound = json_array();
-    if (JNOTNULL(want)) {
-        int i;
-        int size = json_array_size(want);
-        for (i = 0; i < size; i++) {
+    /* Does the client request specific events? */
+    if (JNOTNULL(get.ids)) {
+        size_t i;
+        json_t *jval;
+        json_array_foreach(get.ids, i, jval) {
             rock.rows = 0;
-            const char *id = json_string_value(json_array_get(want, i));
-            if (!id) continue;
-            if (id[0] == '#') {
-                const char *newid = jmap_lookup_id(req, id + 1);
-                if (newid) id = newid;
-            }
+            const char *id = json_string_value(jval);
+
             r = carddav_get_cards(db, mboxname, id, kind, cb, &rock);
             if (r || !rock.rows) {
-                json_array_append_new(notFound, json_string(id));
+                json_array_append(get.not_found, jval);
             }
         }
     }
@@ -529,35 +528,16 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
         rock.rows = 0;
         r = carddav_get_cards(db, mboxname, NULL, kind, cb, &rock);
     }
-    if (rock.props) {
-        free_hash_table(rock.props, NULL);
-        free(rock.props);
-    }
-    if (r) goto done;
 
-    json_t *toplevel = json_pack("{}");
-    json_object_set_new(toplevel, "accountId", json_string(req->accountid));
-    json_object_set_new(toplevel, "state",
-                        jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0));
-    json_object_set_new(toplevel, "list", rock.array);
-    if (json_array_size(notFound)) {
-        json_object_set_new(toplevel, "notFound", notFound);
-    }
-    else {
-        json_decref(notFound);
-        json_object_set_new(toplevel, "notFound", json_null());
-    }
-
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string(resname));
-    json_array_append_new(item, toplevel);
-    json_array_append_new(item, json_string(req->tag));
-
-    json_array_append_new(req->response, item);
-
-    jmap_add_perf(req, toplevel);
+    /* Build response */
+    json_t *jstate = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
+    get.state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
+    jmap_ok(req, jmap_get_reply(&get));
 
   done:
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
     free(mboxname);
     mailbox_close(&rock.mailbox);
     carddav_close(db);
@@ -566,8 +546,7 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb,
 
 static int getContactGroups(struct jmap_req *req)
 {
-    return jmap_contacts_get(req, &getgroups_cb,
-                             CARDDAV_KIND_GROUP, "ContactGroup/get");
+    return jmap_contacts_get(req, &getgroups_cb, CARDDAV_KIND_GROUP);
 }
 
 static const char *_json_object_get_string(const json_t *obj, const char *key)
@@ -1696,8 +1675,8 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
 
     /* Convert the VCARD to a JMAP contact. */
     json_t *obj = jmap_contact_from_vcard(vcard->objects, cdata, &record,
-                                          crock->props, crock->mailbox->name);
-    json_array_append_new(crock->array, obj);
+                                          crock->get->props, crock->mailbox->name);
+    json_array_append_new(crock->get->list, obj);
 
     vparse_free_card(vcard);
 
@@ -1706,8 +1685,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
 
 static int getContacts(struct jmap_req *req)
 {
-    return jmap_contacts_get(req, &getcontacts_cb,
-                             CARDDAV_KIND_CONTACT, "Contact/get");
+    return jmap_contacts_get(req, &getcontacts_cb, CARDDAV_KIND_CONTACT);
 }
 
 static int getContactsUpdates(struct jmap_req *req)

@@ -143,17 +143,6 @@ jmap_method_t jmap_mail_methods[] = {
     { NULL,                           NULL}
 };
 
-struct jmap_get {
-    /* Request arguments */
-    json_t *ids;
-    json_t *properties;
-    hash_table *props;
-    /* Response fields */
-    char *state;
-    json_t *list;
-    json_t *not_found;
-};
-
 struct jmap_set {
     /* Request arguments */
     const char *if_in_state;
@@ -214,75 +203,6 @@ struct jmap_querychanges {
     json_t *added;
 };
 
-struct jmap_parser {
-    struct buf buf;
-    strarray_t path;
-    json_t *invalid;
-};
-
-#define JMAP_PARSER_INITIALIZER { BUF_INITIALIZER, STRARRAY_INITIALIZER, json_array() }
-
-static void jmap_parser_fini(struct jmap_parser *parser)
-{
-    strarray_fini(&parser->path);
-    json_decref(parser->invalid);
-    buf_free(&parser->buf);
-}
-
-static void jmap_parser_push(struct jmap_parser *parser, const char *prop)
-{
-    strarray_push(&parser->path, prop);
-}
-
-static void jmap_parser_push_index(struct jmap_parser *parser,
-                                   const char *prop,
-                                   size_t index)
-{
-    /* TODO make this more clever: won't need to printf most of the time */
-    buf_printf(&parser->buf, "%s[%zu]", prop, index);
-    strarray_push(&parser->path, buf_cstring(&parser->buf));
-    buf_reset(&parser->buf);
-}
-
-static void jmap_parser_pop(struct jmap_parser *parser)
-{
-    free(strarray_pop(&parser->path));
-}
-
-static const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf)
-{
-    int i;
-    buf_reset(buf);
-
-    for (i = 0; i < parser->path.count; i++) {
-        const char *p = strarray_nth(&parser->path, i);
-        if (json_pointer_needsencode(p)) {
-            char *tmp = json_pointer_encode(p);
-            buf_appendcstr(buf, tmp);
-            free(tmp);
-        } else {
-            buf_appendcstr(buf, p);
-        }
-        if ((i + 1) < parser->path.count) {
-            buf_appendcstr(buf, "/");
-        }
-    }
-
-    return buf_cstring(buf);
-}
-
-static void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
-{
-    if (prop)
-        jmap_parser_push(parser, prop);
-
-    json_array_append_new(parser->invalid,
-            json_string(jmap_parser_path(parser, &parser->buf)));
-
-    if (prop)
-        jmap_parser_pop(parser);
-}
-
 static int _parse_strings(json_t *arg, struct jmap_parser *parser, const char *prop) {
     if (!json_is_array(arg)) {
         jmap_parser_invalid(parser, prop);
@@ -300,25 +220,6 @@ static int _parse_strings(json_t *arg, struct jmap_parser *parser, const char *p
         }
     }
     return valid;
-}
-
-static void jmap_ok(jmap_req_t *req, json_t *res)
-{
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string(req->method));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
-
-    jmap_add_perf(req, res);
-}
-
-static void jmap_error(jmap_req_t *req, json_t *err)
-{
-    json_array_append_new(req->response,
-            json_pack("[s,o,s]", "error", err, req->tag));
 }
 
 typedef void jmap_filter_parse_cb(json_t *filter, struct jmap_parser *parser, json_t *unsupported, void *rock);
@@ -407,108 +308,6 @@ static void parse_comparator(json_t *jsort, struct jmap_parser *parser,
                 json_string(jmap_parser_path(parser, &buf)));
         buf_free(&buf);
     }
-}
-
-/* Foo/get */
-
-static void jmap_get_parse(json_t *jargs,
-                           struct jmap_parser *parser,
-                           jmap_req_t *req,
-                           struct jmap_get *get,
-                           json_t **err)
-{
-    json_t *arg, *val;
-    size_t i;
-
-    memset(get, 0, sizeof(struct jmap_get));
-
-    get->list = json_array();
-    get->not_found = json_array();
-
-    arg = json_object_get(jargs, "ids");
-    if (json_is_array(arg)) {
-        get->ids = json_array();
-        /* JMAP spec requires: "If an identical id is included more than once
-         * in the request, the server MUST only include it once in either the
-         * list or notFound argument of the response."
-         * So let's weed out duplicate ids here. */
-        hash_table _dedup = HASH_TABLE_INITIALIZER;
-        construct_hash_table(&_dedup, json_array_size(arg) + 1, 0);
-        json_array_foreach(arg, i, val) {
-            const char *id = json_string_value(val);
-            if (!id) {
-                jmap_parser_push_index(parser, "ids", i);
-                jmap_parser_invalid(parser, NULL);
-                jmap_parser_pop(parser);
-                continue;
-            }
-            /* Weed out unknown creation ids and add the ids of known
-             * creation ids to the requested ids list. THis might
-             * cause a race if the Foo object pointed to by creation
-             * id is deleted between parsing the request and answering
-             * it. But re-checking creation ids for their existence
-             * later in the control flow just shifts the problem */
-            if (*id == '#') {
-                const char *id2 = jmap_lookup_id(req, id + 1);
-                if (!id2) {
-                    json_array_append_new(get->not_found, json_string(id));
-                    continue;
-                }
-                id = id2;
-            }
-            if (hash_lookup(id, &_dedup)) {
-                continue;
-            }
-            json_array_append_new(get->ids, json_string(id));
-        }
-        free_hash_table(&_dedup, NULL);
-    }
-    else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "ids");
-    }
-
-    arg = json_object_get(jargs, "properties");
-    if (json_is_array(arg)) {
-        get->props = xzmalloc(sizeof(hash_table));
-        construct_hash_table(get->props, json_array_size(arg) + 1, 0);
-        json_array_foreach(arg, i, val) {
-            const char *s = json_string_value(val);
-            if (!s) {
-                jmap_parser_push_index(parser, "properties", i);
-                jmap_parser_invalid(parser, NULL);
-                jmap_parser_pop(parser);
-                continue;
-            }
-            hash_insert(s, (void*)1, get->props);
-        }
-    }
-    else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "properties");
-    }
-
-    if (json_array_size(parser->invalid)) {
-        *err = json_pack("{s:s s:O}", "type", "invalidArguments",
-                "arguments", parser->invalid);
-    }
-}
-
-static void jmap_get_fini(struct jmap_get *get)
-{
-    free_hash_table(get->props, NULL);
-    free(get->props);
-    free(get->state);
-    json_decref(get->ids);
-    json_decref(get->list);
-    json_decref(get->not_found);
-}
-
-static json_t *jmap_get_reply(struct jmap_get *get)
-{
-    json_t *res = json_object();
-    json_object_set_new(res, "state", json_string(get->state));
-    json_object_set(res, "list", get->list);
-    json_object_set(res, "notFound", get->not_found);
-    return res;
 }
 
 /* Foo/set */
