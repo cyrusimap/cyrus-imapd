@@ -473,7 +473,6 @@ static int getCalendarsUpdates(struct jmap_req *req)
     int r, pe;
     json_t *invalid;
     const char *since = NULL;
-    int dofetch = 0;
     struct buf buf = BUF_INITIALIZER;
     modseq_t oldmodseq = 0;
 
@@ -495,7 +494,6 @@ static int getCalendarsUpdates(struct jmap_req *req)
             json_array_append_new(invalid, json_string("sinceState"));
         }
     }
-    readprop(req->args, "fetchRecords", 0 /*mandatory*/, invalid, "b", &dofetch);
     if (json_array_size(invalid)) {
         json_t *err = json_pack("{s:s, s:o}",
                                 "type", "invalidArguments", "arguments", invalid);
@@ -545,14 +543,6 @@ static int getCalendarsUpdates(struct jmap_req *req)
     json_array_append_new(item, calendarUpdates);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
-
-    if (dofetch) {
-        struct jmap_req subreq = *req; // struct copy, woot
-        subreq.args = json_pack("{}");
-        json_object_set(subreq.args, "ids", rock.updated);
-        r = getCalendars(&subreq);
-        json_decref(subreq.args);
-    }
 
     jmap_add_perf(req, calendarUpdates);
 
@@ -2242,7 +2232,6 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
     const char *since;
     modseq_t oldmodseq = 0;
     json_int_t maxChanges = 0;
-    int dofetch = 0;
     struct buf buf = BUF_INITIALIZER;
 
     db = caldav_open_userid(req->accountid);
@@ -2267,7 +2256,6 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
             json_array_append_new(invalid, json_string("maxChanges"));
         }
     }
-    readprop(req->args, "fetchRecords", 0 /*mandatory*/, invalid, "b", &dofetch);
     if (json_array_size(invalid)) {
         json_t *err = json_pack("{s:s, s:o}",
                                 "type", "invalidArguments", "arguments", invalid);
@@ -2324,17 +2312,6 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
     json_array_append_new(item, eventUpdates);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
-
-    /* Fetch updated records, if requested. */
-    if (dofetch) {
-        json_t *props = json_object_get(req->args, "fetchRecordProperties");
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        json_object_set(subreq.args, "ids", rock.updated);
-        if (props) json_object_set(subreq.args, "properties", props);
-        r = getCalendarEvents(&subreq);
-        json_decref(subreq.args);
-    }
 
     jmap_add_perf(req, eventUpdates);
 
@@ -2827,7 +2804,6 @@ static int getCalendarEventsList(struct jmap_req *req)
 {
     int r = 0, pe;
     json_t *invalid;
-    int dofetch = 0;
     json_t *filter;
     size_t total = 0;
     json_t *events = NULL;
@@ -2861,12 +2837,6 @@ static int getCalendarEventsList(struct jmap_req *req)
         }
     }
 
-    /* fetchCalendarEvents */
-    if (JNOTNULL(json_object_get(req->args, "fetchCalendarEvents"))) {
-        readprop(req->args, "fetchCalendarEvents",
-                 0 /*mandatory*/, invalid, "b", &dofetch);
-    }
-
     if (json_array_size(invalid)) {
         json_t *err = json_pack("{s:s, s:o}",
                                 "type", "invalidArguments", "arguments", invalid);
@@ -2895,17 +2865,6 @@ static int getCalendarEventsList(struct jmap_req *req)
     json_array_append_new(item, eventList);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
-
-    /* Fetch updated records, if requested. */
-    if (dofetch) {
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        json_object_set_new(subreq.args, "accountId",
-                            json_string(req->accountid));
-        json_object_set(subreq.args, "ids", events);
-        r = getCalendarEvents(&subreq);
-        json_decref(subreq.args);
-    }
 
     jmap_add_perf(req, eventList);
 

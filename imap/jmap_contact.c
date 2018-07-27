@@ -581,7 +581,6 @@ static int getContactsGroupUpdates(struct jmap_req *req)
     int r = -1;
     int pe; /* property parse error */
     modseq_t oldmodseq = 0;
-    int dofetch = 0;
 
     /* Parse and validate arguments. */
     json_t *invalid = json_pack("[]");
@@ -604,9 +603,6 @@ static int getContactsGroupUpdates(struct jmap_req *req)
             json_array_append_new(invalid, json_string("sinceState"));
         }
     }
-
-    readprop(req->args, "fetchRecords",
-             0 /*mandatory*/, invalid, "b", &dofetch);
 
     if (json_array_size(invalid)) {
         json_t *err = json_pack("{s:s, s:o}",
@@ -668,19 +664,6 @@ static int getContactsGroupUpdates(struct jmap_req *req)
     json_array_append_new(item, json_string(req->tag));
 
     json_array_append_new(req->response, item);
-
-    if (dofetch) {
-        struct jmap_req subreq = *req; // struct copy, woot
-        subreq.args = json_pack("{}");
-        json_object_set_new(subreq.args, "accountId",
-                            json_string(req->accountid));
-        json_object_set(subreq.args, "ids", rock.updated);
-        if (abookid) {
-            json_object_set(subreq.args, "addressbookId", abookid);
-        }
-        r = getContactGroups(&subreq);
-        json_decref(subreq.args);
-    }
 
     jmap_add_perf(req, contactGroupUpdates);
 
@@ -1772,21 +1755,6 @@ static int getContactsUpdates(struct jmap_req *req)
 
     json_array_append_new(req->response, item);
 
-    json_t *dofetch = json_object_get(req->args, "fetchRecords");
-    json_t *doprops = json_object_get(req->args, "fetchRecordProperties");
-    if (dofetch && json_is_true(dofetch)) {
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
-        json_object_set(subreq.args, "ids", rock.updated);
-        if (doprops) json_object_set(subreq.args, "properties", doprops);
-        if (abookid) {
-            json_object_set(subreq.args, "addressbookId", abookid);
-        }
-        r = getContacts(&subreq);
-        json_decref(subreq.args);
-    }
-
     jmap_add_perf(req, contactUpdates);
 
     json_decref(rock.created);
@@ -2152,7 +2120,6 @@ static int getContactsList(struct jmap_req *req)
 {
     int r = 0, pe;
     json_t *invalid;
-    int dofetch = 0;
     struct carddav_db *db;
     jmap_filter *parsed_filter = NULL;
 
@@ -2194,12 +2161,6 @@ static int getContactsList(struct jmap_req *req)
         }
     }
 
-    /* fetchRecords */
-    if (JNOTNULL(json_object_get(req->args, "fetchRecords"))) {
-        readprop(req->args, "fetchRecords",
-                 0 /*mandatory*/, invalid, "b", &dofetch);
-    }
-
     if (json_array_size(invalid)) {
         json_t *err = json_pack("{s:s, s:o}",
                                 "type", "invalidArguments", "arguments", invalid);
@@ -2233,17 +2194,6 @@ static int getContactsList(struct jmap_req *req)
     json_array_append_new(item, contactList);
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
-
-    /* Fetch updated records, if requested. */
-    if (dofetch && json_array_size(rock.contacts)) {
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        json_object_set_new(subreq.args, "accountId",
-                            json_string(req->accountid));
-        json_object_set(subreq.args, "ids", rock.contacts);
-        r = getContacts(&subreq);
-        json_decref(subreq.args);
-    }
 
     jmap_add_perf(req, contactList);
 
