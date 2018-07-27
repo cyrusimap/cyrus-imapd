@@ -87,3 +87,49 @@ metric counter cyrus_lmtp_sieve_keep_total              The number of sieve KEEP
 metric counter cyrus_lmtp_sieve_notify_total            The number of sieve NOTIFYs
 metric counter cyrus_lmtp_sieve_autorespond_total       The number of sieve AUTORESPONDs considered
 metric counter cyrus_lmtp_sieve_autorespond_sent_total  The number of sieve AUTORESPONDs sent
+
+metric counter cyrus_http_connections_total       The total number of HTTP connections
+metric gauge   cyrus_http_active_connections      The number of active HTTP connections
+metric gauge   cyrus_http_ready_listeners         The number of currently ready HTTP listeners
+metric counter cyrus_http_shutdown_total          The number of HTTP process shutdowns
+    label cyrus_http_shutdown_total status ok error
+metric counter cyrus_http_acl_total               The total number of HTTP ACLs
+    label cyrus_http_acl_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_bind_total              The total number of HTTP BINDs
+    label cyrus_http_bind_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_copy_total              The total number of HTTP COPYs
+    label cyrus_http_copy_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_delete_total            The total number of HTTP DELETEs
+    label cyrus_http_delete_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_get_total               The total number of HTTP GETs
+    label cyrus_http_get_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_head_total              The total number of HTTP HEADs
+    label cyrus_http_head_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_lock_total              The total number of HTTP LOCKs
+    label cyrus_http_lock_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_mkcalendar_total        The total number of HTTP MKCALENDARs
+    label cyrus_http_mkcalendar_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_mkcol_total             The total number of HTTP MKCOLs
+    label cyrus_http_mkcol_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_move_total              The total number of HTTP MOVEs
+    label cyrus_http_move_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_options_total           The total number of HTTP OPTIONSs
+    label cyrus_http_options_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_patch_total             The total number of HTTP PATCHs
+    label cyrus_http_patch_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_post_total              The total number of HTTP POSTs
+    label cyrus_http_post_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_propfind_total          The total number of HTTP PROPFINDs
+    label cyrus_http_propfind_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_proppatch_total         The total number of HTTP PROPPATCHs
+    label cyrus_http_proppatch_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_put_total               The total number of HTTP PUTs
+    label cyrus_http_put_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_report_total            The total number of HTTP REPORTs
+    label cyrus_http_report_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_trace_total             The total number of HTTP TRACEs
+    label cyrus_http_trace_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_unbind_total            The total number of HTTP UNBINDs
+    label cyrus_http_unbind_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_unlock_total            The total number of HTTP UNLOCKs
+    label cyrus_http_unlock_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive

@@ -46,6 +46,7 @@
 #include "exitcodes.h"
 #include "httpd.h"
 #include "md5.h"
+#include "prometheus.h"
 #include "util.h"
 
 int (*alpn_select_cb)(SSL *ssl,
@@ -347,6 +348,9 @@ static int frame_recv_cb(nghttp2_session *session,
                 &txn->req_tgt.namespace->methods[txn->meth];
 
             ret = (*meth_t->proc)(txn, meth_t->params);
+
+            prometheus_increment(prometheus_lookup_label(http_methods[txn->meth].metric,
+                                                         txn->req_tgt.namespace->name));
         }
 
         if (ret == HTTP_UNAUTHORIZED) {
