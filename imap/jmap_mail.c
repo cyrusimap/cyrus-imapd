@@ -6273,7 +6273,18 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
         if (!folder) continue;
 
         // for this phase, we only care that it has a change
-        if (md->modseq <= since_modseq) continue;
+        if (md->modseq <= since_modseq) {
+            if (search->is_mutable) {
+                /* Make sure we don't report any hidden messages */
+                int rights = jmap_myrights_byname(req, folder->mboxname);
+                if (!(rights & ACL_READ)) continue;
+                modseq_t modseq = 0;
+                conversation_get_modseq(req->cstate, md->cid, &modseq);
+                if (modseq > since_modseq)
+                    hashu64_insert(md->cid, (void*)1, &touched_cids);
+            }
+            continue;
+        }
 
         /* Make sure we don't report any hidden messages */
         int rights = jmap_myrights_byname(req, folder->mboxname);
