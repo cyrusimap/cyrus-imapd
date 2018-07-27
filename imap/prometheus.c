@@ -311,7 +311,27 @@ EXPORTED int prometheus_text_report(struct buf *buf, const char **mimetype)
     mappedfile_unlock(mf);
     mappedfile_close(&mf);
     free(report_fname);
-    return r;
+
+    if (r) return r;
+
+    report_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_MASTER_REPORT, NULL);
+
+    r = mappedfile_open(&mf, report_fname, 0);
+    if (r) {
+        free(report_fname);
+        return 0; /* no master.txt yet? no worries */
+    }
+
+    r = mappedfile_readlock(mf);
+    if (!r) {
+        buf_appendmap(buf, mappedfile_base(mf), mappedfile_size(mf));
+    }
+
+    mappedfile_unlock(mf);
+    mappedfile_close(&mf);
+    free(report_fname);
+
+    return 0;
 }
 
 EXPORTED enum prom_metric_id prometheus_lookup_label(enum prom_labelled_metric metric,
