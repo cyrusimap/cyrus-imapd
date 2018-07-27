@@ -2045,6 +2045,16 @@ EXPORTED json_t* jmap_getstate(jmap_req_t *req, int mbtype, int refresh)
 }
 
 
+EXPORTED json_t *jmap_fmtstate(modseq_t modseq)
+{
+    struct buf buf = BUF_INITIALIZER;
+    json_t *state = NULL;
+    buf_printf(&buf, MODSEQ_FMT, modseq);
+    state = json_string(buf_cstring(&buf));
+    buf_free(&buf);
+    return state;
+}
+
 EXPORTED char *jmap_xhref(const char *mboxname, const char *resource)
 {
     /* XXX - look up root path from namespace? */
@@ -2453,6 +2463,7 @@ EXPORTED void jmap_error(jmap_req_t *req, json_t *err)
             json_pack("[s,o,s]", "error", err, req->tag));
 }
 
+
 /* Foo/get */
 
 EXPORTED void jmap_get_parse(json_t *jargs,
@@ -2552,5 +2563,61 @@ EXPORTED json_t *jmap_get_reply(struct jmap_get *get)
     json_object_set_new(res, "state", json_string(get->state));
     json_object_set(res, "list", get->list);
     json_object_set(res, "notFound", get->not_found);
+    return res;
+}
+
+
+/* Foo/changes */
+
+EXPORTED void jmap_changes_parse(json_t *jargs,
+                                 struct jmap_parser *parser,
+                                 struct jmap_changes *changes,
+                                 json_t **err)
+{
+    memset(changes, 0, sizeof(struct jmap_changes));
+    changes->created = json_array();
+    changes->updated = json_array();
+    changes->destroyed = json_array();
+
+    /* sinceState */
+    json_t *arg = json_object_get(jargs, "sinceState");
+    if (json_is_string(arg)) {
+        changes->since_modseq = atomodseq_t(json_string_value(arg));
+    }
+    if (!changes->since_modseq) {
+        jmap_parser_invalid(parser, "sinceState");
+    }
+
+    /* maxChanges */
+    arg = json_object_get(jargs, "maxChanges");
+    if (json_is_integer(arg) && json_integer_value(arg) > 0) {
+        changes->max_changes = json_integer_value(arg);
+    } else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "maxChanges");
+    }
+
+    if (json_array_size(parser->invalid)) {
+        *err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                "arguments", parser->invalid);
+    }
+}
+
+EXPORTED void jmap_changes_fini(struct jmap_changes *changes)
+{
+    json_decref(changes->created);
+    json_decref(changes->updated);
+    json_decref(changes->destroyed);
+}
+
+EXPORTED json_t *jmap_changes_reply(struct jmap_changes *changes)
+{
+    json_t *res = json_object();
+    json_object_set_new(res, "oldState", jmap_fmtstate(changes->since_modseq));
+    json_object_set_new(res, "newState", jmap_fmtstate(changes->new_modseq));
+    json_object_set_new(res, "hasMoreChanges",
+            json_boolean(changes->has_more_changes));
+    json_object_set(res, "created", changes->created);
+    json_object_set(res, "updated", changes->updated);
+    json_object_set(res, "destroyed", changes->destroyed);
     return res;
 }

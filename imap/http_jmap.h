@@ -147,6 +147,7 @@ extern char *jmap_blobid(const struct message_guid *guid);
 
 /* JMAP states */
 extern json_t* jmap_getstate(jmap_req_t *req, int mbtype, int refresh);
+extern json_t *jmap_fmtstate(modseq_t modseq);
 extern int jmap_cmpstate(jmap_req_t *req, json_t *state, int mbtype);
 extern modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype);
 
@@ -165,6 +166,7 @@ extern json_t *jmap_patchobject_create(json_t *a, json_t *b);
 extern void jmap_add_perf(jmap_req_t *req, json_t *res);
 
 
+/* JMAP request parser */
 struct jmap_parser {
     struct buf buf;
     strarray_t path;
@@ -192,7 +194,8 @@ struct jmap_get {
     json_t *ids;
     json_t *properties;
     hash_table *props;
-    /* Response fields */
+
+  /* Response fields */
     char *state;
     json_t *list;
     json_t *not_found;
@@ -202,5 +205,26 @@ extern void jmap_get_parse(json_t *jargs, struct jmap_parser *parser,
                            jmap_req_t *req, struct jmap_get *get, json_t **err);
 extern void jmap_get_fini(struct jmap_get *get);
 extern json_t *jmap_get_reply(struct jmap_get *get);
+
+
+/* Foo/changes */
+
+struct jmap_changes {
+    /* Request arguments */
+    modseq_t since_modseq;
+    size_t max_changes;
+
+  /* Response fields */
+    modseq_t new_modseq;
+    short has_more_changes;
+    json_t *created;
+    json_t *updated;
+    json_t *destroyed;
+};
+
+extern void jmap_changes_parse(json_t *jargs, struct jmap_parser *parser,
+                               struct jmap_changes *changes, json_t **err);
+extern void jmap_changes_fini(struct jmap_changes *changes);
+extern json_t *jmap_changes_reply(struct jmap_changes *changes);
 
 #endif /* HTTP_JMAP_H */

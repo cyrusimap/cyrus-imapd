@@ -101,14 +101,8 @@ int jmap_contact_init(hash_table *methods, json_t *capabilities __attribute__((u
 
 struct updates_rock {
     jmap_req_t *req;
-    json_t *created;
-    json_t *updated;
-    json_t *destroyed;
-
+    struct jmap_changes *changes;
     size_t seen_records;
-    size_t max_records;
-
-    modseq_t since_modseq;
     modseq_t highestmodseq;
 };
 
@@ -119,46 +113,18 @@ static void strip_spurious_deletes(struct updates_rock *urock)
      * of a hash will cost more */
     unsigned i, j;
 
-    for (i = 0; i < json_array_size(urock->destroyed); i++) {
-        const char *del = json_string_value(json_array_get(urock->destroyed, i));
+    for (i = 0; i < json_array_size(urock->changes->destroyed); i++) {
+        const char *del =
+            json_string_value(json_array_get(urock->changes->destroyed, i));
 
-        for (j = 0; j < json_array_size(urock->updated); j++) {
+        for (j = 0; j < json_array_size(urock->changes->updated); j++) {
             const char *up =
-                json_string_value(json_array_get(urock->updated, j));
+                json_string_value(json_array_get(urock->changes->updated, j));
             if (!strcmpsafe(del, up)) {
-                json_array_remove(urock->destroyed, i--);
+                json_array_remove(urock->changes->destroyed, i--);
                 break;
             }
         }
-    }
-}
-
-static void updates_rock_update(struct updates_rock *rock,
-                                struct dav_data dav,
-                                const char *uid) {
-
-    int rights = jmap_myrights_byname(rock->req, dav.mailbox);
-    if (!(rights & DACL_READ)) return;
-
-    /* Count, but don't process items that exceed the maximum record count. */
-    if (rock->max_records && ++(rock->seen_records) > rock->max_records) {
-        return;
-    }
-
-    /* Report item as updated or destroyed. */
-    if (dav.alive) {
-        if (dav.createdmodseq <= rock->since_modseq)
-            json_array_append_new(rock->updated, json_string(uid));
-        else
-            json_array_append_new(rock->created, json_string(uid));
-    } else {
-        if (dav.createdmodseq <= rock->since_modseq)
-            json_array_append_new(rock->destroyed, json_string(uid));
-    }
-
-    /* Fetch record to determine modseq. */
-    if (dav.modseq > rock->highestmodseq) {
-        rock->highestmodseq = dav.modseq;
     }
 }
 
@@ -549,14 +515,6 @@ static int getContactGroups(struct jmap_req *req)
     return jmap_contacts_get(req, &getgroups_cb, CARDDAV_KIND_GROUP);
 }
 
-static const char *_json_object_get_string(const json_t *obj, const char *key)
-{
-    const json_t *jval = json_object_get(obj, key);
-    if (!jval) return NULL;
-    const char *val = json_string_value(jval);
-    return val;
-}
-
 static const char *_json_array_get_string(const json_t *obj, size_t index)
 {
     const json_t *jval = json_array_get(obj, index);
@@ -569,50 +527,52 @@ static const char *_json_array_get_string(const json_t *obj, size_t index)
 static int getcontactupdates_cb(void *rock, struct carddav_data *cdata)
 {
     struct updates_rock *urock = (struct updates_rock *) rock;
-    updates_rock_update(urock, cdata->dav, cdata->vcard_uid);
+    struct dav_data dav = cdata->dav;
+    const char *uid = cdata->vcard_uid;
+    int rights = jmap_myrights_byname(urock->req, dav.mailbox);
+    if (!(rights & DACL_READ)) return 0;
+
+    /* Count, but don't process items that exceed the maximum record count. */
+    if (urock->changes->max_changes &&
+        ++(urock->seen_records) > urock->changes->max_changes) {
+        urock->changes->has_more_changes = 1;
+        return 0;
+    }
+
+    /* Report item as updated or destroyed. */
+    if (dav.alive) {
+        if (dav.createdmodseq <= urock->changes->since_modseq)
+            json_array_append_new(urock->changes->updated, json_string(uid));
+        else
+            json_array_append_new(urock->changes->created, json_string(uid));
+    } else {
+        if (dav.createdmodseq <= urock->changes->since_modseq)
+            json_array_append_new(urock->changes->destroyed, json_string(uid));
+    }
+
+    /* Fetch record to determine modseq. */
+    if (dav.modseq > urock->highestmodseq) {
+        urock->highestmodseq = dav.modseq;
+    }
+
     return 0;
 }
 
-static int getContactsGroupUpdates(struct jmap_req *req)
+static int jmap_contacts_updates(struct jmap_req *req, int kind)
 {
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_changes changes;
+    json_t *err = NULL;
     struct carddav_db *db = carddav_open_userid(req->accountid);
     if (!db) return -1;
-    struct buf buf = BUF_INITIALIZER;
     int r = -1;
-    int pe; /* property parse error */
-    modseq_t oldmodseq = 0;
 
-    /* Parse and validate arguments. */
-    json_t *invalid = json_pack("[]");
-
-    json_int_t max_records = 0;
-    pe = readprop(req->args, "maxChanges",
-                  0 /*mandatory*/, invalid, "I", &max_records);
-    if (pe > 0) {
-        if (max_records <= 0) {
-            json_array_append_new(invalid, json_string("maxChanges"));
-        }
-    }
-
-    const char *since = NULL;
-    pe = readprop(req->args, "sinceState",
-                  1 /*mandatory*/, invalid, "s", &since);
-    if (pe > 0) {
-        oldmodseq = atomodseq_t(since);
-        if (!oldmodseq) {
-            json_array_append_new(invalid, json_string("sinceState"));
-        }
-    }
-
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}",
-                                "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response,
-                              json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+    /* Parse request */
+    jmap_changes_parse(req->args, &parser, &changes, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    json_decref(invalid);
 
     /* Non-JMAP spec addressbookId argument */
     char *mboxname = NULL;
@@ -626,55 +586,31 @@ static int getContactsGroupUpdates(struct jmap_req *req)
     if (r) goto done;
 
     /* Lookup updates. */
-    struct updates_rock rock = { req, json_array(), json_array(), json_array(),
-                                 0, max_records, oldmodseq, 0 };
-    r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_GROUP,
+    struct updates_rock rock = { req, &changes, 0 /*seen_records*/, 0 /*highestmodseq*/};
+    r = carddav_get_updates(db, changes.since_modseq, mboxname, kind,
                             -1 /*max_records*/, &getcontactupdates_cb, &rock);
     if (r) goto done;
 
     strip_spurious_deletes(&rock);
 
     /* Determine new state. */
-    modseq_t newstate;
-    int more = rock.max_records ? rock.seen_records > rock.max_records : 0;
-    if (more) {
-        newstate = rock.highestmodseq;
-    } else {
-        newstate = jmap_highestmodseq(req, MBTYPE_ADDRESSBOOK);
-    }
+    changes.new_modseq = changes.has_more_changes ?
+        rock.highestmodseq : jmap_highestmodseq(req, MBTYPE_ADDRESSBOOK);
 
-    json_t *contactGroupUpdates = json_pack("{}");
-    buf_printf(&buf, MODSEQ_FMT, newstate);
-    json_object_set_new(contactGroupUpdates, "newState",
-                        json_string(buf_cstring(&buf)));
-    buf_reset(&buf);
-
-    json_object_set_new(contactGroupUpdates, "accountId",
-                        json_string(req->accountid));
-    json_object_set_new(contactGroupUpdates, "oldState", json_string(since));
-    json_object_set_new(contactGroupUpdates, "hasMoreUpdates",
-                        json_boolean(more));
-    json_object_set(contactGroupUpdates, "created", rock.created);
-    json_object_set(contactGroupUpdates, "updated", rock.updated);
-    json_object_set(contactGroupUpdates, "destroyed", rock.destroyed);
-
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("ContactGroup/changes"));
-    json_array_append_new(item, contactGroupUpdates);
-    json_array_append_new(item, json_string(req->tag));
-
-    json_array_append_new(req->response, item);
-
-    jmap_add_perf(req, contactGroupUpdates);
-
-    json_decref(rock.created);
-    json_decref(rock.updated);
-    json_decref(rock.destroyed);
+    /* Build response */
+    jmap_ok(req, jmap_changes_reply(&changes));
 
   done:
-    buf_free(&buf);
+    jmap_changes_fini(&changes);
+    jmap_parser_fini(&parser);
     carddav_close(db);
+
     return r;
+}
+
+static int getContactsGroupUpdates(struct jmap_req *req)
+{
+    return jmap_contacts_updates(req, CARDDAV_KIND_GROUP);
 }
 
 static const char *_resolve_contactid(struct jmap_req *req, const char *id)
@@ -1673,98 +1609,7 @@ static int getContacts(struct jmap_req *req)
 
 static int getContactsUpdates(struct jmap_req *req)
 {
-    struct carddav_db *db = carddav_open_userid(req->accountid);
-    if (!db) return -1;
-    struct buf buf = BUF_INITIALIZER;
-    int r = -1;
-    json_t *invalid = NULL; /* invalid property array */
-    int pe; /* property parse error */
-
-    /* Parse and validate arguments. */
-    invalid = json_pack("[]");
-
-    json_int_t max_records = 0;
-    pe = readprop(req->args, "maxChanges",
-                  0 /*mandatory*/, invalid, "I", &max_records);
-    if (pe > 0) {
-        if (max_records <= 0) {
-            json_array_append_new(invalid, json_string("maxChanges"));
-        }
-    }
-
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}",
-                                "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response,
-                              json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
-        goto done;
-    }
-    json_decref(invalid);
-
-    const char *since = _json_object_get_string(req->args, "sinceState");
-    if (!since) goto done;
-    modseq_t oldmodseq = atomodseq_t(since);
-
-    char *mboxname = NULL;
-    json_t *abookid = json_object_get(req->args, "addressbookId");
-    if (abookid && json_string_value(abookid)) {
-        /* XXX - invalid arguments */
-        const char *addressbookId = json_string_value(abookid);
-        mboxname = carddav_mboxname(req->accountid, addressbookId);
-    }
-
-    r = carddav_create_defaultaddressbook(req->accountid);
-    if (r) goto done;
-
-    /* Lookup updates. */
-    struct updates_rock rock = { req, json_array(), json_array(), json_array(),
-                                 0, max_records, oldmodseq, 0 };
-    r = carddav_get_updates(db, oldmodseq, mboxname, CARDDAV_KIND_CONTACT,
-                            -1 /*max_records*/, &getcontactupdates_cb, &rock);
-    if (r) goto done;
-
-    strip_spurious_deletes(&rock);
-
-    /* Determine new state. */
-    modseq_t newstate;
-    int more = rock.max_records ? rock.seen_records > rock.max_records : 0;
-    if (more) {
-        newstate = rock.highestmodseq;
-    } else {
-        newstate = jmap_highestmodseq(req, MBTYPE_ADDRESSBOOK);
-    }
-
-    json_t *contactUpdates = json_pack("{}");
-    buf_printf(&buf, MODSEQ_FMT, newstate);
-    json_object_set_new(contactUpdates, "newState",
-                        json_string(buf_cstring(&buf)));
-    buf_reset(&buf);
-    json_object_set_new(contactUpdates, "accountId",
-                        json_string(req->accountid));
-    json_object_set_new(contactUpdates, "oldState", json_string(since));
-    json_object_set_new(contactUpdates, "hasMoreUpdates", json_boolean(more));
-    json_object_set(contactUpdates, "created", rock.created);
-    json_object_set(contactUpdates, "updated", rock.updated);
-    json_object_set(contactUpdates, "destroyed", rock.destroyed);
-
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("Contact/changes"));
-    json_array_append_new(item, contactUpdates);
-    json_array_append_new(item, json_string(req->tag));
-
-    json_array_append_new(req->response, item);
-
-    jmap_add_perf(req, contactUpdates);
-
-    json_decref(rock.created);
-    json_decref(rock.updated);
-    json_decref(rock.destroyed);
-
-  done:
-    carddav_close(db);
-    buf_free(&buf);
-    return r;
+    return jmap_contacts_updates(req, CARDDAV_KIND_CONTACT);
 }
 
 typedef struct contact_filter {
