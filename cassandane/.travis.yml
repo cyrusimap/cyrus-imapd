@@ -27,6 +27,7 @@ install:
 - cpanm --notest File::LibMagic
 - cpanm --notest File::Slurp
 - cpanm --notest File::chdir
+- cpanm --notest HTTP::Tiny
 - cpanm --notest IO::Socket::INET6
 - cpanm --notest IO::Stringy
 - cpanm --notest JSON
