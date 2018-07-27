@@ -143,7 +143,7 @@ sub test_contact_changes
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
 
     xlog "create contact 1";
     $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
@@ -158,7 +158,7 @@ sub test_contact_changes
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -180,7 +180,7 @@ sub test_contact_changes
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -193,7 +193,7 @@ sub test_contact_changes
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -205,7 +205,7 @@ sub test_contact_changes
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::true);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::true);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -219,7 +219,7 @@ sub test_contact_changes
                 }, "R2"]]);
     $self->assert_str_equals($interimState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -241,7 +241,7 @@ sub test_contact_changes
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($id2, $res->[0][1]{updated}[0]);
@@ -294,7 +294,7 @@ sub test_contact_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
 
     xlog "create contact 1";
     $res = $jmap->CallMethods([['Contact/set', {
@@ -313,7 +313,7 @@ sub test_contact_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -339,7 +339,7 @@ sub test_contact_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -353,7 +353,7 @@ sub test_contact_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -366,7 +366,7 @@ sub test_contact_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::true);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::true);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -381,7 +381,7 @@ sub test_contact_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($interimState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -405,7 +405,7 @@ sub test_contact_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($id2, $res->[0][1]{updated}[0]);
@@ -937,7 +937,7 @@ sub test_contactgroup_changes
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -960,7 +960,7 @@ sub test_contactgroup_changes
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -973,7 +973,7 @@ sub test_contactgroup_changes
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -985,7 +985,7 @@ sub test_contactgroup_changes
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::true);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::true);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -999,7 +999,7 @@ sub test_contactgroup_changes
                 }, "R2"]]);
     $self->assert_str_equals($interimState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1021,7 +1021,7 @@ sub test_contactgroup_changes
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($id2, $res->[0][1]{updated}[0]);
@@ -1102,7 +1102,7 @@ sub test_contactgroup_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1128,7 +1128,7 @@ sub test_contactgroup_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1142,7 +1142,7 @@ sub test_contactgroup_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1155,7 +1155,7 @@ sub test_contactgroup_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::true);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::true);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1170,7 +1170,7 @@ sub test_contactgroup_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($interimState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1194,7 +1194,7 @@ sub test_contactgroup_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($id2, $res->[0][1]{updated}[0]);
