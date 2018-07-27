@@ -109,21 +109,21 @@ sub test_contact_set_multicontact
     $self->assert_str_equals('Contact/get', $fetch->[0][0]);
     $self->assert_str_equals('R3', $fetch->[0][2]);
     $self->assert_str_equals('second', $fetch->[0][1]{list}[0]{firstName});
-    $self->assert_null($fetch->[0][1]{notFound});
+    $self->assert_deep_equals([], $fetch->[0][1]{notFound});
 
     $fetch = $jmap->CallMethods([['Contact/get', {ids => [$id1, $id2]}, "R4"]]);
     $self->assert_not_null($fetch);
     $self->assert_str_equals('Contact/get', $fetch->[0][0]);
     $self->assert_str_equals('R4', $fetch->[0][2]);
     $self->assert_num_equals(2, scalar @{$fetch->[0][1]{list}});
-    $self->assert_null($fetch->[0][1]{notFound});
+    $self->assert_deep_equals([], $fetch->[0][1]{notFound});
 
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R5"]]);
     $self->assert_not_null($fetch);
     $self->assert_str_equals('Contact/get', $fetch->[0][0]);
     $self->assert_str_equals('R5', $fetch->[0][2]);
     $self->assert_num_equals(2, scalar @{$fetch->[0][1]{list}});
-    $self->assert_null($fetch->[0][1]{notFound});
+    $self->assert_deep_equals([], $fetch->[0][1]{notFound});
 }
 
 sub test_contact_changes
