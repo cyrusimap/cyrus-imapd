@@ -242,10 +242,10 @@ sub test_quota_commitments
     $self->assert(scalar keys %{$report});
 
     # now we expect default partition to have 8000 + 4000 committed
-    $self->assert_equals(12000, $report->{'cyrus_usage_quota_commitment{partition="default",resource="STORAGE"}'}->{value});
+    $self->assert_equals(12000, $report->{'cyrus_usage_quota_commitment'}->{'partition="default",resource="STORAGE"'}->{value});
 
     # and p2 partition to have 8000 + 2000 committed
-    $self->assert_equals(10000, $report->{'cyrus_usage_quota_commitment{partition="p2",resource="STORAGE"}'}->{value});
+    $self->assert_equals(10000, $report->{'cyrus_usage_quota_commitment'}->{'partition="p2",resource="STORAGE"'}->{value});
 }
 
 sub test_shared_mailbox_namespaces
@@ -273,9 +273,9 @@ sub test_shared_mailbox_namespaces
     $self->assert(scalar keys %{$report});
 
     # expect to find 3 folders on each of 'foo' and 'bar' namespaces
-    $self->assert_equals(3, $report->{'cyrus_usage_shared_mailboxes{partition="default",namespace="bar"}'}->{value});
+    $self->assert_equals(3, $report->{'cyrus_usage_shared_mailboxes'}->{'partition="default",namespace="bar"'}->{value});
 
-    $self->assert_equals(3, $report->{'cyrus_usage_shared_mailboxes{partition="default",namespace="foo"}'}->{value});
+    $self->assert_equals(3, $report->{'cyrus_usage_shared_mailboxes'}->{'partition="default",namespace="foo"'}->{value});
 }
 
 1;
