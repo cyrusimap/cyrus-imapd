@@ -5038,8 +5038,11 @@ static int _email_threadkeyword_is_valid(const char *keyword)
     for (i = 0; i < flags->count; i++) {
         const char *flag = strarray_nth(flags, i);
         const char *kw = keyword;
-        if (*flag == '\\') flag++;
-        if (*kw == '$') kw++;
+        if (*flag == '\\') { // special case \ => $
+            flag++;
+            if (*kw != '$') continue;
+            kw++;
+        }
         if (!strcasecmp(flag, kw)) {
             is_supported = 1;
             break;
