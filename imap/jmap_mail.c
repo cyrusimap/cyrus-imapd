@@ -4997,6 +4997,34 @@ static int _email_find(jmap_req_t *req, const char *msgid,
     return r;
 }
 
+static int _email_find_cid_cb(const conv_guidrec_t *rec, void *rock)
+{
+    conversation_id_t *cidp = (conversation_id_t *)rock;
+    if (rec->part) return 0;
+    if (!rec->cid) return 0;
+    *cidp = rec->cid;
+    return IMAP_OK_COMPLETED;
+}
+
+static int _email_find_cid(jmap_req_t *req, const char *msgid,
+                           conversation_id_t *cidp)
+{
+    int r;
+
+    /* must be prefixed with 'M' */
+    if (msgid[0] != 'M')
+        return IMAP_NOTFOUND;
+    /* this is on a 24 character prefix only */
+    if (strlen(msgid) != 25)
+        return IMAP_NOTFOUND;
+
+    r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _email_find_cid_cb, cidp);
+    if (r == IMAP_OK_COMPLETED) {
+        r = 0;
+    }
+    return r;
+}
+
 struct email_expunge_check {
     jmap_req_t *req;
     modseq_t since_modseq;
@@ -8655,11 +8683,83 @@ static int _email_get_with_props(jmap_req_t *req,
     return r;
 }
 
+static int _isthreadsonly(json_t *jargs)
+{
+    json_t *arg = json_object_get(jargs, "properties");
+    if (!json_is_array(arg)) return 0;
+    if (json_array_size(arg) != 1) return 0;
+    const char *s = json_string_value(json_array_get(arg, 0));
+    if (strcmpsafe(s, "threadId")) return 0;
+    return 1;
+}
+
+static void jmap_email_get_threadsonly(jmap_req_t *req, struct jmap_get *get)
+{
+    size_t i;
+    json_t *val;
+    json_array_foreach(get->ids, i, val) {
+        const char *id = json_string_value(val);
+        conversation_id_t cid = 0;
+
+        int r = _email_find_cid(req, id, &cid);
+        if (!r && cid) {
+            char *thrid = _thread_id_from_cid(cid);
+            json_t *msg = json_pack("{s:s, s:s}", "id", id, "threadId", thrid);
+            free(thrid);
+            json_array_append_new(get->list, msg);
+        }
+        else {
+            json_array_append_new(get->not_found, json_string(id));
+        }
+        if (r) {
+            syslog(LOG_ERR, "jmap: Email/get(%s): %s", id, error_message(r));
+        }
+    }
+}
+
+static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct email_getargs *args)
+{
+    size_t i;
+    json_t *val;
+    json_array_foreach(get->ids, i, val) {
+        const char *id = json_string_value(val);
+        char *mboxname = NULL;
+        msgrecord_t *mr = NULL;
+        json_t *msg = NULL;
+        struct mailbox *mbox = NULL;
+
+        uint32_t uid;
+        int r = _email_find(req, id, &mboxname, &uid);
+        if (!r) {
+            r = jmap_openmbox(req, mboxname, &mbox, 0);
+            if (!r) {
+                r = msgrecord_find(mbox, uid, &mr);
+                if (!r) {
+                    r = _email_from_record(req, args, mr, &msg);
+                }
+                jmap_closembox(req, &mbox);
+            }
+        }
+        if (!r && msg) {
+            json_array_append_new(get->list, msg);
+        }
+        else {
+            json_array_append_new(get->not_found, json_string(id));
+        }
+        if (r) {
+            syslog(LOG_ERR, "jmap: Email/get(%s): %s", id, error_message(r));
+        }
+
+        free(mboxname);
+        msgrecord_unref(&mr);
+    }
+}
+
 static int jmap_email_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
-	struct email_getargs args = _EMAIL_GET_ARGS_INITIALIZER;
+    struct email_getargs args = _EMAIL_GET_ARGS_INITIALIZER;
     json_t *err = NULL;
 
     /* Parse request */
@@ -8681,40 +8781,16 @@ static int jmap_email_get(jmap_req_t *req)
         goto done;
     }
 
-    size_t i;
-    json_t *val;
-    json_array_foreach(get.ids, i, val) {
-        const char *id = json_string_value(val);
-        char *mboxname = NULL;
-        msgrecord_t *mr = NULL;
-        json_t *msg = NULL;
-        struct mailbox *mbox = NULL;
-
-        uint32_t uid;
-        int r = _email_find(req, id, &mboxname, &uid);
-        if (!r) {
-            r = jmap_openmbox(req, mboxname, &mbox, 0);
-            if (!r) {
-                r = msgrecord_find(mbox, uid, &mr);
-                if (!r) {
-                    r = _email_from_record(req, &args, mr, &msg);
-                }
-                jmap_closembox(req, &mbox);
-            }
-        }
-        if (!r && msg) {
-            json_array_append_new(get.list, msg);
-        }
-        else {
-            json_array_append_new(get.not_found, json_string(id));
-        }
-        if (r) {
-            syslog(LOG_ERR, "jmap: Email/get(%s): %s", id, error_message(r));
-        }
-
-        free(mboxname);
-        msgrecord_unref(&mr);
+    /* Refuse to fetch more than 500 ids at once */
+    if (json_array_size(get.ids) > 500) {
+        jmap_error(req, json_pack("{s:s}", "type", "requestTooLarge"));
+        goto done;
     }
+
+    if (_isthreadsonly(req->args))
+        jmap_email_get_threadsonly(req, &get);
+    else
+        jmap_email_get_full(req, &get, &args);
 
     json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
     get.state = xstrdup(json_string_value(jstate));
@@ -8732,7 +8808,7 @@ done:
 static int jmap_email_parse(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-	struct email_getargs getargs = _EMAIL_GET_ARGS_INITIALIZER;
+    struct email_getargs getargs = _EMAIL_GET_ARGS_INITIALIZER;
     json_t *err = NULL;
     hash_table *props = NULL;
 
