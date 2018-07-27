@@ -6122,6 +6122,7 @@ sub test_email_query_threadkeywords
     my @flags = split ' ', $convflags;
     foreach (@flags) {
         my $flag = $_;
+        next if lc $flag eq '$hasattachment';  # special case
 
         xlog "Testing for counted conversation flag $flag";
         $flag =~ s+^\\+\$+ ;
@@ -6171,7 +6172,7 @@ sub test_email_query_threadkeywords
 
         xlog "fetch collapsed threads sorted ascending by $flag";
         $res = $jmap->CallMethods([['Email/query', {
-            sort => [{ property => "someInThreadHaveKeyword:$flag" }],
+            sort => [{ property => "someInThreadHaveKeyword", keyword => $flag }],
             collapseThreads => JSON::true,
         }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
@@ -6183,7 +6184,7 @@ sub test_email_query_threadkeywords
 
         xlog "fetch collapsed threads sorted descending by $flag";
         $res = $jmap->CallMethods([['Email/query', {
-            sort => [{ property => "someInThreadHaveKeyword:$flag", isAscending => JSON::false }],
+            sort => [{ property => "someInThreadHaveKeyword", keyword => $flag, isAscending => JSON::false }],
             collapseThreads => JSON::true,
         }, "R1"]]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
@@ -6203,33 +6204,7 @@ sub test_email_query_threadkeywords
         }, "R1"]]);
     }
 
-    # Regression #1: test that 'allInThreadHaveKeyword' filters fail
-    # with an 'cannotDoFilter' error for counted conversation flags.
-    # Cyrus IMAP should support this filter but doesn't currently.
-    my $flag = $flags[0];
-    $flag =~ s+^\\+\$+ ;
-    xlog "fetch collapsed threads with all having $flag flag";
-    $res = $jmap->CallMethods([['Email/query', {
-                    filter => {
-                        allInThreadHaveKeyword => $flag,
-                    },
-                    collapseThreads => JSON::true,
-                }, "R1"]]);
-    $self->assert_str_equals('error', $res->[0][0]);
-    $self->assert_str_equals('unsupportedFilter', $res->[0][1]->{type});
-
-    # Regression #2: test that 'allInThreadHaveKeyword' sorts fail with
-    # an 'unsupportedSort' error even for supported conversation flags
-    $flag =~ s+^\\+\$+ ;
-    xlog "fetch collapsed threads sorted by all having $flag flag";
-    $res = $jmap->CallMethods([['Email/query', {
-                    sort => [{ property => "allInThreadHaveKeyword:$flag" }],
-                    collapseThreads => JSON::true,
-                }, "R1"]]);
-    $self->assert_str_equals('error', $res->[0][0]);
-    $self->assert_str_equals('unsupportedSort', $res->[0][1]->{type});
-
-    # Regression #3: test that 'someInThreadHaveKeyword' filter fail
+    # test that 'someInThreadHaveKeyword' filter fail
     # with an 'cannotDoFilter' error for flags that are not defined
     # in the conversations_counted_flags config option
     xlog "fetch collapsed threads with unsupported flag";
