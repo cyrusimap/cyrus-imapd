@@ -6338,7 +6338,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
             // haven't told the exemplar yet?  This is the exemplar!
             if (!(touched_cid & 2)) {
                 // not yet told in any way, and this ID hasn't been told at all
-                if (touched_cid == 1 && touched_id == 0) {
+                if (touched_cid == 1 && touched_id == 0 && !search->is_mutable) {
                     // this is both old AND new exemplar, horray.  We don't
                     // need to tell anything
                     new_touched_cid |= 8;
