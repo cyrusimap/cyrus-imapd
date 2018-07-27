@@ -108,6 +108,8 @@ static int jmap_emailsubmission_changes(jmap_req_t *req);
 static int jmap_emailsubmission_query(jmap_req_t *req);
 static int jmap_emailsubmission_querychanges(jmap_req_t *req);
 
+static json_t *jmap_fmtstate(modseq_t modseq);
+
 /*
  * Possibly to be implemented:
  * - Email/copy
@@ -162,10 +164,10 @@ struct jmap_set {
 
 struct jmap_changes {
     /* Request arguments */
-    const char *since_state;
+    modseq_t since_modseq;
     size_t max_changes;
     /* Response fields */
-    char *new_state;
+    modseq_t new_modseq;
     short has_more_changes;
     json_t *created;
     json_t *updated;
@@ -448,8 +450,9 @@ static void jmap_changes_parse(json_t *jargs,
     /* sinceState */
     json_t *arg = json_object_get(jargs, "sinceState");
     if (json_is_string(arg)) {
-        changes->since_state = json_string_value(arg);
-    } else {
+        changes->since_modseq = atomodseq_t(json_string_value(arg));
+    }
+    if (!changes->since_modseq) {
         jmap_parser_invalid(parser, "sinceState");
     }
 
@@ -469,7 +472,6 @@ static void jmap_changes_parse(json_t *jargs,
 
 static void jmap_changes_fini(struct jmap_changes *changes)
 {
-    free(changes->new_state);
     json_decref(changes->created);
     json_decref(changes->updated);
     json_decref(changes->destroyed);
@@ -478,8 +480,8 @@ static void jmap_changes_fini(struct jmap_changes *changes)
 static json_t *jmap_changes_reply(struct jmap_changes *changes)
 {
     json_t *res = json_object();
-    json_object_set_new(res, "oldState", json_string(changes->since_state));
-    json_object_set_new(res, "newState", json_string(changes->new_state));
+    json_object_set_new(res, "oldState", jmap_fmtstate(changes->since_modseq));
+    json_object_set_new(res, "newState", jmap_fmtstate(changes->new_modseq));
     json_object_set_new(res, "hasMoreChanges",
             json_boolean(changes->has_more_changes));
     json_object_set(res, "created", changes->created);
@@ -3493,7 +3495,6 @@ static int _mbox_changes_cmp(const void **pa, const void **pb)
 }
 
 static int _mbox_changes(jmap_req_t *req,
-                         modseq_t since_modseq,
                          struct jmap_changes *changes,
                          int *only_counts_changed)
 {
@@ -3504,7 +3505,7 @@ static int _mbox_changes(jmap_req_t *req,
         json_pack("{}"),
         json_pack("{}"),
         json_pack("{}"),
-        since_modseq,
+        changes->since_modseq,
         only_counts_changed,
         req
     };
@@ -3561,11 +3562,8 @@ static int _mbox_changes(jmap_req_t *req,
         *only_counts_changed = 0;
     }
 
-    modseq_t next_modseq = changes->has_more_changes ?
+    changes->new_modseq = changes->has_more_changes ?
         windowmodseq : jmap_highestmodseq(req, 0);
-    json_t *jstate = jmap_fmtstate(next_modseq);
-    changes->new_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
 
 done:
     if (data.created) json_decref(data.created);
@@ -3587,17 +3585,10 @@ static int jmap_mailbox_changes(jmap_req_t *req)
         jmap_error(req, err);
         goto done;
     }
-    modseq_t since_modseq = atomodseq_t(changes.since_state);
-    if (!since_modseq) {
-        jmap_error(req, json_pack("{s:s s:[s]}",
-                    "type", "invalidArguments",
-                    "arguments", "sinceState"));
-        goto done;
-    }
 
     /* Search for updates */
     int only_counts_changed = 0;
-    int r = _mbox_changes(req, since_modseq, &changes, &only_counts_changed);
+    int r = _mbox_changes(req, &changes, &only_counts_changed);
     if (r) {
         syslog(LOG_ERR, "jmap: Mailbox/changes: %s", error_message(r));
         jmap_error(req, jmap_server_error(r));
@@ -6610,7 +6601,8 @@ done:
 static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t **err)
 {
     /* Run search */
-    json_t *filter = json_pack("{s:s}", "sinceEmailState", changes->since_state);
+    json_t *filter = json_pack("{s:o}", "sinceEmailState",
+                               jmap_fmtstate(changes->since_modseq));
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
     struct emailsearch *search = _emailsearch_run(req, filter, sort, /*want_expunged*/1);
     if (search->err) {
@@ -6622,7 +6614,6 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     char *email_id = NULL;
     size_t changes_count = 0;
     modseq_t highest_modseq = 0;
-    modseq_t since_modseq = atomodseq_t(changes->since_state);
     int i;
     hash_table seen_ids = HASH_TABLE_INITIALIZER;
     memset(&seen_ids, 0, sizeof(hash_table));
@@ -6656,7 +6647,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
         if (highest_modseq < md->modseq)
             highest_modseq = md->modseq;
 
-        struct email_expunge_check rock = { req, since_modseq, 0 };
+        struct email_expunge_check rock = { req, changes->since_modseq, 0 };
         int r = conversations_guid_foreach(req->cstate, _guid_from_id(email_id),
                                            _email_is_expunged_cb, &rock);
         if (r) {
@@ -6692,16 +6683,8 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     free(email_id);
 
     /* Set new state */
-    if (changes->has_more_changes) {
-        json_t *val = jmap_fmtstate(highest_modseq);
-        changes->new_state = xstrdup(json_string_value(val));
-        json_decref(val);
-    }
-    else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-        changes->new_state = xstrdup(json_string_value(jstate));
-        json_decref(jstate);
-    }
+    changes->new_modseq = changes->has_more_changes ?
+        highest_modseq : jmap_highestmodseq(req, MBTYPE_EMAIL);
 
 done:
     json_decref(filter);
@@ -6721,15 +6704,6 @@ static int jmap_email_changes(jmap_req_t *req)
         jmap_error(req, err);
         goto done;
     }
-    if (!atomodseq_t(changes.since_state)) {
-        jmap_parser_invalid(&parser, "sinceState");
-    }
-	if (json_array_size(parser.invalid)) {
-		err = json_pack("{s:s}", "type", "invalidArguments");
-		json_object_set(err, "arguments", parser.invalid);
-		jmap_error(req, err);
-		goto done;
-	}
 
     /* Search for updates */
     _email_changes(req, &changes, &err);
@@ -6750,7 +6724,8 @@ done:
 static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_t **err)
 {
     /* Run search */
-    json_t *filter = json_pack("{s:s}", "sinceEmailState", changes->since_state);
+    json_t *filter = json_pack("{s:o}", "sinceEmailState",
+                               jmap_fmtstate(changes->since_modseq));
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
     struct emailsearch *search = _emailsearch_run(req, filter, sort, /*want_expunged*/1);
     if (search->err) {
@@ -6761,7 +6736,6 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     /* Process results */
     size_t changes_count = 0;
     modseq_t highest_modseq = 0;
-    modseq_t since_modseq = atomodseq_t(changes->since_state);
     int i;
 
     size_t mdcount = search->msgdata->count;
@@ -6803,13 +6777,13 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
         /* Report thread */
         char *thread_id = _thread_id_from_cid(md->cid);
         if (conv->exists) {
-            if (conv->createdmodseq <= since_modseq)
+            if (conv->createdmodseq <= changes->since_modseq)
                 json_array_append_new(changes->updated, json_string(thread_id));
             else
                 json_array_append_new(changes->created, json_string(thread_id));
         }
         else {
-            if (conv->createdmodseq <= since_modseq)
+            if (conv->createdmodseq <= changes->since_modseq)
                 json_array_append_new(changes->destroyed, json_string(thread_id));
         }
         free(thread_id);
@@ -6818,16 +6792,8 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     free_hashu64_table(&seen_cids, NULL);
 
     /* Set new state */
-    if (changes->has_more_changes) {
-        json_t *val = jmap_fmtstate(highest_modseq);
-        changes->new_state = xstrdup(json_string_value(val));
-        json_decref(val);
-    }
-    else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-        changes->new_state = xstrdup(json_string_value(jstate));
-        json_decref(jstate);
-    }
+    changes->new_modseq = changes->has_more_changes ?
+        highest_modseq : jmap_highestmodseq(req, MBTYPE_EMAIL);
 
 done:
     json_decref(filter);
@@ -6847,15 +6813,6 @@ static int jmap_thread_changes(jmap_req_t *req)
         jmap_error(req, err);
         goto done;
     }
-    if (!atomodseq_t(changes.since_state)) {
-        jmap_parser_invalid(&parser, "sinceState");
-    }
-	if (json_array_size(parser.invalid)) {
-		err = json_pack("{s:s}", "type", "invalidArguments");
-		json_object_set(err, "arguments", parser.invalid);
-		jmap_error(req, err);
-		goto done;
-	}
 
     /* Search for updates */
     _thread_changes(req, &changes, &err);
@@ -12343,9 +12300,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     }
 
     /* Trivially find no message submission updates at all. */
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-    changes.new_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
+    changes.new_modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
     jmap_ok(req, jmap_changes_reply(&changes));
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
