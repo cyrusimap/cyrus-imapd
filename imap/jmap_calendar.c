@@ -401,10 +401,7 @@ done:
 
 struct calendarupdates_rock {
     jmap_req_t *req;
-    modseq_t oldmodseq;
-    json_t *created;
-    json_t *updated;
-    json_t *destroyed;
+    struct jmap_changes *changes;
 };
 
 static int getcalendarupdates_cb(const mbentry_t *mbentry, void *vrock)
@@ -415,7 +412,7 @@ static int getcalendarupdates_cb(const mbentry_t *mbentry, void *vrock)
     int r = 0;
 
     /* Ignore old changes. */
-    if (mbentry->foldermodseq <= rock->oldmodseq) {
+    if (mbentry->foldermodseq <= rock->changes->since_modseq) {
         goto done;
     }
 
@@ -453,14 +450,14 @@ static int getcalendarupdates_cb(const mbentry_t *mbentry, void *vrock)
 
     /* Report this calendar as created, updated or destroyed. */
     if (mbentry->mbtype & MBTYPE_DELETED) {
-        if (mbentry->createdmodseq <= rock->oldmodseq)
-            json_array_append_new(rock->destroyed, json_string(id));
+        if (mbentry->createdmodseq <= rock->changes->since_modseq)
+            json_array_append_new(rock->changes->destroyed, json_string(id));
     }
     else {
-        if (mbentry->createdmodseq <= rock->oldmodseq)
-            json_array_append_new(rock->updated, json_string(id));
+        if (mbentry->createdmodseq <= rock->changes->since_modseq)
+            json_array_append_new(rock->changes->updated, json_string(id));
         else
-            json_array_append_new(rock->created, json_string(id));
+            json_array_append_new(rock->changes->created, json_string(id));
     }
 
 done:
@@ -470,84 +467,47 @@ done:
 
 static int getCalendarsUpdates(struct jmap_req *req)
 {
-    int r, pe;
-    json_t *invalid;
-    const char *since = NULL;
-    struct buf buf = BUF_INITIALIZER;
-    modseq_t oldmodseq = 0;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_changes changes;
+    json_t *err = NULL;
+    int r;
 
     r = caldav_create_defaultcalendars(req->accountid);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* The account exists but does not have a root mailbox. */
-        json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
-        json_array_append_new(req->response, json_pack("[s,o,s]",
-                    "error", err, req->tag));
+        jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
         return 0;
     } else if (r) return r;
 
-    /* Parse and validate arguments. */
-    invalid = json_pack("[]");
-    pe = readprop(req->args, "sinceState", 1 /*mandatory*/, invalid, "s", &since);
-    if (pe > 0) {
-        oldmodseq = atomodseq_t(since);
-        if (!oldmodseq) {
-            json_array_append_new(invalid, json_string("sinceState"));
-        }
-    }
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}",
-                                "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response,
-                              json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+    /* Parse request */
+    jmap_changes_parse(req->args, &parser, &changes, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    json_decref(invalid);
 
     /* Lookup any updates. */
     char *mboxname = caldav_mboxname(req->accountid, NULL);
-    struct calendarupdates_rock rock = {
-        req,
-        oldmodseq,
-        json_pack("[]"),
-        json_pack("[]"),
-        json_pack("[]")
-    };
+    struct calendarupdates_rock rock = { req, &changes };
+
     r = mboxlist_mboxtree(mboxname, getcalendarupdates_cb, &rock,
                           MBOXTREE_TOMBSTONES|MBOXTREE_SKIP_ROOT);
     free(mboxname);
     if (r) {
-        json_t *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
-        json_array_append_new(req->response,
-                              json_pack("[s,o,s]", "error", err, req->tag));
-        json_decref(rock.created);
-        json_decref(rock.updated);
-        json_decref(rock.destroyed);
+        jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
         goto done;
     }
 
-    /* Create response. */
-    json_t *calendarUpdates = json_pack("{}");
-    json_object_set_new(calendarUpdates, "accountId",
-                        json_string(req->accountid));
-    json_object_set_new(calendarUpdates, "oldState", json_string(since));
-    json_object_set_new(calendarUpdates, "newState",
-                        jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
+    /* Determine new state.  XXX  what about max_changes? */
+    changes.new_modseq = /*changes.has_more_changes ? rock.highestmodseq :*/
+        jmap_highestmodseq(req, MBTYPE_CALENDAR);
 
-    json_object_set_new(calendarUpdates, "created", rock.created);
-    json_object_set_new(calendarUpdates, "updated", rock.updated);
-    json_object_set_new(calendarUpdates, "destroyed", rock.destroyed);
-
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("Calendar/changes"));
-    json_array_append_new(item, calendarUpdates);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
-
-    jmap_add_perf(req, calendarUpdates);
+    /* Build response */
+    jmap_ok(req, jmap_changes_reply(&changes));
 
   done:
-    buf_free(&buf);
+    jmap_changes_fini(&changes);
+    jmap_parser_fini(&parser);
     return r;
 }
 
@@ -2159,12 +2119,8 @@ done:
 
 struct geteventupdates_rock {
     jmap_req_t *req;
-    json_t *created;
-    json_t *updated;
-    json_t *destroyed;
+    struct jmap_changes *changes;
     size_t seen_records;
-    size_t max_records;
-    modseq_t since_modseq;
     modseq_t highestmodseq;
     int check_acl;
     hash_table *mboxrights;
@@ -2177,14 +2133,14 @@ static void strip_spurious_deletes(struct geteventupdates_rock *urock)
      * of a hash will cost more */
     unsigned i, j;
 
-    for (i = 0; i < json_array_size(urock->destroyed); i++) {
-        const char *del = json_string_value(json_array_get(urock->destroyed, i));
+    for (i = 0; i < json_array_size(urock->changes->destroyed); i++) {
+        const char *del = json_string_value(json_array_get(urock->changes->destroyed, i));
 
-        for (j = 0; j < json_array_size(urock->updated); j++) {
+        for (j = 0; j < json_array_size(urock->changes->updated); j++) {
             const char *up =
-                json_string_value(json_array_get(urock->updated, j));
+                json_string_value(json_array_get(urock->changes->updated, j));
             if (!strcmpsafe(del, up)) {
-                json_array_remove(urock->destroyed, i--);
+                json_array_remove(urock->changes->destroyed, i--);
                 break;
             }
         }
@@ -2195,9 +2151,11 @@ static int geteventupdates_cb(void *vrock, struct caldav_data *cdata)
 {
     struct geteventupdates_rock *rock = vrock;
     jmap_req_t *req = rock->req;
+    struct jmap_changes *changes = rock->changes;
 
     /* Count, but don't process items that exceed the maximum record count. */
-    if (rock->max_records && ++(rock->seen_records) > rock->max_records) {
+    if (changes->max_changes && ++(rock->seen_records) > changes->max_changes) {
+        changes->has_more_changes = 1;
         return 0;
     }
 
@@ -2208,13 +2166,13 @@ static int geteventupdates_cb(void *vrock, struct caldav_data *cdata)
 
     /* Report item as updated or destroyed. */
     if (cdata->dav.alive) {
-        if (cdata->dav.createdmodseq <= rock->since_modseq)
-            json_array_append_new(rock->updated, json_string(cdata->ical_uid));
+        if (cdata->dav.createdmodseq <= changes->since_modseq)
+            json_array_append_new(changes->updated, json_string(cdata->ical_uid));
         else
-            json_array_append_new(rock->created, json_string(cdata->ical_uid));
+            json_array_append_new(changes->created, json_string(cdata->ical_uid));
     } else {
-        if (cdata->dav.createdmodseq <= rock->since_modseq)
-            json_array_append_new(rock->destroyed, json_string(cdata->ical_uid));
+        if (cdata->dav.createdmodseq <= changes->since_modseq)
+            json_array_append_new(changes->destroyed, json_string(cdata->ical_uid));
     }
 
     if (cdata->dav.modseq > rock->highestmodseq) {
@@ -2226,13 +2184,11 @@ static int geteventupdates_cb(void *vrock, struct caldav_data *cdata)
 
 static int getCalendarEventsUpdates(struct jmap_req *req)
 {
-    int r, pe;
-    json_t *invalid;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_changes changes;
+    json_t *err = NULL;
     struct caldav_db *db;
-    const char *since;
-    modseq_t oldmodseq = 0;
-    json_int_t maxChanges = 0;
-    struct buf buf = BUF_INITIALIZER;
+    int r = -1;
 
     db = caldav_open_userid(req->accountid);
     if (!db) {
@@ -2240,86 +2196,39 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
         return IMAP_INTERNAL;
     }
 
-    /* Parse and validate arguments. */
-    invalid = json_pack("[]");
-    pe = readprop(req->args, "sinceState", 1 /*mandatory*/, invalid, "s", &since);
-    if (pe > 0) {
-        oldmodseq = atomodseq_t(since);
-        if (!oldmodseq) {
-            json_array_append_new(invalid, json_string("sinceState"));
-        }
+    /* Parse request */
+    jmap_changes_parse(req->args, &parser, &changes, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
     }
-    pe = readprop(req->args,
-                  "maxChanges", 0 /*mandatory*/, invalid, "I", &maxChanges);
-    if (pe > 0) {
-        if (maxChanges <= 0) {
-            json_array_append_new(invalid, json_string("maxChanges"));
-        }
-    }
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}",
-                                "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response,
-                              json_pack("[s,o,s]", "error", err, req->tag));
-        return 0;
-    }
-    json_decref(invalid);
 
     /* Lookup updates. */
     struct geteventupdates_rock rock = {
         req,
-        json_array() /*created*/,
-        json_array() /*updated*/,
-        json_array() /*destroyed*/,
+        &changes,
         0            /*seen_records*/,
-        maxChanges   /*max_records*/,
-        oldmodseq,   /*since_modseq*/
         0            /*highestmodseq*/,
         strcmp(req->accountid, req->userid) /* check_acl */,
         NULL         /*mboxrights*/
     };
-    r = caldav_get_updates(db, oldmodseq, NULL /*mboxname*/, CAL_COMP_VEVENT, 
-                           maxChanges ? maxChanges + 1 : -1,
+    r = caldav_get_updates(db, changes.since_modseq, NULL /*mboxname*/,
+                           CAL_COMP_VEVENT, 
+                           changes.max_changes ? (int) changes.max_changes + 1 : -1,
                            &geteventupdates_cb, &rock);
     if (r) goto done;
     strip_spurious_deletes(&rock);
 
     /* Determine new state. */
-    modseq_t newstate;
-    int more = rock.max_records ? rock.seen_records > rock.max_records : 0;
-    if (more) {
-        newstate = rock.highestmodseq;
-    } else {
-        newstate = jmap_highestmodseq(req, MBTYPE_CALENDAR);
-    }
+    changes.new_modseq = changes.has_more_changes ?
+        rock.highestmodseq : jmap_highestmodseq(req, MBTYPE_CALENDAR);
 
-    /* Create response. */
-    json_t *eventUpdates = json_pack("{}");
-    json_object_set_new(eventUpdates, "accountId", json_string(req->accountid));
-    json_object_set_new(eventUpdates, "oldState", json_string(since));
-
-    buf_printf(&buf, MODSEQ_FMT, newstate);
-    json_object_set_new(eventUpdates, "newState", json_string(buf_cstring(&buf)));
-    buf_reset(&buf);
-
-    json_object_set_new(eventUpdates, "hasMoreUpdates", json_boolean(more));
-    json_object_set(eventUpdates, "created", rock.created);
-    json_object_set(eventUpdates, "updated", rock.updated);
-    json_object_set(eventUpdates, "destroyed", rock.destroyed);
-
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("CalendarEvent/changes"));
-    json_array_append_new(item, eventUpdates);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
-
-    jmap_add_perf(req, eventUpdates);
+    /* Build response */
+    jmap_ok(req, jmap_changes_reply(&changes));
 
   done:
-    buf_free(&buf);
-    if (rock.created) json_decref(rock.created);
-    if (rock.updated) json_decref(rock.updated);
-    if (rock.destroyed) json_decref(rock.destroyed);
+    jmap_changes_fini(&changes);
+    jmap_parser_fini(&parser);
     if (rock.mboxrights) {
         free_hash_table(rock.mboxrights, free);
         free(rock.mboxrights);
