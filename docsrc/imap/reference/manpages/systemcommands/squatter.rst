@@ -24,7 +24,6 @@ Synopsis
     **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S** *seconds*] [ **-r** ] [ **-Z** ] **-u** *user*...
     **squatter** [ **-C** *config-file* ] **-R** [ **-n** *channel* ] [ **-d** ] [**-S** *seconds*] [ **-Z** ]
     **squatter** [ **-C** *config-file* ] **-f** *synclogfile* [**-S** *seconds*] [ **-Z** ]
-    **squatter** [ **-C** *config-file* ] **-I** *file* [**-S** *seconds*] [ **-Z** ]
     **squatter** [ **-C** *config-file* ] **-t** *srctier*... **-z** *desttier* [ **-F** ] [ **-U** ] [ **-T** *dir* ] [ **-X** ] [ **-o** ] [ **-u** *user*... ] [**-S** *seconds*]
 
 
@@ -156,11 +155,6 @@ Options
 .. option:: -h
 
     Display this usage information.
-
-.. option:: -I file
-
-    Read from *file* and index individual messages described by
-    mailbox/uid tuples contained therein.
 
 .. option:: -i
 

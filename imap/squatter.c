@@ -368,109 +368,6 @@ static int do_indexer(const strarray_t *sa)
     return r;
 }
 
-static int index_single_message(const char *mboxname, uint32_t uid)
-{
-    int r;
-    struct mailbox *mailbox = NULL;
-    message_t *msg = NULL;
-    int begun = 0;
-    struct index_record record;
-
-    r = mailbox_open_irl(mboxname, &mailbox);
-    if (r) goto out;
-
-    r = rx->begin_mailbox(rx, mailbox, SEARCH_UPDATE_INCREMENTAL);
-    if (r) goto out;
-    begun = 1;
-
-    r = mailbox_find_index_record(mailbox, uid, &record);
-    if (r) goto out;
-
-    if (record.internal_flags & (FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED))
-        goto out;
-
-    msg = message_new_from_record(mailbox, &record);
-    if (!msg) goto out;
-
-    if (rx->is_indexed(rx, msg))
-        goto out;
-
-    if (verbose) fprintf(stderr, "squatter: indexing mailbox:%s uid:%u\n",
-                         mboxname, uid);
-
-    r = index_getsearchtext(msg, rx, 0);
-
-out:
-    if (begun) {
-        int r2 = rx->end_mailbox(rx, mailbox);
-        if (r2 && !r) r = r2;
-    }
-    message_unref(&msg);
-    mailbox_close(&mailbox);
-    return r;
-}
-
-static int do_indexfrom(const char *fromfile)
-{
-    int r;
-    FILE *fp;
-    unsigned lineno = 0;
-    const char *p;
-    tok_t tok;
-    const char *mboxname;
-    uint32_t uid;
-    char buf[MAX_MAILBOX_BUFFER+128];
-
-    rx = search_begin_update(verbose);
-    if (rx == NULL) /* no indexer defined */
-        return 0;
-
-    fp = fopen(fromfile, "r");
-    if (!fp) {
-        r = errno;
-        perror(fromfile);
-        goto out;
-    }
-
-    while (fgets(buf, sizeof(buf), fp)) {
-        lineno++;
-        if (buf[0] == '#') continue;
-        tok_initm(&tok, buf, "\t", TOK_EMPTY|TOK_TRIMRIGHT);
-
-        /* first token is an mboxname */
-        mboxname = tok_next(&tok);
-        if (!mboxname) {
-syntax_error:
-            fprintf(stderr, "%s:%u: syntax error, skipping\n",
-                    fromfile, lineno);
-            continue;
-        }
-
-        /* 2nd token is a uid */
-        p = tok_next(&tok);
-        if (!p) goto syntax_error;
-        uid = strtoul(p, NULL, 0);
-        if (!uid) goto syntax_error;
-
-        /* no more tokens on the line */
-        p = tok_next(&tok);
-        if (p) goto syntax_error;
-
-        r = index_single_message(mboxname, uid);
-        if (r) {
-            fprintf(stderr, "Failed to index mailbox \"%s\" uid %u: %s\n",
-                    mboxname, uid, error_message(r));
-            /* ignore errors */
-            r = 0;
-        }
-    }
-
-out:
-    if (fp) fclose(fp);
-    search_end_update(rx);
-    return r;
-}
-
 static int squatter_build_query(search_builder_t *bx, const char *query)
 {
     tok_t tok = TOK_INITIALIZER(query, NULL, 0);
@@ -863,11 +760,10 @@ int main(int argc, char **argv)
     int multi_folder = 0;
     int user_mode = 0;
     int compact_flags = 0;
-    const char *fromfile = NULL;
     strarray_t *srctiers = NULL;
     const char *desttier = NULL;
     char *errstr = NULL;
-    enum { UNKNOWN, INDEXER, INDEXFROM, SEARCH, ROLLING, SYNCLOG,
+    enum { UNKNOWN, INDEXER, SEARCH, ROLLING, SYNCLOG,
            COMPACT, AUDIT } mode = UNKNOWN;
 
     setbuf(stdout, NULL);
@@ -900,12 +796,6 @@ int main(int argc, char **argv)
 
         case 'N':
             name_starts_from = optarg;
-            break;
-
-        case 'I':               /* indexer, using specified mbox/uids in file */
-            if (mode != UNKNOWN && mode != INDEXFROM) usage(argv[0]);
-            fromfile = optarg;
-            mode = INDEXFROM;
             break;
 
         case 'R':               /* rolling indexer */
@@ -1040,11 +930,6 @@ int main(int argc, char **argv)
         syslog(LOG_NOTICE, "indexing mailboxes");
         r = do_indexer(&mboxnames);
         syslog(LOG_NOTICE, "done indexing mailboxes");
-        break;
-    case INDEXFROM:
-        syslog(LOG_NOTICE, "indexing messages");
-        r = do_indexfrom(fromfile);
-        syslog(LOG_NOTICE, "done indexing messages");
         break;
     case SEARCH:
         if (recursive_flag && optind == argc) usage(argv[0]);
