@@ -186,6 +186,9 @@ extern void jmap_parser_invalid(struct jmap_parser *parser, const char *prop);
 extern void jmap_ok(jmap_req_t *req, json_t *res);
 extern void jmap_error(jmap_req_t *req, json_t *err);
 
+extern int jmap_parse_strings(json_t *arg,
+                              struct jmap_parser *parser, const char *prop);
+
 
 /* Foo/get */
 
@@ -205,6 +208,32 @@ extern void jmap_get_parse(json_t *jargs, struct jmap_parser *parser,
                            jmap_req_t *req, struct jmap_get *get, json_t **err);
 extern void jmap_get_fini(struct jmap_get *get);
 extern json_t *jmap_get_reply(struct jmap_get *get);
+
+
+/* Foo/set */
+
+struct jmap_set {
+    /* Request arguments */
+    const char *if_in_state;
+    json_t *create;
+    json_t *update;
+    json_t *destroy;
+
+    /* Response fields */
+    char *old_state;
+    char *new_state;
+    json_t *created;
+    json_t *updated;
+    json_t *destroyed;
+    json_t *not_created;
+    json_t *not_updated;
+    json_t *not_destroyed;
+};
+
+extern void jmap_set_parse(json_t *jargs, struct jmap_parser *parser,
+                           struct jmap_set *set, json_t **err);
+extern void jmap_set_fini(struct jmap_set *set);
+extern json_t *jmap_set_reply(struct jmap_set *set);
 
 
 /* Foo/changes */

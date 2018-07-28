@@ -2463,6 +2463,27 @@ EXPORTED void jmap_error(jmap_req_t *req, json_t *err)
             json_pack("[s,o,s]", "error", err, req->tag));
 }
 
+EXPORTED int jmap_parse_strings(json_t *arg,
+                                struct jmap_parser *parser, const char *prop)
+{
+    if (!json_is_array(arg)) {
+        jmap_parser_invalid(parser, prop);
+        return 0;
+    }
+    int valid = 1;
+    size_t i;
+    json_t *val;
+    json_array_foreach(arg, i, val) {
+        if (!json_is_string(val)) {
+            jmap_parser_push_index(parser, prop, i);
+            jmap_parser_invalid(parser, NULL);
+            jmap_parser_pop(parser);
+            valid = 0;
+        }
+    }
+    return valid;
+}
+
 
 /* Foo/get */
 
@@ -2563,6 +2584,127 @@ EXPORTED json_t *jmap_get_reply(struct jmap_get *get)
     json_object_set_new(res, "state", json_string(get->state));
     json_object_set(res, "list", get->list);
     json_object_set(res, "notFound", get->not_found);
+    return res;
+}
+
+
+/* Foo/set */
+
+EXPORTED void jmap_set_parse(json_t *jargs, struct jmap_parser *parser,
+                             struct jmap_set *set, json_t **err)
+{
+    memset(set, 0, sizeof(struct jmap_set));
+    set->create = json_object();
+    set->update = json_object();
+    set->destroy = json_array();
+    set->created = json_object();
+    set->updated = json_object();
+    set->destroyed = json_array();
+    set->not_created = json_object();
+    set->not_updated = json_object();
+    set->not_destroyed = json_object();
+
+    json_t *arg, *val;
+
+    /* ifInState */
+    arg = json_object_get(jargs, "ifInState");
+    if (json_is_string(arg)) {
+        set->if_in_state = json_string_value(arg);
+    }
+    else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "ifInState");
+    }
+
+    /* create */
+    arg = json_object_get(jargs, "create");
+    if (json_is_object(arg)) {
+        const char *id;
+        json_object_foreach(arg, id, val) {
+            if (!json_is_object(val)) {
+                jmap_parser_push(parser, "create");
+                jmap_parser_invalid(parser, id);
+                jmap_parser_pop(parser);
+                continue;
+            }
+            json_object_set(set->create, id, val);
+        }
+    }
+    else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "create");
+    }
+
+    /* update */
+    arg = json_object_get(jargs, "update");
+    if (json_is_object(arg)) {
+        const char *id;
+        json_object_foreach(arg, id, val) {
+            if (!json_is_object(val)) {
+                jmap_parser_push(parser, "update");
+                jmap_parser_invalid(parser, id);
+                jmap_parser_pop(parser);
+                continue;
+            }
+            json_object_set(set->update, id, val);
+        }
+    }
+    else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "update");
+    }
+
+    /* destroy */
+    arg = json_object_get(jargs, "destroy");
+    if (JNOTNULL(arg)) {
+        jmap_parse_strings(arg, parser, "destroy");
+        if (!json_array_size(parser->invalid)) {
+            json_decref(set->destroy);
+            set->destroy = json_incref(arg);
+        }
+    }
+
+    // TODO We could report the following set errors here:
+    // -invalidPatch
+    // - willDestroy
+
+    if (json_array_size(parser->invalid)) {
+        *err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                "arguments", parser->invalid);
+    }
+}
+
+
+EXPORTED void jmap_set_fini(struct jmap_set *set)
+{
+    free(set->old_state);
+    free(set->new_state);
+    json_decref(set->create);
+    json_decref(set->update);
+    json_decref(set->destroy);
+    json_decref(set->created);
+    json_decref(set->updated);
+    json_decref(set->destroyed);
+    json_decref(set->not_created);
+    json_decref(set->not_updated);
+    json_decref(set->not_destroyed);
+}
+
+EXPORTED json_t *jmap_set_reply(struct jmap_set *set)
+{
+    json_t *res = json_object();
+    json_object_set_new(res, "oldState",
+            set->old_state ? json_string(set->old_state) : json_null());
+    json_object_set_new(res, "newState", json_string(set->new_state));
+    json_object_set(res, "created", json_object_size(set->created) ?
+            set->created : json_null());
+    json_object_set(res, "updated", json_object_size(set->updated) ?
+            set->updated : json_null());
+    json_object_set(res, "destroyed", json_array_size(set->destroyed) ?
+            set->destroyed : json_null());
+    json_object_set(res, "notCreated", json_object_size(set->not_created) ?
+            set->not_created : json_null());
+    json_object_set(res, "notUpdated", json_object_size(set->not_updated) ?
+            set->not_updated : json_null());
+    json_object_set(res, "notDestroyed", json_object_size(set->not_destroyed) ?
+            set->not_destroyed : json_null());
     return res;
 }
 
