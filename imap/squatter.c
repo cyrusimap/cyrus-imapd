@@ -184,12 +184,40 @@ static void become_daemon(void)
         exit(0); /* parent */
 }
 
+static int should_index(const char *name)
+{
+    mbentry_t *mbentry = NULL;
+    /* Skip remote mailboxes */
+    int r = mboxlist_lookup(name, &mbentry, NULL);
+    if (r) {
+        /* Convert internal name to external */
+        char *extname = mboxname_to_external(name, &squat_namespace, NULL);
+        if (verbose) {
+            printf("error looking up %s: %s\n",
+                   extname, error_message(r));
+        }
+        syslog(LOG_INFO, "error looking up %s: %s\n",
+               extname, error_message(r));
+
+        free(extname);
+        return 0;
+    }
+
+    // skip remote or not-real mailboxes
+    if (mbentry->mbtype & (MBTYPE_REMOTE|MBTYPE_DELETED|MBTYPE_INTERMEDIATE)) {
+        mboxlist_entry_free(&mbentry);
+        return 0;
+    }
+
+    mboxlist_entry_free(&mbentry);
+    return 1;
+}
+
 /* ====================================================================== */
 
 /* This is called once for each mailbox we're told to index. */
 static int index_one(const char *name, int blocking)
 {
-    mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL;
     int r;
     int flags = 0;
@@ -203,27 +231,6 @@ static int index_one(const char *name, int blocking)
 
     /* Convert internal name to external */
     char *extname = mboxname_to_external(name, &squat_namespace, NULL);
-
-    /* Skip remote mailboxes */
-    r = mboxlist_lookup(name, &mbentry, NULL);
-    if (r) {
-        if (verbose) {
-            printf("error looking up %s: %s\n",
-                   extname, error_message(r));
-        }
-        syslog(LOG_INFO, "error looking up %s: %s\n",
-               extname, error_message(r));
-
-        free(extname);
-        return r;
-    }
-    if (mbentry->mbtype & MBTYPE_REMOTE) {
-        mboxlist_entry_free(&mbentry);
-        free(extname);
-        return 0;
-    }
-
-    mboxlist_entry_free(&mbentry);
 
     /* make sure the mailbox (or an ancestor) has
        /vendor/cmu/cyrus-imapd/squat set to "true" */
@@ -343,7 +350,7 @@ static void expand_mboxnames(strarray_t *sa, int nmboxnames,
     }
 }
 
-static int do_indexer(const strarray_t *sa)
+static int do_indexer(const strarray_t *mboxnames)
 {
     int r = 0;
     int i;
@@ -352,8 +359,10 @@ static int do_indexer(const strarray_t *sa)
     if (rx == NULL)
         return 0;       /* no indexer defined */
 
-    for (i = 0 ; i < sa->count ; i++) {
-        r = index_one(sa->data[i], /*blocking*/1);
+    for (i = 0 ; i < strarray_size(mboxnames) ; i++) {
+        const char *mboxname = strarray_nth(mboxnames, i);
+        if (!should_index(mboxname)) continue;
+        r = index_one(mboxname, /*blocking*/1);
         if (r == IMAP_MAILBOX_NONEXISTENT)
             r = 0;
         if (r == IMAP_MAILBOX_LOCKED)
@@ -473,8 +482,9 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
     int i;
     int r = 0;
 
-    for (i = 0 ; i < mboxnames->count ; i++) {
-        char *userid = mboxname_to_userid(mboxnames->data[i]);
+    for (i = 0; i < strarray_size(mboxnames); i++) {
+        const char *mboxname = strarray_nth(mboxnames, i);
+        char *userid = mboxname_to_userid(mboxname);
         if (!userid) continue;
 
         if (!strcmpsafe(prev_userid, userid)) {
@@ -509,6 +519,7 @@ static int do_search(const char *query, int single, const strarray_t *mboxnames)
 
     for (i = 0 ; i < mboxnames->count ; i++) {
         const char *mboxname = mboxnames->data[i];
+        if (!should_index(mboxname)) continue;
 
         r = mailbox_open_irl(mboxname, &mailbox);
         if (r) {
@@ -536,23 +547,23 @@ static int do_search(const char *query, int single, const strarray_t *mboxnames)
 static strarray_t *read_sync_log_items(sync_log_reader_t *slr)
 {
     const char *args[3];
-    strarray_t *folders = strarray_new();
+    strarray_t *mboxnames = strarray_new();
 
     while (sync_log_reader_getitem(slr, args) == 0) {
         if (!strcmp(args[0], "APPEND")) {
             if (!mboxname_isdeletedmailbox(args[1], NULL))
-                strarray_add(folders, args[1]);
+                strarray_add(mboxnames, args[1]);
         }
         else if (!strcmp(args[0], "USER"))
-            mboxlist_usermboxtree(args[1], NULL, addmbox, folders, /*flags*/0);
+            mboxlist_usermboxtree(args[1], NULL, addmbox, mboxnames, /*flags*/0);
     }
 
-    return folders;
+    return mboxnames;
 }
 
 static int do_synclogfile(const char *synclogfile)
 {
-    strarray_t *folders = NULL;
+    strarray_t *mboxnames = NULL;
     sync_log_reader_t *slr;
     int nskipped = 0;
     int i;
@@ -561,11 +572,11 @@ static int do_synclogfile(const char *synclogfile)
     slr = sync_log_reader_create_with_filename(synclogfile);
     r = sync_log_reader_begin(slr);
     if (r) goto out;
-    folders = read_sync_log_items(slr);
+    mboxnames = read_sync_log_items(slr);
     sync_log_reader_end(slr);
 
-    /* sort folders for locality of reference in file processing mode */
-    strarray_sort(folders, cmpstringp_raw);
+    /* sort mboxnames for locality of reference in file processing mode */
+    strarray_sort(mboxnames, cmpstringp_raw);
 
     signals_poll();
 
@@ -575,8 +586,9 @@ static int do_synclogfile(const char *synclogfile)
         r = 1;
         goto out;
     }
-    for (i = 0; i < folders->count; i++) {
-        const char *mboxname = strarray_nth(folders, i);
+    for (i = 0; i < strarray_size(mboxnames); i++) {
+        const char *mboxname = strarray_nth(mboxnames, i);
+        if (!should_index(mboxname)) continue;
         if (verbose > 1)
             syslog(LOG_INFO, "do_synclogfile: indexing %s", mboxname);
         r = index_one(mboxname, /*blocking*/1);
@@ -590,7 +602,7 @@ static int do_synclogfile(const char *synclogfile)
             }
             r = 0;
             /* try again at the end */
-            strarray_append(folders, mboxname);
+            strarray_append(mboxnames, mboxname);
         }
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to index %s: %s",
@@ -604,14 +616,14 @@ static int do_synclogfile(const char *synclogfile)
     rx = NULL;
 
 out:
-    strarray_free(folders);
+    strarray_free(mboxnames);
     sync_log_reader_free(slr);
     return r;
 }
 
 static void do_rolling(const char *channel)
 {
-    strarray_t *folders = NULL;
+    strarray_t *mboxnames = NULL;
     sync_log_reader_t *slr;
     int i;
     int r;
@@ -636,22 +648,23 @@ static void do_rolling(const char *channel)
             continue;
         }
 
-        folders = read_sync_log_items(slr);
+        mboxnames = read_sync_log_items(slr);
 
-        if (folders->count) {
+        if (mboxnames->count) {
             /* have some due items in the queue, try to index them */
             rx = search_begin_update(verbose);
             if (NULL == rx) {
                 /* XXX if xapian, probably don't have conversations enabled? */
                 fatal("could not construct search text receiver", EC_CONFIG);
             }
-            for (i = 0; i < folders->count; i++) {
-                const char *mboxname = strarray_nth(folders, i);
+            for (i = 0; i < strarray_size(mboxnames); i++) {
+                const char *mboxname = strarray_nth(mboxnames, i);
+                if (!should_index(mboxname)) continue;
                 if (verbose > 1)
                     syslog(LOG_INFO, "do_rolling: indexing %s", mboxname);
                 r = index_one(mboxname, /*blocking*/0);
                 if (r == IMAP_AGAIN || r == IMAP_MAILBOX_LOCKED) {
-                    /* XXX: alternative, just append to strarray_t *folders ... */
+                    /* XXX: alternative, just append to strarray_t *mboxnames ... */
                     sync_log_channel_append(channel, mboxname);
                 }
                 if (sleepmicroseconds)
@@ -661,12 +674,12 @@ static void do_rolling(const char *channel)
             rx = NULL;
         }
 
-        strarray_free(folders);
-        folders = NULL;
+        strarray_free(mboxnames);
+        mboxnames = NULL;
     }
 
     /* XXX - we don't really get here... */
-    strarray_free(folders);
+    strarray_free(mboxnames);
     sync_log_reader_free(slr);
 }
 
@@ -709,6 +722,7 @@ static int do_audit(const strarray_t *mboxnames)
     int i;
     for (i = 0 ; i < mboxnames->count ; i++) {
         const char *mboxname = strarray_nth(mboxnames, i);
+        if (!should_index(mboxname)) continue;
         r = audit_one(mboxname, &unindexed);
         if (r == IMAP_MAILBOX_NONEXISTENT)
             r = 0;
