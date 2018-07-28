@@ -209,6 +209,12 @@ static int should_index(const char *name)
         return 0;
     }
 
+    // skip COLLECTION mailboxes (just files)
+    if (mbentry->mbtype & MBTYPE_COLLECTION) {
+        mboxlist_entry_free(&mbentry);
+        return 0;
+    }
+
     mboxlist_entry_free(&mbentry);
     return 1;
 }
