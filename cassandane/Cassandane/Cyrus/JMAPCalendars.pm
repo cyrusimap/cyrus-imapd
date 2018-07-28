@@ -2509,7 +2509,7 @@ sub test_calendarevent_changes
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $state = $res->[0][1]{newState};
 
     xlog "get zero calendar event updates";
@@ -2519,7 +2519,7 @@ sub test_calendarevent_changes
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $state = $res->[0][1]{newState};
 
     xlog "update event #1 and #2";
@@ -2545,7 +2545,7 @@ sub test_calendarevent_changes
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::true);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::true);
     $state = $res->[0][1]{newState};
 
     xlog "get the final update";
@@ -2555,7 +2555,7 @@ sub test_calendarevent_changes
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $state = $res->[0][1]{newState};
 
     xlog "update event #1 and destroy #2";
@@ -2581,7 +2581,7 @@ sub test_calendarevent_changes
     $self->assert_str_equals($id2, $res->[0][1]{destroyed}[0]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $state = $res->[0][1]{newState};
 
     xlog "get zero calendar event updates";
@@ -2591,7 +2591,7 @@ sub test_calendarevent_changes
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $state = $res->[0][1]{newState};
 
     xlog "move event #1 from calendar $calidA to $calidB";
@@ -2612,7 +2612,7 @@ sub test_calendarevent_changes
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $state = $res->[0][1]{newState};
 
     xlog "update and remove event #1";
@@ -2635,7 +2635,7 @@ sub test_calendarevent_changes
     $self->assert_str_equals($id1, $res->[0][1]{destroyed}[0]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreUpdates}, JSON::false);
+    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
     $state = $res->[0][1]{newState};
 }
 
