@@ -1409,14 +1409,73 @@ static int sender_preferred_name(const char *a, const char *b)
     return d;
 }
 
+static int _thread_datesort(const void **a, const void **b)
+{
+    const conv_thread_t *ta = (const conv_thread_t *)*a;
+    const conv_thread_t *tb = (const conv_thread_t *)*b;
+
+    int r = (ta->internaldate - tb->internaldate);
+    if (r < 0) return -1;
+    if (r > 0) return 1;
+
+    return message_guid_cmp(&ta->guid, &tb->guid);
+}
+
+static void conversations_thread_sort(conversation_t *conv)
+{
+    int i, j;
+    conv_thread_t *thread, *child;
+    ptrarray_t toplevel = PTRARRAY_INITIALIZER;
+    ptrarray_t replies = PTRARRAY_INITIALIZER;
+
+    for (thread = conv->thread; thread; thread = thread->next) {
+        if (thread->inreplyto)
+            ptrarray_append(&replies, thread);
+        else
+            ptrarray_append(&toplevel, thread);
+    }
+
+    ptrarray_sort(&toplevel, _thread_datesort);
+    ptrarray_sort(&replies, _thread_datesort);
+
+    // make the list be the top-level items
+    conv_thread_t **nextp = &conv->thread;
+    for (i = 0; i < ptrarray_size(&toplevel); i++) {
+        thread = ptrarray_nth(&toplevel, i);
+        *nextp = thread;
+        nextp = &thread->next;
+        // each followed immediately by its own replies
+        for (j = 0; j < ptrarray_size(&replies); j++) {
+            child = ptrarray_nth(&replies, j);
+            if (child->inreplyto != thread->msgid) continue;
+            child = ptrarray_remove(&replies, j);
+            *nextp = child;
+            nextp = &child->next;
+            j--;
+        }
+    }
+
+    // append any remaining drafts to the end of the thread
+    for (j = 0; j < ptrarray_size(&replies); j++) {
+        child = ptrarray_nth(&replies, j);
+        *nextp = child;
+        nextp = &child->next;
+    }
+
+    // finish the list
+    *nextp = NULL;
+
+    ptrarray_fini(&toplevel);
+    ptrarray_fini(&replies);
+}
+
 static void conversation_update_thread(conversation_t *conv,
                                        const struct message_guid *guid,
-                                       time_t internaldate,
-                                       const char *msgid,
+                                       time_t internaldate, const char *msgid,
                                        const char *inreplyto,
                                        int delta_exists)
 {
-    conv_thread_t *thread, *parent, **nextp = &conv->thread;
+    conv_thread_t *thread, **nextp = &conv->thread;
 
     for (thread = conv->thread; thread; thread = thread->next) {
         /* does it already exist? */
@@ -1425,19 +1484,16 @@ static void conversation_update_thread(conversation_t *conv,
         nextp = &thread->next;
     }
 
-    if (thread) {
-        /* unstitch */
-        *nextp = thread->next;
-    }
-    else {
-        /* we start with zero */
+    if (!thread) {
+        if (delta_exists <= 0) return; // no thread and no count, skip
         thread = xzmalloc(sizeof(*thread));
+        *nextp = thread;
     }
-
-    /* counts first, may be just removing it */
-    if (thread->exists + delta_exists <= 0) {
-        conv->dirty = 1;
+    else if (thread->exists + delta_exists <= 0) {
+        /* we're just removing the thread, this is always sort-safe */
+        *nextp = thread->next;
         free(thread);
+        conv->dirty = 1;
         return;
     }
 
@@ -1448,38 +1504,9 @@ static void conversation_update_thread(conversation_t *conv,
     thread->msgid = msgid ? crc32_cstring(msgid) : 0;
     thread->inreplyto = inreplyto ? crc32_cstring(inreplyto) : 0;
 
-    if (thread->inreplyto) {
-        /* see if we can stitch it into the list behind the message it replies to */
-        conv_thread_t *candidate = NULL;
-        for (parent = conv->thread; parent; parent = parent->next) {
-            if (thread->inreplyto == parent->msgid) {
-                candidate = parent;
-            }
-            if (thread->inreplyto == parent->inreplyto) {
-                if (parent->internaldate < internaldate)
-                    candidate = parent;
-            }
-        }
-        if (candidate) {
-            thread->next = candidate->next;
-            candidate->next = thread;
-            return;
-        }
-    }
-
-    /* OK, we didn't find a parent to attach to, so just go through by date and put it
-     * after the last one with an earlier date */
-    nextp = &conv->thread;
-    for (parent = conv->thread; parent; parent = parent->next) {
-        if (parent->internaldate > thread->internaldate) break;
-        /* or if the dates are the same, sort by GUID */
-        if (parent->internaldate == thread->internaldate &&
-            message_guid_cmp(&parent->guid, &thread->guid) > 0) break;
-        nextp = &parent->next;
-    }
-
-    thread->next = *nextp;
-    *nextp = thread;
+    conversations_thread_sort(conv);
+    // if we've sorted, it's probably dirty
+    conv->dirty = 1;
 }
 
 EXPORTED void conversation_update_sender(conversation_t *conv,
