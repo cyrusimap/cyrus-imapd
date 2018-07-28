@@ -664,17 +664,33 @@ static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
 
 static int setCalendars(struct jmap_req *req)
 {
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_set set;
+    json_t *err = NULL;
     int r = 0;
-    json_t *set = NULL;
 
-    json_t *state = json_object_get(req->args, "ifInState");
-    if (state && jmap_cmpstate(req, state, MBTYPE_CALENDAR)) {
-        json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
-                    "error", "type", "stateMismatch", req->tag));
+    /* Parse arguments */
+    jmap_set_parse(req->args, &parser, &set, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    set = json_pack("{s:s}", "accountId", req->accountid);
-    json_object_set_new(set, "oldState", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
+
+    if (set.if_in_state) {
+        /* TODO rewrite state function to use char* not json_t* */
+        json_t *jstate = json_string(set.if_in_state);
+        if (jmap_cmpstate(req, jstate, MBTYPE_CALENDAR)) {
+            jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+            goto done;
+        }
+        json_decref(jstate);
+        set.old_state = xstrdup(set.if_in_state);
+    }
+    else {
+        json_t *jstate = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
+        set.old_state = xstrdup(json_string_value(jstate));
+        json_decref(jstate);
+    }
 
     r = caldav_create_defaultcalendars(req->accountid);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -685,396 +701,354 @@ static int setCalendars(struct jmap_req *req)
         return 0;
     } else if (r) return r;
 
-    json_t *create = json_object_get(req->args, "create");
-    if (create) {
-        json_t *created = json_pack("{}");
-        json_t *notCreated = json_pack("{}");
-        json_t *record;
 
-        const char *key;
-        json_t *arg;
-        json_object_foreach(create, key, arg) {
-            /* Validate calendar id. */
-            if (!strlen(key)) {
-                json_t *err= json_pack("{s:s}", "type", "invalidArguments");
-                json_object_set_new(notCreated, key, err);
-                continue;
-            }
+    /* create */
+    const char *key;
+    json_t *arg, *record;
+    json_object_foreach(set.create, key, arg) {
+        /* Validate calendar id. */
+        if (!strlen(key)) {
+            json_t *err= json_pack("{s:s}", "type", "invalidArguments");
+            json_object_set_new(set.not_created, key, err);
+            continue;
+        }
 
-            /* Parse and validate properties. */
-            json_t *invalid = json_pack("[]");
-            const char *name = NULL;
-            const char *color = NULL;
-            int32_t sortOrder = -1;
-            int isVisible = 0;
-            int pe; /* parse error */
-            short flag;
+        /* Parse and validate properties. */
+        json_t *invalid = json_pack("[]");
+        const char *name = NULL;
+        const char *color = NULL;
+        int32_t sortOrder = -1;
+        int isVisible = 0;
+        int pe; /* parse error */
+        short flag;
 
-            /* Mandatory properties. */
-            pe = readprop(arg, "name", 1,  invalid, "s", &name);
-            if (pe > 0 && strnlen(name, 256) == 256) {
-                json_array_append_new(invalid, json_string("name"));
-            }
+        /* Mandatory properties. */
+        pe = readprop(arg, "name", 1,  invalid, "s", &name);
+        if (pe > 0 && strnlen(name, 256) == 256) {
+            json_array_append_new(invalid, json_string("name"));
+        }
 
-            readprop(arg, "color", 1,  invalid, "s", &color);
+        readprop(arg, "color", 1,  invalid, "s", &color);
 
-            pe = readprop(arg, "sortOrder", 1,  invalid, "i", &sortOrder);
-            if (pe > 0 && sortOrder < 0) {
-                json_array_append_new(invalid, json_string("sortOrder"));
-            }
-            pe = readprop(arg, "isVisible", 1,  invalid, "b", &isVisible);
-            if (pe > 0 && !isVisible) {
-                json_array_append_new(invalid, json_string("isVisible"));
-            }
-            /* Optional properties. If present, these MUST be set to true. */
-            flag = 1; readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
-            if (!flag) {
-                json_array_append_new(invalid, json_string("mayReadFreeBusy"));
-            }
-            flag = 1; readprop(arg, "mayReadItems", 0,  invalid, "b", &flag);
-            if (!flag) {
-                json_array_append_new(invalid, json_string("mayReadItems"));
-            }
-            flag = 1; readprop(arg, "mayAddItems", 0,  invalid, "b", &flag);
-            if (!flag) {
-                json_array_append_new(invalid, json_string("mayAddItems"));
-            }
-            flag = 1; readprop(arg, "mayModifyItems", 0,  invalid, "b", &flag);
-            if (!flag) {
-                json_array_append_new(invalid, json_string("mayModifyItems"));
-            }
-            flag = 1; readprop(arg, "mayRemoveItems", 0,  invalid, "b", &flag);
-            if (!flag) {
-                json_array_append_new(invalid, json_string("mayRemoveItems"));
-            }
-            flag = 1; readprop(arg, "mayRename", 0,  invalid, "b", &flag);
-            if (!flag) {
-                json_array_append_new(invalid, json_string("mayRename"));
-            }
-            flag = 1; readprop(arg, "mayDelete", 0,  invalid, "b", &flag);
-            if (!flag) {
-                json_array_append_new(invalid, json_string("mayDelete"));
-            }
+        pe = readprop(arg, "sortOrder", 1,  invalid, "i", &sortOrder);
+        if (pe > 0 && sortOrder < 0) {
+            json_array_append_new(invalid, json_string("sortOrder"));
+        }
+        pe = readprop(arg, "isVisible", 1,  invalid, "b", &isVisible);
+        if (pe > 0 && !isVisible) {
+            json_array_append_new(invalid, json_string("isVisible"));
+        }
+        /* Optional properties. If present, these MUST be set to true. */
+        flag = 1; readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
+        if (!flag) {
+            json_array_append_new(invalid, json_string("mayReadFreeBusy"));
+        }
+        flag = 1; readprop(arg, "mayReadItems", 0,  invalid, "b", &flag);
+        if (!flag) {
+            json_array_append_new(invalid, json_string("mayReadItems"));
+        }
+        flag = 1; readprop(arg, "mayAddItems", 0,  invalid, "b", &flag);
+        if (!flag) {
+            json_array_append_new(invalid, json_string("mayAddItems"));
+        }
+        flag = 1; readprop(arg, "mayModifyItems", 0,  invalid, "b", &flag);
+        if (!flag) {
+            json_array_append_new(invalid, json_string("mayModifyItems"));
+        }
+        flag = 1; readprop(arg, "mayRemoveItems", 0,  invalid, "b", &flag);
+        if (!flag) {
+            json_array_append_new(invalid, json_string("mayRemoveItems"));
+        }
+        flag = 1; readprop(arg, "mayRename", 0,  invalid, "b", &flag);
+        if (!flag) {
+            json_array_append_new(invalid, json_string("mayRename"));
+        }
+        flag = 1; readprop(arg, "mayDelete", 0,  invalid, "b", &flag);
+        if (!flag) {
+            json_array_append_new(invalid, json_string("mayDelete"));
+        }
 
-            /* Report any property errors and bail out. */
-            if (json_array_size(invalid)) {
-                json_t *err = json_pack("{s:s, s:o}",
-                        "type", "invalidProperties", "properties", invalid);
-                json_object_set_new(notCreated, key, err);
-                continue;
-            }
-            json_decref(invalid);
+        /* Report any property errors and bail out. */
+        if (json_array_size(invalid)) {
+            json_t *err = json_pack("{s:s, s:o}",
+                                    "type", "invalidProperties",
+                                    "properties", invalid);
+            json_object_set_new(set.not_created, key, err);
+            continue;
+        }
+        json_decref(invalid);
 
-            /* Prepare the ACL for this calendar */
-            struct buf acl = BUF_INITIALIZER;
-            if (strcmp(req->accountid, req->userid)) {
-                /* Make sure we are allowed to create the calendar */
-                char *parentname = caldav_mboxname(req->accountid, NULL);
-                mbentry_t *mbparent = NULL;
-                mboxlist_lookup(parentname, &mbparent, NULL);
-                free(parentname);
-                int rights = jmap_myrights(req, mbparent);
-                if (!(rights & DACL_MKCOL)) {
-                    json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
-                    json_object_set_new(notCreated, key, err);
-                    mboxlist_entry_free(&mbparent);
-                    continue;
-                }
-                /* Copy the calendar home ACL for this shared calendar */
-                buf_setcstr(&acl, mbparent->acl);
+        /* Prepare the ACL for this calendar */
+        struct buf acl = BUF_INITIALIZER;
+        if (strcmp(req->accountid, req->userid)) {
+            /* Make sure we are allowed to create the calendar */
+            char *parentname = caldav_mboxname(req->accountid, NULL);
+            mbentry_t *mbparent = NULL;
+            mboxlist_lookup(parentname, &mbparent, NULL);
+            free(parentname);
+            int rights = jmap_myrights(req, mbparent);
+            if (!(rights & DACL_MKCOL)) {
+                json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
+                json_object_set_new(set.not_created, key, err);
                 mboxlist_entry_free(&mbparent);
-            } else {
-                /* Users may always create their own calendars */
-                char rights[100];
-                cyrus_acl_masktostr(DACL_ALL | DACL_READFB, rights);
-                buf_printf(&acl, "%s\t%s\t", httpd_userid, rights);
-                cyrus_acl_masktostr(DACL_READFB, rights);
-                buf_printf(&acl, "%s\t%s\t", "anyone", rights);
+                continue;
             }
+            /* Copy the calendar home ACL for this shared calendar */
+            buf_setcstr(&acl, mbparent->acl);
+            mboxlist_entry_free(&mbparent);
+        } else {
+            /* Users may always create their own calendars */
+            char rights[100];
+            cyrus_acl_masktostr(DACL_ALL | DACL_READFB, rights);
+            buf_printf(&acl, "%s\t%s\t", httpd_userid, rights);
+            cyrus_acl_masktostr(DACL_READFB, rights);
+            buf_printf(&acl, "%s\t%s\t", "anyone", rights);
+        }
 
-            /* Create the calendar */
-            char *uid = xstrdup(makeuuid());
-            char *mboxname = caldav_mboxname(req->accountid, uid);
-            r = mboxlist_createsync(mboxname, MBTYPE_CALENDAR,
-                    NULL /* partition */,
-                    req->userid, req->authstate,
-                    0 /* options */, 0 /* uidvalidity */,
-                    0 /* createdmodseq */,
-                    0 /* highestmodseq */, buf_cstring(&acl),
-                    NULL /* uniqueid */, 0 /* local_only */,
-                    NULL /* mboxptr */);
-            buf_free(&acl);
-            if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                        mboxname, error_message(r));
-                if (r == IMAP_PERMISSION_DENIED) {
-                    json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
-                    json_object_set_new(notCreated, key, err);
-                }
-                free(mboxname);
-                goto done;
+        /* Create the calendar */
+        char *uid = xstrdup(makeuuid());
+        char *mboxname = caldav_mboxname(req->accountid, uid);
+        r = mboxlist_createsync(mboxname, MBTYPE_CALENDAR,
+                                NULL /* partition */,
+                                req->userid, req->authstate,
+                                0 /* options */, 0 /* uidvalidity */,
+                                0 /* createdmodseq */,
+                                0 /* highestmodseq */, buf_cstring(&acl),
+                                NULL /* uniqueid */, 0 /* local_only */,
+                                NULL /* mboxptr */);
+        buf_free(&acl);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                   mboxname, error_message(r));
+            if (r == IMAP_PERMISSION_DENIED) {
+                json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
+                json_object_set_new(set.not_created, key, err);
             }
-            r = setcalendars_update(req, mboxname,
-                                    name, color, sortOrder, isVisible);
-            if (r) {
-                free(uid);
-                int rr = mboxlist_delete(mboxname);
-                if (rr) {
-                    syslog(LOG_ERR, "could not delete mailbox %s: %s",
-                            mboxname, error_message(rr));
-                }
-                free(mboxname);
-                goto done;
-            }
-
             free(mboxname);
-
-            /* Report calendar as created. */
-            record = json_pack("{s:s}", "id", uid);
-            json_object_set_new(created, key, record);
-            jmap_add_id(req, key, uid);
+            goto done;
+        }
+        r = setcalendars_update(req, mboxname,
+                                name, color, sortOrder, isVisible);
+        if (r) {
             free(uid);
+            int rr = mboxlist_delete(mboxname);
+            if (rr) {
+                syslog(LOG_ERR, "could not delete mailbox %s: %s",
+                       mboxname, error_message(rr));
+            }
+            free(mboxname);
+            goto done;
         }
 
-        if (json_object_size(created)) {
-            json_object_set(set, "created", created);
-        }
-        json_decref(created);
+        free(mboxname);
 
-        if (json_object_size(notCreated)) {
-            json_object_set(set, "notCreated", notCreated);
-        }
-        json_decref(notCreated);
+        /* Report calendar as created. */
+        record = json_pack("{s:s}", "id", uid);
+        json_object_set_new(set.created, key, record);
+        jmap_add_id(req, key, uid);
+        free(uid);
     }
 
-    json_t *update = json_object_get(req->args, "update");
-    if (update) {
-        json_t *updated = json_pack("{}");
-        json_t *notUpdated = json_pack("{}");
 
-        const char *uid;
-        json_t *arg;
-        json_object_foreach(update, uid, arg) {
+    /* update */
+    const char *uid;
+    json_object_foreach(set.update, uid, arg) {
 
-            /* Validate uid */
-            if (!uid) {
-                continue;
-            }
-            if (uid && uid[0] == '#') {
-                const char *newuid = jmap_lookup_id(req, uid + 1);
-                if (!newuid) {
-                    json_t *err = json_pack("{s:s}", "type", "notFound");
-                    json_object_set_new(notUpdated, uid, err);
-                    continue;
-                }
-                uid = newuid;
-            }
-
-            /* Parse and validate properties. */
-            json_t *invalid = json_pack("[]");
-
-            const char *name = NULL;
-            const char *color = NULL;
-            int32_t sortOrder = -1;
-            int isVisible = -1;
-            int flag;
-            int pe = 0; /* parse error */
-            pe = readprop(arg, "name", 0,  invalid, "s", &name);
-            if (pe > 0 && strnlen(name, 256) == 256) {
-                json_array_append_new(invalid, json_string("name"));
-            }
-            readprop(arg, "color", 0,  invalid, "s", &color);
-            pe = readprop(arg, "sortOrder", 0,  invalid, "i", &sortOrder);
-            if (pe > 0 && sortOrder < 0) {
-                json_array_append_new(invalid, json_string("sortOrder"));
-            }
-            readprop(arg, "isVisible", 0,  invalid, "b", &isVisible);
-
-            /* The mayFoo properties are immutable and MUST NOT set. */
-            pe = readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
-            if (pe > 0) {
-                json_array_append_new(invalid, json_string("mayReadFreeBusy"));
-            }
-            pe = readprop(arg, "mayReadItems", 0,  invalid, "b", &flag);
-            if (pe > 0) {
-                json_array_append_new(invalid, json_string("mayReadItems"));
-            }
-            pe = readprop(arg, "mayAddItems", 0,  invalid, "b", &flag);
-            if (pe > 0) {
-                json_array_append_new(invalid, json_string("mayAddItems"));
-            }
-            pe = readprop(arg, "mayModifyItems", 0,  invalid, "b", &flag);
-            if (pe > 0) {
-                json_array_append_new(invalid, json_string("mayModifyItems"));
-            }
-            pe = readprop(arg, "mayRemoveItems", 0,  invalid, "b", &flag);
-            if (pe > 0) {
-                json_array_append_new(invalid, json_string("mayRemoveItems"));
-            }
-            pe = readprop(arg, "mayRename", 0,  invalid, "b", &flag);
-            if (pe > 0) {
-                json_array_append_new(invalid, json_string("mayRename"));
-            }
-            pe = readprop(arg, "mayDelete", 0,  invalid, "b", &flag);
-            if (pe > 0) {
-                json_array_append_new(invalid, json_string("mayDelete"));
-            }
-
-            /* Report any property errors and bail out. */
-            if (json_array_size(invalid)) {
-                json_t *err = json_pack("{s:s, s:o}",
-                        "type", "invalidProperties", "properties", invalid);
-                json_object_set_new(notUpdated, uid, err);
-                continue;
-            }
-            json_decref(invalid);
-
-            /* Make sure we don't mess up special calendars */
-            char *mboxname = caldav_mboxname(req->accountid, uid);
-            mbname_t *mbname = mbname_from_intname(mboxname);
-            if (!mbname || jmap_calendar_isspecial(mbname)) {
+        /* Validate uid */
+        if (!uid) {
+            continue;
+        }
+        if (uid && uid[0] == '#') {
+            const char *newuid = jmap_lookup_id(req, uid + 1);
+            if (!newuid) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notUpdated, uid, err);
-                mbname_free(&mbname);
-                free(mboxname);
+                json_object_set_new(set.not_updated, uid, err);
                 continue;
             }
+            uid = newuid;
+        }
+
+        /* Parse and validate properties. */
+        json_t *invalid = json_pack("[]");
+
+        const char *name = NULL;
+        const char *color = NULL;
+        int32_t sortOrder = -1;
+        int isVisible = -1;
+        int flag;
+        int pe = 0; /* parse error */
+        pe = readprop(arg, "name", 0,  invalid, "s", &name);
+        if (pe > 0 && strnlen(name, 256) == 256) {
+            json_array_append_new(invalid, json_string("name"));
+        }
+        readprop(arg, "color", 0,  invalid, "s", &color);
+        pe = readprop(arg, "sortOrder", 0,  invalid, "i", &sortOrder);
+        if (pe > 0 && sortOrder < 0) {
+            json_array_append_new(invalid, json_string("sortOrder"));
+        }
+        readprop(arg, "isVisible", 0,  invalid, "b", &isVisible);
+        
+        /* The mayFoo properties are immutable and MUST NOT set. */
+        pe = readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
+        if (pe > 0) {
+            json_array_append_new(invalid, json_string("mayReadFreeBusy"));
+        }
+        pe = readprop(arg, "mayReadItems", 0,  invalid, "b", &flag);
+        if (pe > 0) {
+            json_array_append_new(invalid, json_string("mayReadItems"));
+        }
+        pe = readprop(arg, "mayAddItems", 0,  invalid, "b", &flag);
+        if (pe > 0) {
+            json_array_append_new(invalid, json_string("mayAddItems"));
+        }
+        pe = readprop(arg, "mayModifyItems", 0,  invalid, "b", &flag);
+        if (pe > 0) {
+            json_array_append_new(invalid, json_string("mayModifyItems"));
+        }
+        pe = readprop(arg, "mayRemoveItems", 0,  invalid, "b", &flag);
+        if (pe > 0) {
+            json_array_append_new(invalid, json_string("mayRemoveItems"));
+        }
+        pe = readprop(arg, "mayRename", 0,  invalid, "b", &flag);
+        if (pe > 0) {
+            json_array_append_new(invalid, json_string("mayRename"));
+        }
+        pe = readprop(arg, "mayDelete", 0,  invalid, "b", &flag);
+        if (pe > 0) {
+            json_array_append_new(invalid, json_string("mayDelete"));
+        }
+        
+        /* Report any property errors and bail out. */
+        if (json_array_size(invalid)) {
+            json_t *err = json_pack("{s:s, s:o}",
+                                    "type", "invalidProperties",
+                                    "properties", invalid);
+            json_object_set_new(set.not_updated, uid, err);
+            continue;
+        }
+        json_decref(invalid);
+
+        /* Make sure we don't mess up special calendars */
+        char *mboxname = caldav_mboxname(req->accountid, uid);
+        mbname_t *mbname = mbname_from_intname(mboxname);
+        if (!mbname || jmap_calendar_isspecial(mbname)) {
+            json_t *err = json_pack("{s:s}", "type", "notFound");
+            json_object_set_new(set.not_updated, uid, err);
             mbname_free(&mbname);
-
-            /* Update the calendar */
-            r = setcalendars_update(req, mboxname,
-                                    name, color, sortOrder, isVisible);
             free(mboxname);
-            if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notUpdated, uid, err);
-                r = 0;
-                continue;
-            }
-            else if (r == IMAP_PERMISSION_DENIED) {
-                json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
-                json_object_set_new(notUpdated, uid, err);
-                r = 0;
-                continue;
-            }
+            continue;
+        }
+        mbname_free(&mbname);
 
-            /* Report calendar as updated. */
-            json_object_set_new(updated, uid, json_null());
+        /* Update the calendar */
+        r = setcalendars_update(req, mboxname,
+                                name, color, sortOrder, isVisible);
+        free(mboxname);
+        if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
+            json_t *err = json_pack("{s:s}", "type", "notFound");
+            json_object_set_new(set.not_updated, uid, err);
+            r = 0;
+            continue;
+        }
+        else if (r == IMAP_PERMISSION_DENIED) {
+            json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
+            json_object_set_new(set.not_updated, uid, err);
+            r = 0;
+            continue;
         }
 
-        if (json_object_size(updated)) {
-            json_object_set(set, "updated", updated);
-        }
-        json_decref(updated);
-        if (json_object_size(notUpdated)) {
-            json_object_set(set, "notUpdated", notUpdated);
-        }
-        json_decref(notUpdated);
+        /* Report calendar as updated. */
+        json_object_set_new(set.updated, uid, json_null());
     }
 
-    json_t *destroy = json_object_get(req->args, "destroy");
-    if (destroy) {
-        json_t *destroyed = json_pack("[]");
-        json_t *notDestroyed = json_pack("{}");
 
-        size_t index;
-        json_t *juid;
+    /* destroy */
+    size_t index;
+    json_t *juid;
 
-        json_array_foreach(destroy, index, juid) {
+    json_array_foreach(set.destroy, index, juid) {
 
-            /* Validate uid */
-            const char *uid = json_string_value(juid);
-            if (!uid) {
+        /* Validate uid */
+        const char *uid = json_string_value(juid);
+        if (!uid) {
+            continue;
+        }
+        if (uid && uid[0] == '#') {
+            const char *newuid = jmap_lookup_id(req, uid + 1);
+            if (!newuid) {
+                json_t *err = json_pack("{s:s}", "type", "notFound");
+                json_object_set_new(set.not_destroyed, uid, err);
                 continue;
             }
-            if (uid && uid[0] == '#') {
-                const char *newuid = jmap_lookup_id(req, uid + 1);
-                if (!newuid) {
-                    json_t *err = json_pack("{s:s}", "type", "notFound");
-                    json_object_set_new(notDestroyed, uid, err);
-                    continue;
-                }
-                uid = newuid;
-            }
+            uid = newuid;
+        }
 
-            /* Do not allow to remove the default calendar. */
-            char *mboxname = caldav_mboxname(req->accountid, NULL);
-            static const char *defaultcal_annot =
-                DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
-            struct buf attrib = BUF_INITIALIZER;
-            r = annotatemore_lookupmask(mboxname, defaultcal_annot,
-                                        req->accountid, &attrib);
-            free(mboxname);
-            const char *defaultcal = "Default";
-            if (!r && attrib.len) {
-                defaultcal = buf_cstring(&attrib);
-            }
-            if (!strcmp(uid, defaultcal)) {
-                /* XXX - The isDefault set error is not documented in the spec. */
-                json_t *err = json_pack("{s:s}", "type", "isDefault");
-                json_object_set_new(notDestroyed, uid, err);
-                buf_free(&attrib);
-                continue;
-            }
+        /* Do not allow to remove the default calendar. */
+        char *mboxname = caldav_mboxname(req->accountid, NULL);
+        static const char *defaultcal_annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-default-calendar";
+        struct buf attrib = BUF_INITIALIZER;
+        r = annotatemore_lookupmask(mboxname, defaultcal_annot,
+                                    req->accountid, &attrib);
+        free(mboxname);
+        const char *defaultcal = "Default";
+        if (!r && attrib.len) {
+            defaultcal = buf_cstring(&attrib);
+        }
+        if (!strcmp(uid, defaultcal)) {
+            /* XXX - The isDefault set error is not documented in the spec. */
+            json_t *err = json_pack("{s:s}", "type", "isDefault");
+            json_object_set_new(set.not_destroyed, uid, err);
             buf_free(&attrib);
+            continue;
+        }
+        buf_free(&attrib);
 
-            /* Make sure we don't delete special calendars */
-            mboxname = caldav_mboxname(req->accountid, uid);
-            mbname_t *mbname = mbname_from_intname(mboxname);
-            if (!mbname || jmap_calendar_isspecial(mbname)) {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notDestroyed, uid, err);
-                mbname_free(&mbname);
-                free(mboxname);
-                continue;
-            }
+        /* Make sure we don't delete special calendars */
+        mboxname = caldav_mboxname(req->accountid, uid);
+        mbname_t *mbname = mbname_from_intname(mboxname);
+        if (!mbname || jmap_calendar_isspecial(mbname)) {
+            json_t *err = json_pack("{s:s}", "type", "notFound");
+            json_object_set_new(set.not_destroyed, uid, err);
             mbname_free(&mbname);
-
-            /* Destroy calendar. */
-            r = setcalendars_destroy(req, mboxname);
             free(mboxname);
-            if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notDestroyed, uid, err);
-                r = 0;
-                continue;
-            } else if (r == IMAP_PERMISSION_DENIED) {
-                json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
-                json_object_set_new(notDestroyed, uid, err);
-                r = 0;
-                continue;
-            } else if (r) {
-                goto done;
-            }
+            continue;
+        }
+        mbname_free(&mbname);
 
-            /* Report calendar as destroyed. */
-            json_array_append_new(destroyed, json_string(uid));
+        /* Destroy calendar. */
+        r = setcalendars_destroy(req, mboxname);
+        free(mboxname);
+        if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
+            json_t *err = json_pack("{s:s}", "type", "notFound");
+            json_object_set_new(set.not_destroyed, uid, err);
+            r = 0;
+            continue;
+        } else if (r == IMAP_PERMISSION_DENIED) {
+            json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
+            json_object_set_new(set.not_destroyed, uid, err);
+            r = 0;
+            continue;
+        } else if (r) {
+            goto done;
         }
 
-        if (json_array_size(destroyed)) {
-            json_object_set(set, "destroyed", destroyed);
-        }
-        json_decref(destroyed);
-        if (json_object_size(notDestroyed)) {
-            json_object_set(set, "notDestroyed", notDestroyed);
-        }
-        json_decref(notDestroyed);
+        /* Report calendar as destroyed. */
+        json_array_append_new(set.destroyed, json_string(uid));
     }
 
-    /* Set newState field in calendarsSet. */
-    json_object_set_new(set, "newState", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/1));
 
-    json_incref(set);
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("Calendar/set"));
-    json_array_append_new(item, set);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    // TODO refactor jmap_getstate to return a string, once
+    // all code has been migrated to the new JMAP parser.
+    json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/1);
+    set.new_state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
 
-    jmap_add_perf(req, set);
+    jmap_ok(req, jmap_set_reply(&set));
 
 done:
-    if (set) json_decref(set);
+    jmap_parser_fini(&parser);
+    jmap_set_fini(&set);
     return r;
 }
 
@@ -1886,15 +1860,33 @@ done:
 
 static int setCalendarEvents(struct jmap_req *req)
 {
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_set set;
+    json_t *err = NULL;
     struct caldav_db *db = NULL;
-    json_t *set = NULL;
     int r = 0;
 
-    json_t *state = json_object_get(req->args, "ifInState");
-    if (state && jmap_cmpstate(req, state, MBTYPE_CALENDAR)) {
-        json_array_append_new(req->response, json_pack("[s, {s:s}, s]",
-                    "error", "type", "stateMismatch", req->tag));
+    /* Parse arguments */
+    jmap_set_parse(req->args, &parser, &set, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
+    }
+
+    if (set.if_in_state) {
+        /* TODO rewrite state function to use char* not json_t* */
+        json_t *jstate = json_string(set.if_in_state);
+        if (jmap_cmpstate(req, jstate, MBTYPE_CALENDAR)) {
+            jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+            goto done;
+        }
+        json_decref(jstate);
+        set.old_state = xstrdup(set.if_in_state);
+    }
+    else {
+        json_t *jstate = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
+        set.old_state = xstrdup(json_string_value(jstate));
+        json_decref(jstate);
     }
 
     r = caldav_create_defaultcalendars(req->accountid);
@@ -1913,207 +1905,161 @@ static int setCalendarEvents(struct jmap_req *req)
         goto done;
     }
 
-    set = json_pack("{s:s}", "accountId", req->accountid);
 
-    json_object_set_new(set, "oldState", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
+    /* create */
+    const char *key;
+    json_t *arg;
+    json_object_foreach(set.create, key, arg) {
+        char *uid = NULL;
 
-    json_t *create = json_object_get(req->args, "create");
-    if (create) {
-        json_t *created = json_pack("{}");
-        json_t *notCreated = json_pack("{}");
+        /* Validate calendar event id. */
+        if (!strlen(key)) {
+            json_t *err= json_pack("{s:s}", "type", "invalidArguments");
+            json_object_set_new(set.not_created, key, err);
+            continue;
+        }
 
-        const char *key;
-        json_t *arg;
-        json_object_foreach(create, key, arg) {
-            char *uid = NULL;
-
-            /* Validate calendar event id. */
-            if (!strlen(key)) {
-                json_t *err= json_pack("{s:s}", "type", "invalidArguments");
-                json_object_set_new(notCreated, key, err);
-                continue;
-            }
-
-            /* Create the calendar event. */
-            json_t *invalid = json_pack("[]");
-            r = setcalendarevents_create(req, arg, db, &uid, invalid);
-            if (r) {
-                json_t *err = json_pack("{s:s s:s}",
-                        "type", "internalError", "message", error_message(r));
-                json_object_set_new(notCreated, key, err);
-                r = 0;
-                free(uid);
-                continue;
-            }
-            if (json_array_size(invalid)) {
-                json_t *err = json_pack("{s:s s:o}",
-                        "type", "invalidProperties", "properties", invalid);
-                json_object_set_new(notCreated, key, err);
-                free(uid);
-                continue;
-            }
-            json_decref(invalid);
-
-            /* Report calendar event as created. */
-            json_object_set_new(created, key, json_pack("{s:s}", "id", uid));
-            jmap_add_id(req, key, uid);
+        /* Create the calendar event. */
+        json_t *invalid = json_pack("[]");
+        r = setcalendarevents_create(req, arg, db, &uid, invalid);
+        if (r) {
+            json_t *err = json_pack("{s:s s:s}",
+                                    "type", "internalError",
+                                    "message", error_message(r));
+            json_object_set_new(set.not_created, key, err);
+            r = 0;
             free(uid);
+            continue;
         }
-
-        if (json_object_size(created)) {
-            json_object_set(set, "created", created);
+        if (json_array_size(invalid)) {
+            json_t *err = json_pack("{s:s s:o}",
+                                    "type", "invalidProperties",
+                                    "properties", invalid);
+            json_object_set_new(set.not_created, key, err);
+            free(uid);
+            continue;
         }
-        json_decref(created);
+        json_decref(invalid);
 
-        if (json_object_size(notCreated)) {
-            json_object_set(set, "notCreated", notCreated);
-        }
-        json_decref(notCreated);
-
+        /* Report calendar event as created. */
+        json_object_set_new(set.created, key, json_pack("{s:s}", "id", uid));
+        jmap_add_id(req, key, uid);
+        free(uid);
     }
 
-    json_t *update = json_object_get(req->args, "update");
-    if (update) {
-        json_t *updated = json_pack("{}");
-        json_t *notUpdated = json_pack("{}");
 
-        const char *uid;
-        json_t *arg;
+    /* update */
+    const char *uid;
 
-        json_object_foreach(update, uid, arg) {
-            const char *val = NULL;
+    json_object_foreach(set.update, uid, arg) {
+        const char *val = NULL;
 
-            /* Validate uid. */
-            if (!uid) {
-                continue;
-            }
-            if (uid && uid[0] == '#') {
-                const char *newuid = jmap_lookup_id(req, uid + 1);
-                if (!newuid) {
-                    json_t *err = json_pack("{s:s}", "type", "notFound");
-                    json_object_set_new(notUpdated, uid, err);
-                    continue;
-                }
-                uid = newuid;
-            }
-
-            if ((val = (char *)json_string_value(json_object_get(arg, "uid")))) {
-                /* The uid property must match the current iCalendar UID */
-                if (strcmp(val, uid)) {
-                    json_t *err = json_pack(
-                            "{s:s, s:o}",
-                            "type", "invalidProperties",
-                            "properties", json_pack("[s]"));
-                    json_object_set_new(notUpdated, uid, err);
-                    continue;
-                }
-            }
-
-            /* Update the calendar event. */
-            json_t *invalid = json_pack("[]");
-            r = setcalendarevents_update(req, arg, uid, db, invalid);
-            if (r == IMAP_NOTFOUND) {
+        /* Validate uid. */
+        if (!uid) {
+            continue;
+        }
+        if (uid && uid[0] == '#') {
+            const char *newuid = jmap_lookup_id(req, uid + 1);
+            if (!newuid) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notUpdated, uid, err);
-                json_decref(invalid);
-                r = 0;
+                json_object_set_new(set.not_updated, uid, err);
                 continue;
-            } else if (r) {
-                json_decref(invalid);
-                goto done;
             }
-            if (json_array_size(invalid)) {
-                    json_t *err = json_pack(
-                            "{s:s, s:o}", "type", "invalidProperties",
-                            "properties", invalid);
-                    json_object_set_new(notUpdated, uid, err);
-                    continue;
+            uid = newuid;
+        }
+
+        if ((val = (char *)json_string_value(json_object_get(arg, "uid")))) {
+            /* The uid property must match the current iCalendar UID */
+            if (strcmp(val, uid)) {
+                json_t *err = json_pack(
+                    "{s:s, s:o}",
+                    "type", "invalidProperties",
+                    "properties", json_pack("[s]"));
+                json_object_set_new(set.not_updated, uid, err);
+                continue;
             }
+        }
+
+        /* Update the calendar event. */
+        json_t *invalid = json_pack("[]");
+        r = setcalendarevents_update(req, arg, uid, db, invalid);
+        if (r == IMAP_NOTFOUND) {
+            json_t *err = json_pack("{s:s}", "type", "notFound");
+            json_object_set_new(set.not_updated, uid, err);
             json_decref(invalid);
+            r = 0;
+            continue;
+        } else if (r) {
+            json_decref(invalid);
+            goto done;
+        }
+        if (json_array_size(invalid)) {
+            json_t *err = json_pack(
+                "{s:s, s:o}", "type", "invalidProperties",
+                "properties", invalid);
+            json_object_set_new(set.not_updated, uid, err);
+            continue;
+        }
+        json_decref(invalid);
 
-            /* Report calendar event as updated. */
-            json_object_set_new(updated, uid, json_null());
-        }
-
-        if (json_object_size(updated)) {
-            json_object_set(set, "updated", updated);
-        }
-        json_decref(updated);
-        if (json_object_size(notUpdated)) {
-            json_object_set(set, "notUpdated", notUpdated);
-        }
-        json_decref(notUpdated);
+        /* Report calendar event as updated. */
+        json_object_set_new(set.updated, uid, json_null());
     }
 
-    json_t *destroy = json_object_get(req->args, "destroy");
-    if (destroy) {
-        json_t *destroyed = json_pack("[]");
-        json_t *notDestroyed = json_pack("{}");
 
-        size_t index;
-        json_t *juid;
+    /* destroy */
+    size_t index;
+    json_t *juid;
 
-        json_array_foreach(destroy, index, juid) {
-            /* Validate uid. */
-            const char *uid = json_string_value(juid);
-            if (!uid) {
-                continue;
-            }
-            if (uid && uid[0] == '#') {
-                const char *newuid = jmap_lookup_id(req, uid + 1);
-                if (!newuid) {
-                    json_t *err = json_pack("{s:s}", "type", "notFound");
-                    json_object_set_new(notDestroyed, uid, err);
-                    continue;
-                }
-                uid = newuid;
-            }
-
-            /* Destroy the calendar event. */
-            r = setcalendarevents_destroy(req, uid, db);
-            if (r == IMAP_NOTFOUND) {
+    json_array_foreach(set.destroy, index, juid) {
+        /* Validate uid. */
+        const char *uid = json_string_value(juid);
+        if (!uid) {
+            continue;
+        }
+        if (uid && uid[0] == '#') {
+            const char *newuid = jmap_lookup_id(req, uid + 1);
+            if (!newuid) {
                 json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(notDestroyed, uid, err);
-                r = 0;
+                json_object_set_new(set.not_destroyed, uid, err);
                 continue;
-            } else if (r == IMAP_PERMISSION_DENIED) {
-                json_t *err = json_pack("{s:s}", "type", "forbidden");
-                json_object_set_new(notDestroyed, uid, err);
-                r = 0;
-                continue;
-            } else if (r) {
-                goto done;
             }
-
-            /* Report calendar event as destroyed. */
-            json_array_append_new(destroyed, json_string(uid));
+            uid = newuid;
         }
 
-        if (json_array_size(destroyed)) {
-            json_object_set(set, "destroyed", destroyed);
+        /* Destroy the calendar event. */
+        r = setcalendarevents_destroy(req, uid, db);
+        if (r == IMAP_NOTFOUND) {
+            json_t *err = json_pack("{s:s}", "type", "notFound");
+            json_object_set_new(set.not_destroyed, uid, err);
+            r = 0;
+            continue;
+        } else if (r == IMAP_PERMISSION_DENIED) {
+            json_t *err = json_pack("{s:s}", "type", "forbidden");
+            json_object_set_new(set.not_destroyed, uid, err);
+            r = 0;
+            continue;
+        } else if (r) {
+            goto done;
         }
-        json_decref(destroyed);
-        if (json_object_size(notDestroyed)) {
-            json_object_set(set, "notDestroyed", notDestroyed);
-        }
-        json_decref(notDestroyed);
+
+        /* Report calendar event as destroyed. */
+        json_array_append_new(set.destroyed, json_string(uid));
     }
 
-    /* Set newState field in calendarsSet. */
-    json_object_set_new(set, "newState", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/1));
 
-    json_incref(set);
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("CalendarEvent/set"));
-    json_array_append_new(item, set);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    // TODO refactor jmap_getstate to return a string, once
+    // all code has been migrated to the new JMAP parser.
+    json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/1);
+    set.new_state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
 
-    jmap_add_perf(req, set);
+    jmap_ok(req, jmap_set_reply(&set));
 
 done:
+    jmap_parser_fini(&parser);
+    jmap_set_fini(&set);
     if (db) caldav_close(db);
-    if (set) json_decref(set);
     return r;
 }
 
