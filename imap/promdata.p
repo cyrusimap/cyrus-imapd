@@ -97,6 +97,8 @@ metric counter cyrus_http_acl_total               The total number of HTTP ACLs
     label cyrus_http_acl_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
 metric counter cyrus_http_bind_total              The total number of HTTP BINDs
     label cyrus_http_bind_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
+metric counter cyrus_http_connect_total           The total number of HTTP CONNECTvs
+    label cyrus_http_connect_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
 metric counter cyrus_http_copy_total              The total number of HTTP COPYs
     label cyrus_http_copy_total namespace default admin applepush calendar freebusy addressbook principal notify dblookup ischedule domainkeys jmap prometheus rss tzdist drive
 metric counter cyrus_http_delete_total            The total number of HTTP DELETEs
