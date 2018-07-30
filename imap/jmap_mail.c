@@ -11037,14 +11037,8 @@ int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
 
     /* Check mailboxes for ACL */
     if (req->is_shared_account) {
-        size_t i;
-        json_t *val;
-        struct msgimport_checkacl_rock rock = { req, json_pack("{}") };
-        json_array_foreach(mailboxids, i, val) {
-            json_object_set(rock.mailboxes, json_string_value(val), json_true());
-        }
+        struct msgimport_checkacl_rock rock = { req, mailboxids };
         r = jmap_mboxlist(req, msgimport_checkacl_cb, &rock);
-        json_decref(rock.mailboxes);
         if (r) return r;
     }
 
