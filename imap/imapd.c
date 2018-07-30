@@ -9019,6 +9019,10 @@ static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
 
 nonconv:
     sd->mailboxid = mbentry->uniqueid;
+    sd->uidvalidity = mbentry->uidvalidity;
+
+    if (statusitems == (statusitems & STATUS_MBENTRYITEMS))
+        return 0;
 
     /* use the index status if we can so we get the 'alive' Recent count */
     if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index)) && imapd_index->mailbox)

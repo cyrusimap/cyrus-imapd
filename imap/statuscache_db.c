@@ -220,14 +220,13 @@ EXPORTED int status_lookup(const char *mboxname, const char *userid,
 
     /* We always have message count, uidnext,
        uidvalidity, and highestmodseq for cache */
-    c_statusitems = STATUS_MESSAGES | STATUS_UIDNEXT |
-                    STATUS_UIDVALIDITY | STATUS_HIGHESTMODSEQ;
+    c_statusitems = STATUS_INDEXITEMS;
 
     if (!mailbox->i.exists) {
         /* no messages, so these two must also be zero */
-        c_statusitems |= STATUS_RECENT | STATUS_UNSEEN;
+        c_statusitems |= STATUS_SEENITEMS;
     }
-    else if (statusitems & (STATUS_RECENT | STATUS_UNSEEN)) {
+    else if (statusitems & (STATUS_SEENITEMS)) {
         /* Read \Seen state */
         struct seqset *seq = NULL;
         int internalseen = mailbox_internal_seen(mailbox, userid);
@@ -268,7 +267,7 @@ EXPORTED int status_lookup(const char *mboxname, const char *userid,
         seqset_free(seq);
 
         /* we've calculated the correct values for both */
-        c_statusitems |= STATUS_RECENT | STATUS_UNSEEN;
+        c_statusitems |= STATUS_SEENITEMS;
     }
 
     statuscache_fill(sdata, userid, mailbox, c_statusitems,
@@ -322,14 +321,13 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
 
     /* We always have message count, uidnext,
        uidvalidity, and highestmodseq for cache */
-    c_statusitems = STATUS_MESSAGES | STATUS_UIDNEXT |
-                    STATUS_UIDVALIDITY | STATUS_HIGHESTMODSEQ;
+    c_statusitems = STATUS_INDEXITEMS;
 
     if (!mailbox->i.exists) {
         /* no messages, so these two must also be zero */
-        c_statusitems |= STATUS_RECENT | STATUS_UNSEEN;
+        c_statusitems |= STATUS_SEENITEMS;
     }
-    else if (statusitems & (STATUS_RECENT | STATUS_UNSEEN)) {
+    else if (statusitems & STATUS_SEENITEMS) {
         /* Read \Seen state */
         struct seqset *seq = NULL;
         int internalseen = mailbox_internal_seen(mailbox, userid);
@@ -369,7 +367,7 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
         mailbox_iter_done(&iter);
 
         /* we've calculated the correct values for both */
-        c_statusitems |= STATUS_RECENT | STATUS_UNSEEN;
+        c_statusitems |= STATUS_SEENITEMS;
     }
 
     statuscache_fill(sdata, userid, mailbox, c_statusitems,

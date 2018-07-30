@@ -1786,8 +1786,7 @@ static int index_lock(struct index_state *state)
 
 EXPORTED int index_status(struct index_state *state, struct statusdata *sdata)
 {
-    int items = STATUS_MESSAGES | STATUS_UIDNEXT | STATUS_UIDVALIDITY |
-                STATUS_HIGHESTMODSEQ | STATUS_RECENT | STATUS_UNSEEN;
+    int items = STATUS_INDEXITEMS | STATUS_SEENITEMS | STATUS_UIDVALIDITY;
     int r;
 
     r = index_lock(state);
