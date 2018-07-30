@@ -153,7 +153,7 @@ struct jmap_query {
     size_t limit;
     int have_limit;
     /* Response fields */
-    char *queryState;
+    char *query_state;
     int can_calculate_changes;
     size_t result_position;
     size_t total;
@@ -359,7 +359,7 @@ static void jmap_query_parse(json_t *jargs,
 
 static void jmap_query_fini(struct jmap_query *query)
 {
-    free(query->queryState);
+    free(query->query_state);
     json_decref(query->ids);
 }
 
@@ -369,9 +369,9 @@ static json_t *jmap_query_reply(struct jmap_query *query)
     json_t *res = json_object();
     json_object_set(res, "filter", query->filter);
     json_object_set(res, "sort", query->sort);
-    json_object_set_new(res, "queryState", json_string(query->queryState));
+    json_object_set_new(res, "queryState", json_string(query->query_state));
     json_object_set_new(res, "canCalculateChanges", json_boolean(query->can_calculate_changes));
-    json_object_set_new(res, "position", json_integer(query->position));
+    json_object_set_new(res, "position", json_integer(query->result_position));
     json_object_set_new(res, "total", json_integer(query->total));
     /* Special case total */
     if (query->position > 0 && query->total < SSIZE_MAX) {
@@ -1565,7 +1565,7 @@ static int _mbox_query(jmap_req_t *req, struct jmap_query *jquery)
         jquery->ids = json_array();
     }
     if (result_pos >= 0) {
-        jquery->position = result_pos;
+        jquery->result_position = result_pos;
     }
 
 done:
@@ -1647,7 +1647,7 @@ static int jmap_mailbox_query(jmap_req_t *req)
         goto done;
     }
     json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-    query.queryState = xstrdup(json_string_value(jstate));
+    query.query_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
     /* Build response */
@@ -5231,11 +5231,8 @@ static void _email_querychanges_destroyed(struct jmap_querychanges *query,
 }
 
 struct emailsearch {
-    /* Search result */
-    const ptrarray_t *msgdata; /* Array of MsgData */
     int is_mutable;
-    int err;
-    int is_cached;
+    char *hash;
     /* Internal state */
     search_query_t *query;
     struct searchargs *args;
@@ -5245,52 +5242,19 @@ struct emailsearch {
     ptrarray_t *cached_msgdata;
 };
 
-static void _emailsearch_msgdata_fini(ptrarray_t *msgdata)
-{
-    if (!msgdata) return;
-
-    MsgData *md;
-    while ((md = ptrarray_pop(msgdata))) {
-        if (md->folder) {
-            search_folder_t *folder = md->folder;
-            free(folder->mboxname);
-            bv_free(&folder->uids);
-            bv_free(&folder->unchecked_uids);
-            free(folder);
-        }
-        free(md->cc);
-        free(md->from);
-        free(md->to);
-        free(md->displayfrom);
-        free(md->displayto);
-        free(md->xsubj);
-        free(md->msgid);
-        free(md->listid);
-        free(md->contenttype);
-        strarray_fini(&md->ref);
-        strarray_fini(&md->annot);
-        free(md);
-    }
-    ptrarray_fini(msgdata);
-}
-
 static void _emailsearch_free(struct emailsearch *search)
 {
-    _emailsearch_msgdata_fini(search->cached_msgdata);
-    ptrarray_free(search->cached_msgdata);
     index_close(&search->state);
     search_query_free(search->query);
     freesearchargs(search->args);
     freesortcrit(search->sortcrit);
+    free(search->hash);
     free(search);
 }
 
-
-static char *_emailsearch_cachekey(const char *account_id, struct emailsearch *search)
+static char *_emailsearch_hash(struct emailsearch *search)
 {
     struct buf buf = BUF_INITIALIZER;
-
-    /* Fingerprint search */
     if (search->args->root) {
         search_expr_t *mysearch = search_expr_duplicate(search->args->root);
         search_expr_normalise(&mysearch);
@@ -5302,7 +5266,6 @@ static char *_emailsearch_cachekey(const char *account_id, struct emailsearch *s
     else {
         buf_appendcstr(&buf, "noquery");
     }
-    buf_putc(&buf, '\t');
     if (search->query->sortcrit) {
         char *tmp = sortcrit_as_string(search->query->sortcrit);
         buf_appendcstr(&buf, tmp);
@@ -5316,11 +5279,8 @@ static char *_emailsearch_cachekey(const char *account_id, struct emailsearch *s
     char hex_sha1[(SHA1_DIGEST_LENGTH << 1) + 1];
     bin_to_hex(raw_sha1, SHA1_DIGEST_LENGTH, hex_sha1, BH_LOWER);
     hex_sha1[sizeof(hex_sha1)/sizeof(hex_sha1[0])] = '\0';
-
-    /* Make key */
-    buf_reset(&buf);
-    buf_printf(&buf, "%s/%s", account_id, hex_sha1);
-    return buf_release(&buf);
+    buf_free(&buf);
+    return xstrdup(hex_sha1);
 }
 
 #define FNAME_EMAILSEARCH_DB "/jmap_emailsearch.db"
@@ -5331,316 +5291,12 @@ static char *emailsearch_getcachepath()
     return xstrdupnull(config_getstring(IMAPOPT_JMAP_EMAILSEARCH_DB_PATH));
 }
 
-static void _write_bitvector(struct buf *buf, bitvector_t *vec)
-{
-    buf_appendbit32(buf, vec->length);
-    buf_appendbit32(buf, vec->alloc);
-    buf_appendmap(buf, (char*) vec->bits, vec->alloc);
-}
-
-static void _write_cstring(struct buf *buf, const char *str)
-{
-    if (str) {
-        size_t len = strlen(str);
-        buf_appendbit64(buf, strlen(str));
-        buf_appendmap(buf, str, len);
-    }
-    else {
-        buf_appendbit64(buf, 0);
-    }
-}
-
-static void _write_strarray(struct buf *buf, strarray_t *arr)
-{
-    int i;
-    buf_appendbit64(buf, strarray_size(arr));
-    for (i = 0; i < strarray_size(arr); i++) {
-        _write_cstring(buf, strarray_nth(arr, i));
-    }
-}
-
-static int _write_msgdata(struct buf *buf, MsgData *md)
-{
-    /* search_folder */
-    if (md->folder) {
-        struct search_folder *folder = md->folder;
-        buf_appendbit32(buf, 0xbeefc0de);
-        _write_cstring(buf, folder->mboxname);
-        buf_appendbit32(buf, folder->uidvalidity);
-        if (folder->highest_modseq > UINT64_MAX) return -1;
-        buf_appendbit64(buf, folder->highest_modseq);
-        if (folder->first_modseq > UINT64_MAX) return -1;
-        buf_appendbit64(buf, folder->first_modseq);
-        if (folder->last_modseq > UINT64_MAX) return -1;
-        buf_appendbit64(buf, folder->last_modseq);
-        buf_appendbit32(buf, folder->id);
-        _write_bitvector(buf, &folder->uids);
-        _write_bitvector(buf, &folder->unchecked_uids);
-        buf_appendbit32(buf, folder->unchecked_dirty);
-    } else {
-        buf_appendbit32(buf, 0x0);
-    }
-
-    /* items from the index_record */
-    buf_appendbit32(buf, md->uid);
-    buf_appendbit32(buf, md->msgno);
-    if (md->cid > UINT64_MAX) return -1;
-    buf_appendbit64(buf, md->cid);
-    _write_strarray(buf, &md->ref);
-    buf_appendbit64(buf, md->sentdate);
-    buf_appendbit64(buf, md->internaldate);
-    if (md->size > UINT64_MAX) return -1;
-    buf_appendbit64(buf, md->size);
-    if (md->modseq > UINT64_MAX) return -1;
-    buf_appendbit64(buf, md->modseq);
-    buf_appendbit32(buf, md->hasflag);
-    _write_cstring(buf, message_guid_encode(&md->guid));
-    buf_appendbit32(buf, md->system_flags);
-    buf_appendbit32(buf, md->internal_flags);
-
-    /* items from the conversations database */
-    if (md->convmodseq > UINT64_MAX) return -1;
-    buf_appendbit64(buf, md->convmodseq);
-    buf_appendbit32(buf, md->convexists);
-    buf_appendbit32(buf, md->convsize);
-    buf_appendbit32(buf, md->hasconvflag);
-    buf_appendbit32(buf, md->spamscore);
-
-    /* items from the cache record */
-    _write_cstring(buf, md->msgid);
-    _write_cstring(buf, md->listid);
-    _write_cstring(buf, md->contenttype);
-    _write_cstring(buf, md->cc);
-    _write_cstring(buf, md->from);
-    _write_cstring(buf, md->to);
-    _write_cstring(buf, md->displayfrom);
-    _write_cstring(buf, md->displayto);
-    _write_cstring(buf, md->xsubj);
-    buf_appendbit32(buf, md->xsubj_hash);
-    buf_appendbit32(buf, md->is_refwd);
-    _write_strarray(buf, &md->annot);
-
-    return 0;
-}
-
-static void _read_int64(const char **dataptr, int64_t *num)
-{
-    *num = ntohll(((bit64*)(*dataptr))[0]);
-    *dataptr += 8;
-}
-
-static void _read_uint64(const char **dataptr, uint64_t *num)
-{
-    *num = ntohll(((bit64*)(*dataptr))[0]);
-    *dataptr += 8;
-}
-
-static void _read_int32(const char **dataptr, int32_t *num)
-{
-    *num = ntohll(((bit32*)(*dataptr))[0]);
-    *dataptr += 4;
-}
-
-static void _read_uint32(const char **dataptr, uint32_t *num)
-{
-    *num = ntohl(((bit32*)(*dataptr))[0]);
-    *dataptr += 4;
-}
-
-static int _read_cstring(const char **dataptr, char **strptr)
-{
-    struct buf buf = BUF_INITIALIZER;
-    const char *p = *dataptr;
-    size_t len;
-    _read_uint64(&p, &len);
-    if (len) {
-        buf_appendmap(&buf, p, len);
-        *strptr = buf_release(&buf);
-        p += len;
-    } else {
-        *strptr = NULL;
-    }
-    *dataptr = p;
-    return 0;
-}
-
-static void _read_strarray(const char **dataptr, strarray_t *arr)
-{
-    const char *p = *dataptr;
-    size_t len, i;
-
-    _read_uint64(&p, &len);
-    for (i = 0; i < len; i++) {
-        char *str;
-        _read_cstring(&p, &str);
-        strarray_appendm(arr, str);
-    }
-
-    *dataptr = p;
-}
-
-static void _read_bitvector(const char **dataptr, bitvector_t *vec)
-{
-    const char *p = *dataptr;
-    _read_uint32(&p, &vec->length);
-    _read_uint32(&p, &vec->alloc);
-    vec->bits = xmalloc(vec->alloc);
-    memcpy(vec->bits, p, vec->alloc);
-    p += vec->alloc;
-    *dataptr = p;
-}
-
-static void _read_msgdata(const char **dataptr, MsgData **mdptr)
-{
-    const char *p = *dataptr;
-    MsgData *md = xzmalloc(sizeof(MsgData));
-
-    /* search_folder */
-    uint32_t has_folder;
-    _read_uint32(&p, &has_folder);
-    if (has_folder) {
-        struct search_folder *folder = xzmalloc(sizeof(struct search_folder));
-        _read_cstring(&p, &folder->mboxname);
-        _read_uint32(&p, &folder->uidvalidity);
-        _read_uint64(&p, &folder->highest_modseq);
-        _read_uint64(&p, &folder->first_modseq);
-        _read_uint64(&p, &folder->last_modseq);
-        _read_int32(&p, &folder->id);
-        _read_bitvector(&p, &folder->uids);
-        _read_bitvector(&p, &folder->unchecked_uids);
-        _read_int32(&p, &folder->unchecked_dirty);
-        md->folder = folder;
-    }
-
-    /* items from the index_record */
-    _read_uint32(&p, &md->uid);
-    _read_uint32(&p, &md->msgno);
-    _read_uint64(&p, (uint64_t*) &md->cid);
-    _read_strarray(&p, &md->ref);
-    _read_int64(&p, &md->sentdate);
-    _read_int64(&p, &md->internaldate);
-    _read_uint64(&p, &md->size);
-    _read_uint64(&p, (uint64_t*) &md->modseq);
-    _read_uint32(&p, &md->hasflag);
-    char *tmp;
-    _read_cstring(&p, &tmp);
-    message_guid_decode(&md->guid, tmp);
-    free(tmp);
-    _read_uint32(&p, &md->system_flags);
-    _read_uint32(&p, &md->internal_flags);
-
-    /* items from the conversations database */
-    _read_uint64(&p, (uint64_t*) &md->convmodseq);
-    _read_uint32(&p, &md->convexists);
-    _read_uint32(&p, &md->convsize);
-    _read_uint32(&p, &md->hasconvflag);
-    _read_uint32(&p, &md->spamscore);
-
-    /* items from the cache record */
-    _read_cstring(&p, &md->msgid);
-    _read_cstring(&p, &md->listid);
-    _read_cstring(&p, &md->contenttype);
-    _read_cstring(&p, &md->cc);
-    _read_cstring(&p, &md->from);
-    _read_cstring(&p, &md->to);
-    _read_cstring(&p, &md->displayfrom);
-    _read_cstring(&p, &md->displayto);
-    _read_cstring(&p, &md->xsubj);
-    _read_uint32(&p, &md->xsubj_hash);
-    _read_int32(&p, &md->is_refwd);
-    _read_strarray(&p, &md->annot);
-
-    *dataptr = p;
-    *mdptr = md;
-}
-
-#define _EMAILSEARCH_CACHE_VERSION 0x1
-
-/*
- * Write the current modseq and msgdata to buf.
- */
-static int _emailsearch_write(modseq_t current_modseq,
-                              const ptrarray_t *msgdata,
-                              struct buf *buf)
-{
-    buf_appendbit32(buf, _EMAILSEARCH_CACHE_VERSION);
-    buf_appendbit64(buf, current_modseq);
-    buf_appendbit32(buf, ptrarray_size(msgdata));
-
-    int i;
-    for (i = 0; i < ptrarray_size(msgdata); i++) {
-        MsgData *md = ptrarray_nth(msgdata, i);
-        if (_write_msgdata(buf, md)) return -1;
-    }
-    return 0;
-}
-
-/*
- * Read a cached email search entry matching the current modseq
- * from data into msgdataptr.
- *
- * Returns 0 on success. If the current modseq does not equal
- * the modseq of the cache entry, returns a positive integer
- * (and msgdata is not set).
- * Returns a negative integer for parse errors.
- */
-static int _emailsearch_read(modseq_t current_modseq,
-                             const char *data, size_t datalen,
-                             ptrarray_t **msgdataptr)
-{
-    const char *p = data;
-
-    uint32_t version;
-    _read_uint32(&p, &version);
-    if (version != _EMAILSEARCH_CACHE_VERSION) {
-        syslog(LOG_WARNING, "jmap: invalid cache version. Got %d, expected %d",
-                version, _EMAILSEARCH_CACHE_VERSION);
-        return -1;
-    }
-
-    modseq_t cached_modseq;
-    _read_uint64(&p, (uint64_t*) &cached_modseq);
-    if (cached_modseq != current_modseq) {
-        return 1;
-    }
-
-    ptrarray_t *msgdata = ptrarray_new();
-    uint32_t count;
-    _read_uint32(&p, &count);
-
-    uint32_t i;
-    for (i = 0; i < count; i++) {
-        MsgData *md = NULL;
-        _read_msgdata(&p, &md);
-        ptrarray_append(msgdata, md);
-    }
-    if (p != data + datalen) {
-        _emailsearch_msgdata_fini(msgdata);
-        ptrarray_free(msgdata);
-        return -1;
-    }
-
-    *msgdataptr = msgdata;
-    return 0;
-}
-
-/*
- * Search for messages filtered by filter and sorted by sort.
- *
- * Returns an emailsearch value with the sorted result
- * stored in the msgdata field. On error, returns an emailsearch
- * value with the err field set to a non-zero value.
- *
- * Returned values must be freed using _emailsearch_free.
- */
-static struct emailsearch* _emailsearch_run(jmap_req_t *req,
+static struct emailsearch* _emailsearch_new(jmap_req_t *req,
                                             json_t *filter,
                                             json_t *sort,
                                             int want_expunged)
 {
     struct emailsearch* search = xzmalloc(sizeof(struct emailsearch));
-    struct db *cache_db = NULL;
-    char *cache_key = NULL, *cache_fname = NULL;
     int r = 0;
 
     /* Build search args */
@@ -5654,7 +5310,12 @@ static struct emailsearch* _emailsearch_run(jmap_req_t *req,
     search->init.want_expunged = want_expunged;
 
     r = index_open(req->inboxname, &search->init, &search->state);
-    if (r) goto done;
+    if (r) {
+        syslog(LOG_ERR, "jmap: _emailsearch_new: %s", error_message(r));
+        freesearchargs(search->args);
+        free(search);
+        return NULL;
+    }
 
     /* Build query */
     search->query = search_query_new(search->state, search->args);
@@ -5665,91 +5326,21 @@ static struct emailsearch* _emailsearch_run(jmap_req_t *req,
     search->query->want_expunged = want_expunged;
     search->is_mutable = search_is_mutable(search->sortcrit, search->args);
 
-    /* Determine cache key for lookups */
-    cache_key = _emailsearch_cachekey(req->accountid, search);
+    /* Make hash */
+    search->hash = _emailsearch_hash(search);
 
-   /* Use cache, but only if not looking up expunged messages  */
-    if (!want_expunged) {
-        cache_fname = emailsearch_getcachepath(req->accountid);
-        if (cache_fname) {
-            int flags = CYRUSDB_CREATE|CYRUSDB_CONVERT;
-            r = cyrusdb_open(EMAILSEARCH_DB, cache_fname, flags, &cache_db);
-            if (r) {
-                syslog(LOG_WARNING, "jmap: can't open email search cache %s: %s",
-                        cache_fname, cyrusdb_strerror(r));
-                r = 0;
-            }
-        }
-    }
+    return search;
+}
 
-    /* Lookup cache */
-    if (cache_db) {
-        const char *data = NULL;
-        size_t len = 0;
-        r = cyrusdb_fetch(cache_db, cache_key, strlen(cache_key), &data, &len, NULL);
-        if (!r) {
-            int ret = _emailsearch_read(req->counters.mailmodseq, data, len,
-                                        &search->cached_msgdata);
-            if (ret == 0) {
-                /* Found a current cache entry. */
-                search->msgdata = search->cached_msgdata;
-                search->is_cached = 1;
-            }
-            else {
-                /* Cache entry is outdated or bogus.*/
-                if (ret < 0) {
-                    syslog(LOG_ERR, "jmap: can't parse cached email search (%s)", cache_key);
-                }
-                cyrusdb_delete(cache_db, cache_key, strlen(cache_key), NULL, 0);
-            }
-        }
-        else {
-            if (r != CYRUSDB_NOTFOUND) {
-                syslog(LOG_ERR, "jmap: can't fetch cached email search (%s): %s",
-                        cache_key, cyrusdb_strerror(r));
-            }
-            r = 0;
-        }
-    }
-
-    /* Run query, if not read from cache. */
-    if (!search->msgdata) {
-        r = search_query_run(search->query);
-        if (r) goto done;
-        search->msgdata = &search->query->merged_msgdata;
-        /* Cache search result */
-        if (cache_db) {
-            struct buf buf = BUF_INITIALIZER;
-            int ret = _emailsearch_write(req->counters.mailmodseq,
-                                         &search->query->merged_msgdata, &buf);
-            if (ret == 0) {
-                r = cyrusdb_store(cache_db, cache_key, strlen(cache_key),
-                        buf_base(&buf), buf_len(&buf), NULL);
-                if (r) {
-                    syslog(LOG_ERR, "jmap: can't cache email search (%s): %s",
-                            cache_key, cyrusdb_strerror(r));
-                    r = 0;
-                }
-            }
-            buf_free(&buf);
-        }
-    }
-
-done:
-    if (cache_db) {
-        int r2 = cyrusdb_close(cache_db);
-        if (r2) {
-            syslog(LOG_ERR, "jmap: can't close email search cache %s: %s",
-                    cache_fname, cyrusdb_strerror(r2));
-        }
-    }
-    search->err = r;
+static int _emailsearch_run(struct emailsearch *search, const ptrarray_t **msgdataptr)
+{
+    int r = search_query_run(search->query);
     if (r) {
         syslog(LOG_ERR, "jmap: _emailsearch_run: %s", error_message(r));
+        return r;
     }
-    free(cache_fname);
-    free(cache_key);
-    return search;
+    *msgdataptr = &search->query->merged_msgdata;
+    return 0;
 }
 
 static const char *msglist_sortfields[] = {
@@ -5795,25 +5386,215 @@ static int _email_read_querystate(const char *s, modseq_t *modseq, uint32_t *uid
     return sscanf(s, MODSEQ_FMT ":%u", modseq, uid) == 2;
 }
 
+struct cached_emailquery {
+    char *ids;         /* zero-terminated id strings */
+    size_t ids_count;  /* count of ids in ids array */
+    size_t id_size;    /* byte-length of an id, excluding 0 byte */
+};
+
+#define _CACHED_EMAILQUERY_INITIALIZER { NULL, 0, 0 }
+
+static void _cached_emailquery_fini(struct cached_emailquery *cache_record)
+{
+    free(cache_record->ids);
+}
+
+#define _EMAILSEARCH_CACHE_VERSION 0x2
+
+static int _email_query_writecache(struct db *cache_db,
+                                   const char *cache_key,
+                                   modseq_t current_modseq,
+                                   strarray_t *email_ids)
+{
+    int r = 0;
+
+    /* Serialise cache record preamble */
+    struct buf buf = BUF_INITIALIZER;
+    buf_appendbit32(&buf, _EMAILSEARCH_CACHE_VERSION);
+    buf_appendbit64(&buf, current_modseq);
+    /* Serialise email ids */
+    buf_appendbit64(&buf, strarray_size(email_ids));
+    if (strarray_size(email_ids)) {
+        const char *email_id = strarray_nth(email_ids, 0);
+        size_t email_id_len = strlen(email_id);
+        buf_appendbit64(&buf, email_id_len);
+        int i;
+        for (i = 0; i < strarray_size(email_ids); i++) {
+            const char *email_id = strarray_nth(email_ids, i);
+            if (strlen(email_id) != email_id_len) {
+                syslog(LOG_ERR, "jmap: email id %s has length %zd,"
+                                "expected %zd - aborting cache",
+                                email_id, strlen(email_id), email_id_len);
+                r = CYRUSDB_INTERNAL;
+                goto done;
+            }
+            buf_appendcstr(&buf, email_id);
+            buf_putc(&buf, '\0');
+        }
+    }
+    /* Store cache record */
+    r = cyrusdb_store(cache_db, cache_key, strlen(cache_key),
+            buf_base(&buf), buf_len(&buf), NULL);
+
+done:
+    buf_free(&buf);
+    return r;
+}
+
+static int _email_query_readcache(struct db *cache_db,
+                                  const char *cache_key,
+                                  modseq_t current_modseq,
+                                  struct cached_emailquery *cache_record)
+{
+    /* Load cache record */
+    const char *data = NULL;
+    size_t datalen = 0;
+    int r = cyrusdb_fetch(cache_db, cache_key, strlen(cache_key), &data, &datalen, NULL);
+    if (r) {
+        if (r != CYRUSDB_NOTFOUND) {
+            syslog(LOG_ERR, "jmap: can't fetch cached email search (%s): %s",
+                    cache_key, cyrusdb_strerror(r));
+        }
+        return r;
+    }
+
+    /* Read cache record preamble */
+    const char *p = data;
+    uint32_t version = ntohl(((bit32*)(p))[0]); p += 4;
+    if (version != _EMAILSEARCH_CACHE_VERSION) {
+        syslog(LOG_ERR, "jmap: unexpected cache version %d (%s)", version, cache_key);
+        r = CYRUSDB_EXISTS;
+        goto done;
+    }
+    modseq_t cached_modseq = ntohll(((bit64*)(p))[0]); p += 8;
+    if (cached_modseq != current_modseq) {
+        r = CYRUSDB_EXISTS;
+        goto done;
+    }
+
+    /* Read email ids */
+    size_t ids_count = ntohll(((bit64*)(p))[0]); p += 8;
+    cache_record->ids_count= ids_count;
+    if (ids_count) {
+        size_t id_size = ntohll(((bit64*)(p))[0]); p += 8;
+        cache_record->id_size = id_size;
+        size_t ids_size = ids_count * (id_size + 1);
+        cache_record->ids = xmalloc(ids_size);
+        memcpy(cache_record->ids, p, ids_size);
+        p += ids_size;
+    }
+
+    /* Check end of record */
+    if (p != data + datalen) {
+        syslog(LOG_ERR, "jmap: invalid query cache entry %s", cache_key);
+        r = CYRUSDB_NOTFOUND;
+        goto done;
+    }
+
+done:
+    if (r) {
+        _cached_emailquery_fini(cache_record);
+        cyrusdb_delete(cache_db, cache_key, strlen(cache_key), NULL, 0);
+        return r == CYRUSDB_EXISTS? CYRUSDB_NOTFOUND : r;
+    }
+    return 0;
+}
+
 static void _email_query(jmap_req_t *req, struct jmap_query *query,
                          int collapse_threads,
                          json_t **err,
                          int *is_cachedptr)
 {
-    struct emailsearch *search = _emailsearch_run(req, query->filter, query->sort, 0);
-    if (search->err) {
-        *err = jmap_server_error(IMAP_INTERNAL);  // XXX: runSearch error?
+    char *cache_fname = NULL;
+    char *cache_key = NULL;
+    struct db *cache_db = NULL;
+    modseq_t current_modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
+
+    struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort, 0);
+    if (!search) {
+        *err = jmap_server_error(IMAP_INTERNAL);
         goto done;
     }
+
     /* can calculate changes for mutable sort, but not mutable search */
     query->can_calculate_changes = search->is_mutable > 1 ? 0 : 1;
+    query->query_state = _email_make_querystate(current_modseq, 0);
+
+    /* Open cache */
+    cache_fname = emailsearch_getcachepath(req->accountid);
+    if (cache_fname) {
+        int flags = CYRUSDB_CREATE|CYRUSDB_CONVERT;
+        int r = cyrusdb_open(EMAILSEARCH_DB, cache_fname, flags, &cache_db);
+        if (r) {
+            syslog(LOG_WARNING, "jmap: can't open email search cache %s: %s",
+                    cache_fname, cyrusdb_strerror(r));
+        }
+    }
+
+    /* Make cache key */
+    cache_key = strconcat(req->accountid,
+            "/", collapse_threads ?  "collapsed" : "uncollapsed",
+            "/", search->hash, NULL
+    );
+
+    /* Lookup cache */
+    if (cache_db) {
+        struct cached_emailquery cache_record = _CACHED_EMAILQUERY_INITIALIZER;
+        int r = _email_query_readcache(cache_db, cache_key, current_modseq, &cache_record);
+        if (!r) {
+            size_t from = query->position;
+            if (query->anchor) {
+                size_t i;
+                for (i = 0; i < cache_record.ids_count; i++) {
+                    const char *email_id = cache_record.ids + i * (cache_record.id_size + 1);
+                    if (!strcmp(email_id, query->anchor)) {
+                        if (query->anchor_offset >= 0) {
+                            ssize_t sfrom = (ssize_t) i - query->anchor_offset;
+                            from = sfrom < 0 ? 0 : sfrom;
+                        }
+                        else {
+                            from = i + -query->anchor_offset;
+                        }
+                        break;
+                    }
+                }
+                if (i == cache_record.ids_count) {
+                    *err = json_pack("{s:s}", "type", "anchorNotFound");
+                }
+            }
+            else if (query->position < 0) {
+                ssize_t sposition = (ssize_t) cache_record.ids_count + query->position;
+                from = sposition < 0 ? 0 : sposition;
+            }
+            size_t to = query->limit ? from + query->limit : cache_record.ids_count;
+            size_t i;
+            for (i = from; i < to; i++) {
+                const char *email_id = cache_record.ids + i * (cache_record.id_size + 1);
+                json_array_append_new(query->ids, json_string(email_id));
+            }
+            query->result_position = from;
+            query->total = cache_record.ids_count;
+            *is_cachedptr = 1;
+        }
+        _cached_emailquery_fini(&cache_record);
+        if (*is_cachedptr) goto done;
+    }
+    *is_cachedptr = 0;
+
+    /* Run search */
+    const ptrarray_t *msgdata = NULL;
+    int r = _emailsearch_run(search, &msgdata);
+    if (r) {
+        *err = jmap_server_error(r);
+        goto done;
+    }
 
     // TODO cache emailId -> threadId on the request context
     // TODO support negative positions
     assert(query->position >= 0);
 
     /* Initialize search result loop */
-    size_t mdcount = search->msgdata->count;
+    size_t mdcount = msgdata->count;
     size_t anchor_position = (size_t)-1;
     char *email_id = NULL;
 
@@ -5825,9 +5606,14 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     memset(&seen_cids, 0, sizeof(hashu64_table));
     construct_hashu64_table(&seen_cids, mdcount/4+4,0);
 
+    /* List of all matching email ids */
+    strarray_t email_ids = STRARRAY_INITIALIZER;
+
+    int found_anchor = 0;
+
     int i;
-    for (i = 0 ; i < search->msgdata->count; i++) {
-        MsgData *md = ptrarray_nth(search->msgdata, i);
+    for (i = 0 ; i < msgdata->count; i++) {
+        MsgData *md = ptrarray_nth(msgdata, i);
         search_folder_t *folder = md->folder;
         if (!folder) continue;
 
@@ -5852,11 +5638,13 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
         /* This message matches the query. */
         size_t result_count = json_array_size(query->ids);
         query->total++;
+        strarray_add(&email_ids, email_id);
 
         /* Apply query window, if any */
         if (query->anchor) {
             if (!strcmp(email_id, query->anchor)) {
-                /* This message is the anchor. Recalculate the search result */
+                found_anchor = 1;
+                /* Recalculate the search result */
                 json_t *anchored_ids = json_pack("[]");
                 size_t j;
                 /* Set countdown to enter the anchor window */
@@ -5873,16 +5661,14 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
                 query->ids = anchored_ids;
                 result_count = json_array_size(query->ids);
 
-                /* Adjust the window position for this anchor. This is
-                 * "[...] the 0-based index of the first result in the
-                 * threadIds array within the complete list". */
-                query->position = query->total - json_array_size(anchored_ids) - 1;
+                /* Adjust the window position for this anchor. */
+                query->result_position = query->total - json_array_size(anchored_ids) - 1;
             }
             if (anchor_position != (size_t)-1 && anchor_position) {
                 /* Found the anchor but haven't yet entered its window */
                 anchor_position--;
                 /* But this message still counts to the window position */
-                query->position++;
+                query->result_position++;
                 continue;
             }
         }
@@ -5901,20 +5687,35 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     free_hash_table(&seen_ids, NULL);
     free(email_id);
 
-    modseq_t modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
-    uint32_t uid = 0;
-    // XXX: this shouldn't be the highest uid seen in the results, it should be the
-    // XXX: highest UID in the mailbox.  But we don't have that easily.
-    // XXX: if (JNOTNULL(json_object_get(query->filter, "inMailbox"))) {
-    // XXX:    uid = mailbox->i.lastuid;
-    // XXX: }
-    query->queryState = _email_make_querystate(modseq, uid);
+    if (!query->anchor) {
+        query->result_position = query->position;
+    }
+    else if (!found_anchor) {
+        *err = json_pack("{s:s}", "type", "anchorNotFound");
+    }
 
-    if (is_cachedptr)
-        *is_cachedptr = search->is_cached;
+    /* Cache search result */
+    if (cache_db) {
+        int r = _email_query_writecache(cache_db, cache_key, current_modseq, &email_ids);
+        if (r) {
+            syslog(LOG_ERR, "jmap: can't cache email search (%s): %s",
+                    cache_key, cyrusdb_strerror(r));
+            r = 0;
+        }
+    }
+    strarray_fini(&email_ids);
 
 done:
     _emailsearch_free(search);
+    if (cache_db) {
+        int r = cyrusdb_close(cache_db);
+        if (r) {
+            syslog(LOG_ERR, "jmap: can't close email search cache %s: %s",
+                    cache_fname, cyrusdb_strerror(r));
+        }
+    }
+    free(cache_key);
+    free(cache_fname);
 }
 
 static int jmap_email_query(jmap_req_t *req)
@@ -5983,17 +5784,24 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
         return;
     }
 
+    struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort, /*want_expunged*/1);
+    if (!search) {
+        *err = jmap_server_error(IMAP_INTERNAL);
+        goto done;
+    }
+
     /* Run search */
-    struct emailsearch *search = _emailsearch_run(req, query->filter, query->sort, /*want_expunged*/1);
-    if (search->err) {
-        *err = jmap_server_error(search->err);
+    const ptrarray_t *msgdata = NULL;
+    int r = _emailsearch_run(search, &msgdata);
+    if (r) {
+        *err = jmap_server_error(r);
         goto done;
     }
 
     /* Prepare result loop */
     char *email_id = NULL;
     int found_up_to = 0;
-    size_t mdcount = search->msgdata->count;
+    size_t mdcount = msgdata->count;
 
     hash_table touched_ids = HASH_TABLE_INITIALIZER;
     memset(&touched_ids, 0, sizeof(hash_table));
@@ -6020,7 +5828,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     // phase 1: find messages and threads which have been modified
     size_t i;
     for (i = 0 ; i < mdcount; i++) {
-        MsgData *md = ptrarray_nth(search->msgdata, i);
+        MsgData *md = ptrarray_nth(msgdata, i);
         search_folder_t *folder = md->folder;
         if (!folder) continue;
 
@@ -6051,7 +5859,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
 
     // phase 2: report messages that need it
     for (i = 0 ; i < mdcount; i++) {
-        MsgData *md = ptrarray_nth(search->msgdata, i);
+        MsgData *md = ptrarray_nth(msgdata, i);
         search_folder_t *folder = md->folder;
         if (!folder) continue;
 
@@ -6179,17 +5987,24 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
         return;
     }
 
+    struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort, /*want_expunged*/1);
+    if (!search) {
+        *err = jmap_server_error(IMAP_INTERNAL);
+        goto done;
+    }
+
     /* Run search */
-    struct emailsearch *search = _emailsearch_run(req, query->filter, query->sort, /*want_expunged*/1);
-    if (search->err) {
-        *err = jmap_server_error(search->err);
+    const ptrarray_t *msgdata = NULL;
+    int r = _emailsearch_run(search, &msgdata);
+    if (r) {
+        *err = jmap_server_error(r);
         goto done;
     }
 
     /* Prepare result loop */
     char *email_id = NULL;
     int found_up_to = 0;
-    size_t mdcount = search->msgdata->count;
+    size_t mdcount = msgdata->count;
 
     hash_table touched_ids = HASH_TABLE_INITIALIZER;
     memset(&touched_ids, 0, sizeof(hash_table));
@@ -6205,7 +6020,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     // phase 1: find messages which have been modified
     size_t i;
     for (i = 0 ; i < mdcount; i++) {
-        MsgData *md = ptrarray_nth(search->msgdata, i);
+        MsgData *md = ptrarray_nth(msgdata, i);
         search_folder_t *folder = md->folder;
         if (!folder) continue;
 
@@ -6224,7 +6039,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
 
     // phase 2: report messages that need it
     for (i = 0 ; i < mdcount; i++) {
-        MsgData *md = ptrarray_nth(search->msgdata, i);
+        MsgData *md = ptrarray_nth(msgdata, i);
         search_folder_t *folder = md->folder;
         if (!folder) continue;
 
@@ -6365,9 +6180,17 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     json_t *filter = json_pack("{s:o}", "sinceEmailState",
                                jmap_fmtstate(changes->since_modseq));
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
-    struct emailsearch *search = _emailsearch_run(req, filter, sort, /*want_expunged*/1);
-    if (search->err) {
-        *err = jmap_server_error(search->err);
+
+    struct emailsearch *search = _emailsearch_new(req, filter, sort, /*want_expunged*/1);
+    if (!search) {
+        *err = jmap_server_error(IMAP_INTERNAL);
+        goto done;
+    }
+
+    const ptrarray_t *msgdata = NULL;
+    int r = _emailsearch_run(search, &msgdata);
+    if (r) {
+        *err = jmap_server_error(r);
         goto done;
     }
 
@@ -6378,10 +6201,10 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     int i;
     hash_table seen_ids = HASH_TABLE_INITIALIZER;
     memset(&seen_ids, 0, sizeof(hash_table));
-    construct_hash_table(&seen_ids, search->msgdata->count + 1, 0);
+    construct_hash_table(&seen_ids, msgdata->count + 1, 0);
 
-    for (i = 0 ; i < search->msgdata->count; i++) {
-        MsgData *md = ptrarray_nth(search->msgdata, i);
+    for (i = 0 ; i < msgdata->count; i++) {
+        MsgData *md = ptrarray_nth(msgdata, i);
         search_folder_t *folder = md->folder;
         free(email_id);
         email_id = _email_id_from_guid(&md->guid);
@@ -6488,9 +6311,16 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     json_t *filter = json_pack("{s:o}", "sinceEmailState",
                                jmap_fmtstate(changes->since_modseq));
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
-    struct emailsearch *search = _emailsearch_run(req, filter, sort, /*want_expunged*/1);
-    if (search->err) {
-        *err = jmap_server_error(search->err);
+    struct emailsearch *search = _emailsearch_new(req, filter, sort, /*want_expunged*/1);
+    if (!search) {
+        *err = jmap_server_error(IMAP_INTERNAL);
+        goto done;
+    }
+
+    const ptrarray_t *msgdata = NULL;
+    int r = _emailsearch_run(search, &msgdata);
+    if (r) {
+        *err = jmap_server_error(r);
         goto done;
     }
 
@@ -6499,13 +6329,13 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     modseq_t highest_modseq = 0;
     int i;
 
-    size_t mdcount = search->msgdata->count;
+    size_t mdcount = msgdata->count;
     hashu64_table seen_cids = HASHU64_TABLE_INITIALIZER;
     memset(&seen_cids, 0, sizeof(hashu64_table));
     construct_hashu64_table(&seen_cids, mdcount/4+4,0);
 
-    for (i = 0 ; i < search->msgdata->count; i++) {
-        MsgData *md = ptrarray_nth(search->msgdata, i);
+    for (i = 0 ; i < msgdata->count; i++) {
+        MsgData *md = ptrarray_nth(msgdata, i);
         search_folder_t *folder = md->folder;
 
         if (!folder)
@@ -12155,7 +11985,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
 
     /* We don't store EmailSubmissions */
     json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-    query.queryState = xstrdup(json_string_value(jstate));
+    query.query_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
     query.position = 0;
     query.total = 0;
