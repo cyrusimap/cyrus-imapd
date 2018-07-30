@@ -10996,14 +10996,11 @@ static int _email_import_cb(jmap_req_t *req __attribute__((unused)),
                             FILE *out, void *rock)
 {
     struct _email_import_rock *data = (struct _email_import_rock*) rock;
-
-    // we never need to pre-decode rfc822 messages, they're always 7bit (right?)
     const char *base = data->buf.s;
     size_t len = data->buf.len;
     struct protstream *stream = prot_readmap(base, len);
     int r = message_copy_strict(stream, out, len, 0);
     prot_free(stream);
-
     return r;
 }
 
