@@ -142,7 +142,7 @@ EXPORTED msgrecord_t *msgrecord_new(struct mailbox *mbox)
     msgrecord_t *mr = xzmalloc(sizeof(struct msgrecord));
 
     mr->mbox = mbox;
-    mr->have = M_MAILBOX;
+    mr->have = M_MAILBOX|M_RECORD;
     mr->refcount++;
     mr->isappend = 1;
 
