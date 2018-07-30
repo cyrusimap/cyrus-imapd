@@ -183,7 +183,7 @@ sub test_list_groupaccess_noracl
 }
 
 sub test_list_groupaccess_racl
-    :needs_dependency_ldap :ReverseACLs
+    :needs_dependency_ldap :ReverseACLs :min_version_3_1
 {
     my ($self) = @_;
 
@@ -302,7 +302,7 @@ sub test_list_order_noracl
 }
 
 sub test_list_order_racl
-    :needs_dependency_ldap :ReverseACLs
+    :needs_dependency_ldap :ReverseACLs :min_version_3_1
 {
     my $self = shift;
     return $self->do_test_list_order(@_);
