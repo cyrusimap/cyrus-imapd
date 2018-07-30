@@ -198,7 +198,7 @@ struct jmap_get {
     json_t *properties;
     hash_table *props;
 
-  /* Response fields */
+    /* Response fields */
     char *state;
     json_t *list;
     json_t *not_found;
@@ -243,7 +243,7 @@ struct jmap_changes {
     modseq_t since_modseq;
     size_t max_changes;
 
-  /* Response fields */
+    /* Response fields */
     modseq_t new_modseq;
     short has_more_changes;
     json_t *created;
@@ -255,5 +255,54 @@ extern void jmap_changes_parse(json_t *jargs, struct jmap_parser *parser,
                                struct jmap_changes *changes, json_t **err);
 extern void jmap_changes_fini(struct jmap_changes *changes);
 extern json_t *jmap_changes_reply(struct jmap_changes *changes);
+
+
+/* Foo/query */
+
+struct jmap_query {
+    /* Request arguments */
+    json_t *filter;
+    json_t *sort;
+    ssize_t position;
+    const char *anchor;
+    ssize_t anchor_offset;
+    size_t limit;
+    int have_limit;
+
+    /* Response fields */
+    char *query_state;
+    int can_calculate_changes;
+    size_t result_position;
+    size_t total;
+    json_t *ids;
+};
+
+typedef void jmap_filter_parse_cb(json_t *filter, struct jmap_parser *parser,
+                                  json_t *unsupported, void *rock);
+
+extern void jmap_filter_parse(json_t *filter, struct jmap_parser *parser,
+                              jmap_filter_parse_cb parse_condition,
+                              json_t *unsupported, void *rock);
+
+struct jmap_comparator {
+    const char *property;
+    short is_ascending;
+    const char *collation;
+};
+
+typedef int jmap_comparator_parse_cb(struct jmap_comparator *comp, void *rock);
+
+extern void jmap_parse_comparator(json_t *jsort, struct jmap_parser *parser,
+                                  jmap_comparator_parse_cb comp_cb,
+                                  json_t *unsupported, void *rock);
+
+extern void jmap_query_parse(json_t *jargs, struct jmap_parser *parser,
+                             jmap_filter_parse_cb filter_cb, void *filter_rock,
+                             jmap_comparator_parse_cb comp_cb, void *sort_rock,
+                             struct jmap_query *query, json_t **err);
+
+extern void jmap_query_fini(struct jmap_query *query);
+
+extern json_t *jmap_query_reply(struct jmap_query *query);
 
 #endif /* HTTP_JMAP_H */

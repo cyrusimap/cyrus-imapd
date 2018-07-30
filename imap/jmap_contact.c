@@ -284,10 +284,10 @@ static void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond)
     free(f);
 }
 
-static jmap_filter *jmap_filter_parse(json_t *arg,
-                                      const char *prefix,
-                                      json_t *invalid,
-                                      jmap_filterparse_cb *parse)
+static jmap_filter *_jmap_filter_parse(json_t *arg,
+                                       const char *prefix,
+                                       json_t *invalid,
+                                       jmap_filterparse_cb *parse)
 {
     jmap_filter *f = (jmap_filter *) xzmalloc(sizeof(struct jmap_filter));
     int pe;
@@ -323,8 +323,8 @@ static jmap_filter *jmap_filter_parse(json_t *arg,
         for (i = 0; i < f->n_conditions; i++) {
             json_t *cond = json_array_get(conds, i);
             buf_printf(&buf, "%s.conditions[%zu]", prefix, i);
-            f->conditions[i] = jmap_filter_parse(cond, buf_cstring(&buf),
-                                                 invalid, parse);
+            f->conditions[i] = _jmap_filter_parse(cond, buf_cstring(&buf),
+                                                  invalid, parse);
             buf_reset(&buf);
         }
     } else if (JNOTNULL(conds)) {
@@ -1964,8 +1964,8 @@ static int getContactsList(struct jmap_req *req)
     /* filter */
     json_t *filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        parsed_filter = jmap_filter_parse(filter, "filter",
-                                          invalid, contact_filter_parse);
+        parsed_filter = _jmap_filter_parse(filter, "filter",
+                                           invalid, contact_filter_parse);
     }
 
     /* position */
