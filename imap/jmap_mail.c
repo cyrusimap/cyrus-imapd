@@ -11027,39 +11027,67 @@ static int msgimport_checkacl_cb(const mbentry_t *mbentry, void *xrock)
     return 0;
 }
 
-int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
+static void _email_import(jmap_req_t *req,
+                          json_t *jemail_import,
+                          json_t **new_email,
+                          json_t **err)
 {
-    int r;
-    json_t *mailboxids = json_object_get(msg, "mailboxIds");
+    const char *blob_id = json_string_value(json_object_get(jemail_import, "blobId"));
+    json_t *jmailbox_ids = json_object_get(jemail_import, "mailboxIds");
+
+    /* Gather keywords */
+    strarray_t keywords = STRARRAY_INITIALIZER;
+    const json_t *val;
+    const char *keyword;
+    json_object_foreach(json_object_get(jemail_import, "keywords"), keyword, val) {
+        strarray_append(&keywords, keyword);
+    }
+
+    /* check for internaldate */
+    time_t internaldate = 0;
+    const char *received_at = json_string_value(json_object_get(jemail_import, "receivedAt"));
+    if (received_at) {
+        time_from_iso8601(received_at, &internaldate);
+    }
 
     /* Check mailboxes for ACL */
     if (req->is_shared_account) {
-        struct msgimport_checkacl_rock rock = { req, mailboxids };
-        r = jmap_mboxlist(req, msgimport_checkacl_cb, &rock);
-        if (r) return r;
+        struct msgimport_checkacl_rock rock = { req, jmailbox_ids };
+        int r = jmap_mboxlist(req, msgimport_checkacl_cb, &rock);
+        if (r) {
+            *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                    "properties", "mailboxIds");
+            goto done;
+        }
     }
 
     /* Start import */
     struct email_append_detail detail;
     memset(&detail, 0, sizeof(struct email_append_detail));
     char *mboxname = NULL;
-    time_t internaldate = 0;
-    strarray_t keywords = STRARRAY_INITIALIZER;
     struct _email_import_rock content = { BUF_INITIALIZER };
 
     /* Lookup blob */
-    const char *blobid = json_string_value(json_object_get(msg, "blobId"));
     struct mailbox *mbox = NULL;
     struct body *body = NULL;
     const struct body *subpart = NULL;
     msgrecord_t *mr = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
-
-    r = jmap_findblob(req, blobid, &mbox, &mr, &body, &subpart, NULL);
-    if (r) goto done;
+    int r = jmap_findblob(req, blob_id, &mbox, &mr, &body, &subpart, NULL);
+    if (r) {
+        if (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED)
+            *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                    "properties", "blobId");
+        else
+            *err = jmap_server_error(r);
+        goto done;
+    }
 
     r = msgrecord_get_body(mr, &msg_buf);
-    if (r) goto done;
+    if (r) {
+        *err = jmap_server_error(r);
+        goto done;
+    }
 
     /* Decode blob */
     struct body *part = subpart ? (struct body*) subpart : body;
@@ -11102,25 +11130,35 @@ int _email_import(jmap_req_t *req, json_t *msg, json_t **createdmsg)
     message_free_body(body);
     free(body);
 
-    /* Gather keywords */
-    const json_t *val;
-    const char *kw;
-    json_object_foreach(json_object_get(msg, "keywords"), kw, val) {
-        strarray_append(&keywords, kw);
-    }
-
-    /* check for internaldate */
-    const char *datestr = json_string_value(json_object_get(msg, "receivedAt"));
-    if (datestr) {
-        time_from_iso8601(datestr, &internaldate);
-    }
-
     /* Write the message to the file system */
-    r = _email_append(req, mailboxids, &keywords, internaldate,
+    r = _email_append(req, jmailbox_ids, &keywords, internaldate,
                       has_attachment, _email_import_cb, &content, &detail);
-    if (r) goto done;
+    if (r) {
+        switch (r) {
+            case IMAP_PERMISSION_DENIED:
+                *err = json_pack("{s:s}", "type", "forbidden");
+                break;
+            case IMAP_MAILBOX_EXISTS:
+                *err = json_pack("{s:s}", "type", "alreadyExists");
+                break;
+            case IMAP_QUOTA_EXCEEDED:
+                *err = json_pack("{s:s}", "type", "maxQuotaReached");
+                break;
+            case IMAP_MESSAGE_CONTAINSNULL:
+            case IMAP_MESSAGE_CONTAINSNL:
+            case IMAP_MESSAGE_CONTAINS8BIT:
+            case IMAP_MESSAGE_BADHEADER:
+            case IMAP_MESSAGE_NOBLANKLINE:
+                *err = json_pack("{s:s s:s}", "type", "invalidEmail",
+                        "description", error_message(r));
+                break;
+            default:
+                *err = jmap_server_error(r);
+        }
+        goto done;
+    }
 
-    *createdmsg = json_pack("{s:s, s:s, s:s, s:i}",
+    *new_email = json_pack("{s:s, s:s, s:s, s:i}",
          "id", detail.email_id,
          "blobId", detail.blob_id,
          "threadId", detail.thread_id,
@@ -11133,7 +11171,6 @@ done:
     free(detail.email_id);
     free(detail.blob_id);
     free(detail.thread_id);
-    return r;
 }
 
 static int jmap_email_import(jmap_req_t *req)
@@ -11143,14 +11180,14 @@ static int jmap_email_import(jmap_req_t *req)
 
     json_t *emails = json_object_get(req->args, "emails");
     const char *id;
-    json_t *eimp;
+    json_t *jemail_import;
 
     /* Parse arguments */
     if (json_is_object(emails)) {
         struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
         jmap_parser_push(&parser, "emails");
-        json_object_foreach(emails, id, eimp) {
-            if (!json_is_object(eimp)) {
+        json_object_foreach(emails, id, jemail_import) {
+            if (!json_is_object(jemail_import)) {
                 jmap_parser_invalid(&parser, id);
             }
         }
@@ -11170,20 +11207,20 @@ static int jmap_email_import(jmap_req_t *req)
         goto done;
     }
 
-    json_object_foreach(emails, id, eimp) {
+    json_object_foreach(emails, id, jemail_import) {
         /* Parse import */
         struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
         json_t *val;
         const char *s;
 
         /* blobId */
-        s = json_string_value(json_object_get(eimp, "blobId"));
+        s = json_string_value(json_object_get(jemail_import, "blobId"));
         if (!s) {
             jmap_parser_invalid(&parser, "blobId");
         }
 
         /* keywords */
-        json_t *keywords = json_object_get(eimp, "keywords");
+        json_t *keywords = json_object_get(jemail_import, "keywords");
         if (json_is_object(keywords)) {
             json_t *val;
             jmap_parser_push(&parser, "keywords");
@@ -11199,7 +11236,7 @@ static int jmap_email_import(jmap_req_t *req)
         }
 
         /* receivedAt */
-        json_t *jrecv = json_object_get(eimp, "receivedAt");
+        json_t *jrecv = json_object_get(jemail_import, "receivedAt");
         if (json_is_string(jrecv)) {
             struct tm date;
             s = strptime(json_string_value(jrecv), "%Y-%m-%dT%H:%M:%SZ", &date);
@@ -11211,7 +11248,7 @@ static int jmap_email_import(jmap_req_t *req)
             jmap_parser_invalid(&parser, "receivedAt");
         }
 
-        json_t *mboxids = json_object_get(eimp, "mailboxIds");
+        json_t *mboxids = json_object_get(jemail_import, "mailboxIds");
         if (json_object_size(mboxids)) {
             jmap_parser_push(&parser, "mailboxIds");
             json_object_foreach(mboxids, s, val) {
@@ -11242,45 +11279,16 @@ static int jmap_email_import(jmap_req_t *req)
         json_decref(invalid);
 
         /* Process import */
-        json_t *email;
-        int r = _email_import(req, eimp, &email);
-        if (r == IMAP_NOTFOUND) {
-            json_object_set_new(not_created, id, json_pack("{s:s s:[s]}",
-                        "type", "invalidProperties", "properties", "blobId"));
-        }
-        else if (r) {
-            const char *errtyp = NULL;
-            const char *errdesc = NULL;
-            switch (r) {
-                case IMAP_PERMISSION_DENIED:
-                    errtyp = "forbidden";
-                    break;
-                case IMAP_MAILBOX_EXISTS:
-                    errtyp = "alreadyExists";
-                    break;
-                case IMAP_QUOTA_EXCEEDED:
-                    errtyp = "maxQuotaReached";
-                    break;
-                case IMAP_MESSAGE_CONTAINSNULL:
-                case IMAP_MESSAGE_CONTAINSNL:
-                case IMAP_MESSAGE_CONTAINS8BIT:
-                case IMAP_MESSAGE_BADHEADER:
-                case IMAP_MESSAGE_NOBLANKLINE:
-                    errtyp = "invalidEmail";
-                    errdesc = error_message(r);
-                    break;
-                default:
-                    errtyp = "serverError";
-            }
-            syslog(LOG_ERR, "jmap: Email/import(%s): %s", id, error_message(r));
-            json_t *err = json_pack("{s:s}", "type", errtyp);
-            if (errdesc) json_object_set_new(err, "description", json_string(errdesc));
+        json_t *new_email = NULL;
+        json_t *err = NULL;
+        _email_import(req, jemail_import, &new_email, &err);
+        if (err) {
             json_object_set_new(not_created, id, err);
         }
         else {
             /* Successful import */
-            json_object_set_new(created, id, email);
-            const char *newid = json_string_value(json_object_get(email, "id"));
+            json_object_set_new(created, id, new_email);
+            const char *newid = json_string_value(json_object_get(new_email, "id"));
             jmap_add_id(req, id, newid);
         }
     }
