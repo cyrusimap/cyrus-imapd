@@ -3503,6 +3503,7 @@ sub test_email_set_userkeywords
 }
 
 sub test_email_set_keywords_bogus_values
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
