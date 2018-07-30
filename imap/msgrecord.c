@@ -438,7 +438,7 @@ EXPORTED int msgrecord_get_index_record(msgrecord_t *mr,
 
 EXPORTED int msgrecord_get_fname(msgrecord_t *mr, const char **fname)
 {
-    int r = msgrecord_need(mr, M_MAILBOX);
+    int r = msgrecord_need(mr, M_RECORD);
     if (r) return r;
     *fname = mailbox_record_fname(mr->mbox, &mr->record);
     return 0;
