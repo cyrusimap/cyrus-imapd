@@ -280,6 +280,7 @@ static void do_collate_report(struct buf *buf)
     /* release .doneprocs.lock */
     unlink(doneprocs_lock_fname);
     lock_unlock(doneprocs_lock_fd, doneprocs_lock_fname);
+    close(doneprocs_lock_fd);
     free(doneprocs_lock_fname);
 
     /* format it into buf */
