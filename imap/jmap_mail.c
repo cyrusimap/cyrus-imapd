@@ -8137,9 +8137,12 @@ done:
     free(xvalue);
 }
 
-static int _email_copy(jmap_req_t *req, struct mailbox *src,
-                     struct mailbox *dst,
-                     msgrecord_t *mrw)
+static int _copy_msgrecord(struct auth_state *authstate,
+                           const char *user_id,
+                           struct namespace *namespace,
+                           struct mailbox *src,
+                           struct mailbox *dst,
+                           msgrecord_t *mrw)
 {
     struct appendstate as;
     int r;
@@ -8149,8 +8152,8 @@ static int _email_copy(jmap_req_t *req, struct mailbox *src,
     if (!strcmp(src->uniqueid, dst->uniqueid))
         return 0;
 
-    r = append_setup_mbox(&as, dst, req->userid, httpd_authstate,
-            ACL_INSERT, NULL, &jmap_namespace, 0, EVENT_MESSAGE_COPY);
+    r = append_setup_mbox(&as, dst, user_id, authstate,
+            ACL_INSERT, NULL, namespace, 0, EVENT_MESSAGE_COPY);
     if (r) goto done;
 
     ptrarray_add(&msgrecs, mrw);
@@ -8484,7 +8487,8 @@ static int _email_append(jmap_req_t *req,
         r = jmap_openmbox(req, dstname, &dst, 1);
         if (r) goto done;
 
-        r = _email_copy(req, mbox, dst, mr);
+        r = _copy_msgrecord(httpd_authstate, req->userid, &jmap_namespace,
+                            mbox, dst, mr);
 
         jmap_closembox(req, &dst);
         if (r) goto done;
@@ -10570,7 +10574,8 @@ static void _email_update(jmap_req_t *req,
             continue;
         r = jmap_openmbox(req, dstname, &dst, 1);
         if (r) goto done;
-        r = _email_copy(req, mbox, dst, mrw);
+        r = _copy_msgrecord(httpd_authstate, req->userid, &jmap_namespace,
+                            mbox, dst, mrw);
         jmap_closembox(req, &dst);
         if (r) goto done;
     }
