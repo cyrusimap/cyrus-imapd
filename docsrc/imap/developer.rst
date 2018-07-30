@@ -15,7 +15,6 @@ Getting Started
     developer/compiling
     installing
     developer/developer-testing
-    developer/jmap
 
 .. toctree::
     :hidden:
