@@ -2260,7 +2260,8 @@ EXPORTED int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
 {
     int res = -1;
 
-    if (req->is_shared_account) {
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    if (strcmp(mbname_userid(mbname), req->userid)) {
         if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
             // if it's an intermediate mailbox, we get rights from the parent
             mbentry_t *parententry = NULL;
@@ -2273,6 +2274,7 @@ EXPORTED int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
         else
             res = myrights(req->authstate, mbentry, req->mboxrights);
     }
+    mbname_free(&mbname);
 
     // intermediate mailboxes have limited rights, just see, create sub,
     // rename and delete:
