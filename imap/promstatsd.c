@@ -364,14 +364,14 @@ int main(int argc, char **argv)
     signals_set_shutdown(shut_down);
     signals_add_handlers(0);
 
+    if (cleanup) {
+        shut_down(do_cleanup());
+    }
+
     if (!config_getswitch(IMAPOPT_PROMETHEUS_ENABLED)) {
         fatal("Prometheus metrics are not being tracked."
               "  Set prometheus_enable in imapd.conf",
               EC_CONFIG);
-    }
-
-    if (cleanup) {
-        shut_down(do_cleanup());
     }
 
     /* fork unless we were given the -d option or we're running as a daemon */
