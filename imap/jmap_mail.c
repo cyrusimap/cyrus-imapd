@@ -10820,7 +10820,7 @@ static void _email_import(jmap_req_t *req,
     }
 
     /* Check mailboxes for ACL */
-    if (req->is_shared_account) {
+    if (strcmp(req->userid, req->accountid)) {
         struct msgimport_checkacl_rock rock = { req, jmailbox_ids };
         int r = jmap_mboxlist(req, msgimport_checkacl_cb, &rock);
         if (r) {

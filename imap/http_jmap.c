@@ -907,7 +907,6 @@ static int jmap_post(struct transaction_t *txn,
         req.new_creation_ids = new_creation_ids;
         req.txn = txn;
         req.mboxrights = &mboxrights;
-        req.is_shared_account = strcmp(accountid, httpd_userid);
         req.force_openmbox_rw = 0;
 
         if (do_perf) {
@@ -1348,7 +1347,6 @@ EXPORTED int jmap_download(struct transaction_t *txn)
     req.client_creation_ids = NULL;
     req.new_creation_ids = NULL;
     req.txn = txn;
-    req.is_shared_account = strcmp(req.accountid, req.userid);
     req.force_openmbox_rw = 0;
 
 
@@ -2286,18 +2284,22 @@ EXPORTED int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
 
 EXPORTED int jmap_myrights_byname(jmap_req_t *req, const char *mboxname)
 {
-    if (!req->is_shared_account) {
-        return -1;
+    int rights = 0;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    if (!strcmp(mbname_userid(mbname), req->userid)) {
+        rights = -1;
     }
-    return myrights_byname(req->authstate, mboxname, req->mboxrights);
+    else {
+        rights = myrights_byname(req->authstate, mboxname, req->mboxrights);
+    }
+    mbname_free(&mbname);
+    return rights;
+
 }
 
 
 EXPORTED void jmap_myrights_delete(jmap_req_t *req, const char *mboxname)
 {
-    if (!req->is_shared_account) {
-        return;
-    }
     int *rightsptr = hash_del(mboxname, req->mboxrights);
     free(rightsptr);
 }
