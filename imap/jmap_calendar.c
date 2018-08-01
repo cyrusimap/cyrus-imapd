@@ -383,6 +383,7 @@ static int getCalendars(struct jmap_req *req)
         }
     }
     else {
+        // XXX: replace with a function which only looks inside INBOX.#calendars
         r = jmap_mboxlist(req, &getcalendars_cb, &rock);
         if (r) goto done;
     }
