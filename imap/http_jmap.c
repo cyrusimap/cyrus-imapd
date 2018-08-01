@@ -110,10 +110,6 @@ static int myrights(struct auth_state *authstate,
                     const mbentry_t *mbentry,
                     hash_table *mboxrights);
 
-static int myrights_byname(struct auth_state *authstate,
-                           const char *mboxname,
-                           hash_table *mboxrights);
-
 /* Namespace for JMAP */
 struct namespace_t namespace_jmap = {
     URL_NS_JMAP, 0, "jmap", JMAP_ROOT, "/.well-known/jmap",
@@ -2236,27 +2232,10 @@ static int myrights(struct auth_state *authstate,
     return *rightsptr;
 }
 
-static int myrights_byname(struct auth_state *authstate,
-                           const char *mboxname,
-                           hash_table *mboxrights)
+static int _rights_for_mbentry(jmap_req_t *req, const mbentry_t *mbentry)
 {
-    int *rightsptr = hash_lookup(mboxname, mboxrights);
-    if (!rightsptr) {
-        mbentry_t *mbentry = NULL;
-        if (mboxlist_lookup(mboxname, &mbentry, NULL)) {
-            return 0;
-        }
-        rightsptr = xmalloc(sizeof(int));
-        *rightsptr = httpd_myrights(authstate, mbentry);
-        mboxlist_entry_free(&mbentry);
-        hash_insert(mboxname, rightsptr, mboxrights);
-    }
-    return *rightsptr;
-}
-
-EXPORTED int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
-{
-    int res = -1;
+    // for the mailbox owner, assume full rights
+    int rights = -1;
 
     mbname_t *mbname = mbname_from_intname(mbentry->name);
     if (strcmp(mbname_userid(mbname), req->userid)) {
@@ -2264,37 +2243,58 @@ EXPORTED int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
             // if it's an intermediate mailbox, we get rights from the parent
             mbentry_t *parententry = NULL;
             if (mboxlist_findparent(mbentry->name, &parententry))
-                res = 0;
+                rights = 0;
             else
-                res = myrights(req->authstate, parententry, req->mboxrights);
+                rights = httpd_myrights(req->authstate, parententry);
             mboxlist_entry_free(&parententry);
         }
         else
-            res = myrights(req->authstate, mbentry, req->mboxrights);
+            rights = httpd_myrights(req->authstate, mbentry);
     }
     mbname_free(&mbname);
 
     // intermediate mailboxes have limited rights, just see, create sub,
     // rename and delete:
     if (mbentry->mbtype & MBTYPE_INTERMEDIATE)
-        res &= ACL_LOOKUP | ACL_CREATE | ACL_DELETEMBOX;
+        rights &= ACL_LOOKUP | ACL_CREATE | ACL_DELETEMBOX;
 
-    return res;
+    return rights;
+}
+
+
+EXPORTED int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
+{
+    int *rightsptr = hash_lookup(mbentry->name, req->mboxrights);
+
+    if (!rightsptr) {
+        rightsptr = xmalloc(sizeof(int));
+        *rightsptr = _rights_for_mbentry(req, mbentry);
+        hash_insert(mbentry->name, rightsptr, req->mboxrights);
+    }
+
+    return *rightsptr;
 }
 
 EXPORTED int jmap_myrights_byname(jmap_req_t *req, const char *mboxname)
 {
-    int rights = 0;
-    mbname_t *mbname = mbname_from_intname(mboxname);
-    if (!strcmp(mbname_userid(mbname), req->userid)) {
-        rights = -1;
-    }
-    else {
-        rights = myrights_byname(req->authstate, mboxname, req->mboxrights);
-    }
-    mbname_free(&mbname);
-    return rights;
+    int *rightsptr = hash_lookup(mboxname, req->mboxrights);
 
+    if (!rightsptr) {
+        rightsptr = xmalloc(sizeof(int));
+
+        // if unable to read, that means no rights
+        int rights = 0;
+        mbentry_t *mbentry = NULL;
+        if (!mboxlist_lookup(mboxname, &mbentry, NULL)) {
+            rights = _rights_for_mbentry(req, mbentry);
+            mboxlist_entry_free(&mbentry);
+        }
+
+        *rightsptr = rights;
+        hash_insert(mboxname, rightsptr, req->mboxrights);
+    }
+
+    return *rightsptr;
 }
 
 
