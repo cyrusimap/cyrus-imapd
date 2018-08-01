@@ -1921,6 +1921,9 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
         goto done;
     }
 
+     /* invalidate ACL cache */
+    jmap_myrights_delete(req, mboxname);
+
     /* Write annotations */
     r = _mbox_set_annots(req, args, mboxname);
     if (r) goto done;
@@ -2138,6 +2141,11 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                     mboxevent,
                     0 /* local_only */, 0 /* forceuser */, 0 /* ignorequota */);
             mboxevent_free(&mboxevent);
+
+            /* invalidate ACL cache */
+            jmap_myrights_delete(req, oldmboxname);
+            jmap_myrights_delete(req, newmboxname);
+
             if (r) {
                 syslog(LOG_ERR, "mboxlist_renametree(old=%s new=%s): %s",
                         oldmboxname, newmboxname, error_message(r));
@@ -2252,6 +2260,8 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
     else if (r) {
         goto done;
     }
+
+    /* invalidate ACL cache */
     jmap_myrights_delete(req, mboxname);
 
 done:
@@ -2533,6 +2543,10 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
                     tmp->old_imapname ? tmp->old_imapname : "null",
                     tmp->tmp_imapname, tmp->new_imapname, error_message(r));
         }
+        /* invalidate ACL cache */
+        if (tmp->old_imapname) jmap_myrights_delete(req, tmp->old_imapname);
+        jmap_myrights_delete(req, tmp->tmp_imapname);
+        jmap_myrights_delete(req, tmp->new_imapname);
         free(tmp->old_imapname);
         free(tmp->new_imapname);
         free(tmp->tmp_imapname);
