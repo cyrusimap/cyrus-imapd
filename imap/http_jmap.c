@@ -2467,6 +2467,14 @@ EXPORTED void jmap_error(jmap_req_t *req, json_t *err)
             json_pack("[s,o,s]", "error", err, req->tag));
 }
 
+EXPORTED json_t *jmap_server_error(int r)
+{
+    return json_pack("{s:s, s:s}",
+                     "type", "serverError",
+                     "description", error_message(r));
+}
+
+
 EXPORTED int jmap_parse_strings(json_t *arg,
                                 struct jmap_parser *parser, const char *prop)
 {

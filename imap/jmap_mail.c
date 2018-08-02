@@ -1386,14 +1386,6 @@ static void _mbox_parse_filter(json_t *filter, struct jmap_parser *parser,
     buf_free(&path);
 }
 
-static json_t *jmap_server_error(int r)
-{
-    return json_pack("{s:s, s:s}",
-                     "type", "serverError",
-                     "description", error_message(r));
-}
-
-
 static int jmap_mailbox_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;

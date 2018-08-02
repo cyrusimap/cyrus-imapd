@@ -185,6 +185,8 @@ extern void jmap_parser_invalid(struct jmap_parser *parser, const char *prop);
 extern void jmap_ok(jmap_req_t *req, json_t *res);
 extern void jmap_error(jmap_req_t *req, json_t *err);
 
+extern json_t *jmap_server_error(int r);
+
 extern int jmap_parse_strings(json_t *arg,
                               struct jmap_parser *parser, const char *prop);
 
