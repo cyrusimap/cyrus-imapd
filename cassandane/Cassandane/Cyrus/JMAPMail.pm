@@ -11757,4 +11757,88 @@ sub test_implementation_email_query
     $self->assert(not $res->[0][1]{canCalculateChanges});
 }
 
+sub test_email_copy
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "Create user and share mailbox";
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.other", "cassandane", "lrsiwntex") or die;
+
+    my $srcInboxId = $self->getinbox()->{id};
+    $self->assert_not_null($srcInboxId);
+
+    my $dstInboxId = $self->getinbox({accountId => 'other'})->{id};
+    $self->assert_not_null($dstInboxId);
+
+    xlog "create email";
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                1 => {
+                    mailboxIds => {
+                        $srcInboxId => JSON::true,
+                    },
+                    keywords => {
+                        'foo' => JSON::true,
+                    },
+                    subject => 'hello',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'world',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $emailId = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($emailId);
+
+    xlog "copy email";
+    $res = $jmap->CallMethods([
+        ['Email/copy', {
+            fromAccountId => undef,
+            toAccountId => 'other',
+            create => {
+                1 => {
+                    id => $emailId,
+                    mailboxIds => {
+                        $dstInboxId => JSON::true,
+                    },
+                    keywords => {
+                        'bar' => JSON::true,
+                    },
+                },
+            },
+            onSuccessDestroyOriginal => JSON::true,
+        }, 'R1'],
+    ]);
+
+    my $copiedEmailId = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($copiedEmailId);
+    $self->assert_str_equals('Email/set', $res->[1][0]);
+    $self->assert_str_equals($emailId, $res->[1][1]{destroyed}[0]);
+
+    xlog "get copied email";
+    $res = $jmap->CallMethods([
+        ['Email/get', {
+            accountId => 'other',
+            ids => [$copiedEmailId],
+            properties => ['keywords'],
+        }, 'R1']
+    ]);
+    my $wantKeywords = { 'bar' => JSON::true };
+    $self->assert_deep_equals($wantKeywords, $res->[0][1]{list}[0]{keywords});
+}
+
+
 1;
