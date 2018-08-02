@@ -98,6 +98,7 @@ static int jmap_email_set(jmap_req_t *req);
 static int jmap_email_changes(jmap_req_t *req);
 static int jmap_email_import(jmap_req_t *req);
 static int jmap_email_parse(jmap_req_t *req);
+static int jmap_email_copy(jmap_req_t *req);
 static int jmap_searchsnippet_get(jmap_req_t *req);
 static int jmap_thread_get(jmap_req_t *req);
 static int jmap_identity_get(jmap_req_t *req);
@@ -131,6 +132,7 @@ jmap_method_t jmap_mail_methods[] = {
     { "Email/changes",                &jmap_email_changes },
     { "Email/import",                 &jmap_email_import },
     { "Email/parse",                  &jmap_email_parse },
+    { "Email/copy",                   &jmap_email_copy },
     { "SearchSnippet/get",            &jmap_searchsnippet_get },
     { "Thread/get",                   &jmap_thread_get },
     { "Thread/changes",               &jmap_thread_changes },
@@ -4269,13 +4271,13 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
         mbentry_t *mbentry = NULL;
 
         /* Make sure we are allowed to read this mailbox */
-        if (strcmp(req->accountid, req->userid)) {
-            if (mboxlist_lookup(rec->mboxname, &mbentry, NULL))
-                return 0;
-            int rights = jmap_myrights(req, mbentry);
-            mboxlist_entry_free(&mbentry);
-            if (!(rights & ACL_READ))
-                return 0;
+        if (mboxlist_lookup(rec->mboxname, &mbentry, NULL)) {
+            return 0;
+        }
+        int rights = jmap_myrights(req, mbentry);
+        mboxlist_entry_free(&mbentry);
+        if (!(rights & ACL_READ)) {
+            return 0;
         }
 
         /* Prefer to use messages in already opened mailboxes */
@@ -4305,32 +4307,54 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
     return r;
 }
 
-static int _email_find(jmap_req_t *req, const char *msgid,
-                     char **mboxnameptr, uint32_t *uid)
+static int _email_find_in_account(jmap_req_t *req,
+                                  const char *account_id,
+                                  const char *email_id,
+                                  char **mboxnameptr,
+                                  uint32_t *uidptr)
 {
     struct _email_find_rock rock = { req, NULL, 0 };
     int r;
 
     /* must be prefixed with 'M' */
-    if (msgid[0] != 'M')
+    if (email_id[0] != 'M')
         return IMAP_NOTFOUND;
     /* this is on a 24 character prefix only */
-    if (strlen(msgid) != 25)
+    if (strlen(email_id) != 25)
         return IMAP_NOTFOUND;
-
-    r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _email_find_cb, &rock);
-    if (r == IMAP_OK_COMPLETED) {
+    /* Open conversation state, if not already open */
+    struct conversations_state *mycstate = NULL;
+    if (strcmp(req->accountid, account_id)) {
+        r = conversations_open_user(account_id, &mycstate);
+        if (r) return r;
+    }
+    else {
+        mycstate = req->cstate;
+    }
+    r = conversations_guid_foreach(mycstate, _guid_from_id(email_id),
+                                   _email_find_cb, &rock);
+    if (mycstate != req->cstate) {
+        conversations_commit(&mycstate);
+    }
+    /* Set return values */
+    if (r == IMAP_OK_COMPLETED)
         r = 0;
-    }
-    else if (!rock.mboxname) {
+    else if (!rock.mboxname)
         r = IMAP_NOTFOUND;
-    }
     *mboxnameptr = rock.mboxname;
-    *uid = rock.uid;
+    *uidptr = rock.uid;
     return r;
 }
 
-static int _email_find_cid_cb(const conv_guidrec_t *rec, void *rock)
+static int _email_find(jmap_req_t *req,
+                       const char *email_id,
+                       char **mboxnameptr,
+                       uint32_t *uidptr)
+{
+    return _email_find_in_account(req, req->accountid, email_id, mboxnameptr, uidptr);
+}
+
+static int _email_get_cid_cb(const conv_guidrec_t *rec, void *rock)
 {
     conversation_id_t *cidp = (conversation_id_t *)rock;
     if (rec->part) return 0;
@@ -4339,7 +4363,7 @@ static int _email_find_cid_cb(const conv_guidrec_t *rec, void *rock)
     return IMAP_OK_COMPLETED;
 }
 
-static int _email_find_cid(jmap_req_t *req, const char *msgid,
+static int _email_get_cid(jmap_req_t *req, const char *msgid,
                            conversation_id_t *cidp)
 {
     int r;
@@ -4351,7 +4375,7 @@ static int _email_find_cid(jmap_req_t *req, const char *msgid,
     if (strlen(msgid) != 25)
         return IMAP_NOTFOUND;
 
-    r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _email_find_cid_cb, cidp);
+    r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _email_get_cid_cb, cidp);
     if (r == IMAP_OK_COMPLETED) {
         r = 0;
     }
@@ -4739,6 +4763,13 @@ static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
     return this;
 }
 
+static int _is_valid_utcdate(const char *s)
+{
+    struct tm date;
+    s = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &date);
+    return s && *s == '\0';
+}
+
 struct msgfilter_rock {
     jmap_req_t *req;
     json_t *unsupported;
@@ -4769,9 +4800,7 @@ static void _email_parse_filter(json_t *filter, struct jmap_parser *parser,
 
     arg = json_object_get(filter, "before");
     if ((s = json_string_value(arg))) {
-        struct tm tm;
-        const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
-        if (!p || *p) {
+        if (!_is_valid_utcdate(s)) {
             jmap_parser_invalid(parser, "before");
         }
     } else if (arg) {
@@ -4779,9 +4808,7 @@ static void _email_parse_filter(json_t *filter, struct jmap_parser *parser,
     }
     arg = json_object_get(filter, "after");
     if ((s = json_string_value(arg))) {
-        struct tm tm;
-        const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
-        if (!p || *p) {
+        if (!_is_valid_utcdate(s)) {
             jmap_parser_invalid(parser, "after");
         }
     } else if (arg) {
@@ -7845,7 +7872,7 @@ static void jmap_email_get_threadsonly(jmap_req_t *req, struct jmap_get *get)
         const char *id = json_string_value(val);
         conversation_id_t cid = 0;
 
-        int r = _email_find_cid(req, id, &cid);
+        int r = _email_get_cid(req, id, &cid);
         if (!r && cid) {
             char *thrid = _thread_id_from_cid(cid);
             json_t *msg = json_pack("{s:s, s:s}", "id", id, "threadId", thrid);
@@ -8247,6 +8274,61 @@ done:
     return r;
 }
 
+static int _write_keywords(msgrecord_t *mr, strarray_t *keywords, int has_attachment)
+{
+    uint32_t system_flags = 0;
+    uint32_t user_flags[MAX_USER_FLAGS/32];
+    memset(user_flags, 0, sizeof(user_flags));
+    int r = 0;
+
+    struct mailbox *mbox = NULL;
+    r = msgrecord_get_mailbox(mr, &mbox);
+    if (r) goto done;
+
+    if (has_attachment && config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT)) {
+        /* Set the $HasAttachment flag. We mainly use that to support
+         * the hasAttachment filter property in jmap_email_query */
+        int userflag;
+        r = mailbox_user_flag(mbox, JMAP_HAS_ATTACHMENT_FLAG, &userflag, 1);
+        if (r) goto done;
+        user_flags[userflag/32] |= 1<<(userflag&31);
+    }
+
+    int i;
+    for (i = 0; i < keywords->count; i++) {
+        const char *flag = strarray_nth(keywords, i);
+        if (!strcasecmp(flag, "$Flagged")) {
+            system_flags |= FLAG_FLAGGED;
+        }
+        else if (!strcasecmp(flag, "$Answered")) {
+            system_flags |= FLAG_ANSWERED;
+        }
+        else if (!strcasecmp(flag, "$Seen")) {
+            system_flags |= FLAG_SEEN;
+        }
+        else if (!strcasecmp(flag, "$Draft")) {
+            system_flags |= FLAG_DRAFT;
+        }
+        else if (strcasecmp(flag, JMAP_HAS_ATTACHMENT_FLAG)) {
+            /* $HasAttachment is never set via JMAP keywords */
+            int userflag;
+            r = mailbox_user_flag(mbox, flag, &userflag, 1);
+            if (r) goto done;
+            user_flags[userflag/32] |= 1<<(userflag&31);
+        }
+    }
+
+    r = msgrecord_add_systemflags(mr, system_flags);
+    if (r) goto done;
+
+    r = msgrecord_set_userflags(mr, user_flags);
+    if (r) goto done;
+
+done:
+    return r;
+}
+
+
 struct email_append_detail {
     char *email_id;
     char *blob_id;
@@ -8382,7 +8464,7 @@ static int _email_append(jmap_req_t *req,
     r = append_commit(&as);
     if (r) goto done;
 
-    /* Set system and user flags for new record */
+    /* Load message record */
     r = msgrecord_find(mbox, mbox->i.last_uid, &mr);
     if (r) goto done;
 
@@ -8391,49 +8473,9 @@ static int _email_append(jmap_req_t *req,
     if (r) goto done;
     detail->thread_id = _thread_id_from_cid(cid);
 
-    uint32_t system_flags = 0;
-    uint32_t user_flags[MAX_USER_FLAGS/32];
-    memset(user_flags, 0, sizeof(user_flags));
-    int j;
-
-    if (has_attachment) {
-        /* Set the $HasAttachment flag. We mainly use that to support
-         * the hasAttachment filter property in jmap_email_query */
-        int userflag;
-        r = mailbox_user_flag(mbox, JMAP_HAS_ATTACHMENT_FLAG, &userflag, 1);
-        if (r) goto done;
-        user_flags[userflag/32] |= 1<<(userflag&31);
-    }
-
-    for (j = 0; j < keywords->count; j++) {
-        const char *flag = strarray_nth(keywords, j);
-        if (!strcasecmp(flag, "$Flagged")) {
-            system_flags |= FLAG_FLAGGED;
-        }
-        else if (!strcasecmp(flag, "$Answered")) {
-            system_flags |= FLAG_ANSWERED;
-        }
-        else if (!strcasecmp(flag, "$Seen")) {
-            system_flags |= FLAG_SEEN;
-        }
-        else if (!strcasecmp(flag, "$Draft")) {
-            system_flags |= FLAG_DRAFT;
-        }
-        else if (strcasecmp(flag, JMAP_HAS_ATTACHMENT_FLAG)) {
-            /* $HasAttachment is read-only */
-            int userflag;
-            r = mailbox_user_flag(mbox, flag, &userflag, 1);
-            if (r) goto done;
-            user_flags[userflag/32] |= 1<<(userflag&31);
-        }
-    }
-
-    r = msgrecord_add_systemflags(mr, system_flags);
+    /* Write keywords */
+    r = _write_keywords(mr, keywords, has_attachment);
     if (r) goto done;
-
-    r = msgrecord_set_userflags(mr, user_flags);
-    if (r) goto done;
-
     r = msgrecord_rewrite(mr);
     if (r) goto done;
 
@@ -11025,17 +11067,11 @@ static int jmap_email_import(jmap_req_t *req)
 
         /* receivedAt */
         json_t *jrecv = json_object_get(jemail_import, "receivedAt");
-        if (json_is_string(jrecv)) {
-            struct tm date;
-            s = strptime(json_string_value(jrecv), "%Y-%m-%dT%H:%M:%SZ", &date);
-            if (!s || *s) {
+        if (JNOTNULL(jrecv)) {
+            if (!json_is_string(jrecv) || !_is_valid_utcdate(json_string_value(jrecv))) {
                 jmap_parser_invalid(&parser, "receivedAt");
             }
         }
-        else if (JNOTNULL(jrecv)) {
-            jmap_parser_invalid(&parser, "receivedAt");
-        }
-
         json_t *mboxids = json_object_get(jemail_import, "mailboxIds");
         if (json_object_size(mboxids)) {
             jmap_parser_push(&parser, "mailboxIds");
@@ -11090,6 +11126,403 @@ static int jmap_email_import(jmap_req_t *req)
 done:
     json_decref(created);
     json_decref(not_created);
+    return 0;
+}
+
+struct _email_copy_checkmbox_rock {
+    jmap_req_t *req;           /* JMAP request context */
+    json_t *dst_mboxids;       /* mailboxIds argument */
+    strarray_t *dst_mboxnames; /* array of destination mailbox names */
+};
+
+static int _email_copy_checkmbox_cb(const mbentry_t *mbentry, void *_rock)
+{
+    struct _email_copy_checkmbox_rock *rock = _rock;
+
+    /* Ignore unwanted mailboxes */
+    if (!mbentry || mbentry->mbtype != MBTYPE_EMAIL) {
+        return 0;
+    }
+    if (!json_object_get(rock->dst_mboxids, mbentry->uniqueid)) {
+        return 0;
+    }
+
+    /* Check read-write ACL rights */
+    int want_rights = ACL_LOOKUP|ACL_READ|ACL_WRITE|ACL_INSERT|
+                      ACL_SETSEEN|ACL_ANNOTATEMSG;
+    int rights = jmap_myrights(rock->req, mbentry);
+    if ((rights & want_rights) != want_rights)
+        return IMAP_PERMISSION_DENIED;
+
+    /* Mark this mailbox as found */
+    strarray_append(rock->dst_mboxnames, mbentry->name);
+    size_t want_count = json_object_size(rock->dst_mboxids);
+    size_t have_count = strarray_size(rock->dst_mboxnames);
+    return want_count == have_count ? IMAP_OK_COMPLETED : 0;
+}
+
+struct _email_copy_writeprops_rock {
+    /* Input values */
+    jmap_req_t *req;       /* Context with mailbox cache */
+    time_t internal_date;  /* Always set */
+    strarray_t *keywords;  /* Only set if not NULL */
+    int has_attachment;    /* Only set if keywords is not NULL */
+    /* Return values */
+    conversation_id_t cid; /* Thread id of copied message */
+    uint32_t size;         /* Byte size of copied message */
+};
+
+static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
+{
+    struct _email_copy_writeprops_rock *rock = _rock;
+    struct mailbox *mbox = NULL;
+    msgrecord_t *mr = NULL;
+
+    if (rec->part) {
+        return 0;
+    }
+
+    /* Overwrite message record */
+    int r = jmap_openmbox(rock->req, rec->mboxname, &mbox, /*rw*/1);
+    if (!r) r = msgrecord_find(mbox, rec->uid, &mr);
+    if (!r) r = msgrecord_set_internaldate(mr, rock->internal_date);
+    if (!r) r = _write_keywords(mr, rock->keywords, rock->has_attachment);
+    if (!r) r = msgrecord_rewrite(mr);
+
+    /* Read output values */
+    if (!rock->cid) rock->cid = rec->cid;
+    if (!rock->size) r = msgrecord_get_size(mr, &rock->size);
+
+    if (mr) msgrecord_unref(&mr);
+    jmap_closembox(rock->req, &mbox);
+    return r;
+}
+
+static void _email_copy(jmap_req_t *req, json_t *copy_email,
+                        const char *from_account_id,
+                        const char *to_account_id,
+                        json_t **new_email, json_t **err)
+{
+    strarray_t dst_mboxnames = STRARRAY_INITIALIZER;
+    struct mailbox *src_mbox = NULL;
+    msgrecord_t *src_mr = NULL;
+    int r = 0;
+
+    const char *email_id = json_string_value(json_object_get(copy_email, "id"));
+    const char *blob_id = _guid_from_id(email_id);
+
+    /* Lookup mailbox names and make sure they are all writeable */
+    struct _email_copy_checkmbox_rock checkmbox_rock = {
+        req, json_object_get(copy_email, "mailboxIds"), &dst_mboxnames
+    };
+    r = mboxlist_usermboxtree(to_account_id, httpd_authstate,
+                              _email_copy_checkmbox_cb, &checkmbox_rock, 0);
+    if (r != IMAP_OK_COMPLETED) {
+        if (r == 0 || r == IMAP_PERMISSION_DENIED) {
+            *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                    "properties", "mailboxIds");
+            r = 0;
+        }
+        goto done;
+    }
+
+    /* Find email to copy */
+    char *src_mboxname = NULL;
+    uint32_t src_uid = 0;
+    r = _email_find_in_account(req, from_account_id, email_id, &src_mboxname, &src_uid);
+    if (r) {
+        if (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED) {
+            *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                    "properties", "id");
+            r = 0;
+        }
+        goto done;
+    }
+
+    /* Check if email already exists in to_account */
+    int already_exists = 0;
+    if (strcmp(to_account_id, req->userid)) {
+        struct conversations_state *mycstate = NULL;
+        r = conversations_open_user(to_account_id, &mycstate);
+        if (r) goto done;
+        already_exists = conversations_guid_exists(mycstate, blob_id);
+        conversations_commit(&mycstate);
+    }
+    else {
+        already_exists = conversations_guid_exists(req->cstate, blob_id);
+    }
+    if (already_exists) {
+        *err = json_pack("{s:s}", "type", "alreadyExists");
+        goto done;
+    }
+
+    /* Read message record */
+    r = jmap_openmbox(req, src_mboxname, &src_mbox, /*rw*/0);
+    if (r) goto done;
+    r = msgrecord_find(src_mbox, src_uid, &src_mr);
+    if (r) goto done;
+
+    /* Copy message record to mailboxes */
+    const char *dst_mboxname;
+    while ((dst_mboxname = strarray_pop(&dst_mboxnames))) {
+        struct mailbox *dst_mbox = NULL;
+        r = jmap_openmbox(req, dst_mboxname, &dst_mbox, /*rw*/1);
+        if (!r) {
+            r = _copy_msgrecord(httpd_authstate, to_account_id,
+                    &jmap_namespace, src_mbox, dst_mbox, src_mr);
+        }
+        jmap_closembox(req, &dst_mbox);
+        if (r) goto done;
+    }
+
+    /* Determine overwritten properties */
+    json_t *jkeywords = json_object_get(copy_email, "keywords");
+    strarray_t *keywords = NULL;
+    if (JNOTNULL(jkeywords)) {
+        keywords = strarray_new();
+        void *iter = json_object_iter(jkeywords);
+        do {
+            strarray_append(keywords, json_object_iter_key(iter));
+        } while ((iter = json_object_iter_next(jkeywords, iter)));
+    }
+    time_t internal_date;
+    const char *s = json_string_value(json_object_get(copy_email, "receivedAt"));
+    if (s) {
+        time_from_iso8601(s, &internal_date);
+    }
+    else {
+        internal_date = time(NULL);
+    }
+    int has_attachment = 0;
+    r = msgrecord_hasflag(src_mr, JMAP_HAS_ATTACHMENT_FLAG, &has_attachment);
+    if (r) goto done;
+
+    /* Rewrite new message record properties and lookup thread id */
+    struct _email_copy_writeprops_rock writeprops_rock = {
+        req, internal_date, keywords, has_attachment, /*cid*/0, /*size*/0
+    };
+    struct conversations_state *mycstate = NULL;
+    if (strcmp(req->userid, to_account_id)) {
+        r = conversations_open_user(to_account_id, &mycstate);
+        if (r) goto done;
+    }
+    else {
+        mycstate = req->cstate;
+    }
+    r = conversations_guid_foreach(mycstate, email_id + 1,
+                                   _email_copy_writeprops_cb, &writeprops_rock);
+    if (mycstate != req->cstate) {
+        conversations_commit(&mycstate);
+    }
+    if (!r) {
+        char *thread_id = _thread_id_from_cid(writeprops_rock.cid);
+        *new_email = json_pack("{s:s s:s s:s s:i}",
+                "id", email_id,
+                "blobId", blob_id,
+                "threadId", thread_id,
+                "size", writeprops_rock.size);
+        free(thread_id);
+    }
+    if (writeprops_rock.keywords) {
+        strarray_free(writeprops_rock.keywords);
+    }
+
+done:
+    if (r) {
+        *err = jmap_server_error(r);
+        goto done;
+    }
+    strarray_fini(&dst_mboxnames);
+    if (src_mr) msgrecord_unref(&src_mr);
+    jmap_closembox(req, &src_mbox);
+}
+
+static int jmap_email_copy(jmap_req_t *req)
+{
+    json_t *created = json_object();
+    json_t *not_created = json_object();
+
+    /* Parse arguments */
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    const char *from_account_id = NULL;
+    const char *to_account_id = NULL;
+    json_t *create = json_object();
+    int on_success_destroy_original = 0;
+
+    /* fromAccountId */
+    json_t *jval = json_object_get(req->args, "fromAccountId");
+    if (json_is_string(jval)) {
+        from_account_id = json_string_value(jval);
+    }
+    else if (JNOTNULL(jval)) {
+        jmap_parser_invalid(&parser, "fromAccountId");
+    }
+    else {
+        from_account_id = req->accountid;
+    }
+    /* toAccountId */
+    jval = json_object_get(req->args, "toAccountId");
+    if (json_is_string(jval)) {
+        to_account_id = json_string_value(jval);
+    }
+    else if (JNOTNULL(jval)) {
+        jmap_parser_invalid(&parser, "toAccountId");
+    }
+    else {
+        to_account_id = req->accountid;
+    }
+    /* create */
+    json_t *jcreate = json_object_get(req->args, "create");
+    if (json_is_object(jcreate)) {
+        jmap_parser_push(&parser, "create");
+        const char *creation_id;
+        json_t *jemail;
+        json_object_foreach(jcreate, creation_id, jemail) {
+            if (!json_is_object(jemail)) {
+                jmap_parser_invalid(&parser, creation_id);
+                continue;
+            }
+            struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
+            /* Validate properties */
+            json_t *prop;
+            const char *pname;
+            json_object_foreach(jemail, pname, prop) {
+                if (!strcmp(pname, "id")) {
+                    if (!json_is_string(prop)) {
+                        jmap_parser_invalid(&myparser, "id");
+                    }
+                }
+                else if (!strcmp(pname, "mailboxIds")) {
+                    jmap_parser_push(&myparser, "mailboxIds");
+                    const char *mbox_id;
+                    json_t *jbool;
+                    json_object_foreach(prop, mbox_id, jbool) {
+                        if (!strlen(mbox_id) || jbool != json_true()) {
+                            jmap_parser_invalid(&myparser, mbox_id);
+                        }
+                    }
+                    jmap_parser_pop(&myparser);
+                }
+                else if (!strcmp(pname, "keywords")) {
+                    if (json_is_object(prop)) {
+                        jmap_parser_push(&myparser, "keywords");
+                        const char *keyword;
+                        json_t *jbool;
+                        json_object_foreach(prop, keyword, jbool) {
+                            if (!_email_keyword_is_valid(keyword) || jbool != json_true()) {
+                                jmap_parser_invalid(&myparser, keyword);
+                            }
+                        }
+                        jmap_parser_pop(&myparser);
+                    }
+                    else {
+                        jmap_parser_invalid(&myparser, "keywords");
+                    }
+                }
+                else if (!strcmp(pname, "receivedAt")) {
+                    if (!json_is_string(prop) || !_is_valid_utcdate(json_string_value(prop))) {
+                        jmap_parser_invalid(&myparser, "receivedAt");
+                    }
+                }
+            }
+            /* Check mandatory properties */
+            if (!json_object_get(jemail, "id")) {
+                jmap_parser_invalid(&myparser, "id");
+            }
+            if (!json_object_get(jemail, "mailboxIds")) {
+                jmap_parser_invalid(&myparser, "mailboxIds");
+            }
+            /* Reject invalid properties... */
+            if (json_array_size(myparser.invalid)) {
+                json_object_set(not_created, creation_id,
+                        json_pack("{s:s s:O}",
+                            "type", "invalidProperties",
+                            "properties", myparser.invalid));
+            }
+            /* ...and put valid Emails on the todo list */
+            else {
+                json_object_set(create, creation_id, jemail);
+            }
+            jmap_parser_fini(&myparser);
+        }
+        jmap_parser_pop(&parser);
+    }
+    else {
+        jmap_parser_invalid(&parser, "create");
+    }
+    /* onSuccessDestroyOriginal */
+    jval = json_object_get(req->args, "onSuccessDestroyOriginal");
+    if (json_is_boolean(jval)) {
+        on_success_destroy_original = json_boolean_value(jval);
+    }
+    else if (jval) {
+        jmap_parser_invalid(&parser, "onSuccessDestroyOriginal");
+
+    }
+    if (json_array_size(parser.invalid)) {
+        jmap_error(req, json_pack("{s:s s:O}", "type", "invalidArguments",
+                    "arguments", parser.invalid));
+        goto done;
+    }
+
+    /* Process request */
+    const char *creation_id;
+    json_t *copy_email;
+    json_object_foreach(create, creation_id, copy_email) {
+        json_t *set_err = NULL;
+        json_t *new_email = NULL;
+        /* Copy message */
+        _email_copy(req, copy_email, from_account_id, to_account_id,
+                    &new_email, &set_err);
+        if (set_err) {
+            json_object_set_new(not_created, creation_id, set_err);
+            continue;
+        }
+        /* Report message as created */
+        json_object_set_new(created, creation_id, new_email);
+        const char *msg_id = json_string_value(json_object_get(new_email, "id"));
+        jmap_add_id(req, creation_id, msg_id);
+    }
+
+    /* Prepare response */
+    if (json_object_size(created) == 0) {
+        json_decref(created);
+        created = json_null();
+    }
+    if (json_object_size(not_created) == 0) {
+        json_decref(not_created);
+        not_created = json_null();
+    }
+
+    json_t *res = json_object();
+    json_object_set(res, "fromAccountId", json_object_get(req->args, "fromAccountId"));
+    json_object_set(res, "toAccountId", json_object_get(req->args, "toAccountId"));
+    json_object_set(res, "created", created);
+    json_object_set(res, "not_created", not_created);
+    jmap_ok(req, res);
+
+    /* Destroy originals, if requested */
+    if (on_success_destroy_original && json_object_size(created)) {
+        json_t *destroy_emails = json_array();
+        void *iter = json_object_iter(created);
+        do {
+            json_t *new_email = json_object_iter_value(iter);
+            json_array_append(destroy_emails, json_object_get(new_email, "id"));
+        }
+        while ((iter = json_object_iter_next(created, iter)));
+        struct jmap_req subreq = *req;
+        subreq.args = json_pack("{}");
+        subreq.method = "Email/set";
+        json_object_set(subreq.args, "destroy", destroy_emails);
+        json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
+        jmap_email_set(&subreq);
+        json_decref(subreq.args);
+    }
+
+done:
+    json_decref(created);
+    json_decref(not_created);
+    jmap_parser_fini(&parser);
     return 0;
 }
 
@@ -11699,9 +12132,7 @@ static void _emailsubmission_parse_filter(json_t *filter, struct jmap_parser *pa
 
     arg = json_object_get(filter, "before");
     if ((s = json_string_value(arg))) {
-        struct tm tm;
-        const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
-        if (!p || *p) {
+        if (!_is_valid_utcdate(s)) {
             jmap_parser_invalid(parser, "before");
         }
     } else if (arg) {
@@ -11709,9 +12140,7 @@ static void _emailsubmission_parse_filter(json_t *filter, struct jmap_parser *pa
     }
     arg = json_object_get(filter, "after");
     if ((s = json_string_value(arg))) {
-        struct tm tm;
-        const char *p = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &tm);
-        if (!p || *p) {
+        if (!_is_valid_utcdate(s)) {
             jmap_parser_invalid(parser, "after");
         }
     } else if (arg) {
