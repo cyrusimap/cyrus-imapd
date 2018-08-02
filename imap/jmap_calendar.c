@@ -2396,11 +2396,14 @@ static int search_timerange_cb(void *vrock, struct caldav_data *cdata)
     return 0;
 }
 
-static int jmapevent_search(jmap_req_t *req, json_t *filter,
-                            size_t limit, size_t pos,
-                            size_t *total, json_t **eventids)
+static int jmapevent_search(jmap_req_t *req,  struct jmap_query *jquery)
 {
     int r, i;
+    json_t *filter = jquery->filter;
+    size_t limit = jquery->limit;
+    size_t pos = jquery->position;
+    size_t *total = &jquery->total;
+    json_t **eventids = &jquery->ids;
     struct searchargs *searchargs = NULL;
     struct index_init init;
     struct index_state *state = NULL;
@@ -2560,173 +2563,134 @@ done:
     return r;
 }
 
-static void validatefilter(json_t *filter, const char *prefix, json_t *invalid)
+static void validatefilter(json_t *filter, struct jmap_parser *parser,
+                           json_t *unsupported __attribute__((unused)),
+                           void *rock __attribute__((unused)))
 {
     struct buf buf = BUF_INITIALIZER;
     icaltimetype timeval;
     const char *s;
-    json_t *arg, *val;
-    size_t i;
+    json_t *arg;
 
     if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
-        json_array_append_new(invalid, json_string(prefix));
+        jmap_parser_invalid(parser, NULL);
         return;
     }
-
-    if (readprop_full(filter, prefix, "operator", 0, invalid, "s", &s) > 0) {
-
-        if (strcmp("AND", s) && strcmp("OR", s) && strcmp("NOT", s)) {
-            buf_printf(&buf, "%s.%s", prefix, "operator");
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
-
-        arg = json_object_get(filter, "conditions");
-        if (!json_array_size(arg)) {
-            buf_printf(&buf, "%s.conditions", prefix);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
-
-        json_array_foreach(arg, i, val) {
-            buf_printf(&buf, "%s.conditions[%zu]", prefix, i);
-            validatefilter(val, buf_cstring(&buf), invalid);
-            buf_reset(&buf);
+    arg = json_object_get(filter, "inCalendars");
+    if (arg && json_array_size(arg)) {
+        size_t i;
+        json_t *uid;
+        json_array_foreach(arg, i, uid) {
+            const char *id = json_string_value(uid);
+            if (!id || id[0] == '#') {
+                buf_printf(&buf, "inCalendars[%zu]", i);
+                jmap_parser_invalid(parser, buf_cstring(&buf));
+                buf_reset(&buf);
+            }
         }
     }
-    else {
-        arg = json_object_get(filter, "inCalendars");
-        if (arg && json_array_size(arg)) {
-            size_t i;
-            json_t *uid;
-            json_array_foreach(arg, i, uid) {
-                const char *id = json_string_value(uid);
-                if (!id || id[0] == '#') {
-                    buf_printf(&buf, "%s.calendars[%zu]", prefix, i);
-                    json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                    buf_reset(&buf);
-                }
-            }
-        }
-        else if (JNOTNULL(arg) && !json_array_size(arg)) {
-            buf_printf(&buf, "%s.%s", prefix, "inCalendars");
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
-        }
+    else if (JNOTNULL(arg) && !json_array_size(arg)) {
+        jmap_parser_invalid(parser, "inCalendars");
+    }
 
-        if (JNOTNULL(json_object_get(filter, "after"))) {
-            if (readprop_full(filter, prefix, "after", 1, invalid, "s", &s) > 0) {
-                if (!utcdate_to_icaltime(s, &timeval)) {
-                    buf_printf(&buf, "%s.%s", prefix, "after");
-                    json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                    buf_reset(&buf);
-                }
+    if (JNOTNULL(json_object_get(filter, "after"))) {
+        if (readprop_full(filter, NULL, "after", 1, parser->invalid, "s", &s) > 0) {
+            if (!utcdate_to_icaltime(s, &timeval)) {
+                jmap_parser_invalid(parser, "after");
             }
         }
-        if (JNOTNULL(json_object_get(filter, "before"))) {
-            if (readprop_full(filter, prefix, "before", 1, invalid, "s", &s) > 0) {
-                if (!utcdate_to_icaltime(s, &timeval)) {
-                    buf_printf(&buf, "%s.%s", prefix, "before");
-                    json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                    buf_reset(&buf);
-                }
+    }
+    if (JNOTNULL(json_object_get(filter, "before"))) {
+        if (readprop_full(filter, NULL, "before", 1, parser->invalid, "s", &s) > 0) {
+            if (!utcdate_to_icaltime(s, &timeval)) {
+                jmap_parser_invalid(parser, "before");
             }
         }
+    }
 
-        if (JNOTNULL(json_object_get(filter, "text"))) {
-            readprop_full(filter, prefix, "text", 1, invalid, "s", &s);
-        }
-        if (JNOTNULL(json_object_get(filter, "summary"))) {
-            readprop_full(filter, prefix, "summary", 1, invalid, "s", &s);
-        }
-        if (JNOTNULL(json_object_get(filter, "description"))) {
-            readprop_full(filter, prefix, "description", 1, invalid, "s", &s);
-        }
-        if (JNOTNULL(json_object_get(filter, "location"))) {
-            readprop_full(filter, prefix, "location", 1, invalid, "s", &s);
-        }
-        if (JNOTNULL(json_object_get(filter, "owner"))) {
-            readprop_full(filter, prefix, "owner", 1, invalid, "s", &s);
-        }
-        if (JNOTNULL(json_object_get(filter, "attendee"))) {
-            readprop_full(filter, prefix, "attendee", 1, invalid, "s", &s);
-        }
+    if (JNOTNULL(json_object_get(filter, "text"))) {
+        readprop_full(filter, NULL, "text", 1, parser->invalid, "s", &s);
+    }
+    if (JNOTNULL(json_object_get(filter, "summary"))) {
+        readprop_full(filter, NULL, "summary", 1, parser->invalid, "s", &s);
+    }
+    if (JNOTNULL(json_object_get(filter, "description"))) {
+        readprop_full(filter, NULL, "description", 1, parser->invalid, "s", &s);
+    }
+    if (JNOTNULL(json_object_get(filter, "location"))) {
+        readprop_full(filter, NULL, "location", 1, parser->invalid, "s", &s);
+    }
+    if (JNOTNULL(json_object_get(filter, "owner"))) {
+        readprop_full(filter, NULL, "owner", 1, parser->invalid, "s", &s);
+    }
+    if (JNOTNULL(json_object_get(filter, "attendee"))) {
+        readprop_full(filter, NULL, "attendee", 1, parser->invalid, "s", &s);
     }
 
     buf_free(&buf);
 }
 
+static int validatecomparator(struct jmap_comparator *comp,
+                              void *rock __attribute__((unused)))
+{
+    /* Reject any collation */
+    if (comp->collation) {
+        return 0;
+    }
+    if (!strcmp(comp->property, "start") ||
+        !strcmp(comp->property, "uid")) {
+        return 1;
+    }
+    return 0;
+}
+
 static int getCalendarEventsList(struct jmap_req *req)
 {
-    int r = 0, pe;
-    json_t *invalid;
-    json_t *filter;
-    size_t total = 0;
-    json_t *events = NULL;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_query query;
+    int r = 0;
 
-    /* Parse and validate arguments. */
-    invalid = json_pack("[]");
-
-    /* filter */
-    filter = json_object_get(req->args, "filter");
-    if (JNOTNULL(filter)) {
-        validatefilter(filter, "filter", invalid);
-    }
-
-    /* position */
-    json_int_t pos = 0;
-    if (JNOTNULL(json_object_get(req->args, "position"))) {
-        pe = readprop(req->args, "position",
-                      0 /*mandatory*/, invalid, "I", &pos);
-        if (pe > 0 && pos < 0) {
-            json_array_append_new(invalid, json_string("position"));
-        }
-    }
-
-    /* limit */
-    json_int_t limit = 0;
-    if (JNOTNULL(json_object_get(req->args, "limit"))) {
-        pe = readprop(req->args, "limit",
-                      0 /*mandatory*/, invalid, "I", &limit);
-        if (pe > 0 && limit < 0) {
-            json_array_append_new(invalid, json_string("limit"));
-        }
-    }
-
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}",
-                                "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response,
-                              json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+    /* Parse request */
+    json_t *err = NULL;
+    jmap_query_parse(req->args, &parser,
+            validatefilter, req,
+            validatecomparator, req,
+            &query, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    json_decref(invalid);
+    if (query.position < 0) {
+        /* we currently don't support negative positions */
+        jmap_parser_invalid(&parser, "position");
+    }
+    if (json_array_size(parser.invalid)) {
+        err = json_pack("{s:s}", "type", "invalidArguments");
+        json_object_set(err, "arguments", parser.invalid);
+        jmap_error(req, err);
+        goto done;
+    }
 
     /* Call search */
-    r = jmapevent_search(req, filter, limit, pos, &total, &events);
-    if (r) goto done;
+    r = jmapevent_search(req, &query);
+    if (r) {
+        err = jmap_server_error(r);
+        jmap_error(req, err);
+        goto done;
+    }
 
-    /* Prepare response. */
-    json_t *eventList = json_pack("{}");
-    json_object_set_new(eventList, "accountId", json_string(req->accountid));
-    json_object_set_new(eventList, "queryState", jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0));
-    json_object_set_new(eventList, "position", json_integer(pos));
-    json_object_set_new(eventList, "total", json_integer(total));
-    json_object_set(eventList, "ids", events);
-    if (filter) json_object_set(eventList, "filter", filter);
+    /* Build response */
+    json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
+    query.query_state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
 
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("CalendarEvent/query"));
-    json_array_append_new(item, eventList);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
-
-    jmap_add_perf(req, eventList);
+    json_t *res = jmap_query_reply(&query);
+    jmap_ok(req, res);
 
 done:
-    if (events) json_decref(events);
-    return r;
+    jmap_query_fini(&query);
+    jmap_parser_fini(&parser);
+    return 0;
 }
 
 static int getCalendarPreferences(struct jmap_req *req)
