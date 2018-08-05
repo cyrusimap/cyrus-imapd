@@ -1292,6 +1292,7 @@ envelope_err:
     case BC_METADATA:
     case BC_SERVERMETADATA:
     case BC_ENVIRONMENT:
+    case BC_NOTIFYMETHODCAPABILITY:
     {
         res = 0;
         const char *extname = NULL;
@@ -1316,7 +1317,7 @@ envelope_err:
             break;
         }
 
-        if (op == BC_METADATA) {
+        if (op == BC_METADATA || op == BC_NOTIFYMETHODCAPABILITY) {
             extname = test.u.mm.extname;
 
             if (requires & BFE_VARIABLES) {
@@ -1331,6 +1332,10 @@ envelope_err:
 
         if (op == BC_ENVIRONMENT)
             interp->getenvironment(sc, keyname, &val);
+        else if (op == BC_NOTIFYMETHODCAPABILITY) {
+            if (!strcasecmp(keyname, "online")) val = xstrdup("maybe");
+            else if (!strcasecmp(keyname, "fcc")) val = xstrdup("no");
+        }
         else
             interp->getmetadata(sc, extname, keyname, &val);
 
@@ -1399,6 +1404,28 @@ envelope_err:
             }
 
             if (interp->isvalidlist(interp->interp_context, str) != SIEVE_OK)
+                res = 0;
+        }
+
+        break;
+
+    case BC_VALIDNOTIFYMETHOD:
+        res = 1;
+
+        list_len = strarray_size(test.u.sl);
+
+        for (x = 0; x < list_len && res; x++) {
+            const char *str;
+
+            str = strarray_nth(test.u.sl, x);
+
+            if (requires & BFE_VARIABLES) {
+                str = parse_string(str, variables);
+                char *p = strchr(str, ':');
+                if (p) p[1] = '\0';
+            }
+
+            if (strarray_find_case(interp->notifymethods, str, 0) == -1)
                 res = 0;
         }
 

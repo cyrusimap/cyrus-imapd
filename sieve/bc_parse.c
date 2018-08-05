@@ -415,6 +415,7 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
     case BC_EXISTS:               /* 3 */
     case BC_VALIDEXTLIST:         /* 22 */
     case BC_IHAVE:                /* 24 */
+    case BC_VALIDNOTIFYMETHOD:    /* 27 */
         pos = bc_stringlist_parse(bc, pos, &test->u.sl);
         break;
 
@@ -568,6 +569,7 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
 
 
     case BC_METADATA:             /* 17 */
+    case BC_NOTIFYMETHODCAPABILITY:/* 28 */
         pos = bc_comparator_parse(bc, pos, &test->u.mm.comp);
         pos = bc_string_parse(bc, pos, &test->u.mm.extname);
         pos = bc_string_parse(bc, pos, &test->u.mm.keyname);

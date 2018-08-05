@@ -214,7 +214,7 @@ EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
         goto done;
     }
 
-    sieve_register_notify(interpreter, &stub_notify);
+    sieve_register_notify(interpreter, &stub_notify, NULL);
     sieve_register_parse_error(interpreter, &stub_parse_error);
 
     buf_appendcstr(&errors, "script errors:\r\n");

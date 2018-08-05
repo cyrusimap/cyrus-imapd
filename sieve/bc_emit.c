@@ -287,6 +287,8 @@ static int bc_test_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc)
     case BC_EXISTS:
     case BC_IHAVE:
     case BC_VALIDEXTLIST:
+    case BC_VALIDNOTIFYMETHOD:
+    case BC_NOTIFYMETHODCAPABILITY:
     case BC_HEADER:
     case BC_HASFLAG:
     case BC_STRING:

@@ -368,6 +368,18 @@ static void print_test(test_t *test)
         print_stringlist("VALIDEXTLIST", test->u.sl);
         break;
 
+    case BC_VALIDNOTIFYMETHOD:
+        print_stringlist("VALIDNOTIFYMETHOD", test->u.sl);
+        break;
+
+    case BC_NOTIFYMETHODCAPABILITY:
+        printf("NOTIFYMETHODCAPABILITY");
+        print_comparator(&test->u.mm.comp);
+        print_string("\n\tURI", test->u.mm.extname);
+        print_string(" CAPABILITY", test->u.mm.keyname);
+        print_stringlist(" KEYS", test->u.mm.keylist);
+        break;
+
     case BC_DUPLICATE:
         printf("DUPLICATE");
         print_string((test->u.dup.idtype == B_UNIQUEID) ?

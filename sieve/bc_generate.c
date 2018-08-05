@@ -315,15 +315,18 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         retval->data[codep].type = BT_VALUE;
         retval->data[codep++].u.value = t->u.sz.n;
         break;
-    case EXISTS:      /* BC_EXISTS       { headers    : string list } */
-    case IHAVE:       /* BC_IHAVE        { extensions : string list } */
-    case VALIDEXTLIST:/* BC_VALIDEXTLIST { listnames  : string list } */
+    case EXISTS:       /* BC_EXISTS       { headers    : string list } */
+    case IHAVE:        /* BC_IHAVE        { extensions : string list } */
+    case VALIDEXTLIST: /* BC_VALIDEXTLIST { listnames  : string list } */
+    case VALIDNOTIFYMETHOD: /* BC_VALIDNOTIFYMETHOD { uris  : string list } */
         switch (t->type) {
         case EXISTS:       retval->data[codep++].u.op = BC_EXISTS; break;
         case IHAVE:        retval->data[codep++].u.op = BC_IHAVE; break;
         case VALIDEXTLIST: retval->data[codep++].u.op = BC_VALIDEXTLIST; break;
+        case VALIDNOTIFYMETHOD:
+            retval->data[codep++].u.op = BC_VALIDNOTIFYMETHOD; break;
         }
-        codep= bc_stringlist_generate(codep, retval, t->u.sl);
+        codep = bc_stringlist_generate(codep, retval, t->u.sl);
         break;
     case ANYOF:/* BC_ANYOF { tests : test list } */
         retval->data[codep++].u.op = BC_ANYOF;
@@ -581,7 +584,9 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
         break;
 
     case METADATA:
-        retval->data[codep++].u.op = BC_METADATA;
+    case NOTIFYMETHODCAPABILITY:
+        retval->data[codep++].u.op =
+            t->type == METADATA ? BC_METADATA : BC_NOTIFYMETHODCAPABILITY;
 
         /* comparator */
         codep = bc_comparator_generate(codep, retval,

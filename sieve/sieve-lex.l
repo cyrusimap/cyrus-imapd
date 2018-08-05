@@ -357,6 +357,8 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>ereject              return yylval->nval = EREJECT;
 
     /* enotify - RFC 5435 */
+<INITIAL>notify_method_capability  return NOTIFYMETHODCAPABILITY;
+<INITIAL>valid_notify_method  return VALIDNOTIFYMETHOD;
 <INITIAL>notify               return NOTIFY;
 <INITIAL>:options             return OPTIONS;
 <INITIAL>:message             return MESSAGE;

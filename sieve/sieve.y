@@ -261,10 +261,11 @@ extern void sieverestart(FILE *f);
 %type <nval> reject
 
 /* enotify - RFC 5435 */
-%token METHOD OPTIONS MESSAGE IMPORTANCE
+%token METHOD OPTIONS MESSAGE IMPORTANCE VALIDNOTIFYMETHOD NOTIFYMETHODCAPABILITY
 %token <nval> NOTIFY ENOTIFY ENCODEURL
 %type <cl> ntags
 %type <nval> mod15
+%type <test> methtags
 
 /* notify - draft-martin-sieve-notify-01 */
 %token DENOTIFY ID ANY
@@ -1171,6 +1172,15 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
 
         | CURRENTDATE cdtags datepart stringlist
                                  { $$ = build_date(sscript, $2, NULL, $3, $4); }
+        | VALIDNOTIFYMETHOD stringlist
+                                 {
+                                     $$ = new_test(VALIDNOTIFYMETHOD, sscript);
+                                     $$->u.sl = $2;
+                                 }
+        | NOTIFYMETHODCAPABILITY methtags STRING STRING stringlist
+                                 { $$ = build_mbox_meta(sscript,
+                                                        $2, $3, $4, $5); }
+
         | IHAVE stringlist       { $$ = build_ihave(sscript, $2); }
 
         | MAILBOXEXISTS stringlist
@@ -1563,6 +1573,13 @@ datepart: YEARP
         | STD11
         | ZONEP
         | WEEKDAYP
+        ;
+
+
+/* NOTIFYMETHODCAPABILITY tagged arguments */
+methtags: /* empty */            { $$ = new_test(NOTIFYMETHODCAPABILITY, sscript); }
+        | methtags { ctags = &($1->u.mm.comp); } matchtype
+        | methtags { ctags = &($1->u.mm.comp); } comparator
         ;
 
 
@@ -2530,7 +2547,8 @@ static test_t *build_mbox_meta(sieve_script_t *sscript,
     assert(t && (t->type == MAILBOXEXISTS ||
                  t->type == METADATA || t->type == METADATAEXISTS ||
                  t->type == SERVERMETADATA || t->type == SERVERMETADATAEXISTS ||
-                 t->type == ENVIRONMENT || t->type == SPECIALUSEEXISTS));
+                 t->type == ENVIRONMENT || t->type == SPECIALUSEEXISTS ||
+                 t->type == NOTIFYMETHODCAPABILITY));
 
     canon_comptags(&t->u.mm.comp, sscript);
     t->u.mm.extname = extname;

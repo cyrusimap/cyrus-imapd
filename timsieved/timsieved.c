@@ -417,7 +417,7 @@ static int build_sieve_interp(void)
         return TIMSIEVE_FAIL;
     }
 
-    sieve_register_notify(interp, &timsieved_notify_cb);
+    sieve_register_notify(interp, &timsieved_notify_cb, NULL);
     sieve_register_parse_error(interp, &timsieved_parse_error_cb);
 
     return TIMSIEVE_OK;

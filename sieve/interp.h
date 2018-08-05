@@ -75,6 +75,8 @@ struct sieve_interp {
     /* site-specific imapflags for mark/unmark */
     const strarray_t *markflags;
 
+    const strarray_t *notifymethods;
+
     sieve_execute_error *execute_err;
 
     char *lastitem;

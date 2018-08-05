@@ -185,7 +185,8 @@ void sieve_register_fileinto(sieve_interp_t *interp, sieve_callback *f);
 void sieve_register_keep(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v);
 void sieve_register_imapflags(sieve_interp_t *interp, const strarray_t *mark);
-void sieve_register_notify(sieve_interp_t *interp, sieve_callback *f);
+void sieve_register_notify(sieve_interp_t *interp,
+                           sieve_callback *f, const strarray_t *methods);
 void sieve_register_include(sieve_interp_t *interp, sieve_get_include *f);
 
 /* add the callbacks for messages. again, undefined if used after

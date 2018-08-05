@@ -1554,9 +1554,15 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     sieve_interp_t *interp = NULL;
     int res;
     static strarray_t mark = STRARRAY_INITIALIZER;
+    static strarray_t methods = STRARRAY_INITIALIZER;
 
     if (!mark.count)
         strarray_append(&mark, "\\flagged");
+
+    if (!methods.count) {
+        /* XXX  is there an imapd.conf option for this? */
+        strarray_append(&methods, "mailto:");
+    }
 
     sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
     if (!sieve_usehomedir) {
@@ -1574,7 +1580,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     sieve_register_fileinto(interp, &sieve_fileinto);
     sieve_register_keep(interp, &sieve_keep);
     sieve_register_imapflags(interp, &mark);
-    sieve_register_notify(interp, &sieve_notify);
+    sieve_register_notify(interp, &sieve_notify, &methods);
     sieve_register_size(interp, &getsize);
     sieve_register_mailboxexists(interp, &getmailboxexists);
     sieve_register_specialuseexists(interp, &getspecialuseexists);

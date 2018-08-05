@@ -733,7 +733,7 @@ int main(int argc, char *argv[])
     strarray_append(&mark, "\\flagged");
     sieve_register_imapflags(i, &mark);
 
-    sieve_register_notify(i, notify);
+    sieve_register_notify(i, notify, NULL);
     sieve_register_parse_error(i, mysieve_error);
     sieve_register_execute_error(i, mysieve_execute_error);
 

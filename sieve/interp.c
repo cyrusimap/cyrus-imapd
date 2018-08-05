@@ -232,8 +232,17 @@ EXPORTED void sieve_register_imapflags(sieve_interp_t *interp, const strarray_t 
         (mark && mark->data && mark->count) ? mark : &default_mark;
 }
 
-EXPORTED void sieve_register_notify(sieve_interp_t *interp, sieve_callback *f)
+EXPORTED void sieve_register_notify(sieve_interp_t *interp,
+                                    sieve_callback *f, const strarray_t *methods)
 {
+    static strarray_t default_methods = STRARRAY_INITIALIZER;
+
+    if (!default_methods.count)
+        strarray_append(&default_methods, "mailto:");
+
+    interp->notifymethods =
+        (methods && methods->data && methods->count) ? methods : &default_methods;
+
     interp->notify = f;
 }
 

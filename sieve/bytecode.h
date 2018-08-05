@@ -232,7 +232,9 @@ enum bytecode_comps {
     BC_DUPLICATE,       /* require duplicate */
     BC_IHAVE,           /* require ihave */
     BC_SPECIALUSEEXISTS,/* require special-use */
-    BC_ENVIRONMENT      /* require environment */
+    BC_ENVIRONMENT,     /* require environment */
+    BC_VALIDNOTIFYMETHOD,/* require enotify */
+    BC_NOTIFYMETHODCAPABILITY
 };
 
 /* currently one enum so as to help determine where values are being misused.

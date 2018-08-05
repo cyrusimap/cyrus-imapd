@@ -132,6 +132,15 @@ test_t *new_test(int type, sieve_script_t *parse_script)
         p->u.dt.zonetag = -1;
         break;
 
+    case NOTIFYMETHODCAPABILITY:
+        init_comptags(&p->u.mm.comp);
+        GCC_FALLTHROUGH
+
+    case VALIDNOTIFYMETHOD:
+        capability = "enotify";
+        supported = parse_script->support & SIEVE_CAPA_ENOTIFY;
+        break;
+
     case IHAVE:
         capability = "ihave";
         supported = parse_script->support & SIEVE_CAPA_IHAVE;
