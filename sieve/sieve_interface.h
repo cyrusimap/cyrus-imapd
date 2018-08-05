@@ -205,10 +205,9 @@ void sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
 void sieve_register_environment(sieve_interp_t *interp, sieve_get_environment *f);
 void sieve_register_body(sieve_interp_t *interp, sieve_get_body *f);
 
-void sieve_register_listvalidator(sieve_interp_t *interp,
-                                  sieve_list_validator *f);
-void sieve_register_listcompare(sieve_interp_t *interp,
-                                sieve_list_comparator *f);
+void sieve_register_extlists(sieve_interp_t *interp,
+                             sieve_list_validator *v, sieve_list_comparator *c);
+                                
 
 int sieve_register_duplicate(sieve_interp_t *interp, sieve_duplicate_t *d);
 

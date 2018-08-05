@@ -1610,8 +1610,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     }
 
 #ifdef WITH_DAV
-    sieve_register_listvalidator(interp, &listvalidator);
-    sieve_register_listcompare(interp, &listcompare);
+    sieve_register_extlists(interp, &listvalidator, &listcompare);
 #endif
     sieve_register_parse_error(interp, &sieve_parse_error_handler);
     sieve_register_execute_error(interp, &sieve_execute_error_handler);

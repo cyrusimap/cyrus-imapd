@@ -328,14 +328,12 @@ EXPORTED int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v
     return SIEVE_OK;
 }
 
-EXPORTED void sieve_register_listvalidator(sieve_interp_t *interp, sieve_list_validator *f)
+EXPORTED void sieve_register_extlists(sieve_interp_t *interp,
+                                      sieve_list_validator *v,
+                                      sieve_list_comparator *c)
 {
-    interp->isvalidlist = f;
-}
-
-EXPORTED void sieve_register_listcompare(sieve_interp_t *interp, sieve_list_comparator *f)
-{
-    interp->listcompare = f;
+    interp->isvalidlist = v;
+    interp->listcompare = c;
 }
 
 EXPORTED int sieve_register_duplicate(sieve_interp_t *interp,
