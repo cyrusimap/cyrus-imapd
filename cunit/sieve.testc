@@ -611,7 +611,7 @@ static void context_setup(sieve_test_context_t *ctx,
     sieve_register_include(ctx->interp, getinclude);
     sieve_register_vacation(ctx->interp, &vacation);
     sieve_register_imapflags(ctx->interp, &mark);
-    sieve_register_notify(ctx->interp, notify);
+    sieve_register_notify(ctx->interp, notify, NULL);
     sieve_register_parse_error(ctx->interp, mysieve_error);
     sieve_register_execute_error(ctx->interp, mysieve_execute_error);
 
