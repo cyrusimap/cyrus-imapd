@@ -180,7 +180,7 @@ static char *make_basedir(const char * const *reldirs)
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     r = cyrusdb_open(backend, filename, 0, &db); \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
-    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(db);
 
 #define GOTRESULT(expkey, expkeylen, expdata, expdatalen) \
 { \
