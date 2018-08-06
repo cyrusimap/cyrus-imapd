@@ -11840,7 +11840,7 @@ sub test_email_copy
     $self->assert_deep_equals($wantKeywords, $res->[0][1]{list}[0]{keywords});
 }
 
-sub test_email_destroy_bulk
+sub test_email_set_destroy_bulk
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
