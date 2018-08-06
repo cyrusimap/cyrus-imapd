@@ -598,30 +598,30 @@ sub test_contact_query
     $res = $jmap->CallMethods([ ['Contact/query', { }, "R1"] ]);
 
     $self->assert_num_equals(4, $res->[0][1]{total});
-    $self->assert_num_equals(4, scalar @{$res->[0][1]{contactIds}});
+    $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
 
     xlog "filter by firstName";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { firstName => "foo" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{contactIds}});
-    $self->assert_str_equals($id1, $res->[0][1]{contactIds}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
     xlog "filter by lastName";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { lastName => "last" }
                 }, "R1"] ]);
     $self->assert_num_equals(4, $res->[0][1]{total});
-    $self->assert_num_equals(4, scalar @{$res->[0][1]{contactIds}});
+    $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
 
     xlog "filter by firstName and lastName (one filter)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { firstName => "bam", lastName => "last" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{contactIds}});
-    $self->assert_str_equals($id4, $res->[0][1]{contactIds}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id4, $res->[0][1]{ids}[0]);
 
     xlog "filter by firstName and lastName (AND filter)";
     $res = $jmap->CallMethods([ ['Contact/query', {
@@ -632,8 +632,8 @@ sub test_contact_query
                     }]}
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{contactIds}});
-    $self->assert_str_equals($id3, $res->[0][1]{contactIds}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id3, $res->[0][1]{ids}[0]);
 
     xlog "filter by firstName (OR filter)";
     $res = $jmap->CallMethods([ ['Contact/query', {
@@ -644,47 +644,47 @@ sub test_contact_query
                     }]}
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{contactIds}});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
     xlog "filter by text";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { text => "some" }
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{contactIds}});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
     xlog "filter by email";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { email => "example.com" }
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{contactIds}});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
     xlog "filter by isFlagged (true)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { isFlagged => JSON::true }
                 }, "R1"] ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{contactIds}});
-    $self->assert_str_equals($id2, $res->[0][1]{contactIds}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id2, $res->[0][1]{ids}[0]);
 
     xlog "filter by isFlagged (false)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { isFlagged => JSON::false }
                 }, "R1"] ]);
-    $self->assert_num_equals(3, scalar @{$res->[0][1]{contactIds}});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
 
     xlog "filter by inContactGroup";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { inContactGroup => [$group1, $group3] }
                 }, "R1"] ]);
-    $self->assert_num_equals(3, scalar @{$res->[0][1]{contactIds}});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
 
     xlog "filter by inContactGroup and firstName";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { inContactGroup => [$group1, $group3], firstName => "foo" }
                 }, "R1"] ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{contactIds}});
-    $self->assert_str_equals($id1, $res->[0][1]{contactIds}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 }
 
 
@@ -795,8 +795,10 @@ sub test_contact_query_shared
     xlog "get unfiltered contact list";
     $res = $jmap->CallMethods([ ['Contact/query', { accountId => 'manifold' }, "R1"] ]);
 
+xlog "check total";
     $self->assert_num_equals(4, $res->[0][1]{total});
-    $self->assert_num_equals(4, scalar @{$res->[0][1]{contactIds}});
+xlog "check ids";
+    $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
 
     xlog "filter by firstName";
     $res = $jmap->CallMethods([ ['Contact/query', {
@@ -804,8 +806,8 @@ sub test_contact_query_shared
                     filter => { firstName => "foo" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{contactIds}});
-    $self->assert_str_equals($id1, $res->[0][1]{contactIds}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
     xlog "filter by lastName";
     $res = $jmap->CallMethods([ ['Contact/query', {
@@ -813,7 +815,7 @@ sub test_contact_query_shared
                     filter => { lastName => "last" }
                 }, "R1"] ]);
     $self->assert_num_equals(4, $res->[0][1]{total});
-    $self->assert_num_equals(4, scalar @{$res->[0][1]{contactIds}});
+    $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
 
     xlog "filter by firstName and lastName (one filter)";
     $res = $jmap->CallMethods([ ['Contact/query', {
@@ -821,8 +823,8 @@ sub test_contact_query_shared
                     filter => { firstName => "bam", lastName => "last" }
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{contactIds}});
-    $self->assert_str_equals($id4, $res->[0][1]{contactIds}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id4, $res->[0][1]{ids}[0]);
 
     xlog "filter by firstName and lastName (AND filter)";
     $res = $jmap->CallMethods([ ['Contact/query', {
@@ -834,8 +836,8 @@ sub test_contact_query_shared
                     }]}
                 }, "R1"] ]);
     $self->assert_num_equals(1, $res->[0][1]{total});
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{contactIds}});
-    $self->assert_str_equals($id3, $res->[0][1]{contactIds}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id3, $res->[0][1]{ids}[0]);
 
     xlog "filter by firstName (OR filter)";
     $res = $jmap->CallMethods([ ['Contact/query', {
@@ -847,7 +849,7 @@ sub test_contact_query_shared
                     }]}
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{contactIds}});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
     xlog "filter by text";
     $res = $jmap->CallMethods([ ['Contact/query', {
@@ -855,7 +857,7 @@ sub test_contact_query_shared
                     filter => { text => "some" }
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{contactIds}});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
     xlog "filter by email";
     $res = $jmap->CallMethods([ ['Contact/query', {
@@ -863,37 +865,37 @@ sub test_contact_query_shared
                     filter => { email => "example.com" }
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{contactIds}});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
     xlog "filter by isFlagged (true)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { isFlagged => JSON::true }
                 }, "R1"] ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{contactIds}});
-    $self->assert_str_equals($id2, $res->[0][1]{contactIds}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id2, $res->[0][1]{ids}[0]);
 
     xlog "filter by isFlagged (false)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { isFlagged => JSON::false }
                 }, "R1"] ]);
-    $self->assert_num_equals(3, scalar @{$res->[0][1]{contactIds}});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
 
     xlog "filter by inContactGroup";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { inContactGroup => [$group1, $group3] }
                 }, "R1"] ]);
-    $self->assert_num_equals(3, scalar @{$res->[0][1]{contactIds}});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
 
     xlog "filter by inContactGroup and firstName";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { inContactGroup => [$group1, $group3], firstName => "foo" }
                 }, "R1"] ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{contactIds}});
-    $self->assert_str_equals($id1, $res->[0][1]{contactIds}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 }
 
 sub test_contactgroup_changes
