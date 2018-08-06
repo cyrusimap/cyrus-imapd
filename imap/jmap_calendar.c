@@ -2611,8 +2611,8 @@ static void validatefilter(json_t *filter, struct jmap_parser *parser,
     if (JNOTNULL(json_object_get(filter, "text"))) {
         readprop_full(filter, NULL, "text", 1, parser->invalid, "s", &s);
     }
-    if (JNOTNULL(json_object_get(filter, "summary"))) {
-        readprop_full(filter, NULL, "summary", 1, parser->invalid, "s", &s);
+    if (JNOTNULL(json_object_get(filter, "title"))) {
+        readprop_full(filter, NULL, "title", 1, parser->invalid, "s", &s);
     }
     if (JNOTNULL(json_object_get(filter, "description"))) {
         readprop_full(filter, NULL, "description", 1, parser->invalid, "s", &s);
