@@ -225,11 +225,6 @@ static int jmap_match_jsonprop(json_t *arg, const char *name, const char *text)
  * need it anymore for calendar events. You are next, contacts!
  */
 
-enum jmap_filter_kind {
-    JMAP_FILTER_KIND_COND = 0,
-    JMAP_FILTER_KIND_OPER
-};
-
 enum jmap_filter_op   {
     JMAP_FILTER_OP_NONE = 0,
     JMAP_FILTER_OP_AND,
@@ -238,25 +233,23 @@ enum jmap_filter_op   {
 };
 
 typedef struct jmap_filter {
-    enum jmap_filter_kind kind;
     enum jmap_filter_op op;
-    struct jmap_filter **conditions;
-    size_t n_conditions;
-    void *cond;
+    ptrarray_t conditions;
 } jmap_filter;
 
-typedef void* jmap_filterparse_cb(json_t* arg,
-                                  const char* prefix, json_t*invalid);
+typedef void* jmap_filterparse_cb(json_t* arg);
 typedef int   jmap_filtermatch_cb(void* cond, void* rock);
 typedef void  jmap_filterfree_cb(void* cond);
 
 static int jmap_filter_match(jmap_filter *f,
                              jmap_filtermatch_cb *match, void *rock)
 {
-    if (f->kind == JMAP_FILTER_KIND_OPER) {
-        size_t i;
-        for (i = 0; i < f->n_conditions; i++) {
-            int m = jmap_filter_match(f->conditions[i], match, rock);
+    if (f->op == JMAP_FILTER_OP_NONE) {
+        return match(ptrarray_head(&f->conditions), rock);
+    } else {
+        int i;
+        for (i = 0; i < ptrarray_size(&f->conditions); i++) {
+            int m = jmap_filter_match(ptrarray_nth(&f->conditions, i), match, rock);
             if (m && f->op == JMAP_FILTER_OP_OR) {
                 return 1;
             } else if (m && f->op == JMAP_FILTER_OP_NOT) {
@@ -266,78 +259,55 @@ static int jmap_filter_match(jmap_filter *f,
             }
         }
         return f->op == JMAP_FILTER_OP_AND || f->op == JMAP_FILTER_OP_NOT;
-    } else {
-        return match(f->cond, rock);
     }
 }
 
 static void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond)
 {
-    size_t i;
-    for (i = 0; i < f->n_conditions; i++) {
-        jmap_filter_free(f->conditions[i], freecond);
+    void *cond;
+
+    while ((cond = ptrarray_pop(&f->conditions))) {
+        if (freecond) freecond(cond);
     }
-    if (f->conditions) free(f->conditions);
-    if (f->cond && freecond) {
-        freecond(f->cond);
-    }
+    ptrarray_fini(&f->conditions);
     free(f);
 }
 
-static jmap_filter *_jmap_filter_parse(json_t *arg,
-                                       const char *prefix,
-                                       json_t *invalid,
-                                       jmap_filterparse_cb *parse)
+static jmap_filter *buildfilter(json_t *arg, jmap_filterparse_cb *parse)
 {
     jmap_filter *f = (jmap_filter *) xzmalloc(sizeof(struct jmap_filter));
     int pe;
     const char *val;
-    struct buf buf = BUF_INITIALIZER;
     int iscond = 1;
 
     /* operator */
-    pe = readprop_full(arg, prefix, "operator",
-                       0 /*mandatory*/, invalid, "s", &val);
+    pe = readprop_full(arg, NULL, "operator",
+                       0 /*mandatory*/, NULL, "s", &val);
     if (pe > 0) {
-        f->kind = JMAP_FILTER_KIND_OPER;
         if (!strncmp("AND", val, 3)) {
             f->op = JMAP_FILTER_OP_AND;
         } else if (!strncmp("OR", val, 2)) {
             f->op = JMAP_FILTER_OP_OR;
         } else if (!strncmp("NOT", val, 3)) {
             f->op = JMAP_FILTER_OP_NOT;
-        } else {
-            buf_printf(&buf, "%s.%s", prefix, "operator");
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
         }
     }
-    iscond = f->kind == JMAP_FILTER_KIND_COND;
+    iscond = f->op == JMAP_FILTER_OP_NONE;
 
     /* conditions */
     json_t *conds = json_object_get(arg, "conditions");
     if (conds && !iscond && json_array_size(conds)) {
-        f->n_conditions = json_array_size(conds);
-        f->conditions = xmalloc(sizeof(struct jmap_filter) * f->n_conditions);
-        size_t i;
-        for (i = 0; i < f->n_conditions; i++) {
+        size_t i, n_conditions = json_array_size(conds);
+        for (i = 0; i < n_conditions; i++) {
             json_t *cond = json_array_get(conds, i);
-            buf_printf(&buf, "%s.conditions[%zu]", prefix, i);
-            f->conditions[i] = _jmap_filter_parse(cond, buf_cstring(&buf),
-                                                  invalid, parse);
-            buf_reset(&buf);
+            ptrarray_push(&f->conditions, buildfilter(cond, parse));
         }
-    } else if (JNOTNULL(conds)) {
-        buf_printf(&buf, "%s.%s", prefix, "conditions");
-        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-        buf_reset(&buf);
     }
 
     if (iscond) {
-        f->cond = parse(arg, prefix, invalid);
+        ptrarray_push(&f->conditions, parse(arg));
     }
 
-    buf_free(&buf);
     return f;
 }
 
@@ -1762,35 +1732,24 @@ static void contact_filter_free(void *vf)
 /* Parse the JMAP Contact FilterCondition in arg.
  * Report any invalid properties in invalid, prefixed by prefix.
  * Return NULL on error. */
-static void *contact_filter_parse(json_t *arg,
-                                   const char *prefix,
-                                   json_t *invalid)
+static void *contact_filter_parse(json_t *arg)
 {
     contact_filter *f =
         (contact_filter *) xzmalloc(sizeof(struct contact_filter));
-    struct buf buf = BUF_INITIALIZER;
 
     /* inContactGroup */
     json_t *inContactGroup = json_object_get(arg, "inContactGroup");
-    if (inContactGroup && json_typeof(inContactGroup) != JSON_ARRAY) {
-        buf_printf(&buf, "%s.inContactGroup", prefix);
-        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-        buf_reset(&buf);
-    } else if (inContactGroup) {
+    if (inContactGroup) {
         f->inContactGroup = xmalloc(sizeof(struct hash_table));
         construct_hash_table(f->inContactGroup,
                              json_array_size(inContactGroup)+1, 0);
         size_t i;
         json_t *val;
         json_array_foreach(inContactGroup, i, val) {
-            buf_printf(&buf, "%s.inContactGroup[%zu]", prefix, i);
             const char *id;
             if (json_unpack(val, "s", &id) != -1) {
                 hash_insert(id, (void*)1, f->inContactGroup);
-            } else {
-                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
             }
-            buf_reset(&buf);
         }
     }
 
@@ -1799,73 +1758,174 @@ static void *contact_filter_parse(json_t *arg,
 
     /* text */
     if (JNOTNULL(json_object_get(arg, "text"))) {
-        readprop_full(arg, prefix, "text", 0, invalid, "s", &f->text);
+        readprop_full(arg, NULL, "text", 0, NULL, "s", &f->text);
     }
     /* prefix */
     if (JNOTNULL(json_object_get(arg, "prefix"))) {
-        readprop_full(arg, prefix, "prefix", 0, invalid, "s", &f->prefix);
+        readprop_full(arg, NULL, "prefix", 0, NULL, "s", &f->prefix);
     }
     /* firstName */
     if (JNOTNULL(json_object_get(arg, "firstName"))) {
-        readprop_full(arg, prefix, "firstName", 0, invalid, "s", &f->firstName);
+        readprop_full(arg, NULL, "firstName", 0, NULL, "s", &f->firstName);
     }
     /* lastName */
     if (JNOTNULL(json_object_get(arg, "lastName"))) {
-        readprop_full(arg, prefix, "lastName", 0, invalid, "s", &f->lastName);
+        readprop_full(arg, NULL, "lastName", 0, NULL, "s", &f->lastName);
     }
     /* suffix */
     if (JNOTNULL(json_object_get(arg, "suffix"))) {
-        readprop_full(arg, prefix, "suffix", 0, invalid, "s", &f->suffix);
+        readprop_full(arg, NULL, "suffix", 0, NULL, "s", &f->suffix);
     }
     /* nickname */
     if (JNOTNULL(json_object_get(arg, "nickname"))) {
-        readprop_full(arg, prefix, "nickname", 0, invalid, "s", &f->nickname);
+        readprop_full(arg, NULL, "nickname", 0, NULL, "s", &f->nickname);
     }
     /* company */
     if (JNOTNULL(json_object_get(arg, "company"))) {
-        readprop_full(arg, prefix, "company", 0, invalid, "s", &f->company);
+        readprop_full(arg, NULL, "company", 0, NULL, "s", &f->company);
     }
     /* department */
     if (JNOTNULL(json_object_get(arg, "department"))) {
-        readprop_full(arg, prefix, "department", 0, invalid, "s", &f->department);
+        readprop_full(arg, NULL, "department", 0, NULL, "s", &f->department);
     }
     /* jobTitle */
     if (JNOTNULL(json_object_get(arg, "jobTitle"))) {
-        readprop_full(arg, prefix, "jobTitle", 0, invalid, "s", &f->jobTitle);
+        readprop_full(arg, NULL, "jobTitle", 0, NULL, "s", &f->jobTitle);
     }
     /* email */
     if (JNOTNULL(json_object_get(arg, "email"))) {
-        readprop_full(arg, prefix, "email", 0, invalid, "s", &f->email);
+        readprop_full(arg, NULL, "email", 0, NULL, "s", &f->email);
     }
     /* phone */
     if (JNOTNULL(json_object_get(arg, "phone"))) {
-        readprop_full(arg, prefix, "phone", 0, invalid, "s", &f->phone);
+        readprop_full(arg, NULL, "phone", 0, NULL, "s", &f->phone);
     }
     /* online */
     if (JNOTNULL(json_object_get(arg, "online"))) {
-        readprop_full(arg, prefix, "online", 0, invalid, "s", &f->online);
+        readprop_full(arg, NULL, "online", 0, NULL, "s", &f->online);
     }
     /* address */
     if (JNOTNULL(json_object_get(arg, "address"))) {
-        readprop_full(arg, prefix, "address", 0, invalid, "s", &f->address);
+        readprop_full(arg, NULL, "address", 0, NULL, "s", &f->address);
     }
     /* notes */
     if (JNOTNULL(json_object_get(arg, "notes"))) {
-        readprop_full(arg, prefix, "notes", 0, invalid, "s", &f->notes);
+        readprop_full(arg, NULL, "notes", 0, NULL, "s", &f->notes);
     }
-
-    buf_free(&buf);
 
     return f;
 }
 
+static void validatefilter(json_t *filter, struct jmap_parser *parser,
+                           json_t *unsupported __attribute__((unused)),
+                           void *rock __attribute__((unused)))
+{
+    struct buf buf = BUF_INITIALIZER;
+    const char *s;
+
+    if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
+        jmap_parser_invalid(parser, NULL);
+        return;
+    }
+
+    /* inContactGroup */
+    json_t *inContactGroup = json_object_get(filter, "inContactGroup");
+    if (inContactGroup && json_typeof(inContactGroup) != JSON_ARRAY) {
+        jmap_parser_invalid(parser, "inContactGroup");
+    } else if (inContactGroup) {
+        size_t i;
+        json_t *val;
+        json_array_foreach(inContactGroup, i, val) {
+            const char *id;
+            if (json_unpack(val, "s", &id) == -1) {
+                buf_printf(&buf, "inContactGroup[%zu]", i);
+                jmap_parser_invalid(parser, buf_cstring(&buf));
+                buf_reset(&buf);
+            }
+        }
+    }
+
+    /* text */
+    if (JNOTNULL(json_object_get(filter, "text"))) {
+        readprop_full(filter, NULL, "text", 0, parser->invalid, "s", &s);
+    }
+    /* prefix */
+    if (JNOTNULL(json_object_get(filter, "prefix"))) {
+        readprop_full(filter, NULL, "prefix", 0, parser->invalid, "s", &s);
+    }
+    /* firstName */
+    if (JNOTNULL(json_object_get(filter, "firstName"))) {
+        readprop_full(filter, NULL, "firstName", 0, parser->invalid, "s", &s);
+    }
+    /* lastName */
+    if (JNOTNULL(json_object_get(filter, "lastName"))) {
+        readprop_full(filter, NULL, "lastName", 0, parser->invalid, "s", &s);
+    }
+    /* suffix */
+    if (JNOTNULL(json_object_get(filter, "suffix"))) {
+        readprop_full(filter, NULL, "suffix", 0, parser->invalid, "s", &s);
+    }
+    /* nickname */
+    if (JNOTNULL(json_object_get(filter, "nickname"))) {
+        readprop_full(filter, NULL, "nickname", 0, parser->invalid, "s", &s);
+    }
+    /* company */
+    if (JNOTNULL(json_object_get(filter, "company"))) {
+        readprop_full(filter, NULL, "company", 0, parser->invalid, "s", &s);
+    }
+    /* department */
+    if (JNOTNULL(json_object_get(filter, "department"))) {
+        readprop_full(filter, NULL, "department", 0, parser->invalid, "s", &s);
+    }
+    /* jobTitle */
+    if (JNOTNULL(json_object_get(filter, "jobTitle"))) {
+        readprop_full(filter, NULL, "jobTitle", 0, parser->invalid, "s", &s);
+    }
+    /* email */
+    if (JNOTNULL(json_object_get(filter, "email"))) {
+        readprop_full(filter, NULL, "email", 0, parser->invalid, "s", &s);
+    }
+    /* phone */
+    if (JNOTNULL(json_object_get(filter, "phone"))) {
+        readprop_full(filter, NULL, "phone", 0, parser->invalid, "s", &s);
+    }
+    /* online */
+    if (JNOTNULL(json_object_get(filter, "online"))) {
+        readprop_full(filter, NULL, "online", 0, parser->invalid, "s", &s);
+    }
+    /* address */
+    if (JNOTNULL(json_object_get(filter, "address"))) {
+        readprop_full(filter, NULL, "address", 0, parser->invalid, "s", &s);
+    }
+    /* notes */
+    if (JNOTNULL(json_object_get(filter, "notes"))) {
+        readprop_full(filter, NULL, "notes", 0, parser->invalid, "s", &s);
+    }
+
+    buf_free(&buf);
+}
+
+static int validatecomparator(struct jmap_comparator *comp,
+                              void *rock __attribute__((unused)))
+{
+    /* Reject any collation */
+    if (comp->collation) {
+        return 0;
+    }
+    if (!strcmp(comp->property, "isFlagged") ||
+        !strcmp(comp->property, "firstName") ||
+        !strcmp(comp->property, "lastName") ||
+        !strcmp(comp->property, "nickname") ||
+        !strcmp(comp->property, "company")) {
+        return 1;
+    }
+    return 0;
+}
+
 struct contactlist_rock {
     jmap_req_t *req;
+    struct jmap_query *query;
     jmap_filter *filter;
-    size_t position;
-    size_t limit;
-    size_t total;
-    json_t *contacts;
 
     struct mailbox *mailbox;
     struct carddav_db *carddavdb;
@@ -1927,16 +1987,17 @@ static int getcontactlist_cb(void *rock, struct carddav_data *cdata) {
         !jmap_filter_match(crock->filter, &contact_filter_match, &cfrock)) {
         goto done;
     }
-    crock->total++;
-    if (crock->position > crock->total) {
+    crock->query->total++;
+    if (crock->query->position > (ssize_t) crock->query->total) {
         goto done;
     }
-    if (crock->limit && crock->limit >= json_array_size(crock->contacts)) {
+    if (crock->query->limit &&
+        crock->query->limit >= json_array_size(crock->query->ids)) {
         goto done;
     }
 
     /* All done. Add the contact identifier. */
-    json_array_append_new(crock->contacts, json_string(cdata->vcard_uid));
+    json_array_append_new(crock->query->ids, json_string(cdata->vcard_uid));
 
 done:
     if (contact) json_decref(contact);
@@ -1945,10 +2006,11 @@ done:
 
 static int getContactsList(struct jmap_req *req)
 {
-    int r = 0, pe;
-    json_t *invalid;
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_query query;
     struct carddav_db *db;
     jmap_filter *parsed_filter = NULL;
+    int r = 0;
 
     db = carddav_open_userid(req->accountid);
     if (!db) {
@@ -1958,77 +2020,59 @@ static int getContactsList(struct jmap_req *req)
         goto done;
     }
 
-    /* Parse and validate arguments. */
-    invalid = json_pack("[]");
-
-    /* filter */
-    json_t *filter = json_object_get(req->args, "filter");
-    if (JNOTNULL(filter)) {
-        parsed_filter = _jmap_filter_parse(filter, "filter",
-                                           invalid, contact_filter_parse);
-    }
-
-    /* position */
-    json_int_t pos = 0;
-    if (JNOTNULL(json_object_get(req->args, "position"))) {
-        pe = readprop(req->args, "position",
-                      0 /*mandatory*/, invalid, "I", &pos);
-        if (pe > 0 && pos < 0) {
-            json_array_append_new(invalid, json_string("position"));
-        }
-    }
-
-    /* limit */
-    json_int_t limit = 0;
-    if (JNOTNULL(json_object_get(req->args, "limit"))) {
-        pe = readprop(req->args, "limit",
-                      0 /*mandatory*/, invalid, "I", &limit);
-        if (pe > 0 && limit < 0) {
-            json_array_append_new(invalid, json_string("limit"));
-        }
-    }
-
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}",
-                                "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response,
-                              json_pack("[s,o,s]", "error", err, req->tag));
-        r = 0;
+    /* Parse request */
+    json_t *err = NULL;
+    jmap_query_parse(req->args, &parser,
+            validatefilter, NULL,
+            validatecomparator, NULL,
+            &query, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
-    json_decref(invalid);
+    if (query.position < 0) {
+        /* we currently don't support negative positions */
+        jmap_parser_invalid(&parser, "position");
+    }
+    if (json_array_size(parser.invalid)) {
+        err = json_pack("{s:s}", "type", "invalidArguments");
+        json_object_set(err, "arguments", parser.invalid);
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Build filter */
+    json_t *filter = json_object_get(req->args, "filter");
+    if (JNOTNULL(filter)) {
+        parsed_filter = buildfilter(filter, contact_filter_parse);
+    }
 
     /* Inspect every entry in this accounts addressbook mailboxes. */
     struct contactlist_rock rock = {
-        req, parsed_filter, pos, limit, 0, json_array(), NULL, db
+        req, &query, parsed_filter, NULL, db
     };
     r = carddav_foreach(db, NULL, getcontactlist_cb, &rock);
     if (rock.mailbox) mailbox_close(&rock.mailbox);
-    if (r) goto done;
+    if (r) {
+        err = jmap_server_error(r);
+        jmap_error(req, err);
+        goto done;
+    }
 
-    /* Prepare response. */
-    json_t *contactList = json_pack("{}");
-    json_object_set_new(contactList, "accountId", json_string(req->accountid));
-    json_object_set_new(contactList, "queryState",
-                        jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0));
-    json_object_set_new(contactList, "position", json_integer(rock.position));
-    json_object_set_new(contactList, "total", json_integer(rock.total));
-    json_object_set(contactList, "contactIds", rock.contacts);
-    if (filter) json_object_set(contactList, "filter", filter);
+    /* Build response */
+    json_t *jstate = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
+    query.query_state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
 
-    json_t *item = json_pack("[]");
-    json_array_append_new(item, json_string("Contact/query"));
-    json_array_append_new(item, contactList);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
-
-    jmap_add_perf(req, contactList);
+    json_t *res = jmap_query_reply(&query);
+    jmap_ok(req, res);
 
 done:
+    jmap_query_fini(&query);
+    jmap_parser_fini(&parser);
     if (rock.filter) jmap_filter_free(rock.filter, contact_filter_free);
-    if (rock.contacts) json_decref(rock.contacts);
     if (db) carddav_close(db);
-    return r;
+    return 0;
 }
 
 static struct vparse_entry *_card_multi(struct vparse_card *card,
