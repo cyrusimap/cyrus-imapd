@@ -10732,9 +10732,10 @@ static int _email_mboxrecs_make_cb(const conv_guidrec_t *rec, void *_rock)
     return 0;
 }
 
-static int _email_mboxrecs_make(struct conversations_state *cstate,
-                                strarray_t *email_ids,
-                                ptrarray_t **mboxrecsptr)
+static void _email_mboxrecs_make(struct conversations_state *cstate,
+                                 strarray_t *email_ids,
+                                 json_t *set_errors,
+                                 ptrarray_t **mboxrecsptr)
 {
     ptrarray_t *mboxrecs = ptrarray_new();
 
@@ -10745,13 +10746,14 @@ static int _email_mboxrecs_make(struct conversations_state *cstate,
         int r = conversations_guid_foreach(cstate, _guid_from_id(email_id),
                                            _email_mboxrecs_make_cb, &rock);
         if (r) {
+            json_t *err = (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED) ?
+                json_pack("{s:s}", "notFound") : jmap_server_error(r);
+            json_object_set_new(set_errors, email_id, err);
             _email_mboxrecs_free(&mboxrecs);
-            return r;
         }
     }
 
     *mboxrecsptr = mboxrecs;
-    return 0;
 }
 
 static void _email_destroy_bulk(jmap_req_t *req,
@@ -10769,21 +10771,14 @@ static void _email_destroy_bulk(jmap_req_t *req,
     json_array_foreach(destroy, iz, jval) {
         strarray_append(&email_ids, json_string_value(jval));
     }
-    int r = _email_mboxrecs_make(req->cstate, &email_ids, &mboxrecs);
-    if (r) {
-        for (i = 0; i < strarray_size(&email_ids); i++) {
-            const char *email_id = strarray_nth(&email_ids, i);
-            json_object_set_new(not_destroyed, email_id, jmap_server_error(r));
-        }
-        goto done;
-    }
+    _email_mboxrecs_make(req->cstate, &email_ids, not_destroyed, &mboxrecs);
 
     /* Check mailbox ACL for shared accounts. */
     if (strcmp(req->accountid, req->userid)) {
         for (i = 0; i < ptrarray_size(mboxrecs); i++) {
             struct email_mboxrec *mboxrec = ptrarray_nth(mboxrecs, i);
             mbentry_t *mbentry = NULL;
-            r = mboxlist_lookup(mboxrec->mboxname, &mbentry, NULL);
+            int r = mboxlist_lookup(mboxrec->mboxname, &mbentry, NULL);
             if (!r) {
                 int rights = jmap_myrights(req, mbentry);
                 if (!(rights & ACL_DELETEMSG)) {
@@ -10815,7 +10810,7 @@ static void _email_destroy_bulk(jmap_req_t *req,
         struct email_mboxrec *mboxrec = ptrarray_nth(mboxrecs, i);
         struct mailbox *mbox = NULL;
         int j;
-        r = jmap_openmbox(req, mboxrec->mboxname, &mbox, 1);
+        int r = jmap_openmbox(req, mboxrec->mboxname, &mbox, 1);
         if (!r) {
             /* Expunge messages one by one, marking any failed message */
             for (j = 0; j < ptrarray_size(&mboxrec->uidrecs); j++) {
@@ -10850,7 +10845,6 @@ static void _email_destroy_bulk(jmap_req_t *req,
             json_array_append(destroyed, jval);
     }
 
-done:
     _email_mboxrecs_free(&mboxrecs);
     strarray_fini(&email_ids);
 }
