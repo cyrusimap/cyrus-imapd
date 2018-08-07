@@ -147,6 +147,7 @@ static int dupelim = 1;         /* eliminate duplicate messages with
                                    same message-id */
 static int singleinstance = 1;  /* attempt single instance store */
 static int isproxy = 0;
+static strarray_t *excluded_specialuse = NULL;
 
 static struct stagemsg *stage = NULL;
 
@@ -194,6 +195,10 @@ int service_init(int argc __attribute__((unused)),
     signal(SIGPIPE, SIG_IGN);
 
     singleinstance = config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
+
+    excluded_specialuse =
+        strarray_split(config_getstring(IMAPOPT_LMTP_EXCLUDE_SPECIALUSE),
+                       NULL, STRARRAY_TRIM);
 
     global_sasl_init(1, 1, mysasl_cb);
 
@@ -456,6 +461,44 @@ static int mlookup(const char *name, mbentry_t **mbentryptr)
     return r;
 }
 
+static int delivery_enabled_for_mailbox(struct mailbox *mailbox)
+{
+    struct buf attrib = BUF_INITIALIZER;
+    char *userid = NULL;
+    strarray_t *specialuse = NULL;
+    int i = 0;
+    int r = 0;
+
+    if (!mboxname_isusermailbox(mailbox->name, 0)) return 0;
+    
+    /* test if the mailbox has a special-use attribute in the exclude list */
+    if (strarray_size(excluded_specialuse) > 0) {
+        userid = mboxname_to_userid(mailbox->name);
+
+        r = annotatemore_lookup(mailbox->name, "/specialuse", userid, &attrib);
+        if (r) {
+            /* XXX  allow delivery or no?
+            goto done; /* XXX - return -1?  Failure? */
+        }
+
+        specialuse = strarray_split(buf_cstring(&attrib), NULL, 0);
+
+        for (i = 0; i < strarray_size(specialuse) ; i++) {
+            const char *attribute = strarray_nth(specialuse, i);
+            if (strarray_find(excluded_specialuse, attribute, 0) >= 0) {
+                r = IMAP_MAILBOX_SPECIALUSE;
+                goto done;
+            }
+        }
+    }
+
+done:
+    strarray_free(specialuse);
+    buf_free(&attrib);
+    free(userid);
+    return r;
+}
+
 /* places msg in mailbox mailboxname.
  * if you wish to use single instance store, pass stage as non-NULL
  * if you want to deliver message regardless of duplicates, pass id as NULL
@@ -491,6 +534,13 @@ int deliver_mailbox(FILE *f,
      * after the duplicate elimination is done */
     r = mailbox_open_iwl(mailboxname, &mailbox);
     if (r) return r;
+
+    /* make sure delivery is enabled for this mailbox */
+    r = delivery_enabled_for_mailbox(mailbox);
+    if (r) {
+        mailbox_close(&mailbox);
+        return r;
+    }
 
     if (quotaoverride)
         qdiffs[QUOTA_STORAGE] = -1;
@@ -919,6 +969,8 @@ void shut_down(int code)
         i++;
     }
     if (backend_cached) free(backend_cached);
+
+    if (excluded_specialuse) strarray_free(excluded_specialuse);
 
     if (!isproxy) {
         if (dupelim)

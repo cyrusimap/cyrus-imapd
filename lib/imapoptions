@@ -1277,6 +1277,9 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If enabled, lmtpd will convert the recipient addresses to lowercase
    (up to a '+' character, if present). */
 
+{ "lmtp_exclude_specialuse", NULL, STRING }
+/* Don't allow delivery to folders with given special-use attributes. */
+
 { "lmtp_fuzzy_mailbox_match", 0, SWITCH }
 /* If enabled, and the mailbox specified in the detail part of the
    recipient (everything after the '+') does not exist, lmtpd will try
