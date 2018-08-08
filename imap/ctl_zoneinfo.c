@@ -137,7 +137,7 @@ int main(int argc, char **argv)
         struct hash_table tzentries;
         struct zoneinfo *info;
         struct txn *tid = NULL;
-        char buf[1024];
+        char buf[3000];
         FILE *fp;
 
         construct_hash_table(&tzentries, 500, 1);
