@@ -141,7 +141,7 @@ static int promdir_foreach(promdir_foreach_cb *proc, enum promdir_foreach_mode m
     const char *basedir;
     DIR *dh;
     struct dirent *dirent;
-    int r;
+    int r = 0;
 
     basedir = prometheus_stats_dir();
 
