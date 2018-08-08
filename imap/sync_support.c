@@ -1037,7 +1037,7 @@ int sync_sieve_activate(const char *userid, const char *name)
     const char *sieve_path = user_sieve_path(userid);
     char target[2048];
     char active[2048];
-    char tmp[2048];
+    char tmp[2048+4];  /* +4 for ".NEW" */
 
     snprintf(target, sizeof(target), "%s", name);
     snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
