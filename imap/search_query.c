@@ -60,6 +60,7 @@
 #include "bsearch.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
+#include "statuscache.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -642,6 +643,26 @@ out:
     if (r) query->error = r;
 }
 
+static modseq_t _get_sincemodseq(search_expr_t *e)
+{
+    const search_attr_t *modseq_attr = search_attr_find("modseq");
+
+    if (e->op == SEOP_AND) {
+        search_expr_t *child;
+
+        for (child = e->children ; child ; child = child->next) {
+            modseq_t res = _get_sincemodseq(child);
+            if (res) return res;
+        }
+    }
+    if (e->op == SEOP_GT && e->attr == modseq_attr) {
+        return e->value.u;
+    }
+
+    return 0;
+}
+
+
 static int subquery_run_one_folder(search_query_t *query,
                                    const char *mboxname,
                                    search_expr_t *e)
@@ -664,6 +685,15 @@ static int subquery_run_one_folder(search_query_t *query,
         syslog(LOG_INFO, "Folder %s: loading MsgData for sort criteria %s",
                 mboxname, s);
         free(s);
+    }
+
+    modseq_t sincemodseq = _get_sincemodseq(e);
+    if (sincemodseq) {
+        struct statusdata sdata;
+        int r = status_lookup(mboxname, query->state->userid,
+                              STATUS_HIGHESTMODSEQ, &sdata);
+        // if unchangedsince, then we can skip the index query
+        if (!r && sdata.highestmodseq <= sincemodseq) goto out;
     }
 
     r = query_begin_index(query, mboxname, &state);
