@@ -373,7 +373,8 @@ enum {
     LIST_SEL_RECURSIVEMATCH =   (1<<2),
     LIST_SEL_SPECIALUSE =       (1<<3),
     LIST_SEL_DAV =              (1<<4),
-    LIST_SEL_METADATA =         (1<<5)
+    LIST_SEL_METADATA =         (1<<5),
+    LIST_SEL_INTERMEDIATES =    (1<<6)
     /* New options MUST be handled in imapd.c:list_data_remote() */
 };
 

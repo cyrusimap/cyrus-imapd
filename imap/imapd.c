@@ -12195,6 +12195,8 @@ static int getlistselopts(char *tag, struct listargs *args)
             args->ret |= LIST_RET_SUBSCRIBED;
         } else if (!strcmp(buf.s, "vendor.cmu-dav")) {
             args->sel |= LIST_SEL_DAV;
+        } else if (!strcmp(buf.s, "vendor.fm-include-nonexistent")) {
+            args->sel |= LIST_SEL_INTERMEDIATES;
         } else if (!strcmp(buf.s, "remote")) {
             args->sel |= LIST_SEL_REMOTE;
         } else if (!strcmp(buf.s, "recursivematch")) {
@@ -12482,6 +12484,11 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
     struct statusdata sdata = STATUSDATA_INIT;
     struct buf specialuse = BUF_INITIALIZER;
 
+    /* Intermediates don't actually exist */
+    if (mbentry && (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
+        attributes |= MBOX_ATTRIBUTE_NONEXISTENT;
+    }
+
     if ((attributes & MBOX_ATTRIBUTE_NONEXISTENT)) {
         if (!(listargs->cmd == LIST_CMD_EXTENDED)) {
             attributes |= MBOX_ATTRIBUTE_NOSELECT;
@@ -12683,6 +12690,8 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
     /* skip non-responsive mailboxes early, so they don't break sub folder detection */
     if (mbentry && !imapd_userisadmin) {
         if (mbentry->mbtype == MBTYPE_NETNEWS) return 0;
+        if ((mbentry->mbtype & MBTYPE_INTERMEDIATE) &&
+            !(rock->listargs->sel & LIST_SEL_INTERMEDIATES)) return 0;
         if (!(rock->listargs->sel & LIST_SEL_DAV)) {
             if (mboxname_iscalendarmailbox(mbentry->name, mbentry->mbtype)) return 0;
             if (mboxname_isaddressbookmailbox(mbentry->name, mbentry->mbtype)) return 0;
