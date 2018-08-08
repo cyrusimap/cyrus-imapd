@@ -7371,11 +7371,11 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     }
 
     oldintname = mboxname_from_external(oldname, &imapd_namespace, imapd_userid);
-    strncpy(oldmailboxname, oldintname, MAX_MAILBOX_NAME);
+    xstrncpy(oldmailboxname, oldintname, MAX_MAILBOX_NAME);
     free(oldintname);
 
     newintname = mboxname_from_external(newname, &imapd_namespace, imapd_userid);
-    strncpy(newmailboxname, newintname, MAX_MAILBOX_NAME);
+    xstrncpy(newmailboxname, newintname, MAX_MAILBOX_NAME);
     free(newintname);
 
     olduser = mboxname_to_userid(oldmailboxname);
@@ -11116,7 +11116,7 @@ static int xfer_addusermbox(const mbentry_t *mbentry, void *rock)
     int r = mboxlist_lookup(mbentry->name, &item->mbentry, 0);
     if (r) return r;
     char *extname = mboxname_to_external(item->mbentry->name, &imapd_namespace, imapd_userid);
-    strncpy(item->extname, extname, sizeof(item->extname));
+    xstrncpy(item->extname, extname, sizeof(item->extname));
     free(extname);
     item->mailbox = NULL;
     item->state = 0;
@@ -11652,7 +11652,7 @@ static int xfer_addmbox(struct findall_data *data, void *rock)
         struct xfer_item *mbox = xzmalloc(sizeof(struct xfer_item));
 
         mbox->mbentry = mboxlist_entry_copy(data->mbentry);
-        strncpy(mbox->extname, extname, sizeof(mbox->extname));
+        xstrncpy(mbox->extname, extname, sizeof(mbox->extname));
         if (mbname_localpart(data->mbname) && !list->allow_usersubs) {
             /* User INBOX */
             mbox->state = XFER_MOVING_USER;
