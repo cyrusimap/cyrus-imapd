@@ -394,7 +394,7 @@ static int ask_capability(struct backend *s, int dobanner, int automatic)
     struct protstream *pout = s->out, *pin = s->in;
     const struct protocol_t *prot = s->prot;
     int matches = 0;
-    char str[4096];
+    char str[2047];
     const char *resp;
 
     if (prot->type != TYPE_STD) return 0;
@@ -763,7 +763,7 @@ static int backend_login(struct backend *ret, const char *userid,
 {
     int r = 0;
     int ask = 1; /* should we explicitly ask for capabilities? */
-    char buf[2048];
+    char buf[2047];
     struct protocol_t *prot = ret->prot;
 
     if (prot->type != TYPE_STD) return -1;
@@ -786,7 +786,7 @@ static int backend_login(struct backend *ret, const char *userid,
             }
         } while (strncasecmp(buf, prot->u.std.banner.resp,
                              strlen(prot->u.std.banner.resp)));
-        xstrncpy(ret->banner, buf, 2048);
+        xstrncpy(ret->banner, buf, sizeof(ret->banner));
     }
 
     if (ask) {
