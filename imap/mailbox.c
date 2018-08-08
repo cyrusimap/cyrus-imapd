@@ -5203,7 +5203,7 @@ HIDDEN int mailbox_delete_cleanup(struct mailbox *mailbox, const char *part, con
     object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED);
 #endif
 
-    strncpy(nbuf, name, sizeof(nbuf));
+    xstrncpy(nbuf, name, sizeof(nbuf));
     ntail = nbuf + strlen(nbuf);
 
     if (mailbox && object_storage_enabled){
