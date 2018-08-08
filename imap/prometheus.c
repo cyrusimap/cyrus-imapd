@@ -169,7 +169,7 @@ static void prometheus_done(void *rock __attribute__((unused)))
     struct prom_stats accum = PROM_STATS_INITIALIZER;
     struct prom_stats thisproc = PROM_STATS_INITIALIZER;
     struct mappedfile *doneprocs = NULL;
-    char *doneprocs_fname;
+    char *doneprocs_fname = NULL;
     char *doneprocs_lock_fname;
     int doneprocs_lock_fd;
     int i, r = 0;
