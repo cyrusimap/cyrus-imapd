@@ -110,7 +110,7 @@ static int notify(const char *notifyd_path, const char *method,
 
     memset((char *)&sun, 0, sizeof(sun));
     sun.sun_family = AF_UNIX;
-    strncpy(sun.sun_path, notifyd_path, sizeof(sun.sun_path));
+    xstrncpy(sun.sun_path, notifyd_path, sizeof(sun.sun_path));
 
     /*
      * build request of the form:
