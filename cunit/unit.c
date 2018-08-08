@@ -53,6 +53,7 @@
 #include <setjmp.h>
 #include "timeout.h"
 #include "cyrunit.h"
+#include "util.h"
 #include "xmalloc.h"
 
 /* generated headers are not necessarily in current directory */
@@ -343,7 +344,7 @@ static void run_tests(void)
      */
 
     for (i = 0 ; i < num_testspecs ; i++) {
-        strncpy(suitename, testspecs[i], sizeof(suitename));
+        xstrncpy(suitename, testspecs[i], sizeof(suitename));
         if ((testname = strchr(suitename, ':')) != NULL) {
             *testname++ = '\0';
             if (*testname == '\0')
