@@ -477,7 +477,7 @@ static int delivery_enabled_for_mailbox(const char *mailboxname)
 
         r = annotatemore_lookup(mailboxname, "/specialuse", userid, &attrib);
         if (r) {
-            /* XXX  allow delivery or no?
+            /* XXX  allow delivery or no? */
             goto done; /* XXX - return -1?  Failure? */
         }
 
