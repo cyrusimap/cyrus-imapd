@@ -461,7 +461,7 @@ static int mlookup(const char *name, mbentry_t **mbentryptr)
     return r;
 }
 
-static int delivery_enabled_for_mailbox(struct mailbox *mailbox)
+static int delivery_enabled_for_mailbox(const char *mailboxname)
 {
     struct buf attrib = BUF_INITIALIZER;
     char *userid = NULL;
@@ -469,13 +469,13 @@ static int delivery_enabled_for_mailbox(struct mailbox *mailbox)
     int i = 0;
     int r = 0;
 
-    if (!mboxname_isusermailbox(mailbox->name, 0)) return 0;
+    if (!mboxname_isusermailbox(mailboxname, 0)) return 0;
     
     /* test if the mailbox has a special-use attribute in the exclude list */
     if (strarray_size(excluded_specialuse) > 0) {
-        userid = mboxname_to_userid(mailbox->name);
+        userid = mboxname_to_userid(mailboxname);
 
-        r = annotatemore_lookup(mailbox->name, "/specialuse", userid, &attrib);
+        r = annotatemore_lookup(mailboxname, "/specialuse", userid, &attrib);
         if (r) {
             /* XXX  allow delivery or no?
             goto done; /* XXX - return -1?  Failure? */
@@ -530,17 +530,14 @@ int deliver_mailbox(FILE *f,
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
     time_t internaldate = 0;
 
+    /* make sure delivery is enabled for this mailbox */
+    r = delivery_enabled_for_mailbox(mailboxname);
+    if (r) return r;
+
     /* open the mailbox separately so we can hold it open until
      * after the duplicate elimination is done */
     r = mailbox_open_iwl(mailboxname, &mailbox);
     if (r) return r;
-
-    /* make sure delivery is enabled for this mailbox */
-    r = delivery_enabled_for_mailbox(mailbox);
-    if (r) {
-        mailbox_close(&mailbox);
-        return r;
-    }
 
     if (quotaoverride)
         qdiffs[QUOTA_STORAGE] = -1;
