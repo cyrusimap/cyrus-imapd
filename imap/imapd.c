@@ -4669,7 +4669,9 @@ badannotation:
                 }
                 p++;
 
-                if (!binsize) PARSE_PARTIAL(oi.start_octet, oi.octet_count);
+                if (!binsize) {
+                    PARSE_PARTIAL(oi.start_octet, oi.octet_count);
+                }
 
                 if (*p) {
                     prot_printf(imapd_out, "%s BAD Junk after binary section\r\n", tag);
