@@ -218,7 +218,7 @@ static int do_proxy_request(const char *who, const char *name,
                             const char *backend_host,
                             struct sockaddr *sfrom, socklen_t sfromsiz)
 {
-    char tmpbuf[1024];
+    char tmpbuf[2048];
     int replysize;
     int r = 0;
     int csoc = -1;
