@@ -451,7 +451,7 @@ static int callout_run_socket(const char *callout,
 
     memset(&mysun, 0, sizeof(mysun));
     mysun.sun_family = AF_UNIX;
-    strncpy(mysun.sun_path, callout, sizeof(mysun.sun_path));
+    xstrncpy(mysun.sun_path, callout, sizeof(mysun.sun_path));
     r = connect(sock, (struct sockaddr *)&mysun, sizeof(mysun));
     if (r < 0) {
         syslog(LOG_ERR, "cannot connect socket for callout: %m");
