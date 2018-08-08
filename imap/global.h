@@ -83,7 +83,11 @@ extern int mysasl_config(void *context,
                          unsigned *len);
 extern sasl_security_properties_t *mysasl_secprops(int flags);
 
+#if GCC_VERSION >= 80000
+typedef void mysasl_cb_ft;  /* shut up GCC */
+#else
 typedef int (mysasl_cb_ft)(void);
+#endif
 
 /* user canonification */
 extern const char *canonify_userid(char *user, const char *loginid,

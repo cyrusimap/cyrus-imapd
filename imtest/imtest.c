@@ -144,7 +144,11 @@ static sasl_callback_t callbacks[] = {
     }, {
         SASL_CB_PASS, NULL, NULL
     }, {
-      SASL_CB_GETOPT, (int (*)(void))&mysasl_config, NULL
+#if GCC_VERSION >= 80000
+        SASL_CB_GETOPT, (void*)&mysasl_config, NULL
+#else
+        SASL_CB_GETOPT, (int (*)(void))&mysasl_config, NULL
+#endif
     }, {
         SASL_CB_LIST_END, NULL, NULL
     }

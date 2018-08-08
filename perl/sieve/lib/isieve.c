@@ -53,6 +53,7 @@
 #include <unistd.h>
 
 #include "iptostring.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "perl/sieve/lib/isieve.h"
 #include "perl/sieve/lib/lex.h"
@@ -571,11 +572,19 @@ static int do_referral(isieve_t *obj, char *refer_to)
 
             switch (callbacks[n].id) {
             case SASL_CB_USER:
+#if GCC_VERSION >= 80000
+                callbacks[n].proc = (void*)&refer_simple_cb;
+#else
                 callbacks[n].proc = (int (*)(void))&refer_simple_cb;
+#endif
                 callbacks[n].context = userid ? userid : authid;
                 break;
             case SASL_CB_AUTHNAME:
+#if GCC_VERSION >= 80000
+                callbacks[n].proc = (void*)&refer_simple_cb;
+#else
                 callbacks[n].proc = (int (*)(void))&refer_simple_cb;
+#endif
                 callbacks[n].context = authid;
                 break;
             default:
