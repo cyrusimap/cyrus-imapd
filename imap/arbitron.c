@@ -267,8 +267,8 @@ static int do_mailbox(struct findall_data *data, void *rock __attribute__((unuse
 
 static void run_users(void)
 {
-    char prefix[MAX_MAILBOX_PATH+1],path[MAX_MAILBOX_PATH+1],
-        file[MAX_MAILBOX_PATH+1];
+    char prefix[MAX_MAILBOX_PATH+1],path[2*MAX_MAILBOX_PATH+1],
+        file[3*MAX_MAILBOX_PATH+1];
     DIR *dirp, *dirq;
     struct dirent *dirent1, *dirent2;
 
