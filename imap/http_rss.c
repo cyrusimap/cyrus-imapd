@@ -479,7 +479,7 @@ static int do_list(const char *name, void *rock)
         else href = path;
 
         /* Populate new/updated node */
-        strncpy(node->name, name, len);
+        xstrncpy(node->name, name, len);
         node->name[len] = '\0';
         node->len = len;
         node->parent = last;
