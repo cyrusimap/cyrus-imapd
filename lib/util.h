@@ -369,7 +369,7 @@ int buf_deflate(struct buf *buf, int compLevel, int scheme);
     do { \
         char *_d = (d); \
         size_t _n = (n); \
-        strncpy(_d, (s), _n); \
+        strncpy(_d, (s), _n-1); \
         _d[_n-1] = '\0'; \
     } while(0)
 
