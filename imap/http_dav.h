@@ -291,7 +291,7 @@ typedef modseq_t (*get_modseq_t)(struct mailbox *mailbox,
                                  void *data, const char *userid);
 
 typedef void *(*db_open_proc_t)(struct mailbox *mailbox);
-typedef void (*db_close_proc_t)(void *davdb);
+typedef int (*db_close_proc_t)(void *davdb);
 
 /* Function to lookup DAV 'resource' in 'mailbox',
  * placing the record in 'data'
