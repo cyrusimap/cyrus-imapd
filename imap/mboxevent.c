@@ -339,14 +339,17 @@ EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
 
     FILL_UNSIGNED_PARAM(mboxevent, EVENT_PID, getpid());
 
-    if (mboxevent_expected_param(type, EVENT_SESSIONID))
+    if (mboxevent_expected_param(type, EVENT_SESSIONID)) {
         FILL_STRING_PARAM(mboxevent, EVENT_SESSIONID, xstrdup(session_id()));
+    }
 
-    if (mboxevent_expected_param(type, EVENT_CLIENT_ID) && client_id)
+    if (mboxevent_expected_param(type, EVENT_CLIENT_ID) && client_id) {
         FILL_STRING_PARAM(mboxevent, EVENT_CLIENT_ID, xstrdup(client_id));
+    }
 
-    if (mboxevent_expected_param(type, EVENT_SESSION_ID))
+    if (mboxevent_expected_param(type, EVENT_SESSION_ID)) {
         FILL_STRING_PARAM(mboxevent, EVENT_SESSION_ID, xstrdup(session_id()));
+    }
 
     return mboxevent;
 }
@@ -965,8 +968,9 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
             }
         }
 
-        if (resource)
+        if (resource) {
             FILL_STRING_PARAM(event, EVENT_DAV_FILENAME, xstrdup(resource));
+        }
 
         if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
             if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
@@ -1110,8 +1114,9 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
             }
         }
 
-        if (resource)
+        if (resource) {
             FILL_STRING_PARAM(event, EVENT_DAV_FILENAME, xstrdup(resource));
+        }
 
         if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
             if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
@@ -1325,8 +1330,9 @@ void mboxevent_extract_quota(struct mboxevent *event, const struct quota *quota,
     switch(res) {
     case QUOTA_STORAGE:
         if (mboxevent_expected_param(event->type, EVENT_QUOTA_STORAGE)) {
-            if (quota->limits[res] >= 0)
+            if (quota->limits[res] >= 0) {
                 FILL_UNSIGNED_PARAM(event, EVENT_QUOTA_STORAGE, quota->limits[res]);
+            }
         }
         if (mboxevent_expected_param(event->type, EVENT_DISK_USED)) {
             FILL_UNSIGNED_PARAM(event, EVENT_DISK_USED,
@@ -1477,11 +1483,13 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
         if (cstate)
             conversation_getstatus(cstate, mailbox->name, &status);
 
-        if (mboxevent_expected_param(event->type, EVENT_CONVEXISTS))
+        if (mboxevent_expected_param(event->type, EVENT_CONVEXISTS)) {
             FILL_UNSIGNED_PARAM(event, EVENT_CONVEXISTS, status.exists);
+        }
 
-        if (mboxevent_expected_param(event->type, EVENT_CONVUNSEEN))
+        if (mboxevent_expected_param(event->type, EVENT_CONVUNSEEN)) {
             FILL_UNSIGNED_PARAM(event, EVENT_CONVUNSEEN, status.unseen);
+        }
     }
 
     if (mboxevent_expected_param(event->type, EVENT_COUNTERS)) {
