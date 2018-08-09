@@ -1771,8 +1771,8 @@ done:
 
 static int jmap_core_echo(jmap_req_t *req)
 {
-    json_array_append_new(req->response, json_pack("[s,o,s]",
-                    "Core/echo", req->args, req->tag));
+    json_array_append_new(req->response,
+                          json_pack("[s,O,s]", "Core/echo", req->args, req->tag));
     return 0;
 }
 
