@@ -1832,7 +1832,7 @@ int openinbox(void)
         }
     }
     else if (config_getswitch(IMAPOPT_STATUSCACHE) &&
-             !(r = statuscache_lookup(mbname_intname(mbname), popd_userid, STATUS_MESSAGES, &sdata)) &&
+             !(r = status_lookup_mbname(mbname, popd_userid, STATUS_MESSAGES, &sdata)) &&
              !sdata.messages) {
         /* local mailbox (empty) -- don't bother opening the mailbox */
         syslog(LOG_INFO, "optimized mode for empty maildrop: %s", popd_userid);

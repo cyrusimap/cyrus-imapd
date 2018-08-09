@@ -136,8 +136,8 @@ EXPORTED void statuscache_close(void)
 }
 
 HIDDEN void statuscache_fill(struct statusdata *sdata, const char *userid,
-                      struct mailbox *mailbox, unsigned statusitems,
-                      unsigned numrecent, unsigned numunseen)
+                             struct mailbox *mailbox, unsigned statusitems,
+                             unsigned numrecent, unsigned numunseen)
 {
     assert(sdata);
     assert(mailbox);
@@ -153,6 +153,7 @@ HIDDEN void statuscache_fill(struct statusdata *sdata, const char *userid,
     sdata->size = mailbox->i.quota_mailbox_used;
     sdata->createdmodseq = mailbox->i.createdmodseq;
     sdata->highestmodseq = mailbox->i.highestmodseq;
+    sdata->mailboxid = mailbox->uniqueid;
 }
 
 EXPORTED void statuscache_done(void)
@@ -177,6 +178,61 @@ static char *statuscache_buildkey(const char *mailboxname, const char *userid,
     *keylen = len;
 
     return key;
+}
+
+static int statuscache_lookup(const char *mboxname, const char *userid,
+                       unsigned statusitems, struct statusdata *sdata)
+{
+    size_t keylen, datalen;
+    int r = 0;
+    const char *data = NULL, *dend;
+    char *p, *key = statuscache_buildkey(mboxname, userid, &keylen);
+    unsigned version;
+
+    init_internal();
+
+    /* Don't access DB if it hasn't been opened */
+    if (!statuscache_dbopen)
+        return IMAP_NO_NOSUCHMSG;
+
+    /* Check if there is an entry in the database */
+    do {
+        r = cyrusdb_fetch(statuscachedb, key, keylen, &data, &datalen, NULL);
+    } while (r == CYRUSDB_AGAIN);
+
+    if (r || !data || ((size_t) datalen < sizeof(unsigned))) {
+        return IMAP_NO_NOSUCHMSG;
+    }
+
+    dend = data + datalen;
+
+    version = (unsigned) strtoul(data, &p, 10);
+    if (version != (unsigned) STATUSCACHE_VERSION) {
+        /* Wrong version */
+        return IMAP_NO_NOSUCHMSG;
+    }
+
+    if (p < dend) sdata->statusitems = strtoul(p, &p, 10);
+    if (p < dend) sdata->messages = strtoul(p, &p, 10);
+    if (p < dend) sdata->recent = strtoul(p, &p, 10);
+    if (p < dend) sdata->uidnext = strtoul(p, &p, 10);
+    if (p < dend) sdata->uidvalidity = strtoul(p, &p, 10);
+    if (p < dend) sdata->unseen = strtoul(p, &p, 10);
+    if (p < dend) sdata->size = strtoul(p, &p, 10);
+    if (p < dend) sdata->createdmodseq = strtoull(p, &p, 10);
+    if (p < dend) sdata->highestmodseq = strtoull(p, &p, 10);
+
+    /* Sanity check the data */
+    if (!sdata->statusitems || !sdata->uidnext || !sdata->uidvalidity) {
+        return IMAP_NO_NOSUCHMSG;
+    }
+
+    if ((sdata->statusitems & statusitems) != statusitems) {
+        /* Don't have all of the requested information */
+        return IMAP_NO_NOSUCHMSG;
+    }
+
+    return 0;
 }
 
 /*
@@ -281,6 +337,18 @@ EXPORTED int status_lookup(const char *mboxname, const char *userid,
     return r;
 }
 
+EXPORTED int status_lookup_mbentry(const mbentry_t *mbentry, const char *userid,
+                                  unsigned statusitems, struct statusdata *sdata)
+{
+    return status_lookup(mbentry->name, userid, statusitems, sdata);
+}
+
+EXPORTED int status_lookup_mbname(const mbname_t *mbname, const char *userid,
+                                  unsigned statusitems, struct statusdata *sdata)
+{
+    return status_lookup(mbname_intname(mbname), userid, statusitems, sdata);
+}
+
 /*
  * Performs a STATUS command on an open mailbox - note: state MAY be NULL here.
  */
@@ -375,63 +443,6 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
 
   done:
     return r;
-}
-
-
-
-EXPORTED int statuscache_lookup(const char *mboxname, const char *userid,
-                       unsigned statusitems, struct statusdata *sdata)
-{
-    size_t keylen, datalen;
-    int r = 0;
-    const char *data = NULL, *dend;
-    char *p, *key = statuscache_buildkey(mboxname, userid, &keylen);
-    unsigned version;
-
-    init_internal();
-
-    /* Don't access DB if it hasn't been opened */
-    if (!statuscache_dbopen)
-        return IMAP_NO_NOSUCHMSG;
-
-    /* Check if there is an entry in the database */
-    do {
-        r = cyrusdb_fetch(statuscachedb, key, keylen, &data, &datalen, NULL);
-    } while (r == CYRUSDB_AGAIN);
-
-    if (r || !data || ((size_t) datalen < sizeof(unsigned))) {
-        return IMAP_NO_NOSUCHMSG;
-    }
-
-    dend = data + datalen;
-
-    version = (unsigned) strtoul(data, &p, 10);
-    if (version != (unsigned) STATUSCACHE_VERSION) {
-        /* Wrong version */
-        return IMAP_NO_NOSUCHMSG;
-    }
-
-    if (p < dend) sdata->statusitems = strtoul(p, &p, 10);
-    if (p < dend) sdata->messages = strtoul(p, &p, 10);
-    if (p < dend) sdata->recent = strtoul(p, &p, 10);
-    if (p < dend) sdata->uidnext = strtoul(p, &p, 10);
-    if (p < dend) sdata->uidvalidity = strtoul(p, &p, 10);
-    if (p < dend) sdata->unseen = strtoul(p, &p, 10);
-    if (p < dend) sdata->size = strtoul(p, &p, 10);
-    if (p < dend) sdata->createdmodseq = strtoull(p, &p, 10);
-    if (p < dend) sdata->highestmodseq = strtoull(p, &p, 10);
-
-    /* Sanity check the data */
-    if (!sdata->statusitems || !sdata->uidnext || !sdata->uidvalidity) {
-        return IMAP_NO_NOSUCHMSG;
-    }
-
-    if ((sdata->statusitems & statusitems) != statusitems) {
-        /* Don't have all of the requested information */
-        return IMAP_NO_NOSUCHMSG;
-    }
-
-    return 0;
 }
 
 static int statuscache_store(const char *mboxname,
