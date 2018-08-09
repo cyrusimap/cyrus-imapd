@@ -300,5 +300,29 @@ sub test_created_ids
     $self->assert_str_equals($mboxid2, $JMAPResponse->{createdIds}{2});
 }
 
+sub test_echo
+    :min_version_3_1 :needs_component_jmap
+{
+
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $req = {
+        hello => JSON::true,
+        max => 5,
+        stuff => { foo => "bar", empty => JSON::null }
+    };
+
+    xlog "send ping";
+    my $res = $jmap->CallMethods([['Core/echo', $req, "R1"]]);
+
+    xlog "check pong";
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Core/echo', $res->[0][0]);
+    $self->assert_deep_equals($req, $res->[0][1]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+}
+
 
 1;
