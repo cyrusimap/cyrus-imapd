@@ -343,8 +343,9 @@ EXPORTED struct mboxevent *mboxevent_new(enum event_type type)
         FILL_STRING_PARAM(mboxevent, EVENT_SESSIONID, xstrdup(session_id()));
     }
 
-    if (mboxevent_expected_param(type, EVENT_CLIENT_ID) && client_id) {
-        FILL_STRING_PARAM(mboxevent, EVENT_CLIENT_ID, xstrdup(client_id));
+    if (mboxevent_expected_param(type, EVENT_CLIENT_ID)) {
+        // OK to be blank
+        FILL_STRING_PARAM(mboxevent, EVENT_CLIENT_ID, xstrdupsafe(client_id));
     }
 
     if (mboxevent_expected_param(type, EVENT_SESSION_ID)) {
