@@ -1222,7 +1222,8 @@ sub test_contact_set
 
     my $contact = {
         firstName => "first",
-        lastName => "last"
+        lastName => "last",
+        avatar => JSON::null
     };
 
     my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => $contact }}, "R1"]]);
