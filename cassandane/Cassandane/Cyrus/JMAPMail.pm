@@ -4529,6 +4529,35 @@ sub test_email_set_keywords
     $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
 }
 
+sub test_emailsubmission_capability
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $Request;
+    my $Response;
+
+    xlog "get settings";
+    $Request = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => '',
+    };
+    $Response = $jmap->ua->get($jmap->uri(), $Request);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($Request, $Response);
+    }
+    $self->assert_str_equals('200', $Response->{status});
+
+    my $settings;
+    $settings = eval { decode_json($Response->{content}) } if $Response->{success};
+
+    $self->assert(exists $settings->{capabilities}->{"urn:ietf:params:jmap:submission"});
+}
+
 sub test_emailsubmission_set
     :min_version_3_1 :needs_component_jmap
 {
