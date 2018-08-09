@@ -297,14 +297,17 @@ int jmap_mail_init(hash_table *methods, json_t *capabilities)
         max_size_attachments_per_email = 0;
     }
 
-    json_t *my_capabilities = json_pack("{s:o? s:i s:i s:O s:O}",
+    json_t *email_capabilities = json_pack("{s:o? s:i s:O}",
             "maxMailboxesPerEmail", json_null(),
             "maxSizeAttachmentsPerEmail", max_size_attachments_per_email,
+            "emailsListSortOptions", sortopts);
+
+    json_t *submit_capabilities = json_pack("{s:i s:O}",
             "maxDelayedSend", 0,
-            "emailsListSortOptions", sortopts,
             "submissionExtensions", json_object());
 
-    json_object_set_new(capabilities, JMAP_URN_MAIL, my_capabilities);
+    json_object_set_new(capabilities, JMAP_URN_MAIL, email_capabilities);
+    json_object_set_new(capabilities, JMAP_URN_SUBMISSION, submit_capabilities);
     return 0;
 }
 
