@@ -108,6 +108,8 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "dump", 0, CONFIG_NEED_PARTITION_DATA);
 
+    search_attr_init();
+
     irec.incruid = 0;
     strarray_t *array = strarray_new();
     for (i = optind; i < argc; i++) {
