@@ -2604,7 +2604,7 @@ static int _json_to_card(struct jmap_req *req,
             setentryatt(annotsp, ns, attrib, &buf);
             buf_free(&buf);
         }
-        else if (!strcmp(key, "avatar")) {
+        else if (!strcmp(key, "avatar") && !json_is_null(jval)) {
             int r = _blob_to_card(req, card, "PHOTO", jval);
             if (r) {
                 json_array_append_new(invalid, json_string("avatar"));
