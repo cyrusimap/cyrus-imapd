@@ -739,7 +739,7 @@ static json_t *_mbox_get(jmap_req_t *req,
 
     if (share_type == _MBOX_SHARED) {
         /* Lookup status. */
-        r = status_lookup(mbname_intname(mbname), req->userid, statusitems, &sdata);
+        r = status_lookup_mbname(mbname, req->userid, statusitems, &sdata);
         if (r) goto done;
 
         if (_wantprop(props, "totalEmails")) {
@@ -2961,8 +2961,8 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
 
     /* Lookup status. */
     if (!(mbentry->mbtype & (MBTYPE_DELETED | MBTYPE_INTERMEDIATE))) {
-        int r = status_lookup(mbentry->name, data->req->userid,
-                              STATUS_HIGHESTMODSEQ, &sdata);
+        int r = status_lookup_mbentry(mbentry, data->req->userid,
+                                      STATUS_HIGHESTMODSEQ, &sdata);
         if (r) return r;
         mbmodseq = sdata.highestmodseq;
     } else {

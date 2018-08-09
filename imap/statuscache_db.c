@@ -238,8 +238,8 @@ static int statuscache_lookup(const char *mboxname, const char *userid,
 /*
  * Performs a STATUS command - note: state MAY be NULL here.
  */
-EXPORTED int status_lookup(const char *mboxname, const char *userid,
-                  unsigned statusitems, struct statusdata *sdata)
+EXPORTED int status_lookup_mboxname(const char *mboxname, const char *userid,
+                                    unsigned statusitems, struct statusdata *sdata)
 {
     struct mailbox *mailbox = NULL;
     unsigned numrecent = 0;
@@ -340,13 +340,13 @@ EXPORTED int status_lookup(const char *mboxname, const char *userid,
 EXPORTED int status_lookup_mbentry(const mbentry_t *mbentry, const char *userid,
                                   unsigned statusitems, struct statusdata *sdata)
 {
-    return status_lookup(mbentry->name, userid, statusitems, sdata);
+    return status_lookup_mboxname(mbentry->name, userid, statusitems, sdata);
 }
 
 EXPORTED int status_lookup_mbname(const mbname_t *mbname, const char *userid,
                                   unsigned statusitems, struct statusdata *sdata)
 {
-    return status_lookup(mbname_intname(mbname), userid, statusitems, sdata);
+    return status_lookup_mboxname(mbname_intname(mbname), userid, statusitems, sdata);
 }
 
 /*

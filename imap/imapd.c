@@ -9031,7 +9031,7 @@ nonconv:
         return index_status(imapd_index, sd);
 
     /* fall back to generic lookup */
-    return status_lookup(mbentry->name, imapd_userid, statusitems, sd);
+    return status_lookup_mbentry(mbentry, imapd_userid, statusitems, sd);
 }
 
 /*
