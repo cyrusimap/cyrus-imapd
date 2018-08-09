@@ -161,32 +161,24 @@ EXPORTED void statuscache_done(void)
     /* DB->done() handled by cyrus_done() */
 }
 
-static char *statuscache_buildkey(const char *mailboxname, const char *userid,
-                                  size_t *keylen)
+static void statuscache_buildkey(const char *mboxname, const char *userid,
+                                 struct buf *buf)
 {
-    static char key[MAX_MAILBOX_BUFFER];
-    size_t len;
-
-    /* Build statuscache key */
-    len = strlcpy(key, mailboxname, sizeof(key));
+    buf_setcstr(buf, mboxname);
     /* double % is a safe separator, it can't exist in a mailboxname */
-    key[len++] = '%';
-    key[len++] = '%';
+    buf_putc(buf, '%');
+    buf_putc(buf, '%');
     if (userid)
-        len += strlcpy(key + len, userid, sizeof(key) - len);
-
-    *keylen = len;
-
-    return key;
+        buf_appendcstr(buf, userid);
 }
 
 static int statuscache_lookup(const char *mboxname, const char *userid,
                        unsigned statusitems, struct statusdata *sdata)
 {
-    size_t keylen, datalen;
+    size_t datalen;
     int r = 0;
     const char *data = NULL, *dend;
-    char *p, *key = statuscache_buildkey(mboxname, userid, &keylen);
+    char *p;
     unsigned version;
 
     init_internal();
@@ -196,9 +188,12 @@ static int statuscache_lookup(const char *mboxname, const char *userid,
         return IMAP_NO_NOSUCHMSG;
 
     /* Check if there is an entry in the database */
+    struct buf keybuf = BUF_INITIALIZER;
+    statuscache_buildkey(mboxname, userid, &keybuf);
     do {
-        r = cyrusdb_fetch(statuscachedb, key, keylen, &data, &datalen, NULL);
+        r = cyrusdb_fetch(statuscachedb, keybuf.s, keybuf.len, &data, &datalen, NULL);
     } while (r == CYRUSDB_AGAIN);
+    buf_free(&keybuf);
 
     if (r || !data || ((size_t) datalen < sizeof(unsigned))) {
         return IMAP_NO_NOSUCHMSG;
@@ -396,9 +391,8 @@ static int statuscache_store(const char *mboxname,
                              struct statusdata *sdata,
                              struct txn **tidptr)
 {
-    char data[250];  /* enough room for 11*(UULONG + SP) */
-    size_t keylen, datalen;
-    char *key = statuscache_buildkey(mboxname, sdata->userid, &keylen);
+    struct buf keybuf = BUF_INITIALIZER;
+    struct buf databuf = BUF_INITIALIZER;
     int r;
 
     init_internal();
@@ -407,11 +401,13 @@ static int statuscache_store(const char *mboxname,
     if (!statuscache_dbopen)
         return 0;
 
+    statuscache_buildkey(mboxname, sdata->userid, &keybuf);
+
     /* The trailing whitespace is necessary because we
      * use non-length-based functions to parse the values.
      * Any non-digit char would be fine, but whitespace
      * looks less ugly in dbtool output */
-    datalen = snprintf(data, sizeof(data),
+    buf_printf(&databuf,
                        "%u %u %u %u %u %u %u %u "
                        MODSEQ_FMT " " MODSEQ_FMT " ",
                        STATUSCACHE_VERSION,
@@ -421,7 +417,7 @@ static int statuscache_store(const char *mboxname,
                        sdata->size, sdata->createdmodseq,
                        sdata->highestmodseq);
 
-    r = cyrusdb_store(statuscachedb, key, keylen, data, datalen, tidptr);
+    r = cyrusdb_store(statuscachedb, keybuf.s, keybuf.len, databuf.s, databuf.len, tidptr);
 
     if (r != CYRUSDB_OK) {
         syslog(LOG_ERR, "DBERROR: error updating database: %s (%s)",
@@ -465,8 +461,6 @@ static int delete_cb(void *rockp,
 
 HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata)
 {
-    size_t keylen;
-    char *key;
     int r;
     int doclose = 0;
     struct statuscache_deleterock drock;
@@ -484,10 +478,12 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
     drock.db = statuscachedb;
     drock.tid = NULL;
 
-    key = statuscache_buildkey(mboxname, /*userid*/NULL, &keylen);
+    struct buf keybuf = BUF_INITIALIZER;
+    statuscache_buildkey(mboxname, /*userid*/NULL, &keybuf);
 
-    r = cyrusdb_foreach(drock.db, key, keylen, NULL, delete_cb,
-                    &drock, &drock.tid);
+    r = cyrusdb_foreach(drock.db, keybuf.s, keybuf.len, NULL, delete_cb,
+                        &drock, &drock.tid);
+    buf_free(&keybuf);
 
     if (r != CYRUSDB_OK) {
         syslog(LOG_ERR, "DBERROR: error invalidating: %s (%s)",
