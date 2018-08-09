@@ -187,12 +187,14 @@ static void print_rec(const char *name, const struct buf *citem)
  */
 static int do_examine(struct findall_data *data, void *rock __attribute__((unused)))
 {
-    if (!data) return 0;
     unsigned i, msgno;
     int r = 0;
     int flag = 0;
     struct mailbox *mailbox = NULL;
     int j;
+
+    /* don't want partial matches */
+    if (!data || !data->mbname) return 0;
 
     signals_poll();
 
@@ -356,12 +358,14 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
  */
 static int do_quota(struct findall_data *data, void *rock __attribute__((unused)))
 {
-    if (!data || !data->mbname) return 0;
     int r = 0;
     struct mailbox *mailbox = NULL;
     quota_t total = 0;
     const char *fname;
     struct stat sbuf;
+
+    /* don't want partial matches */
+    if (!data || !data->mbname) return 0;
 
     signals_poll();
 
@@ -429,12 +433,14 @@ int numcmp(const void *a, const void *b)
  */
 static int do_compare(struct findall_data *data, void *rock __attribute__((unused)))
 {
-    if (!data || !data->mbname) return 0;
     int r = 0;
     struct mailbox *mailbox = NULL;
     DIR *dirp;
     struct dirent *dirent;
     uint32_t *uids = NULL, nalloc, count = 0, msgno;
+
+    /* don't want partial matches */
+    if (!data || !data->mbname) return 0;
 
     signals_poll();
 
