@@ -235,48 +235,15 @@ static int statuscache_lookup(const char *mboxname, const char *userid,
     return 0;
 }
 
-/*
- * Performs a STATUS command - note: state MAY be NULL here.
- */
-EXPORTED int status_lookup_mboxname(const char *mboxname, const char *userid,
-                                    unsigned statusitems, struct statusdata *sdata)
+static int status_load_mailbox(struct mailbox *mailbox, const char *userid,
+                               unsigned statusitems, struct statusdata *sdata)
 {
-    struct mailbox *mailbox = NULL;
     unsigned numrecent = 0;
     unsigned numunseen = 0;
-    unsigned c_statusitems;
-    int r;
-
-    init_internal();
-
-    /* Check status cache if possible */
-    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-        /* Do actual lookup of cache item. */
-        r = statuscache_lookup(mboxname, userid, statusitems, sdata);
-
-        /* Seen/recent status uses "push" invalidation events from
-         * seen_db.c.   This avoids needing to open cyrus.header to get
-         * the mailbox uniqueid to open the seen db and get the
-         * unseen_mtime and recentuid.
-         */
-
-        if (!r) {
-            syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'yes'",
-                   mboxname, userid, statusitems);
-            return 0;
-        }
-
-        syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'no'",
-               mboxname, userid, statusitems);
-    }
-
-    /* Missing or invalid cache entry */
-    r = mailbox_open_irl(mboxname, &mailbox);
-    if (r) return r;
 
     /* We always have message count, uidnext,
        uidvalidity, and highestmodseq for cache */
-    c_statusitems = STATUS_INDEXITEMS;
+    unsigned c_statusitems = STATUS_INDEXITEMS;
 
     if (!mailbox->i.exists) {
         /* no messages, so these two must also be zero */
@@ -294,10 +261,10 @@ EXPORTED int status_lookup_mboxname(const char *mboxname, const char *userid,
             struct seen *seendb = NULL;
             struct seendata sd = SEENDATA_INITIALIZER;
 
-            r = seen_open(userid, SEEN_CREATE, &seendb);
+            int r = seen_open(userid, SEEN_CREATE, &seendb);
             if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
             seen_close(&seendb);
-            if (r) goto done;
+            if (r) return r;
 
             recentuid = sd.lastuid;
             seq = seqset_parse(sd.seenuids, NULL, recentuid);
@@ -329,11 +296,51 @@ EXPORTED int status_lookup_mboxname(const char *mboxname, const char *userid,
     statuscache_fill(sdata, userid, mailbox, c_statusitems,
                      numrecent, numunseen);
 
+    return 0;
+}
+
+/*
+ * Performs a STATUS command - note: state MAY be NULL here.
+ */
+EXPORTED int status_lookup_mboxname(const char *mboxname, const char *userid,
+                                    unsigned statusitems, struct statusdata *sdata)
+{
+    struct mailbox *mailbox = NULL;
+    int r = 0;
+
+    init_internal();
+
+    /* Check status cache if possible */
+    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
+        /* Do actual lookup of cache item. */
+        r = statuscache_lookup(mboxname, userid, statusitems, sdata);
+
+        /* Seen/recent status uses "push" invalidation events from
+         * seen_db.c.   This avoids needing to open cyrus.header to get
+         * the mailbox uniqueid to open the seen db and get the
+         * unseen_mtime and recentuid.
+         */
+
+        if (!r) {
+            syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'yes'",
+                   mboxname, userid, statusitems);
+            return 0;
+        }
+
+        syslog(LOG_DEBUG, "statuscache, '%s', '%s', '0x%02x', 'no'",
+               mboxname, userid, statusitems);
+    }
+
+    /* Missing or invalid cache entry */
+    r = mailbox_open_irl(mboxname, &mailbox);
+    if (r) return r;
+
+    status_load_mailbox(mailbox, userid, statusitems, sdata);
+
     /* cache the new value while unlocking */
     mailbox_unlock_index(mailbox, sdata);
-
-  done:
     mailbox_close(&mailbox);
+
     return r;
 }
 
@@ -355,19 +362,12 @@ EXPORTED int status_lookup_mbname(const mbname_t *mbname, const char *userid,
 EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
                                   unsigned statusitems, struct statusdata *sdata)
 {
-    /* XXX Apart from not opening mailbox, this is a copy of status_lookup.
-     If it is here to stay, then refactor with status_lookup. */
-    unsigned numrecent = 0;
-    unsigned numunseen = 0;
-    unsigned c_statusitems;
-    int r = 0;
-
     init_internal();
 
     /* Check status cache if possible */
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
         /* Do actual lookup of cache item. */
-        r = statuscache_lookup(mailbox->name, userid, statusitems, sdata);
+        int r = statuscache_lookup(mailbox->name, userid, statusitems, sdata);
 
         /* Seen/recent status uses "push" invalidation events from
          * seen_db.c.   This avoids needing to open cyrus.header to get
@@ -385,64 +385,7 @@ EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
                mailbox->name, userid, statusitems);
     }
 
-    r = 0;
-
-    /* We always have message count, uidnext,
-       uidvalidity, and highestmodseq for cache */
-    c_statusitems = STATUS_INDEXITEMS;
-
-    if (!mailbox->i.exists) {
-        /* no messages, so these two must also be zero */
-        c_statusitems |= STATUS_SEENITEMS;
-    }
-    else if (statusitems & STATUS_SEENITEMS) {
-        /* Read \Seen state */
-        struct seqset *seq = NULL;
-        int internalseen = mailbox_internal_seen(mailbox, userid);
-        unsigned recentuid;
-
-        if (internalseen) {
-            recentuid = mailbox->i.recentuid;
-        } else {
-            struct seen *seendb = NULL;
-            struct seendata sd = SEENDATA_INITIALIZER;
-
-            r = seen_open(userid, SEEN_CREATE, &seendb);
-            if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
-            seen_close(&seendb);
-            if (r) goto done;
-
-            recentuid = sd.lastuid;
-            seq = seqset_parse(sd.seenuids, NULL, recentuid);
-            seen_freedata(&sd);
-        }
-
-        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
-        const message_t *msg;
-        while ((msg = mailbox_iter_step(iter))) {
-            const struct index_record *record = msg_record(msg);
-            if (record->uid > recentuid)
-                numrecent++;
-            if (internalseen) {
-                if (!(record->system_flags & FLAG_SEEN))
-                    numunseen++;
-            }
-            else {
-                if (!seqset_ismember(seq, record->uid))
-                    numunseen++;
-            }
-        }
-        mailbox_iter_done(&iter);
-
-        /* we've calculated the correct values for both */
-        c_statusitems |= STATUS_SEENITEMS;
-    }
-
-    statuscache_fill(sdata, userid, mailbox, c_statusitems,
-                     numrecent, numunseen);
-
-  done:
-    return r;
+    return status_load_mailbox(mailbox, userid, statusitems, sdata);
 }
 
 static int statuscache_store(const char *mboxname,
