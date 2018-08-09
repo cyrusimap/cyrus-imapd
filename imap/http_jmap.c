@@ -104,6 +104,7 @@ static int  jmap_settings(struct transaction_t *txn);
 static int  jmap_initreq(jmap_req_t *req);
 static void jmap_finireq(jmap_req_t *req);
 
+static int jmap_core_echo(jmap_req_t *req);
 static int jmap_blob_copy(jmap_req_t *req);
 
 static int myrights(struct auth_state *authstate,
@@ -405,6 +406,9 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
 
     json_object_set_new(jmap_capabilities,
                         XML_NS_CYRUS "performance", json_object());
+
+    static jmap_method_t coreecho = { "Core/echo", &jmap_core_echo };
+    hash_insert(coreecho.name, &coreecho, &jmap_methods);
 
     static jmap_method_t blobcopy = { "Blob/copy", &jmap_blob_copy };
     hash_insert(blobcopy.name, &blobcopy, &jmap_methods);
@@ -1763,6 +1767,13 @@ done:
     }
 
     return ret;
+}
+
+static int jmap_core_echo(jmap_req_t *req)
+{
+    json_array_append_new(req->response, json_pack("[s,o,s]",
+                    "Core/echo", req->args, req->tag));
+    return 0;
 }
 
 static int jmap_copyblob(jmap_req_t *req,
