@@ -586,8 +586,7 @@ static int getContactsGroupUpdates(struct jmap_req *req)
 static const char *_resolve_contactid(struct jmap_req *req, const char *id)
 {
     if (id && *id == '#') {
-        const char *newid = jmap_lookup_id(req, id + 1);
-        if (newid) return newid;
+        return jmap_lookup_id(req, id + 1);
     }
     return id;
 }
@@ -603,13 +602,13 @@ static int _add_group_entries(struct jmap_req *req,
 
     for (index = 0; index < json_array_size(members); index++) {
         const char *item = _json_array_get_string(members, index);
-        if (!item) {
+        const char *uid = _resolve_contactid(req, item);
+        if (!item || !uid) {
             buf_printf(&buf, "contactIds[%zu]", index);
             json_array_append_new(invalid, json_string(buf_cstring(&buf)));
             buf_reset(&buf);
             continue;
         }
-        const char *uid = _resolve_contactid(req, item);
         buf_setcstr(&buf, "urn:uuid:");
         buf_appendcstr(&buf, uid);
         vparse_add_entry(card, NULL,
@@ -634,13 +633,13 @@ static int _add_othergroup_entries(struct jmap_req *req,
         unsigned i;
         for (i = 0; i < json_array_size(arg); i++) {
             const char *item = json_string_value(json_array_get(arg, i));
-            if (!item) {
+            const char *uid = _resolve_contactid(req, item);
+            if (!item || !uid) {
                 buf_printf(&buf, "otherContactIds[%s]", key);
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
                 continue;
             }
-            const char *uid = _resolve_contactid(req, item);
             buf_setcstr(&buf, "urn:uuid:");
             buf_appendcstr(&buf, uid);
             struct vparse_entry *entry =
