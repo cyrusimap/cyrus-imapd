@@ -308,6 +308,8 @@ EXPORTED int status_lookup_mboxname(const char *mboxname, const char *userid,
     struct mailbox *mailbox = NULL;
     int r = 0;
 
+    memset(sdata, 0, sizeof(struct statusdata));
+
     init_internal();
 
     /* Check status cache if possible */
@@ -362,6 +364,8 @@ EXPORTED int status_lookup_mbname(const mbname_t *mbname, const char *userid,
 EXPORTED int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
                                   unsigned statusitems, struct statusdata *sdata)
 {
+    memset(sdata, 0, sizeof(struct statusdata));
+
     init_internal();
 
     /* Check status cache if possible */
