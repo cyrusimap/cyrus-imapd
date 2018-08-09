@@ -110,6 +110,8 @@ int main(int argc, char *argv[])
     mboxlist_init(0);
     mboxlist_open(NULL);
 
+    search_attr_init();
+
     irec.incruid = 0;
     strarray_t *array = strarray_new();
     for (i = optind; i < argc; i++) {
