@@ -241,7 +241,7 @@ static int dump_me(struct findall_data *data, void *rock)
     printf("</imapdump>\n");
 
     i = 0;
-    while (uids[i] < irec->incruid && i < numuids) {
+    while (i < numuids && uids[i] < irec->incruid) {
         /* already dumped this message */
         /* xxx could do binary search to get to the first
            undumped uid */
