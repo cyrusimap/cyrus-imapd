@@ -98,6 +98,7 @@ static json_t *jmap_capabilities = NULL;
 static int jmap_get(struct transaction_t *txn, void *params);
 static int jmap_post(struct transaction_t *txn, void *params);
 
+/* WebSocket handler */
 static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
                    struct buf *logbuf, void **rock);
 
@@ -408,6 +409,11 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
         "maxObjectsInSet", jmap_max_objects_in_set,
         "collationAlgorithms", json_array()
     );
+
+    if (ws_enabled()) {
+        json_object_set_new(jmap_capabilities, JMAP_URN_WEBSOCKET,
+                            json_pack("{s:s}", "wsUrl", JMAP_BASE_URL));
+    }
 
     construct_hash_table(&jmap_methods, 128, 0);
 
@@ -2326,19 +2332,6 @@ static json_t *user_settings(const char *userid)
 static int jmap_settings(struct transaction_t *txn)
 {
     assert(httpd_userid);
-
-    if (ws_enabled() &&
-        !json_object_get(jmap_capabilities, JMAP_URN_WEBSOCKET)) {
-        const char *proto = NULL, *host = NULL;
-
-        http_proto_host(txn->req_hdrs, &proto, &host);
-
-        buf_reset(&txn->buf);
-        buf_printf(&txn->buf, "ws%s://%s%s", proto+4, host, JMAP_BASE_URL);
-
-        json_object_set_new(jmap_capabilities, JMAP_URN_WEBSOCKET,
-                            json_pack("{s:s}", "wsUrl", buf_cstring(&txn->buf)));
-    }
 
     /* Create the response object */
     json_t *res = user_settings(httpd_userid);
