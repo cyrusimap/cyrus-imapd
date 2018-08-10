@@ -111,12 +111,10 @@ static int jmap_emailsubmission_querychanges(jmap_req_t *req);
 
 /*
  * Possibly to be implemented:
- * - Email/copy
  * - VacationResponse/get
  * - VacationResponse/set
  * - Identity/changes
  * - Identity/set
- * - Email/report
  */
 
 jmap_method_t jmap_mail_methods[] = {
