@@ -452,14 +452,8 @@ static int jmap_get(struct transaction_t *txn,
 
     if (txn->req_tgt.flags == JMAP_ENDPOINT_API) {
         /* Upgrade to WebSockets over HTTP/1.1 on API endpoint, if requested */
-        if (txn->flags.ver == VER_1_1) {
-            if (txn->flags.upgrade & UPGRADE_WS) {
-                return ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
-            }
-            else if (ws_enabled()) {
-                txn->flags.upgrade |= UPGRADE_WS;
-                txn->flags.conn |= CONN_UPGRADE;
-            }
+        if (txn->flags.upgrade & UPGRADE_WS) {
+            return ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
         }
 
         return jmap_settings(txn);
