@@ -338,31 +338,11 @@ done:
     return r;
 }
 
-struct statuscache_deleterock {
-    struct db *db;
-    struct txn *tid;
-};
-
-static int delete_cb(void *rockp,
-                     const char *key, size_t keylen,
-                     const char *data __attribute__((unused)),
-                     size_t datalen __attribute__((unused)))
-{
-    struct statuscache_deleterock *rp = (struct statuscache_deleterock *)rockp;
-
-    int r = cyrusdb_delete(rp->db, key, keylen, &rp->tid, 1);
-    if (r != CYRUSDB_OK) {
-        syslog(LOG_ERR, "DBERROR: error deleting from database: %s",
-               cyrusdb_strerror(r));
-    }
-
-    return r;
-}
-
 HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata)
 {
     int r;
     int doclose = 0;
+    struct txn *tid = NULL;
 
     /* if it's disabled then skip */
     if (!config_getswitch(IMAPOPT_STATUSCACHE))
@@ -377,32 +357,27 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
         doclose = 1;
     }
 
-    struct statuscache_deleterock drock = { statuscachedb, NULL };
-
-    struct buf keybuf = BUF_INITIALIZER;
-    statuscache_buildkey(mboxname, /*userid*/NULL, &keybuf);
-
-    // remove all existing records
-    r = cyrusdb_foreach(drock.db, keybuf.s, keybuf.len, NULL, delete_cb,
-                        &drock, &drock.tid);
-    buf_free(&keybuf);
-
-    if (r) {
-        syslog(LOG_ERR, "DBERROR: error invalidating: %s (%s)",
-               mboxname, cyrusdb_strerror(r));
+    if (sdata) {
+        r = statuscache_store(mboxname, sdata, &tid);
     }
-
-    // store new records if present
-    if (!r && sdata) {
-        r = statuscache_store(mboxname, sdata, &drock.tid);
+    else {
+        // remove existing record
+        struct buf keybuf = BUF_INITIALIZER;
+        statuscache_buildkey(mboxname, /*userid*/NULL, &keybuf);
+        r = cyrusdb_delete(statuscachedb, keybuf.s, keybuf.len, &tid, 1);
+        buf_free(&keybuf);
+        if (r != CYRUSDB_OK) {
+            syslog(LOG_ERR, "DBERROR: error deleting from database: %s",
+                   cyrusdb_strerror(r));
+        }
     }
 
     if (!r) {
-        cyrusdb_commit(drock.db, drock.tid);
+        cyrusdb_commit(statuscachedb, tid);
     }
     else {
         syslog(LOG_NOTICE, "DBERROR: failed to store statuscache data for %s", mboxname);
-        if (drock.tid) cyrusdb_abort(drock.db, drock.tid);
+        if (tid) cyrusdb_abort(statuscachedb, tid);
     }
 
     // if we opened the DB, close it now

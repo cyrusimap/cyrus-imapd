@@ -2278,6 +2278,7 @@ EXPORTED int mailbox_lock_index(struct mailbox *mailbox, int locktype)
  */
 EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sdata)
 {
+    struct statusdata mysdata = STATUSDATA_INIT;
     struct timeval endtime;
     double timediff;
     int r;
@@ -2299,14 +2300,18 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
     if (mailbox->has_changed) {
         if (updatenotifier) updatenotifier(mailbox->name);
         sync_log_mailbox(mailbox->name);
-        statuscache_invalidate(mailbox->name, sdata);
+
+        if (!sdata) {
+            status_fill_mailbox(mailbox, &mysdata);
+            sdata = &mysdata;
+        }
 
         mailbox->has_changed = 0;
     }
-    else if (sdata) {
-        /* updated data, always write */
+
+    // we always write if given new statusdata, or if we changed the mailbox
+    if (sdata)
         statuscache_invalidate(mailbox->name, sdata);
-    }
 
     if (mailbox->index_locktype) {
         if (lock_unlock(mailbox->index_fd, index_fname))
