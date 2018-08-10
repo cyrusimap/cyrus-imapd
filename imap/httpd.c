@@ -4240,7 +4240,7 @@ static int meth_get(struct transaction_t *txn,
     struct resp_body_t *resp_body = &txn->resp_body;
 
     /* Upgrade to WebSockets over HTTP/1.1 on root, if requested */
-    if ((txn->flags.ver == VER_1_1) && !strcmp(txn->req_uri->path, "/")) {
+    if (!strcmp(txn->req_uri->path, "/")) {
         if (txn->flags.upgrade & UPGRADE_WS) {
             return ws_start_channel(txn, NULL, &ws_echo);
         }
