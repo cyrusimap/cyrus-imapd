@@ -1522,13 +1522,6 @@ EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
         r = warmup_file(fname, 0, 0);
         if (r) goto out;
     }
-    if (warmup_flags & WARMUP_FOLDERSTATUS) {
-        if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-            fname = tofree2 = statuscache_filename();
-            r = warmup_file(fname, 0, 0);
-            if (r) goto out;
-        }
-    }
     if (warmup_flags & WARMUP_SEARCH) {
         userid = mboxname_to_userid(mbentry->name);
         r = search_list_files(userid, &files);

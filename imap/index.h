@@ -220,8 +220,7 @@ enum index_warmup_flags
     WARMUP_INDEX            = (1<<0),
     WARMUP_CONVERSATIONS    = (1<<1),
     WARMUP_ANNOTATIONS      = (1<<2),
-    WARMUP_FOLDERSTATUS     = (1<<3),
-    WARMUP_SEARCH           = (1<<4),
+    WARMUP_SEARCH           = (1<<3),
     WARMUP_ALL              = (~WARMUP_SEARCH)
 };
 

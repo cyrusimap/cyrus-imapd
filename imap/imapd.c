@@ -10355,8 +10355,6 @@ syntax_error:
                 warmup_flags |= WARMUP_CONVERSATIONS;
             else if (!strcasecmp(arg.s, "annotations"))
                 warmup_flags |= WARMUP_ANNOTATIONS;
-            else if (!strcasecmp(arg.s, "folderstatus"))
-                warmup_flags |= WARMUP_FOLDERSTATUS;
             else if (!strcasecmp(arg.s, "search"))
                 warmup_flags |= WARMUP_SEARCH;
             else if (!strcasecmp(arg.s, "uids")) {
