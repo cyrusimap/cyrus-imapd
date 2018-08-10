@@ -13,19 +13,20 @@ Cyrus IMAP 3.0.8 Release Notes
 
 Download via HTTPS:
 
-    *   https://www.cyrusimap.org/releases/cyrus-imapd-3.0.8.tar.gz
-    *   https://www.cyrusimap.org/releases/cyrus-imapd-3.0.8.tar.gz.sig
-
-Download via FTP:
-
-    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-3.0.8.tar.gz
-    *   ftp://ftp.cyrusimap.org/cyrus-imapd/cyrus-imapd-3.0.8.tar.gz.sig
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.8/cyrus-imapd-3.0.8.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.8/cyrus-imapd-3.0.8.tar.gz.sig
 
 
 .. _relnotes-3.0.8-changes:
 
 Changes Since 3.0.7
 ===================
+
+Release changes
+---------------
+
+We're trialing using the Github Releases feature.  If you have trouble downloading
+this release, please report this to the mailing lists.  Thanks!
 
 New configuration options
 -------------------------
