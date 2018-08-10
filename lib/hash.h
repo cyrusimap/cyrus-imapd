@@ -99,4 +99,33 @@ int hash_numrecords(hash_table *table);
 
 void free_hash_table(hash_table *table, void (*func)(void *));
 
+/*
+** An iterator for a hash table. Inserting or deleting entries
+** the hash table is not safe while iterating. The entries are
+** iterated in arbitrary order. */
+typedef struct hash_iter hash_iter;
+
+/* Creates an iterator for the hash table. The iterator points
+ * *before* the first entry, if any. */
+hash_iter *hash_table_iter(hash_table *table);
+
+/* Returns non-zero if the iterator has more entries. */
+int hash_iter_has_next(hash_iter *iter);
+
+/* Forwards the iterator to the next entry and returns its key.
+** If there is no more entry, the return value is NULL. */
+const char *hash_iter_next(hash_iter *iter);
+
+/* Returns the key of the current entry. */
+const char *hash_iter_key(hash_iter *iter);
+
+/* Returns the value of the current entry.*/
+void *hash_iter_val(hash_iter *iter);
+
+/* Resets the iterator to point before the first entry. */
+void hash_iter_reset(hash_iter *);
+
+/* Frees the iterator. */
+void hash_iter_free(hash_iter **iterptr);
+
 #endif /* HASH__H */

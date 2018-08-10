@@ -291,4 +291,60 @@ static void test_freeing_nonempty(void)
     free_hash_table(&ht, lincoln);
     CU_ASSERT_EQUAL(N, freed_count);
 }
+
+static void test_iter(void)
+{
+    hash_table ht;
+
+    /* construct an empty hash table */
+    construct_hash_table(&ht, 16, 0);
+
+    hash_insert("foo", (void*)1, &ht);
+    hash_insert("bar", (void*)2, &ht);
+    hash_insert("baz", (void*)3, &ht);
+
+    hash_iter *iter = hash_table_iter(&ht);
+
+    CU_ASSERT_PTR_NOT_NULL(iter);
+
+    /* run twice to test hash_iter_reset at end of first loop */
+    int i;
+    for (i = 0; i < 2; i++) {
+        strarray_t seen = STRARRAY_INITIALIZER;
+
+        CU_ASSERT(hash_iter_has_next(iter));
+        while (hash_iter_next(iter)) {
+            const char *key = hash_iter_key(iter);
+            CU_ASSERT_PTR_NOT_NULL(key);
+            strarray_append(&seen, key);
+
+            uintptr_t val = (uintptr_t) hash_iter_val(iter);
+            if (!strcmp(key, "foo")) {
+                CU_ASSERT_EQUAL(1, val);
+            }
+            else if (!strcmp(key, "bar")) {
+                CU_ASSERT_EQUAL(2, val);
+            }
+            else if (!strcmp(key, "baz")) {
+                CU_ASSERT_EQUAL(3, val);
+            }
+            else CU_ASSERT(0);
+
+            if (strarray_size(&seen) < 3) {
+                CU_ASSERT(hash_iter_has_next(iter));
+            }
+        }
+        CU_ASSERT(!hash_iter_has_next(iter));
+
+        CU_ASSERT_EQUAL(3, strarray_size(&seen));
+        CU_ASSERT(strarray_find(&seen, "foo", 0) >= 0);
+        CU_ASSERT(strarray_find(&seen, "bar", 0) >= 0);
+        CU_ASSERT(strarray_find(&seen, "baz", 0) >= 0);
+        strarray_fini(&seen);
+        hash_iter_reset(iter);
+    }
+
+    hash_iter_free(&iter);
+    free_hash_table(&ht, NULL);
+}
 /* vim: set ft=c: */

@@ -349,3 +349,73 @@ EXPORTED int hash_numrecords(hash_table *table)
 
     return count;
 }
+
+
+struct hash_iter {
+    hash_table *table;
+    size_t i;
+    bucket *peek;
+    bucket *curr;
+};
+
+EXPORTED hash_iter *hash_table_iter(hash_table *table)
+{
+    hash_iter *iter = xzmalloc(sizeof(struct hash_iter));
+    iter->table = table;
+    hash_iter_reset(iter);
+    return iter;
+}
+
+EXPORTED void hash_iter_reset(hash_iter *iter)
+{
+    hash_table *table = iter->table;
+    iter->curr = NULL;
+    iter->peek = NULL;
+    for (iter->i = 0; iter->i < table->size; iter->i++) {
+        if ((iter->peek = table->table[iter->i])) {
+            break;
+        }
+    }
+}
+
+EXPORTED int hash_iter_has_next(hash_iter *iter)
+{
+    return iter->peek != NULL;
+}
+
+EXPORTED const char *hash_iter_next(hash_iter *iter)
+{
+    hash_table *table = iter->table;
+    iter->curr = iter->peek;
+    iter->peek = NULL;
+    if (iter->curr == NULL)
+        return NULL;
+    else if (iter->curr->next)
+        iter->peek = iter->curr->next;
+    else if (iter->i < table->size) {
+        for (iter->i = iter->i + 1; iter->i < table->size; iter->i++) {
+            if ((iter->peek = table->table[iter->i])) {
+                break;
+            }
+        }
+    }
+    return iter->curr->key;
+}
+
+EXPORTED const char *hash_iter_key(hash_iter *iter)
+{
+    return iter->curr->key;
+}
+
+EXPORTED void *hash_iter_val(hash_iter *iter)
+{
+    return iter->curr->data;
+}
+
+EXPORTED void hash_iter_free(hash_iter **iterptr)
+{
+    if (iterptr) {
+        free(*iterptr);
+        *iterptr = NULL;
+    }
+}
