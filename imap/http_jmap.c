@@ -83,7 +83,7 @@
 #define JMAP_UPLOAD_COL    "upload/"
 #define JMAP_UPLOAD_TPL    "{accountId}/"
 #define JMAP_DOWNLOAD_COL  "download/"
-#define JMAP_DOWNLOAD_TPL  "{accountId}/{blobId}/{name}"
+#define JMAP_DOWNLOAD_TPL  "{accountId}/{blobId}/{name}?accept={type}"
 
 struct namespace jmap_namespace;
 
