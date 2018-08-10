@@ -517,7 +517,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
 
     if (ws_enabled() && !nghttp2_extended_connect) {
         /* Need to forcefully allow :scheme, :path, :protocol pseudo-headers
-           (this version of of libnghttp2 doesn't understand extended CONNECT) */
+           (this version of libnghttp2 doesn't understand extended CONNECT) */
         nghttp2_option_set_no_http_messaging(ctx->options, 1);
     }
 
