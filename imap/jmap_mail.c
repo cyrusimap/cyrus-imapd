@@ -172,11 +172,48 @@ int jmap_mail_init(hash_table *methods, json_t *capabilities)
             "maxSizeAttachmentsPerEmail", max_size_attachments_per_email,
             "emailsListSortOptions", sortopts);
 
+    json_object_set_new(capabilities, JMAP_URN_MAIL, email_capabilities);
+
+    static json_t *submit_ext = NULL;
+    if (!submit_ext) {
+        /* determine extensions from submission server */
+        smtpclient_t *smp = NULL;
+
+        submit_ext = json_object();
+
+        if (!smtpclient_open(&smp)) {
+            const char *smtp_capa[] = { "FUTURERELEASE", "SIZE", "DSN",
+                                        "DELIVERBY", "MT-PRIORITY", NULL };
+            const char **capa;
+            struct buf buf = BUF_INITIALIZER;
+
+            for (capa = smtp_capa; *capa; capa++) {
+                const char *args = smtpclient_has_ext(smp, *capa);
+
+                if (args) {
+                    strarray_t *sa = strarray_split(args, NULL, STRARRAY_TRIM);
+                    json_t *jargs = json_array();
+                    int i;
+
+                    for (i = 0; i < strarray_size(sa); i++) {
+                        buf_setcstr(&buf, strarray_nth(sa, i));
+                        json_array_append_new(jargs, json_string(buf_lcase(&buf)));
+                    }
+                    strarray_free(sa);
+
+                    buf_setcstr(&buf, *capa);
+                    json_object_set_new(submit_ext, buf_lcase(&buf), jargs);
+                }
+            }
+            smtpclient_close(&smp);
+            buf_free(&buf);
+        }
+    }
+
     json_t *submit_capabilities = json_pack("{s:i s:O}",
             "maxDelayedSend", 0,
-            "submissionExtensions", json_object());
+            "submissionExtensions", submit_ext);
 
-    json_object_set_new(capabilities, JMAP_URN_MAIL, email_capabilities);
     json_object_set_new(capabilities, JMAP_URN_SUBMISSION, submit_capabilities);
     return 0;
 }

@@ -94,7 +94,9 @@ enum {
     SMTPCLIENT_CAPA_DSN       = (1 << 3),
     SMTPCLIENT_CAPA_DELIVERBY = (1 << 4),
     SMTPCLIENT_CAPA_SIZE      = (1 << 5),
-    SMTPCLIENT_CAPA_STATUS    = (1 << 6)
+    SMTPCLIENT_CAPA_STATUS    = (1 << 6),
+    SMTPCLIENT_CAPA_FUTURE    = (1 << 7),
+    SMTPCLIENT_CAPA_PRIORITY  = (1 << 8)
 };
 
 static struct protocol_t smtp_protocol =
@@ -108,6 +110,8 @@ static struct protocol_t smtp_protocol =
           { "DELIVERYBY", SMTPCLIENT_CAPA_DELIVERBY },
           { "SIZE", SMTPCLIENT_CAPA_SIZE },
           { "ENHANCEDSTATUSCODES", SMTPCLIENT_CAPA_STATUS },
+          { "FUTURERELEASE", SMTPCLIENT_CAPA_FUTURE },
+          { "MT-PRIORITY", SMTPCLIENT_CAPA_PRIORITY },
           { NULL, 0 } } },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
