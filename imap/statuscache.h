@@ -55,9 +55,6 @@
  * be free()d by the caller. */
 extern char *statuscache_filename(void);
 
-/* open the statuscache db */
-extern void statuscache_open(void);
-
 /* fill a statuscache entry */
 extern void statuscache_fill(struct statusdata *sdata, const char *userid,
                              struct mailbox *mailbox, unsigned statusitems,
@@ -77,9 +74,6 @@ extern int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
    optionally writing the data for one user in the same transaction */
 extern int statuscache_invalidate(const char *mboxname,
                                   struct statusdata *sdata);
-
-/* close the database */
-extern void statuscache_close(void);
 
 /* done with database stuff */
 extern void statuscache_done(void);

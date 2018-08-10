@@ -72,67 +72,54 @@
 
 #define DB config_statuscache_db
 
-static struct db *statuscachedb;
-static int statuscache_dbopen = 0;
+static struct db *statuscachedb = NULL;
+static int _initted = 0;
 
-static void done_cb(void *rock __attribute__((unused))) {
-    if (statuscache_dbopen) {
-        statuscache_close();
-    }
-    statuscache_done();
-}
-
-static void init_internal() {
-    if (!statuscache_dbopen) {
-        statuscache_open();
-        cyrus_modules_add(done_cb, NULL);
-    }
-}
-
-char *statuscache_filename(void)
+static void statuscache_open(void)
 {
-    const char *fname = config_getstring(IMAPOPT_STATUSCACHE_DB_PATH);
-
-    if (fname)
-        return xstrdup(fname);
-
-    /* create db file name */
-    return strconcat(config_dir, FNAME_STATUSCACHEDB, (char *)NULL);
-}
-
-EXPORTED void statuscache_open(void)
-{
-    char *fname = statuscache_filename();
-    int ret;
-
     if (!config_getswitch(IMAPOPT_STATUSCACHE))
-        goto out;
+        return;
 
-    ret = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &statuscachedb);
-    if (ret != 0) {
+    char *fname = xstrdupnull(config_getstring(IMAPOPT_STATUSCACHE_DB_PATH));
+    if (!fname)
+        fname = strconcat(config_dir, FNAME_STATUSCACHEDB, (char *)NULL);
+
+    int r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &statuscachedb);
+    if (r) {
         syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(ret));
+               cyrusdb_strerror(r));
         syslog(LOG_ERR, "statuscache in degraded mode");
-        goto out;
+        statuscachedb = NULL;
     }
 
-    statuscache_dbopen = 1;
-out:
     free(fname);
 }
 
-EXPORTED void statuscache_close(void)
+static void statuscache_close(void)
 {
-    int r;
+    if (!statuscachedb) return;
 
-    if (statuscache_dbopen) {
-        r = cyrusdb_close(statuscachedb);
-        if (r) {
-            syslog(LOG_ERR, "DBERROR: error closing statuscache: %s",
-                   cyrusdb_strerror(r));
-        }
-        statuscache_dbopen = 0;
+    int r = cyrusdb_close(statuscachedb);
+    if (r) {
+        syslog(LOG_ERR, "DBERROR: error closing statuscache: %s",
+              cyrusdb_strerror(r));
     }
+
+    statuscachedb = NULL;
+}
+
+static void done_cb(void *rock __attribute__((unused)))
+{
+    statuscache_close();
+    statuscache_done();
+}
+
+static void init_internal()
+{
+    if (_initted) return;
+    statuscache_open();
+    cyrus_modules_add(done_cb, NULL);
+    _initted = 1;
 }
 
 HIDDEN void statuscache_fill(struct statusdata *sdata, const char *userid,
@@ -184,7 +171,7 @@ static int statuscache_lookup(const char *mboxname, const char *userid,
     init_internal();
 
     /* Don't access DB if it hasn't been opened */
-    if (!statuscache_dbopen)
+    if (!statuscachedb)
         return IMAP_NO_NOSUCHMSG;
 
     /* Check if there is an entry in the database */
@@ -398,7 +385,7 @@ static int statuscache_store(const char *mboxname,
     init_internal();
 
     /* Don't access DB if it hasn't been opened */
-    if (!statuscache_dbopen)
+    if (!statuscachedb)
         return 0;
 
     statuscache_buildkey(mboxname, sdata->userid, &keybuf);
@@ -470,10 +457,11 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
         return 0;
 
     /* Open DB if it hasn't been opened */
-    if (!statuscache_dbopen) {
-        statuscache_open();
-        doclose = 1;
-    }
+    init_internal();
+
+    // failed to open, oh well
+    if (!statuscachedb)
+        return 0;
 
     drock.db = statuscachedb;
     drock.tid = NULL;
