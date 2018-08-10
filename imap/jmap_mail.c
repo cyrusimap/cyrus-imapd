@@ -650,7 +650,6 @@ static json_t *_mbox_get(jmap_req_t *req,
                          enum shared_mbox_type share_type)
 {
     unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
-    struct statusdata sdata;
     int rights;
     int is_inbox = 0, parent_is_inbox = 0;
     int r = 0;
@@ -739,6 +738,7 @@ static json_t *_mbox_get(jmap_req_t *req,
 
     if (share_type == _MBOX_SHARED) {
         /* Lookup status. */
+        struct statusdata sdata = STATUSDATA_INIT;
         r = status_lookup_mbname(mbname, req->userid, statusitems, &sdata);
         if (r) goto done;
 
@@ -750,18 +750,17 @@ static json_t *_mbox_get(jmap_req_t *req,
         }
 
         if (_wantprop(props, "totalThreads") || _wantprop(props, "unreadThreads")) {
-            conv_status_t xconv = CONV_STATUS_INIT;
             if ((r = conversation_getstatus(req->cstate,
-                            mbname_intname(mbname), &xconv))) {
+                            mbname_intname(mbname), &sdata.xconv))) {
                 syslog(LOG_ERR, "conversation_getstatus(%s): %s",
                         mbname_intname(mbname), error_message(r));
                 goto done;
             }
             if (_wantprop(props, "totalThreads")) {
-                json_object_set_new(obj, "totalThreads", json_integer(xconv.exists));
+                json_object_set_new(obj, "totalThreads", json_integer(sdata.xconv.exists));
             }
             if (_wantprop(props, "unreadThreads")) {
-                json_object_set_new(obj, "unreadThreads", json_integer(xconv.unseen));
+                json_object_set_new(obj, "unreadThreads", json_integer(sdata.xconv.unseen));
             }
         }
         if (_wantprop(props, "sortOrder")) {
@@ -2950,7 +2949,6 @@ struct _mbox_changes_data {
 static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
 {
     struct _mbox_changes_data *data = rock;
-    struct statusdata sdata;
     modseq_t modseq, mbmodseq;
     jmap_req_t *req = data->req;
 
@@ -2961,6 +2959,7 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
 
     /* Lookup status. */
     if (!(mbentry->mbtype & (MBTYPE_DELETED | MBTYPE_INTERMEDIATE))) {
+        struct statusdata sdata = STATUSDATA_INIT;
         int r = status_lookup_mbentry(mbentry, data->req->userid,
                                       STATUS_HIGHESTMODSEQ, &sdata);
         if (r) return r;

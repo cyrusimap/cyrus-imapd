@@ -689,7 +689,7 @@ static int subquery_run_one_folder(search_query_t *query,
 
     modseq_t sincemodseq = _get_sincemodseq(e);
     if (sincemodseq) {
-        struct statusdata sdata;
+        struct statusdata sdata = STATUSDATA_INIT;
         int r = status_lookup_mboxname(mboxname, query->state->userid,
                                        STATUS_HIGHESTMODSEQ, &sdata);
         // if unchangedsince, then we can skip the index query

@@ -48,16 +48,12 @@
 
 /* name of the statuscache database */
 #define FNAME_STATUSCACHEDB "/statuscache.db"
-#define STATUSCACHE_VERSION 5
-
-/* Return the filename of the statuscache database,
- * used for XWARMUP.  Returns a new string which must
- * be free()d by the caller. */
-extern char *statuscache_filename(void);
+#define STATUSCACHE_VERSION 6
 
 /* fill a statuscache entry */
-extern void statuscache_fill(struct statusdata *sdata, const char *userid,
-                             struct mailbox *mailbox, unsigned statusitems,
+extern void status_fill_mbentry(const mbentry_t *mbentry, struct statusdata *sdata);
+extern void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdata);
+extern void status_fill_seen(const char *userid, struct statusdata *sdata,
                              unsigned numrecent, unsigned numunseen);
 
 /* lookup a single statuscache entry or open the mailbox and calculate it */
@@ -74,8 +70,5 @@ extern int status_lookup_mailbox(struct mailbox *mailbox, const char *userid,
    optionally writing the data for one user in the same transaction */
 extern int statuscache_invalidate(const char *mboxname,
                                   struct statusdata *sdata);
-
-/* done with database stuff */
-extern void statuscache_done(void);
 
 #endif /* STATUSCACHE_H */

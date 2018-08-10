@@ -1779,14 +1779,11 @@ static int index_lock(struct index_state *state)
 
 EXPORTED int index_status(struct index_state *state, struct statusdata *sdata)
 {
-    int items = STATUS_INDEXITEMS | STATUS_SEENITEMS | STATUS_UIDVALIDITY;
-    int r;
-
-    r = index_lock(state);
+    int r = index_lock(state);
     if (r) return r;
 
-    statuscache_fill(sdata, state->userid, state->mailbox, items,
-                     state->numrecent, state->numunseen);
+    status_fill_mailbox(state->mailbox, sdata);
+    status_fill_seen(state->userid, sdata, state->numrecent, state->numunseen);
 
     index_unlock(state);
     return 0;
