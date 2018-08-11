@@ -329,6 +329,25 @@ done:
     return r;
 }
 
+static const jmap_property_t calendar_props[] = {
+    { "id",              JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "name",            0 },
+    { "color",           0 },
+    { "sortOrder",       0 },
+    { "isVisible",       0 },
+    { "mayReadFreeBusy", JMAP_PROP_SERVER_SET },
+    { "mayReadItems",    JMAP_PROP_SERVER_SET },
+    { "mayAddItems",     JMAP_PROP_SERVER_SET },
+    { "mayModifyItems",  JMAP_PROP_SERVER_SET },
+    { "mayRemoveItems",  JMAP_PROP_SERVER_SET },
+    { "mayRenameItems",  JMAP_PROP_SERVER_SET },
+    { "mayDeleteItems",  JMAP_PROP_SERVER_SET },
+
+    { "x-href",          0 },  /* FM specific */
+
+    { NULL,              0 }
+};
+
 static int getCalendars(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -344,7 +363,7 @@ static int getCalendars(struct jmap_req *req)
     } else if (r) return r;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, &get, &err);
+    jmap_get_parse(req->args, &parser, req, calendar_props, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -1250,6 +1269,17 @@ done:
     return r;
 }
 
+static const jmap_property_t event_props[] = {
+    { "id",            JMAP_PROP_IMMUTABLE },
+    { "calendarId",    0 },
+    { "participantId", 0 },
+
+    { "x-href",        0 },  /* FM specific */
+    { "uid",           0 },  /* legacy */
+
+    { NULL,            0 }
+};
+
 static int getCalendarEvents(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -1276,7 +1306,7 @@ static int getCalendarEvents(struct jmap_req *req)
     struct getcalendarevents_rock rock = { req, &get, NULL /*mbox*/, checkacl };
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, &get, &err);
+    jmap_get_parse(req->args, &parser, req, event_props, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

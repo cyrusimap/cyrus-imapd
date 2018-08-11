@@ -861,6 +861,21 @@ static void jmap_mailbox_get_notfound(const char *id, void *data __attribute__((
     json_array_append_new((json_t*) rock, json_string(id));
 }
 
+static const jmap_property_t mailbox_props[] = {
+    { "id",            JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "name",          0 },
+    { "parentId",      0 },
+    { "role",          0 },
+    { "sortOrder",     0 },
+    { "totalEmails",   JMAP_PROP_SERVER_SET },
+    { "unreadEmails",  JMAP_PROP_SERVER_SET },
+    { "totalThreads",  JMAP_PROP_SERVER_SET },
+    { "unreadThreads", JMAP_PROP_SERVER_SET },
+    { "myrights",      JMAP_PROP_SERVER_SET },
+    { "isSubscribed",  0 },
+    { NULL,            0 }
+};
+
 static int jmap_mailbox_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -868,7 +883,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, &get, &err);
+    jmap_get_parse(req->args, &parser, req, mailbox_props, &get, &err);
     if (err) {
         jmap_error(req, err);
         return 0;
@@ -6533,6 +6548,12 @@ done:
     return r;
 }
 
+static const jmap_property_t thread_props[] = {
+    { "id",       JMAP_PROP_IMMUTABLE },
+    { "emailIds", 0 },
+    { NULL,       0 }
+};
+
 static int jmap_thread_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -6540,7 +6561,7 @@ static int jmap_thread_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, &get, &err);
+    jmap_get_parse(req->args, &parser, req, thread_props, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -7918,6 +7939,42 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
     }
 }
 
+static const jmap_property_t email_props[] = {
+    { "id",             JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "blobId",         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "threadId",       JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "mailboxIds",     0 },
+    { "keywords",       0 },
+    { "size",           JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "receivedAt",     JMAP_PROP_IMMUTABLE },
+
+    { "headers",        JMAP_PROP_IMMUTABLE },
+    { "header:*",       JMAP_PROP_IMMUTABLE },
+    { "messageId",      JMAP_PROP_IMMUTABLE },
+    { "inReplyTo",      JMAP_PROP_IMMUTABLE },
+    { "references",     JMAP_PROP_IMMUTABLE },
+    { "sender",         JMAP_PROP_IMMUTABLE },
+    { "from",           JMAP_PROP_IMMUTABLE },
+    { "to",             JMAP_PROP_IMMUTABLE },
+    { "cc",             JMAP_PROP_IMMUTABLE },
+    { "bcc",            JMAP_PROP_IMMUTABLE },
+    { "replyTo",        JMAP_PROP_IMMUTABLE },
+    { "subject",        JMAP_PROP_IMMUTABLE },
+    { "sentAt",         JMAP_PROP_IMMUTABLE },
+
+    { "bodyStructure",  JMAP_PROP_IMMUTABLE },
+    { "bodyValues",     JMAP_PROP_IMMUTABLE },
+    { "textBody",       JMAP_PROP_IMMUTABLE },
+    { "htmlBody",       JMAP_PROP_IMMUTABLE },
+    { "attachments",    JMAP_PROP_IMMUTABLE },
+    { "hasAttachment",  JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "preview",        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+
+    { "calendarEvents", JMAP_PROP_IMMUTABLE },  /* undocumented */
+
+    { NULL,             0 }
+};
+
 static int jmap_email_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -7926,7 +7983,7 @@ static int jmap_email_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, &get, &err);
+    jmap_get_parse(req->args, &parser, req, email_props, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -11639,6 +11696,18 @@ done:
     return 0;
 }
 
+static const jmap_property_t identity_props[] = {
+    { "id",            JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "name",          0 },
+    { "email",         JMAP_PROP_IMMUTABLE },
+    { "replyTo",       0 },
+    { "bcc",           0 },
+    { "textSignature", 0 },
+    { "htmlSignature", 0 },
+    { "mayDelete",     JMAP_PROP_SERVER_SET },
+    { NULL,            0 }
+};
+
 static int jmap_identity_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -11646,7 +11715,7 @@ static int jmap_identity_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, &get, &err);
+    jmap_get_parse(req->args, &parser, req, identity_props, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -12051,13 +12120,27 @@ done:
     buf_free(&buf);
 }
 
+static const jmap_property_t submission_props[] = {
+    { "id",             JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "identityId",     JMAP_PROP_IMMUTABLE },
+    { "emailId",        JMAP_PROP_IMMUTABLE },
+    { "threadId",       JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "envelope",       JMAP_PROP_IMMUTABLE },
+    { "sendAt",         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "undoStatus",     JMAP_PROP_SERVER_SET },
+    { "deliveryStatus", JMAP_PROP_SERVER_SET },
+    { "dsnBlobIds",     JMAP_PROP_SERVER_SET },
+    { "mdnBlobIds",     JMAP_PROP_SERVER_SET },
+    { NULL,             0 }
+};
+
 static int jmap_emailsubmission_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
     json_t *err = NULL;
 
-    jmap_get_parse(req->args, &parser, req, &get, &err);
+    jmap_get_parse(req->args, &parser, req, submission_props, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

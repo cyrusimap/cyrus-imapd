@@ -407,6 +407,35 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
     return 0;
 }
 
+static const jmap_property_t contact_props[] = {
+    { "id",          JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "isFlagged",   0 },
+    { "avatar",      0 },
+    { "prefix",      0 },
+    { "firstName",   0 },
+    { "lastName",    0 },
+    { "suffix",      0 },
+    { "nickname",    0 },
+    { "birthday",    0 },
+    { "anniversary", 0 },
+    { "company",     0 },
+    { "department",  0 },
+    { "jobTitle",    0 },
+    { "emails",      0 },
+    { "phones",      0 },
+    { "online",      0 },
+    { "addresses",   0 },
+    { "notes",       0 },
+    { NULL,          0 }
+};
+
+static const jmap_property_t group_props[] = {
+    { "id",          JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "name",        0 },
+    { "contactIds",  0 },
+    { NULL,          0 }
+};
+
 static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -440,7 +469,9 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
     struct cards_rock rock = { req, &get, NULL /*mailbox*/, 0 /*rows */ };
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, &get, &err);
+    jmap_get_parse(req->args, &parser, req,
+                   kind == CARDDAV_KIND_GROUP ? group_props : contact_props,
+                   &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

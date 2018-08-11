@@ -192,6 +192,19 @@ extern json_t *jmap_server_error(int r);
 extern int jmap_parse_strings(json_t *arg,
                               struct jmap_parser *parser, const char *prop);
 
+typedef struct jmap_property {
+    const char *name;
+    unsigned flags;
+} jmap_property_t;
+
+enum {
+    JMAP_PROP_SERVER_SET = (1<<0),
+    JMAP_PROP_IMMUTABLE  = (1<<1)
+};
+
+extern const jmap_property_t *jmap_property_find(const char *name,
+                                                 const jmap_property_t props[]);
+
 
 /* Foo/get */
 
@@ -208,7 +221,9 @@ struct jmap_get {
 };
 
 extern void jmap_get_parse(json_t *jargs, struct jmap_parser *parser,
-                           jmap_req_t *req, struct jmap_get *get, json_t **err);
+                           jmap_req_t *req, const jmap_property_t valid_props[],
+                           struct jmap_get *get, json_t **err);
+                           
 extern void jmap_get_fini(struct jmap_get *get);
 extern json_t *jmap_get_reply(struct jmap_get *get);
 

@@ -2508,11 +2508,30 @@ EXPORTED int jmap_parse_strings(json_t *arg,
 }
 
 
+EXPORTED const jmap_property_t *jmap_property_find(const char *name,
+                                                   const jmap_property_t props[])
+{
+    const jmap_property_t *prop;
+
+    for (prop = props; prop && prop->name; prop++) {
+        if (!strcmp(name, prop->name)) return prop;
+        else {
+            size_t len = strlen(prop->name);
+            if ((prop->name[len-1] == '*') && !strncmp(name, prop->name, len-1))
+                return prop;
+        }
+    }
+
+    return NULL;
+}
+
+
 /* Foo/get */
 
 EXPORTED void jmap_get_parse(json_t *jargs,
                              struct jmap_parser *parser,
                              jmap_req_t *req,
+                             const jmap_property_t valid_props[],
                              struct jmap_get *get,
                              json_t **err)
 {
@@ -2572,7 +2591,7 @@ EXPORTED void jmap_get_parse(json_t *jargs,
         construct_hash_table(get->props, json_array_size(arg) + 1, 0);
         json_array_foreach(arg, i, val) {
             const char *s = json_string_value(val);
-            if (!s) {
+            if (!s || !jmap_property_find(s, valid_props)) {
                 jmap_parser_push_index(parser, "properties", i);
                 jmap_parser_invalid(parser, NULL);
                 jmap_parser_pop(parser);
