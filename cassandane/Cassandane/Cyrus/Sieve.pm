@@ -1911,7 +1911,7 @@ EOF
     $self->assert_num_equals(0, $imaptalk->get_response_code('exists'));
 }
 
-sub test_fileinto_mailboxid
+sub test_fileinto_mailboxidexists
     :min_version_3_1
     :needs_component_sieve
 {
@@ -1959,6 +1959,67 @@ require ["fileinto", "mailboxid"];
 if mailboxidexists "$id"  {
     fileinto "$hitfolder";
 }
+EOF
+    );
+
+    xlog "Deliver a message now that the folder exists";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg2");
+        $msg->set_attribute(uid => $uid{$hitfolder});
+        $uid{$hitfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$hitfolder}->{"msg2"} = $msg;
+    }
+
+    xlog "Check that the messages made it";
+    foreach my $folder (keys %exp)
+    {
+	$self->{store}->set_folder($folder);
+	$self->check_messages($exp{$folder}, check_guid => 0);
+    }
+}
+
+sub test_fileinto_mailboxid
+    :min_version_3_1
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    xlog "Testing the \"mailboxid\" action";
+
+    my $talk = $self->{store}->get_client();
+
+    my $hitfolder = "INBOX.newfolder";
+    my $missfolder = "INBOX";
+
+    xlog "Install the sieve script";
+    my $scriptname = 'flatPack';
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "mailboxid"];
+fileinto :mailboxid "does-not-exist";
+
+EOF
+    );
+
+    $talk->create($hitfolder);
+
+    my %uid = ($hitfolder => 1, $missfolder => 1);
+    my %exp;
+    xlog "Deliver a message";
+    {
+        my $msg = $self->{gen}->generate(subject => "msg1");
+        $msg->set_attribute(uid => $uid{$missfolder});
+        $uid{$missfolder}++;
+        $self->{instance}->deliver($msg);
+        $exp{$missfolder}->{"msg1"} = $msg;
+    }
+
+    my $res = $talk->status($hitfolder, ['mailboxid']);
+    my $id = $res->{mailboxid}[0];
+
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "mailboxid"];
+fileinto :mailboxid "$id";
 EOF
     );
 
