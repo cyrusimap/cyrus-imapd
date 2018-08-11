@@ -1972,7 +1972,7 @@ sub install_sieve_script
 
     xlog "Installing sieve script $name in $sieved";
 
-    mkpath $sieved
+    -d $sieved or mkpath $sieved
 	or die "Cannot make path $sieved: $!";
     die "Path does not exist: $sieved" if not -d $sieved;
 
@@ -1987,7 +1987,7 @@ sub install_sieve_script
 			 "$sieved/$name.bc");
     die "File does not exist: $sieved/$name.bc" if not -f "$sieved/$name.bc";
 
-    symlink("$name.bc", "$sieved/defaultbc")
+    -e "$sieved/defaultbc" || symlink("$name.bc", "$sieved/defaultbc")
 	or die "Cannot symlink $name.bc to $sieved/defaultbc";
     die "Symlink does not exist: $sieved/defaultbc" if not -l "$sieved/defaultbc";
 
