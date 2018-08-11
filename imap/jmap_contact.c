@@ -426,6 +426,11 @@ static const jmap_property_t contact_props[] = {
     { "online",      0 },
     { "addresses",   0 },
     { "notes",       0 },
+
+    { "x-href",      0 },  /* FM specific */
+    { "x-importance",0 },  /* FM specific */
+    { "x-hasPhoto",  0 },  /* FM specific */
+
     { NULL,          0 }
 };
 
