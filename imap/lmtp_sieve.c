@@ -172,6 +172,16 @@ static int getmailboxexists(void *sc, const char *extname)
     return r ? 0 : 1; /* 0 => exists */
 }
 
+static int getmailboxidexists(void *sc, const char *extname)
+{
+    script_data_t *sd = (script_data_t *)sc;
+    const char *userid = mbname_userid(sd->mbname);
+    char *intname = mboxlist_find_uniqueid(extname, userid, sd->authstate);
+    int exists = intname ? 1 : 0;
+    free(intname);
+    return exists;
+}
+
 static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
 {
     script_data_t *sd = (script_data_t *)sc;
@@ -1126,7 +1136,15 @@ static int sieve_fileinto(void *ac,
         ret = mboxlist_lookup(intname, NULL, NULL);
         if (ret) free(intname);
     }
-    if (ret) intname = mboxname_from_external(fc->mailbox, sd->ns, userid);
+    if (ret) {
+        if (fc->by_mailboxid)
+            intname = mboxlist_find_uniqueid(fc->mailbox, userid, sd->authstate);
+        else
+            intname = mboxname_from_external(fc->mailbox, sd->ns, userid);
+    }
+
+    // didn't resolve a name, this will always fail
+    if (!intname) goto done;
 
     ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
                           fc->imapflags, userid, sd->authstate, md->id,
@@ -1159,6 +1177,7 @@ static int sieve_fileinto(void *ac,
         }
     }
 
+done:
     if (sd->edited_header) cleanup_special_delivery(mdata);
 
     if (!ret) {
@@ -1583,6 +1602,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     sieve_register_notify(interp, &sieve_notify, &methods);
     sieve_register_size(interp, &getsize);
     sieve_register_mailboxexists(interp, &getmailboxexists);
+    sieve_register_mailboxidexists(interp, &getmailboxidexists);
     sieve_register_specialuseexists(interp, &getspecialuseexists);
     sieve_register_metadata(interp, &getmetadata);
     sieve_register_header(interp, &getheader);

@@ -178,6 +178,9 @@ EXPORTED strarray_t *sieve_listextensions(sieve_interp_t *i)
             strarray_append(i->extensions, "NOTIFY");
             strarray_append(i->extensions, "mailto");
         }
+
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOXID)
+            buf_appendcstr(&buf, " mailboxid");
     }
 
     return i->extensions;
@@ -256,6 +259,11 @@ EXPORTED void sieve_register_size(sieve_interp_t *interp, sieve_get_size *f)
 EXPORTED void sieve_register_mailboxexists(sieve_interp_t *interp, sieve_get_mailboxexists *f)
 {
     interp->getmailboxexists = f;
+}
+
+EXPORTED void sieve_register_mailboxidexists(sieve_interp_t *interp, sieve_get_mailboxidexists *f)
+{
+    interp->getmailboxidexists = f;
 }
 
 EXPORTED void sieve_register_metadata(sieve_interp_t *interp, sieve_get_metadata *f)
@@ -480,6 +488,9 @@ static const struct sieve_capa_t {
     /* Fcc - draft-ietf-extra-sieve-fcc */
     { "fcc", SIEVE_CAPA_FCC },
 
+    /* Mailboxid - draft-gondwana-sieve-mailboxid */
+    { "mailboxid", SIEVE_CAPA_MAILBOXID },
+
     { NULL, 0 }
 };
     
@@ -650,6 +661,11 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
 
     case SIEVE_CAPA_REDIR_DSN:
         if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_REDIRECT_DSN)) capa = 0;
+        break;
+
+    case SIEVE_CAPA_MAILBOXID:
+        if (!(interp->getmailboxidexists &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOXID))) capa = 0;
         break;
 
     default:

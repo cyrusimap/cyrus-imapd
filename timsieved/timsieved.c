@@ -396,6 +396,7 @@ static int build_sieve_interp(void)
     sieve_register_imapflags(interp, NULL);
     sieve_register_size(interp, (sieve_get_size *) &timsieved_generic_cb);
     sieve_register_mailboxexists(interp, (sieve_get_mailboxexists *) &timsieved_generic_cb);
+    sieve_register_mailboxidexists(interp, (sieve_get_mailboxidexists *) &timsieved_generic_cb);
     sieve_register_metadata(interp, (sieve_get_metadata *) &timsieved_generic_cb);
     sieve_register_header(interp, (sieve_get_header *) &timsieved_generic_cb);
     sieve_register_addheader(interp, (sieve_add_header *) &timsieved_generic_cb);

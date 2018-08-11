@@ -296,6 +296,7 @@ static int bc_test_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc)
     case BC_ENVELOPE:
     case BC_BODY:
     case BC_MAILBOXEXISTS:
+    case BC_MAILBOXIDEXISTS:
     case BC_METADATA:
     case BC_METADATAEXISTS:
     case BC_SPECIALUSEEXISTS:

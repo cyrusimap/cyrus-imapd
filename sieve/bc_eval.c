@@ -1289,6 +1289,30 @@ envelope_err:
         free(strarray_takevf(test.u.mm.keylist));
         break;
 
+    case BC_MAILBOXIDEXISTS:
+        res = 0;
+
+        list_len = strarray_size(test.u.mm.keylist);
+
+        /* need to process all of them, to ensure our instruction pointer stays
+         * in the right place */
+        for (x = 0; x < list_len && !res; x++) {
+            const char *extname;
+
+            /* this is a mailbox name in external namespace */
+            extname = strarray_nth(test.u.mm.keylist, x);
+
+            if (requires & BFE_VARIABLES) {
+                extname = parse_string(extname, variables);
+            }
+
+            res = interp->getmailboxidexists(sc, extname);
+            if (res) break;
+        }
+
+        free(strarray_takevf(test.u.mm.keylist));
+        break;
+
     case BC_METADATA:
     case BC_SERVERMETADATA:
     case BC_ENVIRONMENT:
@@ -1706,7 +1730,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             }
 
             res = do_fileinto(actions, folder, specialuse,
-                              !cmd.u.f.copy, cmd.u.f.create, actionflags);
+                              !cmd.u.f.copy, cmd.u.f.create, cmd.u.f.mailboxid,
+                              actionflags);
 
             if (res == SIEVE_RUN_ERROR)
                 *errmsg = "Fileinto can not be used with Reject";
@@ -1996,7 +2021,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 cmd.u.v.fcc.folder,
                 cmd.u.v.fcc.specialuse,
                 NULL,
-                cmd.u.v.fcc.create
+                cmd.u.v.fcc.create,
+                /*mailboxid*/0
             };
             char *fromaddr = NULL; /* relative to message we send */
             char *toaddr = NULL;   /* relative to message we send */

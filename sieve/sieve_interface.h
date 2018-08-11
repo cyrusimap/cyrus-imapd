@@ -64,6 +64,7 @@ typedef int sieve_callback(void *action_context, void *interp_context,
                            void *message_context, const char **errmsg);
 typedef int sieve_get_size(void *message_context, int *size);
 typedef int sieve_get_mailboxexists(void *interp_context, const char *extname);
+typedef int sieve_get_mailboxidexists(void *interp_context, const char *extname);
 typedef int sieve_get_specialuseexists(void *interp_context, const char *extname,
                                        strarray_t *uses);
 typedef int sieve_get_metadata(void *interp_context, const char *extname,
@@ -137,6 +138,7 @@ typedef struct sieve_fileinto_context {
     const char *specialuse;
     strarray_t *imapflags;
     int do_create :1;
+    int by_mailboxid :1;
 } sieve_fileinto_context_t;
 
 typedef struct sieve_keep_context {
@@ -194,6 +196,8 @@ void sieve_register_include(sieve_interp_t *interp, sieve_get_include *f);
 void sieve_register_size(sieve_interp_t *interp, sieve_get_size *f);
 void sieve_register_mailboxexists(sieve_interp_t *interp,
                                   sieve_get_mailboxexists *f);
+void sieve_register_mailboxidexists(sieve_interp_t *interp,
+                                    sieve_get_mailboxidexists *f);
 void sieve_register_specialuseexists(sieve_interp_t *interp,
                                      sieve_get_specialuseexists *f);
 void sieve_register_metadata(sieve_interp_t *interp, sieve_get_metadata *f);

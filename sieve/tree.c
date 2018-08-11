@@ -185,6 +185,11 @@ test_t *new_test(int type, sieve_script_t *parse_script)
         supported = parse_script->support & SIEVE_CAPA_SPECIAL_USE;
         init_comptags(&p->u.mm.comp);
         break;
+
+    case MAILBOXIDEXISTS:
+        capability = "mailboxid";
+        supported = parse_script->support & SIEVE_CAPA_MAILBOXID;
+        break;
     }
 
     if (!supported) {
@@ -376,6 +381,7 @@ void free_test(test_t *t)
 
     case ENVIRONMENT:
     case MAILBOXEXISTS:
+    case MAILBOXIDEXISTS:
     case METADATA:
     case METADATAEXISTS:
     case SERVERMETADATA:

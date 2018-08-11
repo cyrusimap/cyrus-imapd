@@ -200,9 +200,11 @@ enum bytecode {
     B_VACATION_FCC,     /* legacy vacation w/o support for :specialuse */
 
     B_VACATION,         /* require vacation, fcc, specialuse */
-    B_FILEINTO,         /* require mailbox, imap4flags, copy, specialuse */
+    B_FILEINTO_MAILBOXID, /* legacy fileinto w/o support for :mailboxid */
 
     B_REDIRECT,         /* require copy, list, redirect-dsn */
+
+    B_FILEINTO,         /* require mailbox, imap4flags, copy, specialuse, mailboxid */
 };
 
 enum bytecode_comps {
@@ -234,7 +236,8 @@ enum bytecode_comps {
     BC_SPECIALUSEEXISTS,/* require special-use */
     BC_ENVIRONMENT,     /* require environment */
     BC_VALIDNOTIFYMETHOD,/* require enotify */
-    BC_NOTIFYMETHODCAPABILITY
+    BC_NOTIFYMETHODCAPABILITY,
+    BC_MAILBOXIDEXISTS  /* require mailboxid */
 };
 
 /* currently one enum so as to help determine where values are being misused.

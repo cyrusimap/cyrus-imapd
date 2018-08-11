@@ -182,6 +182,8 @@ EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
     sieve_register_size(interpreter, (sieve_get_size *) &stub_generic);
     sieve_register_mailboxexists(interpreter,
                                  (sieve_get_mailboxexists *) &stub_generic);
+    sieve_register_mailboxidexists(interpreter,
+                                   (sieve_get_mailboxidexists *) &stub_generic);
     sieve_register_specialuseexists(interpreter,
                                     (sieve_get_specialuseexists *) &stub_generic);
     sieve_register_metadata(interpreter, (sieve_get_metadata *) &stub_generic);

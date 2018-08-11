@@ -169,7 +169,11 @@ EXPORTED int bc_action_parse(bytecode_input_t *bc, int pos, int version,
         break;
 
 
-    case B_FILEINTO:        /* 38 */
+    case B_FILEINTO:        /* 41 */
+        cmd->u.f.mailboxid = ntohl(bc[pos++].value);
+        GCC_FALLTHROUGH
+
+    case B_FILEINTO_MAILBOXID:        /* 38 */
         pos = bc_string_parse(bc, pos, &cmd->u.f.specialuse);
 
         GCC_FALLTHROUGH
@@ -564,6 +568,7 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
 
     case BC_MAILBOXEXISTS:        /* 16 */
     case BC_SERVERMETADATAEXISTS: /* 20 */
+    case BC_MAILBOXIDEXISTS:      /* 29 */
         pos = bc_stringlist_parse(bc, pos, &test->u.mm.keylist);
         break;
 

@@ -316,6 +316,9 @@ extern void sieverestart(FILE *f);
 /* draft-ietf-extra-sieve-fcc */
 %token FCC
 
+/* draft-gondwana-sieve-mailboxid */
+%token MAILBOXID MAILBOXIDEXISTS
+
 
 %%
 
@@ -499,6 +502,7 @@ ftags: /* empty */               { $$ = new_command(FILEINTO, sscript); }
         | ftags flags
         | ftags create
         | ftags specialuse
+        | ftags mailboxid
         ;
 
 
@@ -583,6 +587,25 @@ specialuse: SPECIALUSE STRING    {
                                      }
 
                                      *specialuse = $2;
+                                 }
+        ;
+
+mailboxid: MAILBOXID             {
+                                     /* $0 refers to ftags */
+                                     commandlist_t *c = $<cl>0;
+
+                                     if (c->u.f.mailboxid) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":mailboxid");
+                                     }
+                                     else if (!supported(SIEVE_CAPA_MAILBOXID)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "mailboxid");
+                                     }
+
+                                     c->u.f.mailboxid = 1;
                                  }
         ;
 
@@ -1184,7 +1207,7 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
         | IHAVE stringlist       { $$ = build_ihave(sscript, $2); }
 
         | MAILBOXEXISTS stringlist
-                                 { 
+                                 {
                                      $$ = new_test(MAILBOXEXISTS, sscript);
                                      $$ = build_mbox_meta(sscript,
                                                           $$, NULL, NULL, $2);
@@ -1233,6 +1256,14 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
                                      $$ = build_mbox_meta(sscript,
                                                           $$, $2, NULL, $3);
                                  }
+
+        | MAILBOXIDEXISTS stringlist
+                                 {
+                                     $$ = new_test(MAILBOXIDEXISTS, sscript);
+                                     $$ = build_mbox_meta(sscript,
+                                                          $$, NULL, NULL, $2);
+                                 }
+
         | error                  { $$ = new_test(SFALSE, sscript); }
         ;
 
@@ -2544,7 +2575,7 @@ static test_t *build_mbox_meta(sieve_script_t *sscript,
                                test_t *t, char *extname,
                                char *keyname, strarray_t *keylist)
 {
-    assert(t && (t->type == MAILBOXEXISTS ||
+    assert(t && (t->type == MAILBOXEXISTS || t->type == MAILBOXIDEXISTS ||
                  t->type == METADATA || t->type == METADATAEXISTS ||
                  t->type == SERVERMETADATA || t->type == SERVERMETADATAEXISTS ||
                  t->type == ENVIRONMENT || t->type == SPECIALUSEEXISTS ||

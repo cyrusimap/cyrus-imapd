@@ -432,6 +432,10 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
     /* draft-ietf-extra-sieve-fcc */
 <INITIAL>:fcc                  return FCC;
 
+    /* draft-gondwana-sieve-mailboxid */
+<INITIAL>mailboxidexists       return MAILBOXIDEXISTS;
+<INITIAL>:mailboxid            return MAILBOXID;
+
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */
 <INITIAL>[ \t\n\r] ;          /* ignore whitespace */

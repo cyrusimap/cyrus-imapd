@@ -129,7 +129,8 @@ void free_duptrack_list(duptrack_list_t *d);
  * action list */
 int do_reject(action_list_t *m, int action, const char *msg);
 int do_fileinto(action_list_t *m, const char *mbox, const char *specialuse,
-                int cancel_keep, int do_create, strarray_t *imapflags);
+                int cancel_keep, int do_create, int by_mailboxid,
+                strarray_t *imapflags);
 int do_redirect(action_list_t *a, const char *addr, const char *deliverby,
                 const char *dsn_notify, const char *dsn_ret,
                 int is_ext_list, int cancel_keep);

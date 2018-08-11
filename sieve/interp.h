@@ -62,6 +62,7 @@ struct sieve_interp {
     sieve_get_include *getinclude;
     sieve_get_fname *getfname;
     sieve_get_mailboxexists *getmailboxexists;
+    sieve_get_mailboxidexists *getmailboxidexists;
     sieve_get_specialuseexists *getspecialuseexists;
     sieve_get_metadata *getmetadata;
 
@@ -195,6 +196,9 @@ enum sieve_capa_flag {
 
     /* Fcc - draft-ietf-extra-sieve-fcc */
     SIEVE_CAPA_FCC          = 1LL<<45,
+
+    /* Mailboxid - draft-gondwana-sieve-mailboxid */
+    SIEVE_CAPA_MAILBOXID    = 1LL<<46,
 };
 
 #define SIEVE_CAPA_ALL (SIEVE_CAPA_BASE           \
@@ -243,6 +247,7 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_DUPLICATE    \
                         | SIEVE_CAPA_SPECIAL_USE  \
                         | SIEVE_CAPA_FCC          \
+                        | SIEVE_CAPA_MAILBOXID    \
                         )
 
 #define SIEVE_CAPA_IHAVE_INCOMPAT (SIEVE_CAPA_ENCODED_CHAR | SIEVE_CAPA_VARIABLES)
