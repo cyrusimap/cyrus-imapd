@@ -1996,7 +1996,7 @@ sub test_fileinto_mailboxid
     my $scriptname = 'flatPack';
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mailboxid"];
-fileinto :mailboxid "does-not-exist";
+fileinto :mailboxid "does-not-exist" "INBOX";
 
 EOF
     );
@@ -2019,7 +2019,7 @@ EOF
 
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mailboxid"];
-fileinto :mailboxid "$id";
+fileinto :mailboxid "$id" "INBOX";
 EOF
     );
 
