@@ -2420,6 +2420,15 @@ EXPORTED void jmap_parser_push_index(struct jmap_parser *parser,
     buf_reset(&parser->buf);
 }
 
+EXPORTED void jmap_parser_push_name(struct jmap_parser *parser,
+                                    const char *prop, const char *name)
+{
+    /* TODO make this more clever: won't need to printf most of the time */
+    buf_printf(&parser->buf, "%s{%s}", prop, name);
+    strarray_push(&parser->path, buf_cstring(&parser->buf));
+    buf_reset(&parser->buf);
+}
+
 EXPORTED void jmap_parser_pop(struct jmap_parser *parser)
 {
     free(strarray_pop(&parser->path));
@@ -2592,7 +2601,10 @@ EXPORTED void jmap_get_parse(json_t *jargs,
         json_array_foreach(arg, i, val) {
             const char *s = json_string_value(val);
             if (!s || !jmap_property_find(s, valid_props)) {
-                jmap_parser_push_index(parser, "properties", i);
+                if (s)
+                    jmap_parser_push_name(parser, "properties", s);
+                else
+                    jmap_parser_push_index(parser, "properties", i);
                 jmap_parser_invalid(parser, NULL);
                 jmap_parser_pop(parser);
                 continue;
