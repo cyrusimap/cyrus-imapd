@@ -333,6 +333,16 @@ sub test_mailbox_get_properties
     my $err = $res->[0][1];
     $self->assert_str_equals("invalidArguments", $err->{type});
     $self->assert_str_equals("properties[1]", $err->{arguments}[0]);
+
+    xlog "get mailboxes with unknown property";
+    $res = $jmap->CallMethods([['Mailbox/get', { properties => ["name", "123"]}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+
+    $err = $res->[0][1];
+    $self->assert_str_equals("invalidArguments", $err->{type});
+    $self->assert_str_equals("properties[1]", $err->{arguments}[0]);
 }
 
 sub test_mailbox_get_ids
