@@ -449,6 +449,51 @@ sub test_contact_set_nickname
     $self->assert_not_null($res);
 }
 
+sub test_contact_set_invalid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create contact with invalid properties";
+    my $res = $jmap->CallMethods([['Contact/set', {create => {
+                        "1" => { id => "xyz", firstName => "foo", lastName => "last1", foo => "", "x-hasPhoto" => JSON::true },
+                    }}, "R1"]]);
+    $self->assert_not_null($res);
+    my $notCreated = $res->[0][1]{notCreated}{"1"};
+    $self->assert_not_null($notCreated);
+    $self->assert_num_equals(3, scalar @{$notCreated->{properties}});
+
+    xlog "create contacts";
+    $res = $jmap->CallMethods([['Contact/set', {create => {
+                        "1" => { firstName => "foo", lastName => "last1" },
+                    }}, "R2"]]);
+    $self->assert_not_null($res);
+    my $contact = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($contact);
+
+    xlog "get contact x-href";
+    $res = $jmap->CallMethods([['Contact/get', {}, "R3"]]);
+    my $href = $res->[0][1]{list}[0]{"x-href"};
+
+    xlog "update contact with invalid properties";
+    $res = $jmap->CallMethods([['Contact/set', {update => {
+                        $contact => { id => "xyz", foo => "", "x-hasPhoto" => "yes", "x-ref" => "abc" },
+                    }}, "R4"]]);
+    $self->assert_not_null($res);
+    my $notUpdated = $res->[0][1]{notUpdated}{$contact};
+    $self->assert_not_null($notUpdated);
+    $self->assert_num_equals(4, scalar @{$notUpdated->{properties}});
+
+    xlog "update contact with server-set properties";
+    $res = $jmap->CallMethods([['Contact/set', {update => {
+                        $contact => { id => $contact, "x-hasPhoto" => JSON::false, "x-href" => $href },
+                    }}, "R5"]]);
+    $self->assert_not_null($res);
+    $self->assert_not_null($res->[0][1]{updated});
+}
+
 sub test_contactgroup_set
     :min_version_3_1 :needs_component_jmap
 {
