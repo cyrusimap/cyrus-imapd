@@ -200,7 +200,7 @@ enum bytecode {
     B_VACATION_FCC,     /* legacy vacation w/o support for :specialuse */
 
     B_VACATION,         /* require vacation, fcc, specialuse */
-    B_FILEINTO_MAILBOXID, /* legacy fileinto w/o support for :mailboxid */
+    B_FILEINTO_SPECIALUSE, /* legacy fileinto w/o support for :mailboxid */
 
     B_REDIRECT,         /* require copy, list, redirect-dsn */
 

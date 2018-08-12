@@ -590,14 +590,28 @@ specialuse: SPECIALUSE STRING    {
                                  }
         ;
 
-mailboxid: MAILBOXID             {
-                                     /* $0 refers to ftags */
+mailboxid: MAILBOXID STRING      {
+                                     /* $0 refers to ftags or vtags */
                                      commandlist_t *c = $<cl>0;
+                                     char **mailboxid = NULL;
 
-                                     if (c->u.f.mailboxid) {
+                                     switch (c->type) {
+                                     case FILEINTO:
+                                         mailboxid = &c->u.f.mailboxid;
+                                         break;
+                                     case VACATION:
+                                         mailboxid = &c->u.v.fcc.mailboxid;
+                                         break;
+                                     case ENOTIFY:
+                                         mailboxid = &c->u.n.fcc.mailboxid;
+                                         break;
+                                     }
+
+                                     if (*mailboxid != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":mailboxid");
+                                         free(*mailboxid);
                                      }
                                      else if (!supported(SIEVE_CAPA_MAILBOXID)) {
                                          sieveerror_c(sscript,
@@ -605,7 +619,7 @@ mailboxid: MAILBOXID             {
                                                       "mailboxid");
                                      }
 
-                                     c->u.f.mailboxid = 1;
+                                     *mailboxid = $2;
                                  }
         ;
 

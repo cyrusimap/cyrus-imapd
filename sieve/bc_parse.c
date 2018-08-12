@@ -170,10 +170,10 @@ EXPORTED int bc_action_parse(bytecode_input_t *bc, int pos, int version,
 
 
     case B_FILEINTO:        /* 41 */
-        cmd->u.f.mailboxid = ntohl(bc[pos++].value);
+        pos = bc_string_parse(bc, pos, &cmd->u.f.mailboxid);
         GCC_FALLTHROUGH
 
-    case B_FILEINTO_MAILBOXID:        /* 38 */
+    case B_FILEINTO_SPECIALUSE:        /* 38 */
         pos = bc_string_parse(bc, pos, &cmd->u.f.specialuse);
 
         GCC_FALLTHROUGH

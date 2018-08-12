@@ -1708,6 +1708,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
 
         case B_FILEINTO:
+        case B_FILEINTO_SPECIALUSE:
         case B_FILEINTO_CREATE:
         case B_FILEINTO_FLAGS:
         case B_FILEINTO_COPY:

@@ -99,7 +99,7 @@ int do_reject(action_list_t *a, int action, const char *msg)
  * incompatible with: [e]reject
  */
 int do_fileinto(action_list_t *a, const char *mbox, const char *specialuse,
-                int cancel_keep, int do_create, int by_mailboxid,
+                int cancel_keep, int do_create, const char *mailboxid,
                 strarray_t *imapflags)
 {
     action_list_t *b = NULL;
@@ -137,7 +137,7 @@ int do_fileinto(action_list_t *a, const char *mbox, const char *specialuse,
     a->u.fil.specialuse = specialuse;
     a->u.fil.imapflags = imapflags;
     a->u.fil.do_create = do_create;
-    a->u.fil.by_mailboxid = by_mailboxid;
+    a->u.fil.mailboxid = mailboxid;
 
     b->next = a;
 

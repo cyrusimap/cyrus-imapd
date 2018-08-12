@@ -518,7 +518,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
         case B_FILEINTO_COPY:
         case B_FILEINTO_FLAGS:
         case B_FILEINTO_CREATE:
-        case B_FILEINTO_MAILBOXID:
+        case B_FILEINTO_SPECIALUSE:
         case B_FILEINTO:
             printf("FILEINTO");
             if (cmd.type >= B_FILEINTO_COPY) {
@@ -530,11 +530,11 @@ static void dump2(bytecode_input_t *d, int bc_len)
                     if (cmd.type >= B_FILEINTO_CREATE) {
                         printf("\n\tCREATE(%d)", cmd.u.f.create);
 
-                        if (cmd.type >= B_FILEINTO_MAILBOXID) {
+                        if (cmd.type >= B_FILEINTO_SPECIALUSE) {
                             print_string(" SPECIALUSE", cmd.u.f.specialuse);
 
                             if (cmd.type >= B_FILEINTO) {
-                                printf("\n\tMAILBOXID(%d)", cmd.u.f.mailboxid);
+                                print_string(" MAILBOXID", cmd.u.f.mailboxid);
                             }
                         }
                     }

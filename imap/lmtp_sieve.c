@@ -1131,16 +1131,18 @@ static int sieve_fileinto(void *ac,
         else md = mdata->m;
     }
 
-    if (fc->specialuse) {
-        intname = mboxname_from_external(fc->specialuse, sd->ns, userid);
-        ret = mboxlist_lookup(intname, NULL, NULL);
-        if (ret) free(intname);
+    if (fc->mailboxid) {
+        intname = mboxlist_find_uniqueid(fc->mailboxid, userid, sd->authstate);
     }
-    if (ret) {
-        if (fc->by_mailboxid)
-            intname = mboxlist_find_uniqueid(fc->mailbox, userid, sd->authstate);
-        else
+    else {
+        if (fc->specialuse) {
+            intname = mboxname_from_external(fc->specialuse, sd->ns, userid);
+            ret = mboxlist_lookup(intname, NULL, NULL);
+            if (ret) free(intname);
+        }
+        if (ret) {
             intname = mboxname_from_external(fc->mailbox, sd->ns, userid);
+        }
     }
 
     // didn't resolve a name, this will always fail

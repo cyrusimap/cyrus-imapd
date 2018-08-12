@@ -138,7 +138,7 @@ typedef struct sieve_fileinto_context {
     const char *specialuse;
     strarray_t *imapflags;
     int do_create :1;
-    int by_mailboxid :1;
+    const char *mailboxid;
 } sieve_fileinto_context_t;
 
 typedef struct sieve_keep_context {

@@ -128,7 +128,7 @@ struct Fileinto {
     char *specialuse;
     int copy;
     int create;
-    int mailboxid;
+    char *mailboxid;
 };
 
 struct Commandlist {

@@ -799,7 +799,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
             case FILEINTO:
                 /* FILEINTO
-                   VALUE mailboxid
+                   STRING mailboxid
                    STRING specialuse
                    VALUE create
                    STRINGLIST flags
@@ -807,9 +807,9 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                    STRING folder
                 */
                 retval->data[codep++].u.op = B_FILEINTO;
-                if (!atleast(retval, codep+3)) return -1;
-                retval->data[codep].type = BT_VALUE;
-                retval->data[codep++].u.value = c->u.f.mailboxid;
+                if (!atleast(retval, codep+2)) return -1;
+                retval->data[codep].type = BT_STR;
+                retval->data[codep++].u.str = c->u.f.mailboxid;
                 retval->data[codep].type = BT_STR;
                 retval->data[codep++].u.str = c->u.f.specialuse;
                 if (!atleast(retval, codep+1)) return -1;

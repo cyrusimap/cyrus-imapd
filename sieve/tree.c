@@ -405,6 +405,7 @@ static void free_fileinto(struct Fileinto *f)
 {
     free(f->folder);
     free(f->specialuse);
+    free(f->mailboxid);
     strarray_free(f->flags);
 }
 
