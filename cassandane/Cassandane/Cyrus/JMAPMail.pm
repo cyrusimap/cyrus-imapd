@@ -2297,7 +2297,7 @@ sub test_mailbox_changes_shared
 
 sub defaultprops_for_email_get
 {
-    return ( "id", "blobId", "threadId", "mailboxIds", "keywords", "size", "receivedAt", "messageId", "inReplyTo", "references", "sender", "from", "to", "cc", "bcc", "replyTo", "subject", "sentAt", "hasAttachment", "preview", "bodyValues", "textBody", "htmlBody", "attachedFiles", "attachedEmails" );
+    return ( "id", "blobId", "threadId", "mailboxIds", "keywords", "size", "receivedAt", "messageId", "inReplyTo", "references", "sender", "from", "to", "cc", "bcc", "replyTo", "subject", "sentAt", "hasAttachment", "preview", "bodyValues", "textBody", "htmlBody", "attachments" );
 }
 
 sub test_email_get
@@ -3614,7 +3614,7 @@ sub test_misc_upload_zero
                 value => "I'm givin' ya one last chance ta surrenda!"
             }
         },
-        attachedFiles => [{
+        attachments => [{
             blobId => $data->{blobId},
             name => "emptyfile.txt",
         }],
@@ -3667,7 +3667,7 @@ sub test_misc_upload
                 value => "<html>I'm givin' ya one last chance ta surrenda!</html>"
             },
         },
-        attachedFiles => [{
+        attachments => [{
             blobId => $data->{blobId},
             name => "test.txt",
         }],
@@ -3737,7 +3737,7 @@ sub test_misc_upload_bin
         subject => "Memo",
         textBody => [{ partId => '1' }],
         bodyValues => { 1 => { value => "I'm givin' ya one last chance ta surrenda!" }},
-        attachedFiles => [{
+        attachments => [{
             blobId => $data->{blobId},
             name => "logo.gif",
         }],
@@ -10742,8 +10742,7 @@ sub test_email_parse
     $self->assert_null($email->{bodyStructure}{subParts});
     $self->assert_num_equals(1, scalar @{$email->{textBody}});
     $self->assert_num_equals(1, scalar @{$email->{htmlBody}});
-    $self->assert_num_equals(0, scalar @{$email->{attachedFiles}});
-    $self->assert_num_equals(0, scalar @{$email->{attachedEmails}});
+    $self->assert_num_equals(0, scalar @{$email->{attachments}});
 
     my $bodyValue = $email->{bodyValues}{$email->{bodyStructure}{partId}};
     $self->assert_str_equals('An embedded email', $bodyValue->{value});
