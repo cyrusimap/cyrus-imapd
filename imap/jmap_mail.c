@@ -7970,7 +7970,8 @@ static const jmap_property_t email_props[] = {
     { "hasAttachment",  JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
     { "preview",        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
 
-    { "calendarEvents", JMAP_PROP_IMMUTABLE },  /* undocumented */
+    { "calendarEvents", JMAP_PROP_IMMUTABLE }, /* FastMail Specific */
+    { "trustedSender",  JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE }, /* FastMail Specific */
 
     { NULL,             0 }
 };
