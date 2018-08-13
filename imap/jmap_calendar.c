@@ -701,6 +701,7 @@ static int setCalendars(struct jmap_req *req)
         json_t *jstate = json_string(set.if_in_state);
         if (jmap_cmpstate(req, jstate, MBTYPE_CALENDAR)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+            json_decref(jstate);
             goto done;
         }
         json_decref(jstate);
@@ -2453,7 +2454,6 @@ static int jmapevent_search(jmap_req_t *req,  struct jmap_query *jquery)
     }
 
     /* Initialize return values */
-    *eventids = json_pack("[]");
     *total = 0;
 
     /* Determine the filter timerange, if any */
