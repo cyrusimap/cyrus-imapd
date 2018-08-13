@@ -400,6 +400,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
             break;
         }
         free(txn->rcpt[j].addr);
+        strarray_free(txn->rcpt[j].resp);
     }
 
     free(txn);
