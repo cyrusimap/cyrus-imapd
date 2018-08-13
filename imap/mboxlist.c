@@ -1113,6 +1113,8 @@ EXPORTED int mboxlist_create_intermediaries(const char *mboxname,
                 mboxlist_entry_free(&newmbentry);
                 break;  /* mailbox exists */
             }
+            free(newmbentry->uniqueid); // from older deleted mailbox ?
+            newmbentry->uniqueid = NULL;
         }
         else if (r != IMAP_MAILBOX_NONEXISTENT) break;
         else newmbentry = mboxlist_entry_create();

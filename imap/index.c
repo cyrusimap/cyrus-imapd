@@ -6954,6 +6954,7 @@ EXPORTED void freesortcrit(struct sortcrit *s)
             free(s[i].args.annot.userid);
             break;
         case SORT_HASFLAG:
+        case SORT_HASCONVFLAG:
             free(s[i].args.flag.name);
             break;
         }

@@ -886,6 +886,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
     jmap_get_parse(req->args, &parser, req, mailbox_props, &get, &err);
     if (err) {
         jmap_error(req, err);
+        jmap_parser_fini(&parser);
         return 0;
     }
 
@@ -1630,6 +1631,7 @@ static void _mbox_setargs_parse(json_t *jargs,
         else {
             /* Empty string, bogus characters or just whitespace */
             jmap_parser_invalid(parser, "name");
+            free(name);
         }
     }
     else if (is_create) {
@@ -11681,12 +11683,11 @@ static int jmap_email_copy(jmap_req_t *req)
         do {
             json_t *new_email = json_object_iter_value(iter);
             json_array_append(destroy_emails, json_object_get(new_email, "id"));
-        }
-        while ((iter = json_object_iter_next(created, iter)));
+        } while ((iter = json_object_iter_next(created, iter)));
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
         subreq.method = "Email/set";
-        json_object_set(subreq.args, "destroy", destroy_emails);
+        json_object_set_new(subreq.args, "destroy", destroy_emails);
         json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
         jmap_email_set(&subreq);
         json_decref(subreq.args);
@@ -11695,6 +11696,7 @@ static int jmap_email_copy(jmap_req_t *req)
 done:
     json_decref(created);
     json_decref(not_created);
+    json_decref(create);
     jmap_parser_fini(&parser);
     return 0;
 }
