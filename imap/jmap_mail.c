@@ -11381,6 +11381,8 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     strarray_t dst_mboxnames = STRARRAY_INITIALIZER;
     struct mailbox *src_mbox = NULL;
     msgrecord_t *src_mr = NULL;
+    char *src_mboxname = NULL;
+    uint32_t src_uid = 0;
     int r = 0;
 
     const char *email_id = json_string_value(json_object_get(copy_email, "id"));
@@ -11402,8 +11404,6 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     }
 
     /* Find email to copy */
-    char *src_mboxname = NULL;
-    uint32_t src_uid = 0;
     r = _email_find_in_account(req, from_account_id, email_id, &src_mboxname, &src_uid);
     if (r) {
         if (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED) {
@@ -11438,7 +11438,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     if (r) goto done;
 
     /* Copy message record to mailboxes */
-    const char *dst_mboxname;
+    char *dst_mboxname;
     while ((dst_mboxname = strarray_pop(&dst_mboxnames))) {
         struct mailbox *dst_mbox = NULL;
         r = jmap_openmbox(req, dst_mboxname, &dst_mbox, /*rw*/1);
@@ -11447,6 +11447,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
                     &jmap_namespace, src_mbox, dst_mbox, src_mr);
         }
         jmap_closembox(req, &dst_mbox);
+        free(dst_mboxname);
         if (r) goto done;
     }
 
@@ -11507,6 +11508,7 @@ done:
         *err = jmap_server_error(r);
         goto done;
     }
+    free(src_mboxname);
     strarray_fini(&dst_mboxnames);
     if (src_mr) msgrecord_unref(&src_mr);
     jmap_closembox(req, &src_mbox);
