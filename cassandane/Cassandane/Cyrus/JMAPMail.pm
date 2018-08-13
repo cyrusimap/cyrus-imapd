@@ -103,6 +103,35 @@ sub getinbox
     return $m{"Inbox"};
 }
 
+sub get_settings
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $Request;
+    my $Response;
+
+    xlog "get settings";
+    $Request = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+        },
+        content => '',
+    };
+    $Response = $jmap->ua->get($jmap->uri(), $Request);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($Request, $Response);
+    }
+    $self->assert_str_equals('200', $Response->{status});
+
+    my $settings;
+    $settings = eval { decode_json($Response->{content}) } if $Response->{success};
+    return $settings;
+}
+
+
 sub test_mailbox_get
     :min_version_3_1 :needs_component_jmap
 {
@@ -4518,23 +4547,25 @@ sub test_email_set_keywords
 
     $self->assert_str_not_equals($res->[0][1]{oldState}, $res->[0][1]{newState});
 
-    xlog "Set \\Seen on message in mailbox C";
-    $store->set_folder('INBOX.C');
-    $store->_select();
-    $talk->store('1', '+flags', '(\\Seen)');
-
-    xlog "Get JMAP keywords";
+    xlog 'Patch $seen on email';
     $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $jmapmsg->{id} => {
+                    'keywords/$seen' => JSON::true
+                }
+            }
+        }, 'R1'],
         ['Email/get', {
             ids => [ $jmapmsg->{id} ],
-            properties => [ 'keywords']
+            properties => ['keywords', 'mailboxIds']
         }, 'R2' ]
     ]);
-    $jmapmsg = $res->[0][1]{list}[0];
+    $jmapmsg = $res->[1][1]{list}[0];
     $keywords = {
         baz => JSON::true,
         qux => JSON::true,
-        '$seen' => JSON::true
+        '$seen' => JSON::true,
     };
     $self->assert_deep_equals($keywords, $jmapmsg->{keywords});
 }
@@ -4543,28 +4574,7 @@ sub test_emailsubmission_capability
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
-
-    my $jmap = $self->{jmap};
-
-    my $Request;
-    my $Response;
-
-    xlog "get settings";
-    $Request = {
-        headers => {
-            'Authorization' => $jmap->auth_header(),
-        },
-        content => '',
-    };
-    $Response = $jmap->ua->get($jmap->uri(), $Request);
-    if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($Request, $Response);
-    }
-    $self->assert_str_equals('200', $Response->{status});
-
-    my $settings;
-    $settings = eval { decode_json($Response->{content}) } if $Response->{success};
-
+    my $settings = $self->get_settings();
     $self->assert(exists $settings->{capabilities}->{"urn:ietf:params:jmap:submission"});
 }
 
@@ -5011,12 +5021,13 @@ sub test_email_set_move
         my ($moveto) = (@_);
 
         xlog "move email to " . Dumper($moveto);
-        $msg->{mailboxIds} = $moveto;
         $res = $jmap->CallMethods(
-            [ [ 'Email/set', { update => { $id => $msg } }, "R1" ] ] );
+            [ [ 'Email/set', {
+                    update => { $id => { 'mailboxIds' => $moveto } },
+            }, "R1" ] ] );
         $self->assert(exists $res->[0][1]{updated}{$id});
 
-        $res = $jmap->CallMethods( [ [ 'Email/get', { ids => [$id] }, "R1" ] ] );
+        $res = $jmap->CallMethods( [ [ 'Email/get', { ids => [$id], properties => ['mailboxIds'] }, "R1" ] ] );
         $msg = $res->[0][1]->{list}[0];
 
         $self->assert_deep_equals($moveto, $msg->{mailboxIds});
@@ -9905,7 +9916,7 @@ sub test_email_set_patch
                     "keywords/foo" => undef,
                     "keywords/bar" => JSON::true,
                 }
-            }
+            },
         }, "R1"],
         ['Email/get', { ids => [$id], properties => ['keywords'] }, 'R2'],
     ]);
@@ -9928,7 +9939,7 @@ sub test_email_set_patch
                     "mailboxIds/$inboxid" => undef,
                     "mailboxIds/$mboxid" => JSON::true,
                 }
-            }
+            },
         }, "R1"],
         ['Email/get', { ids => [$id], properties => ['mailboxIds'] }, 'R2'],
     ]);
@@ -11912,6 +11923,132 @@ sub test_email_set_destroy_bulk
 
 }
 
+sub test_email_set_update_bulk
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $store = $self->{store};
 
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('INBOX.A') or die;
+    $talk->create('INBOX.B') or die;
+    $talk->create('INBOX.C') or die;
+
+    # Get mailboxes
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $self->assert_not_null($res);
+    my %mboxIdByName = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
+
+    # Create email in mailbox A and B
+    $store->set_folder('INBOX.A');
+    $self->make_message('Email 1') || die;
+    $talk->copy(1, 'INBOX.B');
+
+    $res = $jmap->CallMethods([['Email/query', { }, 'R1']]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    my $emailId = $res->[0][1]->{ids}[0];
+
+    $res = $jmap->CallMethods([['Email/set', {
+        update => {
+            $emailId => {
+                mailboxIds => {
+                    $mboxIdByName{'C'} => JSON::true,
+                },
+            },
+        },
+        'cyrusimap.org/debugBulkUpdate' => JSON::true,
+   }, 'R1']]);
+
+    $res = $jmap->CallMethods([['Email/get', {
+        ids => [$emailId],
+        properties => ['mailboxIds'],
+    }, "R1"]]);
+    $self->assert_not_null($res);
+}
+
+sub test_email_set_update_too_many_mailboxes
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $store = $self->{store};
+    my $talk = $self->{store}->get_client();
+
+    my $inboxId = $self->getinbox()->{id};
+
+    # Create email in INBOX
+    $self->make_message('Email') || die;
+
+    my $res = $jmap->CallMethods([['Email/query', { }, 'R1']]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    my $emailId = $res->[0][1]->{ids}[0];
+
+    my $settings = $self->get_settings();
+    my $mailCapabilities = $settings->{capabilities}{'urn:ietf:params:jmap:mail'};
+    my $maxMailboxesPerEmail = $mailCapabilities->{maxMailboxesPerEmail};
+    $self->assert($maxMailboxesPerEmail > 0);
+
+    # Create and get mailboxes
+    for (my $i = 1; $i < $maxMailboxesPerEmail + 2; $i++) {
+        $talk->create("INBOX.mbox$i") or die;
+    }
+    $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $self->assert_not_null($res);
+    my %mboxIds = map { $_->{id} => JSON::true } @{$res->[0][1]{list}};
+
+    # remove from INBOX
+    delete $mboxIds{$inboxId};
+
+    # Move mailbox to too many mailboxes
+    $res = $jmap->CallMethods([['Email/set', {
+        update => {
+            $emailId => {
+                mailboxIds => \%mboxIds,
+            },
+        },
+        'cyrusimap.org/debugBulkUpdate' => JSON::true,
+   }, 'R1']]);
+   $self->assert_str_equals('tooManyMailboxes', $res->[0][1]{notUpdated}{$emailId}{type});
+}
+
+sub test_email_set_update_too_many_keywords
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $store = $self->{store};
+    my $talk = $self->{store}->get_client();
+
+    my $inboxId = $self->getinbox()->{id};
+
+    # Create email in INBOX
+    $self->make_message('Email') || die;
+
+    my $res = $jmap->CallMethods([['Email/query', { }, 'R1']]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    my $emailId = $res->[0][1]->{ids}[0];
+
+    my $settings = $self->get_settings();
+    my $mailCapabilities = $settings->{capabilities}{'urn:ietf:params:jmap:mail'};
+    my $maxKeywordsPerEmail = $mailCapabilities->{maxKeywordsPerEmail};
+    $self->assert($maxKeywordsPerEmail > 0);
+
+    # Set lots of keywords on this email
+    my %keywords;
+    for (my $i = 1; $i < $maxKeywordsPerEmail + 2; $i++) {
+        $keywords{"keyword$i"} = JSON::true;
+    }
+    $res = $jmap->CallMethods([['Email/set', {
+        update => {
+            $emailId => {
+                keywords => \%keywords,
+            },
+        },
+        'cyrusimap.org/debugBulkUpdate' => JSON::true,
+   }, 'R1']]);
+   $self->assert_str_equals('tooManyKeywords', $res->[0][1]{notUpdated}{$emailId}{type});
+}
 
 1;
