@@ -3537,6 +3537,8 @@ static struct header_prop *_header_parseprop(const char *s)
 
     if (f2 && (strcmp(f2, "all") || !strcmp(f1, "all"))) {
         strarray_free(fields);
+        free(lcasename);
+        free(name);
         return NULL;
     }
     if (f1) {
