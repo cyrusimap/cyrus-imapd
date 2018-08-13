@@ -12653,7 +12653,7 @@ static void _emailsubmission_create(jmap_req_t *req,
                                  "maxSize", smtpclient_get_maxsize(sm));
             break;
 
-        case IMAP_REMOTE_DENIED:
+        case IMAP_MAILBOX_DISABLED:
             for (i = 0; i < smtpenv.rcpts.count; i++) {
                 smtp_addr_t *addr = ptrarray_nth(&smtpenv.rcpts, i);
                 max += addr->completed;
@@ -12673,6 +12673,17 @@ static void _emailsubmission_create(jmap_req_t *req,
             *set_err = json_pack("{s:s s:o}", "type", "invalidRecipients",
                                  "invalidRecipients", invalid);
             break;
+
+        case IMAP_REMOTE_DENIED: {
+            const char *desc = smtpclient_get_resp_text(sm);
+            if (smtpclient_has_ext(sm, "ENHANCEDSTATUSCODES")) {
+                const char *p = strchr(desc, ' ');
+                if (p) desc = p+1;
+            }
+            *set_err = json_pack("{s:s s:s}", "type", "forbiddenToSend",
+                                 "description", desc);
+            break;
+        }
 
         default:
             *set_err = json_pack("{s:s}", "type", "smtpProtocolError");

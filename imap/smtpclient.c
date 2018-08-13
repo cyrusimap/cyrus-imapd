@@ -61,6 +61,12 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
+typedef struct {
+    char code[3];
+    struct buf text; /* Zero-terminated reply text, excluding CRLF. OK to overwrite. */
+    int is_last;
+} smtp_resp_t;
+
 struct smtpclient {
     /* SMTP backend. Client implementations can store
      * their context data in backend->context. */
@@ -81,6 +87,7 @@ struct smtpclient {
     char *ret;
     char *by;
     unsigned long msgsize;
+    smtp_resp_t resp;
 };
 
 enum {
@@ -116,13 +123,7 @@ static int smtpclient_new(smtpclient_t **smp,
 
 /* SMTP protocol implementation */
 
-typedef struct {
-    char code[3];
-    char *text; /* Zero-terminated reply text, excluding CRLF. OK to overwrite. */
-    int is_last;
-} smtp_resp_t;
-
-typedef int smtp_readcb_t(smtpclient_t *sm, const smtp_resp_t *resp, void *rock);
+typedef int smtp_readcb_t(smtpclient_t *sm, void *rock);
 
 static int smtpclient_read(smtpclient_t *sm, smtp_readcb_t *cb, void *rock);
 
@@ -187,6 +188,7 @@ EXPORTED int smtpclient_close(smtpclient_t **smp)
     free(sm->ret);
     free(sm->notify);
     free(sm->authid);
+    buf_free(&sm->resp.text);
 
     free(sm);
     *smp = NULL;
@@ -208,30 +210,39 @@ EXPORTED int smtpclient_close(smtpclient_t **smp)
  *
  * Return IMAP_PROTOCOL_ERROR on mismatch, 0 on success.
  */
-static int expect_code_cb(smtpclient_t *sm, const smtp_resp_t *resp, void *rock)
+static int expect_code_cb(smtpclient_t *sm, void *rock)
 {
     size_t i;
     const char *code = rock;
+    smtp_resp_t *resp = &sm->resp;
+
     for (i = 0; i < 3 && code[i]; i++) {
         if (code[i] != resp->code[i]) {
+            const char *text = buf_cstring(&resp->text);
+
             syslog(LOG_ERR, "smtpclient: unexpected response: code=%c%c%c text=%s",
-                    resp->code[0], resp->code[1], resp->code[2], resp->text);
+                   resp->code[0], resp->code[1], resp->code[2], text);
 
             /* Try to glean specific error from response */
             if (CAPA(sm->backend, SMTPCLIENT_CAPA_STATUS)) {
-                if (resp->text[2] == '1' &&
-                    resp->text[4] >= '1' && resp->text[4] <= '3')
+                if (text[2] == '1' && text[4] >= '1' && text[4] <= '3')
                     return IMAP_MAILBOX_NONEXISTENT;
-                else if (resp->text[2] == '3' && resp->text[4] == '4')
+                else if (text[2] == '3' && text[4] == '4')
                     return IMAP_MESSAGE_TOO_LARGE;
-                else if (resp->text[2] == '5' && resp->text[4] == '3')
+                else if (text[2] == '5' && text[4] == '3')
+                    return IMAP_MAILBOX_DISABLED;
+                else if (text[2] == '3' && text[4] == '0')
                     return IMAP_REMOTE_DENIED;
             }
             else {
                 switch (atoi(resp->code)) {
+                case 421:
+                case 451:
+                case 554:
+                    return IMAP_REMOTE_DENIED;
                 case 450:
                 case 550:
-                    return IMAP_REMOTE_DENIED;
+                    return IMAP_MAILBOX_DISABLED;
                 case 452:
                 case 552:
                     return IMAP_MESSAGE_TOO_LARGE;
@@ -250,7 +261,6 @@ static int smtpclient_read(smtpclient_t *sm, smtp_readcb_t *cb, void *rock)
 {
     char buf[513]; /* Maximum length of reply line, see RFC 5321, 4.5.3.1.5. */
     int r = IMAP_IOERROR;
-    smtp_resp_t resp;
 
     do {
         /* Read next reply line. */
@@ -277,18 +287,18 @@ static int smtpclient_read(smtpclient_t *sm, smtp_readcb_t *cb, void *rock)
         *p = '\0';
 
         /* Call callback. */
-        memcpy(resp.code, buf, 3);
-        resp.text = buf + 4;
-        resp.is_last = isspace(buf[3]);
-        r = cb(sm, &resp, rock);
-    } while (!r && !resp.is_last);
+        memcpy(sm->resp.code, buf, 3);
+        buf_setcstr(&sm->resp.text, buf + 4);
+        sm->resp.is_last = isspace(buf[3]);
+        r = cb(sm, rock);
+    } while (!r && !sm->resp.is_last);
 
     return r;
 }
 
-static int ehlo_cb(smtpclient_t *sm, const smtp_resp_t *resp,
-                   void *rock __attribute__((unused)))
+static int ehlo_cb(smtpclient_t *sm, void *rock __attribute__((unused)))
 {
+    smtp_resp_t *resp = &sm->resp;
 
     /* Is this the first response line? */
     if (sm->have_exts == NULL) {
@@ -298,13 +308,13 @@ static int ehlo_cb(smtpclient_t *sm, const smtp_resp_t *resp,
     }
 
     /* Add the extension */
-    char *p = resp->text;
+    const char *p = buf_cstring(&resp->text);
     while (*p && !isspace(*p)) {
         p++;
     }
     const char *args = isspace(*p) ? p + 1 : "";
-    *p = '\0';
-    hash_insert(resp->text, xstrdup(args), sm->have_exts);
+    buf_truncate(&resp->text, p - buf_base(&resp->text));
+    hash_insert(buf_cstring(&resp->text), xstrdup(args), sm->have_exts);
 
     return 0;
 }
@@ -633,6 +643,11 @@ EXPORTED unsigned long smtpclient_get_maxsize(smtpclient_t *sm)
     }
 
     return maxsize;
+}
+
+EXPORTED const char *smtpclient_get_resp_text(smtpclient_t *sm)
+{
+    return buf_cstring(&sm->resp.text);
 }
 
 /* SMTP backend implementations */
