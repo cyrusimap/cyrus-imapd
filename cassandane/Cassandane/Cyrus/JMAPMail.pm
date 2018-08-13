@@ -342,7 +342,7 @@ sub test_mailbox_get_properties
 
     $err = $res->[0][1];
     $self->assert_str_equals("invalidArguments", $err->{type});
-    $self->assert_str_equals("properties[1]", $err->{arguments}[0]);
+    $self->assert_str_equals("properties[1:123]", $err->{arguments}[0]);
 }
 
 sub test_mailbox_get_ids
@@ -6684,7 +6684,7 @@ sub test_email_query_unknown_mailbox
     $res = $jmap->CallMethods([['Email/query', { filter => { inMailboxOtherThan => ["foo"] } }, "R1"]]);
     $self->assert_str_equals('error', $res->[0][0]);
     $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
-    $self->assert_str_equals('filter/inMailboxOtherThan[0]', $res->[0][1]{arguments}[0]);
+    $self->assert_str_equals('filter/inMailboxOtherThan[0:foo]', $res->[0][1]{arguments}[0]);
 }
 
 
