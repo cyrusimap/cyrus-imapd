@@ -115,6 +115,8 @@ static int jmap_emailsubmission_querychanges(jmap_req_t *req);
  * - VacationResponse/set
  * - Identity/changes
  * - Identity/set
+ * - Email/removeAttachments
+ * - Email/report
  */
 
 jmap_method_t jmap_mail_methods[] = {
@@ -866,18 +868,31 @@ static void jmap_mailbox_get_notfound(const char *id, void *data __attribute__((
 }
 
 static const jmap_property_t mailbox_props[] = {
-    { "id",            JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "name",          0 },
-    { "parentId",      0 },
-    { "role",          0 },
-    { "sortOrder",     0 },
-    { "totalEmails",   JMAP_PROP_SERVER_SET },
-    { "unreadEmails",  JMAP_PROP_SERVER_SET },
-    { "totalThreads",  JMAP_PROP_SERVER_SET },
-    { "unreadThreads", JMAP_PROP_SERVER_SET },
-    { "myrights",      JMAP_PROP_SERVER_SET },
-    { "isSubscribed",  0 },
-    { NULL,            0 }
+    { "id",                 JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "name",               0 },
+    { "parentId",           0 },
+    { "role",               0 },
+    { "sortOrder",          0 },
+    { "totalEmails",        JMAP_PROP_SERVER_SET },
+    { "unreadEmails",       JMAP_PROP_SERVER_SET },
+    { "totalThreads",       JMAP_PROP_SERVER_SET },
+    { "unreadThreads",      JMAP_PROP_SERVER_SET },
+    { "myrights",           JMAP_PROP_SERVER_SET },
+    { "isSubscribed",       0 },
+
+    /* FM extensions (do ALL of these get through to Cyrus?) */
+    { "isCollapsed",        0 },
+    { "hidden",             0 },
+    { "sort",               0 },
+    { "identityRef",        0 },
+    { "autoLearn",          0 },
+    { "learnAsSpam",        0 },
+    { "autoPurge",          0 },
+    { "purgeOlderThanDays", 0 },
+    { "onlyPurgeDeleted",   0 },
+    { "suppressDuplicates", 0 },
+
+    { NULL,                 0 }
 };
 
 static int jmap_mailbox_get(jmap_req_t *req)
@@ -7978,8 +7993,13 @@ static const jmap_property_t email_props[] = {
     { "hasAttachment",  JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
     { "preview",        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
 
-    { "calendarEvents", JMAP_PROP_IMMUTABLE }, /* FastMail Specific */
-    { "trustedSender",  JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE }, /* FastMail Specific */
+    /* FM extensions (do ALL of these get through to Cyrus?) */
+    { "addedDates",     0 },
+    { "removedDates",   0 },
+    { "trustedSender",  JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "calendarEvents", JMAP_PROP_IMMUTABLE },
+    { "isDeleted",      0 },
+    { "imageSize",      0 },
 
     { NULL,             0 }
 };
@@ -12279,14 +12299,31 @@ done:
 }
 
 static const jmap_property_t identity_props[] = {
-    { "id",            JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "name",          0 },
-    { "email",         JMAP_PROP_IMMUTABLE },
-    { "replyTo",       0 },
-    { "bcc",           0 },
-    { "textSignature", 0 },
-    { "htmlSignature", 0 },
-    { "mayDelete",     JMAP_PROP_SERVER_SET },
+    { "id",                  JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "name",                0 },
+    { "email",               JMAP_PROP_IMMUTABLE },
+    { "replyTo",             0 },
+    { "bcc",                 0 },
+    { "textSignature",       0 },
+    { "htmlSignature",       0 },
+    { "mayDelete",           JMAP_PROP_SERVER_SET },
+
+    /* FM extensions (do ALL of these get through to Cyrus?) */
+    { "displayName",         0 },
+    { "addBccOnSMTP",        0 },
+    { "saveSentToMailboxId", 0 },
+    { "saveOnSMTP",          0 },
+    { "useForAutoReply",     0 },
+    { "isAutoConfigured",    0 },
+    { "enableExternalSMTP",  0 },
+    { "smtpServer",          0 },
+    { "smtpPort",            0 },
+    { "smtpSSL",             0 },
+    { "smtpUser",            0 },
+    { "smtpPassword",        0 },
+    { "smtpRemoteService",   0 },
+    { "popLinkId",           0 },
+
     { NULL,            0 }
 };
 

@@ -427,7 +427,7 @@ static const jmap_property_t contact_props[] = {
     { "addresses",   0 },
     { "notes",       0 },
 
-    /* FM specific */
+    /* FM extensions */
     { "x-href",      JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
     { "x-hasPhoto",  JMAP_PROP_SERVER_SET },
     { "x-importance",0 },

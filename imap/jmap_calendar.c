@@ -343,7 +343,16 @@ static const jmap_property_t calendar_props[] = {
     { "mayRenameItems",  JMAP_PROP_SERVER_SET },
     { "mayDeleteItems",  JMAP_PROP_SERVER_SET },
 
-    { "x-href",          0 },  /* FM specific */
+    /* FM extensions (do ALL of these get through to Cyrus?) */
+    { "mayAdmin",        0 },
+    { "syncedFrom",      0 },
+    { "isEventsPublic",  0 },
+    { "isFreeBusyPublic",0 },
+    { "eventsUrl",       JMAP_PROP_SERVER_SET },
+    { "freeBusyUrl",     JMAP_PROP_SERVER_SET },
+    { "calDavUrl",       JMAP_PROP_SERVER_SET },
+    { "shareWith",       0 },
+    { "x-href",          0 },
 
     { NULL,              0 }
 };
