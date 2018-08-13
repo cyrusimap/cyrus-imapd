@@ -8377,14 +8377,15 @@ struct email_append_detail {
     size_t size;
 };
 
-static int _email_append(jmap_req_t *req,
-                       json_t *mailboxids,
-                       strarray_t *keywords,
-                       time_t internaldate,
-                       int has_attachment,
-                       int(*writecb)(jmap_req_t*, FILE*, void*),
-                       void *rock,
-                       struct email_append_detail *detail)
+static void _email_append(jmap_req_t *req,
+                          json_t *mailboxids,
+                          strarray_t *keywords,
+                          time_t internaldate,
+                          int has_attachment,
+                          int(*writecb)(jmap_req_t* req, FILE* fp, void* rock, json_t **err),
+                          void *rock,
+                          struct email_append_detail *detail,
+                          json_t **err)
 {
     int fd;
     void *addr;
@@ -8397,7 +8398,16 @@ static int _email_append(jmap_req_t *req,
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
     json_t *val, *mailboxes = NULL;
     size_t len;
-    int r = HTTP_SERVER_ERROR;
+    int r = 0;
+
+    if (json_object_size(mailboxids) > JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL) {
+        *err = json_pack("{s:s}", "type", "tooManyMailboxes");
+        goto done;
+    }
+    else if (strarray_size(keywords) > JMAP_MAIL_MAX_KEYWORDS_PER_EMAIL) {
+        *err = json_pack("{s:s}", "type", "tooManyKeywords");
+        goto done;
+    }
 
     if (!internaldate) internaldate = time(NULL);
 
@@ -8449,7 +8459,7 @@ static int _email_append(jmap_req_t *req,
         r = HTTP_SERVER_ERROR;
         goto done;
     }
-    r = writecb(req, f, rock);
+    r = writecb(req, f, rock, err);
     if (r) goto done;
     if (fflush(f)) {
         r = IMAP_IOERROR;
@@ -8584,7 +8594,29 @@ done:
     jmap_closembox(req, &mbox);
     free(mboxname);
     json_decref(mailboxes);
-    return r;
+    if (r && *err == NULL) {
+        switch (r) {
+            case IMAP_PERMISSION_DENIED:
+                *err = json_pack("{s:s}", "type", "forbidden");
+                break;
+            case IMAP_MAILBOX_EXISTS:
+                *err = json_pack("{s:s}", "type", "alreadyExists");
+                break;
+            case IMAP_QUOTA_EXCEEDED:
+                *err = json_pack("{s:s}", "type", "maxQuotaReached");
+                break;
+            case IMAP_MESSAGE_CONTAINSNULL:
+            case IMAP_MESSAGE_CONTAINSNL:
+            case IMAP_MESSAGE_CONTAINS8BIT:
+            case IMAP_MESSAGE_BADHEADER:
+            case IMAP_MESSAGE_NOBLANKLINE:
+                *err = json_pack("{s:s s:s}", "type", "invalidEmail",
+                        "description", error_message(r));
+                break;
+            default:
+                *err = jmap_server_error(r);
+        }
+    }
 }
 
 struct _email_set_answered_rock {
@@ -10088,15 +10120,9 @@ static void _emailpart_to_mime(jmap_req_t *req, FILE *fp,
     }
 }
 
-struct email_to_mime_rock {
-    struct email *email;
-    json_t **set_err;
-};
-
-static int _email_to_mime(jmap_req_t *req, FILE *fp, void *_rock)
+static int _email_to_mime(jmap_req_t *req, FILE *fp, void *rock, json_t **err)
 {
-    struct email_to_mime_rock *rock = _rock;
-    struct email *email = rock->email;
+    struct email *email = rock;
     json_t *header;
     size_t i;
 
@@ -10139,7 +10165,7 @@ static int _email_to_mime(jmap_req_t *req, FILE *fp, void *_rock)
     json_t *missing_blobs = json_array();
     if (email->body) _emailpart_to_mime(req, fp, email->body, missing_blobs);
     if (json_array_size(missing_blobs)) {
-        *rock->set_err = json_pack("{s:s s:o}", "type", "blobNotFound",
+        *err = json_pack("{s:s s:o}", "type", "blobNotFound",
                 "notFound", missing_blobs);
     }
     else {
@@ -10186,12 +10212,11 @@ static void _email_create(jmap_req_t *req,
 
     /* Append MIME-encoded Email to mailboxes and write keywords */
     json_t *jmailboxids = json_object_get(jemail, "mailboxIds");
-    struct email_to_mime_rock rock = { &email, set_err };
-    r = _email_append(req, jmailboxids, &keywords, time(NULL),
-                      config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT) ?
-                      email.has_attachment : 0, _email_to_mime,
-                      &rock, &detail);
-    if (r || *set_err) goto done;
+    _email_append(req, jmailboxids, &keywords, time(NULL),
+                  config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT) ?
+                  email.has_attachment : 0, _email_to_mime, &email,
+                  &detail, set_err);
+    if (*set_err) goto done;
 
     /* Update ANSWERED flags of replied-to messages */
     json_t *jheaders = _headers_get(&email.headers, "In-Reply-To");
@@ -11569,7 +11594,9 @@ struct _email_import_rock {
 };
 
 static int _email_import_cb(jmap_req_t *req __attribute__((unused)),
-                            FILE *out, void *rock)
+                            FILE *out,
+                            void *rock,
+                            json_t **err __attribute__((unused)))
 {
     struct _email_import_rock *data = (struct _email_import_rock*) rock;
     const char *base = data->buf.s;
@@ -11707,32 +11734,9 @@ static void _email_import(jmap_req_t *req,
     free(body);
 
     /* Write the message to the file system */
-    r = _email_append(req, jmailbox_ids, &keywords, internaldate,
-                      has_attachment, _email_import_cb, &content, &detail);
-    if (r) {
-        switch (r) {
-            case IMAP_PERMISSION_DENIED:
-                *err = json_pack("{s:s}", "type", "forbidden");
-                break;
-            case IMAP_MAILBOX_EXISTS:
-                *err = json_pack("{s:s}", "type", "alreadyExists");
-                break;
-            case IMAP_QUOTA_EXCEEDED:
-                *err = json_pack("{s:s}", "type", "maxQuotaReached");
-                break;
-            case IMAP_MESSAGE_CONTAINSNULL:
-            case IMAP_MESSAGE_CONTAINSNL:
-            case IMAP_MESSAGE_CONTAINS8BIT:
-            case IMAP_MESSAGE_BADHEADER:
-            case IMAP_MESSAGE_NOBLANKLINE:
-                *err = json_pack("{s:s s:s}", "type", "invalidEmail",
-                        "description", error_message(r));
-                break;
-            default:
-                *err = jmap_server_error(r);
-        }
-        goto done;
-    }
+    _email_append(req, jmailbox_ids, &keywords, internaldate,
+                  has_attachment, _email_import_cb, &content, &detail, err);
+    if (*err) goto done;
 
     *new_email = json_pack("{s:s, s:s, s:s, s:i}",
          "id", detail.email_id,
