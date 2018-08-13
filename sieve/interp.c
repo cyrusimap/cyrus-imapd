@@ -78,7 +78,7 @@ EXPORTED sieve_interp_t *sieve_interp_alloc(void *interp_context)
     return i;
 }
 
-EXPORTED strarray_t *sieve_listextensions(sieve_interp_t *i)
+EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
 {
     if (i->extensions == NULL) {
         unsigned long config_sieve_extensions =
@@ -87,7 +87,7 @@ EXPORTED strarray_t *sieve_listextensions(sieve_interp_t *i)
 
         /* strarray of ManageSieve capability/value pairs */
         i->extensions = strarray_new();
-        
+
         /* Add EXTLISTS capability */
         strarray_append(i->extensions, "SIEVE");
 
