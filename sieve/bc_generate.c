@@ -65,6 +65,14 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t);
 
 static int atleast(bytecode_info_t *arr, size_t len)
 {
+    // This evil line of code exists because people aren't doing good
+    // accounting everywhere.  The "atleast" mechanism is disgusting
+    // and bad and wrong, but it's what we have.  So this means we don't
+    // overrun the end ever.  1024 is also super way more than needed,
+    // but memory is pretty cheap during the sieve script generation,
+    // so I just don't care.
+    len += 1024;
+
     if (arr->reallen < len) {
         /* too small; double if that's big enough, otherwise increase to the
            requested size. */
