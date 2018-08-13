@@ -277,17 +277,18 @@ static int statuscache_store(const char *mboxname,
     struct buf databuf = BUF_INITIALIZER;
     int r = 0;
 
-    init_internal();
-
-    /* Don't access DB if it hasn't been opened */
-    if (!statuscachedb)
-        goto done;
-
-    /* if we don't have a full index, don't store anything */
-    if ((sdata->statusitems & STATUS_INDEXITEMS) != STATUS_INDEXITEMS)
-        goto done;
-
     statuscache_buildkey(mboxname, /*userid*/NULL, &keybuf);
+
+    /* if we don't have a full index, just nuke the key */
+    if (!sdata || (sdata->statusitems & STATUS_INDEXITEMS) != STATUS_INDEXITEMS) {
+        r = cyrusdb_delete(statuscachedb, keybuf.s, keybuf.len, tidptr, 1);
+        if (r != CYRUSDB_OK) {
+            syslog(LOG_ERR, "DBERROR: error deleting statuscache for: %s (%s)",
+                   mboxname, cyrusdb_strerror(r));
+        }
+        goto done;
+    }
+
 
     buf_printf(&databuf,
                        "I %u (%u %u %u %u " MODSEQ_FMT " " MODSEQ_FMT ")",
@@ -340,7 +341,6 @@ done:
 
 HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata)
 {
-    int r;
     int doclose = 0;
     struct txn *tid = NULL;
 
@@ -357,20 +357,7 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
         doclose = 1;
     }
 
-    if (sdata) {
-        r = statuscache_store(mboxname, sdata, &tid);
-    }
-    else {
-        // remove existing record
-        struct buf keybuf = BUF_INITIALIZER;
-        statuscache_buildkey(mboxname, /*userid*/NULL, &keybuf);
-        r = cyrusdb_delete(statuscachedb, keybuf.s, keybuf.len, &tid, 1);
-        buf_free(&keybuf);
-        if (r != CYRUSDB_OK) {
-            syslog(LOG_ERR, "DBERROR: error deleting from database: %s",
-                   cyrusdb_strerror(r));
-        }
-    }
+    int r = statuscache_store(mboxname, sdata, &tid);
 
     if (!r) {
         cyrusdb_commit(statuscachedb, tid);
