@@ -20,7 +20,6 @@ Getting Started
 .. toctree::
     :hidden:
 
-    developer/developer-tips
     developer/install-xapian
 
 System files and Databases

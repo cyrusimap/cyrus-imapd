@@ -2,9 +2,9 @@
 
 .. author: Nic Bernstein (Onlight)
 
-==========================
-Developer Thoughts & Notes
-==========================
+==================
+Developer Guidance
+==================
 
 .. toctree::
     :maxdepth: 1

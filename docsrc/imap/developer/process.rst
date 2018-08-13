@@ -55,7 +55,7 @@ If you're not planning on regularly submitting changes, you can just send your p
 Useful Developer Information
 ============================
 
-Some combined :ref:`tips on developing with Cyrus <cyrus-hacking>` have been collected.
+Some combined :ref:`tips on developing with Cyrus <imap-developer-guidance>` have been collected.
 
 Community Participation
 =======================
