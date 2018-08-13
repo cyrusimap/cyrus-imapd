@@ -2412,10 +2412,11 @@ EXPORTED void jmap_parser_push(struct jmap_parser *parser, const char *prop)
 }
 
 EXPORTED void jmap_parser_push_index(struct jmap_parser *parser,
-                                     const char *prop, size_t index)
+                                     const char *prop, size_t index, const char *name)
 {
     /* TODO make this more clever: won't need to printf most of the time */
-    buf_printf(&parser->buf, "%s[%zu]", prop, index);
+    if (name) buf_printf(&parser->buf, "%s[%zu:%s]", prop, index, name);
+    else buf_printf(&parser->buf, "%s[%zu]", prop, index);
     strarray_push(&parser->path, buf_cstring(&parser->buf));
     buf_reset(&parser->buf);
 }
@@ -2507,7 +2508,7 @@ EXPORTED int jmap_parse_strings(json_t *arg,
     json_t *val;
     json_array_foreach(arg, i, val) {
         if (!json_is_string(val)) {
-            jmap_parser_push_index(parser, prop, i);
+            jmap_parser_push_index(parser, prop, i, NULL);
             jmap_parser_invalid(parser, NULL);
             jmap_parser_pop(parser);
             valid = 0;
@@ -2564,7 +2565,7 @@ EXPORTED void jmap_get_parse(json_t *jargs,
         json_array_foreach(arg, i, val) {
             const char *id = json_string_value(val);
             if (!id) {
-                jmap_parser_push_index(parser, "ids", i);
+                jmap_parser_push_index(parser, "ids", i, NULL);
                 jmap_parser_invalid(parser, NULL);
                 jmap_parser_pop(parser);
                 continue;
@@ -2601,10 +2602,7 @@ EXPORTED void jmap_get_parse(json_t *jargs,
         json_array_foreach(arg, i, val) {
             const char *s = json_string_value(val);
             if (!s || !jmap_property_find(s, valid_props)) {
-                if (s)
-                    jmap_parser_push_name(parser, "properties", s);
-                else
-                    jmap_parser_push_index(parser, "properties", i);
+                jmap_parser_push_index(parser, "properties", i, s);
                 jmap_parser_invalid(parser, NULL);
                 jmap_parser_pop(parser);
                 continue;
@@ -2843,7 +2841,7 @@ EXPORTED void jmap_filter_parse(json_t *filter, struct jmap_parser *parser,
             jmap_parser_invalid(parser, "conditions");
         }
         json_array_foreach(arg, i, val) {
-            jmap_parser_push_index(parser, "conditions", i);
+            jmap_parser_push_index(parser, "conditions", i, NULL);
             jmap_filter_parse(val, parser, parse_condition, unsupported, rock);
             jmap_parser_pop(parser);
         }
@@ -2928,7 +2926,7 @@ EXPORTED void jmap_query_parse(json_t *jargs, struct jmap_parser *parser,
     arg = json_object_get(jargs, "sort");
     if (json_is_array(arg)) {
         json_array_foreach(arg, i, val) {
-            jmap_parser_push_index(parser, "sort", i);
+            jmap_parser_push_index(parser, "sort", i, NULL);
             jmap_parse_comparator(val, parser, comp_cb, unsupported_sort, sort_rock);
             jmap_parser_pop(parser);
         }

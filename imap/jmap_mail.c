@@ -194,7 +194,7 @@ static void jmap_querychanges_parse(json_t *jargs,
     arg = json_object_get(jargs, "sort");
     if (json_is_array(arg)) {
         json_array_foreach(arg, i, val) {
-            jmap_parser_push_index(parser, "sort", i);
+            jmap_parser_push_index(parser, "sort", i, NULL);
             jmap_parse_comparator(val, parser, comp_cb, unsupported_sort, sort_rock);
             jmap_parser_pop(parser);
         }
@@ -4881,7 +4881,7 @@ static void _email_parse_filter(json_t *filter, struct jmap_parser *parser,
             n = _mbox_find(req, s);
         }
         if (!n) {
-            jmap_parser_push_index(parser, "inMailboxOtherThan", i);
+            jmap_parser_push_index(parser, "inMailboxOtherThan", i, s);
             jmap_parser_invalid(parser, NULL);
             jmap_parser_pop(parser);
         }
@@ -4949,7 +4949,7 @@ static void _email_parse_filter(json_t *filter, struct jmap_parser *parser,
             case 2:
                 s = json_string_value(json_array_get(arg, 1));
                 if (!s || !strlen(s)) {
-                    jmap_parser_push_index(parser, "header", 1);
+                    jmap_parser_push_index(parser, "header", 1, s);
                     jmap_parser_invalid(parser, NULL);
                     jmap_parser_pop(parser);
                 }
@@ -4957,7 +4957,7 @@ static void _email_parse_filter(json_t *filter, struct jmap_parser *parser,
             case 1:
                 s = json_string_value(json_array_get(arg, 0));
                 if (!s || !strlen(s)) {
-                    jmap_parser_push_index(parser, "header", 0);
+                    jmap_parser_push_index(parser, "header", 0, s);
                     jmap_parser_invalid(parser, NULL);
                     jmap_parser_pop(parser);
                 }
@@ -6652,7 +6652,7 @@ static void _email_parse_wantheaders(json_t *jprops,
             ptrarray_append(want_headers, hprop);
         }
         else {
-            jmap_parser_push_index(parser, prop_name, i);
+            jmap_parser_push_index(parser, prop_name, i, s);
             jmap_parser_invalid(parser, NULL);
             jmap_parser_pop(parser);
         }
@@ -8050,7 +8050,7 @@ static int jmap_email_parse(jmap_req_t *req)
         json_array_foreach(jprops, i, val) {
             const char *s = json_string_value(val);
             if (!s) {
-                jmap_parser_push_index(&parser, "properties", i);
+                jmap_parser_push_index(&parser, "properties", i, s);
                 jmap_parser_invalid(&parser, NULL);
                 jmap_parser_pop(&parser);
                 continue;
@@ -8867,14 +8867,14 @@ static json_t *_header_from_addresses(json_t *addrs,
     json_array_foreach(addrs, i, addr) {
         json_t *jname = json_object_get(addr, "name");
         if (!json_is_string(jname) && JNOTNULL(jname)) {
-            jmap_parser_push_index(parser, prop_name, i);
+            jmap_parser_push_index(parser, prop_name, i, NULL);
             jmap_parser_invalid(parser, "name");
             jmap_parser_pop(parser);
         }
 
         json_t *jemail = json_object_get(addr, "email");
         if (!json_is_string(jemail) && JNOTNULL(jemail)) {
-            jmap_parser_push_index(parser, prop_name, i);
+            jmap_parser_push_index(parser, prop_name, i, NULL);
             jmap_parser_invalid(parser, "email");
             jmap_parser_pop(parser);
         }
@@ -9060,7 +9060,7 @@ static void _headers_parseprops(json_t *jobject,
             size_t i;
             json_t *jall = jval;
             json_array_foreach(jall, i, jval) {
-                jmap_parser_push_index(parser, field, i);
+                jmap_parser_push_index(parser, field, i, NULL);
                 json_t *jheader = cb(jval, parser, field, hprop->name);
                 if (jheader) _headers_add_new(headers, jheader);
                 jmap_parser_pop(parser);
@@ -9335,7 +9335,7 @@ static struct emailpart *_emailpart_parse(json_t *jpart,
             size_t i;
             json_t *subPart;
             json_array_foreach(subParts, i, subPart) {
-                jmap_parser_push_index(parser, "subParts", i);
+                jmap_parser_push_index(parser, "subParts", i, NULL);
                 struct emailpart *subpart = _emailpart_parse(subPart, parser, bodies);
                 if (subpart) ptrarray_append(&part->subparts, subpart);
                 jmap_parser_pop(parser);
@@ -9583,7 +9583,7 @@ static void _email_parse_bodies(json_t *jemail,
         /* textBody */
         if (json_array_size(jtextBody) == 1) {
             json_t *jpart = json_array_get(jtextBody, 0);
-            jmap_parser_push_index(parser, "textBody", 0);
+            jmap_parser_push_index(parser, "textBody", 0, NULL);
             text_body = _emailpart_parse(jpart, parser, bodyValues);
             jmap_parser_pop(parser);
             if (text_body) {
@@ -9608,7 +9608,7 @@ static void _email_parse_bodies(json_t *jemail,
         /* htmlBody */
         if (json_array_size(jhtmlBody) == 1) {
             json_t *jpart = json_array_get(jhtmlBody, 0);
-            jmap_parser_push_index(parser, "htmlBody", 0);
+            jmap_parser_push_index(parser, "htmlBody", 0, NULL);
             html_body = _emailpart_parse(jpart, parser, bodyValues);
             jmap_parser_pop(parser);
             if (html_body) {
@@ -9637,7 +9637,7 @@ static void _email_parse_bodies(json_t *jemail,
             struct emailpart *attpart;
             int have_inlined = 0;
             json_array_foreach(jattachments, i, jpart) {
-                jmap_parser_push_index(parser, "attachments", i);
+                jmap_parser_push_index(parser, "attachments", i, NULL);
                 attpart = _emailpart_parse(jpart, parser, bodyValues);
                 if (attpart) {
                     if (!have_inlined && attpart->disposition) {
@@ -11879,7 +11879,7 @@ static void _emailsubmission_create(jmap_req_t *req,
             size_t i;
             json_t *addr;
             json_array_foreach(rcpt, i, addr) {
-                jmap_parser_push_index(&parser, "rcptTo", i);
+                jmap_parser_push_index(&parser, "rcptTo", i, NULL);
                 _emailsubmission_address_parse(addr, &parser);
                 jmap_parser_pop(&parser);
             }

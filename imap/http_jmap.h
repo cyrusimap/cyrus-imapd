@@ -179,7 +179,7 @@ struct jmap_parser {
 extern void jmap_parser_fini(struct jmap_parser *parser);
 extern void jmap_parser_push(struct jmap_parser *parser, const char *prop);
 extern void jmap_parser_push_index(struct jmap_parser *parser,
-                                   const char *prop, size_t index);
+                                   const char *prop, size_t index, const char *name);
 extern void jmap_parser_pop(struct jmap_parser *parser);
 extern const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf);
 extern void jmap_parser_invalid(struct jmap_parser *parser, const char *prop);
