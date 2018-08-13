@@ -987,21 +987,23 @@ envelope_err:
 
         /* bodypart(s) exist, now to test them */
 
-        for (y = 0; val && val[y] && !res; y++) {
+        for (y = 0; val && val[y]; y++) {
 
-            if (match == B_COUNT) {
-                count++;
-            } else if (val[y]->decoded_body) {
-                const char *content = val[y]->decoded_body;
+            if (!res) {
+                if (match == B_COUNT) {
+                    count++;
+                } else if (val[y]->decoded_body) {
+                    const char *content = val[y]->decoded_body;
 
-                /* search through all the data */
-                res = do_comparisons(test.u.b.pl, content,
-                                     comp, comprock, ctag,
-                                     (requires & BFE_VARIABLES) ?
-                                     variables : NULL, match_vars);
-                if (res < 0) {
-                    free(val[y]);
-                    goto body_err;
+                    /* search through all the data */
+                    res = do_comparisons(test.u.b.pl, content,
+                                        comp, comprock, ctag,
+                                        (requires & BFE_VARIABLES) ?
+                                        variables : NULL, match_vars);
+                    if (res < 0) {
+                        free(val[y]);
+                        goto body_err;
+                    }
                 }
             }
 

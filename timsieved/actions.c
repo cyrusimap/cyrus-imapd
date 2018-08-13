@@ -211,6 +211,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
         prot_printf(conn,"\"%s\" \"%s\"\r\n",
                     strarray_nth(extensions, i), strarray_nth(extensions, i+1));
     }
+    strarray_free(extensions);
 
     if (tls_enabled() && !starttls_done && !authenticated) {
         prot_puts(conn, "\"STARTTLS\"\r\n");
