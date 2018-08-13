@@ -219,10 +219,10 @@ static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
     }
     else {
         for (i = 0; i < strarray_size(uses); i++) {
-            if (!mboxlist_find_specialuse(strarray_nth(uses, i), userid)) {
-                r = 0;
-                break;
-            }
+            char *intname = mboxlist_find_specialuse(strarray_nth(uses, i), userid);
+            if (!intname) r = 0;
+            free(intname);
+            if (!r) break;
         }
     }
 
