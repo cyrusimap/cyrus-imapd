@@ -757,10 +757,18 @@ EXPORTED void smtp_envelope_fini(smtp_envelope_t *env)
 typedef struct {
     int infd;
     int outfd;
-} smtpclient_sendmail_fds_t;
+    pid_t pid;
+} smtpclient_sendmail_ctx_t;
 
 static int smtpclient_sendmail_freectx(struct backend *backend)
 {
+    smtpclient_sendmail_ctx_t *ctx =
+        (smtpclient_sendmail_ctx_t *) backend->context;
+
+    if (ctx->pid && waitpid(ctx->pid, NULL, 0) < 0) {
+        syslog(LOG_ERR, "waitpid(): %m");
+    }
+
     free(backend->context);
     return 0;
 }
@@ -772,9 +780,6 @@ EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
     int p_child[2];
     int p_parent[2];
     int logfd = -1;
-    int *fds = xzmalloc(sizeof(int) * 2);
-    fds[0] = -1;
-    fds[1] = -1;
 
     /* Create the pipes and fork */
     r = pipe(p_child);
@@ -814,21 +819,23 @@ EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
     close(p_parent[1]);
     p_parent[1] = -1;
 
-    fds[0] = p_parent[0]; /* reader */
-    fds[1] = p_child[1];  /* writer */
+    smtpclient_sendmail_ctx_t *ctx = xmalloc(sizeof(smtpclient_sendmail_ctx_t));
+    ctx->infd  = p_parent[0]; /* reader */
+    ctx->outfd = p_child[1];  /* writer */
+    ctx->pid   = pid;
 
     logfd = telemetry_log("smtpclient.sendmail", NULL, NULL, 0);
 
 
     /* Create backend and setup context */
-    bk = backend_connect_pipe(fds[0], fds[1], &smtp_protocol, 0, logfd);
+    bk = backend_connect_pipe(ctx->infd, ctx->outfd, &smtp_protocol, 0, logfd);
     if (!bk) {
         syslog(LOG_ERR, "smptclient_open: can't open sendmail backend");
         r = IMAP_INTERNAL;
         if (logfd != -1) close(logfd);
         goto done;
     }
-    bk->context = fds;
+    bk->context = ctx;
     r = smtpclient_new(smp, bk, smtpclient_sendmail_freectx, logfd);
 
 done:
