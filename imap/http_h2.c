@@ -643,10 +643,11 @@ HIDDEN void http2_input(struct transaction_t *txn)
         if (r) {
             syslog(LOG_ERR, "nghttp2_submit_goaway: %s", nghttp2_strerror(r));
         }
-        else http2_output(txn);
 
         txn->flags.conn = CONN_CLOSE;
     }
+
+    http2_output(txn);
 
     return;
 }

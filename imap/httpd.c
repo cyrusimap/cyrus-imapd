@@ -1723,10 +1723,6 @@ static void cmdloop(struct http_connection *conn)
         /* Check for input from client */
         do {
             /* Flush any buffered output */
-            if (txn.conn->http2_ctx) {
-                /* HTTP/2 output */
-                http2_output(&txn);
-            }
             prot_flush(httpd_out);
             if (backend_current) prot_flush(backend_current->out);
 
