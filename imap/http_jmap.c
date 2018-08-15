@@ -86,8 +86,6 @@
 #define JMAP_DOWNLOAD_COL  "download/"
 #define JMAP_DOWNLOAD_TPL  "{accountId}/{blobId}/{name}?accept={type}"
 
-#define JMAP_WS_PROTOCOL   "jmap"
-
 struct namespace jmap_namespace;
 
 static time_t compile_time;
@@ -97,10 +95,6 @@ static json_t *jmap_capabilities = NULL;
 /* HTTP method handlers */
 static int jmap_get(struct transaction_t *txn, void *params);
 static int jmap_post(struct transaction_t *txn, void *params);
-
-/* WebSocket handler */
-static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
-                   struct buf *logbuf, void **rock);
 
 /* Namespace callbacks */
 static void jmap_init(struct buf *serverinfo);
@@ -117,6 +111,12 @@ static int jmap_blob_copy(jmap_req_t *req);
 static int myrights(struct auth_state *authstate,
                     const mbentry_t *mbentry,
                     hash_table *mboxrights);
+
+/* WebSocket handler */
+#define JMAP_WS_PROTOCOL   "jmap"
+
+static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
+                   struct buf *logbuf, void **rock);
 
 static struct connect_params ws_params = {
     JMAP_BASE_URL, JMAP_WS_PROTOCOL, &jmap_ws

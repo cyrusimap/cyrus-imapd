@@ -389,9 +389,6 @@ static int http_auth(const char *creds, struct transaction_t *txn);
 static int meth_get(struct transaction_t *txn, void *params);
 static int meth_propfind_root(struct transaction_t *txn, void *params);
 
-static int ws_echo(struct buf *inbuf, struct buf *outbuf,
-                   struct buf *logbuf, void **rock);
-
 static struct saslprops_t saslprops = SASLPROPS_INITIALIZER;
 
 static struct sasl_callback mysasl_cb[] = {
@@ -426,6 +423,10 @@ const struct known_meth_t http_methods[] = {
     { "UNLOCK",         METH_NOBODY,    CYRUS_HTTP_UNLOCK_TOTAL },
     { NULL,             0,              0 }
 };
+
+/* WebSocket handler */
+static int ws_echo(struct buf *inbuf, struct buf *outbuf,
+                   struct buf *logbuf, void **rock);
 
 static struct connect_params ws_params = {
     "/", NULL /* sub-protocol */, &ws_echo
