@@ -341,8 +341,6 @@ static int frame_recv_cb(nghttp2_session *session,
         if (txn->ws_ctx) {
             /* WebSocket over HTTP/2 input */
             ws_input(txn);
-
-            ws_output(txn);
             break;
         }
 

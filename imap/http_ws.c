@@ -744,6 +744,9 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
             txn->flags.conn = CONN_CLOSE;
         }
+
+        /* Write frame(s) */
+        ws_output(txn);
     }
     else if (!want_write) {
         /* Connection is done */

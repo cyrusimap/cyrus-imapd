@@ -1745,10 +1745,6 @@ static void cmdloop(struct http_connection *conn)
         /* Check for input from client */
         do {
             /* Flush any buffered output */
-            if (txn.ws_ctx) {
-                /* WebSocket over HTTP/1.1 output */
-                ws_output(&txn);
-            }
             prot_flush(httpd_out);
             if (backend_current) prot_flush(backend_current->out);
 
