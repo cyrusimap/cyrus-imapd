@@ -196,8 +196,6 @@ static ssize_t recv_cb(wslay_event_context_ptr ev,
         pin = ((struct ws_context *) txn->ws_ctx)->h2_pin;
     }
 
-    prot_NONBLOCK(pin);
-
     n = prot_read(pin, (char *) buf, len);
     if (!n) {
         /* No data */
@@ -611,6 +609,9 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
     buf_printf(&ctx->log, "; \"WebSocket/%s via %s\"",
                protocol ? protocol : "echo" , txn->req_line.ver);
     ctx->log_tail = buf_len(&ctx->log);
+
+    /* Set connection as non-blocking */
+    prot_NONBLOCK(txn->conn->pin);
 
     /* Tell client that WebSocket negotiation has succeeded */
     return HTTP_SWITCH_PROT;
