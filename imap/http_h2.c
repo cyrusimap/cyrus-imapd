@@ -73,6 +73,7 @@ int (*alpn_select_cb)(SSL *ssl,
 struct http2_context {
     nghttp2_session *session;           /* HTTP/2 session */
     nghttp2_option *options;            /* Config options for HTTP/2 session */
+    unsigned ws_count;                  /* Count of WebSocket streams */
 };
 
 /* HTTP/2 stream context */
@@ -146,7 +147,7 @@ static ssize_t recv_cb(nghttp2_session *session __attribute__((unused)),
            output from being submitted */
         prot_NONBLOCK(pin);
     }
-    else {
+    else if (!((struct http2_context *) conn->http2_ctx)->ws_count) {
         /* No data -  block next time (for client timeout) */
         prot_BLOCK(pin);
 
@@ -381,6 +382,10 @@ static int frame_recv_cb(nghttp2_session *session,
             nghttp2_submit_goaway(session, NGHTTP2_FLAG_NONE, stream_id,
                                   NGHTTP2_NO_ERROR, NULL, 0);
         }
+        else if (txn->ws_ctx) {
+            /* Increment WebSocket stream count */
+            ctx->ws_count++;
+        }
 
         break;
     }
@@ -399,6 +404,11 @@ static int stream_close_cb(nghttp2_session *session, int32_t stream_id,
            stream_id, nghttp2_http2_strerror(error_code));
 
     if (txn) {
+        if (txn->ws_ctx) {
+            /* Decrement WebSocket stream count */
+            ((struct http2_context *) txn->conn->http2_ctx)->ws_count--;
+        }
+
         /* Memory cleanup */
         transaction_free(txn);
         free(txn);
