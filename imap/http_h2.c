@@ -647,6 +647,7 @@ HIDDEN void http2_input(struct transaction_t *txn)
         txn->flags.conn = CONN_CLOSE;
     }
 
+    /* Write frame(s) */
     http2_output(txn);
 
     return;
@@ -759,6 +760,9 @@ HIDDEN int http2_data_chunk(struct transaction_t *txn,
     uint8_t flags = NGHTTP2_FLAG_END_STREAM;
     nghttp2_data_provider prd;
     int r;
+
+    syslog(LOG_DEBUG, "http2_data_chunk(datalen=%u, last=%d)",
+           datalen, last_chunk);
 
     /* NOTE: The protstream that we use as the data source MUST remain
        available until the data source read callback has retrieved all data.
