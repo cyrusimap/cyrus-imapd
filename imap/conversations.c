@@ -1417,7 +1417,6 @@ static int _thread_datesort(const void **a, const void **b)
 
 static void conversations_thread_sort(conversation_t *conv)
 {
-    int i, j;
     conv_thread_t *thread;
     ptrarray_t items = PTRARRAY_INITIALIZER;
 
@@ -1430,8 +1429,9 @@ static void conversations_thread_sort(conversation_t *conv)
     conv_thread_t **nextp = &conv->thread;
 
     // relink the list
-    for (i = 0; i < ptrarray_size(&toplevel); i++) {
-        thread = ptrarray_nth(&toplevel, i);
+    int i;
+    for (i = 0; i < ptrarray_size(&items); i++) {
+        thread = ptrarray_nth(&items, i);
         *nextp = thread;
         nextp = &thread->next;
     }
