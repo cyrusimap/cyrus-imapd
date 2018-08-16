@@ -12129,7 +12129,6 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
 done:
     if (r) {
         *err = jmap_server_error(r);
-        goto done;
     }
     free(src_mboxname);
     strarray_fini(&dst_mboxnames);
