@@ -10668,6 +10668,18 @@ static void _email_updateplan_error(struct email_updateplan *plan, int errcode, 
     json_decref(err);
 }
 
+static int _email_uidrec_compareuid_cb(const void **pa, const void **pb)
+{
+    const struct email_uidrec *a = *pa;
+    const struct email_uidrec *b = *pb;
+    if (a->uid < b->uid)
+        return -1;
+    else if (a->uid > b->uid)
+        return 1;
+    else
+        return 0;
+}
+
 static void _email_bulkupdate_plancopies(struct email_bulkupdate *bulk,
                                        hash_table *copyupdates_by_mbox_id)
 {
@@ -10740,6 +10752,19 @@ static void _email_bulkupdate_plancopies(struct email_bulkupdate *bulk,
             }
         }
         free_hash_table(&src_mbox_id_counts, NULL);
+    }
+    hash_iter_free(&iter);
+
+    /* Now sort copies per mailbox by UID */
+
+    iter = hash_table_iter(&bulk->plans_by_mbox_id);
+    while (hash_iter_next(iter)) {
+        struct email_updateplan *plan = hash_iter_val(iter);
+        int i;
+        for (i = 0; i < ptrarray_size(&plan->copy); i++) {
+            ptrarray_t *uidrecs = ptrarray_nth(&plan->copy, i);
+            ptrarray_sort(uidrecs, _email_uidrec_compareuid_cb);
+        }
     }
     hash_iter_free(&iter);
 }
@@ -11081,6 +11106,7 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
         json_t *jval;
         const char *mbox_id;
         json_object_foreach(update->mailboxids, mbox_id, jval) {
+            if (hash_lookup(mbox_id, &bulk->plans_by_mbox_id)) continue;
             struct mailbox *mbox = NULL;
             char *mboxname = mboxlist_find_uniqueid(mbox_id, req->accountid, req->authstate);
             if (mboxname) {
@@ -11295,7 +11321,9 @@ static void _email_bulkupdate_exec(jmap_req_t *req,
             ptrarray_t *uidrecs = ptrarray_nth(&plan->copy, j);
             ptrarray_t msgrecs = PTRARRAY_INITIALIZER;
 
-            /* Lookup the source mailbox. It already must have a plan. */
+            if (!ptrarray_size(uidrecs)) continue;
+
+            /* Lookup the source mailbox plan of the first entry. */
             struct email_uidrec *tmp = ptrarray_nth(uidrecs, 0);
             const char *src_mbox_id = tmp->mboxrec->mbox_id;
             struct email_updateplan *src_plan = hash_lookup(src_mbox_id, &bulk->plans_by_mbox_id);
