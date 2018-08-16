@@ -11943,26 +11943,37 @@ sub test_email_set_update_bulk
 
     # Create email in mailbox A and B
     $store->set_folder('INBOX.A');
-    $self->make_message('Email 1') || die;
+    $self->make_message('Email1') || die;
     $talk->copy(1, 'INBOX.B');
 
-    $res = $jmap->CallMethods([['Email/query', { }, 'R1']]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
-    my $emailId = $res->[0][1]->{ids}[0];
+    # Create email in mailboox A
+    $self->make_message('Email2') || die;
+
+    $res = $jmap->CallMethods([['Email/query', {
+        sort => [{ property => 'subject' }],
+    }, 'R1']]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    my $emailId1 = $res->[0][1]->{ids}[0];
+    my $emailId2 = $res->[0][1]->{ids}[1];
 
     $res = $jmap->CallMethods([['Email/set', {
         update => {
-            $emailId => {
+            $emailId1 => {
                 mailboxIds => {
                     $mboxIdByName{'C'} => JSON::true,
                 },
             },
+            $emailId2 => {
+                mailboxIds => {
+                    $mboxIdByName{'C'} => JSON::true,
+                },
+            }
         },
         'cyrusimap.org/debugBulkUpdate' => JSON::true,
    }, 'R1']]);
 
     $res = $jmap->CallMethods([['Email/get', {
-        ids => [$emailId],
+        ids => [$emailId1, $emailId2],
         properties => ['mailboxIds'],
     }, "R1"]]);
     $self->assert_not_null($res);
