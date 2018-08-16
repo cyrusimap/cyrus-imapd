@@ -1424,49 +1424,28 @@ static int _thread_datesort(const void **a, const void **b)
 static void conversations_thread_sort(conversation_t *conv)
 {
     int i, j;
-    conv_thread_t *thread, *child;
-    ptrarray_t toplevel = PTRARRAY_INITIALIZER;
-    ptrarray_t replies = PTRARRAY_INITIALIZER;
+    conv_thread_t *thread;
+    ptrarray_t items = PTRARRAY_INITIALIZER;
 
     for (thread = conv->thread; thread; thread = thread->next) {
-        if (thread->inreplyto)
-            ptrarray_append(&replies, thread);
-        else
-            ptrarray_append(&toplevel, thread);
+        ptrarray_append(&items, thread);
     }
 
-    ptrarray_sort(&toplevel, _thread_datesort);
-    ptrarray_sort(&replies, _thread_datesort);
+    ptrarray_sort(&items, _thread_datesort);
 
-    // make the list be the top-level items
     conv_thread_t **nextp = &conv->thread;
+
+    // relink the list
     for (i = 0; i < ptrarray_size(&toplevel); i++) {
         thread = ptrarray_nth(&toplevel, i);
         *nextp = thread;
         nextp = &thread->next;
-        // each followed immediately by its own replies
-        for (j = 0; j < ptrarray_size(&replies); j++) {
-            child = ptrarray_nth(&replies, j);
-            if (child->inreplyto != thread->msgid) continue;
-            child = ptrarray_remove(&replies, j);
-            *nextp = child;
-            nextp = &child->next;
-            j--;
-        }
-    }
-
-    // append any remaining drafts to the end of the thread
-    for (j = 0; j < ptrarray_size(&replies); j++) {
-        child = ptrarray_nth(&replies, j);
-        *nextp = child;
-        nextp = &child->next;
     }
 
     // finish the list
     *nextp = NULL;
 
-    ptrarray_fini(&toplevel);
-    ptrarray_fini(&replies);
+    ptrarray_fini(&items);
 }
 
 static void conversation_update_thread(conversation_t *conv,
