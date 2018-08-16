@@ -7924,10 +7924,51 @@ static void jmap_email_get_threadsonly(jmap_req_t *req, struct jmap_get *get)
     }
 }
 
+struct _warmup_mboxcache_cb_rock {
+    jmap_req_t *req;
+    ptrarray_t mboxes;
+};
+
+static int _warmup_mboxcache_cb(const conv_guidrec_t *rec, void* vrock)
+{
+    struct _warmup_mboxcache_cb_rock *rock = vrock;
+    int i;
+    for (i = 0; i < ptrarray_size(&rock->mboxes); i++) {
+        struct mailbox *mbox = ptrarray_nth(&rock->mboxes, i);
+        if (!strcmp(rec->mboxname, mbox->name)) {
+            return 0;
+        }
+    }
+    struct mailbox *mbox = NULL;
+    int r = jmap_openmbox(rock->req, rec->mboxname, &mbox, /*rw*/0);
+    if (!r) {
+        ptrarray_append(&rock->mboxes, mbox);
+    }
+    return r;
+}
+
 static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct email_getargs *args)
 {
     size_t i;
     json_t *val;
+
+    /* Warm up the mailbox cache by opening all mailboxes */
+    struct _warmup_mboxcache_cb_rock rock = { req, PTRARRAY_INITIALIZER };
+    json_array_foreach(get->ids, i, val) {
+        const char *email_id = json_string_value(val);
+        if (email_id[0] != 'M' || strlen(email_id) != 25) {
+            continue;
+        }
+        int r = conversations_guid_foreach(req->cstate, _guid_from_id(email_id),
+                                           _warmup_mboxcache_cb, &rock);
+        if (r) {
+            /* Ignore errors, they'll be handled in email_find */
+            syslog(LOG_WARNING, "__warmup_mboxcache_cb(%s): %s", email_id, error_message(r));
+            continue;
+        }
+    }
+
+    /* Process emails one after the other */
     json_array_foreach(get->ids, i, val) {
         const char *id = json_string_value(val);
         char *mboxname = NULL;
@@ -7960,6 +8001,13 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
         free(mboxname);
         msgrecord_unref(&mr);
     }
+
+    /* Close cached mailboxes */
+    struct mailbox *mbox = NULL;
+    while ((mbox = ptrarray_pop(&rock.mboxes))) {
+        jmap_closembox(req, &mbox);
+    }
+    ptrarray_fini(&rock.mboxes);
 }
 
 static const jmap_property_t email_props[] = {
