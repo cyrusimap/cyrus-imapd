@@ -1951,7 +1951,8 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     /* calculate the changes */
     if (old) {
         /* decrease any relevent counts */
-        if (!(old->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        if (!(old->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
+            !(old->system_flags & FLAG_DELETED)) {
             delta_exists--;
             delta_size -= old->size;
             /* drafts don't update the 'unseen' counter so that
@@ -1976,7 +1977,8 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
     if (new) {
         /* add any counts */
-        if (!(new->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        if (!(new->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
+            !(new->system_flags & FLAG_DELETED)) {
             delta_exists++;
             delta_size += new->size;
             /* drafts don't update the 'unseen' counter so that
