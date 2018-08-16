@@ -94,8 +94,6 @@ struct conv_thread {
     struct message_guid guid;
     int exists;
     time_t internaldate;
-    int32_t msgid;
-    int32_t inreplyto;
 };
 
 struct conv_folder {

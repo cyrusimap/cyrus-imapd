@@ -830,8 +830,6 @@ EXPORTED int conversation_store(struct conversations_state *state,
         dlist_setguid(nn, "GUID", &thread->guid);
         dlist_setnum32(nn, "EXISTS", thread->exists);
         dlist_setnum32(nn, "INTERNALDATE", thread->internaldate);
-        dlist_setnum32(nn, "MSGID", thread->msgid);
-        if (thread->inreplyto) dlist_setnum32(nn, "INREPLYTO", thread->inreplyto);
     }
 
     dlist_setnum64(dl, "CREATEDMODSEQ", conv->createdmodseq);
@@ -1085,10 +1083,6 @@ static conv_thread_t *parse_thread(struct dlist *dl)
         if (n) thread->exists = dlist_num(n);
         n = dlist_getchildn(item, 2);
         if (n) thread->internaldate = dlist_num(n);
-        n = dlist_getchildn(item, 3);
-        if (n) thread->msgid = dlist_num(n);
-        n = dlist_getchildn(item, 4);
-        if (n) thread->inreplyto = dlist_num(n);
         item = item->next;
     }
 
@@ -1450,8 +1444,7 @@ static void conversations_thread_sort(conversation_t *conv)
 
 static void conversation_update_thread(conversation_t *conv,
                                        const struct message_guid *guid,
-                                       time_t internaldate, const char *msgid,
-                                       const char *inreplyto,
+                                       time_t internaldate,
                                        int delta_exists)
 {
     conv_thread_t *thread, **nextp = &conv->thread;
@@ -1479,9 +1472,6 @@ static void conversation_update_thread(conversation_t *conv,
     message_guid_copy(&thread->guid, guid);
     thread->internaldate = internaldate;
     thread->exists += delta_exists;
-    /* just copy, it's not that expensive for a write */
-    thread->msgid = msgid ? crc32_cstring(msgid) : 0;
-    thread->inreplyto = inreplyto ? crc32_cstring(inreplyto) : 0;
 
     conversations_thread_sort(conv);
     // if we've sorted, it's probably dirty
@@ -2026,26 +2016,19 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         if (envtokens[ENV_FROM])
             message_parse_env_address(envtokens[ENV_FROM], &addr);
 
-        const char *msgid = envtokens[ENV_MSGID];
-        const char *inreplyto = NULL;
-        if (record->system_flags & FLAG_DRAFT) {
-            /* non-drafts don't get an inreplyto, using it as both a value AND a flag */
-            inreplyto = envtokens[ENV_INREPLYTO];
-        }
-
         /* XXX - internaldate vs gmtime? */
         conversation_update_sender(conv,
                                    addr.name, addr.route,
                                    addr.mailbox, addr.domain,
                                    record->gmtime, delta_exists);
-
-        conversation_update_thread(conv,
-                                   &record->guid,
-                                   record->internaldate,
-                                   msgid, inreplyto,
-                                   delta_exists);
         free(env);
     }
+
+
+    conversation_update_thread(conv,
+                               &record->guid,
+                               record->internaldate,
+                               delta_exists);
 
     conversation_update(cstate, conv, mailbox->name,
                         delta_num_records,
