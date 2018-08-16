@@ -7320,9 +7320,9 @@ sub test_thread_get
 
     # Assert sort order by date
     $self->assert_str_equals($msgA->{id}, $threadA->{emailIds}[0]);
-    $self->assert_str_equals($draftid, $threadA->{emailIds}[1]);
-    $self->assert_str_equals($msgC->{id}, $threadA->{emailIds}[2]);
-    $self->assert_str_equals($msgD->{id}, $threadA->{emailIds}[3]);
+    $self->assert_str_equals($msgC->{id}, $threadA->{emailIds}[1]);
+    $self->assert_str_equals($msgD->{id}, $threadA->{emailIds}[2]);
+    $self->assert_str_equals($draftid, $threadA->{emailIds}[3]);
 }
 
 sub test_identity_get
@@ -9472,7 +9472,7 @@ sub test_thread_latearrival_drafts
     $res = $jmap->CallMethods([
         ['Thread/get', { 'ids' => [$threadid] }, 'R3'],
     ]);
-    $self->assert_deep_equals([$map{A},$map{E},$map{B},$map{D},$map{C}],
+    $self->assert_deep_equals([$map{A},$map{B},$map{E},$map{D},$map{C}],
                               $res->[0][1]{list}[0]{emailIds});
 
     # now deliver something late that's earlier than the draft
@@ -9506,7 +9506,7 @@ sub test_thread_latearrival_drafts
     $res = $jmap->CallMethods([
         ['Thread/get', { 'ids' => [$threadid] }, 'R3'],
     ]);
-    $self->assert_deep_equals([$map{A},$map{E},$map{F},$map{B},$map{D},$map{C}],
+    $self->assert_deep_equals([$map{A},$map{F},$map{B},$map{E},$map{D},$map{C}],
                               $res->[0][1]{list}[0]{emailIds});
 }
 
