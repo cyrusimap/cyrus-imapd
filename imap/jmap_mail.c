@@ -10983,12 +10983,14 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
 
         if (update->mailboxids == NULL) {
             /* This update only rewrites keywords. */
-            int j;
-            for (j = 0; j < ptrarray_size(uidrecs); j++) {
-                struct email_uidrec *uidrec = ptrarray_nth(uidrecs, j);
-                struct email_mboxrec *mboxrec = uidrec->mboxrec;
-                struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
-                ptrarray_append(&plan->setflags, uidrec);
+            if (update->keywords) {
+                int j;
+                for (j = 0; j < ptrarray_size(uidrecs); j++) {
+                    struct email_uidrec *uidrec = ptrarray_nth(uidrecs, j);
+                    struct email_mboxrec *mboxrec = uidrec->mboxrec;
+                    struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
+                    ptrarray_append(&plan->setflags, uidrec);
+                }
             }
             continue;
         }
