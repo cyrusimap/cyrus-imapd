@@ -10752,10 +10752,10 @@ static void _email_bulkupdate_plancopies(struct email_bulkupdate *bulk,
         int i;
         for (i = 0; i < ptrarray_size(updates); i++) {
             struct email_update *update = ptrarray_nth(updates, i);
-            ptrarray_t *uidrecs = hash_lookup(update->email_id, &bulk->uidrecs_by_email_id);
+            ptrarray_t *current_uidrecs = hash_lookup(update->email_id, &bulk->uidrecs_by_email_id);
             int j;
-            for (j = 0; j < ptrarray_size(uidrecs); j++) {
-                struct email_uidrec *uidrec = ptrarray_nth(uidrecs, j);
+            for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
+                struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
                 const char *src_mbox_id = uidrec->mboxrec->mbox_id;
                 uintptr_t count = (uintptr_t) hash_lookup(src_mbox_id, &src_mbox_id_counts);
                 hash_insert(src_mbox_id, (void*) count++, &src_mbox_id_counts);
@@ -10767,13 +10767,13 @@ static void _email_bulkupdate_plancopies(struct email_bulkupdate *bulk,
 
         for (i = 0; i < ptrarray_size(updates); i++) {
             struct email_update *update = ptrarray_nth(updates, i);
-            ptrarray_t *uidrecs = hash_lookup(update->email_id, &bulk->uidrecs_by_email_id);
+            ptrarray_t *current_uidrecs = hash_lookup(update->email_id, &bulk->uidrecs_by_email_id);
 
             int j;
-            struct email_uidrec *pick_uidrec = ptrarray_nth(uidrecs, 0);
+            struct email_uidrec *pick_uidrec = ptrarray_nth(current_uidrecs, 0);
             uintptr_t best_count = (uintptr_t) hash_lookup(pick_uidrec->mboxrec->mbox_id, &src_mbox_id_counts);
-            for (j = 1; j < ptrarray_size(uidrecs); j++) {
-                struct email_uidrec *tmp = ptrarray_nth(uidrecs, j);
+            for (j = 1; j < ptrarray_size(current_uidrecs); j++) {
+                struct email_uidrec *tmp = ptrarray_nth(current_uidrecs, j);
                 uintptr_t count = (uintptr_t) hash_lookup(tmp->mboxrec->mbox_id, &src_mbox_id_counts);
                 if (count > best_count) {
                     pick_uidrec = tmp;
@@ -10900,14 +10900,14 @@ static void _email_bulkupdate_plankeywords(struct email_bulkupdate *bulk)
             continue;
         }
         json_t *jkeywords = json_object();
-        ptrarray_t *uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
+        ptrarray_t *current_uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
 
         /* Aggregate all JMAP keywords of this email - need counts for $seen */
         int i;
         hash_table keywordcounts = HASH_TABLE_INITIALIZER;
-        construct_hash_table(&keywordcounts, ptrarray_size(uidrecs)*MAX_USER_FLAGS, 0);
-        for (i = 0; i < ptrarray_size(uidrecs); i++) {
-            struct email_uidrec *uidrec = ptrarray_nth(uidrecs, i);
+        construct_hash_table(&keywordcounts, ptrarray_size(current_uidrecs)*MAX_USER_FLAGS, 0);
+        for (i = 0; i < ptrarray_size(current_uidrecs); i++) {
+            struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, i);
             struct email_updateplan *plan = hash_lookup(uidrec->mboxrec->mbox_id,
                                                         &bulk->plans_by_mbox_id);
             msgrecord_t *mr = NULL;
@@ -10936,7 +10936,7 @@ static void _email_bulkupdate_plankeywords(struct email_bulkupdate *bulk)
         }
         /* Convert aggregated keywords to JMAP */
         hash_iter *kwiter = hash_table_iter(&keywordcounts);
-        size_t msgcount = ptrarray_size(uidrecs);
+        size_t msgcount = ptrarray_size(current_uidrecs);
         while (hash_iter_next(kwiter)) {
             const char *keyword = hash_iter_key(kwiter);
             uintptr_t count = (uintptr_t) hash_iter_val(kwiter);
@@ -10972,14 +10972,14 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
         if (json_object_get(bulk->set_errors, email_id)) {
             continue;
         }
-        ptrarray_t *uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
+        ptrarray_t *current_uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
 
         if (update->mailboxids == NULL) {
             /* This update only rewrites keywords. */
             if (update->keywords) {
                 int j;
-                for (j = 0; j < ptrarray_size(uidrecs); j++) {
-                    struct email_uidrec *uidrec = ptrarray_nth(uidrecs, j);
+                for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
+                    struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
                     struct email_mboxrec *mboxrec = uidrec->mboxrec;
                     struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
                     ptrarray_append(&plan->setflags, uidrec);
@@ -10993,15 +10993,18 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
             json_t *jval = NULL;
             json_object_foreach(update->mailboxids, mbox_id, jval) {
                 int j;
+
+                /* Lookup the uid record of this email in this mailbox, can be NULL. */
                 struct email_uidrec *uidrec = NULL;
                 struct email_updateplan *plan = hash_lookup(mbox_id, &bulk->plans_by_mbox_id);
-                for (j = 0; j < ptrarray_size(uidrecs); j++) {
-                    struct email_uidrec *tmp = ptrarray_nth(uidrecs, j);
+                for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
+                    struct email_uidrec *tmp = ptrarray_nth(current_uidrecs, j);
                     if (!strcmp(mbox_id, tmp->mboxrec->mbox_id)) {
                         uidrec = tmp;
                         break;
                     }
                 }
+                /* Patch the mailbox */
                 if (jval == json_true()) {
                     if (uidrec) {
                         /* This email is patched to stay in it's mailbox. Whatever. */
@@ -11026,13 +11029,13 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
                     }
                 }
             }
-            /* If this update also updates keywords, make sure to set the flags
+            /* If this update also updates keywords, make sure to set flags
              * also on the current uid records that stay in their mailbox. */
 
             if (update->keywords) {
                 int j;
-                for (j = 0; j < ptrarray_size(uidrecs); j++) {
-                    struct email_uidrec *uidrec = ptrarray_nth(uidrecs, j);
+                for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
+                    struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
                     if (json_object_get(update->mailboxids, uidrec->mboxrec->mbox_id)) {
                         continue;
                     }
@@ -11045,8 +11048,12 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
         else {
             json_t *mailboxids = json_deep_copy(update->mailboxids);
             int j;
-            for (j = 0; j < ptrarray_size(uidrecs); j++) {
-                struct email_uidrec *uidrec = ptrarray_nth(uidrecs, j);
+
+            /* For all current uid records of this email, determine if to
+             * keep, create or delete them in their respective mailbox. */
+
+            for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
+                struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
                 struct email_mboxrec *mboxrec = uidrec->mboxrec;
                 struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
                 if (json_object_get(mailboxids, mboxrec->mbox_id)) {
@@ -11234,12 +11241,12 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
             msgrecord_unref(&mr);
             if (r) continue;
 
-            ptrarray_t *uidrecs = hash_lookup(uidrec->email_id, &bulk->uidrecs_by_email_id);
-            if (uidrecs == NULL) {
-                uidrecs = ptrarray_new();
-                hash_insert(uidrec->email_id, uidrecs, &bulk->uidrecs_by_email_id);
+            ptrarray_t *current_uidrecs = hash_lookup(uidrec->email_id, &bulk->uidrecs_by_email_id);
+            if (current_uidrecs == NULL) {
+                current_uidrecs = ptrarray_new();
+                hash_insert(uidrec->email_id, current_uidrecs, &bulk->uidrecs_by_email_id);
             }
-            ptrarray_append(uidrecs, uidrec);
+            ptrarray_append(current_uidrecs, uidrec);
         }
     }
     strarray_fini(&email_ids);
