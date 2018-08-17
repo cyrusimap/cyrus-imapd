@@ -11051,14 +11051,10 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
                 else {
                     /* Delete message from mailbox */
                     ptrarray_append(&plan->delete, uidrec);
-                    json_object_del(mailboxids, mboxrec->mbox_id);
                 }
             }
-            if (json_object_size(mailboxids) == 0) {
-                json_decref(mailboxids);
-                continue;
-            }
-            /* Copy message to mailbox */
+
+            /* Copy message to any new mailboxes which weren't seen in uidrecs */
             const char *mbox_id;
             json_t *jval;
             json_object_foreach(mailboxids, mbox_id, jval) {
