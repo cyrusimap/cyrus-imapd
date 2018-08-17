@@ -10736,10 +10736,103 @@ static void _email_updateplan_error(struct email_updateplan *plan, int errcode, 
     json_decref(err);
 }
 
-static void _email_bulkupdate_plancopies(struct email_bulkupdate *bulk,
-                                       hash_table *copyupdates_by_mbox_id)
+static void _email_bulkupdate_planmailboxids(struct email_bulkupdate *bulk, ptrarray_t *updates)
 {
-    hash_iter *iter = hash_table_iter(copyupdates_by_mbox_id);
+    hash_table copyupdates_by_mbox_id = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&copyupdates_by_mbox_id, ptrarray_size(updates)+1, 0);
+
+    int i;
+    for (i = 0; i < ptrarray_size(updates); i++) {
+        struct email_update *update = ptrarray_nth(updates, i);
+        const char *email_id = update->email_id;
+
+        if (json_object_get(bulk->set_errors, email_id)) {
+            continue;
+        }
+        ptrarray_t *current_uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
+
+        if (!update->mailboxids) {
+            continue;
+        }
+
+        if (update->patch_mailboxids) {
+            const char *mbox_id = NULL;
+            json_t *jval = NULL;
+            json_object_foreach(update->mailboxids, mbox_id, jval) {
+                int j;
+
+                /* Lookup the uid record of this email in this mailbox, can be NULL. */
+                struct email_uidrec *uidrec = NULL;
+                struct email_updateplan *plan = hash_lookup(mbox_id, &bulk->plans_by_mbox_id);
+                for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
+                    struct email_uidrec *tmp = ptrarray_nth(current_uidrecs, j);
+                    if (!strcmp(mbox_id, tmp->mboxrec->mbox_id)) {
+                        uidrec = tmp;
+                        break;
+                    }
+                }
+                /* Patch the mailbox */
+                if (jval == json_true()) {
+                    if (uidrec) {
+                        /* This email is patched to stay in it's mailbox. Whatever. */
+                    }
+                    else {
+                        /* This is a new mailbox for this email. Copy it over. */
+                        ptrarray_t *copyupdates = hash_lookup(mbox_id, &copyupdates_by_mbox_id);
+                        if (copyupdates == NULL) {
+                            copyupdates = ptrarray_new();
+                            hash_insert(mbox_id, copyupdates, &copyupdates_by_mbox_id);
+                        }
+                        ptrarray_append(copyupdates, update);
+                    }
+                }
+                else {
+                    if (uidrec) {
+                        /* Delete the email from this mailbox. */
+                        ptrarray_append(&plan->delete, uidrec);
+                    }
+                }
+            }
+        }
+        else {
+            json_t *mailboxids = json_deep_copy(update->mailboxids);
+            int j;
+
+            /* For all current uid records of this email, determine if to
+             * keep, create or delete them in their respective mailbox. */
+
+            for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
+                struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
+                struct email_mboxrec *mboxrec = uidrec->mboxrec;
+                struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
+                if (json_object_get(mailboxids, mboxrec->mbox_id)) {
+                    /* Keep message in mailbox */
+                    json_object_del(mailboxids, mboxrec->mbox_id);
+                }
+                else {
+                    /* Delete message from mailbox */
+                    ptrarray_append(&plan->delete, uidrec);
+                }
+            }
+
+            /* Copy message to any new mailboxes which weren't seen in uidrecs */
+            const char *mbox_id;
+            json_t *jval;
+            json_object_foreach(mailboxids, mbox_id, jval) {
+                ptrarray_t *copyupdates = hash_lookup(mbox_id, &copyupdates_by_mbox_id);
+                if (copyupdates == NULL) {
+                    copyupdates = ptrarray_new();
+                    hash_insert(mbox_id, copyupdates, &copyupdates_by_mbox_id);
+                }
+                ptrarray_append(copyupdates, update);
+            }
+            json_decref(mailboxids);
+        }
+    }
+
+    /* Cluster copy operations by mailbox */
+
+    hash_iter *iter = hash_table_iter(&copyupdates_by_mbox_id);
     while (hash_iter_next(iter)) {
         const char *dst_mbox_id = hash_iter_key(iter);
         ptrarray_t *updates = hash_iter_val(iter);
@@ -10782,7 +10875,6 @@ static void _email_bulkupdate_plancopies(struct email_bulkupdate *bulk,
             }
 
             /* Add the picked uid record to its slot in the copy plan */
-
             struct email_updateplan *plan = hash_lookup(dst_mbox_id, &bulk->plans_by_mbox_id);
             ptrarray_t *pick_uidrecs = NULL;
             for (j = 0; j < ptrarray_size(&plan->copy); j++) {
@@ -10799,6 +10891,14 @@ static void _email_bulkupdate_plancopies(struct email_bulkupdate *bulk,
                 ptrarray_append(&plan->copy, pick_uidrecs);
             }
             ptrarray_append(pick_uidrecs, pick_uidrec);
+
+            /* XXX If the update doesn't change keywords, add an empty patch.
+             * This will make the keyword planner determine the consolidated
+             * keywords for this JMAP email. */
+            if (!update->keywords) {
+                update->keywords = json_object();
+                update->patch_keywords = 1;
+            }
         }
         free_hash_table(&src_mbox_id_counts, NULL);
     }
@@ -10816,6 +10916,9 @@ static void _email_bulkupdate_plancopies(struct email_bulkupdate *bulk,
         }
     }
     hash_iter_free(&iter);
+
+    free_hash_table(&copyupdates_by_mbox_id, _ptrarray_free_p);
+
 }
 
 static void _email_bulkupdate_checklimits(struct email_bulkupdate *bulk)
@@ -10888,23 +10991,41 @@ static void _email_bulkupdate_checklimits(struct email_bulkupdate *bulk)
     hash_iter_free(&iter);
 }
 
-static void _email_bulkupdate_plankeywords(struct email_bulkupdate *bulk)
+static void _email_bulkupdate_plankeywords(struct email_bulkupdate *bulk, ptrarray_t *updates)
 {
-    /* Determine aggregated JMAP keywords for each keyword patch */
-    hash_iter *iter = hash_table_iter(&bulk->updates_by_email_id);
-    while (hash_iter_next(iter)) {
-        const char *email_id = hash_iter_key(iter);
-        struct email_update *update = hash_iter_val(iter);
+    int i;
+
+    for (i = 0; i < ptrarray_size(updates); i++) {
+        struct email_update *update = ptrarray_nth(updates, i);
+        const char *email_id = update->email_id;
+
+        if (!update->keywords) {
+            continue;
+        }
+
         if (json_object_get(bulk->set_errors, email_id)) {
             continue;
         }
+        ptrarray_t *current_uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
+
+        /* Add keyword update to all current uid records */
+        // XXX - should not set on deleted
+        int j;
+        for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
+            struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
+            struct email_mboxrec *mboxrec = uidrec->mboxrec;
+            struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
+            ptrarray_append(&plan->setflags, uidrec);
+        }
+
         if (!update->patch_keywords) {
             continue;
         }
-        json_t *jkeywords = json_object();
-        ptrarray_t *current_uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
 
-        /* Aggregate all JMAP keywords of this email - need counts for $seen */
+        /* Prepare keyword patch by aggregating current JMAP keywords */
+        json_t *jkeywords = json_object();
+
+        /* Count current flags to determine $seen keyword */
         int i;
         hash_table keywordcounts = HASH_TABLE_INITIALIZER;
         construct_hash_table(&keywordcounts, ptrarray_size(current_uidrecs)*MAX_USER_FLAGS, 0);
@@ -10955,6 +11076,19 @@ static void _email_bulkupdate_plankeywords(struct email_bulkupdate *bulk)
         json_decref(jkeywords);
         json_decref(patch);
     }
+
+    /* Determine aggregated JMAP keywords for each keyword patch */
+    hash_iter *iter = hash_table_iter(&bulk->updates_by_email_id);
+    while (hash_iter_next(iter)) {
+        const char *email_id = hash_iter_key(iter);
+        struct email_update *update = hash_iter_val(iter);
+        if (json_object_get(bulk->set_errors, email_id)) {
+            continue;
+        }
+        if (!update->patch_keywords) {
+            continue;
+        }
+    }
     hash_iter_free(&iter);
 }
 
@@ -10962,133 +11096,15 @@ static void _email_bulkupdate_plankeywords(struct email_bulkupdate *bulk)
 static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *updates)
 {
     int i;
-    hash_table copyupdates_by_mbox_id = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&copyupdates_by_mbox_id, ptrarray_size(updates)+1, 0);
 
-    /* Open mailboxes and determine non-expunged uid records per email */
+    /* Plan mailbox copies, moves and deletes */
+    _email_bulkupdate_planmailboxids(bulk, updates);
 
-    for (i = 0; i < ptrarray_size(updates); i++) {
-        struct email_update *update = ptrarray_nth(updates, i);
-        const char *email_id = update->email_id;
+    /* Pre-process keyword updates */
+    _email_bulkupdate_plankeywords(bulk, updates);
 
-        if (json_object_get(bulk->set_errors, email_id)) {
-            continue;
-        }
-        ptrarray_t *current_uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
-
-        if (update->mailboxids == NULL) {
-            /* This update only rewrites keywords. */
-            if (update->keywords) {
-                int j;
-                for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
-                    struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
-                    struct email_mboxrec *mboxrec = uidrec->mboxrec;
-                    struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
-                    ptrarray_append(&plan->setflags, uidrec);
-                }
-            }
-            continue;
-        }
-
-        if (update->patch_mailboxids) {
-            const char *mbox_id = NULL;
-            json_t *jval = NULL;
-            json_object_foreach(update->mailboxids, mbox_id, jval) {
-                int j;
-
-                /* Lookup the uid record of this email in this mailbox, can be NULL. */
-                struct email_uidrec *uidrec = NULL;
-                struct email_updateplan *plan = hash_lookup(mbox_id, &bulk->plans_by_mbox_id);
-                for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
-                    struct email_uidrec *tmp = ptrarray_nth(current_uidrecs, j);
-                    if (!strcmp(mbox_id, tmp->mboxrec->mbox_id)) {
-                        uidrec = tmp;
-                        break;
-                    }
-                }
-                /* Patch the mailbox */
-                if (jval == json_true()) {
-                    if (uidrec) {
-                        /* This email is patched to stay in it's mailbox. Whatever. */
-                        if (update->keywords) {
-                            ptrarray_append(&plan->setflags, uidrec);
-                        }
-                    }
-                    else {
-                        /* This is a new mailbox for this email. Copy it over. */
-                        ptrarray_t *copyupdates = hash_lookup(mbox_id, &copyupdates_by_mbox_id);
-                        if (copyupdates == NULL) {
-                            copyupdates = ptrarray_new();
-                            hash_insert(mbox_id, copyupdates, &copyupdates_by_mbox_id);
-                        }
-                        ptrarray_append(copyupdates, update);
-                    }
-                }
-                else {
-                    if (uidrec) {
-                        /* Delete the email from this mailbox. */
-                        ptrarray_append(&plan->delete, uidrec);
-                    }
-                }
-            }
-            /* If this update also updates keywords, make sure to set flags
-             * also on the current uid records that stay in their mailbox. */
-
-            if (update->keywords) {
-                int j;
-                for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
-                    struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
-                    if (json_object_get(update->mailboxids, uidrec->mboxrec->mbox_id)) {
-                        continue;
-                    }
-                    struct email_updateplan *plan = hash_lookup(uidrec->mboxrec->mbox_id,
-                                                                &bulk->plans_by_mbox_id);
-                    ptrarray_append(&plan->setflags, uidrec);
-                }
-            }
-        }
-        else {
-            json_t *mailboxids = json_deep_copy(update->mailboxids);
-            int j;
-
-            /* For all current uid records of this email, determine if to
-             * keep, create or delete them in their respective mailbox. */
-
-            for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
-                struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
-                struct email_mboxrec *mboxrec = uidrec->mboxrec;
-                struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
-                if (json_object_get(mailboxids, mboxrec->mbox_id)) {
-                    /* Keep message in mailbox */
-                    if (update->keywords) {
-                        ptrarray_append(&plan->setflags, uidrec);
-                    }
-                    json_object_del(mailboxids, mboxrec->mbox_id);
-                }
-                else {
-                    /* Delete message from mailbox */
-                    ptrarray_append(&plan->delete, uidrec);
-                }
-            }
-
-            /* Copy message to any new mailboxes which weren't seen in uidrecs */
-            const char *mbox_id;
-            json_t *jval;
-            json_object_foreach(mailboxids, mbox_id, jval) {
-                ptrarray_t *copyupdates = hash_lookup(mbox_id, &copyupdates_by_mbox_id);
-                if (copyupdates == NULL) {
-                    copyupdates = ptrarray_new();
-                    hash_insert(mbox_id, copyupdates, &copyupdates_by_mbox_id);
-                }
-                ptrarray_append(copyupdates, update);
-            }
-            json_decref(mailboxids);
-        }
-    }
-
-    /* Cluster copy operations by mailbox */
-    _email_bulkupdate_plancopies(bulk, &copyupdates_by_mbox_id);
-    free_hash_table(&copyupdates_by_mbox_id, _ptrarray_free_p);
+    /* Check mailbox count and keyword limits per email */
+    _email_bulkupdate_checklimits(bulk);
 
     /* Validate plans */
     strarray_t erroneous_plans = STRARRAY_INITIALIZER;
@@ -11142,11 +11158,6 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
     }
     strarray_fini(&erroneous_plans);
 
-    /* Pre-process keyword updates */
-    _email_bulkupdate_plankeywords(bulk);
-
-    /* Check mailbox count and keyword limits per email */
-    _email_bulkupdate_checklimits(bulk);
 }
 
 static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk, ptrarray_t *updates)
