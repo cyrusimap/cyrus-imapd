@@ -10786,9 +10786,11 @@ static void _email_bulkupdate_plancopies(struct email_bulkupdate *bulk,
             struct email_updateplan *plan = hash_lookup(dst_mbox_id, &bulk->plans_by_mbox_id);
             ptrarray_t *pick_uidrecs = NULL;
             for (j = 0; j < ptrarray_size(&plan->copy); j++) {
-                pick_uidrecs = ptrarray_nth(&plan->copy, j);
-                struct email_uidrec *tmp = ptrarray_nth(pick_uidrecs, 0);
+                ptrarray_t *copy_uidrecs = ptrarray_nth(&plan->copy, j);
+                struct email_uidrec *tmp = ptrarray_nth(copy_uidrecs, 0);
                 if (!strcmp(tmp->mboxrec->mbox_id, pick_uidrec->mboxrec->mbox_id)) {
+                    /* We found an existing slot in the copy plan */
+                    pick_uidrecs = copy_uidrecs;
                     break;
                 }
             }
