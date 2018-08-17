@@ -11029,13 +11029,6 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
                         /* Delete the email from this mailbox. */
                         ptrarray_append(&plan->delete, uidrec);
                     }
-                    else {
-                        /* Can't delete an email from a mailbox it isn't in. */
-                        json_object_set_new(bulk->set_errors, email_id,
-                                json_pack("{s:s s:[s]}", "type", "invalidProperties"
-                                    "properties", "mailboxIds"));
-                        break;
-                    }
                 }
             }
         }
