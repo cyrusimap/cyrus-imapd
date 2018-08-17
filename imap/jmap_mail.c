@@ -10787,7 +10787,7 @@ static void _email_bulkupdate_plancopies(struct email_bulkupdate *bulk,
             ptrarray_t *pick_uidrecs = NULL;
             for (j = 0; j < ptrarray_size(&plan->copy); j++) {
                 pick_uidrecs = ptrarray_nth(&plan->copy, j);
-                struct email_uidrec *tmp = ptrarray_nth(uidrecs, 0);
+                struct email_uidrec *tmp = ptrarray_nth(pick_uidrecs, 0);
                 if (!strcmp(tmp->mboxrec->mbox_id, pick_uidrec->mboxrec->mbox_id)) {
                     break;
                 }
