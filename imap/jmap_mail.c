@@ -5376,7 +5376,6 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
             "/", collapse_threads ?  "collapsed" : "uncollapsed",
             "/", search->hash, NULL
     );
-
     *is_cachedptr = 0;
 
     /* Lookup cache */
@@ -10631,6 +10630,7 @@ struct email_updateplan {
     ptrarray_t copy;      /* Array of array of email_uidrec, grouped by mailbox */
     ptrarray_t setflags;  /* Array of email_uidrec */
     ptrarray_t delete;    /* Array of email_uidrec */
+    struct email_mboxrec *mboxrec; /* Mailbox record */
 };
 
 struct email_bulkupdate {
@@ -10639,7 +10639,8 @@ struct email_bulkupdate {
     hash_table uidrecs_by_email_id; /* Map to ptrarray of email_uidrec, excluding expunged */
     hash_table plans_by_mbox_id;    /* Map to email_updateplan */
     json_t *set_errors;             /* JMAP SetError by email id */
-    ptrarray_t *cur_mboxrecs;       /* List of mboxrecs, including expunged */
+    ptrarray_t *cur_mboxrecs;       /* List of current mbox and UI recs, including expunged */
+    ptrarray_t *new_mboxrecs;       /* New mbox and UID records allocated by planner */
 };
 
 #define _EMAIL_BULKUPDATE_INITIALIZER {\
@@ -10649,6 +10650,7 @@ struct email_bulkupdate {
     HASH_TABLE_INITIALIZER, \
     json_object(), \
     NULL, \
+    ptrarray_new() \
 }
 
 void _email_updateplan_free_p(void* p)
@@ -10684,16 +10686,19 @@ void _email_bulkupdate_close(struct email_bulkupdate *bulk)
     free_hash_table(&bulk->updates_by_email_id, NULL);
     free_hash_table(&bulk->plans_by_mbox_id, _email_updateplan_free_p);
     _email_mboxrecs_free(&bulk->cur_mboxrecs);
+    _email_mboxrecs_free(&bulk->new_mboxrecs);
     json_decref(bulk->set_errors);
 }
 
 static struct email_updateplan *_email_bulkupdate_addplan(struct email_bulkupdate *bulk,
-                                                          struct mailbox *mbox)
+                                                          struct mailbox *mbox,
+                                                          struct email_mboxrec *mboxrec)
 {
     struct email_updateplan *plan = xzmalloc(sizeof(struct email_updateplan));
     plan->mbox = mbox;
     plan->mbox_id = xstrdup(mbox->uniqueid);
     plan->mboxname = xstrdup(mbox->name);
+    plan->mboxrec = mboxrec;
     hash_insert(plan->mbox_id, plan, &bulk->plans_by_mbox_id);
     return plan;
 }
@@ -11008,14 +11013,29 @@ static void _email_bulkupdate_plankeywords(struct email_bulkupdate *bulk, ptrarr
         }
         ptrarray_t *current_uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
 
-        /* Add keyword update to all current uid records */
-        // XXX - should not set on deleted
-        int j;
-        for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
-            struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
-            struct email_mboxrec *mboxrec = uidrec->mboxrec;
-            struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
-            ptrarray_append(&plan->setflags, uidrec);
+        if (!update->mailboxids) {
+            /* Add keyword update to all current uid records */
+            int j;
+            for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
+                struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
+                struct email_mboxrec *mboxrec = uidrec->mboxrec;
+                struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
+                ptrarray_append(&plan->setflags, uidrec);
+            }
+        }
+        else {
+            /* Add keyword update to all current records that won't be deleted */
+            int j;
+            for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
+                struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
+                struct email_mboxrec *mboxrec = uidrec->mboxrec;
+                json_t *jval = json_object_get(update->mailboxids, mboxrec->mbox_id);
+                if (jval == json_true() || (jval == NULL && update->patch_mailboxids)) {
+                    struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id,
+                                                                &bulk->plans_by_mbox_id);
+                    ptrarray_append(&plan->setflags, uidrec);
+                }
+            }
         }
 
         if (!update->patch_keywords) {
@@ -11172,35 +11192,6 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
         hash_insert(update->email_id, update, &bulk->updates_by_email_id);
     }
 
-    /* Open mailboxes and initialize their update plans */
-    size_t mboxhash_size = ptrarray_size(updates) * JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL + 1;
-    construct_hash_table(&bulk->plans_by_mbox_id, mboxhash_size, 0);
-    for (i = 0; i < ptrarray_size(updates); i++) {
-        struct email_update *update = ptrarray_nth(updates, i);
-        if (!update->mailboxids) {
-            continue;
-        }
-        json_t *jval;
-        const char *mbox_id;
-        json_object_foreach(update->mailboxids, mbox_id, jval) {
-            if (hash_lookup(mbox_id, &bulk->plans_by_mbox_id)) continue;
-            struct mailbox *mbox = NULL;
-            char *mboxname = mboxlist_find_uniqueid(mbox_id, req->accountid, req->authstate);
-            if (mboxname) {
-                jmap_openmbox(req, mboxname, &mbox, /*rw*/1);
-            }
-            if (mbox) {
-                _email_bulkupdate_addplan(bulk, mbox);
-            }
-            else {
-                json_object_set_new(bulk->set_errors, update->email_id,
-                        json_pack("{s:s s:[s]}", "type", "invalidProperties",
-                            "properties", "mailboxIds"));
-            }
-            free(mboxname);
-        }
-    }
-
     /* Determine uid records per mailbox */
     strarray_t email_ids = STRARRAY_INITIALIZER;
     for (i = 0; i < ptrarray_size(updates); i++) {
@@ -11212,9 +11203,9 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
     }
     _email_mboxrecs_read(req->cstate, &email_ids, bulk->set_errors, &bulk->cur_mboxrecs);
 
-    /* Map email ids to their list of non-deleted uid records. Create an
-     * update plan for any mailbox that hasn't been opened already. */
-
+    /* Open current mailboxes */
+    size_t mboxhash_size = ptrarray_size(updates) * JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL + 1;
+    construct_hash_table(&bulk->plans_by_mbox_id, mboxhash_size, 0);
     construct_hash_table(&bulk->uidrecs_by_email_id, strarray_size(&email_ids)+1, 0);
     for (i = 0; i < ptrarray_size(bulk->cur_mboxrecs); i++) {
         struct email_mboxrec *mboxrec = ptrarray_nth(bulk->cur_mboxrecs, i);
@@ -11234,8 +11225,9 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
                 }
                 continue;
             }
-            plan = _email_bulkupdate_addplan(bulk, mbox);
+            plan = _email_bulkupdate_addplan(bulk, mbox, mboxrec);
         }
+        /* Map email ids to their list of non-deleted uid records. */
         int j;
         for (j = 0; j < ptrarray_size(&mboxrec->uidrecs); j++) {
             struct email_uidrec *uidrec = ptrarray_nth(&mboxrec->uidrecs, j);
@@ -11263,6 +11255,40 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
         }
     }
     strarray_fini(&email_ids);
+
+    /* Open new mailboxes that haven't been opened already */
+    for (i = 0; i < ptrarray_size(updates); i++) {
+        struct email_update *update = ptrarray_nth(updates, i);
+        if (!update->mailboxids) {
+            continue;
+        }
+        json_t *jval;
+        const char *mbox_id;
+        json_object_foreach(update->mailboxids, mbox_id, jval) {
+            if (hash_lookup(mbox_id, &bulk->plans_by_mbox_id)) {
+                continue;
+            }
+            struct mailbox *mbox = NULL;
+            char *mboxname = mboxlist_find_uniqueid(mbox_id, req->accountid, req->authstate);
+            if (mboxname) {
+                jmap_openmbox(req, mboxname, &mbox, /*rw*/1);
+            }
+            if (mbox) {
+                struct email_mboxrec *mboxrec = xzmalloc(sizeof(struct email_mboxrec));
+                mboxrec->mboxname = xstrdup(mbox->name);
+                mboxrec->mbox_id = xstrdup(mbox->uniqueid);
+                ptrarray_append(bulk->new_mboxrecs, mboxrec);
+                _email_bulkupdate_addplan(bulk, mbox, mboxrec);
+            }
+            else {
+                json_object_set_new(bulk->set_errors, update->email_id,
+                        json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                            "properties", "mailboxIds"));
+            }
+            free(mboxname);
+        }
+    }
+
 
     /* Map updates to update plan */
     _email_bulkupdate_plan(bulk, updates);
@@ -11370,8 +11396,80 @@ static void _email_bulkupdate_exec(jmap_req_t *req,
                                    json_t *not_updated,
                                    json_t *debug)
 {
-    /* First apply keyword updates, then copy messages, then delete */
     hash_iter *iter = hash_table_iter(&bulk->plans_by_mbox_id);
+
+    /* Copy messages */
+    while (hash_iter_next(iter)) {
+        struct email_updateplan *plan = hash_iter_val(iter);
+        struct mailbox *dst_mbox = plan->mbox;
+        int j;
+        for (j = 0; j < ptrarray_size(&plan->copy); j++) {
+            ptrarray_t *src_uidrecs = ptrarray_nth(&plan->copy, j);
+            ptrarray_t src_msgrecs = PTRARRAY_INITIALIZER;
+
+            if (!ptrarray_size(src_uidrecs)) continue;
+
+            /* Lookup the source mailbox plan of the first entry. */
+            struct email_uidrec *tmp = ptrarray_nth(src_uidrecs, 0);
+            const char *src_mbox_id = tmp->mboxrec->mbox_id;
+            struct email_updateplan *src_plan = hash_lookup(src_mbox_id, &bulk->plans_by_mbox_id);
+            struct mailbox *src_mbox = src_plan->mbox;
+            uint32_t last_uid_before_copy = dst_mbox->i.last_uid;
+
+            /* Bulk copy messages per mailbox to destination */
+            int k;
+            for (k = 0; k < ptrarray_size(src_uidrecs); k++) {
+                struct email_uidrec *src_uidrec = ptrarray_nth(src_uidrecs, k);
+                if (json_object_get(bulk->set_errors, src_uidrec->email_id)) {
+                    continue;
+                }
+                msgrecord_t *mrw = msgrecord_from_uid(src_mbox, src_uidrec->uid);
+                ptrarray_append(&src_msgrecs, mrw);
+            }
+            int r = _copy_msgrecords(httpd_authstate, req->userid, &jmap_namespace,
+                                     src_mbox, dst_mbox, &src_msgrecs);
+            if (r) {
+                for (k = 0; k < ptrarray_size(src_uidrecs); k++) {
+                    struct email_uidrec *src_uidrec = ptrarray_nth(src_uidrecs, k);
+                    if (json_object_get(bulk->set_errors, src_uidrec->email_id)) {
+                        continue;
+                    }
+                    json_object_set_new(bulk->set_errors, src_uidrec->email_id, jmap_server_error(r));
+                }
+            }
+            for (k = 0; k < ptrarray_size(&src_msgrecs); k++) {
+                msgrecord_t *mrw = ptrarray_nth(&src_msgrecs, k);
+                msgrecord_unref(&mrw);
+            }
+            ptrarray_fini(&src_msgrecs);
+
+            for (k = 0; k < ptrarray_size(src_uidrecs); k++) {
+                struct email_uidrec *src_uidrec = ptrarray_nth(src_uidrecs, k);
+                if (json_object_get(bulk->set_errors, src_uidrec->email_id)) {
+                    continue;
+                }
+
+                /* Create new uid record */
+                struct email_uidrec *new_uidrec = xzmalloc(sizeof(struct email_uidrec));
+                new_uidrec->email_id = xstrdup(src_uidrec->email_id);
+                new_uidrec->uid = last_uid_before_copy + k + 1;
+                new_uidrec->mboxrec = plan->mboxrec;
+                ptrarray_append(&plan->mboxrec->uidrecs, new_uidrec);
+
+                /* Add new record to setflags plan if keywords are updated */
+                struct email_update *update = hash_lookup(src_uidrec->email_id,
+                                                          &bulk->updates_by_email_id);
+                if (update->keywords == NULL) {
+                    continue;
+                }
+                ptrarray_append(&plan->setflags, new_uidrec);
+            }
+
+        }
+    }
+    hash_iter_reset(iter);
+
+    /* Set flags */
     while (hash_iter_next(iter)) {
         struct email_updateplan *plan = hash_iter_val(iter);
         int j;
@@ -11391,50 +11489,8 @@ static void _email_bulkupdate_exec(jmap_req_t *req,
         }
     }
     hash_iter_reset(iter);
-    while (hash_iter_next(iter)) {
-        struct email_updateplan *plan = hash_iter_val(iter);
-        int j;
-        for (j = 0; j < ptrarray_size(&plan->copy); j++) {
-            ptrarray_t *uidrecs = ptrarray_nth(&plan->copy, j);
-            ptrarray_t msgrecs = PTRARRAY_INITIALIZER;
 
-            if (!ptrarray_size(uidrecs)) continue;
-
-            /* Lookup the source mailbox plan of the first entry. */
-            struct email_uidrec *tmp = ptrarray_nth(uidrecs, 0);
-            const char *src_mbox_id = tmp->mboxrec->mbox_id;
-            struct email_updateplan *src_plan = hash_lookup(src_mbox_id, &bulk->plans_by_mbox_id);
-            struct mailbox *src_mbox = src_plan->mbox;
-
-            /* Bulk copy messages per mailbox to destination */
-            int k;
-            for (k = 0; k < ptrarray_size(uidrecs); k++) {
-                struct email_uidrec *uidrec = ptrarray_nth(uidrecs, k);
-                if (json_object_get(bulk->set_errors, uidrec->email_id)) {
-                    continue;
-                }
-                msgrecord_t *mrw = msgrecord_from_uid(src_mbox, uidrec->uid);
-                ptrarray_append(&msgrecs, mrw);
-            }
-            int r = _copy_msgrecords(httpd_authstate, req->userid, &jmap_namespace,
-                                     src_mbox, /*dst*/plan->mbox, &msgrecs);
-            if (r) {
-                for (k = 0; k < ptrarray_size(uidrecs); k++) {
-                    struct email_uidrec *uidrec = ptrarray_nth(uidrecs, k);
-                    if (json_object_get(bulk->set_errors, uidrec->email_id)) {
-                        continue;
-                    }
-                    json_object_set_new(bulk->set_errors, uidrec->email_id, jmap_server_error(r));
-                }
-            }
-            for (k = 0; k < ptrarray_size(&msgrecs); k++) {
-                msgrecord_t *mrw = ptrarray_nth(&msgrecs, k);
-                msgrecord_unref(&mrw);
-            }
-            ptrarray_fini(&msgrecs);
-        }
-    }
-    hash_iter_reset(iter);
+    /* Delete messages */
     while (hash_iter_next(iter)) {
         struct email_updateplan *plan = hash_iter_val(iter);
         int j;
