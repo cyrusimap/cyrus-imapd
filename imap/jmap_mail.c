@@ -5377,6 +5377,8 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
             "/", search->hash, NULL
     );
 
+    *is_cachedptr = 0;
+
     /* Lookup cache */
     if (cache_db) {
         struct cached_emailquery cache_record = _CACHED_EMAILQUERY_INITIALIZER;
@@ -5407,6 +5409,7 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
                 from = sposition < 0 ? 0 : sposition;
             }
             size_t to = query->limit ? from + query->limit : cache_record.ids_count;
+            if (to > cache_record.ids_count) to = cache_record.ids_count;
             size_t i;
             for (i = from; i < to; i++) {
                 const char *email_id = cache_record.ids + i * (cache_record.id_size + 1);
@@ -5419,7 +5422,6 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
         _cached_emailquery_fini(&cache_record);
         if (*is_cachedptr) goto done;
     }
-    *is_cachedptr = 0;
 
     /* Run search */
     const ptrarray_t *msgdata = NULL;
