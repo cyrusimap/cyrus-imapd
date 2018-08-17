@@ -11457,6 +11457,7 @@ static void _email_bulkupdate_exec(jmap_req_t *req,
                 ptrarray_append(&plan->mboxrec->uidrecs, new_uidrec);
 
                 /* Add new record to setflags plan if keywords are updated */
+                /* XXX append_copy should take new flags as parameter */
                 struct email_update *update = hash_lookup(src_uidrec->email_id,
                                                           &bulk->updates_by_email_id);
                 if (update->keywords == NULL) {
