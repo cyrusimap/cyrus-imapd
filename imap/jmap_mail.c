@@ -10338,6 +10338,18 @@ struct email_uidrec {
     uint32_t uid;                  /* IMAP uid in mbox */
 };
 
+static int _email_uidrec_compareuid_cb(const void **pa, const void **pb)
+{
+    const struct email_uidrec *a = *pa;
+    const struct email_uidrec *b = *pb;
+    if (a->uid < b->uid)
+        return -1;
+    else if (a->uid > b->uid)
+        return 1;
+    else
+        return 0;
+}
+
 static void _email_mboxrec_free(struct email_mboxrec *mboxrec)
 {
     struct email_uidrec *uidrec;
@@ -10423,6 +10435,12 @@ static void _email_mboxrecs_read(struct conversations_state *cstate,
             json_object_set_new(set_errors, email_id, err);
             _email_mboxrecs_free(&mboxrecs);
         }
+    }
+
+    // sort the UID lists
+    for (i = 0; i < ptrarray_size(mboxrecs); i++) {
+        struct email_mboxrec *p = ptrarray_nth(mboxrecs, i);
+        ptrarray_sort(&p->uidrecs, _email_uidrec_compareuid_cb);
     }
 
     *mboxrecsptr = mboxrecs;
@@ -10714,18 +10732,6 @@ static void _email_updateplan_error(struct email_updateplan *plan, int errcode, 
         json_object_set(set_errors, uidrec->email_id, err);
     }
     json_decref(err);
-}
-
-static int _email_uidrec_compareuid_cb(const void **pa, const void **pb)
-{
-    const struct email_uidrec *a = *pa;
-    const struct email_uidrec *b = *pb;
-    if (a->uid < b->uid)
-        return -1;
-    else if (a->uid > b->uid)
-        return 1;
-    else
-        return 0;
 }
 
 static void _email_bulkupdate_plancopies(struct email_bulkupdate *bulk,
@@ -11095,6 +11101,10 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
             _email_updateplan_error(plan, IMAP_PERMISSION_DENIED, bulk->set_errors);
             strarray_append(&erroneous_plans, plan->mbox_id);
         }
+
+        // sort arrays
+        ptrarray_sort(&plan->setflags, _email_uidrec_compareuid_cb);
+        ptrarray_sort(&plan->delete, _email_uidrec_compareuid_cb);
     }
     hash_iter_reset(iter);
     /* Check quota */
