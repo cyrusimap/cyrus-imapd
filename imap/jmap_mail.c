@@ -10797,15 +10797,6 @@ static void _email_bulkupdate_plancopies(struct email_bulkupdate *bulk,
                 ptrarray_append(&plan->copy, pick_uidrecs);
             }
             ptrarray_append(pick_uidrecs, pick_uidrec);
-
-            /* If this update also updates keywords, add the update
-             * to the source mailbox plan of the picked message. */
-
-            if (update->keywords) {
-                const char *src_mbox_id = pick_uidrec->mboxrec->mbox_id;
-                plan = hash_lookup(src_mbox_id, &bulk->plans_by_mbox_id);
-                ptrarray_append(&plan->setflags, pick_uidrec);
-            }
         }
         free_hash_table(&src_mbox_id_counts, NULL);
     }
@@ -11033,6 +11024,21 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
                         /* Delete the email from this mailbox. */
                         ptrarray_append(&plan->delete, uidrec);
                     }
+                }
+            }
+            /* If this update also updates keywords, make sure to set the flags
+             * also on the current uid records that stay in their mailbox. */
+
+            if (update->keywords) {
+                int j;
+                for (j = 0; j < ptrarray_size(uidrecs); j++) {
+                    struct email_uidrec *uidrec = ptrarray_nth(uidrecs, j);
+                    if (json_object_get(update->mailboxids, uidrec->mboxrec->mbox_id)) {
+                        continue;
+                    }
+                    struct email_updateplan *plan = hash_lookup(uidrec->mboxrec->mbox_id,
+                                                                &bulk->plans_by_mbox_id);
+                    ptrarray_append(&plan->setflags, uidrec);
                 }
             }
         }
