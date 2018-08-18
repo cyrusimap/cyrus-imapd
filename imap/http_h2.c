@@ -148,7 +148,7 @@ static ssize_t recv_cb(nghttp2_session *session __attribute__((unused)),
         prot_NONBLOCK(pin);
     }
     else if (!((struct http2_context *) conn->http2_ctx)->ws_count) {
-        /* No data -  block next time (for client timeout) */
+        /* No data (and no WebSockets) -  block next time (for client timeout) */
         prot_BLOCK(pin);
 
         if (pin->eof) n = NGHTTP2_ERR_EOF;
