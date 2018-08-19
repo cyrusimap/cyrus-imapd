@@ -356,7 +356,7 @@ static int _shared_mboxes_cb(const mbentry_t *mbentry, void *rock)
 
     int rights = jmap_myrights(sm->req, mbentry);
     if ((rights & (ACL_LOOKUP|ACL_READ)) == (ACL_LOOKUP|ACL_READ)) {
-        strarray_add(&sm->mboxes, mbentry->name);
+        strarray_append(&sm->mboxes, mbentry->name);
     }
 
     return 0;
@@ -4480,60 +4480,60 @@ static void _email_search_type(search_expr_t *parent, const char *s)
 
     /* Handle type wildcards */
     if (!strcasecmp(s, "image")) {
-        strarray_add(&types, "image_gif");
-        strarray_add(&types, "image_jpeg");
-        strarray_add(&types, "image_pjpeg");
-        strarray_add(&types, "image_jpg");
-        strarray_add(&types, "image_png");
-        strarray_add(&types, "image_bmp");
-        strarray_add(&types, "image_tiff");
+        strarray_append(&types, "image_gif");
+        strarray_append(&types, "image_jpeg");
+        strarray_append(&types, "image_pjpeg");
+        strarray_append(&types, "image_jpg");
+        strarray_append(&types, "image_png");
+        strarray_append(&types, "image_bmp");
+        strarray_append(&types, "image_tiff");
     }
     else if (!strcasecmp(s, "document")) {
-        strarray_add(&types, "application_msword");
-        strarray_add(&types, "application_vnd.openxmlformats-officedocument.wordprocessingml.document");
-        strarray_add(&types, "application_vnd.openxmlformats-officedocument.wordprocessingml.template");
-        strarray_add(&types, "application_vnd.sun.xml.writer");
-        strarray_add(&types, "application_vnd.sun.xml.writer.template");
-        strarray_add(&types, "application_vnd.oasis.opendocument.text");
-        strarray_add(&types, "application_vnd.oasis.opendocument.text-template");
-        strarray_add(&types, "application_x-iwork-pages-sffpages");
-        strarray_add(&types, "application_vnd.apple.pages");
+        strarray_append(&types, "application_msword");
+        strarray_append(&types, "application_vnd.openxmlformats-officedocument.wordprocessingml.document");
+        strarray_append(&types, "application_vnd.openxmlformats-officedocument.wordprocessingml.template");
+        strarray_append(&types, "application_vnd.sun.xml.writer");
+        strarray_append(&types, "application_vnd.sun.xml.writer.template");
+        strarray_append(&types, "application_vnd.oasis.opendocument.text");
+        strarray_append(&types, "application_vnd.oasis.opendocument.text-template");
+        strarray_append(&types, "application_x-iwork-pages-sffpages");
+        strarray_append(&types, "application_vnd.apple.pages");
     }
     else if (!strcasecmp(s, "spreadsheet")) {
-        strarray_add(&types, "application_vnd.ms-excel");
-        strarray_add(&types, "application_vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        strarray_add(&types, "application_vnd.openxmlformats-officedocument.spreadsheetml.template");
-        strarray_add(&types, "application_vnd.sun.xml.calc");
-        strarray_add(&types, "application_vnd.sun.xml.calc.template");
-        strarray_add(&types, "application_vnd.oasis.opendocument.spreadsheet");
-        strarray_add(&types, "application_vnd.oasis.opendocument.spreadsheet-template");
-        strarray_add(&types, "application_x-iwork-numbers-sffnumbers");
-        strarray_add(&types, "application_vnd.apple.numbers");
+        strarray_append(&types, "application_vnd.ms-excel");
+        strarray_append(&types, "application_vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        strarray_append(&types, "application_vnd.openxmlformats-officedocument.spreadsheetml.template");
+        strarray_append(&types, "application_vnd.sun.xml.calc");
+        strarray_append(&types, "application_vnd.sun.xml.calc.template");
+        strarray_append(&types, "application_vnd.oasis.opendocument.spreadsheet");
+        strarray_append(&types, "application_vnd.oasis.opendocument.spreadsheet-template");
+        strarray_append(&types, "application_x-iwork-numbers-sffnumbers");
+        strarray_append(&types, "application_vnd.apple.numbers");
     }
     else if (!strcasecmp(s, "presentation")) {
-        strarray_add(&types, "application_vnd.ms-powerpoint");
-        strarray_add(&types, "application_vnd.openxmlformats-officedocument.presentationml.presentation");
-        strarray_add(&types, "application_vnd.openxmlformats-officedocument.presentationml.template");
-        strarray_add(&types, "application_vnd.openxmlformats-officedocument.presentationml.slideshow");
-        strarray_add(&types, "application_vnd.sun.xml.impress");
-        strarray_add(&types, "application_vnd.sun.xml.impress.template");
-        strarray_add(&types, "application_vnd.oasis.opendocument.presentation");
-        strarray_add(&types, "application_vnd.oasis.opendocument.presentation-template");
-        strarray_add(&types, "application_x-iwork-keynote-sffkey");
-        strarray_add(&types, "application_vnd.apple.keynote");
+        strarray_append(&types, "application_vnd.ms-powerpoint");
+        strarray_append(&types, "application_vnd.openxmlformats-officedocument.presentationml.presentation");
+        strarray_append(&types, "application_vnd.openxmlformats-officedocument.presentationml.template");
+        strarray_append(&types, "application_vnd.openxmlformats-officedocument.presentationml.slideshow");
+        strarray_append(&types, "application_vnd.sun.xml.impress");
+        strarray_append(&types, "application_vnd.sun.xml.impress.template");
+        strarray_append(&types, "application_vnd.oasis.opendocument.presentation");
+        strarray_append(&types, "application_vnd.oasis.opendocument.presentation-template");
+        strarray_append(&types, "application_x-iwork-keynote-sffkey");
+        strarray_append(&types, "application_vnd.apple.keynote");
     }
     else if (!strcasecmp(s, "email")) {
-        strarray_add(&types, "message_rfc822");
+        strarray_append(&types, "message_rfc822");
     }
     else if (!strcasecmp(s, "pdf")) {
-        strarray_add(&types, "application_pdf");
+        strarray_append(&types, "application_pdf");
     }
     else {
         /* FUZZY contenttype is indexed as `type_subtype` */
         char *tmp = xstrdup(s);
         char *p = strchr(tmp, '/');
         if (p) *p = '_';
-        strarray_add(&types, tmp);
+        strarray_append(&types, tmp);
         free(tmp);
     }
 
@@ -5479,7 +5479,7 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
         /* This message matches the query. */
         size_t result_count = json_array_size(query->ids);
         query->total++;
-        strarray_add(&email_ids, email_id);
+        strarray_append(&email_ids, email_id);
 
         /* Apply query window, if any */
         if (query->anchor) {
@@ -7311,7 +7311,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
         /* Extract header */
         /* TODO this should be message_get_field */
         strarray_t headers = STRARRAY_INITIALIZER;
-        strarray_add(&headers, "Content-ID");
+        strarray_append(&headers, "Content-ID");
         char *s = xstrndup(msg_buf->s + part->header_offset, part->header_size);
         message_pruneheader(s, &headers, NULL);
 
@@ -7338,7 +7338,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     if (_wantprop(bodyprops, "language")) {
         /* Extract header */
         strarray_t headers = STRARRAY_INITIALIZER;
-        strarray_add(&headers, "Content-Language");
+        strarray_append(&headers, "Content-Language");
         char *s = xstrndup(msg_buf->s + part->header_offset, part->header_size);
         message_pruneheader(s, &headers, NULL);
         /* Split by space and comma and aggregate into array */
