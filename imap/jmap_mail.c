@@ -5479,7 +5479,7 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
         /* This message matches the query. */
         size_t result_count = json_array_size(query->ids);
         query->total++;
-        strarray_append(&email_ids, email_id);
+        if (cache_db) strarray_append(&email_ids, email_id);
 
         /* Apply query window, if any */
         if (query->anchor) {
