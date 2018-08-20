@@ -225,7 +225,7 @@ static void statuscache_read_seen(const char *mboxname, const char *userid,
     if (*p++ != 'S') return;
     if (*p++ != ' ') return;
 
-    unsigned version = (unsigned) strtoul(data, &p, 10);
+    unsigned version = (unsigned) strtoul(p, &p, 10);
     if (version != (unsigned) STATUSCACHE_VERSION) {
         /* Wrong version */
         return;
