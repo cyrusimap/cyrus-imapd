@@ -797,7 +797,7 @@ EXPORTED int search_expr_always_same(const search_expr_t *e)
             for (child = e->children ; child ; child = child->next) {
                 int cres = search_expr_always_same(child);
                 if (cres == 1) return 1;
-                if (cres == 0) res = 0; // could still be a definite no
+                if (cres == 0) res = 0; // could still be a definite yes
             }
             return res;
         }
