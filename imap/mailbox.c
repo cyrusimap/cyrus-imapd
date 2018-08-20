@@ -6757,6 +6757,7 @@ EXPORTED struct mailbox_iter *mailbox_iter_init(struct mailbox *mailbox,
     iter->mailbox = mailbox;
     iter->changedsince = changedsince;
     iter->num_records = mailbox->i.num_records;
+    iter->msg = message_new();
 
     /* calculate which system_flags to skip over */
     if (flags & ITER_SKIP_UNLINKED)
@@ -6778,8 +6779,7 @@ EXPORTED void mailbox_iter_startuid(struct mailbox_iter *iter, uint32_t uid)
 EXPORTED const message_t *mailbox_iter_step(struct mailbox_iter *iter)
 {
     for (iter->recno++; iter->recno <= iter->num_records; iter->recno++) {
-        message_unref(&iter->msg);
-        iter->msg = message_new_from_mailbox(iter->mailbox, iter->recno);
+        message_set_from_mailbox(iter->mailbox, iter->recno, iter->msg);
         const struct index_record *record = msg_record(iter->msg);
         if (!record->uid) continue; /* can happen on damaged mailboxes */
         if ((record->system_flags & iter->skipflags)) continue;
