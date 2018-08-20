@@ -244,10 +244,10 @@ int main(int argc, char *argv[])
 {
     const char *fname;
     const char *action;
-    char *key;
-    char *value;
+    char *key = NULL;
+    char *value = NULL;
     int i,r;
-    size_t keylen,vallen,reslen;
+    size_t keylen = 0, vallen = 0, reslen = 0;
     int opt,loop;
     char *alt_config = NULL;
     const char *res = NULL;
