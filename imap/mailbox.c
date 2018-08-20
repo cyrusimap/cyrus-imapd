@@ -1690,9 +1690,8 @@ static int mailbox_read_index_header(struct mailbox *mailbox)
 /*
  * Read an index record from a mapped index file
  */
-static int mailbox_buf_to_index_record(const char *buf,
-                                       int version,
-                                       struct index_record *record)
+static int mailbox_buf_to_index_record(const char *buf, int version,
+                                       struct index_record *record, int dirty)
 {
     uint32_t crc;
     uint32_t stored_system_flags = 0;
@@ -1742,6 +1741,7 @@ static int mailbox_buf_to_index_record(const char *buf,
 
     /* THRID got inserted before cache_crc32 in version 12 */
     if (version < 13) {
+        if (dirty) return 0;
         record->cache_crc = ntohl(*((bit32 *)(buf+88)));
 
         crc = crc32_map(buf, 92);
@@ -1757,6 +1757,7 @@ static int mailbox_buf_to_index_record(const char *buf,
 
     /* createdmodseq was added in version 16, pushing the CRCs down */
     if (version < 16) {
+        if (dirty) return 0;
         record->cache_crc = ntohl(*((bit32 *)(buf+96)));
         /* check CRC32 */
         crc = crc32_map(buf, 100);
@@ -1767,6 +1768,8 @@ static int mailbox_buf_to_index_record(const char *buf,
 
     record->createdmodseq = ntohll(*(bit64 *)(buf+OFFSET_CREATEDMODSEQ));
     record->cache_crc = ntohl(*((bit32 *)(buf+OFFSET_CACHE_CRC)));
+
+    if (dirty) return 0;
 
     /* check CRC32 */
     crc = crc32_map(buf, OFFSET_RECORD_CRC);
@@ -1960,6 +1963,27 @@ static int _commit_changes(struct mailbox *mailbox)
     return 0;
 }
 
+EXPORTED int mailbox_reload_index_record_dirty(struct mailbox *mailbox,
+                                               struct index_record *record)
+{
+    unsigned recno = record->recno;
+    unsigned offset = mailbox->i.start_offset + (recno-1) * mailbox->i.record_size;
+
+    if (offset + mailbox->i.record_size > mailbox->index_size) {
+        syslog(LOG_ERR,
+               "IOERROR: index record %u for %s past end of file",
+               recno, mailbox->name);
+        return IMAP_IOERROR;
+    }
+
+    const char *buf = mailbox->index_base + offset;
+    mailbox_buf_to_index_record(buf, mailbox->i.minor_version, record, 1);
+    record->recno = recno;
+
+    return 0;
+}
+
+
 /*
  * Read an index record from a mailbox
  */
@@ -1988,7 +2012,7 @@ static int mailbox_read_index_record(struct mailbox *mailbox,
 
     buf = mailbox->index_base + offset;
 
-    r = mailbox_buf_to_index_record(buf, mailbox->i.minor_version, record);
+    r = mailbox_buf_to_index_record(buf, mailbox->i.minor_version, record, 0);
 
     record->recno = recno;
 
@@ -5733,7 +5757,7 @@ static void cleanup_stale_expunged(struct mailbox *mailbox)
     for (erecno = 1; erecno <= expunge_num; erecno++) {
         struct index_record record;
         bufp = expunge_base + eoffset + (erecno-1)*expungerecord_size;
-        mailbox_buf_to_index_record(bufp, eversion, &record);
+        mailbox_buf_to_index_record(bufp, eversion, &record, 0);
         record.internal_flags |= FLAG_INTERNAL_EXPUNGED | FLAG_INTERNAL_UNLINKED;
         mailbox_record_cleanup(mailbox, &record);
     }

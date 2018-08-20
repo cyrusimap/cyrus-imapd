@@ -558,7 +558,9 @@ extern int mailbox_write_header(struct mailbox *mailbox, int force);
 extern void mailbox_index_dirty(struct mailbox *mailbox);
 extern modseq_t mailbox_modseq_dirty(struct mailbox *mailbox);
 extern int mailbox_reload_index_record(struct mailbox *mailbox,
-                                     struct index_record *record);
+                                       struct index_record *record);
+extern int mailbox_reload_index_record_dirty(struct mailbox *mailbox,
+                                             struct index_record *record);
 extern int mailbox_rewrite_index_record(struct mailbox *mailbox,
                                         struct index_record *record);
 extern int mailbox_append_index_record(struct mailbox *mailbox,
