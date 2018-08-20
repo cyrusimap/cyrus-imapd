@@ -757,6 +757,60 @@ EXPORTED void search_expr_internalise(struct index_state *state, search_expr_t *
     search_expr_apply(e, internalise, state);
 }
 
+/* result:
+ * -1 definitely false (regardless of message)
+ *  0 depends on message
+ * +1 definitely true (regardless of message)
+ */
+EXPORTED int search_expr_always_same(const search_expr_t *e)
+{
+    search_expr_t *child;
+
+    switch (e->op) {
+    case SEOP_UNKNOWN:
+         assert(0); // fatally bad
+         return 0;
+    case SEOP_TRUE:
+         return 1;
+    case SEOP_FALSE:
+         return -1;
+    case SEOP_LT:
+    case SEOP_LE:
+    case SEOP_GT:
+    case SEOP_GE:
+    case SEOP_FUZZYMATCH:
+    case SEOP_MATCH:
+        return 0;
+    case SEOP_AND:
+        {
+            int res = 1;
+            for (child = e->children ; child ; child = child->next) {
+                int cres = search_expr_always_same(child);
+                if (cres == -1) return -1;
+                if (cres == 0) res = 0; // could still be a definite no
+            }
+            return res;
+        }
+    case SEOP_OR:
+        {
+            int res = -1;
+            for (child = e->children ; child ; child = child->next) {
+                int cres = search_expr_always_same(child);
+                if (cres == 1) return 1;
+                if (cres == 0) res = 0; // could still be a definite no
+            }
+            return res;
+        }
+    case SEOP_NOT:
+        {
+            assert(e->children);
+            // reverse the result only
+            return 0 - search_expr_always_same(e->children);
+        }
+    }
+    return 0;
+}
+
 /*
  * Evaluate the given search expression for the given message,
  * Returns nonzero if the expression is true, 0 otherwise.

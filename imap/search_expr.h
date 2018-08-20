@@ -136,6 +136,7 @@ extern char *search_expr_serialise(const search_expr_t *);
 extern search_expr_t *search_expr_unserialise(const char *s);
 extern int search_expr_normalise(search_expr_t **);
 extern void search_expr_internalise(struct index_state *, search_expr_t *);
+extern int search_expr_always_same(const search_expr_t *);
 extern int search_expr_evaluate(message_t *m, const search_expr_t *);
 extern int search_expr_uses_attr(const search_expr_t *, const char *);
 extern int search_expr_is_mutable(const search_expr_t *);
