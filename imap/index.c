@@ -4740,22 +4740,26 @@ EXPORTED int index_search_evaluate(struct index_state *state,
                                    uint32_t msgno)
 {
     struct index_map *im = &state->map[msgno-1];
-    int r;
     message_t *m;
     struct index_record record;
 
-    r = index_reload_record(state, msgno, &record);
-    if (r) return r;
+    int always = search_expr_always_same(e);
+    if (always < 0) return 0;
+    if (always > 0) return 1;
+
+    // failure to load is an error!
+    int r = index_reload_record(state, msgno, &record);
+    if (r) return 0;
 
     xstats_inc(SEARCH_EVALUATE);
 
     m = message_new_from_index(state->mailbox, &record, msgno,
                                (im->isrecent ? MESSAGE_RECENT : 0) |
                                (im->isseen ? MESSAGE_SEEN : 0));
-    r = search_expr_evaluate(m, e);
+    int match = search_expr_evaluate(m, e);
     message_unref(&m);
 
-    return r;
+    return match;
 }
 
 struct getsearchtext_rock
