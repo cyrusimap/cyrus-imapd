@@ -6529,6 +6529,17 @@ done:
     return r;
 }
 
+static int _thread_is_shared_cb(const conv_guidrec_t *rec, void *rock)
+{
+    jmap_req_t *req = rock;
+    static int need_rights = ACL_READ|ACL_LOOKUP;
+    int rights = jmap_myrights_byname(req, rec->mboxname);
+    if ((rights & need_rights) == need_rights) {
+        return IMAP_OK_COMPLETED;
+    }
+    return 0;
+}
+
 static int _thread_get(jmap_req_t *req, json_t *ids,
                        json_t *list, json_t *not_found)
 {
@@ -6551,8 +6562,21 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
             continue;
         }
 
+        int is_own_account = !strcmp(req->userid, req->accountid);
         json_t *ids = json_pack("[]");
         for (thread = conv->thread; thread; thread = thread->next) {
+            if (!is_own_account) {
+                const char *guidrep = message_guid_encode(&thread->guid);
+                int r = conversations_guid_foreach(req->cstate, guidrep,
+                                                   _thread_is_shared_cb, req);
+                if (r != IMAP_OK_COMPLETED) {
+                    if (r) {
+                        syslog(LOG_ERR, "jmap: _thread_is_shared_cb(%s): %s",
+                                guidrep, error_message(r));
+                    }
+                    continue;
+                }
+            }
             char *msgid = _email_id_from_guid(&thread->guid);
             json_array_append_new(ids, json_string(msgid));
             free(msgid);
