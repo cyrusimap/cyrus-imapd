@@ -7673,11 +7673,11 @@ static int _email_get_bodies(jmap_req_t *req,
             /* Parse decoded data to iCalendar object */
             char *tmp;
             size_t tmp_size;
-            charset_decode_mimebody(buf_base(msg->raw) + part->content_offset,
+            const char *rawical = charset_decode_mimebody(buf_base(msg->raw) + part->content_offset,
                     part->content_size, part->charset_enc, &tmp, &tmp_size);
-            if (!tmp) continue;
+            if (!rawical) continue;
             struct buf buf = BUF_INITIALIZER;
-            buf_init_ro_cstr(&buf, tmp);
+            buf_init_ro_cstr(&buf, rawical);
             icalcomponent *ical = ical_string_as_icalcomponent(&buf);
             buf_free(&buf);
             free(tmp);
