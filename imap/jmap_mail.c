@@ -3672,6 +3672,10 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
 
     if (rec->part) return 0;
 
+    static int need_rights = ACL_READ|ACL_LOOKUP;
+    int rights = jmap_myrights_byname(req, rec->mboxname);
+    if ((rights & need_rights) != need_rights) return 0;
+
     r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
     if (r) return r;
 
