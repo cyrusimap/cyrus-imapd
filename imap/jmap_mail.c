@@ -11282,6 +11282,17 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
             ptrarray_append(current_uidrecs, uidrec);
         }
     }
+    /* An email with no current uidrecs is expunged */
+    for (i = 0; i < strarray_size(&email_ids); i++) {
+        const char *email_id = strarray_nth(&email_ids, i);
+        if (json_object_get(bulk->set_errors, email_id)) {
+            continue;
+        }
+        if (!hash_lookup(email_id, &bulk->uidrecs_by_email_id)) {
+            json_object_set_new(bulk->set_errors, email_id,
+                    json_pack("{s:s}", "type", "notFound"));
+        }
+    }
     strarray_fini(&email_ids);
 
     /* Open new mailboxes that haven't been opened already */
