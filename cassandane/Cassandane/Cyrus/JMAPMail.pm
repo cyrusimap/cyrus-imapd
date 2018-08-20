@@ -7325,6 +7325,72 @@ sub test_thread_get
     $self->assert_str_equals($draftid, $threadA->{emailIds}[3]);
 }
 
+sub test_thread_get_shared
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # Create user and share mailbox A but not B
+    xlog "Create shared mailbox";
+    $self->{instance}->create_user("other");
+    $admintalk->create("user.other.A") or die;
+    $admintalk->setacl("user.other.A", "cassandane", "lr") or die;
+    $admintalk->create("user.other.B") or die;
+
+    # Create message in mailbox A
+    $self->{adminstore}->set_folder('user.other.A');
+    my $msgA = $self->make_message("EmailA", store => $self->{adminstore}) or die;
+
+    # Reply-to message in mailbox B
+    $self->{adminstore}->set_folder('user.other.B');
+    my $msgB = $self->make_message("Re: EmailA", (
+        references => [ $msgA ],
+        store => $self->{adminstore},
+    )) or die;
+
+    my @fetchThreadMethods = [
+        ['Email/query', {
+            accountId => 'other',
+            collapseThreads => JSON::true,
+        }, "R1"],
+        ['Email/get', {
+            accountId => 'other',
+            properties => ['threadId'],
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            fetchAllBodyValues => JSON::true,
+        }, 'R2' ],
+        ['Thread/get', {
+            accountId => 'other',
+            '#ids' => {
+                resultOf => 'R2',
+                name => 'Email/get',
+                path => '/list/*/threadId'
+            },
+        }, 'R3' ],
+    ];
+
+    # Fetch Thread
+    my $res = $jmap->CallMethods(@fetchThreadMethods);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_num_equals(1, scalar @{$res->[2][1]{list}[0]{emailIds}});
+
+    # Now share mailbox B
+    $admintalk->setacl("user.other.B", "cassandane", "lr") or die;
+    $res = $jmap->CallMethods(@fetchThreadMethods);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_num_equals(2, scalar @{$res->[2][1]{list}[0]{emailIds}});
+}
+
 sub test_identity_get
     :min_version_3_1 :needs_component_jmap
 {
