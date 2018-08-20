@@ -209,21 +209,16 @@ EXPORTED int index_reload_record(struct index_state *state,
     else {
         record->recno = im->recno;
         record->uid = im->uid;
-        r = mailbox_reload_index_record(state->mailbox, record);
+        r = mailbox_reload_index_record_dirty(state->mailbox, record);
     }
     /* NOTE: we have released the cyrus.index lock at this point, but are
      * still holding the mailbox name relock.  This means nobody can rewrite
      * the file under us - so the offsets are still guaranteed to be correct,
      * and all the immutable fields are unchanged.  That said, we can get a
      * read of a partially updated record which contains an invalid checksum
-     * due to incomplete concurrent changes to mutable fields.
-     *
-     * That's OK in just this case, because we're about to overwrite all the
-     * parsed mutable fields with the clean values we cached back when we had
-     * a cyrus.index lock and got a complete read. */
-    if (r == IMAP_MAILBOX_CHECKSUM) r = 0;
-
-    /* but other errors are still bad */
+     * due to incomplete concurrent changes to mutable fields.  That's why we
+     * used the _dirty API which ignores checksums.
+     * but other errors are still bad */
     if (r) return r;
 
     /* better be! */
