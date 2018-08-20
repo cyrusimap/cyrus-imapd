@@ -11956,6 +11956,7 @@ sub test_email_set_update_bulk
     $self->assert_null(grep { $_ eq '\\Seen' } @flags);
 
     # Create email in mailboox A
+    $talk->select("INBOX.A");
     $self->make_message('Email2') || die;
 
     $res = $jmap->CallMethods([['Email/query', {
@@ -11980,26 +11981,25 @@ sub test_email_set_update_bulk
         },
         'cyrusimap.org/debugBulkUpdate' => JSON::true,
     }, 'R1']]);
-
-    $self->make_message('Email 2') || die;
-    $self->make_message('Email 3') || die;
+    $self->make_message('Email3') || die;
 
     # check that the flags made it
     $talk->select("INBOX.C");
     $res = $talk->fetch("1", "(flags)");
     @flags = @{$res->{1}{flags}};
     $self->assert_not_null(grep { $_ eq 'hello' } @flags);
-    # XXX - this should be true, but currently isn't
-    # $self->assert_null(grep { $_ eq '\\Seen' } @flags);
+    # but \Seen shouldn't
+    $self->assert_null(grep { $_ eq '\\Seen' } @flags);
 
-    $res = $jmap->CallMethods([['Email/query', { }, 'R1']]);
+    $res = $jmap->CallMethods([['Email/query', {
+        sort => [{ property => 'subject' }],
+    }, 'R1']]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
     my @ids = @{$res->[0][1]->{ids}};
+    my $emailId3 = $ids[2];
 
-    # now move all the ids to folder 'D' but one isn't in the
+    # now move all the ids to folder 'D' but two are not in the
     # source folder any more
-    my @moveids = grep { $_ ne $emailId } @ids;
-
     $res = $jmap->CallMethods([['Email/set', {
         update => {
             map { $_ => {
@@ -12011,16 +12011,33 @@ sub test_email_set_update_bulk
     }, 'R1']]);
 
     $self->assert_not_null($res);
-    $self->assert_not_null($res->[0][1]{updated}{$moveids[0]});
-    $self->assert_not_null($res->[0][1]{updated}{$moveids[1]});
+    $self->assert_not_null($res->[0][1]{updated}{$emailId1});
+    $self->assert_not_null($res->[0][1]{updated}{$emailId2});
+    $self->assert_not_null($res->[0][1]{updated}{$emailId3});
     $self->assert_null($res->[0][1]{notUpdated});
 
     $res = $jmap->CallMethods([['Email/get', {
-        ids => [$emailId1, $emailId2],
+        ids => [$emailId1, $emailId2, $emailId3],
         properties => ['mailboxIds'],
     }, "R1"]]);
+    my %emailById = map { $_->{id} => $_ } @{$res->[0][1]{list}};
 
     # now we need to test for actual location
+    my $wantMailboxesEmail1 = {
+        $mboxIdByName{'C'} => JSON::true,
+        $mboxIdByName{'D'} => JSON::true,
+    };
+    my $wantMailboxesEmail2 = {
+        $mboxIdByName{'C'} => JSON::true,
+        $mboxIdByName{'D'} => JSON::true,
+    };
+    my $wantMailboxesEmail3 = {
+        $mboxIdByName{'D'} => JSON::true,
+    };
+    $self->assert_deep_equals($wantMailboxesEmail1, $emailById{$emailId1}->{mailboxIds});
+    $self->assert_deep_equals($wantMailboxesEmail2, $emailById{$emailId2}->{mailboxIds});
+    $self->assert_deep_equals($wantMailboxesEmail3, $emailById{$emailId3}->{mailboxIds});
+
 }
 
 sub test_email_set_update_too_many_mailboxes
