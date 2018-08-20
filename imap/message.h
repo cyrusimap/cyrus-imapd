@@ -271,6 +271,9 @@ extern message_t *message_new_from_index(struct mailbox *,
                                          uint32_t msgno,
                                          uint32_t indexflags);
 extern message_t *message_new_from_filename(const char *filename);
+extern void message_set_from_mailbox(struct mailbox *mailbox,
+                                     unsigned int recno,
+                                     message_t *m);
 
 extern int message_get_indexversion(message_t *m, uint32_t *versionp);
 

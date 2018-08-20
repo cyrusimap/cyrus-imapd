@@ -3647,6 +3647,16 @@ EXPORTED message_t *message_new_from_data(const char *base, size_t len)
     return m;
 }
 
+EXPORTED void message_set_from_mailbox(struct mailbox *mailbox, unsigned int recno, message_t *m)
+{
+    assert(m->refcount == 1);
+    memset(m, 0, sizeof(message_t));
+    m->mailbox = mailbox;
+    m->record.recno = recno;
+    m->have = m->given = M_MAILBOX;
+    m->refcount = 1;
+}
+
 EXPORTED message_t *message_new_from_mailbox(struct mailbox *mailbox, unsigned int recno)
 {
     message_t *m = message_new();
