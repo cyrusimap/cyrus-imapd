@@ -162,6 +162,18 @@ EXPORTED msgrecord_t *msgrecord_from_uid(struct mailbox *mbox, uint32_t uid)
     return mr;
 }
 
+EXPORTED void msgrecord_set_from_recno(struct mailbox *mbox, uint32_t recno, msgrecord_t *mr)
+{
+    assert(mr->refcount == 1);
+
+    memset(mr, 0, sizeof(msgrecord_t));
+    mr->mbox = mbox;
+    mr->record.recno = recno;
+    mr->have = M_MAILBOX|M_RECNO;
+    mr->isappend = 0;
+    mr->refcount = 1;
+}
+
 EXPORTED msgrecord_t *msgrecord_from_recno(struct mailbox *mbox, uint32_t recno)
 {
     msgrecord_t *mr = xzmalloc(sizeof(struct msgrecord));

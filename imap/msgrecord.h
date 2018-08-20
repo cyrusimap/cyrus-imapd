@@ -61,6 +61,8 @@ extern msgrecord_t *msgrecord_from_index_record(struct mailbox *mbox, struct ind
 extern msgrecord_t *msgrecord_copy_msgrecord(struct mailbox *mbox, msgrecord_t *mr);
 extern void msgrecord_unref(msgrecord_t **mr);
 
+extern void msgrecord_set_from_recno(struct mailbox *mbox, uint32_t recno, msgrecord_t *mr);
+
 /* Getters: all pointer values are owned by msgrecord */
 extern int msgrecord_get_body(msgrecord_t *mr, struct buf *buf);
 extern int msgrecord_get_bodystructure(msgrecord_t *mr, struct body **body);
