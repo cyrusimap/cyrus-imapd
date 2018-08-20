@@ -197,6 +197,7 @@ EXPORTED void **ptrarray_takevf(ptrarray_t *pa)
 
 EXPORTED int ptrarray_find(const ptrarray_t *pa, void *match, int starting)
 {
+    if (!pa) return -1;
     int i;
 
     for (i = starting ; i < pa->count ; i++)
@@ -208,11 +209,13 @@ EXPORTED int ptrarray_find(const ptrarray_t *pa, void *match, int starting)
 EXPORTED void ptrarray_sort(ptrarray_t *pa,
                             int (*compare)(const void **, const void **))
 {
+    if (!pa) return;
     qsort(pa->data, pa->count, sizeof(void*),
             (int (*)(const void *, const void *))compare);
 }
 
 EXPORTED int ptrarray_size(const ptrarray_t *pa)
 {
+    if (!pa) return 0;
     return pa->count;
 }
