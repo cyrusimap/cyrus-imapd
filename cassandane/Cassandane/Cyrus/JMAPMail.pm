@@ -3051,34 +3051,61 @@ sub test_email_get_shared
 
     my $admintalk = $self->{adminstore}->get_client();
 
-    # Create user and share mailbox
-    xlog "Create shared mailbox";
-    $self->{instance}->create_user("foo");
-    $admintalk->setacl("user.foo", "cassandane", "lr") or die;
-    $admintalk->create("user.foo.box1") or die;
-    $admintalk->setacl("user.foo.box1", "cassandane", "lr") or die;
+    # Share account
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.other", "cassandane", "lr") or die;
 
-    xlog "Create email in shared account";
-    $self->{adminstore}->set_folder('user.foo.box1');
-    $self->make_message("Email foo", store => $self->{adminstore}) or die;
+    # Create mailbox A
+    $admintalk->create("user.other.A") or die;
+    $admintalk->setacl("user.other.A", "cassandane", "lr") or die;
 
-    xlog "get email list in shared account";
-    my $res = $jmap->CallMethods([['Email/query', { accountId => 'foo' }, "R1"]]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
-    my $id = $res->[0][1]->{ids}[0];
+    # Create message in mailbox A
+    $self->{adminstore}->set_folder('user.other.A');
+    $self->make_message("Email", store => $self->{adminstore}) or die;
 
-    xlog "get email from shared account";
-    $res = $jmap->CallMethods([['Email/get', { accountId => 'foo', ids => [$id]}, "R1"]]);
-    my $msg = $res->[0][1]{list}[0];
-    $self->assert_not_null($msg);
-    $self->assert_str_equals("Email foo", $msg->{subject});
+    # Copy message to unshared mailbox B
+    $admintalk->create("user.other.B") or die;
+    $admintalk->setacl("user.other.B", "cassandane", "") or die;
+    $admintalk->copy(1, "user.other.B");
 
-    xlog "Unshare mailbox";
-    $admintalk->setacl("user.foo.box1", "cassandane", "") or die;
+    my @fetchEmailMethods = [
+        ['Email/query', {
+            accountId => 'other',
+            collapseThreads => JSON::true,
+        }, "R1"],
+        ['Email/get', {
+            accountId => 'other',
+            properties => ['mailboxIds'],
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            fetchAllBodyValues => JSON::true,
+        }, 'R2' ],
+    ];
 
-    xlog "refetch email from unshared mailbox (should fail)";
-    $res = $jmap->CallMethods([['Email/get', { accountId => 'foo', ids => [$id]}, "R1"]]);
-    $self->assert_str_equals($id, $res->[0][1]{notFound}[0]);
+    # Fetch Email
+    my $res = $jmap->CallMethods(@fetchEmailMethods);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_num_equals(1, scalar keys %{$res->[1][1]{list}[0]{mailboxIds}});
+	my $emailId = $res->[1][1]{list}[0]{id};
+
+	# Share mailbox B
+    $admintalk->setacl("user.other.B", "cassandane", "lr") or die;
+    $res = $jmap->CallMethods(@fetchEmailMethods);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_num_equals(2, scalar keys %{$res->[1][1]{list}[0]{mailboxIds}});
+
+	# Unshare mailboxes A and B
+    $admintalk->setacl("user.other.A", "cassandane", "") or die;
+    $admintalk->setacl("user.other.B", "cassandane", "") or die;
+    $res = $jmap->CallMethods([['Email/get', {
+        accountId => 'other',
+        ids => [$emailId],
+    }, 'R1']]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals($emailId, $res->[0][1]{notFound}[0]);
 }
 
 sub test_email_set_draft
