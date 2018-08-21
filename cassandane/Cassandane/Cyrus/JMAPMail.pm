@@ -4449,7 +4449,8 @@ sub test_email_get_keywords_case_insensitive
     my $res = $jmap->CallMethods([
         ['Email/query', { }, 'R1'],
         ['Email/get', {
-            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids'}
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids'},
+            properties => ['keywords'],
         }, 'R2' ]
     ]);
     $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
@@ -4695,6 +4696,75 @@ sub test_emailsubmission_set_with_envelope
     }, "R1" ] ] );
     my $msgsubid = $res->[0][1]->{created}{1}{id};
     $self->assert_not_null($msgsubid);
+}
+
+sub test_email_keywords_shared
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # Share account
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.other", "cassandane", "lr") or die;
+
+    # Create mailbox A
+    $admintalk->create("user.other.A") or die;
+    $admintalk->setacl("user.other.A", "cassandane", "lrwkxdsn") or die;
+
+    # Create message in mailbox A
+    $self->{adminstore}->set_folder('user.other.A');
+    $self->make_message("Email", store => $self->{adminstore}) or die;
+
+    # Set \\Seen on message A as user cassandane
+    $self->{store}->set_folder('user.other.A');
+    $talk->select('user.other.A');
+    $talk->store('1', '+flags', '(\\Seen)');
+
+    # Get email and assert keywords
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            accountId => 'other',
+        }, 'R1'],
+        ['Email/get', {
+            accountId => 'other',
+            properties => ['keywords'],
+            '#ids' => {
+                resultOf => 'R1', name => 'Email/query', path => '/ids'
+            }
+        }, 'R2' ]
+    ]);
+    my $emailId = $res->[1][1]{list}[0]{id};
+    my $wantKeywords = { '$seen' => JSON::true };
+    $self->assert_deep_equals($wantKeywords, $res->[1][1]{list}[0]{keywords});
+
+    # Now set the keywords via JMAP on the shared mailbox
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            accountId => 'other',
+            update => {
+                $emailId => {
+                    keywords => { },
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert_not_null($res->[0][1]{updated}{$emailId});
+
+    # Assert keywords got updated
+    $res = $jmap->CallMethods([
+        ['Email/get', {
+            accountId => 'other',
+            properties => ['keywords'],
+            ids => [$emailId],
+        }, 'R1' ]
+    ]);
+    $wantKeywords = { };
+    $self->assert_deep_equals($wantKeywords, $res->[0][1]{list}[0]{keywords});
 }
 
 sub test_emailsubmission_set_too_many_recipients
