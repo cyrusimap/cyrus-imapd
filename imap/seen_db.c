@@ -271,7 +271,7 @@ EXPORTED int seen_read(struct seen *seendb, const char *uniqueid, struct seendat
     return seen_readit(seendb, uniqueid, sd, 0);
 }
 
-HIDDEN int seen_lockread(struct seen *seendb, const char *uniqueid, struct seendata *sd)
+EXPORTED int seen_lockread(struct seen *seendb, const char *uniqueid, struct seendata *sd)
 {
     if (SEEN_DEBUG) {
         syslog(LOG_DEBUG, "seen_db: seen_lockread %s (%s)",
