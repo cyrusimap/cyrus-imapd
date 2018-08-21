@@ -11507,24 +11507,23 @@ static void _email_bulkupdate_dump(struct email_bulkupdate *bulk, json_t *jdump)
                 buf_reset(&buf);
             }
         }
-        json_object_set(jplan, "copy", jcopy);
+        json_object_set_new(jplan, "copy", jcopy);
 
         json_t *jsetflags = json_array();
         for (j = 0; j < ptrarray_size(&plan->setflags); j++) {
             struct email_uidrec *uidrec = ptrarray_nth(&plan->setflags, j);
             json_array_append_new(jsetflags, json_integer(uidrec->uid));
         }
-        json_object_set(jplan, "setflags", jsetflags);
+        json_object_set_new(jplan, "setflags", jsetflags);
 
         json_t *jdelete = json_array();
         for (j = 0; j < ptrarray_size(&plan->delete); j++) {
             struct email_uidrec *uidrec = ptrarray_nth(&plan->delete, j);
             json_array_append_new(jdelete, json_integer(uidrec->uid));
         }
-        json_object_set(jplan, "delete", jdelete);
+        json_object_set_new(jplan, "delete", jdelete);
 
-        json_object_set(jplans, plan->mboxname, jplan);
-        json_decref(jplan);
+        json_object_set_new(jplans, plan->mboxname, jplan);
     }
     hash_iter_free(&iter);
     json_object_set_new(jdump, "plans", jplans);
