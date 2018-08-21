@@ -11188,7 +11188,7 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
         struct email_updateplan *plan = hash_del(mbox_id, &bulk->plans_by_mbox_id);
         if (!plan) continue;
         jmap_closembox(bulk->req, &plan->mbox);
-        free(plan);
+        _email_updateplan_free_p(plan);
     }
     strarray_fini(&erroneous_plans);
 
