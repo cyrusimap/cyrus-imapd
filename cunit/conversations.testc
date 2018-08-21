@@ -1358,7 +1358,11 @@ static int set_up(void)
 
     libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
     cyrusdb_init();
+#ifdef HAVE_ZEROSKIP
+    config_conversations_db = "zeroskip";
+#else
     config_conversations_db = "twoskip";
+#endif
 
     return 0;
 }

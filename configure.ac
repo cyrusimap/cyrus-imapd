@@ -1404,6 +1404,20 @@ AC_SUBST([JANSSON_LIBS])
 AC_SUBST([JANSSON_CFLAGS])
 
 dnl
+dnl Check for zeroskip library, needed for zeroskip support
+dnl
+AC_ARG_WITH([zeroskip],
+	AS_HELP_STRING([--without-zeroskip], [ignore presence of Zeroskip and disable it]))
+AS_IF([test "x$with_zeroskip" != "xno"],
+	[ PKG_CHECK_MODULES([ZEROSKIP], [libzeroskip],
+		[ AC_DEFINE(HAVE_ZEROSKIP, [], [Do we have Zeroskip?])
+		  with_zeroskip=yes ],
+		with_zeroskip=no)])
+AC_SUBST([ZEROSKIP_LIBS])
+AC_SUBST([ZEROSKIP_CFLAGS])
+AM_CONDITIONAL([USE_ZEROSKIP], [test "x$with_zeroskip" = xyes])
+
+dnl
 dnl Set pidfile location
 dnl
 AC_ARG_WITH(pidfile,
@@ -2349,6 +2363,7 @@ Database support:
    mysql:              $with_mysql
    postgresql:         $use_pgsql
    sqlite:             $use_sqlite
+   zeroskip:           $with_zeroskip
 
 Search engine:
    squat:              $enable_squat
