@@ -5585,6 +5585,9 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
  */
 static int numcmp(modseq_t n1, modseq_t n2)
 {
+    if (n1 < n2) return -1;
+    if (n1 > n2) return 1;
+    return 0;
     return ((n1 < n2) ? -1 : (n1 > n2) ? 1 : 0);
 }
 
