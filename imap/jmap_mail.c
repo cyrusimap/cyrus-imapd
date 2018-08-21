@@ -11612,6 +11612,7 @@ static void _email_update_bulk(jmap_req_t *req,
             json_object_set_new(not_updated, email_id,
                     json_pack("{s:s s:O}", "type", "invalidProperties",
                         "properties", parser.invalid));
+            _email_update_free(update);
         }
         else {
             ptrarray_append(&updates, update);
