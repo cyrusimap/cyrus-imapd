@@ -8457,9 +8457,9 @@ done:
 
 
 struct email_append_detail {
+    char blob_id[42];
     char email_id[26];
     char thread_id[18];
-    char *blob_id;
     size_t size;
 };
 
@@ -10335,7 +10335,6 @@ done:
     strarray_fini(&keywords);
     jmap_parser_fini(&parser);
     _email_fini(&email);
-    free(detail.blob_id);
 }
 
 /* A subset of all messages within an IMAP mailbox. */
@@ -11956,7 +11955,6 @@ done:
     strarray_fini(&keywords);
     buf_free(&content.buf);
     free(mboxname);
-    free(detail.blob_id);
 }
 
 static int jmap_email_import(jmap_req_t *req)
