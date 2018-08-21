@@ -925,8 +925,9 @@ static int split_attribs(const char *data, int datalen,
     /* initialize metadata */
     memset(mdata, 0, sizeof(struct annotate_metadata));
 
-    /* xxx use datalen? */
     /* xxx sanity check the data? */
+    if (datalen <= 0)
+            return 1;
     /*
      * Sigh...this is dumb.  We take care to be machine independent by
      * storing the length in network byte order...but the size of the

@@ -51,6 +51,10 @@ extern int bsearch_mem_mbox(const char *word,
 extern int bsearch_compare_mbox(const char *s1, const char *s2);
 
 extern int bsearch_ncompare_mbox(const char *s1, int l1, const char *s2, int l2);
+extern int bsearch_uncompare_mbox(const unsigned char *s1, size_t l1,
+                                  const unsigned char *s2, size_t l2);
+extern int bsearch_memtree_mbox(const unsigned char *s1, size_t l1,
+                                const unsigned char *s2, size_t l2);
 
 extern int bsearch_ncompare_raw(const char *s1, int l1, const char *s2, int l2);
 
