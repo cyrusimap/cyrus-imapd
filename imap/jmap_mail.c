@@ -906,6 +906,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
     if (err) {
         jmap_error(req, err);
         jmap_parser_fini(&parser);
+        jmap_get_fini(&get);
         return 0;
     }
 
