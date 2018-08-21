@@ -342,6 +342,14 @@ static int frame_recv_cb(nghttp2_session *session,
         if (txn->ws_ctx) {
             /* WebSocket over HTTP/2 input */
             ws_input(txn);
+
+            if (txn->flags.conn & CONN_CLOSE) {
+                /* Issue RST_STREAM so that stream does not hang around. */
+                syslog(LOG_DEBUG, "nghttp2_submit_rst stream()");
+                nghttp2_submit_rst_stream(session, NGHTTP2_FLAG_NONE,
+                                          frame->hd.stream_id,
+                                          NGHTTP2_NO_ERROR);
+            }
             break;
         }
 
