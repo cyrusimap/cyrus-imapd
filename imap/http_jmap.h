@@ -145,7 +145,7 @@ extern const struct body *jmap_contact_findblob(struct message_guid *content_gui
                                                 struct mailbox *mbox,
                                                 msgrecord_t *mr,
                                                 struct buf *blob);
-extern char *jmap_blobid(const struct message_guid *guid);
+extern void jmap_set_blobid(const struct message_guid *guid, char *buf);
 
 /* JMAP states */
 extern json_t* jmap_getstate(jmap_req_t *req, int mbtype, int refresh);

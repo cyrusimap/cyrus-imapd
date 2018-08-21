@@ -4049,12 +4049,11 @@ static char *_html_to_plain(const char *html) {
     return text;
 }
 
-static char *_email_id_from_guid(const struct message_guid *guid)
+static void _email_id_set_guid(const struct message_guid *guid, char *buf)
 {
-    char *msgid = xzmalloc(26);
-    msgid[0] = 'M';
-    memcpy(msgid+1, message_guid_encode(guid), 24);
-    return msgid;
+    buf[0] = 'M';
+    memcpy(buf+1, message_guid_encode(guid), 24);
+    buf[25] = '\0';
 }
 
 static const char *_guid_from_id(const char *msgid)
@@ -4062,13 +4061,13 @@ static const char *_guid_from_id(const char *msgid)
     return msgid + 1;
 }
 
-static char *_thread_id_from_cid(conversation_id_t cid)
+static void _thread_id_set_cid(conversation_id_t cid, char *buf)
 {
-    char *thrid = xzmalloc(18);
-    thrid[0] = 'T';
-    memcpy(thrid+1, conversation_id_encode(cid), 16);
-    return thrid;
+    buf[0] = 'T';
+    memcpy(buf+1, conversation_id_encode(cid), 16);
+    buf[17] = 0;
 }
+
 
 static conversation_id_t _cid_from_id(const char *thrid)
 {
@@ -5441,7 +5440,7 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     /* Initialize search result loop */
     size_t mdcount = msgdata->count;
     size_t anchor_position = (size_t)-1;
-    char *email_id = NULL;
+    char email_id[26];
 
     hash_table seen_ids = HASH_TABLE_INITIALIZER;
     memset(&seen_ids, 0, sizeof(hash_table));
@@ -5471,8 +5470,7 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
             continue;
 
         /* Have we seen this message already? */
-        free(email_id);
-        email_id = _email_id_from_guid(&md->guid);
+        _email_id_set_guid(&md->guid, email_id);
         if (hash_lookup(email_id, &seen_ids))
             continue;
         hash_insert(email_id, (void*)1, &seen_ids);
@@ -5530,7 +5528,6 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     }
     free_hashu64_table(&seen_cids, NULL);
     free_hash_table(&seen_ids, NULL);
-    free(email_id);
 
     if (!query->anchor) {
         query->result_position = query->position;
@@ -5644,7 +5641,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     }
 
     /* Prepare result loop */
-    char *email_id = NULL;
+    char email_id[26];
     int found_up_to = 0;
     size_t mdcount = msgdata->count;
 
@@ -5695,8 +5692,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
         int rights = jmap_myrights_byname(req, folder->mboxname);
         if (!(rights & ACL_READ)) continue;
 
-        free(email_id);
-        email_id = _email_id_from_guid(&md->guid);
+        _email_id_set_guid(&md->guid, email_id);
 
         hash_insert(email_id, (void*)1, &touched_ids);
         hashu64_insert(md->cid, (void*)1, &touched_cids);
@@ -5712,8 +5708,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
         int rights = jmap_myrights_byname(req, folder->mboxname);
         if (!(rights & ACL_READ)) continue;
 
-        free(email_id);
-        email_id = _email_id_from_guid(&md->guid);
+        _email_id_set_guid(&md->guid, email_id);
 
         int is_expunged = (md->system_flags & FLAG_DELETED) ||
                 (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
@@ -5811,7 +5806,6 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
 
     free_hash_table(&touched_ids, NULL);
     free_hashu64_table(&touched_cids, NULL);
-    free(email_id);
 
     modseq_t modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
     query->new_queryState = _email_make_querystate(modseq, 0);
@@ -5847,7 +5841,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     }
 
     /* Prepare result loop */
-    char *email_id = NULL;
+    char email_id[26];
     int found_up_to = 0;
     size_t mdcount = msgdata->count;
 
@@ -5876,8 +5870,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
         int rights = jmap_myrights_byname(req, folder->mboxname);
         if (!(rights & ACL_READ)) continue;
 
-        free(email_id);
-        email_id = _email_id_from_guid(&md->guid);
+        _email_id_set_guid(&md->guid, email_id);
 
         hash_insert(email_id, (void*)1, &touched_ids);
     }
@@ -5892,8 +5885,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
         int rights = jmap_myrights_byname(req, folder->mboxname);
         if (!(rights & ACL_READ)) continue;
 
-        free(email_id);
-        email_id = _email_id_from_guid(&md->guid);
+        _email_id_set_guid(&md->guid, email_id);
 
         int is_expunged = (md->system_flags & FLAG_DELETED) ||
                 (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
@@ -5959,7 +5951,6 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     }
 
     free_hash_table(&touched_ids, NULL);
-    free(email_id);
 
     modseq_t modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
     query->new_queryState = _email_make_querystate(modseq, 0);
@@ -6040,7 +6031,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     }
 
     /* Process results */
-    char *email_id = NULL;
+    char email_id[26];
     size_t changes_count = 0;
     modseq_t highest_modseq = 0;
     int i;
@@ -6051,8 +6042,6 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     for (i = 0 ; i < msgdata->count; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
         search_folder_t *folder = md->folder;
-        free(email_id);
-        email_id = _email_id_from_guid(&md->guid);
 
         if (!folder)
             continue;
@@ -6061,6 +6050,8 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
         int rights = jmap_myrights_byname(req, folder->mboxname);
         if (!(rights & ACL_READ))
             continue;
+
+        _email_id_set_guid(&md->guid, email_id);
 
         /* Skip already seen messages */
         if (hash_lookup(email_id, &seen_ids)) continue;
@@ -6109,7 +6100,6 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
         }
     }
     free_hash_table(&seen_ids, NULL);
-    free(email_id);
 
     /* Set new state */
     changes->new_modseq = changes->has_more_changes ?
@@ -6179,6 +6169,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     memset(&seen_cids, 0, sizeof(hashu64_table));
     construct_hashu64_table(&seen_cids, mdcount/4+4,0);
 
+    char thread_id[18];
     for (i = 0 ; i < msgdata->count; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
         search_folder_t *folder = md->folder;
@@ -6211,7 +6202,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
             continue;
 
         /* Report thread */
-        char *thread_id = _thread_id_from_cid(md->cid);
+        _thread_id_set_cid(md->cid, thread_id);
         if (conv->exists) {
             if (conv->createdmodseq <= changes->since_modseq)
                 json_array_append_new(changes->updated, json_string(thread_id));
@@ -6222,7 +6213,6 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
             if (conv->createdmodseq <= changes->since_modseq)
                 json_array_append_new(changes->destroyed, json_string(thread_id));
         }
-        free(thread_id);
         conversation_free(conv);
     }
     free_hashu64_table(&seen_cids, NULL);
@@ -6555,6 +6545,7 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
     json_array_foreach(ids, i, val) {
         conversation_id_t cid = 0;
         conv_thread_t *thread;
+        char email_id[26];
 
         const char *threadid = json_string_value(val);
         cid = _cid_from_id(threadid);
@@ -6581,9 +6572,8 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
                     continue;
                 }
             }
-            char *msgid = _email_id_from_guid(&thread->guid);
-            json_array_append_new(ids, json_string(msgid));
-            free(msgid);
+            _email_id_set_guid(&thread->guid, email_id);
+            json_array_append_new(ids, json_string(email_id));
         }
 
         json_t *jthread = json_pack("{s:s s:o}", "id", threadid, "emailIds", ids);
@@ -6873,6 +6863,7 @@ static int _email_get_meta(jmap_req_t *req,
 {
     int r = 0;
     hash_table *props = args->props;
+    char email_id[26];
 
     if (msg->part) {
         /* It's an embedded message. */
@@ -6880,9 +6871,9 @@ static int _email_get_meta(jmap_req_t *req,
             json_object_set_new(email, "id", json_null());
         }
         if (_wantprop(props, "blobId")) {
-            char *blobid = jmap_blobid(&msg->part->content_guid);
-            json_object_set_new(email, "blobId", json_string(blobid));
-            free(blobid);
+            char blob_id[42];
+            jmap_set_blobid(&msg->part->content_guid, blob_id);
+            json_object_set_new(email, "blobId", json_string(blob_id));
         }
         if (_wantprop(props, "threadId"))
             json_object_set_new(email, "threadId", json_null());
@@ -6899,24 +6890,23 @@ static int _email_get_meta(jmap_req_t *req,
         return 0;
     }
 
-    char *emailid = NULL;
-
     /* Determine message id */
     struct message_guid guid;
     r = msgrecord_get_guid(msg->mr, &guid);
     if (r) goto done;
-    emailid = _email_id_from_guid(&guid);
+
+    _email_id_set_guid(&guid, email_id);
 
     /* id */
     if (_wantprop(props, "id")) {
-        json_object_set_new(email, "id", json_string(emailid));
+        json_object_set_new(email, "id", json_string(email_id));
     }
 
     /* blobId */
     if (_wantprop(props, "blobId")) {
-        char *blobid = jmap_blobid(&guid);
-        json_object_set_new(email, "blobId", json_string(blobid));
-        free(blobid);
+        char blob_id[42];
+        jmap_set_blobid(&guid, blob_id);
+        json_object_set_new(email, "blobId", json_string(blob_id));
     }
 
     /* threadid */
@@ -6924,15 +6914,15 @@ static int _email_get_meta(jmap_req_t *req,
         bit64 cid;
         r = msgrecord_get_cid(msg->mr, &cid);
         if (r) goto done;
-        char *threadid = _thread_id_from_cid(cid);
-        json_object_set_new(email, "threadId", json_string(threadid));
-        free(threadid);
+        char thread_id[18];
+        _thread_id_set_cid(cid, thread_id);
+        json_object_set_new(email, "threadId", json_string(thread_id));
     }
 
     /* mailboxIds */
     if (_wantprop(props, "mailboxIds")) {
         json_t *mboxids = json_object();
-        json_t *mailboxes = _email_mailboxes(req, emailid);
+        json_t *mailboxes = _email_mailboxes(req, email_id);
 
         json_t *val;
         const char *mboxid;
@@ -6946,7 +6936,7 @@ static int _email_get_meta(jmap_req_t *req,
     /* keywords */
     if (_wantprop(props, "keywords")) {
         json_t *keywords = NULL;
-        r = _email_get_keywords(req, emailid, &keywords);
+        r = _email_get_keywords(req, email_id, &keywords);
         if (r) goto done;
         json_object_set_new(email, "keywords", keywords);
     }
@@ -6989,7 +6979,6 @@ static int _email_get_meta(jmap_req_t *req,
     }
 
 done:
-    free(emailid);
     return r;
 }
 
@@ -7215,9 +7204,9 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     if (_wantprop(bodyprops, "blobId")) {
         json_t *jblob_id = json_null();
         if (!message_guid_isnull(&part->content_guid)) {
-            char *tmp = jmap_blobid(&part->content_guid);
-            jblob_id = json_string(tmp);
-            free(tmp);
+            char blob_id[42];
+            jmap_set_blobid(&part->content_guid, blob_id);
+            jblob_id = json_string(blob_id);
         }
         json_object_set_new(jbodypart, "blobId", jblob_id);
     }
@@ -7939,9 +7928,9 @@ static void jmap_email_get_threadsonly(jmap_req_t *req, struct jmap_get *get)
 
         int r = _email_get_cid(req, id, &cid);
         if (!r && cid) {
-            char *thrid = _thread_id_from_cid(cid);
-            json_t *msg = json_pack("{s:s, s:s}", "id", id, "threadId", thrid);
-            free(thrid);
+            char thread_id[18];
+            _thread_id_set_cid(cid, thread_id);
+            json_t *msg = json_pack("{s:s, s:s}", "id", id, "threadId", thread_id);
             json_array_append_new(get->list, msg);
         }
         else {
@@ -8468,9 +8457,9 @@ done:
 
 
 struct email_append_detail {
-    char *email_id;
+    char email_id[26];
+    char thread_id[18];
     char *blob_id;
-    char *thread_id;
     size_t size;
 };
 
@@ -8570,8 +8559,8 @@ static void _email_append(jmap_req_t *req,
     if ((addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, 0))) {
         struct message_guid guid;
         message_guid_generate(&guid, addr, len);
-        detail->email_id = _email_id_from_guid(&guid);
-        detail->blob_id = jmap_blobid(&guid);
+        _email_id_set_guid(&guid, detail->email_id);
+        jmap_set_blobid(&guid, detail->blob_id);
         detail->size = len;
         munmap(addr, len);
     } else {
@@ -8619,7 +8608,7 @@ static void _email_append(jmap_req_t *req,
     bit64 cid;
     r = msgrecord_get_cid(mr, &cid);
     if (r) goto done;
-    detail->thread_id = _thread_id_from_cid(cid);
+    _thread_id_set_cid(cid, detail->thread_id);
 
     /* Write keywords */
     r = _write_keywords(mr, keywords, has_attachment);
@@ -10346,9 +10335,7 @@ done:
     strarray_fini(&keywords);
     jmap_parser_fini(&parser);
     _email_fini(&email);
-    free(detail.email_id);
     free(detail.blob_id);
-    free(detail.thread_id);
 }
 
 /* A subset of all messages within an IMAP mailbox. */
@@ -11969,9 +11956,7 @@ done:
     strarray_fini(&keywords);
     buf_free(&content.buf);
     free(mboxname);
-    free(detail.email_id);
     free(detail.blob_id);
-    free(detail.thread_id);
 }
 
 static int jmap_email_import(jmap_req_t *req)
@@ -12287,13 +12272,13 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
         conversations_commit(&mycstate);
     }
     if (!r) {
-        char *thread_id = _thread_id_from_cid(writeprops_rock.cid);
+        char thread_id[18];
+        _thread_id_set_cid(writeprops_rock.cid, thread_id);
         *new_email = json_pack("{s:s s:s s:s s:i}",
                 "id", email_id,
                 "blobId", blob_id,
                 "threadId", thread_id,
                 "size", writeprops_rock.size);
-        free(thread_id);
     }
     if (writeprops_rock.keywords) {
         strarray_free(writeprops_rock.keywords);

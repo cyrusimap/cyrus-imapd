@@ -1213,12 +1213,11 @@ EXPORTED void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp)
     syslog(LOG_INFO, "jmap: ignoring non-cached mailbox %s", (*mboxp)->name);
 }
 
-EXPORTED char *jmap_blobid(const struct message_guid *guid)
+EXPORTED void jmap_set_blobid(const struct message_guid *guid, char *buf)
 {
-    char *blobid = xzmalloc(42);
-    blobid[0] = 'G';
-    memcpy(blobid+1, message_guid_encode(guid), 40);
-    return blobid;
+    buf[0] = 'G';
+    memcpy(buf+1, message_guid_encode(guid), 40);
+    buf[41] = '\0';
 }
 
 
@@ -1844,12 +1843,12 @@ EXPORTED int jmap_upload(struct transaction_t *txn)
     char datestr[RFC3339_DATETIME_MAX];
     time_to_rfc3339(now + 86400, datestr, RFC3339_DATETIME_MAX);
 
-    char *blobid = jmap_blobid(&body->content_guid);
+    char blob_id[42];
+    jmap_set_blobid(&body->content_guid, blob_id);
 
     /* Create response object */
     json_t *resp = json_pack("{s:s}", "accountId", accountid);
-    json_object_set_new(resp, "blobId", json_string(blobid));
-    free(blobid);
+    json_object_set_new(resp, "blobId", json_string(blob_id));
     json_object_set_new(resp, "size", json_integer(datalen));
     json_object_set_new(resp, "expires", json_string(datestr));
 

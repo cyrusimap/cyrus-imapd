@@ -1531,12 +1531,12 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
 
         if (photo &&
             (size = vcard_prop_decode_value(photo, NULL, &type, &guid))) {
-            char *blobid = jmap_blobid(&guid);
+            char blob_id[42];
+            jmap_set_blobid(&guid, blob_id);
 
             file = json_pack("{s:s s:i s:s? s:n}",
-                             "blobId", blobid, "size", size,
+                             "blobId", blob_id, "size", size,
                              "type", type, "name");
-            free(blobid);
         }
         else file = json_null();
 
