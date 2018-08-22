@@ -60,11 +60,9 @@ EXPORTED void strarray_fini(strarray_t *sa)
     if (!sa)
         return;
     for (i = 0 ; i < sa->count ; i++) {
-        free(sa->data[i]);
-        sa->data[i] = NULL;
+        xzfree(sa->data[i]);
     }
-    free(sa->data);
-    sa->data = NULL;
+    xzfree(sa->data);
     sa->count = 0;
     sa->alloc = 0;
 }
@@ -189,7 +187,7 @@ EXPORTED int strarray_appendm(strarray_t *sa, char *s)
 
 static void _strarray_set(strarray_t *sa, int idx, char *s)
 {
-    free(sa->data[idx]);
+    xfree(sa->data[idx]);
     sa->data[idx] = s;
     /* adjust the count if we just sparsely expanded the array */
     if (s && idx >= sa->count)
@@ -281,8 +279,7 @@ EXPORTED void strarray_truncate(strarray_t *sa, int newlen)
         ensure_alloc(sa, newlen);
     } else {
         for (i = newlen ; i < sa->count ; i++) {
-            free(sa->data[i]);
-            sa->data[i] = NULL;
+            xzfree(sa->data[i]);
         }
     }
     sa->count = newlen;
