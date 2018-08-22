@@ -58,6 +58,7 @@
 #include "annotate.h"
 #include "append.h"
 #include "bsearch.h"
+#include "hashset.h"
 #include "http_dav.h"
 #include "http_jmap.h"
 #include "http_proxy.h"
@@ -5341,17 +5342,11 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     assert(query->position >= 0);
 
     /* Initialize search result loop */
-    size_t mdcount = msgdata->count;
     size_t anchor_position = (size_t)-1;
     char email_id[26];
 
-    hash_table seen_ids = HASH_TABLE_INITIALIZER;
-    memset(&seen_ids, 0, sizeof(hash_table));
-    construct_hash_table(&seen_ids, mdcount + 1, 0);
-
-    hashu64_table seen_cids = HASHU64_TABLE_INITIALIZER;
-    memset(&seen_cids, 0, sizeof(hashu64_table));
-    construct_hashu64_table(&seen_cids, mdcount/4+4,0);
+    struct hashset *seen_emails = hashset_new(12);
+    struct hashset *seen_threads = hashset_new(8);
 
     /* List of all matching email ids */
     strarray_t email_ids = STRARRAY_INITIALIZER;
@@ -5373,17 +5368,16 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
             continue;
 
         /* Have we seen this message already? */
-        _email_id_set_guid(&md->guid, email_id);
-        if (hash_lookup(email_id, &seen_ids))
+        if (!hashset_add(seen_emails, &md->guid.value))
             continue;
-        hash_insert(email_id, (void*)1, &seen_ids);
-        if (collapse_threads && hashu64_lookup(md->cid, &seen_cids))
+        if (collapse_threads && !hashset_add(seen_threads, &md->cid))
             continue;
-        hashu64_insert(md->cid, (void*)1, &seen_cids);
 
         /* This message matches the query. */
         size_t result_count = json_array_size(query->ids);
         query->total++;
+        _email_id_set_guid(&md->guid, email_id);
+
         if (cache_db) strarray_append(&email_ids, email_id);
 
         /* Apply query window, if any */
@@ -5429,8 +5423,8 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
         /* Add message to result */
         json_array_append_new(query->ids, json_string(email_id));
     }
-    free_hashu64_table(&seen_cids, NULL);
-    free_hash_table(&seen_ids, NULL);
+    hashset_free(&seen_threads);
+    hashset_free(&seen_emails);
 
     if (!query->anchor) {
         query->result_position = query->position;
@@ -6067,10 +6061,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     modseq_t highest_modseq = 0;
     int i;
 
-    size_t mdcount = msgdata->count;
-    hashu64_table seen_cids = HASHU64_TABLE_INITIALIZER;
-    memset(&seen_cids, 0, sizeof(hashu64_table));
-    construct_hashu64_table(&seen_cids, mdcount/4+4,0);
+    struct hashset *seen_threads = hashset_new(8);
 
     char thread_id[18];
     for (i = 0 ; i < msgdata->count; i++) {
@@ -6086,8 +6077,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
             continue;
 
         /* Skip already seen threads */
-        if (hashu64_lookup(md->cid, &seen_cids)) continue;
-        hashu64_insert(md->cid, (void*)1, &seen_cids);
+        if (!hashset_add(seen_threads, &md->cid)) continue;
 
         /* Apply limit, if any */
         if (changes->max_changes && ++changes_count > changes->max_changes) {
@@ -6118,7 +6108,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
         }
         conversation_free(conv);
     }
-    free_hashu64_table(&seen_cids, NULL);
+    hashset_free(&seen_threads);
 
     /* Set new state */
     changes->new_modseq = changes->has_more_changes ?
