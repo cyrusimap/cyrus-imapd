@@ -11641,7 +11641,7 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
         /* Write seen db for shared mailboxes */
         if (plan->seendb) {
             if (add_seenseq || del_seenseq) {
-                struct seqset *new_seenseq = seqset_init(last_uid, SEQ_MERGE);
+                struct seqset *new_seenseq = seqset_init(last_uid, SEQ_SPARSE);
                 if (del_seenseq->len) {
                     uint32_t uid;
                     while ((uid = seqset_getnext(plan->old_seenseq)))
