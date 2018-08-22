@@ -8489,7 +8489,6 @@ static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
     uint32_t system_flags, internal_flags;
 
     mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
-    mboxevent_extract_msgrecord(mboxevent, mrw);
 
     int j;
     int didsome = 0;
@@ -8510,7 +8509,10 @@ static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
         if (!r) r = msgrecord_add_systemflags(mrw, FLAG_DELETED);
         if (!r) r = msgrecord_add_internalflags(mrw, FLAG_INTERNAL_EXPUNGED);
         if (!r) r = msgrecord_rewrite(mrw);
-        if (!r) didsome++;
+        if (!r) {
+            mboxevent_extract_msgrecord(mboxevent, mrw);
+            didsome++;
+        }
         // if errors, record the issue
         if (r) json_object_set_new(errors, uidrec->email_id, jmap_server_error(r));
     }
