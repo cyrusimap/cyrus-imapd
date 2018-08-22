@@ -746,6 +746,7 @@ include_HEADERS = \
 	lib/glob.h \
 	lib/gmtoff.h \
 	lib/hash.h \
+	lib/hashset.h \
 	lib/hashu64.h \
 	lib/imapurl.h \
 	lib/imclient.h \
@@ -1421,6 +1422,7 @@ lib_libcyrus_min_la_SOURCES = \
 	lib/bufarray.c \
 	lib/byteorder64.c \
 	lib/hash.c \
+	lib/hashset.c \
 	lib/hashu64.c \
 	lib/libconfig.c \
 	lib/mpool.c \
