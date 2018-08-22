@@ -8464,8 +8464,24 @@ static int _copy_msgrecord(struct auth_state *authstate,
     return r;
 }
 
-static int _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
-                               ptrarray_t *uidrecs, json_t *errors)
+/* A subset of all messages within an IMAP mailbox. */
+struct email_mboxrec {
+    char *mboxname;     /* IMAP mailbox name */
+    char *mbox_id;      /* Cyrus-internal unique mailbox id */
+    ptrarray_t uidrecs; /* Array of struct email_uidrec */
+};
+
+/* A single mailboxname/UID pair of the JMAP email identified by
+ * email_id. Each email has 1 or more uid records, but uid
+ * records may represent expunged messages. */
+struct email_uidrec {
+    struct email_mboxrec *mboxrec; /* owning mailboxrec */
+    char *email_id;                /* JMAP email id */
+    uint32_t uid;                  /* IMAP uid in mbox */
+};
+
+static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
+                                ptrarray_t *uidrecs, json_t *errors)
 {
     int r;
     struct mboxevent *mboxevent = NULL;
@@ -8485,7 +8501,7 @@ static int _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
         }
         // load the record
         if (mrw) msgrecord_unref(&mrw);
-        r = msgrecord_find(mbox, uid, &mrw);
+        r = msgrecord_find(mbox, uidrec->uid, &mrw);
         if (!r) r = msgrecord_get_systemflags(mrw, &system_flags);
         if (!r) r = msgrecord_get_internalflags(mrw, &internal_flags);
         // already expunged, skip (aka: will be reported as success)
@@ -8508,9 +8524,6 @@ static int _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
         mboxevent_notify(&mboxevent);
     }
     mboxevent_free(&mboxevent);
-
-done:
-    return r;
 }
 
 static int _write_keywords(msgrecord_t *mr, strarray_t *keywords, int has_attachment)
@@ -10448,22 +10461,6 @@ done:
     jmap_parser_fini(&parser);
     _email_fini(&email);
 }
-
-/* A subset of all messages within an IMAP mailbox. */
-struct email_mboxrec {
-    char *mboxname;     /* IMAP mailbox name */
-    char *mbox_id;      /* Cyrus-internal unique mailbox id */
-    ptrarray_t uidrecs; /* Array of struct email_uidrec */
-};
-
-/* A single mailboxname/UID pair of the JMAP email identified by
- * email_id. Each email has 1 or more uid records, but uid
- * records may represent expunged messages. */
-struct email_uidrec {
-    struct email_mboxrec *mboxrec; /* owning mailboxrec */
-    char *email_id;                /* JMAP email id */
-    uint32_t uid;                  /* IMAP uid in mbox */
-};
 
 static int _email_uidrec_compareuid_cb(const void **pa, const void **pb)
 {
