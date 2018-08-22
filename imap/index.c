@@ -5858,15 +5858,15 @@ void index_msgdata_free(MsgData **msgdata, unsigned int n)
 
         if (!md) continue;
 
-        free(md->cc);
-        free(md->from);
-        free(md->to);
-        free(md->displayfrom);
-        free(md->displayto);
-        free(md->xsubj);
-        free(md->msgid);
-        free(md->listid);
-        free(md->contenttype);
+        xfree(md->cc);
+        xfree(md->from);
+        xfree(md->to);
+        xfree(md->displayfrom);
+        xfree(md->displayto);
+        xfree(md->xsubj);
+        xfree(md->msgid);
+        xfree(md->listid);
+        xfree(md->contenttype);
         strarray_fini(&md->ref);
         strarray_fini(&md->annot);
     }
