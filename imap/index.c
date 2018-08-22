@@ -162,7 +162,6 @@ static void index_get_ids(MsgData *msgdata,
 
 static int index_sort_compare(MsgData *md1, MsgData *md2,
                               const struct sortcrit *call_data);
-static int index_sort_compare_qsort(const void *v1, const void *v2);
 
 static void *index_thread_getnext(Thread *thread);
 static void index_thread_setnext(Thread *thread, Thread *next);
@@ -5684,7 +5683,59 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
     return (reverse ? -ret : ret);
 }
 
-static int index_sort_compare_qsort(const void *v1, const void *v2)
+static int sortcrit_is_reverse_uid(const struct sortcrit *sortcrit)
+{
+    if (!(sortcrit->flags & SORT_REVERSE)) return 0;
+    if (!(sortcrit->key == SORT_SEQUENCE)) return 0;
+    return 1;
+}
+
+static int sortcrit_is_modseq(const struct sortcrit *sortcrit)
+{
+    if ((sortcrit->flags & SORT_REVERSE)) return 0;
+    if (!(sortcrit->key == SORT_MODSEQ)) return 0;
+    sortcrit++;
+    if ((sortcrit->flags & SORT_REVERSE)) return 0;
+    if (!(sortcrit->key == SORT_SEQUENCE)) return 0;
+    return 1;
+}
+
+static int sortcrit_is_arrival(const struct sortcrit *sortcrit)
+{
+    if ((sortcrit->flags & SORT_REVERSE)) return 0;
+    if (!(sortcrit->key == SORT_ARRIVAL)) return 0;
+    sortcrit++;
+    if ((sortcrit->flags & SORT_REVERSE)) return 0;
+    if (!(sortcrit->key == SORT_SEQUENCE)) return 0;
+    return 1;
+}
+
+static int sortcrit_is_reverse_arrival(const struct sortcrit *sortcrit)
+{
+    if (!(sortcrit->flags & SORT_REVERSE)) return 0;
+    if (!(sortcrit->key == SORT_ARRIVAL)) return 0;
+    sortcrit++;
+    if ((sortcrit->flags & SORT_REVERSE)) return 0;
+    if (!(sortcrit->key == SORT_SEQUENCE)) return 0;
+    return 1;
+}
+
+static int sortcrit_is_reverse_flagged(const struct sortcrit *sortcrit)
+{
+    if (!(sortcrit->flags & SORT_REVERSE)) return 0;
+    // both HASFLAG and HASCONVFLAG have the same representation internally
+    if (!(sortcrit->key == SORT_HASFLAG ||
+          sortcrit->key == SORT_HASCONVFLAG)) return 0;
+    sortcrit++;
+    if (!(sortcrit->flags & SORT_REVERSE)) return 0;
+    if (!(sortcrit->key == SORT_ARRIVAL)) return 0;
+    sortcrit++;
+    if ((sortcrit->flags & SORT_REVERSE)) return 0;
+    if (!(sortcrit->key == SORT_SEQUENCE)) return 0;
+    return 1;
+}
+
+static int index_sort_compare_generic_qsort(const void *v1, const void *v2)
 {
     MsgData *md1 = *(MsgData **)v1;
     MsgData *md2 = *(MsgData **)v2;
@@ -5692,10 +5743,105 @@ static int index_sort_compare_qsort(const void *v1, const void *v2)
     return index_sort_compare(md1, md2, the_sortcrit);
 }
 
+static int index_sort_compare_reverse_uid(const void *v1, const void *v2)
+{
+    MsgData *md1 = *(MsgData **)v1;
+    MsgData *md2 = *(MsgData **)v2;
+    int ret;
+
+    ret = md1->uid - md2->uid;
+    if (ret) return ret;
+
+    return message_guid_cmp(&md1->guid, &md2->guid);
+}
+
+static int index_sort_compare_modseq(const void *v1, const void *v2)
+{
+    MsgData *md1 = *(MsgData **)v1;
+    MsgData *md2 = *(MsgData **)v2;
+    int ret;
+
+    ret = md1->modseq - md1->modseq;
+    if (ret) return ret;
+
+    ret = md1->uid - md2->uid;
+    if (ret) return ret;
+
+    return message_guid_cmp(&md1->guid, &md2->guid);
+}
+
+static int index_sort_compare_arrival(const void *v1, const void *v2)
+{
+    MsgData *md1 = *(MsgData **)v1;
+    MsgData *md2 = *(MsgData **)v2;
+    int ret;
+
+    ret = md1->internaldate - md2->internaldate;
+    if (ret) return ret;
+
+    ret = md1->uid - md2->uid;
+    if (ret) return ret;
+
+    return message_guid_cmp(&md1->guid, &md2->guid);
+}
+
+static int index_sort_compare_reverse_arrival(const void *v1, const void *v2)
+{
+    MsgData *md1 = *(MsgData **)v1;
+    MsgData *md2 = *(MsgData **)v2;
+    int ret;
+
+    ret = md2->internaldate - md1->internaldate;
+    if (ret) return ret;
+
+    ret = md1->uid - md2->uid;
+    if (ret) return ret;
+
+    return message_guid_cmp(&md1->guid, &md2->guid);
+}
+
+static int index_sort_compare_reverse_flagged(const void *v1, const void *v2)
+{
+    MsgData *md1 = *(MsgData **)v1;
+    MsgData *md2 = *(MsgData **)v2;
+    int ret;
+
+    ret = md2->hasflag - md1->hasflag;
+    if (ret) return ret;
+
+    ret = md2->internaldate - md1->internaldate;
+    if (ret) return ret;
+
+    ret = md1->uid - md2->uid;
+    if (ret) return ret;
+
+    return message_guid_cmp(&md1->guid, &md2->guid);
+}
+
 void index_msgdata_sort(MsgData **msgdata, int n, const struct sortcrit *sortcrit)
 {
-    the_sortcrit = (struct sortcrit *)sortcrit;
-    qsort(msgdata, n, sizeof(MsgData *), index_sort_compare_qsort);
+    if (sortcrit_is_reverse_uid(sortcrit)) {
+        qsort(msgdata, n, sizeof(MsgData *), index_sort_compare_reverse_uid);
+    }
+    else if (sortcrit_is_modseq(sortcrit)) {
+        qsort(msgdata, n, sizeof(MsgData *), index_sort_compare_modseq);
+    }
+    else if (sortcrit_is_arrival(sortcrit)) {
+        qsort(msgdata, n, sizeof(MsgData *), index_sort_compare_arrival);
+    }
+    else if (sortcrit_is_reverse_arrival(sortcrit)) {
+        qsort(msgdata, n, sizeof(MsgData *), index_sort_compare_reverse_arrival);
+    }
+    else if (sortcrit_is_reverse_flagged(sortcrit)) {
+        qsort(msgdata, n, sizeof(MsgData *), index_sort_compare_reverse_flagged);
+    }
+    else {
+        char *tmp = sortcrit_as_string(sortcrit);
+        syslog(LOG_DEBUG, "GENERICSORT: %s", tmp);
+        free(tmp);
+        the_sortcrit = (struct sortcrit *)sortcrit;
+        qsort(msgdata, n, sizeof(MsgData *), index_sort_compare_generic_qsort);
+    }
 }
 
 /*
