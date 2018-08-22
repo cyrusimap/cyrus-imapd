@@ -7060,7 +7060,7 @@ EXPORTED char *sortcrit_as_string(const struct sortcrit *sortcrit)
         "SIZE", "SUBJECT", "TO", "ANNOTATION",
         "MODSEQ", "UID", "HASFLAG", "CONVMODSEQ",
         "CONVEXISTS", "CONVSIZE", "HASCONVFLAG",
-        "FOLDER", "RELEVANCY"
+        "FOLDER", "RELEVANCY", "SPAMSCORE", "GUID"
     };
 
     for ( ; sortcrit->key ; sortcrit++) {
