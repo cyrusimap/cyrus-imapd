@@ -5278,7 +5278,7 @@ MsgData **index_msgdata_load(struct index_state *state,
                     idx = strarray_find_case(cstate->counted_flags, name, 0);
                 /* flag exists in the conversation at all */
                 if (idx >= 0 && conv->counts[idx] > 0 && j < 31)
-                    cur->hasconvflag |= (1<<j);
+                    cur->hasflag |= (1<<j);
                 break;
             }
             case SORT_CONVEXISTS:
@@ -5660,14 +5660,10 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             ret = numcmp(md1->spamscore, md2->spamscore);
             break;
         case SORT_HASFLAG:
+        case SORT_HASCONVFLAG:
             if (i < 31)
                 ret = numcmp(md1->hasflag & (1<<i),
                              md2->hasflag & (1<<i));
-            break;
-        case SORT_HASCONVFLAG:
-            if (i < 31)
-                ret = numcmp(md1->hasconvflag & (1<<i),
-                             md2->hasconvflag & (1<<i));
             break;
         case SORT_FOLDER:
             if (md1->folder && md2->folder)

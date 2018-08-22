@@ -166,7 +166,6 @@ typedef struct msgdata {
     modseq_t convmodseq;        /* modseq of conversation */
     uint32_t convexists;        /* exists count of conversation */
     uint32_t convsize;          /* total size of messages in conversation */
-    bit32 hasconvflag;          /* hasconvflag values (up to 32 of them) */
 
     uint32_t spamscore;         /* x-spam-score header */
 
