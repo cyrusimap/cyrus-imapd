@@ -5023,7 +5023,7 @@ static char *_emailsearch_hash(struct emailsearch *search)
     xsha1((const unsigned char *) buf_base(&buf), buf_len(&buf), raw_sha1);
     size_t hex_size = (SHA1_DIGEST_LENGTH << 1);
     char hex_sha1[hex_size + 1];
-    bin_to_hex(raw_sha1, SHA1_DIGEST_LENGTH, hex_sha1, BH_LOWER);
+    bin_to_lchex(raw_sha1, SHA1_DIGEST_LENGTH, hex_sha1);
     hex_sha1[hex_size] = '\0';
     buf_free(&buf);
     return xstrdup(hex_sha1);

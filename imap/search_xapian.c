@@ -1150,7 +1150,7 @@ static int xapian_run_cb(void *data, size_t n, void *rock)
     guid[40] = '\0';
     size_t i;
     for (i = 0; i < n; i++) {
-        bin_to_hex(data + (i*20), 20, guid, BH_LOWER);
+        bin_to_lchex(data + (i*20), 20, guid);
         r = conversations_guid_foreach(cstate, guid, xapian_run_guid_cb, bb);
         if (r) goto done;
     }
