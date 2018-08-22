@@ -59,6 +59,10 @@ extern char *xstrndup (const char *str, size_t len);
 extern void *xmemdup (const void *ptr, size_t size);
 
 #define xfree(ptr) do { \
+  if (ptr) { free(ptr); } \
+} while (0)
+
+#define xzfree(ptr) do { \
   if (ptr) { free(ptr); ptr = NULL; } \
 } while (0)
 
