@@ -5678,6 +5678,9 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
         }
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
 
+    // must be multi-folder with the same UID!  tiebreaker is GUID
+    if (!ret) return message_guid_cmp(&md1->guid, &md2->guid);
+
     return (reverse ? -ret : ret);
 }
 
