@@ -502,8 +502,10 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
     for (msgno = 1 ; msgno <= state->exists ; msgno++) {
         struct index_map *im = &state->map[msgno-1];
 
-        r = cmd_cancelled();
-        if (r) goto out;
+        if (!(msgno % 128)) {
+            r = cmd_cancelled();
+            if (r) goto out;
+        }
 
         /* we only want to look at unchecked UIDs */
         if (!bv_isset(&folder->unchecked_uids, im->uid))
@@ -717,8 +719,10 @@ static int subquery_run_one_folder(search_query_t *query,
     for (msgno = 1 ; msgno <= state->exists ; msgno++) {
         struct index_map *im = &state->map[msgno-1];
 
-        r = cmd_cancelled();
-        if (r) goto out;
+        if (!(msgno % 128)) {
+            r = cmd_cancelled();
+            if (r) goto out;
+        }
 
         /* can happen if we didn't "tellchanges" yet */
         if ((im->internal_flags & FLAG_INTERNAL_EXPUNGED) && !query->want_expunged)
