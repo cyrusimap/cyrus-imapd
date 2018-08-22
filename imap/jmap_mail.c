@@ -4054,8 +4054,8 @@ static char *_html_to_plain(const char *html) {
 static void _email_id_set_guid(const struct message_guid *guid, char *buf)
 {
     buf[0] = 'M';
-    memcpy(buf+1, message_guid_encode(guid), 24);
-    buf[25] = '\0';
+    // appends NULL for us
+    bin_to_lchex(&guid->value, 12, buf+1);
 }
 
 static const char *_guid_from_id(const char *msgid)
