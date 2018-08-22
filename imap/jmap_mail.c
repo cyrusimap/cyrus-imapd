@@ -8464,48 +8464,52 @@ static int _copy_msgrecord(struct auth_state *authstate,
     return r;
 }
 
-static int _email_expunge(jmap_req_t *req, struct mailbox *mbox, uint32_t uid)
+static int _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
+                               ptrarray_t *uidrecs, json_t *errors)
 {
     int r;
     struct mboxevent *mboxevent = NULL;
     msgrecord_t *mrw = NULL;
     uint32_t system_flags, internal_flags;
 
-    r = msgrecord_find(mbox, uid, &mrw);
-    if (r) return r;
-
-    r = msgrecord_get_systemflags(mrw, &system_flags);
-    if (r) goto done;
-
-    r = msgrecord_get_internalflags(mrw, &internal_flags);
-    if (r) goto done;
-
-    if (internal_flags & FLAG_INTERNAL_EXPUNGED) {
-        r = 0;
-        goto done;
-    }
-
-    /* Expunge index record */
-    r = msgrecord_add_systemflags(mrw, FLAG_DELETED);
-    if (r) goto done;
-
-    r = msgrecord_add_internalflags(mrw, FLAG_INTERNAL_EXPUNGED);
-    if (r) goto done;
-
-    r = msgrecord_rewrite(mrw);
-    if (r) goto done;
-
-    /* Report mailbox event. */
     mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
     mboxevent_extract_msgrecord(mboxevent, mrw);
-    mboxevent_extract_mailbox(mboxevent, mbox);
-    mboxevent_set_numunseen(mboxevent, mbox, -1);
-    mboxevent_set_access(mboxevent, NULL, NULL, req->userid, mbox->name, 0);
-    mboxevent_notify(&mboxevent);
+
+    int j;
+    int didsome = 0;
+    for (j = 0; j < ptrarray_size(uidrecs); j++) {
+        struct email_uidrec *uidrec = ptrarray_nth(uidrecs, j);
+        // skip known errors
+        if (json_object_get(errors, uidrec->email_id)) {
+             continue;
+        }
+        // load the record
+        if (mrw) msgrecord_unref(&mrw);
+        r = msgrecord_find(mbox, uid, &mrw);
+        if (!r) r = msgrecord_get_systemflags(mrw, &system_flags);
+        if (!r) r = msgrecord_get_internalflags(mrw, &internal_flags);
+        // already expunged, skip (aka: will be reported as success)
+        if (internal_flags & FLAG_INTERNAL_EXPUNGED) continue;
+        // update the flags
+        if (!r) r = msgrecord_add_systemflags(mrw, FLAG_DELETED);
+        if (!r) r = msgrecord_add_internalflags(mrw, FLAG_INTERNAL_EXPUNGED);
+        if (!r) r = msgrecord_rewrite(mrw);
+        if (!r) didsome++;
+        // if errors, record the issue
+        if (r) json_object_set_new(errors, uidrec->email_id, jmap_server_error(r));
+    }
+    if (mrw) msgrecord_unref(&mrw);
+
+    /* Report mailbox event if anything to say */
+    if (didsome) {
+        mboxevent_extract_mailbox(mboxevent, mbox);
+        mboxevent_set_numunseen(mboxevent, mbox, -1);
+        mboxevent_set_access(mboxevent, NULL, NULL, req->userid, mbox->name, 0);
+        mboxevent_notify(&mboxevent);
+    }
     mboxevent_free(&mboxevent);
 
 done:
-    if (mrw) msgrecord_unref(&mrw);
     return r;
 }
 
@@ -11689,17 +11693,7 @@ static void _email_bulkupdate_exec_delete(struct email_bulkupdate *bulk)
     hash_iter *iter = hash_table_iter(&bulk->plans_by_mbox_id);
     while (hash_iter_next(iter)) {
         struct email_updateplan *plan = hash_iter_val(iter);
-        int j;
-        for (j = 0; j < ptrarray_size(&plan->delete); j++) {
-            struct email_uidrec *uidrec = ptrarray_nth(&plan->delete, j);
-            if (json_object_get(bulk->set_errors, uidrec->email_id)) {
-                continue;
-            }
-            int r = _email_expunge(bulk->req, plan->mbox, uidrec->uid);
-            if (r) {
-                json_object_set_new(bulk->set_errors, uidrec->email_id, jmap_server_error(r));
-            }
-        }
+        _email_multiexpunge(bulk->req, plan->mbox, &plan->delete, bulk->set_errors);
     }
     hash_iter_free(&iter);
 }
@@ -11872,17 +11866,7 @@ static void _email_destroy_bulk(jmap_req_t *req,
         int r = jmap_openmbox(req, mboxrec->mboxname, &mbox, 1);
         if (!r) {
             /* Expunge messages one by one, marking any failed message */
-            for (j = 0; j < ptrarray_size(&mboxrec->uidrecs); j++) {
-                struct email_uidrec *uidrec = ptrarray_nth(&mboxrec->uidrecs, j);
-                if (json_object_get(not_destroyed, uidrec->email_id)) {
-                    continue;
-                }
-                r = _email_expunge(req, mbox, uidrec->uid);
-                if (r) {
-                    json_object_set_new(not_destroyed, uidrec->email_id,
-                            jmap_server_error(r));
-                }
-            }
+            _email_multiexpunge(req, mbox, &mboxrec->uidrecs, not_destroyed);
         }
         else {
             /* Mark all messages of this mailbox as failed */
