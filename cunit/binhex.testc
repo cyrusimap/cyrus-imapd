@@ -28,6 +28,9 @@ static void test_bin_to_hex_long(void)
     r = bin_to_hex(BIN, sizeof(BIN), hex, BH_LOWER);
     CU_ASSERT_EQUAL(r, sizeof(hex)-1);
     CU_ASSERT_STRING_EQUAL(hex, HEX);
+    r = bin_to_lchex(BIN, sizeof(BIN), hex);
+    CU_ASSERT_EQUAL(r, sizeof(hex)-1);
+    CU_ASSERT_STRING_EQUAL(hex, HEX);
 }
 
 static void test_bin_to_hex_short(void)
@@ -39,6 +42,9 @@ static void test_bin_to_hex_short(void)
 
     memset(hex, 0x45, sizeof(hex));
     r = bin_to_hex(BIN, sizeof(BIN), hex, BH_LOWER);
+    CU_ASSERT_EQUAL(r, sizeof(hex)-1);
+    CU_ASSERT_STRING_EQUAL(hex, HEX);
+    r = bin_to_lchex(BIN, sizeof(BIN), hex);
     CU_ASSERT_EQUAL(r, sizeof(hex)-1);
     CU_ASSERT_STRING_EQUAL(hex, HEX);
 }
