@@ -439,6 +439,7 @@ static const jmap_property_t group_props[] = {
     { "id",          JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
     { "name",        0 },
     { "contactIds",  0 },
+    { "otherAccountContactIds", 0},
     { NULL,          0 }
 };
 
