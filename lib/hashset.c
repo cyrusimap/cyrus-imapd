@@ -106,10 +106,10 @@ EXPORTED int hashset_exists(struct hashset *hs, const void *data)
 
     uint32_t pos = hs->starts[*((uint16_t *)data)];
     while (pos) {
-        size_t offset = hs->recsize * pos;
+        size_t offset = hs->recsize * (pos - 1);
         if (!memcmp(hs->data+offset, data, hs->bytesize))
             return 1; // found it
-        pos = *((uint32_t *)hs->data + offset + hs->bytesize);
+        pos = *(uint32_t *) (hs->data + offset + hs->bytesize);
     }
 
     return 0; // not found
