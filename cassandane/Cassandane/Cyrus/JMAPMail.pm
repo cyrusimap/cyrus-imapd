@@ -1065,6 +1065,44 @@ sub test_mailbox_set_inbox_children
     $self->assert_str_equals("INBOX,INBOX.C,INBOX.C.bar,INBOX.INBOX.B,INBOX.INBOX.sl,INBOX.tl", $mb);
 }
 
+sub test_mailbox_set_nameclash
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # Test name-clash at top-level
+    my $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            A1 => {
+                name => 'A', parentId => undef, role => undef,
+            },
+            A2 => {
+                name => 'A', parentId => undef, role => undef,
+            },
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{created}});
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{notCreated}});
+
+    # Test name-clash at lower lever
+    my $parentA = (values %{$res->[0][1]{created}})[0]{id};
+    $self->assert_not_null($parentA);
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            B1 => {
+                name => 'B', parentId => $parentA, role => undef,
+            },
+            B2 => {
+                name => 'B', parentId => $parentA, role => undef,
+            },
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{created}});
+    $self->assert_num_equals(1, scalar keys %{$res->[0][1]{notCreated}});
+}
+
 sub test_mailbox_set_name_swap
     :min_version_3_1 :needs_component_jmap
 {
