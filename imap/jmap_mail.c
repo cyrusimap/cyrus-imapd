@@ -8433,6 +8433,7 @@ struct email_uidrec {
     struct email_mboxrec *mboxrec; /* owning mailboxrec */
     char *email_id;                /* JMAP email id */
     uint32_t uid;                  /* IMAP uid in mbox */
+    int is_new;                    /* Used by Email/set{update} */
 };
 
 static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
@@ -10529,21 +10530,23 @@ static void _email_mboxrecs_read(struct conversations_state *cstate,
 
 /* Parsed JMAP Email/set#{update} argument. */
 struct email_update {
-    const char *email_id;
-    json_t *keywords;
-    int patch_keywords;
-    json_t *mailboxids;
-    int patch_mailboxids;
+    const char *email_id;     /* Id of updated JMAP email */
+    json_t *keywords;         /* JMAP Email/set keywords argument */
+    int patch_keywords;       /* True if keywords is a patch object */
+    json_t *full_keywords;    /* Patched JMAP keywords across index records */
+    json_t *mailboxids;       /* JMAP Email/set mailboxIds argument */
+    int patch_mailboxids;     /* True if mailboxids is a patch object */
 };
 
 static void _email_update_free(struct email_update *update)
 {
     json_decref(update->keywords);
+    json_decref(update->full_keywords);
     json_decref(update->mailboxids);
     free(update);
 }
 
-static int _email_update_setflags(struct email_update *update,
+static int _email_update_setflags(json_t *keywords, int patch_keywords,
                                   struct seqset *add_seen_uids,
                                   struct seqset *del_seen_uids,
                                   msgrecord_t *mrw)
@@ -10566,7 +10569,7 @@ static int _email_update_setflags(struct email_update *update,
     /* Determine if to patch or reset flags */
     uint32_t user_flags[MAX_USER_FLAGS/32];
     memset(user_flags, 0, sizeof(user_flags));
-    if (update->patch_keywords) {
+    if (patch_keywords) {
         r = msgrecord_get_userflags(mrw, user_flags);
         if (r) goto done;
     }
@@ -10578,7 +10581,7 @@ static int _email_update_setflags(struct email_update *update,
     /* Update flags */
     json_t *jval;
     const char *keyword;
-    json_object_foreach(update->keywords, keyword, jval) {
+    json_object_foreach(keywords, keyword, jval) {
         if (!strcasecmp(keyword, "$Flagged")) {
             if (jval == json_true())
                 system_flags |= FLAG_FLAGGED;
@@ -10625,8 +10628,8 @@ static int _email_update_setflags(struct email_update *update,
                 user_flags[userflag/32] &= ~(1<<(userflag&31));
         }
     }
-    if (!update->patch_keywords && del_seen_uids) {
-        if (json_object_get(update->keywords, "$seen") == NULL)
+    if (!patch_keywords && del_seen_uids) {
+        if (json_object_get(keywords, "$seen") == NULL)
             seqset_add(del_seen_uids, uid, 1);
     }
 
@@ -10738,6 +10741,7 @@ struct email_updateplan {
     ptrarray_t copy;      /* Array of array of email_uidrec, grouped by mailbox */
     ptrarray_t setflags;  /* Array of email_uidrec */
     ptrarray_t delete;    /* Array of email_uidrec */
+    int need_rights;      /* Required ACL bits set */
     struct email_mboxrec *mboxrec; /* Mailbox record */
     struct seen *seendb;            /* Seen database for shared mailbox, or NULL */
     struct seendata old_seendata;   /* Lock-read seen data from database */
@@ -10855,7 +10859,7 @@ static void _email_updateplan_error(struct email_updateplan *plan, int errcode, 
     json_decref(err);
 }
 
-static void _email_bulkupdate_planmailboxids(struct email_bulkupdate *bulk, ptrarray_t *updates)
+static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptrarray_t *updates)
 {
     hash_table copyupdates_by_mbox_id = HASH_TABLE_INITIALIZER;
     construct_hash_table(&copyupdates_by_mbox_id, ptrarray_size(updates)+1, 0);
@@ -10909,6 +10913,7 @@ static void _email_bulkupdate_planmailboxids(struct email_bulkupdate *bulk, ptra
                     if (uidrec) {
                         /* Delete the email from this mailbox. */
                         ptrarray_append(&plan->delete, uidrec);
+                        plan->need_rights |= ACL_EXPUNGE|ACL_DELETEMSG;
                     }
                 }
             }
@@ -10931,6 +10936,7 @@ static void _email_bulkupdate_planmailboxids(struct email_bulkupdate *bulk, ptra
                 else {
                     /* Delete message from mailbox */
                     ptrarray_append(&plan->delete, uidrec);
+                    plan->need_rights |= ACL_EXPUNGE|ACL_DELETEMSG;
                 }
             }
 
@@ -11010,14 +11016,7 @@ static void _email_bulkupdate_planmailboxids(struct email_bulkupdate *bulk, ptra
                 ptrarray_append(&plan->copy, pick_uidrecs);
             }
             ptrarray_append(pick_uidrecs, pick_uidrec);
-
-            /* XXX If the update doesn't change keywords, add an empty patch.
-             * This will make the keyword planner determine the consolidated
-             * keywords for this JMAP email. */
-            if (!update->keywords) {
-                update->keywords = json_object();
-                update->patch_keywords = 1;
-            }
+            plan->need_rights |= ACL_INSERT;
         }
         free_hash_table(&src_mbox_id_counts, NULL);
     }
@@ -11096,7 +11095,36 @@ static void _email_bulkupdate_checklimits(struct email_bulkupdate *bulk)
     hash_iter_free(&iter);
 }
 
-static void _email_bulkupdate_plankeywords(struct email_bulkupdate *bulk, ptrarray_t *updates)
+static json_t *_email_bulkupdate_aggregate_keywords(struct email_bulkupdate *bulk,
+                                                    const char *email_id,
+                                                    hash_table *seenseq_by_mbox_id)
+{
+    ptrarray_t *current_uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
+    struct email_keywords keywords = _EMAIL_KEYWORDS_INITIALIZER;
+    _email_keywords_init(&keywords, bulk->req->userid, seenseq_by_mbox_id);
+
+    int i;
+    for (i = 0; i < ptrarray_size(current_uidrecs); i++) {
+        struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, i);
+        struct email_updateplan *plan = hash_lookup(uidrec->mboxrec->mbox_id,
+                                                    &bulk->plans_by_mbox_id);
+        msgrecord_t *mr = NULL;
+        int r = msgrecord_find(plan->mbox, uidrec->uid, &mr);
+        if (!r) _email_keywords_add_msgrecord(&keywords, mr);
+        if (r) {
+            if (!json_object_get(bulk->set_errors, uidrec->email_id)) {
+                json_object_set_new(bulk->set_errors, uidrec->email_id,
+                        jmap_server_error(r));
+            }
+        }
+        msgrecord_unref(&mr);
+    }
+    json_t *aggregated_keywords = _email_keywords_to_jmap(&keywords);
+    _email_keywords_fini(&keywords);
+    return aggregated_keywords;
+}
+
+static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrarray_t *updates)
 {
     int i;
 
@@ -11129,77 +11157,119 @@ static void _email_bulkupdate_plankeywords(struct email_bulkupdate *bulk, ptrarr
         }
     }
 
-    /* Open and read seen db for shared mailboxes */
     hash_table seenseq_by_mbox_id = HASH_TABLE_INITIALIZER;
     construct_hash_table(&seenseq_by_mbox_id, hash_numrecords(&bulk->plans_by_mbox_id)+1, 0);
+
+    /* Plan keyword updates per mailbox */
     hash_iter *iter = hash_table_iter(&bulk->plans_by_mbox_id);
     while (hash_iter_next(iter)) {
         struct email_updateplan *plan = hash_iter_val(iter);
-        if (mailbox_internal_seen(plan->mbox, bulk->req->userid) || plan->seendb) {
-            continue;
-        }
-        int r = seen_open(bulk->req->userid, SEEN_CREATE, &plan->seendb);
-        if (!r) seen_lockread(plan->seendb, plan->mbox->uniqueid, &plan->old_seendata);
-        if (!r) {
-            plan->old_seenseq = seqset_parse(plan->old_seendata.seenuids, NULL,
-                    plan->mbox->i.last_uid);
-            hash_insert(plan->mbox_id, plan->old_seenseq, &seenseq_by_mbox_id);
-        }
-        else {
-            int j;
-            for (j = 0; j < ptrarray_size(&plan->setflags); j++) {
-                struct email_uidrec *uidrec = ptrarray_nth(&plan->setflags, j);
-                if (json_object_get(bulk->set_errors, uidrec->email_id) == NULL) {
-                    json_object_set_new(bulk->set_errors, uidrec->email_id,
-                            jmap_server_error(r));
+        if (!mailbox_internal_seen(plan->mbox, bulk->req->userid) && !plan->seendb) {
+            /* Open and read seen db for shared mailboxes */
+            int r = seen_open(bulk->req->userid, SEEN_CREATE, &plan->seendb);
+            if (!r) seen_lockread(plan->seendb, plan->mbox->uniqueid, &plan->old_seendata);
+            if (!r) {
+                plan->old_seenseq = seqset_parse(plan->old_seendata.seenuids, NULL,
+                        plan->mbox->i.last_uid);
+                hash_insert(plan->mbox_id, plan->old_seenseq, &seenseq_by_mbox_id);
+            }
+            else {
+                int j;
+                for (j = 0; j < ptrarray_size(&plan->setflags); j++) {
+                    struct email_uidrec *uidrec = ptrarray_nth(&plan->setflags, j);
+                    if (json_object_get(bulk->set_errors, uidrec->email_id) == NULL) {
+                        json_object_set_new(bulk->set_errors, uidrec->email_id,
+                                jmap_server_error(r));
+                    }
                 }
             }
         }
-    }
-    hash_iter_free(&iter);
 
-    /* Replace keyword patches with complete set of updated keywords */
-    iter = hash_table_iter(&bulk->updates_by_email_id);
-    while (hash_iter_next(iter)) {
-        struct email_update *update = hash_iter_val(iter);
-        const char *email_id = update->email_id;
+        /* Determine the ACL and keywords for all new uid records */
+        for (i = 0; i < ptrarray_size(&plan->copy); i++) {
+            ptrarray_t *copy_uidrecs = ptrarray_nth(&plan->copy, i);
+            int j;
+            for (j = 0; j < ptrarray_size(copy_uidrecs); j++) {
+                struct email_uidrec *uidrec = ptrarray_nth(copy_uidrecs, j);
+                if (json_object_get(bulk->set_errors, uidrec->email_id)) {
+                    continue;
+                }
+                struct email_update *update = hash_lookup(uidrec->email_id,
+                                                          &bulk->updates_by_email_id);
 
-        if (json_object_get(bulk->set_errors, email_id)) {
-            continue;
+                if (!update->full_keywords) {
+                    /* Determine the full set of keywords to write on this record */
+                    if (!update->keywords) {
+                        /* Write the combined keywords of all records of this email */
+                        update->full_keywords = _email_bulkupdate_aggregate_keywords(bulk,
+                                                     uidrec->email_id, &seenseq_by_mbox_id);
+                    }
+                    else if (update->patch_keywords) {
+                        /* Write the patched, combined keywords */
+                        json_t *aggregated_keywords = _email_bulkupdate_aggregate_keywords(bulk,
+                                uidrec->email_id, &seenseq_by_mbox_id);
+                        update->full_keywords = jmap_patchobject_apply(aggregated_keywords,
+                                update->keywords);
+                        json_decref(aggregated_keywords);
+                    }
+                    else {
+                        /* Write the keywords defined in the update */
+                        update->full_keywords = json_incref(update->keywords);
+                    }
+                }
+                /* Determine required ACL rights */
+                if (json_object_size(update->full_keywords)) {
+                    int sets_seen = json_object_get(update->full_keywords, "$seen") != NULL;
+                    if (sets_seen)
+                        plan->need_rights |= ACL_SETSEEN;
+                    if (json_object_size(update->full_keywords) > 1 || !sets_seen)
+                        plan->need_rights |= ACL_ANNOTATEMSG;
+                }
+            }
         }
-        if (!update->keywords || !update->patch_keywords) {
-            continue;
-        }
 
-        /* Aggregate keywords for all current uid records */
-        ptrarray_t *current_uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
-        struct email_keywords keywords = _EMAIL_KEYWORDS_INITIALIZER;
-        _email_keywords_init(&keywords, bulk->req->userid, &seenseq_by_mbox_id);
-        int i;
-        for (i = 0; i < ptrarray_size(current_uidrecs); i++) {
-            struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, i);
-            struct email_updateplan *plan = hash_lookup(uidrec->mboxrec->mbox_id,
-                                                        &bulk->plans_by_mbox_id);
+        /* Determine ACL for all existing uid records with updated keywords */
+        for (i = 0; i < ptrarray_size(&plan->setflags); i++) {
+            struct email_uidrec *uidrec = ptrarray_nth(&plan->setflags, i);
+            if (json_object_get(bulk->set_errors, uidrec->email_id)) {
+                continue;
+            }
+            struct email_update *update = hash_lookup(uidrec->email_id,
+                                                      &bulk->updates_by_email_id);
+
+            /* Convert flags to JMAP keywords */
+            struct email_keywords keywords = _EMAIL_KEYWORDS_INITIALIZER;
+            _email_keywords_init(&keywords, bulk->req->userid, &seenseq_by_mbox_id);
             msgrecord_t *mr = NULL;
             int r = msgrecord_find(plan->mbox, uidrec->uid, &mr);
             if (!r) _email_keywords_add_msgrecord(&keywords, mr);
             if (r) {
-                if (!json_object_get(bulk->set_errors, uidrec->email_id)) {
-                    json_object_set_new(bulk->set_errors, uidrec->email_id,
-                                        jmap_server_error(r));
-                }
+                json_object_set_new(bulk->set_errors, uidrec->email_id,
+                        jmap_server_error(r));
             }
             msgrecord_unref(&mr);
-        }
+            json_t *current_keywords = _email_keywords_to_jmap(&keywords);
+            _email_keywords_fini(&keywords);
+            json_t *new_keywords;
+            if (update->patch_keywords) {
+                new_keywords = jmap_patchobject_apply(current_keywords, update->keywords);
+            }
+            else {
+                new_keywords = json_incref(update->keywords);
+            }
 
-        /* Replace keyword patch */
-        json_t *jkeywords = _email_keywords_to_jmap(&keywords);
-        json_t *patch = update->keywords;
-        update->keywords = jmap_patchobject_apply(jkeywords, patch);
-        update->patch_keywords = 0;
-        json_decref(jkeywords);
-        json_decref(patch);
-        _email_keywords_fini(&keywords);
+            /* Determine required ACL rights */
+            if (!json_equal(current_keywords, new_keywords)) {
+                int sets_seen = json_object_get(current_keywords, "$seen") !=
+                                json_object_get(new_keywords, "$seen");
+                if (sets_seen)
+                    plan->need_rights |= ACL_SETSEEN;
+                if (!sets_seen || json_object_size(new_keywords) > 1)
+                    plan->need_rights |= ACL_ANNOTATEMSG;
+            }
+            json_decref(new_keywords);
+            json_decref(current_keywords);
+        }
     }
     hash_iter_free(&iter);
 
@@ -11212,10 +11282,10 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
     int i;
 
     /* Plan mailbox copies, moves and deletes */
-    _email_bulkupdate_planmailboxids(bulk, updates);
+    _email_bulkupdate_plan_mailboxids(bulk, updates);
 
     /* Pre-process keyword updates */
-    _email_bulkupdate_plankeywords(bulk, updates);
+    _email_bulkupdate_plan_keywords(bulk, updates);
 
     /* Check mailbox count and keyword limits per email */
     _email_bulkupdate_checklimits(bulk);
@@ -11228,14 +11298,7 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
     while (hash_iter_next(iter)) {
         struct email_updateplan *plan = hash_iter_val(iter);
         int myrights = jmap_myrights_byname(bulk->req, plan->mboxname);
-        int need_rights = 0;
-        if (ptrarray_size(&plan->copy))
-            need_rights |= ACL_INSERT|ACL_ANNOTATEMSG|ACL_SETSEEN;
-        if (ptrarray_size(&plan->setflags))
-            need_rights |= ACL_ANNOTATEMSG|ACL_SETSEEN;
-        if (ptrarray_size(&plan->delete))
-            need_rights |= ACL_EXPUNGE|ACL_DELETEMSG;
-        if ((myrights & need_rights) != need_rights) {
+        if ((myrights & plan->need_rights) != plan->need_rights) {
             _email_updateplan_error(plan, IMAP_PERMISSION_DENIED, bulk->set_errors);
             strarray_append(&erroneous_plans, plan->mbox_id);
         }
@@ -11548,16 +11611,16 @@ static void _email_bulkupdate_exec_copy(struct email_bulkupdate *bulk)
                 new_uidrec->email_id = xstrdup(src_uidrec->email_id);
                 new_uidrec->uid = last_uid_before_copy + k + 1;
                 new_uidrec->mboxrec = plan->mboxrec;
+                new_uidrec->is_new = 1;
                 ptrarray_append(&plan->mboxrec->uidrecs, new_uidrec);
 
                 /* Add new record to setflags plan if keywords are updated */
                 /* XXX append_copy should take new flags as parameter */
                 struct email_update *update = hash_lookup(src_uidrec->email_id,
                                                           &bulk->updates_by_email_id);
-                if (update->keywords == NULL) {
-                    continue;
+                if (update->keywords || update->full_keywords) {
+                    ptrarray_append(&plan->setflags, new_uidrec);
                 }
-                ptrarray_append(&plan->setflags, new_uidrec);
             }
 
         }
@@ -11586,8 +11649,14 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
             }
             const char *email_id = uidrec->email_id;
             struct email_update *update = hash_lookup(email_id, &bulk->updates_by_email_id);
+
+            /* Determine if to write the aggregated or updated JMAP keywords */
+            json_t *keywords = uidrec->is_new ? update->full_keywords : update->keywords;
+            int patch_keywords = uidrec->is_new ? 0 : update->patch_keywords;
+
+            /* Write keywords */
             msgrecord_t *mrw = msgrecord_from_uid(plan->mbox, uidrec->uid);
-            int r = _email_update_setflags(update, add_seenseq, del_seenseq, mrw);
+            int r = _email_update_setflags(keywords, patch_keywords, add_seenseq, del_seenseq, mrw);
             msgrecord_unref(&mrw);
             if (r) {
                 json_object_set_new(bulk->set_errors, email_id, jmap_server_error(r));
