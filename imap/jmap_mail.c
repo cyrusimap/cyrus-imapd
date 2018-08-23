@@ -2714,6 +2714,9 @@ static int _mboxset_state_is_valid(const char *account_id, struct mboxset_ops *o
 
     /* Map current mailboxes by IMAP name to id */
     mboxlist_usermboxtree(account_id, NULL, _mboxset_state_mboxlist_cb, state, 0);
+    char *inboxname = mboxname_user_mbox(account_id, NULL);
+    const char *inbox_id = hash_lookup(inboxname, id_by_imapname);
+    free(inboxname);
 
     /* Create entries for current mailboxes */
     hash_enumerate(id_by_imapname, _mboxset_state_mkentry_cb, state);
@@ -2725,7 +2728,7 @@ static int _mboxset_state_is_valid(const char *account_id, struct mboxset_ops *o
         struct buf buf = BUF_INITIALIZER;
         if (args->creation_id) {
             struct mboxset_entry *entry = xzmalloc(sizeof(struct mboxset_entry));
-            entry->parent_id = xstrdupnull(args->parent_id);
+            entry->parent_id = xstrdup(args->parent_id ? args->parent_id : inbox_id);
             entry->name = xstrdup(args->name);
             buf_putc(&buf, '#');
             buf_appendcstr(&buf, args->creation_id);
