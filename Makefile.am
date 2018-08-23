@@ -641,6 +641,7 @@ cunit_TESTS = \
 	cunit/glob.testc \
 	cunit/guid.testc \
 	cunit/hash.testc \
+	cunit/hashset.testc \
 	cunit/imapurl.testc \
 	cunit/imparse.testc \
 	cunit/libconfig.testc \

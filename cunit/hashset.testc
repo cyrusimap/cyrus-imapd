@@ -1,0 +1,102 @@
+#include "cunit/cyrunit.h"
+#include "strarray.h"
+#include "util.h"
+#include "hashset.h"
+
+#define CU_ASSERT_MEMEQUAL(actual, expected, sz) \
+    CU_ASSERT_EQUAL(memcmp(actual, expected, sz), 0)
+
+static void test_new(void)
+{
+    const uint32_t exp_starts[65536] = {0};
+
+    struct hashset *hs = hashset_new(12);
+
+    CU_ASSERT_MEMEQUAL(hs->starts, exp_starts, sizeof(exp_starts));
+    CU_ASSERT_EQUAL(hs->bytesize, 12);
+    CU_ASSERT_EQUAL(hs->recsize, 12 + 4);
+    CU_ASSERT_EQUAL(hs->alloc, 0);
+    CU_ASSERT_EQUAL(hs->count, 0);
+    CU_ASSERT_PTR_NULL(hs->data);
+
+    hashset_free(&hs);
+    CU_ASSERT_PTR_NULL(hs);
+}
+
+static void test_exists(void)
+{
+    const char values[][4] = {
+        "ant", "bat", "cat", "dog",
+    };
+    const char unvalues[][4] = {
+        "zig", "yum", "wok", "vim",
+    };
+
+    int r;
+    size_t i, n;
+
+    struct hashset *hs = hashset_new(sizeof(values[0]));
+
+    n = sizeof values / sizeof values[0];
+    for (i = 0; i < n; i++) {
+        r = hashset_add(hs, values[i]);
+        CU_ASSERT_EQUAL_FATAL(r, 1);
+    }
+
+    for (i = 0; i < n; i++) {
+        r = hashset_exists(hs, values[i]);
+        printf("hashset_exists(%s): %i\n", values[i], r);
+        CU_ASSERT_EQUAL(r, 1);
+    }
+
+    n = sizeof unvalues / sizeof unvalues[0];
+    for (i = 0; i < n; i++) {
+        r = hashset_exists(hs, unvalues[i]);
+        printf("hashset_exists(%s): %i\n", unvalues[i], r);
+        CU_ASSERT_EQUAL(r, 0);
+    }
+}
+
+static void test_collisions(void)
+{
+    /* first two bytes are used for hashing, exploit this */
+    /* XXX keep this up to date if hash algorithm changes! */
+    const char values[][16] = {
+        "aaa", "aab", "aaab", "aardvark", "dog",
+    };
+    const char dupvalues[][16] = {
+        "aaab", "dog",
+    };
+    const char unvalues[][16] = {
+        "aa", "doge",
+    };
+
+    size_t i, n;
+    int r;
+
+    struct hashset *hs = hashset_new(sizeof values[0]);
+
+    n = sizeof values / sizeof values[0];
+    for (i = 0; i < n; i++) {
+        r = hashset_add(hs, values[i]);
+        CU_ASSERT_EQUAL(r, 1);
+    }
+
+    n = sizeof dupvalues / sizeof dupvalues[0];
+    for (i = 0; i < n; i++) {
+        r = hashset_add(hs, dupvalues[i]);
+        CU_ASSERT_EQUAL(r, 0);
+    }
+
+    n = sizeof values / sizeof values[0];
+    for (i = 0; i < n; i++) {
+        r = hashset_exists(hs, values[i]);
+        CU_ASSERT_EQUAL(r, 1);
+    }
+
+    n = sizeof unvalues / sizeof unvalues[0];
+    for (i = 0; i < n; i++) {
+        r = hashset_exists(hs, unvalues[i]);
+        CU_ASSERT_EQUAL(r, 0);
+    }
+}
