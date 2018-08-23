@@ -60,7 +60,7 @@ static void test_collisions(void)
     /* first two bytes are used for hashing, exploit this */
     /* XXX keep this up to date if hash algorithm changes! */
     const char values[][16] = {
-        "aaa", "aab", "aaab", "aardvark", "dog",
+        "aaa", "aab", "aaab", "dog", "donut", "aardvark",
     };
     const char dupvalues[][16] = {
         "aaab", "dog",
