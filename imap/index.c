@@ -517,9 +517,12 @@ static int index_writeseen(struct index_state *state)
     if (state->examining)
         return 0;
 
+    /* always dirty the mailbox, we may just be updating recent counts which doesn't bump the
+     * modseq because Recent is all sorts of evil */
+    mailbox_index_dirty(mailbox);
+
     /* already handled! Just update the header fields */
     if (state->internalseen) {
-        mailbox_index_dirty(mailbox);
         mailbox->i.recenttime = time(0);
         if (mailbox->i.recentuid < state->last_uid)
             mailbox->i.recentuid = state->last_uid;
