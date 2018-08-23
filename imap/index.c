@@ -5745,6 +5745,8 @@ static int index_sort_compare_generic_qsort(const void *v1, const void *v2)
     return index_sort_compare(md1, md2, the_sortcrit);
 }
 
+static inline int index_sort_compare_reverse_uid(const void *v1, const void *v2)
+    __attribute__((pure, always_inline, optimize("-O3")));
 static int index_sort_compare_reverse_uid(const void *v1, const void *v2)
 {
     MsgData *md1 = *(MsgData **)v1;
@@ -5757,6 +5759,8 @@ static int index_sort_compare_reverse_uid(const void *v1, const void *v2)
     return message_guid_cmp(&md1->guid, &md2->guid);
 }
 
+static inline int index_sort_compare_modseq(const void *v1, const void *v2)
+    __attribute__((pure, always_inline, optimize("-O3")));
 static int index_sort_compare_modseq(const void *v1, const void *v2)
 {
     MsgData *md1 = *(MsgData **)v1;
@@ -5772,6 +5776,8 @@ static int index_sort_compare_modseq(const void *v1, const void *v2)
     return message_guid_cmp(&md1->guid, &md2->guid);
 }
 
+static inline int index_sort_compare_arrival(const void *v1, const void *v2)
+    __attribute__((pure, always_inline, optimize("-O3")));
 static int index_sort_compare_arrival(const void *v1, const void *v2)
 {
     MsgData *md1 = *(MsgData **)v1;
@@ -5787,6 +5793,8 @@ static int index_sort_compare_arrival(const void *v1, const void *v2)
     return message_guid_cmp(&md1->guid, &md2->guid);
 }
 
+static inline int index_sort_compare_reverse_arrival(const void *v1, const void *v2)
+    __attribute__((pure, always_inline, optimize("-O3")));
 static int index_sort_compare_reverse_arrival(const void *v1, const void *v2)
 {
     MsgData *md1 = *(MsgData **)v1;
@@ -5802,6 +5810,8 @@ static int index_sort_compare_reverse_arrival(const void *v1, const void *v2)
     return message_guid_cmp(&md1->guid, &md2->guid);
 }
 
+static inline int index_sort_compare_reverse_flagged(const void *v1, const void *v2)
+    __attribute__((pure, always_inline, optimize("-O3")));
 static int index_sort_compare_reverse_flagged(const void *v1, const void *v2)
 {
     MsgData *md1 = *(MsgData **)v1;
