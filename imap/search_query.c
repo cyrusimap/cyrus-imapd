@@ -689,6 +689,12 @@ static int subquery_run_one_folder(search_query_t *query,
         free(s);
     }
 
+    // check if we want to process this mailbox
+    if (query->checkfolder &&
+        !query->checkfolder(mboxname, query->checkfolderrock)) {
+        goto out;
+    }
+
     modseq_t sincemodseq = _get_sincemodseq(e);
     if (sincemodseq) {
         struct statusdata sdata = STATUSDATA_INIT;
@@ -761,7 +767,7 @@ static int subquery_run_one_folder(search_query_t *query,
     r = 0;
 
 out:
-    query_end_index(query, &state);
+    if (state) query_end_index(query, &state);
     free(msgno_list);
     return r;
 }

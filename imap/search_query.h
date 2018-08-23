@@ -92,6 +92,9 @@ struct search_query {
      * double-opening it.
      */
     struct index_state *state;
+
+    int (*checkfolder)(const char *mboxname, void *rock);
+    void *checkfolderrock;
     /*
      * Input parameters of the query.  Set these after
      * search_query_new() and before search_query_run().
