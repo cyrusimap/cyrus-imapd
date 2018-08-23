@@ -1799,13 +1799,21 @@ EXPORTED int index_refresh(struct index_state *state)
 static void index_unlock(struct index_state *state)
 {
     /* XXX - errors */
-
     index_writeseen(state);
 
     /* grab the latest modseq */
     state->highestmodseq = state->mailbox->i.highestmodseq;
 
-    mailbox_unlock_index(state->mailbox, NULL);
+    if (state->mailbox->i.dirty) {
+        struct statusdata sdata = STATUSDATA_INIT;
+        status_fill_mailbox(state->mailbox, &sdata);
+        // we zero out recent data for everyone else
+        status_fill_seen(state->userid, &sdata, /*recent*/0, state->numunseen);
+        mailbox_unlock_index(state->mailbox, &sdata);
+    }
+    else {
+        mailbox_unlock_index(state->mailbox, NULL);
+    }
 }
 
 /*
