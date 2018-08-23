@@ -4736,7 +4736,7 @@ sub test_emailsubmission_set_with_envelope
     $self->assert_not_null($msgsubid);
 }
 
-sub test_email_keywords_shared
+sub test_email_seen_shared
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
@@ -4752,18 +4752,18 @@ sub test_email_keywords_shared
 
     # Create mailbox A
     $admintalk->create("user.other.A") or die;
-    $admintalk->setacl("user.other.A", "cassandane", "lrwkxdsn") or die;
+    $admintalk->setacl("user.other.A", "cassandane", "lrs") or die;
 
     # Create message in mailbox A
     $self->{adminstore}->set_folder('user.other.A');
     $self->make_message("Email", store => $self->{adminstore}) or die;
 
-    # Set \\Seen on message A as user cassandane
+    # Set \Seen on message A as user cassandane
     $self->{store}->set_folder('user.other.A');
     $talk->select('user.other.A');
     $talk->store('1', '+flags', '(\\Seen)');
 
-    # Get email and assert keywords
+    # Get email and assert $seen
     my $res = $jmap->CallMethods([
         ['Email/query', {
             accountId => 'other',
@@ -4780,7 +4780,7 @@ sub test_email_keywords_shared
     my $wantKeywords = { '$seen' => JSON::true };
     $self->assert_deep_equals($wantKeywords, $res->[1][1]{list}[0]{keywords});
 
-    # Now set the keywords via JMAP on the shared mailbox
+    # Set $seen via JMAP on the shared mailbox
     $res = $jmap->CallMethods([
         ['Email/set', {
             accountId => 'other',
@@ -4793,7 +4793,7 @@ sub test_email_keywords_shared
     ]);
     $self->assert_not_null($res->[0][1]{updated}{$emailId});
 
-    # Assert keywords got updated
+    # Assert $seen got updated
     $res = $jmap->CallMethods([
         ['Email/get', {
             accountId => 'other',
