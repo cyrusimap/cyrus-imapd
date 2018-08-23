@@ -45,14 +45,12 @@ static void test_exists(void)
 
     for (i = 0; i < n; i++) {
         r = hashset_exists(hs, values[i]);
-        printf("hashset_exists(%s): %i\n", values[i], r);
         CU_ASSERT_EQUAL(r, 1);
     }
 
     n = sizeof unvalues / sizeof unvalues[0];
     for (i = 0; i < n; i++) {
         r = hashset_exists(hs, unvalues[i]);
-        printf("hashset_exists(%s): %i\n", unvalues[i], r);
         CU_ASSERT_EQUAL(r, 0);
     }
 }
