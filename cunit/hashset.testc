@@ -61,6 +61,7 @@ static void test_collisions(void)
     /* XXX keep this up to date if hash algorithm changes! */
     const char values[][16] = {
         "aaa", "aab", "aaab", "dog", "donut", "aardvark",
+        "\0\0boo", "\0\0urns",
     };
     const char dupvalues[][16] = {
         "aaab", "dog",
