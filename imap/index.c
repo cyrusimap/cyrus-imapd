@@ -5582,6 +5582,8 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
 /*
  * Function for comparing two integers.
  */
+static inline int numcmp(modseq_t n1, modseq_t n2)
+    __attribute__((pure, always_inline, optimize("-O3")));
 static int numcmp(modseq_t n1, modseq_t n2)
 {
     if (n1 < n2) return -1;
