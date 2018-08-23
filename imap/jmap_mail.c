@@ -5038,6 +5038,16 @@ static char *emailsearch_getcachepath()
     return xstrdupnull(config_getstring(IMAPOPT_JMAP_EMAILSEARCH_DB_PATH));
 }
 
+static int _jmap_checkfolder(const char *mboxname, void *rock)
+{
+    jmap_req_t *req = (jmap_req_t *)rock;
+    int rights = jmap_myrights_byname(req, mboxname);
+    // we only want to look in folders that the user is allowed to read
+    if ((rights & ACL_READ))
+        return 1;
+    return 0;
+}
+
 static struct emailsearch* _emailsearch_new(jmap_req_t *req,
                                             json_t *filter,
                                             json_t *sort,
@@ -5071,6 +5081,8 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
     search->query->need_ids = 1;
     search->query->verbose = 0;
     search->query->want_expunged = want_expunged;
+    search->query->checkfolder = _jmap_checkfolder;
+    search->query->checkfolderrock = req;
     search->is_mutable = search_is_mutable(search->sortcrit, search->args);
 
     /* Make hash */
@@ -5356,15 +5368,10 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     int i;
     for (i = 0 ; i < msgdata->count; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
-        search_folder_t *folder = md->folder;
-        if (!folder) continue;
 
         /* Skip expunged or hidden messages */
         if (md->system_flags & FLAG_DELETED ||
             md->internal_flags & FLAG_INTERNAL_EXPUNGED)
-            continue;
-        int rights = jmap_myrights_byname(req, folder->mboxname);
-        if (!(rights & ACL_READ))
             continue;
 
         /* Have we seen this message already? */
@@ -5568,15 +5575,10 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     size_t i;
     for (i = 0 ; i < mdcount; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
-        search_folder_t *folder = md->folder;
-        if (!folder) continue;
 
         // for this phase, we only care that it has a change
         if (md->modseq <= since_modseq) {
             if (search->is_mutable) {
-                /* Make sure we don't report any hidden messages */
-                int rights = jmap_myrights_byname(req, folder->mboxname);
-                if (!(rights & ACL_READ)) continue;
                 modseq_t modseq = 0;
                 conversation_get_modseq(req->cstate, md->cid, &modseq);
                 if (modseq > since_modseq)
@@ -5584,10 +5586,6 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
             }
             continue;
         }
-
-        /* Make sure we don't report any hidden messages */
-        int rights = jmap_myrights_byname(req, folder->mboxname);
-        if (!(rights & ACL_READ)) continue;
 
         _email_id_set_guid(&md->guid, email_id);
 
@@ -5598,12 +5596,6 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     // phase 2: report messages that need it
     for (i = 0 ; i < mdcount; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
-        search_folder_t *folder = md->folder;
-        if (!folder) continue;
-
-        /* Make sure we don't report any hidden messages */
-        int rights = jmap_myrights_byname(req, folder->mboxname);
-        if (!(rights & ACL_READ)) continue;
 
         _email_id_set_guid(&md->guid, email_id);
 
@@ -5757,15 +5749,9 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     size_t i;
     for (i = 0 ; i < mdcount; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
-        search_folder_t *folder = md->folder;
-        if (!folder) continue;
 
         // for this phase, we only care that it has a change
         if (md->modseq <= since_modseq) continue;
-
-        /* Make sure we don't report any hidden messages */
-        int rights = jmap_myrights_byname(req, folder->mboxname);
-        if (!(rights & ACL_READ)) continue;
 
         _email_id_set_guid(&md->guid, email_id);
 
@@ -5775,12 +5761,6 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     // phase 2: report messages that need it
     for (i = 0 ; i < mdcount; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
-        search_folder_t *folder = md->folder;
-        if (!folder) continue;
-
-        /* Make sure we don't report any hidden messages */
-        int rights = jmap_myrights_byname(req, folder->mboxname);
-        if (!(rights & ACL_READ)) continue;
 
         _email_id_set_guid(&md->guid, email_id);
 
@@ -5938,15 +5918,6 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
 
     for (i = 0 ; i < msgdata->count; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
-        search_folder_t *folder = md->folder;
-
-        if (!folder)
-            continue;
-
-        /* Skip hidden messages */
-        int rights = jmap_myrights_byname(req, folder->mboxname);
-        if (!(rights & ACL_READ))
-            continue;
 
         _email_id_set_guid(&md->guid, email_id);
 
@@ -6066,15 +6037,6 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     char thread_id[18];
     for (i = 0 ; i < msgdata->count; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
-        search_folder_t *folder = md->folder;
-
-        if (!folder)
-            continue;
-
-        /* Skip hidden messages */
-        int rights = jmap_myrights_byname(req, folder->mboxname);
-        if (!(rights & ACL_READ))
-            continue;
 
         /* Skip already seen threads */
         if (!hashset_add(seen_threads, &md->cid)) continue;
