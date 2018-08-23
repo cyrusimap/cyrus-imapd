@@ -5778,7 +5778,7 @@ static int index_sort_compare_modseq(const void *v1, const void *v2)
     MsgData *md2 = *(MsgData **)v2;
     int ret;
 
-    ret = md1->modseq - md1->modseq;
+    ret = md1->modseq - md2->modseq;
     if (ret) return ret;
 
     ret = md1->uid - md2->uid;
