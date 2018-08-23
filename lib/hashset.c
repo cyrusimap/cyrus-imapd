@@ -63,7 +63,7 @@ EXPORTED struct hashset *hashset_new(size_t bytesize)
 }
 
 // returns 1 if added, 0 if already there
-EXPORTED int hashset_add(struct hashset *hs, void *data)
+EXPORTED int hashset_add(struct hashset *hs, const void *data)
 {
     assert(hs);
     uint32_t *pos = &hs->starts[*((uint16_t *)data)];
@@ -100,7 +100,7 @@ EXPORTED int hashset_add(struct hashset *hs, void *data)
 }
 
 // returns 1 if present, 0 if not
-EXPORTED int hashset_exists(struct hashset *hs, void *data)
+EXPORTED int hashset_exists(struct hashset *hs, const void *data)
 {
     if (!hs) return 0;
 

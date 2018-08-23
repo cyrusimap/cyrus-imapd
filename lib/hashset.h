@@ -16,10 +16,10 @@ struct hashset {
 struct hashset *hashset_new(size_t bytesize);
 
 // returns 1 if added, 0 if not added (already there)
-int hashset_add(struct hashset *hs, void *data);
+int hashset_add(struct hashset *hs, const void *data);
 
 // returns 1 if exists, 0 if not present
-int hashset_exists(struct hashset *hs, void *data);
+int hashset_exists(struct hashset *hs, const void *data);
 
 // XXX: add iterator and foreacher
 void hashset_foreach(struct hashset *hs, int (*)(void *, void *), void *rock);
