@@ -12356,6 +12356,40 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
     return r;
 }
 
+struct _email_exists_rock {
+    jmap_req_t *req;
+    int exists;
+};
+
+static int _email_exists_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct _email_exists_rock *data = (struct _email_exists_rock*) rock;
+    jmap_req_t *req = data->req;
+    struct mailbox *mbox = NULL;
+    msgrecord_t *mr = NULL;
+    uint32_t internal_flags;
+    int r = 0;
+
+    r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
+    if (r) return r;
+
+    r = msgrecord_find(mbox, rec->uid, &mr);
+    if (r) goto done;
+
+    r = msgrecord_get_internalflags(mr, &internal_flags);
+    if (r) goto done;
+
+    if (!(internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        data->exists = 1;
+        r = CYRUSDB_DONE;
+    }
+
+done:
+    if (mr) msgrecord_unref(&mr);
+    jmap_closembox(req, &mbox);
+    return r;
+}
+
 static void _email_copy(jmap_req_t *req, json_t *copy_email,
                         const char *from_account_id,
                         const char *to_account_id,
@@ -12398,18 +12432,18 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     }
 
     /* Check if email already exists in to_account */
-    int already_exists = 0;
+    struct _email_exists_rock data = { req, 0 };
     if (strcmp(to_account_id, req->userid)) {
         struct conversations_state *mycstate = NULL;
         r = conversations_open_user(to_account_id, &mycstate);
         if (r) goto done;
-        already_exists = conversations_guid_exists(mycstate, blob_id);
+        conversations_guid_foreach(mycstate, blob_id, _email_exists_cb, &data);
         conversations_commit(&mycstate);
     }
     else {
-        already_exists = conversations_guid_exists(req->cstate, blob_id);
+        conversations_guid_foreach(req->cstate, blob_id, _email_exists_cb, &data);
     }
-    if (already_exists) {
+    if (data.exists) {
         *err = json_pack("{s:s}", "type", "alreadyExists");
         goto done;
     }
