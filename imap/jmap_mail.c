@@ -5527,6 +5527,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
 {
     modseq_t since_modseq;
     uint32_t since_uid;
+    uint32_t num_changes = 0;
 
     if (!_email_read_querystate(query->since_queryState, &since_modseq, &since_uid)) {
         *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
@@ -5655,10 +5656,12 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
                 if (!(touched_id & 4)) {
                     _email_querychanges_destroyed(query, email_id);
                     new_touched_id |= 4;
+                    num_changes++;
                 }
                 if (!(touched_id & 8)) {
                     _email_querychanges_added(query, email_id);
                     new_touched_id |= 8;
+                    num_changes++;
                 }
                 new_touched_cid |= 4;
                 goto doneloop;
@@ -5683,6 +5686,10 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
         }
 
     doneloop:
+        if (query->max_changes && (num_changes > query->max_changes)) {
+            *err = json_pack("{s:s}", "type", "tooManyChanges");
+            break;
+        }
         if (new_touched_id != touched_id)
             hash_insert(email_id, (void*)new_touched_id, &touched_ids);
         if (new_touched_cid != touched_cid)
@@ -5712,6 +5719,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
 {
     modseq_t since_modseq;
     uint32_t since_uid;
+    uint32_t num_changes = 0;
 
     if (!_email_read_querystate(query->since_queryState, &since_modseq, &since_uid)) {
         *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
@@ -5811,14 +5819,20 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
             if (!(touched_id & 4)) {
                 _email_querychanges_destroyed(query, email_id);
                 new_touched_id |= 4;
+                num_changes++;
             }
             if (!(touched_id & 8)) {
                 _email_querychanges_added(query, email_id);
                 new_touched_id |= 8;
+                num_changes++;
             }
         }
 
     doneloop:
+        if (query->max_changes && (num_changes > query->max_changes)) {
+            *err = json_pack("{s:s}", "type", "tooManyChanges");
+            break;
+        }
         if (new_touched_id != touched_id)
             hash_insert(email_id, (void*)new_touched_id, &touched_ids);
         // if the search is mutable, later changes could have
