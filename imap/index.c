@@ -1237,7 +1237,6 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
     struct mboxevent *flagsset = NULL, *flagsclear = NULL;
     struct index_modified_flags modified_flags;
     struct index_record record;
-    msgrecord_t *msgrec = NULL;
 
     /* First pass at checking permission */
     if ((storeargs->seen && !(state->myrights & ACL_SETSEEN)) ||
@@ -1264,8 +1263,6 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
     storeargs->update_time = time((time_t *)0);
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
-        int dirty = 0;
-
         im = &state->map[msgno-1];
         if (!seqset_ismember(seq, storeargs->usinguid ? im->uid : msgno))
             continue;
@@ -1293,15 +1290,22 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
          * on how it releases the cyrus.index lock in the middle of action */
         r = index_reload_record(state, msgno, &record);
         if (r) goto out;
-        msgrec = msgrecord_from_index_record(state->mailbox, &record);
+
+        msgrecord_t *msgrec = msgrecord_from_index_record(state->mailbox, &record);
 
         switch (storeargs->operation) {
         case STORE_ADD_FLAGS:
         case STORE_REMOVE_FLAGS:
         case STORE_REPLACE_FLAGS:
             r = index_storeflag(state, &modified_flags, msgno, msgrec, storeargs);
-            if (r)
-                break;
+            if (r) goto doneloop;
+
+            // nothing to do?
+            if (!(modified_flags.added_flags | modified_flags.removed_flags))
+                goto doneloop;
+
+            r = msgrecord_rewrite(msgrec);
+            if (r) goto doneloop;
 
             if (modified_flags.added_flags) {
                 if (flagsset == NULL)
@@ -1321,34 +1325,39 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
                                     modified_flags.removed_user_flags);
                 mboxevent_extract_msgrecord(flagsclear, msgrec);
             }
-            dirty = modified_flags.added_flags | modified_flags.removed_flags;
             break;
 
-        case STORE_ANNOTATION:
+        case STORE_ANNOTATION: {
+            int dirty = 0;
             r = index_store_annotation(state, msgno, msgrec, storeargs, &dirty);
+            if (r) goto doneloop;
+            if (!dirty) goto doneloop;
+
+            // rewrite message
+            r = msgrecord_rewrite(msgrec);
+            if (r) goto doneloop;
+
+            // XXX mboxevents?
+
             break;
+        }
 
         default:
             r = IMAP_INTERNAL;
             break;
         }
-        if (r) goto out;
-
-        if (!dirty)
-            continue;
-
-        r = msgrecord_rewrite(msgrec);
-        if (r) goto out;
+        if (r) goto doneloop;
 
         /* msgrecord_rewrite already took care of rewriting the index_record,
          * but we want to stay up to date of the changes in the index_map.
          * Pass the silent flag to index_rewrite_record. */
         r = msgrecord_get_index_record(msgrec, &record);
-        if (r) goto out;
+        if (r) goto doneloop;
         r = index_rewrite_record(state, msgno, &record, /*silent*/1);
-        if (r) goto out;
 
+doneloop:
         msgrecord_unref(&msgrec);
+        if (r) goto out;
     }
 
 
@@ -1365,7 +1374,6 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
     mboxevent_notify(&mboxevents);
 
 out:
-    if (msgrec) msgrecord_unref(&msgrec);
     mboxevent_freequeue(&mboxevents);
     if (storeargs->operation == STORE_ANNOTATION && r)
         annotate_state_abort(&mailbox->annot_state);
