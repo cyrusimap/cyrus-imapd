@@ -233,6 +233,15 @@ magic(FastMailSharing => sub {
 magic(Partition2 => sub {
     shift->config_set('partition-p2' => '@basedir@/data-p2');
 });
+magic(FastMailEvent => sub {
+    shift->config_set(
+        event_content_inclusion_mode => 'standard',
+        event_content_size => 1,  # just the first byte
+        event_exclude_specialuse => '\\Junk',
+        event_extra_params => 'modseq vnd.fastmail.clientId service uidnext vnd.fastmail.sessionId vnd.cmu.envelope vnd.fastmail.convUnseen vnd.fastmail.convExists vnd.fastmail.cid vnd.cmu.mbtype vnd.cmu.davFilename vnd.cmu.davUid vnd.cmu.mailboxACL vnd.fastmail.counters messages vnd.cmu.unseenMessages flagNames',
+        event_groups => 'mailbox message flags calendar applepushservice',
+    );
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
