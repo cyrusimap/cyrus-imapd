@@ -8188,6 +8188,48 @@ sub test_email_querychanges
     $self->assert_equals($res->[0][1]{added}[0]{id}, $idb);
 }
 
+sub test_email_querychanges_toomany
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $res;
+    my $state;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "Generate a email in INBOX via IMAP";
+    $self->make_message("Email A") || die;
+
+    xlog "Get email id";
+    $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+    my $ida = $res->[0][1]->{ids}[0];
+    $self->assert_not_null($ida);
+
+    $state = $res->[0][1]->{queryState};
+
+    $self->make_message("Email B") || die;
+
+    $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
+
+    my ($idb) = grep { $_ ne $ida } @{$res->[0][1]->{ids}};
+
+    xlog "get email list updates";
+    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, maxChanges => 1 }, "R1"]]);
+
+    $self->assert_str_equals("error", $res->[0][0]);
+    $self->assert_str_equals("tooManyChanges", $res->[0][1]{type});
+    $self->assert_str_equals("R1", $res->[0][2]);
+
+    xlog "get email list updates with threads collapsed";
+    $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, collapseThreads => JSON::true, maxChanges => 1 }, "R1"]]);
+
+    $self->assert_str_equals("error", $res->[0][0]);
+    $self->assert_str_equals("tooManyChanges", $res->[0][1]{type});
+    $self->assert_str_equals("R1", $res->[0][2]);
+}
+
 sub test_email_querychanges_zerosince
     :min_version_3_1 :needs_component_jmap
 {
