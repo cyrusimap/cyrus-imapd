@@ -12095,7 +12095,7 @@ sub test_email_copy
     my $emailId = $res->[0][1]->{created}{1}{id};
     $self->assert_not_null($emailId);
 
-    xlog "copy email";
+    xlog "move email";
     $res = $jmap->CallMethods([
         ['Email/copy', {
             fromAccountId => undef,
@@ -12130,6 +12130,48 @@ sub test_email_copy
     ]);
     my $wantKeywords = { 'bar' => JSON::true };
     $self->assert_deep_equals($wantKeywords, $res->[0][1]{list}[0]{keywords});
+
+    xlog "copy email back";
+    $res = $jmap->CallMethods([
+        ['Email/copy', {
+            toAccountId => undef,
+            fromAccountId => 'other',
+            create => {
+                1 => {
+                    id => $copiedEmailId,
+                    mailboxIds => {
+                        $srcInboxId => JSON::true,
+                    },
+                    keywords => {
+                        'bar' => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    $self->assert_str_equals($copiedEmailId, $res->[0][1]->{created}{1}{id});
+
+    xlog "copy email back (again)";
+    $res = $jmap->CallMethods([
+        ['Email/copy', {
+            toAccountId => undef,
+            fromAccountId => 'other',
+            create => {
+                1 => {
+                    id => $copiedEmailId,
+                    mailboxIds => {
+                        $srcInboxId => JSON::true,
+                    },
+                    keywords => {
+                        'bar' => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+
+   $self->assert_str_equals('alreadyExists', $res->[0][1]->{not_created}{1}{type});
 }
 
 sub test_email_set_destroy_bulk
