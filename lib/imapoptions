@@ -2185,6 +2185,11 @@ product version in the capabilities
    authenticated user which triggered the email. The AUTH
    parameter is omitted if the user is unknown to the calling
    process.
+
+   If the directory
+   \fIconfigdirectory\fR/log/smtpclient.\ \fIsmtp_backend\fR
+   exists, then telemetry logs for outgoing SMTP sessions will
+   be created in this directory.
    */
 
 { "smtp_host", "localhost:587", STRING }
