@@ -329,22 +329,22 @@ static struct capa_struct base_capabilities[] = {
     { "METADATA",              2 },
     { "LIST-EXTENDED",         2 },
     { "LIST-STATUS",           2 },
-    { "LIST-MYRIGHTS",         2 }, /* not standard */
+    { "LIST-MYRIGHTS",         2 }, /* RFC 8440 */
     { "LIST-METADATA",         2 }, /* not standard */
     { "WITHIN",                2 },
     { "QRESYNC",               2 },
     { "SCAN",                  2 },
     { "XLIST",                 2 }, /* not standard */
     { "XMOVE",                 2 }, /* not standard */
-    { "MOVE",                  2 },
-    { "SPECIAL-USE",           2 },
-    { "CREATE-SPECIAL-USE",    2 },
-    { "DIGEST=SHA1",           2 }, /* not standard */
-    { "X-REPLICATION",         2 }, /* not standard */
-    { "STATUS=SIZE",           2 }, /* draft-ietf-extra-imap-status-size */
+    { "MOVE",                  2 }, /* RFC 6851 */
+    { "SPECIAL-USE",           2 }, /* RFC 6154 */
+    { "CREATE-SPECIAL-USE",    2 }, /* RFC 6154 */
+    { "DIGEST=SHA1",           2 }, /* Cyrus custom */
+    { "X-REPLICATION",         2 }, /* Cyrus custom */
+    { "STATUS=SIZE",           2 }, /* RFC 8438 */
     { "OBJECTID",              2 }, /* draft-ietf-extra-imap-objectid */
     { "SAVEDATE",              2 }, /* draft-ietf-extra-imap-savedate */
-    { "X-CREATEDMODSEQ",       2 }, /* not standard */
+    { "X-CREATEDMODSEQ",       2 }, /* Cyrus custom */
 
 #ifdef HAVE_SSL
     { "URLAUTH",               2 },
