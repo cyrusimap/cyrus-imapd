@@ -9378,7 +9378,7 @@ EOF
     }, "R1"]]);
 
     xlog "get thread updates";
-    $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state, fetchRecords => $JSON::true }, "R1"]]);
+    $res = $jmap->CallMethods([['Thread/changes', { sinceState => $state }, "R1"]]);
     $self->assert_equals(JSON::false, $res->[0][1]->{hasMoreChanges});
 }
 
