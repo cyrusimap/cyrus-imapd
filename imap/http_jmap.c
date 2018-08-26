@@ -2876,26 +2876,46 @@ EXPORTED void jmap_changes_parse(json_t *jargs,
                                  struct jmap_changes *changes,
                                  json_t **err)
 {
+    const char *key;
+    json_t *arg;
+
     memset(changes, 0, sizeof(struct jmap_changes));
     changes->created = json_array();
     changes->updated = json_array();
     changes->destroyed = json_array();
 
-    /* sinceState */
-    json_t *arg = json_object_get(jargs, "sinceState");
-    if (json_is_string(arg)) {
-        changes->since_modseq = atomodseq_t(json_string_value(arg));
-    }
-    if (!changes->since_modseq) {
-        jmap_parser_invalid(parser, "sinceState");
-    }
+    json_object_foreach(jargs, key, arg) {
+        /* accountId */
+        if (!strcmp(key, "accountId")) {
+            if (json_is_string(arg)) {
+                /* XXX  Need to do something with this */
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "accountId");
+            }
+        }
 
-    /* maxChanges */
-    arg = json_object_get(jargs, "maxChanges");
-    if (json_is_integer(arg) && json_integer_value(arg) > 0) {
-        changes->max_changes = json_integer_value(arg);
-    } else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "maxChanges");
+        /* sinceState */
+        else if (!strcmp(key, "sinceState")) {
+            if (json_is_string(arg)) {
+                changes->since_modseq = atomodseq_t(json_string_value(arg));
+            }
+            if (!changes->since_modseq) {
+                jmap_parser_invalid(parser, "sinceState");
+            }
+        }
+
+        /* maxChanges */
+        else if (!strcmp(key, "maxChanges")) {
+            if (json_is_integer(arg) && json_integer_value(arg) > 0) {
+                changes->max_changes = json_integer_value(arg);
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "maxChanges");
+            }
+        }
+
+        else {
+            jmap_parser_invalid(parser, key);
+        }
     }
 
     if (json_array_size(parser->invalid)) {
@@ -3080,14 +3100,14 @@ EXPORTED void jmap_query_parse(json_t *jargs, struct jmap_parser *parser,
         *err = json_pack("{s:s s:O}", "type", "invalidArguments",
                 "arguments", parser->invalid);
     }
-	else if (json_array_size(unsupported_filter)) {
-		*err = json_pack("{s:s s:O}", "type", "unsupportedFilter",
-                "filters", unsupported_filter);
-	}
-	else if (json_array_size(unsupported_sort)) {
-		*err = json_pack("{s:s s:O}", "type", "unsupportedSort",
-                "sort", unsupported_sort);
-	}
+    else if (json_array_size(unsupported_filter)) {
+        *err = json_pack("{s:s s:O}", "type", "unsupportedFilter",
+                         "filters", unsupported_filter);
+    }
+    else if (json_array_size(unsupported_sort)) {
+        *err = json_pack("{s:s s:O}", "type", "unsupportedSort",
+                         "sort", unsupported_sort);
+    }
 
     json_decref(unsupported_filter);
     json_decref(unsupported_sort);
