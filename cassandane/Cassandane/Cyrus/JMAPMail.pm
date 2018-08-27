@@ -6614,7 +6614,7 @@ sub test_misc_collapsethreads_issue2024
     $self->assert_null($res->[0][1]->{collapseThreads});
 
     $res = $jmap->CallMethods([['Email/query', { }, "R1"]]);
-    $self->assert_null($res->[0][1]->{collapseThreads});
+    $self->assert_equals(JSON::false, $res->[0][1]->{collapseThreads});
 }
 
 sub test_email_query_window
