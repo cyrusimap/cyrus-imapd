@@ -482,7 +482,7 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
     /* Parse request */
     jmap_get_parse(req->args, &parser, req,
                    kind == CARDDAV_KIND_GROUP ? group_props : contact_props,
-                   &get, &err);
+                   NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

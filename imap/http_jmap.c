@@ -2650,9 +2650,13 @@ EXPORTED void jmap_get_parse(json_t *jargs,
                              struct jmap_parser *parser,
                              jmap_req_t *req,
                              const jmap_property_t valid_props[],
+                             int (*args_parse)(const char *, json_t *,
+                                               struct jmap_parser *, void *),
+                             void *args_rock,
                              struct jmap_get *get,
                              json_t **err)
 {
+    const char *key;
     json_t *arg, *val;
     size_t i;
 
@@ -2661,65 +2665,83 @@ EXPORTED void jmap_get_parse(json_t *jargs,
     get->list = json_array();
     get->not_found = json_array();
 
-    arg = json_object_get(jargs, "ids");
-    if (json_is_array(arg)) {
-        get->ids = json_array();
-        /* JMAP spec requires: "If an identical id is included more than once
-         * in the request, the server MUST only include it once in either the
-         * list or notFound argument of the response."
-         * So let's weed out duplicate ids here. */
-        hash_table _dedup = HASH_TABLE_INITIALIZER;
-        construct_hash_table(&_dedup, json_array_size(arg) + 1, 0);
-        json_array_foreach(arg, i, val) {
-            const char *id = json_string_value(val);
-            if (!id) {
-                jmap_parser_push_index(parser, "ids", i, NULL);
-                jmap_parser_invalid(parser, NULL);
-                jmap_parser_pop(parser);
-                continue;
+    json_object_foreach(jargs, key, arg) {
+        if (!strcmp(key, "accountId")) {
+            if (json_is_string(arg)) {
+                /* XXX  Need to do something with this */
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "accountId");
             }
-            /* Weed out unknown creation ids and add the ids of known
-             * creation ids to the requested ids list. THis might
-             * cause a race if the Foo object pointed to by creation
-             * id is deleted between parsing the request and answering
-             * it. But re-checking creation ids for their existence
-             * later in the control flow just shifts the problem */
-            if (*id == '#') {
-                const char *id2 = jmap_lookup_id(req, id + 1);
-                if (!id2) {
-                    json_array_append_new(get->not_found, json_string(id));
-                    continue;
-                }
-                id = id2;
-            }
-            if (hash_lookup(id, &_dedup)) {
-                continue;
-            }
-            json_array_append_new(get->ids, json_string(id));
         }
-        free_hash_table(&_dedup, NULL);
-    }
-    else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "ids");
-    }
 
-    arg = json_object_get(jargs, "properties");
-    if (json_is_array(arg)) {
-        get->props = xzmalloc(sizeof(hash_table));
-        construct_hash_table(get->props, json_array_size(arg) + 1, 0);
-        json_array_foreach(arg, i, val) {
-            const char *s = json_string_value(val);
-            if (!s || !jmap_property_find(s, valid_props)) {
-                jmap_parser_push_index(parser, "properties", i, s);
-                jmap_parser_invalid(parser, NULL);
-                jmap_parser_pop(parser);
-                continue;
+        else if (!strcmp(key, "ids")) {
+            if (json_is_array(arg)) {
+                get->ids = json_array();
+                /* JMAP spec requires: "If an identical id is included
+                 * more than once in the request, the server MUST only
+                 * include it once in either the list or notFound
+                 * argument of the response."
+                 * So let's weed out duplicate ids here. */
+                hash_table _dedup = HASH_TABLE_INITIALIZER;
+                construct_hash_table(&_dedup, json_array_size(arg) + 1, 0);
+                json_array_foreach(arg, i, val) {
+                    const char *id = json_string_value(val);
+                    if (!id) {
+                        jmap_parser_push_index(parser, "ids", i, NULL);
+                        jmap_parser_invalid(parser, NULL);
+                        jmap_parser_pop(parser);
+                        continue;
+                    }
+                    /* Weed out unknown creation ids and add the ids of known
+                     * creation ids to the requested ids list. THis might
+                     * cause a race if the Foo object pointed to by creation
+                     * id is deleted between parsing the request and answering
+                     * it. But re-checking creation ids for their existence
+                     * later in the control flow just shifts the problem */
+                    if (*id == '#') {
+                        const char *id2 = jmap_lookup_id(req, id + 1);
+                        if (!id2) {
+                            json_array_append_new(get->not_found,
+                                                  json_string(id));
+                            continue;
+                        }
+                        id = id2;
+                    }
+                    if (hash_lookup(id, &_dedup)) {
+                        continue;
+                    }
+                    json_array_append_new(get->ids, json_string(id));
+                }
+                free_hash_table(&_dedup, NULL);
             }
-            hash_insert(s, (void*)1, get->props);
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "ids");
+            }
         }
-    }
-    else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "properties");
+
+        else if (!strcmp(key, "properties")) {
+            if (json_is_array(arg)) {
+                get->props = xzmalloc(sizeof(hash_table));
+                construct_hash_table(get->props, json_array_size(arg) + 1, 0);
+                json_array_foreach(arg, i, val) {
+                    const char *s = json_string_value(val);
+                    if (!s || !jmap_property_find(s, valid_props)) {
+                        jmap_parser_push_index(parser, "properties", i, s);
+                        jmap_parser_invalid(parser, NULL);
+                        jmap_parser_pop(parser);
+                        continue;
+                    }
+                    hash_insert(s, (void*)1, get->props);
+                }
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "properties");
+            }
+        }
+
+        else if (!args_parse || !args_parse(key, arg, parser, args_rock)) {
+            jmap_parser_invalid(parser, key);
+        }
     }
 
     if (json_array_size(parser->invalid)) {

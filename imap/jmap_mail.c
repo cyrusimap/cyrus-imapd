@@ -904,7 +904,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, mailbox_props, &get, &err);
+    jmap_get_parse(req->args, &parser, req, mailbox_props, NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         jmap_parser_fini(&parser);
@@ -6475,7 +6475,7 @@ static int jmap_thread_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, thread_props, &get, &err);
+    jmap_get_parse(req->args, &parser, req, thread_props, NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -6774,64 +6774,67 @@ static void _email_parse_wantheaders(json_t *jprops,
     }
 }
 
-static void _email_getargs_parse(int is_get,
-                                 json_t *req_args,
-                                 struct jmap_parser *parser,
-                                 struct email_getargs *args,
-                                 hash_table *props,
-                                 json_t **err)
+static void _email_init_default_props(hash_table *props)
 {
-    size_t i;
-    json_t *val;
-
-    /* properties - already parsed in jmap_get_parse */
-    args->props = props;
-    /* set default props, if not set by client */
-    if (props == NULL) {
-        args->props =
-            is_get ? &_email_get_default_props : &_email_parse_default_props;
-
-        if (args->props->size == 0) {
-            /* Initialize process-owned default property list */
-            construct_hash_table(args->props, 32, 0);
-            if (is_get) {
-                hash_insert("blobId", (void*)1, args->props);
-                hash_insert("id", (void*)1, args->props);
-                hash_insert("keywords", (void*)1, args->props);
-                hash_insert("mailboxIds", (void*)1, args->props);
-                hash_insert("receivedAt", (void*)1, args->props);
-                hash_insert("size", (void*)1, args->props);
-                hash_insert("threadId", (void*)1, args->props);
-            }
-
-            hash_insert("attachments", (void*)1, args->props);
-            hash_insert("bcc", (void*)1, args->props);
-            hash_insert("bodyValues", (void*)1, args->props);
-            hash_insert("cc", (void*)1, args->props);
-            hash_insert("from", (void*)1, args->props);
-            hash_insert("hasAttachment", (void*)1, args->props);
-            hash_insert("htmlBody", (void*)1, args->props);
-            hash_insert("inReplyTo", (void*)1, args->props);
-            hash_insert("messageId", (void*)1, args->props);
-            hash_insert("preview", (void*)1, args->props);
-            hash_insert("references", (void*)1, args->props);
-            hash_insert("replyTo", (void*)1, args->props);
-            hash_insert("sender", (void*)1, args->props);
-            hash_insert("sentAt", (void*)1, args->props);
-            hash_insert("subject", (void*)1, args->props);
-            hash_insert("textBody", (void*)1, args->props);
-            hash_insert("to", (void*)1, args->props);
+    /* Initialize process-owned default property list */
+    construct_hash_table(props, 32, 0);
+    if (props == &_email_get_default_bodyprops) {
+        hash_insert("blobId",      (void*)1, props);
+        hash_insert("charset",     (void*)1, props);
+        hash_insert("cid",         (void*)1, props);
+        hash_insert("disposition", (void*)1, props);
+        hash_insert("language",    (void*)1, props);
+        hash_insert("location",    (void*)1, props);
+        hash_insert("name",        (void*)1, props);
+        hash_insert("partId",      (void*)1, props);
+        hash_insert("size",        (void*)1, props);
+        hash_insert("type",        (void*)1, props);
+    }
+    else {
+        if (props == &_email_get_default_props) {
+            hash_insert("blobId",     (void*)1, props);
+            hash_insert("id",         (void*)1, props);
+            hash_insert("keywords",   (void*)1, props);
+            hash_insert("mailboxIds", (void*)1, props);
+            hash_insert("receivedAt", (void*)1, props);
+            hash_insert("size",       (void*)1, props);
+            hash_insert("threadId",   (void*)1, props);
         }
+
+        hash_insert("attachments",   (void*)1, props);
+        hash_insert("bcc",           (void*)1, props);
+        hash_insert("bodyValues",    (void*)1, props);
+        hash_insert("cc",            (void*)1, props);
+        hash_insert("from",          (void*)1, props);
+        hash_insert("hasAttachment", (void*)1, props);
+        hash_insert("htmlBody",      (void*)1, props);
+        hash_insert("inReplyTo",     (void*)1, props);
+        hash_insert("messageId",     (void*)1, props);
+        hash_insert("preview",       (void*)1, props);
+        hash_insert("references",    (void*)1, props);
+        hash_insert("replyTo",       (void*)1, props);
+        hash_insert("sender",        (void*)1, props);
+        hash_insert("sentAt",        (void*)1, props);
+        hash_insert("subject",       (void*)1, props);
+        hash_insert("textBody",      (void*)1, props);
+        hash_insert("to",            (void*)1, props);
     }
-    else if (is_get) {
-        /* 'id' is ALWAYS returned, even if not explicitly requested */
-        hash_insert("id", (void*)1, args->props);
-    }
+}
+
+static int _email_getargs_parse(const char *key,
+                                json_t *arg,
+                                struct jmap_parser *parser,
+                                void *rock)
+{
+    struct email_getargs *args = (struct email_getargs *) rock;
+    int r = 1;
 
     /* bodyProperties */
-    json_t *arg = json_object_get(req_args, "bodyProperties");
-    if (JNOTNULL(arg)) {
+    if (!strcmp(key, "bodyProperties")) {
         if (jmap_parse_strings(arg, parser, "bodyProperties")) {
+            size_t i;
+            json_t *val;
+
             args->bodyprops = xzmalloc(sizeof(hash_table));
             construct_hash_table(args->bodyprops, json_array_size(arg) + 1, 0);
             json_array_foreach(arg, i, val) {
@@ -6842,68 +6845,31 @@ static void _email_getargs_parse(int is_get,
         _email_parse_wantheaders(arg, parser, "bodyProperties",
                                  &args->want_bodyheaders);
     }
-    else {
-        /* Set default body properties, if not set by client */
-        if (_email_get_default_bodyprops.size == 0) {
-            /* Initialize process-owned default body property list */
-            construct_hash_table(&_email_get_default_bodyprops, 32, 0);
-            hash_insert("blobId", (void*)1, &_email_get_default_bodyprops);
-            hash_insert("charset", (void*)1, &_email_get_default_bodyprops);
-            hash_insert("cid", (void*)1, &_email_get_default_bodyprops);
-            hash_insert("disposition", (void*)1, &_email_get_default_bodyprops);
-            hash_insert("language", (void*)1, &_email_get_default_bodyprops);
-            hash_insert("location", (void*)1, &_email_get_default_bodyprops);
-            hash_insert("name", (void*)1, &_email_get_default_bodyprops);
-            hash_insert("partId", (void*)1, &_email_get_default_bodyprops);
-            hash_insert("size", (void*)1, &_email_get_default_bodyprops);
-            hash_insert("type", (void*)1, &_email_get_default_bodyprops);
-        }
-        args->bodyprops = &_email_get_default_bodyprops;
-    }
 
     /* fetchTextBodyValues */
-    arg = json_object_get(req_args, "fetchTextBodyValues");
-    if (json_is_boolean(arg)) {
+    else if (!strcmp(key, "fetchTextBodyValues") && json_is_boolean(arg)) {
         args->fetch_text_body = json_boolean_value(arg);
     }
-    else if (arg) {
-        jmap_parser_invalid(parser, "fetchTextBodyValues");
-    }
+
     /* fetchHTMLBodyValues */
-    arg = json_object_get(req_args, "fetchHTMLBodyValues");
-    if (json_is_boolean(arg)) {
+    else if (!strcmp(key, "fetchHTMLBodyValues") && json_is_boolean(arg)) {
         args->fetch_html_body = json_boolean_value(arg);
     }
-    else if (arg) {
-        jmap_parser_invalid(parser, "fetchHTMLBodyValues");
-    }
+
     /* fetchAllBodyValues */
-    arg = json_object_get(req_args, "fetchAllBodyValues");
-    if (json_is_boolean(arg)) {
+    else if (!strcmp(key, "fetchAllBodyValues") && json_is_boolean(arg)) {
         args->fetch_all_body = json_boolean_value(arg);
     }
-    else if (arg) {
-        jmap_parser_invalid(parser, "fetchAllBodyValues");
-    }
+
     /* maxBodyValueBytes */
-    arg = json_object_get(req_args, "maxBodyValueBytes");
-    if (json_is_integer(arg) && json_integer_value(arg) > 0) {
+    else if (!strcmp(key, "maxBodyValueBytes") &&
+             json_is_integer(arg) && json_integer_value(arg) > 0) {
         args->max_body_bytes = json_integer_value(arg);
     }
-    else if (arg) {
-        jmap_parser_invalid(parser, "maxBodyValueBytes");
-    }
-    /* header:Xxx properties */
-    json_t *jprops = json_object_get(req_args, "properties");
-    if (JNOTNULL(jprops)) {
-        _email_parse_wantheaders(jprops, parser, "properties",
-                                 &args->want_headers);
-    }
-    /* Complete parse */
-    if (json_array_size(parser->invalid)) {
-        *err = json_pack("{s:s}", "type", "invalidArguments");
-        json_object_set(*err, "arguments", parser->invalid);
-    }
+
+    else r = 0;
+
+    return r;
 }
 
 struct cyrusmsg {
@@ -8155,13 +8121,21 @@ static int jmap_email_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, email_props, &get, &err);
-    if (err) {
-        jmap_error(req, err);
-        goto done;
+    jmap_get_parse(req->args, &parser, req,
+                   email_props, &_email_getargs_parse, &args, &get, &err);
+    if (!err) {
+        /* header:Xxx properties */
+        json_t *jprops = json_object_get(req->args, "properties");
+        if (JNOTNULL(jprops)) {
+            _email_parse_wantheaders(jprops, &parser, "properties",
+                                     &args.want_headers);
+        }
+
+        if (json_array_size(parser.invalid)) {
+            err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                            "arguments", parser.invalid);
+        }
     }
-    _email_getargs_parse(1 /* is_get */,
-                         req->args, &parser, &args, get.props, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -8177,6 +8151,31 @@ static int jmap_email_get(jmap_req_t *req)
     if (json_array_size(get.ids) > 500) {
         jmap_error(req, json_pack("{s:s}", "type", "requestTooLarge"));
         goto done;
+    }
+
+    /* properties - already parsed in jmap_get_parse */
+    args.props = get.props;
+
+    /* Set default properties, if not set by client */
+    if (args.props == NULL) {
+        args.props = &_email_get_default_props;
+
+        if (args.props->size == 0) {
+            _email_init_default_props(args.props);
+        }
+    }
+    else {
+        /* 'id' is ALWAYS returned, even if not explicitly requested */
+        hash_insert("id", (void*)1, args.props);
+    }
+
+    /* Set default body properties, if not set by client */
+    if (args.bodyprops == NULL) {
+        args.bodyprops = &_email_get_default_bodyprops;
+
+        if (args.bodyprops->size == 0) {
+            _email_init_default_props(args.bodyprops);
+        }
     }
 
     if (_isthreadsonly(req->args))
@@ -8201,38 +8200,75 @@ static int jmap_email_parse(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct email_getargs getargs = _EMAIL_GET_ARGS_INITIALIZER;
-    json_t *err = NULL;
+    const char *key;
+    json_t *arg, *jblobIds = NULL;
     hash_table *props = NULL;
 
     /* Parse request */
-    json_t *jblobIds = json_object_get(req->args, "blobIds");
-    jmap_parse_strings(jblobIds, &parser, "blobIds");
-
-    json_t *jprops = json_object_get(req->args, "properties");
-    if (json_is_array(jprops)) {
-        size_t i;
-        json_t *val;
-        props = xzmalloc(sizeof(hash_table));
-        construct_hash_table(props, json_array_size(jprops) + 1, 0);
-        json_array_foreach(jprops, i, val) {
-            const char *s = json_string_value(val);
-            if (!s) {
-                jmap_parser_push_index(&parser, "properties", i, s);
-                jmap_parser_invalid(&parser, NULL);
-                jmap_parser_pop(&parser);
-                continue;
+    json_object_foreach(req->args, key, arg) {
+        if (!strcmp(key, "accountId")) {
+            if (json_is_string(arg)) {
+                /* XXX  Need to do something with this */
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(&parser, "accountId");
             }
-            hash_insert(s, (void*)1, props);
+        }
+
+        else if (!strcmp(key, "blobIds")) {
+            jblobIds = arg;
+            jmap_parse_strings(jblobIds, &parser, "blobIds");
+        }
+
+        else if (!strcmp(key, "properties")) {
+            if (json_is_array(arg)) {
+                size_t i;
+                json_t *val;
+                getargs.props = xzmalloc(sizeof(hash_table));
+                construct_hash_table(getargs.props, json_array_size(arg) + 1, 0);
+                json_array_foreach(arg, i, val) {
+                    const char *s = json_string_value(val);
+                    if (!s) {
+                        jmap_parser_push_index(&parser, "properties", i, s);
+                        jmap_parser_invalid(&parser, NULL);
+                        jmap_parser_pop(&parser);
+                        continue;
+                    }
+                    hash_insert(s, (void*)1, getargs.props);
+                }
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(&parser, "properties");
+            }
+        }
+
+        else if (!_email_getargs_parse(key, arg, &parser, &getargs)) {
+            jmap_parser_invalid(&parser, key);
         }
     }
-    else if (JNOTNULL(jprops)) {
-        jmap_parser_invalid(&parser, "properties");
-    }
-    _email_getargs_parse(0 /* is_get */,
-                         req->args, &parser, &getargs, props, &err);
-    if (err) {
+
+    if (json_array_size(parser.invalid)) {
+        json_t *err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                                "arguments", parser.invalid);
         jmap_error(req, err);
         goto done;
+    }
+
+    /* Set default properties, if not set by client */
+    if (getargs.props == NULL) {
+        getargs.props = &_email_parse_default_props;
+
+        if (getargs.props->size == 0) {
+            _email_init_default_props(getargs.props);
+        }
+    }
+
+    /* Set default body properties, if not set by client */
+    if (getargs.bodyprops == NULL) {
+        getargs.bodyprops = &_email_get_default_bodyprops;
+
+        if (getargs.bodyprops->size == 0) {
+            _email_init_default_props(getargs.bodyprops);
+        }
     }
 
     /* Process request */
@@ -12755,7 +12791,7 @@ static int jmap_identity_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, identity_props, &get, &err);
+    jmap_get_parse(req->args, &parser, req, identity_props, NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -13191,7 +13227,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
     struct jmap_get get;
     json_t *err = NULL;
 
-    jmap_get_parse(req->args, &parser, req, submission_props, &get, &err);
+    jmap_get_parse(req->args, &parser, req, submission_props, NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
