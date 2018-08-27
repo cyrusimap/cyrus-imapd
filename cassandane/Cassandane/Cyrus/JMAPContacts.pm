@@ -1296,6 +1296,7 @@ sub test_contact_set
     $contact->{avatar} = JSON::null;
 
     # Non-JMAP properties.
+    $contact->{"importance"} = 0;
     $contact->{"x-importance"} = 0;
     $contact->{"x-hasPhoto"} = JSON::false;
     $contact->{"addressbookId"} = 'Default';
