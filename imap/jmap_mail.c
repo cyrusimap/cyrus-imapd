@@ -12220,32 +12220,47 @@ static int jmap_email_import(jmap_req_t *req)
     json_t *created = json_pack("{}");
     json_t *not_created = json_pack("{}");
 
-    json_t *emails = json_object_get(req->args, "emails");
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    const char *key;
+    json_t *arg, *emails = NULL;
     const char *id;
     json_t *jemail_import;
 
-    /* Parse arguments */
-    if (json_is_object(emails)) {
-        struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-        jmap_parser_push(&parser, "emails");
-        json_object_foreach(emails, id, jemail_import) {
-            if (!json_is_object(jemail_import)) {
-                jmap_parser_invalid(&parser, id);
+    /* Parse request */
+    json_object_foreach(req->args, key, arg) {
+        if (!strcmp(key, "accountId")) {
+            if (json_is_string(arg)) {
+                /* XXX  Need to do something with this */
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(&parser, "accountId");
             }
         }
-        json_t *invalid = json_incref(parser.invalid);
-        jmap_parser_fini(&parser);
-        if (json_array_size(invalid)) {
-            json_t *err = json_pack("{s:s}", "type", "invalidArguments");
-            json_object_set_new(err, "arguments", invalid);
-            jmap_error(req, err);
-            goto done;
+
+        else if (!strcmp(key, "emails")) {
+            if (json_is_object(arg)) {
+                emails = arg;
+                jmap_parser_push(&parser, "emails");
+                json_object_foreach(emails, id, jemail_import) {
+                    if (!json_is_object(jemail_import)) {
+                        jmap_parser_invalid(&parser, id);
+                    }
+                }
+                jmap_parser_pop(&parser);
+            }
         }
-        json_decref(invalid);
+
+        else {
+            jmap_parser_invalid(&parser, key);
+        }
     }
-    else {
-        jmap_error(req, json_pack("{s:s, s:[s]}",
-                "type", "invalidArguments", "arguments", "emails"));
+
+    /* emails is a required argument */
+    if (!emails) jmap_parser_invalid(&parser, "emails");
+
+    if (json_array_size(parser.invalid)) {
+        json_t *err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                                "arguments", parser.invalid);
+        jmap_error(req, err);
         goto done;
     }
 
@@ -12338,6 +12353,7 @@ static int jmap_email_import(jmap_req_t *req)
 done:
     json_decref(created);
     json_decref(not_created);
+    jmap_parser_fini(&parser);
     return 0;
 }
 
