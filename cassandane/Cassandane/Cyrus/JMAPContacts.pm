@@ -139,7 +139,8 @@ sub test_contact_changes
 
     xlog "get contact updates";
     $res = $jmap->CallMethods([['Contact/changes', {
-                    sinceState => $state
+                    sinceState => $state,
+                    addressbookId => "Default",
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
@@ -1974,6 +1975,19 @@ EOF
     $data = $carddav->Request('GET', $href);
     $self->assert_matches(qr/cat1,cat2/, $data->{content});
 
+}
+
+sub test_contact_get_with_addressbookid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "get contact with addressbookid";
+    my $res = $jmap->CallMethods([['Contact/get',
+                                   { addressbookId => "Default" }, "R3"]]);
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
 }
 
 sub test_contact_get_issue2292
