@@ -179,10 +179,11 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     if (!(mbentry->mbtype & MBTYPE_CALENDAR)) return 0;
 
     /* ...which are at least readable or visible... */
-    int rights = jmap_myrights(rock->req, mbentry);
-    if ((rights & DACL_READ) != DACL_READ) {
+    if (!jmap_hasrights(rock->req, mbentry, DACL_READ))
         return rock->skip_hidden ? 0 : IMAP_PERMISSION_DENIED;
-    }
+
+    // needed for some fields
+    int rights = jmap_myrights(rock->req, mbentry);
 
     /* ...and contain VEVENTs. */
     struct buf attrib = BUF_INITIALIZER;
@@ -446,8 +447,8 @@ static int getcalendarupdates_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     /* Ignore mailboxes that are hidden from us */
-    int rights = jmap_myrights(req, mbentry);
-    if (!(rights & DACL_READ)) return 0;
+    if (!jmap_hasrights(req, mbentry, DACL_READ))
+        return 0;
 
     /* Ignore any mailboxes that aren't (possibly deleted) calendars. */
     if (!mboxname_iscalendarmailbox(mbentry->name, mbentry->mbtype))
@@ -556,12 +557,10 @@ static int setcalendars_update(jmap_req_t *req,
     struct buf val = BUF_INITIALIZER;
     int r;
 
-    int rights = jmap_myrights_byname(req, mboxname);
-    if (!(rights & DACL_READ)) {
+    if (!jmap_hasrights_byname(req, mboxname, DACL_READ))
         return IMAP_MAILBOX_NONEXISTENT;
-    } else if (!(rights & DACL_WRITE)) {
+    if (!jmap_hasrights_byname(req, mboxname, DACL_WRITE))
         return IMAP_PERMISSION_DENIED;
-    }
 
     r = mailbox_open_iwl(mboxname, &mbox);
     if (r) {
@@ -638,14 +637,10 @@ static int setcalendars_update(jmap_req_t *req,
 /* Delete the calendar mailbox named mboxname for the userid in req. */
 static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
 {
-    int r, rights;
-
-    rights = jmap_myrights_byname(req, mboxname);
-    if (!(rights & DACL_READ)) {
+    if (!jmap_hasrights_byname(req, mboxname, DACL_READ))
         return IMAP_NOTFOUND;
-    } else if (!(rights & DACL_RMCOL)) {
+    if (!jmap_hasrights_byname(req, mboxname, DACL_RMCOL))
         return IMAP_PERMISSION_DENIED;
-    }
 
     struct caldav_db *db = caldav_open_userid(req->userid);
     if (!db) {
@@ -663,7 +658,7 @@ static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
      *
      * Need the Events API for this requirement.
      */
-    r = caldav_delmbox(db, mboxname);
+    int r = caldav_delmbox(db, mboxname);
     if (r) {
         syslog(LOG_ERR, "failed to delete mailbox from caldav_db: %s",
                 error_message(r));
@@ -816,8 +811,7 @@ static int setCalendars(struct jmap_req *req)
             mbentry_t *mbparent = NULL;
             mboxlist_lookup(parentname, &mbparent, NULL);
             free(parentname);
-            int rights = jmap_myrights(req, mbparent);
-            if (!(rights & DACL_MKCOL)) {
+            if (!jmap_hasrights(req, mbparent, DACL_MKCOL)) {
                 json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
                 json_object_set_new(set.not_created, key, err);
                 mboxlist_entry_free(&mbparent);
@@ -1176,8 +1170,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     }
 
     /* Check mailbox ACL rights */
-    int rights = jmap_myrights_byname(req, cdata->dav.mailbox);
-    if (!(rights & DACL_READ))
+    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ))
         return 0;
 
     /* Open calendar mailbox. */
@@ -1502,8 +1495,7 @@ static int setcalendarevents_create(jmap_req_t *req,
     buf_free(&buf);
 
     /* Check permissions. */
-    int rights = jmap_myrights_byname(req, mboxname);
-    if (!(rights & needrights)) {
+    if (!jmap_hasrights_byname(req, mboxname, needrights)) {
         json_array_append_new(invalid, json_string("calendarId"));
         free(uid);
         r = 0; goto done;
@@ -1639,8 +1631,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     resource = xstrdup(cdata->dav.resource);
 
     /* Check permissions. */
-    int rights = jmap_myrights_byname(req, mboxname);
-    if (!(rights & needrights)) {
+    if (!jmap_hasrights_byname(req, mboxname, needrights)) {
         json_array_append_new(invalid, json_string("calendarId"));
         r = 0;
         goto done;
@@ -1704,8 +1695,7 @@ static int setcalendarevents_update(jmap_req_t *req,
         dstmboxname = caldav_mboxname(req->accountid, calendarId);
         if (strcmp(mbox->name, dstmboxname)) {
             /* Check permissions */
-            int dstrights = jmap_myrights_byname(req, dstmboxname);
-            if (!(dstrights & needrights)) {
+            if (!jmap_hasrights_byname(req, dstmboxname, needrights)) {
                 json_array_append_new(invalid, json_string("calendarId"));
                 r = 0;
                 goto done;
@@ -1801,7 +1791,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
                                      const char *id,
                                      struct caldav_db *db)
 {
-    int r, rights;
+    int r;
     int needrights = DACL_RMRSRC;
 
     struct caldav_data *cdata = NULL;
@@ -1827,9 +1817,12 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     resource = xstrdup(cdata->dav.resource);
 
     /* Check permissions. */
-    rights = jmap_myrights_byname(req, mboxname);
-    if (!(rights & needrights)) {
-        r = rights & DACL_READ ? IMAP_PERMISSION_DENIED : IMAP_NOTFOUND;
+    if (!jmap_hasrights_byname(req, mboxname, DACL_READ)) {
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
+    if (!jmap_hasrights_byname(req, mboxname, needrights)) {
+        r = IMAP_PERMISSION_DENIED;
         goto done;
     }
 
@@ -2147,8 +2140,7 @@ static int geteventupdates_cb(void *vrock, struct caldav_data *cdata)
     }
 
     /* Check permissions */
-    int rights = jmap_myrights_byname(req, cdata->dav.mailbox);
-    if (!(rights & DACL_READ))
+    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ))
         return 0;
 
     /* Report item as updated or destroyed. */
@@ -2414,8 +2406,7 @@ static int search_timerange_cb(void *vrock, struct caldav_data *cdata)
     }
 
     /* Check permissions */
-    int rights = jmap_myrights_byname(req, cdata->dav.mailbox);
-    if (!(rights & ACL_READ))
+    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ))
         return 0;
 
     /* Keep track of this event */
@@ -2558,8 +2549,7 @@ static int jmapevent_search(jmap_req_t *req,  struct jmap_query *jquery)
         if (!folder) continue;
 
         /* Check permissions */
-        int rights = jmap_myrights_byname(req, folder->mboxname);
-        if (!(rights & ACL_READ))
+        if (!jmap_hasrights_byname(req, folder->mboxname, DACL_READ))
             continue;
 
         /* Fetch the CalDAV db record */
