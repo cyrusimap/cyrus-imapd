@@ -510,7 +510,7 @@ static int getCalendarsUpdates(struct jmap_req *req)
     } else if (r) return r;
 
     /* Parse request */
-    jmap_changes_parse(req->args, &parser, &changes, &err);
+    jmap_changes_parse(req->args, &parser, NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -2176,7 +2176,7 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
     }
 
     /* Parse request */
-    jmap_changes_parse(req->args, &parser, &changes, &err);
+    jmap_changes_parse(req->args, &parser, NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

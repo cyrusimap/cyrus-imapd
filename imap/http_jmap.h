@@ -281,6 +281,9 @@ struct jmap_changes {
 };
 
 extern void jmap_changes_parse(json_t *jargs, struct jmap_parser *parser,
+                               int (*args_parse)(const char *, json_t *,
+                                                 struct jmap_parser *, void *),
+                               void *args_rock,
                                struct jmap_changes *changes, json_t **err);
 extern void jmap_changes_fini(struct jmap_changes *changes);
 extern json_t *jmap_changes_reply(struct jmap_changes *changes);

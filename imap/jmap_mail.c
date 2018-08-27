@@ -3038,7 +3038,7 @@ static int jmap_mailbox_changes(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_changes_parse(req->args, &parser, &changes, &err);
+    jmap_changes_parse(req->args, &parser, NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -5755,14 +5755,7 @@ static int jmap_email_querychanges(jmap_req_t *req)
         jmap_error(req, err);
         goto done;
     }
-#if 0
-    json_t *arg = json_object_get(req->args, "collapseThreads");
-    if (json_is_boolean(arg)) {
-        collapse_threads = json_boolean_value(arg);
-    } else if (arg) {
-        jmap_parser_invalid(&parser, "collapseThreads");
-    }
-#endif
+
     if (json_array_size(parser.invalid)) {
         err = json_pack("{s:s}", "type", "invalidArguments");
         json_object_set(err, "arguments", parser.invalid);
@@ -5891,7 +5884,7 @@ static int jmap_email_changes(jmap_req_t *req)
 
     /* Parse request */
     json_t *err = NULL;
-    jmap_changes_parse(req->args, &parser, &changes, &err);
+    jmap_changes_parse(req->args, &parser, NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -5994,7 +5987,7 @@ static int jmap_thread_changes(jmap_req_t *req)
 
     /* Parse request */
     json_t *err = NULL;
-    jmap_changes_parse(req->args, &parser, &changes, &err);
+    jmap_changes_parse(req->args, &parser, NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -13245,7 +13238,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     struct jmap_changes changes;
 
     json_t *err = NULL;
-    jmap_changes_parse(req->args, &parser, &changes, &err);
+    jmap_changes_parse(req->args, &parser, NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         return 0;

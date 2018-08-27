@@ -447,6 +447,24 @@ static const jmap_property_t group_props[] = {
     { NULL,          0 }
 };
 
+static int _contact_getargs_parse(const char *key,
+                                  json_t *arg,
+                                  struct jmap_parser *parser __attribute__((unused)),
+                                  void *rock)
+{
+    const char **addressbookId = (const char **) rock;
+    int r = 1;
+
+    /* Non-JMAP spec addressbookId argument */
+    if (!strcmp(key, "addressbookId") && json_is_string(arg)) {
+        *addressbookId = json_string_value(arg);
+    }
+
+    else r = 0;
+
+    return r;
+}
+
 static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -468,25 +486,22 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
         return IMAP_INTERNAL;
     }
 
-    char *mboxname = NULL;
-    json_t *abookid = json_object_get(req->args, "addressbookId");
-    if (abookid && json_string_value(abookid)) {
-        /* XXX - invalid arguments */
-        const char *addressbookId = json_string_value(abookid);
-        mboxname = carddav_mboxname(req->accountid, addressbookId);
-    }
-
     /* Build callback data */
     struct cards_rock rock = { req, &get, NULL /*mailbox*/, 0 /*rows */ };
 
     /* Parse request */
+    char *mboxname = NULL;
+    const char *addressbookId = NULL;
     jmap_get_parse(req->args, &parser, req,
                    kind == CARDDAV_KIND_GROUP ? group_props : contact_props,
-                   NULL, NULL, &get, &err);
+                   &_contact_getargs_parse, &addressbookId, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
     }
+
+    mboxname = addressbookId ?
+        carddav_mboxname(req->accountid, addressbookId) : NULL;
 
     /* Does the client request specific events? */
     if (JNOTNULL(get.ids)) {
@@ -581,19 +596,17 @@ static int jmap_contacts_updates(struct jmap_req *req, int kind)
     int r = -1;
 
     /* Parse request */
-    jmap_changes_parse(req->args, &parser, &changes, &err);
+    char *mboxname = NULL;
+    const char *addressbookId = NULL;
+    jmap_changes_parse(req->args, &parser,
+                       &_contact_getargs_parse, &addressbookId, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
     }
 
-    /* Non-JMAP spec addressbookId argument */
-    char *mboxname = NULL;
-    json_t *abookid = json_object_get(req->args, "addressbookId");
-    if (abookid && json_string_value(abookid)) {
-        const char *addressbookId = json_string_value(abookid);
-        mboxname = carddav_mboxname(req->accountid, addressbookId);
-    }
+    mboxname = addressbookId ?
+        carddav_mboxname(req->accountid, addressbookId) : NULL;
 
     r = carddav_create_defaultaddressbook(req->accountid);
     if (r) goto done;

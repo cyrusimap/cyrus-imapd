@@ -2955,6 +2955,9 @@ EXPORTED json_t *jmap_set_reply(struct jmap_set *set)
 
 EXPORTED void jmap_changes_parse(json_t *jargs,
                                  struct jmap_parser *parser,
+                                 int (*args_parse)(const char *, json_t *,
+                                                   struct jmap_parser *, void *),
+                                 void *args_rock,
                                  struct jmap_changes *changes,
                                  json_t **err)
 {
@@ -2995,7 +2998,7 @@ EXPORTED void jmap_changes_parse(json_t *jargs,
             }
         }
 
-        else {
+        else if (!args_parse || !args_parse(key, arg, parser, args_rock)) {
             jmap_parser_invalid(parser, key);
         }
     }
