@@ -286,6 +286,28 @@ extern void jmap_changes_fini(struct jmap_changes *changes);
 extern json_t *jmap_changes_reply(struct jmap_changes *changes);
 
 
+/* Foo/copy */
+
+struct jmap_copy {
+    /* Request arguments */
+    const char *from_account_id;
+    const char *to_account_id;
+    json_t *create;
+    int on_success_destroy_original;
+
+    /* Response fields */
+    json_t *created;
+    json_t *not_created;
+};
+
+extern void jmap_copy_parse(json_t *jargs,
+                            struct jmap_parser *parser, jmap_req_t *req,
+                            void (*validate_object)(json_t *obj, json_t **err),
+                            struct jmap_copy *copy, json_t **err);
+extern void jmap_copy_fini(struct jmap_copy *copy);
+extern json_t *jmap_copy_reply(struct jmap_copy *copy);
+
+
 /* Foo/query */
 
 struct jmap_query {

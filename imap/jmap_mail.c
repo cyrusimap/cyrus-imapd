@@ -12583,178 +12583,115 @@ done:
     jmap_closembox(req, &src_mbox);
 }
 
-static int jmap_email_copy(jmap_req_t *req)
+static void _email_copy_validate_props(json_t *jemail, json_t **err)
 {
-    json_t *created = json_object();
-    json_t *not_created = json_object();
+    struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
 
-    /* Parse arguments */
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    const char *from_account_id = NULL;
-    const char *to_account_id = NULL;
-    json_t *create = json_object();
-    int on_success_destroy_original = 0;
-
-    /* fromAccountId */
-    json_t *jval = json_object_get(req->args, "fromAccountId");
-    if (json_is_string(jval)) {
-        from_account_id = json_string_value(jval);
-    }
-    else if (JNOTNULL(jval)) {
-        jmap_parser_invalid(&parser, "fromAccountId");
-    }
-    else {
-        from_account_id = req->accountid;
-    }
-    /* toAccountId */
-    jval = json_object_get(req->args, "toAccountId");
-    if (json_is_string(jval)) {
-        to_account_id = json_string_value(jval);
-    }
-    else if (JNOTNULL(jval)) {
-        jmap_parser_invalid(&parser, "toAccountId");
-    }
-    else {
-        to_account_id = req->accountid;
-    }
-    /* create */
-    json_t *jcreate = json_object_get(req->args, "create");
-    if (json_is_object(jcreate)) {
-        jmap_parser_push(&parser, "create");
-        const char *creation_id;
-        json_t *jemail;
-        json_object_foreach(jcreate, creation_id, jemail) {
-            if (!json_is_object(jemail)) {
-                jmap_parser_invalid(&parser, creation_id);
-                continue;
-            }
-            struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
-            /* Validate properties */
-            json_t *prop;
-            const char *pname;
-            json_object_foreach(jemail, pname, prop) {
-                if (!strcmp(pname, "id")) {
-                    if (!json_is_string(prop)) {
-                        jmap_parser_invalid(&myparser, "id");
-                    }
-                }
-                else if (!strcmp(pname, "mailboxIds")) {
-                    jmap_parser_push(&myparser, "mailboxIds");
-                    const char *mbox_id;
-                    json_t *jbool;
-                    json_object_foreach(prop, mbox_id, jbool) {
-                        if (!strlen(mbox_id) || jbool != json_true()) {
-                            jmap_parser_invalid(&myparser, mbox_id);
-                        }
-                    }
-                    jmap_parser_pop(&myparser);
-                }
-                else if (!strcmp(pname, "keywords")) {
-                    if (json_is_object(prop)) {
-                        jmap_parser_push(&myparser, "keywords");
-                        const char *keyword;
-                        json_t *jbool;
-                        json_object_foreach(prop, keyword, jbool) {
-                            if (!_email_keyword_is_valid(keyword) || jbool != json_true()) {
-                                jmap_parser_invalid(&myparser, keyword);
-                            }
-                        }
-                        jmap_parser_pop(&myparser);
-                    }
-                    else {
-                        jmap_parser_invalid(&myparser, "keywords");
-                    }
-                }
-                else if (!strcmp(pname, "receivedAt")) {
-                    if (!json_is_string(prop) || !_is_valid_utcdate(json_string_value(prop))) {
-                        jmap_parser_invalid(&myparser, "receivedAt");
-                    }
-                }
-            }
-            /* Check mandatory properties */
-            if (!json_object_get(jemail, "id")) {
+    /* Validate properties */
+    json_t *prop;
+    const char *pname;
+    json_object_foreach(jemail, pname, prop) {
+        if (!strcmp(pname, "id")) {
+            if (!json_is_string(prop)) {
                 jmap_parser_invalid(&myparser, "id");
             }
-            if (!json_object_get(jemail, "mailboxIds")) {
-                jmap_parser_invalid(&myparser, "mailboxIds");
-            }
-            /* Reject invalid properties... */
-            if (json_array_size(myparser.invalid)) {
-                json_object_set(not_created, creation_id,
-                        json_pack("{s:s s:O}",
-                            "type", "invalidProperties",
-                            "properties", myparser.invalid));
-            }
-            /* ...and put valid Emails on the todo list */
-            else {
-                json_object_set(create, creation_id, jemail);
-            }
-            jmap_parser_fini(&myparser);
         }
-        jmap_parser_pop(&parser);
+        else if (!strcmp(pname, "mailboxIds")) {
+            jmap_parser_push(&myparser, "mailboxIds");
+            const char *mbox_id;
+            json_t *jbool;
+            json_object_foreach(prop, mbox_id, jbool) {
+                if (!strlen(mbox_id) || jbool != json_true()) {
+                    jmap_parser_invalid(&myparser, mbox_id);
+                }
+            }
+            jmap_parser_pop(&myparser);
+        }
+        else if (!strcmp(pname, "keywords")) {
+            if (json_is_object(prop)) {
+                jmap_parser_push(&myparser, "keywords");
+                const char *keyword;
+                json_t *jbool;
+                json_object_foreach(prop, keyword, jbool) {
+                    if (!_email_keyword_is_valid(keyword) ||
+                        jbool != json_true()) {
+                        jmap_parser_invalid(&myparser, keyword);
+                    }
+                }
+                jmap_parser_pop(&myparser);
+            }
+            else {
+                jmap_parser_invalid(&myparser, "keywords");
+            }
+        }
+        else if (!strcmp(pname, "receivedAt")) {
+            if (!json_is_string(prop) ||
+                !_is_valid_utcdate(json_string_value(prop))) {
+                jmap_parser_invalid(&myparser, "receivedAt");
+            }
+        }
     }
-    else {
-        jmap_parser_invalid(&parser, "create");
+    /* Check mandatory properties */
+    if (!json_object_get(jemail, "id")) {
+        jmap_parser_invalid(&myparser, "id");
     }
-    /* onSuccessDestroyOriginal */
-    jval = json_object_get(req->args, "onSuccessDestroyOriginal");
-    if (json_is_boolean(jval)) {
-        on_success_destroy_original = json_boolean_value(jval);
+    if (!json_object_get(jemail, "mailboxIds")) {
+        jmap_parser_invalid(&myparser, "mailboxIds");
     }
-    else if (jval) {
-        jmap_parser_invalid(&parser, "onSuccessDestroyOriginal");
+    /* Reject invalid properties... */
+    if (json_array_size(myparser.invalid)) {
+        *err = json_pack("{s:s s:O}",
+                         "type", "invalidProperties",
+                         "properties", myparser.invalid);
+    }
 
-    }
-    if (json_array_size(parser.invalid)) {
-        jmap_error(req, json_pack("{s:s s:O}", "type", "invalidArguments",
-                    "arguments", parser.invalid));
+    jmap_parser_fini(&myparser);
+}
+
+static int jmap_email_copy(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_copy copy;
+    json_t *err = NULL;
+
+    /* Parse request */
+    jmap_copy_parse(req->args, &parser, req,
+                    &_email_copy_validate_props, &copy, &err);
+    if (err) {
+        jmap_error(req, err);
         goto done;
     }
 
     /* Process request */
     const char *creation_id;
     json_t *copy_email;
-    json_object_foreach(create, creation_id, copy_email) {
+    json_object_foreach(copy.create, creation_id, copy_email) {
         json_t *set_err = NULL;
         json_t *new_email = NULL;
         /* Copy message */
-        _email_copy(req, copy_email, from_account_id, to_account_id,
+        _email_copy(req, copy_email, copy.from_account_id, copy.to_account_id,
                     &new_email, &set_err);
         if (set_err) {
-            json_object_set_new(not_created, creation_id, set_err);
+            json_object_set_new(copy.not_created, creation_id, set_err);
             continue;
         }
         /* Report message as created */
-        json_object_set_new(created, creation_id, new_email);
+        json_object_set_new(copy.created, creation_id, new_email);
         const char *msg_id = json_string_value(json_object_get(new_email, "id"));
         jmap_add_id(req, creation_id, msg_id);
     }
 
-    /* Prepare response */
-    if (json_object_size(created) == 0) {
-        json_decref(created);
-        created = json_null();
-    }
-    if (json_object_size(not_created) == 0) {
-        json_decref(not_created);
-        not_created = json_null();
-    }
-
-    json_t *res = json_object();
-    json_object_set(res, "fromAccountId", json_object_get(req->args, "fromAccountId"));
-    json_object_set(res, "toAccountId", json_object_get(req->args, "toAccountId"));
-    json_object_set(res, "created", created);
-    json_object_set(res, "not_created", not_created);
-    jmap_ok(req, res);
+    /* Build response */
+    jmap_ok(req, jmap_copy_reply(&copy));
 
     /* Destroy originals, if requested */
-    if (on_success_destroy_original && json_object_size(created)) {
+    if (copy.on_success_destroy_original && json_object_size(copy.created)) {
         json_t *destroy_emails = json_array();
-        void *iter = json_object_iter(created);
+        void *iter = json_object_iter(copy.created);
         do {
             json_t *new_email = json_object_iter_value(iter);
             json_array_append(destroy_emails, json_object_get(new_email, "id"));
-        } while ((iter = json_object_iter_next(created, iter)));
+        } while ((iter = json_object_iter_next(copy.created, iter)));
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
         subreq.method = "Email/set";
@@ -12765,10 +12702,8 @@ static int jmap_email_copy(jmap_req_t *req)
     }
 
 done:
-    json_decref(created);
-    json_decref(not_created);
-    json_decref(create);
     jmap_parser_fini(&parser);
+    jmap_copy_fini(&copy);
     return 0;
 }
 

@@ -3027,6 +3027,118 @@ EXPORTED json_t *jmap_changes_reply(struct jmap_changes *changes)
 }
 
 
+/* Foo/copy */
+
+EXPORTED void jmap_copy_parse(json_t *jargs,
+                              struct jmap_parser *parser, jmap_req_t *req,
+                              void (*validate_props)(json_t *obj, json_t **err),
+                              struct jmap_copy *copy, json_t **err)
+{
+    memset(copy, 0, sizeof(struct jmap_copy));
+    copy->create = json_object();
+    copy->created = json_object();
+    copy->not_created = json_object();
+
+    const char *key;
+    json_t *arg;
+
+    json_object_foreach(jargs, key, arg) {
+        /* fromAccountId */
+        if (!strcmp(key, "fromAccountId")) {
+            if (json_is_string(arg)) {
+                copy->from_account_id = json_string_value(arg);
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "fromAccountId");
+            }
+            else {
+                copy->from_account_id = req->accountid;
+            }
+        }
+
+        /* toAccountId */
+        else if (!strcmp(key, "toAccountId")) {
+            if (json_is_string(arg)) {
+                copy->to_account_id = json_string_value(arg);
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "toAccountId");
+            }
+            else {
+                copy->to_account_id = req->accountid;
+            }
+        }
+
+        /* create */
+        else if (!strcmp(key, "create")) {
+            json_t *jcreate = arg;
+            if (json_is_object(jcreate)) {
+                jmap_parser_push(parser, "create");
+                const char *creation_id;
+                json_t *obj, *myerr = NULL;
+                json_object_foreach(jcreate, creation_id, obj) {
+                    if (!json_is_object(obj)) {
+                        jmap_parser_invalid(parser, creation_id);
+                        continue;
+                    }
+
+                    /* Validate properties */
+                    validate_props(obj, &myerr);
+                    if (myerr) {
+                        json_object_set(copy->not_created, creation_id, myerr);
+                    }
+                    else {
+                        json_object_set(copy->create, creation_id, obj);
+                    }
+                }
+                jmap_parser_pop(parser);
+            }
+            else {
+                jmap_parser_invalid(parser, "create");
+            }
+        }
+
+        /* onSuccessDestroyOriginal */
+        else if (!strcmp(key, "onSuccessDestroyOriginal")) {
+            if (json_is_boolean(arg)) {
+                copy->on_success_destroy_original = json_boolean_value(arg);
+            }
+            else if (arg) {
+                jmap_parser_invalid(parser, "onSuccessDestroyOriginal");
+                
+            }
+        }
+
+        else jmap_parser_invalid(parser, key);
+    }
+
+    if (json_array_size(parser->invalid)) {
+        *err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                "arguments", parser->invalid);
+    }
+}
+
+
+EXPORTED void jmap_copy_fini(struct jmap_copy *copy)
+{
+    json_decref(copy->create);
+    json_decref(copy->created);
+    json_decref(copy->not_created);
+}
+
+EXPORTED json_t *jmap_copy_reply(struct jmap_copy *copy)
+{
+    json_t *res = json_object();
+    json_object_set(res, "fromAccountId", json_string(copy->from_account_id));
+    json_object_set(res, "toAccountId", json_string(copy->to_account_id));
+    json_object_set(res, "created", json_object_size(copy->created) ?
+                    copy->created : json_null());
+    json_object_set(res, "notCreated", json_object_size(copy->not_created) ?
+                    copy->not_created : json_null());
+    return res;
+}
+
+
 /* Foo/query */
 
 EXPORTED void jmap_filter_parse(json_t *filter, struct jmap_parser *parser,
