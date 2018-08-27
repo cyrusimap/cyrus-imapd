@@ -1981,38 +1981,59 @@ static int jmap_blob_copy(jmap_req_t *req)
     json_t *args = req->args;
     const char *from_accountid = NULL;
     const char *to_accountid = NULL;
-    json_t *val, *blobids, *invalid = json_array();
+    const char *key;
+    json_t *arg, *val, *blobids, *invalid = json_array();
     size_t i = 0;
     struct buf buf = BUF_INITIALIZER;
 
     /* Parse request */
-    val = json_object_get(args, "fromAccountId");
-    if (JNOTNULL(val) && !json_is_string(val)) {
-        json_array_append_new(invalid, json_string("fromAccountId"));
-    }
-    from_accountid = json_string_value(val);
-    if (from_accountid == NULL) {
-        from_accountid = req->userid;
-    }
-    val = json_object_get(args, "toAccountId");
-    if (JNOTNULL(val) && !json_is_string(val)) {
-        json_array_append_new(invalid, json_string("toAccountId"));
-    }
-    to_accountid = json_string_value(val);
-    if (to_accountid == NULL) {
-        to_accountid = req->userid;
-    }
-    blobids = json_object_get(args, "blobIds");
-    if (!json_is_array(blobids)) {
-        json_array_append_new(invalid, json_string("blobIds"));
-    }
-    json_array_foreach(blobids, i, val) {
-        if (!json_is_string(val)) {
-            buf_printf(&buf, "blobIds[%zu]", i);
-            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-            buf_reset(&buf);
+    json_object_foreach(args, key, arg) {
+        if (!strcmp(key, "fromAccountId")) {
+            if (json_is_string(arg)) {
+                from_accountid = json_string_value(arg);
+                if (from_accountid == NULL) {
+                    from_accountid = req->userid;
+                }
+            }
+            else if (JNOTNULL(arg)) {
+                json_array_append_new(invalid, json_string("fromAccountId"));
+            }
+        }
+
+        else if (!strcmp(key, "toAccountId")) {
+            if (json_is_string(arg)) {
+                to_accountid = json_string_value(arg);
+                if (to_accountid == NULL) {
+                    to_accountid = req->userid;
+                }
+            }
+            else if (JNOTNULL(arg)) {
+                json_array_append_new(invalid, json_string("toAccountId"));
+            }
+        }
+
+        else if (!strcmp(key, "blobIds")) {
+            blobids = arg;
+            if (json_is_array(blobids)) {
+                json_array_foreach(blobids, i, val) {
+                    if (!json_is_string(val)) {
+                        buf_printf(&buf, "blobIds[%zu]", i);
+                        json_array_append_new(invalid,
+                                              json_string(buf_cstring(&buf)));
+                        buf_reset(&buf);
+                    }
+                }
+            }
+            else if (JNOTNULL(arg)) {
+                json_array_append_new(invalid, json_string("blobIds"));
+            }
+        }
+
+        else {
+            json_array_append_new(invalid, json_string(key));
         }
     }
+
     if (json_array_size(invalid)) {
         json_t *err = json_pack("{s:s, s:o}",
                 "type", "invalidArguments", "arguments", invalid);
