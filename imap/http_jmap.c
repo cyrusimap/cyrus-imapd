@@ -3371,3 +3371,151 @@ EXPORTED json_t *jmap_query_reply(struct jmap_query *query)
     json_object_set(res, "ids", query->ids);
     return res;
 }
+
+
+/* Foo/queryChanges */
+
+EXPORTED void jmap_querychanges_parse(json_t *jargs,
+                                      struct jmap_parser *parser,
+                                      jmap_filter_parse_cb filter_cb,
+                                      void *filter_rock,
+                                      jmap_comparator_parse_cb comp_cb,
+                                      void *sort_rock,
+                                      int (*args_parse)(const char *, json_t *,
+                                                        struct jmap_parser *,
+                                                        void *),
+                                      void *args_rock,
+                                      struct jmap_querychanges *query,
+                                      json_t **err)
+{
+    const char *key;
+    json_t *arg, *val;
+    size_t i;
+
+    memset(query, 0, sizeof(struct jmap_querychanges));
+    query->removed = json_array();
+    query->added = json_array();
+
+    json_t *unsupported_filter = json_array();
+    json_t *unsupported_sort = json_array();
+
+    json_object_foreach(jargs, key, arg) {
+        if (!strcmp(key, "accountId")) {
+            if (json_is_string(arg)) {
+                /* XXX  Need to do something with this */
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "accountId");
+            }
+        }
+
+        /* filter */
+        else if (!strcmp(key, "filter")) {
+            if (json_is_object(arg)) {
+                jmap_parser_push(parser, "filter");
+                jmap_filter_parse(arg, parser, filter_cb,
+                                  unsupported_filter, filter_rock);
+                jmap_parser_pop(parser);
+                query->filter = arg;
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "filter");
+            }
+        }
+
+        /* sort */
+        else if (!strcmp(key, "sort")) {
+            if (json_is_array(arg)) {
+                json_array_foreach(arg, i, val) {
+                    jmap_parser_push_index(parser, "sort", i, NULL);
+                    jmap_parse_comparator(val, parser, comp_cb,
+                                          unsupported_sort, sort_rock);
+                    jmap_parser_pop(parser);
+                }
+                if (json_array_size(arg)) {
+                    query->sort = arg;
+                }
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "sort");
+            }
+        }
+
+        /* sinceQueryState */
+        else if (!strcmp(key, "sinceQueryState")) {
+            if (json_is_string(arg)) {
+                query->since_queryState = json_string_value(arg);
+            } else {
+                jmap_parser_invalid(parser, "sinceQueryState");
+            }
+        }
+
+        /* maxChanges */
+        else if (!strcmp(key, "maxChanges")) {
+            if (json_is_integer(arg) && json_integer_value(arg) > 0) {
+                query->max_changes = json_integer_value(arg);
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "maxChanges");
+            }
+        }
+
+        /* upToId */
+        else if (!strcmp(key, "upToId")) {
+            if (json_is_string(arg)) {
+                query->up_to_id = json_string_value(arg);
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "upToId");
+            }
+        }
+
+        /* calculateTotal */
+        else if (!strcmp(key, "calculateTotal")) {
+            if (json_is_boolean(arg)) {
+                query->calculate_total = json_boolean_value(arg);
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "calculateTotal");
+            }
+        }
+
+        else if (!args_parse || !args_parse(key, arg, parser, args_rock)) {
+            jmap_parser_invalid(parser, key);
+        }
+    }
+
+    if (json_array_size(parser->invalid)) {
+        *err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                         "arguments", parser->invalid);
+    }
+    else if (json_array_size(unsupported_filter)) {
+        *err = json_pack("{s:s s:O}", "type", "unsupportedFilter",
+                         "filters", unsupported_filter);
+    }
+    else if (json_array_size(unsupported_sort)) {
+        *err = json_pack("{s:s s:O}", "type", "unsupportedSort",
+                         "sort", unsupported_sort);
+    }
+
+    json_decref(unsupported_filter);
+    json_decref(unsupported_sort);
+}
+
+EXPORTED void jmap_querychanges_fini(struct jmap_querychanges *query)
+{
+    free(query->new_queryState);
+    json_decref(query->removed);
+    json_decref(query->added);
+}
+
+EXPORTED json_t *jmap_querychanges_reply(struct jmap_querychanges *query)
+{
+    json_t *res = json_object();
+    json_object_set(res, "filter", query->filter);
+    json_object_set(res, "sort", query->sort);
+    json_object_set_new(res, "oldQueryState", json_string(query->since_queryState));
+    json_object_set_new(res, "newQueryState", json_string(query->new_queryState));
+    json_object_set_new(res, "upToId", query->up_to_id ?
+            json_string(query->up_to_id) : json_null());
+    json_object_set(res, "removed", query->removed);
+    json_object_set(res, "added", query->added);
+    json_object_set_new(res, "total", json_integer(query->total));
+    return res;
+}

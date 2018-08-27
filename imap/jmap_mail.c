@@ -147,142 +147,6 @@ jmap_method_t jmap_mail_methods[] = {
     { NULL,                           NULL}
 };
 
-struct jmap_querychanges {
-    /* Request arguments */
-    json_t *filter;
-    json_t *sort;
-    const char *since_queryState;
-    size_t max_changes;
-    const char *up_to_id;
-    int calculate_total;
-
-    /* Response fields */
-    char *new_queryState;
-    size_t total;
-    json_t *removed;
-    json_t *added;
-};
-
-/* Foo/queryChanges */
-
-static void jmap_querychanges_parse(json_t *jargs,
-                                   struct jmap_parser *parser,
-                                   jmap_filter_parse_cb filter_cb,
-                                   void *filter_rock,
-                                   jmap_comparator_parse_cb comp_cb,
-                                   void *sort_rock,
-                                   struct jmap_querychanges *query,
-                                   json_t **err)
-{
-    json_t *arg, *val;
-    size_t i;
-
-    memset(query, 0, sizeof(struct jmap_querychanges));
-    query->removed = json_array();
-    query->added = json_array();
-
-    json_t *unsupported_filter = json_array();
-    json_t *unsupported_sort = json_array();
-
-    /* filter */
-    arg = json_object_get(jargs, "filter");
-    if (json_is_object(arg)) {
-        jmap_parser_push(parser, "filter");
-        jmap_filter_parse(arg, parser, filter_cb, unsupported_filter, filter_rock);
-        jmap_parser_pop(parser);
-        query->filter = arg;
-    }
-    else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "filter");
-    }
-
-    /* sort */
-    arg = json_object_get(jargs, "sort");
-    if (json_is_array(arg)) {
-        json_array_foreach(arg, i, val) {
-            jmap_parser_push_index(parser, "sort", i, NULL);
-            jmap_parse_comparator(val, parser, comp_cb, unsupported_sort, sort_rock);
-            jmap_parser_pop(parser);
-        }
-        if (json_array_size(arg)) {
-            query->sort = arg;
-        }
-    }
-    else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "sort");
-    }
-
-    /* sinceQueryState */
-    arg = json_object_get(jargs, "sinceQueryState");
-    if (json_is_string(arg)) {
-        query->since_queryState = json_string_value(arg);
-    } else {
-        jmap_parser_invalid(parser, "sinceQueryState");
-    }
-
-    /* maxChanges */
-    arg = json_object_get(jargs, "maxChanges");
-    if (json_is_integer(arg) && json_integer_value(arg) > 0) {
-        query->max_changes = json_integer_value(arg);
-    } else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "maxChanges");
-    }
-
-    /* upToId */
-    arg = json_object_get(jargs, "upToId");
-    if (json_is_string(arg)) {
-        query->up_to_id = json_string_value(arg);
-    } else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "upToId");
-    }
-
-    /* calculateTotal */
-    arg = json_object_get(jargs, "calculateTotal");
-    if (json_is_boolean(arg)) {
-        query->calculate_total = json_boolean_value(arg);
-    } else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "calculateTotal");
-    }
-
-    if (json_array_size(parser->invalid)) {
-        *err = json_pack("{s:s s:O}", "type", "invalidArguments",
-                "arguments", parser->invalid);
-    }
-	else if (json_array_size(unsupported_filter)) {
-		*err = json_pack("{s:s s:O}", "type", "unsupportedFilter",
-                "filters", unsupported_filter);
-	}
-	else if (json_array_size(unsupported_sort)) {
-		*err = json_pack("{s:s s:O}", "type", "unsupportedSort",
-                "sort", unsupported_sort);
-	}
-
-    json_decref(unsupported_filter);
-    json_decref(unsupported_sort);
-}
-
-static void jmap_querychanges_fini(struct jmap_querychanges *query)
-{
-    free(query->new_queryState);
-    json_decref(query->removed);
-    json_decref(query->added);
-}
-
-static json_t *jmap_querychanges_reply(struct jmap_querychanges *query)
-{
-    json_t *res = json_object();
-    json_object_set(res, "filter", query->filter);
-    json_object_set(res, "sort", query->sort);
-    json_object_set_new(res, "oldQueryState", json_string(query->since_queryState));
-    json_object_set_new(res, "newQueryState", json_string(query->new_queryState));
-    json_object_set_new(res, "upToId", query->up_to_id ?
-            json_string(query->up_to_id) : json_null());
-    json_object_set(res, "removed", query->removed);
-    json_object_set(res, "added", query->added);
-    json_object_set_new(res, "total", json_integer(query->total));
-    return res;
-}
-
 /* NULL terminated list of supported jmap_email_query sort fields */
 static const char *msglist_sortfields[];
 
@@ -1475,9 +1339,10 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
     /* Parse arguments */
     json_t *err = NULL;
     jmap_querychanges_parse(req->args, &parser,
-            _mbox_parse_filter, NULL,
-            _mbox_parse_comparator, NULL,
-            &query, &err);
+                            _mbox_parse_filter, NULL,
+                            _mbox_parse_comparator, NULL,
+                            NULL, NULL,
+                            &query, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -5882,25 +5747,28 @@ static int jmap_email_querychanges(jmap_req_t *req)
     /* Parse arguments */
     json_t *err = NULL;
     jmap_querychanges_parse(req->args, &parser,
-            _email_parse_filter, req,
-            _email_parse_comparator, req,
-            &query, &err);
+                            _email_parse_filter, req,
+                            _email_parse_comparator, req,
+                            _email_queryargs_parse, &collapse_threads,
+                            &query, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
     }
+#if 0
     json_t *arg = json_object_get(req->args, "collapseThreads");
     if (json_is_boolean(arg)) {
         collapse_threads = json_boolean_value(arg);
     } else if (arg) {
         jmap_parser_invalid(&parser, "collapseThreads");
     }
-	if (json_array_size(parser.invalid)) {
-		err = json_pack("{s:s}", "type", "invalidArguments");
-		json_object_set(err, "arguments", parser.invalid);
-		jmap_error(req, err);
+#endif
+    if (json_array_size(parser.invalid)) {
+        err = json_pack("{s:s}", "type", "invalidArguments");
+        json_object_set(err, "arguments", parser.invalid);
+        jmap_error(req, err);
         goto done;
-	}
+    }
 
     /* Query changes */
     if (collapse_threads)
@@ -13496,9 +13364,10 @@ static int jmap_emailsubmission_querychanges(jmap_req_t *req)
     /* Parse arguments */
     json_t *err = NULL;
     jmap_querychanges_parse(req->args, &parser,
-            _emailsubmission_parse_filter, NULL,
-            _emailsubmission_parse_comparator, NULL,
-            &query, &err);
+                            _emailsubmission_parse_filter, NULL,
+                            _emailsubmission_parse_comparator, NULL,
+                            NULL, NULL,
+                            &query, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

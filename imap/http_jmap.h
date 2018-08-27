@@ -360,4 +360,40 @@ extern void jmap_query_fini(struct jmap_query *query);
 
 extern json_t *jmap_query_reply(struct jmap_query *query);
 
+
+/* Foo/queryChanges */
+
+struct jmap_querychanges {
+    /* Request arguments */
+    json_t *filter;
+    json_t *sort;
+    const char *since_queryState;
+    size_t max_changes;
+    const char *up_to_id;
+    int calculate_total;
+
+    /* Response fields */
+    char *new_queryState;
+    size_t total;
+    json_t *removed;
+    json_t *added;
+};
+
+extern void jmap_querychanges_parse(json_t *jargs,
+                                    struct jmap_parser *parser,
+                                    jmap_filter_parse_cb filter_cb,
+                                    void *filter_rock,
+                                    jmap_comparator_parse_cb comp_cb,
+                                    void *sort_rock,
+                                    int (*args_parse)(const char *, json_t *,
+                                                      struct jmap_parser *,
+                                                      void *),
+                                    void *args_rock,
+                                    struct jmap_querychanges *query,
+                                    json_t **err);
+
+extern void jmap_querychanges_fini(struct jmap_querychanges *query);
+
+extern json_t *jmap_querychanges_reply(struct jmap_querychanges *query);
+
 #endif /* HTTP_JMAP_H */
