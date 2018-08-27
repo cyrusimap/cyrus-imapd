@@ -6727,7 +6727,7 @@ sub test_email_query_long
     xlog "list first 60 emails";
     $res = $jmap->CallMethods([['Email/query', {
         limit => 60,
-        offset => 0,
+        position => 0,
         collapseThreads => JSON::true,
         sort => [{ property => "id" }],
     }, "R1"]]);
