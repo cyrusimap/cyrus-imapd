@@ -428,9 +428,10 @@ static const jmap_property_t contact_props[] = {
     { "notes",       0 },
 
     /* FM extensions */
-    { "x-href",      JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "x-hasPhoto",  JMAP_PROP_SERVER_SET },
-    { "x-importance",0 },
+    { "x-href",      JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE }, // AJAXUI only
+    { "x-hasPhoto",  JMAP_PROP_SERVER_SET }, // AJAXUI only
+    { "x-importance",0 },  // AJAXUI only
+    { "importance",  0 },  // JMAPUI only
 
     { NULL,          0 }
 };
@@ -439,7 +440,10 @@ static const jmap_property_t group_props[] = {
     { "id",          JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
     { "name",        0 },
     { "contactIds",  0 },
-    { "otherAccountContactIds", 0},
+
+    // FM extensions */
+    { "otherAccountContactIds", 0}, // Both AJAXUI and JMAPUI
+
     { NULL,          0 }
 };
 
@@ -1189,6 +1193,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         free(xhref);
     }
 
+    // need to keep the x- version while AJAXUI is around
     if (_wantprop(props, "x-importance")) {
         double val = 0;
         const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
@@ -1200,6 +1205,20 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
             val = strtod(buf_cstring(&buf), NULL);
 
         json_object_set_new(obj, "x-importance", json_real(val));
+    }
+
+    // also fetchable without the x- for JMAPUI
+    if (_wantprop(props, "importance")) {
+        double val = 0;
+        const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
+
+        buf_reset(&buf);
+        annotatemore_msg_lookup(mboxname, record->uid,
+                                ns, "", &buf);
+        if (buf.len)
+            val = strtod(buf_cstring(&buf), NULL);
+
+        json_object_set_new(obj, "importance", json_real(val));
     }
 
     const strarray_t *n = vparse_multival(card, "n");
@@ -2652,7 +2671,8 @@ static int _json_to_card(struct jmap_req *req,
                 json_array_append_new(invalid, json_string("isFlagged"));
             }
         }
-        else if (!strcmp(key, "x-importance")) {
+        // need to support x-importance while AJAXUI is around
+        else if (!strcmp(key, "x-importance") || !strcmp(key, "importance")) {
             has_noncontent = 1;
             double dval = json_number_value(jval);
             const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
