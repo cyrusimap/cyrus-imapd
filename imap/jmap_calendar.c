@@ -694,7 +694,7 @@ static int setCalendars(struct jmap_req *req)
     int r = 0;
 
     /* Parse arguments */
-    jmap_set_parse(req->args, &parser, &set, &err);
+    jmap_set_parse(req->args, &parser, NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -1901,7 +1901,7 @@ static int setCalendarEvents(struct jmap_req *req)
     int r = 0;
 
     /* Parse arguments */
-    jmap_set_parse(req->args, &parser, &set, &err);
+    jmap_set_parse(req->args, &parser, NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

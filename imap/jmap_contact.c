@@ -710,7 +710,7 @@ static int setContactGroups(struct jmap_req *req)
     if (!db) return -1;
 
     /* Parse arguments */
-    jmap_set_parse(req->args, &parser, &set, &err);
+    jmap_set_parse(req->args, &parser, NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -2860,7 +2860,7 @@ static int setContacts(struct jmap_req *req)
     if (!db) return -1;
 
     /* Parse arguments */
-    jmap_set_parse(req->args, &parser, &set, &err);
+    jmap_set_parse(req->args, &parser, NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

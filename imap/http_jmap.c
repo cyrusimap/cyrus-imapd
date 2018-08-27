@@ -2790,6 +2790,9 @@ EXPORTED json_t *jmap_get_reply(struct jmap_get *get)
 /* Foo/set */
 
 EXPORTED void jmap_set_parse(json_t *jargs, struct jmap_parser *parser,
+                             int (*args_parse)(const char *, json_t *,
+                                               struct jmap_parser *, void *),
+                             void *args_rock,
                              struct jmap_set *set, json_t **err)
 {
     memset(set, 0, sizeof(struct jmap_set));
@@ -2803,60 +2806,79 @@ EXPORTED void jmap_set_parse(json_t *jargs, struct jmap_parser *parser,
     set->not_updated = json_object();
     set->not_destroyed = json_object();
 
+    const char *key;
     json_t *arg, *val;
 
-    /* ifInState */
-    arg = json_object_get(jargs, "ifInState");
-    if (json_is_string(arg)) {
-        set->if_in_state = json_string_value(arg);
-    }
-    else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "ifInState");
-    }
-
-    /* create */
-    arg = json_object_get(jargs, "create");
-    if (json_is_object(arg)) {
-        const char *id;
-        json_object_foreach(arg, id, val) {
-            if (!json_is_object(val)) {
-                jmap_parser_push(parser, "create");
-                jmap_parser_invalid(parser, id);
-                jmap_parser_pop(parser);
-                continue;
+    json_object_foreach(jargs, key, arg) {
+        if (!strcmp(key, "accountId")) {
+            if (json_is_string(arg)) {
+                /* XXX  Need to do something with this */
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "accountId");
             }
-            json_object_set(set->create, id, val);
         }
-    }
-    else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "create");
-    }
 
-    /* update */
-    arg = json_object_get(jargs, "update");
-    if (json_is_object(arg)) {
-        const char *id;
-        json_object_foreach(arg, id, val) {
-            if (!json_is_object(val)) {
-                jmap_parser_push(parser, "update");
-                jmap_parser_invalid(parser, id);
-                jmap_parser_pop(parser);
-                continue;
+        /* ifInState */
+        else  if (!strcmp(key, "ifInState")) {
+            if (json_is_string(arg)) {
+                set->if_in_state = json_string_value(arg);
             }
-            json_object_set(set->update, id, val);
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "ifInState");
+            }
         }
-    }
-    else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "update");
-    }
 
-    /* destroy */
-    arg = json_object_get(jargs, "destroy");
-    if (JNOTNULL(arg)) {
-        jmap_parse_strings(arg, parser, "destroy");
-        if (!json_array_size(parser->invalid)) {
-            json_decref(set->destroy);
-            set->destroy = json_incref(arg);
+        /* create */
+        else if (!strcmp(key, "create")) {
+            if (json_is_object(arg)) {
+                const char *id;
+                json_object_foreach(arg, id, val) {
+                    if (!json_is_object(val)) {
+                        jmap_parser_push(parser, "create");
+                        jmap_parser_invalid(parser, id);
+                        jmap_parser_pop(parser);
+                        continue;
+                    }
+                    json_object_set(set->create, id, val);
+                }
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "create");
+            }
+        }
+
+        /* update */
+        else if (!strcmp(key, "update")) {
+            if (json_is_object(arg)) {
+                const char *id;
+                json_object_foreach(arg, id, val) {
+                    if (!json_is_object(val)) {
+                        jmap_parser_push(parser, "update");
+                        jmap_parser_invalid(parser, id);
+                        jmap_parser_pop(parser);
+                        continue;
+                    }
+                    json_object_set(set->update, id, val);
+                }
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "update");
+            }
+        }
+
+        /* destroy */
+        else if (!strcmp(key, "destroy")) {
+            if (JNOTNULL(arg)) {
+                jmap_parse_strings(arg, parser, "destroy");
+                if (!json_array_size(parser->invalid)) {
+                    json_decref(set->destroy);
+                    set->destroy = json_incref(arg);
+                }
+            }
+        }
+
+        else if (!args_parse || !args_parse(key, arg, parser, args_rock)) {
+            jmap_parser_invalid(parser, key);
         }
     }
 

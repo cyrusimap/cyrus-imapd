@@ -2838,24 +2838,34 @@ done:
     _mboxset_ops_free(ops);
 }
 
+static int _mboxset_args_parse(const char *key,
+                               json_t *arg,
+                               struct jmap_parser *parser __attribute__((unused)),
+                               void *rock)
+{
+    struct mboxset *set = (struct mboxset *) rock;
+    int r = 1;
+
+    if (!strcmp(key, "onDestroyRemoveMessages") && json_is_boolean(arg)) {
+        set->on_destroy_remove_msgs = json_boolean_value(arg);
+    }
+
+    else r = 0;
+
+    return r;
+}
+
 static void _mboxset_parse(json_t *jargs,
                                    struct jmap_parser *parser,
                                    struct mboxset *set,
                                    jmap_req_t *req,
                                    json_t **err)
 {
+    json_t *jarg;
     size_t i;
     memset(set, 0, sizeof(struct mboxset));
 
-    /* onDestroyRemoveMessages */
-    json_t *jarg = json_object_get(jargs, "onDestroyRemoveMessages");
-    if (json_is_boolean(jarg)) {
-        set->on_destroy_remove_msgs = json_boolean_value(jarg);
-    }
-    else if (JNOTNULL(jarg)) {
-        jmap_parser_invalid(parser, "onDestroyRemoveMessages");
-    }
-    jmap_set_parse(jargs, parser, &set->super, err);
+    jmap_set_parse(jargs, parser, &_mboxset_args_parse, set, &set->super, err);
     if (*err) return;
 
     /* create */
@@ -11961,13 +11971,32 @@ static void _email_destroy_bulk(jmap_req_t *req,
     strarray_fini(&email_ids);
 }
 
+static int _email_setargs_parse(const char *key,
+                                json_t *arg,
+                                struct jmap_parser *parser __attribute__((unused)),
+                                void *rock)
+{
+    json_t **debug_bulkupdate = (json_t **) rock;
+    int r = 1;
+
+    if (!strcmp(key, "cyrusimap.org/debugBulkUpdate") && json_is_boolean(arg)) {
+        if (arg == json_true()) *debug_bulkupdate = arg;
+    }
+
+    else r = 0;
+
+    return r;
+}
+
 static int jmap_email_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
 
+    json_t *debug_bulkupdate = NULL;
     json_t *err = NULL;
-    jmap_set_parse(req->args, &parser, &set, &err);
+    jmap_set_parse(req->args, &parser,
+                   &_email_setargs_parse, &debug_bulkupdate, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -12006,10 +12035,6 @@ static int jmap_email_set(jmap_req_t *req)
         jmap_add_id(req, creation_id, msg_id);
     }
 
-    json_t *debug_bulkupdate = NULL;
-    if (json_object_get(req->args, "cyrusimap.org/debugBulkUpdate") == json_true()) {
-        debug_bulkupdate = json_object();
-    }
     _email_update_bulk(req, set.update, set.updated, set.not_updated, debug_bulkupdate);
 
     _email_destroy_bulk(req, set.destroy, set.destroyed, set.not_destroyed);
@@ -13243,33 +13268,55 @@ done:
     return 0;
 }
 
+struct submission_set_args {
+    json_t *onSuccessUpdate;
+    json_t *onSuccessDestroy;
+};
+
+static int _submission_setargs_parse(const char *key,
+                                     json_t *arg,
+                                     struct jmap_parser *parser,
+                                     void *rock)
+{
+    struct submission_set_args *set = (struct submission_set_args *) rock;
+    int r = 1;
+
+    if (!strcmp(key, "onSuccessUpdateEmail")) {
+        if (json_is_object(arg)) {
+            json_t *jval;
+            const char *emailsubmission_id;
+            json_object_foreach(arg, emailsubmission_id, jval) {
+                if (!json_is_object(jval)) {
+                    jmap_parser_push(parser, "onSuccessUpdateEmail");
+                    jmap_parser_invalid(parser, emailsubmission_id);
+                    jmap_parser_pop(parser);
+                }
+            }
+            set->onSuccessUpdate = arg;
+        }
+        else if (JNOTNULL(arg)) r = 0;
+    }
+
+    else if (!strcmp(key, "onSuccessDestroyEmail") && JNOTNULL(arg)) {
+        jmap_parse_strings(arg, parser, "onSuccessDestroyEmail");
+        set->onSuccessDestroy = arg;
+    }
+
+    else r = 0;
+
+    return r;
+}
+
 static int jmap_emailsubmission_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
+    struct submission_set_args sub_args = { NULL, NULL };
     json_t *err = NULL;
 
     /* Parse request */
-    json_t *onSuccessUpdate = json_object_get(req->args, "onSuccessUpdateEmail");
-    if (json_is_object(onSuccessUpdate)) {
-        json_t *jval;
-        const char *emailsubmission_id;
-        json_object_foreach(onSuccessUpdate, emailsubmission_id, jval) {
-            if (!json_is_object(jval)) {
-                jmap_parser_push(&parser, "onSuccessUpdateEmail");
-                jmap_parser_invalid(&parser, emailsubmission_id);
-                jmap_parser_pop(&parser);
-            }
-        }
-    }
-    else if (JNOTNULL(onSuccessUpdate)) {
-        jmap_parser_invalid(&parser, "onSuccessUpdateEmail");
-    }
-    json_t *onSuccessDestroy = json_object_get(req->args, "onSuccessDestroyEmail");
-    if (JNOTNULL(onSuccessDestroy)) {
-        jmap_parse_strings(onSuccessDestroy, &parser, "onSuccessDestroyEmail");
-    }
-    jmap_set_parse(req->args, &parser, &set, &err);
+    jmap_set_parse(req->args, &parser,
+                   &_submission_setargs_parse, &sub_args, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -13314,10 +13361,10 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
 
     /* Process onSuccessXxxEmail */
     json_t *updateEmails = json_object();
-    if (JNOTNULL(onSuccessUpdate)) {
+    if (JNOTNULL(sub_args.onSuccessUpdate)) {
         const char *id;
         json_t *jemail;
-        json_object_foreach(onSuccessUpdate, id, jemail) {
+        json_object_foreach(sub_args.onSuccessUpdate, id, jemail) {
             /* Ignore updates, we rejected all of them */
             if (*id != '#') continue;
 
@@ -13331,10 +13378,10 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         }
     }
     json_t *destroyEmails = json_array();
-    if (JNOTNULL(onSuccessDestroy)) {
+    if (JNOTNULL(sub_args.onSuccessDestroy)) {
         size_t i;
         json_t *jid;
-        json_array_foreach(onSuccessDestroy, i, jid) {
+        json_array_foreach(sub_args.onSuccessDestroy, i, jid) {
             const char *id = json_string_value(jid);
             /* Ignore updates, we rejected all of them */
             if (*id != '#') continue;

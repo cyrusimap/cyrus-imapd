@@ -257,6 +257,9 @@ struct jmap_set {
 };
 
 extern void jmap_set_parse(json_t *jargs, struct jmap_parser *parser,
+                           int (*args_parse)(const char *, json_t *,
+                                             struct jmap_parser *, void *),
+                           void *args_rock,
                            struct jmap_set *set, json_t **err);
 extern void jmap_set_fini(struct jmap_set *set);
 extern json_t *jmap_set_reply(struct jmap_set *set);
