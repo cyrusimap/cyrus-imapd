@@ -12171,7 +12171,7 @@ sub test_email_copy
         }, 'R1'],
     ]);
 
-   $self->assert_str_equals('alreadyExists', $res->[0][1]->{not_created}{1}{type});
+   $self->assert_str_equals('alreadyExists', $res->[0][1]->{notCreated}{1}{type});
 }
 
 sub test_email_set_destroy_bulk
