@@ -7978,6 +7978,11 @@ static void cmd_list(char *tag, struct listargs *listargs)
         list_data(listargs);
     }
 
+    if (global_conversations) {
+        conversations_abort(&global_conversations);
+        global_conversations = NULL;
+    }
+
     strarray_fini(&listargs->pat);
     strarray_fini(&listargs->metaitems);
 
@@ -7996,11 +8001,6 @@ static void cmd_list(char *tag, struct listargs *listargs)
         if (list_callback_calls)
             prot_printf(imapd_out, " %u calls", list_callback_calls);
         prot_printf(imapd_out, ")\r\n");
-    }
-
-    if (global_conversations) {
-        conversations_abort(&global_conversations);
-        global_conversations = NULL;
     }
 }
 
