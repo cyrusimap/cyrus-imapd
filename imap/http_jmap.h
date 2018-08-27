@@ -294,6 +294,7 @@ struct jmap_query {
     ssize_t anchor_offset;
     size_t limit;
     int have_limit;
+    int calculate_total;
 
     /* Response fields */
     char *query_state;

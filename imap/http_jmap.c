@@ -3155,6 +3155,14 @@ EXPORTED void jmap_query_parse(json_t *jargs, struct jmap_parser *parser,
             }
         }
 
+        else if (!strcmp(key, "calculateTotal")) {
+            if (json_is_boolean(arg)) {
+                query->calculate_total = json_boolean_value(arg);
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "calculateTotal");
+            }
+        }
+
         else if (!args_parse || !args_parse(key, arg, parser, args_rock)) {
             jmap_parser_invalid(parser, key);
         }
