@@ -1432,9 +1432,10 @@ static int jmap_mailbox_query(jmap_req_t *req)
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req->args, &parser,
-            _mbox_parse_filter, NULL,
-            _mbox_parse_comparator, NULL,
-            &query, &err);
+                     _mbox_parse_filter, NULL,
+                     _mbox_parse_comparator, NULL,
+                     NULL, NULL,
+                     &query, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -5467,6 +5468,23 @@ done:
     free(cache_fname);
 }
 
+static int _email_queryargs_parse(const char *key,
+                                  json_t *arg,
+                                  struct jmap_parser *parser __attribute__((unused)),
+                                  void *rock)
+{
+    int *collapse_threads = (int *) rock;
+    int r = 1;
+
+    if (!strcmp(key, "collapseThreads") && json_is_boolean(arg)) {
+        *collapse_threads = json_boolean_value(arg);
+    }
+
+    else r = 0;
+
+    return r;
+}
+
 static int jmap_email_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -5476,9 +5494,10 @@ static int jmap_email_query(jmap_req_t *req)
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req->args, &parser,
-            _email_parse_filter, req,
-            _email_parse_comparator, req,
-            &query, &err);
+                     _email_parse_filter, req,
+                     _email_parse_comparator, req,
+                     _email_queryargs_parse, &collapse_threads,
+                     &query, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -5487,12 +5506,7 @@ static int jmap_email_query(jmap_req_t *req)
         /* we currently don't support negative positions */
         jmap_parser_invalid(&parser, "position");
     }
-    json_t *arg = json_object_get(req->args, "collapseThreads");
-    if (json_is_boolean(arg)) {
-        collapse_threads = json_boolean_value(arg);
-    } else if (arg) {
-        jmap_parser_invalid(&parser, "collapseThreads");
-    }
+
     if (json_array_size(parser.invalid)) {
         err = json_pack("{s:s}", "type", "invalidArguments");
         json_object_set(err, "arguments", parser.invalid);
@@ -5510,8 +5524,7 @@ static int jmap_email_query(jmap_req_t *req)
 
     /* Build response */
     json_t *res = jmap_query_reply(&query);
-    json_object_set(res, "collapseThreads",
-            json_object_get(req->args, "collapseThreads"));
+    json_object_set(res, "collapseThreads", json_boolean(collapse_threads));
     json_object_set_new(res, "isCached", json_boolean(is_cached));
     jmap_ok(req, res);
 
@@ -13474,9 +13487,10 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req->args, &parser,
-            _emailsubmission_parse_filter, NULL,
-            _emailsubmission_parse_comparator, NULL,
-            &query, &err);
+                     _emailsubmission_parse_filter, NULL,
+                     _emailsubmission_parse_comparator, NULL,
+                     NULL, NULL,
+                     &query, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

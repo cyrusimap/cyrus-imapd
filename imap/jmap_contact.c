@@ -2079,9 +2079,10 @@ static int getContactsList(struct jmap_req *req)
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req->args, &parser,
-            validatefilter, NULL,
-            validatecomparator, NULL,
-            &query, &err);
+                     validatefilter, NULL,
+                     validatecomparator, NULL,
+                     NULL, NULL,
+                     &query, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

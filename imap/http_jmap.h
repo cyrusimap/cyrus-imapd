@@ -321,6 +321,9 @@ extern void jmap_parse_comparator(json_t *jsort, struct jmap_parser *parser,
 extern void jmap_query_parse(json_t *jargs, struct jmap_parser *parser,
                              jmap_filter_parse_cb filter_cb, void *filter_rock,
                              jmap_comparator_parse_cb comp_cb, void *sort_rock,
+                             int (*args_parse)(const char *, json_t *,
+                                               struct jmap_parser *, void *),
+                             void *args_rock,
                              struct jmap_query *query, json_t **err);
 
 extern void jmap_query_fini(struct jmap_query *query);

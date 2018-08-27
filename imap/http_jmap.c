@@ -3049,8 +3049,12 @@ EXPORTED void jmap_parse_comparator(json_t *jsort, struct jmap_parser *parser,
 EXPORTED void jmap_query_parse(json_t *jargs, struct jmap_parser *parser,
                                jmap_filter_parse_cb filter_cb, void *filter_rock,
                                jmap_comparator_parse_cb comp_cb, void *sort_rock,
+                               int (*args_parse)(const char *, json_t *,
+                                                 struct jmap_parser *, void *),
+                               void *args_rock,
                                struct jmap_query *query, json_t **err)
 {
+    const char *key;
     json_t *arg, *val;
     size_t i;
 
@@ -3060,62 +3064,83 @@ EXPORTED void jmap_query_parse(json_t *jargs, struct jmap_parser *parser,
     json_t *unsupported_filter = json_array();
     json_t *unsupported_sort = json_array();
 
-    /* filter */
-    arg = json_object_get(jargs, "filter");
-    if (json_is_object(arg)) {
-        jmap_parser_push(parser, "filter");
-        jmap_filter_parse(arg, parser, filter_cb, unsupported_filter, filter_rock);
-        jmap_parser_pop(parser);
-        query->filter = arg;
-    }
-    else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "filter");
-    }
-
-    /* sort */
-    arg = json_object_get(jargs, "sort");
-    if (json_is_array(arg)) {
-        json_array_foreach(arg, i, val) {
-            jmap_parser_push_index(parser, "sort", i, NULL);
-            jmap_parse_comparator(val, parser, comp_cb, unsupported_sort, sort_rock);
-            jmap_parser_pop(parser);
+    json_object_foreach(jargs, key, arg) {
+        if (!strcmp(key, "accountId")) {
+            if (json_is_string(arg)) {
+                /* XXX  Need to do something with this */
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "accountId");
+            }
         }
-        if (json_array_size(arg)) {
-            query->sort = arg;
+
+        /* filter */
+        else if (!strcmp(key, "filter")) {
+            if (json_is_object(arg)) {
+                jmap_parser_push(parser, "filter");
+                jmap_filter_parse(arg, parser, filter_cb,
+                                  unsupported_filter, filter_rock);
+                jmap_parser_pop(parser);
+                query->filter = arg;
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "filter");
+            }
         }
-    }
-    else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "sort");
-    }
 
-    arg = json_object_get(jargs, "position");
-    if (json_is_integer(arg)) {
-        query->position = json_integer_value(arg);
-    }
-    else if (arg) {
-        jmap_parser_invalid(parser, "position");
-    }
+        /* sort */
+        else if (!strcmp(key, "sort")) {
+            if (json_is_array(arg)) {
+                json_array_foreach(arg, i, val) {
+                    jmap_parser_push_index(parser, "sort", i, NULL);
+                    jmap_parse_comparator(val, parser, comp_cb, unsupported_sort, sort_rock);
+                    jmap_parser_pop(parser);
+                }
+                if (json_array_size(arg)) {
+                    query->sort = arg;
+                }
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "sort");
+            }
+        }
 
-    arg = json_object_get(jargs, "anchor");
-    if (json_is_string(arg)) {
-        query->anchor = json_string_value(arg);
-    } else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "anchor");
-    }
+        else if (!strcmp(key, "position")) {
+            if (json_is_integer(arg)) {
+                query->position = json_integer_value(arg);
+            }
+            else if (arg) {
+                jmap_parser_invalid(parser, "position");
+            }
+        }
 
-    arg = json_object_get(jargs, "anchorOffset");
-    if (json_is_integer(arg)) {
-        query->anchor_offset = json_integer_value(arg);
-    } else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "anchorOffset");
-    }
+        else if (!strcmp(key, "anchor")) {
+            if (json_is_string(arg)) {
+                query->anchor = json_string_value(arg);
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "anchor");
+            }
+        }
 
-    arg = json_object_get(jargs, "limit");
-    if (json_is_integer(arg) && json_integer_value(arg) >= 0) {
-        query->limit = json_integer_value(arg);
-        query->have_limit = 1;
-    } else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "limit");
+        else if (!strcmp(key, "anchorOffset")) {
+            if (json_is_integer(arg)) {
+                query->anchor_offset = json_integer_value(arg);
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "anchorOffset");
+            }
+        }
+
+        else if (!strcmp(key, "limit")) {
+            if (json_is_integer(arg) && json_integer_value(arg) >= 0) {
+                query->limit = json_integer_value(arg);
+                query->have_limit = 1;
+            } else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "limit");
+            }
+        }
+
+        else if (!args_parse || !args_parse(key, arg, parser, args_rock)) {
+            jmap_parser_invalid(parser, key);
+        }
     }
 
     if (json_array_size(parser->invalid)) {
