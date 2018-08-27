@@ -130,7 +130,11 @@ extern int  jmap_mboxlist(jmap_req_t *req, mboxlist_cb *proc, void *rock);
 /* Request-scoped cache of mailbox rights for authenticated user */
 
 extern int  jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry);
+extern int  jmap_hasrights(jmap_req_t *req, const mbentry_t *mbentry,
+                           int rights);
 extern int  jmap_myrights_byname(jmap_req_t *req, const char *mboxname);
+extern int  jmap_hasrights_byname(jmap_req_t *req, const char *mboxname,
+                                  int rights);
 extern void jmap_myrights_delete(jmap_req_t *req, const char *mboxname);
 
 /* Blob services */

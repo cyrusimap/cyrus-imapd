@@ -2394,6 +2394,15 @@ EXPORTED int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
     return *rightsptr;
 }
 
+// gotta have them all
+EXPORTED int jmap_hasrights(jmap_req_t *req, const mbentry_t *mbentry,
+                            int rights)
+{
+    int myrights = jmap_myrights(req, mbentry);
+    if ((myrights & rights) == rights) return 1;
+    return 0;
+}
+
 EXPORTED int jmap_myrights_byname(jmap_req_t *req, const char *mboxname)
 {
     int *rightsptr = hash_lookup(mboxname, req->mboxrights);
@@ -2416,6 +2425,14 @@ EXPORTED int jmap_myrights_byname(jmap_req_t *req, const char *mboxname)
     return *rightsptr;
 }
 
+// gotta have them all
+EXPORTED int jmap_hasrights_byname(jmap_req_t *req, const char *mboxname,
+                                   int rights)
+{
+    int myrights = jmap_myrights_byname(req, mboxname);
+    if ((myrights & rights) == rights) return 1;
+    return 0;
+}
 
 EXPORTED void jmap_myrights_delete(jmap_req_t *req, const char *mboxname)
 {
