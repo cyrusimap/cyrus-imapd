@@ -154,6 +154,8 @@ struct jmap_querychanges {
     const char *since_queryState;
     size_t max_changes;
     const char *up_to_id;
+    int calculate_total;
+
     /* Response fields */
     char *new_queryState;
     size_t total;
@@ -232,6 +234,14 @@ static void jmap_querychanges_parse(json_t *jargs,
         query->up_to_id = json_string_value(arg);
     } else if (JNOTNULL(arg)) {
         jmap_parser_invalid(parser, "upToId");
+    }
+
+    /* calculateTotal */
+    arg = json_object_get(jargs, "calculateTotal");
+    if (json_is_boolean(arg)) {
+        query->calculate_total = json_boolean_value(arg);
+    } else if (JNOTNULL(arg)) {
+        jmap_parser_invalid(parser, "calculateTotal");
     }
 
     if (json_array_size(parser->invalid)) {
