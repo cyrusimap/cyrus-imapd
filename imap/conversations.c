@@ -205,6 +205,7 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, stru
     for (open = open_conversations; open; open = open->next) {
         if (!strcmp(open->s.path, fname))
             return IMAP_CONVERSATIONS_ALREADY_OPEN;
+        syslog(LOG_NOTICE, "conversations_open_path: opening %s over %s", fname, open->s.path);
     }
 
     open = xzmalloc(sizeof(struct conversations_open));
