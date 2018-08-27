@@ -355,11 +355,10 @@ enum shared_mbox_type { _MBOX_HIDDEN, _MBOX_PARENT, _MBOX_SHARED };
 static int _shared_mboxes_cb(const mbentry_t *mbentry, void *rock)
 {
     struct shared_mboxes *sm = rock;
+    int needrights = ACL_LOOKUP|ACL_READ;
 
-    int rights = jmap_myrights(sm->req, mbentry);
-    if ((rights & (ACL_LOOKUP|ACL_READ)) == (ACL_LOOKUP|ACL_READ)) {
+    if (jmap_hasrights(sm->req, mbentry, needrights))
         strarray_append(&sm->mboxes, mbentry->name);
-    }
 
     return 0;
 }
@@ -656,7 +655,6 @@ static json_t *_mbox_get(jmap_req_t *req,
                          enum shared_mbox_type share_type)
 {
     unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
-    int rights;
     int is_inbox = 0, parent_is_inbox = 0;
     int r = 0;
     mbname_t *mbname = mbname_from_intname(mbentry->name);
@@ -665,7 +663,7 @@ static json_t *_mbox_get(jmap_req_t *req,
     json_t *obj = NULL;
 
     /* Determine rights */
-    rights = jmap_myrights(req, mbentry);
+    int rights = jmap_myrights(req, mbentry);
 
     /* INBOX requires special treatment */
     switch (strarray_size(mbname_boxes(mbname))) {
@@ -725,8 +723,7 @@ static json_t *_mbox_get(jmap_req_t *req,
 
         int mayRename = 0;
         if (!is_inbox && (rights & ACL_DELETEMBOX)) {
-            int parent_rights = jmap_myrights(req, parent);
-            mayRename = parent_rights & ACL_CREATE;
+            mayRename = jmap_hasrights(req, parent, ACL_CREATE);
         }
         json_object_set_new(jrights, "mayRename", json_boolean(mayRename));
 
@@ -1857,7 +1854,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
                          char **mboxid, struct mboxset_result *result)
 {
     char *mboxname = NULL, *parentname = NULL;
-    int r = 0, rights = 0;
+    int r = 0;
     mbentry_t *mbinbox = NULL, *mbparent = NULL, *mbentry = NULL;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
 
@@ -1893,8 +1890,8 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
                 parentname, error_message(r));
         goto done;
     }
-    rights = jmap_myrights(req, mbparent);
-    if (!(rights & ACL_CREATE)) {
+
+    if (!jmap_hasrights(req, mbparent, ACL_CREATE)) {
         jmap_parser_invalid(&parser, "parentId");
         goto done;
     }
@@ -1989,7 +1986,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 {
     /* So many names... manage them in our own string pool */
     ptrarray_t strpool = PTRARRAY_INITIALIZER;
-    int r = 0, rights = 0;
+    int r = 0;
     mbentry_t *mbinbox = NULL, *mbentry = NULL, *mbparent = NULL;
     mboxlist_lookup(req->inboxname, &mbinbox, NULL);
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -2047,8 +2044,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     /* Check ACL */
     ptrarray_append(&strpool, oldmboxname);
     mboxlist_lookup(oldmboxname, &mbentry, NULL);
-    rights = jmap_myrights(req, mbentry);
-    if (!(rights & ACL_WRITE)) {
+    if (!jmap_hasrights(req, mbentry, ACL_WRITE)) {
         result->err = json_pack("{s:s}", "type", "readOnly");
         goto done;
     }
@@ -2087,7 +2083,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         /* Is this a move ot a new parent? */
         if (strcmpsafe(oldparentname, newparentname) || was_toplevel != new_toplevel) {
             /* Check ACL of mailbox */
-            if (!(rights & ACL_DELETEMBOX)) {
+            if (!jmap_hasrights_byname(req, oldparentname, ACL_DELETEMBOX)) {
                 result->err = json_pack("{s:s}", "type", "readOnly");
                 goto done;
             }
@@ -2097,8 +2093,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             mboxlist_lookup(newparentname, &mbparent, NULL);
 
             /* Check ACL of new parent */
-            int parent_rights = jmap_myrights(req, mbparent);
-            if (!(parent_rights & ACL_CREATE)) {
+            if (!jmap_hasrights(req, mbparent, ACL_CREATE)) {
                 jmap_parser_invalid(&parser, "parentId");
                 goto done;
             }
@@ -2213,7 +2208,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
                           enum mboxset_runmode mode,
                           struct mboxset_result *result)
 {
-    int r = 0, rights = 0;
+    int r = 0;
     char *mboxname = NULL;
     mbentry_t *mbinbox = NULL, *mbentry = NULL;
     mboxlist_lookup(req->inboxname, &mbinbox, NULL);
@@ -2233,8 +2228,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
 
     /* Check ACL */
     mboxlist_lookup(mboxname, &mbentry, NULL);
-    rights = jmap_myrights(req, mbentry);
-    if (!(rights & ACL_DELETEMBOX)) {
+    if (!jmap_hasrights(req, mbentry, ACL_DELETEMBOX)) {
         result->err = json_pack("{s:s}", "type", "forbidden");
         goto done;
     }
@@ -3039,10 +3033,9 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
 
     /* OK, report that update. Note that we even report hidden mailboxes
      * in order to allow clients remove unshared and deleted mailboxes */
-    int rights = jmap_myrights(req, mbentry);
     json_t *dest = NULL;
 
-    if ((mbentry->mbtype & MBTYPE_DELETED) || !(rights & ACL_LOOKUP)) {
+    if ((mbentry->mbtype & MBTYPE_DELETED) || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
         if (mbentry->createdmodseq <= data->since_modseq)
             dest = data->destroyed;
     } else {
@@ -3679,9 +3672,9 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
 
     if (rec->part) return 0;
 
-    static int need_rights = ACL_READ|ACL_LOOKUP;
-    int rights = jmap_myrights_byname(req, rec->mboxname);
-    if ((rights & need_rights) != need_rights) return 0;
+    static int needrights = ACL_READ|ACL_LOOKUP;
+    if (!jmap_hasrights_byname(req, rec->mboxname, needrights))
+        return 0;
 
     r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
     if (r) return r;
@@ -4209,17 +4202,10 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
         struct mailbox *mbox = NULL;
         msgrecord_t *mr = NULL;
         uint32_t flags;
-        mbentry_t *mbentry = NULL;
 
         /* Make sure we are allowed to read this mailbox */
-        if (mboxlist_lookup(rec->mboxname, &mbentry, NULL)) {
+        if (!jmap_hasrights_byname(req, rec->mboxname, ACL_READ))
             return 0;
-        }
-        int rights = jmap_myrights(req, mbentry);
-        mboxlist_entry_free(&mbentry);
-        if (!(rights & ACL_READ)) {
-            return 0;
-        }
 
         /* Prefer to use messages in already opened mailboxes */
 
@@ -5045,10 +5031,11 @@ static char *emailsearch_getcachepath()
 static int _jmap_checkfolder(const char *mboxname, void *rock)
 {
     jmap_req_t *req = (jmap_req_t *)rock;
-    int rights = jmap_myrights_byname(req, mboxname);
+
     // we only want to look in folders that the user is allowed to read
-    if ((rights & ACL_READ))
+    if (jmap_hasrights_byname(req, mboxname, ACL_READ))
         return 1;
+
     return 0;
 }
 
@@ -6411,11 +6398,9 @@ done:
 static int _thread_is_shared_cb(const conv_guidrec_t *rec, void *rock)
 {
     jmap_req_t *req = rock;
-    static int need_rights = ACL_READ|ACL_LOOKUP;
-    int rights = jmap_myrights_byname(req, rec->mboxname);
-    if ((rights & need_rights) == need_rights) {
+    static int needrights = ACL_READ|ACL_LOOKUP;
+    if (jmap_hasrights_byname(req, rec->mboxname, needrights))
         return IMAP_OK_COMPLETED;
-    }
     return 0;
 }
 
@@ -10804,7 +10789,7 @@ struct email_updateplan {
     ptrarray_t copy;      /* Array of array of email_uidrec, grouped by mailbox */
     ptrarray_t setflags;  /* Array of email_uidrec */
     ptrarray_t delete;    /* Array of email_uidrec */
-    int need_rights;      /* Required ACL bits set */
+    int needrights;       /* Required ACL bits set */
     struct email_mboxrec *mboxrec; /* Mailbox record */
     struct seen *seendb;            /* Seen database for shared mailbox, or NULL */
     struct seendata old_seendata;   /* Lock-read seen data from database */
@@ -10976,7 +10961,7 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
                     if (uidrec) {
                         /* Delete the email from this mailbox. */
                         ptrarray_append(&plan->delete, uidrec);
-                        plan->need_rights |= ACL_EXPUNGE|ACL_DELETEMSG;
+                        plan->needrights |= ACL_EXPUNGE|ACL_DELETEMSG;
                     }
                 }
             }
@@ -10999,7 +10984,7 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
                 else {
                     /* Delete message from mailbox */
                     ptrarray_append(&plan->delete, uidrec);
-                    plan->need_rights |= ACL_EXPUNGE|ACL_DELETEMSG;
+                    plan->needrights |= ACL_EXPUNGE|ACL_DELETEMSG;
                 }
             }
 
@@ -11079,7 +11064,7 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
                 ptrarray_append(&plan->copy, pick_uidrecs);
             }
             ptrarray_append(pick_uidrecs, pick_uidrec);
-            plan->need_rights |= ACL_INSERT;
+            plan->needrights |= ACL_INSERT;
         }
         free_hash_table(&src_mbox_id_counts, NULL);
     }
@@ -11284,9 +11269,9 @@ static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrar
                 if (json_object_size(update->full_keywords)) {
                     int sets_seen = json_object_get(update->full_keywords, "$seen") != NULL;
                     if (sets_seen)
-                        plan->need_rights |= ACL_SETSEEN;
+                        plan->needrights |= ACL_SETSEEN;
                     if (json_object_size(update->full_keywords) > 1 || !sets_seen)
-                        plan->need_rights |= ACL_ANNOTATEMSG;
+                        plan->needrights |= ACL_ANNOTATEMSG;
                 }
             }
         }
@@ -11326,9 +11311,9 @@ static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrar
                 int sets_seen = json_object_get(current_keywords, "$seen") !=
                                 json_object_get(new_keywords, "$seen");
                 if (sets_seen)
-                    plan->need_rights |= ACL_SETSEEN;
+                    plan->needrights |= ACL_SETSEEN;
                 if (!sets_seen || json_object_size(new_keywords) > 1)
-                    plan->need_rights |= ACL_ANNOTATEMSG;
+                    plan->needrights |= ACL_ANNOTATEMSG;
             }
             json_decref(new_keywords);
             json_decref(current_keywords);
@@ -11360,8 +11345,7 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
     hash_iter *iter = hash_table_iter(&bulk->plans_by_mbox_id);
     while (hash_iter_next(iter)) {
         struct email_updateplan *plan = hash_iter_val(iter);
-        int myrights = jmap_myrights_byname(bulk->req, plan->mboxname);
-        if ((myrights & plan->need_rights) != plan->need_rights) {
+        if (!jmap_hasrights_byname(bulk->req, plan->mboxname, plan->needrights)) {
             _email_updateplan_error(plan, IMAP_PERMISSION_DENIED, bulk->set_errors);
             strarray_append(&erroneous_plans, plan->mbox_id);
         }
@@ -11916,25 +11900,14 @@ static void _email_destroy_bulk(jmap_req_t *req,
     if (strcmp(req->accountid, req->userid)) {
         for (i = 0; i < ptrarray_size(mboxrecs); i++) {
             struct email_mboxrec *mboxrec = ptrarray_nth(mboxrecs, i);
-            mbentry_t *mbentry = NULL;
-            int r = mboxlist_lookup(mboxrec->mboxname, &mbentry, NULL);
-            if (!r) {
-                int rights = jmap_myrights(req, mbentry);
-                if (!(rights & ACL_DELETEMSG)) {
-                    r = IMAP_PERMISSION_DENIED;
-                }
-            }
-            mboxlist_entry_free(&mbentry);
-            if (r) {
+            if (!jmap_hasrights_byname(req, mboxrec->mboxname, ACL_DELETEMSG)) {
                 /* Mark all messages of this mailbox as failed */
                 int j;
                 for (j = 0; j < ptrarray_size(&mboxrec->uidrecs); j++) {
                     struct email_uidrec *uidrec = ptrarray_nth(&mboxrec->uidrecs, j);
                     if (!json_object_get(not_destroyed, uidrec->email_id)) {
                         json_object_set_new(not_destroyed, uidrec->email_id,
-                                r == IMAP_PERMISSION_DENIED ?
-                                json_pack("{s:s}", "type", "forbidden") :
-                                jmap_server_error(r));
+                                            json_pack("{s:s}", "type", "forbidden"));
                     }
                 }
                 /* Remove this mailbox from the todo list */
@@ -12080,12 +12053,9 @@ static int msgimport_checkacl_cb(const mbentry_t *mbentry, void *xrock)
     if (!json_object_get(rock->mailboxes, mbentry->uniqueid))
         return 0;
 
-    int rights = jmap_myrights(req, mbentry);
-    int mask = ACL_INSERT|ACL_ANNOTATEMSG;
-
-    if ((rights & mask) != mask) {
+    int needrights = ACL_INSERT|ACL_ANNOTATEMSG;
+    if (!jmap_hasrights(req, mbentry, needrights))
         return IMAP_PERMISSION_DENIED;
-    }
 
     return 0;
 }
@@ -12355,10 +12325,9 @@ static int _email_copy_checkmbox_cb(const mbentry_t *mbentry, void *_rock)
     }
 
     /* Check read-write ACL rights */
-    int want_rights = ACL_LOOKUP|ACL_READ|ACL_WRITE|ACL_INSERT|
-                      ACL_SETSEEN|ACL_ANNOTATEMSG;
-    int rights = jmap_myrights(rock->req, mbentry);
-    if ((rights & want_rights) != want_rights)
+    int needrights = ACL_LOOKUP|ACL_READ|ACL_WRITE|ACL_INSERT|
+                     ACL_SETSEEN|ACL_ANNOTATEMSG;
+    if (!jmap_hasrights(rock->req, mbentry, needrights))
         return IMAP_PERMISSION_DENIED;
 
     /* Mark this mailbox as found */
@@ -13027,7 +12996,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     }
 
     /* Check ACL */
-    if (!(jmap_myrights_byname(req, mboxname) & ACL_READ)) {
+    if (!jmap_hasrights_byname(req, mboxname, ACL_READ)) {
         *set_err = json_pack("{s:s}", "type", "emailNotFound");
         goto done;
     }
