@@ -2705,11 +2705,7 @@ EXPORTED void jmap_get_parse(json_t *jargs,
 
     json_object_foreach(jargs, key, arg) {
         if (!strcmp(key, "accountId")) {
-            if (json_is_string(arg)) {
-                /* XXX  Need to do something with this */
-            } else if (JNOTNULL(arg)) {
-                jmap_parser_invalid(parser, "accountId");
-            }
+            /* already handled in jmap_api() */
         }
 
         else if (!strcmp(key, "ids")) {
@@ -2832,11 +2828,7 @@ EXPORTED void jmap_set_parse(json_t *jargs, struct jmap_parser *parser,
 
     json_object_foreach(jargs, key, arg) {
         if (!strcmp(key, "accountId")) {
-            if (json_is_string(arg)) {
-                /* XXX  Need to do something with this */
-            } else if (JNOTNULL(arg)) {
-                jmap_parser_invalid(parser, "accountId");
-            }
+            /* already handled in jmap_api() */
         }
 
         /* ifInState */
@@ -2970,13 +2962,8 @@ EXPORTED void jmap_changes_parse(json_t *jargs,
     changes->destroyed = json_array();
 
     json_object_foreach(jargs, key, arg) {
-        /* accountId */
         if (!strcmp(key, "accountId")) {
-            if (json_is_string(arg)) {
-                /* XXX  Need to do something with this */
-            } else if (JNOTNULL(arg)) {
-                jmap_parser_invalid(parser, "accountId");
-            }
+            /* already handled in jmap_api() */
         }
 
         /* sinceState */
@@ -3241,11 +3228,7 @@ EXPORTED void jmap_query_parse(json_t *jargs, struct jmap_parser *parser,
 
     json_object_foreach(jargs, key, arg) {
         if (!strcmp(key, "accountId")) {
-            if (json_is_string(arg)) {
-                /* XXX  Need to do something with this */
-            } else if (JNOTNULL(arg)) {
-                jmap_parser_invalid(parser, "accountId");
-            }
+            /* already handled in jmap_api() */
         }
 
         /* filter */
@@ -3404,11 +3387,7 @@ EXPORTED void jmap_querychanges_parse(json_t *jargs,
 
     json_object_foreach(jargs, key, arg) {
         if (!strcmp(key, "accountId")) {
-            if (json_is_string(arg)) {
-                /* XXX  Need to do something with this */
-            } else if (JNOTNULL(arg)) {
-                jmap_parser_invalid(parser, "accountId");
-            }
+            /* already handled in jmap_api() */
         }
 
         /* filter */

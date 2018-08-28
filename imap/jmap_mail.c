@@ -8085,11 +8085,7 @@ static int jmap_email_parse(jmap_req_t *req)
     /* Parse request */
     json_object_foreach(req->args, key, arg) {
         if (!strcmp(key, "accountId")) {
-            if (json_is_string(arg)) {
-                /* XXX  Need to do something with this */
-            } else if (JNOTNULL(arg)) {
-                jmap_parser_invalid(&parser, "accountId");
-            }
+            /* already handled in jmap_api() */
         }
 
         else if (!strcmp(key, "blobIds")) {
@@ -12089,11 +12085,7 @@ static int jmap_email_import(jmap_req_t *req)
     /* Parse request */
     json_object_foreach(req->args, key, arg) {
         if (!strcmp(key, "accountId")) {
-            if (json_is_string(arg)) {
-                /* XXX  Need to do something with this */
-            } else if (JNOTNULL(arg)) {
-                jmap_parser_invalid(&parser, "accountId");
-            }
+            /* already handled in jmap_api() */
         }
 
         else if (!strcmp(key, "emails")) {
