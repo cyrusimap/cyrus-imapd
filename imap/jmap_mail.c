@@ -6185,29 +6185,44 @@ static int _email_filter_contains_text(json_t *filter)
 static int jmap_searchsnippet_get(jmap_req_t *req)
 {
     int r = 0;
-    json_t *filter, *messageids, *val, *snippets, *notfound, *res, *item;
+    const char *key;
+    json_t *arg, *filter = NULL, *messageids = NULL, *snippets, *notfound;
     struct buf buf = BUF_INITIALIZER;
-    size_t i;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
 
     /* Parse and validate arguments. */
     json_t *unsupported_filter = json_pack("[]");
 
-    /* filter */
-    filter = json_object_get(req->args, "filter");
-    if (JNOTNULL(filter)) {
-        jmap_parser_push(&parser, "filter");
-        jmap_filter_parse(filter, &parser, _email_parse_filter, unsupported_filter, req);
-        jmap_parser_pop(&parser);
-    }
+    json_object_foreach(req->args, key, arg) {
+        if (!strcmp(key, "accountId")) {
+            /* already handled in jmap_api() */
+        }
 
-    /* messageIds */
-    messageids = json_object_get(req->args, "emailIds");
-    if (json_array_size(messageids)) {
-        jmap_parse_strings(messageids, &parser, "emailIds");
-    }
-    else if (!json_is_array(messageids)) {
-        jmap_parser_invalid(&parser, "emailIds");
+        /* filter */
+        else if (!strcmp(key, "filter")) {
+            filter = arg;
+            if (JNOTNULL(filter)) {
+                jmap_parser_push(&parser, "filter");
+                jmap_filter_parse(filter, &parser,
+                                  _email_parse_filter, unsupported_filter, req);
+                jmap_parser_pop(&parser);
+            }
+        }
+
+        /* messageIds */
+        else if (!strcmp(key, "emailIds")) {
+            messageids = arg;
+            if (json_array_size(messageids)) {
+                jmap_parse_strings(messageids, &parser, "emailIds");
+            }
+            else if (!json_is_array(messageids)) {
+                jmap_parser_invalid(&parser, "emailIds");
+            }
+        }
+
+        else {
+            jmap_parser_invalid(&parser, key);
+        }
     }
 
     /* Bail out for argument errors */
@@ -6232,6 +6247,9 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
         if (r) goto done;
     } else {
         /* Trivial, snippets cant' match */
+        size_t i;
+        json_t *val;
+
         snippets = json_pack("[]");
         notfound = json_null();
 
@@ -6243,17 +6261,10 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     }
 
     /* Prepare response. */
-    res = json_pack("{}");
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    json_object_set_new(res, "list", snippets);
-    json_object_set_new(res, "notFound", notfound);
-    json_object_set(res, "filter", filter);
-
-    item = json_pack("[]");
-    json_array_append_new(item, json_string("SearchSnippet/get"));
-    json_array_append_new(item, res);
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
+    jmap_ok(req, json_pack("{s:o s:o s:O}",
+                           "list", snippets,
+                           "notFound", notfound,
+                           "filter", filter));
 
 done:
     jmap_parser_fini(&parser);
