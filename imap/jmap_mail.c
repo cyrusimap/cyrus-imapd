@@ -7341,7 +7341,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
 
     /* size */
     if (_wantprop(bodyprops, "size")) {
-        size_t size;
+        size_t size = 0;
         if (part->numparts && strcasecmp(part->type, "MESSAGE")) {
             /* Multipart */
             size = 0;
