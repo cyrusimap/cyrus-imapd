@@ -5775,8 +5775,7 @@ static int jmap_email_querychanges(jmap_req_t *req)
 
     /* Build response */
     json_t *res = jmap_querychanges_reply(&query);
-    json_object_set(res, "collapseThreads",
-            json_object_get(req->args, "collapseThreads"));
+    json_object_set(res, "collapseThreads", json_boolean(collapse_threads));
     jmap_ok(req, res);
 
 done:
