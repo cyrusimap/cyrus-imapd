@@ -1755,6 +1755,57 @@ sub test_contact_set_importance_later
     $self->assert_num_equals(-0.1, $fetch->[0][1]{list}[0]{"x-importance"});
 }
 
+sub test_contact_set_importance_shared
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+    my $admintalk = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service("http");
+
+    xlog "create shared account";
+    $admintalk->create("user.manifold");
+
+    my $mantalk = Net::CardDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+    xlog "share to user";
+    $admintalk->setacl("user.manifold.#addressbooks.Default", "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog "create contact";
+    my $res = $jmap->CallMethods([['Contact/set', {
+                    accountId => 'manifold',
+                    create => {"1" => {firstName => "first", lastName => "last"}}
+    }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    $admintalk->setacl("user.manifold.#addressbooks.Default", "cassandane" => 'lrsn') or die;
+
+    xlog "update importance";
+    $res = $jmap->CallMethods([['Contact/set', {
+                    accountId => 'manifold',
+                    update => {$id => {"x-importance" => -0.1}}
+    }, "R2"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Contact/set', $res->[0][0]);
+    $self->assert_str_equals('R2', $res->[0][2]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+}
+
 sub test_contact_set_importance_upfront
     :min_version_3_1 :needs_component_jmap
 {
