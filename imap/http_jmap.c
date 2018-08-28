@@ -3119,8 +3119,8 @@ EXPORTED void jmap_copy_fini(struct jmap_copy *copy)
 EXPORTED json_t *jmap_copy_reply(struct jmap_copy *copy)
 {
     json_t *res = json_object();
-    json_object_set(res, "fromAccountId", json_string(copy->from_account_id));
-    json_object_set(res, "toAccountId", json_string(copy->to_account_id));
+    json_object_set_new(res, "fromAccountId", json_string(copy->from_account_id));
+    json_object_set_new(res, "toAccountId", json_string(copy->to_account_id));
     json_object_set(res, "created", json_object_size(copy->created) ?
                     copy->created : json_null());
     json_object_set(res, "notCreated", json_object_size(copy->not_created) ?
