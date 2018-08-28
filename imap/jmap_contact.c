@@ -3004,6 +3004,7 @@ static int setContacts(struct jmap_req *req)
         r = carddav_lookup_uid(db, uid, &cdata);
         uint32_t olduid;
         char *resource = NULL;
+        int do_move = 0;
 
         if (r || !cdata || !cdata->dav.imap_uid
             || cdata->kind != CARDDAV_KIND_CONTACT) {
@@ -3011,24 +3012,6 @@ static int setContacts(struct jmap_req *req)
             json_t *err = json_pack("{s:s}", "type", "notFound");
             json_object_set_new(set.not_updated, uid, err);
             continue;
-        }
-
-        if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_WRITE)) {
-            json_t *err = json_pack("{s:s s:[s]}",
-                                    "type", "invalidProperties",
-                                    "properties", "addressbookId");
-            json_object_set_new(set.not_updated, uid, err);
-            continue;
-        }
-
-        if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
-            jmap_closembox(req, &mailbox);
-            r = jmap_openmbox(req, cdata->dav.mailbox, &mailbox, 1);
-            if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to open %s",
-                       cdata->dav.mailbox);
-                goto done;
-            }
         }
 
         json_t *abookid = json_object_get(arg, "addressbookId");
@@ -3050,8 +3033,53 @@ static int setContacts(struct jmap_req *req)
                     syslog(LOG_ERR, "IOERROR: failed to open %s", mboxname);
                     goto done;
                 }
+                do_move = 1;
             }
             json_object_del(arg, "addressbookId");
+        }
+
+        int needrights = DACL_READ;
+        if (do_move) {
+            needrights += DACL_RMRSRC;
+        }
+        else {
+            json_t *jval;
+            json_object_foreach(arg, key, jval) {
+                if (!strcmp(key, "id") ||
+                    !strcmp(key, "x-href") ||
+                    !strcmp(key, "x-hasPhoto")) {
+                    /* server-set properties - value checked laater */
+                }
+                else if (!strcmp(key, "importance") ||
+                         !strcmp(key, "x-importance")) {
+                    /* updating shared meta-data (per RFC 5257) */
+                    needrights += DACL_PROPRSRC;
+                }
+                else if (!strcmp(key, "isFlagged")) {
+                    /* updating private meta-data */
+                    needrights += DACL_PROPCOL;
+                }
+                else {
+                    /* actually upating the vCard */
+                    needrights += DACL_WRITECONT | DACL_RMRSRC;
+                }
+            }
+        }
+
+        if (!jmap_hasrights_byname(req, cdata->dav.mailbox, needrights)) {
+            json_t *err = json_pack("{s:s}", "type", "forbidden");
+            json_object_set_new(set.not_updated, uid, err);
+            continue;
+        }
+
+        if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
+            jmap_closembox(req, &mailbox);
+            r = jmap_openmbox(req, cdata->dav.mailbox, &mailbox, 1);
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to open %s",
+                       cdata->dav.mailbox);
+                goto done;
+            }
         }
 
         struct index_record record;
@@ -3173,7 +3201,7 @@ static int setContacts(struct jmap_req *req)
         }
         olduid = cdata->dav.imap_uid;
 
-        if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_WRITE)) {
+        if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_RMRSRC)) {
             int rights = jmap_myrights_byname(req, cdata->dav.mailbox);
             json_t *err = json_pack("{s:s}", "type",
                                     rights & ACL_READ ?
