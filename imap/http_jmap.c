@@ -571,7 +571,7 @@ static json_t *extract_value(json_t *val, const char *path, ptrarray_t *pool)
     return val;
 }
 
-static int process_resultrefs(json_t *args, json_t *resp)
+static int process_resultrefs(json_t *args, json_t *resp, json_t **err)
 {
     json_t *ref;
     const char *arg;
@@ -581,6 +581,12 @@ static int process_resultrefs(json_t *args, json_t *resp)
     json_object_foreach_safe(args, tmp, arg, ref) {
         if (*arg != '#' || *(arg+1) == '\0') {
             continue;
+        }
+
+        if (json_object_get(args, arg + 1)) {
+            *err = json_pack("{s:s, s:[s]}",
+                             "type", "invalidArguments", "arguments", arg);
+            goto fail;
         }
 
         const char *of, *path, *name;
@@ -640,7 +646,7 @@ static int process_resultrefs(json_t *args, json_t *resp)
 
     return 0;
 
-fail:
+  fail:
     return ret;
 }
 
@@ -849,6 +855,7 @@ static int jmap_api(struct transaction_t *txn, json_t **res)
         const char *mname = json_string_value(json_array_get(mc, 0));
         json_t *args = json_array_get(mc, 1), *arg;
         const char *tag = json_string_value(json_array_get(mc, 2));
+        json_t *err = NULL;
         int r = 0;
 
         strarray_append(&methods, mname);
@@ -887,9 +894,10 @@ static int jmap_api(struct transaction_t *txn, json_t **res)
         inboxname = mboxname_user_mbox(accountid, NULL);
 
         /* Pre-process result references */
-        if (process_resultrefs(args, resp)) {
-            json_array_append_new(resp, json_pack("[s,{s:s},s]",
-                        "error", "type", "resultReference", tag));
+        if (process_resultrefs(args, resp, &err)) {
+            if (!err) err = json_pack("{s:s}", "type", "resultReference");
+
+            json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
             continue;
         }
 
