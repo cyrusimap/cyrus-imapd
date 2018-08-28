@@ -2859,6 +2859,37 @@ static int _json_to_card(struct jmap_req *req,
     return 0;
 }
 
+static int required_set_rights(json_t *props)
+{
+    int needrights = 0;
+    const char *name;
+    json_t *val;
+
+    json_object_foreach(props, name, val) {
+        if (!strcmp(name, "id") ||
+            !strcmp(name, "x-href") ||
+            !strcmp(name, "x-hasPhoto") ||
+            !strcmp(name, "addressbookId")) {
+            /* immutable */
+        }
+        else if (!strcmp(name, "importance") ||
+                 !strcmp(name, "x-importance")) {
+            /* writing shared meta-data (per RFC 5257) */
+            needrights |= DACL_PROPRSRC;
+        }
+        else if (!strcmp(name, "isFlagged")) {
+            /* writing private meta-data */
+            needrights |= DACL_PROPCOL;
+        }
+        else {
+            /* writing vCard data */
+            needrights |= DACL_WRITECONT | DACL_RMRSRC;
+        }
+    }
+
+    return needrights;
+}
+
 static int setContacts(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -2931,7 +2962,9 @@ static int setContacts(struct jmap_req *req)
         json_object_del(arg, "addressbookId");
         addressbookId = NULL;
 
-        if (!jmap_hasrights_byname(req, mboxname, DACL_WRITE)) {
+        int needrights = required_set_rights(arg);
+
+        if (!jmap_hasrights_byname(req, mboxname, needrights)) {
             json_t *err = json_pack("{s:s s:[s]}",
                                     "type", "invalidProperties",
                                     "properties", "addressbookId");
@@ -3038,33 +3071,8 @@ static int setContacts(struct jmap_req *req)
             json_object_del(arg, "addressbookId");
         }
 
-        int needrights = DACL_READ;
-        if (do_move) {
-            needrights += DACL_RMRSRC;
-        }
-        else {
-            json_t *jval;
-            json_object_foreach(arg, key, jval) {
-                if (!strcmp(key, "id") ||
-                    !strcmp(key, "x-href") ||
-                    !strcmp(key, "x-hasPhoto")) {
-                    /* server-set properties - value checked laater */
-                }
-                else if (!strcmp(key, "importance") ||
-                         !strcmp(key, "x-importance")) {
-                    /* updating shared meta-data (per RFC 5257) */
-                    needrights += DACL_PROPRSRC;
-                }
-                else if (!strcmp(key, "isFlagged")) {
-                    /* updating private meta-data */
-                    needrights += DACL_PROPCOL;
-                }
-                else {
-                    /* actually upating the vCard */
-                    needrights += DACL_WRITECONT | DACL_RMRSRC;
-                }
-            }
-        }
+        int needrights = do_move ?
+            (DACL_READ | DACL_RMRSRC) : required_set_rights(arg);
 
         if (!jmap_hasrights_byname(req, cdata->dav.mailbox, needrights)) {
             json_t *err = json_pack("{s:s}", "type", "forbidden");
