@@ -182,7 +182,7 @@ sub _fmjmap_err
 {
     my ($self, $cmd, %args) = @_;
     my $res = $self->_fmjmap_req($cmd, %args);
-    $self->assert_str_equals($res->[0], "error");
+    $self->assert_str_equals("error", $res->[0]);
     return $res->[1];
 }
 
@@ -259,6 +259,25 @@ sub test_ajaxui_jmapcontacts_contactgroup_set
     my $sgroupid = $res->{created}{"k2520"}{id};
     $self->assert_not_null($sgroupid);
 
+    xlog "create invalid shared contact group";
+    $res = $self->_fmjmap_ok('ContactGroup/set',
+        accountId => 'masteruser',
+        create => {
+            "k2521" => {
+                name => "invalid group",
+                addressbookId => 'Default',
+                contactIds => [],
+                otherAccountContactIds => {},
+            },
+        },
+        update => {},
+        destroy => [],
+    );
+
+    $self->assert_not_null($res->{notCreated}{"k2521"});
+    $self->assert_null($res->{created}{"k2521"});
+
+    # now let's create a contact and put it in the event...
 }
 
 1;
