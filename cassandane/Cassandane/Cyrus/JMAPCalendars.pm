@@ -433,21 +433,6 @@ sub test_calendar_set_shared
     xlog "share calendar read-only to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lr') or die;
 
-    xlog "update calendar (should fail)";
-    $res = $jmap->CallMethods([
-            ['Calendar/set', {
-                    accountId => 'manifold',
-                    update => {$CalendarId => {
-                            name => "bar",
-                            isVisible => \0
-            }}}, "R1"]
-    ]);
-    $self->assert(exists $res->[0][1]{notUpdated}{$CalendarId});
-    $self->assert_str_equals($res->[0][1]{notUpdated}{$CalendarId}{type}, "accountReadOnly");
-
-    xlog "share read-writable to user";
-    $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lrswipkxtecdn') or die;
-
     xlog "update calendar";
     $res = $jmap->CallMethods([
             ['Calendar/set', {
@@ -459,9 +444,6 @@ sub test_calendar_set_shared
     ]);
     $self->assert_str_equals($res->[0][1]{accountId}, 'manifold');
     $self->assert(exists $res->[0][1]{updated}{$CalendarId});
-
-    xlog "share read-only to user";
-    $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lr') or die;
 
     xlog "destroy calendar $CalendarId (should fail)";
     $res = $jmap->CallMethods([['Calendar/set', {accountId => 'manifold', destroy => [$CalendarId]}, "R1"]]);
