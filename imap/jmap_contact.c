@@ -630,6 +630,7 @@ static int jmap_contacts_updates(struct jmap_req *req, int kind)
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
     carddav_close(db);
+    free(mboxname);
 
     return r;
 }
@@ -1211,7 +1212,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         double val = 0;
         const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
 
-        buf_reset(&buf);
+        buf_free(&buf);
         annotatemore_msg_lookup(mboxname, record->uid,
                                 ns, "", &buf);
         if (buf.len)
@@ -1225,7 +1226,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         double val = 0;
         const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
 
-        buf_reset(&buf);
+        buf_free(&buf);
         annotatemore_msg_lookup(mboxname, record->uid,
                                 ns, "", &buf);
         if (buf.len)
@@ -2659,11 +2660,11 @@ static int _json_to_card(struct jmap_req *req,
                 continue;
             }
             else if (!strcmp(key, "x-href")) {
-                if (strcmpnull(json_string_value(jval),
-                               jmap_xhref(cdata->dav.mailbox,
-                                          cdata->dav.resource))) {
+                char *xhref = jmap_xhref(cdata->dav.mailbox, cdata->dav.resource);
+                if (strcmpnull(json_string_value(jval), xhref)) {
                     json_array_append_new(invalid, json_string("x-href"));
                 }
+                free(xhref);
                 continue;
             }
             else if (!strcmp(key, "x-hasPhoto")) {
@@ -2970,6 +2971,7 @@ static int setContacts(struct jmap_req *req)
                                     "properties", "addressbookId");
             json_object_set_new(set.not_created, key, err);
             free(mboxname);
+            free(uid);
             continue;
         }
 
@@ -2985,6 +2987,7 @@ static int setContacts(struct jmap_req *req)
             if (r) {
                 free(mboxname);
                 vparse_free_card(card);
+                free(uid);
                 goto done;
             }
         }
@@ -3003,7 +3006,9 @@ static int setContacts(struct jmap_req *req)
             json_object_set_new(set.not_created, key, err);
             strarray_free(flags);
             freeentryatts(annots);
+            free(mboxname);
             vparse_free_card(card);
+            free(uid);
             continue;
         }
         json_decref(invalid);
@@ -3018,6 +3023,7 @@ static int setContacts(struct jmap_req *req)
         freeentryatts(annots);
 
         if (r) {
+            free(uid);
             goto done;
         }
 
