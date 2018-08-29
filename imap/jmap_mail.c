@@ -6261,10 +6261,10 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     }
 
     /* Prepare response. */
-    jmap_ok(req, json_pack("{s:o s:o s:O}",
-                           "list", snippets,
-                           "notFound", notfound,
-                           "filter", filter));
+    json_t *res = json_pack("{s:o s:o}",
+                            "list", snippets, "notFound", notfound);
+    if (filter) json_object_set(res, "filter", filter);
+    jmap_ok(req, res);
 
 done:
     jmap_parser_fini(&parser);
