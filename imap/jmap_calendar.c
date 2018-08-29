@@ -559,8 +559,6 @@ static int setcalendars_update(jmap_req_t *req,
 
     if (!jmap_hasrights_byname(req, mboxname, DACL_READ))
         return IMAP_MAILBOX_NONEXISTENT;
-    if (!jmap_hasrights_byname(req, mboxname, DACL_WRITE))
-        return IMAP_PERMISSION_DENIED;
 
     r = mailbox_open_iwl(mboxname, &mbox);
     if (r) {
