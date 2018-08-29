@@ -6881,10 +6881,10 @@ done:
 
 static int _cyrusmsg_need_part0(struct cyrusmsg *msg)
 {
-    if (msg->part0 || msg->rfc822part) {
+    if (msg->part0)
         return 0;
-    }
-    if (!msg->mr) return IMAP_INTERNAL;
+    if (!msg->mr)
+        return IMAP_INTERNAL;
 
     int r = msgrecord_get_bodystructure(msg->mr, &msg->_mybody);
     if (r) return r;
@@ -6970,7 +6970,7 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
         }
         if (!strcmp("subject", lcasename)) {
             jval = want_form == HEADER_FORM_TEXT ?
-                _header_as_messageids(part->subject) : json_null();
+                _header_as_text(part->subject) : json_null();
         }
         if (!strcmp("from", lcasename)) {
             jval = want_form == HEADER_FORM_ADDRESSES ?
@@ -7025,7 +7025,7 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
     }
 
     /* Try to read the value from the index record or header cache */
-    if (msg->mr && (!part || part == msg->part0) && !want_all) {
+    if (msg->mr && part == msg->part0 && !want_all && want_form != HEADER_FORM_RAW) {
         if (!msg->_m) {
             int r = msgrecord_get_message(msg->mr, &msg->_m);
             if (r) return json_null();
@@ -7077,9 +7077,6 @@ static int _email_get_meta(jmap_req_t *req,
     char email_id[26];
 
     if (msg->rfc822part) {
-        r = _cyrusmsg_need_part0(msg);
-        if (r) return r;
-
         if (_wantprop(props, "id")) {
             json_object_set_new(email, "id", json_null());
         }
@@ -7253,9 +7250,14 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
         _wantprop(props, "bcc") ||
         _wantprop(props, "subject") ||
         _wantprop(props, "sentAt")) {
-        r = _cyrusmsg_need_part0(msg);
-        if (r) return r;
-        part = msg->rfc822part ? msg->rfc822part->subpart : msg->part0;
+        if (msg->rfc822part) {
+            part = msg->rfc822part->subpart;
+        }
+        else {
+            r = _cyrusmsg_need_part0(msg);
+            if (r) return r;
+            part = msg->part0;
+        }
     }
     /* messageId */
     if (_wantprop(props, "messageId")) {
@@ -7679,9 +7681,15 @@ static int _email_get_bodies(jmap_req_t *req,
     hash_table *props = args->props;
     int r = 0;
 
-    r = _cyrusmsg_need_part0(msg);
-    if (r) return r;
-    const struct body *part = msg->rfc822part ? msg->rfc822part->subpart : msg->part0;
+    const struct body *part;
+    if (msg->rfc822part) {
+        part = msg->rfc822part->subpart;
+    }
+    else {
+        r = _cyrusmsg_need_part0(msg);
+        if (r) return r;
+        part =  msg->part0;
+    }
 
     /* Dissect message into its parts */
     r = _email_extract_bodies(part, &bodies);
