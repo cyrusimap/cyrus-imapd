@@ -7486,7 +7486,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
             const char *s = json_string_value(jrawheader);
             jlanguage = json_array();
             int i;
-            char *tmp = charset_unfold(s, strlen(s) - 1, 0);
+            char *tmp = charset_unfold(s, strlen(s), 0);
             strarray_t *ls = strarray_split(tmp, "\t ,", STRARRAY_TRIM);
             for (i = 0; i < ls->count; i++) {
                 json_array_append_new(jlanguage, json_string(strarray_nth(ls, i)));
