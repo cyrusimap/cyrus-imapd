@@ -267,7 +267,12 @@ static void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond)
     void *cond;
 
     while ((cond = ptrarray_pop(&f->conditions))) {
-        if (freecond) freecond(cond);
+        if (f->op == JMAP_FILTER_OP_NONE) {
+            if (freecond) freecond(cond);
+        }
+        else {
+            jmap_filter_free(cond, freecond);
+        }
     }
     ptrarray_fini(&f->conditions);
     free(f);
@@ -2141,7 +2146,7 @@ static int getContactsList(struct jmap_req *req)
 done:
     jmap_query_fini(&query);
     jmap_parser_fini(&parser);
-    if (rock.filter) jmap_filter_free(rock.filter, contact_filter_free);
+    if (parsed_filter) jmap_filter_free(parsed_filter, contact_filter_free);
     if (db) carddav_close(db);
     return 0;
 }
