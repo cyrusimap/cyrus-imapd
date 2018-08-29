@@ -198,9 +198,10 @@ sub test_ajaxui_jmapcontacts_contactgroup_set
     $admintalk->create("user.masteruser");
     $admintalk->setacl("user.masteruser", admin => 'lrswipkxtecdan');
     $admintalk->setacl("user.masteruser", masteruser => 'lrswipkxtecdn');
-    $admintalk->create("user.masteruser.#addressbooks.Default");
-    $admintalk->create("user.masteruser.#addressbooks.Shared");
-    $admintalk->setacl("user.masteruser.#addressbooks.Default", "cassandane" => 'lrswipkxtecdn') or die;
+    $admintalk->create("user.masteruser.#addressbooks.Default", ['TYPE', 'ADDRESSBOOK']);
+    $admintalk->create("user.masteruser.#addressbooks.Shared", ['TYPE', 'ADDRESSBOOK']);
+    $admintalk->setacl("user.masteruser.#addressbooks.Default", "masteruser" => 'lrswipkxtecdn') or die;
+    $admintalk->setacl("user.masteruser.#addressbooks.Shared", "masteruser" => 'lrswipkxtecdn') or die;
     $admintalk->setacl("user.masteruser.#addressbooks.Shared", "cassandane" => 'lrswipkxtecdn') or die;
 
     my $mastertalk = Net::CardDAVTalk->new(
@@ -213,8 +214,11 @@ sub test_ajaxui_jmapcontacts_contactgroup_set
         expandurl => 1,
     );
 
+    my $res;
+
     xlog "create contact group";
-    my $res = $self->_fmjmap_ok('ContactGroup/set',
+    $res = $self->_fmjmap_ok('ContactGroup/set',
+        accountId => 'cassandane',
         create => {
             "k2519" => {
                 name => "personal group",
@@ -228,8 +232,32 @@ sub test_ajaxui_jmapcontacts_contactgroup_set
         update => {},
         destroy => [],
     );
-    my $groupid = $res->{created}{"k2519"};
+    my $groupid = $res->{created}{"k2519"}{id};
     $self->assert_not_null($groupid);
+
+    $res = $self->_fmjmap_ok('ContactGroup/get',
+        ids => [$groupid],
+    );
+
+    $self->assert_num_equals(1, scalar @{$res->{list}});
+    # check the rest?
+
+    xlog "create contact group";
+    $res = $self->_fmjmap_ok('ContactGroup/set',
+        accountId => 'masteruser',
+        create => {
+            "k2520" => {
+                name => "shared group",
+                addressbookId => 'Shared',
+                contactIds => [],
+                otherAccountContactIds => {},
+            },
+        },
+        update => {},
+        destroy => [],
+    );
+    my $sgroupid = $res->{created}{"k2520"}{id};
+    $self->assert_not_null($sgroupid);
 
 }
 
