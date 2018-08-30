@@ -2117,10 +2117,13 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
 
     /* method */
     if (wantprop(ctx, "method")) {
-        icalproperty_method icalmethod = icalcomponent_get_method(comp);
-        if (icalmethod != ICAL_METHOD_NONE) {
-            const char *method = icalenum_method_to_string(icalmethod);
-            json_object_set_new(event, "method", json_string(method));
+        icalcomponent *ical = icalcomponent_get_parent(comp);
+        if (ical) {
+            icalproperty_method icalmethod = icalcomponent_get_method(ical);
+            if (icalmethod != ICAL_METHOD_NONE) {
+                const char *method = icalenum_method_to_string(icalmethod);
+                json_object_set_new(event, "method", json_string(method));
+            }
         }
     }
 
@@ -4238,7 +4241,8 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     if (pe > 0) {
         icalproperty_method icalmethod = icalenum_string_to_method(method);
         if (icalmethod != ICAL_METHOD_NONE) {
-            icalcomponent_set_method(comp, icalmethod);
+            icalcomponent *ical = icalcomponent_get_parent(comp);
+            icalcomponent_set_method(ical, icalmethod);
         }
         else {
             invalidprop(ctx, "method");
