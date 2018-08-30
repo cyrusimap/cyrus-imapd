@@ -460,8 +460,9 @@ EXPORTED int msgrecord_get_fname(msgrecord_t *mr, const char **fname)
 EXPORTED int msgrecord_annot_lookup(msgrecord_t *mr, const char *entry,
                                     const char *userid, struct buf *value)
 {
-    int r = msgrecord_need(mr, M_MAILBOX|M_UID);
+    int r = msgrecord_need(mr, M_MAILBOX|M_UID|M_ANNOTATIONS);
     if (r) return r;
+
     return annotatemore_msg_lookup(mr->mbox->name, mr->record.uid, entry, userid, value);
 }
 
@@ -471,7 +472,7 @@ EXPORTED int msgrecord_annot_findall(msgrecord_t *mr,
                                      annotatemore_find_proc_t proc,
                                      void *rock)
 {
-    int r = msgrecord_need(mr, M_MAILBOX|M_UID);
+    int r = msgrecord_need(mr, M_MAILBOX|M_UID|M_ANNOTATIONS);
     if (r) return r;
     return annotatemore_findall(mr->mbox->name, mr->record.uid, entry, /*modseq*/0,
                                 proc, rock, /*flags*/0);
@@ -512,7 +513,7 @@ EXPORTED int msgrecord_annot_writeall(msgrecord_t *mr, struct entryattlist *l)
 EXPORTED int msgrecord_extract_annots(msgrecord_t *mr,
                                       struct entryattlist **annots)
 {
-    int r = msgrecord_need(mr, M_MAILBOX|M_RECORD);
+    int r = msgrecord_need(mr, M_MAILBOX|M_RECORD|M_ANNOTATIONS);
     if (r) return r;
     // XXX - is there a way to get error return?
     *annots = mailbox_extract_annots(mr->mbox, &mr->record);
