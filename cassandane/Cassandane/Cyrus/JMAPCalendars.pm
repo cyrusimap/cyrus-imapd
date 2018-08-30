@@ -980,9 +980,10 @@ sub test_calendarevent_get_relatedto
     $self->assert_not_null($event);
     $self->assert_str_equals($id, $event->{uid});
     $self->assert_deep_equals($event->{relatedTo}, {
-            "first"     => "58ADE31-001",
-            "next"      => "58ADE31-003",
-            "x-unknown" => "foo",
+            "58ADE31-001" => { relation => ['first'] },
+            "58ADE31-003" => { relation => ['next'] },
+            "foo" => { relation => ['x-unknown'] },
+            "bar" => { relation => []},
     });
 }
 
@@ -1539,9 +1540,10 @@ sub test_calendarevent_set_relatedto
         "calendarId" => $calid,
         "uid" => "58ADE31-custom-UID",
         "relatedTo" => {
-            "first" => "uid1",
-            "next"  => "uid2",
-            "x-unknown" => "uid3",
+            "uid1" => { relation => ['first'] },
+            "uid2" => { relation => ['next'] },
+            "uid3" => { relation => ['x-unknown'] },
+            "uid4" => { relation => [] },
         },
         "title"=> "foo",
         "start"=> "2015-11-07T09:00:00",
