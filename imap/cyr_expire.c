@@ -662,9 +662,10 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
 
         if (ctx->args.userid)
             mboxlist_usermboxtree(ctx->args.userid, NULL, expire,
-                                  &ctx->erock, MBOXTREE_DELETED);
+                                  &ctx->erock, MBOXTREE_DELETED|MBOXTREE_TOMBSTONES);
         else
-            mboxlist_allmbox(ctx->args.mbox_prefix, expire, &ctx->erock, 0);
+            mboxlist_allmbox(ctx->args.mbox_prefix, expire, &ctx->erock,
+                             MBOXTREE_TOMBSTONES);
 
         syslog(LOG_NOTICE, "Expired %lu and expunged %lu out of %lu "
                             "messages from %lu mailboxes",
