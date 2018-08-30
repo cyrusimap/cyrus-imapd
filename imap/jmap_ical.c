@@ -1695,22 +1695,23 @@ relatedto_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
          prop;
          prop = icalcomponent_get_next_property(comp, ICAL_RELATEDTO_PROPERTY)) {
 
-        const char *uid, *reltype;
+        const char *uid = NULL, *reltype = NULL;
         char *s = NULL;
-        icalparameter *param;
-
-        param = icalproperty_get_first_parameter(prop, ICAL_RELTYPE_PARAMETER);
-        if (!param) continue;
-
-        reltype = icalparameter_get_xvalue(param);
-        if (!reltype || !strlen(reltype)) continue;
+        icalparameter *param = NULL;
 
         uid = icalproperty_get_value_as_string(prop);
         if (!uid || !strlen(uid)) continue;
 
-        s = lcase(xstrdup(reltype));
-        json_object_set_new(ret, s, json_string(uid));
-        free(s);
+        param = icalproperty_get_first_parameter(prop, ICAL_RELTYPE_PARAMETER);
+        if (param) reltype = icalparameter_get_xvalue(param);
+
+        json_t *relation = json_array();
+        if (reltype && *reltype) {
+            s = lcase(xstrdup(reltype));
+            json_array_append_new(relation, json_string(s));
+            free(s);
+        }
+        json_object_set_new(ret, uid, json_pack("{s:o}", "relation", relation));
     }
 
     if (!json_object_size(ret)) {
@@ -3644,8 +3645,6 @@ relatedto_to_ical(context_t *ctx, icalcomponent *comp, json_t *related)
 {
     icalproperty *prop, *next;
     icalparameter *param;
-    json_t *to;
-    const char *reltype;
 
     /* Purge existing relatedTo properties from component */
     for (prop = icalcomponent_get_first_property(comp, ICAL_RELATEDTO_PROPERTY);
@@ -3657,27 +3656,40 @@ relatedto_to_ical(context_t *ctx, icalcomponent *comp, json_t *related)
         icalproperty_free(prop);
     }
 
+    beginprop(ctx, "relatedTo");
     /* Add relatedTo */
-    json_object_foreach(related, reltype, to) {
-        const char *uid = json_string_value(to);
+    const char *uid = NULL;
+    json_t *relatedTo = NULL;
+    json_object_foreach(related, uid, relatedTo) {
+        if (json_object_size(relatedTo) != 1) {
+            invalidprop(ctx, uid);
+            continue;
+        }
+        json_t *relation = json_object_get(relatedTo, "relation");
+        if (!json_is_array(relation) || json_array_size(relation) > 1) {
+            invalidprop(ctx, uid);
+            continue;
+        }
+        const char *reltype = NULL;
+        if (json_array_size(relation)) {
+            reltype = json_string_value(json_array_get(relation, 0));
+            if (!reltype) {
+                invalidprop(ctx, uid);
+                continue;
+            }
+        }
 
-        beginprop_key(ctx, "relatedTo", reltype);
-
-        /* Validate uid and reltype */
-        if (uid && strlen(uid) && strlen(reltype)) {
-            prop = icalproperty_new_relatedto(uid);
-            param = icalparameter_new(ICAL_RELTYPE_PARAMETER);
-
+        prop = icalproperty_new_relatedto(uid);
+        if (reltype) {
             char *s = ucase(xstrdup(reltype));
+            param = icalparameter_new(ICAL_RELTYPE_PARAMETER);
             icalparameter_set_xvalue(param, s);
             icalproperty_add_parameter(prop, param);
-            icalcomponent_add_property(comp, prop);
             free(s);
-        } else {
-            invalidprop(ctx, NULL);
         }
-        endprop(ctx);
+        icalcomponent_add_property(comp, prop);
     }
+    endprop(ctx);
 }
 
 static int
