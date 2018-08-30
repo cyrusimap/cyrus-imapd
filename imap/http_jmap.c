@@ -2704,6 +2704,7 @@ EXPORTED void jmap_get_parse(json_t *jargs,
                                                struct jmap_parser *, void *),
                              void *args_rock,
                              struct jmap_get *get,
+                             int allow_null_ids,
                              json_t **err)
 {
     const char *key;
@@ -2793,6 +2794,20 @@ EXPORTED void jmap_get_parse(json_t *jargs,
     if (json_array_size(parser->invalid)) {
         *err = json_pack("{s:s s:O}", "type", "invalidArguments",
                 "arguments", parser->invalid);
+        return;
+    }
+
+    if (!allow_null_ids && !JNOTNULL(get->ids)) {
+        *err = json_pack("{s:s, s:s}", "type", "requestTooLarge",
+                         "description", "ids must be specified");
+        return;
+    }
+
+    unsigned maxids = config_getint(IMAPOPT_JMAP_MAX_OBJECTS_IN_GET);
+    if (maxids && JNOTNULL(get->ids) && json_array_size(get->ids) > maxids) {
+        *err = json_pack("{s:s, s:s}", "type", "requestTooLarge",
+                         "description", "too many ids specified");
+        return;
     }
 }
 

@@ -229,9 +229,8 @@ extern void jmap_get_parse(json_t *jargs, struct jmap_parser *parser,
                            jmap_req_t *req, const jmap_property_t valid_props[],
                            int (*args_parse)(const char *, json_t *,
                                              struct jmap_parser *, void *),
-                           void *args_rock,
-                           struct jmap_get *get, json_t **err);
-                           
+                           void *args_rock, struct jmap_get *get,
+                           int allow_null_ids, json_t **err);
 extern void jmap_get_fini(struct jmap_get *get);
 extern json_t *jmap_get_reply(struct jmap_get *get);
 

@@ -3472,14 +3472,9 @@ static int jmap_thread_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, thread_props, NULL, NULL, &get, &err);
+    jmap_get_parse(req->args, &parser, req, thread_props, NULL, NULL, &get, 0, &err);
     if (err) {
         jmap_error(req, err);
-        goto done;
-    }
-    /* Refuse to fetch *all* Threads */
-    if (!JNOTNULL(get.ids)) {
-        jmap_error(req, json_pack("{s:s}", "type", "requestTooLarge"));
         goto done;
     }
 
@@ -5276,7 +5271,7 @@ static int jmap_email_get(jmap_req_t *req)
 
     /* Parse request */
     jmap_get_parse(req->args, &parser, req,
-                   email_props, &_email_getargs_parse, &args, &get, &err);
+                   email_props, &_email_getargs_parse, &args, &get, 0, &err);
     if (!err) {
         /* header:Xxx properties */
         json_t *jprops = json_object_get(req->args, "properties");
@@ -5292,18 +5287,6 @@ static int jmap_email_get(jmap_req_t *req)
     }
     if (err) {
         jmap_error(req, err);
-        goto done;
-    }
-
-    /* Refuse to fetch *all* Email */
-    if (!JNOTNULL(get.ids)) {
-        jmap_error(req, json_pack("{s:s}", "type", "requestTooLarge"));
-        goto done;
-    }
-
-    /* Refuse to fetch more than 500 ids at once */
-    if (json_array_size(get.ids) > 500) {
-        jmap_error(req, json_pack("{s:s}", "type", "requestTooLarge"));
         goto done;
     }
 
@@ -9884,7 +9867,7 @@ static int jmap_identity_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, identity_props, NULL, NULL, &get, &err);
+    jmap_get_parse(req->args, &parser, req, identity_props, NULL, NULL, &get, 1, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

@@ -373,7 +373,7 @@ static int getCalendars(struct jmap_req *req)
     } else if (r) return r;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, calendar_props, NULL, NULL, &get, &err);
+    jmap_get_parse(req->args, &parser, req, calendar_props, NULL, NULL, &get, 1, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -1307,7 +1307,7 @@ static int getCalendarEvents(struct jmap_req *req)
     struct getcalendarevents_rock rock = { req, &get, NULL /*mbox*/, checkacl };
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, event_props, NULL, NULL, &get, &err);
+    jmap_get_parse(req->args, &parser, req, event_props, NULL, NULL, &get, 1, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

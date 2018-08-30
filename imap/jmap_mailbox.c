@@ -654,7 +654,7 @@ HIDDEN int jmap_mailbox_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, mailbox_props, NULL, NULL, &get, &err);
+    jmap_get_parse(req->args, &parser, req, mailbox_props, NULL, NULL, &get, 1, &err);
     if (err) {
         jmap_error(req, err);
         jmap_parser_fini(&parser);

@@ -464,7 +464,7 @@ extern int jmap_emailsubmission_get(jmap_req_t *req)
     json_t *err = NULL;
 
     jmap_get_parse(req->args, &parser, req,
-                   submission_props, NULL, NULL, &get, &err);
+                   submission_props, NULL, NULL, &get, 1, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
