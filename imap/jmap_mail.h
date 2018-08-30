@@ -46,10 +46,28 @@
 
 #include <config.h>
 
+#include "hash.h"
 #include "http_jmap.h"
+#include "json_support.h"
+#include "msgrecord.h"
+
+extern int jmap_is_valid_utcdate(const char *s);
+
+extern int jmap_email_find(jmap_req_t *req, const char *email_id,
+                           char **mboxnameptr, uint32_t *uidptr);
+extern int jmap_email_get_with_props(jmap_req_t *req, hash_table *props,
+                                     msgrecord_t *mr, json_t **msgp);
 
 extern char *jmap_mbox_find(jmap_req_t *req, const char *id);
 extern char *jmap_mbox_get_role(jmap_req_t *req, const mbname_t *mbname);
+
+extern int jmap_email_set(jmap_req_t *req);
+
+extern int jmap_emailsubmission_get(jmap_req_t *req);
+extern int jmap_emailsubmission_set(jmap_req_t *req);
+extern int jmap_emailsubmission_changes(jmap_req_t *req);
+extern int jmap_emailsubmission_query(jmap_req_t *req);
+extern int jmap_emailsubmission_querychanges(jmap_req_t *req);
 
 extern int jmap_mailbox_get(jmap_req_t *req);
 extern int jmap_mailbox_set(jmap_req_t *req);
