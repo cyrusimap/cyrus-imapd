@@ -1251,7 +1251,8 @@ imap_httpd_SOURCES += \
 	imap/jmap_contact.c \
 	imap/jmap_ical.c \
 	imap/jmap_ical.h \
-	imap/jmap_mail.c
+	imap/jmap_mail.c\
+	imap/jmap_mailbox.c
 endif
 
 imap_httpd_LDADD = $(LD_SERVER_ADD)
