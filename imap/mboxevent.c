@@ -144,6 +144,8 @@ static struct mboxevent event_template =
     { EVENT_CONVUNSEEN, "vnd.fastmail.convUnseen", EVENT_PARAM_INT, { 0 }, 0 },
     { EVENT_MESSAGE_CID, "vnd.fastmail.cid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_COUNTERS, "vnd.fastmail.counters", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_MESSAGE_EMAILID, "vnd.cmu.emailid", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_MESSAGE_THREADID, "vnd.cmu.threadid", EVENT_PARAM_STRING, { 0 }, 0 },
 
     /* calendar params for calalarmd/notifyd */
     { EVENT_CALENDAR_ALARM_TIME, "alarmTime", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -543,6 +545,12 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     case EVENT_MESSAGE_CID:
         return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_FASTMAIL_CID) &&
                (type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW));
+    case EVENT_MESSAGE_EMAILID:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_EMAILID) &&
+               (type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW));
+    case EVENT_MESSAGE_THREADID:
+        return (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_THREADID) &&
+               (type & (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_NEW));
     case EVENT_MESSAGES:
         if (type & (EVENT_QUOTA_EXCEED|EVENT_QUOTA_WITHIN))
             return 1;
@@ -936,6 +944,32 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
                           xstrdup(conversation_id_encode(record->cid)));
     }
 
+    /* add message EMAILID */
+    if (mboxevent_expected_param(event->type, EVENT_MESSAGE_EMAILID)) {
+        char emailid[26];
+        emailid[0] = 'M';
+        memcpy(emailid+1, message_guid_encode(&record->guid), 24);
+        emailid[25] = '\0';
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, xstrdup(emailid));
+    }
+
+    /* add message THREADID */
+    if (mboxevent_expected_param(event->type, EVENT_MESSAGE_THREADID)) {
+        char threadid[18];
+        if (!record->cid) {
+            threadid[0] = 'N';
+            threadid[0] = 'I';
+            threadid[0] = 'L';
+            threadid[3] = '\0';
+        }
+        else {
+            threadid[0] = 'T';
+            memcpy(threadid+1, conversation_id_encode(record->cid), 16);
+            threadid[17] = '\0';
+        }
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID, xstrdup(threadid));
+    }
+
     /* add vnd.cmu.envelope */
     if (mboxevent_expected_param(event->type, EVENT_ENVELOPE)) {
         FILL_STRING_PARAM(event, EVENT_ENVELOPE,
@@ -1071,6 +1105,42 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         }
         FILL_STRING_PARAM(event, EVENT_MESSAGE_CID,
                           xstrdup(conversation_id_encode(cid)));
+    }
+
+    /* add message EMAILID */
+    if (mboxevent_expected_param(event->type, EVENT_MESSAGE_EMAILID)) {
+        struct message_guid guid;
+        if ((r = msgrecord_get_guid(msgrec, &guid))) {
+            syslog(LOG_ERR, "mboxevent: can't extract guid: %s", error_message(r));
+            return;
+        }
+        char emailid[26];
+        emailid[0] = 'M';
+        memcpy(emailid+1, message_guid_encode(&guid), 24);
+        emailid[25] = '\0';
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_EMAILID, xstrdup(emailid));
+    }
+
+    /* add message THREADID */
+    if (mboxevent_expected_param(event->type, EVENT_MESSAGE_THREADID)) {
+        bit64 cid;
+        if ((r = msgrecord_get_cid(msgrec, &cid))) {
+            syslog(LOG_ERR, "mboxevent: can't extract cid: %s", error_message(r));
+            return;
+        }
+        char threadid[18];
+        if (!cid) {
+            threadid[0] = 'N';
+            threadid[0] = 'I';
+            threadid[0] = 'L';
+            threadid[3] = '\0';
+        }
+        else {
+            threadid[0] = 'T';
+            memcpy(threadid+1, conversation_id_encode(cid), 16);
+            threadid[17] = '\0';
+        }
+        FILL_STRING_PARAM(event, EVENT_MESSAGE_THREADID, xstrdup(threadid));
     }
 
     /* add vnd.cmu.envelope */
