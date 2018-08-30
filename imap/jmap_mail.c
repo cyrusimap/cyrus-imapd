@@ -8935,15 +8935,15 @@ static int _email_set_answered(jmap_req_t *req, const char *inreplyto)
         r = conversation_load(req->cstate, cid, &conv);
         if (r) continue;
         struct conv_thread *thread = conv->thread;
-        do {
+        while (thread) {
             guid = xstrdup(message_guid_encode(&thread->guid));
             r = conversations_guid_foreach(req->cstate, guid, _email_set_answered_cb, &rock);
             if (r) goto done;
-
+            if (rock.found) break;
             thread = thread->next;
             free(guid);
             guid = NULL;
-        } while (!rock.found);
+        }
     }
 done:
     if (conv) conversation_free(conv);
