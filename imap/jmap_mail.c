@@ -7189,6 +7189,17 @@ static int _email_get_meta(jmap_req_t *req,
                 trusted_sender : json_null());
     }
 
+    if (_wantprop(props, "spamScore")) {
+        int r = 0;
+        struct buf buf = BUF_INITIALIZER;
+        json_t *jval = json_null();
+        if (!msg->_m) r = msgrecord_get_message(msg->mr, &msg->_m);
+        if (!r) r = message_get_field(msg->_m, "x-spam-score", MESSAGE_RAW, &buf);
+        if (!r && buf_len(&buf)) jval = json_real(atof(buf_cstring(&buf)));
+        json_object_set_new(email, "spamScore", jval);
+        buf_free(&buf);
+    }
+
 done:
     return r;
 }
@@ -8126,6 +8137,7 @@ static const jmap_property_t email_props[] = {
     { "addedDates",     0 },
     { "removedDates",   0 },
     { "trustedSender",  JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "spamScore",      JMAP_PROP_IMMUTABLE },
     { "calendarEvents", JMAP_PROP_IMMUTABLE },
     { "isDeleted",      0 },
     { "imageSize",      0 },
