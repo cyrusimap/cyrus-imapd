@@ -922,7 +922,7 @@ static int _conversation_save(struct conversations_state *state,
 
 done:
     if (!r)
-        conv->dirty = 0;
+        conv->flags &= ~CONV_ISDIRTY;
 
     return r;
 }
@@ -935,7 +935,7 @@ EXPORTED int conversation_save(struct conversations_state *state,
 
     if (!conv)
         return IMAP_INTERNAL;
-    if (!conv->dirty)
+    if (!(conv->flags & CONV_ISDIRTY))
         return 0;
 
     /* old pre-conversations message, nothing to do */
@@ -1075,7 +1075,7 @@ EXPORTED conv_folder_t *conversation_get_folder(conversation_t *conv,
     folder->number = number;
     folder->next = *nextp;
     *nextp = folder;
-    conv->dirty = 1;
+    conv->flags |= CONV_ISDIRTY;
 
     return folder;
 }
@@ -1221,7 +1221,7 @@ EXPORTED int conversation_parse(struct conversations_state *state,
     conv->prev_unseen = conv->unseen;
 
     dlist_free(&dl);
-    conv->dirty = 0;
+    conv->flags &= ~CONV_ISDIRTY;
     *convp = conv;
     return 0;
 }
@@ -1481,7 +1481,7 @@ static void conversation_update_thread(conversation_t *conv,
         /* we're just removing the thread, this is always sort-safe */
         *nextp = thread->next;
         free(thread);
-        conv->dirty = 1;
+        conv->flags |= CONV_ISDIRTY;
         return;
     }
 
@@ -1491,7 +1491,7 @@ static void conversation_update_thread(conversation_t *conv,
 
     conversations_thread_sort(conv);
     // if we've sorted, it's probably dirty
-    conv->dirty = 1;
+    conv->flags |= CONV_ISDIRTY;
 }
 
 EXPORTED void conversation_update_sender(conversation_t *conv,
@@ -1524,7 +1524,7 @@ EXPORTED void conversation_update_sender(conversation_t *conv,
 
     /* counts first, may be just removing it */
     if (delta_exists <= 0 && (uint32_t)(- delta_exists) >= sender->exists) {
-        conv->dirty = 1;
+        conv->flags |= CONV_ISDIRTY;
         free(sender->name);
         free(sender->route);
         free(sender->mailbox);
@@ -1578,7 +1578,7 @@ EXPORTED void conversation_update_sender(conversation_t *conv,
     sender->next = *nextp;
     *nextp = sender;
 
-    conv->dirty = 1;
+    conv->flags |= CONV_ISDIRTY;
 }
 
 static void _apply_delta(uint32_t *valp, int delta)
@@ -2078,41 +2078,41 @@ EXPORTED void conversation_update(struct conversations_state *state,
     if (delta_num_records) {
         _apply_delta(&conv->num_records, delta_num_records);
         _apply_delta(&folder->num_records, delta_num_records);
-        conv->dirty = 1;
+        conv->flags |= CONV_ISDIRTY;
     }
     if (delta_exists) {
         _apply_delta(&conv->exists, delta_exists);
         _apply_delta(&folder->exists, delta_exists);
-        conv->dirty = 1;
+        conv->flags |= CONV_ISDIRTY;
     }
     if (delta_unseen) {
         _apply_delta(&conv->unseen, delta_unseen);
         _apply_delta(&folder->unseen, delta_unseen);
-        conv->dirty = 1;
+        conv->flags |= CONV_ISDIRTY;
     }
     if (delta_size) {
         _apply_delta(&conv->size, delta_size);
-        conv->dirty = 1;
+        conv->flags |= CONV_ISDIRTY;
     }
     if (state->counted_flags) {
         for (i = 0; i < state->counted_flags->count; i++) {
             if (delta_counts[i]) {
                 _apply_delta(&conv->counts[i], delta_counts[i]);
-                conv->dirty = 1;
+                conv->flags |= CONV_ISDIRTY;
             }
         }
     }
     if (modseq > conv->modseq) {
         conv->modseq = modseq;
-        conv->dirty = 1;
+        conv->flags |= CONV_ISDIRTY;
     }
     if (modseq > folder->modseq) {
         folder->modseq = modseq;
-        conv->dirty = 1;
+        conv->flags |= CONV_ISDIRTY;
     }
     if (createdmodseq && (!conv->createdmodseq || createdmodseq < conv->createdmodseq)) {
         conv->createdmodseq = createdmodseq;
-        conv->dirty = 1;
+        conv->flags |= CONV_ISDIRTY;
     }
 }
 
@@ -2121,7 +2121,7 @@ EXPORTED conversation_t *conversation_new()
     conversation_t *conv;
 
     conv = xzmalloc(sizeof(conversation_t));
-    conv->dirty = 1;
+    conv->flags |= CONV_ISDIRTY;
     xstats_inc(CONV_NEW);
 
     return conv;

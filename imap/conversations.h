@@ -63,6 +63,8 @@ typedef bit64   conversation_id_t;
 struct index_record;
 struct mailbox;
 
+#define CONV_ISDIRTY   (1<<0)
+
 struct conversations_state {
     struct db *db;
     struct txn *txn;
@@ -143,7 +145,7 @@ struct conversation {
     conv_thread_t   *thread;
     char            *subject;
     modseq_t        createdmodseq;
-    int             dirty;
+    int             flags;
 };
 
 #include "mailbox.h"
@@ -223,7 +225,7 @@ extern int conversation_store(struct conversations_state *state,
                                conversation_t *conv);
 /* Update the internal data about a conversation, enforcing
  * consistency rules (e.g. the conversation's modseq is the
- * maximum of all the per-folder modseqs).  Sets conv->dirty
+ * maximum of all the per-folder modseqs).  Sets CONV_DIRTY
  * if any data actually changed.  */
 extern int conversations_update_record(struct conversations_state *cstate,
                                        struct mailbox *mailbox,
