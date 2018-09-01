@@ -192,6 +192,14 @@ static int _init_counted(struct conversations_state *state,
     return 0;
 }
 
+int _saxfolder(int type, struct dlistsax_data *d)
+{
+    struct conversations_open *open = (struct conversations_open *)d->rock;
+    if (type == DLISTSAX_STRING)
+        strarray_append(open->s.folder_names, buf_cstring(&d->buf));
+    return 0;
+}
+
 EXPORTED int conversations_open_path(const char *fname, const char *userid, struct conversations_state **statep)
 {
     struct conversations_open *open = NULL;
@@ -231,13 +239,7 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, stru
     /* if there's a value, parse as a dlist */
     if (!cyrusdb_fetch(open->s.db, FNKEY, strlen(FNKEY),
                    &val, &vallen, &open->s.txn)) {
-        struct dlist *dl = NULL;
-        struct dlist *dp;
-        dlist_parsemap(&dl, 0, 0, val, vallen);
-        for (dp = dl->head; dp; dp = dp->next) {
-            strarray_append(open->s.folder_names, dlist_cstring(dp));
-        }
-        dlist_free(&dl);
+        dlist_parsesax(val, vallen, 0, _saxfolder, open);
     }
 
     if (userid)
