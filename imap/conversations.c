@@ -943,14 +943,39 @@ EXPORTED int conversation_save(struct conversations_state *state,
     return _conversation_save(state, bkey, strlen(bkey), conv);
 }
 
+struct convstatusrock {
+    conv_status_t *status;
+    int state;
+};
+
+int _saxconvstatus(int type, struct dlistsax_data *d)
+{
+    struct convstatusrock *rock = (struct convstatusrock *)d->rock;
+    if (type != DLISTSAX_STRING) return 0;
+    switch (rock->state) {
+    case 0:
+        rock->status->modseq = atoll(buf_cstring(&d->buf));
+        rock->state++;
+        return 0;
+    case 1:
+        rock->status->exists = atol(buf_cstring(&d->buf));
+        rock->state++;
+        return 0;
+    case 2:
+        rock->status->unseen = atol(buf_cstring(&d->buf));
+        rock->state++;
+        return 0;
+    }
+    return IMAP_MAILBOX_BADFORMAT;
+}
+
 EXPORTED int conversation_parsestatus(const char *data, size_t datalen,
                                       conv_status_t *status)
 {
+    struct convstatusrock rock = { status, 0 };
     bit64 version;
     const char *rest;
     size_t restlen;
-    struct dlist *dl = NULL;
-    struct dlist *n;
     int r;
 
     status->modseq = 0;
@@ -970,24 +995,7 @@ EXPORTED int conversation_parsestatus(const char *data, size_t datalen,
         return IMAP_MAILBOX_BADFORMAT;
     }
 
-    r = dlist_parsemap(&dl, 0, 0, rest, restlen);
-    if (r) return r;
-
-    n = dl->head;
-    if (n) {
-        status->modseq = dlist_num(n);
-        n = n->next;
-    }
-    if (n) {
-        status->exists = dlist_num(n);
-        n = n->next;
-    }
-    if (n) {
-        status->unseen = dlist_num(n);
-    }
-
-    dlist_free(&dl);
-    return 0;
+    return dlist_parsesax(rest, restlen, 0, _saxconvstatus, &rock);
 }
 
 EXPORTED int conversation_getstatus(struct conversations_state *state,
