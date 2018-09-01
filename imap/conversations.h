@@ -137,7 +137,7 @@ struct conversation {
     uint32_t        unseen;
     uint32_t        prev_unseen;
     uint32_t        size;
-    uint32_t        *counts;
+    uint32_t        counts[32];
     conv_folder_t   *folders;
     conv_sender_t   *senders;
     conv_thread_t   *thread;
@@ -244,7 +244,7 @@ extern void conversation_update(struct conversations_state *state,
 extern conv_folder_t *conversation_find_folder(struct conversations_state *state,
                                                conversation_t *,
                                                const char *mboxname);
-extern conversation_t *conversation_new(struct conversations_state *state);
+extern conversation_t *conversation_new();
 extern void conversation_free(conversation_t *);
 
 extern void conversation_update_sender(conversation_t *conv,

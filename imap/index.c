@@ -5219,7 +5219,7 @@ MsgData **index_msgdata_load(struct index_state *state,
                 assert(cstate);
                 if (conversation_load(cstate, record.cid, &conv))
                     continue;
-                if (!conv) conv = conversation_new(cstate);
+                if (!conv) conv = conversation_new();
                 did_conv++;
             }
 

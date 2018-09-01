@@ -3510,7 +3510,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     r = conversation_load(state, record->cid, &conv);
     if (r) goto out;
 
-    if (!conv) conv = conversation_new(state);
+    if (!conv) conv = conversation_new();
 
     uint32_t max_thread = config_getint(IMAPOPT_CONVERSATIONS_MAX_THREAD);
     if (conv->exists >= max_thread && !mustkeep && !record->silent) {
@@ -3526,7 +3526,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         conversation_free(conv);
         r = conversation_load(state, record->cid, &conv);
         if (r) goto out;
-        if (!conv) conv = conversation_new(state);
+        if (!conv) conv = conversation_new();
 
         /* and update the pointer for next time */
         if (strcmpsafe(state->annotmboxname, mailbox->name)) {

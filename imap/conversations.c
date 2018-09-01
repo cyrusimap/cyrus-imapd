@@ -187,6 +187,11 @@ static int _init_counted(struct conversations_state *state,
     /* add the value only if there's some flags set */
     if (vallen) {
         state->counted_flags = strarray_nsplit(val, vallen, " ", /*flags*/0);
+        if (state->counted_flags->count > 32) {
+            syslog(LOG_ERR, "conversations: truncating counted_flags: %d (%.*s)",
+                            state->counted_flags->count, vallen, val);
+            strarray_truncate(state->counted_flags, 32);
+        }
     }
 
     return 0;
@@ -1128,7 +1133,7 @@ EXPORTED int conversation_parse(struct conversations_state *state,
     r = dlist_parsemap(&dl, 0, 0, rest, restlen);
     if (r) return r;
 
-    conv = conversation_new(state);
+    conv = conversation_new();
 
     n = dlist_getchildn(dl, 0);
     if (n)
@@ -1940,7 +1945,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                                    "deleted, ignoring", record->cid);
                 return 0;
             }
-            conv = conversation_new(cstate);
+            conv = conversation_new();
         }
     }
 
@@ -2111,13 +2116,11 @@ EXPORTED void conversation_update(struct conversations_state *state,
     }
 }
 
-EXPORTED conversation_t *conversation_new(struct conversations_state *state)
+EXPORTED conversation_t *conversation_new()
 {
     conversation_t *conv;
 
     conv = xzmalloc(sizeof(conversation_t));
-    if (state->counted_flags)
-        conv->counts = xzmalloc(sizeof(uint32_t) * state->counted_flags->count);
     conv->dirty = 1;
     xstats_inc(CONV_NEW);
 
@@ -2147,7 +2150,6 @@ EXPORTED void conversation_free(conversation_t *conv)
     }
 
     free(conv->subject);
-    free(conv->counts);
 
     while ((thread = conv->thread)) {
         conv->thread = thread->next;

@@ -396,7 +396,7 @@ static void test_folder_rename(void)
     r = conversations_add_msgid(state, C_MSGID3, C_CID);
     CU_ASSERT_EQUAL(r, 0);
 
-    conv = conversation_new(state);
+    conv = conversation_new();
     CU_ASSERT_PTR_NOT_NULL(conv);
 
     conversation_update(state, conv, FOLDER1, /*num_records*/3,
@@ -492,7 +492,7 @@ static void test_folders(void)
     CU_ASSERT_PTR_NULL(conv);
 
     /* update should succeed */
-    conv = conversation_new(state);
+    conv = conversation_new();
     CU_ASSERT_PTR_NOT_NULL(conv);
     CU_ASSERT_EQUAL(conv->dirty, 1);
 
@@ -820,7 +820,7 @@ static void test_folder_ordering(void)
     CU_ASSERT_PTR_NULL(conv);
 
     /* update should succeed */
-    conv = conversation_new(state);
+    conv = conversation_new();
     CU_ASSERT_PTR_NOT_NULL(conv);
     CU_ASSERT_EQUAL(conv->dirty, 1);
 
@@ -832,7 +832,7 @@ static void test_folder_ordering(void)
 
     /* discard and recreate */
     conversation_free(conv);
-    conv = conversation_new(state);
+    conv = conversation_new();
 
     conversation_update(state, conv, FOLDER1, /*num_records*/1,
                         /*exists*/1, /*unseen*/0,
@@ -974,7 +974,7 @@ static void __test_senders(void)
     CU_ASSERT_PTR_NULL(conv);
 
     /* update should succeed */
-    conv = conversation_new(state);
+    conv = conversation_new();
     CU_ASSERT_PTR_NOT_NULL(conv);
     CU_ASSERT_EQUAL(conv->dirty, 1);
 
@@ -1169,7 +1169,7 @@ static void test_dump(void)
     }
     for (i = 0 ; i < N_CID_TO_FOLDER ; i++) {
         gen_cid_folder(i, &cid, &mboxnames);
-        conv = conversation_new(state);
+        conv = conversation_new();
         CU_ASSERT_PTR_NOT_NULL(conv);
         for (j = 0 ; j < mboxnames.count ; j++) {
             conversation_update(state, conv, mboxnames.data[j],
