@@ -57,8 +57,8 @@ sub new
 {
     my $class = shift;
     return $class->SUPER::new({
-	adminstore => 1,
-	services => ['imap', 'pop3']
+        adminstore => 1,
+        services => ['imap', 'pop3']
     }, @_);
 }
 
@@ -90,9 +90,9 @@ sub test_dots_unix
     # There should only be ACLs for (external) userid
     my $adminclient = $self->{adminstore}->get_client();
     my $mb = Cassandane::Mboxname->new(
-	    config => $self->{instance}->{config},
-	    userid => $user
-	)->to_external();
+            config => $self->{instance}->{config},
+            userid => $user
+        )->to_external();
 
     my %acls = $adminclient->getacl($mb);
     $self->assert(defined($acls{$user}));
@@ -122,20 +122,20 @@ sub test_dots_unix
     # Same thing in POP
     $store = $self->{instance}->get_service('pop3')->create_store(username => $user_internal);
     {
-	# shut up
-	local $SIG{__DIE__};
-	local $SIG{__WARN__} = sub { 1 };
+        # shut up
+        local $SIG{__DIE__};
+        local $SIG{__WARN__} = sub { 1 };
 
-	eval { $client = $store->get_client(); };
-	my $Err = $@;
-	$store->disconnect();
-	$self->assert_matches(qr/Cannot login via POP3/, $Err);
+        eval { $client = $store->get_client(); };
+        my $Err = $@;
+        $store->disconnect();
+        $self->assert_matches(qr/Cannot login via POP3/, $Err);
     };
 
 
     # We should be able to set ACLs for internal userid
     $adminclient->setacl($mb, $user_internal => 'lrswipkxtecd')
-	or die "Cannot setacl for $mb: $@";
+        or die "Cannot setacl for $mb: $@";
     %acls = $adminclient->getacl($mb);
     $self->assert(defined($acls{$user_internal}));
 
@@ -149,9 +149,9 @@ sub test_dots_unix
     # We should be able to delete ACLs for external/internal userid
     # But external one, as mailbox owner, should still keep some
     $adminclient->deleteacl($mb, $user)
-	or die "Cannot deleteacl for $mb: $@";
+        or die "Cannot deleteacl for $mb: $@";
     $adminclient->deleteacl($mb, $user_internal)
-	or die "Cannot deleteacl for $mb: $@";
+        or die "Cannot deleteacl for $mb: $@";
     %acls = $adminclient->getacl($mb);
     $self->assert(defined($acls{$user}));
     $self->assert(!defined($acls{$user_internal}));

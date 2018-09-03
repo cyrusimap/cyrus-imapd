@@ -81,9 +81,9 @@ sub new
     $config->set(httpallowcompress => 'no');
     $config->set(caldav_historical_age => -1);
     return $class->SUPER::new({
-	config => $config,
+        config => $config,
         adminstore => 1,
-	services => ['imap', 'http'],
+        services => ['imap', 'http'],
     }, @_);
 }
 
@@ -95,18 +95,18 @@ sub set_up
     $ENV{DEBUGDAV} = 1;
     $ENV{JMAP_ALWAYS_FULL} = 1;
     $self->{caldav} = Net::CalDAVTalk->new(
-	user => 'cassandane',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     eval {
-	# this fails on older Cyruses -- but don't crash during set_up!
-	$self->{caldav}->UpdateAddressSet("Test User", "cassandane\@example.com");
+        # this fails on older Cyruses -- but don't crash during set_up!
+        $self->{caldav}->UpdateAddressSet("Test User", "cassandane\@example.com");
     };
 }
 
@@ -302,13 +302,13 @@ sub test_url_virtdom_extradomain
 
     my $service = $self->{instance}->get_service("http");
     my $caltalk = Net::CalDAVTalk->new(
-	user => "cassandane%example.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     xlog "create calendar";
@@ -335,13 +335,13 @@ sub test_url_virtdom_domain
 
     my $service = $self->{instance}->get_service("http");
     my $caltalk = Net::CalDAVTalk->new(
-	user => "test\@example.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "test\@example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     xlog "create calendar";
@@ -381,13 +381,13 @@ sub test_user_rename
 
     my $service = $self->{instance}->get_service("http");
     my $newtalk = Net::CalDAVTalk->new(
-	user => 'newuser',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'newuser',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     xlog "fetch as new user $CalendarId";
@@ -410,13 +410,13 @@ sub test_user_rename_dom
 
     my $service = $self->{instance}->get_service("http");
     my $oldtalk = Net::CalDAVTalk->new(
-	user => "test\@example.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "test\@example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     xlog "create calendar";
@@ -434,13 +434,13 @@ sub test_user_rename_dom
     $admintalk->rename("user.test\@example.com", "user.test2\@example2.com");
 
     my $newtalk = Net::CalDAVTalk->new(
-	user => "test2\@example2.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "test2\@example2.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     xlog "fetch as new user $CalendarId";
@@ -646,13 +646,13 @@ sub test_invite
 
     my $service = $self->{instance}->get_service("http");
     my $CalDAV = Net::CalDAVTalk->new(
-	user => "cassandane%example.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
@@ -712,13 +712,13 @@ sub test_invite_add_another
 
     my $service = $self->{instance}->get_service("http");
     my $CalDAV = Net::CalDAVTalk->new(
-	user => "cassandane%example.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
@@ -786,13 +786,13 @@ sub test_invite_from_nonsched
 
     my $service = $self->{instance}->get_service("http");
     my $CalDAV = Net::CalDAVTalk->new(
-	user => "cassandane%example.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
@@ -860,13 +860,13 @@ sub test_invite_withheader
 
     my $service = $self->{instance}->get_service("http");
     my $CalDAV = Net::CalDAVTalk->new(
-	user => "cassandane%example.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
@@ -933,13 +933,13 @@ sub test_invite_fullvirtual
 
     my $service = $self->{instance}->get_service("http");
     my $CalDAV = Net::CalDAVTalk->new(
-	user => "domuser\@example.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "domuser\@example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
@@ -1129,13 +1129,13 @@ sub test_propfind_principal
 
     my $service = $self->{instance}->get_service("http");
     my $caltalk = Net::CalDAVTalk->new(
-	user => "reallyprivateuser",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "reallyprivateuser",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     xlog "create calendar";
@@ -1271,13 +1271,13 @@ sub test_imap_magicplus_withdomain
 
     my $service = $self->{instance}->get_service("http");
     my $domdav = Net::CalDAVTalk->new(
-	user => 'domuser@example.com',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'domuser@example.com',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $CalendarId = $domdav->NewCalendar({name => 'magicplus'});
@@ -1362,13 +1362,13 @@ sub test_fastmailsharing
 
     my $service = $self->{instance}->get_service("http");
     my $mantalk = Net::CalDAVTalk->new(
-	user => "manifold",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     xlog "create calendar";
@@ -2509,7 +2509,7 @@ RRULE:FREQ=WEEKLY
 EXDATE;TZID=Australia/Melbourne:20160608T153000
 EOF
 
-    # should this send a PARTSTAT=DECLINED instead? 
+    # should this send a PARTSTAT=DECLINED instead?
     $self->assert_caldav_notified(
       {
         recipient => "test1\@example.com",
@@ -2736,13 +2736,13 @@ sub test_reply
 
     my $service = $self->{instance}->get_service("http");
     my $CalDAV = Net::CalDAVTalk->new(
-	user => "cassandane%example.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
@@ -2820,13 +2820,13 @@ sub test_reply_withothers
 
     my $service = $self->{instance}->get_service("http");
     my $CalDAV = Net::CalDAVTalk->new(
-	user => "cassandane%example.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
@@ -3025,13 +3025,13 @@ sub test_invite_change_organizer
 
     my $service = $self->{instance}->get_service("http");
     my $CalDAV = Net::CalDAVTalk->new(
-	user => "cassandane%example.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
@@ -3149,13 +3149,13 @@ sub test_reply_scheduleaddress
 
     my $service = $self->{instance}->get_service("http");
     my $CalDAV = Net::CalDAVTalk->new(
-	user => "cassandane%example.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
@@ -3233,13 +3233,13 @@ sub test_recurring_freebusy
 
     my $service = $self->{instance}->get_service("http");
     my $CalDAV = Net::CalDAVTalk->new(
-	user => "cassandane%example.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});
@@ -3321,13 +3321,13 @@ sub test_invite_samelocalpart
 
     my $service = $self->{instance}->get_service("http");
     my $CalDAV = Net::CalDAVTalk->new(
-	user => "cassandane%example.com",
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => "cassandane%example.com",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $CalendarId = $CalDAV->NewCalendar({name => 'hello'});

@@ -59,7 +59,7 @@ sub set_up
 {
     my ($self) = @_;
     die "No crash binary $crash_bin.  Did you run \"make\" in the Cassandane directory?"
-	unless (-f $crash_bin);
+        unless (-f $crash_bin);
     $self->SUPER::set_up();
 }
 
@@ -78,15 +78,15 @@ sub _test_core_files_with_size
     my $pid;
 
     $instance->run_command(
-	{ cyrus => 0,
-	  handlers => {
-	    signaled => sub {
-		my ($child, $sig) = @_;
-		$pid = $child->{pid};
-		$signaled++;
-	    } },
-	},
-	$crash_bin, $alloc);
+        { cyrus => 0,
+          handlers => {
+            signaled => sub {
+                my ($child, $sig) = @_;
+                $pid = $child->{pid};
+                $signaled++;
+            } },
+        },
+        $crash_bin, $alloc);
 
     $self->assert_equals(1, $signaled);
     $self->assert_not_null($pid);
@@ -97,7 +97,7 @@ sub _test_core_files_with_size
 
     my $core = "$instance->{basedir}/conf/cores/core.$pid";
     if (not -f $core) {
-	$core = "$instance->{basedir}/conf/cores/core";
+        $core = "$instance->{basedir}/conf/cores/core";
     }
     $self->assert(-f $core);
     my $size = -s $core;

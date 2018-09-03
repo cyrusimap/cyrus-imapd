@@ -53,30 +53,30 @@ sub new
     my $name = delete $params{name};
     if (!defined $name)
     {
-	$name = "xx$next_tag";
-	$next_tag++;
+        $name = "xx$next_tag";
+        $next_tag++;
     }
 
     my $argv = delete $params{argv};
     die "No argv= parameter"
-	unless defined $argv && scalar @$argv;
+        unless defined $argv && scalar @$argv;
 
     my $config = delete $params{config};
 
     my $self = bless
     {
-	name => $name,
-	argv => $argv,
-	config => $config,
+        name => $name,
+        argv => $argv,
+        config => $config,
     }, $class;
 
     foreach my $a ($self->_otherparams())
     {
-	$self->{$a} = delete $params{$a}
-	    if defined $params{$a};
+        $self->{$a} = delete $params{$a}
+            if defined $params{$a};
     }
     die "Unexpected parameters: " . join(" ", keys %params)
-	if scalar %params;
+        if scalar %params;
 
     return $self;
 }
@@ -89,8 +89,8 @@ sub master_params
     my $params = {};
     foreach my $a ('name', 'argv', $self->_otherparams())
     {
-	$params->{$a} = $self->{$a}
-	    if defined $self->{$a};
+        $params->{$a} = $self->{$a}
+            if defined $self->{$a};
     }
     return $params;
 }
@@ -101,8 +101,8 @@ sub set_master_param
 
     foreach my $a ('name', 'argv', $self->_otherparams())
     {
-	$self->{$a} = $value
-	    if ($a eq $param);
+        $self->{$a} = $value
+            if ($a eq $param);
     }
 }
 

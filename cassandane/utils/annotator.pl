@@ -19,11 +19,11 @@
 #     endorse or promote products derived from this software without
 #     prior written permission. For permission or any legal
 #     details, please contact
-# 	Opera Software Australia Pty. Ltd.
-# 	Level 50, 120 Collins St
-# 	Melbourne 3000
-# 	Victoria
-# 	Australia
+#       Opera Software Australia Pty. Ltd.
+#       Level 50, 120 Collins St
+#       Melbourne 3000
+#       Victoria
+#       Australia
 #
 #  4. Redistributions of any form whatsoever must retain the following
 #     acknowledgment:
@@ -63,45 +63,45 @@ my %commands =
 (
     set_shared_annotation => sub
     {
-	my ($message, $entry, $value) = @_;
-	die "Wrong number of args for set_shared_annotation" unless (@_ == 3);
-	xlog "set_shared_annotation(\"$entry\", \"$value\")";
-	$message->set_shared_annotation($entry, $value);
+        my ($message, $entry, $value) = @_;
+        die "Wrong number of args for set_shared_annotation" unless (@_ == 3);
+        xlog "set_shared_annotation(\"$entry\", \"$value\")";
+        $message->set_shared_annotation($entry, $value);
     },
     set_private_annotation => sub
     {
-	my ($message, $entry, $value) = @_;
-	die "Wrong number of args for set_private_annotation" unless (@_ == 3);
-	xlog "set_private_annotation(\"$entry\", \"$value\")";
-	$message->set_private_annotation($entry, $value);
+        my ($message, $entry, $value) = @_;
+        die "Wrong number of args for set_private_annotation" unless (@_ == 3);
+        xlog "set_private_annotation(\"$entry\", \"$value\")";
+        $message->set_private_annotation($entry, $value);
     },
     clear_shared_annotation => sub
     {
-	my ($message, $entry) = @_;
-	die "Wrong number of args for clear_shared_annotation" unless (@_ == 2);
-	xlog "clear_shared_annotation(\"$entry\")";
-	$message->clear_shared_annotation($entry);
+        my ($message, $entry) = @_;
+        die "Wrong number of args for clear_shared_annotation" unless (@_ == 2);
+        xlog "clear_shared_annotation(\"$entry\")";
+        $message->clear_shared_annotation($entry);
     },
     clear_private_annotation => sub
     {
-	my ($message, $entry) = @_;
-	die "Wrong number of args for clear_private_annotation" unless (@_ == 2);
-	xlog "clear_private_annotation(\"$entry\")";
-	$message->clear_private_annotation($entry);
+        my ($message, $entry) = @_;
+        die "Wrong number of args for clear_private_annotation" unless (@_ == 2);
+        xlog "clear_private_annotation(\"$entry\")";
+        $message->clear_private_annotation($entry);
     },
     set_flag => sub
     {
-	my ($message, $flag) = @_;
-	die "Wrong number of args for set_flag" unless (@_ == 2);
-	xlog "set_flag($flag)";
-	$message->set_flag($flag);
+        my ($message, $flag) = @_;
+        die "Wrong number of args for set_flag" unless (@_ == 2);
+        xlog "set_flag($flag)";
+        $message->set_flag($flag);
     },
     clear_flag => sub
     {
-	my ($message, $flag) = @_;
-	die "Wrong number of args for clear_flag" unless (@_ == 2);
-	xlog "clear_flag($flag)";
-	$message->clear_flag($flag);
+        my ($message, $flag) = @_;
+        die "Wrong number of args for clear_flag" unless (@_ == 2);
+        xlog "clear_flag($flag)";
+        $message->clear_flag($flag);
     },
 );
 
@@ -114,16 +114,16 @@ sub annotate_message
     # Parse the body of the message as a series of test commands
     my $fh = $message->fh();
     seek $fh, $message->bodystructure()->{Offset}, 0
-	or die "Cannot seek in message: $!";
+        or die "Cannot seek in message: $!";
 
     while (my $line = readline $fh)
     {
-	chomp $line;
-	my @a = split /\s+/, $line;
-	my $cmd = $commands{$a[0]}
-	    or die "Unknown command $a[0]";
-	shift(@a);
-	$cmd->($message, @a);
+        chomp $line;
+        my @a = split /\s+/, $line;
+        my $cmd = $commands{$a[0]}
+            or die "Unknown command $a[0]";
+        shift(@a);
+        $cmd->($message, @a);
     }
 }
 
@@ -139,7 +139,7 @@ GetOptions(
 
 xlog "annotator $$ starting";
 Cassandane::AnnotatorDaemon->run(
-	pid_file => $pidfile,
-	port => $port
+        pid_file => $pidfile,
+        port => $port
     );
 xlog "annotator $$ exiting";

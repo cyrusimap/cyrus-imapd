@@ -77,18 +77,18 @@ sub test_parts_ctor
     my ($self) = @_;
 
     my $mb = Cassandane::Mboxname->new(
-	    domain => 'quinoa.com',
-	    userid => 'pickled',
-	    box => 'fanny.pack');
+            domain => 'quinoa.com',
+            userid => 'pickled',
+            box => 'fanny.pack');
     $self->assert_str_equals($mb->domain, 'quinoa.com');
     $self->assert_str_equals($mb->userid, 'pickled');
     $self->assert_str_equals($mb->box, 'fanny.pack');
     $self->assert_str_equals($mb->to_internal,
-			     'quinoa.com!user.pickled.fanny.pack');
+                             'quinoa.com!user.pickled.fanny.pack');
     $self->assert_str_equals($mb->to_external,
-			     'user.pickled.fanny.pack@quinoa.com');
+                             'user.pickled.fanny.pack@quinoa.com');
     $self->assert_str_equals($mb->to_username,
-			     'pickled@quinoa.com');
+                             'pickled@quinoa.com');
 }
 
 sub test_internal_ctor
@@ -96,17 +96,17 @@ sub test_internal_ctor
     my ($self) = @_;
 
     my $mb = Cassandane::Mboxname->new(
-		config => myconfig(),
-		internal => 'quinoa.com!user.pickled.fanny.pack');
+                config => myconfig(),
+                internal => 'quinoa.com!user.pickled.fanny.pack');
     $self->assert_str_equals($mb->domain, 'quinoa.com');
     $self->assert_str_equals($mb->userid, 'pickled');
     $self->assert_str_equals($mb->box, 'fanny.pack');
     $self->assert_str_equals($mb->to_internal,
-			     'quinoa.com!user.pickled.fanny.pack');
+                             'quinoa.com!user.pickled.fanny.pack');
     $self->assert_str_equals($mb->to_external,
-			     'user.pickled.fanny.pack@quinoa.com');
+                             'user.pickled.fanny.pack@quinoa.com');
     $self->assert_str_equals($mb->to_username,
-			     'pickled@quinoa.com');
+                             'pickled@quinoa.com');
 }
 
 sub test_external_ctor
@@ -114,17 +114,17 @@ sub test_external_ctor
     my ($self) = @_;
 
     my $mb = Cassandane::Mboxname->new(
-		config => myconfig(),
-		external => 'user.pickled.fanny.pack@quinoa.com');
+                config => myconfig(),
+                external => 'user.pickled.fanny.pack@quinoa.com');
     $self->assert_str_equals($mb->domain, 'quinoa.com');
     $self->assert_str_equals($mb->userid, 'pickled');
     $self->assert_str_equals($mb->box, 'fanny.pack');
     $self->assert_str_equals($mb->to_internal,
-			     'quinoa.com!user.pickled.fanny.pack');
+                             'quinoa.com!user.pickled.fanny.pack');
     $self->assert_str_equals($mb->to_external,
-			     'user.pickled.fanny.pack@quinoa.com');
+                             'user.pickled.fanny.pack@quinoa.com');
     $self->assert_str_equals($mb->to_username,
-			     'pickled@quinoa.com');
+                             'pickled@quinoa.com');
 }
 
 sub test_username_ctor
@@ -132,17 +132,17 @@ sub test_username_ctor
     my ($self) = @_;
 
     my $mb = Cassandane::Mboxname->new(
-		config => myconfig(),
-		username => 'pickled@quinoa.com');
+                config => myconfig(),
+                username => 'pickled@quinoa.com');
     $self->assert_str_equals($mb->domain, 'quinoa.com');
     $self->assert_str_equals($mb->userid, 'pickled');
     $self->assert_null($mb->box);
     $self->assert_str_equals($mb->to_internal,
-			     'quinoa.com!user.pickled');
+                             'quinoa.com!user.pickled');
     $self->assert_str_equals($mb->to_external,
-			     'user.pickled@quinoa.com');
+                             'user.pickled@quinoa.com');
     $self->assert_str_equals($mb->to_username,
-			     'pickled@quinoa.com');
+                             'pickled@quinoa.com');
 }
 
 sub test_broken_ctor
@@ -153,40 +153,40 @@ sub test_broken_ctor
 
     eval
     {
-	$mb = Cassandane::Mboxname->new(
-		config => myconfig(),
-		internal => 'quinoa.com!user.pickled.fanny.pack',
-		username => 'pickled@quinoa.com');
+        $mb = Cassandane::Mboxname->new(
+                config => myconfig(),
+                internal => 'quinoa.com!user.pickled.fanny.pack',
+                username => 'pickled@quinoa.com');
     };
     $ex = $@;
     $self->assert_matches(qr/contradictory initialisers/, $ex);
 
     eval
     {
-	$mb = Cassandane::Mboxname->new(
-		config => myconfig(),
-		external => 'user.pickled.fanny.pack@quinoa.com',
-		username => 'pickled@quinoa.com');
+        $mb = Cassandane::Mboxname->new(
+                config => myconfig(),
+                external => 'user.pickled.fanny.pack@quinoa.com',
+                username => 'pickled@quinoa.com');
     };
     $ex = $@;
     $self->assert_matches(qr/contradictory initialisers/, $ex);
 
     eval
     {
-	$mb = Cassandane::Mboxname->new(
-		config => myconfig(),
-		internal => 'quinoa.com!user.pickled.fanny.pack',
-		external => 'user.pickled.fanny.pack@quinoa.com');
+        $mb = Cassandane::Mboxname->new(
+                config => myconfig(),
+                internal => 'quinoa.com!user.pickled.fanny.pack',
+                external => 'user.pickled.fanny.pack@quinoa.com');
     };
     $ex = $@;
     $self->assert_matches(qr/contradictory initialisers/, $ex);
 
     eval
     {
-	$mb = Cassandane::Mboxname->new(
-		config => myconfig(),
-		internal => 'quinoa.com!user.pickled.fanny.pack',
-		selvage => 'sustainble');
+        $mb = Cassandane::Mboxname->new(
+                config => myconfig(),
+                internal => 'quinoa.com!user.pickled.fanny.pack',
+                selvage => 'sustainble');
     };
     $ex = $@;
     $self->assert_matches(qr/extra arguments/, $ex);
@@ -202,11 +202,11 @@ sub test_from_internal
     $self->assert_str_equals($mb->userid, 'pickled');
     $self->assert_str_equals($mb->box, 'fanny.pack');
     $self->assert_str_equals($mb->to_internal,
-			     'quinoa.com!user.pickled.fanny.pack');
+                             'quinoa.com!user.pickled.fanny.pack');
     $self->assert_str_equals($mb->to_external,
-			     'user.pickled.fanny.pack@quinoa.com');
+                             'user.pickled.fanny.pack@quinoa.com');
     $self->assert_str_equals($mb->to_username,
-			     'pickled@quinoa.com');
+                             'pickled@quinoa.com');
 }
 
 sub test_from_external
@@ -219,11 +219,11 @@ sub test_from_external
     $self->assert_str_equals($mb->userid, 'pickled');
     $self->assert_str_equals($mb->box, 'fanny.pack');
     $self->assert_str_equals($mb->to_internal,
-			     'quinoa.com!user.pickled.fanny.pack');
+                             'quinoa.com!user.pickled.fanny.pack');
     $self->assert_str_equals($mb->to_external,
-			     'user.pickled.fanny.pack@quinoa.com');
+                             'user.pickled.fanny.pack@quinoa.com');
     $self->assert_str_equals($mb->to_username,
-			     'pickled@quinoa.com');
+                             'pickled@quinoa.com');
 }
 
 sub test_from_username
@@ -236,11 +236,11 @@ sub test_from_username
     $self->assert_str_equals($mb->userid, 'pickled');
     $self->assert_null($mb->box);
     $self->assert_str_equals($mb->to_internal,
-			     'quinoa.com!user.pickled');
+                             'quinoa.com!user.pickled');
     $self->assert_str_equals($mb->to_external,
-			     'user.pickled@quinoa.com');
+                             'user.pickled@quinoa.com');
     $self->assert_str_equals($mb->to_username,
-			     'pickled@quinoa.com');
+                             'pickled@quinoa.com');
 }
 
 sub test_make_child
@@ -248,24 +248,24 @@ sub test_make_child
     my ($self) = @_;
 
     my $mb = Cassandane::Mboxname->new(
-		config => myconfig(),
-		internal => 'quinoa.com!user.pickled');
+                config => myconfig(),
+                internal => 'quinoa.com!user.pickled');
     $self->assert_str_equals($mb->to_internal,
-			     'quinoa.com!user.pickled');
+                             'quinoa.com!user.pickled');
 
     my $mb2 = $mb->make_child('fanny');
     $self->assert_str_equals($mb2->to_internal,
-			     'quinoa.com!user.pickled.fanny');
+                             'quinoa.com!user.pickled.fanny');
     $self->assert_str_equals($mb->to_internal,
-			     'quinoa.com!user.pickled');
+                             'quinoa.com!user.pickled');
 
     my $mb3 = $mb2->make_child('pack');
     $self->assert_str_equals($mb3->to_internal,
-			     'quinoa.com!user.pickled.fanny.pack');
+                             'quinoa.com!user.pickled.fanny.pack');
     $self->assert_str_equals($mb2->to_internal,
-			     'quinoa.com!user.pickled.fanny');
+                             'quinoa.com!user.pickled.fanny');
     $self->assert_str_equals($mb->to_internal,
-			     'quinoa.com!user.pickled');
+                             'quinoa.com!user.pickled');
 }
 
 sub test_make_parent
@@ -273,28 +273,28 @@ sub test_make_parent
     my ($self) = @_;
 
     my $mb = Cassandane::Mboxname->new(
-		config => myconfig(),
-		internal => 'quinoa.com!user.pickled.fanny.pack');
+                config => myconfig(),
+                internal => 'quinoa.com!user.pickled.fanny.pack');
     $self->assert_str_equals($mb->to_internal,
-			     'quinoa.com!user.pickled.fanny.pack');
+                             'quinoa.com!user.pickled.fanny.pack');
 
     my $mb2 = $mb->make_parent();
     $self->assert_str_equals($mb2->to_internal,
-			     'quinoa.com!user.pickled.fanny');
+                             'quinoa.com!user.pickled.fanny');
 
     my $mb3 = $mb2->make_parent();
     $self->assert_str_equals($mb3->to_internal,
-			     'quinoa.com!user.pickled');
+                             'quinoa.com!user.pickled');
     $self->assert_str_equals($mb2->to_internal,
-			     'quinoa.com!user.pickled.fanny');
+                             'quinoa.com!user.pickled.fanny');
 
     my $mb4 = $mb3->make_parent();
     $self->assert_str_equals($mb4->to_internal,
-			     'quinoa.com!user.pickled');
+                             'quinoa.com!user.pickled');
     $self->assert_str_equals($mb3->to_internal,
-			     'quinoa.com!user.pickled');
+                             'quinoa.com!user.pickled');
     $self->assert_str_equals($mb2->to_internal,
-			     'quinoa.com!user.pickled.fanny');
+                             'quinoa.com!user.pickled.fanny');
 }
 
 1;

@@ -19,11 +19,11 @@
 #     endorse or promote products derived from this software without
 #     prior written permission. For permission or any legal
 #     details, please contact
-# 	Opera Software Australia Pty. Ltd.
-# 	Level 50, 120 Collins St
-# 	Melbourne 3000
-# 	Victoria
-# 	Australia
+#       Opera Software Australia Pty. Ltd.
+#       Level 50, 120 Collins St
+#       Melbourne 3000
+#       Victoria
+#       Australia
 #
 #  4. Redistributions of any form whatsoever must retain the following
 #     acknowledgment:
@@ -73,17 +73,17 @@ my @names;
     # We also convert string exceptions into Test::Unit errors.
     $SIG{__DIE__} = sub
     {
-	my ($e) = @_;
-	if (!ref($e))
-	{
-	    my ($text, $file, $line) = ($e =~ m/^(.*) at (.*\.pm) line (\d+)/);
-	    if ($line)
-	    {
-		local $Error::Depth = 1;
-		Test::Unit::Error->throw('-text' => "Perl exception: $text\n");
-	    }
-	}
-	die @_;
+        my ($e) = @_;
+        if (!ref($e))
+        {
+            my ($text, $file, $line) = ($e =~ m/^(.*) at (.*\.pm) line (\d+)/);
+            if ($line)
+            {
+                local $Error::Depth = 1;
+                Test::Unit::Error->throw('-text' => "Perl exception: $text\n");
+            }
+        }
+        die @_;
     };
 
     # Disable the warning about redefining T:U:E:stringify.
@@ -93,20 +93,20 @@ my @names;
     $Error::Debug = 1;
     *Test::Unit::Exception::stringify = sub
     {
-	my ($self) = @_;
-	my $s = '';
+        my ($self) = @_;
+        my $s = '';
 
-	my $o = $self->object;
-	$s .= $o->to_string() . "\n " if $o && $o->can('to_string');
+        my $o = $self->object;
+        $s .= $o->to_string() . "\n " if $o && $o->can('to_string');
 
-	# Note, -stacktrace includes -text
+        # Note, -stacktrace includes -text
 
-	my $st = $self->{-stacktrace};
-	# Prune all Test::Unit internal calls
-	$st =~ s/Test::Unit::TestCase::run_test.*/[...framework calls elided...]/s;
-	$s .= $st;
+        my $st = $self->{-stacktrace};
+        # Prune all Test::Unit internal calls
+        $st =~ s/Test::Unit::TestCase::run_test.*/[...framework calls elided...]/s;
+        $s .= $st;
 
-	return $s;
+        return $s;
     };
 };
 
@@ -114,24 +114,24 @@ my %runners =
 (
     tap => sub
     {
-	my ($plan, $fh) = @_;
-	my $runner = Cassandane::Unit::Runner->new($fh);
-	$runner->filter('x', 'skip_version', 'skip_missing_features');
-	return $runner->do_run($plan, 0);
+        my ($plan, $fh) = @_;
+        my $runner = Cassandane::Unit::Runner->new($fh);
+        $runner->filter('x', 'skip_version', 'skip_missing_features');
+        return $runner->do_run($plan, 0);
     },
     pretty => sub
     {
-	my ($plan, $fh) = @_;
-	my $runner = Cassandane::Unit::RunnerPretty->new({}, $fh);
-	$runner->filter('x', 'skip_version', 'skip_missing_features');
-	return $runner->do_run($plan, 0);
+        my ($plan, $fh) = @_;
+        my $runner = Cassandane::Unit::RunnerPretty->new({}, $fh);
+        $runner->filter('x', 'skip_version', 'skip_missing_features');
+        return $runner->do_run($plan, 0);
     },
     prettier => sub
     {
-	my ($plan, $fh) = @_;
-	my $runner = Cassandane::Unit::RunnerPretty->new({quiet=>1}, $fh);
-	$runner->filter('x', 'skip_version', 'skip_missing_features');
-	return $runner->do_run($plan, 0);
+        my ($plan, $fh) = @_;
+        my $runner = Cassandane::Unit::RunnerPretty->new({quiet=>1}, $fh);
+        $runner->filter('x', 'skip_version', 'skip_missing_features');
+        return $runner->do_run($plan, 0);
     },
 );
 
@@ -143,31 +143,31 @@ eval
 
     if ( ! -d $output_dir )
     {
-	mkdir($output_dir)
-	    or die "Cannot make output directory \"$output_dir\": $!\n";
+        mkdir($output_dir)
+            or die "Cannot make output directory \"$output_dir\": $!\n";
     }
 
     if (! -w $output_dir )
     {
-	die "Cannot write to output directory \"$output_dir\"\n";
+        die "Cannot write to output directory \"$output_dir\"\n";
     }
 
     $runners{xml} = sub
     {
-	my ($plan, $fh) = @_;
+        my ($plan, $fh) = @_;
 
-	my $runner = Cassandane::Unit::RunnerXML->new($output_dir);
-	$runner->filter('x', 'skip_version');
-	$runner->start($plan);
-	return $runner->all_tests_passed();
+        my $runner = Cassandane::Unit::RunnerXML->new($output_dir);
+        $runner->filter('x', 'skip_version');
+        $runner->start($plan);
+        return $runner->all_tests_passed();
     };
 };
 if ($@) {
     my $eval_err = $@;
     $runners{xml} = sub
     {
-	print STDERR "Sorry, XML output format not available due to:\n=> $eval_err";
-	return 0;
+        print STDERR "Sorry, XML output format not available due to:\n=> $eval_err";
+        return 0;
     };
 }
 
@@ -184,86 +184,86 @@ while (my $a = shift)
 {
     if ($a eq '--config')
     {
-	$cassini_filename = shift;
+        $cassini_filename = shift;
     }
     elsif ($a eq '-c' || $a eq '--cleanup')
     {
-	push(@cassini_overrides, ['cassandane', 'cleanup', 'yes']);
+        push(@cassini_overrides, ['cassandane', 'cleanup', 'yes']);
     }
     elsif ($a eq '--no-cleanup')
     {
-	push(@cassini_overrides, ['cassandane', 'cleanup', 'no']);
+        push(@cassini_overrides, ['cassandane', 'cleanup', 'no']);
     }
     elsif ($a eq '-f')
     {
-	$format = shift;
-	usage unless defined $runners{$format};
+        $format = shift;
+        usage unless defined $runners{$format};
     }
     elsif ($a =~ m/^-f(\w+)$/)
     {
-	$format = $1;
-	usage unless defined $runners{$format};
+        $format = $1;
+        usage unless defined $runners{$format};
     }
     elsif ($a eq '-v' || $a eq '--verbose')
     {
-	set_verbose(get_verbose()+1);
+        set_verbose(get_verbose()+1);
     }
     elsif ($a =~ m/^-v+$/)
     {
-	# ganged verbosity
-	set_verbose(get_verbose() + length($a) - 1);
+        # ganged verbosity
+        set_verbose(get_verbose() + length($a) - 1);
     }
     elsif ($a eq '--valgrind')
     {
-	push(@cassini_overrides, ['valgrind', 'enabled', 'yes']);
+        push(@cassini_overrides, ['valgrind', 'enabled', 'yes']);
     }
     elsif ($a eq '--no-valgrind')
     {
-	push(@cassini_overrides, ['valgrind', 'enabled', 'no']);
+        push(@cassini_overrides, ['valgrind', 'enabled', 'no']);
     }
     elsif ($a eq '-j' || $a eq '--jobs')
     {
-	my $jobs = 0 + shift;
-	usage unless $jobs > 0;
-	push(@cassini_overrides, ['cassandane', 'maxworkers', $jobs]);
+        my $jobs = 0 + shift;
+        usage unless $jobs > 0;
+        push(@cassini_overrides, ['cassandane', 'maxworkers', $jobs]);
     }
     elsif ($a =~ m/^-j(\d+)$/)
     {
-	my $jobs = 0 + $1;
-	usage unless $jobs > 0;
-	push(@cassini_overrides, ['cassandane', 'maxworkers', $jobs]);
+        my $jobs = 0 + $1;
+        usage unless $jobs > 0;
+        push(@cassini_overrides, ['cassandane', 'maxworkers', $jobs]);
     }
     elsif ($a eq '-L' || $a eq '--log-directory')
     {
-	$log_directory = shift;
-	usage unless defined $log_directory;
+        $log_directory = shift;
+        usage unless defined $log_directory;
     }
     elsif ($a eq '-l' || $a eq '--list')
     {
-	$do_list++;
+        $do_list++;
     }
     elsif ($a eq '-k' || $a eq '--keep-going')
     {
-	# These option names stolen from GNU make
-	$keep_going = 1;
+        # These option names stolen from GNU make
+        $keep_going = 1;
     }
     elsif ($a eq '-S' || $a eq '--stop' || $a eq '--no-keep-going')
     {
-	# These option names stolen from GNU make
-	$keep_going = 0;
+        # These option names stolen from GNU make
+        $keep_going = 0;
     }
     elsif ($a =~ m/^-D.*=/)
     {
-	my ($sec, $param, $val) = ($a =~ m/^-D([^.=]+)\.([^.=]+)=(.*)$/);
-	push(@cassini_overrides, [$sec, $param, $val]);
+        my ($sec, $param, $val) = ($a =~ m/^-D([^.=]+)\.([^.=]+)=(.*)$/);
+        push(@cassini_overrides, [$sec, $param, $val]);
     }
     elsif ($a =~ m/^-/)
     {
-	usage;
+        usage;
     }
     else
     {
-	push(@names, $a);
+        push(@names, $a);
     }
 }
 
@@ -274,9 +274,9 @@ Cassandane::Instance::cleanup_leftovers()
     if ($cassini->bool_val('cassandane', 'cleanup'));
 
 my $plan = Cassandane::Unit::TestPlan->new(
-	keep_going => $keep_going,
-	maxworkers => $cassini->val('cassandane', 'maxworkers') || undef,
-	log_directory => $log_directory,
+        keep_going => $keep_going,
+        maxworkers => $cassini->val('cassandane', 'maxworkers') || undef,
+        log_directory => $log_directory,
     );
 
 if ($do_list)
@@ -287,7 +287,7 @@ if ($do_list)
     my %plan = map { _listitem($_) => 1 } $plan->list();
     foreach my $nm (sort keys %plan)
     {
-	print "$nm\n";
+        print "$nm\n";
     }
     exit 0;
 }
@@ -297,7 +297,7 @@ else
     $plan->schedule(@names);
     # Run the schedule
     open my $fh, '>&', \*STDOUT
-	or die "Cannot save STDOUT as a runner print stream: $!";
+        or die "Cannot save STDOUT as a runner print stream: $!";
     exit(! $runners{$format}->($plan, $fh));
 }
 

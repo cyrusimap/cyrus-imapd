@@ -68,7 +68,7 @@ sub set_up
 {
     my ($self) = @_;
     die "No lemming binary $lemming_bin.  Did you run \"make\" in the Cassandane directory?"
-	unless (-f $lemming_bin);
+        unless (-f $lemming_bin);
     $self->SUPER::set_up();
     $self->{instance} = Cassandane::Instance->new(setup_mailbox => 0);
 }
@@ -85,19 +85,19 @@ sub lemming_connect
     my ($srv, $address_family) = @_;
 
     my $sock = create_client_socket(
-		    defined($address_family) ? $address_family : $srv->address_family(),
-		    $srv->host(), $srv->port())
-	or die "Cannot connect to lemming " . $srv->address() . ": $@";
+                    defined($address_family) ? $address_family : $srv->address_family(),
+                    $srv->host(), $srv->port())
+        or die "Cannot connect to lemming " . $srv->address() . ": $@";
 
     # The lemming sends us his PID so we can later wait for him to die
     # properly.  It's easiest for synchronisation purposes to encode
     # this as a fixed sized field.
     my $pid;
     $sock->sysread($pid, 4)
-	or die "Cannot read from lemming: $!";
+        or die "Cannot read from lemming: $!";
     $pid = unpack("L", $pid);
     die "Cannot read from lemming: $!"
-	unless defined $pid;
+        unless defined $pid;
 
     return { sock => $sock, pid => $pid };
 }
@@ -114,7 +114,7 @@ sub lemming_push
 
     # Wait for the master process to wake up and reap the lemming.
     return timed_wait(sub { kill(0, $lemming->{pid}) == 0 },
-	       description => "master to reap lemming $lemming->{pid}");
+               description => "master to reap lemming $lemming->{pid}");
 }
 
 sub lemming_census
@@ -124,28 +124,28 @@ sub lemming_census
 
     my %pids;
     opendir LEMM,$coresdir
-	or die "cannot open $coresdir for reading: $!";
+        or die "cannot open $coresdir for reading: $!";
     while ($_ = readdir LEMM)
     {
-	my ($tag, $pid) = m/^lemming\.(\w+).(\d+)$/;
-	next
-	    unless defined $pid;
-	xlog "found lemming tag=$tag pid=$pid";
-	$pids{$tag} = []
-	    unless defined $pids{$tag};
-	push (@{$pids{$tag}}, $pid);
+        my ($tag, $pid) = m/^lemming\.(\w+).(\d+)$/;
+        next
+            unless defined $pid;
+        xlog "found lemming tag=$tag pid=$pid";
+        $pids{$tag} = []
+            unless defined $pids{$tag};
+        push (@{$pids{$tag}}, $pid);
     }
     closedir LEMM;
 
     my %actual;
     foreach my $tag (keys %pids)
     {
-	my $ntotal = scalar @{$pids{$tag}};
-	my $nlive = kill(0, @{$pids{$tag}});
-	$actual{$tag} = {
-	    live => $nlive,
-	    dead => $ntotal - $nlive,
-	};
+        my $ntotal = scalar @{$pids{$tag}};
+        my $nlive = kill(0, @{$pids{$tag}});
+        $actual{$tag} = {
+            live => $nlive,
+            dead => $ntotal - $nlive,
+        };
     }
     return \%actual;
 }
@@ -158,14 +158,14 @@ sub lemming_cull
 
     return unless -d $coresdir;
     opendir LEMM,$coresdir
-	or die "cannot open $coresdir for reading: $!";
+        or die "cannot open $coresdir for reading: $!";
     while ($_ = readdir LEMM)
     {
-	my ($tag, $pid) = m/^lemming\.(\w+).(\d+)$/;
-	next
-	    unless defined $pid;
-	xlog "culled lemming tag=$tag pid=$pid"
-	    if kill(9, $pid);
+        my ($tag, $pid) = m/^lemming\.(\w+).(\d+)$/;
+        next
+            unless defined $pid;
+        xlog "culled lemming tag=$tag pid=$pid"
+            if kill(9, $pid);
     }
     closedir LEMM;
 }
@@ -207,20 +207,20 @@ sub lemming_wait
     my ($self, %expected_census) = @_;
 
     timed_wait(
-	sub
-	{
-	    my $census = $self->lemming_census();
-	    map {
-		my $service_name = $_;
-		return 0 if !defined $census->{$service_name};
-		my $expected = $expected_census{$service_name};
-		map {
-		    return 0 if $census->{$service_name}->{$_} != $expected->{$_};
-		} keys %$expected;
-	    } keys %expected_census;
-	    return 1;
-	},
-	description => "lemmings to reach the expected census");
+        sub
+        {
+            my $census = $self->lemming_census();
+            map {
+                my $service_name = $_;
+                return 0 if !defined $census->{$service_name};
+                my $expected = $expected_census{$service_name};
+                map {
+                    return 0 if $census->{$service_name}->{$_} != $expected->{$_};
+                } keys %$expected;
+            } keys %expected_census;
+            return 1;
+        },
+        description => "lemmings to reach the expected census");
 }
 
 sub start
@@ -242,19 +242,19 @@ sub test_service
 
     xlog "not preforked, so no lemmings running yet";
     $self->assert_deep_equals({},
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     my $lemm = lemming_connect($srv);
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 }
 
 #
@@ -270,25 +270,25 @@ sub test_multi_connections
 
     xlog "not preforked, so no lemmings running yet";
     $self->assert_deep_equals({},
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     my $lemm1 = lemming_connect($srv);
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     my $lemm2 = lemming_connect($srv);
 
     xlog "two connected so two lemmings forked";
     $self->assert_deep_equals({ A => { live => 2, dead => 0 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     my $lemm3 = lemming_connect($srv);
 
     xlog "three connected so three lemmings forked";
     $self->assert_deep_equals({ A => { live => 3, dead => 0 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     lemming_push($lemm1, 'success');
     lemming_push($lemm2, 'success');
@@ -296,7 +296,7 @@ sub test_multi_connections
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({ A => { live => 0, dead => 3 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 }
 
 #
@@ -314,30 +314,30 @@ sub test_multi_services
 
     xlog "not preforked, so no lemmings running yet";
     $self->assert_deep_equals({},
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     my $lemmA = lemming_connect($srvA);
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A =>  { live => 1, dead => 0 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     my $lemmB = lemming_connect($srvB);
 
     xlog "two connected so two lemmings forked";
     $self->assert_deep_equals({
-				A => { live => 1, dead => 0 },
-				B => { live => 1, dead => 0 },
-			      }, $self->lemming_census());
+                                A => { live => 1, dead => 0 },
+                                B => { live => 1, dead => 0 },
+                              }, $self->lemming_census());
 
     my $lemmC = lemming_connect($srvC);
 
     xlog "three connected so three lemmings forked";
     $self->assert_deep_equals({
-				A => { live => 1, dead => 0 },
-				B => { live => 1, dead => 0 },
-				C => { live => 1, dead => 0 },
-			      }, $self->lemming_census());
+                                A => { live => 1, dead => 0 },
+                                B => { live => 1, dead => 0 },
+                                C => { live => 1, dead => 0 },
+                              }, $self->lemming_census());
 
     lemming_push($lemmA, 'success');
     lemming_push($lemmB, 'success');
@@ -345,10 +345,10 @@ sub test_multi_services
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({
-				A => { live => 0, dead => 1 },
-				B => { live => 0, dead => 1 },
-				C => { live => 0, dead => 1 },
-			      }, $self->lemming_census());
+                                A => { live => 0, dead => 1 },
+                                B => { live => 0, dead => 1 },
+                                C => { live => 0, dead => 1 },
+                              }, $self->lemming_census());
 }
 
 #
@@ -365,28 +365,28 @@ sub test_prefork
 
     xlog "preforked, so one lemming running already";
     $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     my $lemm1 = lemming_connect($srv);
     $self->lemming_wait(A => { live => 2 });
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 2, dead => 0 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     my $lemm2 = lemming_connect($srv);
     $self->lemming_wait(A => { live => 3 });
 
     xlog "connected again so two additional lemmings forked";
     $self->assert_deep_equals({ A => { live => 3, dead => 0 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     lemming_push($lemm1, 'success');
     lemming_push($lemm2, 'success');
 
     xlog "always at least one live lemming";
     $self->assert_deep_equals({ A => { live => 1, dead => 2 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 }
 
 #
@@ -413,48 +413,48 @@ sub test_multi_prefork
     $self->lemming_wait(A => { live => 3 });
     push(@lemmings, $lemm);
     $self->assert_deep_equals({
-				A => { live => 3, dead => 0 },
-				C => { live => 3, dead => 0 },
-			      }, $self->lemming_census());
+                                A => { live => 3, dead => 0 },
+                                C => { live => 3, dead => 0 },
+                              }, $self->lemming_census());
 
     xlog "connect to A again";
     $lemm = lemming_connect($srvA);
     $self->lemming_wait(A => { live => 4 });
     push(@lemmings, $lemm);
     $self->assert_deep_equals({
-				A => { live => 4, dead => 0 },
-				C => { live => 3, dead => 0 },
-			      }, $self->lemming_census());
+                                A => { live => 4, dead => 0 },
+                                C => { live => 3, dead => 0 },
+                              }, $self->lemming_census());
 
     xlog "connect to A a third time";
     $lemm = lemming_connect($srvA);
     $self->lemming_wait(A => { live => 5 });
     push(@lemmings, $lemm);
     $self->assert_deep_equals({
-				A => { live => 5, dead => 0 },
-				C => { live => 3, dead => 0 },
-			      }, $self->lemming_census());
+                                A => { live => 5, dead => 0 },
+                                C => { live => 3, dead => 0 },
+                              }, $self->lemming_census());
 
     xlog "connect to B";
     $lemm = lemming_connect($srvB);
     push(@lemmings, $lemm);
     $self->assert_deep_equals({
-				A => { live => 5, dead => 0 },
-				B => { live => 1, dead => 0 },
-				C => { live => 3, dead => 0 },
-			      }, $self->lemming_census());
+                                A => { live => 5, dead => 0 },
+                                B => { live => 1, dead => 0 },
+                                C => { live => 3, dead => 0 },
+                              }, $self->lemming_census());
 
     foreach $lemm (@lemmings)
     {
-	lemming_push($lemm, 'success');
+        lemming_push($lemm, 'success');
     }
 
     xlog "our lemmings are gone, others have replaced them";
     $self->assert_deep_equals({
-				A => { live => 2, dead => 3 },
-				B => { live => 0, dead => 1 },
-				C => { live => 3, dead => 0 },
-			      }, $self->lemming_census());
+                                A => { live => 2, dead => 3 },
+                                B => { live => 0, dead => 1 },
+                                C => { live => 3, dead => 0 },
+                              }, $self->lemming_census());
 }
 
 #
@@ -470,28 +470,28 @@ sub test_exit_after_connect
 
     xlog "not preforked, so no lemmings running yet";
     $self->assert_deep_equals({},
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     my $lemm = lemming_connect($srv);
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     xlog "push the lemming off the cliff";
     lemming_push($lemm, 'exit');
     $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     xlog "can connect again";
     $lemm = lemming_connect($srv);
     $self->assert_deep_equals({ A => { live => 1, dead => 1 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     xlog "push the lemming off the cliff";
     lemming_push($lemm, 'exit');
     $self->assert_deep_equals({ A => { live => 0, dead => 2 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 }
 
 #
@@ -508,27 +508,27 @@ sub test_service_exit_during_start
 
     xlog "not preforked, so no lemmings running yet";
     $self->assert_deep_equals({},
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     xlog "connection fails due to dead lemming";
     eval
     {
-	$lemm = lemming_connect($srv);
+        $lemm = lemming_connect($srv);
     };
     $self->assert_null($lemm);
 
     xlog "expect 5 dead lemmings";
     $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     xlog "connections should fail because service disabled";
     eval
     {
-	$lemm = lemming_connect($srv);
+        $lemm = lemming_connect($srv);
     };
     $self->assert_null($lemm);
     $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 }
 
 sub test_startup
@@ -544,9 +544,9 @@ sub test_startup
 
     xlog "expect 2 dead lemmings";
     $self->assert_deep_equals({
-				A => { live => 0, dead => 1 },
-				B => { live => 0, dead => 1 },
-			      }, $self->lemming_census());
+                                A => { live => 0, dead => 1 },
+                                B => { live => 0, dead => 1 },
+                              }, $self->lemming_census());
 }
 
 sub test_startup_exits
@@ -560,7 +560,7 @@ sub test_startup_exits
     my $srv = $self->lemming_service(tag => 'C');
     eval
     {
-	$self->start();
+        $self->start();
     };
     xlog "start failed (as expected): $@" if $@;
 
@@ -569,8 +569,8 @@ sub test_startup_exits
 
     xlog "expect 1 dead lemming";
     $self->assert_deep_equals({
-				A => { live => 0, dead => 1 },
-			      }, $self->lemming_census());
+                                A => { live => 0, dead => 1 },
+                              }, $self->lemming_census());
 }
 
 # TODO: test exit during startup with prefork=
@@ -585,19 +585,19 @@ sub test_service_ipv6
 
     xlog "not preforked, so no lemmings running yet";
     $self->assert_deep_equals({},
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     my $lemm = lemming_connect($srv);
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 }
 
 sub test_service_unix
@@ -606,25 +606,25 @@ sub test_service_unix
 
     xlog "single successful service on UNIX domain socket";
     my $srv = $self->lemming_service(
-			host => undef,
-			port => '@basedir@/conf/socket/lemming.sock');
+                        host => undef,
+                        port => '@basedir@/conf/socket/lemming.sock');
     $self->start();
 
     xlog "not preforked, so no lemmings running yet";
     $self->assert_deep_equals({},
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     my $lemm = lemming_connect($srv);
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 }
 
 sub test_service_nohost
@@ -637,19 +637,19 @@ sub test_service_nohost
 
     xlog "not preforked, so no lemmings running yet";
     $self->assert_deep_equals({},
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     my $lemm = lemming_connect($srv);
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 }
 
 sub test_service_dup_port
@@ -660,7 +660,7 @@ sub test_service_dup_port
     xlog "parameters which reference the same IPv4 port";
     my $srvA = $self->lemming_service(tag => 'A');
     my $srvB = $self->lemming_service(tag => 'B',
-				      port => $srvA->port());
+                                      port => $srvA->port());
 
     # master should emit a syslog message like this
     #
@@ -673,7 +673,7 @@ sub test_service_dup_port
 
     xlog "not preforked, so no lemmings running yet";
     $self->assert_deep_equals({},
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     my $lemmA = lemming_connect($srvA);
 
@@ -681,20 +681,20 @@ sub test_service_dup_port
     my ($winner) = keys %$census;  # either could be the one that runs
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ $winner => { live => 1, dead => 0 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     my $lemmB = lemming_connect($srvB);
 
     xlog "the port is owned by service A";
     $self->assert_deep_equals({ $winner => { live => 2, dead => 0 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     lemming_push($lemmA, 'success');
     lemming_push($lemmB, 'success');
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({ $winner => { live => 0, dead => 2 } },
-			      $self->lemming_census());
+                              $self->lemming_census());
 }
 
 sub test_service_noexe
@@ -704,8 +704,8 @@ sub test_service_noexe
     xlog "single service with a non-existant executable";
     my $srvA = $self->lemming_service(tag => 'A');
     my $srvB = $self->{instance}->add_service(
-		    name => 'B',
-		    argv => ['/usr/bin/no-such-exe','--foo','--bar']);
+                    name => 'B',
+                    argv => ['/usr/bin/no-such-exe','--foo','--bar']);
 
     # master should exit while adding services, with a message
     # to syslog like this
@@ -714,7 +714,7 @@ sub test_service_noexe
     # for service 'B'
     eval
     {
-	$self->start();
+        $self->start();
     };
     xlog "start failed (as expected): $@" if $@;
 
@@ -735,17 +735,17 @@ sub test_reap_rate
 
     xlog "not preforked, so no lemmings running yet";
     $self->assert_deep_equals({},
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     xlog "Build a vast flock of lemmings";
     my @lemmings;
     for (1..100)
     {
-	push(@lemmings, lemming_connect($srv));
+        push(@lemmings, lemming_connect($srv));
     }
     $self->assert_deep_equals({
-				A => { live => 100, dead => 0 },
-			      }, $self->lemming_census());
+                                A => { live => 100, dead => 0 },
+                              }, $self->lemming_census());
 
     # This technique avoids having new connections at the
     # same time as we're trying to measure reaping latency,
@@ -754,17 +754,17 @@ sub test_reap_rate
     my $ss = new Cassandane::Util::Sample;
     while (my $lemm = shift @lemmings)
     {
-	my $t = lemming_push($lemm, 'success');
-	$self->assert($t < $max_latency,
-		      "Child reap latency is >= $max_latency sec");
-	$ss->add($t);
+        my $t = lemming_push($lemm, 'success');
+        $self->assert($t < $max_latency,
+                      "Child reap latency is >= $max_latency sec");
+        $ss->add($t);
     }
     xlog "Reap times: $ss";
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({
-				A => { live => 0, dead => 100 },
-			      }, $self->lemming_census());
+                                A => { live => 0, dead => 100 },
+                              }, $self->lemming_census());
 }
 
 sub measure_fork_rate
@@ -775,14 +775,14 @@ sub measure_fork_rate
     my @lemmings;
     for (1..100)
     {
-	my $lemm = lemming_connect($srv);
-	push(@lemmings, $lemm);
-	$metronome->tick();
+        my $lemm = lemming_connect($srv);
+        push(@lemmings, $lemm);
+        $metronome->tick();
     }
 
     foreach my $lemm (@lemmings)
     {
-	lemming_push($lemm, 'success');
+        lemming_push($lemm, 'success');
     }
 
     return $metronome->actual_rate();
@@ -800,8 +800,8 @@ sub test_maxforkrate
     # rates may be difficult to achieve when running under Valgrind, and
     # we don't want that to cause the test to fail spuriously.
     my $epsilon = 0.2;
-    my $fast = 10.0;	    # forks/sec
-    my $slow = 5.0;	    # forks/sec
+    my $fast = 10.0;        # forks/sec
+    my $slow = 5.0;         # forks/sec
 
     my $srvA = $self->lemming_service(tag => 'A');
     my $srvB = $self->lemming_service(tag => 'B', maxforkrate => int($slow));
@@ -809,29 +809,29 @@ sub test_maxforkrate
 
     xlog "not preforked, so no lemmings running yet";
     $self->assert_deep_equals({},
-			      $self->lemming_census());
+                              $self->lemming_census());
 
     xlog "Test that we can achieve the fast forks rate on the unlimited service";
     my $r = $self->measure_fork_rate($srvA, $fast);
     xlog "Actual rate: $r";
     $self->assert($r >= (1.0-$epsilon)*$fast,
-		  "Fork rate too slow, for $r wanted $fast");
+                  "Fork rate too slow, for $r wanted $fast");
     $self->assert($r <= (1.0+$epsilon)*$fast,
-		  "Fork rate too fast, for $r wanted $fast");
+                  "Fork rate too fast, for $r wanted $fast");
 
     xlog "Test that the fork rate is limited on the limited service";
     $r = $self->measure_fork_rate($srvB, $fast);
     xlog "Actual rate: $r";
     $self->assert($r >= (1.0-$epsilon)*$slow,
-		  "Fork rate too slow, got $r wanted $slow");
+                  "Fork rate too slow, got $r wanted $slow");
     $self->assert($r <= (1.0+$epsilon)*$slow,
-		  "Fork rate too fast, got $r wanted $slow");
+                  "Fork rate too fast, got $r wanted $slow");
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({
-				A => { live => 0, dead => 100 },
-				B => { live => 0, dead => 100 },
-			      }, $self->lemming_census());
+                                A => { live => 0, dead => 100 },
+                                B => { live => 0, dead => 100 },
+                              }, $self->lemming_census());
 }
 
 sub XXXtest_periodic_event
@@ -853,8 +853,8 @@ sub XXXtest_periodic_event
     sleep(5*60);
 
     $self->assert_deep_equals({
-				B => { live => 0, dead => 6 },
-			      }, $self->lemming_census());
+                                B => { live => 0, dead => 6 },
+                              }, $self->lemming_census());
 }
 
 sub test_service_bad_name
@@ -876,7 +876,7 @@ sub test_service_bad_name
     #
     eval
     {
-	$self->start();
+        $self->start();
     };
     xlog "start failed (as expected): $@" if $@;
 
@@ -915,33 +915,33 @@ sub XXX_test_service_primary_fail
     my $lemm;
     eval
     {
-	$lemm = lemming_connect($srv, 'inet');
+        $lemm = lemming_connect($srv, 'inet');
     };
     $self->assert_null($lemm);
 
     xlog "expect 5 dead lemmings";
     $self->assert_deep_equals({ foo => { live => 0, dead => 5 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     xlog "check the IPv4 service is really dead";
     eval
     {
-	$lemm = lemming_connect($srv, 'inet');
+        $lemm = lemming_connect($srv, 'inet');
     };
     $self->assert_null($lemm);
     $self->assert_deep_equals({ foo => { live => 0, dead => 5 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     xlog "breed one IPv6 lemming";
     $lemm = lemming_connect($srv, 'inet6');
     $self->assert_deep_equals({ foo => { live => 1, dead => 5 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({ foo => { live => 0, dead => 6 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     xlog "revive the dead IPv4 service";
     $self->{instance}->send_sighup();
@@ -950,13 +950,13 @@ sub XXX_test_service_primary_fail
     $lemm = undef;
     eval
     {
-	$lemm = lemming_connect($srv, 'inet');
+        $lemm = lemming_connect($srv, 'inet');
     };
     $self->assert_null($lemm);
 
     xlog "expect 5 more dead lemmings";
     $self->assert_deep_equals({ foo => { live => 0, dead => 11 } },
-	$self->lemming_census());
+        $self->lemming_census());
 }
 
 sub XXX_test_service_associate_fail
@@ -973,33 +973,33 @@ sub XXX_test_service_associate_fail
     my $lemm;
     eval
     {
-	$lemm = lemming_connect($srv, 'inet6');
+        $lemm = lemming_connect($srv, 'inet6');
     };
     $self->assert_null($lemm);
 
     xlog "expect 5 dead lemmings";
     $self->assert_deep_equals({ foo => { live => 0, dead => 5 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     xlog "check the IPv6 service is really dead";
     eval
     {
-	$lemm = lemming_connect($srv, 'inet6');
+        $lemm = lemming_connect($srv, 'inet6');
     };
     $self->assert_null($lemm);
     $self->assert_deep_equals({ foo => { live => 0, dead => 5 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     xlog "breed one IPv4 lemming";
     $lemm = lemming_connect($srv, 'inet');
     $self->assert_deep_equals({ foo => { live => 1, dead => 5 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({ foo => { live => 0, dead => 6 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     xlog "revive the dead IPv6 service";
     $self->{instance}->send_sighup();
@@ -1008,13 +1008,13 @@ sub XXX_test_service_associate_fail
     $lemm = undef;
     eval
     {
-	$lemm = lemming_connect($srv, 'inet6');
+        $lemm = lemming_connect($srv, 'inet6');
     };
     $self->assert_null($lemm);
 
     xlog "expect 5 dead lemmings";
     $self->assert_deep_equals({ foo => { live => 0, dead => 11 } },
-	$self->lemming_census());
+        $self->lemming_census());
 }
 
 sub test_sighup_recycling
@@ -1029,34 +1029,34 @@ sub test_sighup_recycling
 
     xlog "preforked, so one lemming running already";
     $self->assert_deep_equals({ foo => { live => 1, dead => 0 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     my $lemm = lemming_connect($srv);
     $self->lemming_wait(foo => { live => 2 });
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ foo => { live => 2, dead => 0 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     $self->{instance}->send_sighup();
     $self->lemming_wait(foo => { live => 2, dead => 1 });
 
     xlog "recycled, so expect one dead lemming";
     $self->assert_deep_equals({ foo => { live => 2, dead => 1 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     $self->{instance}->send_sighup();
     $self->lemming_wait(foo => { live => 2, dead => 2 });
 
     xlog "recycled, again so expect one more dead lemming";
     $self->assert_deep_equals({ foo => { live => 2, dead => 2 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog "always at least one live lemming";
     $self->assert_deep_equals({ foo => { live => 1, dead => 3 } },
-	$self->lemming_census());
+        $self->lemming_census());
 }
 
 sub test_sighup_reloading
@@ -1074,24 +1074,24 @@ sub test_sighup_reloading
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     lemming_push($lemmA, 'success');
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     xlog "connection fails due to unexisting lemming";
     my $lemmB;
     eval
     {
-	$lemmB = lemming_connect($srvB);
+        $lemmB = lemming_connect($srvB);
     };
     $self->assert_null($lemmB);
 
     $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
 
     xlog "add service in cyrus.conf and reload";
@@ -1102,27 +1102,27 @@ sub test_sighup_reloading
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 1, dead => 1 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     lemming_push($lemmA, 'success');
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({ A => { live => 0, dead => 2 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     $lemmB = lemming_connect($srvB);
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 0, dead => 2 },
-				B => { live => 1, dead => 0 } },
-	$self->lemming_census());
+                                B => { live => 1, dead => 0 } },
+        $self->lemming_census());
 
     lemming_push($lemmB, 'success');
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({ A => { live => 0, dead => 2 },
-				B => { live => 0, dead => 1 } },
-	$self->lemming_census());
+                                B => { live => 0, dead => 1 } },
+        $self->lemming_census());
 
 
     xlog "remove service in cyrus.conf and reload";
@@ -1139,27 +1139,27 @@ sub test_sighup_reloading
     $lemmA = undef;
     eval
     {
-	$lemmA = lemming_connect($srvA);
+        $lemmA = lemming_connect($srvA);
     };
     $self->assert_null($lemmA);
 
     $self->assert_deep_equals({ A => { live => 0, dead => 2 },
-				B => { live => 0, dead => 1 } },
-	$self->lemming_census());
+                                B => { live => 0, dead => 1 } },
+        $self->lemming_census());
 
     $lemmB = lemming_connect($srvB);
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 0, dead => 2 },
-				B => { live => 1, dead => 1 } },
-	$self->lemming_census());
+                                B => { live => 1, dead => 1 } },
+        $self->lemming_census());
 
     lemming_push($lemmB, 'success');
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({ A => { live => 0, dead => 2 },
-				B => { live => 0, dead => 2 } },
-	$self->lemming_census());
+                                B => { live => 0, dead => 2 } },
+        $self->lemming_census());
 }
 
 sub test_sighup_reloading_listen
@@ -1176,20 +1176,20 @@ sub test_sighup_reloading_listen
 
     xlog "preforked, so one lemming running already";
     $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     my $lemm = lemming_connect($srv);
     $self->lemming_wait(A => { live => 2 });
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 2, dead => 0 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog "always at least one live lemming";
     $self->assert_deep_equals({ A => { live => 1, dead => 1 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
 
     xlog "change service listen port in cyrus.conf and reload";
@@ -1204,20 +1204,20 @@ sub test_sighup_reloading_listen
     $self->lemming_wait(A => { live => 1, dead => 2 });
 
     $self->assert_deep_equals({ A => { live => 1, dead => 2 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     $lemm = lemming_connect($srv);
     $self->lemming_wait(A => { live => 2 });
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 2, dead => 2 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog "always at least one live lemming";
     $self->assert_deep_equals({ A => { live => 1, dead => 3 } },
-	$self->lemming_census());
+        $self->lemming_census());
 }
 
 sub test_sighup_reloading_proto
@@ -1236,7 +1236,7 @@ sub test_sighup_reloading_proto
 
     xlog "preforked, so two lemmings running already";
     $self->assert_deep_equals({ A => { live => 2, dead => 0 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     # check IPv4
     my $lemm = lemming_connect($srv, 'inet');
@@ -1244,13 +1244,13 @@ sub test_sighup_reloading_proto
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 3, dead => 0 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog "always at least two live lemmings";
     $self->assert_deep_equals({ A => { live => 2, dead => 1 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     # check IPv6
     $lemm = lemming_connect($srv, 'inet6');
@@ -1258,13 +1258,13 @@ sub test_sighup_reloading_proto
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 3, dead => 1 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog "always at least two live lemmings";
     $self->assert_deep_equals({ A => { live => 2, dead => 2 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
 
     xlog "change service listen proto in cyrus.conf and reload";
@@ -1276,7 +1276,7 @@ sub test_sighup_reloading_proto
     $self->lemming_wait(A => { live => 1, dead => 4 });
 
     $self->assert_deep_equals({ A => { live => 1, dead => 4 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     # check IPv4
     $lemm = lemming_connect($srv, 'inet');
@@ -1284,26 +1284,26 @@ sub test_sighup_reloading_proto
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => { live => 2, dead => 4 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     lemming_push($lemm, 'success');
 
     xlog "always at least one live lemming";
     $self->assert_deep_equals({ A => { live => 1, dead => 5 } },
-	$self->lemming_census());
+        $self->lemming_census());
 
     # check IPv6
     xlog "connection fails due to unexisting IPv6 lemming";
     $lemm = undef;
     eval
     {
-	$lemm = lemming_connect($srv, 'inet6');
+        $lemm = lemming_connect($srv, 'inet6');
     };
     $self->assert_null($lemm);
 
     xlog "always at least one live lemming";
     $self->assert_deep_equals({ A => { live => 1, dead => 5 } },
-	$self->lemming_census());
+        $self->lemming_census());
 }
 
 1;

@@ -60,13 +60,13 @@ sub new
 
     my $nmessages = $NMESSAGES;
     $nmessages = delete $params{nmessages}
-	if defined $params{nmessages};
+        if defined $params{nmessages};
     my $deltat = $DELTAT;
     $deltat = delete $params{deltat}
-	if defined $params{deltat};
+        if defined $params{deltat};
     my $nthreads = $NTHREADS;
     $nthreads = delete $params{nthreads}
-	if defined $params{nthreads};
+        if defined $params{nthreads};
 
     my $self = $class->SUPER::new(%params);
 
@@ -76,18 +76,18 @@ sub new
     $self->{threads} = [];
     for (my $i = 1 ; $i <= $nthreads ; $i++)
     {
-	my $thread =
-	{
-	    id => $i,
-	    subject => ucfirst(random_word()) . " " . random_word(),
-	    cid => undef,
-	    last_message => undef,
-	};
-	push(@{$self->{threads}}, $thread);
+        my $thread =
+        {
+            id => $i,
+            subject => ucfirst(random_word()) . " " . random_word(),
+            cid => undef,
+            last_message => undef,
+        };
+        push(@{$self->{threads}}, $thread);
     }
 
     $self->{next_date} = DateTime->now->epoch -
-		    $self->{deltat} * ($self->{nmessages}+1);
+                    $self->{deltat} * ($self->{nmessages}+1);
     $self->{last_thread} = undef;
 
     return $self;
@@ -101,27 +101,27 @@ sub _choose_thread
     my $thread;
     if ($dice <= $FINISH_CHANCE)
     {
-	# follow-up on the last thread
-	$thread = $self->{last_thread};
+        # follow-up on the last thread
+        $thread = $self->{last_thread};
     }
     if (!defined $thread)
     {
-	my $i = int(rand(scalar(@{$self->{threads}})));
-	$thread = $self->{threads}->[$i];
+        my $i = int(rand(scalar(@{$self->{threads}})));
+        $thread = $self->{threads}->[$i];
     }
 
     $dice = rand;
     if ($dice <= $FINISH_CHANCE)
     {
-	# detach from the generator...we won't find it again
-	my @tt = grep { $thread != $_ } @{$self->{threads}};
-	$self->{threads} = \@tt;
-	$self->{last_thread} = undef
-	    if defined $self->{last_thread} && $thread == $self->{last_thread};
+        # detach from the generator...we won't find it again
+        my @tt = grep { $thread != $_ } @{$self->{threads}};
+        $self->{threads} = \@tt;
+        $self->{last_thread} = undef
+            if defined $self->{last_thread} && $thread == $self->{last_thread};
     }
     else
     {
-	$self->{last_thread} = $thread;
+        $self->{last_thread} = $thread;
     }
 
     return $thread;
@@ -137,21 +137,21 @@ sub generate
     my ($self, %params) = @_;
 
     return undef
-	if (!$self->{nmessages});
+        if (!$self->{nmessages});
 
     my $thread = $self->_choose_thread();
     return undef
-	if (!defined $thread);
+        if (!defined $thread);
 
     my $last = $thread->{last_message};
     if (defined $last)
     {
-	$params{subject} = "Re: " . $thread->{subject};
-	$params{references} = [ $last ];
+        $params{subject} = "Re: " . $thread->{subject};
+        $params{references} = [ $last ];
     }
     else
     {
-	$params{subject} = $thread->{subject};
+        $params{subject} = $thread->{subject};
     }
     $params{date} = DateTime->from_epoch( epoch => $self->{next_date} );
     $self->{next_date} += $self->{deltat};
@@ -161,7 +161,7 @@ sub generate
 
     my $cid = $thread->{cid};
     $cid = $thread->{cid} = $msg->make_cid()
-	unless defined $cid;
+        unless defined $cid;
     $msg->set_attributes(cid => $cid);
 
     $thread->{last_message} = $msg;

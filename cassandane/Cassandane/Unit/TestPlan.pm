@@ -51,10 +51,10 @@ sub new
 {
     my ($class, $suite) = @_;
     my $self = {
-	suite => $suite,
-	loaded_suite => undef,
-	denied => {},
-	allowed => {},
+        suite => $suite,
+        loaded_suite => undef,
+        denied => {},
+        allowed => {},
     };
     return bless $self, $class;
 }
@@ -102,12 +102,12 @@ sub new
 {
     my ($class) = @_;
     my $self = {
-	id => $nextid++,
-	pid => undef,
-	downpipe => undef,
-	uppipe => undef,
-	busy => 0,
-	handler => undef,
+        id => $nextid++,
+        pid => undef,
+        downpipe => undef,
+        uppipe => undef,
+        busy => 0,
+        handler => undef,
     };
     return bless $self, $class;
 }
@@ -138,32 +138,32 @@ sub start
 
     my ($dr, $dw) = POSIX::pipe();
     die "Cannot create down pipe: $!"
-	unless defined $dw;
+        unless defined $dw;
 
     my ($ur, $uw) = POSIX::pipe();
     die "Cannot create up pipe: $!"
-	unless defined $uw;
+        unless defined $uw;
 
     my $pid = fork();
     die "Cannot fork: $!" unless defined $pid;
 
     if ($pid)
     {
-	# parent
-	$self->{downpipe} = _pipe_write_fh($dr, $dw);
-	$self->{uppipe} = _pipe_read_fh($ur, $uw);
-	$self->{pid} = $pid;
+        # parent
+        $self->{downpipe} = _pipe_write_fh($dr, $dw);
+        $self->{uppipe} = _pipe_read_fh($ur, $uw);
+        $self->{pid} = $pid;
     }
     else
     {
-	# child
-	$self->{downpipe} = _pipe_read_fh($dr, $dw);
-	$self->{uppipe} = _pipe_write_fh($ur, $uw);
-	$ENV{TEST_UNIT_WORKER_ID} = $self->{id};    # 1, 2, 3...
-	$ENV{TEST_UNIT_BASENAME} = $0;
-	$0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID})";
-	$self->_mainloop();
-	exit(0);
+        # child
+        $self->{downpipe} = _pipe_read_fh($dr, $dw);
+        $self->{uppipe} = _pipe_write_fh($ur, $uw);
+        $ENV{TEST_UNIT_WORKER_ID} = $self->{id};    # 1, 2, 3...
+        $ENV{TEST_UNIT_BASENAME} = $0;
+        $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID})";
+        $self->_mainloop();
+        exit(0);
     }
 }
 
@@ -173,14 +173,14 @@ sub _send
     my $msg = sprintf($fmt, @args);
 # print STDERR "--> \"$msg\"\n";
     syswrite($fh, $msg)
-	or die "Cannot write to pipe: $!";
+        or die "Cannot write to pipe: $!";
 }
 
 sub _receive
 {
     my ($fh) = @_;
     my $msg = $fh->gets()
-	or return;
+        or return;
 # print STDERR "<-- \"$msg\"\n";
     chomp $msg;
     return $msg;
@@ -192,25 +192,25 @@ sub _mainloop
 
     while (my $msg = _receive($self->{downpipe}))
     {
-	my ($command, @args) = split(/\s+/, $msg);
+        my ($command, @args) = split(/\s+/, $msg);
 
-	if ($command eq 'stop')
-	{
-	    return;
-	}
-	elsif ($command eq 'run')
-	{
-	    my ($witem) = thaw(decode_base64($args[0]));
-	    $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID}) $witem->{suite}.$witem->{testname}";
-	    $self->{handler}->($witem);
-	    $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID})";
-	    _send($self->{uppipe},
-		  "done %s\n", encode_base64(freeze($witem), ''));
-	}
-	else
-	{
-	    print STDERR "_mainloop: unknown command '$command'\n";
-	}
+        if ($command eq 'stop')
+        {
+            return;
+        }
+        elsif ($command eq 'run')
+        {
+            my ($witem) = thaw(decode_base64($args[0]));
+            $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID}) $witem->{suite}.$witem->{testname}";
+            $self->{handler}->($witem);
+            $0 = "$ENV{TEST_UNIT_BASENAME} ($ENV{TEST_UNIT_WORKER_ID})";
+            _send($self->{uppipe},
+                  "done %s\n", encode_base64(freeze($witem), ''));
+        }
+        else
+        {
+            print STDERR "_mainloop: unknown command '$command'\n";
+        }
     }
 }
 
@@ -222,7 +222,7 @@ sub get_reply
     return if !defined $msg;
     my ($command, @args) = split(/\s+/, $msg);
     die "Unknown message \"$msg\""
-	if ($command ne 'done');
+        if ($command ne 'done');
     $self->{busy} = 0;
     my ($witem) = thaw(decode_base64($args[0]));
     return $witem;
@@ -233,7 +233,7 @@ sub assign
     my ($self, $witem) = @_;
     $witem->{start_time} = time();
     _send($self->{downpipe},
-	  "run %s\n", encode_base64(freeze($witem), ''));
+          "run %s\n", encode_base64(freeze($witem), ''));
     $self->{busy} = 1;
 }
 
@@ -242,14 +242,14 @@ sub stop
     my ($self) = @_;
     eval
     {
-	# We don't care if this dies, it just
-	# means the Worker has died prematurely.
-	_send($self->{downpipe}, "stop\n");
+        # We don't care if this dies, it just
+        # means the Worker has died prematurely.
+        _send($self->{downpipe}, "stop\n");
     };
     while (1)
     {
-	my $res = waitpid($self->{pid}, 0);
-	last if ($res < 0 || $res == $self->{pid});
+        my $res = waitpid($self->{pid}, 0);
+        last if ($res < 0 || $res == $self->{pid});
     }
     $self->_cleanup();
 }
@@ -260,14 +260,14 @@ sub _cleanup
 
     if ($self->{downpipe})
     {
-	close $self->{downpipe};
-	$self->{downpipe} = undef;
+        close $self->{downpipe};
+        $self->{downpipe} = undef;
     }
 
     if ($self->{uppipe})
     {
-	close $self->{uppipe};
-	$self->{uppipe} = undef;
+        close $self->{uppipe};
+        $self->{uppipe} = undef;
     }
 
     $self->{pid} = undef;
@@ -287,14 +287,14 @@ sub new
 {
     my ($class, %params) = @_;
     my $self = {
-	workers => [],
-	maxworkers => 2,
-	pending => [],
-	handler => sub { die "This should not happen"; },
+        workers => [],
+        maxworkers => 2,
+        pending => [],
+        handler => sub { die "This should not happen"; },
     };
     foreach my $p (qw(maxworkers handler))
     {
-	$self->{$p} = $params{$p} if $params{$p};
+        $self->{$p} = $params{$p} if $params{$p};
     }
     return bless $self, $class;
 }
@@ -305,10 +305,10 @@ sub start
 
     while (scalar @{$self->{workers}} < $self->{maxworkers})
     {
-	my $w = Cassandane::Unit::Worker->new();
-	$w->{handler} = $self->{handler};
-	$w->start();
-	push(@{$self->{workers}}, $w);
+        my $w = Cassandane::Unit::Worker->new();
+        $w->{handler} = $self->{handler};
+        $w->start();
+        push(@{$self->{workers}}, $w);
     }
 }
 
@@ -335,25 +335,25 @@ sub _wait
     my $rbits = '';
     foreach my $w (@{$self->{workers}})
     {
-	next if (!$w->{busy});
-	vec($rbits, fileno($w->{uppipe}), 1) = 1;
+        next if (!$w->{busy});
+        vec($rbits, fileno($w->{uppipe}), 1) = 1;
     }
 
     # select() with no timeout
     my $res;
     do {
-	$res = select($rbits, undef, undef, undef);
+        $res = select($rbits, undef, undef, undef);
     } while ($res < 0 && $! == EINTR);
     die "select failed: $!" if ($res < 0);
 
     # discover which of our workers has responded
     foreach my $w (@{$self->{workers}})
     {
-	if (vec($rbits, fileno($w->{uppipe}), 1))
-	{
-	    push(@{$self->{pending}}, $w->get_reply());
-	    return $w;
-	}
+        if (vec($rbits, fileno($w->{uppipe}), 1))
+        {
+            push(@{$self->{pending}}, $w->get_reply());
+            return $w;
+        }
     }
     die "Unexpected result from select: $res";
 }
@@ -367,8 +367,8 @@ sub retrieve
 
     if ($blocking && !scalar @{$self->{pending}})
     {
-	my @busy = grep { $_->{busy}; } @{$self->{workers}};
-	$self->_wait() if (scalar @busy);
+        my @busy = grep { $_->{busy}; } @{$self->{workers}};
+        $self->_wait() if (scalar @busy);
     }
     return shift @{$self->{pending}};
 }
@@ -380,7 +380,7 @@ sub stop
 
     while (my $w = pop @{$self->{workers}})
     {
-	$w->stop();
+        $w->stop();
     }
 }
 
@@ -398,7 +398,7 @@ sub new
 {
     my ($class) = shift;
     my $self = {
-	witem => undef,
+        witem => undef,
     };
     return bless $self, $class;
 }
@@ -474,13 +474,13 @@ sub new
 {
     my ($class, %opts) = @_;
     my $self = {
-	schedule => {},
-	keep_going => delete $opts{keep_going} || 0,
-	log_directory => delete $opts{log_directory},
-	maxworkers => delete $opts{maxworkers} || 1,
+        schedule => {},
+        keep_going => delete $opts{keep_going} || 0,
+        log_directory => delete $opts{log_directory},
+        maxworkers => delete $opts{maxworkers} || 1,
     };
     die "Unknown options: " . join(' ', keys %opts)
-	if scalar %opts;
+        if scalar %opts;
     return bless $self, $class;
 }
 
@@ -488,7 +488,7 @@ sub _get_item
 {
     my ($self, $suite) = @_;
     return $self->{schedule}->{$suite} ||=
-	Cassandane::Unit::TestPlanItem->new($suite);
+        Cassandane::Unit::TestPlanItem->new($suite);
 }
 
 sub _schedule
@@ -502,25 +502,25 @@ sub _schedule
 
     if ($neg eq '!')
     {
-	if (defined $testname)
-	{
-	    # disable a specific test
-	    $self->_get_item($suite)->_deny($testname);
-	}
-	else
-	{
-	    # remove entire suite
-	    delete $self->{schedule}->{$suite};
-	}
+        if (defined $testname)
+        {
+            # disable a specific test
+            $self->_get_item($suite)->_deny($testname);
+        }
+        else
+        {
+            # remove entire suite
+            delete $self->{schedule}->{$suite};
+        }
     }
     else
     {
-	# add to the schedule
-	my $item = $self->_get_item($suite);
-	if (defined $testname)
-	{
-	    $item->_allow($testname) if $testname;
-	}
+        # add to the schedule
+        my $item = $self->_get_item($suite);
+        if (defined $testname)
+        {
+            $item->_allow($testname) if $testname;
+        }
     }
 }
 
@@ -541,23 +541,23 @@ sub _parse_test_spec
 
     foreach my $root (@test_roots)
     {
-	return ($neg, 'd', $path, undef)
-	    if ($root eq $path);
+        return ($neg, 'd', $path, undef)
+            if ($root eq $path);
 
-	my $fpath = $path;
-	$fpath = "$root/$path"
-	    if ("$root/" ne substr($path, 0, length($root)+1));
+        my $fpath = $path;
+        $fpath = "$root/$path"
+            if ("$root/" ne substr($path, 0, length($root)+1));
 
-	return ($neg, 'd', $fpath, undef)
-	    if ( -d $fpath );
-	return ($neg, 'f', "$fpath.pm", undef)
-	    if ( -f "$fpath.pm" );
+        return ($neg, 'd', $fpath, undef)
+            if ( -d $fpath );
+        return ($neg, 'f', "$fpath.pm", undef)
+            if ( -f "$fpath.pm" );
 
-	my $test;
-	($fpath, $test) = ($fpath =~ m/^(.*)\/([^\/]+)$/);
-	next unless defined $test;
-	return ($neg, 'f', "$fpath.pm", $test)
-	    if ( -f "$fpath.pm" );
+        my $test;
+        ($fpath, $test) = ($fpath =~ m/^(.*)\/([^\/]+)$/);
+        next unless defined $test;
+        return ($neg, 'f', "$fpath.pm", $test)
+            if ( -f "$fpath.pm" );
     }
 
     die "Unrecognised test specification: $name";
@@ -568,30 +568,30 @@ sub schedule
     my ($self, @names) = @_;
 
     @names = @test_roots
-	if !scalar @names;
+        if !scalar @names;
 
     foreach my $name (@names)
     {
-	my ($neg, $type, $path, $test) = _parse_test_spec($name);
+        my ($neg, $type, $path, $test) = _parse_test_spec($name);
 
-	$self->schedule(@test_roots)
-	    if $neg eq '!' && !scalar %{$self->{schedule}};
+        $self->schedule(@test_roots)
+            if $neg eq '!' && !scalar %{$self->{schedule}};
 
-	if ($type eq 'd')
-	{
-	    opendir DIR, $path
-		or die "Cannot open directory $path for reading: $!";
-	    while ($_ = readdir DIR)
-	    {
-		next unless m/\.pm$/;
-		$self->_schedule($neg, "$path/$_", undef);
-	    }
-	    closedir DIR;
-	}
-	else
-	{
-	    $self->_schedule($neg, $path, $test);
-	}
+        if ($type eq 'd')
+        {
+            opendir DIR, $path
+                or die "Cannot open directory $path for reading: $!";
+            while ($_ = readdir DIR)
+            {
+                next unless m/\.pm$/;
+                $self->_schedule($neg, "$path/$_", undef);
+            }
+            closedir DIR;
+        }
+        else
+        {
+            $self->_schedule($neg, $path, $test);
+        }
     }
 }
 
@@ -608,25 +608,25 @@ sub _get_schedule
     my @res;
     foreach my $item (@items)
     {
-	my $loaded = $item->_get_loaded_suite();
-	foreach my $name (sort @{$loaded->names()})
-	{
-	    $name =~ s/^test_//;
-	    next unless $item->_is_allowed($name);
+        my $loaded = $item->_get_loaded_suite();
+        foreach my $name (sort @{$loaded->names()})
+        {
+            $name =~ s/^test_//;
+            next unless $item->_is_allowed($name);
 
-	    my (@settings) = Cassandane::Unit::TestCase->make_parameter_settings($item->{suite});
-	    foreach my $setting (@settings)
-	    {
-		push(@res, {
-		    suite => $item->{suite},
-		    testname => $name,
-		    result => 'unknown',
-		    exception => undef,
-		    logfile => undef,
-		    parameter_setting => $setting,
-		});
-	    }
-	}
+            my (@settings) = Cassandane::Unit::TestCase->make_parameter_settings($item->{suite});
+            foreach my $setting (@settings)
+            {
+                push(@res, {
+                    suite => $item->{suite},
+                    testname => $name,
+                    result => 'unknown',
+                    exception => undef,
+                    logfile => undef,
+                    parameter_setting => $setting,
+                });
+            }
+        }
     }
     return @res;
 }
@@ -640,7 +640,7 @@ sub list
     my @res;
     foreach my $witem ($self->_get_schedule())
     {
-	push(@res, "$witem->{suite}.$witem->{testname}");
+        push(@res, "$witem->{suite}.$witem->{testname}");
     }
 
     return @res;
@@ -658,41 +658,41 @@ sub _setup_logfile
     # for the single threaded case where inter-test
     # messages go to the original stdout.
     open my $oldout, '>&', \*STDOUT
-	or die "Cannot save STDOUT";
+        or die "Cannot save STDOUT";
     open my $olderr, '>&', \*STDERR
-	or die "Cannot save STDERR";
+        or die "Cannot save STDERR";
 
     my $logfh;
     my $logfile;
     srand;   # XXX does this fix the tempfile() issue (#42)?
     if (defined $self->{log_directory})
     {
-	# Log directory specified so create the log file
-	# there with a semi-obvious name
-	if (! -d $self->{log_directory})
-	{
-	    mkpath($self->{log_directory})
-		or die "Cannot create directory $self->{log_directory}: $!";
-	}
-	my $template = $witem->{suite} .  '.' .  $witem->{testname} .  '.XXXXXX';
-	$template =~ s/::/./g;
-	($logfh, $logfile) = tempfile($template,
-				      DIR => $self->{log_directory},
-				      SUFFIX => '.log',
-				      UNLINK => 0);
-	chmod(0644, $logfile);
+        # Log directory specified so create the log file
+        # there with a semi-obvious name
+        if (! -d $self->{log_directory})
+        {
+            mkpath($self->{log_directory})
+                or die "Cannot create directory $self->{log_directory}: $!";
+        }
+        my $template = $witem->{suite} .  '.' .  $witem->{testname} .  '.XXXXXX';
+        $template =~ s/::/./g;
+        ($logfh, $logfile) = tempfile($template,
+                                      DIR => $self->{log_directory},
+                                      SUFFIX => '.log',
+                                      UNLINK => 0);
+        chmod(0644, $logfile);
     }
     else
     {
-	# Create a per-test temporary logfile
-	($logfh, $logfile) = tempfile(UNLINK => 0);
+        # Create a per-test temporary logfile
+        ($logfh, $logfile) = tempfile(UNLINK => 0);
     }
 
     # Redirect both STDOUT and STDERR to the log file
     open STDOUT, '>&', $logfh
-	or die "Cannot redirect STDOUT";
+        or die "Cannot redirect STDOUT";
     open STDERR, '>&', $logfh
-	or die "Cannot redirect STDERR";
+        or die "Cannot redirect STDERR";
     close $logfh;
 
     $witem->{logfile} = $logfile;
@@ -707,13 +707,13 @@ sub _restore_stdout
 
     ${\*STDOUT}->flush;
     open STDOUT, '>&', $self->{oldout}
-	or die "Cannot restore STDOUT";
+        or die "Cannot restore STDOUT";
     close $self->{oldout};
     $self->{oldout} = undef;
 
     ${\*STDERR}->flush;
     open STDERR, '>&', $self->{olderr}
-	or die "Cannot restore STDERR";
+        or die "Cannot restore STDERR";
     close $self->{olderr};
     $self->{olderr} = undef;
 }
@@ -723,10 +723,10 @@ sub _dump_logfile
     my ($logfile) = @_;
 
     open LOGFILE, '<', $logfile
-	or die "Cannot open $logfile for reading: $!";
+        or die "Cannot open $logfile for reading: $!";
     while (<LOGFILE>)
     {
-	print STDERR $_;
+        print STDERR $_;
     }
     close LOGFILE;
 }
@@ -750,24 +750,24 @@ sub _run_workitem
 
     if ($test->can('post_tear_down'))
     {
-	eval
-	{
-	    $test->post_tear_down();
-	};
-	my $ex = $@;
-	if ($ex)
-	{
-	    $result->add_error($test,
-			       Test::Unit::Error->make_new_from_error($ex));
-	}
+        eval
+        {
+            $test->post_tear_down();
+        };
+        my $ex = $@;
+        if ($ex)
+        {
+            $result->add_error($test,
+                               Test::Unit::Error->make_new_from_error($ex));
+        }
     }
 
     $self->_restore_stdout();
     if ($annotate_flag)
     {
-	$test->annotate_from_file($witem->{logfile});
-	_dump_logfile($witem->{logfile}) if (get_verbose > 1);
-	unlink($witem->{logfile}) if (!defined $self->{log_directory});
+        $test->annotate_from_file($witem->{logfile});
+        _dump_logfile($witem->{logfile}) if (get_verbose > 1);
+        unlink($witem->{logfile}) if (!defined $self->{log_directory});
     }
 }
 
@@ -779,7 +779,7 @@ sub _finish_workitem
     $result->start_test($test);
     if ($runner->can('fake_start_time'))
     {
-	$runner->fake_start_time($test, $witem->{start_time});
+        $runner->fake_start_time($test, $witem->{start_time});
     }
 
     $test->annotate_from_file($witem->{logfile});
@@ -788,17 +788,17 @@ sub _finish_workitem
 
     if ($witem->{result} eq 'pass')
     {
-	$result->add_pass($test);
+        $result->add_pass($test);
     }
     elsif ($witem->{result} eq 'fail')
     {
-	$witem->{exception}->{'-object'} = $test;
-	$result->add_failure($test, $witem->{exception});
+        $witem->{exception}->{'-object'} = $test;
+        $result->add_failure($test, $witem->{exception});
     }
     elsif ($witem->{result} eq 'error')
     {
-	$witem->{exception}->{'-object'} = $test;
-	$result->add_error($test, $witem->{exception});
+        $witem->{exception}->{'-object'} = $test;
+        $result->add_error($test, $witem->{exception});
     }
     $result->end_test($test);
 }
@@ -812,12 +812,12 @@ sub _setup_worker_listeners
     my $found = 0;
     foreach my $ll (@{$result->{_Listeners}})
     {
-	push(@list, $ll)
-	    unless defined $ll->{remove_me_in_cassandane_child};
-	$found ||= (ref($ll) eq ref($wlistener));
+        push(@list, $ll)
+            unless defined $ll->{remove_me_in_cassandane_child};
+        $found ||= (ref($ll) eq ref($wlistener));
     }
     push(@list, $wlistener)
-	unless $found;
+        unless $found;
     $result->{_Listeners} = \@list;
 }
 
@@ -839,59 +839,59 @@ sub run
     # try to clean up after ourselves on interrupt
     my $interrupted = 0;
     $SIG{INT} = sub {
-	$interrupted ++;
-	# third ^C will terminate without cleanup
-	$SIG{INT} = 'DEFAULT' if $interrupted >= 2;
+        $interrupted ++;
+        # third ^C will terminate without cleanup
+        $SIG{INT} = 'DEFAULT' if $interrupted >= 2;
     };
 
     if ($maxworkers > 1)
     {
-	# multi-threaded case: use worker pool
+        # multi-threaded case: use worker pool
 
-	# we want an error not a signal
-	$SIG{PIPE} = 'IGNORE';
+        # we want an error not a signal
+        $SIG{PIPE} = 'IGNORE';
 
-	# Just In Case any code samples this in a TestCase c'tor
-	$ENV{TEST_UNIT_WORKER_ID} = 'invalid';
+        # Just In Case any code samples this in a TestCase c'tor
+        $ENV{TEST_UNIT_WORKER_ID} = 'invalid';
 
-	my $wlistener = Cassandane::Unit::WorkerListener->new();
+        my $wlistener = Cassandane::Unit::WorkerListener->new();
 
-	my $pool = Cassandane::Unit::WorkerPool->new(
-	    maxworkers => $maxworkers,
-	    handler => sub {
-		my ($witem) = @_;
-		$wlistener->{witem} = $witem;
-		_setup_worker_listeners($result, $wlistener);
-		$self->_run_workitem($witem, $result, $runner, 0);
-	    },
-	);
-	my $witem;
-	$pool->start();
-	# first ^C stops spawning new work items
-	while ($interrupted < 1 && ($witem = shift @workitems))
-	{
-	    $pool->assign($witem)
-		if ($self->{keep_going} || $result->was_successful());
-	    while ($witem = $pool->retrieve(0))
-	    {
-		$self->_finish_workitem($witem, $result, $runner);
-	    }
-	}
-	# second ^C stops waiting for work items to finish
-	while ($interrupted < 2 && ($witem = $pool->retrieve(1)))
-	{
-	    $self->_finish_workitem($witem, $result, $runner);
-	}
-	$pool->stop();
+        my $pool = Cassandane::Unit::WorkerPool->new(
+            maxworkers => $maxworkers,
+            handler => sub {
+                my ($witem) = @_;
+                $wlistener->{witem} = $witem;
+                _setup_worker_listeners($result, $wlistener);
+                $self->_run_workitem($witem, $result, $runner, 0);
+            },
+        );
+        my $witem;
+        $pool->start();
+        # first ^C stops spawning new work items
+        while ($interrupted < 1 && ($witem = shift @workitems))
+        {
+            $pool->assign($witem)
+                if ($self->{keep_going} || $result->was_successful());
+            while ($witem = $pool->retrieve(0))
+            {
+                $self->_finish_workitem($witem, $result, $runner);
+            }
+        }
+        # second ^C stops waiting for work items to finish
+        while ($interrupted < 2 && ($witem = $pool->retrieve(1)))
+        {
+            $self->_finish_workitem($witem, $result, $runner);
+        }
+        $pool->stop();
     }
     else
     {
-	# single threaded case: just run it all in-process
-	foreach my $witem (@workitems)
-	{
-	    $self->_run_workitem($witem, $result, $runner, 1);
-	    last if ($interrupted || !($self->{keep_going} || $result->was_successful()));
-	}
+        # single threaded case: just run it all in-process
+        foreach my $witem (@workitems)
+        {
+            $self->_run_workitem($witem, $result, $runner, 1);
+            last if ($interrupted || !($self->{keep_going} || $result->was_successful()));
+        }
     }
 
     return $result->was_successful();

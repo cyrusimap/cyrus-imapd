@@ -76,7 +76,7 @@ sub test_delete_subuser
     $self->{instance}->create_user('admin1');
     $adminstore->set_folder('user.admin1');
     for ('A'..'Z') {
-	$self->make_message("Message $_", store => $adminstore);
+        $self->make_message("Message $_", store => $adminstore);
     }
     $admintalk->unselect();
 

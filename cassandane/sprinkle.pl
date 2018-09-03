@@ -19,11 +19,11 @@
 #     endorse or promote products derived from this software without
 #     prior written permission. For permission or any legal
 #     details, please contact
-# 	Opera Software Australia Pty. Ltd.
-# 	Level 50, 120 Collins St
-# 	Melbourne 3000
-# 	Victoria
-# 	Australia
+#       Opera Software Australia Pty. Ltd.
+#       Level 50, 120 Collins St
+#       Melbourne 3000
+#       Victoria
+#       Australia
 #
 #  4. Redistributions of any form whatsoever must retain the following
 #     acknowledgment:
@@ -65,7 +65,7 @@ sub choose_folder
 
     for (my $i = 0 ; $i < $nparts ; $i++)
     {
-	push(@parts, random_word());
+        push(@parts, random_word());
     }
 
     my $folder = join('.', ($base_folder, @parts));
@@ -78,38 +78,38 @@ sub sprinkle
     my ($path, $imap_store) = @_;
 
     my $mbox_store = Cassandane::MessageStoreFactory->create((
-			type => 'mbox',
-			path => $path ))
-	or die "Cannot create MBOX message store";
+                        type => 'mbox',
+                        path => $path ))
+        or die "Cannot create MBOX message store";
 
     $mbox_store->read_begin();
     while (my $msg = $mbox_store->read_message())
     {
-	if ($num_remaining == 0)
-	{
-	    $imap_store->write_end()
-		if $num_written;
-	    $imap_store->set_folder(choose_folder());
-	    $imap_store->write_begin();
-	    $num_remaining = 1 + int(rand(300));
-	    $num_written = 0;
-	    xlog "choosing $num_remaining messages";
-	}
-	$imap_store->write_message($msg);
-	$num_remaining--;
-	$num_written++;
+        if ($num_remaining == 0)
+        {
+            $imap_store->write_end()
+                if $num_written;
+            $imap_store->set_folder(choose_folder());
+            $imap_store->write_begin();
+            $num_remaining = 1 + int(rand(300));
+            $num_written = 0;
+            xlog "choosing $num_remaining messages";
+        }
+        $imap_store->write_message($msg);
+        $num_remaining--;
+        $num_written++;
     }
     $mbox_store->read_end();
 }
 
 my $imap_store = Cassandane::MessageStoreFactory->create((
-	type => 'imap',
-	host => 'slott02',
-	port => 2144,
-	folder => 'inbox.sprinkle',
-	username => 'test@vmtom.com',
-	password => 'testpw',
-	verbose => ($verbose > 1 ? 1 : 0),
+        type => 'imap',
+        host => 'slott02',
+        port => 2144,
+        folder => 'inbox.sprinkle',
+        username => 'test@vmtom.com',
+        password => 'testpw',
+        verbose => ($verbose > 1 ? 1 : 0),
     ))
     or die "Cannot create IMAP message store";
 $base_folder = $imap_store->{folder};

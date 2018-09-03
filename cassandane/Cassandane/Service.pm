@@ -54,15 +54,15 @@ sub new
 
     my $host = '127.0.0.1';
     $host = delete $params{host}
-	if (exists $params{host});
+        if (exists $params{host});
     my $port = delete $params{port};
     my $type = delete $params{type} || 'unknown';
 
     my $self = $class->SUPER::new(%params);
 
     $self->{_daemon} = Cassandane::Daemon->new(name => $params{name},
-					       host => $host,
-					       port => $port);
+                                               host => $host,
+                                               port => $port);
     $self->{type} = $type;
 
     return $self;
@@ -124,9 +124,9 @@ sub create_store
 sub get_socket {
     my ($self) = @_;
     return create_client_socket(
-	$self->address_family(),
-	$self->host(),
-	$self->port()
+        $self->address_family(),
+        $self->host(),
+        $self->port()
     );
 }
 

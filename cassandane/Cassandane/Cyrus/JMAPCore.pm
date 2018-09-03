@@ -62,15 +62,15 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane',
-		 conversations => 'yes',
-		 httpmodules => 'carddav caldav jmap',
-		 httpallowcompress => 'no');
+                 conversations => 'yes',
+                 httpmodules => 'carddav caldav jmap',
+                 httpallowcompress => 'no');
 
     return $class->SUPER::new({
-	config => $config,
-	jmap => 1,
-	adminstore => 1,
-	services => [ 'imap', 'http' ]
+        config => $config,
+        jmap => 1,
+        adminstore => 1,
+        services => [ 'imap', 'http' ]
     }, @args);
 }
 
@@ -89,20 +89,20 @@ sub test_settings
     $self->{instance}->create_user("bar");
     $admintalk->setacl("user.bar", "cassandane", "lrswp") or die;
 
-	my $service = $self->{instance}->get_service("http");
-	my $fooCalDAVTalk = Net::CalDAVTalk->new(
-		user => "foo",
-		password => 'pass',
-		host => $service->host(),
-		port => $service->port(),
-		scheme => 'http',
-		url => '/',
-		expandurl => 1,
-	);
-	my $CalendarId = $fooCalDAVTalk->NewCalendar({name => 'foo'});
-	$self->assert_not_null($CalendarId);
-	$admintalk->setacl("user.foo.#calendars.$CalendarId", "cassandane" => 'lr') or die;
-	$admintalk->setacl("user.foo.#addressbooks.Default", "cassandane" => '') or die;
+        my $service = $self->{instance}->get_service("http");
+        my $fooCalDAVTalk = Net::CalDAVTalk->new(
+                user => "foo",
+                password => 'pass',
+                host => $service->host(),
+                port => $service->port(),
+                scheme => 'http',
+                url => '/',
+                expandurl => 1,
+        );
+        my $CalendarId = $fooCalDAVTalk->NewCalendar({name => 'foo'});
+        $self->assert_not_null($CalendarId);
+        $admintalk->setacl("user.foo.#calendars.$CalendarId", "cassandane" => 'lr') or die;
+        $admintalk->setacl("user.foo.#addressbooks.Default", "cassandane" => '') or die;
 
     # Make sure that isReadOnly is false if ANY mailbox is read-writeable
     $self->{instance}->create_user("baz");
@@ -152,7 +152,7 @@ sub test_settings
     my $acc;
     my @wantHasDataFor;
     my @gotHasDataFor;
-	my $accounts =  $settings->{accounts};
+        my $accounts =  $settings->{accounts};
     $self->assert_num_equals(4, scalar keys %{$accounts});
 
     $acc = $accounts->{cassandane};

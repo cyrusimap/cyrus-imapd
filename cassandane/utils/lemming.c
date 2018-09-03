@@ -18,11 +18,11 @@
  *     endorse or promote products derived from this software without
  *     prior written permission. For permission or any legal
  *     details, please contact
- * 	Opera Software Australia Pty. Ltd.
- * 	Level 50, 120 Collins St
- * 	Melbourne 3000
- * 	Victoria
- * 	Australia
+ *      Opera Software Australia Pty. Ltd.
+ *      Level 50, 120 Collins St
+ *      Melbourne 3000
+ *      Victoria
+ *      Australia
  *
  *  4. Redistributions of any form whatsoever must retain the following
  *     acknowledgment:
@@ -55,8 +55,8 @@
 #define STATUS_FD   3
 #define LISTEN_FD   4
 
-#define MASTER_SERVICE_AVAILABLE	1
-#define MASTER_SERVICE_UNAVAILABLE	2
+#define MASTER_SERVICE_AVAILABLE        1
+#define MASTER_SERVICE_UNAVAILABLE      2
 
 static volatile int gotsighup = 0;
 
@@ -76,10 +76,10 @@ static void no_cores(void)
     memset(&lim, 0, sizeof(lim));
     r = getrlimit(RLIMIT_CORE, &lim);
     if (lim.rlim_cur) {
-	lim.rlim_cur = 0;
-	r = setrlimit(RLIMIT_CORE, &lim);
-	if (r)
-	    syslog(LOG_ERR, "setrlimit failed: %m");
+        lim.rlim_cur = 0;
+        r = setrlimit(RLIMIT_CORE, &lim);
+        if (r)
+            syslog(LOG_ERR, "setrlimit failed: %m");
     }
 }
 
@@ -97,14 +97,14 @@ static void set_sighup_handler(int restartable)
     action.sa_flags = 0;
 #ifdef SA_RESTART
     if (restartable) {
-	action.sa_flags |= SA_RESTART;
+        action.sa_flags |= SA_RESTART;
     }
 #endif
     action.sa_handler = sighup_handler;
 
     if (sigaction(SIGHUP, &action, NULL) < 0) {
-	syslog(LOG_ERR, "unable to install signal handler for SIGHUP: %m");
-	exit(1);
+        syslog(LOG_ERR, "unable to install signal handler for SIGHUP: %m");
+        exit(1);
     }
 }
 
@@ -116,13 +116,13 @@ retry_write(int fd, const void *vbuf, int len)
 
     do
     {
-	n = write(fd, buf, len);
-	if (n < 0)
-	    return -1;
-	if (n == 0)
-	    return -1;	/* WTF? */
-	buf += n;
-	len -= n;
+        n = write(fd, buf, len);
+        if (n < 0)
+            return -1;
+        if (n == 0)
+            return -1;  /* WTF? */
+        buf += n;
+        len -= n;
     }
     while (len > 0);
     return 0;
@@ -138,8 +138,8 @@ tell_master(int message)
     msg.pid = getpid();
     if (retry_write(STATUS_FD, &msg, sizeof(msg)) < 0)
     {
-	syslog(LOG_ERR, "Couldn't write status message to master: %m");
-	exit(1);
+        syslog(LOG_ERR, "Couldn't write status message to master: %m");
+        exit(1);
     }
 }
 
@@ -160,12 +160,12 @@ read_line_from_client(void)
     set_sighup_handler(1);
     if (fd < 0)
     {
-	if (gotsighup) {
-	    syslog(LOG_ERR, "lemming exiting normally on SIGHUP");
-	    exit(0);
-	}
-	syslog(LOG_ERR,  "cannot accept: %m");
-	exit(1);
+        if (gotsighup) {
+            syslog(LOG_ERR, "lemming exiting normally on SIGHUP");
+            exit(0);
+        }
+        syslog(LOG_ERR,  "cannot accept: %m");
+        exit(1);
     }
 
     tell_master(MASTER_SERVICE_UNAVAILABLE);
@@ -174,31 +174,31 @@ read_line_from_client(void)
     n = write(fd, &pid, sizeof(pid));
     if (n < 0)
     {
-	syslog(LOG_ERR,  "cannot write pid: %m");
-	exit(1);
+        syslog(LOG_ERR,  "cannot write pid: %m");
+        exit(1);
     }
     if (n < (int)sizeof(pid))
     {
-	syslog(LOG_ERR,  "short write of pid");
-	exit(1);
+        syslog(LOG_ERR,  "short write of pid");
+        exit(1);
     }
 
     /* read the command line from the Perl test code */
     for (;;)
     {
-	n = read(fd, line+len, maxlen-len);
-// 	syslog(LOG_ERR, "read returned %d", n);
-	if (n < 0)
-	{
-	    syslog(LOG_ERR,  "cannot read command: %m");
-	    exit(1);
-	}
-	if (n == 0)
-	    break;	/* EOF */
-	len += n;
-	if (line[len-1] == '\r' ||
-	    line[len-1] == '\n')
-	    break;	/* have a whole line */
+        n = read(fd, line+len, maxlen-len);
+//      syslog(LOG_ERR, "read returned %d", n);
+        if (n < 0)
+        {
+            syslog(LOG_ERR,  "cannot read command: %m");
+            exit(1);
+        }
+        if (n == 0)
+            break;      /* EOF */
+        len += n;
+        if (line[len-1] == '\r' ||
+            line[len-1] == '\n')
+            break;      /* have a whole line */
     }
     close(fd);
 //     syslog(LOG_ERR, "read total of %d bytes", len);
@@ -206,7 +206,7 @@ read_line_from_client(void)
     /* nul-terminate and trim the line */
     line[len] = '\0';
     while (len > 0 && isspace(line[len-1]))
-	line[--len] = '\0';
+        line[--len] = '\0';
 
     return line;
 }
@@ -244,26 +244,26 @@ main(int argc, char **argv)
     /* parse arguments */
     while ((c = getopt(argc, argv, "C:d:m:t:")) > 0)
     {
-	switch (c)
-	{
-	case 'C':
-	    /* Cyrus alt-config option, ignored */
-	    break;
-	case 'd':
-	    delay_ms = atoi(optarg);
-	    break;
-	case 'm':
-	    mode = optarg;
-	    break;
-	case 't':
-	    tag = optarg;
-	    break;
-	default:
-	    usage();
-	}
+        switch (c)
+        {
+        case 'C':
+            /* Cyrus alt-config option, ignored */
+            break;
+        case 'd':
+            delay_ms = atoi(optarg);
+            break;
+        case 'm':
+            mode = optarg;
+            break;
+        case 't':
+            tag = optarg;
+            break;
+        default:
+            usage();
+        }
     }
     if (optind < argc)
-	usage();
+        usage();
 
     openlog("lemming", LOG_PID, LOG_LOCAL6);
 
@@ -272,65 +272,65 @@ main(int argc, char **argv)
 
     salen = sizeof(struct sockaddr_storage);
     if (!getsockname(LISTEN_FD, localsock, &salen)) {
-	family = localsock->sa_family;
+        family = localsock->sa_family;
     }
     else {
-	syslog(LOG_ERR, "unable to determine socket family: %m");
+        syslog(LOG_ERR, "unable to determine socket family: %m");
     }
 
     if (!strcmp(mode, "exit-ipv4/serve"))
     {
-	switch (family) {
-	case AF_INET:
-	    lemming_exit();
-	    break;
+        switch (family) {
+        case AF_INET:
+            lemming_exit();
+            break;
 
-	default:
-	    mode = "serve";
-	    break;
-	}
+        default:
+            mode = "serve";
+            break;
+        }
     }
     else if (!strcmp(mode, "exit-ipv6/serve"))
     {
-	switch (family) {
-	case AF_INET6:
-	    lemming_exit();
-	    break;
+        switch (family) {
+        case AF_INET6:
+            lemming_exit();
+            break;
 
-	default:
-	    mode = "serve";
-	    break;
-	}
+        default:
+            mode = "serve";
+            break;
+        }
     }
 
     if (!strcmp(mode, "serve"))
-	mode = read_line_from_client();
+        mode = read_line_from_client();
     else if (delay_ms)
-	poll(NULL, 0, delay_ms);
+        poll(NULL, 0, delay_ms);
 
     if (!strcmp(mode, "success"))
     {
-	lemming_success();
+        lemming_success();
     }
     else if (!strcmp(mode, "exit"))
     {
-	lemming_exit();
+        lemming_exit();
     }
     else if (!strcmp(mode, "abort"))
     {
-	syslog(LOG_ERR, "lemming abort()ing");
-	abort();
+        syslog(LOG_ERR, "lemming abort()ing");
+        abort();
     }
     else if (!strcmp(mode, "segv"))
     {
-	syslog(LOG_ERR, "lemming receiving SEGV");
-	*(char *)0 = 0;
+        syslog(LOG_ERR, "lemming receiving SEGV");
+        *(char *)0 = 0;
     }
     else
     {
-	syslog(LOG_ERR, "unknown failure mode \"%s\"", mode);
-	fprintf(stderr, "lemming: unknown failure mode \"%s\"\n", mode);
-	return 1;
+        syslog(LOG_ERR, "unknown failure mode \"%s\"", mode);
+        fprintf(stderr, "lemming: unknown failure mode \"%s\"\n", mode);
+        return 1;
     }
 
     return 0;

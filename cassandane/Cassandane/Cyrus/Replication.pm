@@ -413,9 +413,9 @@ sub assert_sieve_noactive
     my $sieve_dir = $instance->get_sieve_script_dir($user);
 
     $self->assert(( ! -e "$sieve_dir/defaultbc" ),
-		  "$sieve_dir/defaultbc exists");
+                  "$sieve_dir/defaultbc exists");
     $self->assert(( ! -l "$sieve_dir/defaultbc" ),
-		  "dangling $sieve_dir/defaultbc symlink exists");
+                  "dangling $sieve_dir/defaultbc symlink exists");
 }
 
 sub assert_sieve_matches
@@ -635,12 +635,12 @@ EOF
     $self->assert_sieve_exists($self->{instance}, $user, $scriptname);
     $self->assert_sieve_active($self->{instance}, $user, $scriptname);
     $self->assert_sieve_matches($self->{instance}, $user, $scriptname,
-				$scriptnewcontent);
+                                $scriptnewcontent);
 
     $self->assert_sieve_exists($self->{replica}, $user, $scriptname);
     $self->assert_sieve_active($self->{replica}, $user, $scriptname);
     $self->assert_sieve_matches($self->{replica}, $user, $scriptname,
-				$scriptoldcontent);
+                                $scriptoldcontent);
 
     # then, run replication,
     # the one that exists on replica is different to and older than the one
@@ -652,12 +652,12 @@ EOF
     $self->assert_sieve_exists($self->{instance}, $user, $scriptname);
     $self->assert_sieve_active($self->{instance}, $user, $scriptname);
     $self->assert_sieve_matches($self->{instance}, $user, $scriptname,
-				$scriptnewcontent);
+                                $scriptnewcontent);
 
     $self->assert_sieve_exists($self->{replica}, $user, $scriptname);
     $self->assert_sieve_active($self->{replica}, $user, $scriptname);
     $self->assert_sieve_matches($self->{replica}, $user, $scriptname,
-				$scriptnewcontent);
+                                $scriptnewcontent);
 }
 
 sub test_sieve_replication_delete_unactivate
@@ -742,7 +742,7 @@ sub test_replication_mailbox_too_old
         handlers => {
             exited_abnormally => sub { (undef, $exit_code) = @_; },
         },
-	redirects => { stderr => $log_firstreject },
+        redirects => { stderr => $log_firstreject },
     );
     $self->assert_equals(1, $exit_code);
     $self->assert(qr/USER received NO response: IMAP_MAILBOX_NOTSUPPORTED/,

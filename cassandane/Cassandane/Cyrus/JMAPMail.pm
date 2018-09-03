@@ -62,16 +62,16 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane',
-		 conversations => 'yes',
+                 conversations => 'yes',
                  conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
-		 httpmodules => 'carddav caldav jmap',
-		 httpallowcompress => 'no');
+                 httpmodules => 'carddav caldav jmap',
+                 httpallowcompress => 'no');
 
     return $class->SUPER::new({
-	config => $config,
-	jmap => 1,
-	adminstore => 1,
-	services => [ 'imap', 'http' ]
+        config => $config,
+        jmap => 1,
+        adminstore => 1,
+        services => [ 'imap', 'http' ]
     }, @args);
 }
 
@@ -3127,15 +3127,15 @@ sub test_email_get_shared
     my $res = $jmap->CallMethods(@fetchEmailMethods);
     $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
     $self->assert_num_equals(1, scalar keys %{$res->[1][1]{list}[0]{mailboxIds}});
-	my $emailId = $res->[1][1]{list}[0]{id};
+        my $emailId = $res->[1][1]{list}[0]{id};
 
-	# Share mailbox B
+        # Share mailbox B
     $admintalk->setacl("user.other.B", "cassandane", "lr") or die;
     $res = $jmap->CallMethods(@fetchEmailMethods);
     $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
     $self->assert_num_equals(2, scalar keys %{$res->[1][1]{list}[0]{mailboxIds}});
 
-	# Unshare mailboxes A and B
+        # Unshare mailboxes A and B
     $admintalk->setacl("user.other.A", "cassandane", "") or die;
     $admintalk->setacl("user.other.B", "cassandane", "") or die;
     $res = $jmap->CallMethods([['Email/get', {
@@ -7037,7 +7037,7 @@ sub test_email_query_snippets
             },
             '#filter' => {
                 resultOf => 'R1',
-                name => 'Email/query', 
+                name => 'Email/query',
                 path => '/filter',
             },
         }, 'R2'],
@@ -7053,7 +7053,7 @@ sub test_email_query_snippets
         ['SearchSnippet/get', {
             '#emailIds' => {
                 resultOf => 'R1',
-                name => 'Email/query', 
+                name => 'Email/query',
                 path => '/ids',
             },
         }, 'R2'],
@@ -8882,12 +8882,12 @@ sub test_email_querychanges_implementation
     my $state_collapsed = $res->[1][1]->{queryState};
     $self->assert_not_null($state_collapsed);
 
-	xlog "update email B";
-	$res = $jmap->CallMethods([['Email/set', {
-		update => { $msgidB => {
-			'keywords/$Seen' => JSON::true }
-		},
-	}, "R1"]]);
+        xlog "update email B";
+        $res = $jmap->CallMethods([['Email/set', {
+                update => { $msgidB => {
+                        'keywords/$Seen' => JSON::true }
+                },
+        }, "R1"]]);
     $self->assert(exists $res->[0][1]->{updated}{$msgidB});
 
     xlog "Create two new emails via IMAP";

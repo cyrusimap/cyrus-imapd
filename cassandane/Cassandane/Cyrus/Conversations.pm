@@ -48,8 +48,8 @@ use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::ThreadedGenerator;
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_iso8601 from_iso8601
-				  from_rfc822
-				  to_rfc3501 from_rfc3501);
+                                  from_rfc822
+                                  to_rfc3501 from_rfc3501);
 
 sub new
 {
@@ -375,10 +375,10 @@ sub bogus_test_append_clash
 
     xlog "generating message C";
     my $ElCid = choose_cid($exp{A}->get_attribute('cid'),
-			   $exp{B}->get_attribute('cid'));
+                           $exp{B}->get_attribute('cid'));
     $exp{C} = $self->make_message("Message C",
-				  references => [ $exp{A}, $exp{B} ],
-				 );
+                                  references => [ $exp{A}, $exp{B} ],
+                                 );
     $exp{C}->set_attributes(uid => 3, cid => $ElCid);
 
     # Since IRIS-293, inserting this message will have the side effect
@@ -387,11 +387,11 @@ sub bogus_test_append_clash
     my $nextuid = 4;
     foreach my $s (qw(A B))
     {
-	if ($actual->{"Message $s"}->make_cid() ne $ElCid)
-	{
-	    $exp{$s}->set_attributes(uid => $nextuid, cid => $ElCid);
-	    $nextuid++;
-	}
+        if ($actual->{"Message $s"}->make_cid() ne $ElCid)
+        {
+            $exp{$s}->set_attributes(uid => $nextuid, cid => $ElCid);
+            $nextuid++;
+        }
     }
 
     $self->check_messages(\%exp);
@@ -426,11 +426,11 @@ sub bogus_test_double_clash
 
     xlog "generating message D";
     my $ElCid = choose_cid($exp{A}->get_attribute('cid'),
-			   $exp{B}->get_attribute('cid'),
-			   $exp{C}->get_attribute('cid'));
+                           $exp{B}->get_attribute('cid'),
+                           $exp{C}->get_attribute('cid'));
     $exp{D} = $self->make_message("Message D",
-				  references => [ $exp{A}, $exp{B}, $exp{C} ],
-				 );
+                                  references => [ $exp{A}, $exp{B}, $exp{C} ],
+                                 );
     $exp{D}->set_attributes(uid => 4, cid => $ElCid);
 
     # Since IRIS-293, inserting this message will have the side effect
@@ -439,11 +439,11 @@ sub bogus_test_double_clash
     my $nextuid = 5;
     foreach my $s (qw(A B C))
     {
-	if ($actual->{"Message $s"}->make_cid() ne $ElCid)
-	{
-	    $exp{$s}->set_attributes(uid => $nextuid, cid => $ElCid);
-	    $nextuid++;
-	}
+        if ($actual->{"Message $s"}->make_cid() ne $ElCid)
+        {
+            $exp{$s}->set_attributes(uid => $nextuid, cid => $ElCid);
+            $nextuid++;
+        }
     }
 
     $self->check_messages(\%exp);
@@ -501,12 +501,12 @@ sub bogus_test_replication_clash
 
     xlog "generating message D";
     my $ElCid = choose_cid($exp{A}->get_attribute('cid'),
-			   $exp{B}->get_attribute('cid'),
-			   $exp{C}->get_attribute('cid'));
+                           $exp{B}->get_attribute('cid'),
+                           $exp{C}->get_attribute('cid'));
     $exp{D} = $self->make_message("Message D",
-				  store => $master_store,
-				  references => [ $exp{A}, $exp{B}, $exp{C} ],
-				 );
+                                  store => $master_store,
+                                  references => [ $exp{A}, $exp{B}, $exp{C} ],
+                                 );
     $exp{D}->set_attributes(uid => 4, cid => $ElCid);
 
     # Since IRIS-293, inserting this message will have the side effect
@@ -515,11 +515,11 @@ sub bogus_test_replication_clash
     my $nextuid = 5;
     foreach my $s (qw(A B C))
     {
-	if ($actual->{"Message $s"}->make_cid() ne $ElCid)
-	{
-	    $exp{$s}->set_attributes(uid => $nextuid, cid => $ElCid);
-	    $nextuid++;
-	}
+        if ($actual->{"Message $s"}->make_cid() ne $ElCid)
+        {
+            $exp{$s}->set_attributes(uid => $nextuid, cid => $ElCid);
+            $nextuid++;
+        }
     }
 
     $self->run_replication();
@@ -542,7 +542,7 @@ sub test_xconvfetch
     $store->write_begin();
     while (my $msg = $generator->generate())
     {
-	$store->write_message($msg);
+        $store->write_message($msg);
     }
     $store->write_end();
 
@@ -552,50 +552,50 @@ sub test_xconvfetch
     $store->read_begin();
     while (my $msg = $store->read_message())
     {
-	my $uid = $msg->get_attribute('uid');
-	my $cid = $msg->get_attribute('cid');
-	my $threadid = $msg->get_header('X-Cassandane-Thread');
-	if (defined $cids{$cid})
-	{
-	    $self->assert_num_equals($threadid, $cids{$cid});
-	}
-	else
-	{
-	    $cids{$cid} = $threadid;
-	    xlog "Found CID $cid";
-	}
-	$self->assert_null($uids{$uid});
-	$uids{$uid} = 1;
+        my $uid = $msg->get_attribute('uid');
+        my $cid = $msg->get_attribute('cid');
+        my $threadid = $msg->get_header('X-Cassandane-Thread');
+        if (defined $cids{$cid})
+        {
+            $self->assert_num_equals($threadid, $cids{$cid});
+        }
+        else
+        {
+            $cids{$cid} = $threadid;
+            xlog "Found CID $cid";
+        }
+        $self->assert_null($uids{$uid});
+        $uids{$uid} = 1;
     }
     $store->read_end();
 
     xlog "Using XCONVFETCH on each conversation";
     foreach my $cid (keys %cids)
     {
-	xlog "XCONVFETCHing CID $cid";
+        xlog "XCONVFETCHing CID $cid";
 
-	my $result = $store->xconvfetch_begin($cid);
-	$self->assert_not_null($result->{xconvmeta});
-	$self->assert_num_equals(1, scalar keys %{$result->{xconvmeta}});
-	$self->assert_not_null($result->{xconvmeta}->{$cid});
-	$self->assert_not_null($result->{xconvmeta}->{$cid}->{modseq});
-	while (my $msg = $store->xconvfetch_message())
-	{
-	    my $muid = $msg->get_attribute('uid');
-	    my $mcid = $msg->get_attribute('cid');
-	    my $threadid = $msg->get_header('X-Cassandane-Thread');
-	    $self->assert_str_equals($cid, $mcid);
-	    $self->assert_num_equals($cids{$cid}, $threadid);
-	    $self->assert_num_equals(1, $uids{$muid});
-	    $uids{$muid} |= 2;
-	}
-	$store->xconvfetch_end();
+        my $result = $store->xconvfetch_begin($cid);
+        $self->assert_not_null($result->{xconvmeta});
+        $self->assert_num_equals(1, scalar keys %{$result->{xconvmeta}});
+        $self->assert_not_null($result->{xconvmeta}->{$cid});
+        $self->assert_not_null($result->{xconvmeta}->{$cid}->{modseq});
+        while (my $msg = $store->xconvfetch_message())
+        {
+            my $muid = $msg->get_attribute('uid');
+            my $mcid = $msg->get_attribute('cid');
+            my $threadid = $msg->get_header('X-Cassandane-Thread');
+            $self->assert_str_equals($cid, $mcid);
+            $self->assert_num_equals($cids{$cid}, $threadid);
+            $self->assert_num_equals(1, $uids{$muid});
+            $uids{$muid} |= 2;
+        }
+        $store->xconvfetch_end();
     }
 
     xlog "checking that all the UIDs in the folder were XCONVFETCHed";
     foreach my $uid (keys %uids)
     {
-	$self->assert_num_equals(3, $uids{$uid});
+        $self->assert_num_equals(3, $uids{$uid});
     }
 }
 
@@ -658,7 +658,7 @@ sub bogus_test_cross_user_copy
     my $adminstore = $srv->create_store(username => 'admin');
     my $adminclient = $adminstore->get_client();
     $adminclient->setacl('user.cassandane', $bobuser => 'lrswipkxtecda')
-	or die "Cannot setacl on user.cassandane: $@";
+        or die "Cannot setacl on user.cassandane: $@";
 
     xlog "generating two messages";
     my %exp;
@@ -666,7 +666,7 @@ sub bogus_test_cross_user_copy
     my $cid = $exp{A}->make_cid();
     $exp{A}->set_attribute(cid => $cid);
     $exp{B} = $self->{gen}->generate(subject => 'Message B',
-				     references => [ $exp{A} ]);
+                                     references => [ $exp{A} ]);
     $exp{B}->set_attribute(cid => $cid);
 
     xlog "Writing messaged to user.cassandane";
@@ -683,7 +683,7 @@ sub bogus_test_cross_user_copy
     $bobstore->set_folder('user.cassandane');
     $bobstore->_select();
     $bobclient->copy(2, $bobfolder)
-	or die "Cannot COPY message to $bobfolder";
+        or die "Cannot COPY message to $bobfolder";
 
     xlog "Check that the message made it to $bobfolder";
     my %bobexp;

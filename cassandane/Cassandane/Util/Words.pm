@@ -61,17 +61,17 @@ sub _read_words
 {
     my $i = 0;
     open DICT,'<',WORDFILE
-	or die "Cannot open " . WORDFILE . " for reading: $!";
+        or die "Cannot open " . WORDFILE . " for reading: $!";
     while (<DICT>)
     {
-	chomp;
-	$_ = lc;
-	next unless m/^[a-z]+$/;
-	next if length $_ > MAX_LENGTH || length $_ < MIN_LENGTH;
-	next if $i++ < STRIDE;
-	$i = 0;
-	push(@words, $_);
- 	last if scalar @words == MAX_WORDS;
+        chomp;
+        $_ = lc;
+        next unless m/^[a-z]+$/;
+        next if length $_ > MAX_LENGTH || length $_ < MIN_LENGTH;
+        next if $i++ < STRIDE;
+        $i = 0;
+        push(@words, $_);
+        last if scalar @words == MAX_WORDS;
     }
     close DICT;
 }
@@ -79,7 +79,7 @@ sub _read_words
 sub random_word
 {
     _read_words()
-	if (!scalar @words);
+        if (!scalar @words);
     @remaining = @words unless scalar @remaining;
     return $remaining[int(rand(scalar @remaining))];
 }

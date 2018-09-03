@@ -50,15 +50,15 @@ sub new
 {
     my ($class, %params) = @_;
     my %bits = (
-	host => delete $params{host} || 'localhost',
-	port => 0 + (delete $params{port} || 110),
-	folder => delete $params{folder} || 'INBOX',
-	username => delete $params{username},
-	password => delete $params{password},
-	client => undef,
-	# state for streaming read
-	next_id => undef,
-	last_id => undef,
+        host => delete $params{host} || 'localhost',
+        port => 0 + (delete $params{port} || 110),
+        folder => delete $params{folder} || 'INBOX',
+        username => delete $params{username},
+        password => delete $params{password},
+        client => undef,
+        # state for streaming read
+        next_id => undef,
+        last_id => undef,
     );
 
     # Sadly, it seems the version of Net::POP3 I'm using has
@@ -66,7 +66,7 @@ sub new
     # an already connected socket.  So, no IPv6 for us.
     my $af = delete $params{address_family};
     die "Sorry, only INET supported for POP3"
-	if (defined $af && $af ne 'inet');
+        if (defined $af && $af ne 'inet');
 
     my $self = $class->SUPER::new(%params);
     map { $self->{$_} = $bits{$_}; } keys %bits;
@@ -79,14 +79,14 @@ sub connect
 
     # if already successfully connected, do nothing
     return
-	if (defined $self->{client});
+        if (defined $self->{client});
 
     # xlog "connect: creating POP3 object";
     my %opts;
     $opts{Debug} = $self->{verbose}
-	if $self->{verbose};
+        if $self->{verbose};
     my $client = Net::POP3->new("$self->{host}:$self->{port}", %opts)
-	or die "Cannot create Net::POP3 object";
+        or die "Cannot create Net::POP3 object";
 
     my ($uu, $ud) = split(/@/, $self->{username});
 
@@ -95,15 +95,15 @@ sub connect
     my $ff = $self->{folder};
     if ($ff =~ m/^inbox$/i)
     {
-	$ff = '';
+        $ff = '';
     }
     elsif ($ff =~ m/^inbox\./i)
     {
-	$ff =~ s/^inbox\./+/i;
+        $ff =~ s/^inbox\./+/i;
     }
     else
     {
-	$ff = "+$ff";
+        $ff = "+$ff";
     }
 
     my $pop3_username = "$uu$ff$ud";
@@ -111,7 +111,7 @@ sub connect
     # xlog "connect: password=\"" . $self->{password} . "\"";
 
     my $res = $client->login($pop3_username, $self->{password})
-	or die "Cannot login via POP3";
+        or die "Cannot login via POP3";
     $res = 0 if ($res eq '0E0');
     $res = 0 + $res;
 
@@ -127,8 +127,8 @@ sub disconnect
 
     if (defined $self->{client})
     {
-	$self->{client}->quit();
-	$self->{client} = undef;
+        $self->{client}->quit();
+        $self->{client} = undef;
     }
 }
 
@@ -146,7 +146,7 @@ sub read_message
 
     my $id = $self->{next_id};
     return undef
-	if ($id > $self->{last_id});
+        if ($id > $self->{last_id});
     $self->{next_id}++;
 
     return Cassandane::Message->new(fh => $self->{client}->getfh($id));

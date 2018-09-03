@@ -74,14 +74,14 @@ sub test_status_after_expunge
 
     xlog "First create a sub folder";
     $talk->create($subfolder)
-	or die "Cannot create folder $subfolder: $@";
+        or die "Cannot create folder $subfolder: $@";
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "Generate messages in $subfolder";
     $store->set_folder($subfolder);
     $store->_select();
     for (1..5) {
-	$self->make_message("Message $subfolder $_");
+        $self->make_message("Message $subfolder $_");
     }
     $talk->unselect();
     $talk->select($subfolder);

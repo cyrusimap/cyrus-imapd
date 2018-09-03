@@ -68,10 +68,10 @@ sub test_full_ctor
 {
     my ($self) = @_;
     my $a = Cassandane::Address->new(
-	name => 'Fred J. Bloggs',
-	localpart => 'fbloggs',
-	domain => 'fastmail.fm',
-	);
+        name => 'Fred J. Bloggs',
+        localpart => 'fbloggs',
+        domain => 'fastmail.fm',
+        );
     $self->assert($a->name eq 'Fred J. Bloggs');
     $self->assert($a->localpart eq 'fbloggs');
     $self->assert($a->domain eq 'fastmail.fm');

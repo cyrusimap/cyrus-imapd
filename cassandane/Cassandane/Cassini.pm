@@ -56,33 +56,33 @@ sub new
 
     my $filename = 'cassandane.ini';
     $filename = $params{filename}
-	if defined $params{filename};
+        if defined $params{filename};
     $filename = abs_path($filename);
 
     my $inifile = new Config::IniFiles();
     if ( -f $filename)
     {
-	xlog "Reading $filename" if get_verbose;
-	$inifile->SetFileName($filename);
-	if (!$inifile->ReadConfig())
-	{
-	    # Config::IniFiles seems to include the filename in
-	    # error messages, so we don't.  However it tends to
-	    # emit multiline-messages which confuses our logs.
-	    set_verbose(1);
-	    map { s/[\n\r]\s*/ /g; xlog $_; } @Config::IniFiles::errors;
-	    die "Failed reading $filename";
-	}
+        xlog "Reading $filename" if get_verbose;
+        $inifile->SetFileName($filename);
+        if (!$inifile->ReadConfig())
+        {
+            # Config::IniFiles seems to include the filename in
+            # error messages, so we don't.  However it tends to
+            # emit multiline-messages which confuses our logs.
+            set_verbose(1);
+            map { s/[\n\r]\s*/ /g; xlog $_; } @Config::IniFiles::errors;
+            die "Failed reading $filename";
+        }
     }
 
     my $self = {
-	filename => $filename,
-	inifile => $inifile
+        filename => $filename,
+        inifile => $inifile
     };
 
     bless $self, $class;
     $instance = $self
-	unless defined $instance;
+        unless defined $instance;
     return $self;
 }
 
@@ -92,9 +92,9 @@ sub instance
 
     if (!defined $instance)
     {
-	$instance = Cassandane::Cassini->new();
-	die "Singleton broken in Cassini ctor!"
-	    unless defined $instance;
+        $instance = Cassandane::Cassini->new();
+        die "Singleton broken in Cassini ctor!"
+            unless defined $instance;
     }
     return $instance;
 }
@@ -135,11 +135,11 @@ sub override
 
     if (defined $ii->val($section, $parameter))
     {
-	$ii->setval($section, $parameter, $value);
+        $ii->setval($section, $parameter, $value);
     }
     else
     {
-	$ii->newval($section, $parameter, $value);
+        $ii->newval($section, $parameter, $value);
     }
 }
 
@@ -149,7 +149,7 @@ sub get_section
     my $inifile = $self->{inifile};
     my %params;
     if ($inifile->SectionExists($section)) {
-	map { $params{$_} = $inifile->val($section, $_) } $inifile->Parameters($section);
+        map { $params{$_} = $inifile->val($section, $_) } $inifile->Parameters($section);
     }
     return \%params;
 }

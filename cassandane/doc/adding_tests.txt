@@ -188,22 +188,22 @@ Cassandane::Generator
     Return-Path
     Received
     MIME-Version
-	1.0
+        1.0
     Content-Type
-	text/plain; charset="us-ascii"
+        text/plain; charset="us-ascii"
     Content-Transfer-Encoding
-	7bit
+        7bit
     Subject
     From
     Message-ID
     Date
     To
     X-Cassandane-Unique
-	a string of hex digits which uniquely defines each created
-	message.  Unlike the Cyrus GUID concept, two Message objects
-	generated at different times which happen to have the same
-	headers and body will have different X-Cassandane-Unique values.
-	This can be useful for testing the identity of messages.
+        a string of hex digits which uniquely defines each created
+        message.  Unlike the Cyrus GUID concept, two Message objects
+        generated at different times which happen to have the same
+        headers and body will have different X-Cassandane-Unique values.
+        This can be useful for testing the identity of messages.
 
     Some of these can be overridden by providing options to generate()
 
@@ -212,15 +212,15 @@ Cassandane::Generator
     The following options can be used:
 
     date
-	a DateTime object
+        a DateTime object
     from
-	a Cassandane::Address object
+        a Cassandane::Address object
     subject
-	a string
+        a string
     to
-	a Cassandane::Address object
+        a Cassandane::Address object
     messageid
-	a string
+        a string
 
 TODO: document MessageStore, IMAPMessageStore, POP3MessageStore, and
 ThreadedGenerator.

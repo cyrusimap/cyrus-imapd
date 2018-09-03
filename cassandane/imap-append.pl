@@ -19,11 +19,11 @@
 #     endorse or promote products derived from this software without
 #     prior written permission. For permission or any legal
 #     details, please contact
-# 	Opera Software Australia Pty. Ltd.
-# 	Level 50, 120 Collins St
-# 	Melbourne 3000
-# 	Victoria
-# 	Australia
+#       Opera Software Australia Pty. Ltd.
+#       Level 50, 120 Collins St
+#       Melbourne 3000
+#       Victoria
+#       Australia
 #
 #  4. Redistributions of any form whatsoever must retain the following
 #     acknowledgment:
@@ -54,64 +54,64 @@ sub usage
 }
 
 my %imap_params = (
-	type => 'imap',
-	host => 'localhost',
-	port => 9100,
-	folder => 'inbox',
-	username => 'cassandane',
-	password => 'testpw',
+        type => 'imap',
+        host => 'localhost',
+        port => 9100,
+        folder => 'inbox',
+        username => 'cassandane',
+        password => 'testpw',
 );
 my %mbox_params;
 while (my $a = shift)
 {
     if ($a eq '-f')
     {
-	usage() if defined $mbox_params{uri};
-	$mbox_params{type} = shift;
+        usage() if defined $mbox_params{uri};
+        $mbox_params{type} = shift;
     }
     elsif ($a eq '-u')
     {
-	usage() if defined $mbox_params{type};
-	$mbox_params{uri} = shift;
+        usage() if defined $mbox_params{type};
+        $mbox_params{uri} = shift;
     }
     elsif ($a eq '-h' || $a eq '--host')
     {
-	$imap_params{host} = shift;
-	usage() unless defined $imap_params{host};
+        $imap_params{host} = shift;
+        usage() unless defined $imap_params{host};
     }
     elsif ($a eq '-p' || $a eq '--port')
     {
-	$imap_params{port} = shift;
-	usage() unless defined $imap_params{port};
+        $imap_params{port} = shift;
+        usage() unless defined $imap_params{port};
     }
     elsif ($a eq '-F' || $a eq '--folder')
     {
-	$imap_params{folder} = shift;
-	usage() unless defined $imap_params{folder};
+        $imap_params{folder} = shift;
+        usage() unless defined $imap_params{folder};
     }
     elsif ($a eq '-U' || $a eq '--user')
     {
-	$imap_params{username} = shift;
-	usage() unless defined $imap_params{username};
+        $imap_params{username} = shift;
+        usage() unless defined $imap_params{username};
     }
     elsif ($a eq '-P' || $a eq '--password')
     {
-	$imap_params{password} = shift;
-	usage() unless defined $imap_params{password};
+        $imap_params{password} = shift;
+        usage() unless defined $imap_params{password};
     }
     elsif ($a eq '-v' || $a eq '--verbose')
     {
-	$mbox_params{verbose} = 1;
-	$imap_params{verbose} = 1;
+        $mbox_params{verbose} = 1;
+        $imap_params{verbose} = 1;
     }
     elsif ($a =~ m/^-/)
     {
-	usage();
+        usage();
     }
     else
     {
-	usage() if defined $mbox_params{filename};
-	$mbox_params{filename} = $a;
+        usage() if defined $mbox_params{filename};
+        $mbox_params{filename} = $a;
     }
 }
 

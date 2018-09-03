@@ -85,9 +85,9 @@ sub _set_limits
     my @quotalist;
     foreach my $resource (keys %resources)
     {
-	my $limit = $resources{$resource}
-	    or die "No limit specified for $resource";
-	push(@quotalist, uc($resource), $limit);
+        my $limit = $resources{$resource}
+            or die "No limit specified for $resource";
+        push(@quotalist, uc($resource), $limit);
     }
     $self->{limits}->{$quotaroot} = { @quotalist };
     $admintalk->setquota($quotaroot, \@quotalist);
@@ -115,14 +115,14 @@ sub _check_usages
     # will give a human some idea of what went wrong.
     my %act;
     while (scalar(@result)) {
-	my ($res, $used, $limit) = splice(@result, 0, 3);
-	$res = uc($res);
-	die "Resource $res appears twice in result"
-	    if defined $act{$res};
-	$act{$res} = {
-	    used => $used,
-	    limit => $limit,
-	};
+        my ($res, $used, $limit) = splice(@result, 0, 3);
+        $res = uc($res);
+        die "Resource $res appears twice in result"
+            if defined $act{$res};
+        $act{$res} = {
+            used => $used,
+            limit => $limit,
+        };
     }
 
     # Build a conveniently checkable hash from %expecteds
@@ -130,10 +130,10 @@ sub _check_usages
     my %exp;
     foreach my $res (keys %expecteds)
     {
-	$exp{uc($res)} = {
-	    used => $expecteds{$res},
-	    limit => $limits->{uc($res)},
-	};
+        $exp{uc($res)} = {
+            used => $expecteds{$res},
+            limit => $limits->{uc($res)},
+        };
     }
 
     # Now actually compare
@@ -156,7 +156,7 @@ sub _zap_quota
     # accidentally futz with the expected quota db backend
     my $backend = $self->{instance}->{config}->get('quota_db');
     $self->assert_str_equals('quotalegacy', $backend)
-	if defined $backend;	    # the default value is also ok
+        if defined $backend;        # the default value is also ok
 
     my ($c) = ($quotaroot =~ m/^user\.(.)/);
     my $dirname = $self->{instance}->{basedir} . "/conf/quota/$c";
@@ -164,7 +164,7 @@ sub _zap_quota
     mkpath $dirname;
 
     open QUOTA,'>',$filename
-	or die "Failed to open $filename for writing: $!";
+        or die "Failed to open $filename for writing: $!";
 
     # STORAGE is special and always present, but -1 if unlimited
     my $limit = $limits->{STORAGE} || -1;
@@ -175,10 +175,10 @@ sub _zap_quota
     my %keywords = ( MESSAGE => 'M', 'X-ANNOTATION-STORAGE' => 'AS' );
     foreach my $resource (keys %$limits)
     {
-	my $kw = $keywords{$resource} or next;
-	$limit = $limits->{$resource};
-	$used = $useds->{$resource} || 0;
-	print QUOTA " $kw $used $limit";
+        my $kw = $keywords{$resource} or next;
+        $limit = $limits->{$resource};
+        $used = $useds->{$resource} || 0;
+        print QUOTA " $kw $used $limit";
     }
 
     print QUOTA "\n";
@@ -227,19 +227,19 @@ sub test_using_storage
     my $expected = 0;
     foreach my $folder ("INBOX", "INBOX.sub")
     {
-	$expecteds{$folder} = 0;
-	$self->{store}->set_folder($folder);
+        $expecteds{$folder} = 0;
+        $self->{store}->set_folder($folder);
 
-	for (1..10)
-	{
-	    my $msg = $self->make_message("Message $_",
-					  extra_lines => 10 + rand(5000));
-	    my $len = length($msg->as_string());
-	    $expecteds{$folder} += $len;
-	    $expected += $len;
-	    xlog "added $len bytes of message";
-	    $self->_check_usages(storage => int($expected/1024));
-	}
+        for (1..10)
+        {
+            my $msg = $self->make_message("Message $_",
+                                          extra_lines => 10 + rand(5000));
+            my $len = length($msg->as_string());
+            $expecteds{$folder} += $len;
+            $expected += $len;
+            xlog "added $len bytes of message";
+            $self->_check_usages(storage => int($expected/1024));
+        }
     }
 
     # delete subfolder
@@ -274,18 +274,18 @@ sub test_using_storage_late
     my $expected = 0;
     foreach my $folder ("INBOX", "INBOX.sub")
     {
-	$expecteds{$folder} = 0;
-	$self->{store}->set_folder($folder);
+        $expecteds{$folder} = 0;
+        $self->{store}->set_folder($folder);
 
-	for (1..10)
-	{
-	    my $msg = $self->make_message("Message $_",
-					  extra_lines => 10 + rand(5000));
-	    my $len = length($msg->as_string());
-	    $expecteds{$folder} += $len;
-	    $expected += $len;
-	    xlog "added $len bytes of message";
-	}
+        for (1..10)
+        {
+            my $msg = $self->make_message("Message $_",
+                                          extra_lines => 10 + rand(5000));
+            my $len = length($msg->as_string());
+            $expecteds{$folder} += $len;
+            $expected += $len;
+            xlog "added $len bytes of message";
+        }
     }
 
     $self->_set_limits(storage => 100000);
@@ -326,17 +326,17 @@ sub test_exceeding_storage
     my $expected = 0;
     while ($slack > 1000)
     {
-	my $nlines = int(($slack - 640) / 23);
-	$nlines = 1000 if ($nlines > 1000);
+        my $nlines = int(($slack - 640) / 23);
+        $nlines = 1000 if ($nlines > 1000);
 
-	my $msg = $self->make_message("Message $n",
-				      extra_lines => $nlines);
-	my $len = length($msg->as_string());
-	$slack -= $len;
-	$expected += $len;
-	xlog "added $len bytes of message";
-	$msgs{$n} = $msg;
-	$n++;
+        my $msg = $self->make_message("Message $n",
+                                      extra_lines => $nlines);
+        my $len = length($msg->as_string());
+        $slack -= $len;
+        $expected += $len;
+        xlog "added $len bytes of message";
+        $msgs{$n} = $msg;
+        $n++;
     }
     xlog "check that the messages are all in the mailbox";
     $self->check_messages(\%msgs);
@@ -381,17 +381,17 @@ sub test_move_near_limit
     my $expected = 0;
     while ($slack > 1000)
     {
-	my $nlines = int(($slack - 640) / 23);
-	$nlines = 1000 if ($nlines > 1000);
+        my $nlines = int(($slack - 640) / 23);
+        $nlines = 1000 if ($nlines > 1000);
 
-	my $msg = $self->make_message("Message $n",
-				      extra_lines => $nlines);
-	my $len = length($msg->as_string());
-	$slack -= $len;
-	$expected += $len;
-	xlog "added $len bytes of message";
-	$msgs{$n} = $msg;
-	$n++;
+        my $msg = $self->make_message("Message $n",
+                                      extra_lines => $nlines);
+        my $len = length($msg->as_string());
+        $slack -= $len;
+        $expected += $len;
+        xlog "added $len bytes of message";
+        $msgs{$n} = $msg;
+        $n++;
     }
     xlog "check that the messages are all in the mailbox";
     $self->check_messages(\%msgs);
@@ -440,17 +440,17 @@ sub test_overquota
     my $expected = 0;
     while ($slack > 1000)
     {
-	my $nlines = int(($slack - 640) / 23);
-	$nlines = 1000 if ($nlines > 1000);
+        my $nlines = int(($slack - 640) / 23);
+        $nlines = 1000 if ($nlines > 1000);
 
-	my $msg = $self->make_message("Message $n",
-				      extra_lines => $nlines);
-	my $len = length($msg->as_string());
-	$slack -= $len;
-	$expected += $len;
-	xlog "added $len bytes of message";
-	$msgs{$n} = $msg;
-	$n++;
+        my $msg = $self->make_message("Message $n",
+                                      extra_lines => $nlines);
+        my $len = length($msg->as_string());
+        $slack -= $len;
+        $expected += $len;
+        xlog "added $len bytes of message";
+        $msgs{$n} = $msg;
+        $n++;
     }
     xlog "check that the messages are all in the mailbox";
     $self->check_messages(\%msgs);
@@ -470,11 +470,11 @@ sub test_overquota
     my $overmsg = eval { $self->make_message("Message $n") };
     my $ex = $@;
     if ($ex) {
-	$self->assert($ex =~ m/over quota/i);
+        $self->assert($ex =~ m/over quota/i);
     }
     else {
-	$self->assert_str_equals('no', $talk->get_last_completion_response());
-	$self->assert($talk->get_last_error() =~ m/over quota/i);
+        $self->assert_str_equals('no', $talk->get_last_completion_response());
+        $self->assert($talk->get_last_error() =~ m/over quota/i);
     }
 
     xlog "check that the exceeding message is not in the mailbox";
@@ -522,16 +522,16 @@ sub test_using_message
     my $expected = 0;
     foreach my $folder ("INBOX", "INBOX.sub")
     {
-	$expecteds{$folder} = 0;
-	$self->{store}->set_folder($folder);
+        $expecteds{$folder} = 0;
+        $self->{store}->set_folder($folder);
 
-	for (1..10)
-	{
-	    my $msg = $self->make_message("Message $_");
-	    $expecteds{$folder}++;
-	    $expected++;
-	    $self->_check_usages(message => $expected);
-	}
+        for (1..10)
+        {
+            my $msg = $self->make_message("Message $_");
+            $expecteds{$folder}++;
+            $expected++;
+            $self->_check_usages(message => $expected);
+        }
     }
 
     # delete subfolder
@@ -565,15 +565,15 @@ sub test_using_message_late
     my $expected = 0;
     foreach my $folder ("INBOX", "INBOX.sub")
     {
-	$expecteds{$folder} = 0;
-	$self->{store}->set_folder($folder);
+        $expecteds{$folder} = 0;
+        $self->{store}->set_folder($folder);
 
-	for (1..10)
-	{
-	    my $msg = $self->make_message("Message $_");
-	    $expecteds{$folder}++;
-	    $expected++;
-	}
+        for (1..10)
+        {
+            my $msg = $self->make_message("Message $_");
+            $expecteds{$folder}++;
+            $expected++;
+        }
     }
 
     $self->_set_limits(message => 50000);
@@ -610,7 +610,7 @@ sub test_exceeding_message
     my %msgs;
     for (1..10)
     {
-	$msgs{$_} = $self->make_message("Message $_");
+        $msgs{$_} = $self->make_message("Message $_");
     }
     xlog "check that the messages are all in the mailbox";
     $self->check_messages(\%msgs);
@@ -625,11 +625,11 @@ sub test_exceeding_message
     # of IMAPTalk, leaving the completion response undefined.
     my $ex = $@;
     if ($ex) {
-	$self->assert($ex =~ m/over quota/i);
+        $self->assert($ex =~ m/over quota/i);
     }
     else {
-	$self->assert_str_equals('no', $talk->get_last_completion_response());
-	$self->assert($talk->get_last_error() =~ m/over quota/i);
+        $self->assert_str_equals('no', $talk->get_last_completion_response());
+        $self->assert($talk->get_last_error() =~ m/over quota/i);
     }
 
     xlog "check that the exceeding message is not in the mailbox";
@@ -659,21 +659,21 @@ sub test_using_annotstorage_msg
     my $expected = 0;
     foreach my $folder ("INBOX", "INBOX.sub1", "INBOX.sub2")
     {
-	$self->{store}->set_folder($folder);
-	$expecteds{$folder} = 0;
-	my $uid = 1;
-	for (1..5)
-	{
-	    $self->make_message("Message $uid");
+        $self->{store}->set_folder($folder);
+        $expecteds{$folder} = 0;
+        my $uid = 1;
+        for (1..5)
+        {
+            $self->make_message("Message $uid");
 
             my $data = $self->make_random_data(10);
-	    $talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $data }]]);
-	    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-	    $uid++;
-	    $expecteds{$folder} += length($data);
-	    $expected += length($data);
-	    $self->_check_usages('x-annotation-storage' => int($expected/1024));
-	}
+            $talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $data }]]);
+            $self->assert_str_equals('ok', $talk->get_last_completion_response());
+            $uid++;
+            $expecteds{$folder} += length($data);
+            $expected += length($data);
+            $self->_check_usages('x-annotation-storage' => int($expected/1024));
+        }
     }
 
     xlog "delete subfolder sub1";
@@ -729,20 +729,20 @@ sub test_using_annotstorage_msg_late
     my $expected = 0;
     foreach my $folder ("INBOX", "INBOX.sub1", "INBOX.sub2")
     {
-	$self->{store}->set_folder($folder);
-	$expecteds{$folder} = 0;
-	my $uid = 1;
-	for (1..5)
-	{
-	    $self->make_message("Message $uid");
+        $self->{store}->set_folder($folder);
+        $expecteds{$folder} = 0;
+        my $uid = 1;
+        for (1..5)
+        {
+            $self->make_message("Message $uid");
 
             my $data = $self->make_random_data(10);
-	    $talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $data }]]);
-	    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-	    $uid++;
-	    $expecteds{$folder} += length($data);
-	    $expected += length($data);
-	}
+            $talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $data }]]);
+            $self->assert_str_equals('ok', $talk->get_last_completion_response());
+            $uid++;
+            $expecteds{$folder} += length($data);
+            $expected += length($data);
+        }
     }
 
     $self->_set_limits('x-annotation-storage' => 100000);
@@ -799,20 +799,20 @@ sub test_using_annotstorage_mbox
     my $expected = 0;
     foreach my $folder ("INBOX", "INBOX.sub")
     {
-	$expecteds{$folder} = 0;
-	$self->{store}->set_folder($folder);
-	my $data = '';
-	while ($expecteds{$folder} <= 60*1024)
-	{
-	    my $moredata = $self->make_random_data(5);
-	    $data .= $moredata;
-	    $talk->setmetadata($self->{store}->{folder}, '/private/comment', { Quote => $data });
-	    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-	    $expecteds{$folder} += length($moredata);
-	    $expected += length($moredata);
-	    xlog "EXPECTING $expected on $folder";
-	    $self->_check_usages('x-annotation-storage' => int($expected/1024));
-	}
+        $expecteds{$folder} = 0;
+        $self->{store}->set_folder($folder);
+        my $data = '';
+        while ($expecteds{$folder} <= 60*1024)
+        {
+            my $moredata = $self->make_random_data(5);
+            $data .= $moredata;
+            $talk->setmetadata($self->{store}->{folder}, '/private/comment', { Quote => $data });
+            $self->assert_str_equals('ok', $talk->get_last_completion_response());
+            $expecteds{$folder} += length($moredata);
+            $expected += length($moredata);
+            xlog "EXPECTING $expected on $folder";
+            $self->_check_usages('x-annotation-storage' => int($expected/1024));
+        }
     }
 
     # delete subfolder
@@ -849,18 +849,18 @@ sub test_using_annotstorage_mbox_late
     my $expected = 0;
     foreach my $folder ("INBOX", "INBOX.sub")
     {
-	$expecteds{$folder} = 0;
-	$self->{store}->set_folder($folder);
-	my $data = '';
-	while ($expecteds{$folder} <= 60*1024)
-	{
-	    my $moredata = $self->make_random_data(5);
-	    $data .= $moredata;
-	    $talk->setmetadata($self->{store}->{folder}, '/private/comment', { Quote => $data });
-	    $self->assert_str_equals('ok', $talk->get_last_completion_response());
-	    $expecteds{$folder} += length($moredata);
-	    $expected += length($moredata);
-	}
+        $expecteds{$folder} = 0;
+        $self->{store}->set_folder($folder);
+        my $data = '';
+        while ($expecteds{$folder} <= 60*1024)
+        {
+            my $moredata = $self->make_random_data(5);
+            $data .= $moredata;
+            $talk->setmetadata($self->{store}->{folder}, '/private/comment', { Quote => $data });
+            $self->assert_str_equals('ok', $talk->get_last_completion_response());
+            $expecteds{$folder} += length($moredata);
+            $expected += length($moredata);
+        }
     }
 
     $self->_set_limits('x-annotation-storage' => 100000);
@@ -893,14 +893,14 @@ sub test_quotarename
     # Right - let's set ourselves a basic usage quota
     $self->_set_quotaroot('user.cassandane');
     $self->_set_limits(
-	storage => 100000,
-	message => 50000,
-	'x-annotation-storage' => 10000,
+        storage => 100000,
+        message => 50000,
+        'x-annotation-storage' => 10000,
     );
     $self->_check_usages(
-	storage => 0,
-	message => 0,
-	'x-annotation-storage' => 0,
+        storage => 0,
+        message => 0,
+        'x-annotation-storage' => 0,
     );
 
     my $expected_storage = 0;
@@ -908,21 +908,21 @@ sub test_quotarename
     my $expected_annotation_storage = 0;
     my $uid = 1;
     for (1..10) {
-	my $msg = $self->make_message("Message $_", extra_lines => 5000);
-	$expected_storage += length($msg->as_string());
-	$expected_message++;
+        my $msg = $self->make_message("Message $_", extra_lines => 5000);
+        $expected_storage += length($msg->as_string());
+        $expected_message++;
 
-	my $annotation = $self->make_random_data(1);
-	$expected_annotation_storage += length($annotation);
-	$talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $annotation }]]);
-	$self->assert_str_equals('ok', $talk->get_last_completion_response());
-	$uid++;
+        my $annotation = $self->make_random_data(1);
+        $expected_annotation_storage += length($annotation);
+        $talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $annotation }]]);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $uid++;
     }
 
     $self->_check_usages(
-	storage => int($expected_storage/1024),
-	message => $expected_message,
-	'x-annotation-storage' => int($expected_annotation_storage/1024),
+        storage => int($expected_storage/1024),
+        message => $expected_message,
+        'x-annotation-storage' => int($expected_annotation_storage/1024),
     );
 
     $talk->create("INBOX.sub") || die "Failed to create subfolder";
@@ -934,24 +934,24 @@ sub test_quotarename
     $uid = 1;
     for (1..10) {
 
-	my $msg = $self->make_message("Message $_",
-				      extra_lines => 10 + rand(5000));
-	$expected_storage_more += length($msg->as_string());
-	$expected_message_more++;
+        my $msg = $self->make_message("Message $_",
+                                      extra_lines => 10 + rand(5000));
+        $expected_storage_more += length($msg->as_string());
+        $expected_message_more++;
 
-	my $annotation = $self->make_random_data(1);
-	$expected_annotation_storage_more += length($annotation);
-	$talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $annotation }]]);
-	$self->assert_str_equals('ok', $talk->get_last_completion_response());
-	$uid++;
+        my $annotation = $self->make_random_data(1);
+        $expected_annotation_storage_more += length($annotation);
+        $talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $annotation }]]);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $uid++;
     }
     $self->{store}->set_folder("INBOX");
     $talk->select($self->{store}->{folder}) || die;
 
     $self->_check_usages(
-	storage => int($expected_storage_more/1024),
-	message => $expected_message_more,
-	'x-annotation-storage' => int($expected_annotation_storage_more/1024),
+        storage => int($expected_storage_more/1024),
+        message => $expected_message_more,
+        'x-annotation-storage' => int($expected_annotation_storage_more/1024),
     );
 
     $talk->rename("INBOX.sub", "INBOX.othersub") || die;
@@ -959,17 +959,17 @@ sub test_quotarename
 
     # usage should be the same after a rename
     $self->_check_usages(
-	storage => int($expected_storage_more/1024),
-	message => $expected_message_more,
-	'x-annotation-storage' => int($expected_annotation_storage_more/1024),
+        storage => int($expected_storage_more/1024),
+        message => $expected_message_more,
+        'x-annotation-storage' => int($expected_annotation_storage_more/1024),
     );
 
     $talk->delete("INBOX.othersub") || die;
 
     $self->_check_usages(
-	storage => int($expected_storage/1024),
-	message => $expected_message,
-	'x-annotation-storage' => int($expected_annotation_storage/1024),
+        storage => int($expected_storage/1024),
+        message => $expected_message,
+        'x-annotation-storage' => int($expected_annotation_storage/1024),
     );
 }
 
@@ -982,16 +982,16 @@ sub test_quota_f_unixhs
 
     xlog "set ourselves a basic usage quota";
     $self->_set_limits(
-	quotaroot => 'user/cassandane',
-	storage => 100000,
-	message => 50000,
-	'x-annotation-storage' => 10000,
+        quotaroot => 'user/cassandane',
+        storage => 100000,
+        message => 50000,
+        'x-annotation-storage' => 10000,
     );
     $self->_check_usages(
-	quotaroot => 'user/cassandane',
-	storage => 0,
-	message => 0,
-	'x-annotation-storage' => 0,
+        quotaroot => 'user/cassandane',
+        storage => 0,
+        message => 0,
+        'x-annotation-storage' => 0,
     );
 
     xlog "run quota -f";
@@ -1016,34 +1016,34 @@ sub test_quota_f
 
     xlog "set ourselves a basic usage quota";
     $self->_set_limits(
-	quotaroot => 'user.cassandane',
-	storage => 100000,
-	message => 50000,
-	'x-annotation-storage' => 10000,
+        quotaroot => 'user.cassandane',
+        storage => 100000,
+        message => 50000,
+        'x-annotation-storage' => 10000,
     );
     $self->_check_usages(
-	quotaroot => 'user.cassandane',
-	storage => 0,
-	message => 0,
-	'x-annotation-storage' => 0,
+        quotaroot => 'user.cassandane',
+        storage => 0,
+        message => 0,
+        'x-annotation-storage' => 0,
     );
 
     xlog "create some messages to use various quota resources";
     $self->{instance}->create_user("quotafuser");
     $self->_set_limits(
-	quotaroot => 'user.quotafuser',
-	storage => 100000,
-	message => 50000,
-	'x-annotation-storage' => 10000,
+        quotaroot => 'user.quotafuser',
+        storage => 100000,
+        message => 50000,
+        'x-annotation-storage' => 10000,
     );
     $self->{adminstore}->set_folder("user.quotafuser");
     my $quotafuser_expected_storage = 0;
     my $quotafuser_expected_message = 0;
     my $quotafuser_expected_annotation_storage = 0;
     for (1..3) {
-	my $msg = $self->make_message("QuotaFUser $_", store => $self->{adminstore}, extra_lines => 17000);
-	$quotafuser_expected_storage += length($msg->as_string());
-	$quotafuser_expected_message++;
+        my $msg = $self->make_message("QuotaFUser $_", store => $self->{adminstore}, extra_lines => 17000);
+        $quotafuser_expected_storage += length($msg->as_string());
+        $quotafuser_expected_message++;
     }
     my $annotation = $self->make_random_data(10);
     $quotafuser_expected_annotation_storage += length($annotation);
@@ -1053,9 +1053,9 @@ sub test_quota_f
     my $cassandane_expected_message = 0;
     my $cassandane_expected_annotation_storage = 0;
     for (1..10) {
-	my $msg = $self->make_message("Cassandane $_", extra_lines => 5000);
-	$cassandane_expected_storage += length($msg->as_string());
-	$cassandane_expected_message++;
+        my $msg = $self->make_message("Cassandane $_", extra_lines => 5000);
+        $cassandane_expected_storage += length($msg->as_string());
+        $cassandane_expected_message++;
     }
     $annotation = $self->make_random_data(3);
     $cassandane_expected_annotation_storage += length($annotation);
@@ -1063,16 +1063,16 @@ sub test_quota_f
 
     xlog "check usages";
     $self->_check_usages(
-	quotaroot => 'user.quotafuser',
-	storage => int($quotafuser_expected_storage/1024),
-	message => $quotafuser_expected_message,
-	'x-annotation-storage' => int($quotafuser_expected_annotation_storage/1024),
+        quotaroot => 'user.quotafuser',
+        storage => int($quotafuser_expected_storage/1024),
+        message => $quotafuser_expected_message,
+        'x-annotation-storage' => int($quotafuser_expected_annotation_storage/1024),
     );
     $self->_check_usages(
-	quotaroot => 'user.cassandane',
-	storage => int($cassandane_expected_storage/1024),
-	message => $cassandane_expected_message,
-	'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
+        quotaroot => 'user.cassandane',
+        storage => int($cassandane_expected_storage/1024),
+        message => $cassandane_expected_message,
+        'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
     );
 
     xlog "create a bogus quota file";
@@ -1080,16 +1080,16 @@ sub test_quota_f
 
     xlog "check usages";
     $self->_check_usages(
-	quotaroot => 'user.quotafuser',
-	storage => 0,
-	message => 0,
-	'x-annotation-storage' => 0,
+        quotaroot => 'user.quotafuser',
+        storage => 0,
+        message => 0,
+        'x-annotation-storage' => 0,
     );
     $self->_check_usages(
-	quotaroot => 'user.cassandane',
-	storage => int($cassandane_expected_storage/1024),
-	message => $cassandane_expected_message,
-	'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
+        quotaroot => 'user.cassandane',
+        storage => int($cassandane_expected_storage/1024),
+        message => $cassandane_expected_message,
+        'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
     );
 
     xlog "find and add the quota";
@@ -1097,16 +1097,16 @@ sub test_quota_f
 
     xlog "check usages";
     $self->_check_usages(
-	quotaroot => 'user.quotafuser',
-	storage => int($quotafuser_expected_storage/1024),
-	message => $quotafuser_expected_message,
-	'x-annotation-storage' => int($quotafuser_expected_annotation_storage/1024),
+        quotaroot => 'user.quotafuser',
+        storage => int($quotafuser_expected_storage/1024),
+        message => $quotafuser_expected_message,
+        'x-annotation-storage' => int($quotafuser_expected_annotation_storage/1024),
     );
     $self->_check_usages(
-	quotaroot => 'user.cassandane',
-	storage => int($cassandane_expected_storage/1024),
-	message => $cassandane_expected_message,
-	'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
+        quotaroot => 'user.cassandane',
+        storage => int($cassandane_expected_storage/1024),
+        message => $cassandane_expected_message,
+        'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
     );
 
     xlog "re-run the quota utility";
@@ -1114,16 +1114,16 @@ sub test_quota_f
 
     xlog "check usages";
     $self->_check_usages(
-	quotaroot => 'user.quotafuser',
-	storage => int($quotafuser_expected_storage/1024),
-	message => $quotafuser_expected_message,
-	'x-annotation-storage' => int($quotafuser_expected_annotation_storage/1024),
+        quotaroot => 'user.quotafuser',
+        storage => int($quotafuser_expected_storage/1024),
+        message => $quotafuser_expected_message,
+        'x-annotation-storage' => int($quotafuser_expected_annotation_storage/1024),
     );
     $self->_check_usages(
-	quotaroot => 'user.cassandane',
-	storage => int($cassandane_expected_storage/1024),
-	message => $cassandane_expected_message,
-	'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
+        quotaroot => 'user.cassandane',
+        storage => int($cassandane_expected_storage/1024),
+        message => $cassandane_expected_message,
+        'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
     );
 }
 
@@ -1146,11 +1146,11 @@ sub test_quota_f_vs_update
     xlog "Create some sub folders";
     for my $f (@folders)
     {
-	$talk->create("$basefolder.$f") || die "Failed $@";
-	$self->{store}->set_folder("$basefolder.$f");
-	$msg = $self->make_message("Cassandane $f",
-				      extra_lines => 2000+rand(5000));
-	$expected += length($msg->as_string());
+        $talk->create("$basefolder.$f") || die "Failed $@";
+        $self->{store}->set_folder("$basefolder.$f");
+        $msg = $self->make_message("Cassandane $f",
+                                      extra_lines => 2000+rand(5000));
+        $expected += length($msg->as_string());
     }
     # unselect so quota -f can lock the mailboxes
     $talk->unselect();
@@ -1163,7 +1163,7 @@ sub test_quota_f_vs_update
     $self->{instance}->quota_Z_go("$basefolder.a");
     $self->{instance}->quota_Z_go("$basefolder.b");
     my (@bits) = $self->{instance}->run_command({ cyrus => 1, background => 1 },
-	'quota', '-Z', '-f', $basefolder);
+        'quota', '-Z', '-f', $basefolder);
 
     # waiting for quota -f to ensure that
     # a) the -Z mechanism is working and
@@ -1175,13 +1175,13 @@ sub test_quota_f_vs_update
     xlog "Mailbox update behind the scan";
     $self->{store}->set_folder("$basefolder.b");
     $msg = $self->make_message("Cassandane b UPDATE",
-				  extra_lines => 2000+rand(3000));
+                                  extra_lines => 2000+rand(3000));
     $expected += length($msg->as_string());
 
     xlog "Mailbox update in front of the scan";
     $self->{store}->set_folder("$basefolder.d");
     $msg = $self->make_message("Cassandane d UPDATE",
-				  extra_lines => 2000+rand(3000));
+                                  extra_lines => 2000+rand(3000));
     $expected += length($msg->as_string());
 
     xlog "Let quota -f continue and finish";
@@ -1213,14 +1213,14 @@ sub test_quota_f_nested_qr
     my $n = 5;
     foreach my $f (@folders)
     {
-	$self->{store}->set_folder($f);
-	for (1..$n) {
-	    my $msg = $self->make_message("$f $_",
-					  extra_lines => 10 + rand(5000));
-	    $exp{$f} += length($msg->as_string());
-	}
-	$n += 5;
-	xlog "Expect " . $exp{$f} . " on " . $f;
+        $self->{store}->set_folder($f);
+        for (1..$n) {
+            my $msg = $self->make_message("$f $_",
+                                          extra_lines => 10 + rand(5000));
+            $exp{$f} += length($msg->as_string());
+        }
+        $n += 5;
+        xlog "Expect " . $exp{$f} . " on " . $f;
     }
 
     xlog "set a quota on inbox";
@@ -1270,136 +1270,136 @@ sub test_quota_f_prefix
 
     # surround with other users too
     $self->{instance}->create_user("aabefore",
-				   subdirs => [ qw(subdir subdir2) ]);
+                                   subdirs => [ qw(subdir subdir2) ]);
 
     $self->{instance}->create_user("zzafter",
-				   subdirs => [ qw(subdir subdir2) ]);
+                                   subdirs => [ qw(subdir subdir2) ]);
 
     $self->{instance}->create_user("base",
-				   subdirs => [ qw(subdir subdir2) ]);
+                                   subdirs => [ qw(subdir subdir2) ]);
     $self->_set_limits(quotaroot => 'user.base', storage => 1000000);
     my $exp_base = 0;
 
     xlog "Adding messages to user.base";
     $self->{adminstore}->set_folder("user.base");
     for (1..10) {
-	my $msg = $self->make_message("base $_",
-				      store => $self->{adminstore},
-				      extra_lines => 5000+rand(50000));
-	$exp_base += length($msg->as_string());
+        my $msg = $self->make_message("base $_",
+                                      store => $self->{adminstore},
+                                      extra_lines => 5000+rand(50000));
+        $exp_base += length($msg->as_string());
     }
 
     xlog "Adding messages to user.base.subdir2";
     $self->{adminstore}->set_folder("user.base.subdir2");
     for (1..10) {
-	my $msg = $self->make_message("base subdir2 $_",
-				      store => $self->{adminstore},
-				      extra_lines => 5000+rand(50000));
-	$exp_base += length($msg->as_string());
+        my $msg = $self->make_message("base subdir2 $_",
+                                      store => $self->{adminstore},
+                                      extra_lines => 5000+rand(50000));
+        $exp_base += length($msg->as_string());
     }
 
     $self->{instance}->create_user("baseplus",
-				   subdirs => [ qw(subdir) ]);
+                                   subdirs => [ qw(subdir) ]);
     $self->_set_limits(quotaroot => 'user.baseplus', storage => 1000000);
     my $exp_baseplus = 0;
 
     xlog "Adding messages to user.baseplus";
     $self->{adminstore}->set_folder("user.baseplus");
     for (1..10) {
-	my $msg = $self->make_message("baseplus $_",
-				      store => $self->{adminstore},
-				      extra_lines => 5000+rand(50000));
-	$exp_baseplus += length($msg->as_string());
+        my $msg = $self->make_message("baseplus $_",
+                                      store => $self->{adminstore},
+                                      extra_lines => 5000+rand(50000));
+        $exp_baseplus += length($msg->as_string());
     }
 
     xlog "Adding messages to user.baseplus.subdir";
     $self->{adminstore}->set_folder("user.baseplus.subdir");
     for (1..10) {
-	my $msg = $self->make_message("baseplus subdir $_",
-				      store => $self->{adminstore},
-				      extra_lines => 5000+rand(50000));
-	$exp_baseplus += length($msg->as_string());
+        my $msg = $self->make_message("baseplus subdir $_",
+                                      store => $self->{adminstore},
+                                      extra_lines => 5000+rand(50000));
+        $exp_baseplus += length($msg->as_string());
     }
 
     xlog "Check that the quotas were updated as expected";
     $self->_check_usages(quotaroot => 'user.base',
-			 storage => int($exp_base/1024));
+                         storage => int($exp_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
-			 storage => int($exp_baseplus/1024));
+                         storage => int($exp_baseplus/1024));
 
     xlog "Run quota -f";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
     xlog "Check that the quotas were unchanged by quota -f";
     $self->_check_usages(quotaroot => 'user.base',
-			 storage => int($exp_base/1024));
+                         storage => int($exp_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
-			 storage => int($exp_baseplus/1024));
+                         storage => int($exp_baseplus/1024));
 
     my $bogus_base = $exp_base + 20000 + rand(30000);
     my $bogus_baseplus = $exp_baseplus + 50000 + rand(80000);
     xlog "Write incorrect values to the quota db";
     $self->_zap_quota(quotaroot => 'user.base',
-		      useds => { storage => $bogus_base });
+                      useds => { storage => $bogus_base });
     $self->_zap_quota(quotaroot => 'user.baseplus',
-		      useds => { storage => $bogus_baseplus });
+                      useds => { storage => $bogus_baseplus });
 
     xlog "Check that the quotas are now bogus";
     $self->_check_usages(quotaroot => 'user.base',
-			 storage => int($bogus_base/1024));
+                         storage => int($bogus_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
-			 storage => int($bogus_baseplus/1024));
+                         storage => int($bogus_baseplus/1024));
 
     xlog "Run quota -f with no prefix";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
     xlog "Check that the quotas were all fixed";
     $self->_check_usages(quotaroot => 'user.base',
-			 storage => int($exp_base/1024));
+                         storage => int($exp_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
-			 storage => int($exp_baseplus/1024));
+                         storage => int($exp_baseplus/1024));
 
     xlog "Write incorrect values to the quota db";
     $self->_zap_quota(quotaroot => "user.base",
-		      useds => { storage => $bogus_base });
+                      useds => { storage => $bogus_base });
     $self->_zap_quota(quotaroot => "user.baseplus",
-		      useds => { storage => $bogus_baseplus });
+                      useds => { storage => $bogus_baseplus });
 
     xlog "Check that the quotas are now bogus";
     $self->_check_usages(quotaroot => 'user.base',
-			 storage => int($bogus_base/1024));
+                         storage => int($bogus_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
-			 storage => int($bogus_baseplus/1024));
+                         storage => int($bogus_baseplus/1024));
 
     xlog "Run quota -f on user.base only";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f', 'user.base');
 
     xlog "Check that only the user.base and user.baseplus quotas were fixed";
     $self->_check_usages(quotaroot => 'user.base',
-			 storage => int($exp_base/1024));
+                         storage => int($exp_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
-			 storage => int($exp_baseplus/1024));
+                         storage => int($exp_baseplus/1024));
 
     xlog "Write incorrect values to the quota db";
     $self->_zap_quota(quotaroot => "user.base",
-		      useds => { storage => $bogus_base });
+                      useds => { storage => $bogus_base });
     $self->_zap_quota(quotaroot => "user.baseplus",
-		      useds => { storage => $bogus_baseplus });
+                      useds => { storage => $bogus_baseplus });
 
     xlog "Check that the quotas are now bogus";
     $self->_check_usages(quotaroot => 'user.base',
-			 storage => int($bogus_base/1024));
+                         storage => int($bogus_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
-			 storage => int($bogus_baseplus/1024));
+                         storage => int($bogus_baseplus/1024));
 
     xlog "Run quota -f on user.baseplus only";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f', 'user.baseplus');
 
     xlog "Check that only the user.baseplus quotas were fixed";
     $self->_check_usages(quotaroot => 'user.base',
-			 storage => int($bogus_base/1024));
+                         storage => int($bogus_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
-			 storage => int($exp_baseplus/1024));
+                         storage => int($exp_baseplus/1024));
 }
 
 sub bogus_test_upgrade_v2_4
@@ -1438,8 +1438,8 @@ sub bogus_test_upgrade_v2_4
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($responses);
     foreach my $response (values(%$responses)) {
-	$expected_message++;
-	$expected_storage += $response->{'rfc822.size'};
+        $expected_message++;
+        $expected_storage += $response->{'rfc822.size'};
     }
     $talk->close();
 
@@ -1451,14 +1451,14 @@ sub bogus_test_upgrade_v2_4
     # when the mailbox was upgraded, new resources quota usage shall have been
     # computed automatically
     $self->_set_limits(
-	storage => 100000,
-	message => 50000,
-	'x-annotation-storage' => 10000,
+        storage => 100000,
+        message => 50000,
+        'x-annotation-storage' => 10000,
     );
     $self->_check_usages(
-	storage => int($expected_storage/1024),
-	message => $expected_message,
-	'x-annotation-storage' => int($expected_annotation_storage/1024),
+        storage => int($expected_storage/1024),
+        message => $expected_message,
+        'x-annotation-storage' => int($expected_annotation_storage/1024),
     );
 }
 
@@ -1473,7 +1473,7 @@ sub test_bz3529
     # accidentally futz with the expected quota db backend
     my $backend = $self->{instance}->{config}->get('quota_db');
     $self->assert_str_equals('quotalegacy', $backend)
-	if defined $backend;	    # the default value is also ok
+        if defined $backend;        # the default value is also ok
 
     $self->_set_quotaroot('user.cassandane');
     my $talk = $self->{store}->get_client();
@@ -1483,14 +1483,14 @@ sub test_bz3529
     $self->_check_usages('x-annotation-storage' => 0);
 
     xlog "make some messages to hang annotations on";
-# 	$self->{store}->set_folder($folder);
+#       $self->{store}->set_folder($folder);
     my $uid = 1;
     my %msgs;
     for (1..20)
     {
-	$msgs{$uid} = $self->make_message("Message $uid");
-	$msgs{$uid}->set_attribute('uid', $uid);
-	$uid++;
+        $msgs{$uid} = $self->make_message("Message $uid");
+        $msgs{$uid}->set_attribute('uid', $uid);
+        $uid++;
     }
 
     my $data = $self->make_random_data(30);
@@ -1736,14 +1736,14 @@ sub test_replication_annotstorage
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     $self->assert_deep_equals([
-	'X-ANNOTATION-STORAGE', $used, 67890
+        'X-ANNOTATION-STORAGE', $used, 67890
     ], \@res);
 
     xlog "check the annotation used some quota on the replica";
     @res = $replicatalk->getquota($folder);
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
     $self->assert_deep_equals([
-	'X-ANNOTATION-STORAGE', $used, 67890
+        'X-ANNOTATION-STORAGE', $used, 67890
     ], \@res);
 
     xlog "clear the X-ANNOTATION-STORAGE quota on the master";
@@ -1927,9 +1927,9 @@ sub test_using_annotstorage_msg_copy_exdel
     xlog "Create subfolders to copy from and to";
     $talk = $store->get_client();
     $talk->create($from_folder)
-	or die "Cannot create mailbox $from_folder: $@";
+        or die "Cannot create mailbox $from_folder: $@";
     $talk->create($to_folder)
-	or die "Cannot create mailbox $to_folder: $@";
+        or die "Cannot create mailbox $to_folder: $@";
 
     $store->set_folder($from_folder);
 
@@ -1939,14 +1939,14 @@ sub test_using_annotstorage_msg_copy_exdel
     my $uid = 1;
     for (1..20)
     {
-	my $data = $self->make_random_data(10);
-	my $msg = $self->make_message("Message $uid");
-	$msg->set_attribute('uid', $uid);
-	$msg->set_annotation($entry, $attrib, $data);
-	$exp{$uid} = $msg;
-	$talk->store('' . $uid, 'annotation', [$entry, [$attrib, { Quote => $data }]]);
-	$expected += length($data);
-	$uid++;
+        my $data = $self->make_random_data(10);
+        my $msg = $self->make_message("Message $uid");
+        $msg->set_attribute('uid', $uid);
+        $msg->set_annotation($entry, $attrib, $data);
+        $exp{$uid} = $msg;
+        $talk->store('' . $uid, 'annotation', [$entry, [$attrib, { Quote => $data }]]);
+        $expected += length($data);
+        $uid++;
     }
 
     xlog "Check the annotations are there";
@@ -2028,9 +2028,9 @@ sub test_using_annotstorage_msg_copy_eximm
     xlog "Create subfolders to copy from and to";
     $talk = $store->get_client();
     $talk->create($from_folder)
-	or die "Cannot create mailbox $from_folder: $@";
+        or die "Cannot create mailbox $from_folder: $@";
     $talk->create($to_folder)
-	or die "Cannot create mailbox $to_folder: $@";
+        or die "Cannot create mailbox $to_folder: $@";
 
     $store->set_folder($from_folder);
 
@@ -2040,14 +2040,14 @@ sub test_using_annotstorage_msg_copy_eximm
     my $uid = 1;
     for (1..20)
     {
-	my $data = $self->make_random_data(10);
-	my $msg = $self->make_message("Message $uid");
-	$msg->set_attribute('uid', $uid);
-	$msg->set_annotation($entry, $attrib, $data);
-	$exp{$uid} = $msg;
-	$talk->store('' . $uid, 'annotation', [$entry, [$attrib, { Quote => $data }]]);
-	$expected += length($data);
-	$uid++;
+        my $data = $self->make_random_data(10);
+        my $msg = $self->make_message("Message $uid");
+        $msg->set_attribute('uid', $uid);
+        $msg->set_annotation($entry, $attrib, $data);
+        $exp{$uid} = $msg;
+        $talk->store('' . $uid, 'annotation', [$entry, [$attrib, { Quote => $data }]]);
+        $expected += length($data);
+        $uid++;
     }
 
     xlog "Check the annotations are there";
@@ -2124,9 +2124,9 @@ sub test_using_annotstorage_msg_copy_dedel
     xlog "Create subfolders to copy from and to";
     $talk = $store->get_client();
     $talk->create($from_folder)
-	or die "Cannot create mailbox $from_folder: $@";
+        or die "Cannot create mailbox $from_folder: $@";
     $talk->create($to_folder)
-	or die "Cannot create mailbox $to_folder: $@";
+        or die "Cannot create mailbox $to_folder: $@";
 
     $store->set_folder($from_folder);
 
@@ -2136,14 +2136,14 @@ sub test_using_annotstorage_msg_copy_dedel
     my $uid = 1;
     for (1..20)
     {
-	my $data = $self->make_random_data(10);
-	my $msg = $self->make_message("Message $uid");
-	$msg->set_attribute('uid', $uid);
-	$msg->set_annotation($entry, $attrib, $data);
-	$exp{$uid} = $msg;
-	$talk->store('' . $uid, 'annotation', [$entry, [$attrib, { Quote => $data }]]);
-	$expected += length($data);
-	$uid++;
+        my $data = $self->make_random_data(10);
+        my $msg = $self->make_message("Message $uid");
+        $msg->set_attribute('uid', $uid);
+        $msg->set_annotation($entry, $attrib, $data);
+        $exp{$uid} = $msg;
+        $talk->store('' . $uid, 'annotation', [$entry, [$attrib, { Quote => $data }]]);
+        $expected += length($data);
+        $uid++;
     }
 
     xlog "Check the annotations are there";
@@ -2173,7 +2173,7 @@ sub test_using_annotstorage_msg_copy_dedel
     $talk = $store->get_client();
     $talk->unselect();
     $talk->delete($from_folder)
-	or die "Cannot delete folder $from_folder: $@";
+        or die "Cannot delete folder $from_folder: $@";
 
     xlog "Messages are still in the destination folder";
     $store->set_folder($to_folder);
@@ -2224,9 +2224,9 @@ sub test_using_annotstorage_msg_copy_deimm
     xlog "Create subfolders to copy from and to";
     $talk = $store->get_client();
     $talk->create($from_folder)
-	or die "Cannot create mailbox $from_folder: $@";
+        or die "Cannot create mailbox $from_folder: $@";
     $talk->create($to_folder)
-	or die "Cannot create mailbox $to_folder: $@";
+        or die "Cannot create mailbox $to_folder: $@";
 
     $store->set_folder($from_folder);
 
@@ -2236,14 +2236,14 @@ sub test_using_annotstorage_msg_copy_deimm
     my $uid = 1;
     for (1..20)
     {
-	my $data = $self->make_random_data(10);
-	my $msg = $self->make_message("Message $uid");
-	$msg->set_attribute('uid', $uid);
-	$msg->set_annotation($entry, $attrib, $data);
-	$exp{$uid} = $msg;
-	$talk->store('' . $uid, 'annotation', [$entry, [$attrib, { Quote => $data }]]);
-	$expected += length($data);
-	$uid++;
+        my $data = $self->make_random_data(10);
+        my $msg = $self->make_message("Message $uid");
+        $msg->set_attribute('uid', $uid);
+        $msg->set_annotation($entry, $attrib, $data);
+        $exp{$uid} = $msg;
+        $talk->store('' . $uid, 'annotation', [$entry, [$attrib, { Quote => $data }]]);
+        $expected += length($data);
+        $uid++;
     }
 
     xlog "Check the annotations are there";
@@ -2273,7 +2273,7 @@ sub test_using_annotstorage_msg_copy_deimm
     $talk = $store->get_client();
     $talk->unselect();
     $talk->delete($from_folder)
-	or die "Cannot delete folder $from_folder: $@";
+        or die "Cannot delete folder $from_folder: $@";
 
     xlog "Messages are still in the destination folder";
     $store->set_folder($to_folder);
@@ -2299,21 +2299,21 @@ sub test_reconstruct
 
     my $store = $self->{store};
     $store->set_fetch_attributes('uid',
-				 "annotation ($mentry1 $mattrib)",
-				 "annotation ($mentry2 $mattrib)");
+                                 "annotation ($mentry1 $mattrib)",
+                                 "annotation ($mentry2 $mattrib)");
     my $talk = $store->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 
     xlog "set ourselves a basic limit";
     $self->_set_limits(
-	storage => 100000,
-	message => 50000,
-	'x-annotation-storage' => 100000,
+        storage => 100000,
+        message => 50000,
+        'x-annotation-storage' => 100000,
     );
     $self->_check_usages(
-	storage => 0,
-	message => 0,
-	'x-annotation-storage' => 0,
+        storage => 0,
+        message => 0,
+        'x-annotation-storage' => 0,
     );
     my $expected_annotation_storage = 0;
     my $expected_storage = 0;
@@ -2330,22 +2330,22 @@ sub test_reconstruct
     my %exp;
     for (1..10)
     {
-	my $msg = $self->make_message("Message $_",
-				      extra_lines => 10 + rand(5000));
-	$exp{$uid} = $msg;
-	my $data1 = $self->make_random_data(7);
-	my $data2 = $self->make_random_data(3);
-	$msg->set_attribute('uid', $uid);
-	$msg->set_annotation($mentry1, $mattrib, $data1);
-	$msg->set_annotation($mentry2, $mattrib, $data2);
-	$talk->store('' . $uid, 'annotation',
-		    [$mentry1, [$mattrib, { Quote => $data1 }],
-		     $mentry2, [$mattrib, { Quote => $data2 }]]);
-	$self->assert_str_equals('ok', $talk->get_last_completion_response());
-	$expected_annotation_storage += (length($data1) + length($data2));
-	$expected_storage += length($msg->as_string());
-	$expected_message++;
-	$uid++;
+        my $msg = $self->make_message("Message $_",
+                                      extra_lines => 10 + rand(5000));
+        $exp{$uid} = $msg;
+        my $data1 = $self->make_random_data(7);
+        my $data2 = $self->make_random_data(3);
+        $msg->set_attribute('uid', $uid);
+        $msg->set_annotation($mentry1, $mattrib, $data1);
+        $msg->set_annotation($mentry2, $mattrib, $data2);
+        $talk->store('' . $uid, 'annotation',
+                    [$mentry1, [$mattrib, { Quote => $data1 }],
+                     $mentry2, [$mattrib, { Quote => $data2 }]]);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $expected_annotation_storage += (length($data1) + length($data2));
+        $expected_storage += length($msg->as_string());
+        $expected_message++;
+        $uid++;
     }
 
     xlog "Check the messages are all there";
@@ -2355,14 +2355,14 @@ sub test_reconstruct
     my $res = $talk->getmetadata($folder, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder => { $fentry => $data }
+        $folder => { $fentry => $data }
     }, $res);
 
     xlog "Check the quota usage is as expected";
     $self->_check_usages(
-	storage => int($expected_storage/1024),
-	message => $expected_message,
-	'x-annotation-storage' => int($expected_annotation_storage/1024),
+        storage => int($expected_storage/1024),
+        message => $expected_message,
+        'x-annotation-storage' => int($expected_annotation_storage/1024),
     );
 
     $self->{store}->disconnect();
@@ -2375,14 +2375,14 @@ sub test_reconstruct
     my $cyrus_index = "$mbdir/cyrus.index";
     $self->assert(( -f $cyrus_index ));
     rename($cyrus_index, $cyrus_index . '.NOT')
-	or die "Cannot rename $cyrus_index: $!";
+        or die "Cannot rename $cyrus_index: $!";
 
     xlog "Running reconstruct";
     $self->{instance}->run_command({ cyrus => 1 },
-				   'reconstruct', 'user.cassandane');
+                                   'reconstruct', 'user.cassandane');
     xlog "Running quota -f";
     $self->{instance}->run_command({ cyrus => 1 },
-				   'quota', '-f', "user.cassandane");
+                                   'quota', '-f', "user.cassandane");
 
     $talk = $store->get_client();
 
@@ -2393,14 +2393,14 @@ sub test_reconstruct
     $res = $talk->getmetadata($folder, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder => { $fentry => $data }
+        $folder => { $fentry => $data }
     }, $res);
 
     xlog "Check the quota usage is still as expected";
     $self->_check_usages(
-	storage => int($expected_storage/1024),
-	message => $expected_message,
-	'x-annotation-storage' => int($expected_annotation_storage/1024),
+        storage => int($expected_storage/1024),
+        message => $expected_message,
+        'x-annotation-storage' => int($expected_annotation_storage/1024),
     );
 }
 
@@ -2420,21 +2420,21 @@ sub test_reconstruct_orphans
 
     my $store = $self->{store};
     $store->set_fetch_attributes('uid',
-				 "annotation ($mentry1 $mattrib)",
-				 "annotation ($mentry2 $mattrib)");
+                                 "annotation ($mentry1 $mattrib)",
+                                 "annotation ($mentry2 $mattrib)");
     my $talk = $store->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 
     xlog "set ourselves a basic limit";
     $self->_set_limits(
-	storage => 100000,
-	message => 50000,
-	'x-annotation-storage' => 100000,
+        storage => 100000,
+        message => 50000,
+        'x-annotation-storage' => 100000,
     );
     $self->_check_usages(
-	storage => 0,
-	message => 0,
-	'x-annotation-storage' => 0,
+        storage => 0,
+        message => 0,
+        'x-annotation-storage' => 0,
     );
     my $expected_annotation_storage = 0;
     my $expected_storage = 0;
@@ -2451,22 +2451,22 @@ sub test_reconstruct_orphans
     my %exp;
     for (1..10)
     {
-	my $msg = $self->make_message("Message $_",
-				      extra_lines => 10 + rand(5000));
-	$exp{$uid} = $msg;
-	my $data1 = $self->make_random_data(7);
-	my $data2 = $self->make_random_data(3);
-	$msg->set_attribute('uid', $uid);
-	$msg->set_annotation($mentry1, $mattrib, $data1);
-	$msg->set_annotation($mentry2, $mattrib, $data2);
-	$talk->store('' . $uid, 'annotation',
-		    [$mentry1, [$mattrib, { Quote => $data1 }],
-		     $mentry2, [$mattrib, { Quote => $data2 }]]);
-	$self->assert_str_equals('ok', $talk->get_last_completion_response());
-	$expected_annotation_storage += (length($data1) + length($data2));
-	$expected_storage += length($msg->as_string());
-	$expected_message++;
-	$uid++;
+        my $msg = $self->make_message("Message $_",
+                                      extra_lines => 10 + rand(5000));
+        $exp{$uid} = $msg;
+        my $data1 = $self->make_random_data(7);
+        my $data2 = $self->make_random_data(3);
+        $msg->set_attribute('uid', $uid);
+        $msg->set_annotation($mentry1, $mattrib, $data1);
+        $msg->set_annotation($mentry2, $mattrib, $data2);
+        $talk->store('' . $uid, 'annotation',
+                    [$mentry1, [$mattrib, { Quote => $data1 }],
+                     $mentry2, [$mattrib, { Quote => $data2 }]]);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $expected_annotation_storage += (length($data1) + length($data2));
+        $expected_storage += length($msg->as_string());
+        $expected_message++;
+        $uid++;
     }
 
     xlog "Check the messages are all there";
@@ -2476,14 +2476,14 @@ sub test_reconstruct_orphans
     my $res = $talk->getmetadata($folder, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder => { $fentry => $data }
+        $folder => { $fentry => $data }
     }, $res);
 
     xlog "Check the quota usage is as expected";
     $self->_check_usages(
-	storage => int($expected_storage/1024),
-	message => $expected_message,
-	'x-annotation-storage' => int($expected_annotation_storage/1024),
+        storage => int($expected_storage/1024),
+        message => $expected_message,
+        'x-annotation-storage' => int($expected_annotation_storage/1024),
     );
 
     $self->{store}->disconnect();
@@ -2496,29 +2496,29 @@ sub test_reconstruct_orphans
     my $cyrus_index = "$mbdir/cyrus.index";
     $self->assert(( -f $cyrus_index ));
     rename($cyrus_index, $cyrus_index . '.NOT')
-	or die "Cannot rename $cyrus_index: $!";
+        or die "Cannot rename $cyrus_index: $!";
 
     xlog "Delete a couple of messages";
     foreach $uid (2, 7)
     {
-	xlog "Deleting uid $uid";
-	unlink("$mbdir/$uid.");
+        xlog "Deleting uid $uid";
+        unlink("$mbdir/$uid.");
 
-	my $msg = delete $exp{$uid};
-	my $data1 = $msg->get_annotation($mentry1, $mattrib);
-	my $data2 = $msg->get_annotation($mentry2, $mattrib);
+        my $msg = delete $exp{$uid};
+        my $data1 = $msg->get_annotation($mentry1, $mattrib);
+        my $data2 = $msg->get_annotation($mentry2, $mattrib);
 
-	$expected_annotation_storage -= (length($data1) + length($data2));
-	$expected_storage -= length($msg->as_string());
-	$expected_message--;
+        $expected_annotation_storage -= (length($data1) + length($data2));
+        $expected_storage -= length($msg->as_string());
+        $expected_message--;
     }
 
     xlog "Running reconstruct";
     $self->{instance}->run_command({ cyrus => 1 },
-				   'reconstruct', 'user.cassandane');
+                                   'reconstruct', 'user.cassandane');
     xlog "Running quota -f";
     $self->{instance}->run_command({ cyrus => 1 },
-				   'quota', '-f', "user.cassandane");
+                                   'quota', '-f', "user.cassandane");
 
     $talk = $store->get_client();
 
@@ -2529,14 +2529,14 @@ sub test_reconstruct_orphans
     $res = $talk->getmetadata($folder, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder => { $fentry => $data }
+        $folder => { $fentry => $data }
     }, $res);
 
     xlog "Check the quota usage is still as expected";
     $self->_check_usages(
-	storage => int($expected_storage/1024),
-	message => $expected_message,
-	'x-annotation-storage' => int($expected_annotation_storage/1024),
+        storage => int($expected_storage/1024),
+        message => $expected_message,
+        'x-annotation-storage' => int($expected_annotation_storage/1024),
     );
 }
 
@@ -2562,12 +2562,12 @@ sub test_bug3735
     my $filename = $self->{instance}->{basedir} . "/bug3735.out";
 
     $self->{instance}->run_command({
-	cyrus => 1,
-	redirects => { stdout => $filename },
+        cyrus => 1,
+        redirects => { stdout => $filename },
     }, 'quota', "user.a");
 
     open RESULTS, '<', $filename
-	or die "Cannot open $filename for reading: $!";
+        or die "Cannot open $filename for reading: $!";
     my @res = <RESULTS>;
     close RESULTS;
 
@@ -2593,8 +2593,8 @@ sub test_rename_withannot
 
     my $store = $self->{store};
     $store->set_fetch_attributes('uid',
-				 "annotation ($mentry1 $mattrib)",
-				 "annotation ($mentry2 $mattrib)");
+                                 "annotation ($mentry1 $mattrib)",
+                                 "annotation ($mentry2 $mattrib)");
     my $talk = $store->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 
@@ -2603,14 +2603,14 @@ sub test_rename_withannot
 
     xlog "set ourselves a basic limit";
     $self->_set_limits(
-	storage => 100000,
-	message => 50000,
-	'x-annotation-storage' => 100000,
+        storage => 100000,
+        message => 50000,
+        'x-annotation-storage' => 100000,
     );
     $self->_check_usages(
-	storage => 0,
-	message => 0,
-	'x-annotation-storage' => 0,
+        storage => 0,
+        message => 0,
+        'x-annotation-storage' => 0,
     );
     my $expected_annotation_storage = 0;
     my $expected_storage = 0;
@@ -2627,22 +2627,22 @@ sub test_rename_withannot
     my %exp;
     for (1..10)
     {
-	my $msg = $self->make_message("Message $_",
-				      extra_lines => 10 + rand(5000));
-	$exp{$uid} = $msg;
-	my $data1 = $self->make_random_data(7);
-	my $data2 = $self->make_random_data(3);
-	$msg->set_attribute('uid', $uid);
-	$msg->set_annotation($mentry1, $mattrib, $data1);
-	$msg->set_annotation($mentry2, $mattrib, $data2);
-	$talk->store('' . $uid, 'annotation',
-		    [$mentry1, [$mattrib, { Quote => $data1 }],
-		     $mentry2, [$mattrib, { Quote => $data2 }]]);
-	$self->assert_str_equals('ok', $talk->get_last_completion_response());
-	$expected_annotation_storage += (length($data1) + length($data2));
-	$expected_storage += length($msg->as_string());
-	$expected_message++;
-	$uid++;
+        my $msg = $self->make_message("Message $_",
+                                      extra_lines => 10 + rand(5000));
+        $exp{$uid} = $msg;
+        my $data1 = $self->make_random_data(7);
+        my $data2 = $self->make_random_data(3);
+        $msg->set_attribute('uid', $uid);
+        $msg->set_annotation($mentry1, $mattrib, $data1);
+        $msg->set_annotation($mentry2, $mattrib, $data2);
+        $talk->store('' . $uid, 'annotation',
+                    [$mentry1, [$mattrib, { Quote => $data1 }],
+                     $mentry2, [$mattrib, { Quote => $data2 }]]);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $expected_annotation_storage += (length($data1) + length($data2));
+        $expected_storage += length($msg->as_string());
+        $expected_message++;
+        $uid++;
     }
 
     my $res;
@@ -2654,30 +2654,30 @@ sub test_rename_withannot
     $res = $talk->getmetadata($src, $vendsize);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
-	$src => { $vendsize => $expected_storage },
+        $src => { $vendsize => $expected_storage },
     }, $res);
 
     if ($cyrus_version >= 3) {
-	xlog "check that the annot size matches";
-	$res = $talk->getmetadata($src, $vendannot);
-	$self->assert_str_equals('ok', $talk->get_last_completion_response());
-	$self->assert_deep_equals({
-	    $src => { $vendannot => $expected_annotation_storage },
-	}, $res);
+        xlog "check that the annot size matches";
+        $res = $talk->getmetadata($src, $vendannot);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $self->assert_deep_equals({
+            $src => { $vendannot => $expected_annotation_storage },
+        }, $res);
     }
 
     xlog "Check the mailbox annotation is still there";
     $res = $talk->getmetadata($src, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
-	$src => { $fentry => $data }
+        $src => { $fentry => $data }
     }, $res);
 
     xlog "Check the quota usage is as expected";
     $self->_check_usages(
-	storage => int($expected_storage/1024),
-	message => $expected_message,
-	'x-annotation-storage' => int($expected_annotation_storage/1024),
+        storage => int($expected_storage/1024),
+        message => $expected_message,
+        'x-annotation-storage' => int($expected_annotation_storage/1024),
     );
 
     xlog "rename $src to $dest";
@@ -2695,30 +2695,30 @@ sub test_rename_withannot
     $res = $talk->getmetadata($dest, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
-	$dest => { $fentry => $data }
+        $dest => { $fentry => $data }
     }, $res);
 
     xlog "check that the used size still matches";
     $res = $talk->getmetadata($dest, $vendsize);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
-	$dest => { $vendsize => $expected_storage },
+        $dest => { $vendsize => $expected_storage },
     }, $res);
 
     if ($cyrus_version >= 3) {
-	xlog "check that the annot size still matches";
-	$res = $talk->getmetadata($dest, $vendannot);
-	$self->assert_str_equals('ok', $talk->get_last_completion_response());
-	$self->assert_deep_equals({
-	    $dest => { $vendannot => $expected_annotation_storage },
-	}, $res);
+        xlog "check that the annot size still matches";
+        $res = $talk->getmetadata($dest, $vendannot);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $self->assert_deep_equals({
+            $dest => { $vendannot => $expected_annotation_storage },
+        }, $res);
     }
 
     xlog "Check the quota usage is still as expected";
     $self->_check_usages(
-	storage => int($expected_storage/1024),
-	message => $expected_message,
-	'x-annotation-storage' => int($expected_annotation_storage/1024),
+        storage => int($expected_storage/1024),
+        message => $expected_message,
+        'x-annotation-storage' => int($expected_annotation_storage/1024),
     );
 }
 

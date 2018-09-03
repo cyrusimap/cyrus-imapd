@@ -55,8 +55,8 @@ sub new
 {
     my ($class, @args) = @_;
     return $class->SUPER::new({
-	# We need IMAP to be able to create the mailbox for POP
-	services => ['imap', 'pop3'],
+        # We need IMAP to be able to create the mailbox for POP
+        services => ['imap', 'pop3'],
     }, @args);
 }
 
@@ -68,7 +68,7 @@ sub set_up
     my $svc = $self->{instance}->get_service('pop3');
     if (defined $svc)
     {
-	$self->{pop_store} = $svc->create_store();
+        $self->{pop_store} = $svc->create_store();
     }
 }
 
@@ -78,8 +78,8 @@ sub tear_down
 
     if (defined $self->{pop_store})
     {
-	$self->{pop_store}->disconnect();
-	$self->{pop_store} = undef;
+        $self->{pop_store}->disconnect();
+        $self->{pop_store} = undef;
     }
 
     $self->SUPER::tear_down();
@@ -118,7 +118,7 @@ sub test_top_args
     my $lines = $client->read_until_dot();
     my %actual;
     $actual{'Message A'} = Cassandane::Message->new(lines => $lines,
-						    attrs => { uid => 1 });
+                                                    attrs => { uid => 1 });
     $self->check_messages(\%exp, actual => \%actual);
 
     xlog "TOP with 2 arguments, first one not a number, should return an error";
@@ -166,7 +166,7 @@ sub test_subfolder_login
     my $lines = $popclient->read_until_dot();
     my %actual;
     $actual{'Message A'} = Cassandane::Message->new(lines => $lines,
-						    attrs => { uid => 1 });
+                                                    attrs => { uid => 1 });
     $self->check_messages(\%exp, actual => \%actual);
 
     my $svc = $self->{instance}->get_service('pop3');
@@ -185,7 +185,7 @@ sub test_subfolder_login
     # note: "uid 2" is totally bogus here, because the "generator" doesn't
     # notice the folder change and hence the new UID space...
     $subactual{'Message B'} = Cassandane::Message->new(lines => $sublines,
-						       attrs => { uid => 2 });
+                                                       attrs => { uid => 2 });
     $self->check_messages(\%subexp, actual => \%subactual);
 }
 

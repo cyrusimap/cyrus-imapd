@@ -51,8 +51,8 @@ sub new
     my $config = Cassandane::Config->default()->clone();
     $config->set(autocreate_quota => 101200);
     return $class->SUPER::new({
-	config => $config,
-	adminstore => 1,
+        config => $config,
+        adminstore => 1,
     }, @_);
 }
 
@@ -62,7 +62,7 @@ sub set_up
     $self->SUPER::set_up();
 
     $self->{instance}->create_user("foo",
-				   subdirs => [ 'cassandane', ['cassandane', 'sent'] ]);
+                                   subdirs => [ 'cassandane', ['cassandane', 'sent'] ]);
 
     my $admintalk = $self->{adminstore}->get_client();
     $admintalk->setacl("user.foo.cassandane.sent", "cassandane", "lrswp");

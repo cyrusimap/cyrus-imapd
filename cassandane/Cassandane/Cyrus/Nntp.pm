@@ -62,11 +62,11 @@ sub set_up
     my $svc = $self->{instance}->get_service('nntp');
     if (defined $svc)
     {
-	my $debug = get_verbose() ? 2 : 0;
-	$self->{client} = new News::NNTPClient($svc->host(),
-					       $svc->port(),
-					       $debug);
-	$self->{client}->authinfo('cassandane', 'testpw');
+        my $debug = get_verbose() ? 2 : 0;
+        $self->{client} = new News::NNTPClient($svc->host(),
+                                               $svc->port(),
+                                               $debug);
+        $self->{client}->authinfo('cassandane', 'testpw');
     }
 }
 
@@ -76,8 +76,8 @@ sub tear_down
 
     if (defined $self->{client})
     {
-	$self->{client}->quit();
-	$self->{client} = undef;
+        $self->{client}->quit();
+        $self->{client} = undef;
     }
 
     $self->SUPER::tear_down();
@@ -94,11 +94,11 @@ sub test_cve_2011_3208_list_newsgroups
     my $wildmat = '';
     while (length $wildmat < 1024+$stack_slosh)
     {
-	$wildmat .= ($wildmat eq '' ? '' : '.');
-	$wildmat .= random_word();
-	$client->list('newsgroups', $wildmat);
-	$self->assert_num_equals(215, $client->code());
-	$self->assert($client->message() =~ m/List of newsgroups follows/i);
+        $wildmat .= ($wildmat eq '' ? '' : '.');
+        $wildmat .= random_word();
+        $client->list('newsgroups', $wildmat);
+        $self->assert_num_equals(215, $client->code());
+        $self->assert($client->message() =~ m/List of newsgroups follows/i);
     }
 }
 
@@ -111,11 +111,11 @@ sub test_cve_2011_3208_list_active
     my $wildmat = '';
     while (length $wildmat < 1024+$stack_slosh)
     {
-	$wildmat .= ($wildmat eq '' ? '' : '.');
-	$wildmat .= random_word();
-	$client->list('active', $wildmat);
-	$self->assert_num_equals(215, $client->code());
-	$self->assert($client->message() =~ m/List of newsgroups follows/i);
+        $wildmat .= ($wildmat eq '' ? '' : '.');
+        $wildmat .= random_word();
+        $client->list('active', $wildmat);
+        $self->assert_num_equals(215, $client->code());
+        $self->assert($client->message() =~ m/List of newsgroups follows/i);
     }
 }
 
@@ -134,11 +134,11 @@ sub test_cve_2011_3208_newnews
     my $since = time() - 3600;
     while (length $wildmat < 1024+$stack_slosh)
     {
-	$wildmat .= ($wildmat eq '' ? '' : '.');
-	$wildmat .= random_word();
-	$client->newnews($wildmat, $since);
-	$self->assert_num_equals(230, $client->code());
-	$self->assert($client->message() =~ m/List of new articles follows/i);
+        $wildmat .= ($wildmat eq '' ? '' : '.');
+        $wildmat .= random_word();
+        $client->newnews($wildmat, $since);
+        $self->assert_num_equals(230, $client->code());
+        $self->assert($client->message() =~ m/List of new articles follows/i);
     }
 }
 

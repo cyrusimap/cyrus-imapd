@@ -73,28 +73,28 @@ sub cyr_backup_json
     my ($self, $params, $subcommand, @args) = @_;
 
     die "params not a hashref"
-	if defined $params and ref $params ne 'HASH';
+        if defined $params and ref $params ne 'HASH';
     die "invalid subcommand: $subcommand"
-	if not grep { $_ eq $subcommand } qw(chunks mailboxes messages headers);
+        if not grep { $_ eq $subcommand } qw(chunks mailboxes messages headers);
 
     my $instance = $params->{instance} // $self->{backups};
     my $user = $params->{user} // 'cassandane';
 
     my $out = "$instance->{basedir}/$self->{_name}"
-	  . "-cyr_backup-$user-json-$subcommand.stdout";
+          . "-cyr_backup-$user-json-$subcommand.stdout";
     my $err = "$instance->{basedir}/$self->{_name}"
-	  . "-cyr_backup-$user-json-$subcommand.stderr";
+          . "-cyr_backup-$user-json-$subcommand.stderr";
 
     $instance->run_command(
-	{ cyrus => 1,
-	  redirects => { 'stdout' => $out,
-			 'stderr' => $err } },
-	'cyr_backup', '-u', $user, 'json', $subcommand, @args
+        { cyrus => 1,
+          redirects => { 'stdout' => $out,
+                         'stderr' => $err } },
+        'cyr_backup', '-u', $user, 'json', $subcommand, @args
     );
 
     local $/;
     open my $fh, '<', $out
-	or die "Cannot open $out for reading: $!";
+        or die "Cannot open $out for reading: $!";
     my $data = JSON::decode_json(<$fh>);
     close $fh;
 
@@ -117,8 +117,8 @@ sub test_basic
 
     # XXX probably don't do this like this
     $self->{instance}->run_command(
-	{ cyrus => 1 },
-	qw(sync_client -vv -n backup -u cassandane)
+        { cyrus => 1 },
+        qw(sync_client -vv -n backup -u cassandane)
     );
 
     my $chunks = $self->cyr_backup_json({}, 'chunks');
@@ -146,8 +146,8 @@ sub test_messages
 
     # XXX probably don't do this like this
     $self->{instance}->run_command(
-	{ cyrus => 1 },
-	qw(sync_client -vv -n backup -u cassandane)
+        { cyrus => 1 },
+        qw(sync_client -vv -n backup -u cassandane)
     );
 
     my $messages = $self->cyr_backup_json({}, 'messages');
@@ -159,11 +159,11 @@ sub test_messages
 
     # transform out enough data for comparison purposes
     my %expected = map {
-	$_->get_guid() => $_->get_header('X-Cassandane-Unique')
+        $_->get_guid() => $_->get_header('X-Cassandane-Unique')
     } values %exp;
 
     my %actual = map {
-	$_ => $headers->{$_}->{'X-Cassandane-Unique'}->[0]
+        $_ => $headers->{$_}->{'X-Cassandane-Unique'}->[0]
     } keys %{$headers};
 
     $self->assert_deep_equals(\%expected, \%actual);

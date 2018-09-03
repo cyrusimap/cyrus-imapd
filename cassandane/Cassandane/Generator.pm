@@ -88,18 +88,18 @@ our @domains = (
 our @localpart_styles = (
     sub($$$)
     {
-	my ($forename, $initial, $surname) = @_;
-	return "$forename.$surname";
+        my ($forename, $initial, $surname) = @_;
+        return "$forename.$surname";
     },
     sub($$$)
     {
-	my ($forename, $initial, $surname) = @_;
-	return lc(substr($forename,0,1) . $initial . $surname);
+        my ($forename, $initial, $surname) = @_;
+        return lc(substr($forename,0,1) . $initial . $surname);
     },
     sub($$$)
     {
-	my ($forename, $initial, $surname) = @_;
-	return lc(substr($forename,0,1) .  $initial .  substr($surname,0,1));
+        my ($forename, $initial, $surname) = @_;
+        return lc(substr($forename,0,1) .  $initial .  substr($surname,0,1));
     }
 );
 
@@ -108,9 +108,9 @@ sub new
     my ($class, %params) = @_;
 
     my $self = {
-	next_uid => 1,
-	min_extra_lines => $params{min_extra_lines} || 0,
-	max_extra_lines => $params{max_extra_lines} || 0,
+        next_uid => 1,
+        min_extra_lines => $params{min_extra_lines} || 0,
+        max_extra_lines => $params{max_extra_lines} || 0,
     };
 
     bless $self, $class;
@@ -151,20 +151,20 @@ sub make_random_address
     $i = oct("0x" . substr($digest,4,4)) % 26;
     my $initial = delete $params{initial};
     $initial = substr("ABCDEFGHIJKLMNOPQRSTUVWXYZ", $i, 1)
-	if !defined $initial;
+        if !defined $initial;
 
     $i = oct("0x" . substr($digest,8,4)) % scalar(@localpart_styles);
     my $localpart = delete $params{localpart};
     $localpart = $localpart_styles[$i]->($forename, $initial, $surname)
-	if !defined $localpart;
+        if !defined $localpart;
 
     my $extra = delete $params{extra};
     $extra = '' if !defined $extra;
 
     return Cassandane::Address->new(
-	name => "$forename $initial. $surname$extra",
-	localpart => $localpart,
-	domain => $domain
+        name => "$forename $initial. $surname$extra",
+        localpart => $localpart,
+        domain => $domain
     );
 }
 
@@ -178,9 +178,9 @@ sub _generate_to
 {
     my ($self, $params) = @_;
     return Cassandane::Address->new(
-	name => "Test User",
-	localpart => 'test',
-	domain => 'vmtom.com'
+        name => "Test User",
+        localpart => 'test',
+        domain => 'vmtom.com'
     );
 }
 
@@ -199,67 +199,67 @@ sub _params_defaults
     # Note: no error checking, e.g. for unknown parameters.  Sorry.
     #
     $params->{date} = DateTime->now()
-	unless defined $params->{date};
+        unless defined $params->{date};
     $params->{date} = from_iso8601($params->{date})
-	if ref $params->{date} eq '';
+        if ref $params->{date} eq '';
     die "Bad date: " . ref $params->{date}
-	unless ref $params->{date} eq 'DateTime';
+        unless ref $params->{date} eq 'DateTime';
 
     $params->{from} = $self->_generate_from($params)
-	unless defined $params->{from};
+        unless defined $params->{from};
     die "Bad from: " . ref $params->{from}
-	unless ref $params->{from} eq 'Cassandane::Address';
+        unless ref $params->{from} eq 'Cassandane::Address';
 
     $params->{subject} = "Generated test email"
-	unless defined $params->{subject};
+        unless defined $params->{subject};
 
     $params->{to} = $self->_generate_to($params)
-	unless defined $params->{to};
+        unless defined $params->{to};
     die "Bad to: " . ref $params->{to}
-	unless ref $params->{to} eq 'Cassandane::Address';
+        unless ref $params->{to} eq 'Cassandane::Address';
 
     $params->{messageid} = $self->_generate_messageid($params)
-	unless defined $params->{messageid};
+        unless defined $params->{messageid};
 
     # Allow 'references' to be an array of Message objects
     # which is really handy for generating conversation data
     if (defined $params->{references} &&
-	ref $params->{references} eq 'ARRAY')
+        ref $params->{references} eq 'ARRAY')
     {
-	my @refs;
-	map {
-	    if (ref($_) eq 'Cassandane::Message')
-	    {
-		push(@refs, $_->messageid())
-	    }
-	    else
-	    {
-		push(@refs, "" . $_);
-	    }
-	} @{$params->{references}};
-	$params->{references} = join(', ', @refs);
+        my @refs;
+        map {
+            if (ref($_) eq 'Cassandane::Message')
+            {
+                push(@refs, $_->messageid())
+            }
+            else
+            {
+                push(@refs, "" . $_);
+            }
+        } @{$params->{references}};
+        $params->{references} = join(', ', @refs);
     }
 
     $params->{uid} = $self->_generate_uid()
-	unless defined $params->{uid};
+        unless defined $params->{uid};
 
     $params->{body} = "This is a generated test email.  " .
-		      "If received, please notify $admin\r\n"
-	unless defined $params->{body};
+                      "If received, please notify $admin\r\n"
+        unless defined $params->{body};
 
     $params->{extra_lines} = int($self->{min_extra_lines} +
-				 rand($self->{max_extra_lines} -
-				      $self->{min_extra_lines}))
-	unless defined $params->{extra_lines};
+                                 rand($self->{max_extra_lines} -
+                                      $self->{min_extra_lines}))
+        unless defined $params->{extra_lines};
 
     $params->{mime_encoding} = '7bit'
-	unless defined $params->{mime_encoding};
+        unless defined $params->{mime_encoding};
     $params->{mime_type} = 'text/plain'
-	unless defined $params->{mime_type};
+        unless defined $params->{mime_type};
     $params->{mime_charset} = 'us-ascii'
-	unless defined $params->{mime_charset};
+        unless defined $params->{mime_charset};
     $params->{mime_boundary} = 'Apple-Mail-1-798269008'
-	unless defined $params->{mime_boundary};
+        unless defined $params->{mime_boundary};
 
     return $params;
 }
@@ -284,7 +284,7 @@ sub generate
     my $extra_lines = $params->{extra_lines};
     my $extra = '';
     if ($extra_lines) {
-	$extra .= "This is an extra line\r\n" x $extra_lines;
+        $extra .= "This is an extra line\r\n" x $extra_lines;
     }
     my $size = $params->{size};
     my $msg = Cassandane::Message->new();
@@ -292,21 +292,21 @@ sub generate
     $msg->add_header("Return-Path", "<" . $from->address() . ">");
     # TODO: two minutes ago
     $msg->add_header("Received",
-		     "from gateway (gateway." . $to->domain() . " [10.0.0.1])\r\n" .
-		     "\tby ahost (ahost." . $to->domain() . "[10.0.0.2]); $datestr");
+                     "from gateway (gateway." . $to->domain() . " [10.0.0.1])\r\n" .
+                     "\tby ahost (ahost." . $to->domain() . "[10.0.0.2]); $datestr");
     $msg->add_header("Received",
-		     "from mail." . $from->domain() . " (mail." . $from->domain() . " [192.168.0.1])\r\n" .
-		     "\tby gateway." . $to->domain() . " (gateway." . $to->domain() . " [10.0.0.1]); $datestr");
+                     "from mail." . $from->domain() . " (mail." . $from->domain() . " [192.168.0.1])\r\n" .
+                     "\tby gateway." . $to->domain() . " (gateway." . $to->domain() . " [10.0.0.1]); $datestr");
     $msg->add_header("MIME-Version", "1.0");
     my $mimetype = $params->{mime_type};
     if ($mimetype =~ m/multipart\//i)
     {
-	$mimetype .= "; boundary=\"$params->{mime_boundary}\""
+        $mimetype .= "; boundary=\"$params->{mime_boundary}\""
     }
     else
     {
-	$mimetype .= "; charset=\"$params->{mime_charset}\""
-	    if $params->{mime_charset} ne '';
+        $mimetype .= "; charset=\"$params->{mime_charset}\""
+            if $params->{mime_charset} ne '';
     }
     $msg->add_header("Content-Type", $mimetype);
     $msg->add_header("Content-Transfer-Encoding", $params->{mime_encoding});
@@ -314,32 +314,32 @@ sub generate
     $msg->add_header("From", $from);
     $msg->add_header("Message-ID", "<" . $params->{messageid} . ">");
     $msg->add_header("References", $params->{references})
-	if defined $params->{references};
+        if defined $params->{references};
     $msg->add_header("Date", $datestr);
     $msg->add_header("To", $to);
     $msg->add_header("Cc", $params->{cc}) if defined $params->{cc};
     $msg->add_header("Bcc", $params->{bcc}) if defined $params->{bcc};
     if (defined($params->{extra_headers})) {
-	foreach my $extra_header (@{$params->{extra_headers}}) {
-	    $msg->add_header(@{$extra_header});
-	}
+        foreach my $extra_header (@{$params->{extra_headers}}) {
+            $msg->add_header(@{$extra_header});
+        }
     }
     $msg->add_header('X-Cassandane-Unique', _generate_unique());
     if (defined $size)
     {
-	my $padding = "ton bear\r\n";
-	my $msg_size = $msg->size() + length($params->{body}) + length($extra);
-	my $needs = $size - $msg_size;
-	die "size $size cannot be achieved, message is already $msg_size bytes long"
-	    if $needs < 0;
-	my $npad = int($needs / length($padding)) - 1;
-	if ($npad > 0)
-	{
-	    $extra .= $padding x $npad;
-	    $needs -= length($padding) * $npad;
-	}
-	$extra .= 'X' x ($needs - 2) if ($needs >= 2);
-	$extra .= "\r\n";
+        my $padding = "ton bear\r\n";
+        my $msg_size = $msg->size() + length($params->{body}) + length($extra);
+        my $needs = $size - $msg_size;
+        die "size $size cannot be achieved, message is already $msg_size bytes long"
+            if $needs < 0;
+        my $npad = int($needs / length($padding)) - 1;
+        if ($npad > 0)
+        {
+            $extra .= $padding x $npad;
+            $needs -= length($padding) * $npad;
+        }
+        $extra .= 'X' x ($needs - 2) if ($needs >= 2);
+        $extra .= "\r\n";
     }
     $msg->set_body($params->{body} . $extra);
     $msg->set_attributes(uid => $params->{uid});

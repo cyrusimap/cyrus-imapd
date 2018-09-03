@@ -102,8 +102,8 @@ sub create_testmessages
     $self->make_message("I am running") || die;
     $self->make_message("I run") || die;
     $self->make_message("He runs") || die;
- 
-    # Some bodies with the same word stems but different senders. We use 
+
+    # Some bodies with the same word stems but different senders. We use
     # the "connect" word stem since it it the first example on Xapian's
     # Stemming documentation (https://xapian.org/docs/stemming.html).
     # Mails from foo@example.com...

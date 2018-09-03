@@ -20,7 +20,7 @@ Net::XmtpServer - Implement SMTP/LMTP server skeleton
   # Callbacks for each server event
   sub helo { }
   sub rcpt { }
-  
+
 
 =head1 DESCRIPTION
 
@@ -118,9 +118,9 @@ Catch configure options
 =cut
 sub post_configure_hook {
   my ($Self, $Xmtp, $Srv) = ($_[0], $_[0]->{xmtp} ||= {}, $_[0]->{server});
-  
+
   # In old versions of Net::Server, parameters passed to "run" could
-  # be accessed with $Self->{server}->{configure_args}.  
+  # be accessed with $Self->{server}->{configure_args}.
   # In new versions they are available directly in $Self->{server}
   my $Config = $Srv->{configure_args};
   my %Options = $Config ? @{$Config} : %{$Srv};

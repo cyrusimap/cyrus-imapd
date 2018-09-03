@@ -19,11 +19,11 @@
 #     endorse or promote products derived from this software without
 #     prior written permission. For permission or any legal
 #     details, please contact
-# 	Opera Software Australia Pty. Ltd.
-# 	Level 50, 120 Collins St
-# 	Melbourne 3000
-# 	Victoria
-# 	Australia
+#       Opera Software Australia Pty. Ltd.
+#       Level 50, 120 Collins St
+#       Melbourne 3000
+#       Victoria
+#       Australia
 #
 #  4. Redistributions of any form whatsoever must retain the following
 #     acknowledgment:
@@ -47,8 +47,8 @@ use URI::Escape;
 use lib '.';
 use Cassandane::Generator;
 use Cassandane::Util::DateTime qw(to_iso8601 from_iso8601
-				  from_rfc822
-				  to_rfc3501 from_rfc3501);
+                                  from_rfc822
+                                  to_rfc3501 from_rfc3501);
 use Cassandane::MessageStoreFactory;
 
 sub usage
@@ -61,11 +61,11 @@ my $verbose = 1;
 my $imapport = 2143;
 my $pop3port = 2110;
 my %store_params = (
-	host => '127.0.0.2',
-	folder => 'inbox.showaftertestXX',
-	username => 'test@vmtom.com',
-	password => 'testpw',
-	verbose => $verbose,
+        host => '127.0.0.2',
+        folder => 'inbox.showaftertestXX',
+        username => 'test@vmtom.com',
+        password => 'testpw',
+        verbose => $verbose,
     );
 
 #
@@ -81,66 +81,66 @@ sub check_messages($$$$)
     $store->read_begin();
     while (my $msg = $store->read_message())
     {
-	$nmsgs++;
+        $nmsgs++;
 
-	if ($verbose)
-	{
-	    printf "[%u]\n", $nmsgs;
-	    printf "    message-id=\"%s\"\n", $msg->get_header('Message-ID');
-	    printf "    from=\"%s\"\n", $msg->get_header('From');
-	}
+        if ($verbose)
+        {
+            printf "[%u]\n", $nmsgs;
+            printf "    message-id=\"%s\"\n", $msg->get_header('Message-ID');
+            printf "    from=\"%s\"\n", $msg->get_header('From');
+        }
 
-	my $internal_dt;
-	my $datehdr_dt;
-	my $subject_dt;
-	my $d;
+        my $internal_dt;
+        my $datehdr_dt;
+        my $subject_dt;
+        my $d;
 
-	# Check that the Date: header is present and well formed.
-	$d = $msg->get_header('Date');
-	$datehdr_dt = from_rfc822($d)
-	    or die "Bogus RFC822 time in Date header \"$d\"";
-	printf "    date=\"%s\" -> %u\n", $d, $datehdr_dt->epoch() if $verbose;
+        # Check that the Date: header is present and well formed.
+        $d = $msg->get_header('Date');
+        $datehdr_dt = from_rfc822($d)
+            or die "Bogus RFC822 time in Date header \"$d\"";
+        printf "    date=\"%s\" -> %u\n", $d, $datehdr_dt->epoch() if $verbose;
 
-	# Check that the Subject: header is present and
-	# encodes a datetime in ISO8601 format, as generated
-	my $s = $msg->get_header('Subject');
-	($d) = ($s =~ m/^message at (\S*)$/)
-	    or die "Bogus Subject header \"$s\"";
-	$subject_dt = from_iso8601($d)
-	    or die "Bogus ISO8601 time in Subject \"$s\"";
-	printf "    subject=\"%s\" -> %u\n", $s, $subject_dt->epoch() if $verbose;
+        # Check that the Subject: header is present and
+        # encodes a datetime in ISO8601 format, as generated
+        my $s = $msg->get_header('Subject');
+        ($d) = ($s =~ m/^message at (\S*)$/)
+            or die "Bogus Subject header \"$s\"";
+        $subject_dt = from_iso8601($d)
+            or die "Bogus ISO8601 time in Subject \"$s\"";
+        printf "    subject=\"%s\" -> %u\n", $s, $subject_dt->epoch() if $verbose;
 
-	if ($expect_internaldate)
-	{
-	    # Check that an internaldate field is present and well formed.
-	    $internal_dt = from_rfc3501($msg->get_attribute('internaldate'));
-	    die "No or bogus INTERNALDATE"
-		unless defined $internal_dt;
-	    printf "    internaldate=%u\n", $internal_dt->epoch() if $verbose;
-	}
-	else
-	{
-	    # For convenience, pretend the internal date was here
-	    $internal_dt = $datehdr_dt;
-	}
+        if ($expect_internaldate)
+        {
+            # Check that an internaldate field is present and well formed.
+            $internal_dt = from_rfc3501($msg->get_attribute('internaldate'));
+            die "No or bogus INTERNALDATE"
+                unless defined $internal_dt;
+            printf "    internaldate=%u\n", $internal_dt->epoch() if $verbose;
+        }
+        else
+        {
+            # For convenience, pretend the internal date was here
+            $internal_dt = $datehdr_dt;
+        }
 
-	# Check that all three of the dates match exactly.
-	# If this fails, something has gone awry with the
-	# dataset generation in genmail.pl.
-	die "Invalid message: times don't match"
-	    unless ($internal_dt->epoch() == $datehdr_dt->epoch() &&
-		    $datehdr_dt->epoch() == $subject_dt->epoch());
+        # Check that all three of the dates match exactly.
+        # If this fails, something has gone awry with the
+        # dataset generation in genmail.pl.
+        die "Invalid message: times don't match"
+            unless ($internal_dt->epoch() == $datehdr_dt->epoch() &&
+                    $datehdr_dt->epoch() == $subject_dt->epoch());
 
-	if (defined($cutoff_dt))
-	{
-	    die "Incorrectly found message before cutoff time " .  $cutoff_dt->epoch()
-		unless ($internal_dt->epoch() > $cutoff_dt->epoch());
-	}
+        if (defined($cutoff_dt))
+        {
+            die "Incorrectly found message before cutoff time " .  $cutoff_dt->epoch()
+                unless ($internal_dt->epoch() > $cutoff_dt->epoch());
+        }
     }
     $store->read_end();
 
     die "Wrong number of messages, got $nmsgs, expecting $expected_nmsgs"
-	unless (!defined $expected_nmsgs || $nmsgs == $expected_nmsgs);
+        unless (!defined $expected_nmsgs || $nmsgs == $expected_nmsgs);
 
     return 1;
 }
@@ -155,18 +155,18 @@ sub get_pop3showafter
     my ($store) = @_;
 
     my $annos = $store->get_client()->getmetadata($store->{folder}, $showafter_anno)
-	or die "Cannot get annotation $showafter_anno: $@";
+        or die "Cannot get annotation $showafter_anno: $@";
 
     if ($annos eq "Completed")
     {
-	return "NIL";
+        return "NIL";
     }
 
     my $aa = $annos->{$store->{folder}}->{$showafter_anno};
     die "No data for annotation $showafter_anno"
-	unless defined $aa;
+        unless defined $aa;
     die "Wrong content-type for annotation $showafter_anno: " . $aa->{'content-type.shared'}
-	unless ($aa->{'content-type.shared'} eq 'text/plain');
+        unless ($aa->{'content-type.shared'} eq 'text/plain');
     return $aa->{'value.shared'};
 }
 
@@ -175,24 +175,24 @@ sub set_pop3showafter
     my ($store, $val) = @_;
 
     $store->get_client()->setannotation($store->{folder}, $showafter_anno, [ 'value.shared', $val ])
-	or die "Setting annotation $showafter_anno failed: $@";
+        or die "Setting annotation $showafter_anno failed: $@";
 
     my $newval = get_pop3showafter($store);
     die "Set $showafter_anno is not reflected in get: got \"$newval\" expecting \"$val\""
-	unless ($newval eq $val);
+        unless ($newval eq $val);
 }
 
 my $imap_store = Cassandane::MessageStoreFactory->create(
-			type => 'imap',
-			port => $imapport,
-			%store_params
-		    );
+                        type => 'imap',
+                        port => $imapport,
+                        %store_params
+                    );
 $imap_store->set_fetch_attributes('uid', 'internaldate');
 my $pop3_store = Cassandane::MessageStoreFactory->create(
-			type => 'pop3',
-			port => $pop3port,
-			%store_params
-		    );
+                        type => 'pop3',
+                        port => $pop3port,
+                        %store_params
+                    );
 
 my $now = DateTime->now()->epoch();
 my $cutoff_dt = DateTime->from_epoch(epoch => $now - 86400/2);
@@ -208,14 +208,14 @@ for (my $offset = -86400 ; $offset <= 0 ; $offset += 3600)
 {
     my $then = DateTime->from_epoch(epoch => $now + $offset);
     my $msg = $gen->generate(
-	date => $then,
-	subject => "message at " . to_iso8601($then),
+        date => $then,
+        subject => "message at " . to_iso8601($then),
     );
     $imap_store->write_message($msg);
 
     $expected_nmsgs_all++;
     $expected_nmsgs_after++
-	if ($then->epoch() > $cutoff_dt->epoch());
+        if ($then->epoch() > $cutoff_dt->epoch());
 }
 $imap_store->write_end();
 

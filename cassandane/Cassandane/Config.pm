@@ -51,9 +51,9 @@ sub new
 {
     my $class = shift;
     my $self = {
-	parent => undef,
-	variables => {},
-	params => { @_ },
+        parent => undef,
+        variables => {},
+        params => { @_ },
     };
 
     bless $self, $class;
@@ -63,34 +63,34 @@ sub new
 sub default
 {
     if (!defined($default)) {
-	$default = Cassandane::Config->new(
-	    admins => 'admin mailproxy mupduser repluser',
+        $default = Cassandane::Config->new(
+            admins => 'admin mailproxy mupduser repluser',
             rfc3028_strict => 'no',
-	    configdirectory => '@basedir@/conf',
-	    syslog_prefix => '@name@',
-	    sievedir => '@basedir@/conf/sieve',
-	    defaultpartition => 'default',
+            configdirectory => '@basedir@/conf',
+            syslog_prefix => '@name@',
+            sievedir => '@basedir@/conf/sieve',
+            defaultpartition => 'default',
             defaultdomain => 'defdomain',
-	    'partition-default' => '@basedir@/data',
-	    sasl_mech_list => 'PLAIN LOGIN',
-	    allowplaintext => 'yes',
-	    # config options used at FastMail - may as well be testing our stuff
-	    expunge_mode => 'delayed',
-	    delete_mode => 'delayed',
-	    # for debugging - see cassandane.ini.example
-	    debug_command => '@prefix@/utils/gdbtramp %s %d',
-	    # everyone should be running this
-	    improved_mboxlist_sort => 'yes',
-	    # default changed, we want to be explicit about it
-	    unixhierarchysep => 'no',
+            'partition-default' => '@basedir@/data',
+            sasl_mech_list => 'PLAIN LOGIN',
+            allowplaintext => 'yes',
+            # config options used at FastMail - may as well be testing our stuff
+            expunge_mode => 'delayed',
+            delete_mode => 'delayed',
+            # for debugging - see cassandane.ini.example
+            debug_command => '@prefix@/utils/gdbtramp %s %d',
+            # everyone should be running this
+            improved_mboxlist_sort => 'yes',
+            # default changed, we want to be explicit about it
+            unixhierarchysep => 'no',
             # let's hear all about it
             auditlog => 'yes',
             chatty => 'yes',
             debug => 'yes',
             httpprettytelemetry => 'yes',
-	);
-	my $defs = Cassandane::Cassini->instance()->get_section('config');
-	$default->set(%$defs);
+        );
+        my $defs = Cassandane::Cassini->instance()->get_section('config');
+        $default->set(%$defs);
     }
 
     return $default;
@@ -110,14 +110,14 @@ sub set
     my ($self, %nv) = @_;
     while (my ($n, $v) = each %nv)
     {
-	if (defined $v)
-	{
-	    $self->{params}->{$n} = $v;
-	}
-	else
-	{
-	    delete $self->{params}->{$n};
-	}
+        if (defined $v)
+        {
+            $self->{params}->{$n} = $v;
+        }
+        else
+        {
+            delete $self->{params}->{$n};
+        }
     }
 }
 
@@ -126,10 +126,10 @@ sub get
     my ($self, $n) = @_;
     while (defined $self)
     {
-	my $v = $self->{params}->{$n};
-	return $v
-	    if defined $v;
-	$self = $self->{parent};
+        my $v = $self->{params}->{$n};
+        return $v
+            if defined $v;
+        $self = $self->{parent};
     }
     return undef;
 }
@@ -159,7 +159,7 @@ sub set_variables
     my ($self, %nv) = @_;
     while (my ($n, $v) = each %nv)
     {
-	$self->{variables}->{$n} = $v;
+        $self->{variables}->{$n} = $v;
     }
 }
 
@@ -169,9 +169,9 @@ sub _get_variable
     $n =~ s/@//g;
     while (defined $self)
     {
-	my $v = $self->{variables}->{$n};
-	return $v if defined $v;
-	$self = $self->{parent};
+        my $v = $self->{variables}->{$n};
+        return $v if defined $v;
+        $self = $self->{parent};
     }
     die "Variable $n not defined";
 }
@@ -183,17 +183,17 @@ sub substitute
     my $r = '';
     while (defined $s)
     {
-	my ($pre, $ref, $post) = ($s =~ m/(.*)(@[a-z]+@)(.*)/);
-	if (defined $ref)
-	{
-	    $r .= $pre . $self->_get_variable($ref);
-	    $s = $post;
-	}
-	else
-	{
-	    $r .= $s;
-	    last;
-	}
+        my ($pre, $ref, $post) = ($s =~ m/(.*)(@[a-z]+@)(.*)/);
+        if (defined $ref)
+        {
+            $r .= $pre . $self->_get_variable($ref);
+            $s = $post;
+        }
+        else
+        {
+            $r .= $s;
+            last;
+        }
     }
     return $r;
 }
@@ -204,11 +204,11 @@ sub _flatten
     my %nv;
     for (my $conf = $self ; defined $conf ; $conf = $conf->{parent})
     {
-	foreach my $n (keys %{$conf->{params}})
-	{
-	    $nv{$n} = $self->substitute($conf->{params}->{$n})
-		unless defined $nv{$n};
-	}
+        foreach my $n (keys %{$conf->{params}})
+        {
+            $nv{$n} = $self->substitute($conf->{params}->{$n})
+                unless defined $nv{$n};
+        }
     }
     return \%nv;
 }
@@ -219,10 +219,10 @@ sub generate
     my $nv = $self->_flatten();
 
     open CONF,'>',$filename
-	or die "Cannot open $filename for writing: $!";
+        or die "Cannot open $filename for writing: $!";
     while (my ($n, $v) = each %$nv)
     {
-	print CONF "$n: $v\n";
+        print CONF "$n: $v\n";
     }
     close CONF;
 }

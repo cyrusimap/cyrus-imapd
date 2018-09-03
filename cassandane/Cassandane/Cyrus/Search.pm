@@ -73,8 +73,8 @@ sub _fgrep_msgs
 
     foreach my $msg (values %$msgs)
     {
-	push(@res, $msg->uid())
-	    if (index($msg->$attr(), $s) >= 0);
+        push(@res, $msg->uid())
+            if (index($msg->$attr(), $s) >= 0);
     }
     @res = sort { $a <=> $b } @res;
     return \@res;
@@ -93,11 +93,11 @@ sub test_from
     my $N = 20;
     for (1..$N)
     {
-	my $msg = $self->make_message("Message $_");
-	$exp{$_} = $msg;
-	my ($dom) = ($msg->from() =~ m/(@[^>]*)>/);
-	$from_domains{$dom} = 1;
-	xlog "Message uid " . $msg->uid() . " from domain " . $dom;
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
+        my ($dom) = ($msg->from() =~ m/(@[^>]*)>/);
+        $from_domains{$dom} = 1;
+        xlog "Message uid " . $msg->uid() . " from domain " . $dom;
     }
     xlog "check the messages got there";
     $self->check_messages(\%exp);
@@ -105,19 +105,19 @@ sub test_from
     my @found;
     foreach my $dom (keys %from_domains)
     {
-	xlog "searching for: FROM $dom";
-	my $uids = $talk->search('from', { Quote => $dom })
-	    or die "Cannot search: $@";
-	my $expected_uids = _fgrep_msgs(\%exp, 'from', $dom);
-	$self->assert_deep_equals($expected_uids, $uids);
-	map { $found[$_] = 1 } @$uids;
+        xlog "searching for: FROM $dom";
+        my $uids = $talk->search('from', { Quote => $dom })
+            or die "Cannot search: $@";
+        my $expected_uids = _fgrep_msgs(\%exp, 'from', $dom);
+        $self->assert_deep_equals($expected_uids, $uids);
+        map { $found[$_] = 1 } @$uids;
     }
 
     xlog "checking all the message were found";
     for (1..$N)
     {
-	$self->assert($found[$_],
-		      "UID $_ was not returned from a SEARCH");
+        $self->assert($found[$_],
+                      "UID $_ was not returned from a SEARCH");
     }
 
     xlog "Double-check the messages are still there";

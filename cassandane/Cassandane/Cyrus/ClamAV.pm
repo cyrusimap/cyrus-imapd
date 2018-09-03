@@ -53,20 +53,20 @@ my %eicar_attached = (
     mime_type => "multipart/mixed",
     mime_boundary => "boundary",
     body => ""
-	. "--boundary\r\n"
-	. "Content-Type: text/plain\r\n"
-	. "\r\n"
-	. "body"
-	. "\r\n"
-	. "--boundary\r\n"
-	. "Content-Disposition: attachment; filename=eicar.txt;\r\n"
-	. "Content-Type: text/plain\r\n"
-	. "\r\n"
-	# This is the EICAR AV test file:
-	# http://www.eicar.org/83-0-Anti-Malware-Testfile.html
-	. 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
-	. "\r\n"
-	. "--boundary\r\n",
+        . "--boundary\r\n"
+        . "Content-Type: text/plain\r\n"
+        . "\r\n"
+        . "body"
+        . "\r\n"
+        . "--boundary\r\n"
+        . "Content-Disposition: attachment; filename=eicar.txt;\r\n"
+        . "Content-Type: text/plain\r\n"
+        . "\r\n"
+        # This is the EICAR AV test file:
+        # http://www.eicar.org/83-0-Anti-Malware-Testfile.html
+        . 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
+        . "\r\n"
+        . "--boundary\r\n",
 );
 
 sub new
@@ -131,39 +131,39 @@ sub test_remove_infected
     # run cyr_virusscan
     my $out = "$self->{instance}->{basedir}/$self->{_name}-cyr_virusscan.stdout";
     $self->{instance}->run_command(
-	{ cyrus => 1,
-	  redirects => { 'stdout' => $out },
-	}, 'cyr_virusscan', '-r');
+        { cyrus => 1,
+          redirects => { 'stdout' => $out },
+        }, 'cyr_virusscan', '-r');
 
     # check the output
-    # user.cassandane				         1  UNREAD  Eicar-Test-Signature
-    # shared.folder				         1  UNREAD  Eicar-Test-Signature
+    # user.cassandane                                    1  UNREAD  Eicar-Test-Signature
+    # shared.folder                                      1  UNREAD  Eicar-Test-Signature
     {
-	local $/;
-	open my $fh, '<', $out
-	    or die "Cannot open $out for reading: $!";
-	$out = <$fh>;
-	close $fh;
-	xlog $out;
+        local $/;
+        open my $fh, '<', $out
+            or die "Cannot open $out for reading: $!";
+        $out = <$fh>;
+        close $fh;
+        xlog $out;
     }
     # XXX is there a better way than hard coding UID:1 ?
     my ($v) = Cassandane::Instance->get_version();
     if ($v >= 3) {
-	$self->assert_matches(
-	    qr/user\.cassandane\s+1\s+UNREAD\s+Eicar-Test-Signature/,
-	    $out);
-	$self->assert_matches(
-	    qr/shared\.folder\s+1\s+UNREAD\s+Eicar-Test-Signature/,
-	    $out);
+        $self->assert_matches(
+            qr/user\.cassandane\s+1\s+UNREAD\s+Eicar-Test-Signature/,
+            $out);
+        $self->assert_matches(
+            qr/shared\.folder\s+1\s+UNREAD\s+Eicar-Test-Signature/,
+            $out);
     }
     else {
-	# pre-3.0 a different output format was used
-	$self->assert_matches(
-	    qr/Working\son\sshared\.folder\.\.\.\nVirus\sdetected\sin\smessage\s1:\sEicar-Test-Signature/,
-	    $out);
-	$self->assert_matches(
-	    qr/Working\son\suser\.cassandane\.\.\.\nVirus\sdetected\sin\smessage\s1:\sEicar-Test-Signature/,
-	    $out);
+        # pre-3.0 a different output format was used
+        $self->assert_matches(
+            qr/Working\son\sshared\.folder\.\.\.\nVirus\sdetected\sin\smessage\s1:\sEicar-Test-Signature/,
+            $out);
+        $self->assert_matches(
+            qr/Working\son\suser\.cassandane\.\.\.\nVirus\sdetected\sin\smessage\s1:\sEicar-Test-Signature/,
+            $out);
     }
 
     # make sure the infected ones were expunged, but the clean ones weren't

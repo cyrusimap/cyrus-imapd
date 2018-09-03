@@ -68,21 +68,21 @@ sub test_basic
 
     for (1..$rate)
     {
-	$m->tick();
-	my $r = $m->actual_rate();
-	xlog "Actual rate $r";
-	# Be forgiving of early samples to let the
-	# metronome stabilise.
-	$ss->add($r) if ($_ >= 20)
+        $m->tick();
+        my $r = $m->actual_rate();
+        xlog "Actual rate $r";
+        # Be forgiving of early samples to let the
+        # metronome stabilise.
+        $ss->add($r) if ($_ >= 20)
     }
 
     xlog "Rates: $ss";
     my $avg = $ss->average();
     my $std = $ss->sample_deviation();
     $self->assert($avg >= (1.0-$epsilon)*$rate && $avg <= (1.0+$epsilon)*$rate,
-		  "Average $avg is outside expected range");
+                  "Average $avg is outside expected range");
     $self->assert($std/$rate < $epsilon,
-		  "Standard deviation $std is too high");
+                  "Standard deviation $std is too high");
 }
 
 1;

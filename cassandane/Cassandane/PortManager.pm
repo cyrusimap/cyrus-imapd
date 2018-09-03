@@ -53,23 +53,23 @@ sub alloc
 {
     if (!defined $base_port)
     {
-	my $workerid = $ENV{TEST_UNIT_WORKER_ID} || '1';
-	die "Invalid TEST_UNIT_WORKER_ID - code not run in Worker context"
-	    if (defined($workerid) && $workerid eq 'invalid');
-	my $cassini = Cassandane::Cassini->instance();
-	my $cassini_base_port = $cassini->val('cassandane', 'base_port') // 0;
-	$base_port = 0 + $cassini_base_port || 9100;
-	$base_port += $max_ports * ($workerid-1);
+        my $workerid = $ENV{TEST_UNIT_WORKER_ID} || '1';
+        die "Invalid TEST_UNIT_WORKER_ID - code not run in Worker context"
+            if (defined($workerid) && $workerid eq 'invalid');
+        my $cassini = Cassandane::Cassini->instance();
+        my $cassini_base_port = $cassini->val('cassandane', 'base_port') // 0;
+        $base_port = 0 + $cassini_base_port || 9100;
+        $base_port += $max_ports * ($workerid-1);
     }
     for (my $i = 0 ; $i < $max_ports ; $i++)
     {
-	my $port = $base_port + (($next_port + $i) % $max_ports);
-	if (!$allocated{$port})
-	{
-	    $allocated{$port} = 1;
-	    $next_port++;
-	    return $port;
-	}
+        my $port = $base_port + (($next_port + $i) % $max_ports);
+        if (!$allocated{$port})
+        {
+            $allocated{$port} = 1;
+            $next_port++;
+            return $port;
+        }
     }
     die "No ports remaining";
 }
@@ -80,12 +80,12 @@ sub free_all
     my @freed;
     for (my $i = 0 ; $i < $max_ports ; $i++)
     {
-	my $port = $base_port + $i;
-	if ($allocated{$port})
-	{
-	    $allocated{$port} = 0;
-	    push(@freed, $port);
-	}
+        my $port = $base_port + $i;
+        if ($allocated{$port})
+        {
+            $allocated{$port} = 0;
+            push(@freed, $port);
+        }
     }
     return @freed;
 }

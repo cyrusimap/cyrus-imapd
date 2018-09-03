@@ -61,16 +61,16 @@ sub new
     my ($class, @args) = @_;
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane',
-		 caldav_historical_age => -1,
-		 conversations => 'yes',
-		 httpmodules => 'carddav caldav jmap',
-		 httpallowcompress => 'no');
+                 caldav_historical_age => -1,
+                 conversations => 'yes',
+                 httpmodules => 'carddav caldav jmap',
+                 httpallowcompress => 'no');
 
     return $class->SUPER::new({
-	config => $config,
-	jmap => 1,
-	adminstore => 1,
-	services => [ 'imap', 'http' ]
+        config => $config,
+        jmap => 1,
+        adminstore => 1,
+        services => [ 'imap', 'http' ]
     }, @args);
 }
 
@@ -250,7 +250,7 @@ sub test_calendar_set
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{updated});
     $self->assert(exists $res->[0][1]{updated}{$id});
-    
+
     xlog "get calendar $id";
     $res = $jmap->CallMethods([['Calendar/get', {ids => [$id]}, "R1"]]);
     $self->assert_str_equals('bar', $res->[0][1]{list}[0]{name});
@@ -1491,42 +1491,42 @@ sub test_calendarevent_set_simple
 sub test_calendarevent_set_bymonth
     :min_version_3_1 :needs_component_jmap
 {
-	my ($self) = @_;
+        my ($self) = @_;
 
-	my $jmap = $self->{jmap};
-	my $calid = "Default";
+        my $jmap = $self->{jmap};
+        my $calid = "Default";
 
-	my $event =  {
-		"calendarId"=> $calid,
-		"start"=> "2010-02-12T00:00:00",
-		"recurrenceRule"=> {
-			"frequency"=> "monthly",
-			"interval"=> 13,
-			"byMonth"=> [
-				"4L"
-			],
-			"count"=> 3
-		},
-		"\@type"=> "jsevent",
-		"title"=> "",
-		"description"=> "",
-		"locations"=> undef,
-		"links"=> undef,
-		"isAllDay"=> JSON::false,
-		"duration"=> "P0D",
-		"timeZone"=> undef,
-		"recurrenceOverrides"=> undef,
-		"status"=> "confirmed",
-		"freeBusyStatus"=> "busy",
-		"replyTo"=> undef,
-		"participants"=> undef,
-		"participantId"=> undef,
-		"useDefaultAlerts"=> JSON::false,
-		"alerts"=> undef
-	};
+        my $event =  {
+                "calendarId"=> $calid,
+                "start"=> "2010-02-12T00:00:00",
+                "recurrenceRule"=> {
+                        "frequency"=> "monthly",
+                        "interval"=> 13,
+                        "byMonth"=> [
+                                "4L"
+                        ],
+                        "count"=> 3
+                },
+                "\@type"=> "jsevent",
+                "title"=> "",
+                "description"=> "",
+                "locations"=> undef,
+                "links"=> undef,
+                "isAllDay"=> JSON::false,
+                "duration"=> "P0D",
+                "timeZone"=> undef,
+                "recurrenceOverrides"=> undef,
+                "status"=> "confirmed",
+                "freeBusyStatus"=> "busy",
+                "replyTo"=> undef,
+                "participants"=> undef,
+                "participantId"=> undef,
+                "useDefaultAlerts"=> JSON::false,
+                "alerts"=> undef
+        };
 
-	my $ret = $self->createandget_event($event);
-	$self->assert_normalized_event_equals($event, $ret);
+        my $ret = $self->createandget_event($event);
+        $self->assert_normalized_event_equals($event, $ret);
 }
 
 sub test_calendarevent_set_relatedto

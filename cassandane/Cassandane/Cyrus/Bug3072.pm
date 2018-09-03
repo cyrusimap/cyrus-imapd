@@ -75,7 +75,7 @@ sub test_copy_longset
 
     $imaptalk->create("INBOX.dest");
     for (1..2000) {
-	$self->make_message("Message $_");
+        $self->make_message("Message $_");
     }
     my $list = join(',', map { $_ * 2 } 1..1000);
 

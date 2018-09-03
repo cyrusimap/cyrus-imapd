@@ -47,15 +47,15 @@ sub new
     my ($class, @args) = @_;
 
     die "Unknown extra arguments"
-	if scalar(@args);
+        if scalar(@args);
 
     my $self =
     {
-	_total => 0.0,
-	_total2 => 0.0,
-	_n => 0,
-	_min => undef,
-	_max => undef,
+        _total => 0.0,
+        _total2 => 0.0,
+        _n => 0,
+        _min => undef,
+        _max => undef,
     };
     return bless($self, $class);
 }
@@ -68,9 +68,9 @@ sub add
     $self->{_total2} += $x * $x;
     $self->{_n}++;
     $self->{_min} = $x
-	if (!defined $self->{_min} || $x < $self->{_min});
+        if (!defined $self->{_min} || $x < $self->{_min});
     $self->{_max} = $x
-	if (!defined $self->{_max} || $x > $self->{_max});
+        if (!defined $self->{_max} || $x > $self->{_max});
 }
 
 sub nsamples
@@ -105,9 +105,9 @@ sub sample_deviation
     my ($self) = @_;
     die "No samples yet" if ($self->{_n} < 2);
     return sqrt(
-	($self->{_n} * $self->{_total2} - $self->{_total} * $self->{_total})
-	/
-	($self->{_n} * ($self->{_n} - 1))
+        ($self->{_n} * $self->{_total2} - $self->{_total} * $self->{_total})
+        /
+        ($self->{_n} * ($self->{_n} - 1))
     );
 }
 
@@ -117,14 +117,14 @@ sub as_string
     my $s = "no samples";
     if ($self->{_n} > 0)
     {
-	$s = "count " . $self->nsamples() .
-	     " minimum " . $self->minimum() .
-	     " maximum " . $self->maximum() .
-	     " average " . $self->average();
-	if ($self->{_n} > 1)
-	{
-	    $s .= " sample_deviation " . $self->sample_deviation();
-	}
+        $s = "count " . $self->nsamples() .
+             " minimum " . $self->minimum() .
+             " maximum " . $self->maximum() .
+             " average " . $self->average();
+        if ($self->{_n} > 1)
+        {
+            $s .= " sample_deviation " . $self->sample_deviation();
+        }
     }
     return $s;
 }

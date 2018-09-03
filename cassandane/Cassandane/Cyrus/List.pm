@@ -82,15 +82,15 @@ sub _install_test_data
     my $imaptalk = $self->{store}->get_client();
 
     foreach my $row (@{$test_data}) {
-	my ($cmd, $arg) = @{$row};
-	if (ref $arg) {
-	    foreach (@{$arg}) {
-		$imaptalk->$cmd($_) || die "$cmd '$_': $@";
-	    }
-	}
-	else {
-	    $imaptalk->$cmd($arg) || die "$cmd '$_': $@";
-	}
+        my ($cmd, $arg) = @{$row};
+        if (ref $arg) {
+            foreach (@{$arg}) {
+                $imaptalk->$cmd($_) || die "$cmd '$_': $@";
+            }
+        }
+        else {
+            $imaptalk->$cmd($arg) || die "$cmd '$_': $@";
+        }
     }
 }
 
@@ -167,26 +167,26 @@ sub _assert_list_data
 
         # look for unexpected flags
         foreach my $flag (sort keys %{$actual_hash{$mailbox}->{flags}}) {
-	    if ($flag eq "\\noinferiors") {
+            if ($flag eq "\\noinferiors") {
                 $self->assert(
                     (exists $actual_hash{$mailbox}->{flags}->{$flag}
                      || exists $actual_hash{$mailbox}->{flags}->{"\\hasnochildren"}),
                     "'$mailbox': found unexpected flag '$flag'"
                 );
-	    }
-	    elsif ($flag eq "\\nonexistent") {
+            }
+            elsif ($flag eq "\\nonexistent") {
                 $self->assert(
                     (exists $actual_hash{$mailbox}->{flags}->{$flag}
                      || exists $actual_hash{$mailbox}->{flags}->{"\\noselect"}),
                     "'$mailbox': found unexpected flag '$flag'"
                 );
-	    }
-	    else {
-		$self->assert(
-		    exists $expected_flags{$flag},
-		    "'$mailbox': found unexected flag '$flag'"
-		);
-	    }
+            }
+            else {
+                $self->assert(
+                    exists $expected_flags{$flag},
+                    "'$mailbox': found unexected flag '$flag'"
+                );
+            }
         }
     }
 
@@ -238,12 +238,12 @@ sub test_rfc5258_ex01_list_all
     my ($self) = @_;
 
     $self->_install_test_data([
-	[ 'subscribe' => 'INBOX' ],
-	[ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
-	[ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
-	[ 'delete' => 'Fruit/Peach' ],
-	[ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
-	[ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
+        [ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
+        [ 'delete' => 'Fruit/Peach' ],
+        [ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
+        [ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -268,12 +268,12 @@ sub test_recursivematch
     my ($self) = @_;
 
     $self->_install_test_data([
-	[ 'subscribe' => 'INBOX' ],
-	[ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
-	[ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
-	[ 'delete' => 'Fruit/Peach' ],
-	[ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
-	[ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
+        [ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
+        [ 'delete' => 'Fruit/Peach' ],
+        [ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
+        [ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -296,12 +296,12 @@ sub test_recursivematch_percent
     my ($self) = @_;
 
     $self->_install_test_data([
-	[ 'subscribe' => 'INBOX' ],
-	[ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
-	[ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
-	[ 'delete' => 'Fruit/Peach' ],
-	[ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
-	[ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
+        [ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
+        [ 'delete' => 'Fruit/Peach' ],
+        [ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
+        [ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -322,12 +322,12 @@ sub test_rfc5258_ex02_list_subscribed
     my ($self) = @_;
 
     $self->_install_test_data([
-	[ 'subscribe' => 'INBOX' ],
-	[ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
-	[ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
-	[ 'delete' => 'Fruit/Peach' ],
-	[ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
-	[ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
+        [ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
+        [ 'delete' => 'Fruit/Peach' ],
+        [ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
+        [ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -350,12 +350,12 @@ sub test_list_subscribed_return_children
     my ($self) = @_;
 
     $self->_install_test_data([
-	[ 'subscribe' => 'INBOX' ],
-	[ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
-	[ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
-	[ 'delete' => 'Fruit/Peach' ],
-	[ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
-	[ 'subscribe' => [qw( Vegetable )] ],
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
+        [ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
+        [ 'delete' => 'Fruit/Peach' ],
+        [ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
+        [ 'subscribe' => [qw( Vegetable )] ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -378,14 +378,14 @@ sub test_list_subscribed_return_children_noaltns
     my ($self) = @_;
 
     $self->_install_test_data([
-	[ 'subscribe' => 'INBOX' ],
-	[ 'create' => [qw( INBOX/Fruit INBOX/Fruit/Apple INBOX/Fruit/Banana
-			   INBOX/Fruit/Peach )] ],
-	[ 'subscribe' => [qw( INBOX/Fruit/Banana INBOX/Fruit/Peach )] ],
-	[ 'delete' => 'INBOX/Fruit/Peach' ],
-	[ 'create' => [qw( INBOX/Tofu INBOX/Vegetable INBOX/Vegetable/Broccoli
-			   INBOX/Vegetable/Corn )] ],
-	[ 'subscribe' => [qw( INBOX/Vegetable )] ],
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( INBOX/Fruit INBOX/Fruit/Apple INBOX/Fruit/Banana
+                           INBOX/Fruit/Peach )] ],
+        [ 'subscribe' => [qw( INBOX/Fruit/Banana INBOX/Fruit/Peach )] ],
+        [ 'delete' => 'INBOX/Fruit/Peach' ],
+        [ 'create' => [qw( INBOX/Tofu INBOX/Vegetable INBOX/Vegetable/Broccoli
+                           INBOX/Vegetable/Corn )] ],
+        [ 'subscribe' => [qw( INBOX/Vegetable )] ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -408,12 +408,12 @@ sub test_list_return_subscribed
     my ($self) = @_;
 
     $self->_install_test_data([
-	[ 'subscribe' => 'INBOX' ],
-	[ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
-	[ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
-	[ 'delete' => 'Fruit/Peach' ],
-	[ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
-	[ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
+        [ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
+        [ 'delete' => 'Fruit/Peach' ],
+        [ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
+        [ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -422,14 +422,14 @@ sub test_list_return_subscribed
 
     xlog(Dumper $subdata);
     $self->_assert_list_data($subdata, '/', {
-	'INBOX'                 => [qw( \\Subscribed \\HasNoChildren )],
-	'Fruit'                 => [qw( \\HasChildren )],
-	'Fruit/Apple'           => [qw( \\HasNoChildren )],
-	'Fruit/Banana'          => [qw( \\Subscribed \\HasNoChildren )],
-	'Tofu'                  => [qw( \\HasNoChildren )],
-	'Vegetable'             => [qw( \\Subscribed \\HasChildren )],
-	'Vegetable/Broccoli'    => [qw( \\Subscribed \\HasNoChildren )],
-	'Vegetable/Corn'        => [qw( \\HasNoChildren )],
+        'INBOX'                 => [qw( \\Subscribed \\HasNoChildren )],
+        'Fruit'                 => [qw( \\HasChildren )],
+        'Fruit/Apple'           => [qw( \\HasNoChildren )],
+        'Fruit/Banana'          => [qw( \\Subscribed \\HasNoChildren )],
+        'Tofu'                  => [qw( \\HasNoChildren )],
+        'Vegetable'             => [qw( \\Subscribed \\HasChildren )],
+        'Vegetable/Broccoli'    => [qw( \\Subscribed \\HasNoChildren )],
+        'Vegetable/Corn'        => [qw( \\HasNoChildren )],
     });
 }
 
@@ -439,18 +439,18 @@ sub test_rfc5258_ex03_children
     my ($self) = @_;
 
     $self->_install_test_data([
-	[ 'subscribe' => 'INBOX' ],
-	[ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
-	[ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
-	[ 'delete' => 'Fruit/Peach' ],
-	[ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
-	[ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( Fruit Fruit/Apple Fruit/Banana Fruit/Peach)] ],
+        [ 'subscribe' => [qw( Fruit/Banana Fruit/Peach )] ],
+        [ 'delete' => 'Fruit/Peach' ],
+        [ 'create' => [qw( Tofu Vegetable Vegetable/Broccoli Vegetable/Corn )] ],
+        [ 'subscribe' => [qw( Vegetable Vegetable/Broccoli )] ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
 
     my $data = $imaptalk->list(
-	[qw()], "", "%", 'RETURN', [qw(CHILDREN)],
+        [qw()], "", "%", 'RETURN', [qw(CHILDREN)],
     );
 
     $self->_assert_list_data($data, '/', {
@@ -486,11 +486,11 @@ sub test_rfc5258_ex07_multiple_mailbox_patterns
     my ($self) = @_;
 
     $self->_install_test_data([
-	[ 'create' => 'Drafts' ],
-	[ 'create' => [qw(
-	    Sent Sent/March2004 Sent/December2003 Sent/August2004
-	)] ],
-	[ 'create' => [qw( Unlisted Unlisted/Foo )] ],
+        [ 'create' => 'Drafts' ],
+        [ 'create' => [qw(
+            Sent Sent/March2004 Sent/December2003 Sent/August2004
+        )] ],
+        [ 'create' => [qw( Unlisted Unlisted/Foo )] ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -1063,7 +1063,7 @@ sub bogus_test_rfc6154_ex01_list_non_extended
     my ($self) = @_;
 
     $self->_install_test_data([
-	[ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
+        [ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -1080,11 +1080,11 @@ sub bogus_test_rfc6154_ex01_list_non_extended
 
     $self->_assert_list_data($alldata, '/', {
         'INBOX'                 => [qw( \\HasNoChildren )],
-	'ToDo'                  => [qw( \\HasNoChildren )],
-	'Projects'              => [qw( \\HasChildren )],
-	'SentMail'              => [qw( \\Sent \\HasNoChildren )],
-	'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
-	'Trash'                 => [qw( \\Trash \\HasNoChildren )],
+        'ToDo'                  => [qw( \\HasNoChildren )],
+        'Projects'              => [qw( \\HasChildren )],
+        'SentMail'              => [qw( \\Sent \\HasNoChildren )],
+        'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
+        'Trash'                 => [qw( \\Trash \\HasNoChildren )],
     });
 }
 
@@ -1094,7 +1094,7 @@ sub test_rfc6154_ex02a_list_return_special_use
     my ($self) = @_;
 
     $self->_install_test_data([
-	[ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
+        [ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -1111,11 +1111,11 @@ sub test_rfc6154_ex02a_list_return_special_use
 
     $self->_assert_list_data($alldata, '/', {
         'INBOX'                 => [qw( \\HasNoChildren )],
-	'ToDo'                  => [qw( \\HasNoChildren )],
-	'Projects'              => [qw( \\HasChildren )],
-	'SentMail'              => [qw( \\Sent \\HasNoChildren )],
-	'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
-	'Trash'                 => [qw( \\Trash \\HasNoChildren )],
+        'ToDo'                  => [qw( \\HasNoChildren )],
+        'Projects'              => [qw( \\HasChildren )],
+        'SentMail'              => [qw( \\Sent \\HasNoChildren )],
+        'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
+        'Trash'                 => [qw( \\Trash \\HasNoChildren )],
     });
 }
 
@@ -1125,7 +1125,7 @@ sub test_rfc6154_ex02b_list_special_use
     my ($self) = @_;
 
     $self->_install_test_data([
-	[ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
+        [ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -1141,9 +1141,9 @@ sub test_rfc6154_ex02b_list_special_use
     my $alldata = $imaptalk->list([qw( SPECIAL-USE )], "", "%");
 
     $self->_assert_list_data($alldata, '/', {
-	'SentMail'              => [qw( \\Sent \\HasNoChildren )],
-	'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
-	'Trash'                 => [qw( \\Trash \\HasNoChildren )],
+        'SentMail'              => [qw( \\Sent \\HasNoChildren )],
+        'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
+        'Trash'                 => [qw( \\Trash \\HasNoChildren )],
     });
 }
 
@@ -1153,8 +1153,8 @@ sub test_list_special_use_return_subscribed
     my ($self) = @_;
 
     $self->_install_test_data([
-	[ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
-	[ 'subscribe' => [qw( SentMail Trash) ] ],
+        [ 'create' => [qw( ToDo Projects Projects/Foo SentMail MyDrafts Trash) ] ],
+        [ 'subscribe' => [qw( SentMail Trash) ] ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -1168,13 +1168,13 @@ sub test_list_special_use_return_subscribed
     $self->assert_equals('ok', $imaptalk->get_last_completion_response());
 
     my $alldata = $imaptalk->list([qw( SPECIAL-USE )], "", "*",
-				  'RETURN', [qw(SUBSCRIBED)]);
+                                  'RETURN', [qw(SUBSCRIBED)]);
 
     xlog Dumper $alldata;
     $self->_assert_list_data($alldata, '/', {
-	'SentMail'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
-	'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
-	'Trash'                 => [qw( \\Trash \\HasNoChildren \\Subscribed )],
+        'SentMail'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
+        'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
+        'Trash'                 => [qw( \\Trash \\HasNoChildren \\Subscribed )],
     });
 
 }
@@ -1188,7 +1188,7 @@ sub test_virtdomains_return_subscribed_altns
     $admintalk->create("user/foo\@example.com");
 
     my $foostore = $self->{instance}->get_service('imap')->create_store(
-			username => "foo\@example.com");
+                        username => "foo\@example.com");
     my $footalk = $foostore->get_client();
 
     $footalk->create("Drafts");
@@ -1207,18 +1207,18 @@ sub test_virtdomains_return_subscribed_altns
     $self->assert_equals('ok', $footalk->get_last_completion_response());
 
     my $specialuse = $footalk->list([qw( SPECIAL-USE )], "", "*",
-				    'RETURN', [qw(SUBSCRIBED)]);
+                                    'RETURN', [qw(SUBSCRIBED)]);
 
     xlog Dumper $specialuse;
     $self->_assert_list_data($specialuse, '/', {
-	'Sent'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
-	'Drafts'            => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
+        'Sent'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
+        'Drafts'            => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
     });
 
     $admintalk->create("user/bar\@example.com");
     $admintalk->create("user/bar/shared-folder\@example.com"); # yay bogus domaining
     $admintalk->setacl("user/bar/shared-folder\@example.com",
-		       'foo@example.com' => 'lrswipkxtecd');
+                       'foo@example.com' => 'lrswipkxtecd');
     $self->assert_equals('ok', $admintalk->get_last_completion_response());
 
     $footalk->subscribe("Other Users/bar/shared-folder");
@@ -1227,7 +1227,7 @@ sub test_virtdomains_return_subscribed_altns
     $admintalk->create("another-namespace\@example.com");
     $admintalk->create("another-namespace/folder\@example.com");
     $admintalk->setacl("another-namespace/folder\@example.com",
-		       'foo@example.com' => 'lrswipkxtecd');
+                       'foo@example.com' => 'lrswipkxtecd');
 
     $footalk->subscribe("Shared Folders/another-namespace/folder");
     $self->assert_equals('ok', $footalk->get_last_completion_response());
@@ -1236,16 +1236,16 @@ sub test_virtdomains_return_subscribed_altns
 
     xlog Dumper $alldata;
     $self->_assert_list_data($alldata, '/', {
-	'INBOX'		=> [qw( \\HasNoChildren \\Subscribed )],
-	'Drafts'	=> [qw( \\HasNoChildren \\Subscribed )],
-	'Sent'		=> [qw( \\HasNoChildren \\Subscribed )],
-	'Trash'		=> [qw( \\HasNoChildren \\Subscribed )],
-	'Other Users/bar/shared-folder'
-			=> [qw( \\HasNoChildren \\Subscribed )],
-	'Shared Folders/another-namespace'
-			=> [qw( \\HasChildren )],
-	'Shared Folders/another-namespace/folder'
-			=> [qw( \\HasNoChildren \\Subscribed )],
+        'INBOX'         => [qw( \\HasNoChildren \\Subscribed )],
+        'Drafts'        => [qw( \\HasNoChildren \\Subscribed )],
+        'Sent'          => [qw( \\HasNoChildren \\Subscribed )],
+        'Trash'         => [qw( \\HasNoChildren \\Subscribed )],
+        'Other Users/bar/shared-folder'
+                        => [qw( \\HasNoChildren \\Subscribed )],
+        'Shared Folders/another-namespace'
+                        => [qw( \\HasChildren )],
+        'Shared Folders/another-namespace/folder'
+                        => [qw( \\HasNoChildren \\Subscribed )],
     });
 }
 
@@ -1258,7 +1258,7 @@ sub test_virtdomains_return_subscribed_noaltns
     $admintalk->create("user/foo\@example.com");
 
     my $foostore = $self->{instance}->get_service('imap')->create_store(
-			username => "foo\@example.com");
+                        username => "foo\@example.com");
     my $footalk = $foostore->get_client();
 
     $footalk->create("INBOX/Drafts");
@@ -1277,18 +1277,18 @@ sub test_virtdomains_return_subscribed_noaltns
     $self->assert_equals('ok', $footalk->get_last_completion_response());
 
     my $specialuse = $footalk->list([qw( SPECIAL-USE )], "", "*",
-				    'RETURN', [qw(SUBSCRIBED)]);
+                                    'RETURN', [qw(SUBSCRIBED)]);
 
     xlog Dumper $specialuse;
     $self->_assert_list_data($specialuse, '/', {
-	'INBOX/Sent'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
-	'INBOX/Drafts'            => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
+        'INBOX/Sent'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
+        'INBOX/Drafts'            => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
     });
 
     $admintalk->create("user/bar\@example.com");
     $admintalk->create("user/bar/shared-folder\@example.com"); # yay bogus domaining
     $admintalk->setacl("user/bar/shared-folder\@example.com",
-		       'foo@example.com' => 'lrswipkxtecd');
+                       'foo@example.com' => 'lrswipkxtecd');
     $self->assert_equals('ok', $admintalk->get_last_completion_response());
 
     $footalk->subscribe("user/bar/shared-folder");
@@ -1297,7 +1297,7 @@ sub test_virtdomains_return_subscribed_noaltns
     $admintalk->create("another-namespace\@example.com");
     $admintalk->create("another-namespace/folder\@example.com");
     $admintalk->setacl("another-namespace/folder\@example.com",
-		       'foo@example.com' => 'lrswipkxtecd');
+                       'foo@example.com' => 'lrswipkxtecd');
     $self->assert_equals('ok', $admintalk->get_last_completion_response());
 
     $footalk->subscribe("another-namespace/folder");
@@ -1307,13 +1307,13 @@ sub test_virtdomains_return_subscribed_noaltns
 
     xlog Dumper $alldata;
     $self->_assert_list_data($alldata, '/', {
-	'INBOX'		=> [qw( \\HasChildren \\Subscribed )],
-	'INBOX/Drafts'	=> [qw( \\HasNoChildren \\Subscribed )],
-	'INBOX/Sent'	=> [qw( \\HasNoChildren \\Subscribed )],
-	'INBOX/Trash'	=> [qw( \\HasNoChildren \\Subscribed )],
-	'user/bar/shared-folder' => [qw( \\HasNoChildren \\Subscribed )],
-	'another-namespace' => [qw( \\HasChildren ) ],
-	'another-namespace/folder' => [qw( \\HasNoChildren \\Subscribed )],
+        'INBOX'         => [qw( \\HasChildren \\Subscribed )],
+        'INBOX/Drafts'  => [qw( \\HasNoChildren \\Subscribed )],
+        'INBOX/Sent'    => [qw( \\HasNoChildren \\Subscribed )],
+        'INBOX/Trash'   => [qw( \\HasNoChildren \\Subscribed )],
+        'user/bar/shared-folder' => [qw( \\HasNoChildren \\Subscribed )],
+        'another-namespace' => [qw( \\HasChildren ) ],
+        'another-namespace/folder' => [qw( \\HasNoChildren \\Subscribed )],
     });
 }
 
@@ -1323,10 +1323,10 @@ sub test_delete_nounsubscribe
     my ($self) = @_;
 
     $self->_install_test_data([
-	[ 'subscribe' => 'INBOX' ],
-	[ 'create' => [qw( deltest deltest/sub1 deltest/sub2 )] ],
-	[ 'subscribe' => [qw( deltest deltest/sub2 )] ],
-	[ 'delete' => 'deltest' ],
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( deltest deltest/sub1 deltest/sub2 )] ],
+        [ 'subscribe' => [qw( deltest deltest/sub2 )] ],
+        [ 'delete' => 'deltest' ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -1336,11 +1336,11 @@ sub test_delete_nounsubscribe
     $self->_assert_list_data($subdata, '/', {
         'INBOX'         => '\\Subscribed',
         'deltest'       => [qw( \\NonExistent \\Subscribed )],
-	'deltest/sub2'  => [qw( \\Subscribed )],
+        'deltest/sub2'  => [qw( \\Subscribed )],
     });
 
     $self->_install_test_data([
-	[ 'delete' => 'deltest/sub2' ],
+        [ 'delete' => 'deltest/sub2' ],
     ]);
 
     $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
@@ -1348,7 +1348,7 @@ sub test_delete_nounsubscribe
     $self->_assert_list_data($subdata, '/', {
         'INBOX'         => '\\Subscribed',
         'deltest'       => [qw( \\NonExistent \\Subscribed )],
-	'deltest/sub2'  => [qw( \\NonExistent \\Subscribed )],
+        'deltest/sub2'  => [qw( \\NonExistent \\Subscribed )],
     });
 }
 
@@ -1361,10 +1361,10 @@ sub test_delete_unsubscribe
     $self->_start_instances();
 
     $self->_install_test_data([
-	[ 'subscribe' => 'INBOX' ],
-	[ 'create' => [qw( deltest deltest/sub1 deltest/sub2 )] ],
-	[ 'subscribe' => [qw( deltest deltest/sub2 )] ],
-	[ 'delete' => 'deltest' ],
+        [ 'subscribe' => 'INBOX' ],
+        [ 'create' => [qw( deltest deltest/sub1 deltest/sub2 )] ],
+        [ 'subscribe' => [qw( deltest deltest/sub2 )] ],
+        [ 'delete' => 'deltest' ],
     ]);
 
     my $imaptalk = $self->{store}->get_client();
@@ -1377,13 +1377,13 @@ sub test_delete_unsubscribe
     });
 
     $self->_install_test_data([
-	[ 'delete' => 'deltest/sub2' ],
+        [ 'delete' => 'deltest/sub2' ],
     ]);
 
     $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*");
 
     $self->_assert_list_data($subdata, '/', {
-	'INBOX' => '\\Subscribed',
+        'INBOX' => '\\Subscribed',
     });
 }
 
@@ -1396,7 +1396,7 @@ sub test_dotuser_gh1875_virt
     $admintalk->create("user/foo.bar\@example.com");
 
     my $foostore = $self->{instance}->get_service('imap')->create_store(
-			username => "foo.bar\@example.com");
+                        username => "foo.bar\@example.com");
     my $footalk = $foostore->get_client();
 
     $footalk->create("INBOX/Drafts");
@@ -1407,10 +1407,10 @@ sub test_dotuser_gh1875_virt
 
     xlog Dumper $data;
     $self->_assert_list_data($data, '/', {
-	'INBOX'             => [qw( \\HasChildren )],
-	'INBOX/Sent'        => [qw( \\HasNoChildren )],
-	'INBOX/Drafts'      => [qw( \\HasNoChildren )],
-	'INBOX/Trash'       => [qw( \\HasNoChildren )],
+        'INBOX'             => [qw( \\HasChildren )],
+        'INBOX/Sent'        => [qw( \\HasNoChildren )],
+        'INBOX/Drafts'      => [qw( \\HasNoChildren )],
+        'INBOX/Trash'       => [qw( \\HasNoChildren )],
     });
 }
 
@@ -1423,7 +1423,7 @@ sub test_dotuser_gh1875_novirt
     $admintalk->create("user/foo.bar");
 
     my $foostore = $self->{instance}->get_service('imap')->create_store(
-			username => "foo.bar");
+                        username => "foo.bar");
     my $footalk = $foostore->get_client();
 
     $footalk->create("INBOX/Drafts");
@@ -1434,10 +1434,10 @@ sub test_dotuser_gh1875_novirt
 
     xlog Dumper $data;
     $self->_assert_list_data($data, '/', {
-	'INBOX'             => [qw( \\HasChildren )],
-	'INBOX/Sent'        => [qw( \\HasNoChildren )],
-	'INBOX/Drafts'      => [qw( \\HasNoChildren )],
-	'INBOX/Trash'       => [qw( \\HasNoChildren )],
+        'INBOX'             => [qw( \\HasChildren )],
+        'INBOX/Sent'        => [qw( \\HasNoChildren )],
+        'INBOX/Drafts'      => [qw( \\HasNoChildren )],
+        'INBOX/Trash'       => [qw( \\HasNoChildren )],
     });
 }
 
@@ -1450,7 +1450,7 @@ sub test_dotuser_gh1875_virt_altns
     $admintalk->create("user/foo.bar\@example.com");
 
     my $foostore = $self->{instance}->get_service('imap')->create_store(
-			username => "foo.bar\@example.com");
+                        username => "foo.bar\@example.com");
     my $footalk = $foostore->get_client();
 
     $footalk->create("Drafts");
@@ -1461,10 +1461,10 @@ sub test_dotuser_gh1875_virt_altns
 
     xlog Dumper $data;
     $self->_assert_list_data($data, '/', {
-	'INBOX'       => [qw( \\HasNoChildren )],
-	'Sent'        => [qw( \\HasNoChildren )],
-	'Drafts'      => [qw( \\HasNoChildren )],
-	'Trash'       => [qw( \\HasNoChildren )],
+        'INBOX'       => [qw( \\HasNoChildren )],
+        'Sent'        => [qw( \\HasNoChildren )],
+        'Drafts'      => [qw( \\HasNoChildren )],
+        'Trash'       => [qw( \\HasNoChildren )],
     });
 }
 
@@ -1477,7 +1477,7 @@ sub test_dotuser_gh1875_novirt_altns
     $admintalk->create("user/foo.bar");
 
     my $foostore = $self->{instance}->get_service('imap')->create_store(
-			username => "foo.bar");
+                        username => "foo.bar");
     my $footalk = $foostore->get_client();
 
     $footalk->create("Drafts");
@@ -1488,10 +1488,10 @@ sub test_dotuser_gh1875_novirt_altns
 
     xlog Dumper $data;
     $self->_assert_list_data($data, '/', {
-	'INBOX'       => [qw( \\HasNoChildren )],
-	'Sent'        => [qw( \\HasNoChildren )],
-	'Drafts'      => [qw( \\HasNoChildren )],
-	'Trash'       => [qw( \\HasNoChildren )],
+        'INBOX'       => [qw( \\HasNoChildren )],
+        'Sent'        => [qw( \\HasNoChildren )],
+        'Drafts'      => [qw( \\HasNoChildren )],
+        'Trash'       => [qw( \\HasNoChildren )],
     });
 }
 
@@ -1501,7 +1501,7 @@ sub test_otherusers_pattern
     $self->{instance}->create_user("foo");
 
     my $foostore = $self->{instance}->get_service('imap')->create_store(
-			username => "foo");
+                        username => "foo");
     my $footalk = $foostore->get_client();
 
     $footalk->create('INBOX.mytest');
@@ -1511,34 +1511,34 @@ sub test_otherusers_pattern
 
     my $admintalk = $self->{adminstore}->get_client();
     $admintalk->setacl("user.foo",
-	'cassandane' => 'lrswipkxtecd');
+        'cassandane' => 'lrswipkxtecd');
     $self->assert_str_equals('ok',
-	$admintalk->get_last_completion_response());
+        $admintalk->get_last_completion_response());
     $admintalk->setacl("user.foo.mytest",
-	'cassandane' => 'lrswipkxtecd');
+        'cassandane' => 'lrswipkxtecd');
     $self->assert_str_equals('ok',
-	$admintalk->get_last_completion_response());
+        $admintalk->get_last_completion_response());
     $admintalk->setacl("user.foo.mytest.mysubtest",
-	'cassandane' => 'lrswipkxtecd');
+        'cassandane' => 'lrswipkxtecd');
     $self->assert_str_equals('ok',
-	$admintalk->get_last_completion_response());
+        $admintalk->get_last_completion_response());
 
     my $casstalk = $self->{store}->get_client();
     my $data;
 
     $data = $casstalk->list("", "user.%");
     $self->_assert_list_data($data, '.', {
-	'user.foo'		    => [qw( \\HasChildren )],
+        'user.foo'                  => [qw( \\HasChildren )],
     });
 
     $data = $casstalk->list("", "user.foo.%");
     $self->_assert_list_data($data, '.', {
-	'user.foo.mytest'           => [qw( \\HasChildren )],
+        'user.foo.mytest'           => [qw( \\HasChildren )],
     });
 
     $data = $casstalk->list("", "user.foo.mytest.%");
     $self->_assert_list_data($data, '.', {
-	'user.foo.mytest.mysubtest' => [qw( \\HasNoChildren )],
+        'user.foo.mytest.mysubtest' => [qw( \\HasNoChildren )],
     });
 }
 
@@ -1549,7 +1549,7 @@ sub test_otherusers_pattern_unixhs
     $self->{instance}->create_user("foo");
 
     my $foostore = $self->{instance}->get_service('imap')->create_store(
-			username => "foo");
+                        username => "foo");
     my $footalk = $foostore->get_client();
 
     $footalk->create('INBOX/mytest');
@@ -1559,34 +1559,34 @@ sub test_otherusers_pattern_unixhs
 
     my $admintalk = $self->{adminstore}->get_client();
     $admintalk->setacl("user/foo",
-	'cassandane' => 'lrswipkxtecd');
+        'cassandane' => 'lrswipkxtecd');
     $self->assert_str_equals('ok',
-	$admintalk->get_last_completion_response());
+        $admintalk->get_last_completion_response());
     $admintalk->setacl("user/foo/mytest",
-	'cassandane' => 'lrswipkxtecd');
+        'cassandane' => 'lrswipkxtecd');
     $self->assert_str_equals('ok',
-	$admintalk->get_last_completion_response());
+        $admintalk->get_last_completion_response());
     $admintalk->setacl("user/foo/mytest/mysubtest",
-	'cassandane' => 'lrswipkxtecd');
+        'cassandane' => 'lrswipkxtecd');
     $self->assert_str_equals('ok',
-	$admintalk->get_last_completion_response());
+        $admintalk->get_last_completion_response());
 
     my $casstalk = $self->{store}->get_client();
     my $data;
 
     $data = $casstalk->list("", "user/%");
     $self->_assert_list_data($data, '/', {
-	'user/foo'		    => [qw( \\HasChildren )],
+        'user/foo'                  => [qw( \\HasChildren )],
     });
 
     $data = $casstalk->list("", "user/foo/%");
     $self->_assert_list_data($data, '/', {
-	'user/foo/mytest'           => [qw( \\HasChildren )],
+        'user/foo/mytest'           => [qw( \\HasChildren )],
     });
 
     $data = $casstalk->list("", "user/foo/mytest/%");
     $self->_assert_list_data($data, '/', {
-	'user/foo/mytest/mysubtest' => [qw( \\HasNoChildren )],
+        'user/foo/mytest/mysubtest' => [qw( \\HasNoChildren )],
     });
 }
 

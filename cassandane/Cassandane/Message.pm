@@ -57,34 +57,34 @@ sub new
     my $class = shift;
     my %params = @_;
     my $self = {
-	headers => [],
-	headers_by_name => {},
-	body => undef,
-	# Other message attributes - e.g. IMAP uid & internaldate
-	attrs => {},
+        headers => [],
+        headers_by_name => {},
+        body => undef,
+        # Other message attributes - e.g. IMAP uid & internaldate
+        attrs => {},
     };
 
     bless $self, $class;
 
     $self->set_lines(@{$params{lines}})
-	if (defined $params{lines});
+        if (defined $params{lines});
     $self->set_raw($params{raw})
-	if (defined $params{raw});
+        if (defined $params{raw});
     $self->set_fh($params{fh})
-	if (defined $params{fh});
+        if (defined $params{fh});
     # do these one by one to normalise the incoming keys
     # and any other logic that set_attribute() wants to do.
     if (defined $params{attrs})
     {
-	while (my ($n, $v) = each %{$params{attrs}})
-	{
-	    if (lc($n) eq 'annotation')
-	    {
-		$self->_set_annotations_from_fetch($v);
-		next;
-	    }
-	    $self->set_attribute($n, $v);
-	}
+        while (my ($n, $v) = each %{$params{attrs}})
+        {
+            if (lc($n) eq 'annotation')
+            {
+                $self->_set_annotations_from_fetch($v);
+                next;
+            }
+            $self->set_attribute($n, $v);
+        }
     }
 
     return $self;
@@ -105,8 +105,8 @@ sub _canon_name($)
     my @cc = split(/([^[:alnum:]])+/, lc($name));
     map
     {
-	$_ = ucfirst($_);
-	$_ = 'ID' if m/^Id$/;
+        $_ = ucfirst($_);
+        $_ = 'ID' if m/^Id$/;
     } @cc;
     return join('', @cc);
 }
@@ -123,9 +123,9 @@ sub _canon_value
     my $res = "";
     foreach my $l (split(/[\r\n]+/, $value))
     {
-	$res .= ($res ne "" && !($l =~ m/^[ \t]/) ? "\t" : "");
-	$res .= $l;
-	$res .= "\r\n";
+        $res .= ($res ne "" && !($l =~ m/^[ \t]/) ? "\t" : "");
+        $res .= $l;
+        $res .= "\r\n";
     }
     $res .= "\r\n" if ($res eq "");
     return $res;
@@ -144,9 +144,9 @@ sub get_header
     $name = lc($name);
     my $values = $self->{headers_by_name}->{$name};
     return undef
-	unless defined $values;
+        unless defined $values;
     die "Too many values for header \"$name\""
-	unless (scalar @$values == 1);
+        unless (scalar @$values == 1);
     return $values->[0];
 }
 
@@ -160,7 +160,7 @@ sub set_headers
     my @headers = grep { $_->{name} ne $name } @{$self->{headers}};
     foreach my $v (@values)
     {
-	push(@headers, { name => $name, value => "" . $v });
+        push(@headers, { name => $name, value => "" . $v });
     }
     $self->{headers} = \@headers;
 }
@@ -217,8 +217,8 @@ sub set_attributes
 
     while (my $name = shift @args)
     {
-	my $value = shift @args;
-	$self->set_attribute($name, $value);
+        my $value = shift @args;
+        $self->set_attribute($name, $value);
     }
 }
 
@@ -245,9 +245,9 @@ sub _validate_ea
     my ($self, $ea) = @_;
 
     die "Bad entry \"$ea->{entry}\""
-	unless $ea->{entry} =~ m/^(\/[a-z0-9.]+)*$/i;
+        unless $ea->{entry} =~ m/^(\/[a-z0-9.]+)*$/i;
     die "Bad attrib \"$ea->{attrib}\""
-	unless $ea->{attrib} =~ m/^value.(shared|priv)$/i;
+        unless $ea->{attrib} =~ m/^value.(shared|priv)$/i;
 }
 
 sub has_annotation
@@ -256,7 +256,7 @@ sub has_annotation
     my $ea = shift;
     if (ref $ea ne 'HASH')
     {
-	$ea = { entry => $ea, attrib => shift };
+        $ea = { entry => $ea, attrib => shift };
     }
 
     $self->_validate_ea($ea);
@@ -269,7 +269,7 @@ sub get_annotation
     my $ea = shift;
     if (ref $ea ne 'HASH')
     {
-	$ea = { entry => $ea, attrib => shift };
+        $ea = { entry => $ea, attrib => shift };
     }
 
     $self->_validate_ea($ea);
@@ -283,9 +283,9 @@ sub list_annotations
 
     foreach my $key (keys %{$self->{attrs}})
     {
-	my ($dummy, $entry, $attrib) = split / /,$key;
-	next unless defined $attrib && $dummy eq 'annotation';
-	push (@res, { entry => $entry, attrib => $attrib });
+        my ($dummy, $entry, $attrib) = split / /,$key;
+        next unless defined $attrib && $dummy eq 'annotation';
+        push (@res, { entry => $entry, attrib => $attrib });
     }
     return @res;
 }
@@ -296,7 +296,7 @@ sub set_annotation
     my $ea = shift;
     if (ref $ea ne 'HASH')
     {
-	$ea = { entry => $ea, attrib => shift };
+        $ea = { entry => $ea, attrib => shift };
     }
     my $value = shift;
 
@@ -311,13 +311,13 @@ sub _set_annotations_from_fetch
 
     foreach my $entry (keys %$fetchitem)
     {
-	$ea->{entry} = $entry;
-	my $av = $fetchitem->{$entry};
-	foreach my $attrib (keys %$av)
-	{
-	    $ea->{attrib} = $attrib;
-	    $self->set_annotation($ea, $av->{$attrib});
-	}
+        $ea->{entry} = $entry;
+        my $av = $fetchitem->{$entry};
+        foreach my $attrib (keys %$av)
+        {
+            $ea->{attrib} = $attrib;
+            $self->set_annotation($ea, $av->{$attrib});
+        }
     }
 }
 
@@ -328,11 +328,11 @@ sub as_string
 
     foreach my $h (@{$self->{headers}})
     {
-	$s .= _canon_name($h->{name}) . ": " .  _canon_value($h->{value});
+        $s .= _canon_name($h->{name}) . ": " .  _canon_value($h->{value});
     }
     $s .= "\r\n";
     $s .= $self->{body}
-	if defined $self->{body};
+        if defined $self->{body};
 
     return $s;
 }
@@ -348,45 +348,45 @@ sub set_lines
     # First parse the headers
     while (scalar @lines)
     {
-	my $line = shift @lines;
-	# remove trailing end of line chars
-	$line =~ s/[\r\n]*$//;
+        my $line = shift @lines;
+        # remove trailing end of line chars
+        $line =~ s/[\r\n]*$//;
 
-# 	xlog "    raw line \"$line\"";
+#       xlog "    raw line \"$line\"";
 
-	if ($line =~ m/^\s/)
-	{
-	    # continuation line -- gather the line
-	    push(@pending, $line);
-# 	    xlog "    gathering continuation line";
-	    next;
-	}
-#  	xlog "    pending \"" . join("CRLF", @pending) . "\"";
+        if ($line =~ m/^\s/)
+        {
+            # continuation line -- gather the line
+            push(@pending, $line);
+#           xlog "    gathering continuation line";
+            next;
+        }
+#       xlog "    pending \"" . join("CRLF", @pending) . "\"";
 
-	# Not a continuation line; handle the previous pending line
-	if (@pending)
-	{
-# 	    xlog "    finished joined line \"$pending\"";
-	    my $first = shift @pending;
-	    my ($name, $value) = ($first =~ m/^([!-9;-~]+):(.*)$/);
+        # Not a continuation line; handle the previous pending line
+        if (@pending)
+        {
+#           xlog "    finished joined line \"$pending\"";
+            my $first = shift @pending;
+            my ($name, $value) = ($first =~ m/^([!-9;-~]+):(.*)$/);
 
-	    die "Malformed RFC822 header at or near \"$first\""
-		unless defined $value;
+            die "Malformed RFC822 header at or near \"$first\""
+                unless defined $value;
 
-	    $value = join("\r\n", ($value, @pending));
+            $value = join("\r\n", ($value, @pending));
 
-	    # Lose a single SP after the : which we will be putting
-	    # back when we canonicalise on output.  This is technically
-	    # wrong but does make for prettier output *and* circular
-	    # consistency with most messages in the wild.
-	    $value =~ s/^ //;
+            # Lose a single SP after the : which we will be putting
+            # back when we canonicalise on output.  This is technically
+            # wrong but does make for prettier output *and* circular
+            # consistency with most messages in the wild.
+            $value =~ s/^ //;
 
-# 	    xlog "    saving header $name=$value";
-	    $self->add_header($name, $value);
-	}
+#           xlog "    saving header $name=$value";
+            $self->add_header($name, $value);
+        }
 
-	last if ($line eq '');
-	@pending = ( $line );
+        last if ($line eq '');
+        @pending = ( $line );
     }
 #     xlog "    finished with headers, next line is \"" . $lines[0] . "\"";
 
@@ -394,8 +394,8 @@ sub set_lines
     my $body = '';
     foreach my $line (@lines)
     {
-	$line =~ s/[\r\n]*$//;
-	$body .= $line . "\r\n";
+        $line =~ s/[\r\n]*$//;
+        $body .= $line . "\r\n";
     }
     $self->set_body($body);
 }
@@ -406,7 +406,7 @@ sub set_fh
     my @lines;
     while (<$fh>)
     {
-	push(@lines, $_);
+        push(@lines, $_);
     }
     $self->set_lines(@lines);
 }
@@ -416,7 +416,7 @@ sub set_raw
     my ($self, $raw) = @_;
     my $fh;
     open $fh,'<',\$raw
-	or die "Cannot open in-memory file for reading: $!";
+        or die "Cannot open in-memory file for reading: $!";
     $self->set_fh($fh);
     close $fh;
 }
@@ -428,7 +428,7 @@ sub set_internaldate
 
     if (ref $id eq 'DateTime')
     {
-	$id = to_rfc3501($id);
+        $id = to_rfc3501($id);
     }
     $self->set_attribute(internaldate => $id);
 }
@@ -494,26 +494,26 @@ sub base_subject
 
     for (;;)
     {
-	# (3) Remove all prefix text of the subject that
-	# matches the subj-leader ABNF.
-	my $n = 0;
-	while (s/^\s+// ||
-	       s/^\[[^][]*\]\s*// ||
-	       s/^re\s*(\[[^][]*\])?://i ||
-	       s/^fw\s*(\[[^][]*\])?://i ||
-	       s/^fwd\s*(\[[^][]*\])?://i)
-	{
-	    $n++;
-	}
-	last if !$n;
+        # (3) Remove all prefix text of the subject that
+        # matches the subj-leader ABNF.
+        my $n = 0;
+        while (s/^\s+// ||
+               s/^\[[^][]*\]\s*// ||
+               s/^re\s*(\[[^][]*\])?://i ||
+               s/^fw\s*(\[[^][]*\])?://i ||
+               s/^fwd\s*(\[[^][]*\])?://i)
+        {
+            $n++;
+        }
+        last if !$n;
 
-	# (4) If there is prefix text of the subject that
-	# matches the subj-blob ABNF, and removing that
-	# prefix leaves a non-empty subj-base, then remove
-	# the prefix text.
-	my ($prefix, $base) = m/^\[[^][]*\]\s*(.*)$/;
-	last if !defined $prefix;
-	$_ = $base if ($base ne '');
+        # (4) If there is prefix text of the subject that
+        # matches the subj-blob ABNF, and removing that
+        # prefix leaves a non-empty subj-base, then remove
+        # the prefix text.
+        my ($prefix, $base) = m/^\[[^][]*\]\s*(.*)$/;
+        last if !defined $prefix;
+        $_ = $base if ($base ne '');
     }
     # (5) Repeat (3) and (4) until no matches remain.
 

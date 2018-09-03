@@ -63,20 +63,20 @@ sub write_inifile
     my %sections;
     foreach my $k (keys %contents)
     {
-	my ($sec, $param) = split(/\./, $k);
-	$sections{$sec} ||= {};
-	$sections{$sec}->{$param} = $contents{$k};
+        my ($sec, $param) = split(/\./, $k);
+        $sections{$sec} ||= {};
+        $sections{$sec}->{$param} = $contents{$k};
     }
 
     open INIFILE, '>', $filename
-	or die "Cannot open file $filename for writing: $!";
+        or die "Cannot open file $filename for writing: $!";
     foreach my $sec (keys %sections)
     {
-	printf INIFILE "[%s]\n", $sec;
-	foreach my $param (keys %{$sections{$sec}})
-	{
-	    printf INIFILE "%s=%s\n", $param, $sections{$sec}->{$param};
-	}
+        printf INIFILE "[%s]\n", $sec;
+        foreach my $param (keys %{$sections{$sec}})
+        {
+            printf INIFILE "%s=%s\n", $param, $sections{$sec}->{$param};
+        }
     }
     close INIFILE;
 }
@@ -90,7 +90,7 @@ sub test_basic
     xlog "Working in temporary directory $CWD";
     # data thanks to hipsteripsum.me
     write_inifile({},
-	'helvetica.blog' => 'ethical',
+        'helvetica.blog' => 'ethical',
     );
 
     my $cassini = new Cassandane::Cassini;
@@ -99,20 +99,20 @@ sub test_basic
     $self->assert_null($cassini->val('swag', 'quinoa'));
     # or return the default
     $self->assert_str_equals('whatever',
-			     $cassini->val('swag', 'quinoa', 'whatever'));
+                             $cassini->val('swag', 'quinoa', 'whatever'));
 
     # Don't find non-existant param in existant section
     $self->assert_null($cassini->val('helvetica', 'quinoa'));
     # or return the default
     $self->assert_str_equals('whatever',
-			     $cassini->val('helvetica', 'quinoa', 'whatever'));
+                             $cassini->val('helvetica', 'quinoa', 'whatever'));
 
     # Don't find param in non-existant section where the
     # param does exist in another section
     $self->assert_null($cassini->val('swag', 'blog'));
     # or return the default
     $self->assert_str_equals('whatever',
-			     $cassini->val('swag', 'blog', 'whatever'));
+                             $cassini->val('swag', 'blog', 'whatever'));
 
     # Don't find case aliases for existant param
     $self->assert_null($cassini->val('Helvetica', 'blog'));
@@ -132,22 +132,22 @@ sub test_boolval
     xlog "Working in temporary directory $CWD";
     # data thanks to hipsteripsum.me
     write_inifile({},
-	'narwhal.cardigan' => 'no',
-	'narwhal.banksy' => 'yes',
-	'narwhal.occupy' => 'NO',
-	'narwhal.mustache' => 'YES',
-	'narwhal.gentrify' => 'false',
-	'narwhal.thundercats' => 'true',
-	'narwhal.scenester' => 'FALSE',
-	'narwhal.squid' => 'TRUE',
-	'narwhal.selvage' => '0',
-	'narwhal.portland' => '1',
-	'narwhal.bunch' => 'off',
-	'narwhal.bicycle' => 'on',
-	'narwhal.organic' => 'OFF',
-	'narwhal.leggings' => 'ON',
-	'narwhal.mixtape' => '',
-	'narwhal.vegan' => 'invalid',
+        'narwhal.cardigan' => 'no',
+        'narwhal.banksy' => 'yes',
+        'narwhal.occupy' => 'NO',
+        'narwhal.mustache' => 'YES',
+        'narwhal.gentrify' => 'false',
+        'narwhal.thundercats' => 'true',
+        'narwhal.scenester' => 'FALSE',
+        'narwhal.squid' => 'TRUE',
+        'narwhal.selvage' => '0',
+        'narwhal.portland' => '1',
+        'narwhal.bunch' => 'off',
+        'narwhal.bicycle' => 'on',
+        'narwhal.organic' => 'OFF',
+        'narwhal.leggings' => 'ON',
+        'narwhal.mixtape' => '',
+        'narwhal.vegan' => 'invalid',
     );
 
     my $cassini = new Cassandane::Cassini;
@@ -185,30 +185,30 @@ sub test_override
     xlog "Working in temporary directory $CWD";
     # data thanks to hipsteripsum.me
     write_inifile({},
-	'semiotics.skateboard' => 'flexitarian',
+        'semiotics.skateboard' => 'flexitarian',
     );
 
     my $cassini = new Cassandane::Cassini;
 
     $self->assert_null($cassini->val('semiotics', 'typewriter'));
     $self->assert_str_equals('whatever',
-			     $cassini->val('semiotics', 'typewriter', 'whatever'));
+                             $cassini->val('semiotics', 'typewriter', 'whatever'));
     $self->assert_str_equals('flexitarian',
-			     $cassini->val('semiotics', 'skateboard', 'whatever'));
+                             $cassini->val('semiotics', 'skateboard', 'whatever'));
     $self->assert_str_equals('flexitarian',
-			     $cassini->val('semiotics', 'skateboard'));
+                             $cassini->val('semiotics', 'skateboard'));
     $self->assert_null($cassini->val('twee', 'cliche'));
 
     $cassini->override('semiotics', 'typewriter', 'vegan');
 
     $self->assert_str_equals('vegan',
-			     $cassini->val('semiotics', 'typewriter'));
+                             $cassini->val('semiotics', 'typewriter'));
     $self->assert_str_equals('vegan',
-			     $cassini->val('semiotics', 'typewriter', 'whatever'));
+                             $cassini->val('semiotics', 'typewriter', 'whatever'));
     $self->assert_str_equals('flexitarian',
-			     $cassini->val('semiotics', 'skateboard', 'whatever'));
+                             $cassini->val('semiotics', 'skateboard', 'whatever'));
     $self->assert_str_equals('flexitarian',
-			     $cassini->val('semiotics', 'skateboard'));
+                             $cassini->val('semiotics', 'skateboard'));
     $self->assert_null($cassini->val('twee', 'cliche'));
 }
 

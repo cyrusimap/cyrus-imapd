@@ -62,9 +62,9 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane',
-		 conversations => 'yes',
-		 httpmodules => 'carddav caldav jmap',
-		 httpallowcompress => 'no',
+                 conversations => 'yes',
+                 httpmodules => 'carddav caldav jmap',
+                 httpallowcompress => 'no',
                  allowusermoves => 'yes',
                  altnamespace => 'no',
                  anyoneuseracl => 'no',
@@ -144,10 +144,10 @@ sub new
     );
 
     return $class->SUPER::new({
-	config => $config,
-	jmap => 1,
-	adminstore => 1,
-	services => [ 'imap', 'http' ]
+        config => $config,
+        jmap => 1,
+        adminstore => 1,
+        services => [ 'imap', 'http' ]
     }, @args);
 }
 

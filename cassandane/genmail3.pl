@@ -19,11 +19,11 @@
 #     endorse or promote products derived from this software without
 #     prior written permission. For permission or any legal
 #     details, please contact
-# 	Opera Software Australia Pty. Ltd.
-# 	Level 50, 120 Collins St
-# 	Melbourne 3000
-# 	Victoria
-# 	Australia
+#       Opera Software Australia Pty. Ltd.
+#       Level 50, 120 Collins St
+#       Melbourne 3000
+#       Victoria
+#       Australia
 #
 #  4. Redistributions of any form whatsoever must retain the following
 #     acknowledgment:
@@ -61,67 +61,67 @@ sub usage
 my $mode = 'sequence';
 my $maxmessages;
 my %params = (
-	type => 'imap',
-	host => 'localhost',
-	port => 9100,
-	folder => 'inbox',
-	username => 'cassandane',
-	password => 'testpw',
-	verbose => 0,
+        type => 'imap',
+        host => 'localhost',
+        port => 9100,
+        folder => 'inbox',
+        username => 'cassandane',
+        password => 'testpw',
+        verbose => 0,
 );
 while (my $a = shift)
 {
     if ($a eq '-u')
     {
-	usage() if defined $params{uri};
-	%params = ( uri => shift, verbose => $params{verbose} );
+        usage() if defined $params{uri};
+        %params = ( uri => shift, verbose => $params{verbose} );
     }
     elsif ($a eq '-h' || $a eq '--host')
     {
-	$params{host} = shift;
-	usage() unless defined $params{host};
+        $params{host} = shift;
+        usage() unless defined $params{host};
     }
     elsif ($a eq '-p' || $a eq '--port')
     {
-	$params{port} = shift;
-	usage() unless defined $params{port};
+        $params{port} = shift;
+        usage() unless defined $params{port};
     }
     elsif ($a eq '-F' || $a eq '--folder')
     {
-	$params{folder} = shift;
-	usage() unless defined $params{folder};
+        $params{folder} = shift;
+        usage() unless defined $params{folder};
     }
     elsif ($a eq '-U' || $a eq '--user')
     {
-	$params{username} = shift;
-	usage() unless defined $params{username};
+        $params{username} = shift;
+        usage() unless defined $params{username};
     }
     elsif ($a eq '-P' || $a eq '--password')
     {
-	$params{password} = shift;
-	usage() unless defined $params{password};
+        $params{password} = shift;
+        usage() unless defined $params{password};
     }
     elsif ($a eq '-v' || $a eq '--verbose')
     {
-	$params{verbose} = 1;
+        $params{verbose} = 1;
     }
     elsif ($a eq '-T' || $a eq '--threaded')
     {
-	$mode = 'threaded';
+        $mode = 'threaded';
     }
     elsif ($a eq '-m' || $a eq '--max-messages')
     {
-	$maxmessages = shift || usage;
-	$maxmessages = int(0+$maxmessages);
+        $maxmessages = shift || usage;
+        $maxmessages = int(0+$maxmessages);
     }
     elsif ($a =~ m/^-/)
     {
-	usage();
+        usage();
     }
     else
     {
-	usage() if defined $params{path};
-	%params = ( path => $a, verbose => $params{verbose} );
+        usage() if defined $params{path};
+        %params = ( path => $a, verbose => $params{verbose} );
     }
 }
 

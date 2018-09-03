@@ -134,17 +134,17 @@ sub _generate_and_read
 
     # Write the file
     my ($fh, $filename) = tempfile()
-	or die "Cannot open temporary file: $!";
+        or die "Cannot open temporary file: $!";
     $c->generate($filename);
 
     # read it back again to check
     my %nv;
     while (<$fh>)
     {
-	chomp;
-	my ($n, $v) = m/^([^:\s]+):\s*(\S+)$/;
-	$self->assert(defined $v);
-	$nv{$n} = $v;
+        chomp;
+        my ($n, $v) = m/^([^:\s]+):\s*(\S+)$/;
+        $self->assert(defined $v);
+        $nv{$n} = $v;
     }
 
     close $fh;
@@ -187,7 +187,7 @@ sub test_variables
     my $nv;
     eval
     {
-	$nv = $self->_generate_and_read($c2);
+        $nv = $self->_generate_and_read($c2);
     };
     $self->assert(defined $@ && $@ =~ m/Variable grade not defined/i);
 

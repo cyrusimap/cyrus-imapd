@@ -67,7 +67,7 @@ sub set_up
     # let's create ourselves an archive user
     # sub folders of another user - one is subscribable
     $self->{instance}->create_user("archive",
-				   subdirs => [ 'cassandane', ['cassandane', 'sent'] ]);
+                                   subdirs => [ 'cassandane', ['cassandane', 'sent'] ]);
     $admintalk->setacl("user.archive.cassandane.sent", "cassandane", "lrswp");
 }
 

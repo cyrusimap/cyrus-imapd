@@ -62,19 +62,19 @@ sub check_expected
 
     my $avg = $ss->average();
     $self->assert(abs($eavg - $avg) < $epsilon,
-		  "Average: expecting $eavg got $avg");
+                  "Average: expecting $eavg got $avg");
 
     my $min = $ss->minimum();
     $self->assert(abs($emin - $min) < $epsilon,
-		  "Minimum: expecting $emin got $min");
+                  "Minimum: expecting $emin got $min");
 
     my $max = $ss->maximum();
     $self->assert(abs($emax - $max) < $epsilon,
-		  "Maximum: expecting $emax got $max");
+                  "Maximum: expecting $emax got $max");
 
     my $std = $ss->sample_deviation();
     $self->assert(abs($estd - $std) < $epsilon,
-		  "Sample Deviation: expecting $estd got $std");
+                  "Sample Deviation: expecting $estd got $std");
 }
 
 sub test_uniform

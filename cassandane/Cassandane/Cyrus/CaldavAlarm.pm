@@ -62,9 +62,9 @@ sub new
     $config->set(httpallowcompress => 'no');
     $config->set(caldav_historical_age => -1);
     return $class->SUPER::new({
-	config => $config,
+        config => $config,
         adminstore => 1,
-	services => ['imap', 'http'],
+        services => ['imap', 'http'],
     }, @_);
 }
 
@@ -75,13 +75,13 @@ sub set_up
     my $service = $self->{instance}->get_service("http");
     $ENV{DEBUGDAV} = 1;
     $self->{caldav} = Net::CalDAVTalk->new(
-	user => 'cassandane',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 }
 
@@ -1697,13 +1697,13 @@ sub test_simple_multiuser
 
     my $service = $self->{instance}->get_service("http");
     my $FooDAV = Net::CalDAVTalk->new(
-	user => 'foo',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'foo',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $cal = $FooDAV->GetCalendar("cassandane.$CalendarId");
@@ -1849,13 +1849,13 @@ sub test_override_multiuser
 
     my $service = $self->{instance}->get_service("http");
     my $FooDAV = Net::CalDAVTalk->new(
-	user => 'foo',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'foo',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $cal = $FooDAV->GetCalendar("cassandane.$CalendarId");
@@ -2033,13 +2033,13 @@ sub test_simple_multiuser_sametime
 
     my $service = $self->{instance}->get_service("http");
     my $FooDAV = Net::CalDAVTalk->new(
-	user => 'foo',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'foo',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     my $cal = $FooDAV->GetCalendar("cassandane.$CalendarId");

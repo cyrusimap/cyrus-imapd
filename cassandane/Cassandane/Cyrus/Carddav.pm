@@ -61,9 +61,9 @@ sub new
     $config->set(httpmodules => 'carddav');
     $config->set(httpallowcompress => 'no');
     return $class->SUPER::new({
-	adminstore => 1,
-	config => $config,
-	services => ['imap', 'http'],
+        adminstore => 1,
+        config => $config,
+        services => ['imap', 'http'],
     }, @_);
 }
 
@@ -74,13 +74,13 @@ sub set_up
     my $service = $self->{instance}->get_service("http");
     $ENV{DEBUGDAV} = 1;
     $self->{carddav} = Net::CardDAVTalk->new(
-	user => 'cassandane',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 }
 
@@ -200,13 +200,13 @@ sub test_homeset_extradomain
 
     my $service = $self->{instance}->get_service("http");
     my $talk = Net::CardDAVTalk->new(
-	user => 'cassandane%extradomain.com',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'cassandane%extradomain.com',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     $self->assert_str_equals($talk->{basepath}, "/dav/addressbooks/user/cassandane\@extradomain.com");
@@ -307,22 +307,22 @@ sub test_sharing_samedomain
 
     my $service = $self->{instance}->get_service("http");
     my $talk1 = Net::CardDAVTalk->new(
-	user => 'user1@example.com',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'user1@example.com',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
     my $talk2 = Net::CardDAVTalk->new(
-	user => 'user2@example.com',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'user2@example.com',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     $talk2->NewAddressBook("Shared", name => "Shared Address Book");
@@ -355,22 +355,22 @@ sub test_sharing_crossdomain
 
     my $service = $self->{instance}->get_service("http");
     my $talk1 = Net::CardDAVTalk->new(
-	user => 'user1@example.com',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'user1@example.com',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
     my $talk2 = Net::CardDAVTalk->new(
-	user => 'user2@example.org',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'user2@example.org',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     $talk2->NewAddressBook("Shared", name => "Shared Address Book");
@@ -403,22 +403,22 @@ sub test_sharing_contactpaths
 
     my $service = $self->{instance}->get_service("http");
     my $talk1 = Net::CardDAVTalk->new(
-	user => 'user1@example.com',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'user1@example.com',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
     my $talk2 = Net::CardDAVTalk->new(
-	user => 'user2@example.org',
-	password => 'pass',
-	host => $service->host(),
-	port => $service->port(),
-	scheme => 'http',
-	url => '/',
-	expandurl => 1,
+        user => 'user2@example.org',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
     );
 
     $talk2->NewAddressBook("Shared", name => "Shared Address Book");

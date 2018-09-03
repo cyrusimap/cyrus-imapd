@@ -60,7 +60,7 @@ sub new
     $self->{nmessages} = $NMESSAGES;
     $self->{deltat} = $DELTAT;
     $self->{next_date} = DateTime->now->epoch -
-		    $self->{deltat} * ($self->{nmessages}+1);
+                    $self->{deltat} * ($self->{nmessages}+1);
 
     return $self;
 }
@@ -75,7 +75,7 @@ sub generate
     my ($self, %params) = @_;
 
     return undef
-	if (!$self->{nmessages});
+        if (!$self->{nmessages});
 
     my $dt = DateTime->from_epoch( epoch => $self->{next_date} );
     $params{subject} = "message at " .  to_iso8601($dt);

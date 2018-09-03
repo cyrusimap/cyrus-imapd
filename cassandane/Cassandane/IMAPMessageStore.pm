@@ -54,22 +54,22 @@ sub new
 {
     my ($class, %params) = @_;
     my %bits = (
-	address_family => delete $params{address_family} || 'inet',
-	host => delete $params{host} || 'localhost',
-	port => 0 + (delete $params{port} || 143),
-	folder => delete $params{folder} || 'INBOX',
-	username => delete $params{username},
-	password => delete $params{password},
-	client => undef,
-	banner => undef,
-	# state for streaming read
-	next_uid => undef,
-	last_uid => undef,
-	last_batch_uid => undef,
-	batch => undef,
-	fetch_attrs => { uid => 1, 'body.peek[]' => 1 },
-	# state for XCONVFETCH
-	fetched => undef,
+        address_family => delete $params{address_family} || 'inet',
+        host => delete $params{host} || 'localhost',
+        port => 0 + (delete $params{port} || 143),
+        folder => delete $params{folder} || 'INBOX',
+        username => delete $params{username},
+        password => delete $params{password},
+        client => undef,
+        banner => undef,
+        # state for streaming read
+        next_uid => undef,
+        last_uid => undef,
+        last_batch_uid => undef,
+        batch => undef,
+        fetch_attrs => { uid => 1, 'body.peek[]' => 1 },
+        # state for XCONVFETCH
+        fetched => undef,
     );
     my $self = $class->SUPER::new(%params);
     map { $self->{$_} = $bits{$_}; } keys %bits;
@@ -82,31 +82,31 @@ sub connect
 
     # if already successfully connected, do nothing
     return
-	if (defined $self->{client} &&
-	    ($self->{client}->state() == Mail::IMAPTalk::Authenticated ||
-	     $self->{client}->state() == Mail::IMAPTalk::Selected));
+        if (defined $self->{client} &&
+            ($self->{client}->state() == Mail::IMAPTalk::Authenticated ||
+             $self->{client}->state() == Mail::IMAPTalk::Selected));
 
     $self->disconnect();
 
     my $sock = create_client_socket(
-		    $self->{address_family},
-		    $self->{host}, $self->{port})
-	or die "Cannot create client socket: $@";
+                    $self->{address_family},
+                    $self->{host}, $self->{port})
+        or die "Cannot create client socket: $@";
 
     my $client = Mail::IMAPTalk->new(
-			    Socket => $sock,
-			    Pedantic => 1,
+                            Socket => $sock,
+                            Pedantic => 1,
                             PreserveINBOX => 1,
-			    Uid => 0
-			)
-	or die "Cannot connect to server: $@";
+                            Uid => 0
+                        )
+        or die "Cannot connect to server: $@";
 
     $client->set_tracing(1)
-	if $self->{verbose};
+        if $self->{verbose};
 
     my $banner = $client->get_response_code('remainder');
     $client->login($self->{username}, $self->{password})
-	or die "Cannot login to server \"$self->{host}:$self->{port}\": $@";
+        or die "Cannot login to server \"$self->{host}:$self->{port}\": $@";
 
     # Make Mail::IMAPTalk just stfu
     $client->set_unicode_folders(1);
@@ -124,8 +124,8 @@ sub disconnect
     # We don't care if the LOGOUT fails.  Really.
     eval
     {
-	$self->{client}->logout()
-	    if defined $self->{client};
+        $self->{client}->logout()
+            if defined $self->{client};
     };
     $self->{client} = undef;
 }
@@ -136,8 +136,8 @@ sub _select
 
     if ($self->{client}->state() == Mail::IMAPTalk::Selected)
     {
-	$self->{client}->unselect()
-	    or die "Cannot unselect: $@";
+        $self->{client}->unselect()
+            or die "Cannot unselect: $@";
     }
     return $self->{client}->select($self->{folder});
 }
@@ -152,10 +152,10 @@ sub write_begin
     $r = $self->_select();
     if (!defined $r)
     {
-	die "Cannot select folder \"$self->{folder}\": $@"
-	    unless $self->{client}->get_last_error() =~ m/does not exist/;
-	$self->{client}->create($self->{folder})
-	    or die "Cannot create folder \"$self->{folder}\": $@"
+        die "Cannot select folder \"$self->{folder}\": $@"
+            unless $self->{client}->get_last_error() =~ m/does not exist/;
+        $self->{client}->create($self->{folder})
+            or die "Cannot create folder \"$self->{folder}\": $@"
     }
 }
 
@@ -165,15 +165,15 @@ sub write_message
 
     my @extra;
     if ($opts{flags}) {
-	push @extra, '(' . join(' ', @{$opts{flags}}) . ')';
+        push @extra, '(' . join(' ', @{$opts{flags}}) . ')';
     }
     if ($msg->has_attribute('internaldate')) {
         push @extra, $msg->get_attribute('internaldate');
     }
 
     $self->{client}->append($self->{folder}, @extra,
-			    { Literal => $msg->as_string() } )
-			    || die "$@";
+                            { Literal => $msg->as_string() } )
+                            || die "$@";
 }
 
 sub write_end
@@ -188,13 +188,13 @@ sub set_fetch_attributes
     $self->{fetch_attrs} = { uid => 1, 'body.peek[]' => 1 };
     foreach my $attr (@attrs)
     {
-	$attr = lc($attr);
-	die "Bad fetch attribute \"$attr\""
-	    unless ($attr =~ m/^annotation\s+\(\S+\s+value\.(shared|priv)\)$/i ||
-		    $attr =~ m/^[a-z0-9.\[\]<>]+$/);
-	next
-	    if ($attr =~ m/^body/);
-	$self->{fetch_attrs}->{$attr} = 1;
+        $attr = lc($attr);
+        die "Bad fetch attribute \"$attr\""
+            unless ($attr =~ m/^annotation\s+\(\S+\s+value\.(shared|priv)\)$/i ||
+                    $attr =~ m/^[a-z0-9.\[\]<>]+$/);
+        next
+            if ($attr =~ m/^body/);
+        $self->{fetch_attrs}->{$attr} = 1;
     }
 }
 
@@ -205,7 +205,7 @@ sub read_begin
     $self->connect();
 
     $self->_select()
-	or die "Cannot select folder \"$self->{folder}\": $@";
+        or die "Cannot select folder \"$self->{folder}\": $@";
 
     $self->{next_uid} = 1;
     $self->{last_uid} = -1 + $self->{client}->get_response_code('uidnext');
@@ -219,43 +219,43 @@ sub read_message
 
     for (;;)
     {
-	while (defined $self->{batch})
-	{
-	    my $uid = $self->{next_uid};
-	    last if $uid > $self->{last_batch_uid};
-	    $self->{next_uid}++;
-	    my $rr = $self->{batch}->{$uid};
-	    next unless defined $rr;
-	    delete $self->{batch}->{$uid};
+        while (defined $self->{batch})
+        {
+            my $uid = $self->{next_uid};
+            last if $uid > $self->{last_batch_uid};
+            $self->{next_uid}++;
+            my $rr = $self->{batch}->{$uid};
+            next unless defined $rr;
+            delete $self->{batch}->{$uid};
 
-	    # xlog "found uid=$uid in batch";
-	    # xlog "rr=" . Dumper($rr);
-	    my $raw = $rr->{'body'};
-	    delete $rr->{'body'};
-	    return Cassandane::Message->new(raw => $raw,
-					    attrs => { id => $uid, %$rr });
-	}
-	$self->{batch} = undef;
+            # xlog "found uid=$uid in batch";
+            # xlog "rr=" . Dumper($rr);
+            my $raw = $rr->{'body'};
+            delete $rr->{'body'};
+            return Cassandane::Message->new(raw => $raw,
+                                            attrs => { id => $uid, %$rr });
+        }
+        $self->{batch} = undef;
 
-	# xlog "batch empty or no batch available";
+        # xlog "batch empty or no batch available";
 
-	for (;;)
-	{
-	    my $first_uid = $self->{next_uid};
-	    return undef
-		if $first_uid > $self->{last_uid};  # EOF
-	    my $last_uid = $first_uid + $BATCHSIZE - 1;
-	    $last_uid = $self->{last_uid}
-		if $last_uid > $self->{last_uid};
-	    # xlog "fetching batch range $first_uid:$last_uid";
-	    my $attrs = join(' ', keys %{$self->{fetch_attrs}});
-	    $self->{batch} = $self->{client}->fetch("$first_uid:$last_uid",
-						    "($attrs)");
-	    $self->{last_batch_uid} = $last_uid;
-	    last if (defined $self->{batch} && scalar $self->{batch} > 0);
-	    $self->{next_uid} = $last_uid + 1;
-	}
-	# xlog "have a batch, next_uid=$self->{next_uid}";
+        for (;;)
+        {
+            my $first_uid = $self->{next_uid};
+            return undef
+                if $first_uid > $self->{last_uid};  # EOF
+            my $last_uid = $first_uid + $BATCHSIZE - 1;
+            $last_uid = $self->{last_uid}
+                if $last_uid > $self->{last_uid};
+            # xlog "fetching batch range $first_uid:$last_uid";
+            my $attrs = join(' ', keys %{$self->{fetch_attrs}});
+            $self->{batch} = $self->{client}->fetch("$first_uid:$last_uid",
+                                                    "($attrs)");
+            $self->{last_batch_uid} = $last_uid;
+            last if (defined $self->{batch} && scalar $self->{batch} > 0);
+            $self->{next_uid} = $last_uid + 1;
+        }
+        # xlog "have a batch, next_uid=$self->{next_uid}";
     }
 
     return undef;
@@ -278,7 +278,7 @@ sub remove
     $self->connect();
     my $r = $self->{client}->delete($self->{folder});
     die "IMAP DELETE failed: $@"
-	if (!defined $r && !($self->{client}->get_last_error() =~ m/does not exist/));
+        if (!defined $r && !($self->{client}->get_last_error() =~ m/does not exist/));
 }
 
 sub get_client
@@ -317,7 +317,7 @@ sub set_folder
 
     if ($self->{folder} ne $folder)
     {
-	$self->{folder} = $folder;
+        $self->{folder} = $folder;
     }
 }
 
@@ -327,8 +327,8 @@ sub _kvlist_to_hash
     my $h = {};
     while (my $k = shift @kvlist)
     {
-	my $v = shift @kvlist;
-	$h->{lc($k)} = $v;
+        my $v = shift @kvlist;
+        $h->{lc($k)} = $v;
     }
     return $h;
 }
@@ -340,30 +340,30 @@ sub xconvfetch_begin
 
     my $results =
     {
-	xconvmeta => {},
+        xconvmeta => {},
     };
     $self->{fetched} = undef;
     my %handlers =
     (
-	xconvmeta => sub
-	{
-	    # expecting: * XCONVMETA d55a42549e674b82 (MODSEQ 29)
-	    my ($response, $rr) = @_;
-# 	    xlog "XCONVMETA rr=" . Dumper($rr);
-	    $results->{xconvmeta}->{$rr->[0]} = _kvlist_to_hash(@{$rr->[1]});
-	},
-	fetch => sub
-	{
-	    my ($response, $rr) = @_;
-# 	    xlog "FETCH rr=" . Dumper($rr);
-	    push(@{$self->{fetched}}, $rr);
-	}
+        xconvmeta => sub
+        {
+            # expecting: * XCONVMETA d55a42549e674b82 (MODSEQ 29)
+            my ($response, $rr) = @_;
+#           xlog "XCONVMETA rr=" . Dumper($rr);
+            $results->{xconvmeta}->{$rr->[0]} = _kvlist_to_hash(@{$rr->[1]});
+        },
+        fetch => sub
+        {
+            my ($response, $rr) = @_;
+#           xlog "FETCH rr=" . Dumper($rr);
+            push(@{$self->{fetched}}, $rr);
+        }
     );
 
     $self->connect();
 
     $self->{client}->_imap_cmd("xconvfetch", 0, \%handlers, @args)
-	or return undef;
+        or return undef;
 
     return $results;
 }
@@ -374,7 +374,7 @@ sub xconvfetch_message
 
     my $rr = shift @{$self->{fetched}};
     return undef
-	if !defined $rr;
+        if !defined $rr;
 
     my $raw = $rr->{'body'};
     delete $rr->{'body'};
@@ -426,8 +426,8 @@ sub idle_begin
 
     if (!$got_idling)
     {
-	$@ = "Did not receive expected \"idling\" response";
-	return undef;
+        $@ = "Did not receive expected \"idling\" response";
+        return undef;
     }
 
     return 1;
@@ -459,8 +459,8 @@ sub idle_response
     my $got = 0;
     eval
     {
-	$talk->_parse_response($handlers);
-	$got = 1;
+        $talk->_parse_response($handlers);
+        $got = 1;
     };
 
     # Restore old values of CmdId and Timeout

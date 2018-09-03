@@ -55,9 +55,9 @@ use Cassandane::PortManager;
 use Cyrus::CheckReplication;
 
 my @stores = qw(store adminstore
-		replica_store replica_adminstore
-		frontend_store frontend_adminstore
-		backend2_store backend2_adminstore);
+                replica_store replica_adminstore
+                frontend_store frontend_adminstore
+                backend2_store backend2_adminstore);
 my %magic_handlers;
 
 # This code for storing function attributes is from
@@ -84,38 +84,38 @@ sub new
     my ($class, $params, @args) = @_;
 
     my $want = {
-	instance => 1,
-	replica => 0,
-	murder => 0,
-	backups => 0,
-	start_instances => 1,
-	services => [ 'imap' ],
-	store => 1,
-	adminstore => 0,
-	gen => 1,
-	deliver => 0,
-	jmap => 0,
+        instance => 1,
+        replica => 0,
+        murder => 0,
+        backups => 0,
+        start_instances => 1,
+        services => [ 'imap' ],
+        store => 1,
+        adminstore => 0,
+        gen => 1,
+        deliver => 0,
+        jmap => 0,
     };
     map {
-	$want->{$_} = delete $params->{$_}
-	    if defined $params->{$_};
+        $want->{$_} = delete $params->{$_}
+            if defined $params->{$_};
 
     } keys %$want;
     $want->{folder} = delete $params->{folder}
-	if defined $params->{folder};
+        if defined $params->{folder};
 
     my $instance_params = {};
     foreach my $p (qw(config))
     {
-	$instance_params->{$p} = delete $params->{$p}
-	    if defined $params->{$p};
+        $instance_params->{$p} = delete $params->{$p}
+            if defined $params->{$p};
     }
 
     # should have consumed all of the $params hash; if
     # not something is awry.
     my $leftovers = join(' ', keys %$params);
     die "Unexpected configuration parameters: $leftovers"
-	if length($leftovers);
+        if length($leftovers);
 
     my $self = $class->SUPER::new(@args);
     $self->{_name} = $args[0] || 'unknown';
@@ -137,7 +137,7 @@ sub magic
     my ($name, $handler) = @_;
     $name = lc($name);
     die "Magic \"$name\" registered twice"
-	if defined $magic_handlers{$name};
+        if defined $magic_handlers{$name};
     $magic_handlers{$name} = $handler;
 }
 
@@ -145,7 +145,7 @@ sub _who_wants_it
 {
     my ($self) = @_;
     return $self->{_current_magic}
-	if defined $self->{_current_magic} ;
+        if defined $self->{_current_magic} ;
     return "Test " . $self->{_name};
 }
 
@@ -163,7 +163,7 @@ sub config_set
     $self->{_config}->set(%pairs);
     while (my ($n, $v) = each %pairs)
     {
-	xlog $self->_who_wants_it() . " sets config $n = $v";
+        xlog $self->_who_wants_it() . " sets config $n = $v";
     }
 }
 
@@ -192,8 +192,8 @@ magic(SemidelayedExpunge => sub {
     my $semidelayed = 'semidelayed';
     my ($maj, $min) = Cassandane::Instance->get_version();
     if ($maj < 3 || ($maj == 3 && $min < 1)) {
-	# this value used to be called 'default' in 3.0 and earlier
-	$semidelayed = 'default';
+        # this value used to be called 'default' in 3.0 and earlier
+        $semidelayed = 'default';
     }
     shift->config_set(expunge_mode => $semidelayed);
 });
@@ -252,31 +252,31 @@ sub _run_magic
 
     foreach my $m (split(/_/, $self->{_name}))
     {
-	next if $seen{$m};
-	next unless defined $magic_handlers{$m};
-	$self->{_current_magic} = "Magic word $m in name";
-	$magic_handlers{$m}->($self);
-	$self->{_current_magic} = undef;
-	$seen{$m} = 1;
+        next if $seen{$m};
+        next unless defined $magic_handlers{$m};
+        $self->{_current_magic} = "Magic word $m in name";
+        $magic_handlers{$m}->($self);
+        $self->{_current_magic} = undef;
+        $seen{$m} = 1;
     }
 
     my $sub = $self->can($self->{_name});
     if (defined $sub) {
-	foreach my $a (attributes::get($sub))
-	{
-	    my $m = lc($a);
-	    # ignore min/max version attribution here
-	    next if $a =~ m/^(?:min|max)_version_/;
-	    # ignore feature test attribution here
-	    next if $a =~ m/^needs_/;
-	    die "Unknown attribute $a"
-		unless defined $magic_handlers{$m};
-	    next if $seen{$m};
-	    $self->{_current_magic} = "Magic attribute $a";
-	    $magic_handlers{$m}->($self);
-	    $self->{_current_magic} = undef;
-	    $seen{$m} = 1;
-	}
+        foreach my $a (attributes::get($sub))
+        {
+            my $m = lc($a);
+            # ignore min/max version attribution here
+            next if $a =~ m/^(?:min|max)_version_/;
+            # ignore feature test attribution here
+            next if $a =~ m/^needs_/;
+            die "Unknown attribute $a"
+                unless defined $magic_handlers{$m};
+            next if $seen{$m};
+            $self->{_current_magic} = "Magic attribute $a";
+            $magic_handlers{$m}->($self);
+            $self->{_current_magic} = undef;
+            $seen{$m} = 1;
+        }
     }
 }
 
@@ -302,218 +302,218 @@ sub _create_instances
 
     if ($want->{instance})
     {
-	my $conf = $self->{_config}->clone();
+        my $conf = $self->{_config}->clone();
 
-	if ($want->{replica})
-	{
-	    $sync_port = Cassandane::PortManager::alloc();
-	    $conf->set(
-		# sync_client will find the port in the config
-		sync_port => $sync_port,
-		# tell sync_client how to login
-		sync_authname => 'repluser',
-		sync_password => 'replpass',
-	    );
-	}
+        if ($want->{replica})
+        {
+            $sync_port = Cassandane::PortManager::alloc();
+            $conf->set(
+                # sync_client will find the port in the config
+                sync_port => $sync_port,
+                # tell sync_client how to login
+                sync_authname => 'repluser',
+                sync_password => 'replpass',
+            );
+        }
 
-	if ($want->{murder})
-	{
-	    $mupdate_port = Cassandane::PortManager::alloc();
-	    $backend1_imapd_port = Cassandane::PortManager::alloc();
+        if ($want->{murder})
+        {
+            $mupdate_port = Cassandane::PortManager::alloc();
+            $backend1_imapd_port = Cassandane::PortManager::alloc();
 
-	    $conf->set(
-		servername => "localhost:$backend1_imapd_port",
-		mupdate_server => "localhost:$mupdate_port",
-		# XXX documentation says to use mupdate_port, but
-		# XXX this doesn't work -- need to embed port number in
-		# XXX mupdate_server setting instead.
-		#mupdate_port => $mupdate_port,
-		mupdate_username => 'mupduser',
-		mupdate_authname => 'mupduser',
-		mupdate_password => 'mupdpass',
-		proxyservers => 'mailproxy',
-		lmtp_admins => 'mailproxy',
-		proxy_authname => 'mailproxy',
-		proxy_password => 'mailproxy',
-	    );
-	}
+            $conf->set(
+                servername => "localhost:$backend1_imapd_port",
+                mupdate_server => "localhost:$mupdate_port",
+                # XXX documentation says to use mupdate_port, but
+                # XXX this doesn't work -- need to embed port number in
+                # XXX mupdate_server setting instead.
+                #mupdate_port => $mupdate_port,
+                mupdate_username => 'mupduser',
+                mupdate_authname => 'mupduser',
+                mupdate_password => 'mupdpass',
+                proxyservers => 'mailproxy',
+                lmtp_admins => 'mailproxy',
+                proxy_authname => 'mailproxy',
+                proxy_password => 'mailproxy',
+            );
+        }
 
-	if ($want->{backups})
-	{
-	    $backupd_port = Cassandane::PortManager::alloc();
-	    $conf->set(
-		backup_sync_host => "localhost",
-		backup_sync_port => $backupd_port,
-		backup_sync_authname => 'repluser',
-		backup_sync_password => 'repluser',
-		backup_sync_try_imap => 'no',
-		xbackup_enabled => 'yes',
-	    );
-	}
+        if ($want->{backups})
+        {
+            $backupd_port = Cassandane::PortManager::alloc();
+            $conf->set(
+                backup_sync_host => "localhost",
+                backup_sync_port => $backupd_port,
+                backup_sync_authname => 'repluser',
+                backup_sync_password => 'repluser',
+                backup_sync_try_imap => 'no',
+                xbackup_enabled => 'yes',
+            );
+        }
 
-	my $sub = $self->{_name};
-	if ($sub =~ s/^test_/config_/ && $self->can($sub))
-	{
-	    die 'Use of config_<testname> subs is not supported anymore';
-	}
+        my $sub = $self->{_name};
+        if ($sub =~ s/^test_/config_/ && $self->can($sub))
+        {
+            die 'Use of config_<testname> subs is not supported anymore';
+        }
 
-	$instance_params{config} = $conf;
+        $instance_params{config} = $conf;
 
-	$instance_params{description} = "main instance for test $self->{_name}";
-	$self->{instance} = Cassandane::Instance->new(%instance_params);
-	$self->{instance}->add_services(@{$want->{services}});
-	$self->{instance}->_setup_for_deliver()
-	    if ($want->{deliver});
+        $instance_params{description} = "main instance for test $self->{_name}";
+        $self->{instance} = Cassandane::Instance->new(%instance_params);
+        $self->{instance}->add_services(@{$want->{services}});
+        $self->{instance}->_setup_for_deliver()
+            if ($want->{deliver});
 
-	if ($want->{replica})
-	{
-	    my $cyrus_replica_prefix = $cassini->val('cyrus replica', 'prefix');
-	    if (defined $cyrus_replica_prefix and -d $cyrus_replica_prefix) {
-		xlog "replica instance: using [cyrus replica] configuration";
-		$instance_params{installation} = 'replica';
-	    }
+        if ($want->{replica})
+        {
+            my $cyrus_replica_prefix = $cassini->val('cyrus replica', 'prefix');
+            if (defined $cyrus_replica_prefix and -d $cyrus_replica_prefix) {
+                xlog "replica instance: using [cyrus replica] configuration";
+                $instance_params{installation} = 'replica';
+            }
 
-	    $instance_params{description} = "replica instance for test $self->{_name}";
-	    $self->{replica} = Cassandane::Instance->new(%instance_params,
-							 setup_mailbox => 0);
-	    my ($v) = Cassandane::Instance->get_version($instance_params{installation});
-	    if ($v < 3) {
-		$self->{replica}->add_service(name => 'sync',
-					      port => $sync_port,
-					      argv => ['sync_server']);
-	    }
-	    else {
-		$self->{replica}->add_service(name => 'sync', port => $sync_port);
-	    }
-	    $self->{replica}->add_services(@{$want->{services}});
-	    $self->{replica}->_setup_for_deliver()
-		if ($want->{deliver});
-	}
+            $instance_params{description} = "replica instance for test $self->{_name}";
+            $self->{replica} = Cassandane::Instance->new(%instance_params,
+                                                         setup_mailbox => 0);
+            my ($v) = Cassandane::Instance->get_version($instance_params{installation});
+            if ($v < 3) {
+                $self->{replica}->add_service(name => 'sync',
+                                              port => $sync_port,
+                                              argv => ['sync_server']);
+            }
+            else {
+                $self->{replica}->add_service(name => 'sync', port => $sync_port);
+            }
+            $self->{replica}->add_services(@{$want->{services}});
+            $self->{replica}->_setup_for_deliver()
+                if ($want->{deliver});
+        }
 
-	if ($want->{murder})
-	{
-	    $frontend_imapd_port = Cassandane::PortManager::alloc();
-	    $backend2_imapd_port = Cassandane::PortManager::alloc();
+        if ($want->{murder})
+        {
+            $frontend_imapd_port = Cassandane::PortManager::alloc();
+            $backend2_imapd_port = Cassandane::PortManager::alloc();
 
-	    # set up a front end on which we also run the mupdate master
-	    my $frontend_conf = $self->{_config}->clone();
-	    $frontend_conf->set(
-		servername => "localhost:$frontend_imapd_port",
-		mupdate_server => "localhost:$mupdate_port",
-		# XXX documentation says to use mupdate_port, but
-		# XXX this doesn't work -- need to embed port number in
-		# XXX mupdate_server setting instead.
-		#mupdate_port => $mupdate_port,
-		mupdate_username => 'mupduser',
-		mupdate_authname => 'mupduser',
-		mupdate_password => 'mupdpass',
-		serverlist =>
-		    "localhost:$backend1_imapd_port localhost:$backend2_imapd_port",
-		proxy_authname => 'mailproxy',
-		proxy_password => 'mailproxy',
-	    );
+            # set up a front end on which we also run the mupdate master
+            my $frontend_conf = $self->{_config}->clone();
+            $frontend_conf->set(
+                servername => "localhost:$frontend_imapd_port",
+                mupdate_server => "localhost:$mupdate_port",
+                # XXX documentation says to use mupdate_port, but
+                # XXX this doesn't work -- need to embed port number in
+                # XXX mupdate_server setting instead.
+                #mupdate_port => $mupdate_port,
+                mupdate_username => 'mupduser',
+                mupdate_authname => 'mupduser',
+                mupdate_password => 'mupdpass',
+                serverlist =>
+                    "localhost:$backend1_imapd_port localhost:$backend2_imapd_port",
+                proxy_authname => 'mailproxy',
+                proxy_password => 'mailproxy',
+            );
 
-	    my $cyrus_murder_prefix = $cassini->val('cyrus murder', 'prefix');
-	    if (defined $cyrus_murder_prefix and -d $cyrus_murder_prefix) {
-		xlog "murder instance: using [cyrus murder] configuration";
-		$instance_params{installation} = 'murder';
-	    }
+            my $cyrus_murder_prefix = $cassini->val('cyrus murder', 'prefix');
+            if (defined $cyrus_murder_prefix and -d $cyrus_murder_prefix) {
+                xlog "murder instance: using [cyrus murder] configuration";
+                $instance_params{installation} = 'murder';
+            }
 
-	    $instance_params{description} = "murder frontend for test $self->{_name}";
-	    $instance_params{config} = $frontend_conf;
-	    $self->{frontend} = Cassandane::Instance->new(%instance_params,
-							  setup_mailbox => 0);
-	    $self->{frontend}->add_service(name => 'mupdate',
-					   port => $mupdate_port,
-					   argv => ['mupdate', '-m'],
-					   prefork => 1);
-	    $self->{frontend}->add_services(@{$want->{services}});
-	    $self->{frontend}->_setup_for_deliver()
-		if ($want->{deliver});
+            $instance_params{description} = "murder frontend for test $self->{_name}";
+            $instance_params{config} = $frontend_conf;
+            $self->{frontend} = Cassandane::Instance->new(%instance_params,
+                                                          setup_mailbox => 0);
+            $self->{frontend}->add_service(name => 'mupdate',
+                                           port => $mupdate_port,
+                                           argv => ['mupdate', '-m'],
+                                           prefork => 1);
+            $self->{frontend}->add_services(@{$want->{services}});
+            $self->{frontend}->_setup_for_deliver()
+                if ($want->{deliver});
 
-	    # arrange for frontend imapd to run on a known port
-	    $self->{frontend}->remove_service('imap');
-	    $self->{frontend}->add_service(name => 'imap',
-					   port => $frontend_imapd_port);
+            # arrange for frontend imapd to run on a known port
+            $self->{frontend}->remove_service('imap');
+            $self->{frontend}->add_service(name => 'imap',
+                                           port => $frontend_imapd_port);
 
-	    # arrange for backend1 to push to mupdate on startup
-	    $self->{instance}->add_start(name => 'mupdatepush',
-					 argv => ['ctl_mboxlist', '-m']);
+            # arrange for backend1 to push to mupdate on startup
+            $self->{instance}->add_start(name => 'mupdatepush',
+                                         argv => ['ctl_mboxlist', '-m']);
 
-	    # arrange for backend1 imapd to run on a known port
-	    $self->{instance}->remove_service('imap');
-	    $self->{instance}->add_service(name => 'imap',
-					   port => $backend1_imapd_port);
+            # arrange for backend1 imapd to run on a known port
+            $self->{instance}->remove_service('imap');
+            $self->{instance}->add_service(name => 'imap',
+                                           port => $backend1_imapd_port);
 
 
-	    # set up a second backend
-	    my $backend2_conf = $self->{_config}->clone();
-	    $backend2_conf->set(
-		servername => "localhost:$backend2_imapd_port",
-		mupdate_server => "localhost:$mupdate_port",
-		# XXX documentation says to use mupdate_port, but
-		# XXX this doesn't work -- need to embed port number in
-		# XXX mupdate_server setting instead.
-		#mupdate_port => $mupdate_port,
-		mupdate_username => 'mupduser',
-		mupdate_authname => 'mupduser',
-		mupdate_password => 'mupdpass',
-		proxyservers => 'mailproxy',
-		lmtp_admins => 'mailproxy',
-		sasl_mech_list => 'PLAIN',
-		proxy_authname => 'mailproxy',
-		proxy_password => 'mailproxy',
-	    );
+            # set up a second backend
+            my $backend2_conf = $self->{_config}->clone();
+            $backend2_conf->set(
+                servername => "localhost:$backend2_imapd_port",
+                mupdate_server => "localhost:$mupdate_port",
+                # XXX documentation says to use mupdate_port, but
+                # XXX this doesn't work -- need to embed port number in
+                # XXX mupdate_server setting instead.
+                #mupdate_port => $mupdate_port,
+                mupdate_username => 'mupduser',
+                mupdate_authname => 'mupduser',
+                mupdate_password => 'mupdpass',
+                proxyservers => 'mailproxy',
+                lmtp_admins => 'mailproxy',
+                sasl_mech_list => 'PLAIN',
+                proxy_authname => 'mailproxy',
+                proxy_password => 'mailproxy',
+            );
 
-	    $instance_params{description} = "murder backend2 for test $self->{_name}";
-	    $instance_params{config} = $backend2_conf;
-	    $self->{backend2} = Cassandane::Instance->new(%instance_params,
-							  setup_mailbox => 0); # XXX ?
-	    $self->{backend2}->add_services(@{$want->{services}});
+            $instance_params{description} = "murder backend2 for test $self->{_name}";
+            $instance_params{config} = $backend2_conf;
+            $self->{backend2} = Cassandane::Instance->new(%instance_params,
+                                                          setup_mailbox => 0); # XXX ?
+            $self->{backend2}->add_services(@{$want->{services}});
 
-	    # arrange for backend2 to push to mupdate on startup
-	    $self->{backend2}->add_start(name => 'mupdatepush',
-					 argv => ['ctl_mboxlist', '-m']);
+            # arrange for backend2 to push to mupdate on startup
+            $self->{backend2}->add_start(name => 'mupdatepush',
+                                         argv => ['ctl_mboxlist', '-m']);
 
-	    # arrange for backend2 imap to run on a known port
-	    $self->{backend2}->remove_service('imap');
-	    $self->{backend2}->add_service(name => 'imap',
-					   port => $backend2_imapd_port);
+            # arrange for backend2 imap to run on a known port
+            $self->{backend2}->remove_service('imap');
+            $self->{backend2}->add_service(name => 'imap',
+                                           port => $backend2_imapd_port);
 
-	    $self->{backend2}->_setup_for_deliver()
-		if ($want->{deliver});
-	}
+            $self->{backend2}->_setup_for_deliver()
+                if ($want->{deliver});
+        }
 
-	if ($want->{backups})
-	{
-	    # set up a backup server
-	    my $backup_conf = $self->{_config}->clone();
-	    $backup_conf->set(
-		temp_path => '@basedir@/tmp',
-		backup_keep_previous => 'yes',
-		'backuppartition-default' => '@basedir@/data/backup',
-	    );
+        if ($want->{backups})
+        {
+            # set up a backup server
+            my $backup_conf = $self->{_config}->clone();
+            $backup_conf->set(
+                temp_path => '@basedir@/tmp',
+                backup_keep_previous => 'yes',
+                'backuppartition-default' => '@basedir@/data/backup',
+            );
 
-	    my $cyrus_backup_prefix = $cassini->val('cyrus backup', 'prefix');
-	    if (defined $cyrus_backup_prefix and -d $cyrus_backup_prefix) {
-		xlog "backup instance: using [cyrus backup] configuration";
-		$instance_params{installation} = 'backup';
-	    }
+            my $cyrus_backup_prefix = $cassini->val('cyrus backup', 'prefix');
+            if (defined $cyrus_backup_prefix and -d $cyrus_backup_prefix) {
+                xlog "backup instance: using [cyrus backup] configuration";
+                $instance_params{installation} = 'backup';
+            }
 
-	    $instance_params{description} = "backup server for test $self->{_name}";
-	    $instance_params{config} = $backup_conf;
+            $instance_params{description} = "backup server for test $self->{_name}";
+            $instance_params{config} = $backup_conf;
 
-	    $self->{backups} = Cassandane::Instance->new(%instance_params,
-							 setup_mailbox => 0);
-	    $self->{backups}->add_service(name => 'backup',
-					  port => $backupd_port,
-					  argv => ['backupd']);
-	}
+            $self->{backups} = Cassandane::Instance->new(%instance_params,
+                                                         setup_mailbox => 0);
+            $self->{backups}->add_service(name => 'backup',
+                                          port => $backupd_port,
+                                          argv => ['backupd']);
+        }
     }
 
     if ($want->{gen})
     {
-	$self->{gen} = Cassandane::Generator->new();
+        $self->{gen} = Cassandane::Generator->new();
     }
 }
 
@@ -528,38 +528,38 @@ sub _jmap_setup
     my $service = $self->{instance}->get_service("http");
     $ENV{DEBUGJMAP} = 1;
     eval {
-	$self->{carddav} = Net::CardDAVTalk->new(
-	    user => 'cassandane',
-	    password => 'pass',
-	    host => $service->host(),
-	    port => $service->port(),
-	    scheme => 'http',
-	    url => '/',
-	    expandurl => 1,
-	);
-	$self->{caldav} = Net::CalDAVTalk->new(
-	    user => 'cassandane',
-	    password => 'pass',
-	    host => $service->host(),
-	    port => $service->port(),
-	    scheme => 'http',
-	    url => '/',
-	    expandurl => 1,
-	);
-	$self->{caldav}->UpdateAddressSet("Test User", "cassandane\@example.com");
-	$self->{jmap} = Mail::JMAPTalk->new(
-	    user => 'cassandane',
-	    password => 'pass',
-	    host => $service->host(),
-	    port => $service->port(),
-	    scheme => 'http',
-	    url => '/jmap/',
-	);
+        $self->{carddav} = Net::CardDAVTalk->new(
+            user => 'cassandane',
+            password => 'pass',
+            host => $service->host(),
+            port => $service->port(),
+            scheme => 'http',
+            url => '/',
+            expandurl => 1,
+        );
+        $self->{caldav} = Net::CalDAVTalk->new(
+            user => 'cassandane',
+            password => 'pass',
+            host => $service->host(),
+            port => $service->port(),
+            scheme => 'http',
+            url => '/',
+            expandurl => 1,
+        );
+        $self->{caldav}->UpdateAddressSet("Test User", "cassandane\@example.com");
+        $self->{jmap} = Mail::JMAPTalk->new(
+            user => 'cassandane',
+            password => 'pass',
+            host => $service->host(),
+            port => $service->port(),
+            scheme => 'http',
+            url => '/jmap/',
+        );
     };
     if ($@) {
-	my $e = $@;
-	$self->tear_down();
-	die $e;
+        my $e = $@;
+        $self->tear_down();
+        die $e;
     }
 }
 
@@ -571,9 +571,9 @@ sub set_up
 
     $self->_create_instances();
     $self->_start_instances()
-	if $self->{_want}->{start_instances};
+        if $self->{_want}->{start_instances};
     $self->_jmap_setup()
-	if $self->{_want}->{jmap};
+        if $self->{_want}->{jmap};
     xlog "Calling test function";
 }
 
@@ -582,15 +582,15 @@ sub _start_instances
     my ($self) = @_;
 
     $self->{frontend}->start()
-	if (defined $self->{frontend});
+        if (defined $self->{frontend});
     $self->{instance}->start()
-	if (defined $self->{instance});
+        if (defined $self->{instance});
     $self->{backend2}->start()
-	if (defined $self->{backend2});
+        if (defined $self->{backend2});
     $self->{replica}->start()
-	if (defined $self->{replica});
+        if (defined $self->{replica});
     $self->{backups}->start()
-	if (defined $self->{backups});
+        if (defined $self->{backups});
 
     $self->{store} = undef;
     $self->{adminstore} = undef;
@@ -609,11 +609,11 @@ sub _start_instances
     # in the replica.  Doing it this way avoids issues with
     # mismatched mailbox uniqueids.
     $self->run_replication()
-	if (defined $self->{replica});
+        if (defined $self->{replica});
 
     my %store_params;
     $store_params{folder} = $self->{_want}->{folder}
-	if defined $self->{_want}->{folder};
+        if defined $self->{_want}->{folder};
 
     my %adminstore_params = ( %store_params, username => 'admin' );
     # The admin stores need an extra parameter to force their
@@ -621,59 +621,59 @@ sub _start_instances
     # which refers to user.admin not user.cassandane
     $adminstore_params{folder} ||= 'INBOX';
     $adminstore_params{folder} = 'user.cassandane'
-	if ($adminstore_params{folder} =~ m/^inbox$/i);
+        if ($adminstore_params{folder} =~ m/^inbox$/i);
 
     if (defined $self->{instance})
     {
-	my $svc = $self->{instance}->get_service('imap');
-	if (defined $svc)
-	{
-	    $self->{store} = $svc->create_store(%store_params)
-		if ($self->{_want}->{store});
-	    $self->{adminstore} = $svc->create_store(%adminstore_params)
-		if ($self->{_want}->{adminstore});
-	}
+        my $svc = $self->{instance}->get_service('imap');
+        if (defined $svc)
+        {
+            $self->{store} = $svc->create_store(%store_params)
+                if ($self->{_want}->{store});
+            $self->{adminstore} = $svc->create_store(%adminstore_params)
+                if ($self->{_want}->{adminstore});
+        }
     }
     if (defined $self->{replica})
     {
-	# aliases for the master's store(s)
-	$self->{master_store} = $self->{store};
-	$self->{master_adminstore} = $self->{adminstore};
+        # aliases for the master's store(s)
+        $self->{master_store} = $self->{store};
+        $self->{master_adminstore} = $self->{adminstore};
 
-	my $svc = $self->{replica}->get_service('imap');
-	if (defined $svc)
-	{
-	    $self->{replica_store} = $svc->create_store(%store_params)
-		if ($self->{_want}->{store});
-	    $self->{replica_adminstore} = $svc->create_store(%adminstore_params)
-		if ($self->{_want}->{adminstore});
-	}
+        my $svc = $self->{replica}->get_service('imap');
+        if (defined $svc)
+        {
+            $self->{replica_store} = $svc->create_store(%store_params)
+                if ($self->{_want}->{store});
+            $self->{replica_adminstore} = $svc->create_store(%adminstore_params)
+                if ($self->{_want}->{adminstore});
+        }
     }
     if (defined $self->{frontend})
     {
-	# aliases for first backend store
-	$self->{backend1_store} = $self->{store};
-	$self->{backend1_adminstore} = $self->{adminstore};
+        # aliases for first backend store
+        $self->{backend1_store} = $self->{store};
+        $self->{backend1_adminstore} = $self->{adminstore};
 
-	my $svc = $self->{frontend}->get_service('imap');
-	if (defined $svc)
-	{
-	    $self->{frontend_store} = $svc->create_store(%store_params)
-		if ($self->{_want}->{store});
-	    $self->{frontend_adminstore} = $svc->create_store(%adminstore_params)
-		if ($self->{_want}->{adminstore});
-	}
+        my $svc = $self->{frontend}->get_service('imap');
+        if (defined $svc)
+        {
+            $self->{frontend_store} = $svc->create_store(%store_params)
+                if ($self->{_want}->{store});
+            $self->{frontend_adminstore} = $svc->create_store(%adminstore_params)
+                if ($self->{_want}->{adminstore});
+        }
     }
     if (defined $self->{backend2})
     {
-	my $svc = $self->{backend2}->get_service('imap');
-	if (defined $svc)
-	{
-	    $self->{backend2_store} = $svc->create_store(%store_params)
-		if ($self->{_want}->{store});
-	    $self->{backend2_adminstore} = $svc->create_store(%adminstore_params)
-		if ($self->{_want}->{adminstore});
-	}
+        my $svc = $self->{backend2}->get_service('imap');
+        if (defined $svc)
+        {
+            $self->{backend2_store} = $svc->create_store(%store_params)
+                if ($self->{_want}->{store});
+            $self->{backend2_adminstore} = $svc->create_store(%adminstore_params)
+                if ($self->{_want}->{adminstore});
+        }
     }
 }
 
@@ -685,11 +685,11 @@ sub tear_down
 
     foreach my $s (@stores)
     {
-	if (defined $self->{$s})
-	{
-	    $self->{$s}->disconnect();
-	    $self->{$s} = undef;
-	}
+        if (defined $self->{$s})
+        {
+            $self->{$s}->disconnect();
+            $self->{$s} = undef;
+        }
     }
     $self->{master_store} = undef;
     $self->{master_adminstore} = undef;
@@ -698,33 +698,33 @@ sub tear_down
 
     if (defined $self->{instance})
     {
-	$self->{instance}->stop();
-	$self->{instance}->cleanup();
-	$self->{instance} = undef;
+        $self->{instance}->stop();
+        $self->{instance}->cleanup();
+        $self->{instance} = undef;
     }
     if (defined $self->{backups})
     {
-	$self->{backups}->stop();
-	$self->{backups}->cleanup();
-	$self->{backups} = undef;
+        $self->{backups}->stop();
+        $self->{backups}->cleanup();
+        $self->{backups} = undef;
     }
     if (defined $self->{backend2})
     {
-	$self->{backend2}->stop();
-	$self->{backend2}->cleanup();
-	$self->{backend2} = undef;
+        $self->{backend2}->stop();
+        $self->{backend2}->cleanup();
+        $self->{backend2} = undef;
     }
     if (defined $self->{replica})
     {
-	$self->{replica}->stop();
-	$self->{replica}->cleanup();
-	$self->{replica} = undef;
+        $self->{replica}->stop();
+        $self->{replica}->cleanup();
+        $self->{replica} = undef;
     }
     if (defined $self->{frontend})
     {
-	$self->{frontend}->stop();
-	$self->{frontend}->cleanup();
-	$self->{frontend} = undef;
+        $self->{frontend}->stop();
+        $self->{frontend}->cleanup();
+        $self->{frontend} = undef;
     }
     xlog "---------- END $self->{_name} ----------";
 }
@@ -734,8 +734,8 @@ sub post_tear_down
     my ($self) = @_;
 
     die "Found some stray processes"
-	if (Cassandane::Daemon::kill_processes_on_ports(
-		    Cassandane::PortManager::free_all()));
+        if (Cassandane::Daemon::kill_processes_on_ports(
+                    Cassandane::PortManager::free_all()));
 }
 
 sub _save_message
@@ -753,7 +753,7 @@ sub make_message
 {
     my ($self, $subject, %attrs) = @_;
 
-    my $store = $attrs{store};	# may be undef
+    my $store = $attrs{store};  # may be undef
     delete $attrs{store};
 
     my $msg = $self->{gen}->generate(subject => $subject, %attrs);
@@ -768,26 +768,26 @@ sub make_random_data
     my ($self, $kb, %params) = @_;
     my $data = '';
     $params{minreps} = 10
-	unless defined $params{minreps};
+        unless defined $params{minreps};
     $params{maxreps} = 100
-	unless defined $params{maxreps};
+        unless defined $params{maxreps};
     $params{separators} = ' '
-	unless defined $params{separators};
+        unless defined $params{separators};
     my $sepidx = 0;
     while (!defined $kb || length($data) < 1024*$kb)
     {
-	my $word = random_word();
-	my $count = $params{minreps} +
-		    rand($params{maxreps} - $params{minreps});
-	while ($count > 0)
-	{
-	    my $sep = substr($params{separators},
-			     $sepidx % length($params{separators}), 1);
-	    $sepidx++;
-	    $data .= $sep . $word;
-	    $count--;
-	}
-	last unless defined $kb;
+        my $word = random_word();
+        my $count = $params{minreps} +
+                    rand($params{maxreps} - $params{minreps});
+        while ($count > 0)
+        {
+            my $sep = substr($params{separators},
+                             $sepidx % length($params{separators}), 1);
+            $sepidx++;
+            $data .= $sep . $word;
+            $count--;
+        }
+        last unless defined $kb;
     }
     return $data;
 }
@@ -804,81 +804,81 @@ sub check_messages
 
     if (!defined $actual)
     {
-	my $store = $params{store} || $self->{store};
-	$actual = {};
-	$store->read_begin();
-	while (my $msg = $store->read_message())
-	{
-	    my $key = $msg->$keyed_on();
-	    $self->assert(!defined $actual->{$key});
-	    $actual->{$key} = $msg;
-	}
-	$store->read_end();
+        my $store = $params{store} || $self->{store};
+        $actual = {};
+        $store->read_begin();
+        while (my $msg = $store->read_message())
+        {
+            my $key = $msg->$keyed_on();
+            $self->assert(!defined $actual->{$key});
+            $actual->{$key} = $msg;
+        }
+        $store->read_end();
     }
 
     $self->assert_num_equals(scalar keys %$expected, scalar keys %$actual);
 
     foreach my $expmsg (values %$expected)
     {
-	my $key = $expmsg->$keyed_on();
-	xlog "message \"$key\"";
-	my $actmsg = $actual->{$key};
+        my $key = $expmsg->$keyed_on();
+        xlog "message \"$key\"";
+        my $actmsg = $actual->{$key};
 
-	$self->assert_not_null($actmsg);
+        $self->assert_not_null($actmsg);
 
-	if ($check_guid)
-	{
-	    xlog "checking guid";
-	    $self->assert_str_equals($expmsg->get_guid(),
-				     $actmsg->get_guid());
-	}
+        if ($check_guid)
+        {
+            xlog "checking guid";
+            $self->assert_str_equals($expmsg->get_guid(),
+                                     $actmsg->get_guid());
+        }
 
-	# Check required headers
-	foreach my $h (qw(x-cassandane-unique))
-	{
-	    xlog "checking header $h";
-	    $self->assert_not_null($actmsg->get_header($h));
-	    $self->assert_str_equals($expmsg->get_header($h),
-				     $actmsg->get_header($h));
-	}
+        # Check required headers
+        foreach my $h (qw(x-cassandane-unique))
+        {
+            xlog "checking header $h";
+            $self->assert_not_null($actmsg->get_header($h));
+            $self->assert_str_equals($expmsg->get_header($h),
+                                     $actmsg->get_header($h));
+        }
 
-	# if there were optional headers we wished to check, do it here
+        # if there were optional headers we wished to check, do it here
 
-	# check optional string attributes
-	foreach my $a (qw(id uid cid))
-	{
-	    next unless defined $expmsg->get_attribute($a);
-	    xlog "checking attribute $a";
-	    $self->assert_str_equals($expmsg->get_attribute($a),
-				     $actmsg->get_attribute($a));
-	}
+        # check optional string attributes
+        foreach my $a (qw(id uid cid))
+        {
+            next unless defined $expmsg->get_attribute($a);
+            xlog "checking attribute $a";
+            $self->assert_str_equals($expmsg->get_attribute($a),
+                                     $actmsg->get_attribute($a));
+        }
 
-	# check optional structured attributes
-	foreach my $a (qw(flags modseq))
-	{
-	    next unless defined $expmsg->get_attribute($a);
-	    xlog "checking attribute $a";
-	    $self->assert_deep_equals($expmsg->get_attribute($a),
-				      $actmsg->get_attribute($a));
-	}
+        # check optional structured attributes
+        foreach my $a (qw(flags modseq))
+        {
+            next unless defined $expmsg->get_attribute($a);
+            xlog "checking attribute $a";
+            $self->assert_deep_equals($expmsg->get_attribute($a),
+                                      $actmsg->get_attribute($a));
+        }
 
-	# check annotations
-	foreach my $ea ($expmsg->list_annotations())
-	{
-	    xlog "checking annotation ($ea->{entry} $ea->{attrib})";
-	    $self->assert($actmsg->has_annotation($ea));
-	    my $expval = $expmsg->get_annotation($ea);
-	    my $actval = $actmsg->get_annotation($ea);
-	    if (defined $expval)
-	    {
-		$self->assert_not_null($actval);
-		$self->assert_str_equals($expval, $actval);
-	    }
-	    else
-	    {
-		$self->assert_null($actval);
-	    }
-	}
+        # check annotations
+        foreach my $ea ($expmsg->list_annotations())
+        {
+            xlog "checking annotation ($ea->{entry} $ea->{attrib})";
+            $self->assert($actmsg->has_annotation($ea));
+            my $expval = $expmsg->get_annotation($ea);
+            my $actval = $actmsg->get_annotation($ea);
+            if (defined $expval)
+            {
+                $self->assert_not_null($actval);
+                $self->assert_str_equals($expval, $actval);
+            }
+            else
+            {
+                $self->assert_null($actval);
+            }
+        }
     }
 
     return $actual;
@@ -890,8 +890,8 @@ sub _disconnect_all
 
     foreach my $s (@stores)
     {
-	$self->{$s}->disconnect()
-	    if defined $self->{$s};
+        $self->{$s}->disconnect()
+            if defined $self->{$s};
     }
 }
 
@@ -901,11 +901,11 @@ sub _reconnect_all
 
     foreach my $s (@stores)
     {
-	if (defined $self->{$s})
-	{
-	    $self->{$s}->connect();
-	    $self->{$s}->_select();
-	}
+        if (defined $self->{$s})
+        {
+            $self->{$s}->connect();
+            $self->{$s}->_select();
+        }
     }
 }
 
@@ -1000,7 +1000,7 @@ sub run_delayed_expunge
 
     my @cmd = ( 'cyr_expire', '-E', '1', '-X', '0', '-D', '0' );
     push(@cmd, '-v')
-	if get_verbose;
+        if get_verbose;
     $self->{instance}->run_command({ cyrus => 1 }, @cmd);
 
     $self->_reconnect_all();

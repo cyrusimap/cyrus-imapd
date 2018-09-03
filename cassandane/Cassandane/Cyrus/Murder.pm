@@ -114,46 +114,46 @@ sub test_list_specialuse
 
     # create some special-use folders
     foreach my $f (keys %specialuse) {
-	$frontend->create("INBOX.$f");
-	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+        $frontend->create("INBOX.$f");
+        $self->assert_str_equals('ok', $frontend->get_last_completion_response());
 
-	$frontend->subscribe("INBOX.$f");
-	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+        $frontend->subscribe("INBOX.$f");
+        $self->assert_str_equals('ok', $frontend->get_last_completion_response());
 
-	$frontend->setmetadata("INBOX.$f",
-			       '/private/specialuse', "\\$f");
-	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+        $frontend->setmetadata("INBOX.$f",
+                               '/private/specialuse', "\\$f");
+        $self->assert_str_equals('ok', $frontend->get_last_completion_response());
     }
 
     # create some other non special-use folders (control group)
     foreach my $f (keys %other) {
-	$frontend->create("INBOX.$f");
-	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+        $frontend->create("INBOX.$f");
+        $self->assert_str_equals('ok', $frontend->get_last_completion_response());
 
-	$frontend->subscribe("INBOX.$f");
-	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+        $frontend->subscribe("INBOX.$f");
+        $self->assert_str_equals('ok', $frontend->get_last_completion_response());
     }
 
     # ask the backend about them
     my $bresult = $backend->list([qw(SPECIAL-USE)], "", "*",
-	'RETURN', [qw(SUBSCRIBED)]);
+        'RETURN', [qw(SUBSCRIBED)]);
     $self->assert_str_equals('ok', $backend->get_last_completion_response());
     xlog Dumper $bresult;
 
     # check the responses
     my %found;
     foreach my $r (@{$bresult}) {
-	my ($flags, $sep, $name) = @{$r};
-	# carve out the interesting part of the name
-	$self->assert_matches(qr/^INBOX$sep/, $name);
-	$name = substr($name, 6);
-	$found{$name} = 1;
-	# only want specialuse folders
-	$self->assert(exists $specialuse{$name});
-	# must be flagged with appropriate flag
-	$self->assert_equals(1, scalar grep { $_ eq "\\$name" } @{$flags});
-	# must be flagged with \subscribed
-	$self->assert_equals(1, scalar grep { $_ eq '\\Subscribed' } @{$flags});
+        my ($flags, $sep, $name) = @{$r};
+        # carve out the interesting part of the name
+        $self->assert_matches(qr/^INBOX$sep/, $name);
+        $name = substr($name, 6);
+        $found{$name} = 1;
+        # only want specialuse folders
+        $self->assert(exists $specialuse{$name});
+        # must be flagged with appropriate flag
+        $self->assert_equals(1, scalar grep { $_ eq "\\$name" } @{$flags});
+        # must be flagged with \subscribed
+        $self->assert_equals(1, scalar grep { $_ eq '\\Subscribed' } @{$flags});
     }
 
     # make sure no expected responses were missing
@@ -161,7 +161,7 @@ sub test_list_specialuse
 
     # ask the frontend about them
     my $fresult = $frontend->list([qw(SPECIAL-USE)], "", "*",
-	'RETURN', [qw(SUBSCRIBED)]);
+        'RETURN', [qw(SUBSCRIBED)]);
     $self->assert_str_equals('ok', $frontend->get_last_completion_response());
     xlog Dumper $fresult;
 
@@ -181,18 +181,18 @@ sub test_xlist
 
     # create some special-use folders
     foreach my $f (keys %specialuse) {
-	$frontend->create("INBOX.$f");
-	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+        $frontend->create("INBOX.$f");
+        $self->assert_str_equals('ok', $frontend->get_last_completion_response());
 
-	$frontend->setmetadata("INBOX.$f",
-			       '/private/specialuse', "\\$f");
-	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+        $frontend->setmetadata("INBOX.$f",
+                               '/private/specialuse', "\\$f");
+        $self->assert_str_equals('ok', $frontend->get_last_completion_response());
     }
 
     # create some other non special-use folders (control group)
     foreach my $f (keys %other) {
-	$frontend->create("INBOX.$f");
-	$self->assert_str_equals('ok', $frontend->get_last_completion_response());
+        $frontend->create("INBOX.$f");
+        $self->assert_str_equals('ok', $frontend->get_last_completion_response());
     }
 
     # ask the backend about them
@@ -203,27 +203,27 @@ sub test_xlist
     # check the responses
     my %found;
     foreach my $r (@{$bresult}) {
-	my ($flags, $sep, $name) = @{$r};
-	if ($name eq 'INBOX') {
-	    $found{$name} = 1;
-	    # must be flagged with \Inbox
-	    $self->assert_equals(1, scalar grep { $_ eq '\\Inbox' } @{$flags});
-	}
-	else {
-	    # carve out the interesting part of the name
-	    $self->assert_matches(qr/^INBOX$sep/, $name);
-	    $name = substr($name, 6);
-	    $found{$name} = 1;
-	    $self->assert(exists $specialuse{$name} or exists $other{$name});
-	    if (exists $specialuse{$name}) {
-		# must be flagged with appropriate flag
-		$self->assert_equals(1, scalar grep { $_ eq "\\$name" } @{$flags});
-	    }
-	    else {
-		# must not be flagged with name-based flag
-		$self->assert_equals(0, scalar grep { $_ eq "\\$name" } @{$flags});
-	    }
-	}
+        my ($flags, $sep, $name) = @{$r};
+        if ($name eq 'INBOX') {
+            $found{$name} = 1;
+            # must be flagged with \Inbox
+            $self->assert_equals(1, scalar grep { $_ eq '\\Inbox' } @{$flags});
+        }
+        else {
+            # carve out the interesting part of the name
+            $self->assert_matches(qr/^INBOX$sep/, $name);
+            $name = substr($name, 6);
+            $found{$name} = 1;
+            $self->assert(exists $specialuse{$name} or exists $other{$name});
+            if (exists $specialuse{$name}) {
+                # must be flagged with appropriate flag
+                $self->assert_equals(1, scalar grep { $_ eq "\\$name" } @{$flags});
+            }
+            else {
+                # must not be flagged with name-based flag
+                $self->assert_equals(0, scalar grep { $_ eq "\\$name" } @{$flags});
+            }
+        }
     }
 
     # make sure no expected responses were missing
@@ -263,14 +263,14 @@ sub test_move_to_backend_nonexistent
 
     my $f_folders = $frontend->list('', '*');
     $self->assert_deep_equals(
-	[[[ '\\HasChildren' ], '.', 'INBOX' ],
-	 [[ '\\HasNoChildren' ], '.', 'INBOX.dest' ]],
-	$f_folders);
+        [[[ '\\HasChildren' ], '.', 'INBOX' ],
+         [[ '\\HasNoChildren' ], '.', 'INBOX.dest' ]],
+        $f_folders);
 
     my $b_folders = $backend->list('', '*');
     $self->assert_deep_equals(
-	[[[ '\\HasNoChildren' ], '.', 'INBOX' ]],
-	$b_folders);
+        [[[ '\\HasNoChildren' ], '.', 'INBOX' ]],
+        $b_folders);
 
     # try to move a message to dest
     $frontend->move($exp{A}->get_attribute('uid'), $dest_folder);
@@ -305,13 +305,13 @@ sub test_move_to_nonexistent
     # make sure we don't unexpectedly have the nonexistent folder
     my $f_folders = $frontend->list('', '*');
     $self->assert_deep_equals(
-	[[[ '\\HasNoChildren' ], '.', 'INBOX' ]],
-	$f_folders);
+        [[[ '\\HasNoChildren' ], '.', 'INBOX' ]],
+        $f_folders);
 
     my $b_folders = $backend->list('', '*');
     $self->assert_deep_equals(
-	[[[ '\\HasNoChildren' ], '.', 'INBOX' ]],
-	$b_folders);
+        [[[ '\\HasNoChildren' ], '.', 'INBOX' ]],
+        $b_folders);
 
     # try to move a message to dest
     $frontend->move($exp{A}->get_attribute('uid'), $dest_folder);

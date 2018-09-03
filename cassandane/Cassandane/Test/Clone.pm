@@ -107,7 +107,7 @@ sub test_complex
 {
     my ($self) = @_;
     my $a = { foo => [ { x => 42, y => 123 } ],
-	      bar => { quux => 37, foonly => 475 } };
+              bar => { quux => 37, foonly => 475 } };
     my $b = clone($a);
     $self->assert_deep_equals($a, $b);
 }

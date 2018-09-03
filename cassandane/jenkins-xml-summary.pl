@@ -19,11 +19,11 @@
 #     endorse or promote products derived from this software without
 #     prior written permission. For permission or any legal
 #     details, please contact
-# 	Opera Software Australia Pty. Ltd.
-# 	Level 50, 120 Collins St
-# 	Melbourne 3000
-# 	Victoria
-# 	Australia
+#       Opera Software Australia Pty. Ltd.
+#       Level 50, 120 Collins St
+#       Melbourne 3000
+#       Victoria
+#       Australia
 #
 #  4. Redistributions of any form whatsoever must retain the following
 #     acknowledgment:
@@ -91,41 +91,41 @@ foreach my $file (@report_files)
 
     my ($xsuite, @wtf) = $doc->getElementsByTagName('testsuite', 0);
     die "Invalid document $file"
-	if (!defined $xsuite || scalar(@wtf));
+        if (!defined $xsuite || scalar(@wtf));
 
     my $suite = $xsuite->getAttribute('name');
 
     foreach my $xcase ( $xsuite->getElementsByTagName('testcase', 0) )
     {
-	my $case = $xcase->getAttribute('name');
-	$case =~ s/^test_//;
+        my $case = $xcase->getAttribute('name');
+        $case =~ s/^test_//;
 
-	my $status = 1;
-	$nrun++;
-	my (@xfails) = $xcase->getElementsByTagName('failure', 0);
-	if (scalar @xfails)
-	{
-	    $nfailures++;
-	    $status = 0;
-	}
-	my (@xerrors) = $xcase->getElementsByTagName('error', 0);
-	if (scalar @xerrors)
-	{
-	    $nerrors++;
-	    $status = 0;
-	}
+        my $status = 1;
+        $nrun++;
+        my (@xfails) = $xcase->getElementsByTagName('failure', 0);
+        if (scalar @xfails)
+        {
+            $nfailures++;
+            $status = 0;
+        }
+        my (@xerrors) = $xcase->getElementsByTagName('error', 0);
+        if (scalar @xerrors)
+        {
+            $nerrors++;
+            $status = 0;
+        }
 
-	next if $status;
+        next if $status;
 
-	print "\n$suite.$case\n";
+        print "\n$suite.$case\n";
 
-	if (defined $build_url)
-	{
-	    my $quoted_suite = $suite;
-	    $quoted_suite =~ s/[:\/]/_/g;
-	    my $url = "$build_url/testReport/%28root%29/$quoted_suite/test_$case/";
-	    print "    $url\n";
-	}
+        if (defined $build_url)
+        {
+            my $quoted_suite = $suite;
+            $quoted_suite =~ s/[:\/]/_/g;
+            my $url = "$build_url/testReport/%28root%29/$quoted_suite/test_$case/";
+            print "    $url\n";
+        }
     }
 }
 print "\n$nrun run, $nfailures failures, $nerrors errors\n";

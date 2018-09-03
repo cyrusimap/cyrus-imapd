@@ -47,17 +47,17 @@ sub new
     my $class = shift;
     my %params = @_;
     my $self = {
-	name => undef,
-	localpart => undef,
-	domain => undef,
+        name => undef,
+        localpart => undef,
+        domain => undef,
     };
 
     $self->{name} = $params{name}
-	if defined $params{name};
+        if defined $params{name};
     $self->{localpart} = $params{localpart}
-	if defined $params{localpart};
+        if defined $params{localpart};
     $self->{domain} = $params{domain}
-	if defined $params{domain};
+        if defined $params{domain};
 
     bless $self, $class;
     return $self;
@@ -92,7 +92,7 @@ sub as_string
     my ($self) = @_;
     my $s = '';
     $s .= $self->{name} . ' '
-	if defined $self->{name};
+        if defined $self->{name};
     $s .= '<' . $self->address() . '>';
     return $s;
 }

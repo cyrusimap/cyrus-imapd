@@ -104,13 +104,13 @@ sub test_address_stringification
     my $m = Cassandane::Message->new();
     $m->add_header('subject', 'Hello World');
     $m->add_header('From', Cassandane::Address->new(
-	    name => 'Fred J. Bloggs',
-	    localpart => 'fbloggs',
-	    domain => 'fastmail.fm'));
+            name => 'Fred J. Bloggs',
+            localpart => 'fbloggs',
+            domain => 'fastmail.fm'));
     $self->assert_null($m->get_headers('to'));
     $self->assert_null($m->get_body);
     $self->assert_str_equals('Fred J. Bloggs <fbloggs@fastmail.fm>',
-			     $m->get_headers('from')->[0]);
+                             $m->get_headers('from')->[0]);
     my $exp = <<'EOF';
 Subject: Hello World
 From: Fred J. Bloggs <fbloggs@fastmail.fm>
@@ -128,21 +128,21 @@ sub test_address_list_stringification
     my $m = Cassandane::Message->new();
     $m->add_header('subject', 'Hello World');
     my @tos = (
-	Cassandane::Address->new(
-	    name => 'Sarah Jane Smith',
-	    localpart => 'sjsmith',
-	    domain => 'tard.is'),
-	Cassandane::Address->new(
-	    name => 'Genghis Khan',
-	    localpart => 'gkhan',
-	    domain => 'horde.mo'),
-	);
+        Cassandane::Address->new(
+            name => 'Sarah Jane Smith',
+            localpart => 'sjsmith',
+            domain => 'tard.is'),
+        Cassandane::Address->new(
+            name => 'Genghis Khan',
+            localpart => 'gkhan',
+            domain => 'horde.mo'),
+        );
     $m->add_header('To', join(', ', @tos));
     $self->assert_null($m->get_body());
     $self->assert_null($m->get_headers('from'));
     $self->assert_str_equals(
-	'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
-	$m->get_headers('to')->[0]);
+        'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
+        $m->get_headers('to')->[0]);
     my $exp = <<'EOF';
 Subject: Hello World
 To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
@@ -163,9 +163,9 @@ sub test_multiple_headers
     $m->add_header("received", "from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100");
     $m->add_header("received", "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100");
     $self->assert_deep_equals([
-	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100",
-	"from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
-	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
+        "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100",
+        "from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
+        "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
     ], $m->get_headers("received"));
     my $exp = <<'EOF';
 Subject: Hello World
@@ -187,12 +187,12 @@ sub test_replacing_headers
     my $m = Cassandane::Message->new();
     $m->add_header('subject', 'Hello World');
     $self->assert_str_equals(
-	'Hello World',
-	$m->get_header('subject'));
+        'Hello World',
+        $m->get_header('subject'));
     $m->set_headers('subject', 'No, scratch that');
     $self->assert_str_equals(
-	'No, scratch that',
-	$m->get_header('subject'));
+        'No, scratch that',
+        $m->get_header('subject'));
     my $exp = <<'EOF';
 Subject: No, scratch that
 
@@ -271,36 +271,36 @@ EOF
 
     $m->set_lines(@lines);
     $self->assert_str_equals(
-	'Fred J. Bloggs <fbloggs@fastmail.fm>',
-	 $m->get_headers('from')->[0]);
+        'Fred J. Bloggs <fbloggs@fastmail.fm>',
+         $m->get_headers('from')->[0]);
     $self->assert_str_equals(
-	'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
-	$m->get_headers('to')->[0]);
+        'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
+        $m->get_headers('to')->[0]);
     $self->assert_str_equals(
-	'Hello World',
-	$m->get_headers('Subject')->[0]);
+        'Hello World',
+        $m->get_headers('Subject')->[0]);
     $self->assert_deep_equals([
-	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
-	"from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
-	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
+        "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
+        "from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
+        "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
     ], $m->get_headers('received'));
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
 
     $m = Cassandane::Message->new(lines => \@lines);
     $self->assert_str_equals(
-	'Fred J. Bloggs <fbloggs@fastmail.fm>',
-	 $m->get_headers('from')->[0]);
+        'Fred J. Bloggs <fbloggs@fastmail.fm>',
+         $m->get_headers('from')->[0]);
     $self->assert_str_equals(
-	'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
-	$m->get_headers('to')->[0]);
+        'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
+        $m->get_headers('to')->[0]);
     $self->assert_str_equals(
-	'Hello World',
-	$m->get_headers('Subject')->[0]);
+        'Hello World',
+        $m->get_headers('Subject')->[0]);
     $self->assert_deep_equals([
-	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
-	"from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
-	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
+        "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
+        "from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
+        "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
     ], $m->get_headers('received'));
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
@@ -332,36 +332,36 @@ EOF
 
     $m->set_raw($txt);
     $self->assert_str_equals(
-	'Fred J. Bloggs <fbloggs@fastmail.fm>',
-	 $m->get_headers('from')->[0]);
+        'Fred J. Bloggs <fbloggs@fastmail.fm>',
+         $m->get_headers('from')->[0]);
     $self->assert_str_equals(
-	'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
-	$m->get_headers('to')->[0]);
+        'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
+        $m->get_headers('to')->[0]);
     $self->assert_str_equals(
-	'Hello World',
-	$m->get_headers('Subject')->[0]);
+        'Hello World',
+        $m->get_headers('Subject')->[0]);
     $self->assert_deep_equals([
-	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
-	"from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
-	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
+        "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
+        "from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
+        "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
     ], $m->get_headers('received'));
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
 
     $m = Cassandane::Message->new(raw => $txt);
     $self->assert_str_equals(
-	'Fred J. Bloggs <fbloggs@fastmail.fm>',
-	 $m->get_headers('from')->[0]);
+        'Fred J. Bloggs <fbloggs@fastmail.fm>',
+         $m->get_headers('from')->[0]);
     $self->assert_str_equals(
-	'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
-	$m->get_headers('to')->[0]);
+        'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
+        $m->get_headers('to')->[0]);
     $self->assert_str_equals(
-	'Hello World',
-	$m->get_headers('Subject')->[0]);
+        'Hello World',
+        $m->get_headers('Subject')->[0]);
     $self->assert_deep_equals([
-	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
-	"from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
-	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
+        "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
+        "from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
+        "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
     ], $m->get_headers('received'));
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
@@ -399,22 +399,22 @@ sub test_attributes
     $m->set_internaldate('15-Oct-2010 03:19:52 +1100');
     $self->assert($m->has_attribute('internaldate'));
     $self->assert_str_equals('15-Oct-2010 03:19:52 +1100',
-			     $m->get_attribute('internaldate'));
+                             $m->get_attribute('internaldate'));
     $m->set_internaldate(undef);
     $self->assert($m->has_attribute('internaldate'));
     $self->assert_null($m->get_attribute('internaldate'));
     my $dt = DateTime->new(
-			  year => 2010,
-			  month => 10,
-			  day => 15,
-			  hour => 3,
-			  minute => 19,
-			  second => 47,
-			  time_zone => 'Australia/Melbourne');
+                          year => 2010,
+                          month => 10,
+                          day => 15,
+                          hour => 3,
+                          minute => 19,
+                          second => 47,
+                          time_zone => 'Australia/Melbourne');
     $m->set_internaldate($dt);
     $self->assert($m->has_attribute('internaldate'));
     $self->assert_str_equals(to_rfc3501($dt),
-			     $m->get_attribute('internaldate'));
+                             $m->get_attribute('internaldate'));
 
     $m = Cassandane::Message->new(attrs => { UID => 456 });
     $self->assert($m->has_attribute('uid'));
@@ -454,42 +454,42 @@ EOF
 
     $m->set_lines(@lines);
     $self->assert_str_equals(
-	'Fred J. Bloggs <fbloggs@fastmail.fm>',
-	 $m->get_headers('from')->[0]);
+        'Fred J. Bloggs <fbloggs@fastmail.fm>',
+         $m->get_headers('from')->[0]);
     $self->assert_str_equals(
-	'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
-	$m->get_headers('to')->[0]);
+        'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
+        $m->get_headers('to')->[0]);
     $self->assert_str_equals(
-	'Foonly',
-	$m->get_headers('X-Foo_Bar.Baz&Quux')->[0]);
+        'Foonly',
+        $m->get_headers('X-Foo_Bar.Baz&Quux')->[0]);
     $self->assert_str_equals(
-	'Hello World',
-	$m->get_headers('Subject')->[0]);
+        'Hello World',
+        $m->get_headers('Subject')->[0]);
     $self->assert_deep_equals([
-	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
-	"from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
-	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
+        "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
+        "from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
+        "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
     ], $m->get_headers('received'));
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
 
     $m = Cassandane::Message->new(lines => \@lines);
     $self->assert_str_equals(
-	'Fred J. Bloggs <fbloggs@fastmail.fm>',
-	 $m->get_headers('from')->[0]);
+        'Fred J. Bloggs <fbloggs@fastmail.fm>',
+         $m->get_headers('from')->[0]);
     $self->assert_str_equals(
-	'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
-	$m->get_headers('to')->[0]);
+        'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>',
+        $m->get_headers('to')->[0]);
     $self->assert_str_equals(
-	'Foonly',
-	$m->get_headers('X-Foo_Bar.Baz&Quux')->[0]);
+        'Foonly',
+        $m->get_headers('X-Foo_Bar.Baz&Quux')->[0]);
     $self->assert_str_equals(
-	'Hello World',
-	$m->get_headers('Subject')->[0]);
+        'Hello World',
+        $m->get_headers('Subject')->[0]);
     $self->assert_deep_equals([
-	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
-	"from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
-	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
+        "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
+        "from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
+        "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
     ], $m->get_headers('received'));
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
@@ -522,9 +522,9 @@ EOF
     $self->assert_str_equals('Hello World', $m2->get_header('subject'));
 
     my $addr = Cassandane::Address->new(
-	    name => 'Fred J. Bloggs',
-	    localpart => 'fbloggs',
-	    domain => 'fastmail.fm');
+            name => 'Fred J. Bloggs',
+            localpart => 'fbloggs',
+            domain => 'fastmail.fm');
     $m->add_header('From', $addr);
     $self->assert_str_equals($addr->as_string, $m->get_header('from'));
     $self->assert_null($m2->get_header('from'));
@@ -546,60 +546,60 @@ sub test_base_subject
     my ($self) = @_;
 
     my @testcases = (
-	'Hello World' => 'Hello World',
-	'  Hello World' => 'Hello World',
-	'Hello World   ' => 'Hello World',
-	'    Hello World   ' => 'Hello World',
-	'    Hello   World   ' => 'Hello World',
-	" \t\t  Hello \t\t World \t\t " => 'Hello World',
-	're: Hello World' => 'Hello World',
-	'Re: Hello World' => 'Hello World',
-	'RE: Hello World' => 'Hello World',
-	're : Hello World' => 'Hello World',
-	'Re : Hello World' => 'Hello World',
-	'RE : Hello World' => 'Hello World',
-	"re \t : Hello World" => 'Hello World',
-	"Re \t : Hello World" => 'Hello World',
-	"RE \t : Hello World" => 'Hello World',
-	'fw: Hello World' => 'Hello World',
-	'Fw: Hello World' => 'Hello World',
-	'FW: Hello World' => 'Hello World',
-	'fw : Hello World' => 'Hello World',
-	'Fw : Hello World' => 'Hello World',
-	'FW : Hello World' => 'Hello World',
-	"fw \t : Hello World" => 'Hello World',
-	"Fw \t : Hello World" => 'Hello World',
-	"FW \t : Hello World" => 'Hello World',
-	'fwd: Hello World' => 'Hello World',
-	'Fwd: Hello World' => 'Hello World',
-	'FWD: Hello World' => 'Hello World',
-	'fwd : Hello World' => 'Hello World',
-	'Fwd : Hello World' => 'Hello World',
-	'FWD : Hello World' => 'Hello World',
-	"fwd \t : Hello World" => 'Hello World',
-	"Fwd \t : Hello World" => 'Hello World',
-	"FWD \t : Hello World" => 'Hello World',
-	"Hello World (fwd)" => 'Hello World',
-	"Hello World (fwd) \t " => 'Hello World',
-	"Hello World \t  \t (fwd)" => 'Hello World',
-	"Hello World (FWD) \t" => 'Hello World',
-	"Hello World \t\t  (FWD)" => 'Hello World',
-	"Hello World (FWD)   " => 'Hello World',
-	" \t\t     Hello World" => "Hello World",
-	"[PATCH]Hello World" => "Hello World",
-	"[PATCH] Hello World" => "Hello World",
-	"\t [PATCH] \t Hello World" => "Hello World",
-	"[RFC][PATCH][WTF]Hello World" => "Hello World",
-	"  [RFC] [PATCH]   [WTF]    Hello World" => "Hello World",
+        'Hello World' => 'Hello World',
+        '  Hello World' => 'Hello World',
+        'Hello World   ' => 'Hello World',
+        '    Hello World   ' => 'Hello World',
+        '    Hello   World   ' => 'Hello World',
+        " \t\t  Hello \t\t World \t\t " => 'Hello World',
+        're: Hello World' => 'Hello World',
+        'Re: Hello World' => 'Hello World',
+        'RE: Hello World' => 'Hello World',
+        're : Hello World' => 'Hello World',
+        'Re : Hello World' => 'Hello World',
+        'RE : Hello World' => 'Hello World',
+        "re \t : Hello World" => 'Hello World',
+        "Re \t : Hello World" => 'Hello World',
+        "RE \t : Hello World" => 'Hello World',
+        'fw: Hello World' => 'Hello World',
+        'Fw: Hello World' => 'Hello World',
+        'FW: Hello World' => 'Hello World',
+        'fw : Hello World' => 'Hello World',
+        'Fw : Hello World' => 'Hello World',
+        'FW : Hello World' => 'Hello World',
+        "fw \t : Hello World" => 'Hello World',
+        "Fw \t : Hello World" => 'Hello World',
+        "FW \t : Hello World" => 'Hello World',
+        'fwd: Hello World' => 'Hello World',
+        'Fwd: Hello World' => 'Hello World',
+        'FWD: Hello World' => 'Hello World',
+        'fwd : Hello World' => 'Hello World',
+        'Fwd : Hello World' => 'Hello World',
+        'FWD : Hello World' => 'Hello World',
+        "fwd \t : Hello World" => 'Hello World',
+        "Fwd \t : Hello World" => 'Hello World',
+        "FWD \t : Hello World" => 'Hello World',
+        "Hello World (fwd)" => 'Hello World',
+        "Hello World (fwd) \t " => 'Hello World',
+        "Hello World \t  \t (fwd)" => 'Hello World',
+        "Hello World (FWD) \t" => 'Hello World',
+        "Hello World \t\t  (FWD)" => 'Hello World',
+        "Hello World (FWD)   " => 'Hello World',
+        " \t\t     Hello World" => "Hello World",
+        "[PATCH]Hello World" => "Hello World",
+        "[PATCH] Hello World" => "Hello World",
+        "\t [PATCH] \t Hello World" => "Hello World",
+        "[RFC][PATCH][WTF]Hello World" => "Hello World",
+        "  [RFC] [PATCH]   [WTF]    Hello World" => "Hello World",
     );
 
     while (@testcases)
     {
-	my $in = shift @testcases;
-	my $exp = shift @testcases;
-	my $out = base_subject($in);
-	xlog "base_subject(\"$in\") = \"$out\"";
-	$self->assert_str_equals($exp, $out);
+        my $in = shift @testcases;
+        my $exp = shift @testcases;
+        my $out = base_subject($in);
+        xlog "base_subject(\"$in\") = \"$out\"";
+        $self->assert_str_equals($exp, $out);
     }
 
 }
@@ -650,9 +650,9 @@ sub test_attributes_from_fetch
 {
     my ($self) = @_;
     my $m = Cassandane::Message->new(attrs => {
-				foo => 'ethical',
-				bar => 'pitchfork',
-				});
+                                foo => 'ethical',
+                                bar => 'pitchfork',
+                                });
 
     $self->assert($m->has_attribute('foo'));
     $self->assert_str_equals('ethical', $m->get_attribute('foo'));
@@ -729,9 +729,9 @@ sub test_annotations
     @aa = $m->list_annotations();
     @aa = sort { $a->{entry} cmp $b->{entry} } @aa;
     $self->assert_deep_equals([
-	    {entry => $e1, attrib => $a1},
-	    {entry => $e2, attrib => $a2},
-	], \@aa);
+            {entry => $e1, attrib => $a1},
+            {entry => $e2, attrib => $a2},
+        ], \@aa);
 }
 
 sub test_annotations_from_fetch
@@ -744,10 +744,10 @@ sub test_annotations_from_fetch
     my $a2 = 'value.priv';
 
     my $m = Cassandane::Message->new(attrs => {
-			annotation => {
-			    $e1 => { $a1 => 'whatever' },
-			    $e2 => { $a2 => 'sartorial' }
-			}});
+                        annotation => {
+                            $e1 => { $a1 => 'whatever' },
+                            $e2 => { $a2 => 'sartorial' }
+                        }});
 
     $self->assert($m->has_annotation($e1, $a1));
     $self->assert($m->has_annotation($e2, $a2));
@@ -760,9 +760,9 @@ sub test_annotations_from_fetch
     my @aa = $m->list_annotations();
     @aa = sort { $a->{entry} cmp $b->{entry} } @aa;
     $self->assert_deep_equals([
-	    {entry => $e1, attrib => $a1},
-	    {entry => $e2, attrib => $a2},
-	], \@aa);
+            {entry => $e1, attrib => $a1},
+            {entry => $e2, attrib => $a2},
+        ], \@aa);
 
 }
 
@@ -790,10 +790,10 @@ EOF
     map { $_ .= "\r\n" } @lines;
 
     my $m = Cassandane::Message->new(
-		lines => \@lines,
-		attrs => {
-		    uid => 42
-		});
+                lines => \@lines,
+                attrs => {
+                    uid => 42
+                });
 
     $self->assert_str_equals('Fred J. Bloggs <fbloggs@fastmail.fm>', $m->from());
     $self->assert_str_equals('Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>', $m->to());
@@ -825,7 +825,7 @@ sub test_header_normalisation
     $m->add_header('x-cliche', "chambray\rdenim");
 
     $m->set_headers('x-vegan',
-	"helvetica\rwayfarers keytar\nshoreditch\r\n \t portland");
+        "helvetica\rwayfarers keytar\nshoreditch\r\n \t portland");
 
     $m->set_body("This is a message to let you know\r\nthat I'm alive and well\r\n");
     my $exp = <<'EOF';
@@ -859,9 +859,9 @@ sub test_add_empty
     $m->add_header('subject', 'Hello World');
     $m->add_header('X-Justin-Beiber', "");
     $m->add_header('From', Cassandane::Address->new(
-	    name => 'Fred J. Bloggs',
-	    localpart => 'fbloggs',
-	    domain => 'fastmail.fm'));
+            name => 'Fred J. Bloggs',
+            localpart => 'fbloggs',
+            domain => 'fastmail.fm'));
     $m->set_body("This is a message to let you know\r\nthat I'm alive and well\r\n");
     my $exp = <<'EOF';
 Subject: Hello World

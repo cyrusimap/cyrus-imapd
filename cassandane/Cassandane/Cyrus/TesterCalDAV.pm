@@ -1481,8 +1481,8 @@ sub new
     my $buildinfo = Cassandane::BuildInfo->new();
 
     if (not $buildinfo->get('component', 'httpd')) {
-	# don't bother setting up, we're not running tests anyway
-	return $class->SUPER::new({}, @_);
+        # don't bother setting up, we're not running tests anyway
+        return $class->SUPER::new({}, @_);
     }
 
     my $config = Cassandane::Config->default()->clone();
@@ -1504,8 +1504,8 @@ sub set_up
     $self->SUPER::set_up();
 
     if (not $self->{instance}->{buildinfo}->get('component', 'httpd')) {
-	# don't bother setting up further, we're not running tests anyway
-	return;
+        # don't bother setting up further, we're not running tests anyway
+        return;
     }
 
     my $admintalk = $self->{adminstore}->get_client();
@@ -1530,10 +1530,10 @@ sub set_up
             expandurl => 1,
         );
 
-	eval {
-	    # this fails on older Cyruses -- but don't crash during set_up!
-	    $CalDAV->UpdateAddressSet($displayname, "$name\@example.com");
-	};
+        eval {
+            # this fails on older Cyruses -- but don't crash during set_up!
+            $CalDAV->UpdateAddressSet($displayname, "$name\@example.com");
+        };
     }
 }
 

@@ -87,54 +87,54 @@ sub new
     my $cassini = Cassandane::Cassini->instance();
 
     my $self = {
-	name => undef,
-	buildinfo => undef,
-	basedir => undef,
-	installation => 'default',
-	cyrus_prefix => undef,
-	cyrus_destdir => undef,
-	config => Cassandane::Config->default()->clone(),
-	starts => [],
-	services => {},
-	events => [],
-	daemons => {},
-	re_use_dir => 0,
-	setup_mailbox => 1,
-	persistent => 0,
-	_children => {},
-	_stopped => 0,
-	description => 'unknown',
-	_shutdowncallbacks => [],
-	_started => 0,
-	_pwcheck => $cassini->val('cassandane', 'pwcheck', 'alwaystrue'),
+        name => undef,
+        buildinfo => undef,
+        basedir => undef,
+        installation => 'default',
+        cyrus_prefix => undef,
+        cyrus_destdir => undef,
+        config => Cassandane::Config->default()->clone(),
+        starts => [],
+        services => {},
+        events => [],
+        daemons => {},
+        re_use_dir => 0,
+        setup_mailbox => 1,
+        persistent => 0,
+        _children => {},
+        _stopped => 0,
+        description => 'unknown',
+        _shutdowncallbacks => [],
+        _started => 0,
+        _pwcheck => $cassini->val('cassandane', 'pwcheck', 'alwaystrue'),
     };
 
     $self->{name} = $params{name}
-	if defined $params{name};
+        if defined $params{name};
     $self->{basedir} = $params{basedir}
-	if defined $params{basedir};
+        if defined $params{basedir};
     $self->{installation} = $params{installation}
-	if defined $params{installation};
+        if defined $params{installation};
     $self->{cyrus_prefix} = $cassini->val("cyrus $self->{installation}",
-					  'prefix', '/usr/cyrus');
+                                          'prefix', '/usr/cyrus');
     $self->{cyrus_prefix} = $params{cyrus_prefix}
-	if defined $params{cyrus_prefix};
+        if defined $params{cyrus_prefix};
     $self->{cyrus_destdir} = $cassini->val("cyrus $self->{installation}",
-					  'destdir', '');
+                                          'destdir', '');
     $self->{cyrus_destdir} = $params{cyrus_destdir}
-	if defined $params{cyrus_destdir};
+        if defined $params{cyrus_destdir};
     $self->{config} = $params{config}->clone()
-	if defined $params{config};
+        if defined $params{config};
     $self->{re_use_dir} = $params{re_use_dir}
-	if defined $params{re_use_dir};
+        if defined $params{re_use_dir};
     $self->{setup_mailbox} = $params{setup_mailbox}
-	if defined $params{setup_mailbox};
+        if defined $params{setup_mailbox};
     $self->{persistent} = $params{persistent}
-	if defined $params{persistent};
+        if defined $params{persistent};
     $self->{description} = $params{description}
-	if defined $params{description};
+        if defined $params{description};
     $self->{pwcheck} = $params{pwcheck}
-	if defined $params{pwcheck};
+        if defined $params{pwcheck};
 
     # XXX - get testcase name from caller, to apply even finer
     # configuration from cassini ?
@@ -153,81 +153,81 @@ sub get_version
     $installation = 'default' if not defined $installation;
 
     if (exists $cached_version{$installation}) {
-	return @{$cached_version{$installation}} if wantarray;
-	return $cached_sversion{$installation};
+        return @{$cached_version{$installation}} if wantarray;
+        return $cached_sversion{$installation};
     }
 
     my $cassini = Cassandane::Cassini->instance();
 
     my $cyrus_prefix = $cassini->val("cyrus $installation",
-				     'prefix', '/usr/cyrus');
+                                     'prefix', '/usr/cyrus');
     my $cyrus_destdir = $cassini->val("cyrus $installation",
-				      'destdir', '');
+                                      'destdir', '');
 
     my $cyrus_master;
     foreach my $d (qw( bin sbin libexec libexec/cyrus-imapd lib cyrus/bin ))
     {
-	my $try = "$cyrus_destdir$cyrus_prefix/$d/master";
-	if (-x $try) {
-	    $cyrus_master = $try;
-	    last;
-	}
+        my $try = "$cyrus_destdir$cyrus_prefix/$d/master";
+        if (-x $try) {
+            $cyrus_master = $try;
+            last;
+        }
     }
 
     die "unable to locate master binary" if not defined $cyrus_master;
 
     my $version;
     {
-	open my $fh, '-|', "$cyrus_master -V"
-	    or die "unable to execute '$cyrus_master -V': $!";
-	local $/;
-	$version = <$fh>;
-	close $fh;
+        open my $fh, '-|', "$cyrus_master -V"
+            or die "unable to execute '$cyrus_master -V': $!";
+        local $/;
+        $version = <$fh>;
+        close $fh;
     }
 
     if (not $version) {
-	# Cyrus version might be too old for 'master -V'
-	# Try to squirrel a version out of libcyrus pkgconfig file
-	open my $fh, '<', "$cyrus_destdir$cyrus_prefix/lib/pkgconfig/libcyrus.pc";
-	while (<$fh>) {
-	    $version = $_ if m/^Version:/;
-	}
-	close $fh;
+        # Cyrus version might be too old for 'master -V'
+        # Try to squirrel a version out of libcyrus pkgconfig file
+        open my $fh, '<', "$cyrus_destdir$cyrus_prefix/lib/pkgconfig/libcyrus.pc";
+        while (<$fh>) {
+            $version = $_ if m/^Version:/;
+        }
+        close $fh;
     }
 
     #cyrus-imapd 3.0.0-beta3-114-g5fa1dbc-dirty
     if ($version =~ m/^cyrus-imapd (\d+)\.(\d+).(\d+)(?:-(.*))?$/) {
-	my ($maj, $min, $rev, $extra) = ($1, $2, $3, $4);
-	my $pluscommits = 0;
-	if (defined $extra && $extra =~ m/(\d+)-g[a-fA-F0-9]+(?:-dirty)?$/) {
-	    $pluscommits = $1;
-	}
-	$cached_version{$installation} = [ 0 + $maj,
-					   0 + $min,
-					   0 + $rev,
-					   0 + $pluscommits,
-					   $extra ];
+        my ($maj, $min, $rev, $extra) = ($1, $2, $3, $4);
+        my $pluscommits = 0;
+        if (defined $extra && $extra =~ m/(\d+)-g[a-fA-F0-9]+(?:-dirty)?$/) {
+            $pluscommits = $1;
+        }
+        $cached_version{$installation} = [ 0 + $maj,
+                                           0 + $min,
+                                           0 + $rev,
+                                           0 + $pluscommits,
+                                           $extra ];
     }
     elsif ($version =~ m/^Version: (\d+)\.(\d+).(\d+)(?:-(.*))?$/) {
-	my ($maj, $min, $rev, $extra) = ($1, $2, $3, $4);
-	my $pluscommits;
-	if ($extra =~ m/(\d+)-g[a-fA-F0-9]+(?:-dirty)?$/) {
-	    $pluscommits = $1;
-	}
-	$cached_version{$installation} = [ 0 + $maj,
-					   0 + $min,
-					   0 + $rev,
-					   0 + $pluscommits,
-					   $extra ];
+        my ($maj, $min, $rev, $extra) = ($1, $2, $3, $4);
+        my $pluscommits;
+        if ($extra =~ m/(\d+)-g[a-fA-F0-9]+(?:-dirty)?$/) {
+            $pluscommits = $1;
+        }
+        $cached_version{$installation} = [ 0 + $maj,
+                                           0 + $min,
+                                           0 + $rev,
+                                           0 + $pluscommits,
+                                           $extra ];
     }
     else {
-	$cached_version{$installation} = [0, 0, 0, 0, q{}];
+        $cached_version{$installation} = [0, 0, 0, 0, q{}];
     }
 
     $cached_sversion{$installation} = join q{.},
-					   @{$cached_version{$installation}}[0..2];
+                                           @{$cached_version{$installation}}[0..2];
     $cached_sversion{$installation} .= "-$cached_version{$installation}->[4]"
-	if $cached_version{$installation}->[4];
+        if $cached_version{$installation}->[4];
 
     return @{$cached_version{$installation}} if wantarray;
     return $cached_sversion{$installation};
@@ -237,9 +237,9 @@ sub _rootdir
 {
     if (!defined $__cached_rootdir)
     {
-	my $cassini = Cassandane::Cassini->instance();
-	$__cached_rootdir =
-	    $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
+        my $cassini = Cassandane::Cassini->instance();
+        $__cached_rootdir =
+            $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
     }
     return $__cached_rootdir;
 }
@@ -249,7 +249,7 @@ sub _make_instance_info
     my ($name, $basedir) = @_;
 
     die "Need either a name or a basename"
-	if !defined $name && !defined $basedir;
+        if !defined $name && !defined $basedir;
     $name ||= basename($basedir);
     $basedir ||= _rootdir() . '/' . $name;
 
@@ -257,9 +257,9 @@ sub _make_instance_info
     die "Cannot stat $basedir: $!" if !defined $sb && $! != ENOENT;
 
     return {
-	name => $name,
-	basedir => $basedir,
-	ctime => ($sb ? $sb->ctime : undef),
+        name => $name,
+        basedir => $basedir,
+        ctime => ($sb ? $sb->ctime : undef),
     };
 }
 
@@ -267,13 +267,13 @@ sub _make_unique_instance_info
 {
     if (!defined $stamp)
     {
-	$stamp = to_iso8601(DateTime->now);
-	$stamp =~ s/.*T(\d+)Z/$1/;
+        $stamp = to_iso8601(DateTime->now);
+        $stamp =~ s/.*T(\d+)Z/$1/;
 
-	my $workerid = $ENV{TEST_UNIT_WORKER_ID};
-	die "Invalid TEST_UNIT_WORKER_ID - code not run in Worker context"
-	    if (defined($workerid) && $workerid eq 'invalid');
-	$stamp .= sprintf("%02X", $workerid) if defined $workerid;
+        my $workerid = $ENV{TEST_UNIT_WORKER_ID};
+        die "Invalid TEST_UNIT_WORKER_ID - code not run in Worker context"
+            if (defined($workerid) && $workerid eq 'invalid');
+        $stamp .= sprintf("%02X", $workerid) if defined $workerid;
     }
 
     my $rootdir = _rootdir();
@@ -282,11 +282,11 @@ sub _make_unique_instance_info
     my $basedir;
     for (;;)
     {
-	$name = sprintf("%s%02X", $stamp, $next_unique);
-	$next_unique++;
-	$basedir = "$rootdir/$name";
-	last if mkdir($basedir);
-	die "Cannot create $basedir: $!" if ($! != EEXIST);
+        $name = sprintf("%s%02X", $stamp, $next_unique);
+        $next_unique++;
+        $basedir = "$rootdir/$name";
+        last if mkdir($basedir);
+        die "Cannot create $basedir: $!" if ($! != EEXIST);
     }
     return _make_instance_info($name, $basedir);
 }
@@ -295,12 +295,12 @@ sub list
 {
     my $rootdir = _rootdir();
     opendir ROOT, $rootdir
-	or die "Cannot open $rootdir for reading: $!";
+        or die "Cannot open $rootdir for reading: $!";
     my @instances;
     while ($_ = readdir(ROOT))
     {
-	next unless m/^[0-9]+[A-Z]?$/;
-	push(@instances, _make_instance_info($_));
+        next unless m/^[0-9]+[A-Z]?$/;
+        push(@instances, _make_instance_info($_));
     }
     closedir ROOT;
     return @instances;
@@ -319,19 +319,19 @@ sub _init_basedir_and_name
 
     my $info;
     my $which = (defined $self->{name} ? 1 : 0) |
-		(defined $self->{basedir} ? 2 : 0);
+                (defined $self->{basedir} ? 2 : 0);
     if ($which == 0)
     {
-	# have neither name nor basedir
-	# usual first time case for test instances
-	$info = _make_unique_instance_info();
+        # have neither name nor basedir
+        # usual first time case for test instances
+        $info = _make_unique_instance_info();
     }
     else
     {
-	# have name but not basedir
-	# usual first time case for start-instance.pl
-	# or basedir but not name, which doesn't happen
-	$info = _make_instance_info($self->{name}, $self->{basedir});
+        # have name but not basedir
+        # usual first time case for start-instance.pl
+        # or basedir but not name, which doesn't happen
+        $info = _make_instance_info($self->{name}, $self->{basedir});
     }
     $self->{name} = $info->{name};
     $self->{basedir} = $info->{basedir};
@@ -355,18 +355,18 @@ sub cleanup_leftovers
 
     return if (!-d $rootdir);
     opendir ROOT, $rootdir
-	or die "Cannot open directory $rootdir for reading: $!";
+        or die "Cannot open directory $rootdir for reading: $!";
     my @dirs;
     while (my $e = readdir(ROOT))
     {
-	push(@dirs, $e) if ($e =~ m/^[0-9]{6}([A-Z]|)[0-9]{1,}$/);
+        push(@dirs, $e) if ($e =~ m/^[0-9]{6}([A-Z]|)[0-9]{1,}$/);
     }
     closedir ROOT;
 
     map
     {
-	xlog "Cleaning up old basedir $rootdir/$_";
-	rmtree "$rootdir/$_";
+        xlog "Cleaning up old basedir $rootdir/$_";
+        rmtree "$rootdir/$_";
     } @dirs;
 }
 
@@ -376,18 +376,18 @@ sub add_service
 
     my $name = $params{name};
     die "Missing parameter 'name'"
-	unless defined $name;
+        unless defined $name;
     die "Already have a service named \"$name\""
-	if defined $self->{services}->{$name};
+        if defined $self->{services}->{$name};
 
     # Add a hardcoded recover START if we're doing an actual IMAP test.
     if ($name =~ m/imap/)
     {
-	if (!grep { $_->{name} eq 'recover'; } @{$self->{starts}})
-	{
-	    $self->add_start(name => 'recover',
-			     argv => [ qw(ctl_cyrusdb -r) ]);
-	}
+        if (!grep { $_->{name} eq 'recover'; } @{$self->{starts}})
+        {
+            $self->add_start(name => 'recover',
+                             argv => [ qw(ctl_cyrusdb -r) ]);
+        }
     }
 
     my $srv = Cassandane::ServiceFactory->create(%params);
@@ -432,14 +432,14 @@ sub add_daemon
 
     my $name = delete $params{name};
     die "Missing parameter 'name'"
-	unless defined $name;
+        unless defined $name;
     die "Already have a daemon named \"$name\""
-	if defined $self->{daemons}->{$name};
+        if defined $self->{daemons}->{$name};
 
     my $daemon = Cassandane::Daemon->new(
-	    name => $name,
-	    config => $self->{config},
-	    %params
+            name => $name,
+            config => $self->{config},
+            %params
     );
 
     $self->{daemons}->{$name} = $daemon;
@@ -467,21 +467,21 @@ sub _find_binary
     my $base = $self->{cyrus_destdir} . $self->{cyrus_prefix};
     foreach (qw( bin sbin libexec libexec/cyrus-imapd lib cyrus/bin ))
     {
-	my $dir = "$base/$_";
-	if (opendir my $dh, $dir)
-	{
-	    if (grep { $_ eq $name } readdir $dh) {
-		xlog "Found binary $name in $dir";
-		closedir $dh;
-		return "$dir/$name";
-	    }
-	    closedir $dh;
-	}
-	else
-	{
-	    xlog "Couldn't opendir $dir: $!" if $! != ENOENT;
-	    next;
-	}
+        my $dir = "$base/$_";
+        if (opendir my $dh, $dir)
+        {
+            if (grep { $_ eq $name } readdir $dh) {
+                xlog "Found binary $name in $dir";
+                closedir $dh;
+                return "$dir/$name";
+            }
+            closedir $dh;
+        }
+        else
+        {
+            xlog "Couldn't opendir $dir: $!" if $! != ENOENT;
+            next;
+        }
     }
 
     die "Couldn't locate $name under $base";
@@ -498,22 +498,22 @@ sub _binary
 
     if ($cassini->bool_val('valgrind', 'enabled') &&
         !($name =~ m/\.pl$/) &&
-	!($name =~ m/^\//))
+        !($name =~ m/^\//))
     {
-	my $arguments = '-q --tool=memcheck --leak-check=full --run-libc-freeres=no';
-	my $valgrind_logdir = $self->{basedir} . '/vglogs';
-	my $valgrind_suppressions =
-	    abs_path($cassini->val('valgrind', 'suppression', 'vg.supp'));
-	mkpath $valgrind_logdir
-	    unless ( -d $valgrind_logdir );
-	push(@cmd,
-	    $cassini->val('valgrind', 'binary', '/usr/bin/valgrind'),
-	    "--log-file=$valgrind_logdir/$name.%p",
-	    "--suppressions=$valgrind_suppressions",
+        my $arguments = '-q --tool=memcheck --leak-check=full --run-libc-freeres=no';
+        my $valgrind_logdir = $self->{basedir} . '/vglogs';
+        my $valgrind_suppressions =
+            abs_path($cassini->val('valgrind', 'suppression', 'vg.supp'));
+        mkpath $valgrind_logdir
+            unless ( -d $valgrind_logdir );
+        push(@cmd,
+            $cassini->val('valgrind', 'binary', '/usr/bin/valgrind'),
+            "--log-file=$valgrind_logdir/$name.%p",
+            "--suppressions=$valgrind_suppressions",
             "--gen-suppressions=all",
-	    split(/\s+/, $cassini->val('valgrind', 'arguments', $arguments))
-	);
-	$valground = 1;
+            split(/\s+/, $cassini->val('valgrind', 'arguments', $arguments))
+        );
+        $valground = 1;
     }
 
     my $bin = $self->_find_binary($name);
@@ -521,9 +521,9 @@ sub _binary
 
     if (!$valground && $cassini->bool_val('gdb', $name))
     {
-	xlog "Will run binary $name under gdb due to cassandane.ini";
-	xlog "Look in syslog for helpful instructions from gdbtramp";
-	push(@cmd, '-D');
+        xlog "Will run binary $name under gdb due to cassandane.ini";
+        xlog "Look in syslog for helpful instructions from gdbtramp";
+        push(@cmd, '-D');
     }
 
     return @cmd;
@@ -558,13 +558,13 @@ sub _list_pid_files
 
     my $rundir = $self->{basedir} . "/run";
     opendir(RUNDIR, $rundir)
-	or die "Cannot open run directory $rundir: $!";
+        or die "Cannot open run directory $rundir: $!";
 
     my @pidfiles;
     while ($_ = readdir(RUNDIR))
     {
-	my ($name) = m/^([^.].*)\.pid$/;
-	push(@pidfiles, $name) if defined $name;
+        my ($name) = m/^([^.].*)\.pid$/;
+        push(@pidfiles, $name) if defined $name;
     }
 
     closedir(RUNDIR);
@@ -581,32 +581,32 @@ sub _build_skeleton
 
     my @subdirs =
     (
-	'conf',
-	'conf/cores',
-	'conf/db',
-	'conf/sieve',
-	'conf/socket',
-	'conf/proc',
-	'conf/log',
-	'conf/log/admin',
-	'conf/log/cassandane',
-	'conf/log/user2',
-	'conf/log/foo',
-	'conf/log/postman',
-	'conf/log/repluser',
-	'conf/log/smtpclient.sendmail',
-	'conf/log/smtpclient.host',
-	'lock',
-	'data',
-	'meta',
-	'run',
-	'tmp',
+        'conf',
+        'conf/cores',
+        'conf/db',
+        'conf/sieve',
+        'conf/socket',
+        'conf/proc',
+        'conf/log',
+        'conf/log/admin',
+        'conf/log/cassandane',
+        'conf/log/user2',
+        'conf/log/foo',
+        'conf/log/postman',
+        'conf/log/repluser',
+        'conf/log/smtpclient.sendmail',
+        'conf/log/smtpclient.host',
+        'lock',
+        'data',
+        'meta',
+        'run',
+        'tmp',
     );
     foreach my $sd (@subdirs)
     {
-	my $d = $self->{basedir} . '/' . $sd;
-	mkpath $d
-	    or die "Cannot make path $d: $!";
+        my $d = $self->{basedir} . '/' . $sd;
+        mkpath $d
+            or die "Cannot make path $d: $!";
     }
 }
 
@@ -615,37 +615,37 @@ sub _generate_imapd_conf
     my ($self) = @_;
 
     my ($cyrus_major_version, $cyrus_minor_version) =
-	Cassandane::Instance->get_version($self->{installation});
+        Cassandane::Instance->get_version($self->{installation});
 
     $self->{config}->set_variables(
-	name => $self->{name},
-	basedir => $self->{basedir},
-	cyrus_prefix => $self->{cyrus_prefix},
-	prefix => getcwd(),
+        name => $self->{name},
+        basedir => $self->{basedir},
+        cyrus_prefix => $self->{cyrus_prefix},
+        prefix => getcwd(),
     );
     $self->{config}->set(
-	sasl_pwcheck_method => 'saslauthd',
-	sasl_saslauthd_path => "$self->{basedir}/run/mux",
-	notifysocket => "dlist:$self->{basedir}/run/notify",
-	event_notifier => 'pusher',
+        sasl_pwcheck_method => 'saslauthd',
+        sasl_saslauthd_path => "$self->{basedir}/run/mux",
+        notifysocket => "dlist:$self->{basedir}/run/notify",
+        event_notifier => 'pusher',
     );
     if ($cyrus_major_version >= 3) {
-	$self->{config}->set(
-	    imipnotifier => 'imip',
-	    event_groups => 'mailbox message flags calendar',
-	);
+        $self->{config}->set(
+            imipnotifier => 'imip',
+            event_groups => 'mailbox message flags calendar',
+        );
 
-	if ($cyrus_major_version > 3 || $cyrus_minor_version >= 1) {
-	    $self->{config}->set(
-		smtp_backend => 'host',
-		smtp_host => $self->{smtphost},
-	    );
-	}
+        if ($cyrus_major_version > 3 || $cyrus_minor_version >= 1) {
+            $self->{config}->set(
+                smtp_backend => 'host',
+                smtp_host => $self->{smtphost},
+            );
+        }
     }
     else {
-	$self->{config}->set(
-	    event_groups => 'mailbox message flags',
-	);
+        $self->{config}->set(
+            event_groups => 'mailbox message flags',
+        );
     }
     if ($self->{buildinfo}->get('search', 'xapian')) {
         my %xapian_defaults = (
@@ -674,22 +674,22 @@ sub _emit_master_entry
     # Convert ->{argv} to ->{cmd}
     my $argv = delete $params->{argv};
     die "No argv argument"
-	unless defined $argv;
+        unless defined $argv;
     # do not alter original argv
     my @args = @$argv;
     my $bin = shift @args;
     $params->{cmd} = join(' ',
-	$self->_binary($bin),
-	'-C', $self->_imapd_conf(),
-	@args
+        $self->_binary($bin),
+        '-C', $self->_imapd_conf(),
+        @args
     );
 
     print MASTER "    $name";
     while (my ($k, $v) = each %$params)
     {
-	$v = "\"$v\""
-	    if ($v =~ m/\s/);
-	print MASTER " $k=$v";
+        $v = "\"$v\""
+            if ($v =~ m/\s/);
+        print MASTER " $k=$v";
     }
     print MASTER "\n";
 }
@@ -701,27 +701,27 @@ sub _generate_master_conf
     my $filename = $self->_master_conf();
     my $conf = $self->_imapd_conf();
     open MASTER,'>',$filename
-	or die "Cannot open $filename for writing: $!";
+        or die "Cannot open $filename for writing: $!";
 
     if (scalar @{$self->{starts}})
     {
-	print MASTER "START {\n";
-	map { $self->_emit_master_entry($_); } @{$self->{starts}};
-	print MASTER "}\n";
+        print MASTER "START {\n";
+        map { $self->_emit_master_entry($_); } @{$self->{starts}};
+        print MASTER "}\n";
     }
 
     if (scalar %{$self->{services}})
     {
-	print MASTER "SERVICES {\n";
-	map { $self->_emit_master_entry($_); } values %{$self->{services}};
-	print MASTER "}\n";
+        print MASTER "SERVICES {\n";
+        map { $self->_emit_master_entry($_); } values %{$self->{services}};
+        print MASTER "}\n";
     }
 
     if (scalar @{$self->{events}})
     {
-	print MASTER "EVENTS {\n";
-	map { $self->_emit_master_entry($_); } @{$self->{events}};
-	print MASTER "}\n";
+        print MASTER "EVENTS {\n";
+        map { $self->_emit_master_entry($_); } @{$self->{events}};
+        print MASTER "}\n";
     }
 
     # $self->{daemons} is daemons *not* managed by master
@@ -735,64 +735,64 @@ sub _add_services_from_cyrus_conf
 
     my $filename = $self->_master_conf();
     open MASTER,'<',$filename
-	or die "Cannot open $filename for reading: $!";
+        or die "Cannot open $filename for reading: $!";
 
     my $in;
     while (<MASTER>)
     {
-	chomp;
-	s/\s*#.*//;		# strip comments
-	next if m/^\s*$/;	# skip empty lines
-	my ($m) = m/^(START|SERVICES|EVENTS)\s*{/;
-	if ($m)
-	{
-	    $in = $m;
-	    next;
-	}
-	if ($in && m/^\s*}\s*$/)
-	{
-	    $in = undef;
-	    next;
-	}
-	next if !defined $in;
+        chomp;
+        s/\s*#.*//;             # strip comments
+        next if m/^\s*$/;       # skip empty lines
+        my ($m) = m/^(START|SERVICES|EVENTS)\s*{/;
+        if ($m)
+        {
+            $in = $m;
+            next;
+        }
+        if ($in && m/^\s*}\s*$/)
+        {
+            $in = undef;
+            next;
+        }
+        next if !defined $in;
 
-	my ($name, $rem) = m/^\s*([a-zA-Z0-9]+)\s+(.*)$/;
-	$_ = $rem;
-	my %params;
-	while (length $_)
-	{
-	    my ($k, $rem2) = m/^([a-zA-Z0-9]+)=(.*)/;
-	    die "Bad parameter name" if !defined $k;
-	    $_ = $rem2;
+        my ($name, $rem) = m/^\s*([a-zA-Z0-9]+)\s+(.*)$/;
+        $_ = $rem;
+        my %params;
+        while (length $_)
+        {
+            my ($k, $rem2) = m/^([a-zA-Z0-9]+)=(.*)/;
+            die "Bad parameter name" if !defined $k;
+            $_ = $rem2;
 
-	    my ($v, $rem3) = m/^"([^"]*)"(.*)/;
-	    if (!defined $v)
-	    {
-		($v, $rem3) = m/^(\S*)(.*)/;
-	    }
-	    die "Bad parameter value" if !defined $v;
-	    $_ = $rem3;
+            my ($v, $rem3) = m/^"([^"]*)"(.*)/;
+            if (!defined $v)
+            {
+                ($v, $rem3) = m/^(\S*)(.*)/;
+            }
+            die "Bad parameter value" if !defined $v;
+            $_ = $rem3;
 
-	    if ($k eq 'listen')
-	    {
-		my $aa = Cassandane::Daemon::parse_address($v);
-		$params{host} = $aa->{host};
-		$params{port} = $aa->{port};
-	    }
-	    elsif ($k eq 'cmd')
-	    {
-		$params{argv} = [ split(/\s+/, $v) ];
-	    }
-	    else
-	    {
-		$params{$k} = $v;
-	    }
-	    s/^\s+//;
-	}
-	if ($in eq 'SERVICES')
-	{
-	    $self->add_service(name => $name, %params);
-	}
+            if ($k eq 'listen')
+            {
+                my $aa = Cassandane::Daemon::parse_address($v);
+                $params{host} = $aa->{host};
+                $params{port} = $aa->{port};
+            }
+            elsif ($k eq 'cmd')
+            {
+                $params{argv} = [ split(/\s+/, $v) ];
+            }
+            else
+            {
+                $params{$k} = $v;
+            }
+            s/^\s+//;
+        }
+        if ($in eq 'SERVICES')
+        {
+            $self->add_service(name => $name, %params);
+        }
     }
 
     close MASTER;
@@ -820,12 +820,12 @@ sub _read_pid_file
     return undef if ( ! -f $file );
 
     open PID,'<',$file
-	or return undef;
+        or return undef;
     while(<PID>)
     {
-	chomp;
-	($pid) = m/^(\d+)$/;
-	last;
+        chomp;
+        ($pid) = m/^(\d+)$/;
+        last;
     }
     close PID;
 
@@ -847,25 +847,25 @@ sub _start_master
     # also going to fail miserably.  In any case we want to know.
     foreach my $srv (values %{$self->{services}}, values %{$self->{daemons}})
     {
-	die "Some process is already listening on " . $srv->address()
-	    if $srv->is_listening();
+        die "Some process is already listening on " . $srv->address()
+            if $srv->is_listening();
     }
 
     # Now start the master process.
     my @cmd =
     (
-	'master',
-	# The following is added automatically by _fork_command:
-	# '-C', $self->_imapd_conf(),
-	'-l', '255',
-	'-p', $self->_pid_file(),
-	'-d',
-	'-M', $self->_master_conf(),
+        'master',
+        # The following is added automatically by _fork_command:
+        # '-C', $self->_imapd_conf(),
+        '-l', '255',
+        '-p', $self->_pid_file(),
+        '-d',
+        '-M', $self->_master_conf(),
     );
     if (get_verbose) {
-	my $logfile = $self->{basedir} . '/conf/master.log';
-	xlog "_start_master: logging to $logfile";
-	push(@cmd, '-L', $logfile);
+        my $logfile = $self->{basedir} . '/conf/master.log';
+        xlog "_start_master: logging to $logfile";
+        push(@cmd, '-L', $logfile);
     }
     unlink $self->_pid_file();
     # Start master daemon
@@ -875,13 +875,13 @@ sub _start_master
     # that we can verify is still alive.
     xlog "_start_master: waiting for PID file";
     timed_wait(sub { $self->_read_pid_file() },
-	        description => "the master PID file to exist");
+                description => "the master PID file to exist");
     xlog "_start_master: PID file present and correct";
 
     # Start any other defined daemons
     foreach my $daemon (values %{$self->{daemons}})
     {
-	$self->run_command({ cyrus => 0 }, $daemon->get_argv());
+        $self->run_command({ cyrus => 0 }, $daemon->get_argv());
     }
 
     # Wait until all the defined services are reported as listening.
@@ -891,13 +891,13 @@ sub _start_master
     xlog "_start_master: PID waiting for services";
     foreach my $srv (values %{$self->{services}}, values %{$self->{daemons}})
     {
-	timed_wait(sub
-		{
-		    $self->is_running()
-			or die "Master no longer running";
-		    $srv->is_listening();
-		},
-	        description => $srv->address() . " to be in LISTEN state");
+        timed_wait(sub
+                {
+                    $self->is_running()
+                        or die "Master no longer running";
+                    $srv->is_listening();
+                },
+                description => $srv->address() . " to be in LISTEN state");
     }
     xlog "_start_master: all services listening";
 }
@@ -911,22 +911,22 @@ sub _start_authdaemon
 
     my $saslpid = fork();
     unless ($saslpid) {
-	$SIG{TERM} = sub { die "killed" };
+        $SIG{TERM} = sub { die "killed" };
 
-	POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
+        POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
 
-	# child;
-	$0 = "cassandane saslauthd: $basedir";
-	saslauthd("$basedir/run");
-	exit 0;
+        # child;
+        $0 = "cassandane saslauthd: $basedir";
+        saslauthd("$basedir/run");
+        exit 0;
     }
 
     xlog "started saslauthd for $basedir as $saslpid";
     push @{$self->{_shutdowncallbacks}}, sub {
-	my $self = shift;
-	xlog "killing saslauthd $saslpid";
-	kill(15, $saslpid);
-	waitpid($saslpid, 0);
+        my $self = shift;
+        xlog "killing saslauthd $saslpid";
+        kill(15, $saslpid);
+        waitpid($saslpid, 0);
     };
 }
 
@@ -938,22 +938,22 @@ sub _start_notifyd
 
     my $notifypid = fork();
     unless ($notifypid) {
-	$SIG{TERM} = sub { die "killed" };
+        $SIG{TERM} = sub { die "killed" };
 
-	POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
+        POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
 
-	# child;
-	$0 = "cassandane notifyd: $basedir";
-	notifyd("$basedir/run");
-	exit 0;
+        # child;
+        $0 = "cassandane notifyd: $basedir";
+        notifyd("$basedir/run");
+        exit 0;
     }
 
     xlog "started notifyd for $basedir as $notifypid";
     push @{$self->{_shutdowncallbacks}}, sub {
-	my $self = shift;
-	xlog "killing notifyd $notifypid";
-	kill(15, $notifypid);
-	waitpid($notifypid, 0);
+        my $self = shift;
+        xlog "killing notifyd $notifypid";
+        kill(15, $notifypid);
+        waitpid($notifypid, 0);
     };
 }
 
@@ -963,9 +963,9 @@ sub _start_notifyd
 # Argument 'user' may be of the form 'user' or 'user@domain'.
 # Following that are optional named parameters
 #
-#   subdirs	    array of strings, lists folders
-#		    to be created, relative to the new
-#		    home folder
+#   subdirs         array of strings, lists folders
+#                   to be created, relative to the new
+#                   home folder
 #
 # Returns void, or dies if something went wrong
 #
@@ -979,25 +979,25 @@ sub create_user
 
     my $srv = $self->get_service('imap');
     return
-	unless defined $srv;
+        unless defined $srv;
 
     my $adminstore = $srv->create_store(username => 'admin');
     my $adminclient = $adminstore->get_client();
 
     my @mboxes = ( $mb->to_external() );
     map { push(@mboxes, $mb->make_child($_)->to_external()); } @{$params{subdirs}}
-	if ($params{subdirs});
+        if ($params{subdirs});
 
     foreach my $mb (@mboxes)
     {
-	$adminclient->create($mb)
-	    or die "Cannot create $mb: $@";
-	$adminclient->setacl($mb, admin => 'lrswipkxtecdan')
-	    or die "Cannot setacl for $mb: $@";
-	$adminclient->setacl($mb, $user => 'lrswipkxtecdn')
-	    or die "Cannot setacl for $mb: $@";
-	$adminclient->setacl($mb, anyone => 'p')
-	    or die "Cannot setacl for $mb: $@";
+        $adminclient->create($mb)
+            or die "Cannot create $mb: $@";
+        $adminclient->setacl($mb, admin => 'lrswipkxtecdan')
+            or die "Cannot setacl for $mb: $@";
+        $adminclient->setacl($mb, $user => 'lrswipkxtecdn')
+            or die "Cannot setacl for $mb: $@";
+        $adminclient->setacl($mb, anyone => 'p')
+            or die "Cannot setacl for $mb: $@";
     }
 }
 
@@ -1058,20 +1058,20 @@ sub start
 
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
     {
-	$created = 1;
-	rmtree $self->{basedir};
-	$self->_build_skeleton();
-	# TODO: system("echo 1 >/proc/sys/kernel/core_uses_pid");
-	# TODO: system("echo 1 >/proc/sys/fs/suid_dumpable");
-	$self->{buildinfo} = Cassandane::BuildInfo->new($self->{cyrus_destdir},
-						        $self->{cyrus_prefix});
-	$self->_generate_imapd_conf();
-	$self->_generate_master_conf();
-	$self->_fix_ownership();
+        $created = 1;
+        rmtree $self->{basedir};
+        $self->_build_skeleton();
+        # TODO: system("echo 1 >/proc/sys/kernel/core_uses_pid");
+        # TODO: system("echo 1 >/proc/sys/fs/suid_dumpable");
+        $self->{buildinfo} = Cassandane::BuildInfo->new($self->{cyrus_destdir},
+                                                        $self->{cyrus_prefix});
+        $self->_generate_imapd_conf();
+        $self->_generate_master_conf();
+        $self->_fix_ownership();
     }
     elsif (!scalar $self->{services})
     {
-	$self->_add_services_from_cyrus_conf();
+        $self->_add_services_from_cyrus_conf();
     }
     $self->_start_authdaemon();
     $self->_start_notifyd();
@@ -1082,11 +1082,11 @@ sub start
 
     if ($created && $self->{setup_mailbox})
     {
-	$self->create_user("cassandane");
+        $self->create_user("cassandane");
     }
 
     xlog "started $self->{description}: cyrus version "
-	. Cassandane::Instance->get_version($self->{installation});
+        . Cassandane::Instance->get_version($self->{installation});
 }
 
 sub _compress_berkeley_crud
@@ -1097,20 +1097,20 @@ sub _compress_berkeley_crud
     my $dbdir = $self->{basedir} . "/conf/db";
     if ( -d $dbdir )
     {
-	opendir DBDIR, $dbdir
-	    or die "Cannot open directory $dbdir: $!";
-	while (my $e = readdir DBDIR)
-	{
-	    push(@files, "$dbdir/$e")
-		if ($e =~ m/^__db\.\d+$/);
-	}
-	closedir DBDIR;
+        opendir DBDIR, $dbdir
+            or die "Cannot open directory $dbdir: $!";
+        while (my $e = readdir DBDIR)
+        {
+            push(@files, "$dbdir/$e")
+                if ($e =~ m/^__db\.\d+$/);
+        }
+        closedir DBDIR;
     }
 
     if (scalar @files)
     {
-	xlog "Compressing Berkeley environment files: " . join(' ', @files);
-	system('/bin/bzip2', @files);
+        xlog "Compressing Berkeley environment files: " . join(' ', @files);
+        system('/bin/bzip2', @files);
     }
 }
 
@@ -1122,20 +1122,20 @@ sub _uncompress_berkeley_crud
     my $dbdir = $self->{basedir} . "/conf/db";
     if ( -d $dbdir )
     {
-	opendir DBDIR, $dbdir
-	    or die "Cannot open directory $dbdir: $!";
-	while (my $e = readdir DBDIR)
-	{
-	    push(@files, "$dbdir/$e")
-		if ($e =~ m/^__db\.\d+\.bz2$/);
-	}
-	closedir DBDIR;
+        opendir DBDIR, $dbdir
+            or die "Cannot open directory $dbdir: $!";
+        while (my $e = readdir DBDIR)
+        {
+            push(@files, "$dbdir/$e")
+                if ($e =~ m/^__db\.\d+\.bz2$/);
+        }
+        closedir DBDIR;
     }
 
     if (scalar @files)
     {
-	xlog "Uncompressing Berkeley environment files: " . join(' ', @files);
-	system('/bin/bunzip2', @files);
+        xlog "Uncompressing Berkeley environment files: " . join(' ', @files);
+        system('/bin/bunzip2', @files);
     }
 }
 
@@ -1150,30 +1150,30 @@ sub _check_valgrind_logs
 
     return unless -d $valgrind_logdir;
     opendir VGLOGS, $valgrind_logdir
-	or die "Cannot open directory $valgrind_logdir for reading: $!";
+        or die "Cannot open directory $valgrind_logdir for reading: $!";
     my @nzlogs;
     while ($_ = readdir VGLOGS)
     {
-	next if m/^\./;
-	next if m/\.core\./;
-	my $log = "$valgrind_logdir/$_";
-	next if -z $log;
-	push(@nzlogs, $_);
+        next if m/^\./;
+        next if m/\.core\./;
+        my $log = "$valgrind_logdir/$_";
+        next if -z $log;
+        push(@nzlogs, $_);
 
-	xlog "Valgrind errors from file $log";
-	open VG, "<$log"
-	    or die "Cannot open Valgrind log $log for reading: $!";
-	while (<VG>) {
-	    chomp;
-	    xlog "$_";
-	}
-	close VG;
+        xlog "Valgrind errors from file $log";
+        open VG, "<$log"
+            or die "Cannot open Valgrind log $log for reading: $!";
+        while (<VG>) {
+            chomp;
+            xlog "$_";
+        }
+        close VG;
 
     }
     closedir VGLOGS;
 
     die "Found Valgrind errors, see log for details"
-	if scalar @nzlogs;
+        if scalar @nzlogs;
 }
 
 # The 'file' program seems to consistently misreport cores
@@ -1185,17 +1185,17 @@ sub _detect_core_program
     my $prog;
 
     open STRINGS, '-|', ('strings', '-a', $core)
-	or die "Cannot run strings on $core: $!";
+        or die "Cannot run strings on $core: $!";
     while (<STRINGS>)
     {
-	chomp;
-	if (m/\/bin\//)
-	{
-	    $prog = $_;
-	    last;
-	}
-	$lines++;
-	last if ($lines > 10);
+        chomp;
+        if (m/\/bin\//)
+        {
+            $prog = $_;
+            last;
+        }
+        $lines++;
+        last if ($lines > 10);
     }
     close STRINGS;
 
@@ -1211,20 +1211,20 @@ sub _check_cores
 
     return unless -d $coredir;
     opendir CORES, $coredir
-	or die "Cannot open directory $coredir for reading: $!";
+        or die "Cannot open directory $coredir for reading: $!";
     while ($_ = readdir CORES)
     {
-	next if m/^\./;
-	next unless m/^core(\.\d+)?$/;
-	my $core = "$coredir/$_";
-	next if -z $core;
-	chmod(0644, $core);
-	$ncores++;
+        next if m/^\./;
+        next unless m/^core(\.\d+)?$/;
+        my $core = "$coredir/$_";
+        next if -z $core;
+        chmod(0644, $core);
+        $ncores++;
 
-	my $prog = _detect_core_program($core);
+        my $prog = _detect_core_program($core);
 
-	xlog "Found core file $core";
-	xlog "   from program $prog" if defined $prog;
+        xlog "Found core file $core";
+        xlog "   from program $prog" if defined $prog;
     }
     closedir CORES;
 
@@ -1244,8 +1244,8 @@ sub _stop_pid
     # SIGTERM - The standard Cyrus graceful shutdown signal, should
     #           be handled and propagated by master.
     # SIGILL - Not handled by master; kernel's default action is to
-    #	       dump a core.  We use this to try to get a core when
-    #	       something is wrong with master.
+    #          dump a core.  We use this to try to get a core when
+    #          something is wrong with master.
     # SIGKILL - Hmm, something went wrong with our cunning SIGILL plan,
     #           let's take off and nuke it from orbit.  We just don't
     #           want to leave processes around cluttering up the place.
@@ -1255,18 +1255,18 @@ sub _stop_pid
 
     foreach my $sig (@sigs)
     {
-	xlog "_stop_pid: sending signal $sig to $pid";
-	kill($sig, $pid) or xlog "Can't send signal $sig to pid $pid: $!";
-	eval {
-	    timed_wait(sub {
-		eval { $reaper->() if (defined $reaper) };
-		return (kill(0, $pid) == 0);
-	    });
-	};
-	last unless $@;
-	# Timed out -- No More Mr Nice Guy
-	xlog "_stop_pid: failed to shut down pid $pid with signal $sig";
-	$r = 0;
+        xlog "_stop_pid: sending signal $sig to $pid";
+        kill($sig, $pid) or xlog "Can't send signal $sig to pid $pid: $!";
+        eval {
+            timed_wait(sub {
+                eval { $reaper->() if (defined $reaper) };
+                return (kill(0, $pid) == 0);
+            });
+        };
+        last unless $@;
+        # Timed out -- No More Mr Nice Guy
+        xlog "_stop_pid: failed to shut down pid $pid with signal $sig";
+        $r = 0;
     }
     return $r;
 }
@@ -1297,15 +1297,15 @@ sub stop
 
     foreach my $name ($self->_list_pid_files())
     {
-	my $pid = $self->_read_pid_file($name);
-	next if (!defined $pid);
-	_stop_pid($pid)
-	    or die "Cannot shut down $name pid $pid";
+        my $pid = $self->_read_pid_file($name);
+        next if (!defined $pid);
+        _stop_pid($pid)
+            or die "Cannot shut down $name pid $pid";
     }
     # Note: no need to reap this daemon which is not our child anymore
 
     foreach my $item (@{$self->{_shutdowncallbacks}}) {
-	$item->($self);
+        $item->($self);
     }
     $self->{_shutdowncallbacks} = [];
 
@@ -1320,9 +1320,9 @@ sub cleanup
 
     if (Cassandane::Cassini->instance()->bool_val('cassandane', 'cleanup'))
     {
-	# Remove all on-disk traces of this instance
-	xlog "Cleaning up basedir " . $self->{basedir};
-	rmtree $self->{basedir};
+        # Remove all on-disk traces of this instance
+        xlog "Cleaning up basedir " . $self->{basedir};
+        rmtree $self->{basedir};
     }
 }
 
@@ -1331,21 +1331,21 @@ sub DESTROY
     my ($self) = @_;
 
     if (defined $self->{basedir} &&
-	!$self->{persistent} &&
-	!$self->{_stopped})
+        !$self->{persistent} &&
+        !$self->{_stopped})
     {
-	# clean up any dangling master and daemon process
-	foreach my $name ($self->_list_pid_files())
-	{
-	    my $pid = $self->_read_pid_file($name);
-	    next if (!defined $pid);
-	    _stop_pid($pid);
-	}
+        # clean up any dangling master and daemon process
+        foreach my $name ($self->_list_pid_files())
+        {
+            my $pid = $self->_read_pid_file($name);
+            next if (!defined $pid);
+            _stop_pid($pid);
+        }
 
-	foreach my $item (@{$self->{_shutdowncallbacks}}) {
-	    $item->($self);
-	}
-	$self->{_shutdowncallbacks} = [];
+        foreach my $item (@{$self->{_shutdowncallbacks}}) {
+            $item->($self);
+        }
+        $self->{_shutdowncallbacks} = [];
     }
 }
 
@@ -1363,8 +1363,8 @@ sub _setup_for_deliver
     my ($self) = @_;
 
     $self->add_service(name => 'lmtp',
-		       argv => ['lmtpd', '-a'],
-		       port => '@basedir@/conf/socket/lmtp');
+                       argv => ['lmtpd', '-a'],
+                       port => '@basedir@/conf/socket/lmtp');
 }
 
 sub deliver
@@ -1376,35 +1376,35 @@ sub deliver
     my $folder = $params{folder};
     if (defined $folder)
     {
-	$folder =~ s/^inbox.//i;
-	push(@cmd, '-m', $folder);
+        $folder =~ s/^inbox.//i;
+        push(@cmd, '-m', $folder);
     }
 
     my @users;
     if (defined $params{users})
     {
-	push(@users, @{$params{users}});
+        push(@users, @{$params{users}});
     }
     elsif (defined $params{user})
     {
-	push(@users, $params{user})
+        push(@users, $params{user})
     }
     else
     {
-	push(@users, 'cassandane');
+        push(@users, 'cassandane');
     }
     push(@cmd, @users);
 
     my $ret = 0;
 
     $self->run_command({
-	cyrus => 1,
-	redirects => {
-	    stdin => \$str
-	},
-	handlers => {
-	    exited_abnormally => sub { (undef, $ret) = @_; },
-	},
+        cyrus => 1,
+        redirects => {
+            stdin => \$str
+        },
+        handlers => {
+            exited_abnormally => sub { (undef, $ret) = @_; },
+        },
     }, @cmd);
 
     return $ret;
@@ -1420,8 +1420,8 @@ sub deliver
 #           automatically prepended to the given command name
 #
 # handlers  hash of coderefs to be called when various events
-#	    are detected.  Default is to 'die' on any event
-#	    except exiting with code 0.  The events are:
+#           are detected.  Default is to 'die' on any event
+#           except exiting with code 0.  The events are:
 #
 #   exited_normally($child)
 #   exited_abnormally($child, $code)
@@ -1429,11 +1429,11 @@ sub deliver
 #
 # redirects  hash for I/O redirections
 #     stdin     feed stdin from; handles SCALAR data or filename,
-#		    /dev/null by default
+#                   /dev/null by default
 #     stdout    feed stdout to; /dev/null by default (or is unmolested
-#		    if xlog is in verbose mode)
+#                   if xlog is in verbose mode)
 #     stderr    feed stderr to; /dev/null by default (or is unmolested
-#		    if xlog is in verbose mode)
+#                   if xlog is in verbose mode)
 #
 # workingdir  path to launch the command from
 #
@@ -1443,13 +1443,13 @@ sub run_command
 
     my $options = {};
     if (ref($args[0]) eq 'HASH') {
-	$options = shift(@args);
+        $options = shift(@args);
     }
 
     my ($pid, $got_exit) = $self->_fork_command($options, @args);
 
     return $pid
-	if ($options->{background});
+        if ($options->{background});
 
     if (defined $got_exit) {
         # Child already reaped, pass it on
@@ -1469,7 +1469,7 @@ sub reap_command
     my $child = waitpid($pid, 0);
     # and deal with it's exit status
     return $self->_handle_wait_status($pid)
-	if $child == $pid;
+        if $child == $pid;
     return undef;
 }
 
@@ -1483,20 +1483,20 @@ sub stop_command
 my %default_command_handlers = (
     signaled => sub
     {
-	my ($child, $sig) = @_;
-	my $desc = _describe_child($child);
-	die "child process $desc terminated by signal $sig";
+        my ($child, $sig) = @_;
+        my $desc = _describe_child($child);
+        die "child process $desc terminated by signal $sig";
     },
     exited_normally => sub
     {
-	my ($child) = @_;
-	return 0;
+        my ($child) = @_;
+        return 0;
     },
     exited_abnormally => sub
     {
-	my ($child, $code) = @_;
-	my $desc = _describe_child($child);
-	die "child process $desc exited with code $code";
+        my ($child, $code) = @_;
+        my $desc = _describe_child($child);
+        die "child process $desc exited with code $code";
     },
 );
 
@@ -1508,9 +1508,9 @@ sub _add_child
     $handlers ||= \%default_command_handlers;
 
     my $child = {
-	binary => $binary,
-	pid => $pid,
-	handlers => { %default_command_handlers, %$handlers },
+        binary => $binary,
+        pid => $pid,
+        handlers => { %default_command_handlers, %$handlers },
     };
     $self->{_children}->{$key} = $child;
     return $child;
@@ -1527,10 +1527,10 @@ sub _cyrus_perl_search_path
 {
     my ($self) = @_;
     my @inc = (
-	substr($Config{installvendorlib}, length($Config{vendorprefix})),
-	substr($Config{installvendorarch}, length($Config{vendorprefix})),
-	substr($Config{installsitelib}, length($Config{siteprefix})),
-	substr($Config{installsitearch}, length($Config{siteprefix}))
+        substr($Config{installvendorlib}, length($Config{vendorprefix})),
+        substr($Config{installvendorarch}, length($Config{vendorprefix})),
+        substr($Config{installsitelib}, length($Config{siteprefix})),
+        substr($Config{installsitearch}, length($Config{siteprefix}))
     );
     return map { $self->{cyrus_destdir} . $self->{cyrus_prefix} . $_; } @inc;
 }
@@ -1539,34 +1539,34 @@ sub _cyrus_perl_search_path
 # Starts a new process to run a program.
 #
 # Returns launched $pid; you must call _handle_wait_status() to
-#	   decode $?.  Dies on errors.
+#          decode $?.  Dies on errors.
 #
 sub _fork_command
 {
     my ($self, $options, $binary, @argv) = @_;
 
     die "No binary specified"
-	unless defined $binary;
+        unless defined $binary;
 
     my %redirects;
     if (defined($options->{redirects})) {
-	%redirects = %{$options->{redirects}};
+        %redirects = %{$options->{redirects}};
     }
     # stdin is null, stdout is null or unmolested
     $redirects{stdin} = '/dev/null'
-	unless(defined($redirects{stdin}));
+        unless(defined($redirects{stdin}));
     $redirects{stdout} = '/dev/null'
-	unless(get_verbose || defined($redirects{stdout}));
+        unless(get_verbose || defined($redirects{stdout}));
     $redirects{stderr} = '/dev/null'
-	unless(get_verbose || defined($redirects{stderr}));
+        unless(get_verbose || defined($redirects{stderr}));
 
     my @cmd = ();
     if ($options->{cyrus})
     {
-	push(@cmd, $self->_binary($binary), '-C', $self->_imapd_conf());
+        push(@cmd, $self->_binary($binary), '-C', $self->_imapd_conf());
     }
     else {
-	push(@cmd, $binary);
+        push(@cmd, $binary);
     }
     push(@cmd, @argv);
 
@@ -1574,34 +1574,34 @@ sub _fork_command
 
     if (defined($redirects{stdin}) && (ref($redirects{stdin}) eq 'SCALAR'))
     {
-	my $fh;
-	my $data = $redirects{stdin};
-	$redirects{stdin} = undef;
-	# Use the fork()ing form of open()
-	my $pid = open $fh,'|-';
-	die "Cannot fork: $!"
-	    if !defined $pid;
-	if ($pid)
-	{
-	    # parent process
-	    $self->_add_child($binary, $pid, $options->{handlers});
-	    print $fh ${$data};
-	    close ($fh);
-	    return ($pid, $?);
-	}
+        my $fh;
+        my $data = $redirects{stdin};
+        $redirects{stdin} = undef;
+        # Use the fork()ing form of open()
+        my $pid = open $fh,'|-';
+        die "Cannot fork: $!"
+            if !defined $pid;
+        if ($pid)
+        {
+            # parent process
+            $self->_add_child($binary, $pid, $options->{handlers});
+            print $fh ${$data};
+            close ($fh);
+            return ($pid, $?);
+        }
     }
     else
     {
-	# No capturing - just plain fork()
-	my $pid = fork();
-	die "Cannot fork: $!"
-	    if !defined $pid;
-	if ($pid)
-	{
-	    # parent process
-	    $self->_add_child($binary, $pid, $options->{handlers});
-	    return ($pid, undef);
-	}
+        # No capturing - just plain fork()
+        my $pid = fork();
+        die "Cannot fork: $!"
+            if !defined $pid;
+        if ($pid)
+        {
+            # parent process
+            $self->_add_child($binary, $pid, $options->{handlers});
+            return ($pid, undef);
+        }
     }
 
     # child process
@@ -1624,40 +1624,40 @@ sub _fork_command
     # to be, then prepend destdir to that.
     if ($self->{cyrus_destdir} ne "")
     {
-	$ENV{LD_LIBRARY_PATH} = join(':', (
-		$self->{cyrus_destdir} . $self->{cyrus_prefix} . "/lib",
-		split(/:/, $ENV{LD_LIBRARY_PATH} || "")
-	));
+        $ENV{LD_LIBRARY_PATH} = join(':', (
+                $self->{cyrus_destdir} . $self->{cyrus_prefix} . "/lib",
+                split(/:/, $ENV{LD_LIBRARY_PATH} || "")
+        ));
     }
 #     xlog "\$LD_LIBRARY_PATH is"; map { xlog "    $_"; } split(/:/, $ENV{LD_LIBRARY_PATH});
 
     my $cd = $options->{workingdir};
     $cd = $self->{basedir} . '/conf/cores'
-	unless defined($cd);
+        unless defined($cd);
     chdir($cd)
-	or die "Cannot cd to $cd: $!";
+        or die "Cannot cd to $cd: $!";
 
     # ulimit -c ...
     my $cassini = Cassandane::Cassini::instance();
     my $coresizelimit = 0 + $cassini->val("cyrus $self->{installation}",
-					  'coresizelimit', '100');
+                                          'coresizelimit', '100');
     if ($coresizelimit <= 0) {
-	$coresizelimit = RLIM_INFINITY;
+        $coresizelimit = RLIM_INFINITY;
     }
     else {
-	# convert megabytes to bytes
-	$coresizelimit *= (1024 * 1024);
+        # convert megabytes to bytes
+        $coresizelimit *= (1024 * 1024);
     }
     xlog "setting core size limit to $coresizelimit";
     setrlimit(RLIMIT_CORE, $coresizelimit, $coresizelimit);
 
     # let's log our rlimits, might be useful for diagnosing weirdnesses
     if (get_verbose() >= 4) {
-	my $limits = get_rlimits();
-	foreach my $name (keys %{$limits}) {
-	    $limits->{$name} = [ getrlimit($limits->{$name}) ];
-	}
-	xlog "rlimits: " . Dumper $limits;
+        my $limits = get_rlimits();
+        foreach my $name (keys %{$limits}) {
+            $limits->{$name} = [ getrlimit($limits->{$name}) ];
+        }
+        xlog "rlimits: " . Dumper $limits;
     }
 
     # TODO: do any setuid, umask, or environment futzing here
@@ -1665,18 +1665,18 @@ sub _fork_command
     # implement redirects
     if (defined $redirects{stdin})
     {
-	open STDIN,'<',$redirects{stdin}
-	    or die "Cannot redirect STDIN from $redirects{stdin}: $!";
+        open STDIN,'<',$redirects{stdin}
+            or die "Cannot redirect STDIN from $redirects{stdin}: $!";
     }
     if (defined $redirects{stdout})
     {
-	open STDOUT,'>',$redirects{stdout}
-	    or die "Cannot redirect STDOUT to $redirects{stdout}: $!";
+        open STDOUT,'>',$redirects{stdout}
+            or die "Cannot redirect STDOUT to $redirects{stdout}: $!";
     }
     if (defined $redirects{stderr})
     {
-	open STDERR,'>',$redirects{stderr}
-	    or die "Cannot redirect STDERR to $redirects{stderr}: $!";
+        open STDERR,'>',$redirects{stderr}
+            or die "Cannot redirect STDERR to $redirects{stderr}: $!";
     }
 
     exec @cmd;
@@ -1692,18 +1692,18 @@ sub _handle_wait_status
 
     if (WIFSIGNALED($status))
     {
-	my $sig = WTERMSIG($status);
-	return $child->{handlers}->{signaled}->($child, $sig);
+        my $sig = WTERMSIG($status);
+        return $child->{handlers}->{signaled}->($child, $sig);
     }
     elsif (WIFEXITED($status))
     {
-	my $code = WEXITSTATUS($status);
-	return $child->{handlers}->{exited_abnormally}->($child, $code)
-	    if $code != 0;
+        my $code = WEXITSTATUS($status);
+        return $child->{handlers}->{exited_abnormally}->($child, $code)
+            if $code != 0;
     }
     else
     {
-	die "WTF? Cannot decode wait status $status";
+        die "WTF? Cannot decode wait status $status";
     }
     return $child->{handlers}->{exited_normally}->($child);
 }
@@ -1718,14 +1718,14 @@ sub describe
     printf "    services:\n";
     foreach my $srv (values %{$self->{services}})
     {
-	printf "        ";
-	$srv->describe();
+        printf "        ";
+        $srv->describe();
     }
     printf "    daemons:\n";
     foreach my $daemon (values %{$self->{daemons}})
     {
-	printf "        ";
-	$daemon->describe();
+        printf "        ";
+        $daemon->describe();
     }
 }
 
@@ -1744,7 +1744,7 @@ sub quota_Z_go
 
     my $dir = dirname($filename);
     mkpath $dir
-	unless ( -d $dir );
+        unless ( -d $dir );
 
     my $fd = POSIX::creat($filename, 0600);
     POSIX::close($fd);
@@ -1756,7 +1756,7 @@ sub quota_Z_wait
     my $filename = $self->_quota_Z_file($mboxname);
 
     timed_wait(sub { return (! -f $filename); },
-	        description => "quota -Z to be finished with $mboxname");
+                description => "quota -Z to be finished with $mboxname");
 }
 
 #
@@ -1767,12 +1767,12 @@ sub unpackfile
     my ($self, $src, $dst) = @_;
 
     if (!defined($dst)) {
-	# unpack in base directory
-	$dst = $self->{basedir};
+        # unpack in base directory
+        $dst = $self->{basedir};
     }
     elsif ($dst !~ /^\//) {
-	# unpack relatively to base directory
-	$dst = $self->{basedir} . '/' . $dst;
+        # unpack relatively to base directory
+        $dst = $self->{basedir} . '/' . $dst;
     }
     # else: absolute path given
 
@@ -1781,23 +1781,23 @@ sub unpackfile
 
     my $file = [split(/\./, (split(/\//, $src))[-1])];
     if (grep { $_ eq 'tar' } @$file) {
-	push(@cmd, 'tar', '-x', '-f', $src, '-C', $dst);
+        push(@cmd, 'tar', '-x', '-f', $src, '-C', $dst);
     }
     elsif ($file->[-1] eq 'gz') {
-	$options->{redirects} = {
-	    stdout => "$dst/" . join('.', splice(@$file, 0, -1))
-	};
-	push(@cmd, 'gunzip', '-c', $src);
+        $options->{redirects} = {
+            stdout => "$dst/" . join('.', splice(@$file, 0, -1))
+        };
+        push(@cmd, 'gunzip', '-c', $src);
     }
     elsif ($file->[-1] eq 'bz2') {
-	$options->{redirects} = {
-	    stdout => "$dst/" . join('.', splice(@$file, 0, -1))
-	};
-	push(@cmd, 'bunzip2', '-c', $src);
+        $options->{redirects} = {
+            stdout => "$dst/" . join('.', splice(@$file, 0, -1))
+        };
+        push(@cmd, 'bunzip2', '-c', $src);
     }
     else {
-	# we don't handle this combination
-	die "Unhandled packed file $src";
+        # we don't handle this combination
+        die "Unhandled packed file $src";
     }
 
     return $self->run_command($options, @cmd);
@@ -1828,14 +1828,14 @@ sub folder_to_deleted_directories
     my $deldir = $self->{basedir} . "/data/DELETED/$folder";
     if ( -d $deldir )
     {
-	opendir DELDIR, $deldir
-	    or die "Cannot open directory $deldir: $!";
-	while (my $e = readdir DELDIR)
-	{
-	    push(@dirs, "$deldir/$e")
-		if ($e =~ m/^[0-9A-F]{8}$/);
-	}
-	closedir DELDIR;
+        opendir DELDIR, $deldir
+            or die "Cannot open directory $deldir: $!";
+        while (my $e = readdir DELDIR)
+        {
+            push(@dirs, "$deldir/$e")
+                if ($e =~ m/^[0-9A-F]{8}$/);
+        }
+        closedir DELDIR;
     }
     return @dirs;
 }
@@ -1846,32 +1846,32 @@ sub saslauthd
     unlink("$dir/mux");
     xlog "opening socket $dir/mux";
     my $sock = IO::Socket::UNIX->new(
-	Local => "$dir/mux",
-	Type => SOCK_STREAM,
-	Listen => SOMAXCONN,
+        Local => "$dir/mux",
+        Type => SOCK_STREAM,
+        Listen => SOMAXCONN,
     );
     die "FAILED to create socket $!" unless $sock;
     system("chmod 777 $dir/mux");
 
     eval {
-	while (my $client = $sock->accept()) {
-	    my $LoginName = get_counted_string($client);
-	    my $Password = get_counted_string($client);
-	    my $Service = lc get_counted_string($client);
-	    my $Realm = get_counted_string($client);
-	    xlog "authdaemon connection: $LoginName $Password $Service $Realm";
+        while (my $client = $sock->accept()) {
+            my $LoginName = get_counted_string($client);
+            my $Password = get_counted_string($client);
+            my $Service = lc get_counted_string($client);
+            my $Realm = get_counted_string($client);
+            xlog "authdaemon connection: $LoginName $Password $Service $Realm";
 
-	    # XXX - custom logic?
+            # XXX - custom logic?
 
-	    # OK :)
-	    if ($Password eq 'bad') {
-		$client->print(pack("nA3", 2, "NO\000"));
-	    }
-	    else {
-		$client->print(pack("nA3", 2, "OK\000"));
-	    }
-	    $client->close();
-	}
+            # OK :)
+            if ($Password eq 'bad') {
+                $client->print(pack("nA3", 2, "NO\000"));
+            }
+            else {
+                $client->print(pack("nA3", 2, "OK\000"));
+            }
+            $client->close();
+        }
     };
 }
 
@@ -1961,13 +1961,13 @@ sub get_sieve_script_dir
 
     if (defined $user)
     {
-	my $uhash = substr($user, 0, 1);
-	$sieved .= "$uhash/$user";
+        my $uhash = substr($user, 0, 1);
+        $sieved .= "$uhash/$user";
     }
     else
     {
-	# shared folder
-	$sieved .= 'global/';
+        # shared folder
+        $sieved .= 'global/';
     }
 
     return $sieved;
@@ -1984,22 +1984,22 @@ sub install_sieve_script
     xlog "Installing sieve script $name in $sieved";
 
     -d $sieved or mkpath $sieved
-	or die "Cannot make path $sieved: $!";
+        or die "Cannot make path $sieved: $!";
     die "Path does not exist: $sieved" if not -d $sieved;
 
     open(FH, '>', "$sieved/$name.script")
-	or die "Cannot open $sieved/$name.script for writing: $!";
+        or die "Cannot open $sieved/$name.script for writing: $!";
     print FH $script;
     close(FH);
 
     $self->run_command({ cyrus => 1 },
-			 "sievec",
-			 "$sieved/$name.script",
-			 "$sieved/$name.bc");
+                         "sievec",
+                         "$sieved/$name.script",
+                         "$sieved/$name.bc");
     die "File does not exist: $sieved/$name.bc" if not -f "$sieved/$name.bc";
 
     -e "$sieved/defaultbc" || symlink("$name.bc", "$sieved/defaultbc")
-	or die "Cannot symlink $name.bc to $sieved/defaultbc";
+        or die "Cannot symlink $name.bc to $sieved/defaultbc";
     die "Symlink does not exist: $sieved/defaultbc" if not -l "$sieved/defaultbc";
 
     xlog "Sieve script installed successfully";

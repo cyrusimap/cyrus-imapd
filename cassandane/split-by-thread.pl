@@ -19,11 +19,11 @@
 #     endorse or promote products derived from this software without
 #     prior written permission. For permission or any legal
 #     details, please contact
-# 	Opera Software Australia Pty. Ltd.
-# 	Level 50, 120 Collins St
-# 	Melbourne 3000
-# 	Victoria
-# 	Australia
+#       Opera Software Australia Pty. Ltd.
+#       Level 50, 120 Collins St
+#       Melbourne 3000
+#       Victoria
+#       Australia
 #
 #  4. Redistributions of any form whatsoever must retain the following
 #     acknowledgment:
@@ -56,26 +56,26 @@ while (my $a = shift)
 {
     if ($a eq '-f')
     {
-	usage() if defined $params{uri};
-	$params{type} = shift;
+        usage() if defined $params{uri};
+        $params{type} = shift;
     }
     elsif ($a eq '-u')
     {
-	usage() if defined $params{type};
-	$params{uri} = shift;
+        usage() if defined $params{type};
+        $params{uri} = shift;
     }
     elsif ($a eq '-v')
     {
-	$params{verbose} = 1;
+        $params{verbose} = 1;
     }
     elsif ($a =~ m/^-/)
     {
-	usage();
+        usage();
     }
     else
     {
-	usage() if defined $params{path};
-	$params{path} = $a;
+        usage() if defined $params{path};
+        $params{path} = $a;
     }
 }
 
@@ -88,11 +88,11 @@ sub extract_refs
 
     for (;;)
     {
-	my ($msgid, $rem) = ($str =~ m/[\s,]*(<[^\s<>]+@[^\s<>]+>)(.*)/);
-	last if !defined $msgid;
-	push(@refs, $msgid);
-	last if !defined $rem || !length $rem;
-	$str = $rem;
+        my ($msgid, $rem) = ($str =~ m/[\s,]*(<[^\s<>]+@[^\s<>]+>)(.*)/);
+        last if !defined $msgid;
+        push(@refs, $msgid);
+        last if !defined $rem || !length $rem;
+        $str = $rem;
     }
 
     return @refs;
@@ -108,10 +108,10 @@ my $max_msgs = 1000;
 sub thread_new
 {
     my $t =
-	{
-	    id => $next_thread_id++,
-	    messages => [],
-	};
+        {
+            id => $next_thread_id++,
+            messages => [],
+        };
     push(@threads, $t);
     return $t;
 }
@@ -129,35 +129,35 @@ while (my $msg = $store->read_message())
 {
     my $msgid = $msg->get_header('message-id');
     die "duplicate msgid $msgid"
-	if defined $threads_by_msgid{$msgid};
+        if defined $threads_by_msgid{$msgid};
 
     my @refs;
     eval
     {
-	@refs = extract_refs($msg);
+        @refs = extract_refs($msg);
     };
     if ($@)
     {
-	print STDERR "Can't get references: $@";
-	next;
+        print STDERR "Can't get references: $@";
+        next;
     }
 
     my $thread;
     foreach my $ref (@refs)
     {
-	my $t = $threads_by_msgid{$ref};
-	if (defined $t &&
-	    defined $thread &&
-	    $t->{id} != $thread->{id})
-	{
-	    print STDERR "Thread clash! $t->{id} vs $thread->{id}\n";
-	    next;
-	}
-	$thread = $t;
+        my $t = $threads_by_msgid{$ref};
+        if (defined $t &&
+            defined $thread &&
+            $t->{id} != $thread->{id})
+        {
+            print STDERR "Thread clash! $t->{id} vs $thread->{id}\n";
+            next;
+        }
+        $thread = $t;
     }
 
     $thread = thread_new()
-	if !defined $thread;
+        if !defined $thread;
     thread_add_message($thread, $msg);
 
     last if (--$max_msgs == 0);
@@ -169,12 +169,12 @@ foreach my $t (@threads)
     next if scalar(@{$t->{messages}}) < 8;
 
     my $store = Cassandane::MessageStoreFactory->create(
-		    type => 'mbox',
-		    path => sprintf("x/thread%04u", $t->{id}));
+                    type => 'mbox',
+                    path => sprintf("x/thread%04u", $t->{id}));
     $store->write_begin();
     foreach my $msg (@{$t->{messages}})
     {
-	$store->write_message($msg);
+        $store->write_message($msg);
     }
     $store->write_end();
 }

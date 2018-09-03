@@ -49,10 +49,10 @@ sub new
 {
     my ($class, %params) = @_;
     my $self = {
-	verbose => delete $params{verbose} || 0,
+        verbose => delete $params{verbose} || 0,
     };
     die "Unknown parameters: " . join(' ', keys %params)
-	if scalar %params;
+        if scalar %params;
     return bless $self, $class;
 }
 

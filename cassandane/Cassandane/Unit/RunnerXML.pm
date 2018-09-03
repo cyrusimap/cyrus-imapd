@@ -58,9 +58,9 @@ sub new {
     $generator ||= XML::Generator->new(escape => 'always', pretty => 2);
 
     return bless({directory => $directory, gen => $generator,
-		  all_tests_passed => 1,
-		  classrecs => {}},
-		 $class);
+                  all_tests_passed => 1,
+                  classrecs => {}},
+                 $class);
 }
 
 sub all_tests_passed {
@@ -83,10 +83,10 @@ sub _classrec {
     my ($self, $test) = @_;
 
     return $self->{classrecs}->{ref($test)} ||= {
-		testrecs => {}, tests => 0,
-		errors => 0, failures => 0,
-		timestamp => strftime("%Y-%m-%dT%H:%M:%S", gmtime(time())),
-		};
+                testrecs => {}, tests => 0,
+                errors => 0, failures => 0,
+                timestamp => strftime("%Y-%m-%dT%H:%M:%S", gmtime(time())),
+                };
 }
 
 sub _testrec {
@@ -94,7 +94,7 @@ sub _testrec {
 
     my $cr = $self->_classrec($test);
     return $cr->{testrecs}->{$test->name()} ||=
-		{ start_time => 0, node => undef, child_nodes => [] };
+                { start_time => 0, node => undef, child_nodes => [] };
 }
 
 sub add_pass {}
@@ -104,7 +104,7 @@ sub _extype
     my ($exception) = @_;
     my $o = $exception->object();
     return $o->to_string()
-	if (defined $o && $o->can('to_string'));
+        if (defined $o && $o->can('to_string'));
     return "unknown";
 }
 
@@ -116,9 +116,9 @@ sub add_failure {
     $cr->{failures}++;
     $self->{all_tests_passed} = 0;
     push(@{$tr->{child_nodes}},
-	 $self->{gen}->failure({type => _extype($exception),
-				message => $exception->get_message()},
-				$exception->stringify()));
+         $self->{gen}->failure({type => _extype($exception),
+                                message => $exception->get_message()},
+                                $exception->stringify()));
 }
 
 sub add_error {
@@ -129,9 +129,9 @@ sub add_error {
     $cr->{errors}++;
     $self->{all_tests_passed} = 0;
     push(@{$tr->{child_nodes}},
-	 $self->{gen}->error({type => _extype($exception),
-			      message => $exception->get_message()},
-			      $exception->stringify()));
+         $self->{gen}->error({type => _extype($exception),
+                              message => $exception->get_message()},
+                              $exception->stringify()));
 }
 
 sub start_test {
@@ -157,9 +157,9 @@ sub end_test {
     my $tr = $self->_testrec($test);
     my $time = time() - $tr->{start_time};
     $tr->{node} = $self->{gen}->testcase({name => $test->name(),
-					  classname => ref($test),
-					  time => sprintf('%.4f', $time)},
-					  @{$tr->{child_nodes}});
+                                          classname => ref($test),
+                                          time => sprintf('%.4f', $time)},
+                                          @{$tr->{child_nodes}});
     $cr->{time} += $time;
 }
 
@@ -169,30 +169,30 @@ sub _emit_xml {
     my $hostname = hostname();
 
     foreach my $class (keys %{$self->{classrecs}}) {
-	my $cr = $self->{classrecs}->{$class};
+        my $cr = $self->{classrecs}->{$class};
 
-	my $output = IO::File->new(">" . $self->_xml_filename($class));
-	unless(defined($output)) {
-	    die("Can't open " . $self->_xml_filename($class) . ": $!");
-	}
+        my $output = IO::File->new(">" . $self->_xml_filename($class));
+        unless(defined($output)) {
+            die("Can't open " . $self->_xml_filename($class) . ": $!");
+        }
 
-	my $time = sprintf('%.4f', $cr->{time});
-	my @child_nodes = map { $_->{node}; } (values %{$cr->{testrecs}});
-	unshift(@child_nodes, $self->{gen}->properties());
-	my $system_out = 'system-out';
-	push(@child_nodes, $self->{gen}->$system_out());
-	my $system_err = 'system-err';
-	push(@child_nodes, $self->{gen}->$system_err());
-	my $xml = $self->{gen}->testsuite({tests => $cr->{tests},
-					   failures => $cr->{failures},
-					   errors => $cr->{errors},
-					   time => $time,
-					   name => $class,
-					   hostname => $hostname,
-					   timestamp => $cr->{timestamp}},
-					  @child_nodes);
-	$output->print($xml);
-	$output->close();
+        my $time = sprintf('%.4f', $cr->{time});
+        my @child_nodes = map { $_->{node}; } (values %{$cr->{testrecs}});
+        unshift(@child_nodes, $self->{gen}->properties());
+        my $system_out = 'system-out';
+        push(@child_nodes, $self->{gen}->$system_out());
+        my $system_err = 'system-err';
+        push(@child_nodes, $self->{gen}->$system_err());
+        my $xml = $self->{gen}->testsuite({tests => $cr->{tests},
+                                           failures => $cr->{failures},
+                                           errors => $cr->{errors},
+                                           time => $time,
+                                           name => $class,
+                                           hostname => $hostname,
+                                           timestamp => $cr->{timestamp}},
+                                          @child_nodes);
+        $output->print($xml);
+        $output->close();
     }
 }
 
@@ -210,7 +210,7 @@ __END__
 
 =head1 NAME
 
-Test::Unit::Runner::XML - Generate XML reports from unit test results 
+Test::Unit::Runner::XML - Generate XML reports from unit test results
 
 =head1 SYNOPSIS
 
@@ -224,7 +224,7 @@ Test::Unit::Runner::XML - Generate XML reports from unit test results
 =head1 DESCRIPTION
 
 Test::Unit::Runner::XML generates XML reports from unit test results. The
-reports are in the same format as those produced by Ant's JUnit task, 
+reports are in the same format as those produced by Ant's JUnit task,
 allowing them to be used with Java continuous integration and reporting tools.
 
 =head1 CONSTRUCTOR
@@ -233,7 +233,7 @@ allowing them to be used with Java continuous integration and reporting tools.
 
 Construct a new runner that will write XML reports into $directory
 
-=head1 METHODS 
+=head1 METHODS
 
 =head2 start
 

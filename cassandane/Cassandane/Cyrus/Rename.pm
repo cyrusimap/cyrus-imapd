@@ -48,8 +48,8 @@ use Cassandane::Instance;
 
 Cassandane::Cyrus::TestCase::magic(MetaPartition => sub {
     shift->config_set(
-	'metapartition-default' => '@basedir@/meta',
-	'metapartition_files' => 'header index'
+        'metapartition-default' => '@basedir@/meta',
+        'metapartition_files' => 'header index'
     );
 });
 

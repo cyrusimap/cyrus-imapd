@@ -53,11 +53,11 @@ sub new {
 
     my $prefix = $cassini->val("cyrus default", 'prefix', '/usr/cyrus');
     $prefix = $params{cyrus_prefix}
-	if defined $params{cyrus_prefix};
+        if defined $params{cyrus_prefix};
 
     my $destdir = $cassini->val("cyrus default", 'destdir', '');
     $destdir = $params{cyrus_destdir}
-	if defined $params{cyrus_destdir};
+        if defined $params{cyrus_destdir};
 
     $self->{data} = _read_buildinfo($destdir, $prefix);
 

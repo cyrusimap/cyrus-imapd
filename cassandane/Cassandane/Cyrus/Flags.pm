@@ -89,16 +89,16 @@ sub test_deleted
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $msg{B} = $self->make_message('Message B');
     $msg{B}->set_attributes(id => 2,
-			    uid => 2,
-			    flags => []);
+                            uid => 2,
+                            flags => []);
     $msg{C} = $self->make_message('Message C');
     $msg{C}->set_attributes(id => 3,
-			    uid => 3,
-			    flags => []);
+                            uid => 3,
+                            flags => []);
     $self->check_messages(\%msg);
 
     xlog "Mark the middle message \\Deleted";
@@ -142,12 +142,12 @@ sub test_seen
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $msg{B} = $self->make_message('Message B');
     $msg{B}->set_attributes(id => 2,
-			    uid => 2,
-			    flags => []);
+                            uid => 2,
+                            flags => []);
     $self->check_messages(\%msg);
 
     xlog "Set \\Seen on message A";
@@ -203,12 +203,12 @@ sub test_seen_otheruser
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $msg{B} = $self->make_message('Message B');
     $msg{B}->set_attributes(id => 2,
-			    uid => 2,
-			    flags => []);
+                            uid => 2,
+                            flags => []);
     $self->check_messages(\%msg);
 
     # select AFTER creating messages so we don't get \Recent
@@ -259,12 +259,12 @@ sub test_flagged
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $msg{B} = $self->make_message('Message B');
     $msg{B}->set_attributes(id => 2,
-			    uid => 2,
-			    flags => []);
+                            uid => 2,
+                            flags => []);
     $self->check_messages(\%msg);
 
     xlog "Set \\Flagged on message A";
@@ -312,12 +312,12 @@ sub test_userflag
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $msg{B} = $self->make_message('Message B');
     $msg{B}->set_attributes(id => 2,
-			    uid => 2,
-			    flags => []);
+                            uid => 2,
+                            flags => []);
     $self->check_messages(\%msg);
 
     xlog "Set \$Foobar on message A";
@@ -366,12 +366,12 @@ sub test_expunge_removeflag
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $msg{B} = $self->make_message('Message B');
     $msg{B}->set_attributes(id => 2,
-			    uid => 2,
-			    flags => []);
+                            uid => 2,
+                            flags => []);
     $self->check_messages(\%msg);
 
     xlog "Set \$Foobar on message A";
@@ -431,38 +431,38 @@ sub test_max_userflags
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $msg{B} = $self->make_message('Message B');
     $msg{B}->set_attributes(id => 2,
-			    uid => 2,
-			    flags => []);
+                            uid => 2,
+                            flags => []);
     $self->check_messages(\%msg);
 
     my %allflags;
     for (my $i = 0 ; $i < MAX_USER_FLAGS ; $i++)
     {
-	my $flag;
+        my $flag;
 
-	for (;;)
-	{
-	    $flag = '$' . ucfirst(random_word());
-	    if (!defined $allflags{$flag})
-	    {
-		$allflags{$flag} = $i;
-		last;
-	    }
-	}
+        for (;;)
+        {
+            $flag = '$' . ucfirst(random_word());
+            if (!defined $allflags{$flag})
+            {
+                $allflags{$flag} = $i;
+                last;
+            }
+        }
 
-	xlog "Set $flag on message A";
-	$talk->store('1', '+flags', "($flag)");
-	$msg{A}->set_attribute(flags => [$flag]);
-	$self->check_messages(\%msg);
+        xlog "Set $flag on message A";
+        $talk->store('1', '+flags', "($flag)");
+        $msg{A}->set_attribute(flags => [$flag]);
+        $self->check_messages(\%msg);
 
-	xlog "Clear $flag on message A";
-	$talk->store('1', '-flags', "($flag)");
-	$msg{A}->set_attribute(flags => []);
-	$self->check_messages(\%msg);
+        xlog "Clear $flag on message A";
+        $talk->store('1', '-flags', "($flag)");
+        $msg{A}->set_attribute(flags => []);
+        $self->check_messages(\%msg);
     }
 
     xlog "Cannot set one more wafer-thin user flag";
@@ -506,20 +506,20 @@ sub test_search_allflags
     my %msg;
     for (my $i = 1 ; $i <= MAX_USER_FLAGS ; $i++)
     {
-	my $flag = "flag$i";
-	$msg{$i} = $self->make_message("Message $i");
-	xlog "Set $flag on message $i";
-	$talk->store($i, '+flags', "($flag)");
+        my $flag = "flag$i";
+        $msg{$i} = $self->make_message("Message $i");
+        xlog "Set $flag on message $i";
+        $talk->store($i, '+flags', "($flag)");
     }
 
     # for debugging
     $talk->fetch('1:*', '(uid flags)');
 
     for (my $i = 1 ; $i <= MAX_USER_FLAGS ; $i++) {
-	xlog "Can search for flag $i";
-	my $uids = $talk->search("keyword", "flag$i");
-	$self->assert_equals(1, scalar(@$uids));
-	$self->assert_equals($i, $uids->[0]);
+        xlog "Can search for flag $i";
+        my $uids = $talk->search("keyword", "flag$i");
+        $self->assert_equals(1, scalar(@$uids));
+        $self->assert_equals($i, $uids->[0]);
     }
 }
 
@@ -543,12 +543,12 @@ sub test_multi_flags
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $msg{B} = $self->make_message('Message B');
     $msg{B}->set_attributes(id => 2,
-			    uid => 2,
-			    flags => []);
+                            uid => 2,
+                            flags => []);
     $self->check_messages(\%msg);
 
     xlog "Set many flags on message A";
@@ -578,23 +578,23 @@ sub test_multi_flags
 
     xlog "Walk through every combination of flags";
     my %rev_map = (
-	1 => '\\Answered',
-	2 => '\\Flagged',
-	4 => '\\Draft',
-	8 => '\\Deleted',
-	16 => '\\Seen' );
+        1 => '\\Answered',
+        2 => '\\Flagged',
+        4 => '\\Draft',
+        8 => '\\Deleted',
+        16 => '\\Seen' );
     my $max = (2 ** scalar keys %rev_map) - 1;
     for (my $i = 0 ; $i <= $max ; $i++)
     {
-	my @flags;
-	for (my $m = 1 ; defined($rev_map{$m}) ; $m *= 2)
-	{
-	    push(@flags, $rev_map{$m}) if ($i & $m);
-	}
-	xlog "Setting " . join(',',@flags) . " on message A";
-	$talk->store('1', 'flags', '(' . join(' ',@flags) . ')');
-	$msg{A}->set_attribute(flags => \@flags);
-	$self->check_messages(\%msg);
+        my @flags;
+        for (my $m = 1 ; defined($rev_map{$m}) ; $m *= 2)
+        {
+            push(@flags, $rev_map{$m}) if ($i & $m);
+        }
+        xlog "Setting " . join(',',@flags) . " on message A";
+        $talk->store('1', 'flags', '(' . join(' ',@flags) . ')');
+        $msg{A}->set_attribute(flags => \@flags);
+        $self->check_messages(\%msg);
     }
 
     xlog "Reconnect, all the flags should still be on message A";
@@ -670,12 +670,12 @@ sub test_modseq
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $msg{B} = $self->make_message('Message B');
     $msg{B}->set_attributes(id => 2,
-			    uid => 2,
-			    flags => []);
+                            uid => 2,
+                            flags => []);
     my $act0 = $self->check_messages(\%msg);
     my $hms0 = $self->get_highestmodseq();
 
@@ -730,20 +730,20 @@ sub test_modseq
 # Test UNCHANGEDSINCE modifier; RFC4551 section 3.2.
 # - changing a flag with current modseq equal to the
 #   UNCHANGEDSINCE value
-#	- updates the flag
-#	- updates modseq
-#	- sends an untagged FETCH response
-#	- the FETCH response has the new modseq
-#	- returns an OK response
-#	- the UID does not appear in the MODIFIED response code
+#       - updates the flag
+#       - updates modseq
+#       - sends an untagged FETCH response
+#       - the FETCH response has the new modseq
+#       - returns an OK response
+#       - the UID does not appear in the MODIFIED response code
 # - ditto less than
 # - changing a flag with current modseq greater than the
 #   UNCHANGEDSINCE value
-#	- doesn't update the flag
-#	- doesn't update modseq
-#	- sent no FETCH untagged response
-#	- returns an OK response
-#	- but reports the UID in the MODIFIED response code
+#       - doesn't update the flag
+#       - doesn't update modseq
+#       - sent no FETCH untagged response
+#       - returns an OK response
+#       - but reports the UID in the MODIFIED response code
 #
 sub test_unchangedsince
 {
@@ -758,36 +758,36 @@ sub test_unchangedsince
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $msg{B} = $self->make_message('Message B');
     $msg{B}->set_attributes(id => 2,
-			    uid => 2,
-			    flags => []);
+                            uid => 2,
+                            flags => []);
     my $act0 = $self->check_messages(\%msg);
 
     my %fetched;
     my $modified;
     my %handlers =
     (
-	fetch => sub
-	{
-	    my ($response, $rr, $id) = @_;
+        fetch => sub
+        {
+            my ($response, $rr, $id) = @_;
 
-	    # older versions of Mail::IMAPTalk don't have
-	    # the 3rd argument.  We can't test properly in
-	    # those circumstances.
-	    $self->assert_not_null($id);
+            # older versions of Mail::IMAPTalk don't have
+            # the 3rd argument.  We can't test properly in
+            # those circumstances.
+            $self->assert_not_null($id);
 
-	    $fetched{$id} = $rr;
-	},
-	modified => sub
-	{
-	    my ($response, $rr) = @_;
-	    # we should not get more than one of these ever
-	    $self->assert_null($modified);
-	    $modified = $rr;
-	}
+            $fetched{$id} = $rr;
+        },
+        modified => sub
+        {
+            my ($response, $rr) = @_;
+            # we should not get more than one of these ever
+            $self->assert_null($modified);
+            $modified = $rr;
+        }
     );
 
     # Note: Mail::IMAPTalk::store() doesn't support modifiers
@@ -797,10 +797,10 @@ sub test_unchangedsince
     %fetched = ();
     $modified = undef;
     $talk->_imap_cmd('store', 1, \%handlers,
-		 '1', ['unchangedsince', get_modseq($act0, 'A')],
-		  '+flags', ['\\Flagged']);
+                 '1', ['unchangedsince', get_modseq($act0, 'A')],
+                  '+flags', ['\\Flagged']);
     my $res1 = $talk->get_last_completion_response();
-    #	- updates the flag
+    #   - updates the flag
     $msg{A}->set_attribute(flags => ['\\Flagged']);
     my $act1 = $self->check_messages(\%msg);
     xlog "returns an OK response?";
@@ -814,16 +814,16 @@ sub test_unchangedsince
     $self->assert_not_null($fetched{1});
     xlog "the FETCH response has the new modseq?";
     $self->assert_num_equals(get_modseq($act1, 'A'),
-			     get_modseq_from_fetch(\%fetched, 1));
+                             get_modseq_from_fetch(\%fetched, 1));
 
     xlog "Changing a flag with current modseq < UNCHANGEDSINCE";
     %fetched = ();
     $modified = undef;
     $talk->_imap_cmd('store', 1, \%handlers,
-		 '1', ['unchangedsince', get_modseq($act1, 'A')+1],
-		  '-flags', ['\\Flagged']);
+                 '1', ['unchangedsince', get_modseq($act1, 'A')+1],
+                  '-flags', ['\\Flagged']);
     my $res2 = $talk->get_last_completion_response();
-    #	- updates the flag
+    #   - updates the flag
     $msg{A}->set_attribute(flags => []);
     my $act2 = $self->check_messages(\%msg);
     xlog "returns an OK response?";
@@ -837,16 +837,16 @@ sub test_unchangedsince
     $self->assert_not_null($fetched{1});
     xlog "the FETCH response has the new modseq?";
     $self->assert_num_equals(get_modseq($act2, 'A'),
-			     get_modseq_from_fetch(\%fetched, 1));
+                             get_modseq_from_fetch(\%fetched, 1));
 
     xlog "Changing a flag with current modseq > UNCHANGEDSINCE";
     %fetched = ();
     $modified = undef;
     $talk->_imap_cmd('store', 1, \%handlers,
-		 '1', ['unchangedsince', get_modseq($act2, 'A')-1],
-		  '+flags', ['\\Flagged']);
+                 '1', ['unchangedsince', get_modseq($act2, 'A')-1],
+                  '+flags', ['\\Flagged']);
     my $res3 = $talk->get_last_completion_response();
-    #	- doesn't update the flag
+    #   - doesn't update the flag
     $msg{A}->set_attribute(flags => []);
     my $act3 = $self->check_messages(\%msg);
     xlog "returns an OK response?";
@@ -895,11 +895,11 @@ sub test_unchangedsince_multi
     my %msg;
     for (my $i = 1 ; $i <= 26 ; $i++)
     {
-	my $letter = chr(64 + $i);  # A ... Z
-	$msg{$letter} = $self->make_message('Message ' . $letter);
-	$msg{$letter}->set_attributes(id => $i,
-				      uid => $i,
-				      flags => []);
+        my $letter = chr(64 + $i);  # A ... Z
+        $msg{$letter} = $self->make_message('Message ' . $letter);
+        $msg{$letter}->set_attributes(id => $i,
+                                      uid => $i,
+                                      flags => []);
     }
 
     xlog "Bump the modseq on M,N,O";
@@ -911,19 +911,19 @@ sub test_unchangedsince_multi
     my $act0 = $self->check_messages(\%msg);
 
     {
-	my $store2 = $self->{instance}->get_service('imap')->create_store();
-	$store2->connect();
-	$store2->_select();
-	my $talk2 = $store2->get_client();
-	xlog "Delete and expunge D,E,F from another session";
-	for (my $i = 4 ; $i <= 6 ; $i++)
-	{
-	    my $letter = chr(64 + $i);  # D, E, F
-	    $talk2->store($i, '+flags', '(\\Deleted)');
-	    delete $msg{$letter};
-	}
-	$talk2->expunge();
-	$store2->disconnect();
+        my $store2 = $self->{instance}->get_service('imap')->create_store();
+        $store2->connect();
+        $store2->_select();
+        my $talk2 = $store2->get_client();
+        xlog "Delete and expunge D,E,F from another session";
+        for (my $i = 4 ; $i <= 6 ; $i++)
+        {
+            my $letter = chr(64 + $i);  # D, E, F
+            $talk2->store($i, '+flags', '(\\Deleted)');
+            delete $msg{$letter};
+        }
+        $talk2->expunge();
+        $store2->disconnect();
     }
 
 
@@ -931,24 +931,24 @@ sub test_unchangedsince_multi
     my $modified;
     my %handlers =
     (
-	fetch => sub
-	{
-	    my ($response, $rr, $id) = @_;
+        fetch => sub
+        {
+            my ($response, $rr, $id) = @_;
 
-	    # older versions of Mail::IMAPTalk don't have
-	    # the 3rd argument.  We can't test properly in
-	    # those circumstances.
-	    $self->assert_not_null($id);
+            # older versions of Mail::IMAPTalk don't have
+            # the 3rd argument.  We can't test properly in
+            # those circumstances.
+            $self->assert_not_null($id);
 
-	    $fetched{$id} = $rr;
-	},
-	modified => sub
-	{
-	    my ($response, $rr) = @_;
-	    # we should not get more than one of these ever
-	    $self->assert_null($modified);
-	    $modified = $rr;
-	}
+            $fetched{$id} = $rr;
+        },
+        modified => sub
+        {
+            my ($response, $rr) = @_;
+            # we should not get more than one of these ever
+            $self->assert_null($modified);
+            $modified = $rr;
+        }
     );
 
     # Note: Mail::IMAPTalk::store() doesn't support modifiers
@@ -958,8 +958,8 @@ sub test_unchangedsince_multi
     %fetched = ();
     $modified = undef;
     $talk->_imap_cmd('store', 1, \%handlers,
-		 \'1:*', ['unchangedsince', get_modseq($act0, 'Z')],
-		  '+flags', ['\\Flagged']);
+                 \'1:*', ['unchangedsince', get_modseq($act0, 'Z')],
+                  '+flags', ['\\Flagged']);
     my $res1 = $talk->get_last_completion_response();
 
     $msg{A}->set_attribute(flags => ['\\Flagged']);
@@ -991,8 +991,8 @@ sub test_unchangedsince_multi
     # have to renumber here to account for deletion
     for (my $i = 7 ; $i <= 26 ; $i++)
     {
-	my $letter = chr(64 + $i);  # G ... Z
-	$msg{$letter}->set_attribute(id => $i-3);
+        my $letter = chr(64 + $i);  # G ... Z
+        $msg{$letter}->set_attribute(id => $i-3);
     }
     my $act1 = $self->check_messages(\%msg);
 
@@ -1037,10 +1037,10 @@ sub test_unchangedsince_multi
     $self->assert_num_equals(23, scalar keys %fetched);
     foreach my $i (1..3, 7..12, 16..26)
     {
-	my $letter = chr(64 + $i);
-	$self->assert_not_null($fetched{$i});
-	$self->assert_num_equals(get_modseq($act1, $letter),
-				 get_modseq_from_fetch(\%fetched, $i));
+        my $letter = chr(64 + $i);
+        $self->assert_not_null($fetched{$i});
+        $self->assert_num_equals(get_modseq($act1, $letter),
+                                 get_modseq_from_fetch(\%fetched, $i));
     }
 
 }
@@ -1059,16 +1059,16 @@ sub test_setseen
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $msg{B} = $self->make_message('Message B');
     $msg{B}->set_attributes(id => 2,
-			    uid => 2,
-			    flags => []);
+                            uid => 2,
+                            flags => []);
     $msg{C} = $self->make_message('Message C');
     $msg{C}->set_attributes(id => 3,
-			    uid => 3,
-			    flags => []);
+                            uid => 3,
+                            flags => []);
     $self->check_messages(\%msg);
 
     xlog "Fetch body of message A";
@@ -1107,12 +1107,12 @@ sub test_setseen_after_store
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $msg{B} = $self->make_message('Message B');
     $msg{B}->set_attributes(id => 2,
-			    uid => 2,
-			    flags => []);
+                            uid => 2,
+                            flags => []);
     $self->check_messages(\%msg);
 
     xlog "Fetch body of message A";
@@ -1149,8 +1149,8 @@ sub test_setseen_notify
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
-			    uid => 1,
-			    flags => []);
+                            uid => 1,
+                            flags => []);
     $self->check_messages(\%msg);
 
     my $notify1 = $self->{instance}->getnotify();

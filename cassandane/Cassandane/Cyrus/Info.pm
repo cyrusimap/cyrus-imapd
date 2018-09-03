@@ -71,17 +71,17 @@ sub run_cyr_info
     my $filename = $self->{instance}->{basedir} . "/cyr_info.out";
 
     $self->{instance}->run_command({
-	    cyrus => 1,
-	    redirects => { stdout => $filename },
-	},
-	'cyr_info',
-	# we get -C for free
-	'-M', $self->{instance}->_master_conf(),
-	@args
+            cyrus => 1,
+            redirects => { stdout => $filename },
+        },
+        'cyr_info',
+        # we get -C for free
+        '-M', $self->{instance}->_master_conf(),
+        @args
     );
 
     open RESULTS, '<', $filename
-	or die "Cannot open $filename for reading: $!";
+        or die "Cannot open $filename for reading: $!";
     my @res = readline(RESULTS);
     close RESULTS;
 
@@ -97,23 +97,23 @@ sub bogus_test_info_conf
     # Slurp the imapd.conf
     my $filename = $self->{instance}->_imapd_conf();
     open CONF, '<', $filename
-	or die "Cannot open $filename for reading: $!";
+        or die "Cannot open $filename for reading: $!";
     my @imapd_conf = readline(CONF);
     close CONF;
 
     @imapd_conf = sort {
-	    substr($a, 0, index($a, ':'))
-	    cmp
-	    substr($b, 0, index($b, ':'))
-	} @imapd_conf;
+            substr($a, 0, index($a, ':'))
+            cmp
+            substr($b, 0, index($b, ':'))
+        } @imapd_conf;
 
     my @output = $self->run_cyr_info('conf');
 
     @output = sort {
-	    substr($a, 0, index($a, ':'))
-	    cmp
-	    substr($b, 0, index($b, ':'))
-	} @output;
+            substr($a, 0, index($a, ':'))
+            cmp
+            substr($b, 0, index($b, ':'))
+        } @output;
 
     $self->assert_deep_equals(\@imapd_conf, \@output);
 }

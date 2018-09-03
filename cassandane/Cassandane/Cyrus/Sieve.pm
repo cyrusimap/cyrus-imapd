@@ -53,25 +53,25 @@ sub new
 
     my ($maj, $min) = Cassandane::Instance->get_version();
     if ($maj == 3 && $min == 0) {
-	# need to explicitly add 'body' to sieve_extensions for 3.0
-	$config->set(sieve_extensions =>
-	    "fileinto reject vacation vacation-seconds imapflags notify " .
-	    "envelope relational regex subaddress copy date index " .
-	    "imap4flags mailbox mboxmetadata servermetadata variables " .
-	    "body");
+        # need to explicitly add 'body' to sieve_extensions for 3.0
+        $config->set(sieve_extensions =>
+            "fileinto reject vacation vacation-seconds imapflags notify " .
+            "envelope relational regex subaddress copy date index " .
+            "imap4flags mailbox mboxmetadata servermetadata variables " .
+            "body");
     }
     elsif ($maj < 3) {
-	# also for 2.5 (the earliest Cyrus that Cassandane can test)
+        # also for 2.5 (the earliest Cyrus that Cassandane can test)
         $config->set(sieve_extensions =>
-	    "fileinto reject vacation vacation-seconds imapflags notify " .
-	    "envelope relational regex subaddress copy date index " .
-	    "imap4flags body");
+            "fileinto reject vacation vacation-seconds imapflags notify " .
+            "envelope relational regex subaddress copy date index " .
+            "imap4flags body");
     }
 
     return $class->SUPER::new({
-	    config => $config,
-	    deliver => 1,
-	    services => [ 'imap', 'sieve' ],
+            config => $config,
+            deliver => 1,
+            services => [ 'imap', 'sieve' ],
             adminstore => 1,
     }, @_);
 }
@@ -95,18 +95,18 @@ sub read_errors
     my @errors;
     if ( -f $filename )
     {
-	open FH, '<', $filename
-	    or die "Cannot open $filename for reading: $!";
-	@errors = readline(FH);
-	close FH;
-	if (get_verbose)
-	{
-	    xlog "errors: ";
-	    map { xlog $_ } @errors;
-	}
-	# Hack to remove spurious junk generated when
-	# running coveraged code under ggcov-run
-	@errors = grep { ! m/libggcov:/ && ! m/profiling:/ } @errors;
+        open FH, '<', $filename
+            or die "Cannot open $filename for reading: $!";
+        @errors = readline(FH);
+        close FH;
+        if (get_verbose)
+        {
+            xlog "errors: ";
+            map { xlog $_ } @errors;
+        }
+        # Hack to remove spurious junk generated when
+        # running coveraged code under ggcov-run
+        @errors = grep { ! m/libggcov:/ && ! m/profiling:/ } @errors;
     }
     return @errors;
 }
@@ -124,36 +124,36 @@ sub compile_sievec
     $self->assert(( ! -f "$basedir/$name.errors" ));
 
     open(FH, '>', "$basedir/$name.script")
-	or die "Cannot open $basedir/$name.script for writing: $!";
+        or die "Cannot open $basedir/$name.script for writing: $!";
     print FH $script;
     close(FH);
 
     xlog "Running sievec on script $name";
     my $result = $self->{instance}->run_command(
-	    {
-		cyrus => 1,
-		redirects => { stderr => "$basedir/$name.errors" },
-		handlers => {
-		    exited_normally => sub { return 'success'; },
-		    exited_abnormally => sub { return 'failure'; },
-		},
-	    },
-	    "sievec", "$basedir/$name.script", "$basedir/$name.bc");
+            {
+                cyrus => 1,
+                redirects => { stderr => "$basedir/$name.errors" },
+                handlers => {
+                    exited_normally => sub { return 'success'; },
+                    exited_abnormally => sub { return 'failure'; },
+                },
+            },
+            "sievec", "$basedir/$name.script", "$basedir/$name.bc");
 
     # Read the errors file in @errors
     my (@errors) = read_errors("$basedir/$name.errors");
 
     if ($result eq 'success')
     {
-	xlog "Checking that sievec wrote the output .bc file";
-	$self->assert(( -f "$basedir/$name.bc" ));
-	xlog "Checking that sievec didn't write anything to stderr";
-	$self->assert_equals(0, scalar(@errors));
+        xlog "Checking that sievec wrote the output .bc file";
+        $self->assert(( -f "$basedir/$name.bc" ));
+        xlog "Checking that sievec didn't write anything to stderr";
+        $self->assert_equals(0, scalar(@errors));
     }
     elsif ($result eq 'failure')
     {
-	xlog "Checking that sievec didn't write the output .bc file";
-	$self->assert(( ! -f "$basedir/$name.bc" ));
+        xlog "Checking that sievec didn't write the output .bc file";
+        $self->assert(( ! -f "$basedir/$name.bc" ));
     }
 
     return ($result, join("\n", @errors));
@@ -165,7 +165,7 @@ sub compile_timsieved
 
     my $basedir = $self->{instance}->{basedir};
     my $bindir = $self->{instance}->{cyrus_destdir} .
-		 $self->{instance}->{cyrus_prefix} . '/bin';
+                 $self->{instance}->{cyrus_prefix} . '/bin';
     my $srv = $self->{instance}->get_service('sieve');
 
     xlog "Checking preconditions for compiling sieve script $name";
@@ -174,44 +174,44 @@ sub compile_timsieved
     $self->assert(( ! -f "$basedir/$name.errors" ));
 
     open(FH, '>', "$basedir/$name.script")
-	or die "Cannot open $basedir/$name.script for writing: $!";
+        or die "Cannot open $basedir/$name.script for writing: $!";
     print FH $script;
     close(FH);
 
     if (! -f "$basedir/sieve.passwd" )
     {
-	open(FH, '>', "$basedir/sieve.passwd")
-	    or die "Cannot open $basedir/sieve.passwd for writing: $!";
-	print FH "\ntestpw\n";
-	close(FH);
+        open(FH, '>', "$basedir/sieve.passwd")
+            or die "Cannot open $basedir/sieve.passwd for writing: $!";
+        print FH "\ntestpw\n";
+        close(FH);
     }
 
     xlog "Running installsieve on script $name";
     my $result = $self->{instance}->run_command({
-		redirects => {
-		    # No cyrus => 1 as installsieve is a Perl
-		    # script which doesn't need Valgrind and
-		    # doesn't understand the Cyrus -C option
-		    stdin => "$basedir/sieve.passwd",
-		    stderr => "$basedir/$name.errors"
-		},
-		handlers => {
-		    exited_normally => sub { return 'success'; },
-		    exited_abnormally => sub { return 'failure'; },
-		},
-	    },
-	    "$bindir/installsieve",
-	    "-i", "$basedir/$name.script",
-	    "-u", "cassandane",
-	    $srv->host() . ":" . $srv->port());
+                redirects => {
+                    # No cyrus => 1 as installsieve is a Perl
+                    # script which doesn't need Valgrind and
+                    # doesn't understand the Cyrus -C option
+                    stdin => "$basedir/sieve.passwd",
+                    stderr => "$basedir/$name.errors"
+                },
+                handlers => {
+                    exited_normally => sub { return 'success'; },
+                    exited_abnormally => sub { return 'failure'; },
+                },
+            },
+            "$bindir/installsieve",
+            "-i", "$basedir/$name.script",
+            "-u", "cassandane",
+            $srv->host() . ":" . $srv->port());
 
     # Read the errors file in @errors
     my (@errors) = read_errors("$basedir/$name.errors");
 
     if ($result eq 'success')
     {
-	xlog "Checking that installsieve didn't write anything to stderr";
-	$self->assert_equals(0, scalar(@errors));
+        xlog "Checking that installsieve didn't write anything to stderr";
+        $self->assert_equals(0, scalar(@errors));
     }
 
     return ($result, join("\n", @errors));
@@ -238,7 +238,7 @@ sub test_vacation_with_following_rules
 require ["fileinto", "reject", "vacation", "imapflags", "notify", "envelope", "relational", "regex", "subaddress", "copy", "mailbox", "mboxmetadata", "servermetadata", "date", "index", "comparator-i;ascii-numeric", "variables"];
 
 ### 5. Sieve generated for vacation responses
-if 
+if
   allof(
   currentdate :zone "+0000" :value "ge" "iso8601" "2017-06-08T05:00:00Z",
   currentdate :zone "+0000" :value "le" "iso8601" "2017-06-13T19:00:00Z"
@@ -289,7 +289,7 @@ EOF
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create($target)
-	 or die "Cannot create $target: $@";
+         or die "Cannot create $target: $@";
     $self->{store}->set_fetch_attributes('uid');
 
     xlog "Deliver another message";
@@ -318,7 +318,7 @@ sub test_deliver_specialuse
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create($target, "(use (\\Trash))")
-	 or die "Cannot create $target: $@";
+         or die "Cannot create $target: $@";
     $self->{store}->set_fetch_attributes('uid');
 
     xlog "Install a sieve script filing all mail into the Trash role";
@@ -353,7 +353,7 @@ sub test_deliver_compile
     xlog "Create the target folder";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($target)
-	 or die "Cannot create $target: $@";
+         or die "Cannot create $target: $@";
     $self->{store}->set_fetch_attributes('uid');
 
     xlog "Install a sieve script filing all mail into the target folder";
@@ -391,63 +391,63 @@ sub badscript_common
     my $errs;
 
     ($res, $errs) = $self->compile_sieve_script('badrequire',
-	"require [\"nonesuch\"];\n");
+        "require [\"nonesuch\"];\n");
     $self->assert_str_equals('failure', $res);
     $self->assert_matches(qr/Unsupported feature.*nonesuch/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badreject1',
-	"reject \"foo\"\n");
+        "reject \"foo\"\n");
     $self->assert_str_equals('failure', $res);
     $self->assert_matches(qr/line 1: reject (?:extension )?MUST be enabled/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badreject2',
-	"require [\"reject\"];\nreject\n");
+        "require [\"reject\"];\nreject\n");
     $self->assert_str_equals('failure', $res);
     $self->assert_matches(qr/line 3: syntax error.*expecting STRING/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badreject3',
-	"require [\"reject\"];\nreject 42\n");
+        "require [\"reject\"];\nreject 42\n");
     $self->assert_str_equals('failure', $res);
     $self->assert_matches(qr/line 2: syntax error.*expecting STRING/, $errs);
 
     # TODO: test UTF-8 verification of the string parameter
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto1',
-	"fileinto \"foo\"\n");
+        "fileinto \"foo\"\n");
     $self->assert_str_equals('failure', $res);
     $self->assert_matches(qr/line 1: fileinto (?:extension )?MUST be enabled/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto2',
-	"require [\"fileinto\"];\nfileinto\n");
+        "require [\"fileinto\"];\nfileinto\n");
     $self->assert_str_equals('failure', $res);
     $self->assert_matches(qr/line 3: syntax error.*unexpected.*\$end/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto3',
-	"require [\"fileinto\"];\nfileinto 42\n");
+        "require [\"fileinto\"];\nfileinto 42\n");
     $self->assert_str_equals('failure', $res);
     $self->assert_matches(qr/line 2: syntax error.*unexpected.*NUMBER/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto4',
-	"require [\"fileinto\"];\nfileinto :copy \"foo\"\n");
+        "require [\"fileinto\"];\nfileinto :copy \"foo\"\n");
     $self->assert_str_equals('failure', $res);
     $self->assert_matches(qr/line 2: copy (?:extension )?MUST be enabled/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto5',
-	"require [\"fileinto\",\"copy\"];\nfileinto \"foo\"\n");
+        "require [\"fileinto\",\"copy\"];\nfileinto \"foo\"\n");
     $self->assert_str_equals('failure', $res);
     $self->assert_matches(qr/line 3: syntax error.*expecting.*;/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('badfileinto6',
-	"require [\"fileinto\",\"copy\"];\nfileinto :copy \"foo\"\n");
+        "require [\"fileinto\",\"copy\"];\nfileinto :copy \"foo\"\n");
     $self->assert_str_equals('failure', $res);
     $self->assert_matches(qr/line 3: syntax error.*expecting.*;/, $errs);
 
     ($res, $errs) = $self->compile_sieve_script('goodfileinto7',
-	"require [\"fileinto\",\"copy\"];\nfileinto \"foo\";\n");
+        "require [\"fileinto\",\"copy\"];\nfileinto \"foo\";\n");
     $self->assert_str_equals('success', $res);
 
     ($res, $errs) = $self->compile_sieve_script('goodfileinto8',
-	"require [\"fileinto\",\"copy\"];\nfileinto :copy \"foo\";\n");
+        "require [\"fileinto\",\"copy\"];\nfileinto :copy \"foo\";\n");
     $self->assert_str_equals('success', $res);
 
     # TODO: test UTF-8 verification of the string parameter
@@ -548,10 +548,10 @@ sub test_deliver_fileinto_dot
     xlog "Create the target folder";
 
     my $target = Cassandane::Mboxname->new(config => $self->{instance}->{config},
-					   userid => $user,
-					   box => 'target')->to_external();
+                                           userid => $user,
+                                           box => 'target')->to_external();
     $imaptalk->create($target)
-	 or die "Cannot create $target: $@";
+         or die "Cannot create $target: $@";
 
     xlog "Install the sieve script";
     $self->{instance}->install_sieve_script(<<EOF
@@ -587,13 +587,13 @@ sub XXXtest_shared_delivery_addflag
     my $admintalk = $self->{adminstore}->get_client();
     my $target = "shared.departments.cis";
     $admintalk->create($target)
-	or die "Cannot create folder \"$target\": $@";
+        or die "Cannot create folder \"$target\": $@";
     $admintalk->setacl($target, admin => 'lrswipkxtecda')
-	or die "Cannot setacl for \"$target\": $@";
+        or die "Cannot setacl for \"$target\": $@";
     $admintalk->setacl($target, 'cassandane' => 'lrswipkxtecd')
-	or die "Cannot setacl for \"$target\": $@";
+        or die "Cannot setacl for \"$target\": $@";
     $admintalk->setacl($target, 'anyone' => 'p')
-	or die "Cannot setacl for \"$target\": $@";
+        or die "Cannot setacl for \"$target\": $@";
 
 
     xlog "Install the sieve script";
@@ -611,7 +611,7 @@ EOF
 
     xlog "Tell the folder to run the sieve script";
     $admintalk->setmetadata($target, "/shared/vendor/cmu/cyrus-imapd/sieve", $scriptname)
-	or die "Cannot set metadata: $@";
+        or die "Cannot set metadata: $@";
 
     xlog "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "quinoa");
@@ -647,31 +647,31 @@ EOF
     );
 
     my @cases = (
-	{ subject => 'quinoa', filedto => $hitfolder },
-	{ subject => 'QUINOA', filedto => $hitfolder },
-	{ subject => 'Quinoa', filedto => $hitfolder },
-	{ subject => 'QuinoA', filedto => $hitfolder },
-	{ subject => 'qUINOa', filedto => $hitfolder },
-	{ subject => 'selvage', filedto => $missfolder },
+        { subject => 'quinoa', filedto => $hitfolder },
+        { subject => 'QUINOA', filedto => $hitfolder },
+        { subject => 'Quinoa', filedto => $hitfolder },
+        { subject => 'QuinoA', filedto => $hitfolder },
+        { subject => 'qUINOa', filedto => $hitfolder },
+        { subject => 'selvage', filedto => $missfolder },
     );
 
     my %uid = ($hitfolder => 1, $missfolder => 1);
     my %exp;
     foreach my $case (@cases)
     {
-	xlog "Deliver a message with subject \"$case->{subject}\"";
-	my $msg = $self->{gen}->generate(subject => $case->{subject});
-	$msg->set_attribute(uid => $uid{$case->{filedto}});
-	$uid{$case->{filedto}}++;
-	$self->{instance}->deliver($msg);
+        xlog "Deliver a message with subject \"$case->{subject}\"";
+        my $msg = $self->{gen}->generate(subject => $case->{subject});
+        $msg->set_attribute(uid => $uid{$case->{filedto}});
+        $uid{$case->{filedto}}++;
+        $self->{instance}->deliver($msg);
         $exp{$case->{filedto}}->{$case->{subject}} = $msg;
     }
 
     xlog "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
-	$self->{store}->set_folder($folder);
-	$self->check_messages($exp{$folder}, check_guid => 0);
+        $self->{store}->set_folder($folder);
+        $self->check_messages($exp{$folder}, check_guid => 0);
     }
 }
 
@@ -727,8 +727,8 @@ EOF
     xlog "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
-	$self->{store}->set_folder($folder);
-	$self->check_messages($exp{$folder}, check_guid => 0);
+        $self->{store}->set_folder($folder);
+        $self->check_messages($exp{$folder}, check_guid => 0);
     }
 }
 
@@ -785,8 +785,8 @@ EOF
     xlog "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
-	$self->{store}->set_folder($folder);
-	$self->check_messages($exp{$folder}, check_guid => 0);
+        $self->{store}->set_folder($folder);
+        $self->check_messages($exp{$folder}, check_guid => 0);
     }
 }
 
@@ -840,8 +840,8 @@ EOF
     xlog "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
-	$self->{store}->set_folder($folder);
-	$self->check_messages($exp{$folder}, check_guid => 0);
+        $self->{store}->set_folder($folder);
+        $self->check_messages($exp{$folder}, check_guid => 0);
     }
 }
 
@@ -898,8 +898,8 @@ EOF
     xlog "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
-	$self->{store}->set_folder($folder);
-	$self->check_messages($exp{$folder}, check_guid => 0);
+        $self->{store}->set_folder($folder);
+        $self->check_messages($exp{$folder}, check_guid => 0);
     }
 }
 
@@ -953,8 +953,8 @@ EOF
     xlog "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
-	$self->{store}->set_folder($folder);
-	$self->check_messages($exp{$folder}, check_guid => 0);
+        $self->{store}->set_folder($folder);
+        $self->check_messages($exp{$folder}, check_guid => 0);
     }
 }
 
@@ -1012,8 +1012,8 @@ EOF
     xlog "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
-	$self->{store}->set_folder($folder);
-	$self->check_messages($exp{$folder}, check_guid => 0);
+        $self->{store}->set_folder($folder);
+        $self->check_messages($exp{$folder}, check_guid => 0);
     }
 }
 
@@ -1069,8 +1069,8 @@ EOF
     xlog "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
-	$self->{store}->set_folder($folder);
-	$self->check_messages($exp{$folder}, check_guid => 0);
+        $self->{store}->set_folder($folder);
+        $self->check_messages($exp{$folder}, check_guid => 0);
     }
 }
 
@@ -1416,8 +1416,8 @@ EOF
     xlog "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
-	$self->{store}->set_folder($folder);
-	$self->check_messages($exp{$folder}, check_guid => 0);
+        $self->{store}->set_folder($folder);
+        $self->check_messages($exp{$folder}, check_guid => 0);
     }
 }
 
@@ -1652,11 +1652,11 @@ To: foo/bar <foo@bar.com>
 Message-ID: <fake.1528862927.58376@person.com>
 Subject: Confirmation of your order
 MIME-Version: 1.0
-Content-Type: multipart/mixed; 
+Content-Type: multipart/mixed;
   boundary="----=_Part_91374_1856076643.1527870431792"
 
 ------=_Part_91374_1856076643.1527870431792
-Content-Type: multipart/alternative; 
+Content-Type: multipart/alternative;
   boundary="----=_Part_91373_1043761677.1527870431791"
 
 ------=_Part_91373_1043761677.1527870431791
@@ -1793,11 +1793,11 @@ To: foo/bar <foo@bar.com>
 Message-ID: <fake.1528862927.58376@person.com>
 Subject: Confirmation of your order
 MIME-Version: 1.0
-Content-Type: multipart/mixed; 
+Content-Type: multipart/mixed;
   boundary="----=_Part_91374_1856076643.1527870431792"
 
 ------=_Part_91374_1856076643.1527870431792
-Content-Type: multipart/alternative; 
+Content-Type: multipart/alternative;
   boundary="----=_Part_91373_1043761677.1527870431791"
 
 ------=_Part_91373_1043761677.1527870431791
@@ -1974,8 +1974,8 @@ EOF
     xlog "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
-	$self->{store}->set_folder($folder);
-	$self->check_messages($exp{$folder}, check_guid => 0);
+        $self->{store}->set_folder($folder);
+        $self->check_messages($exp{$folder}, check_guid => 0);
     }
 }
 
@@ -2035,8 +2035,8 @@ EOF
     xlog "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
-	$self->{store}->set_folder($folder);
-	$self->check_messages($exp{$folder}, check_guid => 0);
+        $self->{store}->set_folder($folder);
+        $self->check_messages($exp{$folder}, check_guid => 0);
     }
 }
 

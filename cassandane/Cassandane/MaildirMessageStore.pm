@@ -49,9 +49,9 @@ sub new
 {
     my ($class, %params) = @_;
     my %bits = (
-	directory => delete $params{directory},
-	next_uid => 0 + (delete $params{next_uid} || 1),
-	uids_to_read => [],
+        directory => delete $params{directory},
+        next_uid => 0 + (delete $params{next_uid} || 1),
+        uids_to_read => [],
     );
     my $self = $class->SUPER::new(%params);
     map { $self->{$_} = $bits{$_}; } keys %bits;
@@ -64,8 +64,8 @@ sub write_begin
 
     if (defined $self->{directory} && ! -d $self->{directory})
     {
-	mkpath($self->{directory})
-	    or die "Couldn't make path $self->{directory}";
+        mkpath($self->{directory})
+            or die "Couldn't make path $self->{directory}";
     }
 }
 
@@ -78,15 +78,15 @@ sub write_message
     my $filename;
     for (;;)
     {
-	my $uid = $self->{next_uid};
-	$self->{next_uid} = $self->{next_uid} + 1;
-	$filename = "$directory/$uid.";
-	last unless ( -f $filename );
+        my $uid = $self->{next_uid};
+        $self->{next_uid} = $self->{next_uid} + 1;
+        $filename = "$directory/$uid.";
+        last unless ( -f $filename );
     }
 
     my $fh;
     open $fh,'>',$filename
-	or die "Cannot open $filename for writing: $!";
+        or die "Cannot open $filename for writing: $!";
     print $fh $msg;
     close $fh;
 }
@@ -102,7 +102,7 @@ sub read_begin
     my ($self) = @_;
 
     die "No such directory: $self->{directory}"
-	if (defined $self->{directory} && ! -d $self->{directory});
+        if (defined $self->{directory} && ! -d $self->{directory});
 
     # Scan the directory for filenames.  We need to read the
     # whole directory and sort the results because the messages
@@ -112,13 +112,13 @@ sub read_begin
     my $directory = ($self->{directory} || ".");
     my $fh;
     opendir $fh,$directory
-	or die "Cannot open directory $directory for reading: $!";
+        or die "Cannot open directory $directory for reading: $!";
 
     while (my $e = readdir $fh)
     {
-	my ($uid) = ($e =~ m/^(\d+)\.$/);
-	next unless defined $uid;
-	push(@uids, 0+$uid);
+        my ($uid) = ($e =~ m/^(\d+)\.$/);
+        next unless defined $uid;
+        push(@uids, 0+$uid);
     }
 
     @uids = sort { $a <=> $b } @uids;
@@ -135,17 +135,17 @@ sub read_message
 
     for (;;)
     {
-	my $uid = shift(@{$self->{uids_to_read}});
-	return undef
-	    unless defined $uid;
-	$filename = "$directory/$uid.";
-	# keep trying if a message disappeared
-	last if ( -f $filename );
+        my $uid = shift(@{$self->{uids_to_read}});
+        return undef
+            unless defined $uid;
+        $filename = "$directory/$uid.";
+        # keep trying if a message disappeared
+        last if ( -f $filename );
     }
 
     my $fh;
     open $fh,'<',$filename
-	or die "Cannot open $filename for reading: $!";
+        or die "Cannot open $filename for reading: $!";
     my $msg = Cassandane::Message->new(fh => $fh);
     close $fh;
 
@@ -165,9 +165,9 @@ sub remove
 
     if (defined $self->{directory})
     {
-	my $r = rmtree($self->{directory});
-	die "rmtree failed: $!"
-	    if (!$r && ! $!{ENOENT} );
+        my $r = rmtree($self->{directory});
+        die "rmtree failed: $!"
+            if (!$r && ! $!{ENOENT} );
     }
 }
 

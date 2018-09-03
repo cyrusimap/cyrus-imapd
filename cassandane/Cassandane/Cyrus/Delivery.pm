@@ -59,7 +59,7 @@ sub new
 {
     my $class = shift;
     return $class->SUPER::new({
-	    deliver => 1,
+            deliver => 1,
             adminstore => 1,
     }, @_);
 }
@@ -361,7 +361,7 @@ sub test_duplicate_suppression_off
     xlog "Create the target folder";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
-	or die "Cannot create $folder: $@";
+        or die "Cannot create $folder: $@";
     $self->{store}->set_fetch_attributes('uid');
 
     xlog "Deliver a message";
@@ -399,7 +399,7 @@ sub test_duplicate_suppression_on
     xlog "Create the target folder";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder1)
-	or die "Cannot create $folder1: $@";
+        or die "Cannot create $folder1: $@";
     $self->{store}->set_fetch_attributes('uid');
 
     xlog "Deliver a message";
@@ -421,7 +421,7 @@ sub test_duplicate_suppression_on
 
     xlog "Rename the folder";
     $imaptalk->rename($folder1, $folder2)
-	or die "Cannot rename $folder1 to $folder2: $@";
+        or die "Cannot rename $folder1 to $folder2: $@";
 
     xlog "Try to deliver the same message again";
     $self->{instance}->deliver($msgs{1}, folder => $folder2);
@@ -446,7 +446,7 @@ sub test_duplicate_suppression_on_delete
     xlog "Create the target folder";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
-	or die "Cannot create $folder: $@";
+        or die "Cannot create $folder: $@";
 
     xlog "Deliver a message";
     my %msgs;
@@ -460,11 +460,11 @@ sub test_duplicate_suppression_on_delete
     xlog "Delete the folder";
     $imaptalk->unselect();
     $imaptalk->delete($folder)
-	or die "Cannot delete $folder: $@";
+        or die "Cannot delete $folder: $@";
 
     xlog "Create another folder of the same name";
     $imaptalk->create($folder)
-	or die "Cannot create another $folder: $@";
+        or die "Cannot create another $folder: $@";
 
     xlog "Check that all messages are gone";
     $self->{store}->set_folder($folder);
@@ -505,7 +505,7 @@ sub test_duplicate_suppression_on_badmbox
     xlog "Create a folder of the given name";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
-	or die "Cannot create $folder: $@";
+        or die "Cannot create $folder: $@";
 
     xlog "Try to deliver the same message to the new folder";
     $self->{instance}->deliver($msgs{1}, folder => $folder);

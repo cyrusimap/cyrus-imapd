@@ -92,10 +92,10 @@ sub make_message_pair
     $self->assert_str_not_equals($guid0, $guid1);
     if ($guid0 gt $guid1)
     {
-	# swap
-	my $t = $msg0;
-	$msg0 = $msg1;
-	$msg1 = $t;
+        # swap
+        my $t = $msg0;
+        $msg0 = $msg1;
+        $msg1 = $t;
     }
 
     # Save and return the messages
@@ -115,22 +115,22 @@ sub unescape
 
     for (;;)
     {
-	my  ($pre, $byte, $post) =
-		($s =~ m/^([\0-\xfe]*)\xff([\x80-\xff])(.*)$/);
-	last if !defined $byte;
+        my  ($pre, $byte, $post) =
+                ($s =~ m/^([\0-\xfe]*)\xff([\x80-\xff])(.*)$/);
+        last if !defined $byte;
 
-	$r .= $pre;
-	if ($byte eq '\xff')
-	{
-	    $r .= '\xff';
-	}
-	else
-	{
-	    $r .= chr(ord($byte) & ~0x80);
-	}
+        $r .= $pre;
+        if ($byte eq '\xff')
+        {
+            $r .= '\xff';
+        }
+        else
+        {
+            $r .= chr(ord($byte) & ~0x80);
+        }
 
-	last if !defined $post;
-	$s = $post;
+        last if !defined $post;
+        $s = $post;
     }
 
     $r .= $s;
@@ -150,24 +150,24 @@ sub list_annotations
     my $instance = delete $params{instance} || $self->{instance};
     my $uids = delete $params{uids};
     die "Unknown parameters: " . join(' ', map { $_ . '=' . $params{$_}; } keys %params)
-	if scalar %params;
+        if scalar %params;
 
     my $basedir = $instance->{basedir};
 
     my $mailbox_db;
     if ($scope eq 'global' || $scope eq 'mailbox')
     {
-	$mailbox_db = "$basedir/conf/annotations.db";
+        $mailbox_db = "$basedir/conf/annotations.db";
     }
     elsif ($scope eq 'message')
     {
-	my $mb = $mailbox;
-	$mb =~ s/\./\//g;
-	$mailbox_db = "$basedir/data/$mb/cyrus.annotations";
+        my $mb = $mailbox;
+        $mb =~ s/\./\//g;
+        $mailbox_db = "$basedir/data/$mb/cyrus.annotations";
     }
     else
     {
-	die "Unknown scope: $scope";
+        die "Unknown scope: $scope";
     }
 
     my $tmpfile = tmpnam();
@@ -175,22 +175,22 @@ sub list_annotations
     $format = $format // 'skiplist';
 
     $instance->run_command({ cyrus => 1 },
-			'cvt_cyrusdb',
-			$mailbox_db, $format,
-			$tmpfile, 'flat');
+                        'cvt_cyrusdb',
+                        $mailbox_db, $format,
+                        $tmpfile, 'flat');
 
     my @annots;
     open TMP, '<', $tmpfile
-	or die "Cannot open $tmpfile for reading: $!";
+        or die "Cannot open $tmpfile for reading: $!";
     while (<TMP>)
     {
-	chomp;
-	my ($key, $value) = split(/\t/, $_, 2);
-	my @f = split(/\0/, unescape($key), 4);
-	$value = unescape($value);
+        chomp;
+        my ($key, $value) = split(/\t/, $_, 2);
+        my @f = split(/\0/, unescape($key), 4);
+        $value = unescape($value);
 
-	# Damn stupid database format has sizeof(long) bytes of length.
-	my ($length) = unpack("N", $value);
+        # Damn stupid database format has sizeof(long) bytes of length.
+        my ($length) = unpack("N", $value);
 
     # In records written by older versions of Cyrus, there will be
     # binary encoded content-type and modifiedsince values after the
@@ -198,12 +198,12 @@ sub list_annotations
     # them the entry metadata.
     my @entry = split(/\0/, substr($value, $Config{longsize}), 3);
     my $annot = {
-	    uid => ($scope eq 'message' ? $f[0] : 0),
-	    mboxname => ($scope eq 'message' ? $mailbox : $f[0]),
-	    entry => $f[1],
-	    userid => $f[2],
-	    data => $entry[0],
-	};
+            uid => ($scope eq 'message' ? $f[0] : 0),
+            mboxname => ($scope eq 'message' ? $mailbox : $f[0]),
+            entry => $f[1],
+            userid => $f[2],
+            data => $entry[0],
+        };
 
     if ($entry[2]) {
         my ($modseq, $flags) =
@@ -224,7 +224,7 @@ sub list_annotations
         }
     }
 
-	push(@annots, $annot);
+        push(@annots, $annot);
     }
     close(TMP);
     unlink($tmpfile);
@@ -232,10 +232,10 @@ sub list_annotations
     # enforce a stable order so we have some chance of
     # comparing the results
     @annots = sort {
-	$a->{mboxname} cmp $b->{mboxname} ||
-	$a->{uid} <=> $b->{uid} ||
-	$a->{userid} cmp $b->{userid} ||
-	$a->{entry} cmp $b->{entry};
+        $a->{mboxname} cmp $b->{mboxname} ||
+        $a->{uid} <=> $b->{uid} ||
+        $a->{userid} cmp $b->{userid} ||
+        $a->{entry} cmp $b->{entry};
     } @annots;
 
     return \@annots;
@@ -246,12 +246,12 @@ sub list_uids
     my ($self, $store) = @_;
     my @uids;
 
-	$store->read_begin();
-	while (my $msg = $store->read_message())
-	{
+        $store->read_begin();
+        while (my $msg = $store->read_message())
+        {
         push(@uids, $msg->{uid});
-	}
-	$store->read_end();
+        }
+        $store->read_end();
 
     return \@uids;
 }
@@ -450,36 +450,36 @@ sub test_specialuse
     xlog "First create all the folders";
     foreach my $tc (@testcases)
     {
-	$imaptalk->create("INBOX.$tc->{folder}")
-	    or die "Cannot create mailbox INBOX.$tc->{folder}: $@";
+        $imaptalk->create("INBOX.$tc->{folder}")
+            or die "Cannot create mailbox INBOX.$tc->{folder}: $@";
     }
 
     foreach my $tc (@testcases)
     {
-	my $folder = "INBOX.$tc->{folder}";
+        my $folder = "INBOX.$tc->{folder}";
 
-	xlog "initial value for $folder is NIL";
-	$res = $imaptalk->getmetadata($folder, $entry);
-	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-	$self->assert_not_null($res);
-	delete $res->{$sentry}; # may return a shared entry as well...
-	$self->assert_deep_equals({
-	    $folder => { $entry => undef }
-	}, $res);
+        xlog "initial value for $folder is NIL";
+        $res = $imaptalk->getmetadata($folder, $entry);
+        $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+        $self->assert_not_null($res);
+        delete $res->{$sentry}; # may return a shared entry as well...
+        $self->assert_deep_equals({
+            $folder => { $entry => undef }
+        }, $res);
 
-	xlog "can set $folder to $tc->{specialuse}";
-	$imaptalk->setmetadata($folder, $entry, $tc->{specialuse});
-	$self->assert_str_equals($tc->{result}, $imaptalk->get_last_completion_response());
+        xlog "can set $folder to $tc->{specialuse}";
+        $imaptalk->setmetadata($folder, $entry, $tc->{specialuse});
+        $self->assert_str_equals($tc->{result}, $imaptalk->get_last_completion_response());
 
-	xlog "can get the set value back";
-	$res = $imaptalk->getmetadata($folder, $entry);
-	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-	$self->assert_not_null($res);
-	delete $res->{$sentry}; # may return a shared entry as well...
-	my $expected = {
-		$folder => { $entry => ($tc->{result} eq 'ok' ?  $tc->{specialuse} : undef) }
-	    };
-	$self->assert_deep_equals($expected, $res);
+        xlog "can get the set value back";
+        $res = $imaptalk->getmetadata($folder, $entry);
+        $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+        $self->assert_not_null($res);
+        delete $res->{$sentry}; # may return a shared entry as well...
+        my $expected = {
+                $folder => { $entry => ($tc->{result} eq 'ok' ?  $tc->{specialuse} : undef) }
+            };
+        $self->assert_deep_equals($expected, $res);
     }
 
     xlog "can get same values in a new connection";
@@ -488,35 +488,35 @@ sub test_specialuse
 
     foreach my $tc (@testcases)
     {
-	my $folder = "INBOX.$tc->{folder}";
+        my $folder = "INBOX.$tc->{folder}";
 
-	$res = $imaptalk->getmetadata($folder, $entry);
-	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-	$self->assert_not_null($res);
-	delete $res->{$sentry}; # may return a shared entry as well...
-	my $expected = {
-		$folder => { $entry => ($tc->{result} eq 'ok' ?  $tc->{specialuse} : undef) }
-	    };
-	$self->assert_deep_equals($expected, $res);
+        $res = $imaptalk->getmetadata($folder, $entry);
+        $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+        $self->assert_not_null($res);
+        delete $res->{$sentry}; # may return a shared entry as well...
+        my $expected = {
+                $folder => { $entry => ($tc->{result} eq 'ok' ?  $tc->{specialuse} : undef) }
+            };
+        $self->assert_deep_equals($expected, $res);
     }
 
     xlog "can delete values";
     foreach my $tc (@testcases)
     {
-	next unless ($tc->{result} eq 'ok');
-	my $folder = "INBOX.$tc->{folder}";
+        next unless ($tc->{result} eq 'ok');
+        my $folder = "INBOX.$tc->{folder}";
 
-	$imaptalk->setmetadata($folder, $entry, undef);
-	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+        $imaptalk->setmetadata($folder, $entry, undef);
+        $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-	$res = $imaptalk->getmetadata($folder, $entry);
-	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-	$self->assert_not_null($res);
-	delete $res->{$sentry}; # may return a shared entry as well...
-	my $expected = {
-		$folder => { $entry => undef }
-	    };
-	$self->assert_deep_equals($expected, $res);
+        $res = $imaptalk->getmetadata($folder, $entry);
+        $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+        $self->assert_not_null($res);
+        delete $res->{$sentry}; # may return a shared entry as well...
+        my $expected = {
+                $folder => { $entry => undef }
+            };
+        $self->assert_deep_equals($expected, $res);
     }
 
 }
@@ -533,14 +533,14 @@ sub test_createspecialuse
     my $folder = "INBOX.Archive";
     my $use = "\\Archive";
     $imaptalk->create($folder, "(USE ($use))")
-	or die "Cannot create mailbox $folder with special-use $use: $@";
+        or die "Cannot create mailbox $folder with special-use $use: $@";
 
     xlog "initial value for $folder is $use";
     $res = $imaptalk->getmetadata($folder, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals({
-	$folder => { $entry => $use }
+        $folder => { $entry => $use }
     }, $res);
 }
 
@@ -570,7 +570,7 @@ sub test_motd
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals({
-	"" => { $entry => undef }
+        "" => { $entry => undef }
     }, $res);
 
     xlog "cannot set the value as ordinary user";
@@ -588,7 +588,7 @@ sub test_motd
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     my $expected = {
-	    "" => { $entry => $value1 }
+            "" => { $entry => $value1 }
     };
     $self->assert_deep_equals($expected, $res);
 
@@ -605,7 +605,7 @@ sub test_motd
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $expected = {
-	    "" => { $entry => $value1 }
+            "" => { $entry => $value1 }
     };
     $self->assert_deep_equals($expected, $res);
 
@@ -617,7 +617,7 @@ sub test_motd
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $expected = {
-	    "" => { $entry => undef }
+            "" => { $entry => undef }
     };
     $self->assert_deep_equals($expected, $res);
 
@@ -650,7 +650,7 @@ sub test_size
     $res = $imaptalk->getmetadata($folder_cass, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder_cass => { $entry => "0" }
+        $folder_cass => { $entry => "0" }
     }, $res);
 
     xlog "cannot set the value as ordinary user";
@@ -673,7 +673,7 @@ sub test_size
     $res = $imaptalk->getmetadata($folder_cass, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder_cass => { $entry => "" . $expected }
+        $folder_cass => { $entry => "" . $expected }
     }, $res);
 
     xlog "adding a 2nd message bumps the value by the message's size";
@@ -683,7 +683,7 @@ sub test_size
     $res = $imaptalk->getmetadata($folder_cass, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder_cass => { $entry => "" . $expected }
+        $folder_cass => { $entry => "" . $expected }
     }, $res);
 
     # TODO: removing a message doesn't reduce the value until (possibly delayed) expunge
@@ -700,8 +700,8 @@ sub test_uniqueid
     my $res;
     # data thanks to hipsteripsum.me
     my @folders = ( qw(INBOX.etsy INBOX.etsy
-		       INBOX.sartorial
-		       INBOX.dreamcatcher.keffiyeh) );
+                       INBOX.sartorial
+                       INBOX.dreamcatcher.keffiyeh) );
     my @uuids;
     my %uuids_seen;
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
@@ -709,27 +709,27 @@ sub test_uniqueid
     xlog "create the folders";
     foreach my $f (@folders)
     {
-	$imaptalk->create($f)
-	    or die "Cannot create mailbox $f: $@";
-	$res = $imaptalk->getmetadata($f, $entry);
-	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-	$self->assert_not_null($res);
-	my $uuid = $res->{$f}{$entry};
-	$self->assert_not_null($uuid);
-	$self->assert($uuid =~ m/^[0-9a-z-]+$/);
-	$imaptalk->delete($f)
-	    or die "Cannot delete mailbox $f: $@";
-	push(@uuids, $uuid);
-	# all the uniqueids must be unique (duh)
-	$self->assert(!defined $uuids_seen{$uuid});
-	$uuids_seen{$uuid} = 1;
+        $imaptalk->create($f)
+            or die "Cannot create mailbox $f: $@";
+        $res = $imaptalk->getmetadata($f, $entry);
+        $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+        $self->assert_not_null($res);
+        my $uuid = $res->{$f}{$entry};
+        $self->assert_not_null($uuid);
+        $self->assert($uuid =~ m/^[0-9a-z-]+$/);
+        $imaptalk->delete($f)
+            or die "Cannot delete mailbox $f: $@";
+        push(@uuids, $uuid);
+        # all the uniqueids must be unique (duh)
+        $self->assert(!defined $uuids_seen{$uuid});
+        $uuids_seen{$uuid} = 1;
     }
 
     # Do the logging in a 2nd pass in the hope of maximising
     # our chances of getting all the creates in one second
     for (my $i = 0 ; $i < scalar(@folders) ; $i++)
     {
-	xlog "uniqueid of " . $folders[$i] . " was \"" . $uuids[$i] .  "\"";
+        xlog "uniqueid of " . $folders[$i] . " was \"" . $uuids[$i] .  "\"";
     }
 }
 
@@ -792,11 +792,11 @@ sub test_embedded_nuls
 
     xlog "create a temporary mailbox";
     $imaptalk->create($folder)
-	or die "Cannot create mailbox $folder: $@";
+        or die "Cannot create mailbox $folder: $@";
 
     xlog "initially, NIL is reported";
     my $res = $imaptalk->getmetadata($folder, $entry)
-	or die "Cannot get metadata: $@";
+        or die "Cannot get metadata: $@";
     $self->assert_num_equals(1, scalar keys %$res);
     $self->assert_null($res->{$folder}{$entry});
 
@@ -812,13 +812,13 @@ sub test_embedded_nuls
 
     xlog "check it's gone now";
     $res = $imaptalk->getmetadata($folder, $entry)
-	or die "Cannot get metadata: $@";
+        or die "Cannot get metadata: $@";
     $self->assert_num_equals(1, scalar keys %$res);
     $self->assert_null($res->{$folder}{$entry});
 
     xlog "clean up temporary mailbox";
     $imaptalk->delete($folder)
-	or die "Cannot delete mailbox $folder: $@";
+        or die "Cannot delete mailbox $folder: $@";
 }
 
 sub test_permessage_getset
@@ -843,112 +843,112 @@ sub test_permessage_getset
 
     xlog "fetch an annotation - should be no values";
     my $res = $talk->fetch('1:*',
-			   ['annotation', [$entry, $attrib]]);
+                           ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => { annotation => { $entry => { $attrib => undef } } },
-		2 => { annotation => { $entry => { $attrib => undef } } },
-		3 => { annotation => { $entry => { $attrib => undef } } },
-	    },
-	    $res);
+            {
+                1 => { annotation => { $entry => { $attrib => undef } } },
+                2 => { annotation => { $entry => { $attrib => undef } } },
+                3 => { annotation => { $entry => { $attrib => undef } } },
+            },
+            $res);
 
     xlog "store an annotation";
     $talk->store('1', 'annotation',
-	         [$entry, [$attrib, $value1]]);
+                 [$entry, [$attrib, $value1]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "fetch the annotation again, should see changes";
     $res = $talk->fetch('1:*',
-		        ['annotation', [$entry, $attrib]]);
+                        ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => { annotation => { $entry => { $attrib => $value1 } } },
-		2 => { annotation => { $entry => { $attrib => undef } } },
-		3 => { annotation => { $entry => { $attrib => undef } } },
-	    },
-	    $res);
+            {
+                1 => { annotation => { $entry => { $attrib => $value1 } } },
+                2 => { annotation => { $entry => { $attrib => undef } } },
+                3 => { annotation => { $entry => { $attrib => undef } } },
+            },
+            $res);
 
     xlog "store an annotation with an embedded NUL";
     $talk->store('3', 'annotation',
-	         [$entry, [$attrib, $value2]]);
+                 [$entry, [$attrib, $value2]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "fetch the annotation again, should see changes";
     $res = $talk->fetch('1:*',
-		        ['annotation', [$entry, $attrib]]);
+                        ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => { annotation => { $entry => { $attrib => $value1 } } },
-		2 => { annotation => { $entry => { $attrib => undef } } },
-		3 => { annotation => { $entry => { $attrib => $value2 } } },
-	    },
-	    $res);
+            {
+                1 => { annotation => { $entry => { $attrib => $value1 } } },
+                2 => { annotation => { $entry => { $attrib => undef } } },
+                3 => { annotation => { $entry => { $attrib => $value2 } } },
+            },
+            $res);
 
     xlog "store multiple annotations";
     # Note $value3 has no whitespace so we have to
     # convince Mail::IMAPTalk to quote it anyway
     $talk->store('1:*', 'annotation',
-	         [$entry, [$attrib, { Quote => $value3 }]]);
+                 [$entry, [$attrib, { Quote => $value3 }]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "fetch the annotation again, should see changes";
     $res = $talk->fetch('1:*',
-		        ['annotation', [$entry, $attrib]]);
+                        ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => { annotation => { $entry => { $attrib => $value3 } } },
-		2 => { annotation => { $entry => { $attrib => $value3 } } },
-		3 => { annotation => { $entry => { $attrib => $value3 } } },
-	    },
-	    $res);
+            {
+                1 => { annotation => { $entry => { $attrib => $value3 } } },
+                2 => { annotation => { $entry => { $attrib => $value3 } } },
+                3 => { annotation => { $entry => { $attrib => $value3 } } },
+            },
+            $res);
 
     xlog "delete an annotation";
     # Note $value3 has no whitespace so we have to
     # convince Mail::IMAPTalk to quote it anyway
     $talk->store('2', 'annotation',
-	         [$entry, [$attrib, undef]]);
+                 [$entry, [$attrib, undef]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "fetch the annotation again, should see changes";
     $res = $talk->fetch('1:*',
-		        ['annotation', [$entry, $attrib]]);
+                        ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => { annotation => { $entry => { $attrib => $value3 } } },
-		2 => { annotation => { $entry => { $attrib => undef } } },
-		3 => { annotation => { $entry => { $attrib => $value3 } } },
-	    },
-	    $res);
+            {
+                1 => { annotation => { $entry => { $attrib => $value3 } } },
+                2 => { annotation => { $entry => { $attrib => undef } } },
+                3 => { annotation => { $entry => { $attrib => $value3 } } },
+            },
+            $res);
 
     xlog "delete all annotations";
     # Note $value3 has no whitespace so we have to
     # convince Mail::IMAPTalk to quote it anyway
     $talk->store('1:*', 'annotation',
-	         [$entry, [$attrib, undef]]);
+                 [$entry, [$attrib, undef]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "fetch the annotation again, should see changes";
     $res = $talk->fetch('1:*',
-		        ['annotation', [$entry, $attrib]]);
+                        ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => { annotation => { $entry => { $attrib => undef } } },
-		2 => { annotation => { $entry => { $attrib => undef } } },
-		3 => { annotation => { $entry => { $attrib => undef } } },
-	    },
-	    $res);
+            {
+                1 => { annotation => { $entry => { $attrib => undef } } },
+                2 => { annotation => { $entry => { $attrib => undef } } },
+                3 => { annotation => { $entry => { $attrib => undef } } },
+            },
+            $res);
 }
 
 sub test_permessage_unknown
@@ -969,30 +969,30 @@ sub test_permessage_unknown
     xlog "fetch annotation - should be no values";
     my $talk = $self->{store}->get_client();
     my $res = $talk->fetch('1:*',
-			   ['annotation', [$entry, $attrib]]);
+                           ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => { annotation => { $entry => { $attrib => undef } } }
-	    },
-	    $res);
+            {
+                1 => { annotation => { $entry => { $attrib => undef } } }
+            },
+            $res);
 
     xlog "store annotation - should fail";
     $talk->store('1', 'annotation',
-	         [$entry, [$attrib, $value1]]);
+                 [$entry, [$attrib, $value1]]);
     $self->assert_str_equals('no', $talk->get_last_completion_response());
 
     xlog "fetch the annotation again, should see nothing";
     $res = $talk->fetch('1:*',
-		        ['annotation', [$entry, $attrib]]);
+                        ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => { annotation => { $entry => { $attrib => undef } } }
-	    },
-	    $res);
+            {
+                1 => { annotation => { $entry => { $attrib => undef } } }
+            },
+            $res);
 }
 
 sub test_permessage_unknown_allowed
@@ -1014,30 +1014,30 @@ sub test_permessage_unknown_allowed
     xlog "fetch annotation - should be no values";
     my $talk = $self->{store}->get_client();
     my $res = $talk->fetch('1:*',
-			   ['annotation', [$entry, $attrib]]);
+                           ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => { annotation => { $entry => { $attrib => undef } } }
-	    },
-	    $res);
+            {
+                1 => { annotation => { $entry => { $attrib => undef } } }
+            },
+            $res);
 
     xlog "store annotation - should succeed";
     $talk->store('1', 'annotation',
-	         [$entry, [$attrib, $value1]]);
+                 [$entry, [$attrib, $value1]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "fetch the annotation again, should see the value";
     $res = $talk->fetch('1:*',
-		        ['annotation', [$entry, $attrib]]);
+                        ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => { annotation => { $entry => { $attrib => $value1 } } }
-	    },
-	    $res);
+            {
+                1 => { annotation => { $entry => { $attrib => $value1 } } }
+            },
+            $res);
 }
 
 sub set_msg_annotation
@@ -1150,7 +1150,7 @@ sub test_msg_replication_new_bot_mse_gul
 
     xlog "testing replication of message scope annotations";
     xlog "case new_bot_mse_gul: new messages appear, on both master " .
-	 "and replica, with equal modseqs, lower GUID on master.";
+         "and replica, with equal modseqs, lower GUID on master.";
 
     xlog "need a master and replica pair";
     $self->assert_not_null($self->{replica});
@@ -1205,7 +1205,7 @@ sub test_msg_replication_new_bot_mse_guh
 
     xlog "testing replication of message scope annotations";
     xlog "case new_bot_mse_guh: new messages appear, on both master " .
-	 "and replica, with equal modseqs, higher GUID on master.";
+         "and replica, with equal modseqs, higher GUID on master.";
 
     xlog "need a master and replica pair";
     $self->assert_not_null($self->{replica});
@@ -1386,7 +1386,7 @@ sub test_msg_replication_mod_bot_msl
 
     xlog "testing replication of message scope annotations";
     xlog "case mod_bot_msl: message is modified, on both ends, " .
-	 "modseq lower on master";
+         "modseq lower on master";
 
     xlog "need a master and replica pair";
     $self->assert_not_null($self->{replica});
@@ -1455,7 +1455,7 @@ sub test_msg_replication_mod_bot_msh
 
     xlog "testing replication of message scope annotations";
     xlog "case mod_bot_msh: message is modified, on both ends, " .
-	 "modseq higher on master";
+         "modseq higher on master";
 
     xlog "need a master and replica pair";
     $self->assert_not_null($self->{replica});
@@ -1820,11 +1820,11 @@ sub test_msg_sort_order
     my $attrib = 'value.priv';
     # 20 random dictionary words
     my @values = ( qw(gradual flips tempe cud flaunt nina crackle congo),
-		   qw(buttons coating byrd arise ayyubid badgers argosy),
-		   qw(sutton dallied belled fondues mimi) );
+                   qw(buttons coating byrd arise ayyubid badgers argosy),
+                   qw(sutton dallied belled fondues mimi) );
     # the expected result of sorting those words alphabetically
     my @exp_order = ( 15, 12, 13, 14, 18, 9, 11, 10, 8,
-		      7, 4, 17, 5, 2, 19, 1, 20, 6, 16, 3 );
+                      7, 4, 17, 5, 2, 19, 1, 20, 6, 16, 3 );
 
     $self->{store}->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
@@ -1832,14 +1832,14 @@ sub test_msg_sort_order
     my %exp;
     for (my $i = 0 ; $i < 20 ; $i++)
     {
-	my $letter = chr(ord('A')+$i);
-	my $uid = $i+1;
-	my $value = $values[$i];
+        my $letter = chr(ord('A')+$i);
+        my $uid = $i+1;
+        my $value = $values[$i];
 
-	$exp{$letter} = $self->make_message("Message $letter");
-	$self->set_msg_annotation(undef, $uid, $entry, $attrib, $value);
-	$exp{$letter}->set_attribute('uid', $uid);
-	$exp{$letter}->set_annotation($entry, $attrib, $value);
+        $exp{$letter} = $self->make_message("Message $letter");
+        $self->set_msg_annotation(undef, $uid, $entry, $attrib, $value);
+        $exp{$letter}->set_attribute('uid', $uid);
+        $exp{$letter}->set_annotation($entry, $attrib, $value);
     }
     $self->check_messages(\%exp);
 
@@ -1862,8 +1862,8 @@ sub test_msg_sort_search
     my $attrib = 'value.priv';
     # 10 random dictionary words, and 10 carefully chosen ones
     my @values = ( qw(deirdre agreed feedback cuspids breeds decreed greedily),
-		   qw(gibbers eakins flash needful yules linseed equine hangman),
-		   qw(hatters ragweed pureed cloaked heedless) );
+                   qw(gibbers eakins flash needful yules linseed equine hangman),
+                   qw(hatters ragweed pureed cloaked heedless) );
     # the expected result of sorting the words with 'eed' alphabetically
     my @exp_order = ( 2, 5, 6, 3, 7, 20, 13, 11, 18, 17 );
     # the expected result of search for words with 'eed' and uid order
@@ -1876,16 +1876,16 @@ sub test_msg_sort_search
     my $now = DateTime->now->epoch;
     for (my $i = 0 ; $i < 20 ; $i++)
     {
-	my $letter = chr(ord('A')+$i);
-	my $uid = $i+1;
-	my $value = $values[$i];
-	my $date = DateTime->from_epoch(epoch => $now - (20-$i)*60);
+        my $letter = chr(ord('A')+$i);
+        my $uid = $i+1;
+        my $value = $values[$i];
+        my $date = DateTime->from_epoch(epoch => $now - (20-$i)*60);
 
-	$exp{$letter} = $self->make_message("Message $letter",
-					    date => $date);
-	$self->set_msg_annotation(undef, $uid, $entry, $attrib, $value);
-	$exp{$letter}->set_attribute('uid', $uid);
-	$exp{$letter}->set_annotation($entry, $attrib, $value);
+        $exp{$letter} = $self->make_message("Message $letter",
+                                            date => $date);
+        $self->set_msg_annotation(undef, $uid, $entry, $attrib, $value);
+        $exp{$letter}->set_attribute('uid', $uid);
+        $exp{$letter}->set_annotation($entry, $attrib, $value);
     }
     $self->check_messages(\%exp);
 
@@ -1893,14 +1893,14 @@ sub test_msg_sort_search
 
     xlog "run the SORT command with an ANNOTATION search criterion";
     my $res = $talk->sort("(DATE)", 'utf-8',
-		          'ANNOTATION', $entry, $attrib, { Quote => "eed" });
+                          'ANNOTATION', $entry, $attrib, { Quote => "eed" });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(\@exp_search, $res);
 
     xlog "run the SORT command with both ANNOTATION search & order criteria";
     $res = $talk->sort("(ANNOTATION $entry $attrib)", 'utf-8',
-		       'ANNOTATION', $entry, $attrib, { Quote => "eed" });
+                       'ANNOTATION', $entry, $attrib, { Quote => "eed" });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(\@exp_order, $res);
@@ -1955,103 +1955,103 @@ sub test_modseq
     xlog "fetch an annotation - should be no values";
     my $hms0 = $self->get_highestmodseq();
     my $res = $talk->fetch('1:*',
-			   ['modseq', 'annotation', [$entry, $attrib]]);
+                           ['modseq', 'annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => {
-			modseq => [$hms0-2],
-			annotation => { $entry => { $attrib => undef } }
-		     },
-		2 => {
-			modseq => [$hms0-1],
-			annotation => { $entry => { $attrib => undef } }
-		     },
-		3 => {
-			modseq => [$hms0],
-			annotation => { $entry => { $attrib => undef } }
-		     },
-	    },
-	    $res);
+            {
+                1 => {
+                        modseq => [$hms0-2],
+                        annotation => { $entry => { $attrib => undef } }
+                     },
+                2 => {
+                        modseq => [$hms0-1],
+                        annotation => { $entry => { $attrib => undef } }
+                     },
+                3 => {
+                        modseq => [$hms0],
+                        annotation => { $entry => { $attrib => undef } }
+                     },
+            },
+            $res);
 
     xlog "store an annotation";
     $talk->store('1', 'annotation',
-	         [$entry, [$attrib, $value1]]);
+                 [$entry, [$attrib, $value1]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "fetch an annotation - should be updated";
     my $hms1 = $self->get_highestmodseq();
     $self->assert($hms1 > $hms0);
     $res = $talk->fetch('1:*',
-		        ['modseq', 'annotation', [$entry, $attrib]]);
+                        ['modseq', 'annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => {
-			modseq => [$hms1],
-			annotation => { $entry => { $attrib => $value1 } }
-		     },
-		2 => {
-			modseq => [$hms0-1],
-			annotation => { $entry => { $attrib => undef } }
-		     },
-		3 => {
-			modseq => [$hms0],
-			annotation => { $entry => { $attrib => undef } }
-		     },
-	    },
-	    $res);
+            {
+                1 => {
+                        modseq => [$hms1],
+                        annotation => { $entry => { $attrib => $value1 } }
+                     },
+                2 => {
+                        modseq => [$hms0-1],
+                        annotation => { $entry => { $attrib => undef } }
+                     },
+                3 => {
+                        modseq => [$hms0],
+                        annotation => { $entry => { $attrib => undef } }
+                     },
+            },
+            $res);
 
     xlog "delete an annotation";
     $talk->store('1', 'annotation',
-	         [$entry, [$attrib, undef]]);
+                 [$entry, [$attrib, undef]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "fetch an annotation - should be updated";
     my $hms2 = $self->get_highestmodseq();
     $self->assert($hms2 > $hms1);
     $res = $talk->fetch('1:*',
-		        ['modseq', 'annotation', [$entry, $attrib]]);
+                        ['modseq', 'annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => {
-			modseq => [$hms2],
-			annotation => { $entry => { $attrib => undef } }
-		     },
-		2 => {
-			modseq => [$hms0-1],
-			annotation => { $entry => { $attrib => undef } }
-		     },
-		3 => {
-			modseq => [$hms0],
-			annotation => { $entry => { $attrib => undef } }
-		     },
-	    },
-	    $res);
+            {
+                1 => {
+                        modseq => [$hms2],
+                        annotation => { $entry => { $attrib => undef } }
+                     },
+                2 => {
+                        modseq => [$hms0-1],
+                        annotation => { $entry => { $attrib => undef } }
+                     },
+                3 => {
+                        modseq => [$hms0],
+                        annotation => { $entry => { $attrib => undef } }
+                     },
+            },
+            $res);
 }
 
 #
 # Test UNCHANGEDSINCE modifier; RFC4551 section 3.2.
 # - changing an annotation with current modseq equal to the
 #   UNCHANGEDSINCE value
-#	- updates the annotation
-#	- updates modseq
-#	- sends an untagged FETCH response
-#	- the FETCH response has the new modseq
-#	- returns an OK response
-#	- the UID does not appear in the MODIFIED response code
+#       - updates the annotation
+#       - updates modseq
+#       - sends an untagged FETCH response
+#       - the FETCH response has the new modseq
+#       - returns an OK response
+#       - the UID does not appear in the MODIFIED response code
 # - ditto less than
 # - changing an annotation with current modseq greater than the
 #   UNCHANGEDSINCE value
-#	- doesn't update the annotation
-#	- doesn't update modseq
-#	- sent no FETCH untagged response
-#	- returns an OK response
-#	- but reports the UID in the MODIFIED response code
+#       - doesn't update the annotation
+#       - doesn't update modseq
+#       - sent no FETCH untagged response
+#       - returns an OK response
+#       - but reports the UID in the MODIFIED response code
 #
 sub test_unchangedsince
 {
@@ -2079,24 +2079,24 @@ sub test_unchangedsince
     my $modified;
     my %handlers =
     (
-	fetch => sub
-	{
-	    my ($response, $rr, $id) = @_;
+        fetch => sub
+        {
+            my ($response, $rr, $id) = @_;
 
-	    # older versions of Mail::IMAPTalk don't have
-	    # the 3rd argument.  We can't test properly in
-	    # those circumstances.
-	    $self->assert_not_null($id);
+            # older versions of Mail::IMAPTalk don't have
+            # the 3rd argument.  We can't test properly in
+            # those circumstances.
+            $self->assert_not_null($id);
 
-	    $fetched{$id} = $rr;
-	},
-	modified => sub
-	{
-	    my ($response, $rr) = @_;
-	    # we should not get more than one of these ever
-	    $self->assert_null($modified);
-	    $modified = $rr;
-	}
+            $fetched{$id} = $rr;
+        },
+        modified => sub
+        {
+            my ($response, $rr) = @_;
+            # we should not get more than one of these ever
+            $self->assert_null($modified);
+            $modified = $rr;
+        }
     );
 
     # Note: Mail::IMAPTalk::store() doesn't support modifiers
@@ -2106,72 +2106,72 @@ sub test_unchangedsince
     %fetched = ();
     $modified = undef;
     $talk->_imap_cmd('store', 1, \%handlers,
-		 '1', ['unchangedsince', $hms0-2],
-	         'annotation', [$entry, [$attrib, $value1]]);
+                 '1', ['unchangedsince', $hms0-2],
+                 'annotation', [$entry, [$attrib, $value1]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "fetch an annotation - should be updated";
     my $hms1 = $self->get_highestmodseq();
     $self->assert($hms1 > $hms0);
     my $res = $talk->fetch('1:*',
-		           ['modseq', 'annotation', [$entry, $attrib]]);
+                           ['modseq', 'annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => {
-			modseq => [$hms1],
-			annotation => { $entry => { $attrib => $value1 } }
-		     },
-		2 => {
-			modseq => [$hms0-1],
-			annotation => { $entry => { $attrib => undef } }
-		     },
-		3 => {
-			modseq => [$hms0],
-			annotation => { $entry => { $attrib => undef } }
-		     },
-	    },
-	    $res);
+            {
+                1 => {
+                        modseq => [$hms1],
+                        annotation => { $entry => { $attrib => $value1 } }
+                     },
+                2 => {
+                        modseq => [$hms0-1],
+                        annotation => { $entry => { $attrib => undef } }
+                     },
+                3 => {
+                        modseq => [$hms0],
+                        annotation => { $entry => { $attrib => undef } }
+                     },
+            },
+            $res);
 
     xlog "setting an annotation with current modseq < UNCHANGEDSINCE";
     %fetched = ();
     $modified = undef;
     $talk->_imap_cmd('store', 1, \%handlers,
-		 '1', ['unchangedsince', $hms1+1],
-	         'annotation', [$entry, [$attrib, $value2]]);
+                 '1', ['unchangedsince', $hms1+1],
+                 'annotation', [$entry, [$attrib, $value2]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "fetch an annotation - should be updated";
     my $hms2 = $self->get_highestmodseq();
     $self->assert($hms2 > $hms1);
     $res = $talk->fetch('1:*',
-		        ['modseq', 'annotation', [$entry, $attrib]]);
+                        ['modseq', 'annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => {
-			modseq => [$hms2],
-			annotation => { $entry => { $attrib => $value2 } }
-		     },
-		2 => {
-			modseq => [$hms0-1],
-			annotation => { $entry => { $attrib => undef } }
-		     },
-		3 => {
-			modseq => [$hms0],
-			annotation => { $entry => { $attrib => undef } }
-		     },
-	    },
-	    $res);
+            {
+                1 => {
+                        modseq => [$hms2],
+                        annotation => { $entry => { $attrib => $value2 } }
+                     },
+                2 => {
+                        modseq => [$hms0-1],
+                        annotation => { $entry => { $attrib => undef } }
+                     },
+                3 => {
+                        modseq => [$hms0],
+                        annotation => { $entry => { $attrib => undef } }
+                     },
+            },
+            $res);
 
     xlog "setting an annotation with current modseq > UNCHANGEDSINCE";
     %fetched = ();
     $modified = undef;
     $talk->_imap_cmd('store', 1, \%handlers,
-		 '1', ['unchangedsince', $hms2-1],
-	         'annotation', [$entry, [$attrib, $value3]]);
+                 '1', ['unchangedsince', $hms2-1],
+                 'annotation', [$entry, [$attrib, $value3]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "didn't update modseq?";
@@ -2179,26 +2179,26 @@ sub test_unchangedsince
     $self->assert($hms3 == $hms2);
     xlog "fetch an annotation - should not be updated";
     $res = $talk->fetch('1:*',
-		        ['modseq', 'annotation', [$entry, $attrib]]);
+                        ['modseq', 'annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(
-	    {
-		1 => {
-			# unchanged
-			modseq => [$hms2],
-			annotation => { $entry => { $attrib => $value2 } }
-		     },
-		2 => {
-			modseq => [$hms0-1],
-			annotation => { $entry => { $attrib => undef } }
-		     },
-		3 => {
-			modseq => [$hms0],
-			annotation => { $entry => { $attrib => undef } }
-		     },
-	    },
-	    $res);
+            {
+                1 => {
+                        # unchanged
+                        modseq => [$hms2],
+                        annotation => { $entry => { $attrib => $value2 } }
+                     },
+                2 => {
+                        modseq => [$hms0-1],
+                        annotation => { $entry => { $attrib => undef } }
+                     },
+                3 => {
+                        modseq => [$hms0],
+                        annotation => { $entry => { $attrib => undef } }
+                     },
+            },
+            $res);
     xlog "reports the UID in the MODIFIED response code?";
     $self->assert_not_null($modified);
     $self->assert_deep_equals($modified, [1]);
@@ -2283,18 +2283,18 @@ sub test_copy_messages
     my $store = $self->{store};
     my $talk = $store->get_client();
     $talk->create($from_folder)
-	or die "Cannot create mailbox $from_folder: $@";
+        or die "Cannot create mailbox $from_folder: $@";
     $talk->create($to_folder)
-	or die "Cannot create mailbox $to_folder: $@";
+        or die "Cannot create mailbox $to_folder: $@";
 
     $store->set_folder($from_folder);
 
     my @data_by_uid = (
-	undef,
-	# data thanks to hipsteripsum.me
-	"american apparel",
-	"mixtape aesthetic",
-	"organic quinoa"
+        undef,
+        # data thanks to hipsteripsum.me
+        "american apparel",
+        "mixtape aesthetic",
+        "organic quinoa"
     );
 
     xlog "Append some messages and store annotations";
@@ -2302,13 +2302,13 @@ sub test_copy_messages
     my $uid = 1;
     while (defined $data_by_uid[$uid])
     {
-	my $data = $data_by_uid[$uid];
-	my $msg = $self->make_message("Message $uid");
-	$msg->set_attribute('uid', $uid);
-	$msg->set_annotation($entry, $attrib, $data);
-	$exp{$uid} = $msg;
-	$self->set_msg_annotation(undef, $uid, $entry, $attrib, $data);
-	$uid++;
+        my $data = $data_by_uid[$uid];
+        my $msg = $self->make_message("Message $uid");
+        $msg->set_attribute('uid', $uid);
+        $msg->set_annotation($entry, $attrib, $data);
+        $exp{$uid} = $msg;
+        $self->set_msg_annotation(undef, $uid, $entry, $attrib, $data);
+        $uid++;
     }
 
     xlog "Check the annotations are there";
@@ -2363,11 +2363,11 @@ sub test_expunge_messages
     $talk->uid(1);
 
     my @data_by_uid = (
-	undef,
-	# data thanks to hipsteripsum.me
-	"polaroid seitan",
-	"bicycle rights",
-	"bushwick gastropub"
+        undef,
+        # data thanks to hipsteripsum.me
+        "polaroid seitan",
+        "bicycle rights",
+        "bushwick gastropub"
     );
 
     xlog "Append some messages and store annotations";
@@ -2375,12 +2375,12 @@ sub test_expunge_messages
     my $uid = 1;
     while (defined $data_by_uid[$uid])
     {
-	my $data = $data_by_uid[$uid];
-	my $msg = $self->make_message("Message $uid");
-	$msg->set_annotation($entry, $attrib, $data);
-	$exp{$uid} = $msg;
-	$self->set_msg_annotation(undef, $uid, $entry, $attrib, $data);
-	$uid++;
+        my $data = $data_by_uid[$uid];
+        my $msg = $self->make_message("Message $uid");
+        $msg->set_annotation($entry, $attrib, $data);
+        $exp{$uid} = $msg;
+        $self->set_msg_annotation(undef, $uid, $entry, $attrib, $data);
+        $uid++;
     }
 
     xlog "Check the annotations are there";
@@ -2389,66 +2389,66 @@ sub test_expunge_messages
     xlog "Check the annotations are in the DB too";
     my $r = $self->list_annotations(scope => 'message');
     $self->assert_deep_equals([
-	{
-	    mboxname => 'user.cassandane',
-	    uid => 1,
-	    entry => $entry,
-	    userid => 'cassandane',
-	    data => $data_by_uid[1]
-	},
-	{
-	    mboxname => 'user.cassandane',
-	    uid => 2,
-	    entry => $entry,
-	    userid => 'cassandane',
-	    data => $data_by_uid[2]
-	},
-	{
-	    mboxname => 'user.cassandane',
-	    uid => 3,
-	    entry => $entry,
-	    userid => 'cassandane',
-	    data => $data_by_uid[3]
-	}
+        {
+            mboxname => 'user.cassandane',
+            uid => 1,
+            entry => $entry,
+            userid => 'cassandane',
+            data => $data_by_uid[1]
+        },
+        {
+            mboxname => 'user.cassandane',
+            uid => 2,
+            entry => $entry,
+            userid => 'cassandane',
+            data => $data_by_uid[2]
+        },
+        {
+            mboxname => 'user.cassandane',
+            uid => 3,
+            entry => $entry,
+            userid => 'cassandane',
+            data => $data_by_uid[3]
+        }
     ], $r);
 
     $uid = 1;
     while (defined $data_by_uid[$uid])
     {
-	xlog "Delete message $uid";
-	$talk->store($uid, '+flags', '(\\Deleted)');
-	$talk->expunge();
+        xlog "Delete message $uid";
+        $talk->store($uid, '+flags', '(\\Deleted)');
+        $talk->expunge();
 
-	xlog "Check the annotation is gone";
-	delete $exp{$uid};
-	$self->check_messages(\%exp);
-	$uid++;
+        xlog "Check the annotation is gone";
+        delete $exp{$uid};
+        $self->check_messages(\%exp);
+        $uid++;
     }
 
     xlog "Check the annotations are still in the DB";
     $r = $self->list_annotations(scope => 'message');
     $self->assert_deep_equals([
-	{
-	    mboxname => 'user.cassandane',
-	    uid => 1,
-	    entry => $entry,
-	    userid => 'cassandane',
-	    data => $data_by_uid[1]
-	},
-	{
-	    mboxname => 'user.cassandane',
-	    uid => 2,
-	    entry => $entry,
-	    userid => 'cassandane',
-	    data => $data_by_uid[2]
-	},
-	{
-	    mboxname => 'user.cassandane',
-	    uid => 3,
-	    entry => $entry,
-	    userid => 'cassandane',
-	    data => $data_by_uid[3]
-	}
+        {
+            mboxname => 'user.cassandane',
+            uid => 1,
+            entry => $entry,
+            userid => 'cassandane',
+            data => $data_by_uid[1]
+        },
+        {
+            mboxname => 'user.cassandane',
+            uid => 2,
+            entry => $entry,
+            userid => 'cassandane',
+            data => $data_by_uid[2]
+        },
+        {
+            mboxname => 'user.cassandane',
+            uid => 3,
+            entry => $entry,
+            userid => 'cassandane',
+            data => $data_by_uid[3]
+        }
     ], $r);
 
     $self->run_delayed_expunge();
@@ -2485,15 +2485,15 @@ sub test_cvt_cyrusdb
     my %exp;
     for (1..10)
     {
-	my $msg = $self->make_message("Message $_");
-	$exp{$uid} = $msg;
-	$msg->set_attribute('uid', $uid);
-	my $data = $self->make_random_data(7, maxreps => 20, separators => $evilchars);
-	$msg->set_annotation($mentry, $mattrib, $data);
-	$talk->store('' . $uid, 'annotation',
-		    [$mentry, [$mattrib, $data]]);
-	$self->assert_str_equals('ok', $talk->get_last_completion_response());
-	$uid++;
+        my $msg = $self->make_message("Message $_");
+        $exp{$uid} = $msg;
+        $msg->set_attribute('uid', $uid);
+        my $data = $self->make_random_data(7, maxreps => 20, separators => $evilchars);
+        $msg->set_annotation($mentry, $mattrib, $data);
+        $talk->store('' . $uid, 'annotation',
+                    [$mentry, [$mattrib, $data]]);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $uid++;
     }
 
     xlog "Check the messages are all there";
@@ -2503,7 +2503,7 @@ sub test_cvt_cyrusdb
     my $res = $talk->getmetadata($folder, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder => { $fentry => $data }
+        $folder => { $fentry => $data }
     }, $res);
 
     xlog "Shut down the instance";
@@ -2523,9 +2523,9 @@ sub test_cvt_cyrusdb
 
     $self->assert(( ! -f $global_flat ));
     $self->{instance}->run_command({ cyrus => 1 },
-				   'cvt_cyrusdb',
-				   $global_db, $format,
-				   $global_flat, 'flat');
+                                   'cvt_cyrusdb',
+                                   $global_db, $format,
+                                   $global_flat, 'flat');
     $self->assert(( -f $global_flat ));
 
     xlog "Convert the mailbox annotation db to flat";
@@ -2534,31 +2534,31 @@ sub test_cvt_cyrusdb
 
     $self->assert(( ! -f $mailbox_flat ));
     $self->{instance}->run_command({ cyrus => 1 },
-				   'cvt_cyrusdb',
-				   $mailbox_db, $format,
-				   $mailbox_flat, 'flat');
+                                   'cvt_cyrusdb',
+                                   $mailbox_db, $format,
+                                   $mailbox_flat, 'flat');
     $self->assert(( -f $mailbox_flat ));
 
     xlog "Move aside the original annotation dbs";
     rename($global_db, "$global_db.NOT")
-	or die "Cannot rename $global_db to $global_db.NOT: $!";
+        or die "Cannot rename $global_db to $global_db.NOT: $!";
     rename($mailbox_db, "$mailbox_db.NOT")
-	or die "Cannot rename $mailbox_db to $mailbox_db.NOT: $!";
+        or die "Cannot rename $mailbox_db to $mailbox_db.NOT: $!";
     $self->assert(( ! -f $global_db ));
     $self->assert(( ! -f $mailbox_db ));
 
     xlog "restore the global annotation db from flat";
     $self->{instance}->run_command({ cyrus => 1 },
-				   'cvt_cyrusdb',
-				   $global_flat, 'flat',
-				   $global_db, $format);
+                                   'cvt_cyrusdb',
+                                   $global_flat, 'flat',
+                                   $global_db, $format);
     $self->assert(( -f $global_db ));
 
     xlog "restore the mailbox annotation db from flat";
     $self->{instance}->run_command({ cyrus => 1 },
-				   'cvt_cyrusdb',
-				   $mailbox_flat, 'flat',
-				   $mailbox_db, $format);
+                                   'cvt_cyrusdb',
+                                   $mailbox_flat, 'flat',
+                                   $mailbox_db, $format);
     $self->assert(( -f $mailbox_db ));
 
     xlog "Start the instance up again and reconnect";
@@ -2572,7 +2572,7 @@ sub test_cvt_cyrusdb
     $res = $talk->getmetadata($folder, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder => { $fentry => $data }
+        $folder => { $fentry => $data }
     }, $res);
 }
 
@@ -2588,34 +2588,34 @@ sub folder_delete_mboxa_common
 
     xlog "create a mailbox";
     $imaptalk->create($folder)
-	or die "Cannot create mailbox $folder: $@";
+        or die "Cannot create mailbox $folder: $@";
 
     xlog "set and then get the same back again";
     $imaptalk->setmetadata($folder, $fentry, $data)
-	or die "Cannot setmetadata: $@";
+        or die "Cannot setmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
     my $res = $imaptalk->getmetadata($folder, $fentry)
-	or die "Cannot getmetadata: $@";
+        or die "Cannot getmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder => { $fentry => $data }
+        $folder => { $fentry => $data }
     }, $res);
 
     xlog "delete the mailbox";
     $imaptalk->delete($folder)
-	or die "Cannot delete mailbox $folder: $@";
+        or die "Cannot delete mailbox $folder: $@";
 
     xlog "create a new mailbox with the same name";
     $imaptalk->create($folder)
-	or die "Cannot create mailbox $folder: $@";
+        or die "Cannot create mailbox $folder: $@";
 
     xlog "new mailbox reports NIL for the per-mailbox metadata";
     $res = $imaptalk->getmetadata($folder, $fentry)
-	or die "Cannot getmetadata: $@";
+        or die "Cannot getmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder => { $fentry => undef }
+        $folder => { $fentry => undef }
     }, $res);
 }
 
@@ -2631,23 +2631,23 @@ sub folder_delete_mboxm_common
 
     xlog "create a mailbox";
     $imaptalk->create($folder)
-	or die "Cannot create mailbox $folder: $@";
+        or die "Cannot create mailbox $folder: $@";
 
     xlog "set and then get the same back again";
     $imaptalk->setmetadata($folder, $fentry, $data)
-	or die "Cannot setmetadata: $@";
+        or die "Cannot setmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
     my $res = $imaptalk->getmetadata($folder, $fentry)
-	or die "Cannot getmetadata: $@";
+        or die "Cannot getmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder => { $fentry => $data }
+        $folder => { $fentry => $data }
     }, $res);
 
     xlog "delete the mailbox";
     $imaptalk->delete($folder)
-	or die "Cannot delete mailbox $folder: $@";
+        or die "Cannot delete mailbox $folder: $@";
 
     xlog "cannot get metadata for deleted mailbox";
     $res = $imaptalk->getmetadata($folder, $fentry);
@@ -2656,14 +2656,14 @@ sub folder_delete_mboxm_common
 
     xlog "create a new mailbox with the same name";
     $imaptalk->create($folder)
-	or die "Cannot create mailbox $folder: $@";
+        or die "Cannot create mailbox $folder: $@";
 
     xlog "new mailbox reports NIL for the per-mailbox metadata";
     $res = $imaptalk->getmetadata($folder, $fentry)
-	or die "Cannot getmetadata: $@";
+        or die "Cannot getmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_deep_equals({
-	$folder => { $fentry => undef }
+        $folder => { $fentry => undef }
     }, $res);
 }
 
@@ -2681,22 +2681,22 @@ sub folder_delete_msg_common
 
     xlog "create a mailbox";
     $imaptalk->create($folder)
-	or die "Cannot create mailbox $folder: $@";
+        or die "Cannot create mailbox $folder: $@";
 
     xlog "add some messages";
     my $uid = 1;
     my %exp;
     for (1..10)
     {
-	my $msg = $self->make_message("Message $_");
-	$exp{$uid} = $msg;
-	$msg->set_attribute('uid', $uid);
-	my $data = $self->make_random_data(0.3, maxreps => 15);
-	$msg->set_annotation($mentry, $mattrib, $data);
-	$imaptalk->store('' . $uid, 'annotation',
-			[$mentry, [$mattrib, $data]]);
-	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-	$uid++;
+        my $msg = $self->make_message("Message $_");
+        $exp{$uid} = $msg;
+        $msg->set_attribute('uid', $uid);
+        my $data = $self->make_random_data(0.3, maxreps => 15);
+        $msg->set_annotation($mentry, $mattrib, $data);
+        $imaptalk->store('' . $uid, 'annotation',
+                        [$mentry, [$mattrib, $data]]);
+        $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+        $uid++;
     }
 
     xlog "Check the messages are all there";
@@ -2705,22 +2705,22 @@ sub folder_delete_msg_common
     xlog "delete the mailbox";
     $imaptalk->unselect();
     $imaptalk->delete($folder)
-	or die "Cannot delete mailbox $folder: $@";
+        or die "Cannot delete mailbox $folder: $@";
 
     xlog "create a new mailbox with the same name";
     $imaptalk->create($folder)
-	or die "Cannot create mailbox $folder: $@";
+        or die "Cannot create mailbox $folder: $@";
 
     xlog "create some new messages";
     %exp = ();
     $uid = 1;
     for (1..10)
     {
-	my $msg = $self->make_message("Message NEW $_");
-	$exp{$uid} = $msg;
-	$msg->set_attribute('uid', $uid);
-	# Note: no annotation on the new message
-	$uid++;
+        my $msg = $self->make_message("Message NEW $_");
+        $exp{$uid} = $msg;
+        $msg->set_attribute('uid', $uid);
+        # Note: no annotation on the new message
+        $uid++;
     }
 
     xlog "new mailbox reports NIL for the per-message metadata";
@@ -2736,7 +2736,7 @@ sub test_folder_delete_mboxa_dmimm
     xlog "deleted with the mailbox; delete_mode = immediate (BZ2685)";
 
     $self->assert_str_equals('immediate',
-		    $self->{instance}->{config}->get('delete_mode'));
+                    $self->{instance}->{config}->get('delete_mode'));
 
     $self->folder_delete_mboxa_common();
 }
@@ -2750,7 +2750,7 @@ sub test_folder_delete_mboxa_dmdel
     xlog "deleted with the mailbox; delete_mode = delayed (BZ2685)";
 
     $self->assert_str_equals('delayed',
-		    $self->{instance}->{config}->get('delete_mode'));
+                    $self->{instance}->{config}->get('delete_mode'));
 
     $self->folder_delete_mboxa_common();
 }
@@ -2764,7 +2764,7 @@ sub test_folder_delete_mboxm_dmimm
     xlog "deleted with the mailbox; delete_mode = immediate (BZ2685)";
 
     $self->assert_str_equals('immediate',
-		    $self->{instance}->{config}->get('delete_mode'));
+                    $self->{instance}->{config}->get('delete_mode'));
 
     $self->folder_delete_mboxm_common();
 }
@@ -2778,7 +2778,7 @@ sub test_folder_delete_mboxm_dmdel
     xlog "deleted with the mailbox; delete_mode = delayed (BZ2685)";
 
     $self->assert_str_equals('delayed',
-		    $self->{instance}->{config}->get('delete_mode'));
+                    $self->{instance}->{config}->get('delete_mode'));
 
     $self->folder_delete_mboxm_common();
 }
@@ -2792,7 +2792,7 @@ sub test_folder_delete_msg_dmimm
     xlog "deleted with the mailbox; delete_mode = immediate (BZ2685)";
 
     $self->assert_str_equals('immediate',
-		    $self->{instance}->{config}->get('delete_mode'));
+                    $self->{instance}->{config}->get('delete_mode'));
 
     $self->folder_delete_msg_common();
 }
@@ -2806,7 +2806,7 @@ sub test_folder_delete_msg_dmdel
     xlog "deleted with the mailbox; delete_mode = delayed (BZ2685)";
 
     $self->assert_str_equals('delayed',
-		    $self->{instance}->{config}->get('delete_mode'));
+                    $self->{instance}->{config}->get('delete_mode'));
 
     $self->folder_delete_msg_common();
 }
@@ -2828,17 +2828,17 @@ sub test_getmetadata_multiple_folders
     xlog "Create folders";
     foreach my $f (@folders)
     {
-	$imaptalk->create($f)
-	    or die "Cannot create mailbox $f: $@";
+        $imaptalk->create($f)
+            or die "Cannot create mailbox $f: $@";
 
-	my $res = $imaptalk->getmetadata($f, $entry);
-	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-	$self->assert_not_null($res);
+        my $res = $imaptalk->getmetadata($f, $entry);
+        $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+        $self->assert_not_null($res);
 
-	my $uuid = $res->{$f}{$entry};
-	$self->assert_not_null($uuid);
-	$self->assert($uuid =~ m/^[0-9a-z-]+$/);
-	$uuids{$f} = $uuid;
+        my $uuid = $res->{$f}{$entry};
+        $self->assert_not_null($uuid);
+        $self->assert($uuid =~ m/^[0-9a-z-]+$/);
+        $uuids{$f} = $uuid;
     }
 
     xlog "Getting metadata with a list of folder names";
@@ -2846,14 +2846,14 @@ sub test_getmetadata_multiple_folders
     my %exp;
     foreach my $f (@folders)
     {
-	push(@f2, $f);
-	$exp{$f} = { $entry => $uuids{$f} };
+        push(@f2, $f);
+        $exp{$f} = { $entry => $uuids{$f} };
 
-	my $res = $imaptalk->getmetadata(\@f2, $entry);
-	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-	$self->assert_not_null($res);
+        my $res = $imaptalk->getmetadata(\@f2, $entry);
+        $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+        $self->assert_not_null($res);
 
-	$self->assert_deep_equals(\%exp, $res);
+        $self->assert_deep_equals(\%exp, $res);
     }
 }
 
@@ -2868,20 +2868,20 @@ sub getmetadata
 
     my %handlers =
     (
-	metadata => sub
-	{
-	    my ($response, $rr, $id) = @_;
-	    if ($rr->[0] =~ m/^longentries/i)
-	    {
-		$res->{longentries} = 0 + $rr->[1];
-	    }
-	    else
-	    {
-		my $f = $talk->_unfix_folder_name($rr->[0]);
-		my %kv = ( @{$rr->[1]} );
-		map { $res->{$f}->{$_} = $kv{$_}; } keys %kv;
-	    }
-	}
+        metadata => sub
+        {
+            my ($response, $rr, $id) = @_;
+            if ($rr->[0] =~ m/^longentries/i)
+            {
+                $res->{longentries} = 0 + $rr->[1];
+            }
+            else
+            {
+                my $f = $talk->_unfix_folder_name($rr->[0]);
+                my %kv = ( @{$rr->[1]} );
+                map { $res->{$f}->{$_} = $kv{$_}; } keys %kv;
+            }
+        }
     );
 
     my $r = $talk->_imap_cmd('getmetadata', 0, \%handlers, @args);
@@ -2903,7 +2903,7 @@ sub test_getmetadata_maxsize
 
     xlog "Create folder";
     $imaptalk->create($folder)
-	or die "Cannot create mailbox $folder: $@";
+        or die "Cannot create mailbox $folder: $@";
 
     $res = $imaptalk->getmetadata($folder, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
@@ -2953,25 +2953,25 @@ sub test_getmetadata_depth
     # data thanks to hipsteripsum.me
     my $folder = 'INBOX.denim';
     my %entries = (
-	'/shared/selvage' => 'locavore',
-	'/shared/selvage/portland' => 'ennui',
-	'/shared/selvage/leggings' => 'scenester',
-	'/shared/selvage/portland/mustache' => 'terry richardson',
-	'/shared/selvage/portland/mustache/american' => 'messenger bag',
-	'/shared/selvage/portland/mustache/american/apparel' => 'street art',
+        '/shared/selvage' => 'locavore',
+        '/shared/selvage/portland' => 'ennui',
+        '/shared/selvage/leggings' => 'scenester',
+        '/shared/selvage/portland/mustache' => 'terry richardson',
+        '/shared/selvage/portland/mustache/american' => 'messenger bag',
+        '/shared/selvage/portland/mustache/american/apparel' => 'street art',
     );
     my $rootentry = '/shared/selvage';
     my $res;
 
     xlog "Create folder";
     $imaptalk->create($folder)
-	or die "Cannot create mailbox $folder: $@";
+        or die "Cannot create mailbox $folder: $@";
 
     xlog "Setup metadata";
     foreach my $entry (sort keys %entries)
     {
-	$imaptalk->setmetadata($folder, $entry, $entries{$entry})
-	    or die "Cannot setmetadata: $@";
+        $imaptalk->setmetadata($folder, $entry, $entries{$entry})
+            or die "Cannot setmetadata: $@";
     }
 
     xlog "Getting metadata with no DEPTH";

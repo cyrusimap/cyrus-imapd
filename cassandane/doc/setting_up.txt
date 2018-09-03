@@ -49,7 +49,7 @@ at all.  This section documents those steps.
     without entering your password all the time.  One way of doing this
     is to add the following at the *end* of your /etc/sudoers file
 
-    gnb	ALL = (cyrus) NOPASSWD: ALL
+    gnb ALL = (cyrus) NOPASSWD: ALL
 
     Obviously, replace 'gnb' with your username.
 
@@ -57,36 +57,36 @@ at all.  This section documents those steps.
     obvious ways of doing this.
 
      *  Fully installed Cyrus build in /usr/cyrus.  This requires
-	you to do a step as root every time you build Cyrus, which
-	can be a pain.
+        you to do a step as root every time you build Cyrus, which
+        can be a pain.
 
-	gnb> cd ~/my/cyrus/workarea
-	gnb> ./configure --prefix=/usr/cyrus \
-	      --with-cyrus-prefix=/usr/cyrus ...
-	gnb> make && sudo make install
+        gnb> cd ~/my/cyrus/workarea
+        gnb> ./configure --prefix=/usr/cyrus \
+              --with-cyrus-prefix=/usr/cyrus ...
+        gnb> make && sudo make install
 
      *  Partially installed Cyrus build in a temp directory.  This
-	is what I use.
+        is what I use.
 
-	gnb> cd ~/my/cyrus/workarea
-	gnb> ./configure --prefix=/usr/cyrus \
-	      --with-cyrus-prefix=/usr/cyrus ...
-	gnb> make && make DESTDIR=/var/tmp/cyrus install
+        gnb> cd ~/my/cyrus/workarea
+        gnb> ./configure --prefix=/usr/cyrus \
+              --with-cyrus-prefix=/usr/cyrus ...
+        gnb> make && make DESTDIR=/var/tmp/cyrus install
 
-	gnb> cd ~/my/cassandane/workarea
-	gnb> cp cassandane.ini.example cassandane.ini
-	gnb> vi cassandane.ini
-	[cyrus default]
-	destdir = /var/tmp/cyrus
+        gnb> cd ~/my/cassandane/workarea
+        gnb> cp cassandane.ini.example cassandane.ini
+        gnb> vi cassandane.ini
+        [cyrus default]
+        destdir = /var/tmp/cyrus
 
     Also note that you can do other combinations too, the trick is to
     set up the 'cyrus default' section in the cassandane.ini such that
 
      *  'prefix' is the value of --prefix and --cyrus-prefix you used
-	 when you ran the Cyrus configure script.  Default is /usr/cyrus
+         when you ran the Cyrus configure script.  Default is /usr/cyrus
 
      *  'destdir' is the value of DESTDIR when you did 'make install'
-	in the Cyrus directory.  Default is empty.
+        in the Cyrus directory.  Default is empty.
 
 5.  It's also a good idea to set some kernel tunables.
 

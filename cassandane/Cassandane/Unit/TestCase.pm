@@ -54,7 +54,7 @@ sub new
 {
     my $class = shift;
     if (not $buildinfo) {
-	$buildinfo = Cassandane::BuildInfo->new();
+        $buildinfo = Cassandane::BuildInfo->new();
     }
     return $class->SUPER::new(@_);
 }
@@ -72,38 +72,38 @@ sub _skip_version
     return if not $str =~ m/^(min|max)_version_([\d_]+)$/;
     my $minmax = $1;
     my ($lim_major, $lim_minor, $lim_revision, $lim_commits)
-	= map { 0 + $_ } split /_/, $2;
+        = map { 0 + $_ } split /_/, $2;
     return if not defined $lim_major;
 
     my ($major, $minor, $revision, $commits) = Cassandane::Instance->get_version();
 
     if ($minmax eq 'min') {
-	return 1 if $major < $lim_major; # too old, skip!
-	return if $major > $lim_major;   # definitely new enough
+        return 1 if $major < $lim_major; # too old, skip!
+        return if $major > $lim_major;   # definitely new enough
 
-	return if not defined $lim_minor; # don't check deeper if caller doesn't care
-	return 1 if $minor < $lim_minor;
-	return if $minor > $lim_minor;
+        return if not defined $lim_minor; # don't check deeper if caller doesn't care
+        return 1 if $minor < $lim_minor;
+        return if $minor > $lim_minor;
 
-	return if not defined $lim_revision;
-	return 1 if $revision < $lim_revision;
+        return if not defined $lim_revision;
+        return 1 if $revision < $lim_revision;
 
-	return if not defined $lim_commits;
-	return 1 if $commits < $lim_commits;
+        return if not defined $lim_commits;
+        return 1 if $commits < $lim_commits;
     }
     else {
-	return 1 if $major > $lim_major; # too new, skip!
-	return if $major < $lim_major;   # definitely old enough
+        return 1 if $major > $lim_major; # too new, skip!
+        return if $major < $lim_major;   # definitely old enough
 
-	return if not defined $lim_minor; # don't check deeper if caller doesn't care
-	return 1 if $minor > $lim_minor;
-	return if $minor < $lim_minor;
+        return if not defined $lim_minor; # don't check deeper if caller doesn't care
+        return 1 if $minor > $lim_minor;
+        return if $minor < $lim_minor;
 
-	return if not defined $lim_revision;
-	return 1 if $revision > $lim_revision;
+        return if not defined $lim_revision;
+        return 1 if $revision > $lim_revision;
 
-	return if not defined $lim_commits;
-	return 1 if $commits > $lim_commits;
+        return if not defined $lim_commits;
+        return 1 if $commits > $lim_commits;
     }
 
     return;
@@ -114,38 +114,38 @@ sub filter
     my ($self) = @_;
     return
     {
-	x => sub
-	{
-	    my $method = shift;
-	    $method =~ s/^test_//;
-	    # Only the explicitly enabled test runs
-	    return ($enabled eq $method ? undef : 1);
-	},
-	skip_version => sub
-	{
-	    return if not exists $self->{_name};
-	    my $sub = $self->can($self->{_name});
-	    return if not defined $sub;
-	    foreach my $attr (attributes::get($sub)) {
-		next if $attr !~ m/^(?:min|max)_version_[\d_]+$/;
-		return 1 if _skip_version($attr);
-	    }
-	    return;
-	},
-	skip_missing_features => sub
-	{
-	    return if not exists $self->{_name};
-	    my $sub = $self->can($self->{_name});
-	    return if not defined $sub;
-	    foreach my $attr (attributes::get($sub)) {
-		next if $attr !~ m/^needs_(\w+)_([\w_]+)$/;
-		if (not $buildinfo->get($1, $2)) {
-		    xlog "$1.$2 not enabled, $self->{_name} will be skipped";
-		    return 1;
-		}
-	    }
-	    return;
-	}
+        x => sub
+        {
+            my $method = shift;
+            $method =~ s/^test_//;
+            # Only the explicitly enabled test runs
+            return ($enabled eq $method ? undef : 1);
+        },
+        skip_version => sub
+        {
+            return if not exists $self->{_name};
+            my $sub = $self->can($self->{_name});
+            return if not defined $sub;
+            foreach my $attr (attributes::get($sub)) {
+                next if $attr !~ m/^(?:min|max)_version_[\d_]+$/;
+                return 1 if _skip_version($attr);
+            }
+            return;
+        },
+        skip_missing_features => sub
+        {
+            return if not exists $self->{_name};
+            my $sub = $self->can($self->{_name});
+            return if not defined $sub;
+            foreach my $attr (attributes::get($sub)) {
+                next if $attr !~ m/^needs_(\w+)_([\w_]+)$/;
+                if (not $buildinfo->get($1, $2)) {
+                    xlog "$1.$2 not enabled, $self->{_name} will be skipped";
+                    return 1;
+                }
+            }
+            return;
+        }
     };
 }
 
@@ -155,10 +155,10 @@ sub annotate_from_file
     return if !defined $filename;
 
     open LOG, '<', $filename
-	or die "Cannot open $filename for reading: $!";
+        or die "Cannot open $filename for reading: $!";
     while (<LOG>)
     {
-	$self->annotate($_);
+        $self->annotate($_);
     }
     close LOG;
 }
@@ -172,11 +172,11 @@ sub parameter
     return if (!scalar(@values));
 
     my $param = {
-	id => scalar(@params),
-	package => caller,
-	values => \@values,
-	maxvidx => scalar(@values)-1,
-	reference => $ref,
+        id => scalar(@params),
+        package => caller,
+        values => \@values,
+        maxvidx => scalar(@values)-1,
+        reference => $ref,
     };
     push(@params, $param);
 
@@ -192,9 +192,9 @@ sub _describe_setting
     my @ss = ( @$setting );
     while (scalar @ss)
     {
-	my $id = shift @ss;
-	my $value = $params[$id]->{values}->[shift @ss];
-	push(@parts, "$id:\"$value\"");
+        my $id = shift @ss;
+        my $value = $params[$id]->{values}->[shift @ss];
+        push(@parts, "$id:\"$value\"");
     }
     return '[' . join(' ', @parts) . ']';
 }
@@ -209,30 +209,30 @@ sub make_parameter_settings
     my @stack;
     foreach my $param (grep { $_->{package} eq $package } @params)
     {
-	push(@stack, { param => $param, vidx => 0 });
+        push(@stack, { param => $param, vidx => 0 });
     }
     return [] if !scalar(@stack);
 
     SETTING: while (1)
     {
-	# save a setting
-	my $setting = [ map { $_->{param}->{id}, $_->{vidx} } @stack ];
-# 	xlog "XXX making setting " . _describe_setting($setting);
-	push(@settings, $setting);
-	# increment indexes, wrapping and overflowing
-	foreach my $s (@stack)
-	{
-	    $s->{vidx}++;
-	    if ($s->{vidx} > $s->{param}->{maxvidx})
-	    {
-		$s->{vidx} = 0;
-	    }
-	    else
-	    {
-		next SETTING;
-	    }
-	}
-	last;
+        # save a setting
+        my $setting = [ map { $_->{param}->{id}, $_->{vidx} } @stack ];
+#       xlog "XXX making setting " . _describe_setting($setting);
+        push(@settings, $setting);
+        # increment indexes, wrapping and overflowing
+        foreach my $s (@stack)
+        {
+            $s->{vidx}++;
+            if ($s->{vidx} > $s->{param}->{maxvidx})
+            {
+                $s->{vidx} = 0;
+            }
+            else
+            {
+                next SETTING;
+            }
+        }
+        last;
     }
 
     return @settings;
@@ -246,16 +246,16 @@ sub apply_parameter_setting
 
     foreach my $param (@params)
     {
-	${$param->{reference}} = undef;
+        ${$param->{reference}} = undef;
     }
 
     my @ss = ( @$setting );
     while (scalar @ss)
     {
-	my $param = $params[shift @ss];
-	my $value = $param->{values}->[shift @ss];
-# 	xlog "XXX setting parameter id $param->{id} to value \"$value\"";
-	${$param->{reference}} = $value;
+        my $param = $params[shift @ss];
+        my $value = $param->{values}->[shift @ss];
+#       xlog "XXX setting parameter id $param->{id} to value \"$value\"";
+        ${$param->{reference}} = $value;
     }
 }
 

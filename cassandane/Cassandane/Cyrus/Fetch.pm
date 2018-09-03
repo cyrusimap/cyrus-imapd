@@ -100,45 +100,45 @@ sub test_duplicate_headers
     my ($self) = @_;
 
     my $from1 = Cassandane::Address->new(localpart => 'firstsender',
-					 domain    => 'example.com');
+                                         domain    => 'example.com');
     my $from2 = Cassandane::Address->new(localpart => 'secondsender',
-					 domain    => 'example.com');
+                                         domain    => 'example.com');
 
     my $rcpt1 = Cassandane::Address->new(localpart => 'firstrecipient',
-					 domain    => 'example.com');
+                                         domain    => 'example.com');
     my $rcpt2 = Cassandane::Address->new(localpart => 'secondrecipient',
-					 domain    => 'example.com');
+                                         domain    => 'example.com');
 
     my $cc1   = Cassandane::Address->new(localpart => 'firstcc',
-					 domain    => 'example.com');
+                                         domain    => 'example.com');
     my $cc2   = Cassandane::Address->new(localpart => 'secondcc',
-					 domain    => 'example.com');
+                                         domain    => 'example.com');
 
     my $bcc1  = Cassandane::Address->new(localpart => 'firstbcc',
-					 domain    => 'example.com');
+                                         domain    => 'example.com');
     my $bcc2  = Cassandane::Address->new(localpart => 'secondbcc',
-					 domain    => 'example.com');
+                                         domain    => 'example.com');
 
     my $date1 = DateTime->from_epoch(epoch => time());
     my $date2 = DateTime->from_epoch(epoch => time() - 2);
 
     my $msg = $self->make_message(
-	'subject1',
-	from => $from1,
-	to => $rcpt1,
-	cc => $cc1,
-	bcc => $bcc1,
-	messageid => 'messageid1@example.com',
-	date => $date1,
-	extra_headers => [
-	    [subject => 'subject2'],
-	    [from => $from2->as_string() ],
-	    [to => $rcpt2->as_string() ],
-	    [cc => $cc2->as_string() ],
-	    [bcc => $bcc2->as_string() ],
-	    ['message-id' => '<messageid2@example.com>' ],
-	    [date => to_rfc822($date2) ],
-	],
+        'subject1',
+        from => $from1,
+        to => $rcpt1,
+        cc => $cc1,
+        bcc => $bcc1,
+        messageid => 'messageid1@example.com',
+        date => $date1,
+        extra_headers => [
+            [subject => 'subject2'],
+            [from => $from2->as_string() ],
+            [to => $rcpt2->as_string() ],
+            [cc => $cc2->as_string() ],
+            [bcc => $bcc2->as_string() ],
+            ['message-id' => '<messageid2@example.com>' ],
+            [date => to_rfc822($date2) ],
+        ],
     );
 
     # Verify that it created duplicate headers, and didn't collate the values.
@@ -153,14 +153,14 @@ sub test_duplicate_headers
     # So we currently expect all the "second" values, when we would prefer
     # to expect the "first" ones.
     my %exp = (
-	Subject => 'subject2',
-	From => $from2->address(),
-	To => $rcpt2->address(),
-	Cc => $cc2->address(),
-	Bcc => $bcc2->address(),
-	Date => to_rfc822($date2),
-	'Message-ID' => '<messageid2@example.com>',
-	'In-Reply-To' => undef,
+        Subject => 'subject2',
+        From => $from2->address(),
+        To => $rcpt2->address(),
+        Cc => $cc2->address(),
+        Bcc => $bcc2->address(),
+        Date => to_rfc822($date2),
+        'Message-ID' => '<messageid2@example.com>',
+        'In-Reply-To' => undef,
     );
 
     my $imaptalk = $self->{store}->get_client();
@@ -700,7 +700,7 @@ sub test_fetch_urlfetch
     $res = $talk->_imap_cmd('append', 0, \%handlers,
         'INBOX', [], "14-Jul-2013 17:01:02 +0000",
         "CATENATE", [
-            "URL", "/INBOX/;uid=1/;section=3.HEADER", 
+            "URL", "/INBOX/;uid=1/;section=3.HEADER",
             "URL", "/INBOX/;uid=1/;section=2.1",
         ],
     );

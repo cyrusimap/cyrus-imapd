@@ -66,28 +66,28 @@ sub from_iso8601($)
 {
     my ($s) = @_;
     my ($year, $mon, $day, $hour, $min, $sec, $zulu) =
-	($s =~ m/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/);
+        ($s =~ m/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/);
     return unless defined $sec;
     return if ($year < 1970 || $year > 2037);
     return if ($mon < 1 || $mon > 12);
     return if ($day < 1 || $day > 31);
     return if ($hour < 0 || $hour > 23);
     return if ($min < 0 || $min > 59);
-    return if ($sec < 0 || $sec > 60);	# allow for leap second
+    return if ($sec < 0 || $sec > 60);  # allow for leap second
 
 #     printf STDERR "%s -> year=%u mon=%u day=%u hour=%u min=%u sec=%u\n",
-# 	$s, $year, $mon, $day, $hour, $min, $sec;
+#       $s, $year, $mon, $day, $hour, $min, $sec;
 
     my $tz = ($zulu ? 'GMT' : 'local');
     return DateTime->new(
-		year => $year,
-		month => $mon,
-		day => $day,
-		hour => $hour,
-		minute => $min,
-		second => $sec,
-		time_zone => $tz
-	    );
+                year => $year,
+                month => $mon,
+                day => $day,
+                hour => $hour,
+                minute => $min,
+                second => $sec,
+                time_zone => $tz
+            );
 }
 
 #
@@ -156,7 +156,7 @@ sub from_rfc822($)
 {
     my ($s) = @_;
     my ($wdayn, $day, $mon, $year, $hour, $min, $sec, $tzsign, $tzhour, $tzmin) =
-	($s =~ m/^([A-Z][a-z][a-z]), (\d+) ([A-Z][a-z][a-z]) (\d{4}) (\d{2}):(\d{2}):(\d{2}) ([-+])(\d{2})(\d{2})$/);
+        ($s =~ m/^([A-Z][a-z][a-z]), (\d+) ([A-Z][a-z][a-z]) (\d{4}) (\d{2}):(\d{2}):(\d{2}) ([-+])(\d{2})(\d{2})$/);
     return unless defined $tzmin;
     return if ($year < 1970 || $year > 2037);
     $mon = $rfc822_months{$mon};
@@ -164,22 +164,22 @@ sub from_rfc822($)
     return if ($day < 1 || $day > 31);
     return if ($hour < 0 || $hour > 23);
     return if ($min < 0 || $min > 59);
-    return if ($sec < 0 || $sec > 60);	# allow for leap second
+    return if ($sec < 0 || $sec > 60);  # allow for leap second
     return if ($tzhour < 0 || $tzhour > 23);
     return if ($tzmin < 0 || $tzmin > 59);
 
 #     printf STDERR "%s -> year=%u mon=%u day=%u hour=%u min=%u sec=%u tzsign=%s tzhour=%u tzmin=%u\n",
-# 	$s, $year, $mon, $day, $hour, $min, $sec, $tzsign, $tzhour, $tzmin;
+#       $s, $year, $mon, $day, $hour, $min, $sec, $tzsign, $tzhour, $tzmin;
 
     return DateTime->new(
-		year => $year,
-		month => $mon,
-		day => $day,
-		hour => $hour,
-		minute => $min,
-		second => $sec,
-		time_zone => "$tzsign$tzhour$tzmin"
-	    );
+                year => $year,
+                month => $mon,
+                day => $day,
+                hour => $hour,
+                minute => $min,
+                second => $sec,
+                time_zone => "$tzsign$tzhour$tzmin"
+            );
 }
 
 #
@@ -197,9 +197,9 @@ sub to_rfc822($)
     # that the RFC expects.
     my @lt = localtime($dt->epoch);
     return strftime($rfc822_days[$lt[6]] .
-		    ", %d " .
-		    $rfc822_months[$lt[4]] .
-		    " %Y %T %z", @lt);
+                    ", %d " .
+                    $rfc822_months[$lt[4]] .
+                    " %Y %T %z", @lt);
 }
 
 
@@ -215,7 +215,7 @@ sub from_rfc3501($)
 {
     my ($s) = @_;
     my ($day, $mon, $year, $hour, $min, $sec, $tzsign, $tzhour, $tzmin) =
-	($s =~ m/^\s*(\d+)-([A-Z][a-z][a-z])-(\d{4}) (\d{2}):(\d{2}):(\d{2}) ([-+])(\d{2})(\d{2})$/);
+        ($s =~ m/^\s*(\d+)-([A-Z][a-z][a-z])-(\d{4}) (\d{2}):(\d{2}):(\d{2}) ([-+])(\d{2})(\d{2})$/);
     return unless defined $tzmin;
     return if ($year < 1970 || $year > 2037);
     $mon = $rfc822_months{$mon};
@@ -223,22 +223,22 @@ sub from_rfc3501($)
     return if ($day < 1 || $day > 31);
     return if ($hour < 0 || $hour > 23);
     return if ($min < 0 || $min > 59);
-    return if ($sec < 0 || $sec > 60);	# allow for leap second
+    return if ($sec < 0 || $sec > 60);  # allow for leap second
     return if ($tzhour < 0 || $tzhour > 23);
     return if ($tzmin < 0 || $tzmin > 59);
 
 #     printf STDERR "%s -> year=%u mon=%u day=%u hour=%u min=%u sec=%u tzsign=%s tzhour=%u tzmin=%u\n",
-# 	$s, $year, $mon, $day, $hour, $min, $sec, $tzsign, $tzhour, $tzmin;
+#       $s, $year, $mon, $day, $hour, $min, $sec, $tzsign, $tzhour, $tzmin;
 
     return DateTime->new(
-		year => $year,
-		month => $mon,
-		day => $day,
-		hour => $hour,
-		minute => $min,
-		second => $sec,
-		time_zone => "$tzsign$tzhour$tzmin"
-	    );
+                year => $year,
+                month => $mon,
+                day => $day,
+                hour => $hour,
+                minute => $min,
+                second => $sec,
+                time_zone => "$tzsign$tzhour$tzmin"
+            );
 }
 
 # die "Woops, from_rfc3501 is broken"

@@ -67,8 +67,8 @@ sub test_unrelated
     my $N = 20;
     for (1..$N)
     {
-	my $msg = $self->make_message("Message $_");
-	$exp{$_} = $msg;
+        my $msg = $self->make_message("Message $_");
+        $exp{$_} = $msg;
     }
     xlog "check the messages got there";
     $self->check_messages(\%exp);
@@ -101,11 +101,11 @@ sub test_subjects
     my @subjects = ( 'quinoa', 'selvedge', 'messenger bag' );
     for (1..$N)
     {
-	my $sub = $subjects[($_ - 1) % scalar(@subjects)];
-	$exp_by_sub{$sub} ||= [];
-	my $msg = $self->make_message(("Re: " x scalar(@{$exp_by_sub{$sub}})) . $sub);
-	push(@{$exp_by_sub{$sub}}, $msg);
-	$exp{$_} = $msg;
+        my $sub = $subjects[($_ - 1) % scalar(@subjects)];
+        $exp_by_sub{$sub} ||= [];
+        my $msg = $self->make_message(("Re: " x scalar(@{$exp_by_sub{$sub}})) . $sub);
+        push(@{$exp_by_sub{$sub}}, $msg);
+        $exp{$_} = $msg;
     }
     xlog "check the messages got there";
     $self->check_messages(\%exp);
@@ -113,9 +113,9 @@ sub test_subjects
     my @expthreads;
     foreach my $sub (@subjects)
     {
-	my @thread = ( map { $_->uid } @{$exp_by_sub{$sub}} );
-	my $parent = shift(@thread);
-	push(@expthreads, [ $parent, map { [ $_ ] } @thread ] );
+        my @thread = ( map { $_->uid } @{$exp_by_sub{$sub}} );
+        my $parent = shift(@thread);
+        push(@expthreads, [ $parent, map { [ $_ ] } @thread ] );
     }
 
     xlog "The REFERENCES algorithm gives one thread per subject, even";
@@ -147,21 +147,21 @@ sub test_references_chain
     my @subjects = ( 'cosby sweater', 'brooklyn', 'portland' );
     for (1..$N)
     {
-	my $sub = $subjects[($_ - 1) % scalar(@subjects)];
-	$exp_by_sub{$sub} ||= [];
-	my $msg;
-	if (scalar @{$exp_by_sub{$sub}})
-	{
-	    my $parent = $exp_by_sub{$sub}->[-1];
-	    $msg = $self->make_message("Re: " . $parent->subject,
-				       references => [ $parent ]);
-	}
-	else
-	{
-	    $msg = $self->make_message($sub);
-	}
-	push(@{$exp_by_sub{$sub}}, $msg);
-	$exp{$_} = $msg;
+        my $sub = $subjects[($_ - 1) % scalar(@subjects)];
+        $exp_by_sub{$sub} ||= [];
+        my $msg;
+        if (scalar @{$exp_by_sub{$sub}})
+        {
+            my $parent = $exp_by_sub{$sub}->[-1];
+            $msg = $self->make_message("Re: " . $parent->subject,
+                                       references => [ $parent ]);
+        }
+        else
+        {
+            $msg = $self->make_message($sub);
+        }
+        push(@{$exp_by_sub{$sub}}, $msg);
+        $exp{$_} = $msg;
     }
     xlog "check the messages got there";
     $self->check_messages(\%exp);
@@ -171,7 +171,7 @@ sub test_references_chain
     xlog "The REFERENCES algorithm gives the true thread structure which is deep";
     foreach my $sub (@subjects)
     {
-	push(@expthreads, [ map { $_->uid } @{$exp_by_sub{$sub}} ]);
+        push(@expthreads, [ map { $_->uid } @{$exp_by_sub{$sub}} ]);
     }
     $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
     $self->assert_deep_equals(\@expthreads, $res);
@@ -188,9 +188,9 @@ sub test_references_chain
     @expthreads = ();
     foreach my $sub (@subjects)
     {
-	my @thread = ( map { $_->uid } @{$exp_by_sub{$sub}} );
-	my $parent = shift(@thread);
-	push(@expthreads, [ $parent, map { [ $_ ] } @thread ] );
+        my @thread = ( map { $_->uid } @{$exp_by_sub{$sub}} );
+        my $parent = shift(@thread);
+        push(@expthreads, [ $parent, map { [ $_ ] } @thread ] );
     }
     $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
     $self->assert_deep_equals(\@expthreads, $res);
@@ -215,21 +215,21 @@ sub test_references_star
     my @subjects = ( 'cosby sweater', 'brooklyn', 'portland' );
     foreach my $uid (1..$N)
     {
-	my $sub = $subjects[($uid - 1) % scalar(@subjects)];
-	$exp_by_sub{$sub} ||= [];
-	my $msg;
-	if (scalar @{$exp_by_sub{$sub}})
-	{
-	    my $parent = $exp_by_sub{$sub}->[0];
-	    $msg = $self->make_message("Re: " . $parent->subject,
-				       references => [ $parent ]);
-	}
-	else
-	{
-	    $msg = $self->make_message($sub);
-	}
-	push(@{$exp_by_sub{$sub}}, $msg);
-	$exp{$uid} = $msg;
+        my $sub = $subjects[($uid - 1) % scalar(@subjects)];
+        $exp_by_sub{$sub} ||= [];
+        my $msg;
+        if (scalar @{$exp_by_sub{$sub}})
+        {
+            my $parent = $exp_by_sub{$sub}->[0];
+            $msg = $self->make_message("Re: " . $parent->subject,
+                                       references => [ $parent ]);
+        }
+        else
+        {
+            $msg = $self->make_message($sub);
+        }
+        push(@{$exp_by_sub{$sub}}, $msg);
+        $exp{$uid} = $msg;
     }
     xlog "check the messages got there";
     $self->check_messages(\%exp, keyed_on => 'uid');
@@ -237,9 +237,9 @@ sub test_references_star
     my @expthreads;
     foreach my $sub (@subjects)
     {
-	my @thread = ( map { $_->uid } @{$exp_by_sub{$sub}} );
-	my $parent = shift(@thread);
-	push(@expthreads, [ $parent, map { [ $_ ] } @thread ] );
+        my @thread = ( map { $_->uid } @{$exp_by_sub{$sub}} );
+        my $parent = shift(@thread);
+        push(@expthreads, [ $parent, map { [ $_ ] } @thread ] );
     }
 
     xlog "The REFERENCES algorithm gives the true thread structure which is flat";
@@ -269,14 +269,14 @@ sub test_references_missing_parent
 
     xlog "Generate message B, which References message A";
     my $msgB = $self->make_message("Re: " . $msgA->subject,
-				   uid => 1,
-				   references => [ $msgA ]);
+                                   uid => 1,
+                                   references => [ $msgA ]);
     $exp{1} = $msgB;
 
     xlog "Generate message C, which References message A";
     my $msgC = $self->make_message("Re: " . $msgA->subject,
-				   uid => 2,
-				   references => [ $msgA ]);
+                                   uid => 2,
+                                   references => [ $msgA ]);
     $exp{2} = $msgC;
 
     xlog "check the messages got there";
@@ -310,10 +310,10 @@ sub test_references_loop
     my $msgB = $self->{gen}->generate(subject => "Re: put a bird on it", uid => 1);
     $msgB->set_headers('Message-Id', '<477CBE0D020000330001972A@gwia1.boku.ac.at>');
     $msgB->set_headers('References',
-			'<477CB3AF0200001E00003B58@gwia1.boku.ac.at>' . "\n" .
-			'<477CBA030200003300019722@gwia1.boku.ac.at>' . "\n" .
-			'<477CBD530200003300019726@gwia1.boku.ac.at>' . "\n" .
-			'<477CBE0D020000330001972A@gwia1.boku.ac.at>');
+                        '<477CB3AF0200001E00003B58@gwia1.boku.ac.at>' . "\n" .
+                        '<477CBA030200003300019722@gwia1.boku.ac.at>' . "\n" .
+                        '<477CBD530200003300019726@gwia1.boku.ac.at>' . "\n" .
+                        '<477CBE0D020000330001972A@gwia1.boku.ac.at>');
     $msgB->set_headers('In-Reply-To', '<477CBE0D020000330001972A@gwia1.boku.ac.at>');
     $self->_save_message($msgB);
     $exp{1} = $msgB;
@@ -322,13 +322,13 @@ sub test_references_loop
     my $msgC = $self->{gen}->generate(subject => "Re: put a bird on it", uid => 2);
     $msgC->set_headers('Message-Id', '<478B52E10200003300019E06@gwia1.boku.ac.at>');
     $msgC->set_headers('References',
-			'<477CB3AF0200001E00003B58@gwia1.boku.ac.at>' . "\n" .
-			'<478B2D7F0200003300019DA2@gwia1.boku.ac.at>' . "\n" .
-			'<478B2E9F0200003300019DA5@gwia1.boku.ac.at>' . "\n" .
-			'<478B2F0E0200003300019DA8@gwia1.boku.ac.at>' . "\n" .
-			'<478B32C40200003300019DB1@gwia1.boku.ac.at>' . "\n" .
-			'<478B38C40200003300019DBD@gwia1.boku.ac.at>' . "\n" .
-			'<478B52E10200003300019E06@gwia1.boku.ac.at>');
+                        '<477CB3AF0200001E00003B58@gwia1.boku.ac.at>' . "\n" .
+                        '<478B2D7F0200003300019DA2@gwia1.boku.ac.at>' . "\n" .
+                        '<478B2E9F0200003300019DA5@gwia1.boku.ac.at>' . "\n" .
+                        '<478B2F0E0200003300019DA8@gwia1.boku.ac.at>' . "\n" .
+                        '<478B32C40200003300019DB1@gwia1.boku.ac.at>' . "\n" .
+                        '<478B38C40200003300019DBD@gwia1.boku.ac.at>' . "\n" .
+                        '<478B52E10200003300019E06@gwia1.boku.ac.at>');
     $msgC->set_headers('In-Reply-To',  '<478B52E10200003300019E06@gwia1.boku.ac.at>');
     $self->_save_message($msgC);
     $exp{2} = $msgC;

@@ -41,9 +41,9 @@ root@testbox# ./testrunner.pl
 
 root@testbox# ls reports
 TEST-Cassandane.Cyrus.Conversations.xml  TEST-Cassandane.Test.DateTime.xml
-TEST-Cassandane.Cyrus.Replication.xml	 TEST-Cassandane.Test.Instance.xml
-TEST-Cassandane.Cyrus.Simple.xml	 TEST-Cassandane.Test.Message.xml
-TEST-Cassandane.Test.Address.xml	 TEST-Cassandane.Test.MessageStoreFactory.xml
+TEST-Cassandane.Cyrus.Replication.xml    TEST-Cassandane.Test.Instance.xml
+TEST-Cassandane.Cyrus.Simple.xml         TEST-Cassandane.Test.Message.xml
+TEST-Cassandane.Test.Address.xml         TEST-Cassandane.Test.MessageStoreFactory.xml
 TEST-Cassandane.Test.Config.xml
 
 

@@ -71,66 +71,66 @@ sub test_basic
 
     # Data thanks to hipsteripsum.me
     my @cases = ({
-	    # test default options
-	    user => 'helvetica',
-	    opts => [ ],
-	    can_login => 0,
-	},{
-	    # test the -s option with our service
-	    user => 'portland',
-	    opts => [ '-s', 'imap' ],
-	    can_login => 0,
-	},{
-	    # test the -s option with another service
-	    user => 'stumptown',
-	    opts => [ '-s', 'godard' ],
-	    can_login => 1,
-	},{
-	    # test the -m option
-	    user => 'mustache',
-	    opts => [ '-m', 'Bugger off, you' ],
-	    can_login => 0,
-	},{
-	    # control case - no cyr_deny command run
-	    user => 'vegan',
-	    can_login => 1,
-	});
+            # test default options
+            user => 'helvetica',
+            opts => [ ],
+            can_login => 0,
+        },{
+            # test the -s option with our service
+            user => 'portland',
+            opts => [ '-s', 'imap' ],
+            can_login => 0,
+        },{
+            # test the -s option with another service
+            user => 'stumptown',
+            opts => [ '-s', 'godard' ],
+            can_login => 1,
+        },{
+            # test the -m option
+            user => 'mustache',
+            opts => [ '-m', 'Bugger off, you' ],
+            can_login => 0,
+        },{
+            # control case - no cyr_deny command run
+            user => 'vegan',
+            can_login => 1,
+        });
 
 
     xlog "Create all users";
     foreach my $case (@cases)
     {
-	$self->{instance}->create_user($case->{user});
+        $self->{instance}->create_user($case->{user});
     }
 
     xlog "Running cyr_deny for some users";
     foreach my $case (@cases)
     {
-	next unless defined $case->{opts};
-	$self->{instance}->run_command({ cyrus => 1 },
-		'cyr_deny', @{$case->{opts}}, $case->{user});
+        next unless defined $case->{opts};
+        $self->{instance}->run_command({ cyrus => 1 },
+                'cyr_deny', @{$case->{opts}}, $case->{user});
     }
 
     my $svc = $self->{instance}->get_service('imap');
     foreach my $case (@cases)
     {
-	xlog "Trying to log in as user $case->{user}";
-	my $store = $svc->create_store(username => $case->{user});
-	if ($case->{can_login})
-	{
-	    xlog "Expecting this to succeeed";
-	    my $talk = $store->get_client();
-	    my $r = $talk->status('inbox', [ 'messages' ]);
-	    $self->assert_deep_equals({ messages => 0 }, $r);
-	    $talk = undef;
-	}
-	else
-	{
-	    xlog "Expecting this to fail";
-	    eval { $store->get_client(); };
-	    my $exception = $@;
-	    $self->assert_matches(qr/no - login failed: authorization failure/i, $exception);
-	}
+        xlog "Trying to log in as user $case->{user}";
+        my $store = $svc->create_store(username => $case->{user});
+        if ($case->{can_login})
+        {
+            xlog "Expecting this to succeeed";
+            my $talk = $store->get_client();
+            my $r = $talk->status('inbox', [ 'messages' ]);
+            $self->assert_deep_equals({ messages => 0 }, $r);
+            $talk = undef;
+        }
+        else
+        {
+            xlog "Expecting this to fail";
+            eval { $store->get_client(); };
+            my $exception = $@;
+            $self->assert_matches(qr/no - login failed: authorization failure/i, $exception);
+        }
     }
 }
 
@@ -176,7 +176,7 @@ sub test_connected
 
     # Could do this, but Mail::IMAPTalk drops ALERTs in a BYE response
 #     $self->assert_matches(qr/Access to this service has been blocked/i,
-# 			  $user_talk->get_response_code('alert'));
+#                         $user_talk->get_response_code('alert'));
 }
 
 1;

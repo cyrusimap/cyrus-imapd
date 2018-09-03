@@ -73,12 +73,12 @@ sub _force_db_creations
 
     # create a backups.db -- but only if backups are compiled in!
     eval {
-	$self->{instance}->_find_binary('ctl_backups');
+        $self->{instance}->_find_binary('ctl_backups');
 
-	xlog "autovivify a backups.db";
-	$self->{instance}->run_command({
-	    cyrus => 1,
-	}, 'ctl_backups', 'list');
+        xlog "autovivify a backups.db";
+        $self->{instance}->run_command({
+            cyrus => 1,
+        }, 'ctl_backups', 'list');
     };
 }
 
@@ -87,7 +87,7 @@ sub test_alternate_quotadb_path
     my ($self) = @_;
 
     my $quota_db_path = $self->{instance}->get_basedir()
-			. '/conf/non-default-quotas.db';
+                        . '/conf/non-default-quotas.db';
 
     $self->{instance}->{config}->set(quota_db => 'twoskip');
     $self->{instance}->{config}->set(quota_db_path => $quota_db_path);
@@ -99,9 +99,9 @@ sub test_alternate_quotadb_path
     # If it mistakenly tries to use the default filename, it will error
     # out due to it not existing.
     eval {
-	$self->{instance}->run_command({
-	    cyrus => 1,
-	}, 'ctl_cyrusdb', '-c');
+        $self->{instance}->run_command({
+            cyrus => 1,
+        }, 'ctl_cyrusdb', '-c');
     };
     $self->assert(not $@);
 

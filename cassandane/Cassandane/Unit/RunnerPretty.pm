@@ -106,7 +106,7 @@ sub _getpaddedname
     my $res = "$suite.$testname";
 
     if (length($res) > 70) {
-	$res = substr($res, 0, 67) . '...';
+        $res = substr($res, 0, 67) . '...';
     }
 
     $res .= ' ' x (72 - length($res));

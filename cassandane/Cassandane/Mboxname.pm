@@ -50,12 +50,12 @@ sub new
     my ($class, %params) = @_;
 
     my $self = bless({
-	domain => delete $params{domain},
-	userid => delete $params{userid},
-	box => delete $params{box},	    # internal format, i.e. '.' separated
-	config => delete $params{config}
-		    || Cassandane::Config::default(),
-	# TODO is_deleted
+        domain => delete $params{domain},
+        userid => delete $params{userid},
+        box => delete $params{box},         # internal format, i.e. '.' separated
+        config => delete $params{config}
+                    || Cassandane::Config::default(),
+        # TODO is_deleted
     }, $class);
 
     my $s;
@@ -64,28 +64,28 @@ sub new
     $s = delete $params{external};
     if (defined $s)
     {
-	$self->from_external($s);
-	$n++;
+        $self->from_external($s);
+        $n++;
     }
 
     $s = delete $params{internal};
     if (defined $s)
     {
-	$self->from_internal($s);
-	$n++;
+        $self->from_internal($s);
+        $n++;
     }
 
     $s = delete $params{username};
     if (defined $s)
     {
-	$self->from_username($s);
-	$n++;
+        $self->from_username($s);
+        $n++;
     }
 
     die "Too many contradictory initialisers"
-	if $n > 1;
+        if $n > 1;
     die "Unknown extra arguments"
-	if scalar(%params);
+        if scalar(%params);
 
     return $self;
 }
@@ -109,10 +109,10 @@ sub _set
     my ($self, $domain, $userid, $box) = @_;
 
     die "No Config specified"
-	unless defined $self->{config};
+        unless defined $self->{config};
     my $virtdomains = $self->{config}->get('virtdomains') || 'off';
     die "Domain specified but virtdomains not enabled in instance"
-	if (defined $domain && $virtdomains eq 'off');
+        if (defined $domain && $virtdomains eq 'off');
 
     $box = undef if defined $box && $box eq '';
 
@@ -131,7 +131,7 @@ sub _external_separator
 {
     my ($self) = @_;
     die "No Config specified"
-	unless defined $self->{config};
+        unless defined $self->{config};
     return $self->{config}->get_bool('unixhierarchysep', 'off') ? '/' : '.';
 }
 
@@ -139,7 +139,7 @@ sub _external_separator_regexp
 {
     my ($self) = @_;
     die "No Config specified"
-	unless defined $self->{config};
+        unless defined $self->{config};
     return $self->{config}->get_bool('unixhierarchysep', 'off') ? qr/\// : qr/\./;
 }
 
@@ -150,8 +150,8 @@ sub from_external
 
     if (!defined $s)
     {
-	$self->_reset();
-	return;
+        $self->_reset();
+        return;
     }
 
     my ($local, $domain) = ($s =~ m/^([^@]+)@([^@]+)$/);
@@ -159,7 +159,7 @@ sub from_external
     my $sep = $self->_external_separator_regexp;
     my ($prefix, $userid, @comps) = split($sep, $local);
     die "Bad external name \"$s\""
-	if !defined $userid || $prefix ne 'user';
+        if !defined $userid || $prefix ne 'user';
 
     $self->_set($domain, $userid, join('.', @comps));
 }
@@ -183,8 +183,8 @@ sub from_internal
 
     if (!defined $s)
     {
-	$self->_reset();
-	return;
+        $self->_reset();
+        return;
     }
 
     my ($domain, $local) = ($s =~ m/^([^!]+)!([^!]+)$/);
@@ -214,8 +214,8 @@ sub from_username
 
     if (!defined $s)
     {
-	$self->_reset();
-	return;
+        $self->_reset();
+        return;
     }
 
     my ($userid, $domain) = ($s =~ m/^([^@]+)@([^@]+)$/);
@@ -242,22 +242,22 @@ sub make_child
     # Flatten out any array refs and stringify
     foreach my $c (@args)
     {
-	if (ref $c && ref $c eq 'ARRAY')
-	{
-	    map { push(@comps, "" . $_); } @$c;
-	}
-	elsif (!ref $c)
-	{
-	    push(@comps, "" . $c);
-	}
+        if (ref $c && ref $c eq 'ARRAY')
+        {
+            map { push(@comps, "" . $_); } @$c;
+        }
+        elsif (!ref $c)
+        {
+            push(@comps, "" . $c);
+        }
     }
     map { die "Bad mboxname component \"$_\"" if index($_, $sep) >= 0; } @comps;
 
     my $child = $self->clone();
     if (scalar @comps)
     {
-	unshift(@comps, $child->{box}) if defined $child->{box};
-	$child->{box} = join('.', @comps);
+        unshift(@comps, $child->{box}) if defined $child->{box};
+        $child->{box} = join('.', @comps);
     }
 
     return $child;
@@ -273,11 +273,11 @@ sub make_parent
     my $child = $self->clone();
     if (scalar @comps)
     {
-	$child->{box} = join('.', @comps);
+        $child->{box} = join('.', @comps);
     }
     else
     {
-	$child->{box} = undef;
+        $child->{box} = undef;
     }
 
     return $child;

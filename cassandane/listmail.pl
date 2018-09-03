@@ -19,11 +19,11 @@
 #     endorse or promote products derived from this software without
 #     prior written permission. For permission or any legal
 #     details, please contact
-# 	Opera Software Australia Pty. Ltd.
-# 	Level 50, 120 Collins St
-# 	Melbourne 3000
-# 	Victoria
-# 	Australia
+#       Opera Software Australia Pty. Ltd.
+#       Level 50, 120 Collins St
+#       Melbourne 3000
+#       Victoria
+#       Australia
 #
 #  4. Redistributions of any form whatsoever must retain the following
 #     acknowledgment:
@@ -56,26 +56,26 @@ while (my $a = shift)
 {
     if ($a eq '-f')
     {
-	usage() if defined $params{uri};
-	$params{type} = shift;
+        usage() if defined $params{uri};
+        $params{type} = shift;
     }
     elsif ($a eq '-u')
     {
-	usage() if defined $params{type};
-	$params{uri} = shift;
+        usage() if defined $params{type};
+        $params{uri} = shift;
     }
     elsif ($a eq '-v')
     {
-	$params{verbose} = 1;
+        $params{verbose} = 1;
     }
     elsif ($a =~ m/^-/)
     {
-	usage();
+        usage();
     }
     else
     {
-	usage() if defined $params{path};
-	$params{path} = $a;
+        usage() if defined $params{path};
+        $params{path} = $a;
     }
 }
 
