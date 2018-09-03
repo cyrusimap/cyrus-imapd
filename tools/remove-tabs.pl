@@ -12,8 +12,12 @@ sub cleanup {
   my $d = IO::Dir->new($name);
   while (defined($_ = $d->read)) {
     next if m/^\./;
+    # XXX this should really be file name patterns to process,
+    # XXX not ones to ignore...
     next if m/^Makefile/;
     next if m/\.tgz$/;
+    next if m/\.tar\.gz$/;
+    next if m/\.gif$/;
     cleanup("$name/$_");
   }
 }
