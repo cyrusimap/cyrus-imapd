@@ -2011,6 +2011,65 @@ sub test_mailbox_set_shared
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
 }
 
+sub test_mailbox_set_issubscribed
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                "A" => {
+                    name => "A",
+                },
+                "B" => {
+                    name => "B",
+                    isSubscribed => JSON::true,
+                }
+            }
+        }, "R1"]
+    ]);
+    $self->assert_equals(JSON::false, $res->[0][1]{created}{A}{isSubscribed});
+    $self->assert(not exists $res->[0][1]{created}{B}{isSubscribed});
+    my $mboxIdA = $res->[0][1]{created}{A}{id};
+    my $mboxIdB = $res->[0][1]{created}{B}{id};
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            ids => [$mboxIdA, $mboxIdB],
+            properties => ['isSubscribed'],
+        }, 'R1']
+    ]);
+    $self->assert_equals($mboxIdA, $res->[0][1]{list}[0]{id});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]{isSubscribed});
+    $self->assert_equals($mboxIdB, $res->[0][1]{list}[1]{id});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[1]{isSubscribed});
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxIdA => {
+                    isSubscribed => JSON::true,
+                },
+                $mboxIdB => {
+                    isSubscribed => JSON::false,
+                },
+            }
+        }, "R1"]
+    ]);
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            ids => [$mboxIdA, $mboxIdB],
+            properties => ['isSubscribed'],
+        }, 'R1']
+    ]);
+    $self->assert_equals($mboxIdA, $res->[0][1]{list}[0]{id});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{isSubscribed});
+    $self->assert_equals($mboxIdB, $res->[0][1]{list}[1]{id});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[1]{isSubscribed});
+}
+
 sub test_mailbox_changes
     :min_version_3_1 :needs_component_jmap
 {
