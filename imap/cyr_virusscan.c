@@ -95,6 +95,9 @@ int notify = 0;
 struct infected_mbox *public = NULL;
 struct infected_mbox *user = NULL;
 
+/* current namespace */
+static struct namespace virusscan_namespace;
+
 int verbose = 1;
 
 /* abstract definition of a virus scan engine */
@@ -228,6 +231,7 @@ void append_notifications();
 int main (int argc, char *argv[]) {
     int option;		/* getopt() returns an int */
     char *alt_config = NULL;
+    int r;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -274,6 +278,15 @@ int main (int argc, char *argv[]) {
     /* setup for mailbox event notifications */
     mboxevent_init();
 
+    /* Set namespace -- force standard (internal) */
+    if ((r = mboxname_init_namespace(&virusscan_namespace, 1)) != 0) {
+	syslog(LOG_ERR, "%s", error_message(r));
+	fatal(error_message(r), EC_CONFIG);
+    }
+
+    mboxevent_setnamespace(&virusscan_namespace);
+
+
     if (optind == argc) { /* do the whole partition */
         mboxlist_findall(NULL, "*", 1, 0, 0, scan_me, NULL);
     } else {
@@ -314,7 +327,7 @@ int scan_me(const char *name,
 	    int maycreate __attribute__((unused)),
 	    void *rock __attribute__((unused)))
 {
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     int r;
     struct infected_mbox *i_mbox = NULL;
 
