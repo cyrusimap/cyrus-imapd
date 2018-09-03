@@ -147,10 +147,24 @@ sub test_remove_infected
 	xlog $out;
     }
     # XXX is there a better way than hard coding UID:1 ?
-    $self->assert_matches(qr/user\.cassandane\s+1\s+UNREAD\s+Eicar-Test-Signature/,
-			  $out);
-    $self->assert_matches(qr/shared\.folder\s+1\s+UNREAD\s+Eicar-Test-Signature/,
-			  $out);
+    my ($v) = Cassandane::Instance->get_version();
+    if ($v >= 3) {
+	$self->assert_matches(
+	    qr/user\.cassandane\s+1\s+UNREAD\s+Eicar-Test-Signature/,
+	    $out);
+	$self->assert_matches(
+	    qr/shared\.folder\s+1\s+UNREAD\s+Eicar-Test-Signature/,
+	    $out);
+    }
+    else {
+	# pre-3.0 a different output format was used
+	$self->assert_matches(
+	    qr/Working\son\sshared\.folder\.\.\.\nVirus\sdetected\sin\smessage\s1:\sEicar-Test-Signature/,
+	    $out);
+	$self->assert_matches(
+	    qr/Working\son\suser\.cassandane\.\.\.\nVirus\sdetected\sin\smessage\s1:\sEicar-Test-Signature/,
+	    $out);
+    }
 
     # make sure the infected ones were expunged, but the clean ones weren't
     $self->{store}->set_folder("INBOX");
