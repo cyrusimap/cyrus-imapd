@@ -196,7 +196,7 @@ sub test_rename_user_deep_subfolder
 # Test big conversation rename
 #
 sub test_rename_user_bigconversation
-    :AllowMoves :Conversations
+    :AllowMoves :Conversations :min_version_3_0
 {
     my ($self) = @_;
 
@@ -233,7 +233,7 @@ sub test_rename_user_bigconversation
 # Test big conversation rename
 #
 sub test_rename_user_midsizeconversation
-    :AllowMoves :Conversations
+    :AllowMoves :Conversations :min_version_3_0
 {
     my ($self) = @_;
 
@@ -279,7 +279,7 @@ sub test_rename_user_midsizeconversation
 # Test big conversation rename
 #
 sub test_rename_bigconversation
-     :Conversations
+     :Conversations :min_version_3_0
 {
     my ($self) = @_;
 
@@ -311,7 +311,7 @@ sub test_rename_bigconversation
 # Test mid-sized conversation rename
 #
 sub test_rename_midsizeconversation
-     :Conversations
+     :Conversations :min_version_3_0
 {
     my ($self) = @_;
 
@@ -349,7 +349,7 @@ sub test_rename_midsizeconversation
 # Test Bug #3634 - rename inbox -> inbox.sub
 #
 sub test_rename_inbox
-    :Conversations
+    :Conversations :min_version_3_0
 {
     my ($self) = @_;
 
@@ -448,7 +448,7 @@ sub test_rename_withsub
 }
 
 sub test_rename_conversations
-    :Conversations :VirtDomains
+    :Conversations :VirtDomains :min_version_3_0
 {
     my ($self) = @_;
 
