@@ -398,7 +398,8 @@ static json_t *_mbox_get(jmap_req_t *req,
                          const mbentry_t *mbentry,
                          hash_table *roles,
                          hash_table *props,
-                         enum shared_mbox_type share_type)
+                         enum shared_mbox_type share_type,
+                         strarray_t *sublist)
 {
     unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
     int is_inbox = 0, parent_is_inbox = 0;
@@ -535,6 +536,11 @@ static json_t *_mbox_get(jmap_req_t *req,
         }
     }
 
+    if (_wantprop(props, "isSubscribed")) {
+        int is_subscribed = strarray_find(sublist, mbentry->name, 0) >= 0;
+        json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
+    }
+
 done:
     if (r) {
         syslog(LOG_ERR, "_mbox_get: %s", error_message(r));
@@ -551,6 +557,7 @@ struct jmap_mailbox_get_cb_rock {
     hash_table *roles;
     hash_table *want;
     struct shared_mboxes *shared_mboxes;
+    strarray_t *sublist;
 };
 
 static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
@@ -592,7 +599,7 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
         return 0;
 
     /* Convert mbox to JMAP object. */
-    obj = _mbox_get(req, mbentry, rock->roles, rock->get->props, share_type);
+    obj = _mbox_get(req, mbentry, rock->roles, rock->get->props, share_type, rock->sublist);
     if (!obj) {
         syslog(LOG_INFO, "could not convert mailbox %s to JMAP", mbentry->name);
         return IMAP_INTERNAL;
@@ -657,7 +664,11 @@ HIDDEN int jmap_mailbox_get(jmap_req_t *req)
 
     /* Build callback data */
     struct shared_mboxes *shared_mboxes = _shared_mboxes_new(req, /*flags*/0);
-    struct jmap_mailbox_get_cb_rock rock = { req, &get, NULL, NULL, shared_mboxes };
+    strarray_t *sublist = NULL;
+    if (_wantprop(get.props, "isSubscribed")) {
+        sublist = mboxlist_sublist(req->userid);
+    }
+    struct jmap_mailbox_get_cb_rock rock = { req, &get, NULL, NULL, shared_mboxes, sublist };
     rock.roles = (hash_table *) xmalloc(sizeof(hash_table));
     construct_hash_table(rock.roles, 8, 0);
 
@@ -700,6 +711,7 @@ HIDDEN int jmap_mailbox_get(jmap_req_t *req)
     free(rock.want);
     free_hash_table(rock.roles, NULL);
     free(rock.roles);
+    strarray_free(rock.sublist);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
     return 0;
@@ -1343,6 +1355,7 @@ struct mboxset_args {
     char *parent_id;
     char *role;
     char *specialuse;
+    int is_subscribed; /* -1 if not set */
     int is_toplevel;
     int sortorder;
 };
@@ -1484,6 +1497,18 @@ static void _mbox_setargs_parse(json_t *jargs,
         jmap_parser_invalid(parser, "sortOrder");
     }
 
+    /* isSubscribed */
+    json_t *jisSubscribed = json_object_get(jargs, "isSubscribed");
+    if (json_is_boolean(jisSubscribed)) {
+        args->is_subscribed = json_boolean_value(jisSubscribed);
+    }
+    else if (jisSubscribed) {
+        jmap_parser_invalid(parser, "isSubscribed");
+    }
+    else {
+        args->is_subscribed = -1;
+    }
+
     /* All of these are server-set. */
     json_t *jrights = json_object_get(jargs, "myRights");
     if (json_is_object(jrights) && !is_create) {
@@ -1598,7 +1623,7 @@ static void _mboxset_result_fini(struct mboxset_result *result)
 
 static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
                          enum mboxset_runmode mode,
-                         char **mboxid, struct mboxset_result *result)
+                         json_t **mbox, struct mboxset_result *result)
 {
     char *mboxname = NULL, *parentname = NULL;
     int r = 0;
@@ -1702,14 +1727,21 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
      /* invalidate ACL cache */
     jmap_myrights_delete(req, mboxname);
 
-    /* Write annotations */
+    /* Write annotations and isSubscribed */
     r = _mbox_set_annots(req, args, mboxname);
+    if (!r && args->is_subscribed > 0) {
+        r = mboxlist_changesub(mboxname, req->userid, httpd_authstate, 1, 0, 0);
+    }
     if (r) goto done;
 
     /* Lookup and return the new mailbox id */
     r = mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r) goto done;
-    *mboxid = xstrdup(mbentry->uniqueid);
+    *mbox = json_pack("{s:s}", "id", mbentry->uniqueid);
+    /* Set server defaults */
+    if (args->is_subscribed < 0) {
+        json_object_set_new(*mbox, "isSubscribed", json_false());
+    }
 
 done:
     if (json_array_size(parser.invalid)) {
@@ -1931,8 +1963,12 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         }
     }
 
-    /* Write annotations */
+    /* Write annotations and isSubscribed */
     r = _mbox_set_annots(req, args, mboxname);
+    if (!r && args->is_subscribed >= 0) {
+        r = mboxlist_changesub(mboxname, req->userid, httpd_authstate,
+                               args->is_subscribed, 0, 0);
+    }
     if (r) goto done;
 
 done:
@@ -2230,9 +2266,9 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
         struct mboxset_args *args = ptrarray_nth(ops->put, i);
         /* Create */
         if (args->creation_id) {
-            char *mbox_id = NULL;
+            json_t *mbox = NULL;
             struct mboxset_result result = MBOXSET_RESULT_INITIALIZER;
-            _mbox_create(req, args, mode, &mbox_id, &result);
+            _mbox_create(req, args, mode, &mbox, &result);
             if (result.err) {
                 json_object_set(set->super.not_created,
                         args->creation_id, result.err);
@@ -2241,10 +2277,9 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
                 ptrarray_append(&skipped_put, args);
             }
             else {
-                json_t *mbox = json_pack("{s:s}", "id", mbox_id);
                 json_object_set_new(set->super.created, args->creation_id, mbox);
-                jmap_add_id(req, args->creation_id, mbox_id);
-                free(mbox_id);
+                jmap_add_id(req, args->creation_id,
+                        json_string_value(json_object_get(mbox, "id")));
                 if (result.tmp_imapname) {
                     struct tmp_rename *tmp = xzmalloc(sizeof(struct tmp_rename));
                     tmp->old_imapname = xstrdupnull(result.old_imapname);
