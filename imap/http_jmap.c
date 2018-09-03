@@ -2493,7 +2493,11 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val, json_t *patch)
         }
         /* Replace value at path */
         char *name = json_pointer_decode(base, strlen(base));
-        json_object_set(it, name, newval);
+        if (newval == json_null()) {
+            json_object_del(it, name);
+        } else {
+            json_object_set(it, name, newval);
+        }
         free(name);
     }
 
