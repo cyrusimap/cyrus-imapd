@@ -548,14 +548,14 @@ sub test_mailbox_query
     $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
     $self->assert_str_equals($mboxids{'A'}, $res->[0][1]{ids}[2]);
 
-    xlog "filter mailboxes by hasRole == true";
-    $res = $jmap->CallMethods([['Mailbox/query', {filter => {hasRole => JSON::true}}, "R1"]]);
+    xlog "filter mailboxes by hasAnyRole == true";
+    $res = $jmap->CallMethods([['Mailbox/query', {filter => {hasAnyRole => JSON::true}}, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[0]);
 
-    xlog "filter mailboxes by hasRole == false";
+    xlog "filter mailboxes by hasAnyRole == false";
     $res = $jmap->CallMethods([['Mailbox/query', {
-        filter => {hasRole => JSON::false},
+        filter => {hasAnyRole => JSON::false},
         sort => [{ property => "name"}],
     }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
@@ -761,6 +761,18 @@ sub test_mailbox_query_filteroperator
     my %mboxids = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
     $self->assert(exists $mboxids{'Inbox'});
 
+    xlog "Subscribe mailbox Ham";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxids{'Ham'} => {
+                    isSubscribed => JSON::true,
+                },
+            },
+        }, 'R1']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$mboxids{'Ham'}});
+
     xlog "list mailboxes filtered by parentId OR role";
     $res = $jmap->CallMethods([['Mailbox/query', {
         filter => {
@@ -768,7 +780,7 @@ sub test_mailbox_query_filteroperator
             conditions => [{
                 parentId => $mboxids{'Ham'},
             }, {
-                hasRole => JSON::true,
+                hasAnyRole => JSON::true,
             }],
         },
         sort => [{ property => "name" }],
@@ -778,14 +790,45 @@ sub test_mailbox_query_filteroperator
     $self->assert_str_equals($mboxids{'Spam'}, $res->[0][1]{ids}[1]);
     $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[2]);
 
-    xlog "list mailboxes filtered by parentId AND hasRole false";
+    xlog "list mailboxes filtered by name";
+    $res = $jmap->CallMethods([['Mailbox/query', {
+        filter => {
+            name => 'Zonk',
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[0]);
+
+    xlog "list mailboxes filtered by isSubscribed";
+    $res = $jmap->CallMethods([['Mailbox/query', {
+        filter => {
+            isSubscribed => JSON::true,
+        },
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[0]);
+
+    xlog "list mailboxes filtered by isSubscribed is false";
+    $res = $jmap->CallMethods([['Mailbox/query', {
+        filter => {
+            isSubscribed => JSON::false,
+        },
+        sort => [{ property => "name" }],
+    }, "R1"]]);
+    $self->assert_num_equals(4, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'Bonk'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
+    $self->assert_str_equals($mboxids{'Spam'}, $res->[0][1]{ids}[2]);
+    $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[3]);
+
+    xlog "list mailboxes filtered by parentId AND hasAnyRole false";
     $res = $jmap->CallMethods([['Mailbox/query', {
         filter => {
             operator => "AND",
             conditions => [{
                 parentId => $mboxids{'Inbox'},
             }, {
-                hasRole => JSON::false,
+                hasAnyRole => JSON::false,
             }],
         },
         sort => [{ property => "name" }],
@@ -802,7 +845,7 @@ sub test_mailbox_query_filteroperator
                 conditions => [{
                     parentId => $mboxids{'Inbox'},
                 }, {
-                    hasRole => JSON::true,
+                    hasAnyRole => JSON::true,
                 }],
             ],
         },
