@@ -1133,7 +1133,7 @@ sub test_setseen_after_store
 }
 
 sub test_setseen_notify
-    :Conversations :FastMailEvent
+    :Conversations :FastMailEvent :min_version_3_0
 {
     my ($self) = @_;
 
