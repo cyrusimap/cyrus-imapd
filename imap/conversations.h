@@ -63,7 +63,14 @@ typedef bit64   conversation_id_t;
 struct index_record;
 struct mailbox;
 
-#define CONV_ISDIRTY   (1<<0)
+#define CONV_ISDIRTY     (1<<0)
+#define CONV_WITHFOLDERS (1<<1)
+#define CONV_WITHSENDERS (1<<2)
+#define CONV_WITHSUBJECT (1<<3)
+#define CONV_WITHTHREAD  (1<<4)
+
+#define CONV_WITHALL CONV_WITHFOLDERS|CONV_WITHSENDERS|\
+                     CONV_WITHSUBJECT|CONV_WITHTHREAD;
 
 struct conversations_state {
     struct db *db;
