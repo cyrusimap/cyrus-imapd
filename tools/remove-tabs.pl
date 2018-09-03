@@ -30,7 +30,7 @@ sub cleanup_file {
   my $oh = IO::File->new("$filename.new", "w");
 
   if (stream_clean($ih, $oh)) {
-    system("chmod", "u+x", "$filename.new") if -x $filename;
+    system("chmod", "a+x", "$filename.new") if -x $filename;
     rename("$filename.new", "$filename");
   }
   else {
