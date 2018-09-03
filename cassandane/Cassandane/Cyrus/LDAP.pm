@@ -37,6 +37,10 @@
 #  OF THIS SOFTWARE.
 #
 
+# XXX Most of these tests are tagged with :min_version_3_0_8, as
+# XXX the architecture used for testing LDAP depends on the fix
+# XXX for https://github.com/cyrusimap/cyrus-imapd/issues/2282
+
 package Cassandane::Cyrus::LDAP;
 use strict;
 use warnings;
@@ -110,7 +114,7 @@ sub tear_down
 }
 
 sub test_setacl_groupid
-    :needs_dependency_ldap
+    :needs_dependency_ldap :min_version_3_0_8
 {
     my ($self) = @_;
 
@@ -128,7 +132,7 @@ sub test_setacl_groupid
 }
 
 sub test_setacl_groupid_spaces
-    :needs_dependency_ldap
+    :needs_dependency_ldap :min_version_3_0_8
 {
     my ($self) = @_;
 
@@ -159,7 +163,7 @@ sub test_setacl_groupid_spaces
 }
 
 sub test_list_groupaccess_noracl
-    :needs_dependency_ldap
+    :needs_dependency_ldap :min_version_3_0_8
 {
     my ($self) = @_;
 
@@ -295,7 +299,7 @@ sub do_test_list_order
 }
 
 sub test_list_order_noracl
-    :needs_dependency_ldap
+    :needs_dependency_ldap :min_version_3_0_8
 {
     my $self = shift;
     return $self->do_test_list_order(@_);
