@@ -91,7 +91,7 @@ extern int  optopt;
 
 /* globals for callback functions */
 int disinfect = 0;
-int notify = 0;
+int email_notification = 0;
 struct infected_mbox *public = NULL;
 struct infected_mbox *user = NULL;
 
@@ -248,7 +248,7 @@ int main (int argc, char *argv[]) {
 	    break;
 
 	case 'n':
-	    notify = 1;
+	    email_notification = 1;
 	    break;
 
 	case 'h':
@@ -295,7 +295,7 @@ int main (int argc, char *argv[]) {
 	}
     }
 
-    if (notify) append_notifications();
+    if (email_notification) append_notifications();
 
     sync_log_done();
 
@@ -341,7 +341,7 @@ int scan_me(const char *name,
 	return 0;
     }
 
-    if (notify) {
+    if (email_notification) {
         const char *owner = mboxname_to_userid(name);
         if (owner) {
             if (!strcmp(owner, user->owner)) {
@@ -408,7 +408,7 @@ unsigned virus_check(struct mailbox *mailbox,
             printf("Virus detected in message %u: %s\n", record->uid, virname);
 	}
 	if (disinfect) {
-	    if (notify && i_mbox) {
+	    if (email_notification && i_mbox) {
                 create_digest(i_mbox, mailbox, record, virname);
 	    }
 	}
