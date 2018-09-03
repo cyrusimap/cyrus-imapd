@@ -1579,7 +1579,7 @@ done:
 }
 
 static int setcalendarevents_update(jmap_req_t *req,
-                                    json_t *event,
+                                    json_t *event_patch,
                                     const char *id,
                                     struct caldav_db *db,
                                     json_t *invalid)
@@ -1602,7 +1602,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     char *schedule_address = NULL;
 
     /* Validate calendarId */
-    pe = readprop(event, "calendarId", 0, invalid, "s", &calendarId);
+    pe = readprop(event_patch, "calendarId", 0, invalid, "s", &calendarId);
     if (pe > 0 && *calendarId && *calendarId == '#') {
         calendarId = jmap_lookup_id(req, calendarId + 1);
         if (!calendarId) {
@@ -1669,14 +1669,20 @@ static int setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
 
-    /* Convert the JMAP calendar event to ical. */
+    /* Patch the old JMAP calendar event */
     jmapical_err_t err;
     memset(&err, 0, sizeof(jmapical_err_t));
-
-    if (!json_object_get(event, "uid")) {
-        json_object_set_new(event, "uid", json_string(id));
+    json_t *old_event = jmapical_tojmap(oldical, NULL,  &err);
+    if (!old_event || err.code) {
+        syslog(LOG_ERR, "jmapical_tojmap: %s\n", jmapical_strerror(err.code));
+        r = IMAP_INTERNAL;
+        goto done;
     }
-    ical = jmapical_toical(event, oldical, &err);
+    json_t *new_event = jmap_patchobject_apply(old_event, event_patch);
+    memset(&err, 0, sizeof(jmapical_err_t));
+    ical = jmapical_toical(new_event, oldical, &err);
+    json_decref(old_event);
+    json_decref(new_event);
 
     if (err.code == JMAPICAL_ERROR_PROPS) {
         /* Handle any property errors and bail out. */
