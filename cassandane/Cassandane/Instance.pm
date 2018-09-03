@@ -1638,7 +1638,18 @@ sub _fork_command
 	or die "Cannot cd to $cd: $!";
 
     # ulimit -c ...
-    setrlimit(RLIMIT_CORE, 100*1024*1024, 100*1024*1024); # 100MB
+    my $cassini = Cassandane::Cassini::instance();
+    my $coresizelimit = 0 + $cassini->val("cyrus $self->{installation}",
+					  'coresizelimit', '100');
+    if ($coresizelimit <= 0) {
+	$coresizelimit = RLIM_INFINITY;
+    }
+    else {
+	# convert megabytes to bytes
+	$coresizelimit *= (1024 * 1024);
+    }
+    xlog "setting core size limit to $coresizelimit";
+    setrlimit(RLIMIT_CORE, $coresizelimit, $coresizelimit);
 
     # let's log our rlimits, might be useful for diagnosing weirdnesses
     if (get_verbose() >= 4) {
