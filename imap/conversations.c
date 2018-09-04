@@ -1241,7 +1241,7 @@ int _saxconvparse(int type, struct dlistsax_data *d)
         // encoded subject
         if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
         if (rock->flags & CONV_WITHSUBJECT)
-            rock->conv->subject = xstrdup(d->data);
+            rock->conv->subject = xstrdupnull(d->data);
         rock->state = 14;
         return 0;
 
@@ -1691,12 +1691,12 @@ EXPORTED void conversation_update_sender(conversation_t *conv,
 
     if (!sender->mailbox || sender_preferred_mailbox(sender->mailbox, mailbox) > 0) {
         free(sender->mailbox);
-        sender->mailbox = xstrdup(mailbox);
+        sender->mailbox = xstrdupnull(mailbox);
     }
 
     if (!sender->domain || sender_preferred_domain(sender->domain, domain) > 0) {
         free(sender->domain);
-        sender->domain = xstrdup(domain);
+        sender->domain = xstrdupnull(domain);
     }
 
     /* last seen for display sorting */
