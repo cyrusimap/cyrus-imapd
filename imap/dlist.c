@@ -864,8 +864,13 @@ static int _parseliteral(struct dlistsax_state *s, struct buf *buf)
     while (s->p < s->end) {
         if (cyrus_isdigit(*s->p)) {
             len = (len * 10) + (*s->p++ - '0');
+            continue;
         }
-        else if (*s->p == '}') {
+        // skip literal+
+        if (*s->p == '+' && (s->p + 1 < s->end))
+            s->p++;
+        // we'd better be at 
+        if (*s->p == '}') {
             if (s->p + 3 + len >= s->end) break;
             if (s->p[1] != '\r') break;
             if (s->p[2] != '\n') break;
@@ -873,6 +878,8 @@ static int _parseliteral(struct dlistsax_state *s, struct buf *buf)
             s->p += len = 3;
             return 0;
         }
+
+        break;
     }
 
     return IMAP_INVALID_IDENTIFIER;
