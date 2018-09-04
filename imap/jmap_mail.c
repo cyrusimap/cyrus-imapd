@@ -3397,7 +3397,8 @@ done:
 
 static int _thread_is_shared_cb(const conv_guidrec_t *rec, void *rock)
 {
-    jmap_req_t *req = rock;
+    if (rec->part) return 0;
+    jmap_req_t *req = (jmap_req_t *)rock;
     static int needrights = ACL_READ|ACL_LOOKUP;
     if (jmap_hasrights_byname(req, rec->mboxname, needrights))
         return IMAP_OK_COMPLETED;
