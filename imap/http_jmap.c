@@ -3452,7 +3452,7 @@ EXPORTED void jmap_querychanges_parse(json_t *jargs,
         /* sinceQueryState */
         else if (!strcmp(key, "sinceQueryState")) {
             if (json_is_string(arg)) {
-                query->since_queryState = json_string_value(arg);
+                query->since_querystate = json_string_value(arg);
             } else {
                 jmap_parser_invalid(parser, "sinceQueryState");
             }
@@ -3490,6 +3490,10 @@ EXPORTED void jmap_querychanges_parse(json_t *jargs,
         }
     }
 
+    if (query->since_querystate == NULL) {
+        jmap_parser_invalid(parser, "sinceQueryState");
+    }
+
     if (json_array_size(parser->invalid)) {
         *err = json_pack("{s:s s:O}", "type", "invalidArguments",
                          "arguments", parser->invalid);
@@ -3509,7 +3513,7 @@ EXPORTED void jmap_querychanges_parse(json_t *jargs,
 
 EXPORTED void jmap_querychanges_fini(struct jmap_querychanges *query)
 {
-    free(query->new_queryState);
+    free(query->new_querystate);
     json_decref(query->removed);
     json_decref(query->added);
 }
@@ -3519,8 +3523,8 @@ EXPORTED json_t *jmap_querychanges_reply(struct jmap_querychanges *query)
     json_t *res = json_object();
     json_object_set(res, "filter", query->filter);
     json_object_set(res, "sort", query->sort);
-    json_object_set_new(res, "oldQueryState", json_string(query->since_queryState));
-    json_object_set_new(res, "newQueryState", json_string(query->new_queryState));
+    json_object_set_new(res, "oldQueryState", json_string(query->since_querystate));
+    json_object_set_new(res, "newQueryState", json_string(query->new_querystate));
     json_object_set_new(res, "upToId", query->up_to_id ?
             json_string(query->up_to_id) : json_null());
     json_object_set(res, "removed", query->removed);

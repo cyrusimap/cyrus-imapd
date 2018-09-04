@@ -2520,7 +2520,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     uint32_t since_uid;
     uint32_t num_changes = 0;
 
-    if (!_email_read_querystate(query->since_queryState, &since_modseq, &since_uid)) {
+    if (!_email_read_querystate(query->since_querystate, &since_modseq, &since_uid)) {
         *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
         return;
     }
@@ -2698,7 +2698,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     free_hashu64_table(&touched_cids, NULL);
 
     modseq_t modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
-    query->new_queryState = _email_make_querystate(modseq, 0);
+    query->new_querystate = _email_make_querystate(modseq, 0);
 
 done:
     _emailsearch_free(search);
@@ -2712,7 +2712,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     uint32_t since_uid;
     uint32_t num_changes = 0;
 
-    if (!_email_read_querystate(query->since_queryState, &since_modseq, &since_uid)) {
+    if (!_email_read_querystate(query->since_querystate, &since_modseq, &since_uid)) {
         *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
         return;
     }
@@ -2838,7 +2838,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     free_hash_table(&touched_ids, NULL);
 
     modseq_t modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
-    query->new_queryState = _email_make_querystate(modseq, 0);
+    query->new_querystate = _email_make_querystate(modseq, 0);
 
 done:
     _emailsearch_free(search);

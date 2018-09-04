@@ -369,13 +369,13 @@ struct jmap_querychanges {
     /* Request arguments */
     json_t *filter;
     json_t *sort;
-    const char *since_queryState;
+    const char *since_querystate;
     size_t max_changes;
     const char *up_to_id;
     int calculate_total;
 
     /* Response fields */
-    char *new_queryState;
+    char *new_querystate;
     size_t total;
     json_t *removed;
     json_t *added;
