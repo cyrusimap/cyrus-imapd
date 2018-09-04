@@ -982,7 +982,7 @@ sub test_calendarevent_get_relatedto
     $self->assert_deep_equals($event->{relatedTo}, {
             "58ADE31-001" => { relation => ['first'] },
             "58ADE31-003" => { relation => ['next'] },
-            "foo" => { relation => ['x-unknown'] },
+            "foo" => { relation => ['x-unknown1', 'x-unknown2'] },
             "bar" => { relation => []},
     });
 }
@@ -1542,7 +1542,7 @@ sub test_calendarevent_set_relatedto
         "relatedTo" => {
             "uid1" => { relation => ['first'] },
             "uid2" => { relation => ['next'] },
-            "uid3" => { relation => ['x-unknown'] },
+            "uid3" => { relation => ['x-unknown1', 'x-unknown2'] },
             "uid4" => { relation => [] },
         },
         "title"=> "foo",
