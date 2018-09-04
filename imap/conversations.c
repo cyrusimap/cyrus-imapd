@@ -1736,11 +1736,6 @@ static void _apply_delta(uint32_t *valp, int delta)
     }
 }
 
-EXPORTED const strarray_t *conversations_get_folders(struct conversations_state *state)
-{
-    return state->folder_names;
-}
-
 static int _match1(void *rock,
                    const char *key __attribute__((unused)),
                    size_t keylen __attribute__((unused)),

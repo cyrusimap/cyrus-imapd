@@ -193,7 +193,6 @@ extern conv_folder_t *conversation_get_folder(conversation_t *conv,
 extern void conversation_normalise_subject(struct buf *);
 
 /* G record */
-extern const strarray_t *conversations_get_folders(struct conversations_state *state);
 extern int conversations_guid_exists(struct conversations_state *state,
                                      const char *guidrep);
 extern int conversations_guid_foreach(struct conversations_state *state,
