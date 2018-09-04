@@ -410,6 +410,8 @@ static void test_folder_rename(void)
                         /*modseq*/8,
                         /*createdmodseq*/1);
 
+    conv->subject = xstrdup("☃");
+
     r = conversation_save(state, C_CID, conv);
     CU_ASSERT_EQUAL(r, 0);
 
@@ -452,6 +454,7 @@ static void test_folder_rename(void)
     folder = conversation_find_folder(state, conv, FOLDER3);
     CU_ASSERT_PTR_NOT_NULL_FATAL(folder);
     CU_ASSERT_EQUAL(folder->exists, 2);
+    CU_ASSERT_STRING_EQUAL(conv->subject, "☃");
     conversation_free(conv);
     conv = NULL;
 
