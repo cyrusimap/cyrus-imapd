@@ -3038,6 +3038,8 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     struct hashset *seen_threads = hashset_new(8);
 
     char thread_id[18];
+    conversation_t conv = CONVERSATION_INIT;
+
     for (i = 0 ; i < msgdata->count; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
 
@@ -3055,23 +3057,23 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
             highest_modseq = md->modseq;
 
         /* Determine if the thread got changed or destroyed */
-        conversation_t *conv = NULL;
-        if (conversation_load(req->cstate, md->cid, &conv) || !conv)
+        if (conversation_load_advanced(req->cstate, md->cid, &conv, /*flags*/0))
             continue;
 
         /* Report thread */
         _thread_id_set_cid(md->cid, thread_id);
-        if (conv->exists) {
-            if (conv->createdmodseq <= changes->since_modseq)
+        if (conv.exists) {
+            if (conv.createdmodseq <= changes->since_modseq)
                 json_array_append_new(changes->updated, json_string(thread_id));
             else
                 json_array_append_new(changes->created, json_string(thread_id));
         }
         else {
-            if (conv->createdmodseq <= changes->since_modseq)
+            if (conv.createdmodseq <= changes->since_modseq)
                 json_array_append_new(changes->destroyed, json_string(thread_id));
         }
-        conversation_free(conv);
+
+        conversation_fini(&conv);
     }
     hashset_free(&seen_threads);
 
@@ -3080,6 +3082,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
         highest_modseq : jmap_highestmodseq(req, MBTYPE_EMAIL);
 
 done:
+    conversation_fini(&conv);
     json_decref(filter);
     json_decref(sort);
     _emailsearch_free(search);
@@ -3404,7 +3407,7 @@ static int _thread_is_shared_cb(const conv_guidrec_t *rec, void *rock)
 static int _thread_get(jmap_req_t *req, json_t *ids,
                        json_t *list, json_t *not_found)
 {
-    conversation_t *conv = NULL;
+    conversation_t conv = CONVERSATION_INIT;
     json_t *val;
     size_t i;
     int r = 0;
@@ -3417,16 +3420,16 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
         const char *threadid = json_string_value(val);
         cid = _cid_from_id(threadid);
 
-        if (cid) r = conversation_load(req->cstate, cid, &conv);
+        if (cid) r = conversation_load_advanced(req->cstate, cid, &conv, CONV_WITHTHREAD);
         if (r) goto done;
-        if (!conv) {
+        if (!conv.thread) {
             json_array_append_new(not_found, json_string(threadid));
             continue;
         }
 
         int is_own_account = !strcmp(req->userid, req->accountid);
         json_t *ids = json_pack("[]");
-        for (thread = conv->thread; thread; thread = thread->next) {
+        for (thread = conv.thread; thread; thread = thread->next) {
             if (!is_own_account) {
                 const char *guidrep = message_guid_encode(&thread->guid);
                 int r = conversations_guid_foreach(req->cstate, guidrep,
@@ -3446,14 +3449,13 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
         json_t *jthread = json_pack("{s:s s:o}", "id", threadid, "emailIds", ids);
         json_array_append_new(list, jthread);
 
-        conversation_free(conv);
-        conv = NULL;
+        conversation_fini(&conv);
     }
 
     r = 0;
 
 done:
-    if (conv) conversation_free(conv);
+    conversation_fini(&conv);
     return r;
 }
 
@@ -6038,8 +6040,7 @@ static int _email_set_answered(jmap_req_t *req, const char *inreplyto)
 {
     int r = 0, i;
     arrayu64_t cids = ARRAYU64_INITIALIZER;
-    conversation_t *conv = NULL;
-    char *guid = NULL;
+    conversation_t conv = CONVERSATION_INIT;
     struct _email_set_answered_rock rock = { req, inreplyto, 0 /*found*/ };
 
     r = conversations_get_msgid(req->cstate, inreplyto, &cids);
@@ -6050,25 +6051,22 @@ static int _email_set_answered(jmap_req_t *req, const char *inreplyto)
      * across mailboxes. */
     for (i = 0; i < cids.count; i++) {
         conversation_id_t cid = arrayu64_nth(&cids, i);
-        conversation_free(conv);
-        conv = NULL;
-        r = conversation_load(req->cstate, cid, &conv);
+        r = conversation_load_advanced(req->cstate, cid, &conv, CONV_WITHTHREAD);
         if (r) continue;
-        struct conv_thread *thread = conv->thread;
+        struct conv_thread *thread = conv.thread;
         while (thread) {
-            guid = xstrdup(message_guid_encode(&thread->guid));
+            const char *guid = message_guid_encode(&thread->guid);
             r = conversations_guid_foreach(req->cstate, guid, _email_set_answered_cb, &rock);
             if (r) goto done;
             if (rock.found) break;
             thread = thread->next;
-            free(guid);
-            guid = NULL;
         }
+        conversation_fini(&conv);
     }
+
 done:
-    if (conv) conversation_free(conv);
+    conversation_fini(&conv);
     arrayu64_fini(&cids);
-    free(guid);
     return r;
 
 }
