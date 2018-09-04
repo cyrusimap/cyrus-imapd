@@ -201,7 +201,7 @@ int _saxfolder(int type, struct dlistsax_data *d)
 {
     struct conversations_open *open = (struct conversations_open *)d->rock;
     if (type == DLISTSAX_STRING)
-        strarray_append(open->s.folder_names, buf_cstring(&d->buf));
+        strarray_append(open->s.folder_names, d->data);
     return 0;
 }
 
@@ -959,15 +959,15 @@ int _saxconvstatus(int type, struct dlistsax_data *d)
     if (type != DLISTSAX_STRING) return 0;
     switch (rock->state) {
     case 0:
-        rock->status->modseq = atoll(buf_cstring(&d->buf));
+        rock->status->modseq = atoll(d->data);
         rock->state++;
         return 0;
     case 1:
-        rock->status->exists = atol(buf_cstring(&d->buf));
+        rock->status->exists = atol(d->data);
         rock->state++;
         return 0;
     case 2:
-        rock->status->unseen = atol(buf_cstring(&d->buf));
+        rock->status->unseen = atol(d->data);
         rock->state++;
         return 0;
     }

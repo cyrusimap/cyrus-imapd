@@ -373,34 +373,34 @@ int parseentry_cb(int type, struct dlistsax_data *d)
         if (rock->doingacl) {
             buf_append(rock->aclbuf, &d->kbuf);
             buf_putc(rock->aclbuf, '\t');
-            buf_append(rock->aclbuf, &d->buf);
+            buf_appendcstr(rock->aclbuf, d->data);
             buf_putc(rock->aclbuf, '\t');
         }
         else {
             const char *key = buf_cstring(&d->kbuf);
             if (!strcmp(key, "F")) {
-                rock->mbentry->foldermodseq = atoll(buf_cstring(&d->buf));
+                rock->mbentry->foldermodseq = atoll(d->data);
             }
             else if (!strcmp(key, "C")) {
-                rock->mbentry->createdmodseq = atoll(buf_cstring(&d->buf));
+                rock->mbentry->createdmodseq = atoll(d->data);
             }
             else if (!strcmp(key, "I")) {
-                rock->mbentry->uniqueid = buf_newcstring(&d->buf);
+                rock->mbentry->uniqueid = xstrdupnull(d->data);
             }
             else if (!strcmp(key, "M")) {
-                rock->mbentry->mtime = atoi(buf_cstring(&d->buf));
+                rock->mbentry->mtime = atoi(d->data);
             }
             else if (!strcmp(key, "P")) {
-                rock->mbentry->partition = buf_newcstring(&d->buf);
+                rock->mbentry->partition = xstrdupnull(d->data);
             }
             else if (!strcmp(key, "S")) {
-                rock->mbentry->server = buf_newcstring(&d->buf);
+                rock->mbentry->server = xstrdupnull(d->data);
             }
             else if (!strcmp(key, "T")) {
-                rock->mbentry->mbtype = mboxlist_string_to_mbtype(buf_cstring(&d->buf));
+                rock->mbentry->mbtype = mboxlist_string_to_mbtype(d->data);
             }
             else if (!strcmp(key, "V")) {
-                rock->mbentry->uidvalidity = atol(buf_cstring(&d->buf));
+                rock->mbentry->uidvalidity = atol(d->data);
             }
         }
     }

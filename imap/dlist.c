@@ -825,6 +825,7 @@ struct dlistsax_state {
     dlistsax_cb_t *proc;
     int depth;
     struct dlistsax_data d;
+    struct buf buf;
     struct buf gbuf;
 };
 
@@ -888,10 +889,13 @@ static int _parseitem(struct dlistsax_state *s, struct buf *buf)
     sp = memchr(s->p, ' ', s->end - s->p);
     if (!sp) sp = s->end;
     while (sp[-1] == ')' && sp > s->p) sp--;
-    /* this is much faster because it doesn't do a reset and check the MMAP flag */
-    buf->len = 0;
+    /* this is much faster than setmap because it doesn't
+     * do a reset and check the MMAP flag */
+    buf_truncate(buf, 0);
     buf_appendmap(buf, s->p, sp - s->p);
     s->p = sp;
+    if (buf->len == 3 && buf->s[0] == 'N' && buf->s[1] == 'I' && buf->s[2] == 'L')
+        return IMAP_ZERO_LENGTH_LITERAL; // this is kinda bogus, but...
     return 0; /* this could be the last thing, so end is OK */
 }
 
@@ -902,15 +906,16 @@ static int _parsesax(struct dlistsax_state *s, int parsekey)
     s->depth++;
 
     /* handle the key if wanted */
+    struct buf *backdoor = (struct buf *)(&s->d.kbuf);
     if (parsekey) {
-        r = _parseitem(s, &s->d.kbuf);
+        r = _parseitem(s, backdoor);
         if (r) return r;
         if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
         if (*s->p == ' ') s->p++;
         else return IMAP_INVALID_IDENTIFIER;
     }
     else {
-        s->d.kbuf.len = 0;
+        backdoor->len = 0;
     }
 
     if (s->p >= s->end) return IMAP_INVALID_IDENTIFIER;
@@ -968,10 +973,14 @@ static int _parsesax(struct dlistsax_state *s, int parsekey)
         }
     }
     else {
-        r = _parseitem(s, &s->d.buf);
-        if (r) return r;
-
+        r = _parseitem(s, &s->buf);
+        if (r == IMAP_ZERO_LENGTH_LITERAL)
+            s->d.data = NULL; // NIL
+        else if (r) return r;
+        else
+            s->d.data = buf_cstring(&s->buf);
         r = s->proc(DLISTSAX_STRING, &s->d);
+        s->d.data = NULL; // zero out for next call
         if (r) return r;
     }
 

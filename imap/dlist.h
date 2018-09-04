@@ -65,8 +65,8 @@ enum dlistsax_t {
 };
 
 struct dlistsax_data {
-    struct buf kbuf;
-    struct buf buf;
+    const struct buf kbuf;
+    const char *data;
     void *rock;
 };
 
