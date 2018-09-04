@@ -866,16 +866,19 @@ static int _parseliteral(struct dlistsax_state *s, struct buf *buf)
             len = (len * 10) + (*s->p++ - '0');
             continue;
         }
-        // skip literal+
+
+        // skip literal+ if present
         if (*s->p == '+' && (s->p + 1 < s->end))
             s->p++;
-        // we'd better be at 
+
+        // we'd better be at the end of the literal
         if (*s->p == '}') {
             if (s->p + 3 + len >= s->end) break;
             if (s->p[1] != '\r') break;
             if (s->p[2] != '\n') break;
-            buf_setmap(buf, s->p+3, len);
-            s->p += len = 3;
+            buf_truncate(buf, 0);
+            buf_appendmap(buf, s->p + 3, len);
+            s->p += len + 3;
             return 0;
         }
 
@@ -888,22 +891,28 @@ static int _parseliteral(struct dlistsax_state *s, struct buf *buf)
 static int _parseitem(struct dlistsax_state *s, struct buf *buf)
 {
     const char *sp;
-    if (*s->p == '"')
-        return _parseqstring(s, buf);
-    else if (*s->p == '{')
-        return _parseliteral(s, buf);
 
-    sp = memchr(s->p, ' ', s->end - s->p);
-    if (!sp) sp = s->end;
-    while (sp[-1] == ')' && sp > s->p) sp--;
     /* this is much faster than setmap because it doesn't
      * do a reset and check the MMAP flag */
     buf_truncate(buf, 0);
-    buf_appendmap(buf, s->p, sp - s->p);
-    s->p = sp;
-    if (buf->len == 3 && buf->s[0] == 'N' && buf->s[1] == 'I' && buf->s[2] == 'L')
-        return IMAP_ZERO_LENGTH_LITERAL; // this is kinda bogus, but...
-    return 0; /* this could be the last thing, so end is OK */
+
+    switch (*s->p) {
+    case '"':
+        return _parseqstring(s, buf);
+
+    case '{':
+        return _parseliteral(s, buf);
+
+    default:
+        sp = memchr(s->p, ' ', s->end - s->p);
+        if (!sp) sp = s->end;
+        while (sp[-1] == ')' && sp > s->p) sp--;
+        buf_appendmap(buf, s->p, sp - s->p);
+        s->p = sp;
+        if (buf->len == 3 && buf->s[0] == 'N' && buf->s[1] == 'I' && buf->s[2] == 'L')
+            return IMAP_ZERO_LENGTH_LITERAL; // this is kinda bogus, but...
+        return 0; /* this could be the last thing, so end is OK */
+    }
 }
 
 static int _parsesax(struct dlistsax_state *s, int parsekey)
