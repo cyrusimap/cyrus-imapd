@@ -771,18 +771,14 @@ EXPORTED int conversation_setstatus(struct conversations_state *state,
     return 0;
 }
 
-EXPORTED int conversation_store(struct conversations_state *state,
-                       const char *key, int keylen,
-                       conversation_t *conv)
+static void conv_to_buf(conversation_t *conv, struct buf *buf, int flagcount)
 {
     struct dlist *dl, *n, *nn;
-    struct buf buf = BUF_INITIALIZER;
     const conv_folder_t *folder;
     const conv_sender_t *sender;
     const conv_thread_t *thread;
     int version = CONVERSATIONS_VERSION;
     int i;
-    int r;
 
     dl = dlist_newlist(NULL, NULL);
     dlist_setnum64(dl, "MODSEQ", conv->modseq);
@@ -790,11 +786,8 @@ EXPORTED int conversation_store(struct conversations_state *state,
     dlist_setnum32(dl, "EXISTS", conv->exists);
     dlist_setnum32(dl, "UNSEEN", conv->unseen);
     n = dlist_newlist(dl, "COUNTS");
-    if (state->counted_flags) {
-        for (i = 0; i < state->counted_flags->count; i++) {
-            const char *flag = strarray_nth(state->counted_flags, i);
-            dlist_setnum32(n, flag, conv->counts[i]);
-        }
+    for (i = 0; i < flagcount; i++) {
+        dlist_setnum32(n, "flag", conv->counts[i]);
     }
 
     n = dlist_newlist(dl, "FOLDER");
@@ -842,16 +835,25 @@ EXPORTED int conversation_store(struct conversations_state *state,
 
     dlist_setnum64(dl, "CREATEDMODSEQ", conv->createdmodseq);
 
-    buf_printf(&buf, "%d ", version);
-    dlist_printbuf(dl, 0, &buf);
+    buf_printf(buf, "%d ", version);
+    dlist_printbuf(dl, 0, buf);
     dlist_free(&dl);
+}
+
+EXPORTED int conversation_store(struct conversations_state *state,
+                       const char *key, int keylen,
+                       conversation_t *conv)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    conv_to_buf(conv, &buf, state->counted_flags->count);
 
     if (_sanity_check_counts(conv)) {
         syslog(LOG_ERR, "IOERROR: conversations_audit on store: %s %.*s %.*s",
                state->path, keylen, key, (int)buf.len, buf.s);
     }
 
-    r = cyrusdb_store(state->db, key, keylen, buf.s, buf.len, &state->txn);
+    int r = cyrusdb_store(state->db, key, keylen, buf.s, buf.len, &state->txn);
 
     buf_free(&buf);
 
