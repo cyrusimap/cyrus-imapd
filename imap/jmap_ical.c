@@ -2122,8 +2122,10 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
         if (ical) {
             icalproperty_method icalmethod = icalcomponent_get_method(ical);
             if (icalmethod != ICAL_METHOD_NONE) {
-                const char *method = icalenum_method_to_string(icalmethod);
+                char *method = xstrdupsafe(icalenum_method_to_string(icalmethod));
+                lcase(method);
                 json_object_set_new(event, "method", json_string(method));
+                free(method);
             }
         }
     }
