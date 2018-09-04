@@ -846,7 +846,7 @@ EXPORTED int conversation_store(struct conversations_state *state,
 {
     struct buf buf = BUF_INITIALIZER;
 
-    conv_to_buf(conv, &buf, state->counted_flags->count);
+    conv_to_buf(conv, &buf, state->counted_flags ? state->counted_flags->count : 0);
 
     if (_sanity_check_counts(conv)) {
         syslog(LOG_ERR, "IOERROR: conversations_audit on store: %s %.*s %.*s",
