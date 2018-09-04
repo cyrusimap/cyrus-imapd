@@ -2107,7 +2107,7 @@ sub test_calendarevent_set_participants
                 href => 'https://somelink.local',
             },
         },
-        method => 'REQUEST',
+        method => 'request',
     };
 
     my $ret = $self->createandget_event($event);
