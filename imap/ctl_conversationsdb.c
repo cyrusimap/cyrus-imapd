@@ -514,13 +514,13 @@ static int fix_modseqs(struct conversations_state *a,
         }
         if (ca.key[0] == 'B') {
             /* B keys - check all the modseqs, both top level and per folder */
-            conversation_t *conva = NULL;
-            conversation_t *convb = NULL;
+            conversation_t conva = CONVERSATION_INIT;
+            conversation_t convb = CONVERSATION_INIT;
             conv_folder_t *foldera;
             conv_folder_t *folderb;
             conv_sender_t *sendera;
 
-            r = conversation_parse(a, ca.data, ca.datalen, &conva);
+            r = conversation_parse(ca.data, ca.datalen, &conva, CONV_WITHALL);
             if (r) {
                 fprintf(stderr, "Failed to parse conversations "
                                 "record \"%.*s\" in %s: %s\n",
@@ -528,45 +528,45 @@ static int fix_modseqs(struct conversations_state *a,
                                 a->path, error_message(r));
                 goto next;
             }
-            r = conversation_parse(b, cb.data, cb.datalen, &convb);
+            r = conversation_parse(cb.data, cb.datalen, &convb, CONV_WITHALL);
             if (r) {
                 fprintf(stderr, "Failed to parse conversations "
                                 "record \"%.*s\" in %s: %s\n",
                                 (int)cb.keylen, cb.key,
                                 b->path, error_message(r));
-                conversation_free(conva);
+                conversation_fini(&conva);
                 goto next;
             }
 
             /* because expunged messages could have had higher modseqs,
              * we need to re-copy any higher modseqs in */
-            if (conva->modseq > convb->modseq)
-                convb->modseq = conva->modseq;
+            if (conva.modseq > convb.modseq)
+                convb.modseq = conva.modseq;
 
-            for (foldera = conva->folders; foldera; foldera = foldera->next) {
-                folderb = conversation_get_folder(convb, foldera->number, 1);
+            for (foldera = conva.folders; foldera; foldera = foldera->next) {
+                folderb = conversation_get_folder(&convb, foldera->number, 1);
                 if (folderb->modseq < foldera->modseq)
                     folderb->modseq = foldera->modseq;
             }
 
             /* senders are timestamped, and the timestamp might be for a
              * deleted message! */
-            for (sendera = conva->senders; sendera; sendera = sendera->next) {
+            for (sendera = conva.senders; sendera; sendera = sendera->next) {
                 /* always update!  The delta logic will ensure we don't add
                  * the record if it's not already at least present in the
                  * other conversation */
-                conversation_update_sender(convb, sendera->name, sendera->route,
+                conversation_update_sender(&convb, sendera->name, sendera->route,
                                            sendera->mailbox, sendera->domain,
                                            sendera->lastseen, /*delta_count*/0);
             }
 
             /* be nice to know if this is needed, but at least twoskip
              * will dedup for us */
-            r = conversation_store(b, cb.key, cb.keylen, convb);
+            r = conversation_store(b, cb.key, cb.keylen, &convb);
 
             /* free first before checking for errors */
-            conversation_free(conva);
-            conversation_free(convb);
+            conversation_fini(&conva);
+            conversation_fini(&convb);
 
             if (r) {
                 fprintf(stderr, "Failed to store conversations "

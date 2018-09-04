@@ -70,7 +70,7 @@ struct mailbox;
 #define CONV_WITHTHREAD  (1<<4)
 
 #define CONV_WITHALL CONV_WITHFOLDERS|CONV_WITHSENDERS|\
-                     CONV_WITHSUBJECT|CONV_WITHTHREAD;
+                     CONV_WITHSUBJECT|CONV_WITHTHREAD
 
 struct conversations_state {
     struct db *db;
@@ -155,6 +155,8 @@ struct conversation {
     int             flags;
 };
 
+#define CONVERSATION_INIT { 0, 0, 0, 0, 0, 0, {0}, NULL, NULL, NULL, NULL, 0, CONV_ISDIRTY }
+
 #include "mailbox.h"
 
 /* Sets the suffix used for conversations db filenames.  Only needed
@@ -221,12 +223,15 @@ extern int conversation_get_modseq(struct conversations_state *state,
 extern int conversation_save(struct conversations_state *state,
                              conversation_id_t cid,
                              conversation_t *conv);
+extern int conversation_load_advanced(struct conversations_state *state,
+                                      conversation_id_t cid,
+                                      conversation_t *convp,
+                                      int flags);
 extern int conversation_load(struct conversations_state *state,
                              conversation_id_t cid,
                              conversation_t **convp);
-extern int conversation_parse(struct conversations_state *state,
-                              const char *data, size_t datalen,
-                              conversation_t **convp);
+extern int conversation_parse(const char *data, size_t datalen,
+                              conversation_t *conv, int flags);
 extern int conversation_store(struct conversations_state *state,
                                const char *key, int keylen,
                                conversation_t *conv);
@@ -254,6 +259,7 @@ extern conv_folder_t *conversation_find_folder(struct conversations_state *state
                                                conversation_t *,
                                                const char *mboxname);
 extern conversation_t *conversation_new();
+extern void conversation_fini(conversation_t *);
 extern void conversation_free(conversation_t *);
 
 extern void conversation_update_sender(conversation_t *conv,

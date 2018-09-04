@@ -1082,46 +1082,251 @@ EXPORTED conv_folder_t *conversation_get_folder(conversation_t *conv,
     return folder;
 }
 
-static conv_thread_t *parse_thread(struct dlist *dl)
+struct convparserock {
+    conversation_t *conv;
+    strarray_t strs;
+    conv_folder_t *folder;
+    conv_thread_t *thread;
+    conv_thread_t **nextthread;
+    int state;
+    int substate;
+    int flags;
+};
+
+int _saxconvparse(int type, struct dlistsax_data *d)
 {
-    conv_thread_t *res = NULL;
-    conv_thread_t **p = &res;
-    struct dlist *item = dl->head;
-    struct dlist *n;
-    while (item) {
-        conv_thread_t *thread = *p = xzmalloc(sizeof(conv_thread_t));
-        p = &thread->next;
-        n = dlist_getchildn(item, 0);
-        if (n) {
-            struct message_guid *guid = NULL;
-            dlist_toguid(n, &guid);
-            if (guid) message_guid_copy(&thread->guid, guid);
+    struct convparserock *rock = (struct convparserock *)d->rock;
+    switch (rock->state) {
+    case 0:
+        // initial dlist start
+        if (type != DLISTSAX_LISTSTART) return IMAP_MAILBOX_BADFORMAT;
+        rock->state = 1;
+        return 0;
+
+    case 1:
+        // modseq
+        if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
+        rock->conv->modseq = atoll(d->data);
+        rock->state = 2;
+        return 0;
+
+    case 2:
+        // num_records
+        if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
+        rock->conv->num_records = atol(d->data);
+        rock->state = 3;
+        return 0;
+
+    case 3:
+        // exists
+        if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
+        rock->conv->exists = atol(d->data);
+        rock->state = 4;
+        return 0;
+
+    case 4:
+        // unseen
+        if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
+        rock->conv->unseen = atol(d->data);
+        rock->conv->prev_unseen = rock->conv->unseen;
+        rock->state = 5;
+        return 0;
+
+    case 5:
+        // enter flagcounts
+        if (type != DLISTSAX_LISTSTART) return IMAP_MAILBOX_BADFORMAT;
+        rock->state = 6;
+        return 0;
+
+    case 6:
+        if (type == DLISTSAX_LISTEND) {
+            // end of flagcounts
+            rock->substate = 0;
+            rock->state = 7;
+            return 0;
         }
-        n = dlist_getchildn(item, 1);
-        if (n) thread->exists = dlist_num(n);
-        n = dlist_getchildn(item, 2);
-        if (n) thread->internaldate = dlist_num(n);
-        item = item->next;
+        // inside flagcounts
+        if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
+        rock->conv->counts[rock->substate++] = atol(d->data);
+        return 0;
+
+    case 7:
+        // start of folders list
+        if (type != DLISTSAX_LISTSTART) return IMAP_MAILBOX_BADFORMAT;
+        rock->state = 8;
+        return 0;
+
+    case 8:
+        if (type == DLISTSAX_LISTEND) {
+            rock->state = 10; // finished folders list
+            return 0;
+        }
+        // start of individual folder info
+        if (type != DLISTSAX_LISTSTART) return IMAP_MAILBOX_BADFORMAT;
+        rock->state = 9;
+        return 0;
+
+    case 9:
+        if (type == DLISTSAX_LISTEND) {
+            rock->substate = 0;
+            rock->state = 8; // back to folders list state
+            return 0;
+        }
+        if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
+        if (!(rock->flags & CONV_WITHFOLDERS)) return 0;
+        switch (rock->substate) {
+        case 0:
+            rock->folder = conversation_get_folder(rock->conv, atol(d->data), 1);
+            rock->substate = 1;
+            return 0;
+        case 1:
+            rock->folder->modseq = atoll(d->data);
+            rock->substate = 2;
+            return 0;
+        case 2:
+            rock->folder->num_records = atol(d->data);
+            rock->substate = 3;
+            return 0;
+        case 3:
+            rock->folder->exists = atol(d->data);
+            rock->folder->prev_exists = rock->folder->exists;
+            rock->substate = 4;
+            return 0;
+        case 4:
+            rock->folder->unseen = atol(d->data);
+            rock->substate = 5;
+            return 0;
+        }
+        return IMAP_MAILBOX_BADFORMAT;
+
+    case 10:
+        // start senders list
+        if (type != DLISTSAX_LISTSTART) return IMAP_MAILBOX_BADFORMAT;
+        rock->state = 11;
+        return 0;
+
+    case 11:
+        if (type == DLISTSAX_LISTEND) {
+            // end of senders list
+            rock->state = 13;
+            return 0;
+        }
+        if (type != DLISTSAX_LISTSTART) return IMAP_MAILBOX_BADFORMAT;
+        rock->state = 12;
+        return 0;
+
+    case 12:
+        // individual sender items
+        if (type == DLISTSAX_LISTEND) {
+            if (rock->flags & CONV_WITHSENDERS) {
+                conversation_update_sender(rock->conv,
+                                           strarray_nth(&rock->strs, 0),
+                                           strarray_nth(&rock->strs, 1),
+                                           strarray_nth(&rock->strs, 2),
+                                           strarray_nth(&rock->strs, 3),
+                                           atol(strarray_nth(&rock->strs, 4)),
+                                           atol(strarray_nth(&rock->strs, 5)));
+                strarray_fini(&rock->strs);
+            }
+            rock->substate = 0;
+            rock->state = 11; // drop back to senders list
+            return 0;
+        }
+        if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
+        if (rock->flags & CONV_WITHSENDERS)
+            strarray_set(&rock->strs, rock->substate++, d->data);
+        return 0;
+
+    case 13:
+        // encoded subject
+        if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
+        if (rock->flags & CONV_WITHSUBJECT)
+            rock->conv->subject = xstrdup(d->data);
+        rock->state = 14;
+        return 0;
+
+    case 14:
+        // conversation size
+        if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
+        rock->conv->size = atol(d->data);
+        rock->state = 15;
+        return 0;
+
+    case 15:
+        // start thread list
+        if (type != DLISTSAX_LISTSTART) return IMAP_MAILBOX_BADFORMAT;
+        rock->state = 16;
+        rock->nextthread = &rock->conv->thread;
+        return 0;
+
+    case 16:
+        if (type == DLISTSAX_LISTEND) {
+            // end of thread list
+            rock->state = 18;
+            return 0;
+        }
+        if (type != DLISTSAX_LISTSTART) return IMAP_MAILBOX_BADFORMAT;
+        if (rock->flags & CONV_WITHTHREAD)
+            rock->thread = xzmalloc(sizeof(conv_thread_t));
+        rock->state = 17;
+        return 0;
+
+    case 17:
+        if (type == DLISTSAX_LISTEND) {
+            // end of individual thread
+            if (rock->flags & CONV_WITHTHREAD) {
+                *rock->nextthread = rock->thread;
+                rock->nextthread = &rock->thread->next;
+                rock->thread = NULL;
+            }
+            rock->substate = 0;
+            rock->state = 16;
+            return 0;
+        }
+        if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
+        if (!(rock->flags & CONV_WITHTHREAD)) return 0;
+        switch (rock->substate) {
+        case 0:
+            message_guid_decode(&rock->thread->guid, d->data);
+            rock->substate = 1;
+            return 0;
+
+        case 1:
+            rock->thread->exists = atol(d->data);
+            rock->substate = 2;
+            return 0;
+
+        case 2:
+            rock->thread->internaldate = atol(d->data);
+            rock->substate = 3;
+            return 0;
+        }
+        return 0; // there might be following fields that we ignore here
+
+    case 18:
+        if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
+        rock->conv->createdmodseq = atoll(d->data);
+        rock->state = 19;
+        return 0;
+
+    case 19:
+        if (type != DLISTSAX_LISTEND) return IMAP_MAILBOX_BADFORMAT;
+        rock->state = 20;
+        return 0;
+
     }
 
-    return res;
+    // we should finish at createdmodseq
+    return IMAP_MAILBOX_BADFORMAT;
 }
 
-EXPORTED int conversation_parse(struct conversations_state *state,
-                       const char *data, size_t datalen,
-                       conversation_t **convp)
+EXPORTED int conversation_parse(const char *data, size_t datalen,
+                                conversation_t *conv, int flags)
 {
     const char *rest;
-    int i;
     int restlen;
     bit64 version;
-    struct dlist *dl = NULL;
-    struct dlist *n, *nn;
-    conversation_t *conv;
-    conv_folder_t *folder;
     int r;
-
-    *convp = NULL;
 
     r = parsenum(data, &rest, datalen, &version);
     if (r) return IMAP_MAILBOX_BADFORMAT;
@@ -1132,105 +1337,22 @@ EXPORTED int conversation_parse(struct conversations_state *state,
 
     if (version != CONVERSATIONS_VERSION) return IMAP_MAILBOX_BADFORMAT;
 
-    r = dlist_parsemap(&dl, 0, 0, rest, restlen);
+    struct convparserock rock = { conv, STRARRAY_INITIALIZER,
+                                  NULL, NULL, NULL, 0, 0, flags };
+
+    r = dlist_parsesax(rest, restlen, 0, _saxconvparse, &rock);
     if (r) return r;
 
-    conv = conversation_new();
+    conv->flags = flags;
 
-    n = dlist_getchildn(dl, 0);
-    if (n)
-        conv->modseq = dlist_num(n);
-    n = dlist_getchildn(dl, 1);
-    if (n)
-        conv->num_records = dlist_num(n);
-    n = dlist_getchildn(dl, 2);
-    if (n)
-        conv->exists = dlist_num(n);
-    n = dlist_getchildn(dl, 3);
-    if (n)
-        conv->unseen = dlist_num(n);
-    n = dlist_getchildn(dl, 4);
-    if (state->counted_flags) {
-        nn = n ? n->head : NULL;
-        for (i = 0; i < state->counted_flags->count; i++) {
-            if (nn) {
-                conv->counts[i] = dlist_num(nn);
-                nn = nn->next;
-            }
-            else
-                conv->counts[i] = 0;
-        }
-    }
-
-    n = dlist_getchildn(dl, 5);
-    for (n = (n ? n->head : NULL) ; n ; n = n->next) {
-        int number;
-        nn = dlist_getchildn(n, 0);
-        if (!nn)
-            continue;
-        number = dlist_num(nn);
-        folder = conversation_get_folder(conv, number, 1);
-
-        nn = dlist_getchildn(n, 1);
-        if (nn)
-            folder->modseq = dlist_num(nn);
-        nn = dlist_getchildn(n, 2);
-        if (nn)
-            folder->num_records = dlist_num(nn);
-        nn = dlist_getchildn(n, 3);
-        if (nn)
-            folder->exists = dlist_num(nn);
-        nn = dlist_getchildn(n, 4);
-        if (nn)
-            folder->unseen = dlist_num(nn);
-
-        folder->prev_exists = folder->exists;
-    }
-
-    n = dlist_getchildn(dl, 6);
-    for (n = (n ? n->head : NULL) ; n ; n = n->next) {
-        struct dlist *nn2, *nn3, *nn4, *nn5, *nn6;
-        nn = dlist_getchildn(n, 0);
-        nn2 = dlist_getchildn(n, 1);
-        nn3 = dlist_getchildn(n, 2);
-        nn4 = dlist_getchildn(n, 3);
-        nn5 = dlist_getchildn(n, 4);
-        nn6 = dlist_getchildn(n, 5);
-        if (nn6)
-            conversation_update_sender(conv, nn->sval, nn2->sval,
-                                       nn3->sval, nn4->sval,
-                                       dlist_num(nn5), dlist_num(nn6));
-        else if (nn4) /* XXX: remove when cleaned up - handle old-style too */
-            conversation_update_sender(conv, nn->sval, nn2->sval,
-                                       nn3->sval, nn4->sval,
-                                       0/*time_t*/, (1<<30)/*exists*/);
-        /* INSANE EXISTS NUMBER MEANS IT NEVER GETS CLEANED UP */
-    }
-
-    n = dlist_getchildn(dl, 7);
-    if (n) conv->subject = xstrdupnull(dlist_cstring(n));
-
-    n = dlist_getchildn(dl, 8);
-    if (n) conv->size = dlist_num(n);
-
-    n = dlist_getchildn(dl, 9);
-    if (n) conv->thread = parse_thread(n);
-
-    n = dlist_getchildn(dl, 10);
-    if (n)
-        conv->createdmodseq = dlist_num(n);
-
-    conv->prev_unseen = conv->unseen;
-
-    dlist_free(&dl);
-    conv->flags &= ~CONV_ISDIRTY;
-    *convp = conv;
     return 0;
 }
 
-EXPORTED int conversation_load(struct conversations_state *state,
+
+EXPORTED int conversation_load_advanced(struct conversations_state *state,
                       conversation_id_t cid,
-                      conversation_t **convp)
+                      conversation_t *conv,
+                      int flags)
 {
     const char *data;
     size_t datalen;
@@ -1244,25 +1366,41 @@ EXPORTED int conversation_load(struct conversations_state *state,
                   &state->txn);
 
     if (r == CYRUSDB_NOTFOUND) {
-        *convp = NULL;
-        return 0;
+        return IMAP_MAILBOX_NONEXISTENT;
     } else if (r != CYRUSDB_OK) {
-        return r;
+        return IMAP_INTERNAL;
     }
     xstats_inc(CONV_LOAD);
 
-    r = conversation_parse(state, data, datalen, convp);
+    r = conversation_parse(data, datalen, conv, flags);
     if (r) {
         syslog(LOG_ERR, "IOERROR: conversations invalid conversation "
                CONV_FMT, cid);
-        *convp = NULL;
     }
 
-    if (_sanity_check_counts(*convp)) {
+    if ((conv->flags & CONV_WITHFOLDERS) && _sanity_check_counts(conv)) {
         syslog(LOG_ERR, "IOERROR: conversations_audit on load: %s %s %.*s",
                state->path, bkey, (int)datalen, data);
     }
 
+    return r;
+}
+
+EXPORTED int conversation_load(struct conversations_state *state,
+                      conversation_id_t cid,
+                      conversation_t **convp)
+{
+    // we'll malloc one
+    conversation_t *conv = conversation_new();
+    int r = conversation_load_advanced(state, cid, conv, CONV_WITHALL);
+    if (r) {
+        // we still return success, just don't have any data
+        conversation_free(conv);
+        *convp = NULL;
+    }
+    else {
+        *convp = conv;
+    }
     return 0;
 }
 
@@ -2129,13 +2267,13 @@ EXPORTED conversation_t *conversation_new()
     return conv;
 }
 
-EXPORTED void conversation_free(conversation_t *conv)
+EXPORTED void conversation_fini(conversation_t *conv)
 {
+    if (!conv) return;
+
     conv_folder_t *folder;
     conv_sender_t *sender;
     conv_thread_t *thread;
-
-    if (!conv) return;
 
     while ((folder = conv->folders)) {
         conv->folders = folder->next;
@@ -2144,23 +2282,26 @@ EXPORTED void conversation_free(conversation_t *conv)
 
     while ((sender = conv->senders)) {
         conv->senders = sender->next;
-        free(sender->name);
-        free(sender->route);
-        free(sender->mailbox);
-        free(sender->domain);
+        xfree(sender->name);
+        xfree(sender->route);
+        xfree(sender->mailbox);
+        xfree(sender->domain);
         free(sender);
     }
 
-    free(conv->subject);
+    xfree(conv->subject);
 
     while ((thread = conv->thread)) {
         conv->thread = thread->next;
         free(thread);
     }
-
-    free(conv);
 }
 
+EXPORTED void conversation_free(conversation_t *conv)
+{
+    conversation_fini(conv);
+    free(conv);
+}
 
 struct prune_rock {
     struct conversations_state *state;
@@ -2301,17 +2442,15 @@ static int zero_b_cb(void *rock,
                      size_t vallen)
 {
     struct conversations_state *state = (struct conversations_state *)rock;
-    conversation_t *conv = NULL;
+    conversation_t *conv = conversation_new();
     conv_folder_t *folder;
-    conv_sender_t *sender;
-    conv_thread_t *thread;
     int r;
     int i;
 
-    r = conversation_parse(state, val, vallen, &conv);
+    r = conversation_parse(val, vallen, conv, CONV_WITHFOLDERS|CONV_WITHSUBJECT);
     if (r) {
         r = cyrusdb_delete(state->db, key, keylen, &state->txn, /*force*/1);
-        return r;
+        goto done;
     }
 
     /* leave modseq untouched */
@@ -2332,28 +2471,15 @@ static int zero_b_cb(void *rock,
         folder->unseen = 0;
     }
 
-    /* just zero out senders */
-    while ((sender = conv->senders)) {
-        conv->senders = sender->next;
-        free(sender->name);
-        free(sender->route);
-        free(sender->mailbox);
-        free(sender->domain);
-        free(sender);
-    }
-
-    while ((thread = conv->thread)) {
-        conv->thread = thread->next;
-        free(thread);
-    }
-
     /* keep the subject of course */
 
+    /* zero out the size */
     conv->size = 0;
 
     r = conversation_store(state, key, keylen, conv);
-    conversation_free(conv);
 
+done:
+    conversation_free(conv);
     return r;
 }
 
@@ -2424,18 +2550,19 @@ static int cleanup_b_cb(void *rock,
                         size_t vallen)
 {
     struct conversations_state *state = (struct conversations_state *)rock;
-    conversation_t *conv = NULL;
+    conversation_t *conv = conversation_new();
     int r;
 
-    r = conversation_parse(state, val, vallen, &conv);
-    if (r) return r;
+    r = conversation_parse(val, vallen, conv, /*flags*/0);
+    if (r) goto done;
 
     /* should be gone, wipe it */
     if (!conv->num_records)
         r = cyrusdb_delete(state->db, key, keylen, &state->txn, 1);
 
-    conversation_free(conv);
 
+done:
+    conversation_free(conv);
     return r;
 }
 
