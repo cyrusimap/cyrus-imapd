@@ -2272,14 +2272,12 @@ EXPORTED void conversation_fini(conversation_t *conv)
     if (!conv) return;
 
     conv_folder_t *folder;
-    conv_sender_t *sender;
-    conv_thread_t *thread;
-
     while ((folder = conv->folders)) {
         conv->folders = folder->next;
         free(folder);
     }
 
+    conv_sender_t *sender;
     while ((sender = conv->senders)) {
         conv->senders = sender->next;
         xfree(sender->name);
@@ -2289,8 +2287,9 @@ EXPORTED void conversation_fini(conversation_t *conv)
         free(sender);
     }
 
-    xfree(conv->subject);
+    xzfree(conv->subject);
 
+    conv_thread_t *thread;
     while ((thread = conv->thread)) {
         conv->thread = thread->next;
         free(thread);
