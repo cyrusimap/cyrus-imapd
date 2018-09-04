@@ -1907,21 +1907,21 @@ static int search_convflags_match(message_t *m,
 {
     struct conv_rock *rock = (struct conv_rock *)internalised;
     conversation_id_t cid = NULLCONVERSATION;
-    conversation_t *conv = NULL;
+    conversation_t conv = CONVERSATION_INIT;
     int r = 0; /* invalid flag name */
 
     if (!rock->cstate) return 0;
 
     message_get_cid(m, &cid);
-    if (conversation_load(rock->cstate, cid, &conv)) return 0;
-    if (!conv) return 0;
+    if (conversation_load_advanced(rock->cstate, cid, &conv, /*flags*/0)) return 0;
+    if (!conv.exists) return 0;
 
     if (rock->num == 0)
-        r = (conv->unseen != conv->exists);
+        r = (conv.unseen != conv.exists);
     else if (rock->num > 0)
-        r = !!conv->counts[rock->num-1];
+        r = !!conv.counts[rock->num-1];
 
-    conversation_free(conv);
+    conversation_fini(&conv);
     return r;
 }
 
@@ -1932,21 +1932,21 @@ static int search_allconvflags_match(message_t *m,
 {
     struct conv_rock *rock = (struct conv_rock *)internalised;
     conversation_id_t cid = NULLCONVERSATION;
-    conversation_t *conv = NULL;
+    conversation_t conv = CONVERSATION_INIT;
     int r = 0; /* invalid flag name */
 
     if (!rock->cstate) return 0;
 
     message_get_cid(m, &cid);
-    if (conversation_load(rock->cstate, cid, &conv)) return 0;
-    if (!conv) return 0;
+    if (conversation_load_advanced(rock->cstate, cid, &conv, /*flags*/0)) return 0;
+    if (!conv.exists) return 0;
 
     if (rock->num == 0)
-        r = !conv->unseen;
+        r = !conv.unseen;
     else if (rock->num > 0)
-        r = (conv->counts[rock->num-1] == conv->exists);
+        r = (conv.counts[rock->num-1] == conv.exists);
 
-    conversation_free(conv);
+    conversation_fini(&conv);
     return r;
 }
 
@@ -1975,18 +1975,18 @@ static int search_convmodseq_match(message_t *m, const union search_value *v,
 {
     struct conv_rock *rock = (struct conv_rock *)internalised;
     conversation_id_t cid = NULLCONVERSATION;
-    conversation_t *conv = NULL;
+    conversation_t conv = CONVERSATION_INIT;
     int r;
 
     if (!rock->cstate) return 0;
 
     message_get_cid(m, &cid);
-    if (conversation_load(rock->cstate, cid, &conv)) return 0;
-    if (!conv) return 0;
+    if (conversation_load_advanced(rock->cstate, cid, &conv, /*flags*/0)) return 0;
+    if (!conv.exists) return 0;
 
-    r = (v->u == conv->modseq);
+    r = (v->u == conv.modseq);
 
-    conversation_free(conv);
+    conversation_fini(&conv);
     return r;
 }
 
