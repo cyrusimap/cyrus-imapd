@@ -1695,22 +1695,23 @@ relatedto_from_ical(context_t *ctx __attribute__((unused)), icalcomponent *comp)
          prop;
          prop = icalcomponent_get_next_property(comp, ICAL_RELATEDTO_PROPERTY)) {
 
-        const char *uid = NULL, *reltype = NULL;
-        char *s = NULL;
-        icalparameter *param = NULL;
-
-        uid = icalproperty_get_value_as_string(prop);
+        const char *uid = icalproperty_get_value_as_string(prop);
         if (!uid || !strlen(uid)) continue;
 
-        param = icalproperty_get_first_parameter(prop, ICAL_RELTYPE_PARAMETER);
-        if (param) reltype = icalparameter_get_xvalue(param);
-
+        icalparameter *param = NULL;
         json_t *relation = json_array();
-        if (reltype && *reltype) {
-            s = lcase(xstrdup(reltype));
-            json_array_append_new(relation, json_string(s));
-            free(s);
+        for (param = icalproperty_get_first_parameter(prop, ICAL_RELTYPE_PARAMETER);
+             param;
+             param = icalproperty_get_next_parameter(prop, ICAL_RELTYPE_PARAMETER)) {
+
+            const char *reltype = icalparameter_get_xvalue(param);
+            if (reltype && *reltype) {
+                char *s =lcase(xstrdup(reltype));
+                json_array_append_new(relation, json_string(s));
+                free(s);
+            }
         }
+
         json_object_set_new(ret, uid, json_pack("{s:o}", "relation", relation));
     }
 
@@ -3663,26 +3664,23 @@ relatedto_to_ical(context_t *ctx, icalcomponent *comp, json_t *related)
     const char *uid = NULL;
     json_t *relatedTo = NULL;
     json_object_foreach(related, uid, relatedTo) {
-        if (json_object_size(relatedTo) != 1) {
-            invalidprop(ctx, uid);
-            continue;
-        }
         json_t *relation = json_object_get(relatedTo, "relation");
-        if (!json_is_array(relation) || json_array_size(relation) > 1) {
+        if (!json_is_array(relation)) {
             invalidprop(ctx, uid);
             continue;
-        }
-        const char *reltype = NULL;
-        if (json_array_size(relation)) {
-            reltype = json_string_value(json_array_get(relation, 0));
-            if (!reltype) {
-                invalidprop(ctx, uid);
-                continue;
-            }
         }
 
         prop = icalproperty_new_relatedto(uid);
-        if (reltype) {
+        size_t i;
+        json_t *jreltype;
+        json_array_foreach(relation, i, jreltype) {
+            const char *reltype = json_string_value(jreltype);
+            if (!reltype) {
+                beginprop_idx(ctx, "relation", i);
+                invalidprop(ctx, NULL);
+                endprop(ctx);
+                continue;
+            }
             char *s = ucase(xstrdup(reltype));
             param = icalparameter_new(ICAL_RELTYPE_PARAMETER);
             icalparameter_set_xvalue(param, s);
