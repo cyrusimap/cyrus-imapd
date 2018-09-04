@@ -5141,7 +5141,7 @@ MsgData **index_msgdata_load(struct index_state *state,
     struct mailbox *mailbox = state->mailbox;
     struct index_record record;
     struct conversations_state *cstate = NULL;
-    conversation_t *conv = NULL;
+    conversation_t conv = CONVERSATION_INIT;
 
     if (!n) return NULL;
 
@@ -5176,7 +5176,6 @@ MsgData **index_msgdata_load(struct index_state *state,
 
         did_cache = did_env = did_conv = 0;
         tmpenv = NULL;
-        conv = NULL; /* XXX: use a hash to avoid re-reading? */
 
         for (j = 0; sortcrit[j].key; j++) {
             label = sortcrit[j].key;
@@ -5217,9 +5216,8 @@ MsgData **index_msgdata_load(struct index_state *state,
                 label == SORT_CONVEXISTS || label == SORT_CONVSIZE) && !did_conv) {
                 if (!cstate) cstate = conversations_get_mbox(index_mboxname(state));
                 assert(cstate);
-                if (conversation_load(cstate, record.cid, &conv))
+                if (conversation_load_advanced(cstate, record.cid, &conv, /*flags*/0))
                     continue;
-                if (!conv) conv = conversation_new();
                 did_conv++;
             }
 
@@ -5295,18 +5293,18 @@ MsgData **index_msgdata_load(struct index_state *state,
                 if (cstate->counted_flags)
                     idx = strarray_find_case(cstate->counted_flags, name, 0);
                 /* flag exists in the conversation at all */
-                if (idx >= 0 && conv->counts[idx] > 0 && j < 31)
+                if (idx >= 0 && conv.counts[idx] > 0 && j < 31)
                     cur->hasflag |= (1<<j);
                 break;
             }
             case SORT_CONVEXISTS:
-                cur->convexists = conv->exists;
+                cur->convexists = conv.exists;
                 break;
             case SORT_CONVSIZE:
-                cur->convsize = conv->size;
+                cur->convsize = conv.size;
                 break;
             case SORT_CONVMODSEQ:
-                cur->convmodseq = conv->modseq;
+                cur->convmodseq = conv.modseq;
                 break;
             case SORT_RELEVANCY:
                 /* for now all messages have relevancy=100 */
@@ -5315,7 +5313,7 @@ MsgData **index_msgdata_load(struct index_state *state,
         }
 
         free(tmpenv);
-        conversation_free(conv);
+        conversation_fini(&conv);
     }
 
     return ptrs;
