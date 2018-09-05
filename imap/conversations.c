@@ -1373,12 +1373,8 @@ EXPORTED int conversation_load_advanced(struct conversations_state *state,
     xstats_inc(CONV_LOAD);
 
     r = conversation_parse(data, datalen, conv, flags);
-    if (r) {
-        syslog(LOG_ERR, "IOERROR: conversations invalid conversation "
-               CONV_FMT, cid);
-    }
 
-    if ((conv->flags & CONV_WITHFOLDERS) && _sanity_check_counts(conv)) {
+    if (r || ((conv->flags & CONV_WITHFOLDERS) && _sanity_check_counts(conv))) {
         syslog(LOG_ERR, "IOERROR: conversations_audit on load: %s %s %.*s",
                state->path, bkey, (int)datalen, data);
     }
