@@ -1940,6 +1940,25 @@ sub test_calendarevent_set_recurrence
     $event->{id} = $ret->{id};
     $event->{calendarId} = $ret->{calendarId};
     $self->assert_normalized_event_equals($ret, $event);
+
+    # Now delete the recurrence rule
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set',{
+            update => {
+                $event->{id} => {
+                    recurrenceRule => undef,
+                },
+            },
+        }, "R1"],
+        ['CalendarEvent/get',{
+            ids => [$event->{id}],
+        }, "R2"],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$event->{id}});
+
+    delete $event->{recurrenceRule};
+    $ret = $res->[1][1]{list}[0];
+    $self->assert_normalized_event_equals($ret, $event);
 }
 
 sub test_calendarevent_set_recurrenceoverrides
