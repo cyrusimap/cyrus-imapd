@@ -739,12 +739,14 @@ typedef struct {
     ptrarray_t result;  /* Result records (mboxquery_record_t) */
     struct shared_mboxes *shared_mboxes;
     strarray_t *sublist;
+    int include_tombstones;
+    int include_hidden;
 
-    int _need_name;
-    int _need_utf8mboxname;
-    int _need_sort_order;
-    int _need_role;
-    int _need_sublist;
+    int need_name;
+    int need_utf8mboxname;
+    int need_sort_order;
+    int need_role;
+    int need_sublist;
 } mboxquery_t;
 
 typedef struct {
@@ -754,20 +756,16 @@ typedef struct {
     char *utf8mboxname;
     char *jmapname;
     int sort_order;
+    modseq_t foldermodseq;
+    modseq_t createdmodseq;
+    int mbtype;
+    enum shared_mbox_type shared_mbtype;
 } mboxquery_record_t;
 
 typedef struct {
     char *field;
     int desc;
 } mboxquery_sort_t;
-
-static mboxquery_t *_mboxquery_new(jmap_req_t *req)
-{
-    mboxquery_t *q = xzmalloc(sizeof(mboxquery_t));
-    q->req = req;
-    q->shared_mboxes = _shared_mboxes_new(req, /*flags*/0);
-    return q;
-}
 
 static void _mboxquery_filter_free(mboxquery_filter_t *filter)
 {
@@ -914,14 +912,38 @@ static mboxquery_filter_t *_mboxquery_build_filter(mboxquery_t *query, json_t *j
         filter->has_any_role = json_object_get(jfilter, "hasAnyRole");
         filter->is_subscribed = json_object_get(jfilter, "isSubscribed");
         if (filter->role || filter->has_any_role) {
-            query->_need_role = 1;
+            query->need_role = 1;
         }
         if (filter->is_subscribed) {
-            query->_need_sublist = 1;
+            query->need_sublist = 1;
         }
     }
     return filter;
 }
+
+static mboxquery_t *_mboxquery_new(jmap_req_t *req, json_t *filter, json_t *sort)
+{
+    mboxquery_t *q = xzmalloc(sizeof(mboxquery_t));
+    q->req = req;
+    q->shared_mboxes = _shared_mboxes_new(req, /*flags*/0);
+
+    /* Prepare filter */
+    q->filter = _mboxquery_build_filter(q, filter);
+
+    /* Prepare sort */
+    size_t i;
+    json_t *jval;
+    json_array_foreach(sort, i, jval) {
+        mboxquery_sort_t *crit = xzmalloc(sizeof(mboxquery_sort_t));
+        const char *prop = json_string_value(json_object_get(jval, "property"));
+        crit->field = xstrdup(prop);
+        crit->desc = json_object_get(jval, "isAscending") == json_false();
+        ptrarray_append(&q->sort, crit);
+    }
+
+    return q;
+}
+
 
 static int _mboxquery_compar(const void **a, const void **b, void *rock)
 {
@@ -952,10 +974,14 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
 {
     mboxquery_t *q = rock;
 
-    if (mbentry->mbtype & (MBTYPES_NONIMAP|MBTYPE_DELETED))
+    if (mbentry->mbtype & MBTYPES_NONIMAP)
         return 0;
 
-    if (_shared_mbox_type(q->shared_mboxes, mbentry->name) == _MBOX_HIDDEN)
+    if ((mbentry->mbtype & MBTYPE_DELETED) && !q->include_tombstones)
+        return 0;
+
+    enum shared_mbox_type shared_mbtype = _shared_mbox_type(q->shared_mboxes, mbentry->name);
+    if (shared_mbtype == _MBOX_HIDDEN && !q->include_hidden)
         return 0;
 
     mbname_t *_mbname = mbname_from_intname(mbentry->name);
@@ -963,7 +989,7 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
     int r = 0;
 
     char *utf8mboxname = NULL;
-    if (q->_need_utf8mboxname) {
+    if (q->need_utf8mboxname) {
         charset_t cs = charset_lookupname("imap-mailbox-name");
         if (!cs) {
             syslog(LOG_ERR, "_mboxquery_cb: no imap-mailbox-name charset");
@@ -992,13 +1018,17 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
     rec->id = xstrdup(mbentry->uniqueid);
     rec->mbname = _mbname;
     rec->utf8mboxname = xstrdupnull(utf8mboxname);
+    rec->foldermodseq = mbentry->foldermodseq;
+    rec->createdmodseq = mbentry->createdmodseq;
+    rec->mbtype = mbentry->mbtype;
+    rec->shared_mbtype = shared_mbtype;
     _mbname = NULL; /* rec takes ownership for _mbname */
 
-    if (q->_need_name) {
+    if (q->need_name) {
         rec->mboxname = xstrdup(mbentry->name);
         rec->jmapname = _mbox_get_name(q->req->accountid, rec->mbname);
     }
-    if (q->_need_sort_order) {
+    if (q->need_sort_order) {
         rec->sort_order = _mbox_get_sortorder(q->req, rec->mbname);
     }
     ptrarray_append(&q->result, rec);
@@ -1016,17 +1046,17 @@ static int _mboxquery_run(mboxquery_t *query)
     for (i = 0; i < query->sort.count; i++) {
         mboxquery_sort_t *crit = ptrarray_nth(&query->sort, i);
         if (!strcmp(crit->field, "name")) {
-            query->_need_name = 1;
+            query->need_name = 1;
         }
         else if (!strcmp(crit->field, "sortOrder")) {
-            query->_need_sort_order = 1;
+            query->need_sort_order = 1;
         }
         else if (!strcmp(crit->field, "parent/name")) {
-            query->_need_utf8mboxname = 1;
+            query->need_utf8mboxname = 1;
         }
     }
 
-    if (query->_need_sublist) {
+    if (query->need_sublist) {
         query->sublist = mboxlist_sublist(query->req->userid);
         if (!query->sublist) {
             syslog(LOG_ERR, "jmap: mboxquery_run: could not load sublist");
@@ -1034,8 +1064,11 @@ static int _mboxquery_run(mboxquery_t *query)
         }
     }
 
-    /* Lookup all mailboxes */
-    int r = jmap_mboxlist(query->req, _mboxquery_cb, query);
+    /* Lookup mailboxes */
+    int flags = 0;
+    if (query->include_tombstones) flags |= MBOXTREE_TOMBSTONES|MBOXTREE_DELETED;
+    int r = mboxlist_usermboxtree(query->req->accountid, query->req->authstate,
+                                  _mboxquery_cb, query, flags);
     if (r) goto done;
 
     /* Sort result */
@@ -1047,88 +1080,79 @@ done:
     return r;
 }
 
-static int _mbox_query(jmap_req_t *req, struct jmap_query *jquery)
+
+static int _mboxquery_can_calculate_changes(mboxquery_t *mbquery)
+{
+    /* XXX Mailbox/queryChanges currently has to overreport mailboxes
+     * in removed if the filter criteria includes annotations. This
+     * workaround is OK for a user's owned mailbox, but we don't want
+     * to leak mailboxes for shared accounts */
+    return !strcmp(mbquery->req->userid, mbquery->req->accountid);
+}
+
+static int _mbox_query(jmap_req_t *req, struct jmap_query *query)
 {
     int r = 0;
-    size_t j;
-    json_t *val;
-
-    /* Reject any attempt to calculcate updates for jmap_mailbox_querychanges.
-     * All of the filter and sort criteria are mutable. That only leaves
-     * an unsorted and unfiltere mailbox list which we internally sort
-     * by mailbox ids, which isn't any better than jmap_mailbox_changes. */
-    jquery->can_calculate_changes = 0;
 
     /* Prepare query */
-    mboxquery_t *query = _mboxquery_new(req);
-
-    /* Prepare sort */
-    json_array_foreach(jquery->sort, j, val) {
-        mboxquery_sort_t *crit = xzmalloc(sizeof(mboxquery_sort_t));
-        const char *prop = json_string_value(json_object_get(val, "property"));
-        crit->field = xstrdup(prop);
-        crit->desc = json_object_get(val, "isAscending") == json_false();
-        ptrarray_append(&query->sort, crit);
-    }
-
-    /* Prepare filter */
-    query->filter = _mboxquery_build_filter(query, jquery->filter);
+    mboxquery_t *mbquery = _mboxquery_new(req, query->filter, query->sort);
 
     /* Run the query */
-    r = _mboxquery_run(query);
+    r = _mboxquery_run(mbquery);
     if (r) goto done;
 
-    jquery->total = query->result.count;
+    query->total = mbquery->result.count;
 
-    /* Apply jquery */
+    /* Apply query */
     ssize_t i, frompos = 0;
     int seen_anchor = 0;
     ssize_t skip_anchor = 0;
     ssize_t result_pos = -1;
+    modseq_t highest_modseq = 0;
 
     /* Set position of first result */
-    if (!jquery->anchor) {
-        if (jquery->position > 0) {
-            frompos = jquery->position;
+    if (!query->anchor) {
+        if (query->position > 0) {
+            frompos = query->position;
         }
-        else if (jquery->position < 0) {
-            frompos = query->result.count + jquery->position ;
+        else if (query->position < 0) {
+            frompos = mbquery->result.count + query->position ;
             if (frompos < 0) frompos = 0;
         }
     }
 
-    for (i = frompos; i < query->result.count; i++) {
-        mboxquery_record_t *rec = ptrarray_nth(&query->result, i);
+    for (i = frompos; i < mbquery->result.count; i++) {
+        mboxquery_record_t *rec = ptrarray_nth(&mbquery->result, i);
 
         /* Check anchor */
-        if (jquery->anchor && !seen_anchor) {
-            seen_anchor = !strcmp(rec->id, jquery->anchor);
+        if (query->anchor && !seen_anchor) {
+            seen_anchor = !strcmp(rec->id, query->anchor);
             if (!seen_anchor) {
                 continue;
             }
             /* Found the anchor! Now apply anchor offsets */
-            if (jquery->anchor_offset < 0) {
-                skip_anchor = -jquery->anchor_offset;
+            if (query->anchor_offset < 0) {
+                skip_anchor = -query->anchor_offset;
                 continue;
             }
-            else if (jquery->anchor_offset > 0) {
+            else if (query->anchor_offset > 0) {
                 /* Prefill result list with all, but the current record */
-                size_t lo = jquery->anchor_offset < i ? i - jquery->anchor_offset : 0;
-                size_t hi = jquery->limit ? lo + jquery->limit : (size_t) i;
+                size_t lo = query->anchor_offset < i ? i - query->anchor_offset : 0;
+                size_t hi = query->limit ? lo + query->limit : (size_t) i;
                 result_pos = lo;
                 while (lo < hi && lo < (size_t) i) {
-                    mboxquery_record_t *p = ptrarray_nth(&query->result, lo);
-                    json_array_append_new(jquery->ids, json_string(p->id));
+                    mboxquery_record_t *p = ptrarray_nth(&mbquery->result, lo);
+                    json_array_append_new(query->ids, json_string(p->id));
                     lo++;
                 }
             }
         }
-        else if (jquery->anchor && skip_anchor) {
+        else if (query->anchor && skip_anchor) {
             if (--skip_anchor) continue;
         }
 
         /* Check limit. */
-        if (jquery->limit && jquery->limit <= json_array_size(jquery->ids)) {
+        if (query->limit && query->limit <= json_array_size(query->ids)) {
             break;
         }
 
@@ -1136,18 +1160,26 @@ static int _mbox_query(jmap_req_t *req, struct jmap_query *jquery)
         if (result_pos == -1) {
             result_pos = i;
         }
-        json_array_append_new(jquery->ids, json_string(rec->id));
+        if (highest_modseq < rec->foldermodseq) {
+            highest_modseq = rec->foldermodseq;
+        }
+        json_array_append_new(query->ids, json_string(rec->id));
     }
-    if (jquery->anchor && !seen_anchor) {
-        json_decref(jquery->ids);
-        jquery->ids = json_array();
+    if (query->anchor && !seen_anchor) {
+        json_decref(query->ids);
+        query->ids = json_array();
     }
     if (result_pos >= 0) {
-        jquery->result_position = result_pos;
+        query->result_position = result_pos;
     }
 
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT, highest_modseq);
+    query->query_state = buf_release(&buf);
+    query->can_calculate_changes = _mboxquery_can_calculate_changes(mbquery);
+
 done:
-    _mboxquery_free(&query);
+    _mboxquery_free(&mbquery);
     return r;
 }
 
@@ -1232,9 +1264,6 @@ HIDDEN int jmap_mailbox_query(jmap_req_t *req)
         jmap_error(req, jmap_server_error(r));
         goto done;
     }
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
-    query.query_state = xstrdup(json_string_value(jstate));
-    json_decref(jstate);
 
     /* Build response */
     jmap_ok(req, jmap_query_reply(&query));
@@ -1245,10 +1274,25 @@ done:
     return 0;
 }
 
+struct mboxquerychanges_rock {
+    hash_table *removed;
+    modseq_t sincemodseq;
+};
+
+static int _mboxquerychanges_cb(const mbentry_t *mbentry, void *vrock)
+{
+    struct mboxquerychanges_rock *rock = vrock;
+    if (mbentry->foldermodseq > rock->sincemodseq) {
+        hash_insert(mbentry->uniqueid, (void*)1, rock->removed);
+    }
+    return 0;
+}
+
 HIDDEN int jmap_mailbox_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_querychanges query;
+    int r = 0;
 
     /* Parse arguments */
     json_t *err = NULL;
@@ -1262,10 +1306,81 @@ HIDDEN int jmap_mailbox_querychanges(jmap_req_t *req)
         goto done;
     }
 
-    /* Refuse all attempts to calculcate list updates */
-    jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+    modseq_t sincemodseq = atomodseq_t(query.since_querystate);
+    if (!sincemodseq) {
+        jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+        goto done;
+    }
+
+    /* Prepare query */
+    mboxquery_t *mbquery = _mboxquery_new(req, query.filter, query.sort);
+    if (!_mboxquery_can_calculate_changes(mbquery)) {
+        jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+        goto done;
+    }
+
+    /* Run the query */
+    mbquery->include_tombstones = 1;
+    mbquery->include_hidden = 1;
+    r = _mboxquery_run(mbquery);
+    if (r) goto done;
+
+    hash_table removed = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&removed, mbquery->result.count + 1, 0);
+    if (mbquery->need_role) {
+        /* The filter includes a condition on role (or hasAnyRole).
+         * We don't keep a history of annotations, so we can't tell
+         * if the mailbox was a match previously and now isn't.
+         * XXX the workaround is to report all mailboxes in removed,
+         * until we have a sane way of tracking annotation changes */
+
+        struct mboxquerychanges_rock rock = { &removed, sincemodseq };
+        int r = mboxlist_usermboxtree(req->accountid, req->authstate,
+                                      _mboxquerychanges_cb, &rock,
+                                      MBOXTREE_TOMBSTONES|MBOXTREE_DELETED);
+        if (r) goto done;
+    }
+
+    modseq_t highestmodseq = sincemodseq;
+    ssize_t i;
+    for (i = 0; i < mbquery->result.count; i++) {
+        mboxquery_record_t *mbrec = ptrarray_nth(&mbquery->result, i);
+        if (mbrec->mbtype & MBTYPE_DELETED) {
+            if (mbrec->foldermodseq > sincemodseq) {
+                hash_insert(mbrec->id, (void*)1, &removed);
+            }
+        }
+        else if (!jmap_hasrights_byname(req, mbrec->mboxname, ACL_LOOKUP)) {
+            if (mbrec->createdmodseq <= sincemodseq) {
+                hash_insert(mbrec->id, (void*)1, &removed);
+            }
+        }
+        else if (mbrec->foldermodseq > sincemodseq && mbrec->shared_mbtype != _MBOX_HIDDEN) {
+            json_array_append_new(query.added, json_pack("{s:s s:i}", "id", mbrec->id, "index", i));
+            hash_insert(mbrec->id, (void*)1, &removed);
+            if (highestmodseq < mbrec->foldermodseq) {
+                highestmodseq = mbrec->foldermodseq;
+            }
+        }
+    }
+    hash_iter *iter = hash_table_iter(&removed);
+    while (hash_iter_next(iter)) {
+        json_array_append_new(query.removed, json_string(hash_iter_key(iter)));
+    }
+    hash_iter_free(&iter);
+    free_hash_table(&removed, NULL);
+    _mboxquery_free(&mbquery);
+
+    /* Build response */
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT, highestmodseq);
+    query.new_querystate = buf_release(&buf);
+    jmap_ok(req, jmap_querychanges_reply(&query));
 
 done:
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+    }
     jmap_querychanges_fini(&query);
     jmap_parser_fini(&parser);
     return 0;
