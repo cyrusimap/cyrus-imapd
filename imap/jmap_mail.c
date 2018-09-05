@@ -5689,27 +5689,29 @@ static int _write_keywords(msgrecord_t *mr, strarray_t *keywords, int has_attach
         user_flags[userflag/32] |= 1<<(userflag&31);
     }
 
-    int i;
-    for (i = 0; i < keywords->count; i++) {
-        const char *flag = strarray_nth(keywords, i);
-        if (!strcasecmp(flag, "$Flagged")) {
-            system_flags |= FLAG_FLAGGED;
-        }
-        else if (!strcasecmp(flag, "$Answered")) {
-            system_flags |= FLAG_ANSWERED;
-        }
-        else if (!strcasecmp(flag, "$Seen")) {
-            system_flags |= FLAG_SEEN;
-        }
-        else if (!strcasecmp(flag, "$Draft")) {
-            system_flags |= FLAG_DRAFT;
-        }
-        else if (strcasecmp(flag, JMAP_HAS_ATTACHMENT_FLAG)) {
-            /* $HasAttachment is never set via JMAP keywords */
-            int userflag;
-            r = mailbox_user_flag(mbox, flag, &userflag, 1);
-            if (r) goto done;
-            user_flags[userflag/32] |= 1<<(userflag&31);
+    if (keywords) {
+        int i;
+        for (i = 0; i < keywords->count; i++) {
+            const char *flag = strarray_nth(keywords, i);
+            if (!strcasecmp(flag, "$Flagged")) {
+                system_flags |= FLAG_FLAGGED;
+            }
+            else if (!strcasecmp(flag, "$Answered")) {
+                system_flags |= FLAG_ANSWERED;
+            }
+            else if (!strcasecmp(flag, "$Seen")) {
+                system_flags |= FLAG_SEEN;
+            }
+            else if (!strcasecmp(flag, "$Draft")) {
+                system_flags |= FLAG_DRAFT;
+            }
+            else if (strcasecmp(flag, JMAP_HAS_ATTACHMENT_FLAG)) {
+                /* $HasAttachment is never set via JMAP keywords */
+                int userflag;
+                r = mailbox_user_flag(mbox, flag, &userflag, 1);
+                if (r) goto done;
+                user_flags[userflag/32] |= 1<<(userflag&31);
+            }
         }
     }
 
