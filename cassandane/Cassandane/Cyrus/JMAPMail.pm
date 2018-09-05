@@ -1677,6 +1677,20 @@ sub test_mailbox_set_role
     my $multi = $m{"Multi"};
     $self->assert_str_equals($sent->{role}, "sent");
     $self->assert_str_equals($multi->{role}, "archive");
+
+    xlog "remove a mailbox role";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => { "$id" => {
+                role => undef,
+            }
+        }}, "R1"],
+        ['Mailbox/get', {
+            ids => [$id], properties => ['role'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+    $self->assert_null($res->[1][1]{list}[0]{role});
 }
 
 sub test_mailbox_set_no_outbox_role
