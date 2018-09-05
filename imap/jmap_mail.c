@@ -3414,16 +3414,15 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
     int r = 0;
 
     json_array_foreach(ids, i, val) {
-        conversation_id_t cid = 0;
         conv_thread_t *thread;
         char email_id[26];
 
         const char *threadid = json_string_value(val);
-        cid = _cid_from_id(threadid);
 
-        if (cid) r = conversation_load_advanced(req->cstate, cid, &conv, CONV_WITHTHREAD);
-        if (r) goto done;
-        if (!conv.thread) {
+        memset(&conv, 0, sizeof(conversation_t));
+        r = conversation_load_advanced(req->cstate, _cid_from_id(threadid),
+                                       &conv, CONV_WITHTHREAD);
+        if (r || !conv.thread) {
             json_array_append_new(not_found, json_string(threadid));
             continue;
         }
@@ -3455,7 +3454,6 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
 
     r = 0;
 
-done:
     conversation_fini(&conv);
     return r;
 }
