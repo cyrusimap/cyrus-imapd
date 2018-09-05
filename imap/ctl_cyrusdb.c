@@ -125,12 +125,17 @@ static void usage(void)
     exit(-1);
 }
 
+struct fix_rock {
+    char *last_name;
+    int insert_intermediates;
+};
+
 /* Callback for use by process_mboxlist */
 static int fixmbox(const mbentry_t *mbentry,
                    void *rock)
 {
     int r;
-    char **last_name = (char **) rock;
+    struct fix_rock *frock = (struct fix_rock *) rock;
 
     if (mbentry->legacy_specialuse) {
         char *userid = mboxname_to_userid(mbentry->name);
@@ -164,9 +169,12 @@ static int fixmbox(const mbentry_t *mbentry,
         }
     }
     else {
-        if (!(mbentry->mbtype & MBTYPE_INTERMEDIATE) &&
-            !mboxname_isdeletedmailbox(mbentry->name, NULL) &&
-            !mboxname_contains_parent(mbentry->name, *last_name)) {
+        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+            frock->insert_intermediates = 0;
+        }
+        else if (frock->insert_intermediates &&
+                 !mboxname_isdeletedmailbox(mbentry->name, NULL) &&
+                 !mboxname_contains_parent(mbentry->name, frock->last_name)) {
             int r;
 
             syslog(LOG_NOTICE,
@@ -186,8 +194,8 @@ static int fixmbox(const mbentry_t *mbentry,
             }
         }
 
-        free(*last_name);
-        *last_name = xstrdupnull(mbentry->name);
+        free(frock->last_name);
+        frock->last_name = xstrdupnull(mbentry->name);
     }
 
     return 0;
@@ -195,11 +203,11 @@ static int fixmbox(const mbentry_t *mbentry,
 
 static void process_mboxlist(void)
 {
-    char *last_name = NULL;
+    struct fix_rock frock = { NULL, 1 };
 
     /* build a list of mailboxes - we're using internal names here */
-    mboxlist_allmbox(NULL, fixmbox, &last_name, 0);
-    free(last_name);
+    mboxlist_allmbox(NULL, fixmbox, &frock, MBOXTREE_INTERMEDIATES);
+    free(frock.last_name);
 
     /* enable or disable RACLs per config */
     mboxlist_set_racls(config_getswitch(IMAPOPT_REVERSEACLS));
