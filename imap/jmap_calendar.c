@@ -1520,7 +1520,7 @@ static int setcalendarevents_create(jmap_req_t *req,
     if (!json_object_get(event, "uid")) {
         json_object_set_new(event, "uid", json_string(uid));
     }
-    ical = jmapical_toical(event, oldical, &err);
+    ical = jmapical_toical(event, &err);
 
     if (err.code == JMAPICAL_ERROR_PROPS) {
         json_array_extend(invalid, err.props);
@@ -1680,7 +1680,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
     json_t *new_event = jmap_patchobject_apply(old_event, event_patch);
     memset(&err, 0, sizeof(jmapical_err_t));
-    ical = jmapical_toical(new_event, oldical, &err);
+    ical = jmapical_toical(new_event, &err);
     json_decref(old_event);
     json_decref(new_event);
 

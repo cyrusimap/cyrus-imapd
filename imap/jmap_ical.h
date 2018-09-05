@@ -114,10 +114,9 @@ json_t *jmapical_tojmap_all(icalcomponent *ical, json_t *props, jmapical_err_t *
 /* Convert the JMAP object obj to iCalendar.
  *
  * ojb:  must contain a JMAP calendar event
- * ical: optional iCalendar VEVENT to mix obj into
  * err:  optional error receiver
  */
-icalcomponent* jmapical_toical(json_t *obj, icalcomponent *ical, jmapical_err_t *err);
+icalcomponent* jmapical_toical(json_t *obj, jmapical_err_t *err);
 void icalcomponent_add_required_timezones(icalcomponent *ical);
 
 /* for CalDAV content negotiation */

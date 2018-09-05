@@ -96,7 +96,6 @@
 
 #define JMAPICAL_READ_MODE       0
 #define JMAPICAL_WRITE_MODE      (1<<0)
-#define JMAPICAL_UPDATE_MODE     (1<<1)
 #define JMAPICAL_EXC_MODE        (1<<8)
 
 typedef struct context {
@@ -2514,7 +2513,6 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     int pe;
     const char *dur_old, *dur, *val, *endzoneid;
     struct icaltimetype dtstart_old, dtstart;
-    int is_create = !(ctx->mode & JMAPICAL_UPDATE_MODE);
     json_t *locations;
     json_t *duration;
 
@@ -2528,8 +2526,7 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 
     /* Read new timezone */
     if (!json_is_null(json_object_get(event, "timeZone"))) {
-        pe = readprop(ctx, event, "timeZone",
-                      is_create && !ctx->is_allday, "s", &val);
+        pe = readprop(ctx, event, "timeZone", !ctx->is_allday, "s", &val);
         if (pe > 0) {
             /* Lookup the new timezone. */
             ctx->tzstart = tz_from_tzid(val);
@@ -2542,9 +2539,7 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     } else {
         ctx->tzstart = NULL;
     }
-    if (is_create) {
-        ctx->tzstart_old = ctx->tzstart;
-    }
+    ctx->tzstart_old = ctx->tzstart;
 
     /* Determine current end timezone */
     tzid = tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
@@ -2603,21 +2598,14 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     } else {
         ctx->tzend = ctx->tzend_old;
     }
-    if (is_create) {
-        ctx->tzend_old = endzoneid ? ctx->tzend : ctx->tzstart;
-    }
+    ctx->tzend_old = endzoneid ? ctx->tzend : ctx->tzstart;
     if (!endzoneid) {
         ctx->tzend = ctx->tzend_old;
     }
 
     /* Determine current duration */
-    if (!is_create) {
-        duration = duration_from_ical(comp);
-        dur_old = json_string_value(duration);
-    } else {
-        duration = NULL;
-        dur_old = "P0D";
-    }
+    duration = NULL;
+    dur_old = "P0D";
 
     /* Read new duration */
     pe = readprop(ctx, event, "duration", 0, "s", &dur);
@@ -2643,7 +2631,7 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 
     /* Read new start */
     dtstart = dtstart_old;
-    pe = readprop(ctx, event, "start", is_create, "s", &val);
+    pe = readprop(ctx, event, "start", 1, "s", &val);
     if (pe > 0) {
         if (!localdate_to_icaltime(val, &dtstart,
                                    ctx->tzstart, ctx->is_allday)) {
@@ -4118,7 +4106,8 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
 }
 
 /* Create or overwrite the iCalendar properties in VEVENT comp based on the
- * properties the JMAP calendar event.
+ * properties the JMAP calendar event. This writes a *complete* jsevent and
+ * does not implement patch object semantics.
  *
  * Collect all required timezone ids in ctx. 
  */
@@ -4128,23 +4117,11 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     int pe; /* parse error */
     const char *val = NULL;
     icalproperty *prop = NULL;
-    int is_create = !(ctx->mode & JMAPICAL_UPDATE_MODE);
     int is_exc = ctx->mode & JMAPICAL_EXC_MODE;
     json_t *overrides = NULL;
 
-    assert(is_create || comp);
-
-    if (!is_create && !is_exc) {
-        /* Read and write back the event, updated by the current changes */
-        context_t *fromctx = context_new(NULL, NULL, JMAPICAL_READ_MODE);
-        json_t *cur = calendarevent_from_ical(fromctx, comp);
-        json_object_update(cur, event);
-        event = cur;
-        context_free(fromctx);
-    } else {
-        /* Do not preserve any current contents */
-        json_incref(event);
-    }
+    /* Do not preserve any current contents */
+    json_incref(event);
 
     icaltimezone *utc = icaltimezone_get_utc_timezone();
     icaltimetype now = icaltime_current_time_with_zone(utc);
@@ -4168,7 +4145,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     }
 
     /* isAllDay */
-    readprop(ctx, event, "isAllDay", is_create, "b", &ctx->is_allday);
+    readprop(ctx, event, "isAllDay", 1, "b", &ctx->is_allday);
 
     /* start, duration, timeZone */
     startend_to_ical(ctx, comp, event);
@@ -4189,41 +4166,31 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         val = NULL;
         if (!json_is_null(json_object_get(event, "prodId"))) {
             pe = readprop(ctx, event, "prodId", 0, "s", &val);
-            if (pe > 0 || is_create) {
-                struct buf buf = BUF_INITIALIZER;
-                if (!val) {
-                    /* Use same product id like jcal.c */
-                    buf_setcstr(&buf, "-//CyrusJMAP.org/Cyrus ");
-                    buf_appendcstr(&buf, CYRUS_VERSION);
-                    buf_appendcstr(&buf, "//EN");
-                    val = buf_cstring(&buf);
-                }
-                /* Purge any PRODID from the component. It should
-                 * go into the enclosing VCALENDAR instead. */
-                remove_icalprop(comp, ICAL_PRODID_PROPERTY);
-
-                /* Set PRODID in the VCALENDAR */
-                icalcomponent *ical = icalcomponent_get_parent(comp);
-                remove_icalprop(ical, ICAL_PRODID_PROPERTY);
-                prop = icalproperty_new_prodid(val);
-                icalcomponent_add_property(ical, prop);
-                buf_free(&buf);
+            struct buf buf = BUF_INITIALIZER;
+            if (!val) {
+                /* Use same product id like jcal.c */
+                buf_setcstr(&buf, "-//CyrusJMAP.org/Cyrus ");
+                buf_appendcstr(&buf, CYRUS_VERSION);
+                buf_appendcstr(&buf, "//EN");
+                val = buf_cstring(&buf);
             }
+            /* Set PRODID in the VCALENDAR */
+            icalcomponent *ical = icalcomponent_get_parent(comp);
+            remove_icalprop(ical, ICAL_PRODID_PROPERTY);
+            prop = icalproperty_new_prodid(val);
+            icalcomponent_add_property(ical, prop);
+            buf_free(&buf);
         }
     }
 
     /* created */
-    if (is_create) {
-        dtprop_to_ical(comp, now, utc, 1, ICAL_CREATED_PROPERTY);
-    }
+    dtprop_to_ical(comp, now, utc, 1, ICAL_CREATED_PROPERTY);
 
     /* updated */
     dtprop_to_ical(comp, now, utc, 1, ICAL_DTSTAMP_PROPERTY);
 
     /* sequence */
-    if (is_create) {
-        icalcomponent_set_sequence(comp, 0);
-    }
+    icalcomponent_set_sequence(comp, 0);
 
     json_t *jprio = json_object_get(event, "priority");
     if (json_integer_value(jprio) >= 0 || json_integer_value(jprio) <= 9) {
@@ -4234,7 +4201,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     }
 
     /* title */
-    pe = readprop(ctx, event, "title", is_create, "s", &val);
+    pe = readprop(ctx, event, "title", 1, "s", &val);
     if (pe > 0) {
         icalcomponent_set_summary(comp, val);
     }
@@ -4347,7 +4314,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         } else {
             invalidprop(ctx, "status");
         }
-    } else if (!pe && is_create) {
+    } else if (!pe) {
         status = ICAL_STATUS_CONFIRMED;
     }
     if (status != ICAL_STATUS_NONE) {
@@ -4446,14 +4413,6 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         } else {
             invalidprop(ctx, "alerts");
         }
-    } else if (!pe && !is_create && ctx->tzstart_old != ctx->tzstart) {
-        /* The start timezone has changed but none of the alerts. */
-        /* This is where we would like to update the timezones of any VALARMs
-         * that have a TRIGGER value type of DATETIME (instead of the usual
-         * DURATION type). Unfortunately, these DATETIMEs are stored in UTC.
-         * Hence we can't tell if the event owner really wants to wake up
-         * at e.g. 1am UTC or if it just was close to a local datetime during
-         * creation of the iCalendar file. For now, do nothing about that. */
     }
 
     /* recurrenceOverrides - must be last to apply patches */
@@ -4483,55 +4442,30 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 }
 
 icalcomponent*
-jmapical_toical(json_t *obj, icalcomponent *src, jmapical_err_t *err)
+jmapical_toical(json_t *obj, jmapical_err_t *err)
 {
     icalcomponent *ical = NULL;
     icalcomponent *comp = NULL;
     context_t *ctx = NULL;
 
-    if (src) {
-        ical = icalcomponent_new_clone(src);
-        /* Locate the main VEVENT. */
-        for (comp = icalcomponent_get_first_component(ical,
-                                                      ICAL_VEVENT_COMPONENT);
-             comp;
-             comp = icalcomponent_get_next_component(ical,
-                                                     ICAL_VEVENT_COMPONENT)) {
-            if (!icalcomponent_get_first_property(comp,
-                                                  ICAL_RECURRENCEID_PROPERTY)) {
-                break;
-            }
-        }
-        if (!comp) {
-            if (err) err->code = JMAPICAL_ERROR_ICAL;
-            goto done;
-        }
-    } else {
-        /* Create a new VCALENDAR. */
-        ical = icalcomponent_new_vcalendar();
-        icalcomponent_add_property(ical, icalproperty_new_version("2.0"));
-        icalcomponent_add_property(ical, icalproperty_new_calscale("GREGORIAN"));
+    /* Create a new VCALENDAR. */
+    ical = icalcomponent_new_vcalendar();
+    icalcomponent_add_property(ical, icalproperty_new_version("2.0"));
+    icalcomponent_add_property(ical, icalproperty_new_calscale("GREGORIAN"));
 
-        /* Create a new VEVENT. */
-        icaltimezone *utc = icaltimezone_get_utc_timezone();
-        struct icaltimetype now =
-            icaltime_from_timet_with_zone(time(NULL), 0, utc);
-        comp = icalcomponent_new_vevent();
-        icalcomponent_set_sequence(comp, 0);
-        icalcomponent_set_dtstamp(comp, now);
-        icalcomponent_add_property(comp, icalproperty_new_created(now));
-        icalcomponent_add_component(ical, comp);
-    }
+    /* Create a new VEVENT. */
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+    struct icaltimetype now =
+        icaltime_from_timet_with_zone(time(NULL), 0, utc);
+    comp = icalcomponent_new_vevent();
+    icalcomponent_set_sequence(comp, 0);
+    icalcomponent_set_dtstamp(comp, now);
+    icalcomponent_add_property(comp, icalproperty_new_created(now));
+    icalcomponent_add_component(ical, comp);
 
     /* Convert the JMAP calendar event to ical. */
     ctx = context_new(NULL, err, JMAPICAL_WRITE_MODE);
-    if (src) {
-        ctx->mode |= JMAPICAL_UPDATE_MODE;
-    }
     ctx->uid = json_string_value(json_object_get(obj, "uid"));
-    if (!ctx->uid && src) {
-        ctx->uid = icalcomponent_get_uid(comp);
-    }
     if (!ctx->uid) {
         if (err) err->code = JMAPICAL_ERROR_UID;
         if (ical) icalcomponent_free(ical);
@@ -4621,7 +4555,7 @@ EXPORTED icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf)
         return NULL;
     }
 
-    ical = jmapical_toical(obj, NULL, NULL);
+    ical = jmapical_toical(obj, NULL);
 
     json_decref(obj);
 
