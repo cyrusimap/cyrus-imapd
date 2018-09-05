@@ -1347,27 +1347,6 @@ static int manage_attachments(struct transaction_t *txn,
     short *op;
     int r, ret = 0;
 
-    /* Open attachments collection for writing */
-    mailboxname = caldav_mboxname(httpd_userid, MANAGED_ATTACH);
-    r = mailbox_open_iwl(mailboxname, &attachments);
-    if (r) {
-        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-               mailboxname, error_message(r));
-        ret = HTTP_SERVER_ERROR;
-    }
-    else {
-        /* Open the WebDAV DB corresponding to the attachments collection */
-        webdavdb = mailbox_open_webdav(attachments);
-        if (!webdavdb) {
-            syslog(LOG_ERR, "webdav_open_mailbox(%s) failed",
-                   attachments->name);
-            ret = HTTP_SERVER_ERROR;
-        }
-    }
-    free(mailboxname);
-
-    if (ret) return ret;
-
     /* Create hash table of managed attachments in new resource */
     construct_hash_table(&mattach_table, 10, 1);
 
@@ -1392,6 +1371,30 @@ static int manage_attachments(struct transaction_t *txn,
 
                 param = icalproperty_get_managedid_parameter(prop);
                 if (!param) continue;
+
+                if (!attachments) {
+                    /* Open attachments collection for writing */
+                    mailboxname = caldav_mboxname(httpd_userid, MANAGED_ATTACH);
+                    r = mailbox_open_iwl(mailboxname, &attachments);
+                    if (r) {
+                        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                               mailboxname, error_message(r));
+                        ret = HTTP_SERVER_ERROR;
+                    }
+                    else {
+                        /* Open the WebDAV DB corresponding
+                           to the attachments collection */
+                        webdavdb = mailbox_open_webdav(attachments);
+                        if (!webdavdb) {
+                            syslog(LOG_ERR, "webdav_open_mailbox(%s) failed",
+                                   attachments->name);
+                            ret = HTTP_SERVER_ERROR;
+                        }
+                    }
+                    free(mailboxname);
+
+                    if (ret) goto done;
+                }
 
                 /* Find DAV record for the attachment with this managed-id */
                 mid = icalparameter_get_managedid(param);
@@ -1461,10 +1464,36 @@ static int manage_attachments(struct transaction_t *txn,
         }
     }
 
-    /* Update reference counts of attachments in hash table */
-    hash_enumerate(&mattach_table,
-                   (void(*)(const char*,void*,void*)) &update_refcount,
-                   attachments);
+    if (hash_numrecords(&mattach_table)) {
+        if (!attachments) {
+            /* Open attachments collection for writing */
+            mailboxname = caldav_mboxname(httpd_userid, MANAGED_ATTACH);
+            r = mailbox_open_iwl(mailboxname, &attachments);
+            if (r) {
+                syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                       mailboxname, error_message(r));
+                ret = HTTP_SERVER_ERROR;
+            }
+            else {
+                /* Open the WebDAV DB corresponding
+                   to the attachments collection */
+                webdavdb = mailbox_open_webdav(attachments);
+                if (!webdavdb) {
+                    syslog(LOG_ERR, "webdav_open_mailbox(%s) failed",
+                           attachments->name);
+                    ret = HTTP_SERVER_ERROR;
+                }
+            }
+            free(mailboxname);
+            
+            if (ret) goto done;
+        }
+
+        /* Update reference counts of attachments in hash table */
+        hash_enumerate(&mattach_table,
+                       (void(*)(const char*,void*,void*)) &update_refcount,
+                       attachments);
+    }
 
   done:
     free_hash_table(&mattach_table, free);
