@@ -872,28 +872,189 @@ sub test_mailbox_query_issue2286
     $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
 }
 
-sub test_mailbox_querychanges
+sub test_mailbox_querychanges_name
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
+    my $inboxId = $self->getinbox()->{id};
 
-    # This just tests that Mailbox/queryChanges isn't supported.
+    my $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            1 => {
+                parentId => $inboxId,
+                name => 'A',
+            },
+            2 => {
+                parentId => $inboxId,
+                name => 'B',
+            },
+            3 => {
+                parentId => $inboxId,
+                name => 'C',
+            },
+        },
+    }, "R1"]]);
+    my $mboxId1 = $res->[0][1]{created}{1}{id};
+    my $mboxId2 = $res->[0][1]{created}{2}{id};
+    my $mboxId3 = $res->[0][1]{created}{3}{id};
+    $self->assert_not_null($mboxId1);
+    $self->assert_not_null($mboxId2);
+    $self->assert_not_null($mboxId3);
 
-    xlog "get current mailbox state";
-    my $res = $jmap->CallMethods([['Mailbox/query', { }, "R1"]]);
+    $res = $jmap->CallMethods([['Mailbox/query', {
+        filter => { parentId => $inboxId },
+        sort => [{ property => "name" }],
+    }, "R1"]]);
     my $state = $res->[0][1]->{queryState};
     $self->assert_not_null($state);
-    $self->assert_equals(JSON::false, $res->[0][1]->{canCalculateChanges});
+    $self->assert_equals(JSON::true, $res->[0][1]->{canCalculateChanges});
 
-    xlog "get mailbox list updates";
     $res = $jmap->CallMethods([['Mailbox/queryChanges', {
-        filter => {},
         sinceQueryState => $state,
+        filter => { parentId => $inboxId },
+        sort => [{ property => "name" }],
     }, "R1"]]);
-    $self->assert_str_equals("error", $res->[0][0]);
-    $self->assert_str_equals("cannotCalculateChanges", $res->[0][1]{type});
-    $self->assert_str_equals("R1", $res->[0][2]);
+    $self->assert_str_equals($state, $res->[0][1]->{newQueryState});
+
+    # Move mailbox 1 to end of the list
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $mboxId1 => {
+                name => 'Z',
+            },
+        },
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{updated}{$mboxId1});
+
+    $res = $jmap->CallMethods([['Mailbox/queryChanges', {
+        sinceQueryState => $state,
+        filter => { parentId => $inboxId },
+        sort => [{ property => "name" }],
+    }, "R1"]]);
+    $self->assert_str_not_equals($state, $res->[0][1]->{newQueryState});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{removed}});
+    $self->assert_str_equals($mboxId1, $res->[0][1]{removed}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
+    $self->assert_str_equals($mboxId1, $res->[0][1]{added}[0]{id});
+
+    # position 0 -> the tombstone from 'A'
+    # position 1 -> keep 'B'
+    # position 2 -> keep 'Z'
+    # position 3 -> new mailbox name 'Z'
+    $self->assert_num_equals(3, $res->[0][1]{added}[0]{index});
+    $state = $res->[0][1]->{newQueryState};
+
+    # Keep mailbox 2 at start of the list and remove mailbox 3
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $mboxId2 => {
+                name => 'Y',
+            },
+        },
+        destroy => [$mboxId3],
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{updated}{$mboxId2});
+    $self->assert_str_equals($mboxId3, $res->[0][1]{destroyed}[0]);
+
+    $res = $jmap->CallMethods([['Mailbox/queryChanges', {
+        sinceQueryState => $state,
+        filter => { parentId => $inboxId },
+        sort => [{ property => "name" }],
+    }, "R1"]]);
+
+    $self->assert_str_not_equals($state, $res->[0][1]->{newQueryState});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{removed}});
+    my %removed = map { $_ => 1 } @{$res->[0][1]{removed}};
+    $self->assert(exists $removed{$mboxId2});
+    $self->assert(exists $removed{$mboxId3});
+
+    # position 0 -> null
+    # position 1 -> tombstone from 'B'
+    # position 2 -> deleted 'C'
+    # position 3 -> splice in 'Y'
+    # position 4 -> new position of 'Z'
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
+    $self->assert_str_equals($mboxId2, $res->[0][1]{added}[0]{id});
+    $self->assert_num_equals(3, $res->[0][1]{added}[0]{index});
+}
+
+sub test_mailbox_querychanges_role
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $inboxId = $self->getinbox()->{id};
+
+    my $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            1 => {
+                parentId => $inboxId,
+                name => 'A',
+            },
+            2 => {
+                parentId => $inboxId,
+                name => 'B',
+                role => 'trash',
+            },
+            3 => {
+                parentId => $inboxId,
+                name => 'C',
+                role => 'junk',
+            },
+        },
+    }, "R1"]]);
+    my $mboxId1 = $res->[0][1]{created}{1}{id};
+    my $mboxId2 = $res->[0][1]{created}{2}{id};
+    my $mboxId3 = $res->[0][1]{created}{3}{id};
+    $self->assert_not_null($mboxId1);
+    $self->assert_not_null($mboxId2);
+    $self->assert_not_null($mboxId3);
+
+    my $filter = { hasAnyRole => JSON::true, };
+    my $sort = [{ property => "name" }];
+
+    $res = $jmap->CallMethods([['Mailbox/query', {
+        filter => $filter, sort => $sort,
+    }, "R1"]]);
+    my $state = $res->[0][1]->{queryState};
+    $self->assert_not_null($state);
+    $self->assert_equals(JSON::true, $res->[0][1]->{canCalculateChanges});
+
+    $res = $jmap->CallMethods([['Mailbox/queryChanges', {
+        sinceQueryState => $state,
+        filter => $filter, sort => $sort,
+    }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{newQueryState});
+
+    # Remove mailbox 2 from results and add mailbox 1
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $mboxId1 => {
+                role => 'important',
+            },
+            $mboxId2 => {
+                role => undef,
+            },
+        },
+    }, "R1"]]);
+    $self->assert(exists $res->[0][1]{updated}{$mboxId1});
+    $self->assert(exists $res->[0][1]{updated}{$mboxId2});
+
+    $res = $jmap->CallMethods([['Mailbox/queryChanges', {
+        sinceQueryState => $state,
+        filter => $filter, sort => $sort,
+    }, "R1"]]);
+
+    $self->assert_str_not_equals($state, $res->[0][1]->{newQueryState});
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{removed}});
+    my %removed = map { $_ => 1 } @{$res->[0][1]{removed}};
+    $self->assert(exists $removed{$mboxId1});
+    $self->assert(exists $removed{$mboxId2});
+
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
+    $self->assert_str_equals($mboxId1, $res->[0][1]{added}[0]{id});
+    $self->assert_num_equals(0, $res->[0][1]{added}[0]{index});
 }
 
 sub test_mailbox_set
