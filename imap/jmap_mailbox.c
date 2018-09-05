@@ -1383,8 +1383,8 @@ struct mboxset_args {
     char *mbox_id;
     char *name;
     char *parent_id;
-    char *role;
-    char *specialuse;
+    char *role;       // empty string means delete
+    char *specialuse; // empty string means delete
     int is_subscribed; /* -1 if not set */
     int is_toplevel;
     int sortorder;
@@ -1511,6 +1511,10 @@ static void _mbox_setargs_parse(json_t *jargs,
             jmap_parser_invalid(parser, "role");
         }
     }
+    else if (jrole == json_null()) {
+        args->role = xstrdup("");
+        args->specialuse = xstrdup("");
+    }
     else if (JNOTNULL(jrole)) {
         jmap_parser_invalid(parser, "role");
     }
@@ -1601,7 +1605,7 @@ static int _mbox_set_annots(jmap_req_t *req,
         }
         buf_reset(&buf);
     }
-    else if (args->role) {
+    if (args->role) {
         buf_setcstr(&buf, args->role);
         static const char *annot = IMAP_ANNOT_NS "x-role";
         r = annotatemore_write(mboxname, annot, req->accountid, &buf);
