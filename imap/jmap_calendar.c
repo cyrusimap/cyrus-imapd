@@ -2730,15 +2730,7 @@ done:
 static int getCalendarPreferences(struct jmap_req *req)
 {
     /* Just a dummy implementation to make the JMAP web client happy. */
-    json_t *item = json_pack("[]");
-    json_t *res = json_pack("{}");
-    json_array_append_new(item, json_string("CalendarPreference/get"));
-    json_array_append_new(item, res);
-    json_object_set_new(res, "accountId", json_string(req->accountid));
-    json_array_append_new(item, json_string(req->tag));
-    json_array_append_new(req->response, item);
-
-    jmap_add_perf(req, res);
+    jmap_ok(req, json_pack("{}"));
 
     return 0;
 }

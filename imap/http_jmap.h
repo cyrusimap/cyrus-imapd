@@ -168,9 +168,6 @@ extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch);
 /* Create a patch-object that transforms a to b. */
 extern json_t *jmap_patchobject_create(json_t *a, json_t *b);
 
-/* Add performance stats to method response */
-extern void jmap_add_perf(jmap_req_t *req, json_t *res);
-
 
 /* JMAP request parser */
 struct jmap_parser {

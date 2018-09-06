@@ -2541,7 +2541,8 @@ EXPORTED json_t *jmap_patchobject_create(json_t *a, json_t *b)
     return patch;
 }
 
-EXPORTED void jmap_add_perf(jmap_req_t *req, json_t *res)
+/* Add performance stats to method response */
+static void jmap_add_perf(jmap_req_t *req, json_t *res)
 {
     if (req->do_perf) {
         struct rusage usage;
