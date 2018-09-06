@@ -5870,16 +5870,28 @@ static void _email_append(jmap_req_t *req,
     struct body *body = NULL;
     struct appendstate as;
 
+    /* Prepare flags */
+    strarray_t flags = STRARRAY_INITIALIZER;
+    int i;
+    for (i = 0; i < strarray_size(keywords); i++) {
+        const char *flag = jmap_keyword_to_imap(strarray_nth(keywords, i));
+        if (flag) strarray_append(&flags, flag);
+    }
+    if (has_attachment) {
+        strarray_add(&flags, "$hasattachment");
+    }
+
     /* Append the message to the mailbox */
     qdiffs[QUOTA_MESSAGE] = 1;
     r = append_setup_mbox(&as, mbox, req->userid, httpd_authstate,
             0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
     if (r) goto done;
-    r = append_fromstage(&as, &body, stage, internaldate, 0, NULL, 0, NULL);
+    r = append_fromstage(&as, &body, stage, internaldate, 0, flags.count ? &flags : NULL, 0, NULL);
     if (r) {
         append_abort(&as);
         goto done;
     }
+    strarray_fini(&flags);
     message_free_body(body);
     free(body);
 
@@ -5894,12 +5906,6 @@ static void _email_append(jmap_req_t *req,
     r = msgrecord_get_cid(mr, &cid);
     if (r) goto done;
     _thread_id_set_cid(cid, detail->thread_id);
-
-    /* Write keywords */
-    r = _write_keywords(mr, keywords, has_attachment);
-    if (r) goto done;
-    r = msgrecord_rewrite(mr);
-    if (r) goto done;
 
     /* Complete message creation */
     if (stage) {
