@@ -3683,10 +3683,9 @@ static int _email_keywords_add_msgrecord(struct email_keywords *keywords,
                         keywords->userid, error_message(r));
             }
         }
-        if (seenseq && seqset_ismember(seenseq, uid)) {
-            uintptr_t count = (uintptr_t) hash_lookup("$seen", &keywords->counts);
-            hash_insert("$seen", (void*) count+1, &keywords->counts);
-        }
+
+        if (seenseq && seqset_ismember(seenseq, uid))
+            _email_keywords_add_keyword(keywords, "$seen");
     }
 
     /* Count message */
