@@ -107,6 +107,7 @@ struct search_query {
     int want_expunged;
     uint32_t want_mbtype;
     int verbose;
+    int ignore_timer;
 
     /*
      * A query comprises multiple sub-queries logically ORed together.

@@ -1206,7 +1206,7 @@ static void cmdloop(void)
     prot_printf(imapd_out, " server ready\r\n");
 
     /* clear cancelled flag if present before the next command */
-    cmd_cancelled();
+    cmd_cancelled(/*insearch*/0);
 
     motd_file();
 
@@ -14011,7 +14011,7 @@ static void cmd_xforever(const char *tag)
         sleep(1);
         prot_printf(imapd_out, "* FOREVER %u\r\n", n++);
         prot_flush(imapd_out);
-        r = cmd_cancelled();
+        r = cmd_cancelled(/*insearch*/0);
     }
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag, error_message(r));

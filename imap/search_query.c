@@ -352,7 +352,7 @@ static int query_begin_index(search_query_t *query,
         if (r) goto out;
     }
 
-    r = cmd_cancelled();
+    r = cmd_cancelled(!query->ignore_timer);
 
 out:
     return r;
@@ -503,7 +503,7 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
         struct index_map *im = &state->map[msgno-1];
 
         if (!(msgno % 128)) {
-            r = cmd_cancelled();
+            r = cmd_cancelled(!query->ignore_timer);
             if (r) goto out;
         }
 
@@ -726,7 +726,7 @@ static int subquery_run_one_folder(search_query_t *query,
         struct index_map *im = &state->map[msgno-1];
 
         if (!(msgno % 128)) {
-            r = cmd_cancelled();
+            r = cmd_cancelled(!query->ignore_timer);
             if (r) goto out;
         }
 

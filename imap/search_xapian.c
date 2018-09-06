@@ -1133,7 +1133,7 @@ static int xapian_run_cb(void *data, size_t n, void *rock)
 {
     xapian_builder_t *bb = (xapian_builder_t *)rock;
 
-    int r = cmd_cancelled();
+    int r = cmd_cancelled(/*insearch*/1);
     if (r) goto done;
 
     struct conversations_state *cstate;
