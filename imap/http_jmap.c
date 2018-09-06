@@ -101,7 +101,10 @@ static void jmap_init(struct buf *serverinfo);
 static int  jmap_need_auth(struct transaction_t *txn);
 static int  jmap_auth(const char *userid);
 
-static int  jmap_settings(struct transaction_t *txn);
+static int jmap_settings(struct transaction_t *txn);
+static int jmap_download(struct transaction_t *txn);
+static int jmap_upload(struct transaction_t *txn);
+
 static int  jmap_initreq(jmap_req_t *req);
 static void jmap_finireq(jmap_req_t *req);
 
@@ -1392,7 +1395,7 @@ static char *parse_accept_header(const char **hdr)
 }
 
 
-EXPORTED int jmap_download(struct transaction_t *txn)
+static int jmap_download(struct transaction_t *txn)
 {
     const char *userid = txn->req_tgt.resource;
     const char *slash = strchr(userid, '/');
@@ -1678,7 +1681,7 @@ static int data_domain(const char *p, size_t n)
     return r;
 }
 
-EXPORTED int jmap_upload(struct transaction_t *txn)
+static int jmap_upload(struct transaction_t *txn)
 {
     strarray_t flags = STRARRAY_INITIALIZER;
 
