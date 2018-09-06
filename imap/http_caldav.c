@@ -1328,6 +1328,34 @@ static void update_refcount(const char *mid, short *op,
     }
 }
 
+static int open_attachments(const char *userid, struct mailbox **attachments,
+                            struct webdav_db **webdavdb)
+{
+    char *mailboxname = mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
+    int r, ret = 0;
+
+    /* Open attachments collection for writing */
+    r = mailbox_open_iwl(mailboxname, attachments);
+    if (r) {
+        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+               mailboxname, error_message(r));
+        ret = HTTP_SERVER_ERROR;
+    }
+    else {
+        /* Open the WebDAV DB corresponding to the attachments collection */
+        *webdavdb = mailbox_open_webdav(*attachments);
+        if (!*webdavdb) {
+            syslog(LOG_ERR,
+                   "webdav_open_mailbox(%s) failed", (*attachments)->name);
+            ret = HTTP_SERVER_ERROR;
+        }
+    }
+
+    free(mailboxname);
+
+    return ret;
+}
+
 /* Check an iCal object to see if managed attachments are being manipulated */
 static int manage_attachments(struct transaction_t *txn,
                               struct mailbox *mailbox,
@@ -1335,7 +1363,6 @@ static int manage_attachments(struct transaction_t *txn,
                               icalcomponent **oldical, char **schedule_address)
 {
     /* Compare any managed attachments in new and existing resources */
-    char *mailboxname = NULL;
     struct mailbox *attachments = NULL;
     struct webdav_db *webdavdb = NULL;
     struct hash_table mattach_table = HASH_TABLE_INITIALIZER;
@@ -1345,7 +1372,7 @@ static int manage_attachments(struct transaction_t *txn,
     icalparameter *param;
     const char *mid;
     short *op;
-    int r, ret = 0;
+    int ret = 0;
 
     /* Create hash table of managed attachments in new resource */
     construct_hash_table(&mattach_table, 10, 1);
@@ -1373,26 +1400,9 @@ static int manage_attachments(struct transaction_t *txn,
                 if (!param) continue;
 
                 if (!attachments) {
-                    /* Open attachments collection for writing */
-                    mailboxname = caldav_mboxname(httpd_userid, MANAGED_ATTACH);
-                    r = mailbox_open_iwl(mailboxname, &attachments);
-                    if (r) {
-                        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                               mailboxname, error_message(r));
-                        ret = HTTP_SERVER_ERROR;
-                    }
-                    else {
-                        /* Open the WebDAV DB corresponding
-                           to the attachments collection */
-                        webdavdb = mailbox_open_webdav(attachments);
-                        if (!webdavdb) {
-                            syslog(LOG_ERR, "webdav_open_mailbox(%s) failed",
-                                   attachments->name);
-                            ret = HTTP_SERVER_ERROR;
-                        }
-                    }
-                    free(mailboxname);
-
+                    /* Open attachments collection and its DAV DB for writing */
+                    ret = open_attachments(httpd_userid,
+                                           &attachments, &webdavdb);
                     if (ret) goto done;
                 }
 
@@ -1466,26 +1476,8 @@ static int manage_attachments(struct transaction_t *txn,
 
     if (hash_numrecords(&mattach_table)) {
         if (!attachments) {
-            /* Open attachments collection for writing */
-            mailboxname = caldav_mboxname(httpd_userid, MANAGED_ATTACH);
-            r = mailbox_open_iwl(mailboxname, &attachments);
-            if (r) {
-                syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                       mailboxname, error_message(r));
-                ret = HTTP_SERVER_ERROR;
-            }
-            else {
-                /* Open the WebDAV DB corresponding
-                   to the attachments collection */
-                webdavdb = mailbox_open_webdav(attachments);
-                if (!webdavdb) {
-                    syslog(LOG_ERR, "webdav_open_mailbox(%s) failed",
-                           attachments->name);
-                    ret = HTTP_SERVER_ERROR;
-                }
-            }
-            free(mailboxname);
-            
+            /* Open attachments collection and its DAV DB for writing */
+            ret = open_attachments(httpd_userid, &attachments, &webdavdb);
             if (ret) goto done;
         }
 
@@ -2742,7 +2734,6 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     struct index_record record;
     char *schedule_address = NULL;
     const char *etag = NULL, **hdr;
-    char *mailboxname = NULL;
     time_t lastmod = 0;
     icalcomponent *ical = NULL, *comp, *nextc, *master = NULL;
     icalcomponent_kind kind;
@@ -2855,21 +2846,9 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
         else goto done;
     }
 
-    /* Open attachments collection for writing */
-    mailboxname = caldav_mboxname(httpd_userid, MANAGED_ATTACH);
-    r = mailbox_open_iwl(mailboxname, &attachments);
-    if (r) {
-        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-               mailboxname, error_message(r));
-        txn->error.desc = error_message(r);
-        ret = HTTP_SERVER_ERROR;
-        free(mailboxname);
-        goto done;
-    }
-    free(mailboxname);
-
-    /* Open the WebDAV DB corresponding to the attachments collection */
-    webdavdb = webdav_open_mailbox(attachments);
+    /* Open attachments collection and its DAV DB for writing */
+    ret = open_attachments(httpd_userid, &attachments, &webdavdb);
+    if (ret) goto done;
 
     if (mid) {
         /* Locate first ATTACH property with this MANAGED-ID */
@@ -3174,7 +3153,6 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     free(schedule_address);
     if (aprop) icalproperty_free(aprop);
     if (ical) icalcomponent_free(ical);
-    if (webdavdb) webdav_close(webdavdb);
     if (caldavdb) caldav_close(caldavdb);
     mailbox_close(&attachments);
     mailbox_close(&calendar);
