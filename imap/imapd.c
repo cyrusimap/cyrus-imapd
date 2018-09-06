@@ -12778,6 +12778,42 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
     return 1;
 }
 
+static void add_intermediates(const char *extname, struct list_rock *lrock)
+{
+    mbname_t *mbname = mbname_from_extname(extname,
+                                           &imapd_namespace, imapd_userid);
+    strarray_t inter = STRARRAY_INITIALIZER;
+
+    /* build a list of "missing" ancestors (youngest to oldest) */
+    while (strarray_size(mbname_boxes(mbname))) {
+        free(mbname_pop_boxes(mbname));
+
+        extname = mbname_extname(mbname, &imapd_namespace, imapd_userid);
+        if (!extname) break;  /* root of hierarchy */
+
+        if (lrock->last_name &&
+            mboxname_is_prefix(lrock->last_name, extname)) break;
+
+        strarray_push(&inter, extname);
+    }
+    mbname_free(&mbname);
+
+    /* output the ancestors (oldest to youngest) */
+    char *ancestor;
+    while ((ancestor = strarray_pop(&inter))) {
+        mbentry_t *mbentry = NULL;
+
+        if (!mboxlist_lookup_allow_all(ancestor, &mbentry, NULL)) {
+            mbentry->mbtype |= MBTYPE_INTERMEDIATE;  /* force \NonExistent */
+            perform_output(ancestor, mbentry, lrock);
+        }
+
+        mboxlist_entry_free(&mbentry);
+        free(ancestor);
+    }
+    strarray_fini(&inter);
+}
+
 /* callback for mboxlist_findall
  * used when the SUBSCRIBED selection option is NOT given */
 static int list_cb(struct findall_data *data, void *rockp)
@@ -12808,6 +12844,15 @@ static int list_cb(struct findall_data *data, void *rockp)
 
     else if (!(rock->last_attributes & MBOX_ATTRIBUTE_HASCHILDREN))
         rock->last_attributes |= MBOX_ATTRIBUTE_HASNOCHILDREN;
+
+    /* do we need to add "missing" intermediates? */
+    if ((rock->listargs->sel & LIST_SEL_INTERMEDIATES) &&
+        ((rock->listargs->sel & LIST_SEL_DAV) ||
+         !(data->mbentry->mbtype & MBTYPES_DAV)) &&
+        !mboxname_contains_parent(data->extname, rock->last_name)) {
+
+        add_intermediates(data->extname, rock);
+    }
 
     if (!perform_output(data->extname, data->mbentry, rock))
         return 0;
