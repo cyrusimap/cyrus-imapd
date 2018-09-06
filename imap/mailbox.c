@@ -1741,9 +1741,10 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
 
     /* THRID got inserted before cache_crc32 in version 12 */
     if (version < 13) {
-        if (dirty) return 0;
         record->cache_crc = ntohl(*((bit32 *)(buf+88)));
 
+        if (dirty) return 0;
+        /* check CRC32 */
         crc = crc32_map(buf, 92);
         if (crc != ntohl(*((bit32 *)(buf+92))))
             return IMAP_MAILBOX_CHECKSUM;
@@ -1757,8 +1758,9 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
 
     /* createdmodseq was added in version 16, pushing the CRCs down */
     if (version < 16) {
-        if (dirty) return 0;
         record->cache_crc = ntohl(*((bit32 *)(buf+96)));
+
+        if (dirty) return 0;
         /* check CRC32 */
         crc = crc32_map(buf, 100);
         if (crc != ntohl(*((bit32 *)(buf+100))))
@@ -1770,7 +1772,6 @@ static int mailbox_buf_to_index_record(const char *buf, int version,
     record->cache_crc = ntohl(*((bit32 *)(buf+OFFSET_CACHE_CRC)));
 
     if (dirty) return 0;
-
     /* check CRC32 */
     crc = crc32_map(buf, OFFSET_RECORD_CRC);
     if (crc != ntohl(*((bit32 *)(buf+OFFSET_RECORD_CRC))))
