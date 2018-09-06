@@ -12481,6 +12481,7 @@ sub test_email_copy_hasattachment
                     },
                     keywords => {
                         'foo' => JSON::true,
+                        '$seen' => JSON::true,
                     },
                     subject => 'hello',
                     bodyStructure => {
@@ -12534,7 +12535,11 @@ sub test_email_copy_hasattachment
             properties => ['keywords'],
         }, 'R1']
     ]);
-    my $wantKeywords = { '$hasattachment' => JSON::true, };
+    my $wantKeywords = {
+        '$hasattachment' => JSON::true,
+        foo => JSON::true,
+        '$seen' => JSON::true,
+    };
     $self->assert_deep_equals($wantKeywords, $res->[0][1]{list}[0]{keywords});
 }
 
