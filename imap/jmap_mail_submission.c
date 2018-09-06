@@ -373,9 +373,10 @@ static void _emailsubmission_create(jmap_req_t *req,
     if (r) {
         int i, max = 0;
         json_t *invalid = NULL;
+        const char *desc = smtpclient_get_resp_text(sm);
 
         syslog(LOG_ERR, "jmap: can't create message submission: %s",
-                error_message(r));
+               desc ? desc : error_message(r));
 
         switch (r) {
         case IMAP_MESSAGE_TOO_LARGE:
@@ -405,18 +406,35 @@ static void _emailsubmission_create(jmap_req_t *req,
             break;
 
         case IMAP_REMOTE_DENIED: {
-            const char *desc = smtpclient_get_resp_text(sm);
+            char *err = NULL;
+            const char *p;
+
             if (smtpclient_has_ext(sm, "ENHANCEDSTATUSCODES")) {
-                const char *p = strchr(desc, ' ');
-                if (p) desc = p+1;
+                p = strchr(desc, ' ');
+                if (p) {
+                    desc = p+1;
+                    while (*desc == ' ') desc++;  /* trim leading whitespace */
+                }
             }
-            *set_err = json_pack("{s:s s:s}", "type", "forbiddenToSend",
-                                 "description", desc);
+            if ((p = strstr(desc, "[jmapError:"))) {
+                p += 11;
+                const char *q = strchr(p, ']');
+                if (q) {
+                    err = xstrndup(p, q - p);
+                    desc = q+1;
+                    while (*desc == ' ') desc++;  /* trim leading whitespace */
+                }
+            }
+            if (!err) err = xstrdup("forbiddenToSend");
+            *set_err = json_pack("{s:s s:s}",
+                                 "type", err, "description", desc);
+            free(err);
             break;
         }
 
         default:
-            *set_err = json_pack("{s:s}", "type", "smtpProtocolError");
+            *set_err = json_pack("{s:s s:s}", "type", "smtpProtocolError",
+                                 "description", desc);
             break;
         }
     }
