@@ -803,7 +803,7 @@ static int setContactGroups(struct jmap_req *req)
         json_object_del(arg, "addressbookId");
         addressbookId = NULL;
 
-        if (!jmap_hasrights_byname(req, mboxname, DACL_WRITE)) {
+        if (!jmap_hasrights_byname(req, mboxname, DACL_WRITECONT)) {
             json_array_append_new(invalid, json_string("addressbookId"));
             json_t *err = json_pack("{s:s, s:o}",
                                     "type", "invalidProperties",
@@ -862,7 +862,7 @@ static int setContactGroups(struct jmap_req *req)
         olduid = cdata->dav.imap_uid;
         resource = xstrdup(cdata->dav.resource);
 
-        if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_WRITE)) {
+        if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_WRITECONT)) {
             int rights = jmap_myrights_byname(req, cdata->dav.mailbox);
             json_t *err = json_pack("{s:s}", "type",
                                     rights & ACL_READ ?
@@ -888,6 +888,14 @@ static int setContactGroups(struct jmap_req *req)
             const char *mboxname =
                 mboxname_abook(req->accountid, json_string_value(abookid));
             if (strcmp(mboxname, cdata->dav.mailbox)) {
+                if (!jmap_hasrights_byname(req, mboxname, DACL_WRITECONT)) {
+                    json_t *err = json_pack("{s:s s:[s]}",
+                                            "type", "invalidProperties",
+                                            "properties", "addressbookId");
+                    json_object_set_new(set.not_updated, uid, err);
+                    free(resource);
+                    continue;
+                }
                 /* move */
                 r = mailbox_open_iwl(mboxname, &newmailbox);
                 if (r) {
@@ -1007,7 +1015,7 @@ static int setContactGroups(struct jmap_req *req)
         }
         olduid = cdata->dav.imap_uid;
 
-        if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_WRITE)) {
+        if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_RMRSRC)) {
             int rights = jmap_myrights_byname(req, cdata->dav.mailbox);
             json_t *err = json_pack("{s:s}", "type",
                                     rights & ACL_READ ?
@@ -3064,12 +3072,11 @@ static int setContacts(struct jmap_req *req)
                 mboxname_abook(req->accountid, json_string_value(abookid));
             if (strcmp(mboxname, cdata->dav.mailbox)) {
                 /* move */
-                if (!jmap_hasrights_byname(req, mboxname, DACL_WRITE)) {
+                if (!jmap_hasrights_byname(req, mboxname, DACL_WRITECONT)) {
                     json_t *err = json_pack("{s:s s:[s]}",
                                             "type", "invalidProperties",
                                             "properties", "addressbookId");
                     json_object_set_new(set.not_updated, uid, err);
-                    jmap_closembox(req, &mailbox);
                     continue;
                 }
                 r = jmap_openmbox(req, mboxname, &newmailbox, 1);
