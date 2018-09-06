@@ -10126,6 +10126,7 @@ sub test_email_import
     }, "R1"]]);
     $self->assert_str_equals("Email/import", $res->[0][0]);
     $self->assert_str_equals("alreadyExists", $res->[0][1]->{notCreated}{"1"}{type});
+    $self->assert_not_null($res->[0][1]->{notCreated}{"1"}{existingId});
 }
 
 sub test_email_import_error
@@ -12449,6 +12450,7 @@ sub test_email_copy
     ]);
 
    $self->assert_str_equals('alreadyExists', $res->[0][1]->{notCreated}{1}{type});
+   $self->assert_not_null($res->[0][1]->{notCreated}{1}{existingId});
 }
 
 sub test_email_copy_hasattachment
