@@ -5684,63 +5684,6 @@ static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
     mboxevent_free(&mboxevent);
 }
 
-static int _write_keywords(msgrecord_t *mr, strarray_t *keywords, int has_attachment)
-{
-    uint32_t system_flags = 0;
-    uint32_t user_flags[MAX_USER_FLAGS/32];
-    memset(user_flags, 0, sizeof(user_flags));
-    int r = 0;
-
-    struct mailbox *mbox = NULL;
-    r = msgrecord_get_mailbox(mr, &mbox);
-    if (r) goto done;
-
-    if (has_attachment && config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT)) {
-        /* Set the $HasAttachment flag. We mainly use that to support
-         * the hasAttachment filter property in jmap_email_query */
-        int userflag;
-        r = mailbox_user_flag(mbox, JMAP_HAS_ATTACHMENT_FLAG, &userflag, 1);
-        if (r) goto done;
-        user_flags[userflag/32] |= 1<<(userflag&31);
-    }
-
-    if (keywords) {
-        int i;
-        for (i = 0; i < keywords->count; i++) {
-            const char *flag = strarray_nth(keywords, i);
-            if (!strcasecmp(flag, "$Flagged")) {
-                system_flags |= FLAG_FLAGGED;
-            }
-            else if (!strcasecmp(flag, "$Answered")) {
-                system_flags |= FLAG_ANSWERED;
-            }
-            else if (!strcasecmp(flag, "$Seen")) {
-                system_flags |= FLAG_SEEN;
-            }
-            else if (!strcasecmp(flag, "$Draft")) {
-                system_flags |= FLAG_DRAFT;
-            }
-            else if (strcasecmp(flag, JMAP_HAS_ATTACHMENT_FLAG)) {
-                /* $HasAttachment is never set via JMAP keywords */
-                int userflag;
-                r = mailbox_user_flag(mbox, flag, &userflag, 1);
-                if (r) goto done;
-                user_flags[userflag/32] |= 1<<(userflag&31);
-            }
-        }
-    }
-
-    r = msgrecord_add_systemflags(mr, system_flags);
-    if (r) goto done;
-
-    r = msgrecord_set_userflags(mr, user_flags);
-    if (r) goto done;
-
-done:
-    return r;
-}
-
-
 struct email_append_detail {
     char blob_id[42];
     char email_id[26];
@@ -5881,7 +5824,7 @@ static void _email_append(jmap_req_t *req,
         strarray_add(&flags, "$hasattachment");
     }
 
-    /* Append the message to the mailbox */
+    /* Append the message to the mailbox. */
     qdiffs[QUOTA_MESSAGE] = 1;
     r = append_setup_mbox(&as, mbox, req->userid, httpd_authstate,
             0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
@@ -7575,6 +7518,9 @@ static void _email_create(jmap_req_t *req,
         json_t *jval;
         const char *keyword;
         json_object_foreach(jkeywords, keyword, jval) {
+            if (!strcasecmp(keyword, JMAP_HAS_ATTACHMENT_FLAG)) {
+                continue;
+            }
             strarray_append(&keywords, keyword);
         }
     }
@@ -7750,10 +7696,14 @@ static void _email_update_free(struct email_update *update)
     free(update);
 }
 
-static int _email_update_setflags(json_t *keywords, int patch_keywords,
-                                  struct seqset *add_seen_uids,
-                                  struct seqset *del_seen_uids,
-                                  msgrecord_t *mrw)
+/* Set or patch the JMAP keywords on message record mrw.
+ * If add_seen_uids or del_seen_uids is not NULL, then
+ * the record UID is added to respective sequence set,
+ * if the flag must be set or deleted. */
+static int _email_setflags(json_t *keywords, int patch_keywords,
+                           struct seqset *add_seen_uids,
+                           struct seqset *del_seen_uids,
+                           msgrecord_t *mrw)
 {
     uint32_t system_flags = 0, internal_flags = 0;
     struct mailbox *mbox = NULL;
@@ -7818,10 +7768,6 @@ static int _email_update_setflags(json_t *keywords, int patch_keywords,
             else
                 system_flags &= ~FLAG_DRAFT;
         }
-        else if (!strcasecmp(keyword, JMAP_HAS_ATTACHMENT_FLAG)) {
-            /* $HasAttachment is read-only. Ignore. */
-            continue;
-        }
         else {
             int userflag;
             r = mailbox_user_flag(mbox, keyword, &userflag, 1);
@@ -7873,6 +7819,9 @@ static void _email_update_parse(json_t *jemail,
                 jmap_parser_pop(parser);
                 continue;
             }
+            else if (!strcasecmp(keyword, JMAP_HAS_ATTACHMENT_FLAG)) {
+                continue;
+            }
             /* At least one keyword gets patched */
             update->patch_keywords = 1;
             /* Normalize keywords to lowercase */
@@ -7895,6 +7844,9 @@ static void _email_update_parse(json_t *jemail,
                 jmap_parser_push(parser, "keywords");
                 jmap_parser_invalid(parser, keyword);
                 jmap_parser_pop(parser);
+                continue;
+            }
+            else if (!strcasecmp(keyword, JMAP_HAS_ATTACHMENT_FLAG)) {
                 continue;
             }
             buf_setcstr(&buf, keyword);
@@ -8886,7 +8838,7 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
 
             /* Write keywords */
             msgrecord_t *mrw = msgrecord_from_uid(plan->mbox, uidrec->uid);
-            int r = _email_update_setflags(keywords, patch_keywords, add_seenseq, del_seenseq, mrw);
+            int r = _email_setflags(keywords, patch_keywords, add_seenseq, del_seenseq, mrw);
             msgrecord_unref(&mrw);
             if (r) {
                 json_object_set_new(bulk->set_errors, email_id, jmap_server_error(r));
@@ -9274,6 +9226,9 @@ static void _email_import(jmap_req_t *req,
     const json_t *val;
     const char *keyword;
     json_object_foreach(json_object_get(jemail_import, "keywords"), keyword, val) {
+        if (!strcasecmp(keyword, JMAP_HAS_ATTACHMENT_FLAG)) {
+            continue;
+        }
         strarray_append(&keywords, keyword);
     }
 
@@ -9552,10 +9507,10 @@ static int _email_copy_checkmbox_cb(const mbentry_t *mbentry, void *_rock)
 
 struct _email_copy_writeprops_rock {
     /* Input values */
-    jmap_req_t *req;       /* Context with mailbox cache */
-    time_t internal_date;  /* Always set */
-    strarray_t *keywords;  /* Only set if not NULL */
-    int has_attachment;    /* Only set if keywords is not NULL */
+    jmap_req_t *req;
+    time_t internal_date;
+    json_t *keywords;
+    int has_attachment;
     /* Return values */
     conversation_id_t cid; /* Thread id of copied message */
     uint32_t size;         /* Byte size of copied message */
@@ -9566,6 +9521,7 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
     struct _email_copy_writeprops_rock *rock = _rock;
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
+    jmap_req_t *req = rock->req;
 
     if (rec->part) {
         return 0;
@@ -9575,13 +9531,70 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
     int r = jmap_openmbox(rock->req, rec->mboxname, &mbox, /*rw*/1);
     if (!r) r = msgrecord_find(mbox, rec->uid, &mr);
     if (!r) r = msgrecord_set_internaldate(mr, rock->internal_date);
-    if (!r) r = _write_keywords(mr, rock->keywords, rock->has_attachment);
+    if (!r) {
+        /* Write the keywords. There's lots of ceremony around seen.db */
+        struct seen *seendb = NULL;
+        struct seqset *seenseq = NULL;
+        struct seqset *addseen = NULL;
+        struct seqset *delseen = NULL;
+
+        /* Read the current seen sequence from seen.db */
+        int need_seendb = !mailbox_internal_seen(mbox, req->userid);
+        if (need_seendb) {
+            delseen = seqset_init(mbox->i.last_uid, SEQ_SPARSE);
+            addseen = seqset_init(mbox->i.last_uid, SEQ_SPARSE);
+            struct seendata sd = SEENDATA_INITIALIZER;
+            r = seen_open(req->userid, SEEN_CREATE, &seendb);
+            if (!r) r = seen_lockread(seendb, mbox->uniqueid, &sd);
+            if (!r) {
+                seenseq = seqset_parse(sd.seenuids, NULL, sd.lastuid);
+                seen_freedata(&sd);
+            }
+        }
+
+        /* Write the flags on the record */
+        if (!r) r = _email_setflags(rock->keywords, 0, addseen, delseen, mr);
+
+        /* Write back changes to seen.db */
+        if (!r && need_seendb && (addseen->len || delseen->len)) {
+            if (delseen->len) {
+                struct seqset *newseen = seqset_init(mbox->i.last_uid, SEQ_SPARSE);
+                uint32_t uid;
+                while ((uid = seqset_getnext(seenseq))) {
+                    if (!seqset_ismember(delseen, uid)) {
+                        seqset_add(newseen, uid, 1);
+                    }
+                }
+                seqset_free(seenseq);
+                seenseq = newseen;
+            }
+            else if (addseen->len) {
+                seqset_add(seenseq, rec->uid, 1);
+            }
+
+            struct seendata sd = SEENDATA_INITIALIZER;
+            sd.seenuids = seqset_cstring(seenseq);
+            if (!sd.seenuids) sd.seenuids = xstrdup("");
+            sd.lastread = time(NULL);
+            sd.lastchange = mbox->i.last_appenddate;
+            sd.lastuid = mbox->i.last_uid;
+            r = seen_write(seendb, mbox->uniqueid, &sd);
+            seen_freedata(&sd);
+        }
+
+        seqset_free(delseen);
+        seqset_free(addseen);
+        seqset_free(seenseq);
+        seen_close(&seendb);
+    }
     if (!r) r = msgrecord_rewrite(mr);
+    if (r) goto done;
 
     /* Read output values */
     if (!rock->cid) rock->cid = rec->cid;
     if (!rock->size) r = msgrecord_get_size(mr, &rock->size);
 
+done:
     if (mr) msgrecord_unref(&mr);
     jmap_closembox(rock->req, &mbox);
     return r;
@@ -9621,6 +9634,60 @@ done:
     return r;
 }
 
+struct emailcopy_pickrecord_rock {
+    jmap_req_t *req;
+    struct mailbox *mbox;
+    msgrecord_t *mr;
+    struct email_keywords keywords;
+    int gather_keywords;
+};
+
+static int _email_copy_pickrecord_cb(const conv_guidrec_t *rec, void *vrock)
+{
+    struct emailcopy_pickrecord_rock *rock = vrock;
+    jmap_req_t *req = rock->req;
+
+    /* Make sure we are allowed to read this mailbox */
+    if (!jmap_hasrights_byname(req, rec->mboxname, ACL_READ)) return 0;
+
+    struct mailbox *mbox = NULL;
+    msgrecord_t *mr = NULL;
+
+    /* Check if this record is expunged */
+    int r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
+    if (r) goto done;
+
+    r = msgrecord_find(mbox, rec->uid, &mr);
+    if (r) goto done;
+    uint32_t system_flags;
+    uint32_t internal_flags;
+    r = msgrecord_get_systemflags(mr, &system_flags);
+    if (!r) msgrecord_get_internalflags(mr, &internal_flags);
+    if (system_flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED) {
+        msgrecord_unref(&mr);
+        jmap_closembox(req, &mbox);
+        goto done;
+    }
+
+    /* Aggregate message record flags into JMAP keywords */
+    if (rock->gather_keywords) {
+        _email_keywords_add_msgrecord(&rock->keywords, mr);
+    }
+
+    /* Keep this message record as source to copy from? */
+    if (!rock->mbox) {
+        rock->mbox = mbox;
+        rock->mr = mr;
+    }
+    else {
+        msgrecord_unref(&mr);
+        jmap_closembox(req, &mbox);
+    }
+
+done:
+    return r;
+}
+
 static void _email_copy(jmap_req_t *req, json_t *copy_email,
                         const char *from_account_id,
                         const char *to_account_id,
@@ -9630,37 +9697,12 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     struct mailbox *src_mbox = NULL;
     msgrecord_t *src_mr = NULL;
     char *src_mboxname = NULL;
-    uint32_t src_uid = 0;
     int r = 0;
 
     const char *email_id = json_string_value(json_object_get(copy_email, "id"));
     const char *blob_id = _guid_from_id(email_id);
-
-    /* Lookup mailbox names and make sure they are all writeable */
-    struct _email_copy_checkmbox_rock checkmbox_rock = {
-        req, json_object_get(copy_email, "mailboxIds"), &dst_mboxnames
-    };
-    r = mboxlist_usermboxtree(to_account_id, httpd_authstate,
-                              _email_copy_checkmbox_cb, &checkmbox_rock, 0);
-    if (r != IMAP_OK_COMPLETED) {
-        if (r == 0 || r == IMAP_PERMISSION_DENIED) {
-            *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
-                    "properties", "mailboxIds");
-            r = 0;
-        }
-        goto done;
-    }
-
-    /* Find email to copy */
-    r = _email_find_in_account(req, from_account_id, email_id, &src_mboxname, &src_uid);
-    if (r) {
-        if (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED) {
-            *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
-                    "properties", "id");
-            r = 0;
-        }
-        goto done;
-    }
+    uint32_t src_size = 0;
+    json_t *new_keywords = NULL;
 
     /* Check if email already exists in to_account */
     struct _email_exists_rock data = { req, 0 };
@@ -9679,11 +9721,82 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
         goto done;
     }
 
-    /* Read message record */
-    r = jmap_openmbox(req, src_mboxname, &src_mbox, /*rw*/0);
-    if (r) goto done;
-    r = msgrecord_find(src_mbox, src_uid, &src_mr);
-    if (r) goto done;
+    /* Lookup mailbox names and make sure they are all writeable */
+    struct _email_copy_checkmbox_rock checkmbox_rock = {
+        req, json_object_get(copy_email, "mailboxIds"), &dst_mboxnames
+    };
+    r = mboxlist_usermboxtree(to_account_id, httpd_authstate,
+                              _email_copy_checkmbox_cb, &checkmbox_rock, 0);
+    if (r != IMAP_OK_COMPLETED) {
+        if (r == 0 || r == IMAP_PERMISSION_DENIED) {
+            *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                    "properties", "mailboxIds");
+            r = 0;
+        }
+        goto done;
+    }
+
+    /* Pick source message record and gather JMAP keywords */
+    new_keywords = json_deep_copy(json_object_get(copy_email, "keywords"));
+    if (json_is_null(new_keywords)) {
+        new_keywords = NULL;
+    }
+
+    hash_table seenseq_by_mbox_id = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&seenseq_by_mbox_id, 32, 0);
+    struct emailcopy_pickrecord_rock pickrecord_rock = {
+        req, NULL, NULL, _EMAIL_KEYWORDS_INITIALIZER, 0
+    };
+    if (!new_keywords) {
+        _email_keywords_init(&pickrecord_rock.keywords, req->userid, &seenseq_by_mbox_id);
+        pickrecord_rock.gather_keywords = 1;
+    }
+    if (strcmp(from_account_id, req->userid)) {
+        struct conversations_state *mycstate = NULL;
+        r = conversations_open_user(from_account_id, &mycstate);
+        if (!r) r = conversations_guid_foreach(mycstate, blob_id,
+                _email_copy_pickrecord_cb, &pickrecord_rock);
+        if (!r) r = conversations_commit(&mycstate);
+    }
+    else {
+        r = conversations_guid_foreach(req->cstate, blob_id,
+                _email_copy_pickrecord_cb, &pickrecord_rock);
+    }
+    if (!r && pickrecord_rock.mbox) {
+        src_mbox = pickrecord_rock.mbox;
+        src_mr = pickrecord_rock.mr;
+        if (!new_keywords) {
+            new_keywords = _email_keywords_to_jmap(&pickrecord_rock.keywords);
+        }
+        r = msgrecord_get_size(src_mr, &src_size);
+    }
+    else if (!r) {
+        r = IMAP_NOTFOUND;
+    }
+    free_hash_table(&seenseq_by_mbox_id, (void (*)(void *)) seqset_free);
+    _email_keywords_fini(&pickrecord_rock.keywords);
+    if (r) {
+        if (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED) {
+            *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                    "properties", "id");
+            r = 0;
+        }
+        goto done;
+    }
+    if (json_object_get(copy_email, "keywords") ||
+        !config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT)) {
+        /* We either read the keywords from the client, or this server
+         * is configured to use an external annotator for this flag.
+         * In either way, don't write the flag on the new records. */
+        const char *key;
+        json_t *jval;
+        void *tmp;
+        json_object_foreach_safe(new_keywords, tmp, key, jval) {
+            if (!strcasecmp(key, JMAP_HAS_ATTACHMENT_FLAG)) {
+                json_object_del(new_keywords, key);
+            }
+        }
+    }
 
     /* Copy message record to mailboxes */
     char *dst_mboxname;
@@ -9699,16 +9812,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
         if (r) goto done;
     }
 
-    /* Determine overwritten properties */
-    json_t *jkeywords = json_object_get(copy_email, "keywords");
-    strarray_t *keywords = NULL;
-    if (JNOTNULL(jkeywords)) {
-        keywords = strarray_new();
-        void *iter = json_object_iter(jkeywords);
-        do {
-            strarray_append(keywords, json_object_iter_key(iter));
-        } while ((iter = json_object_iter_next(jkeywords, iter)));
-    }
+    /* Rewrite new message record properties and lookup thread id */
     time_t internal_date;
     const char *s = json_string_value(json_object_get(copy_email, "receivedAt"));
     if (s) {
@@ -9720,10 +9824,8 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     int has_attachment = 0;
     r = msgrecord_hasflag(src_mr, JMAP_HAS_ATTACHMENT_FLAG, &has_attachment);
     if (r) goto done;
-
-    /* Rewrite new message record properties and lookup thread id */
     struct _email_copy_writeprops_rock writeprops_rock = {
-        req, internal_date, keywords, has_attachment, /*cid*/0, /*size*/0
+        req, internal_date, new_keywords, has_attachment, /*cid*/0, /*size*/0
     };
     struct conversations_state *mycstate = NULL;
     if (strcmp(req->userid, to_account_id)) {
@@ -9738,6 +9840,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     if (mycstate != req->cstate) {
         conversations_commit(&mycstate);
     }
+
     if (!r) {
         char thread_id[18];
         _thread_id_set_cid(writeprops_rock.cid, thread_id);
@@ -9745,10 +9848,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
                 "id", email_id,
                 "blobId", blob_id,
                 "threadId", thread_id,
-                "size", writeprops_rock.size);
-    }
-    if (writeprops_rock.keywords) {
-        strarray_free(writeprops_rock.keywords);
+                "size", src_size);
     }
 
 done:
@@ -9759,6 +9859,7 @@ done:
     strarray_fini(&dst_mboxnames);
     if (src_mr) msgrecord_unref(&src_mr);
     jmap_closembox(req, &src_mbox);
+    json_decref(new_keywords);
 }
 
 static void _email_copy_validate_props(json_t *jemail, json_t **err)
