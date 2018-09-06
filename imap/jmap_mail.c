@@ -8305,6 +8305,36 @@ static json_t *_email_bulkupdate_aggregate_keywords(struct email_bulkupdate *bul
     return aggregated_keywords;
 }
 
+static int _flag_update_changes_seen(json_t *new, json_t *old)
+{
+    int is_seen = json_object_get(new, "$seen") ? 1 : 0;
+    int was_seen = (old && json_object_get(old, "$seen")) ? 1 : 0;
+    return is_seen != was_seen;
+}
+
+static int _flag_update_changes_not_seen(json_t *new, json_t *old)
+{
+    const char *name;
+    json_t *val;
+
+    json_object_foreach(new, name, val) {
+        if (!strcmp(name, "$seen")) continue;
+        int was_seen = (old && json_object_get(old, name)) ? 1 : 0;
+        if (!was_seen) return 1;
+    }
+
+    if (old) {
+        json_object_foreach(old, name, val) {
+            if (!strcmp(name, "$seen")) continue;
+            int is_seen = json_object_get(new, name) ? 1 : 0;
+            if (!is_seen) return 1;
+        }
+    }
+
+
+    return 0;
+}
+
 static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrarray_t *updates)
 {
     int i;
@@ -8398,14 +8428,13 @@ static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrar
                         update->full_keywords = json_incref(update->keywords);
                     }
                 }
+
                 /* Determine required ACL rights */
-                if (json_object_size(update->full_keywords)) {
-                    int sets_seen = json_object_get(update->full_keywords, "$seen") != NULL;
-                    if (sets_seen)
-                        plan->needrights |= ACL_SETSEEN;
-                    if (json_object_size(update->full_keywords) > 1 || !sets_seen)
-                        plan->needrights |= ACL_ANNOTATEMSG;
-                }
+                if (_flag_update_changes_seen(update->full_keywords, NULL))
+                    plan->needrights |= ACL_SETSEEN;
+                if (_flag_update_changes_not_seen(update->full_keywords, NULL))
+                    plan->needrights |= ACL_WRITE;
+                /* XXX - what about annotations? */
             }
         }
 
@@ -8440,14 +8469,12 @@ static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrar
             }
 
             /* Determine required ACL rights */
-            if (!json_equal(current_keywords, new_keywords)) {
-                int sets_seen = json_object_get(current_keywords, "$seen") !=
-                                json_object_get(new_keywords, "$seen");
-                if (sets_seen)
-                    plan->needrights |= ACL_SETSEEN;
-                if (!sets_seen || json_object_size(new_keywords) > 1)
-                    plan->needrights |= ACL_ANNOTATEMSG;
-            }
+            if (_flag_update_changes_seen(new_keywords, current_keywords))
+                plan->needrights |= ACL_SETSEEN;
+            if (_flag_update_changes_not_seen(new_keywords, current_keywords))
+                plan->needrights |= ACL_WRITE;
+            /* XXX - what about annotations? */
+
             json_decref(new_keywords);
             json_decref(current_keywords);
         }
