@@ -5971,7 +5971,7 @@ done:
                 *err = json_pack("{s:s}", "type", "forbidden");
                 break;
             case IMAP_MAILBOX_EXISTS:
-                *err = json_pack("{s:s}", "type", "alreadyExists");
+                *err = json_pack("{s:s s:s}", "type", "alreadyExists", "existingId", detail->email_id);
                 break;
             case IMAP_QUOTA_EXCEEDED:
                 *err = json_pack("{s:s}", "type", "maxQuotaReached");
@@ -9669,7 +9669,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
         conversations_guid_foreach(req->cstate, blob_id, _email_exists_cb, &data);
     }
     if (data.exists) {
-        *err = json_pack("{s:s}", "type", "alreadyExists");
+        *err = json_pack("{s:s s:s}", "type", "alreadyExists", "existingId", email_id);
         goto done;
     }
 
