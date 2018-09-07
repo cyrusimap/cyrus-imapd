@@ -79,29 +79,6 @@
 #include "util.h"
 #include "xmalloc.h"
 
-#define MF_UNLOCKED 0
-#define MF_READLOCKED 1
-#define MF_WRITELOCKED 2
-
-struct mappedfile {
-    char *fname;
-
-    /* obviously you will need 64 bit size_t for 64 bit files... */
-    struct buf map_buf;
-    size_t map_size;
-
-    /* the file itself */
-    int fd;
-
-    /* tracking */
-    int lock_status;
-    int dirty;
-    int was_resized;
-    int is_rw;
-
-    struct timeval starttime;
-};
-
 static void _ensure_mapped(struct mappedfile *mf, size_t offset, int update)
 {
     /* we may be rewriting inside a file, so don't shrink, only extend */
@@ -482,47 +459,4 @@ EXPORTED int mappedfile_rename(struct mappedfile *mf, const char *newname)
     if (dirfd >= 0) close(dirfd);
     free(copy);
     return r;
-}
-
-
-EXPORTED int mappedfile_islocked(const struct mappedfile *mf)
-{
-    return (mf->lock_status != MF_UNLOCKED);
-}
-
-//FIXME this function is nowhere used
-EXPORTED int mappedfile_isreadlocked(const struct mappedfile *mf)
-{
-    return (mf->lock_status == MF_READLOCKED);
-}
-
-EXPORTED int mappedfile_iswritelocked(const struct mappedfile *mf)
-{
-    return (mf->lock_status == MF_WRITELOCKED);
-}
-
-EXPORTED int mappedfile_iswritable(const struct mappedfile *mf)
-{
-    return !!mf->is_rw;
-}
-
-EXPORTED const char *mappedfile_base(const struct mappedfile *mf)
-{
-    /* XXX - require locked? */
-    return mf->map_buf.s;
-}
-
-EXPORTED size_t mappedfile_size(const struct mappedfile *mf)
-{
-    return mf->map_size;
-}
-
-EXPORTED const struct buf *mappedfile_buf(const struct mappedfile *mf)
-{
-    return &mf->map_buf;
-}
-
-EXPORTED const char *mappedfile_fname(const struct mappedfile *mf)
-{
-    return mf->fname;
 }

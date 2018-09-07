@@ -48,10 +48,31 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 
-struct mappedfile;
+struct mappedfile {
+    char *fname;
+
+    /* obviously you will need 64 bit size_t for 64 bit files... */
+    struct buf map_buf;
+    size_t map_size;
+
+    /* the file itself */
+    int fd;
+
+    /* tracking */
+    int lock_status;
+    int dirty;
+    int was_resized;
+    int is_rw;
+
+    struct timeval starttime;
+};
 
 #define MAPPEDFILE_CREATE (1<<0)
 #define MAPPEDFILE_RW     (1<<1)
+
+#define MF_UNLOCKED 0
+#define MF_READLOCKED 1
+#define MF_WRITELOCKED 2
 
 extern int mappedfile_open(struct mappedfile **mfp,
                            const char *fname, int flags);
@@ -75,16 +96,14 @@ extern int mappedfile_truncate(struct mappedfile *mf, off_t offset);
 
 extern int mappedfile_rename(struct mappedfile *mf, const char *newname);
 
-extern int mappedfile_islocked(const struct mappedfile *mf);
-extern int mappedfile_isreadlocked(const struct mappedfile *mf);
-extern int mappedfile_iswritelocked(const struct mappedfile *mf);
-extern int mappedfile_iswritable(const struct mappedfile *mf);
-
-extern const char *mappedfile_base(const struct mappedfile *mf);
-extern size_t mappedfile_size(const struct mappedfile *mf);
-extern const struct buf *mappedfile_buf(const struct mappedfile *mf);
-
-extern const char *mappedfile_fname(const struct mappedfile *mf);
+#define mappedfile_islocked(mf) ((mf)->lock_status != MF_UNLOCKED)
+#define mappedfile_isreadlocked(mf) ((mf)->lock_status == MF_READLOCKED)
+#define mappedfile_iswritelocked(mf) ((mf)->lock_status == MF_WRITELOCKED)
+#define mappedfile_iswritable(mf) (!!(mf)->is_rw)
+#define mappedfile_base(mf) ((const char *)((mf)->map_buf.s))
+#define mappedfile_size(mf) ((mf)->map_size)
+#define mappedfile_buf(mf) ((const struct buf *)(&((mf)->map_buf)))
+#define mappedfile_fname(mf) ((const char *)((mf)->fname))
 
 
 #endif /* _MAPPEDFILE_H */
