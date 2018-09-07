@@ -157,8 +157,31 @@ static enum shared_mbox_type _shared_mbox_type(struct shared_mboxes *sm,
         int cmp = bsearch_compare_mbox(sharedname, name);
         if (!cmp)
             return _MBOX_SHARED;
-        else if (cmp > 0 && mboxname_is_prefix(sharedname, name))
-            return _MBOX_PARENT;
+
+        if (cmp > 0 && mboxname_is_prefix(sharedname, name)) {
+            // if this isn't a user's INBOX, then it's definitely a
+            // parent, so show it
+            mbname_t *mbname = mbname_from_intname(name);
+            if (strarray_size(mbname_boxes(mbname))) {
+                mbname_free(&mbname);
+                return _MBOX_PARENT;
+            }
+            mbname_free(&mbname);
+
+            // if it is the INBOX, then only show if it's a parent of
+            // a mailbox which is user.foo.INBOX.etc
+            mbname_t *sharedmbname = mbname_from_intname(sharedname);
+            if (!strcmpsafe(strarray_nth(mbname_boxes(sharedmbname), 0), "INBOX")) {
+                mbname_free(&sharedmbname);
+                return _MBOX_PARENT;
+            }
+            mbname_free(&sharedmbname);
+
+            // otherwise fall through, because there might be a later member
+            // of mboxes for which this name is a parent.  We could theoretically
+            // avoid recalculating "mbname" here, but the complexity of cleanup
+            // isn't worth the trouble.
+        }
     }
 
     return _MBOX_HIDDEN;
