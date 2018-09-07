@@ -587,11 +587,6 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     if (rock->want && !hash_lookup(mbentry->uniqueid, rock->want))
         return 0;
 
-    /* Are we done with looking up mailboxes by id? */
-    if (rock->want && !hash_numrecords(rock->want))
-        return IMAP_OK_COMPLETED;
-
-
     /* Check share_type for this mailbox */
     enum shared_mbox_type share_type =
         _shared_mbox_type(rock->shared_mboxes, mbentry->name);
@@ -609,6 +604,9 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     /* Move this mailbox of the lookup list */
     if (rock->want) {
         hash_del(mbentry->uniqueid, rock->want);
+        // are we done looking?
+        if (!hash_numrecords(rock->want))
+            return IMAP_OK_COMPLETED;
     }
 
     return 0;
