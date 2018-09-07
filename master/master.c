@@ -2145,6 +2145,7 @@ static void do_prom_report(struct timeval now)
 
     /* write it out */
     retry_write(fd, buf_cstring(&report), buf_len(&report));
+    ftruncate(fd, buf_len(&report));
     lock_unlock(fd, prom_report_fname);
     close(fd);
 
