@@ -516,77 +516,10 @@ sub test_mailbox_get_shared
     $self->assert_null($m{inbox}{parentId});
     $self->assert_null($m{box2}{parentId});
 
-    $self->assert($m{inbox}{myRights}{mayReadItems});
-    $self->assert($m{box2}{myRights}{mayReadItems});
-    $self->assert(!$m{inbox}{myRights}{mayAddItems});
-    $self->assert(!$m{box2}{myRights}{mayAddItems});
-}
-
-sub test_mailbox_get_shared_noinbox
-    :min_version_3_1 :needs_component_jmap
-{
-    my ($self) = @_;
-
-    my $jmap = $self->{jmap};
-
-    my $imaptalk = $self->{store}->get_client();
-    my $admintalk = $self->{adminstore}->get_client();
-
-    # Create user and share mailbox
-    $self->{instance}->create_user("foo");
-    $admintalk->setacl("user.foo", "cassandane", "lr") or die;
-    $admintalk->create("user.foo.box1") or die;
-    $admintalk->setacl("user.foo.box1", "cassandane", "lr") or die;
-
-    $self->{instance}->create_user("foobar");
-    $admintalk->create("user.foobar.box2") or die;
-    $admintalk->setacl("user.foobar.box2", "cassandane", "lr") or die;
-
-    # Create user but do not share mailbox
-    $self->{instance}->create_user("bar");
-
-    # Get our own Inbox id
-    my $inbox = $self->getinbox();
-
-    my $foostore = Cassandane::IMAPMessageStore->new(
-        host => $self->{store}->{host},
-        port => $self->{store}->{port},
-        username => 'foo',
-        password => 'testpw',
-        verbose => $self->{store}->{verbose},
-    );
-    my $footalk = $foostore->get_client();
-
-    $footalk->setmetadata("INBOX.box1", "/private/specialuse", "\\Trash");
-    $self->assert_equals('ok', $footalk->get_last_completion_response());
-
-    xlog "get mailboxes for foo account";
-    my $res = $jmap->CallMethods([['Mailbox/get', { accountId => "foo" }, "R1"]]);
-    $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
-
-    my %m = map { lc($_->{name}) => $_ } @{$res->[0][1]{list}};
-    my $fooInbox = $m{'inbox'};
-    $self->assert_str_not_equals($inbox->{id}, $fooInbox->{id});
-    $self->assert_str_equals('inbox', $fooInbox->{role});
-    my $box1 = $m{'box1'};
-    $self->assert_str_equals('trash', $box1->{role});
-
-    xlog "get mailboxes for inaccessible bar account";
-    $res = $jmap->CallMethods([['Mailbox/get', { accountId => "bar" }, "R1"]]);
-    $self->assert_str_equals("error", $res->[0][0]);
-    $self->assert_str_equals("accountNotFound", $res->[0][1]{type});
-
-    xlog "get mailboxes for inexistent account";
-    $res = $jmap->CallMethods([['Mailbox/get', { accountId => "baz" }, "R1"]]);
-    $self->assert_str_equals("error", $res->[0][0]);
-    $self->assert_str_equals("accountNotFound", $res->[0][1]{type});
-
-    xlog "get mailboxes for visible account";
-    $res = $jmap->CallMethods([['Mailbox/get', { accountId => "foobar" }, "R1"]]);
-    %m = map { lc($_->{name}) => $_ } @{$res->[0][1]{list}};
-    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
-    $self->assert_null($m{inbox});
-    $self->assert_not_null($m{box2});
+    $self->assert_equals(JSON::true, $m{inbox}{myRights}{mayReadItems});
+    $self->assert_equals(JSON::true, $m{box2}{myRights}{mayReadItems});
+    $self->assert_equals(JSON::false, $m{inbox}{myRights}{mayAddItems});
+    $self->assert_equals(JSON::false, $m{box2}{myRights}{mayAddItems});
 }
 
 sub test_mailbox_get_shared_inbox
@@ -654,6 +587,10 @@ sub test_mailbox_get_shared_inbox
     $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
     $self->assert_not_null($m{inbox});
     $self->assert_not_null($m{box2});
+    $self->assert_equals(JSON::false, $m{inbox}{myRights}{mayReadItems});
+    $self->assert_equals(JSON::true, $m{box2}{myRights}{mayReadItems});
+    $self->assert_equals(JSON::false, $m{inbox}{myRights}{mayAddItems});
+    $self->assert_equals(JSON::false, $m{box2}{myRights}{mayAddItems});
     $self->assert_null($m{inbox}{parentId});
     $self->assert_str_equals($m{box2}{parentId}, $m{inbox}{id});
 }
@@ -1654,11 +1591,10 @@ sub test_mailbox_get_shared_parents
 
     xlog "get mailboxes for foo account";
     my $res = $jmap->CallMethods([['Mailbox/get', { accountId => "foo" }, "R1"]]);
-    $self->assert_num_equals(5, scalar @{$res->[0][1]{list}});
+    $self->assert_num_equals(4, scalar @{$res->[0][1]{list}});
 
     # Assert rights
     my %m = map { lc($_->{name}) => $_ } @{$res->[0][1]{list}};
-    $self->assert_equals(JSON::false, $m{inbox}->{myRights}->{mayReadItems});
     $self->assert_equals(JSON::false, $m{box1}->{myRights}->{mayReadItems});
     $self->assert_equals(JSON::true, $m{box11}->{myRights}->{mayReadItems});
     $self->assert_equals(JSON::false, $m{box3}->{myRights}->{mayReadItems});
