@@ -1247,6 +1247,7 @@ if JMAP
 imap_httpd_SOURCES += \
 	imap/http_jmap.c \
 	imap/http_jmap.h \
+	imap/jmap_api.c \
 	imap/jmap_calendar.c \
 	imap/jmap_contact.c \
 	imap/jmap_ical.c \

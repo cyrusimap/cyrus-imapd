@@ -1,6 +1,6 @@
-/* http_jmap.h -- Routines for handling JMAP requests in httpd
+/* jmap_api.h -- Routines for handling JMAP AOI requests
  *
- * Copyright (c) 1994-2016 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2018 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -46,6 +46,7 @@
 
 #include "auth.h"
 #include "conversations.h"
+#include "hash.h"
 #include "httpd.h"
 #include "json_support.h"
 #include "mailbox.h"
@@ -63,6 +64,19 @@
 #define _wantprop(props, name) ((props) ? (hash_lookup(name, props) != NULL) : 1)
 
 extern struct namespace jmap_namespace;
+
+extern json_t *jmap_capabilities;
+extern hash_table jmap_methods;
+
+extern long jmap_max_size_upload;
+extern long jmap_max_concurrent_upload;
+extern long jmap_max_size_request;
+extern long jmap_max_concurrent_requests;
+extern long jmap_max_calls_in_request;
+extern long jmap_max_objects_in_get;
+extern long jmap_max_objects_in_set;
+
+extern int jmap_api(struct transaction_t *txn, json_t **res);
 
 typedef struct jmap_req {
     const char           *method;
@@ -101,6 +115,10 @@ typedef struct jmap_req {
     hash_table *new_creation_ids;
 } jmap_req_t;
 
+extern int jmap_initreq(jmap_req_t *req);
+extern void jmap_finireq(jmap_req_t *req);
+
+
 typedef struct {
     const char *name;
     int (*proc)(struct jmap_req *req);
@@ -125,6 +143,7 @@ extern int jmap_is_valid_id(const char *id);
 /* usermbox-like mailbox tree traversal, scoped by accountid.
  * Reports only active (not deleted) mailboxes. Checks presence
  * of ACL_LOOKUP for shared accounts. */
+extern int  jmap_is_accessible(const mbentry_t *mbentry, void *rock);
 extern int  jmap_mboxlist(jmap_req_t *req, mboxlist_cb *proc, void *rock);
 
 /* Request-scoped cache of mailbox rights for authenticated user */
