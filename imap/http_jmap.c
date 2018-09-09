@@ -2002,9 +2002,6 @@ static int jmap_blob_copy(jmap_req_t *req)
         if (!strcmp(key, "fromAccountId")) {
             if (json_is_string(arg)) {
                 from_accountid = json_string_value(arg);
-                if (from_accountid == NULL) {
-                    from_accountid = req->userid;
-                }
             }
             else if (JNOTNULL(arg)) {
                 json_array_append_new(invalid, json_string("fromAccountId"));
@@ -2014,9 +2011,6 @@ static int jmap_blob_copy(jmap_req_t *req)
         else if (!strcmp(key, "toAccountId")) {
             if (json_is_string(arg)) {
                 to_accountid = json_string_value(arg);
-                if (to_accountid == NULL) {
-                    to_accountid = req->userid;
-                }
             }
             else if (JNOTNULL(arg)) {
                 json_array_append_new(invalid, json_string("toAccountId"));
@@ -2053,6 +2047,13 @@ static int jmap_blob_copy(jmap_req_t *req)
         return 0;
     }
     json_decref(invalid);
+
+    if (from_accountid == NULL) {
+        from_accountid = req->userid;
+    }
+    if (to_accountid == NULL) {
+        to_accountid = req->userid;
+    }
 
     /* No return from here on */
     struct mailbox *to_mbox = NULL;
@@ -3072,9 +3073,6 @@ EXPORTED void jmap_copy_parse(json_t *jargs,
             else if (JNOTNULL(arg)) {
                 jmap_parser_invalid(parser, "fromAccountId");
             }
-            else {
-                copy->from_account_id = req->accountid;
-            }
         }
 
         /* toAccountId */
@@ -3084,9 +3082,6 @@ EXPORTED void jmap_copy_parse(json_t *jargs,
             }
             else if (JNOTNULL(arg)) {
                 jmap_parser_invalid(parser, "toAccountId");
-            }
-            else {
-                copy->to_account_id = req->accountid;
             }
         }
 
@@ -3136,6 +3131,13 @@ EXPORTED void jmap_copy_parse(json_t *jargs,
     if (json_array_size(parser->invalid)) {
         *err = json_pack("{s:s s:O}", "type", "invalidArguments",
                 "arguments", parser->invalid);
+    }
+
+    if (!copy->from_account_id) {
+        copy->from_account_id = req->accountid;
+    }
+    if (!copy->to_account_id) {
+        copy->to_account_id = req->accountid;
     }
 }
 
