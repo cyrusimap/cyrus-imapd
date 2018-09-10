@@ -161,6 +161,7 @@ sub test_settings
     $self->assert_equals(JSON::false, $acc->{isReadOnly});
     @wantHasDataFor = sort((
         'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
         'urn:ietf:params:jmap:contacts',
         'urn:ietf:params:jmap:calendars'
     ));
@@ -171,7 +172,9 @@ sub test_settings
     $self->assert_str_equals("foo", $acc->{name});
     $self->assert_equals(JSON::false, $acc->{isPrimary});
     $self->assert_equals(JSON::true, $acc->{isReadOnly});
-    @wantHasDataFor = sort ('urn:ietf:params:jmap:mail','urn:ietf:params:jmap:calendars');
+    @wantHasDataFor = sort ('urn:ietf:params:jmap:mail',
+                            'urn:ietf:params:jmap:submission',
+                            'urn:ietf:params:jmap:calendars');
     @gotHasDataFor = sort @{$acc->{hasDataFor}};
     $self->assert_deep_equals(\@wantHasDataFor, \@gotHasDataFor);
 
@@ -179,14 +182,14 @@ sub test_settings
     $self->assert_str_equals("bar", $acc->{name});
     $self->assert_equals(JSON::false, $acc->{isPrimary});
     $self->assert_equals(JSON::false, $acc->{isReadOnly});
-    $self->assert_num_equals(1, scalar @{$acc->{hasDataFor}});
+    $self->assert_num_equals(2, scalar @{$acc->{hasDataFor}});
     $self->assert_str_equals('urn:ietf:params:jmap:mail', $acc->{hasDataFor}[0]);
 
     $acc = $accounts->{baz};
     $self->assert_str_equals("baz", $acc->{name});
     $self->assert_equals(JSON::false, $acc->{isPrimary});
     $self->assert_equals(JSON::false, $acc->{isReadOnly});
-    $self->assert_num_equals(1, scalar @{$acc->{hasDataFor}});
+    $self->assert_num_equals(2, scalar @{$acc->{hasDataFor}});
     $self->assert_str_equals('urn:ietf:params:jmap:mail', $acc->{hasDataFor}[0]);
 }
 
