@@ -2087,6 +2087,7 @@ sub test_calendarevent_set_participants
             "web" => "http://local/rsvp",
 
         },
+        participantId => 'foo@local',
         "participants" => {
             'foo@local' => {
                 name => 'Foo',
@@ -2242,6 +2243,7 @@ sub test_calendarevent_set_participantid
         "status" => "confirmed",
         "replyTo" => { imip => "mailto:cassandane\@example.com" },
         "participants" => $participants,
+        "participantId" => 'you',
     };
 
     my $ret = $self->createandget_event($event);
