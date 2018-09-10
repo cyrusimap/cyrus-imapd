@@ -1246,6 +1246,10 @@ int _saxconvparse(int type, struct dlistsax_data *d)
         return 0;
 
     case 14:
+        if (type == DLISTSAX_LISTEND) {
+            rock->state = 20; // finish early
+            return 0;
+        }
         // conversation size
         if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
         rock->conv->size = atol(d->data);
@@ -1253,6 +1257,10 @@ int _saxconvparse(int type, struct dlistsax_data *d)
         return 0;
 
     case 15:
+        if (type == DLISTSAX_LISTEND) {
+            rock->state = 20; // finish early
+            return 0;
+        }
         // start thread list
         if (type != DLISTSAX_LISTSTART) return IMAP_MAILBOX_BADFORMAT;
         rock->state = 16;
@@ -1304,6 +1312,10 @@ int _saxconvparse(int type, struct dlistsax_data *d)
         return 0; // there might be following fields that we ignore here
 
     case 18:
+        if (type == DLISTSAX_LISTEND) {
+            rock->state = 20; // finish early
+            return 0;
+        }
         if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
         rock->conv->createdmodseq = atoll(d->data);
         rock->state = 19;
