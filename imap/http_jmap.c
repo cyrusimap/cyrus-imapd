@@ -931,8 +931,10 @@ static void findaccounts_add(struct findaccounts_data *ctx)
     const char *userid = buf_cstring(&ctx->userid);
 
     json_t *has_data_for = json_array();
-    if (ctx->has_mail)
+    if (ctx->has_mail) {
         json_array_append_new(has_data_for, json_string(JMAP_URN_MAIL));
+        json_array_append_new(has_data_for, json_string(JMAP_URN_SUBMISSION));
+    }
     if (ctx->has_contacts)
         json_array_append_new(has_data_for, json_string(JMAP_URN_CONTACTS));
     if (ctx->has_calendars)
