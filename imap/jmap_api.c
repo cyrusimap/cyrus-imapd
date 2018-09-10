@@ -350,7 +350,8 @@ static int parse_json_body(struct transaction_t *txn, json_t **req)
     return 0;
 }
 
-static int validate_request(struct transaction_t *txn, json_t *req, int *do_perf)
+static int validate_request(struct transaction_t *txn, json_t *req,
+                            jmap_settings_t *settings, int *do_perf)
 {
     json_t *using = json_object_get(req, "using");
     json_t *calls = json_object_get(req, "methodCalls");
@@ -365,7 +366,8 @@ static int validate_request(struct transaction_t *txn, json_t *req, int *do_perf
      * maxConcurrentRequests
      */
 
-    if (buf_len(&txn->req_body.payload) > (size_t) jmap_max_size_request) {
+    if (buf_len(&txn->req_body.payload) >
+        (size_t) settings->limits[MAX_SIZE_REQUEST]) {
         return JMAP_LIMIT_SIZE;
     }
 
@@ -378,7 +380,7 @@ static int validate_request(struct transaction_t *txn, json_t *req, int *do_perf
                 !json_is_string(json_array_get(val, 2))) {
             return JMAP_NOT_REQUEST;
         }
-        if (i >= (size_t) jmap_max_calls_in_request) {
+        if (i >= (size_t) settings->limits[MAX_CALLS_IN_REQUEST]) {
             return JMAP_LIMIT_CALLS;
         }
         const char *mname = json_string_value(json_array_get(val, 0));
@@ -387,7 +389,8 @@ static int validate_request(struct transaction_t *txn, json_t *req, int *do_perf
 
         if (!strcmp(mname, "get")) {
             json_t *ids = json_object_get(json_array_get(val, 1), "ids");
-            if (json_array_size(ids) > (size_t) jmap_max_objects_in_get) {
+            if (json_array_size(ids) >
+                (size_t) settings->limits[MAX_OBJECTS_IN_GET]) {
                 return JMAP_LIMIT_OBJS_GET;
             }
         }
@@ -396,7 +399,7 @@ static int validate_request(struct transaction_t *txn, json_t *req, int *do_perf
             size_t size = json_object_size(json_object_get(args, "create"));
             size += json_object_size(json_object_get(args, "update"));
             size += json_array_size(json_object_get(args, "destroy"));
-            if (size > (size_t) jmap_max_objects_in_set) {
+            if (size > (size_t) settings->limits[MAX_OBJECTS_IN_SET]) {
                 return JMAP_LIMIT_OBJS_SET;
             }
         }
@@ -416,7 +419,7 @@ static int validate_request(struct transaction_t *txn, json_t *req, int *do_perf
         else if (!strcmp(s, "ietf:jmapmail")) {
             syslog(LOG_DEBUG, "old capability %s used", s);
         }
-        else if (!json_object_get(jmap_capabilities, s)) {
+        else if (!json_object_get(settings->capabilities, s)) {
             return JMAP_UNKNOWN_CAPABILITY;
         }
     }
@@ -529,13 +532,14 @@ HIDDEN void jmap_finireq(jmap_req_t *req)
     req->mboxes = NULL;
 }
 
-static jmap_method_t *find_methodproc(const char *name)
+static jmap_method_t *find_methodproc(const char *name, hash_table *jmap_methods)
 {
-    return hash_lookup(name, &jmap_methods);
+    return hash_lookup(name, jmap_methods);
 }
 
 /* Perform an API request */
-HIDDEN int jmap_api(struct transaction_t *txn, json_t **res)
+HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
+                    jmap_settings_t *settings)
 {
     json_t *jreq = NULL, *resp = NULL;
     size_t i;
@@ -551,7 +555,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res)
     if (ret) return json_error_response(txn, ret, res);
 
     /* Validate Request object */
-    if ((ret = validate_request(txn, jreq, &do_perf))) {
+    if ((ret = validate_request(txn, jreq, settings, &do_perf))) {
         return json_error_response(txn, ret, res);
     }
 
@@ -568,8 +572,8 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res)
     construct_hash_table(&mboxrights, 64, 0);
 
     /* Set up creation ids */
-    long max_creation_ids =
-        (jmap_max_calls_in_request + 1) * jmap_max_objects_in_set;
+    long max_creation_ids = (settings->limits[MAX_CALLS_IN_REQUEST] + 1) *
+    settings->limits[MAX_OBJECTS_IN_SET];
     new_creation_ids = xzmalloc(sizeof(hash_table));
     construct_hash_table(new_creation_ids, max_creation_ids, 0);
 
@@ -615,7 +619,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res)
         strarray_append(&methods, mname);
 
         /* Find the message processor */
-        if (!(mp = find_methodproc(mname))) {
+        if (!(mp = find_methodproc(mname, &settings->methods))) {
             json_array_append(resp, json_pack("[s {s:s} s]",
                         "error", "type", "unknownMethod", tag));
             continue;
@@ -1507,12 +1511,7 @@ HIDDEN void jmap_get_parse(json_t *jargs,
         return;
     }
 
-    unsigned maxids = config_getint(IMAPOPT_JMAP_MAX_OBJECTS_IN_GET);
-    if (maxids && JNOTNULL(get->ids) && json_array_size(get->ids) > maxids) {
-        *err = json_pack("{s:s, s:s}", "type", "requestTooLarge",
-                         "description", "too many ids specified");
-        return;
-    }
+    /* Number of ids checked in validate_request() */ 
 }
 
 HIDDEN void jmap_get_fini(struct jmap_get *get)

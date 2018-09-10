@@ -143,11 +143,11 @@ static const char *msglist_sortfields[];
 #define JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL 20
 #define JMAP_MAIL_MAX_KEYWORDS_PER_EMAIL 100 /* defined in mailbox_user_flag */
 
-int jmap_mail_init(hash_table *methods, json_t *capabilities)
+int jmap_mail_init(jmap_settings_t *settings)
 {
     jmap_method_t *mp;
     for (mp = jmap_mail_methods; mp->name; mp++) {
-        hash_insert(mp->name, mp, methods);
+        hash_insert(mp->name, mp, &settings->methods);
     }
 
     json_t *sortopts = json_array();
@@ -172,7 +172,8 @@ int jmap_mail_init(hash_table *methods, json_t *capabilities)
             "maxSizeAttachmentsPerEmail", max_size_attachments_per_email,
             "emailsListSortOptions", sortopts);
 
-    json_object_set_new(capabilities, JMAP_URN_MAIL, email_capabilities);
+    json_object_set_new(settings->capabilities,
+                        JMAP_URN_MAIL, email_capabilities);
 
     static json_t *submit_ext = NULL;
     if (!submit_ext) {
@@ -214,7 +215,8 @@ int jmap_mail_init(hash_table *methods, json_t *capabilities)
             "maxDelayedSend", 0,
             "submissionExtensions", submit_ext);
 
-    json_object_set_new(capabilities, JMAP_URN_SUBMISSION, submit_capabilities);
+    json_object_set_new(settings->capabilities,
+                        JMAP_URN_SUBMISSION, submit_capabilities);
     return 0;
 }
 

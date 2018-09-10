@@ -65,18 +65,27 @@
 
 extern struct namespace jmap_namespace;
 
-extern json_t *jmap_capabilities;
-extern hash_table jmap_methods;
 
-extern long jmap_max_size_upload;
-extern long jmap_max_concurrent_upload;
-extern long jmap_max_size_request;
-extern long jmap_max_concurrent_requests;
-extern long jmap_max_calls_in_request;
-extern long jmap_max_objects_in_get;
-extern long jmap_max_objects_in_set;
+enum {
+    MAX_SIZE_REQUEST = 0,
+    MAX_CALLS_IN_REQUEST,
+    MAX_CONCURRENT_REQUESTS,
+    MAX_OBJECTS_IN_GET,
+    MAX_OBJECTS_IN_SET,
+    MAX_SIZE_UPLOAD,
+    MAX_CONCURRENT_UPLOAD,
+    JMAP_NUM_LIMITS  /* MUST be last */
+};
 
-extern int jmap_api(struct transaction_t *txn, json_t **res);
+typedef struct {
+    hash_table methods;
+    json_t *capabilities;
+    json_t *collations;
+    long limits[JMAP_NUM_LIMITS];
+} jmap_settings_t;
+
+extern int jmap_api(struct transaction_t *txn, json_t **res,
+                    jmap_settings_t *settings);
 
 typedef struct jmap_req {
     const char           *method;
@@ -125,9 +134,9 @@ typedef struct {
 } jmap_method_t;
 
 /* Protocol implementations */
-extern int jmap_mail_init(hash_table *methods, json_t *capabilities);
-extern int jmap_contact_init(hash_table *methods, json_t *capabilities);
-extern int jmap_calendar_init(hash_table *methods, json_t *capabilities);
+extern int jmap_mail_init(jmap_settings_t *settings);
+extern int jmap_contact_init(jmap_settings_t *settings);
+extern int jmap_calendar_init(jmap_settings_t *settings);
 
 /* Request-scoped mailbox cache */
 extern int  jmap_openmbox(jmap_req_t *req, const char *name,

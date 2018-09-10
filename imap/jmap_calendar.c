@@ -95,11 +95,11 @@ jmap_method_t jmap_calendar_methods[] = {
     { NULL,                       NULL}
 };
 
-int jmap_calendar_init(hash_table *methods, json_t *capabilities __attribute__((unused)))
+int jmap_calendar_init(jmap_settings_t *settings)
 {
     jmap_method_t *mp;
     for (mp = jmap_calendar_methods; mp->name; mp++) {
-        hash_insert(mp->name, mp, methods);
+        hash_insert(mp->name, mp, &settings->methods);
     }
     return 0;
 }

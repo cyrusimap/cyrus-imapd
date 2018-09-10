@@ -141,16 +141,9 @@ struct namespace_t namespace_jmap = {
  * Namespace callbacks
  */
 
-long jmap_max_size_upload = 0;
-long jmap_max_concurrent_upload = 0;
-long jmap_max_size_request = 0;
-long jmap_max_concurrent_requests = 0;
-long jmap_max_calls_in_request = 0;
-long jmap_max_objects_in_get = 0;
-long jmap_max_objects_in_set = 0;
-
-json_t *jmap_capabilities = NULL;
-hash_table jmap_methods = HASH_TABLE_INITIALIZER;
+static jmap_settings_t my_jmap_settings = {
+    HASH_TABLE_INITIALIZER, NULL, NULL, { 0 }
+};
 
 jmap_method_t jmap_core_methods[] = {
     { "Core/echo",    &jmap_core_echo },
@@ -167,34 +160,50 @@ static int jmap_core_init()
                 imapopts[optkey].optname); \
         val = 0; \
     }
-    _read_opt(jmap_max_size_upload, IMAPOPT_JMAP_MAX_SIZE_UPLOAD);
-    jmap_max_size_upload *= 1024;
-    _read_opt(jmap_max_concurrent_upload, IMAPOPT_JMAP_MAX_CONCURRENT_UPLOAD);
-    _read_opt(jmap_max_size_request, IMAPOPT_JMAP_MAX_SIZE_REQUEST);
-    jmap_max_size_request *= 1024;
-    _read_opt(jmap_max_concurrent_requests, IMAPOPT_JMAP_MAX_CONCURRENT_REQUESTS);
-    _read_opt(jmap_max_calls_in_request, IMAPOPT_JMAP_MAX_CALLS_IN_REQUEST);
-    _read_opt(jmap_max_objects_in_get, IMAPOPT_JMAP_MAX_OBJECTS_IN_GET);
-    _read_opt(jmap_max_objects_in_set, IMAPOPT_JMAP_MAX_OBJECTS_IN_SET);
+    _read_opt(my_jmap_settings.limits[MAX_SIZE_UPLOAD],
+              IMAPOPT_JMAP_MAX_SIZE_UPLOAD);
+    my_jmap_settings.limits[MAX_SIZE_UPLOAD] *= 1024;
+    _read_opt(my_jmap_settings.limits[MAX_CONCURRENT_UPLOAD],
+              IMAPOPT_JMAP_MAX_CONCURRENT_UPLOAD);
+    _read_opt(my_jmap_settings.limits[MAX_SIZE_REQUEST],
+              IMAPOPT_JMAP_MAX_SIZE_REQUEST);
+    my_jmap_settings.limits[MAX_SIZE_REQUEST] *= 1024;
+    _read_opt(my_jmap_settings.limits[MAX_CONCURRENT_REQUESTS],
+              IMAPOPT_JMAP_MAX_CONCURRENT_REQUESTS);
+    _read_opt(my_jmap_settings.limits[MAX_CALLS_IN_REQUEST],
+              IMAPOPT_JMAP_MAX_CALLS_IN_REQUEST);
+    _read_opt(my_jmap_settings.limits[MAX_OBJECTS_IN_GET],
+              IMAPOPT_JMAP_MAX_OBJECTS_IN_GET);
+    _read_opt(my_jmap_settings.limits[MAX_OBJECTS_IN_SET],
+              IMAPOPT_JMAP_MAX_OBJECTS_IN_SET);
 #undef _read_opt
 
-    jmap_capabilities = json_pack("{s:{s:i s:i s:i s:i s:i s:i s:i s:o}}",
-        JMAP_URN_CORE,
-        "maxSizeUpload", jmap_max_size_upload,
-        "maxConcurrentUpload", jmap_max_concurrent_upload,
-        "maxSizeRequest", jmap_max_size_request,
-        "maxConcurrentRequests", jmap_max_concurrent_requests,
-        "maxCallsInRequest",jmap_max_calls_in_request,
-        "maxObjectsInGet", jmap_max_objects_in_get,
-        "maxObjectsInSet", jmap_max_objects_in_set,
-        "collationAlgorithms", json_array()
-    );
+    my_jmap_settings.collations = json_array();
+    my_jmap_settings.capabilities =
+        json_pack("{s:{s:i s:i s:i s:i s:i s:i s:i s:o}}",
+                  JMAP_URN_CORE,
+                  "maxSizeUpload",
+                  my_jmap_settings.limits[MAX_SIZE_UPLOAD],
+                  "maxConcurrentUpload",
+                  my_jmap_settings.limits[MAX_CONCURRENT_UPLOAD],
+                  "maxSizeRequest",
+                  my_jmap_settings.limits[MAX_SIZE_REQUEST],
+                  "maxConcurrentRequests",
+                  my_jmap_settings.limits[MAX_CONCURRENT_REQUESTS],
+                  "maxCallsInRequest",
+                  my_jmap_settings.limits[MAX_CALLS_IN_REQUEST],
+                  "maxObjectsInGet",
+                  my_jmap_settings.limits[MAX_OBJECTS_IN_GET],
+                  "maxObjectsInSet",
+                  my_jmap_settings.limits[MAX_OBJECTS_IN_SET],
+                  "collationAlgorithms", my_jmap_settings.collations
+            );
 
-    construct_hash_table(&jmap_methods, 128, 0);
+    construct_hash_table(&my_jmap_settings.methods, 128, 0);
 
     jmap_method_t *mp;
     for (mp = jmap_core_methods; mp->name; mp++) {
-        hash_insert(mp->name, mp, &jmap_methods);
+        hash_insert(mp->name, mp, &my_jmap_settings.methods);
     }
     return 0;
 }
@@ -211,16 +220,16 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
     initialize_JMAP_error_table();
 
     jmap_core_init();
-    jmap_mail_init(&jmap_methods, jmap_capabilities);
-    jmap_contact_init(&jmap_methods, jmap_capabilities);
-    jmap_calendar_init(&jmap_methods, jmap_capabilities);
+    jmap_mail_init(&my_jmap_settings);
+    jmap_contact_init(&my_jmap_settings);
+    jmap_calendar_init(&my_jmap_settings);
 
     if (ws_enabled()) {
-        json_object_set_new(jmap_capabilities, JMAP_URN_WEBSOCKET,
+        json_object_set_new(my_jmap_settings.capabilities, JMAP_URN_WEBSOCKET,
                             json_pack("{s:s}", "wsUrl", JMAP_BASE_URL));
     }
 
-    json_object_set_new(jmap_capabilities,
+    json_object_set_new(my_jmap_settings.capabilities,
                         XML_NS_CYRUS "performance", json_object());
 }
 
@@ -385,7 +394,7 @@ static int jmap_post(struct transaction_t *txn,
     }
 
     /* Regular JMAP API request */
-    ret = jmap_api(txn, &res);
+    ret = jmap_api(txn, &res, &my_jmap_settings);
 
     if (!ret) {
         /* Output the JSON object */
@@ -735,7 +744,7 @@ static int jmap_upload(struct transaction_t *txn)
     const char *data = buf_base(&txn->req_body.payload);
     size_t datalen = buf_len(&txn->req_body.payload);
 
-    if (datalen > (size_t) jmap_max_size_upload) {
+    if (datalen > (size_t) my_jmap_settings.limits[MAX_SIZE_UPLOAD]) {
         txn->error.desc = "JSON upload byte size exceeds maxSizeUpload";
         return HTTP_PAYLOAD_TOO_LARGE;
     }
@@ -1030,7 +1039,7 @@ static json_t *user_settings(const char *userid)
     return json_pack("{s:s s:o s:O s:s s:s s:s}",
             "username", userid,
             "accounts", accounts,
-            "capabilities", jmap_capabilities,
+            "capabilities", my_jmap_settings.capabilities,
             "apiUrl", JMAP_BASE_URL,
             "downloadUrl", JMAP_BASE_URL JMAP_DOWNLOAD_COL JMAP_DOWNLOAD_TPL,
             /* FIXME eventSourceUrl */
@@ -1344,7 +1353,7 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
     buf_init_ro(&txn->req_body.payload, buf_base(inbuf), buf_len(inbuf));
 
     /* Process the API request */
-    ret = jmap_api(txn, &res);
+    ret = jmap_api(txn, &res, &my_jmap_settings);
 
     /* Free request payload */
     buf_free(&txn->req_body.payload);

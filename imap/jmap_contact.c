@@ -90,11 +90,11 @@ jmap_method_t jmap_contact_methods[] = {
     { NULL,                      NULL}
 };
 
-int jmap_contact_init(hash_table *methods, json_t *capabilities __attribute__((unused)))
+int jmap_contact_init(jmap_settings_t *settings)
 {
     jmap_method_t *mp;
     for (mp = jmap_contact_methods; mp->name; mp++) {
-        hash_insert(mp->name, mp, methods);
+        hash_insert(mp->name, mp, &settings->methods);
     }
     return 0;
 }
