@@ -1343,6 +1343,7 @@ HIDDEN int jmap_mailbox_querychanges(jmap_req_t *req)
     /* Run the query */
     mbquery->include_tombstones = 1;
     mbquery->include_hidden = 1;
+    mbquery->need_name = 1;
     r = _mboxquery_run(mbquery);
     if (r) goto done;
 
