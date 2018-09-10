@@ -152,17 +152,14 @@ long jmap_max_objects_in_set = 0;
 json_t *jmap_capabilities = NULL;
 hash_table jmap_methods = HASH_TABLE_INITIALIZER;
 
-static void jmap_init(struct buf *serverinfo __attribute__((unused)))
+jmap_method_t jmap_core_methods[] = {
+    { "Core/echo",    &jmap_core_echo },
+    { "Blob/copy",    &jmap_blob_copy },
+    { NULL,                      NULL}
+};
+
+static int jmap_core_init()
 {
-    namespace_jmap.enabled =
-        config_httpmodules & IMAP_ENUM_HTTPMODULES_JMAP;
-
-    if (!namespace_jmap.enabled) return;
-
-    compile_time = calc_compile_time(__TIME__, __DATE__);
-
-    initialize_JMAP_error_table();
-
 #define _read_opt(val, optkey) \
     val = config_getint(optkey); \
     if (val <= 0) { \
@@ -193,25 +190,38 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
         "collationAlgorithms", json_array()
     );
 
+    construct_hash_table(&jmap_methods, 128, 0);
+
+    jmap_method_t *mp;
+    for (mp = jmap_core_methods; mp->name; mp++) {
+        hash_insert(mp->name, mp, &jmap_methods);
+    }
+    return 0;
+}
+
+static void jmap_init(struct buf *serverinfo __attribute__((unused)))
+{
+    namespace_jmap.enabled =
+        config_httpmodules & IMAP_ENUM_HTTPMODULES_JMAP;
+
+    if (!namespace_jmap.enabled) return;
+
+    compile_time = calc_compile_time(__TIME__, __DATE__);
+
+    initialize_JMAP_error_table();
+
+    jmap_core_init();
+    jmap_mail_init(&jmap_methods, jmap_capabilities);
+    jmap_contact_init(&jmap_methods, jmap_capabilities);
+    jmap_calendar_init(&jmap_methods, jmap_capabilities);
+
     if (ws_enabled()) {
         json_object_set_new(jmap_capabilities, JMAP_URN_WEBSOCKET,
                             json_pack("{s:s}", "wsUrl", JMAP_BASE_URL));
     }
 
-    construct_hash_table(&jmap_methods, 128, 0);
-
-    jmap_mail_init(&jmap_methods, jmap_capabilities);
-    jmap_contact_init(&jmap_methods, jmap_capabilities);
-    jmap_calendar_init(&jmap_methods, jmap_capabilities);
-
     json_object_set_new(jmap_capabilities,
                         XML_NS_CYRUS "performance", json_object());
-
-    static jmap_method_t coreecho = { "Core/echo", &jmap_core_echo };
-    hash_insert(coreecho.name, &coreecho, &jmap_methods);
-
-    static jmap_method_t blobcopy = { "Blob/copy", &jmap_blob_copy };
-    hash_insert(blobcopy.name, &blobcopy, &jmap_methods);
 }
 
 static int jmap_auth(const char *userid __attribute__((unused)))
