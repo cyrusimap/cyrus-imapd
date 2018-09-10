@@ -1162,6 +1162,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     json_t *obj, *jprops = NULL;
     jmapical_err_t err;
     jmap_req_t *req = rock->req;
+    char *schedule_address = NULL;
 
     if (!cdata->dav.alive) {
         return 0;
@@ -1179,7 +1180,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     }
 
     /* Load message containing the resource and parse iCal data */
-    ical = caldav_record_to_ical(rock->mailbox, cdata, httpd_userid, NULL);
+    ical = caldav_record_to_ical(rock->mailbox, cdata, httpd_userid, &schedule_address);
     if (!ical) {
         syslog(LOG_ERR, "caldav_record_to_ical failed for record %u:%s",
                 cdata->dav.imap_uid, rock->mailbox->name);
@@ -1210,43 +1211,21 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     ical = NULL;
 
     /* Add participant id */
-    if (_wantprop(rock->get->props, "participantId") && rock->req->userid) {
-        const char *userid = rock->req->userid;
-        char *participant_id = NULL;
-        struct buf buf = BUF_INITIALIZER;
-
-        const char *id;
-        json_t *p;
-        json_object_foreach(json_object_get(obj, "participants"), id, p) {
-            struct caldav_sched_param sparam;
-            const char *addr;
-
-            addr = json_string_value(json_object_get(p, "email"));
-            if (!addr) continue;
-
-            buf_setcstr(&buf, "mailto:");
-            buf_appendcstr(&buf, addr);
-
-            bzero(&sparam, sizeof(struct caldav_sched_param));
-            if (caladdress_lookup(addr, &sparam, userid)) {
-                sched_param_fini(&sparam);
-                continue;
+    if (_wantprop(rock->get->props, "participantId")) {
+        const char *participant_id = NULL;
+        if (schedule_address) {
+            const char *key;
+            json_t *participant;
+            json_object_foreach(json_object_get(obj, "participants"), key, participant) {
+                const char *email = json_string_value(json_object_get(participant, "email"));
+                if (email && !strcmp(email, schedule_address)) {
+                    participant_id = key;
+                    break;
+                }
             }
-
-            /* First participant that matches isyou wins */
-            if (sparam.isyou) {
-                participant_id = xstrdup(id);
-                sched_param_fini(&sparam);
-                break;
-            }
-
-            sched_param_fini(&sparam);
         }
-
         json_object_set_new(obj, "participantId", participant_id ?
                 json_string(participant_id) : json_null());
-        free(participant_id);
-        buf_free(&buf);
     }
 
     /* Add JMAP-only fields. */
@@ -1265,6 +1244,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     json_array_append_new(rock->get->list, obj);
 
 done:
+    free(schedule_address);
     if (ical) icalcomponent_free(ical);
     if (jprops) json_decref(jprops);
     return r;
@@ -1522,7 +1502,18 @@ static int setcalendarevents_create(jmap_req_t *req,
     }
     ical = jmapical_toical(event, &err);
 
-    if (err.code == JMAPICAL_ERROR_PROPS) {
+    json_t *jparticipantId = json_object_get(event, "participantId");
+    if (json_is_string(jparticipantId)) {
+        const char *participant_id = json_string_value(jparticipantId);
+        json_t *participants = json_object_get(event, "participants");
+        json_t *participant = json_object_get(participants, participant_id);
+        schedule_address = xstrdupnull(json_string_value(json_object_get(participant, "email")));
+    }
+    else if (JNOTNULL(jparticipantId)) {
+        json_array_append_new(invalid, json_string("participantId"));
+    }
+
+    if (json_array_size(invalid) || err.code == JMAPICAL_ERROR_PROPS) {
         json_array_extend(invalid, err.props);
         json_decref(err.props);
         free(uid);
@@ -1684,7 +1675,18 @@ static int setcalendarevents_update(jmap_req_t *req,
     json_decref(old_event);
     json_decref(new_event);
 
-    if (err.code == JMAPICAL_ERROR_PROPS) {
+    json_t *jparticipantId = json_object_get(new_event, "participantId");
+    if (json_is_string(jparticipantId)) {
+        const char *participant_id = json_string_value(jparticipantId);
+        json_t *participants = json_object_get(new_event, "participants");
+        json_t *participant = json_object_get(participants, participant_id);
+        schedule_address = xstrdupnull(json_string_value(json_object_get(participant, "email")));
+    }
+    else if (JNOTNULL(jparticipantId)) {
+        json_array_append_new(invalid, json_string("participantId"));
+    }
+
+    if (json_array_size(invalid) || err.code == JMAPICAL_ERROR_PROPS) {
         /* Handle any property errors and bail out. */
         json_array_extend(invalid, err.props);
         r = 0; goto done;
