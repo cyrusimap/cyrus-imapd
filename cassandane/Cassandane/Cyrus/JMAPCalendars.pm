@@ -3835,5 +3835,96 @@ sub test_calendarevent_set_uid
     $self->assert_str_equals($event->{uid}, $ret->{id});
 }
 
+sub test_calendarevent_copy
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $admintalk = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service("http");
+
+    xlog "create shared accounts";
+    $admintalk->create("user.other");
+
+    my $othercaldav = Net::CalDAVTalk->new(
+        user => "other",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    $admintalk->setacl('user.other', admin => 'lrswipkxtecdan');
+    $admintalk->setacl('user.other', other => 'lrswipkxtecdn');
+    
+    xlog "create source calendar";
+    my $srcCalendarId = $caldav->NewCalendar({name => 'Source Calendar'});
+    $self->assert_not_null($srcCalendarId);
+
+    xlog "create destination calendar";
+    my $dstCalendarId = $othercaldav->NewCalendar({name => 'Destination Calendar'});
+    $self->assert_not_null($dstCalendarId);
+
+    xlog "share calendar";
+    $admintalk->setacl("user.other.#calendars.$dstCalendarId", "cassandane" => 'lrswipkxtecdn') or die;
+
+    my $event =  {
+        "calendarId" => $srcCalendarId,
+        "uid" => "58ADE31-custom-UID",
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "isAllDay"=> JSON::false,
+        "locale" => "en",
+        "status" => "tentative",
+        "description"=> "",
+        "freeBusyStatus"=> "busy",
+        "privacy" => "secret",
+        "attachments"=> undef,
+        "participants" => undef,
+        "alerts"=> undef,
+    };
+
+    xlog "create event";
+    my $res = $jmap->CallMethods([['CalendarEvent/set',{
+        create => {"1" => $event}},
+    "R1"]]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $eventId = $res->[0][1]{created}{"1"}{id};
+
+    xlog "copy event";
+    $res = $jmap->CallMethods([['CalendarEvent/copy', {
+        fromAccountId => undef,
+        toAccountId => 'other',
+        create => {
+            1 => {
+                id => $eventId,
+                calendarId => $dstCalendarId,
+            },
+        },
+        onSuccessDestroyOriginal => JSON::true,
+    },
+    "R1"]]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $copiedEventId = $res->[0][1]{created}{"1"}{id};
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'other',
+            ids => [$copiedEventId],
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            accountId => undef,
+            ids => [$eventId],
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('foo', $res->[0][1]{list}[0]{title});
+    $self->assert_str_equals($eventId, $res->[1][1]{notFound}[0]);
+}
 
 1;
