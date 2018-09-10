@@ -4046,8 +4046,7 @@ static int _cyrusmsg_get_headers(struct cyrusmsg *msg,
         *headersptr = msg->_headers;
         return 0;
     }
-    else if (part) {
-        if (!part->part_id) return IMAP_INTERNAL;
+    else if (part && part->part_id) {
         if (msg->_headers_by_part_id) {
             *headersptr = hash_lookup(part->part_id, msg->_headers_by_part_id);
             if (*headersptr) return 0;
@@ -4069,7 +4068,7 @@ static int _cyrusmsg_get_headers(struct cyrusmsg *msg,
     _headers_init(headers);
     _headers_from_mime(msg->mime->s + header_part->header_offset,
                        header_part->header_size, headers);
-    if (part)
+    if (part && part->part_id)
         hash_insert(part->part_id, headers, msg->_headers_by_part_id);
     else
         msg->_headers = headers;
