@@ -82,6 +82,7 @@ static int getCalendarEventsUpdates(struct jmap_req *req);
 static int getCalendarEventsList(struct jmap_req *req);
 static int setCalendarEvents(struct jmap_req *req);
 static int getCalendarPreferences(struct jmap_req *req);
+static int copyCalendarEvent(struct jmap_req *req);
 
 jmap_method_t jmap_calendar_methods[] = {
     { "Calendar/get",             &getCalendars },
@@ -91,6 +92,7 @@ jmap_method_t jmap_calendar_methods[] = {
     { "CalendarEvent/changes",    &getCalendarEventsUpdates },
     { "CalendarEvent/query",      &getCalendarEventsList },
     { "CalendarEvent/set",        &setCalendarEvents },
+    { "CalendarEvent/copy",       &copyCalendarEvent },
     { "CalendarPreference/get",   &getCalendarPreferences },
     { NULL,                       NULL}
 };
@@ -1411,6 +1413,7 @@ static int setcalendarevents_schedule(jmap_req_t *req,
 }
 
 static int setcalendarevents_create(jmap_req_t *req,
+                                    const char *account_id,
                                     json_t *event,
                                     struct caldav_db *db,
                                     char **uidptr,
@@ -1424,7 +1427,6 @@ static int setcalendarevents_create(jmap_req_t *req,
     char *mboxname = NULL;
     char *resource = NULL;
 
-    icalcomponent *oldical = NULL;
     icalcomponent *ical = NULL;
     const char *calendarId = NULL;
     char *schedule_address = NULL;
@@ -1455,7 +1457,7 @@ static int setcalendarevents_create(jmap_req_t *req,
      * We attempt to reuse the UID as DAV resource name; but
      * only if it looks like a reasonable URL path segment. */
     struct buf buf = BUF_INITIALIZER;
-    mboxname = caldav_mboxname(req->accountid, calendarId);
+    mboxname = caldav_mboxname(account_id, calendarId);
     const char *p;
     for (p = uid; *p; p++) {
         if ((*p >= '0' && *p <= '9') ||
@@ -1486,8 +1488,7 @@ static int setcalendarevents_create(jmap_req_t *req,
     /* Open mailbox for writing */
     r = mailbox_open_iwl(mboxname, &mbox);
     if (r) {
-        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                mboxname, error_message(r));
+        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s", mboxname, error_message(r));
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             json_array_append_new(invalid, json_string("calendarId"));
             r = 0;
@@ -1530,7 +1531,7 @@ static int setcalendarevents_create(jmap_req_t *req,
 
     /* Handle scheduling. */
     r = setcalendarevents_schedule(req, &schedule_address,
-                                   oldical, ical, JMAP_CREATE);
+                                   NULL, ical, JMAP_CREATE);
     if (r) goto done;
 
     /* Store the VEVENT. */
@@ -1965,7 +1966,7 @@ static int setCalendarEvents(struct jmap_req *req)
 
         /* Create the calendar event. */
         json_t *invalid = json_pack("[]");
-        r = setcalendarevents_create(req, arg, db, &uid, invalid);
+        r = setcalendarevents_create(req, req->accountid, arg, db, &uid, invalid);
         if (r) {
             json_t *err = json_pack("{s:s s:s}",
                                     "type", "internalError",
@@ -2738,5 +2739,180 @@ static int getCalendarPreferences(struct jmap_req *req)
     /* Just a dummy implementation to make the JMAP web client happy. */
     jmap_ok(req, json_pack("{}"));
 
+    return 0;
+}
+
+static void _calendarevent_copy(jmap_req_t *req,
+                                json_t *jevent,
+                                const char *src_account_id __attribute__((unused)),
+                                const char *dst_account_id,
+                                struct caldav_db *src_db,
+                                struct caldav_db *dst_db,
+                                json_t **new_event,
+                                json_t **set_err)
+{
+    struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
+    icalcomponent *src_ical = NULL;
+    json_t *dst_event = NULL;
+    struct mailbox *src_mbox = NULL;
+
+    /* Read mandatory properties */
+    const char *src_id = json_string_value(json_object_get(jevent, "id"));
+    const char *dst_calendar_id = json_string_value(json_object_get(jevent, "calendarId"));
+    if (!src_id) {
+        jmap_parser_invalid(&myparser, "id");
+    }
+    if (!dst_calendar_id) {
+        jmap_parser_invalid(&myparser, "calendarId");
+    }
+    if (json_array_size(myparser.invalid)) {
+        *set_err = json_pack("{s:s s:O}", "type", "invalidProperties",
+                                          "properties", myparser.invalid);
+        goto done;
+    }
+
+    /* Lookup event */
+    struct caldav_data *cdata = NULL;
+    int r = caldav_lookup_uid(src_db, src_id, &cdata);
+    if (r && r != CYRUSDB_NOTFOUND) {
+        syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s", src_id, error_message(r));
+        goto done;
+    }
+    if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive || !cdata->dav.rowid || !cdata->dav.imap_uid) {
+        *set_err = json_pack("{s:s}", "type", "notFound");
+        goto done;
+    }
+    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ)) {
+        *set_err = json_pack("{s:s}", "type", "notFound");
+        goto done;
+    }
+
+    /* Read source event */
+    r = jmap_openmbox(req, cdata->dav.mailbox, &src_mbox, /*rw*/0);
+    if (r) goto done;
+    char *schedule_address = NULL;
+    src_ical = caldav_record_to_ical(src_mbox, cdata, httpd_userid, &schedule_address);
+    if (!src_ical) {
+        syslog(LOG_ERR, "calendarevent_copy: can't convert %s to JMAP", src_id);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Patch JMAP event */
+    jmapical_err_t err;
+    memset(&err, 0, sizeof(jmapical_err_t));
+    json_t *src_event = jmapical_tojmap(src_ical, NULL, &err);
+    if (!err.code) {
+        dst_event = jmap_patchobject_apply(src_event, jevent);
+        memset(&err, 0, sizeof(jmapical_err_t));
+    }
+    json_decref(src_event);
+    if (err.code) {
+        syslog(LOG_ERR, "calendarevent_copy: can't convert to ical: %s", src_id);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Create event */
+    json_t *invalid = json_array();
+    char *dst_uid = NULL;
+    r = setcalendarevents_create(req, dst_account_id, dst_event,
+                                 dst_db, &dst_uid, invalid);
+    if (r || json_array_size(invalid)) {
+        if (!r) {
+            *set_err = json_pack("{s:s s:o}", "type", "invalidProperties",
+                                              "properties", invalid);
+        }
+        goto done;
+    }
+    json_decref(invalid);
+    *new_event = json_pack("{s:s}", "id", dst_uid);
+    free(dst_uid);
+
+done:
+    if (r && *set_err == NULL) {
+        if (r == CYRUSDB_NOTFOUND)
+            *set_err = json_pack("{s:s}", "type", "notFound");
+        else
+            *set_err = jmap_server_error(r);
+        return;
+    }
+    jmap_closembox(req, &src_mbox);
+    if (src_ical) icalcomponent_free(src_ical);
+    json_decref(dst_event);
+    jmap_parser_fini(&myparser);
+}
+
+static int copyCalendarEvent(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_copy copy;
+    json_t *err = NULL;
+    struct caldav_db *src_db = NULL;
+    struct caldav_db *dst_db = NULL;
+
+    /* Parse request */
+    jmap_copy_parse(req->args, &parser, req, NULL, &copy, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    src_db = caldav_open_userid(copy.from_account_id);
+    if (!src_db) {
+        jmap_error(req, json_pack("{s:s}", "type", "fromAccountNotFound"));
+        goto done;
+    }
+    dst_db = caldav_open_userid(copy.to_account_id);
+    if (!dst_db) {
+        jmap_error(req, json_pack("{s:s}", "type", "toAccountNotFound"));
+        goto done;
+    }
+
+    /* Process request */
+    const char *creation_id;
+    json_t *jevent;
+    json_object_foreach(copy.create, creation_id, jevent) {
+        /* Copy event */
+        json_t *set_err = NULL;
+        json_t *new_event = NULL;
+
+        _calendarevent_copy(req, jevent, copy.from_account_id, copy.to_account_id,
+                            src_db, dst_db, &new_event, &set_err);
+        if (set_err) {
+            json_object_set_new(copy.not_created, creation_id, set_err);
+            continue;
+        }
+        /* Report event as created */
+        json_object_set_new(copy.created, creation_id, new_event);
+        const char *event_id = json_string_value(json_object_get(new_event, "id"));
+        jmap_add_id(req, creation_id, event_id);
+    }
+
+    /* Build response */
+    jmap_ok(req, jmap_copy_reply(&copy));
+
+    /* Destroy originals, if requested */
+    if (copy.on_success_destroy_original && json_object_size(copy.created)) {
+        json_t *destroy_events = json_array();
+        void *iter = json_object_iter(copy.created);
+        do {
+            json_t *new_event = json_object_iter_value(iter);
+            json_array_append(destroy_events, json_object_get(new_event, "id"));
+        } while ((iter = json_object_iter_next(copy.created, iter)));
+        struct jmap_req subreq = *req;
+        subreq.args = json_pack("{}");
+        subreq.method = "CalendarEvent/set";
+        json_object_set_new(subreq.args, "destroy", destroy_events);
+        json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
+        setCalendarEvents(&subreq);
+        json_decref(subreq.args);
+    }
+
+done:
+    if (src_db) caldav_close(src_db);
+    if (dst_db) caldav_close(dst_db);
+    jmap_parser_fini(&parser);
+    jmap_copy_fini(&copy);
     return 0;
 }
