@@ -101,6 +101,10 @@ int jmap_calendar_init(jmap_settings_t *settings)
     for (mp = jmap_calendar_methods; mp->name; mp++) {
         hash_insert(mp->name, mp, &settings->methods);
     }
+
+    json_object_set_new(settings->capabilities,
+                        JMAP_URN_CALENDARS, json_object());
+
     return 0;
 }
 

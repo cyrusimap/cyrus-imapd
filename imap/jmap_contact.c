@@ -96,6 +96,10 @@ int jmap_contact_init(jmap_settings_t *settings)
     for (mp = jmap_contact_methods; mp->name; mp++) {
         hash_insert(mp->name, mp, &settings->methods);
     }
+
+    json_object_set_new(settings->capabilities,
+                        JMAP_URN_CONTACTS, json_object());
+
     return 0;
 }
 
