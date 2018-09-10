@@ -996,7 +996,7 @@ static int findaccounts_cb(struct findall_data *data, void *rock)
 
 static json_t *user_settings(const char *userid)
 {
-    json_t *accounts = json_pack("{s:{s:s s:b s:b s:[s,s,s]}}",
+    json_t *accounts = json_pack("{s:{s:s s:b s:b s:[s,s,s,s]}}",
             userid, "name", userid,
             "isPrimary", 1,
             "isReadOnly", 0,
@@ -1005,6 +1005,7 @@ static json_t *user_settings(const char *userid)
              * for the primary account */
             "hasDataFor",
             JMAP_URN_MAIL,
+            JMAP_URN_SUBMISSION,
             JMAP_URN_CONTACTS,
             JMAP_URN_CALENDARS);
 
