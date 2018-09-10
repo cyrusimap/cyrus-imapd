@@ -1796,13 +1796,15 @@ HIDDEN void jmap_copy_parse(json_t *jargs,
                         continue;
                     }
 
-                    /* Validate properties */
-                    validate_props(obj, &myerr);
-                    if (myerr) {
-                        json_object_set(copy->not_created, creation_id, myerr);
-                    }
-                    else {
-                        json_object_set(copy->create, creation_id, obj);
+                    if (validate_props) {
+                        /* Validate properties */
+                        validate_props(obj, &myerr);
+                        if (myerr) {
+                            json_object_set(copy->not_created, creation_id, myerr);
+                        }
+                        else {
+                            json_object_set(copy->create, creation_id, obj);
+                        }
                     }
                 }
                 jmap_parser_pop(parser);
