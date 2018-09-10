@@ -318,6 +318,7 @@ struct jmap_copy {
     const char *from_account_id;
     const char *to_account_id;
     json_t *create;
+    int blob_copy;
     int on_success_destroy_original;
 
     /* Response fields */

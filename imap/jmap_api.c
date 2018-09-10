@@ -1755,7 +1755,8 @@ HIDDEN void jmap_copy_parse(json_t *jargs,
                             struct jmap_copy *copy, json_t **err)
 {
     memset(copy, 0, sizeof(struct jmap_copy));
-    copy->create = json_object();
+    copy->blob_copy = !strcmp(req->method, "Blob/copy");
+    copy->create = copy->blob_copy ? json_array() : json_object();
     copy->created = json_object();
     copy->not_created = json_object();
 
@@ -1783,46 +1784,51 @@ HIDDEN void jmap_copy_parse(json_t *jargs,
             }
         }
 
-        /* create */
-        else if (!strcmp(key, "create")) {
-            json_t *jcreate = arg;
-            if (json_is_object(jcreate)) {
-                jmap_parser_push(parser, "create");
-                const char *creation_id;
-                json_t *obj, *myerr = NULL;
-                json_object_foreach(jcreate, creation_id, obj) {
-                    if (!json_is_object(obj)) {
-                        jmap_parser_invalid(parser, creation_id);
-                        continue;
-                    }
-
-                    if (validate_props) {
-                        /* Validate properties */
-                        validate_props(obj, &myerr);
-                        if (myerr) {
-                            json_object_set(copy->not_created, creation_id, myerr);
-                        }
-                        else {
-                            json_object_set(copy->create, creation_id, obj);
-                        }
-                    }
+        /* blobIds */
+        else if (copy->blob_copy &&
+                 !strcmp(key, "blobIds") && json_is_array(arg)) {
+            struct buf buf = BUF_INITIALIZER;
+            json_t *id;
+            size_t i;
+            json_array_foreach(arg, i, id) {
+                if (!json_is_string(id)) {
+                    buf_printf(&buf, "blobIds[%zu]", i);
+                    jmap_parser_invalid(parser, buf_cstring(&buf));
+                    buf_reset(&buf);
                 }
-                jmap_parser_pop(parser);
-            }
-            else {
-                jmap_parser_invalid(parser, "create");
+                else json_array_append(copy->create, id);
             }
         }
 
+        /* create */
+        else if (!copy->blob_copy &&
+                 !strcmp(key, "create") && json_is_object(arg)) {
+            jmap_parser_push(parser, "create");
+            const char *creation_id;
+            json_t *obj;
+            json_object_foreach(arg, creation_id, obj) {
+                if (!json_is_object(obj)) {
+                    jmap_parser_invalid(parser, creation_id);
+                }
+                else {
+                    /* Validate properties */
+                    json_t *myerr = NULL;
+                    if (validate_props) validate_props(obj, &myerr);
+                    if (myerr) {
+                        json_object_set(copy->not_created, creation_id, myerr);
+                    }
+                    else {
+                        json_object_set(copy->create, creation_id, obj);
+                    }
+                }
+            }
+            jmap_parser_pop(parser);
+        }
+
         /* onSuccessDestroyOriginal */
-        else if (!strcmp(key, "onSuccessDestroyOriginal")) {
-            if (json_is_boolean(arg)) {
-                copy->on_success_destroy_original = json_boolean_value(arg);
-            }
-            else if (arg) {
-                jmap_parser_invalid(parser, "onSuccessDestroyOriginal");
-                
-            }
+        else if (!copy->blob_copy && !strcmp(key, "onSuccessDestroyOriginal") &&
+                 json_is_boolean(arg)) {
+            copy->on_success_destroy_original = json_boolean_value(arg);
         }
 
         else jmap_parser_invalid(parser, key);
@@ -1855,9 +1861,11 @@ HIDDEN json_t *jmap_copy_reply(struct jmap_copy *copy)
     json_object_set_new(res, "fromAccountId",
                         json_string(copy->from_account_id));
     json_object_set_new(res, "toAccountId", json_string(copy->to_account_id));
-    json_object_set(res, "created", json_object_size(copy->created) ?
+    json_object_set(res, copy->blob_copy ? "copied" : "created",
+                    json_object_size(copy->created) ?
                     copy->created : json_null());
-    json_object_set(res, "notCreated", json_object_size(copy->not_created) ?
+    json_object_set(res, copy->blob_copy ? "notCopied" : "notCreated",
+                    json_object_size(copy->not_created) ?
                     copy->not_created : json_null());
     return res;
 }

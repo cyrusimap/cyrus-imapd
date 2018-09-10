@@ -1172,137 +1172,67 @@ done:
 /* Blob/copy method */
 static int jmap_blob_copy(jmap_req_t *req)
 {
-    json_t *args = req->args;
-    const char *from_accountid = NULL;
-    const char *to_accountid = NULL;
-    const char *key;
-    json_t *arg, *val, *blobids, *invalid = json_array();
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_copy copy;
+    json_t *val, *err = NULL;
     size_t i = 0;
-    struct buf buf = BUF_INITIALIZER;
+    int r = 0;
 
     /* Parse request */
-    json_object_foreach(args, key, arg) {
-        if (!strcmp(key, "fromAccountId")) {
-            if (json_is_string(arg)) {
-                from_accountid = json_string_value(arg);
-            }
-            else if (JNOTNULL(arg)) {
-                json_array_append_new(invalid, json_string("fromAccountId"));
-            }
-        }
-
-        else if (!strcmp(key, "toAccountId")) {
-            if (json_is_string(arg)) {
-                to_accountid = json_string_value(arg);
-            }
-            else if (JNOTNULL(arg)) {
-                json_array_append_new(invalid, json_string("toAccountId"));
-            }
-        }
-
-        else if (!strcmp(key, "blobIds")) {
-            blobids = arg;
-            if (json_is_array(blobids)) {
-                json_array_foreach(blobids, i, val) {
-                    if (!json_is_string(val)) {
-                        buf_printf(&buf, "blobIds[%zu]", i);
-                        json_array_append_new(invalid,
-                                              json_string(buf_cstring(&buf)));
-                        buf_reset(&buf);
-                    }
-                }
-            }
-            else if (JNOTNULL(arg)) {
-                json_array_append_new(invalid, json_string("blobIds"));
-            }
-        }
-
-        else {
-            json_array_append_new(invalid, json_string(key));
-        }
-    }
-
-    if (json_array_size(invalid)) {
-        json_t *err = json_pack("{s:s, s:o}",
-                "type", "invalidArguments", "arguments", invalid);
-        json_array_append_new(req->response, json_pack("[s,o,s]",
-                    "error", err, req->tag));
-        return 0;
-    }
-    json_decref(invalid);
-
-    if (from_accountid == NULL) {
-        from_accountid = req->userid;
-    }
-    if (to_accountid == NULL) {
-        to_accountid = req->userid;
+    jmap_copy_parse(req->args, &parser, req, NULL, &copy, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto cleanup;
     }
 
     /* No return from here on */
     struct mailbox *to_mbox = NULL;
-    json_t *not_copied = json_object();
-    json_t *copied = json_object();
 
     /* Check if we can upload to toAccountId */
-    int r = create_upload_collection(to_accountid, &to_mbox);
+    r = create_upload_collection(copy.to_account_id, &to_mbox);
     if (r == IMAP_PERMISSION_DENIED) {
-        json_array_foreach(blobids, i, val) {
-            json_object_set(not_copied, json_string_value(val),
+        json_array_foreach(copy.create, i, val) {
+            json_object_set(copy.not_created, json_string_value(val),
                     json_pack("{s:s}", "type", "toAccountNotFound"));
         }
-        r = 0;
         goto done;
     } else if (r) {
         syslog(LOG_ERR, "jmap_blob_copy: create_upload_collection(%s): %s",
-                to_accountid, error_message(r));
-        goto done;
+               copy.to_account_id, error_message(r));
+        goto cleanup;
     }
 
     /* Check if we can access any mailbox of fromAccountId */
-    req->accountid = from_accountid;
+    req->accountid = copy.from_account_id;
     r = jmap_mboxlist(req, jmap_is_accessible, NULL);
     if (r != IMAP_OK_COMPLETED) {
-        json_array_foreach(blobids, i, val) {
-            json_object_set(not_copied, json_string_value(val),
+        json_array_foreach(copy.create, i, val) {
+            json_object_set(copy.not_created, json_string_value(val),
                     json_pack("{s:s}", "type", "fromAccountNotFound"));
         }
-        r = 0;
         goto done;
     }
-    r = 0;
 
     /* Copy blobs one by one. XXX should we batch copy here? */
-    json_array_foreach(blobids, i, val) {
+    json_array_foreach(copy.create, i, val) {
         const char *blobid = json_string_value(val);
-        r = jmap_copyblob(req, blobid, from_accountid, to_mbox);
+        r = jmap_copyblob(req, blobid, copy.from_account_id, to_mbox);
         if (r == IMAP_NOTFOUND) {
-            json_object_set_new(not_copied, blobid,
+            json_object_set_new(copy.not_created, blobid,
                     json_pack("{s:s}", "type", "blobNotFound"));
-            r = 0;
-            continue;
         }
-        else if (r) goto done;
-        json_object_set_new(copied, blobid, json_string(blobid));
+        else if (r) goto cleanup;
+        else json_object_set_new(copy.created, blobid, json_string(blobid));
     }
 
 done:
-    if (!r) {
-        /* Build response */
-        if (!json_object_size(copied)) {
-            json_decref(copied);
-            copied = json_null();
-        }
-        if (!json_object_size(not_copied)) {
-            json_decref(not_copied);
-            not_copied = json_null();
-        }
-        json_t *res = json_pack("{s:O s:O s:o s:o}",
-                "fromAccountId", json_object_get(args, "fromAccountId"),
-                "toAccountId", json_object_get(args, "toAccountId"),
-                "copied", copied, "notCopied", not_copied);
-        json_array_append_new(req->response, json_pack("[s,o,s]",
-                    "Blob/copy", res, req->tag));
-    }
+    /* Build response */
+    jmap_ok(req, jmap_copy_reply(&copy));
+    r = 0;
+
+cleanup:
+    jmap_parser_fini(&parser);
+    jmap_copy_fini(&copy);
     mailbox_close(&to_mbox);
     return r;
 }
