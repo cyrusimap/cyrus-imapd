@@ -172,9 +172,9 @@ sub test_settings
     $self->assert_str_equals("foo", $acc->{name});
     $self->assert_equals(JSON::false, $acc->{isPrimary});
     $self->assert_equals(JSON::true, $acc->{isReadOnly});
-    @wantHasDataFor = sort ('urn:ietf:params:jmap:mail',
+    @wantHasDataFor = sort(('urn:ietf:params:jmap:mail',
                             'urn:ietf:params:jmap:submission',
-                            'urn:ietf:params:jmap:calendars');
+                            'urn:ietf:params:jmap:calendars'));
     @gotHasDataFor = sort @{$acc->{hasDataFor}};
     $self->assert_deep_equals(\@wantHasDataFor, \@gotHasDataFor);
 
