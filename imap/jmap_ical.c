@@ -1360,6 +1360,16 @@ participants_from_ical(context_t *ctx __attribute__((unused)),
         json_t *p = participant_from_ical(prop, &attendee_by_mailto, &id_by_mailto, orga);
         json_object_set_new(participants, id, p);
     }
+    if (orga && !hash_lookup(icalproperty_get_organizer(orga), &attendee_by_mailto)) {
+        /* Add a default attendee for the organizer. */
+        char *email = mailaddr_from_uri(icalproperty_get_organizer(orga));
+        json_object_set_new(participants, email, json_pack("{s:s s:s s:[s] s:s}",
+                "name", "",
+                "email", email,
+                "roles", "owner",
+                "rsvpResponse", "accepted"));
+        free(email);
+    }
 
 done:
     if (!json_object_size(participants)) {
