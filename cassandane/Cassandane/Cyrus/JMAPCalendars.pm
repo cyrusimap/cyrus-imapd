@@ -1130,6 +1130,33 @@ sub test_calendarevent_get_participants
     $self->assert_deep_equals($participants, $event->{participants});
 }
 
+sub test_calendarevent_get_organizer
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('organizer');
+
+    my $participants = {
+        'organizer@local' => {
+            name => '',
+            email => 'organizer@local',
+            roles => ['owner'],
+            rsvpResponse => 'accepted',
+        },
+        'attendee@local' => {
+            name => '',
+            email => 'attendee@local',
+            roles => ['attendee'],
+            rsvpResponse => 'needs-action',
+        },
+    };
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_deep_equals($participants, $event->{participants});
+    $self->assert_equals('mailto:organizer@local', $event->{replyTo}{imip});
+}
+
 sub test_calendarevent_get_recurrence
     :min_version_3_1 :needs_component_jmap
 {
