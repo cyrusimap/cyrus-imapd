@@ -1,4 +1,4 @@
-/* jmap_api.h -- Routines for handling JMAP AOI requests
+/* http_jmap.h -- Routines for handling JMAP requests in httpd
  *
  * Copyright (c) 1994-2018 Carnegie Mellon University.  All rights reserved.
  *
