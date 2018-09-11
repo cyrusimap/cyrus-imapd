@@ -6107,9 +6107,12 @@ sub test_email_query_bcc
     my $res = $jmap->CallMethods([['Mailbox/get', { accountId => $account }, "R1"]]);
     my $inboxid = $res->[0][1]{list}[0]{id};
 
-    xlog "create email";
+    xlog "create email1";
     my $bcc1  = Cassandane::Address->new(localpart => 'needle', domain => 'local');
     my $msg1 = $self->make_message('msg1', bcc => $bcc1);
+
+    my $bcc2  = Cassandane::Address->new(localpart => 'beetle', domain => 'local');
+    my $msg2 = $self->make_message('msg2', bcc => $bcc2);
 
     xlog "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
@@ -6122,8 +6125,12 @@ sub test_email_query_bcc
             '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' }
         }, 'R2'],
     ]);
-    $self->assert_num_equals(1, scalar @{$res->[1][1]->{list}});
-    my $emailId1 = $res->[1][1]->{list}[0]{id};
+
+    my %m = map { $_->{subject} => $_ } @{$res->[1][1]{list}};
+    my $emailId1 = $m{"msg1"}->{id};
+    my $emailId2 = $m{"msg2"}->{id};
+    $self->assert_not_null($emailId1);
+    $self->assert_not_null($emailId2);
 
     xlog "filter text";
     $res = $jmap->CallMethods([['Email/query', {
@@ -6141,7 +6148,8 @@ sub test_email_query_bcc
             conditions => [ {text => "needle"} ],
         },
     }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[0]);
 
     xlog "filter bcc";
     $res = $jmap->CallMethods([['Email/query', {
@@ -6159,7 +6167,8 @@ sub test_email_query_bcc
             conditions => [ {bcc => "needle"} ],
         },
     }, "R1"]]);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]->{ids}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[0]);
 }
 
 
