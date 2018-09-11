@@ -1622,6 +1622,9 @@ static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
         if ((s = json_string_value(json_object_get(filter, "cc")))) {
             _email_search_string(this, s, "cc");
         }
+        if ((s = json_string_value(json_object_get(filter, "bcc")))) {
+            _email_search_string(this, s, "bcc");
+        }
         if ((s = json_string_value(json_object_get(filter, "from")))) {
             _email_search_string(this, s, "from");
         }
