@@ -50,6 +50,7 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
+use File::Temp qw(tempdir);
 
 my $basedir;
 my $binary;
@@ -73,7 +74,6 @@ sub cyrus_version_supports_jmap
 
 sub init
 {
-
     my $cassini = Cassandane::Cassini->instance();
     $basedir = $cassini->val('jmaptester', 'basedir');
     return unless defined $basedir;
@@ -97,6 +97,18 @@ sub new
     $config->set(caldav_realm => 'Cassandane');
     $config->set(httpallowcompress => 'no');
     $config->set(conversations => 'yes');
+
+    $config->set(search_engine => 'xapian');
+    $config->set(search_index_headers => 'no');
+    $config->set(search_batchsize => 8192);
+    $config->set(defaultpartition => 'default');
+    $config->set(defaultsearchtier => 't1');
+
+    $config->set('partition-default' => tempdir(CLEANUP => 1));
+    $config->set('t1searchpartition-default' => tempdir(CLEANUP => 1));
+
+    $config->set('sync_log' => 'on');
+    $config->set('sync_log_channels' => 'squatter');
 
     if (cyrus_version_supports_jmap()) {
         $config->set(httpmodules => 'jmap');
@@ -230,6 +242,12 @@ sub run_test
     local $ENV{JMTS_TEST_OUTPUT_TO_STDERR} = 1 if get_verbose;
     local $ENV{JMTS_TELEMETRY} = 1 if get_verbose >= 3;
 
+    # Needed so text based searching works in Email/query, etc...
+    my $squatter_pid = $self->{instance}->run_command(
+      { cyrus => 1, background => 1 },
+      'squatter', '-R', '-d',
+    );
+
     $self->{instance}->run_command({
             redirects => { stderr => $errfile, stdout => $outfile },
             workingdir => $basedir,
@@ -241,6 +259,8 @@ sub run_test
         "perl", '-I' => "$basedir/lib",
          "$basedir/$name.t",
     );
+
+    kill 'INT' => $squatter_pid || die "Failed to kill squatter $squatter_pid\n";
 
     if ((!$status || get_verbose)) {
         if (-f $errfile) {
