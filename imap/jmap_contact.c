@@ -2933,6 +2933,7 @@ static int setContacts(struct jmap_req *req)
         json_t *jstate = json_string(set.if_in_state);
         if (jmap_cmpstate(req, jstate, MBTYPE_ADDRESSBOOK)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+            json_decref(jstate);
             goto done;
         }
         json_decref(jstate);
