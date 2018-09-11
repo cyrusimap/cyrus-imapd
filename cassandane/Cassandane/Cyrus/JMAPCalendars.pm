@@ -1141,7 +1141,7 @@ sub test_calendarevent_get_organizer
         'organizer@local' => {
             name => '',
             email => 'organizer@local',
-            roles => ['owner'],
+            roles => ['owner', 'attendee'],
             rsvpResponse => 'accepted',
         },
         'attendee@local' => {
@@ -2158,6 +2158,68 @@ sub test_calendarevent_set_participants
     };
 
     my $ret = $self->createandget_event($event);
+    $self->assert_normalized_event_equals($ret, $event);
+}
+
+sub test_calendarevent_set_participants_patch
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $event =  {
+        "calendarId" => $calid,
+        "title"=> "title",
+        "description"=> "description",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/London",
+        "isAllDay"=> JSON::false,
+        "freeBusyStatus"=> "busy",
+        "status" => "confirmed",
+        "replyTo" => {
+            "imip" => "mailto:foo\@local",
+        },
+        "participants" => {
+            'bar@local' => {
+                name => 'Bar',
+                email => 'bar@local',
+                roles => [ 'attendee' ],
+                rsvpResponse => 'needs-action',
+                participation => 'required',
+                rsvpWanted => JSON::true,
+            },
+        },
+        method => 'request',
+    };
+
+    my $ret = $self->createandget_event($event);
+    $event->{participants}{'foo@local'} = {
+        name => '',
+        email => 'foo@local',
+        roles => ['owner', 'attendee'],
+        rsvpResponse => 'accepted',
+    };
+    $self->assert_normalized_event_equals($ret, $event);
+    my $eventId = $ret->{id};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'participants/bar@local/rsvpResponse' => 'accepted',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $event->{participants}{'bar@local'}{rsvpResponse} = 'accepted';
+    $ret = $res->[1][1]{list}[0];
     $self->assert_normalized_event_equals($ret, $event);
 }
 
