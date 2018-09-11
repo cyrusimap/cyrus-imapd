@@ -1678,7 +1678,6 @@ static int setcalendarevents_update(jmap_req_t *req,
     memset(&err, 0, sizeof(jmapical_err_t));
     ical = jmapical_toical(new_event, &err);
     json_decref(old_event);
-    json_decref(new_event);
 
     json_t *jparticipantId = json_object_get(new_event, "participantId");
     if (json_is_string(jparticipantId)) {
@@ -1690,6 +1689,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     else if (JNOTNULL(jparticipantId)) {
         json_array_append_new(invalid, json_string("participantId"));
     }
+    json_decref(new_event);
 
     if (json_array_size(invalid) || err.code == JMAPICAL_ERROR_PROPS) {
         /* Handle any property errors and bail out. */
@@ -2755,6 +2755,7 @@ static void _calendarevent_copy(jmap_req_t *req,
     icalcomponent *src_ical = NULL;
     json_t *dst_event = NULL;
     struct mailbox *src_mbox = NULL;
+    int r = 0;
 
     /* Read mandatory properties */
     const char *src_id = json_string_value(json_object_get(jevent, "id"));
@@ -2773,7 +2774,7 @@ static void _calendarevent_copy(jmap_req_t *req,
 
     /* Lookup event */
     struct caldav_data *cdata = NULL;
-    int r = caldav_lookup_uid(src_db, src_id, &cdata);
+    r = caldav_lookup_uid(src_db, src_id, &cdata);
     if (r && r != CYRUSDB_NOTFOUND) {
         syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s", src_id, error_message(r));
         goto done;
