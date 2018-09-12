@@ -1157,9 +1157,10 @@ static json_t *participant_from_ical(icalproperty *prop,
             json_array_append_new(roles, json_string("owner"));
         }
     }
-    if (ical_role == ICAL_ROLE_CHAIR)
+    if (ical_role == ICAL_ROLE_CHAIR) {
         json_array_append_new(roles, json_string("chair"));
-    if (!json_array_size(roles) || !seen_attendee_role) {
+    }
+    if (!json_array_size(roles)) {
         json_array_append_new(roles, json_string("attendee"));
     }
     json_object_set_new(p, "roles", roles);
@@ -1176,10 +1177,7 @@ static json_t *participant_from_ical(icalproperty *prop,
     icalproperty *rsvp_prop = prop;
     while (!rsvp) {
         param = icalproperty_get_first_parameter(rsvp_prop, ICAL_PARTSTAT_PARAMETER);
-        if (!param) {
-            rsvp = "needs-action";
-            break;
-        }
+        if (!param) break;
         icalparameter_partstat pst = icalparameter_get_partstat(param);
         switch (pst) {
             case ICAL_PARTSTAT_ACCEPTED:
@@ -1190,6 +1188,9 @@ static json_t *participant_from_ical(icalproperty *prop,
                 break;
             case ICAL_PARTSTAT_TENTATIVE:
                 rsvp = "tentative";
+                break;
+            case ICAL_PARTSTAT_NEEDSACTION:
+                rsvp = "needs-action";
                 break;
             case ICAL_PARTSTAT_DELEGATED:
                 /* Follow the delegate chain */
@@ -1204,17 +1205,17 @@ static json_t *participant_from_ical(icalproperty *prop,
                             /* This is a pathological case: libical does
                              * not check for infinite DELEGATE chains, so we
                              * make sure not to fall in an endless loop. */
-                            rsvp = "needs-action";
+                            rsvp = "none";
                         }
                         continue;
                     }
                 }
                 /* fallthrough */
             default:
-                rsvp = "needs-action";
+                rsvp = "none";
         }
     }
-    if (rsvp) {
+    if (rsvp && strcmp(rsvp,  "none")) {
         json_object_set_new(p, "rsvpResponse", json_string(rsvp));
     }
 
@@ -1361,13 +1362,15 @@ participants_from_ical(context_t *ctx __attribute__((unused)),
         json_object_set_new(participants, id, p);
     }
     if (orga && !hash_lookup(icalproperty_get_organizer(orga), &attendee_by_mailto)) {
-        /* Add a default attendee for the organizer. */
+        /* Add a default participant for the organizer. */
         char *email = mailaddr_from_uri(icalproperty_get_organizer(orga));
-        json_object_set_new(participants, email, json_pack("{s:s s:s s:[s,s] s:s}",
-                "name", "",
+        const char *name = NULL;
+        icalparameter *param = icalproperty_get_first_parameter(orga, ICAL_CN_PARAMETER);
+        if (param) name = icalparameter_get_cn(param);
+        json_object_set_new(participants, email, json_pack("{s:s s:s s:[s]}",
+                "name", name ? name : "",
                 "email", email,
-                "roles", "owner", "attendee",
-                "rsvpResponse", "accepted"));
+                "roles", "owner"));
         free(email);
     }
 
@@ -2794,7 +2797,7 @@ participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p)
     }
 
     /* rsvpResponse */
-    icalparameter_partstat ps = ICAL_PARTSTAT_NEEDSACTION;
+    icalparameter_partstat ps = ICAL_PARTSTAT_NONE;
     json_t *rsvpResponse = json_object_get(p, "rsvpResponse");
     if (json_is_string(rsvpResponse)) {
         char *tmp = ucase(xstrdup(json_string_value(rsvpResponse)));
@@ -2822,10 +2825,16 @@ participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p)
     /* rsvpWanted */
     json_t *rsvpWanted = json_object_get(p, "rsvpWanted");
     if (json_is_boolean(rsvpWanted)) {
-        if (rsvpWanted == json_true())
+        if (rsvpWanted == json_true()) {
             param = icalparameter_new_rsvp(ICAL_RSVP_TRUE);
-        else
+            if (ps == ICAL_PARTSTAT_NONE) {
+                icalproperty_add_parameter(prop,
+                        icalparameter_new_partstat(ICAL_PARTSTAT_NEEDSACTION));
+            }
+        }
+        else {
             param = icalparameter_new_rsvp(ICAL_RSVP_FALSE);
+        }
         icalproperty_add_parameter(prop, param);
     }
     else if (JNOTNULL(rsvpWanted)) {
@@ -2960,42 +2969,133 @@ participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p)
     }
 }
 
-/* Create or update the ATTENDEEs in the VEVENT component comp as
- * defined by the participants property. */
+/* Create or update the ORGANIZER and ATTENDEEs in the VEVENT component comp as
+ * defined by the participants and replyTo property. */
 static void
-participants_to_ical(context_t *ctx, icalcomponent *comp, json_t *participants)
+participants_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 {
-    const char *id;
-    json_t *p;
-
-    /* Purge existing ATTENDEEs */
+    /* Purge existing ATTENDEEs and ORGANIZER */
     remove_icalprop(comp, ICAL_ATTENDEE_PROPERTY);
+    remove_icalprop(comp, ICAL_ORGANIZER_PROPERTY);
 
-    if (!JNOTNULL(participants)) {
-        return;
+    json_t *participants = json_object_get(event, "participants");
+    if (JNOTNULL(participants) && !json_is_object(participants)) {
+        invalidprop(ctx, "participants");
+    }
+    json_t *replyTo = json_object_get(event, "replyTo");
+    if (JNOTNULL(replyTo) && !json_is_object(replyTo)) {
+        invalidprop(ctx, "replyTo");
     }
 
-    json_object_foreach(participants, id, p) {
-        if (!strlen(id))
-            continue;
+    json_t *jval = NULL;
+    const char *key = NULL;
 
-        beginprop_key(ctx, "participants", id);
+    /* Parse replyTo */
+    const char *replyto_imip = NULL;
+    const char *replyto_web = NULL;
+    beginprop(ctx, "replyTo");
+    json_object_foreach(replyTo, key, jval) {
+        if (!strcmp(key, "imip")) {
+            const char *s = json_string_value(jval);
+            if (s && !strncasecmp(s, "mailto:", 7)) {
+                replyto_imip = s;
+            }
+            else  {
+                invalidprop(ctx, "imip");
+            }
+        }
+        else if (!strcmp(key, "web")) {
+            const char *s = json_string_value(jval);
+            if (s && (!strncmp(s, "http:", 5) || !strncmp(s, "https:", 6))) {
+                replyto_web = s;
+            }
+            else {
+                invalidprop(ctx, "web");
+            }
+        }
+        else {
+            invalidprop(ctx, key);
+        }
+    }
+    endprop(ctx);
 
-        const char *email = json_string_value(json_object_get(p, "email"));
+    /* If participants are set, replyTo{imip} must be set */
+    if ((replyto_imip != NULL) != JNOTNULL(participants)) {
+        invalidprop(ctx, "replyTo");
+        invalidprop(ctx, "participants");
+        return;
+    }
+    else if (replyto_imip == NULL) return;
+
+    /* At most one participant with replyTo{imip} may be set */
+    int seen_replyto_imip = 0;
+    json_object_foreach(participants, key, jval) {
+        const char *email = json_string_value(json_object_get(jval, "email"));
+        if (email && !strcasecmp(email, replyto_imip + 7)) {
+            if (!seen_replyto_imip) {
+                seen_replyto_imip = 1;
+            }
+            else {
+                beginprop(ctx, "participants");
+                invalidprop(ctx, key);
+                endprop(ctx);
+            }
+        }
+    }
+
+    /* Create an ORGANIZER with the replyTo{imip} value */
+    icalproperty *orga = icalproperty_new_organizer(replyto_imip);
+    if (replyto_web) {
+        set_icalxparam(orga, JMAPICAL_XPARAM_RSVP_URI, replyto_web, 1);
+    }
+    icalcomponent_add_property(comp, orga);
+
+    /* Process participants */
+    json_object_foreach(participants, key, jval) {
+        beginprop_key(ctx, "participants", key);
+
+        const char *email = json_string_value(json_object_get(jval, "email"));
         if (!email) {
             invalidprop(ctx, "email");
             endprop(ctx);
             continue;
         }
-        char *tmp = mailaddr_to_uri(email);
-        icalproperty *prop = icalproperty_new_attendee(tmp);
-        participant_to_ical(ctx, prop, p);
-        if (strcmp(id, email)) {
-            set_icalxparam(prop, JMAPICAL_XPARAM_ID, id, 1);
-        }
-        icalcomponent_add_property(comp, prop);
-        free(tmp);
 
+        /* Either reuse the ORGANIZER property or create an ATTENDEE. */
+        char *mailto = mailaddr_to_uri(email);
+        icalproperty *prop = NULL;
+        if (!strcasecmp(email, replyto_imip + 7)) {
+            json_t *roles = json_object_get(jval, "roles");
+            if (json_array_size(roles) == 1) {
+                const char *role = json_string_value(json_array_get(roles, 0));
+                if (role && !strcmp(role, "owner")) {
+                    size_t n = json_object_size(jval);
+                    json_t *rsvpWanted = json_object_get(jval, "rsvpWanted");
+                    if (rsvpWanted && rsvpWanted == json_false()) n--;
+                    json_t *rsvpResponse = json_object_get(jval, "rsvpResponse");
+                    if (rsvpResponse) {
+                        const char *rsvp = json_string_value(rsvpResponse);
+                        if (rsvp && !strcmp(rsvp, "needs-action")) n--;
+                    }
+                    if (json_object_get(jval, "name")) n--;
+                    if (n == 2) {
+                        /* Reuse the ORGANIZER */
+                        prop = orga;
+                    }
+                }
+            }
+        }
+        if (!prop) {
+            prop = icalproperty_new_attendee(mailto);
+            icalcomponent_add_property(comp, prop);
+        }
+        if (strcmp(key, email)) {
+            set_icalxparam(prop, JMAPICAL_XPARAM_ID, key, 1);
+        }
+        free(mailto);
+
+        /* Map participant to iCalendar */
+        participant_to_ical(ctx, prop, jval);
         endprop(ctx);
     }
 }
@@ -3921,51 +4021,6 @@ static void set_language_icalprop(icalcomponent *comp, icalproperty_kind kind,
 }
 
 static void
-replyto_to_ical(context_t *ctx, icalcomponent *comp, json_t *replyto)
-{
-    icalproperty *prop;
-    json_t *imip, *web;
-
-    remove_icalprop(comp, ICAL_ORGANIZER_PROPERTY);
-
-    /* XXX(rsto): We want ORGANIZER always to have a mailto: URI
-     * for now, and without ORGANIZER we can't store the 'web'
-     * replyTo property. */
-    if ((imip = json_object_get(replyto, "imip"))) {
-        const char *addr = NULL;
-
-        beginprop_key(ctx, "replyTo", "imip");
-
-        addr = json_string_value(imip);
-        if (!addr) {
-            invalidprop(ctx, NULL);
-            endprop(ctx);
-            return;
-        }
-
-        prop = icalproperty_new_organizer(addr);
-        icalcomponent_add_property(comp, prop);
-        endprop(ctx);
-
-        if ((web = json_object_get(replyto, "web"))) {
-            const char *uri = NULL;
-
-            beginprop_key(ctx, "replyTo", "web");
-
-            uri = json_string_value(web);
-            if (!uri || (strncmp(uri, "http:", 5) && strncmp(uri, "https:", 6))) {
-                invalidprop(ctx, NULL);
-                endprop(ctx);
-                return;
-            }
-            set_icalxparam(prop, JMAPICAL_XPARAM_RSVP_URI, uri, 1);
-
-            endprop(ctx);
-        }
-    }
-}
-
-static void
 overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
 {
     json_t *override, *master;
@@ -4376,27 +4431,8 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         }
     }
 
-    /* replyTo */
-    json_t *replyto;
-    if (!json_is_null(json_object_get(event, "replyTo"))) {
-        pe = readprop(ctx, event, "replyTo", 0, "o", &replyto);
-        if (pe > 0) {
-            replyto_to_ical(ctx, comp, replyto);
-        }
-    } else {
-        remove_icalprop(comp, ICAL_ORGANIZER_PROPERTY);
-    }
-
-    /* participants */
-    json_t *participants = NULL;
-    pe = readprop(ctx, event, "participants", 0, "o", &participants);
-    if (pe > 0) {
-        if (json_is_null(participants) || json_object_size(participants)) {
-            participants_to_ical(ctx, comp, participants);
-        } else {
-            invalidprop(ctx, "participants");
-        }
-    }
+    /* replyTo and participants */
+    participants_to_ical(ctx, comp, event);
 
     /* participantId: readonly */
 
