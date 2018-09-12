@@ -9856,13 +9856,14 @@ static void _email_copy_validate_props(json_t *jemail, json_t **err)
     struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
 
     /* Validate properties */
-    json_t *prop;
+    json_t *prop, *id = NULL, *mailboxids = NULL;;
     const char *pname;
     json_object_foreach(jemail, pname, prop) {
         if (!strcmp(pname, "id")) {
             if (!json_is_string(prop)) {
                 jmap_parser_invalid(&myparser, "id");
             }
+            id = prop;
         }
         else if (!strcmp(pname, "mailboxIds")) {
             jmap_parser_push(&myparser, "mailboxIds");
@@ -9874,6 +9875,7 @@ static void _email_copy_validate_props(json_t *jemail, json_t **err)
                 }
             }
             jmap_parser_pop(&myparser);
+            mailboxids = prop;
         }
         else if (!strcmp(pname, "keywords")) {
             if (json_is_object(prop)) {
@@ -9898,12 +9900,15 @@ static void _email_copy_validate_props(json_t *jemail, json_t **err)
                 jmap_parser_invalid(&myparser, "receivedAt");
             }
         }
+        else {
+            jmap_parser_invalid(&myparser, pname);
+        }
     }
     /* Check mandatory properties */
-    if (!json_object_get(jemail, "id")) {
+    if (!id) {
         jmap_parser_invalid(&myparser, "id");
     }
-    if (!json_object_get(jemail, "mailboxIds")) {
+    if (!mailboxids) {
         jmap_parser_invalid(&myparser, "mailboxIds");
     }
     /* Reject invalid properties... */
