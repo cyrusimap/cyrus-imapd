@@ -684,50 +684,34 @@ static void _emailsubmission_parse_filter(json_t *filter,
                                           json_t *unsupported __attribute__((unused)),
                                           void *rock __attribute__((unused)))
 {
+    const char *field;
     json_t *arg;
-    const char *s;
 
-    if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
-        jmap_parser_invalid(parser, NULL);
-        return;
-    }
-
-    arg = json_object_get(filter, "before");
-    if ((s = json_string_value(arg))) {
-        if (!jmap_is_valid_utcdate(s)) {
-            jmap_parser_invalid(parser, "before");
+    json_object_foreach(filter, field, arg) {
+        if (!strcmp(field, "emailIds") ||
+            !strcmp(field, "threadIds")) {
+            if (!json_is_array(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+            else {
+                jmap_parse_strings(arg, parser, field);
+            }
         }
-    } else if (arg) {
-        jmap_parser_invalid(parser, "before");
-    }
-    arg = json_object_get(filter, "after");
-    if ((s = json_string_value(arg))) {
-        if (!jmap_is_valid_utcdate(s)) {
-            jmap_parser_invalid(parser, "after");
+        else if (!strcmp(field, "undoStatus")) {
+            if (!json_is_string(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
         }
-    } else if (arg) {
-        jmap_parser_invalid(parser, "after");
-    }
-
-    arg = json_object_get(filter, "emailIds");
-    if (json_is_array(arg)) {
-        jmap_parse_strings(arg, parser, "emailIds");
-    } else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "emailIds");
-    }
-
-    arg = json_object_get(filter, "threadIds");
-    if (json_is_array(arg)) {
-        jmap_parse_strings(arg, parser, "threadIds");
-    } else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "threadIds");
-    }
-
-    arg = json_object_get(filter, "emailSubmissionIds");
-    if (json_is_array(arg)) {
-        jmap_parse_strings(arg, parser, "emailSubmissionIds");
-    } else if (JNOTNULL(arg)) {
-        jmap_parser_invalid(parser, "emailSubmissionIds");
+        else if (!strcmp(field, "before") ||
+                 !strcmp(field, "after")) {
+            if (!json_is_string(arg) ||
+                jmap_is_valid_utcdate(json_string_value(arg))) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else {
+            jmap_parser_invalid(parser, field);
+        }
     }
 }
 

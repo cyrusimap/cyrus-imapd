@@ -1739,180 +1739,119 @@ static void _email_parse_filter(json_t *filter, struct jmap_parser *parser,
                                 json_t *unsupported, void *rock)
 {
     jmap_req_t *req = rock;
+    const char *field, *s = NULL;
     json_t *arg, *val;
-    const char *s;
-    size_t i;
 
-    if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
-        jmap_parser_invalid(parser, NULL);
-        return;
-    }
-    arg = json_object_get(filter, "inMailbox");
-    if ((s = json_string_value(arg))) {
-        char *n = jmap_mbox_find(req, s);
-        if (!n) {
-            jmap_parser_invalid(parser, "inMailbox");
+    json_object_foreach(filter, field, arg) {
+        if (!strcmp(field, "inMailbox")) {
+            char *n = NULL;
+            if (!json_is_string(arg) ||
+                !(n = jmap_mbox_find(req, json_string_value(arg)))) {
+                jmap_parser_invalid(parser, field);
+            }
+            free(n);
         }
-        free(n);
-    } else if (arg) {
-        jmap_parser_invalid(parser, "inMailbox");
-    }
-
-    arg = json_object_get(filter, "before");
-    if ((s = json_string_value(arg))) {
-        if (!jmap_is_valid_utcdate(s)) {
-            jmap_parser_invalid(parser, "before");
-        }
-    } else if (arg) {
-        jmap_parser_invalid(parser, "before");
-    }
-    arg = json_object_get(filter, "after");
-    if ((s = json_string_value(arg))) {
-        if (!jmap_is_valid_utcdate(s)) {
-            jmap_parser_invalid(parser, "after");
-        }
-    } else if (arg) {
-        jmap_parser_invalid(parser, "after");
-    }
-
-    arg = json_object_get(filter, "minSize");
-    if (arg && !json_is_integer(arg)) {
-        jmap_parser_invalid(parser, "minSize");
-    }
-    arg = json_object_get(filter, "maxSize");
-    if (arg && !json_is_integer(arg)) {
-        jmap_parser_invalid(parser, "maxSize");
-    }
-    arg = json_object_get(filter, "hasAttachment");
-    if (arg && !json_is_boolean(arg)) {
-        jmap_parser_invalid(parser, "hasAttachment");
-    }
-    arg = json_object_get(filter, "attachmentName");
-    if (arg && !json_is_string(arg)) {
-        jmap_parser_invalid(parser, "attachmentName");
-    }
-    arg = json_object_get(filter, "attachmentType");
-    if (arg && !json_is_string(arg)) {
-        jmap_parser_invalid(parser, "attachmentType");
-    }
-    arg = json_object_get(filter, "text");
-    if (arg && !json_is_string(arg)) {
-        jmap_parser_invalid(parser, "text");
-    }
-    arg = json_object_get(filter, "from");
-    if (arg && !json_is_string(arg)) {
-        jmap_parser_invalid(parser, "from");
-    }
-    arg = json_object_get(filter, "to");
-    if (arg && !json_is_string(arg)) {
-        jmap_parser_invalid(parser, "to");
-    }
-    arg = json_object_get(filter, "cc");
-    if (arg && !json_is_string(arg)) {
-        jmap_parser_invalid(parser, "cc");
-    }
-    arg = json_object_get(filter, "bcc");
-    if (arg && !json_is_string(arg)) {
-        jmap_parser_invalid(parser, "bcc");
-    }
-    arg = json_object_get(filter, "subject");
-    if (arg && !json_is_string(arg)) {
-        jmap_parser_invalid(parser, "subject");
-    }
-    arg = json_object_get(filter, "body");
-    if (arg && !json_is_string(arg)) {
-        jmap_parser_invalid(parser, "body");
-    }
-
-    json_array_foreach(json_object_get(filter, "inMailboxOtherThan"), i, val) {
-        char *n = NULL;
-        if ((s = json_string_value(val))) {
-            n = jmap_mbox_find(req, s);
-        }
-        if (!n) {
-            jmap_parser_push_index(parser, "inMailboxOtherThan", i, s);
-            jmap_parser_invalid(parser, NULL);
-            jmap_parser_pop(parser);
-        }
-        free(n);
-    }
-
-    arg = json_object_get(filter, "allInThreadHaveKeyword");
-    if ((s = json_string_value(arg))) {
-        if (!_email_keyword_is_valid(s)) {
-            jmap_parser_invalid(parser, "allInThreadHaveKeyword");
-        }
-        if (!_email_threadkeyword_is_valid(s)) {
-            json_array_append_new(unsupported, json_pack("{s:s}",
-                        "allInThreadHaveKeyword", s));
-        }
-    } else if (arg) {
-        jmap_parser_invalid(parser, "allInThreadHaveKeyword");
-    }
-    arg = json_object_get(filter, "someInThreadHaveKeyword");
-    if ((s = json_string_value(arg))) {
-        if (!_email_keyword_is_valid(s)) {
-            jmap_parser_invalid(parser, "someInThreadHaveKeyword");
-        }
-        if (!_email_threadkeyword_is_valid(s)) {
-            json_array_append_new(unsupported, json_pack("{s:s}",
-                        "someInThreadHaveKeyword", s));
-        }
-    } else if (arg) {
-        jmap_parser_invalid(parser, "someInThreadHaveKeyword");
-    }
-    arg = json_object_get(filter, "noneInThreadHaveKeyword");
-    if ((s = json_string_value(arg))) {
-        if (!_email_keyword_is_valid(s)) {
-            jmap_parser_invalid(parser, "noneInThreadHaveKeyword");
-        }
-        if (!_email_threadkeyword_is_valid(s)) {
-            json_array_append_new(unsupported, json_pack("{s:s}",
-                        "noneInThreadHaveKeyword", s));
-        }
-    } else if (arg) {
-        jmap_parser_invalid(parser, "noneInThreadHaveKeyword");
-    }
-
-
-    arg = json_object_get(filter, "hasKeyword");
-    if ((s = json_string_value(arg))) {
-        if (!_email_keyword_is_valid(s)) {
-            jmap_parser_invalid(parser, "hasKeyword");
-        }
-    } else if (arg) {
-        jmap_parser_invalid(parser, "hasKeyword");
-    }
-    arg = json_object_get(filter, "notKeyword");
-    if ((s = json_string_value(arg))) {
-        if (!_email_keyword_is_valid(s)) {
-            jmap_parser_invalid(parser, "notKeyword");
-        }
-    } else if (arg) {
-        jmap_parser_invalid(parser, "notKeyword");
-    }
-
-    arg = json_object_get(filter, "header");
-    if (JNOTNULL(arg)) {
-        switch (json_array_size(arg)) {
-            case 2:
-                s = json_string_value(json_array_get(arg, 1));
-                if (!s || !strlen(s)) {
-                    jmap_parser_push_index(parser, "header", 1, s);
-                    jmap_parser_invalid(parser, NULL);
-                    jmap_parser_pop(parser);
+        else if (!strcmp(field, "inMailboxOtherThan")) {
+            if (!json_is_array(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+            else {
+                size_t i;
+                json_array_foreach(arg, i, val) {
+                    char *n = NULL;
+                    if (!json_is_string(val) ||
+                        !(s = json_string_value(val)) ||
+                        !(n = jmap_mbox_find(req, s))) {
+                        jmap_parser_push_index(parser, field, i, s);
+                        jmap_parser_invalid(parser, NULL);
+                        jmap_parser_pop(parser);
+                    }
+                    free(n);
                 }
-                /* fallthrough */
-            case 1:
-                s = json_string_value(json_array_get(arg, 0));
-                if (!s || !strlen(s)) {
-                    jmap_parser_push_index(parser, "header", 0, s);
-                    jmap_parser_invalid(parser, NULL);
-                    jmap_parser_pop(parser);
+            }
+        }
+        else if (!strcmp(field, "before") ||
+                 !strcmp(field, "after")) {
+            if (!json_is_string(arg) ||
+                !jmap_is_valid_utcdate(json_string_value(arg))) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "minSize") ||
+                 !strcmp(field, "maxSize")) {
+            if (!json_is_integer(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "allInThreadHaveKeyword") ||
+                 !strcmp(field, "someInThreadHaveKeyword") ||
+                 !strcmp(field, "noneInThreadHaveKeyword")) {
+            if (!json_is_string(arg) ||
+                !(s = json_string_value(arg)) ||
+                !_email_keyword_is_valid(s)) {
+                jmap_parser_invalid(parser, field);
+            }
+            else if (!_email_threadkeyword_is_valid(s)) {
+                json_array_append_new(unsupported, json_pack("{s:s}", field, s));
+            }
+        }
+        else if (!strcmp(field, "hasKeyword") ||
+                 !strcmp(field, "notKeyword")) {
+            if (!json_is_string(arg) ||
+                !_email_keyword_is_valid(json_string_value(arg))) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "hasAttachment")) {
+            if (!json_is_boolean(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "text") ||
+                 !strcmp(field, "from") ||
+                 !strcmp(field, "to") ||
+                 !strcmp(field, "cc") ||
+                 !strcmp(field, "bcc") ||
+                 !strcmp(field, "subject") ||
+                 !strcmp(field, "body") ||
+                 !strcmp(field, "attachmentName") ||  /* FM-specific */
+                 !strcmp(field, "attachmentType")) {  /* FM-specific */
+            if (!json_is_string(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "header")) {
+            if (!json_is_array(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+            else {
+                switch (json_array_size(arg)) {
+                case 2:
+                    s = json_string_value(json_array_get(arg, 1));
+                    if (!s || !strlen(s)) {
+                        jmap_parser_push_index(parser, field, 1, s);
+                        jmap_parser_invalid(parser, NULL);
+                        jmap_parser_pop(parser);
+                    }
+
+                    GCC_FALLTHROUGH
+
+                case 1:
+                    s = json_string_value(json_array_get(arg, 0));
+                    if (!s || !strlen(s)) {
+                        jmap_parser_push_index(parser, field, 0, s);
+                        jmap_parser_invalid(parser, NULL);
+                        jmap_parser_pop(parser);
+                    }
+                    break;
+
+                default:
+                    jmap_parser_invalid(parser, field);
                 }
-                break;
-            default:
-                jmap_parser_invalid(parser, "header");
+            }
+        }
+        else {
+            jmap_parser_invalid(parser, field);
         }
     }
 }

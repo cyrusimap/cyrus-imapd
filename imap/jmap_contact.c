@@ -1907,89 +1907,45 @@ static void validatefilter(json_t *filter, struct jmap_parser *parser,
                            json_t *unsupported __attribute__((unused)),
                            void *rock __attribute__((unused)))
 {
-    struct buf buf = BUF_INITIALIZER;
-    const char *s;
+    const char *field;
+    json_t *arg;
 
-    if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
-        jmap_parser_invalid(parser, NULL);
-        return;
-    }
-
-    /* inContactGroup */
-    json_t *inContactGroup = json_object_get(filter, "inContactGroup");
-    if (inContactGroup && json_typeof(inContactGroup) != JSON_ARRAY) {
-        jmap_parser_invalid(parser, "inContactGroup");
-    } else if (inContactGroup) {
-        size_t i;
-        json_t *val;
-        json_array_foreach(inContactGroup, i, val) {
-            const char *id;
-            if (json_unpack(val, "s", &id) == -1) {
-                buf_printf(&buf, "inContactGroup[%zu]", i);
-                jmap_parser_invalid(parser, buf_cstring(&buf));
-                buf_reset(&buf);
+    json_object_foreach(filter, field, arg) {
+        if (!strcmp(field, "inContactGroup")) {
+            if (!json_is_array(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+            else {
+                jmap_parse_strings(arg, parser, field);
             }
         }
+        else if (!strcmp(field, "isFlagged")) {
+            if (!json_is_boolean(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else if (!strcmp(field, "text") ||
+                 !strcmp(field, "prefix") ||
+                 !strcmp(field, "firstName") ||
+                 !strcmp(field, "lastName") ||
+                 !strcmp(field, "suffix") ||
+                 !strcmp(field, "nickname") ||
+                 !strcmp(field, "company") ||
+                 !strcmp(field, "department") ||
+                 !strcmp(field, "jobTitle") ||
+                 !strcmp(field, "email") ||
+                 !strcmp(field, "phone") ||
+                 !strcmp(field, "online") ||
+                 !strcmp(field, "address") ||
+                 !strcmp(field, "notes")) {
+            if (!json_is_string(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
+        else {
+            jmap_parser_invalid(parser, field);
+        }
     }
-
-    /* text */
-    if (JNOTNULL(json_object_get(filter, "text"))) {
-        readprop_full(filter, NULL, "text", 0, parser->invalid, "s", &s);
-    }
-    /* prefix */
-    if (JNOTNULL(json_object_get(filter, "prefix"))) {
-        readprop_full(filter, NULL, "prefix", 0, parser->invalid, "s", &s);
-    }
-    /* firstName */
-    if (JNOTNULL(json_object_get(filter, "firstName"))) {
-        readprop_full(filter, NULL, "firstName", 0, parser->invalid, "s", &s);
-    }
-    /* lastName */
-    if (JNOTNULL(json_object_get(filter, "lastName"))) {
-        readprop_full(filter, NULL, "lastName", 0, parser->invalid, "s", &s);
-    }
-    /* suffix */
-    if (JNOTNULL(json_object_get(filter, "suffix"))) {
-        readprop_full(filter, NULL, "suffix", 0, parser->invalid, "s", &s);
-    }
-    /* nickname */
-    if (JNOTNULL(json_object_get(filter, "nickname"))) {
-        readprop_full(filter, NULL, "nickname", 0, parser->invalid, "s", &s);
-    }
-    /* company */
-    if (JNOTNULL(json_object_get(filter, "company"))) {
-        readprop_full(filter, NULL, "company", 0, parser->invalid, "s", &s);
-    }
-    /* department */
-    if (JNOTNULL(json_object_get(filter, "department"))) {
-        readprop_full(filter, NULL, "department", 0, parser->invalid, "s", &s);
-    }
-    /* jobTitle */
-    if (JNOTNULL(json_object_get(filter, "jobTitle"))) {
-        readprop_full(filter, NULL, "jobTitle", 0, parser->invalid, "s", &s);
-    }
-    /* email */
-    if (JNOTNULL(json_object_get(filter, "email"))) {
-        readprop_full(filter, NULL, "email", 0, parser->invalid, "s", &s);
-    }
-    /* phone */
-    if (JNOTNULL(json_object_get(filter, "phone"))) {
-        readprop_full(filter, NULL, "phone", 0, parser->invalid, "s", &s);
-    }
-    /* online */
-    if (JNOTNULL(json_object_get(filter, "online"))) {
-        readprop_full(filter, NULL, "online", 0, parser->invalid, "s", &s);
-    }
-    /* address */
-    if (JNOTNULL(json_object_get(filter, "address"))) {
-        readprop_full(filter, NULL, "address", 0, parser->invalid, "s", &s);
-    }
-    /* notes */
-    if (JNOTNULL(json_object_get(filter, "notes"))) {
-        readprop_full(filter, NULL, "notes", 0, parser->invalid, "s", &s);
-    }
-
-    buf_free(&buf);
 }
 
 static int validatecomparator(struct jmap_comparator *comp,

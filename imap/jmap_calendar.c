@@ -2607,67 +2607,49 @@ static void validatefilter(json_t *filter, struct jmap_parser *parser,
                            json_t *unsupported __attribute__((unused)),
                            void *rock __attribute__((unused)))
 {
-    struct buf buf = BUF_INITIALIZER;
     icaltimetype timeval;
-    const char *s;
+    const char *field;
     json_t *arg;
 
-    if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
-        jmap_parser_invalid(parser, NULL);
-        return;
-    }
-    arg = json_object_get(filter, "inCalendars");
-    if (arg && json_array_size(arg)) {
-        size_t i;
-        json_t *uid;
-        json_array_foreach(arg, i, uid) {
-            const char *id = json_string_value(uid);
-            if (!id || id[0] == '#') {
-                buf_printf(&buf, "inCalendars[%zu]", i);
-                jmap_parser_invalid(parser, buf_cstring(&buf));
-                buf_reset(&buf);
+    json_object_foreach(filter, field, arg) {
+        if (!strcmp(field, "inCalendars")) {
+            if (!(json_is_array(arg) && json_array_size(arg))) {
+                jmap_parser_invalid(parser, field);
+            }
+            else {
+                size_t i;
+                json_t *uid;
+                json_array_foreach(arg, i, uid) {
+                    const char *id = json_string_value(uid);
+                    if (!id || id[0] == '#') {
+                        jmap_parser_push_index(parser, field, i, id);
+                        jmap_parser_invalid(parser, NULL);
+                        jmap_parser_pop(parser);
+                    }
+                }
             }
         }
-    }
-    else if (JNOTNULL(arg) && !json_array_size(arg)) {
-        jmap_parser_invalid(parser, "inCalendars");
-    }
-
-    if (JNOTNULL(json_object_get(filter, "after"))) {
-        if (readprop_full(filter, NULL, "after", 1, parser->invalid, "s", &s) > 0) {
-            if (!utcdate_to_icaltime(s, &timeval)) {
-                jmap_parser_invalid(parser, "after");
+        else if (!strcmp(field, "before") ||
+                 !strcmp(field, "after")) {
+            if (!json_is_string(arg) ||
+                !utcdate_to_icaltime(json_string_value(arg), &timeval)) {
+                jmap_parser_invalid(parser, field);
             }
         }
-    }
-    if (JNOTNULL(json_object_get(filter, "before"))) {
-        if (readprop_full(filter, NULL, "before", 1, parser->invalid, "s", &s) > 0) {
-            if (!utcdate_to_icaltime(s, &timeval)) {
-                jmap_parser_invalid(parser, "before");
+        else if (!strcmp(field, "text") ||
+                 !strcmp(field, "title") ||
+                 !strcmp(field, "description") ||
+                 !strcmp(field, "location") ||
+                 !strcmp(field, "owner") ||
+                 !strcmp(field, "attendee")) {
+            if (!json_is_string(arg)) {
+                jmap_parser_invalid(parser, field);
             }
         }
+        else {
+            jmap_parser_invalid(parser, field);
+        }
     }
-
-    if (JNOTNULL(json_object_get(filter, "text"))) {
-        readprop_full(filter, NULL, "text", 1, parser->invalid, "s", &s);
-    }
-    if (JNOTNULL(json_object_get(filter, "title"))) {
-        readprop_full(filter, NULL, "title", 1, parser->invalid, "s", &s);
-    }
-    if (JNOTNULL(json_object_get(filter, "description"))) {
-        readprop_full(filter, NULL, "description", 1, parser->invalid, "s", &s);
-    }
-    if (JNOTNULL(json_object_get(filter, "location"))) {
-        readprop_full(filter, NULL, "location", 1, parser->invalid, "s", &s);
-    }
-    if (JNOTNULL(json_object_get(filter, "owner"))) {
-        readprop_full(filter, NULL, "owner", 1, parser->invalid, "s", &s);
-    }
-    if (JNOTNULL(json_object_get(filter, "attendee"))) {
-        readprop_full(filter, NULL, "attendee", 1, parser->invalid, "s", &s);
-    }
-
-    buf_free(&buf);
 }
 
 static int validatecomparator(struct jmap_comparator *comp,

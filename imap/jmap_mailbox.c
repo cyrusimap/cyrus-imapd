@@ -1204,7 +1204,8 @@ done:
     return r;
 }
 
-static int _mbox_parse_comparator(struct jmap_comparator *comp, void *rock __attribute__((unused)))
+static int _mbox_parse_comparator(struct jmap_comparator *comp,
+                                  void *rock __attribute__((unused)))
 {
     /* Reject unsupported properties */
     if (strcmp(comp->property, "sortOrder") &&
@@ -1220,46 +1221,34 @@ static int _mbox_parse_comparator(struct jmap_comparator *comp, void *rock __att
 }
 
 static void _mbox_parse_filter(json_t *filter, struct jmap_parser *parser,
-                               json_t *unsupported,
+                               json_t *unsupported __attribute__((unused)),
                                void *rock __attribute__((unused)))
 {
     json_t *val;
     const char *field;
-    struct buf path = BUF_INITIALIZER;
+
     json_object_foreach(filter, field, val) {
-        if (!strcmp(field, "parentId")) {
-            if (val != json_null() && !json_is_string(val)) {
-                jmap_parser_invalid(parser, "parentId");
+        if (!strcmp(field, "parentId") ||
+            !strcmp(field, "role")) {
+            if (!(json_is_string(val) || json_is_null(val))) {
+                jmap_parser_invalid(parser, field);
             }
         }
         else if (!strcmp(field, "name")) {
-            if (val != json_null() && !json_is_string(val)) {
-                jmap_parser_invalid(parser, "name");
+            if (!json_is_string(val)) {
+                jmap_parser_invalid(parser, field);
             }
         }
-        else if (!strcmp(field, "role")) {
-            if (val != json_null() && (!json_is_string(val) || !json_is_null(val))) {
-                jmap_parser_invalid(parser, "role");
-            }
-        }
-        else if (!strcmp(field, "isSubscribed")) {
+        else if (!strcmp(field, "isSubscribed") ||
+                 !strcmp(field, "hasAnyRole")) {
             if (!json_is_boolean(val)) {
-                jmap_parser_invalid(parser, "isSubscribed");
-            }
-        }
-        else if (!strcmp(field, "hasAnyRole")) {
-            if (!json_is_boolean(val)) {
-                jmap_parser_invalid(parser, "hasAnyRole");
+                jmap_parser_invalid(parser, field);
             }
         }
         else {
-            jmap_parser_push(parser, field);
-            jmap_parser_path(parser, &path);
-            json_array_append_new(unsupported, json_string(buf_cstring(&path)));
-            buf_reset(&path);
+            jmap_parser_invalid(parser, field);
         }
     }
-    buf_free(&path);
 }
 
 HIDDEN int jmap_mailbox_query(jmap_req_t *req)
