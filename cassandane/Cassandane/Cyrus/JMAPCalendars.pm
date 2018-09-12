@@ -794,8 +794,10 @@ sub normalize_event
             if (not exists $p->{participation}) {
                 $p->{participation} = 'required';
             }
-            if (not exists $p->{rsvpResponse}) {
-                $p->{rsvpResponse} = 'needs-action';
+            if ((not exists $p->{rsvpResponse})) {
+                if (exists $p->{rsvpWanted} and $p->{rsvpWanted} eq 'true') {
+                    $p->{rsvpResponse} = 'needs-action';
+                }
             }
             if (exists $p->{roles}) {
                 my @roles = sort @{$p->{roles}};
@@ -1087,7 +1089,7 @@ sub test_calendarevent_get_participants
         'smithers@example.com' => {
             name => 'Monty Burns',
             email => 'smithers@example.com',
-            roles => ['owner', 'attendee'],
+            roles => ['owner'],
             rsvpResponse => 'accepted',
             participation => 'required',
         },
@@ -1139,16 +1141,14 @@ sub test_calendarevent_get_organizer
 
     my $participants = {
         'organizer@local' => {
-            name => '',
+            name => 'Organizer',
             email => 'organizer@local',
-            roles => ['owner', 'attendee'],
-            rsvpResponse => 'accepted',
+            roles => ['owner'],
         },
         'attendee@local' => {
             name => '',
             email => 'attendee@local',
             roles => ['attendee'],
-            rsvpResponse => 'needs-action',
         },
     };
 
@@ -1374,10 +1374,10 @@ EOF
 
     my $event = $self->putandget_vevent($id, $ical);
     my $p = $event->{participants}{"lenny\@example.com"};
-    $self->assert_str_equals("needs-action", $p->{rsvpResponse});
+    $self->assert_null($p->{rsvpResponse});
     $self->assert_deep_equals(["carl\@example.com"], $p->{delegatedTo});
     $p = $event->{participants}{"carl\@example.com"};
-    $self->assert_str_equals("needs-action", $p->{rsvpResponse});
+    $self->assert_null($p->{rsvpResponse});
     $self->assert_deep_equals(["lenny\@example.com"], $p->{delegatedTo});
     $self->assert_deep_equals(["lenny\@example.com"], $p->{delegatedFrom});
 }
@@ -2093,7 +2093,7 @@ sub test_calendarevent_set_participants
                 name => 'Foo',
                 email => 'foo@local',
                 kind => 'individual',
-                roles => [ 'owner', 'chair', 'attendee' ],
+                roles => [ 'owner', 'chair' ],
                 locationId => 'loc1',
                 rsvpResponse => 'accepted',
                 participation => 'required',
@@ -2199,8 +2199,7 @@ sub test_calendarevent_set_participants_patch
     $event->{participants}{'foo@local'} = {
         name => '',
         email => 'foo@local',
-        roles => ['owner', 'attendee'],
-        rsvpResponse => 'accepted',
+        roles => ['owner'],
     };
     $self->assert_normalized_event_equals($ret, $event);
     my $eventId = $ret->{id};

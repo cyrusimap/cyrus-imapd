@@ -13,7 +13,7 @@ DESCRIPTION:
 SUMMARY:foo
 LAST-MODIFIED:20150928T132434Z
 ATTENDEE:mailto:attendee@local
-ORGANIZER:mailto:organizer@local
+ORGANIZER;CN="Organizer":mailto:organizer@local
 END:VEVENT
 END:VCALENDAR
 
