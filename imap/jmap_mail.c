@@ -7477,6 +7477,15 @@ static void _emailpart_to_mime(jmap_req_t *req, FILE *fp,
     }
 }
 
+static int _email_have_toplevel_header(struct email *email, const char *lcasename)
+{
+    json_t *header = json_object_get(email->headers.all, lcasename);
+    if (!header && email->body) {
+        header = json_object_get(email->body->headers.all, lcasename);
+    }
+    return JNOTNULL(header);
+}
+
 static int _email_to_mime(jmap_req_t *req, FILE *fp, void *rock, json_t **err)
 {
     struct email *email = rock;
@@ -7484,27 +7493,27 @@ static int _email_to_mime(jmap_req_t *req, FILE *fp, void *rock, json_t **err)
     size_t i;
 
     /* Set mandatory and quasi-mandatory headers */
-    if (!json_object_get(email->headers.all, "user-agent")) {
+    if (!_email_have_toplevel_header(email, "user-agent")) {
         char *tmp = strconcat("Cyrus-JMAP/", CYRUS_VERSION, NULL);
         header = json_pack("{s:s s:s}", "name", "User-Agent", "value", tmp);
         _headers_shift_new(&email->headers, header);
         free(tmp);
     }
-    if (!json_object_get(email->headers.all, "message-id")) {
+    if (!_email_have_toplevel_header(email, "message-id")) {
         struct buf buf = BUF_INITIALIZER;
         buf_printf(&buf, "<%s@%s>", makeuuid(), config_servername);
         header = json_pack("{s:s s:s}", "name", "Message-Id", "value", buf_cstring(&buf));
         _headers_shift_new(&email->headers, header);
         buf_free(&buf);
     }
-    if (!json_object_get(email->headers.all, "date")) {
+    if (!_email_have_toplevel_header(email, "date")) {
         char fmt[RFC5322_DATETIME_MAX+1];
         memset(fmt, 0, RFC5322_DATETIME_MAX+1);
         time_to_rfc5322(time(NULL), fmt, RFC5322_DATETIME_MAX+1);
         header = json_pack("{s:s s:s}", "name", "Date", "value", fmt);
         _headers_shift_new(&email->headers, header);
     }
-    if (!json_object_get(email->headers.all, "from")) {
+    if (!_email_have_toplevel_header(email, "from")) {
         header = json_pack("{s:s s:s}", "name", "From", "value", req->userid);
         _headers_shift_new(&email->headers, header);
     }
