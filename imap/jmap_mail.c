@@ -3709,6 +3709,8 @@ static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *vrock)
 
     if (rec->part) return 0;
 
+    if (!jmap_hasrights_byname(req, rec->mboxname, ACL_READ|ACL_LOOKUP)) return 0;
+
     /* Fetch system flags */
     int r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
     if (r) return r;
@@ -7605,6 +7607,7 @@ static void _email_mboxrecs_free(ptrarray_t **mboxrecsptr)
 }
 
 struct email_mboxrecs_make_rock {
+    jmap_req_t *req;
     const char *email_id;
     ptrarray_t *mboxrecs;
 };
@@ -7613,6 +7616,8 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
 {
     struct email_mboxrecs_make_rock *rock = _rock;
     ptrarray_t *mboxrecs = rock->mboxrecs;
+
+    if (!jmap_hasrights_byname(rock->req, rec->mboxname, ACL_READ|ACL_LOOKUP)) return 0;
 
     /* Check if there's already a mboxrec for this mailbox. */
     int i;
@@ -7644,7 +7649,8 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
     return 0;
 }
 
-static void _email_mboxrecs_read(struct conversations_state *cstate,
+static void _email_mboxrecs_read(jmap_req_t *req,
+                                 struct conversations_state *cstate,
                                  strarray_t *email_ids,
                                  json_t *set_errors,
                                  ptrarray_t **mboxrecsptr)
@@ -7654,7 +7660,7 @@ static void _email_mboxrecs_read(struct conversations_state *cstate,
     int i;
     for (i = 0; i < strarray_size(email_ids); i++) {
         const char *email_id = strarray_nth(email_ids, i);
-        struct email_mboxrecs_make_rock rock = { email_id, mboxrecs };
+        struct email_mboxrecs_make_rock rock = { req, email_id, mboxrecs };
         int r = conversations_guid_foreach(cstate, _guid_from_id(email_id),
                                            _email_mboxrecs_read_cb, &rock);
         if (r) {
@@ -8346,6 +8352,10 @@ static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrar
             struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
             struct email_mboxrec *mboxrec = uidrec->mboxrec;
             struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
+
+            if (!jmap_hasrights_byname(bulk->req, plan->mboxname, ACL_READ|ACL_LOOKUP)) {
+                continue;
+            }
             if (!update->mailboxids) {
                 /* Add keyword update to all current uid records */
                 ptrarray_append(&plan->setflags, uidrec);
@@ -8564,7 +8574,7 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
         }
         strarray_append(&email_ids, update->email_id);
     }
-    _email_mboxrecs_read(req->cstate, &email_ids, bulk->set_errors, &bulk->cur_mboxrecs);
+    _email_mboxrecs_read(req, req->cstate, &email_ids, bulk->set_errors, &bulk->cur_mboxrecs);
 
     /* Open current mailboxes */
     size_t mboxhash_size = ptrarray_size(updates) * JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL + 1;
@@ -9037,7 +9047,7 @@ static void _email_destroy_bulk(jmap_req_t *req,
     json_array_foreach(destroy, iz, jval) {
         strarray_append(&email_ids, json_string_value(jval));
     }
-    _email_mboxrecs_read(req->cstate, &email_ids, not_destroyed, &mboxrecs);
+    _email_mboxrecs_read(req, req->cstate, &email_ids, not_destroyed, &mboxrecs);
 
     /* Check mailbox ACL for shared accounts. */
     if (strcmp(req->accountid, req->userid)) {
