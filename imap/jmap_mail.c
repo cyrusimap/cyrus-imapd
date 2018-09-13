@@ -6184,7 +6184,7 @@ static json_t *_header_from_addresses(json_t *addrs,
 
     size_t i;
     json_t *addr;
-    struct buf adr = BUF_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
     json_t *jstrings = json_array();
     json_t *ret = NULL;
 
@@ -6213,20 +6213,58 @@ static json_t *_header_from_addresses(json_t *addrs,
         if (!name && !email) continue;
 
         if (name && strlen(name) && email) {
-            char *xname = charset_encode_mimeheader(name, strlen(name), 0);
-            buf_printf(&adr, "%s <%s>", xname, email);
-            free(xname);
+            enum name_type { ATOM, QUOTED_STRING, HIGH_BIT } name_type = ATOM;
+            const char *p;
+            for (p = name; *p; p++) {
+                char c = *p;
+                /* Check for ATOM characters */
+                if (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z'))
+                    continue;
+                if ('0' <= c && c <= '9')
+                    continue;
+                if (strchr("!#$%&'*+-/=?^_`{|}~", c))
+                    continue;
+                if (c < 0) {
+                    /* Contains at least one high bit character. */
+                    name_type = HIGH_BIT;
+                    break;
+                }
+                else {
+                    /* Requires at least a quoted string, but could
+                     * still contain a high bit at a later position. */
+                    name_type = QUOTED_STRING;
+                }
+            }
+            if (name_type == ATOM) {
+                buf_setcstr(&buf, name);
+            }
+            else if (name_type == QUOTED_STRING) {
+                buf_putc(&buf, '"');
+                for (p = name; *p; p++) {
+                    if (*p == '"' || *p == '\\' || *p == '\r') {
+                        buf_putc(&buf, '\\');
+                    }
+                    buf_putc(&buf, *p);
+                }
+                buf_putc(&buf, '"');
+            }
+            else if (name_type == HIGH_BIT) {
+                char *xname = charset_encode_mimeheader(name, strlen(name), 0);
+                buf_appendcstr(&buf, xname);
+                free(xname);
+            }
+            buf_printf(&buf, " <%s>", email);
         } else if (email) {
-            buf_setcstr(&adr, email);
+            buf_setcstr(&buf, email);
         }
-        json_array_append_new(jstrings, json_string(buf_cstring(&adr)));
-        buf_reset(&adr);
+        json_array_append_new(jstrings, json_string(buf_cstring(&buf)));
+        buf_reset(&buf);
     }
     ret = _header_from_jstrings(jstrings, parser, prop_name, header_name, ',');
 
 done:
     json_decref(jstrings);
-    buf_free(&adr);
+    buf_free(&buf);
     return ret;
 }
 
