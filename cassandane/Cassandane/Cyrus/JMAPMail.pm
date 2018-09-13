@@ -11225,6 +11225,11 @@ sub test_email_set_headers
            value => [{ 'name' => 'foo', email => 'bar@local' }],
            wantRaw => ' foo <bar@local>',
        },
+       'header:X-AddrsQuoted' => {
+           format => 'asAddresses',
+           value => [{ 'name' => 'Foo Bar', email => 'quotbar@local' }],
+           wantRaw => ' "Foo Bar" <quotbar@local>',
+       },
        'header:X-Addrs8bit' => {
            format => 'asAddresses',
            value => [{ 'name' => "Rudi R\N{LATIN SMALL LETTER U WITH DIAERESIS}be", email => 'bar@local' }],
