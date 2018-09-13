@@ -5262,6 +5262,7 @@ sub test_email_seen_shared_twofolder_hidden
     $admintalk->setacl("user.other.A", "cassandane", "lrs") or die;
     # NOTE: user cassandane does NOT get permission to see this one
     $admintalk->create("user.other.A.sub") or die;
+    $admintalk->setacl("user.other.A.sub", "cassandane", "") or die;
 
     # Create message in mailbox A
     $self->{adminstore}->set_folder('user.other.A');
