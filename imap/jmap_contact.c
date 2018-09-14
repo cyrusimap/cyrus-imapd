@@ -90,6 +90,8 @@ jmap_method_t jmap_contact_methods[] = {
     { NULL,                      NULL}
 };
 
+static char *_prodid = NULL;
+
 int jmap_contact_init(jmap_settings_t *settings)
 {
     jmap_method_t *mp;
@@ -99,6 +101,19 @@ int jmap_contact_init(jmap_settings_t *settings)
 
     json_object_set_new(settings->capabilities,
                         JMAP_URN_CONTACTS, json_object());
+
+    /* Initialize PRODID value
+     *
+     * XXX - OS X 10.11.6 Contacts is not unfolding PRODID lines, so make
+     * sure that PRODID never exceeds the 75 octet limit without CRLF */
+    struct buf prodidbuf = BUF_INITIALIZER;
+    size_t max_len = 68; /* 75 - strlen("PRODID:") */
+    buf_printf(&prodidbuf, "-//CyrusIMAP.org//Cyrus %s//EN", CYRUS_VERSION);
+    if (buf_len(&prodidbuf) > max_len) {
+        buf_truncate(&prodidbuf, max_len - 6);
+        buf_appendcstr(&prodidbuf, "..//EN");
+    }
+    _prodid = buf_release(&prodidbuf);
 
     return 0;
 }
@@ -2864,6 +2879,84 @@ static int required_set_rights(json_t *props)
     return needrights;
 }
 
+static int setContacts_create(jmap_req_t *req, const char *account_id,
+                              json_t *jcard,
+                              struct mailbox **mailbox, char **uidptr,
+                              json_t *invalid)
+{
+    struct entryattlist *annots = NULL;
+    strarray_t *flags = NULL;
+    struct vparse_card *card = NULL;
+    char *uid = xstrdup(makeuuid());
+    int r = 0;
+
+    *uidptr = NULL;
+
+    const char *addressbookId = "Default";
+    json_t *abookid = json_object_get(jcard, "addressbookId");
+    if (abookid && json_string_value(abookid)) {
+        /* XXX - invalid arguments */
+        addressbookId = json_string_value(abookid);
+    }
+    char *mboxname = mboxname_abook(account_id, addressbookId);
+    json_object_del(jcard, "addressbookId");
+    addressbookId = NULL;
+
+    int needrights = required_set_rights(jcard);
+
+    /* Check permissions. */
+    if (!jmap_hasrights_byname(req, mboxname, needrights)) {
+        json_array_append_new(invalid, json_string("addressbookId"));
+        goto done;
+    }
+
+    card = vparse_new_card("VCARD");
+    vparse_add_entry(card, NULL, "PRODID", _prodid);
+    vparse_add_entry(card, NULL, "VERSION", "3.0");
+    vparse_add_entry(card, NULL, "UID", uid);
+
+    /* we need to create and append a record */
+    if (!*mailbox || strcmp((*mailbox)->name, mboxname)) {
+        jmap_closembox(req, mailbox);
+        r = jmap_openmbox(req, mboxname, mailbox, 1);
+        if (r == IMAP_MAILBOX_NONEXISTENT) {
+            json_array_append_new(invalid, json_string("addressbookId"));
+            r = 0;
+            goto done;
+        }
+        else if (r) goto done;
+    }
+
+    flags = strarray_new();
+    r = _json_to_card(req, NULL, card, jcard, flags, &annots, invalid);
+    if (r || json_array_size(invalid)) {
+        r = 0;
+        goto done;
+    }
+
+    syslog(LOG_NOTICE, "jmap: create contact %s/%s (%s)",
+           account_id, mboxname, uid);
+    r = carddav_store(*mailbox, card, NULL, 0, flags, annots,
+                      account_id, req->authstate, ignorequota);
+    if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
+        syslog(LOG_ERR, "carddav_store failed for user %s: %s",
+               account_id, error_message(r));
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    r = 0;
+    *uidptr = uid;
+
+done:
+    if (!*uidptr) free(uid);
+    vparse_free_card(card);
+    free(mboxname);
+    strarray_free(flags);
+    freeentryatts(annots);
+
+    return r;
+}
+
 static int setContacts(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -2901,110 +2994,38 @@ static int setContacts(struct jmap_req *req)
         json_decref(jstate);
     }
 
-    /* Initialize PRODID value */
-    static char *_prodid = NULL;
-    if (!_prodid) {
-        /* XXX - OS X 10.11.6 Contacts is not unfolding PRODID lines, so make
-         * sure that PRODID never exceeds the 75 octet limit without CRLF */
-        struct buf prodidbuf = BUF_INITIALIZER;
-        size_t max_len = 68; /* 75 - strlen("PRODID:") */
-        buf_printf(&prodidbuf, "-//CyrusIMAP.org//Cyrus %s//EN", CYRUS_VERSION);
-        if (buf_len(&prodidbuf) > max_len) {
-            buf_truncate(&prodidbuf, max_len - 6);
-            buf_appendcstr(&prodidbuf, "..//EN");
-        }
-        _prodid = buf_release(&prodidbuf);
-    }
-
     r = carddav_create_defaultaddressbook(req->accountid);
     if (r) goto done;
 
     /* create */
-    json_t *record;
     const char *key;
     json_t *arg;
     json_object_foreach(set.create, key, arg) {
-        char *uid = xstrdup(makeuuid());
-        struct entryattlist *annots = NULL;
-
-        const char *addressbookId = "Default";
-        json_t *abookid = json_object_get(arg, "addressbookId");
-        if (abookid && json_string_value(abookid)) {
-            /* XXX - invalid arguments */
-            addressbookId = json_string_value(abookid);
-        }
-        char *mboxname = mboxname_abook(req->accountid, addressbookId);
-        json_object_del(arg, "addressbookId");
-        addressbookId = NULL;
-
-        int needrights = required_set_rights(arg);
-
-        if (!jmap_hasrights_byname(req, mboxname, needrights)) {
-            json_t *err = json_pack("{s:s s:[s]}",
-                                    "type", "invalidProperties",
-                                    "properties", "addressbookId");
+        char *uid = NULL;
+        json_t *invalid = json_pack("[]");
+        r = setContacts_create(req, req->accountid, arg,
+                               &mailbox, &uid, invalid);
+        if (r) {
+            json_t *err = json_pack("{s:s s:s}",
+                                    "type", "internalError",
+                                    "message", error_message(r));
             json_object_set_new(set.not_created, key, err);
-            free(mboxname);
+            r = 0;
             free(uid);
             continue;
         }
-
-        struct vparse_card *card = vparse_new_card("VCARD");
-        vparse_add_entry(card, NULL, "PRODID", _prodid);
-        vparse_add_entry(card, NULL, "VERSION", "3.0");
-        vparse_add_entry(card, NULL, "UID", uid);
-
-        /* we need to create and append a record */
-        if (!mailbox || strcmp(mailbox->name, mboxname)) {
-            jmap_closembox(req, &mailbox);
-            r = jmap_openmbox(req, mboxname, &mailbox, 1);
-            if (r) {
-                free(mboxname);
-                vparse_free_card(card);
-                free(uid);
-                goto done;
-            }
-        }
-
-        strarray_t *flags = strarray_new();
-        json_t *invalid = json_pack("[]");
-        r = _json_to_card(req, NULL, card, arg, flags, &annots, invalid);
-        if (r || json_array_size(invalid)) {
-            /* this is just a failure */
-            r = 0;
-            json_t *err = json_pack("{s:s}", "type", "invalidProperties");
-            if (json_array_size(invalid)) {
-                json_object_set(err, "properties", invalid);
-            }
-            json_decref(invalid);
+        if (json_array_size(invalid)) {
+            json_t *err = json_pack("{s:s s:o}",
+                                    "type", "invalidProperties",
+                                    "properties", invalid);
             json_object_set_new(set.not_created, key, err);
-            strarray_free(flags);
-            freeentryatts(annots);
-            free(mboxname);
-            vparse_free_card(card);
             free(uid);
             continue;
         }
         json_decref(invalid);
 
-        syslog(LOG_NOTICE, "jmap: create contact %s/%s (%s)",
-               req->accountid, mboxname, uid);
-        r = carddav_store(mailbox, card, NULL, 0, flags, annots,
-                          req->accountid, req->authstate, ignorequota);
-        vparse_free_card(card);
-        free(mboxname);
-        strarray_free(flags);
-        freeentryatts(annots);
-
-        if (r) {
-            free(uid);
-            goto done;
-        }
-
-        record = json_pack("{s:s}", "id", uid);
-        json_object_set_new(set.created, key, record);
-
-        /* Register creation id */
+        /* Report calendar event as created. */
+        json_object_set_new(set.created, key, json_pack("{s:s}", "id", uid));
         jmap_add_id(req, key, uid);
         free(uid);
     }
