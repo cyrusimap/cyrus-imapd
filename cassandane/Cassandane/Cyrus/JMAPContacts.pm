@@ -2093,6 +2093,73 @@ sub test_contactgroup_get_issue2292
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
 }
 
+sub test_contact_copy
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+    my $admintalk = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service("http");
 
+    xlog "create shared accounts";
+    $admintalk->create("user.other");
+
+    my $othercarddav = Net::CardDAVTalk->new(
+        user => "other",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog "share addressbook";
+    $admintalk->setacl("user.other.#addressbooks.Default",
+                       "cassandane" => 'lrswipkxtecdn') or die;
+
+    my $card =  {
+        "addressbookId" => "Default",
+        "firstName"=> "foo",
+        "lastName"=> "bar",
+    };
+
+    xlog "create card";
+    my $res = $jmap->CallMethods([['Contact/set',{
+        create => {"1" => $card}},
+    "R1"]]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $cardId = $res->[0][1]{created}{"1"}{id};
+
+    xlog "move card $cardId";
+    $res = $jmap->CallMethods([['Contact/copy', {
+        fromAccountId => undef,
+        toAccountId => 'other',
+        create => {
+            1 => {
+                id => $cardId,
+                addressbookId => "Default",
+            },
+        },
+        onSuccessDestroyOriginal => JSON::true,
+    },
+    "R1"]]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $copiedCardId = $res->[0][1]{created}{"1"}{id};
+
+    $res = $jmap->CallMethods([
+        ['Contact/get', {
+            accountId => 'other',
+            ids => [$copiedCardId],
+        }, 'R1'],
+        ['Contact/get', {
+            accountId => undef,
+            ids => [$cardId],
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('foo', $res->[0][1]{list}[0]{firstName});
+    $self->assert_str_equals($cardId, $res->[1][1]{notFound}[0]);
+}
 
 1;
