@@ -78,6 +78,7 @@ static int getContacts(struct jmap_req *req);
 static int getContactsUpdates(struct jmap_req *req);
 static int getContactsList(struct jmap_req *req);
 static int setContacts(struct jmap_req *req);
+static int copyContacts(struct jmap_req *req);
 
 jmap_method_t jmap_contact_methods[] = {
     { "ContactGroup/get",        &getContactGroups },
@@ -87,6 +88,7 @@ jmap_method_t jmap_contact_methods[] = {
     { "Contact/changes",         &getContactsUpdates },
     { "Contact/query",           &getContactsList },
     { "Contact/set",             &setContacts },
+    { "Contact/copy",            &copyContacts },
     { NULL,                      NULL}
 };
 
@@ -2880,17 +2882,25 @@ static int required_set_rights(json_t *props)
 }
 
 static int setContacts_create(jmap_req_t *req, const char *account_id,
-                              json_t *jcard,
+                              json_t *jcard, struct carddav_data *cdata,
                               struct mailbox **mailbox, char **uidptr,
                               json_t *invalid)
 {
     struct entryattlist *annots = NULL;
     strarray_t *flags = NULL;
     struct vparse_card *card = NULL;
-    char *uid = xstrdup(makeuuid());
+    char *uid = NULL;
     int r = 0;
 
     *uidptr = NULL;
+
+    if ((uid = (char *) json_string_value(json_object_get(jcard, "id")))) {
+        /* Use custom vCard UID from request object */
+        uid = xstrdup(uid);
+    }  else {
+        /* Create a vCard UID */
+        uid = xstrdup(makeuuid());
+    }
 
     const char *addressbookId = "Default";
     json_t *abookid = json_object_get(jcard, "addressbookId");
@@ -2928,7 +2938,7 @@ static int setContacts_create(jmap_req_t *req, const char *account_id,
     }
 
     flags = strarray_new();
-    r = _json_to_card(req, NULL, card, jcard, flags, &annots, invalid);
+    r = _json_to_card(req, cdata, card, jcard, flags, &annots, invalid);
     if (r || json_array_size(invalid)) {
         r = 0;
         goto done;
@@ -3004,7 +3014,7 @@ static int setContacts(struct jmap_req *req)
         char *uid = NULL;
         json_t *invalid = json_pack("[]");
         r = setContacts_create(req, req->accountid, arg,
-                               &mailbox, &uid, invalid);
+                               NULL, &mailbox, &uid, invalid);
         if (r) {
             json_t *err = json_pack("{s:s s:s}",
                                     "type", "internalError",
@@ -3337,4 +3347,167 @@ const struct body *jmap_contact_findblob(struct message_guid *content_guid,
     }
 
     return ret;
+}
+
+static void _contact_copy(jmap_req_t *req,
+                          json_t *jcard,
+                          const char *src_account_id __attribute__((unused)),
+                          const char *dst_account_id,
+                          struct carddav_db *src_db,
+                          json_t **new_card,
+                          json_t **set_err)
+{
+    struct jmap_parser myparser = JMAP_PARSER_INITIALIZER;
+    struct vparse_card *vcard = NULL;
+    json_t *dst_card = NULL;
+    struct mailbox *src_mbox = NULL;
+    struct mailbox *dst_mbox = NULL;
+    int r = 0;
+
+    /* Read mandatory properties */
+    const char *src_id = json_string_value(json_object_get(jcard, "id"));
+    if (!src_id) {
+        jmap_parser_invalid(&myparser, "id");
+    }
+    if (json_array_size(myparser.invalid)) {
+        *set_err = json_pack("{s:s s:O}", "type", "invalidProperties",
+                                          "properties", myparser.invalid);
+        goto done;
+    }
+
+    /* Lookup event */
+    struct carddav_data *cdata = NULL;
+    r = carddav_lookup_uid(src_db, src_id, &cdata);
+    if (r && r != CYRUSDB_NOTFOUND) {
+        syslog(LOG_ERR, "carddav_lookup_uid(%s) failed: %s",
+               src_id, error_message(r));
+        goto done;
+    }
+    if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive ||
+        !cdata->dav.rowid || !cdata->dav.imap_uid) {
+        *set_err = json_pack("{s:s}", "type", "notFound");
+        goto done;
+    }
+    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ)) {
+        *set_err = json_pack("{s:s}", "type", "notFound");
+        goto done;
+    }
+
+    /* Read source event */
+    r = jmap_openmbox(req, cdata->dav.mailbox, &src_mbox, /*rw*/0);
+    if (r) goto done;
+    struct index_record record;
+    r = mailbox_find_index_record(src_mbox, cdata->dav.imap_uid, &record);
+    if (!r) vcard = record_to_vcard(src_mbox, &record);
+    if (!vcard || !vcard->objects) {
+        syslog(LOG_ERR, "contact_copy: can't convert %s to JMAP", src_id);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Patch JMAP event */
+    json_t *src_card = jmap_contact_from_vcard(vcard->objects, cdata, &record,
+                                               NULL, src_mbox->name);
+    if (src_card) {
+        json_object_del(src_card, "x-href");  // immutable and WILL change
+        dst_card = jmap_patchobject_apply(src_card, jcard);
+    }
+    json_decref(src_card);
+
+    /* Create vcard */
+    json_t *invalid = json_array();
+    char *dst_uid = NULL;
+    r = setContacts_create(req, dst_account_id, dst_card,
+                           cdata, &dst_mbox, &dst_uid, invalid);
+    if (r || json_array_size(invalid)) {
+        if (!r) {
+            *set_err = json_pack("{s:s s:o}", "type", "invalidProperties",
+                                              "properties", invalid);
+        }
+        goto done;
+    }
+    json_decref(invalid);
+    *new_card = json_pack("{s:s}", "id", dst_uid);
+    free(dst_uid);
+
+done:
+    if (r && *set_err == NULL) {
+        if (r == CYRUSDB_NOTFOUND)
+            *set_err = json_pack("{s:s}", "type", "notFound");
+        else
+            *set_err = jmap_server_error(r);
+        return;
+    }
+    jmap_closembox(req, &dst_mbox);
+    jmap_closembox(req, &src_mbox);
+    if (vcard) vparse_free_card(vcard);
+    json_decref(dst_card);
+    jmap_parser_fini(&myparser);
+}
+
+static int copyContacts(struct jmap_req *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_copy copy;
+    json_t *err = NULL;
+    struct carddav_db *src_db = NULL;
+
+    /* Parse request */
+    jmap_copy_parse(req->args, &parser, req, NULL, &copy, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    src_db = carddav_open_userid(copy.from_account_id);
+    if (!src_db) {
+        jmap_error(req, json_pack("{s:s}", "type", "fromAccountNotFound"));
+        goto done;
+    }
+
+    /* Process request */
+    const char *creation_id;
+    json_t *jcard;
+    json_object_foreach(copy.create, creation_id, jcard) {
+        /* Copy event */
+        json_t *set_err = NULL;
+        json_t *new_card = NULL;
+
+        _contact_copy(req, jcard, copy.from_account_id, copy.to_account_id,
+                      src_db, /*dst_db,*/ &new_card, &set_err);
+        if (set_err) {
+            json_object_set_new(copy.not_created, creation_id, set_err);
+            continue;
+        }
+        /* Report event as created */
+        json_object_set_new(copy.created, creation_id, new_card);
+        const char *card_id = json_string_value(json_object_get(new_card, "id"));
+        jmap_add_id(req, creation_id, card_id);
+    }
+
+    /* Build response */
+    jmap_ok(req, jmap_copy_reply(&copy));
+
+    /* Destroy originals, if requested */
+    if (copy.on_success_destroy_original && json_object_size(copy.created)) {
+        json_t *destroy_events = json_array();
+        void *iter = json_object_iter(copy.created);
+        do {
+            json_t *new_card = json_object_iter_value(iter);
+            json_array_append(destroy_events, json_object_get(new_card, "id"));
+        } while ((iter = json_object_iter_next(copy.created, iter)));
+        struct jmap_req subreq = *req;
+        subreq.args = json_pack("{}");
+        subreq.method = "Contact/set";
+        json_object_set_new(subreq.args, "destroy", destroy_events);
+        json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
+        setContacts(&subreq);
+        json_decref(subreq.args);
+    }
+
+done:
+    if (src_db) carddav_close(src_db);
+    jmap_parser_fini(&parser);
+    jmap_copy_fini(&copy);
+    return 0;
 }
