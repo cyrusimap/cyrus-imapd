@@ -1431,7 +1431,7 @@ static int setcalendarevents_create(jmap_req_t *req,
     const char *calendarId = NULL;
     char *schedule_address = NULL;
 
-    if ((uid = (char *) json_string_value(json_object_get(event, "id")))) {
+    if ((uid = (char *) json_string_value(json_object_get(event, "uid")))) {
         /* Use custom iCalendar UID from request object */
         uid = xstrdup(uid);
     }  else {
