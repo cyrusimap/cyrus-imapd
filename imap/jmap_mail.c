@@ -6947,7 +6947,6 @@ static void _email_parse_bodies(json_t *jemail,
             json_t *jpart = json_array_get(jtextBody, 0);
             jmap_parser_push_index(parser, "textBody", 0, NULL);
             text_body = _emailpart_parse(jpart, parser, bodyValues);
-            jmap_parser_pop(parser);
             if (text_body) {
                 if (!text_body->type) {
                     /* Set default type */
@@ -6960,9 +6959,10 @@ static void _email_parse_bodies(json_t *jemail,
                 }
                 else if (strcasecmp(text_body->type, "text") ||
                          strcasecmp(text_body->subtype, "plain")) {
-                    jmap_parser_invalid(parser, "textBody");
+                    jmap_parser_invalid(parser, "type");
                 }
             }
+            jmap_parser_pop(parser);
         }
         else if (JNOTNULL(jtextBody)) {
             jmap_parser_invalid(parser, "textBody");
