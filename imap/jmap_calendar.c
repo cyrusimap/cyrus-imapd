@@ -51,6 +51,7 @@
 #include <unistd.h>
 #endif
 
+#include "acl.h"
 #include "annotate.h"
 #include "caldav_db.h"
 #include "global.h"
@@ -174,6 +175,66 @@ struct getcalendars_rock {
     struct jmap_get *get;
     int skip_hidden;
 };
+
+static json_t *_get_sharewith(const mbentry_t *mbentry)
+{
+    static strarray_t *admins = NULL;
+    if (!admins) admins = strarray_split(config_getstring(IMAPOPT_ADMINS),
+                                         NULL, STRARRAY_TRIM);
+
+    char *aclstr = xstrdup(mbentry->acl);
+    char *owner = mboxname_to_userid(mbentry->name);
+
+    json_t *sharewith = json_null();
+
+    char *userid;
+    char *nextid;
+    for (userid = aclstr; userid; userid = nextid) {
+        int rights;
+        char *rightstr;
+
+        rightstr = strchr(userid, '\t');
+        if (!rightstr) break;
+        *rightstr++ = '\0';
+
+        nextid = strchr(rightstr, '\t');
+        if (!nextid) break;
+        *nextid++ = '\0';
+
+        cyrus_acl_strtomask(rightstr, &rights);
+
+        // skip system users and owner
+        if (is_system_user(userid)) continue;
+        if (!strcmp(userid, owner)) continue;
+
+        // we've got one! Create the object if this is the first
+        if (!JNOTNULL(sharewith))
+            sharewith = json_pack("{}");
+
+        json_t *obj = json_pack("{}");
+        json_object_set_new(sharewith, userid, obj);
+
+        json_object_set_new(obj, "mayReadFreeBusy",
+                            rights & DACL_READFB ? json_true() : json_false());
+        json_object_set_new(obj, "mayReadItems",
+                            rights & DACL_READ ? json_true() : json_false());
+        json_object_set_new(obj, "mayAddItems",
+                            rights & DACL_WRITECONT ? json_true() : json_false());
+        json_object_set_new(obj, "mayModifyItems",
+                            rights & DACL_WRITECONT ? json_true() : json_false());
+        json_object_set_new(obj, "mayRemoveItems",
+                            rights & DACL_RMRSRC ? json_true() : json_false());
+        json_object_set_new(obj, "mayRename",
+                            rights & DACL_RMCOL ? json_true() : json_false());
+        json_object_set_new(obj, "mayDelete",
+                            rights & DACL_RMCOL ? json_true() : json_false());
+    }
+
+    free(aclstr);
+    free(owner);
+
+    return sharewith;
+}
 
 static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
 {
@@ -327,6 +388,11 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     if (_wantprop(rock->get->props, "mayDelete")) {
         json_object_set_new(obj, "mayDelete",
                             rights & DACL_RMCOL ? json_true() : json_false());
+    }
+
+    if (_wantprop(rock->get->props, "shareWith")) {
+        json_t *sharewith = _get_sharewith(mbentry);
+        json_object_set_new(obj, "shareWith", sharewith);
     }
 
     json_array_append_new(rock->get->list, obj);
