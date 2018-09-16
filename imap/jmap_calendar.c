@@ -1581,7 +1581,7 @@ static int setcalendarevents_update(jmap_req_t *req,
                                     json_t *invalid)
 {
     int r, pe;
-    int needrights = DACL_RMRSRC|DACL_WRITE;
+    int needrights = DACL_RMRSRC|DACL_WRITEPROPS|DACL_WRITECONT;
 
     struct caldav_data *cdata = NULL;
     struct mailbox *mbox = NULL;
