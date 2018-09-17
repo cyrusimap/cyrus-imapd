@@ -360,7 +360,13 @@ static char *mailaddr_from_uri(const char *uri)
         return NULL;
     }
     uri += 7;
-    return address_canonicalise(uri);
+    const char *p = strchr(uri, '?');
+    if (!p) return address_canonicalise(uri);
+
+    char *tmp = xstrndup(uri, p - uri);
+    char *ret = address_canonicalise(uri);
+    free(tmp);
+    return ret;
 }
 
 static char *mailaddr_to_uri(const char *addr)
@@ -1198,7 +1204,9 @@ static json_t *participant_from_ical(icalproperty *prop,
                 if (param) {
                     const char *to = icalparameter_get_delegatedto(param);
                     if (!to) continue;
-                    rsvp_prop = hash_lookup(to, attendee_by_mailto);
+                    char *email = mailaddr_from_uri(to);
+                    rsvp_prop = hash_lookup(email, attendee_by_mailto);
+                    free(email);
                     if (rsvp_prop) {
                         /* Determine PARTSTAT from delegate. */
                         if (++depth > 64) {
@@ -1234,7 +1242,9 @@ static json_t *participant_from_ical(icalproperty *prop,
          param = icalproperty_get_next_parameter(prop, ICAL_DELEGATEDTO_PARAMETER)) {
 
         const char *mailto = icalparameter_get_delegatedto(param);
-        const char *to_id = hash_lookup(mailto, id_by_mailto);
+        char *email = mailaddr_from_uri(mailto);
+        const char *to_id = hash_lookup(email, id_by_mailto);
+        free(email);
         if (to_id) json_array_append_new(delegatedTo, json_string(to_id));
     }
     if (json_array_size(delegatedTo)) {
@@ -1251,7 +1261,9 @@ static json_t *participant_from_ical(icalproperty *prop,
          param = icalproperty_get_next_parameter(prop, ICAL_DELEGATEDFROM_PARAMETER)) {
 
         const char *mailto = icalparameter_get_delegatedfrom(param);
-        const char *from_id = hash_lookup(mailto, id_by_mailto);
+        char *email = mailaddr_from_uri(mailto);
+        const char *from_id = hash_lookup(email, id_by_mailto);
+        free(email);
         if (from_id) json_array_append_new(delegatedFrom, json_string(from_id));
     }
     if (json_array_size(delegatedFrom)) {
@@ -1338,13 +1350,15 @@ participants_from_ical(context_t *ctx __attribute__((unused)),
          prop;
          prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
 
-        /* Map mailto:URI to ATTENDEE */
-        hash_insert(icalproperty_get_value_as_string(prop), prop, &attendee_by_mailto);
+        /* Map normalized mailto:URI to ATTENDEE */
+        char *email = mailaddr_from_uri(icalproperty_get_value_as_string(prop));
+        hash_insert(email, prop, &attendee_by_mailto);
 
         /* Map mailto:URI to ID */
         char *id = xstrdupnull(get_icalxparam_value(prop, JMAPICAL_XPARAM_ID));
-        if (!id) id = mailaddr_from_uri(icalproperty_get_attendee(prop));
-        hash_insert(icalproperty_get_value_as_string(prop), id, &id_by_mailto);
+        if (!id) id = xstrdup(email);
+        hash_insert(email, id, &id_by_mailto);
+        free(email);
     }
     if (!hash_numrecords(&attendee_by_mailto)) {
         goto done;
@@ -1357,20 +1371,24 @@ participants_from_ical(context_t *ctx __attribute__((unused)),
          prop;
          prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
 
-        const char *id = hash_lookup(icalproperty_get_value_as_string(prop), &id_by_mailto);
+        char *email = mailaddr_from_uri(icalproperty_get_value_as_string(prop));
+        const char *id = hash_lookup(email, &id_by_mailto);
         json_t *p = participant_from_ical(prop, &attendee_by_mailto, &id_by_mailto, orga);
         json_object_set_new(participants, id, p);
+        free(email);
     }
-    if (orga && !hash_lookup(icalproperty_get_organizer(orga), &attendee_by_mailto)) {
-        /* Add a default participant for the organizer. */
-        char *email = mailaddr_from_uri(icalproperty_get_organizer(orga));
-        const char *name = NULL;
-        icalparameter *param = icalproperty_get_first_parameter(orga, ICAL_CN_PARAMETER);
-        if (param) name = icalparameter_get_cn(param);
-        json_object_set_new(participants, email, json_pack("{s:s s:s s:[s]}",
-                "name", name ? name : "",
-                "email", email,
-                "roles", "owner"));
+    if (orga) {
+        char *email = mailaddr_from_uri(icalproperty_get_value_as_string(orga));
+        if (!hash_lookup(email, &attendee_by_mailto)) {
+            /* Add a default participant for the organizer. */
+            const char *name = NULL;
+            icalparameter *param = icalproperty_get_first_parameter(orga, ICAL_CN_PARAMETER);
+            if (param) name = icalparameter_get_cn(param);
+            json_object_set_new(participants, email, json_pack("{s:s s:s s:[s]}",
+                        "name", name ? name : "",
+                        "email", email,
+                        "roles", "owner"));
+        }
         free(email);
     }
 
