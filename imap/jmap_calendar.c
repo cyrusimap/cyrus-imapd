@@ -183,6 +183,9 @@ static json_t *_get_sharewith(const mbentry_t *mbentry)
 
     json_t *sharewith = json_null();
 
+    // create, update, delete
+    int writerights = DACL_WRITECONT | DACL_WRITEPROPS | DACL_RMRSRC;
+
     char *userid;
     char *nextid;
     for (userid = aclstr; userid; userid = nextid) {
@@ -211,19 +214,13 @@ static json_t *_get_sharewith(const mbentry_t *mbentry)
         json_object_set_new(sharewith, userid, obj);
 
         json_object_set_new(obj, "mayReadFreeBusy",
-                            rights & DACL_READFB ? json_true() : json_false());
-        json_object_set_new(obj, "mayReadItems",
-                            rights & DACL_READ ? json_true() : json_false());
-        json_object_set_new(obj, "mayAddItems",
-                            rights & DACL_WRITECONT ? json_true() : json_false());
-        json_object_set_new(obj, "mayModifyItems",
-                            rights & DACL_WRITECONT ? json_true() : json_false());
-        json_object_set_new(obj, "mayRemoveItems",
-                            rights & DACL_RMRSRC ? json_true() : json_false());
-        json_object_set_new(obj, "mayRename",
-                            rights & DACL_RMCOL ? json_true() : json_false());
-        json_object_set_new(obj, "mayDelete",
-                            rights & DACL_RMCOL ? json_true() : json_false());
+                            (rights & DACL_READFB == DACL_READFB) ? json_true() : json_false());
+        json_object_set_new(obj, "mayRead",
+                            (rights & DACL_READ == DACL_READ) ? json_true() : json_false());
+        json_object_set_new(obj, "mayWrite",
+                            (rights & writerights == writerights) ? json_true() : json_false());
+        json_object_set_new(obj, "mayAdmin",
+                            (rights & ACL_ADMIN == ACL_ADMIN) ? json_true() : json_false());
     }
 
     free(aclstr);
