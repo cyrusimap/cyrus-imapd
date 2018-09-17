@@ -608,6 +608,7 @@ static void server_unaccept(struct server_state *state)
     state->out = NULL;
     sasl_dispose(&state->saslconn);
     state->is_connected = 0;
+    state->is_authenticated = 0;
     state->is_tls = 0;
 #ifdef HAVE_SSL
     if (state->tls_conn) {
