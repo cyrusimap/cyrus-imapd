@@ -1179,7 +1179,6 @@ sub test_calendarevent_get_organizermailto
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_deep_equals($participants, $event->{participants});
-# FIXME    $self->assert_equals('mailto:organizer@local', $event->{replyTo}{imip});
 }
 
 sub test_calendarevent_get_recurrence
