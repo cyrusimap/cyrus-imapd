@@ -11203,22 +11203,22 @@ sub test_email_set_headers
         },
        'header:X-MsgIdsShort' => {
            format => 'asMessageIds',
-           value  => [ 'foobarbaz' ],
-           wantRaw => " <foobarbaz>",
+           value  => [ 'foobar@ba' ],
+           wantRaw => " <foobar\@ba>",
        },
        'header:X-MsgIdsLong' => {
            format => 'asMessageIds',
            value  => [
-               'foobarbaz',
-               'foobarbaz',
-               'foobarbaz',
-               'foobarbaz',
-               'foobarbaz',
-               'foobarbaz',
-               'foobarbaz',
-               'foobarbaz',
+               'foobar@ba',
+               'foobar@ba',
+               'foobar@ba',
+               'foobar@ba',
+               'foobar@ba',
+               'foobar@ba',
+               'foobar@ba',
+               'foobar@ba',
            ],
-           wantRaw => (" <foobarbaz>" x 5)."\r\n".(" <foobarbaz>" x 3),
+           wantRaw => (" <foobar\@ba>" x 5)."\r\n".(" <foobar\@ba>" x 3),
        },
        'header:X-AddrsShort' => {
            format => 'asAddresses',
@@ -13219,5 +13219,42 @@ sub test_email_get_headers_multipart
     $self->assert_str_equals(' SPAMA, SPAMB, SPAMC', $msg->{"header:x-spam-hits:asRaw"});
     $self->assert_str_equals('SPAMA, SPAMB, SPAMC', $msg->{"header:x-spam-hits:asText"});
 }
+
+sub test_email_set_messageids
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $inboxid = $self->getinbox()->{id};
+
+    my $email =  {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [ { email => q{foo@local}, name => '' } ],
+        to => [ {
+            email => q{bar@local},
+            name => '',
+        } ],
+        messageId => ['nope1'],
+        'header:X-BadMsgId:asMessageIds' => ['nope2'],
+        'header:In-Reply-To' => 'nope3',
+    };
+
+    xlog "create and get email";
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                "1" => $email
+            }
+        }, "R1"],
+    ]);
+    $self->assert_str_equals('invalidProperties', $res->[0][1]{notCreated}{1}{type});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{notCreated}{1}{properties}});
+    my @invalidProps = @{$res->[0][1]{notCreated}{1}{properties}};
+    $self->assert(grep { $_ eq 'messageId'} @invalidProps);
+    $self->assert(grep { $_ eq 'header:X-BadMsgId:asMessageIds'} @invalidProps);
+    $self->assert(grep { $_ eq 'header:In-Reply-To'} @invalidProps);
+}
+
 
 1;
