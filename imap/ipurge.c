@@ -233,7 +233,7 @@ static int usage(const char *name)
 /* we don't check what comes in on matchlen and category, should we? */
 static int purge_me(struct findall_data *data, void *rock __attribute__((unused)))
 {
-    if (!data) return 0;
+    if (!data || !data->mbname) return 0;
     struct mailbox *mailbox = NULL;
     int r;
     mbox_stats_t stats;
