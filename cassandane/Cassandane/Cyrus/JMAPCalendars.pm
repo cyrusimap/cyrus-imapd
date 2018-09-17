@@ -1157,6 +1157,31 @@ sub test_calendarevent_get_organizer
     $self->assert_equals('mailto:organizer@local', $event->{replyTo}{imip});
 }
 
+sub test_calendarevent_get_organizermailto
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('organizermailto');
+
+    my $participants = {
+        'organizer@local' => {
+            name => 'Organizer',
+            email => 'organizer@local',
+            roles => ['owner'],
+        },
+        'attendee@local' => {
+            name => 'Attendee',
+            email => 'attendee@local',
+            roles => ['attendee'],
+        },
+    };
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_deep_equals($participants, $event->{participants});
+# FIXME    $self->assert_equals('mailto:organizer@local', $event->{replyTo}{imip});
+}
+
 sub test_calendarevent_get_recurrence
     :min_version_3_1 :needs_component_jmap
 {
