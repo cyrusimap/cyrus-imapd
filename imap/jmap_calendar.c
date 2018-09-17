@@ -348,39 +348,46 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
+    int writerights = DACL_WRITECONT|DACL_WRITEPROPS;
+
     if (_wantprop(rock->get->props, "mayReadFreeBusy")) {
         json_object_set_new(obj, "mayReadFreeBusy",
-                            rights & DACL_READFB ? json_true() : json_false());
+                            ((rights & DACL_READFB) == DACL_READFB) ? json_true() : json_false());
     }
 
     if (_wantprop(rock->get->props, "mayReadItems")) {
         json_object_set_new(obj, "mayReadItems",
-                            rights & DACL_READ ? json_true() : json_false());
+                            ((rights & DACL_READ) == DACL_READ) ? json_true() : json_false());
     }
 
     if (_wantprop(rock->get->props, "mayAddItems")) {
         json_object_set_new(obj, "mayAddItems",
-                            rights & DACL_WRITECONT ? json_true() : json_false());
+                            ((rights & writerights) == writerights) ? json_true() : json_false());
     }
 
     if (_wantprop(rock->get->props, "mayModifyItems")) {
         json_object_set_new(obj, "mayModifyItems",
-                            rights & DACL_WRITECONT ? json_true() : json_false());
+                            ((rights & writerights) == writerights) ? json_true() : json_false());
     }
 
     if (_wantprop(rock->get->props, "mayRemoveItems")) {
         json_object_set_new(obj, "mayRemoveItems",
-                            rights & DACL_RMRSRC ? json_true() : json_false());
+                            ((rights & DACL_RMRSRC) == DACL_RMRSRC) ? json_true() : json_false());
     }
 
     if (_wantprop(rock->get->props, "mayRename")) {
         json_object_set_new(obj, "mayRename",
-                            rights & DACL_RMCOL ? json_true() : json_false());
+                            ((rights & (DACL_RMCOL|DACL_MKCOL)) == (DACL_RMCOL|DACL_MKCOL)) ? json_true() : json_false());
     }
 
     if (_wantprop(rock->get->props, "mayDelete")) {
         json_object_set_new(obj, "mayDelete",
-                            rights & DACL_RMCOL ? json_true() : json_false());
+                            ((rights & DACL_RMCOL) == DACL_RMCOL) ? json_true() : json_false());
+    }
+
+    if (_wantprop(rock->get->props, "mayAdmin")) {
+        json_object_set_new(obj, "mayAdmin",
+                            ((rights & ACL_ADMIN) == ACL_ADMIN) ? json_true() : json_false());
     }
 
     if (_wantprop(rock->get->props, "shareWith")) {
