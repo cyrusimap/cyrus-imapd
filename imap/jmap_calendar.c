@@ -214,13 +214,13 @@ static json_t *_get_sharewith(const mbentry_t *mbentry)
         json_object_set_new(sharewith, userid, obj);
 
         json_object_set_new(obj, "mayReadFreeBusy",
-                            (rights & DACL_READFB == DACL_READFB) ? json_true() : json_false());
+                            ((rights & DACL_READFB) == DACL_READFB) ? json_true() : json_false());
         json_object_set_new(obj, "mayRead",
-                            (rights & DACL_READ == DACL_READ) ? json_true() : json_false());
+                            ((rights & DACL_READ) == DACL_READ) ? json_true() : json_false());
         json_object_set_new(obj, "mayWrite",
-                            (rights & writerights == writerights) ? json_true() : json_false());
+                            ((rights & writerights) == writerights) ? json_true() : json_false());
         json_object_set_new(obj, "mayAdmin",
-                            (rights & ACL_ADMIN == ACL_ADMIN) ? json_true() : json_false());
+                            ((rights & ACL_ADMIN) == ACL_ADMIN) ? json_true() : json_false());
     }
 
     free(aclstr);
