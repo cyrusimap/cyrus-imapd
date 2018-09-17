@@ -178,10 +178,6 @@ struct getcalendars_rock {
 
 static json_t *_get_sharewith(const mbentry_t *mbentry)
 {
-    static strarray_t *admins = NULL;
-    if (!admins) admins = strarray_split(config_getstring(IMAPOPT_ADMINS),
-                                         NULL, STRARRAY_TRIM);
-
     char *aclstr = xstrdup(mbentry->acl);
     char *owner = mboxname_to_userid(mbentry->name);
 
@@ -417,7 +413,7 @@ static const jmap_property_t calendar_props[] = {
     { "mayDeleteItems",  JMAP_PROP_SERVER_SET },
 
     /* FM extensions (do ALL of these get through to Cyrus?) */
-    { "mayAdmin",        0 },
+    { "mayAdmin",        JMAP_PROP_SERVER_SET },
     { "syncedFrom",      0 },
     { "isEventsPublic",  0 },
     { "isFreeBusyPublic",0 },
@@ -861,6 +857,10 @@ static int setCalendars(struct jmap_req *req)
         flag = 1; readprop(arg, "mayDelete", 0,  invalid, "b", &flag);
         if (!flag) {
             json_array_append_new(invalid, json_string("mayDelete"));
+        }
+        flag = 1; readprop(arg, "mayAdmin", 0,  invalid, "b", &flag);
+        if (!flag) {
+            json_array_append_new(invalid, json_string("mayAdmin"));
         }
 
         /* Report any property errors and bail out. */
