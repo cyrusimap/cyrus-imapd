@@ -12764,6 +12764,18 @@ sub test_email_copy
     my $emailId = $res->[0][1]->{created}{1}{id};
     $self->assert_not_null($emailId);
 
+    my $email = $res = $jmap->CallMethods([
+        ['Email/get', {
+            ids => [$emailId],
+            properties => ['receivedAt'],
+        }, 'R1']
+    ]);
+    my $receivedAt = $res->[0][1]{list}[0]{receivedAt};
+    $self->assert_not_null($receivedAt);
+
+    # Safeguard receivedAt asserts.
+    sleep 1;
+
     xlog "move email";
     $res = $jmap->CallMethods([
         ['Email/copy', {
@@ -12794,11 +12806,12 @@ sub test_email_copy
         ['Email/get', {
             accountId => 'other',
             ids => [$copiedEmailId],
-            properties => ['keywords'],
+            properties => ['keywords', 'receivedAt'],
         }, 'R1']
     ]);
     my $wantKeywords = { 'bar' => JSON::true };
     $self->assert_deep_equals($wantKeywords, $res->[0][1]{list}[0]{keywords});
+    $self->assert_str_equals($receivedAt, $res->[0][1]{list}[0]{receivedAt});
 
     xlog "copy email back";
     $res = $jmap->CallMethods([
