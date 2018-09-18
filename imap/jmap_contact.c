@@ -3451,6 +3451,7 @@ static int copyContacts(struct jmap_req *req)
     struct jmap_copy copy;
     json_t *err = NULL;
     struct carddav_db *src_db = NULL;
+    json_t *destroy_cards = json_array();
 
     /* Parse request */
     jmap_copy_parse(req->args, &parser, req, NULL, &copy, &err);
@@ -3479,6 +3480,10 @@ static int copyContacts(struct jmap_req *req)
             json_object_set_new(copy.not_created, creation_id, set_err);
             continue;
         }
+
+        // extract the id for later deletion
+        json_array_append(destroy_cards, json_object_get(jcard, "id"));
+
         /* Report event as created */
         json_object_set_new(copy.created, creation_id, new_card);
         const char *card_id = json_string_value(json_object_get(new_card, "id"));
@@ -3489,23 +3494,18 @@ static int copyContacts(struct jmap_req *req)
     jmap_ok(req, jmap_copy_reply(&copy));
 
     /* Destroy originals, if requested */
-    if (copy.on_success_destroy_original && json_object_size(copy.created)) {
-        json_t *destroy_events = json_array();
-        void *iter = json_object_iter(copy.created);
-        do {
-            json_t *new_card = json_object_iter_value(iter);
-            json_array_append(destroy_events, json_object_get(new_card, "id"));
-        } while ((iter = json_object_iter_next(copy.created, iter)));
+    if (copy.on_success_destroy_original && json_array_size(destroy_cards)) {
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
         subreq.method = "Contact/set";
-        json_object_set_new(subreq.args, "destroy", destroy_events);
-        json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
+        json_object_set(subreq.args, "destroy", destroy_cards);
+        json_object_set_new(subreq.args, "accountId", json_string(copy.from_account_id));
         setContacts(&subreq);
         json_decref(subreq.args);
     }
 
 done:
+    json_decref(destroy_cards);
     if (src_db) carddav_close(src_db);
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);
