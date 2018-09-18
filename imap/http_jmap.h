@@ -122,6 +122,10 @@ typedef struct jmap_req {
     hash_table *mboxrights;
     hash_table *client_creation_ids;
     hash_table *new_creation_ids;
+
+    /* used for subrequests */
+    const char *subreq;
+    json_t *subargs;
 } jmap_req_t;
 
 extern int jmap_initreq(jmap_req_t *req);

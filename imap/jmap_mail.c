@@ -10091,13 +10091,10 @@ static int jmap_email_copy(jmap_req_t *req)
 
     /* Destroy originals, if requested */
     if (copy.on_success_destroy_original && json_array_size(destroy_emails)) {
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        subreq.method = "Email/set";
-        json_object_set(subreq.args, "destroy", destroy_emails);
-        json_object_set_new(subreq.args, "accountId", json_string(copy.from_account_id));
-        jmap_email_set(&subreq);
-        json_decref(subreq.args);
+        req->subreq = "Email/set";
+        req->subargs = json_pack("{}");
+        json_object_set(req->subargs, "destroy", destroy_emails);
+        json_object_set_new(req->subargs, "accountId", json_string(copy.from_account_id));
     }
 
 done:

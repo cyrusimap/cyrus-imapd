@@ -617,11 +617,15 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         int r = 0;
 
         strarray_append(&methods, mname);
+        json_incref(args);
+
+    redo:
 
         /* Find the message processor */
         if (!(mp = find_methodproc(mname, &settings->methods))) {
             json_array_append(resp, json_pack("[s {s:s} s]",
                         "error", "type", "unknownMethod", tag));
+            json_decref(args);
             continue;
         }
 
@@ -633,6 +637,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
                 json_t *err = json_pack("{s:s, s:[s]}",
                         "type", "invalidArguments", "arguments", "accountId");
                 json_array_append(resp, json_pack("[s,o,s]", "error", err, tag));
+                json_decref(args);
                 continue;
             }
             /* Check if any shared mailbox is accessible */
@@ -643,6 +648,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
                     json_t *err = json_pack("{s:s}", "type", "accountNotFound");
                     json_array_append_new(resp,
                                           json_pack("[s,o,s]", "error", err, tag));
+                    json_decref(args);
                     continue;
                 }
                 hash_insert(accountid, (void*)1, &accounts);
@@ -656,6 +662,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
             if (!err) err = json_pack("{s:s}", "type", "resultReference");
 
             json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
+            json_decref(args);
             continue;
         }
 
@@ -664,6 +671,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         if (r) {
             txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
+            json_decref(args);
             goto done;
         }
 
@@ -697,7 +705,12 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
 
         /* Read the current state data in */
         r = mboxname_read_counters(inboxname, &req.counters);
-        if (r) goto done;
+        if (r) {
+            jmap_finireq(&req);
+            if (req.subargs) json_decref(req.subargs);
+            json_decref(args);
+            goto done;
+        }
 
         /* Call the message processor. */
         r = mp->proc(&req);
@@ -709,9 +722,19 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
             conversations_abort(&req.cstate);
             txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
+            if (req.subargs) json_decref(req.subargs);
+            json_decref(args);
             goto done;
         }
         conversations_commit(&req.cstate);
+
+        json_decref(args);
+
+        if (req.subreq) {
+            mname = req.subreq;
+            args = req.subargs;
+            goto redo;
+        }
     }
 
     /* tell syslog which methods were called */
