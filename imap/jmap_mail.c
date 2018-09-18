@@ -9619,7 +9619,7 @@ static int _email_copy_checkmbox_cb(const mbentry_t *mbentry, void *_rock)
 struct _email_copy_writeprops_rock {
     /* Input values */
     jmap_req_t *req;
-    time_t internal_date;
+    const char *received_at;
     json_t *keywords;
     struct seen *seendb;
     int has_attachment;
@@ -9642,7 +9642,11 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
     /* Overwrite message record */
     int r = jmap_openmbox(rock->req, rec->mboxname, &mbox, /*rw*/1);
     if (!r) r = msgrecord_find(mbox, rec->uid, &mr);
-    if (!r) r = msgrecord_set_internaldate(mr, rock->internal_date);
+    if (!r && rock->received_at) {
+        time_t internal_date;
+        time_from_iso8601(rock->received_at, &internal_date);
+        r = msgrecord_set_internaldate(mr, internal_date);
+    }
     if (!r) {
         /* Write the keywords. There's lots of ceremony around seen.db */
         struct seqset *seenseq = NULL;
@@ -9923,19 +9927,12 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     }
 
     /* Rewrite new message record properties and lookup thread id */
-    time_t internal_date;
-    const char *s = json_string_value(json_object_get(copy_email, "receivedAt"));
-    if (s) {
-        time_from_iso8601(s, &internal_date);
-    }
-    else {
-        internal_date = time(NULL);
-    }
+    const char *receivedAt = json_string_value(json_object_get(copy_email, "receivedAt"));
     int has_attachment = 0;
     r = msgrecord_hasflag(src_mr, JMAP_HAS_ATTACHMENT_FLAG, &has_attachment);
     if (r) goto done;
     struct _email_copy_writeprops_rock writeprops_rock = {
-        req, internal_date, new_keywords, seendb, has_attachment, /*cid*/0, /*size*/0
+        req, receivedAt, new_keywords, seendb, has_attachment, /*cid*/0, /*size*/0
     };
     struct conversations_state *mycstate = NULL;
     if (strcmp(req->userid, to_account_id)) {
