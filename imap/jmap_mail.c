@@ -10048,6 +10048,7 @@ static int jmap_email_copy(jmap_req_t *req)
     struct jmap_copy copy;
     json_t *err = NULL;
     struct seen *seendb = NULL;
+    json_t *destroy_emails = json_array();
 
     /* Parse request */
     jmap_copy_parse(req->args, &parser, req,
@@ -10078,7 +10079,11 @@ static int jmap_email_copy(jmap_req_t *req)
             json_object_set_new(copy.not_created, creation_id, set_err);
             continue;
         }
-        /* Report message as created */
+
+        /* Note the source ID for deletion */
+        json_array_append(destroy_emails, json_object_get(copy_email, "id"));
+
+        /* Report the message as created */
         json_object_set_new(copy.created, creation_id, new_email);
         const char *msg_id = json_string_value(json_object_get(new_email, "id"));
         jmap_add_id(req, creation_id, msg_id);
@@ -10088,23 +10093,18 @@ static int jmap_email_copy(jmap_req_t *req)
     jmap_ok(req, jmap_copy_reply(&copy));
 
     /* Destroy originals, if requested */
-    if (copy.on_success_destroy_original && json_object_size(copy.created)) {
-        json_t *destroy_emails = json_array();
-        void *iter = json_object_iter(copy.created);
-        do {
-            json_t *new_email = json_object_iter_value(iter);
-            json_array_append(destroy_emails, json_object_get(new_email, "id"));
-        } while ((iter = json_object_iter_next(copy.created, iter)));
+    if (copy.on_success_destroy_original && json_array_size(destroy_emails)) {
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
         subreq.method = "Email/set";
-        json_object_set_new(subreq.args, "destroy", destroy_emails);
-        json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
+        json_object_set(subreq.args, "destroy", destroy_emails);
+        json_object_set_new(subreq.args, "accountId", json_string(copy.from_account_id));
         jmap_email_set(&subreq);
         json_decref(subreq.args);
     }
 
 done:
+    json_decref(destroy_emails);
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);
     seen_close(&seendb);
