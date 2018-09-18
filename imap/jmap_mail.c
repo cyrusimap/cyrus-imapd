@@ -6674,7 +6674,7 @@ static struct emailpart *_emailpart_parse(json_t *jpart,
     }
     /* charset */
     json_t *jcharset = json_object_get(jpart, "charset");
-    if (json_is_string(jcharset) && !have_type_header && JNOTNULL(jpartId)) {
+    if (json_is_string(jcharset) && !have_type_header && !JNOTNULL(jpartId)) {
         part->charset = xstrdup(json_string_value(jcharset));
     }
     else if (JNOTNULL(jcharset)) {
