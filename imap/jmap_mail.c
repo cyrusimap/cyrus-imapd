@@ -9814,48 +9814,15 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     int r = 0;
 
     const char *email_id = json_string_value(json_object_get(copy_email, "id"));
-    const char *blob_id = _guid_from_id(email_id);
+    char *blob_id = NULL;
     uint32_t src_size = 0;
     json_t *new_keywords = NULL;
 
-    /* Check if email already exists in to_account */
-    struct _email_exists_rock data = { req, 0 };
-    if (strcmp(to_account_id, req->userid)) {
-        struct conversations_state *mycstate = NULL;
-        r = conversations_open_user(to_account_id, &mycstate);
-        if (r) goto done;
-        conversations_guid_foreach(mycstate, blob_id, _email_exists_cb, &data);
-        conversations_commit(&mycstate);
-    }
-    else {
-        conversations_guid_foreach(req->cstate, blob_id, _email_exists_cb, &data);
-    }
-    if (data.exists) {
-        *err = json_pack("{s:s s:s}", "type", "alreadyExists", "existingId", email_id);
-        goto done;
-    }
-
-    /* Lookup mailbox names and make sure they are all writeable */
-    struct _email_copy_checkmbox_rock checkmbox_rock = {
-        req, json_object_get(copy_email, "mailboxIds"), &dst_mboxnames
-    };
-    r = mboxlist_usermboxtree(to_account_id, httpd_authstate,
-                              _email_copy_checkmbox_cb, &checkmbox_rock, 0);
-    if (r != IMAP_OK_COMPLETED) {
-        if (r == 0 || r == IMAP_PERMISSION_DENIED) {
-            *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
-                    "properties", "mailboxIds");
-            r = 0;
-        }
-        goto done;
-    }
-
-    /* Pick source message record and gather JMAP keywords */
+    /* Lookup source message record and gather JMAP keywords */
     new_keywords = json_deep_copy(json_object_get(copy_email, "keywords"));
     if (json_is_null(new_keywords)) {
         new_keywords = NULL;
     }
-
     hash_table seenseq_by_mbox_id = HASH_TABLE_INITIALIZER;
     construct_hash_table(&seenseq_by_mbox_id, 32, 0);
     struct emailcopy_pickrecord_rock pickrecord_rock = {
@@ -9868,12 +9835,12 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     if (strcmp(from_account_id, req->userid)) {
         struct conversations_state *mycstate = NULL;
         r = conversations_open_user(from_account_id, &mycstate);
-        if (!r) r = conversations_guid_foreach(mycstate, blob_id,
+        if (!r) r = conversations_guid_foreach(mycstate, _guid_from_id(email_id),
                 _email_copy_pickrecord_cb, &pickrecord_rock);
         if (!r) r = conversations_commit(&mycstate);
     }
     else {
-        r = conversations_guid_foreach(req->cstate, blob_id,
+        r = conversations_guid_foreach(req->cstate, _guid_from_id(email_id),
                 _email_copy_pickrecord_cb, &pickrecord_rock);
     }
     if (!r && pickrecord_rock.mbox) {
@@ -9910,6 +9877,43 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
                 json_object_del(new_keywords, key);
             }
         }
+    }
+
+    struct message_guid guid;
+    r = msgrecord_get_guid(src_mr, &guid);
+    if (r) goto done;
+    blob_id = xstrdup(message_guid_encode(&guid));
+
+    /* Check if email already exists in to_account */
+    struct _email_exists_rock data = { req, 0 };
+    if (strcmp(to_account_id, req->userid)) {
+        struct conversations_state *mycstate = NULL;
+        r = conversations_open_user(to_account_id, &mycstate);
+        if (r) goto done;
+        conversations_guid_foreach(mycstate, blob_id, _email_exists_cb, &data);
+        conversations_commit(&mycstate);
+    }
+    else {
+        conversations_guid_foreach(req->cstate, blob_id, _email_exists_cb, &data);
+    }
+    if (data.exists) {
+        *err = json_pack("{s:s s:s}", "type", "alreadyExists", "existingId", email_id);
+        goto done;
+    }
+
+    /* Lookup mailbox names and make sure they are all writeable */
+    struct _email_copy_checkmbox_rock checkmbox_rock = {
+        req, json_object_get(copy_email, "mailboxIds"), &dst_mboxnames
+    };
+    r = mboxlist_usermboxtree(to_account_id, httpd_authstate,
+                              _email_copy_checkmbox_cb, &checkmbox_rock, 0);
+    if (r != IMAP_OK_COMPLETED) {
+        if (r == 0 || r == IMAP_PERMISSION_DENIED) {
+            *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                    "properties", "mailboxIds");
+            r = 0;
+        }
+        goto done;
     }
 
     /* Copy message record to mailboxes */
@@ -9963,6 +9967,7 @@ done:
         *err = jmap_server_error(r);
     }
     free(src_mboxname);
+    free(blob_id);
     strarray_fini(&dst_mboxnames);
     if (src_mr) msgrecord_unref(&src_mr);
     jmap_closembox(req, &src_mbox);
