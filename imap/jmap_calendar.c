@@ -2903,6 +2903,7 @@ static int copyCalendarEvent(struct jmap_req *req)
     json_t *err = NULL;
     struct caldav_db *src_db = NULL;
     struct caldav_db *dst_db = NULL;
+    json_t *destroy_events = json_array();
 
     /* Parse request */
     jmap_copy_parse(req->args, &parser, req, NULL, &copy, &err);
@@ -2936,6 +2937,10 @@ static int copyCalendarEvent(struct jmap_req *req)
             json_object_set_new(copy.not_created, creation_id, set_err);
             continue;
         }
+
+        // copy the ID for later deletion
+        json_array_append(destroy_events, json_object_get(jevent, "id"));
+
         /* Report event as created */
         json_object_set_new(copy.created, creation_id, new_event);
         const char *event_id = json_string_value(json_object_get(new_event, "id"));
@@ -2946,23 +2951,18 @@ static int copyCalendarEvent(struct jmap_req *req)
     jmap_ok(req, jmap_copy_reply(&copy));
 
     /* Destroy originals, if requested */
-    if (copy.on_success_destroy_original && json_object_size(copy.created)) {
-        json_t *destroy_events = json_array();
-        void *iter = json_object_iter(copy.created);
-        do {
-            json_t *new_event = json_object_iter_value(iter);
-            json_array_append(destroy_events, json_object_get(new_event, "id"));
-        } while ((iter = json_object_iter_next(copy.created, iter)));
+    if (copy.on_success_destroy_original && json_array_size(destroy_events)) {
         struct jmap_req subreq = *req;
         subreq.args = json_pack("{}");
         subreq.method = "CalendarEvent/set";
-        json_object_set_new(subreq.args, "destroy", destroy_events);
-        json_object_set_new(subreq.args, "accountId", json_string(req->accountid));
+        json_object_set(subreq.args, "destroy", destroy_events);
+        json_object_set_new(subreq.args, "accountId", json_string(copy.from_account_id));
         setCalendarEvents(&subreq);
         json_decref(subreq.args);
     }
 
 done:
+    json_decref(destroy_events);
     if (src_db) caldav_close(src_db);
     if (dst_db) caldav_close(dst_db);
     jmap_parser_fini(&parser);
