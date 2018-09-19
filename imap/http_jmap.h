@@ -122,10 +122,7 @@ typedef struct jmap_req {
     hash_table *mboxrights;
     hash_table *client_creation_ids;
     hash_table *new_creation_ids;
-
-    /* used for subrequests */
-    const char *subreq;
-    json_t *subargs;
+    ptrarray_t *method_calls;
 } jmap_req_t;
 
 extern int jmap_initreq(jmap_req_t *req);
@@ -147,6 +144,15 @@ extern int  jmap_openmbox(jmap_req_t *req, const char *name,
                           struct mailbox **mboxp, int rw);
 extern int  jmap_isopenmbox(jmap_req_t *req, const char *name);
 extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
+
+/* Adds a JMAP sub request to be processed after req has
+ * finished. Method must be a regular JMAP method name,
+ * args the JSON-encoded method arguments. If client_id
+ * is NULL, the subrequest will use the same client id
+ * as req. The args argument will be unreferenced after
+ * completion. */
+extern void jmap_add_subreq(jmap_req_t *req, const char *method,
+                            json_t *args, const char *client_id);
 
 /* Creation ids */
 extern const char *jmap_lookup_id(jmap_req_t *req, const char *creation_id);

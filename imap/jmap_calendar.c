@@ -2952,10 +2952,10 @@ static int copyCalendarEvent(struct jmap_req *req)
 
     /* Destroy originals, if requested */
     if (copy.on_success_destroy_original && json_array_size(destroy_events)) {
-        req->subreq = "CalendarEvent/set";
-        req->subargs = json_pack("{}");
-        json_object_set(req->subargs, "destroy", destroy_events);
-        json_object_set_new(req->subargs, "accountId", json_string(copy.from_account_id));
+        json_t *subargs = json_object();
+        json_object_set(subargs, "destroy", destroy_events);
+        json_object_set_new(subargs, "accountId", json_string(copy.from_account_id));
+        jmap_add_subreq(req, "CalendarEvent/set", subargs, NULL);
     }
 
 done:

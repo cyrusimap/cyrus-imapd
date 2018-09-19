@@ -550,6 +550,8 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     hash_table accounts = HASH_TABLE_INITIALIZER;
     hash_table mboxrights = HASH_TABLE_INITIALIZER;
     strarray_t methods = STRARRAY_INITIALIZER;
+    ptrarray_t method_calls = PTRARRAY_INITIALIZER;
+    ptrarray_t processed_methods = PTRARRAY_INITIALIZER;
 
     ret = parse_json_body(txn, &jreq);
     if (ret) return json_error_response(txn, ret, res);
@@ -606,9 +608,20 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         goto done;
     }
 
-    /* Process each method call in the request */
+    /* Push client method calls on call stack */
+    json_t *jmethod_calls = json_object_get(jreq, "methodCalls");
+    for (i = json_array_size(jmethod_calls); i > 0; i--) {
+        json_t *mc = json_array_get(jmethod_calls, i-1);
+        ptrarray_push(&method_calls, json_incref(mc));
+    }
+
+    /* Process call stack */
     json_t *mc;
-    json_array_foreach(json_object_get(jreq, "methodCalls"), i, mc) {
+    while ((mc = ptrarray_pop(&method_calls))) {
+        /* Mark method as processed */
+        ptrarray_push(&processed_methods, mc);
+
+        /* Process method */
         const jmap_method_t *mp;
         const char *mname = json_string_value(json_array_get(mc, 0));
         json_t *args = json_array_get(mc, 1), *arg;
@@ -618,8 +631,6 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
 
         strarray_append(&methods, mname);
         json_incref(args);
-
-    redo:
 
         /* Find the message processor */
         if (!(mp = find_methodproc(mname, &settings->methods))) {
@@ -692,6 +703,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         req.new_creation_ids = new_creation_ids;
         req.txn = txn;
         req.mboxrights = &mboxrights;
+        req.method_calls = &method_calls;
 
         if (do_perf) {
             struct rusage usage;
@@ -707,7 +719,6 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         r = mboxname_read_counters(inboxname, &req.counters);
         if (r) {
             jmap_finireq(&req);
-            if (req.subargs) json_decref(req.subargs);
             json_decref(args);
             goto done;
         }
@@ -722,19 +733,12 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
             conversations_abort(&req.cstate);
             txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
-            if (req.subargs) json_decref(req.subargs);
             json_decref(args);
             goto done;
         }
         conversations_commit(&req.cstate);
 
         json_decref(args);
-
-        if (req.subreq) {
-            mname = req.subreq;
-            args = req.subargs;
-            goto redo;
-        }
     }
 
     /* tell syslog which methods were called */
@@ -751,6 +755,18 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     }
 
   done:
+    {
+        /* Clean up call stack */
+        json_t *jval;
+        while ((jval = ptrarray_pop(&processed_methods)))  {
+            json_decref(jval);
+        }
+        while ((jval = ptrarray_pop(&method_calls))) {
+            json_decref(jval);
+        }
+        ptrarray_fini(&processed_methods);
+        ptrarray_fini(&method_calls);
+    }
     free_hash_table(client_creation_ids, free);
     free(client_creation_ids);
     free_hash_table(new_creation_ids, free);
@@ -763,6 +779,13 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     strarray_fini(&methods);
 
     return ret;
+}
+
+extern void jmap_add_subreq(jmap_req_t *req, const char *method,
+                            json_t *args, const char *client_id)
+{
+    if (!client_id) client_id = req->tag;
+    ptrarray_push(req->method_calls, json_pack("[s,o,s]", method, args, client_id));
 }
 
 const char *jmap_lookup_id(jmap_req_t *req, const char *creation_id)
