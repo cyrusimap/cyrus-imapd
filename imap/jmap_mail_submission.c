@@ -640,15 +640,11 @@ extern int jmap_emailsubmission_set(jmap_req_t *req)
     jmap_ok(req, jmap_set_reply(&set));
 
     if (json_object_size(updateEmails) || json_array_size(destroyEmails)) {
-        struct jmap_req subreq = *req;
-        subreq.args = json_pack("{}");
-        subreq.method = "Email/set";
-        json_object_set(subreq.args, "update", updateEmails);
-        json_object_set(subreq.args, "destroy", destroyEmails);
-        json_object_set_new(subreq.args, "accountId",
-                            json_string(req->accountid));
-        jmap_email_set(&subreq);
-        json_decref(subreq.args);
+        json_t *subargs = json_object();
+        json_object_set(subargs, "update", updateEmails);
+        json_object_set(subargs, "destroy", destroyEmails);
+        json_object_set_new(subargs, "accountId", json_string(req->accountid));
+        jmap_add_subreq(req, "Email/set", subargs, NULL);
     }
     json_decref(updateEmails);
     json_decref(destroyEmails);
