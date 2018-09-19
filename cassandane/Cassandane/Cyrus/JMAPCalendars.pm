@@ -1157,6 +1157,35 @@ sub test_calendarevent_get_organizer
     $self->assert_equals('mailto:organizer@local', $event->{replyTo}{imip});
 }
 
+sub test_calendarevent_get_organizer_bogusuri
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    # As seen in the wild: an ORGANIZER/ATTENDEE with a value
+    # that hasn't even an URI scheme.
+
+    my ($id, $ical) = $self->icalfile('organizer_bogusuri');
+
+    my $participants = {
+        '/foo-bar/principal/' => {
+            name => 'Organizer',
+            email => undef,
+            roles => ['owner'],
+        },
+        'attendee@local' => {
+            name => '',
+            email => 'attendee@local',
+            roles => ['attendee'],
+        },
+    };
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_deep_equals($participants, $event->{participants});
+    $self->assert_null($event->{replyTo}{imip});
+    $self->assert_str_equals('/foo-bar/principal/', $event->{replyTo}{other});
+}
+
 sub test_calendarevent_get_organizermailto
     :min_version_3_1 :needs_component_jmap
 {
