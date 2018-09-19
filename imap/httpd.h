@@ -526,7 +526,7 @@ extern xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
 extern struct accept *parse_accept(const char **hdr);
 extern void parse_query_params(struct transaction_t *txn, const char *query);
 extern time_t calc_compile_time(const char *time, const char *date);
-extern const char *http_statusline(long code);
+extern const char *http_statusline(unsigned ver, long code);
 extern char *rfc3339date_gen(char *buf, size_t len, time_t t);
 extern char *httpdate_gen(char *buf, size_t len, time_t t);
 extern void begin_resp_headers(struct transaction_t *txn, long code);

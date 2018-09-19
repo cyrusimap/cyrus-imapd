@@ -48,7 +48,7 @@
 #include "spool.h"
 
 /* Supported HTTP version */
-#define HTTP2_VERSION    "HTTP/2"
+#define HTTP2_VERSION    "HTTP/2.0" /* per draft-ietf-httpbis-semantics §3.5 */
 #define HTTP_VERSION     "HTTP/1.1"
 #define HTTP_VERSION_LEN 8
 

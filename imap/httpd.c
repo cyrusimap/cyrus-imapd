@@ -2086,18 +2086,17 @@ EXPORTED char *httpdate_gen(char *buf, size_t len, time_t t)
 
 
 /* Create an HTTP Status-Line given response code */
-EXPORTED const char *http_statusline(long code)
+EXPORTED const char *http_statusline(unsigned ver, long code)
 {
     static struct buf statline = BUF_INITIALIZER;
-    static unsigned tail = 0;
 
-    if (!tail) {
-        buf_setcstr(&statline, HTTP_VERSION);
-        buf_putc(&statline, ' ');
-        tail = buf_len(&statline);
+    if (ver == VER_2) buf_setcstr(&statline, HTTP2_VERSION);
+    else {
+        buf_setmap(&statline, HTTP_VERSION, HTTP_VERSION_LEN-1);
+        buf_putc(&statline, ver + '0');
     }
 
-    buf_truncate(&statline, tail);
+    buf_putc(&statline, ' ');
     buf_appendcstr(&statline, error_message(code));
     return buf_cstring(&statline);
 }
@@ -2254,7 +2253,8 @@ EXPORTED void begin_resp_headers(struct transaction_t *txn, long code)
         http2_begin_headers(txn);
         if (code) simple_hdr(txn, ":status", "%.3s", error_message(code));
     }
-    else if (code) prot_printf(txn->conn->pout, "%s\r\n", http_statusline(code));
+    else if (code) prot_printf(txn->conn->pout, "%s\r\n",
+                               http_statusline(txn->flags.ver, code));
 }
 
 EXPORTED int end_resp_headers(struct transaction_t *txn, long code)
@@ -2793,9 +2793,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     }
 
     /* Add response */
-    buf_printf(&log, " => \"%s %s\"",
-               txn->flags.ver == VER_2 ? HTTP2_VERSION : HTTP_VERSION,
-               error_message(code));
+    buf_printf(&log, " => \"%s\"", http_statusline(txn->flags.ver, code));
 
     /* Add any auxiliary response data */
     sep = " (";
