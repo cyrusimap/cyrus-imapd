@@ -2964,17 +2964,17 @@ static char *qp_encode(const char *data, size_t len, int isheader,
             unsigned char next = (n < len - 1) ? data[n+1] : '\0';
 
             if (cnt >= BASE64_MAX_LINE_LEN) {
-                if (isheader && !ISUTF8CONTINUATION(this)) {
+                if (!isheader) {
+                    /* add soft line break to body */
+                    buf_appendcstr(&buf, "=\r\n");
+                    cnt = 0;
+                }
+                else if (!ISUTF8CONTINUATION(this)) {
                     /* split encoded token with fold */
                     buf_appendcstr(&buf, "?=");
                     buf_appendcstr(&buf, "\r\n ");
                     buf_appendcstr(&buf, "=?UTF-8?Q?");
                     cnt = 11;
-                }
-                else {
-                    /* add soft line break to body */
-                    buf_appendcstr(&buf, "=\r\n");
-                    cnt = 0;
                 }
             }
 
