@@ -1465,7 +1465,7 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond,
 
     if (code) {
         xmlNewChild(resp, NULL, BAD_CAST "status",
-                    BAD_CAST http_statusline(fctx->txn->flags.ver, code));
+                    BAD_CAST http_statusline(VER_1_1, code));
 
         if (precond) {
             xmlNodePtr error = xmlNewChild(resp, NULL, BAD_CAST "error", NULL);
@@ -1583,8 +1583,7 @@ int xml_add_response(struct propfind_ctx *fctx, long code, unsigned precond,
 
             if (stat->root) {
                 xmlNewChild(stat->root, NULL, BAD_CAST "status",
-                            BAD_CAST http_statusline(fctx->txn->flags.ver,
-                                                     stat->status));
+                            BAD_CAST http_statusline(VER_1_1, stat->status));
                 if (stat->precond) {
                     struct error_t error = { NULL, stat->precond, NULL, NULL, 0 };
                     xml_add_error(stat->root, &error, fctx->ns);
@@ -3474,8 +3473,7 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 
         if (stat->root) {
             xmlNewChild(stat->root, NULL, BAD_CAST "status",
-                        BAD_CAST http_statusline(pctx->txn->flags.ver,
-                                                 stat->status));
+                        BAD_CAST http_statusline(VER_1_1, stat->status));
             if (stat->precond) {
                 struct error_t error = { NULL, stat->precond, NULL, NULL, 0 };
                 xml_add_error(stat->root, &error, pctx->ns);
@@ -3925,7 +3923,6 @@ struct move_rock {
     const char *urlprefix;
     xmlNodePtr root;
     xmlNsPtr ns[NUM_NAMESPACE];
-    unsigned http_ver;
 };
 
 /* Callback for use by dav_move_collection() to move single collection */
@@ -4020,7 +4017,7 @@ static int move_collection(const mbentry_t *mbentry, void *rock)
 
         /* Add <status> element */
         xmlNewChild(resp, NULL, BAD_CAST "status",
-                    BAD_CAST http_statusline(mrock->http_ver, code));
+                    BAD_CAST http_statusline(VER_1_1, code));
 
         /* Add <error> element */
         xml_add_error(resp, &err, mrock->ns);
@@ -4168,8 +4165,7 @@ static int dav_move_collection(struct transaction_t *txn,
     if (!r && recursive) {
         char ombn[MAX_MAILBOX_BUFFER];
         struct move_rock mrock = { ++omlen, ++nmlen, BUF_INITIALIZER,
-                                   dest_tgt->namespace->prefix, NULL, {0},
-                                   txn->flags.ver };
+                                   dest_tgt->namespace->prefix, NULL, {0} };
 
         strcpy(ombn, oldmailboxname);
         strcat(ombn, ".");

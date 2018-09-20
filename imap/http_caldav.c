@@ -3347,7 +3347,7 @@ static void import_resource(const char *uid, void *data, void *rock)
 
         node = xmlNewChild(resp, ns[NS_DAV], BAD_CAST "propstat", NULL);
         xmlNewChild(node, ns[NS_DAV], BAD_CAST "status",
-                    BAD_CAST http_statusline(irock->txn->flags.ver, HTTP_OK));
+                    BAD_CAST http_statusline(VER_1_1, HTTP_OK));
 
         node = xmlNewChild(node, ns[NS_DAV], BAD_CAST "prop", NULL);
 
@@ -3374,7 +3374,7 @@ static void import_resource(const char *uid, void *data, void *rock)
         xml_add_href(resp, NULL, NULL);
 
         xmlNewChild(resp, ns[NS_DAV], BAD_CAST "status",
-                    BAD_CAST http_statusline(irock->txn->flags.ver, r));
+                    BAD_CAST http_statusline(VER_1_1, r));
 
         node = xml_add_error(resp, &txn->error, ns);
         break;
