@@ -87,7 +87,8 @@ enum event_type {
     EVENT_CALENDAR_ALARM      = (1<<22),
     /* Other */
     EVENT_APPLEPUSHSERVICE     = (1<<23),
-    EVENT_APPLEPUSHSERVICE_DAV = (1<<24)
+    EVENT_APPLEPUSHSERVICE_DAV = (1<<24),
+    EVENT_MAILBOX_MODSEQ       = (1<<25)
 };
 
 /*

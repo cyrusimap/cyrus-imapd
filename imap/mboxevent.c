@@ -80,7 +80,7 @@
                         EVENT_MESSAGE_TRASH)
 
 #define MAILBOX_EVENTS (EVENT_MAILBOX_CREATE|EVENT_MAILBOX_DELETE|\
-                        EVENT_MAILBOX_RENAME|EVENT_ACL_CHANGE)
+                        EVENT_MAILBOX_RENAME|EVENT_ACL_CHANGE|EVENT_MAILBOX_MODSEQ)
 
 #define SUBS_EVENTS    (EVENT_MAILBOX_SUBSCRIBE|EVENT_MAILBOX_UNSUBSCRIBE)
 
@@ -1697,6 +1697,8 @@ static const char *event_to_name(enum event_type type)
         return "ApplePushService";
     case EVENT_APPLEPUSHSERVICE_DAV:
         return "ApplePushServiceDAV";
+    case EVENT_MAILBOX_MODSEQ:
+        return "MailboxModseq";
     default:
         fatal("Unknown message event", EC_SOFTWARE);
     }

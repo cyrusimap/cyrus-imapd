@@ -2671,6 +2671,14 @@ EXPORTED int mailbox_commit(struct mailbox *mailbox)
             session_id(), mailbox->name, mailbox->uniqueid,
             mailbox->i.highestmodseq);
 
+    if (mailbox->modseq_dirty) {
+        struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_MODSEQ);
+        mboxevent_extract_mailbox(mboxevent, mailbox);
+        mboxevent_set_access(mboxevent, NULL, NULL, "", mailbox->name, 0);
+        mboxevent_notify(&mboxevent);
+        mboxevent_free(&mboxevent);
+    }
+
     /* remove all dirty flags! */
     mailbox->i.dirty = 0;
     mailbox->modseq_dirty = 0;
