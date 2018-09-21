@@ -1490,7 +1490,7 @@ static int setcalendarevents_create(jmap_req_t *req,
                                     json_t *invalid)
 {
     int r, pe;
-    int needrights = DACL_WRITE;
+    int needrights = DACL_WRITEPROPS|DACL_WRITECONT;
     char *uid = NULL;
 
     struct mailbox *mbox = NULL;
