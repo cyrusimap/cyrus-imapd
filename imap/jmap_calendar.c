@@ -782,7 +782,7 @@ static int setCalendars(struct jmap_req *req)
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
+        json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
         set.old_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
     }
@@ -1999,7 +1999,7 @@ static int setCalendarEvents(struct jmap_req *req)
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        json_t *jstate = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);
+        json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
         set.old_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
     }
