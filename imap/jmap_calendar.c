@@ -75,26 +75,24 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-static int getCalendars(struct jmap_req *req);
-static int getCalendarsUpdates(struct jmap_req *req);
-static int setCalendars(struct jmap_req *req);
-static int getCalendarEvents(struct jmap_req *req);
-static int getCalendarEventsUpdates(struct jmap_req *req);
-static int getCalendarEventsList(struct jmap_req *req);
-static int setCalendarEvents(struct jmap_req *req);
-static int getCalendarPreferences(struct jmap_req *req);
-static int copyCalendarEvent(struct jmap_req *req);
+static int jmap_calendar_get(struct jmap_req *req);
+static int jmap_calendar_changes(struct jmap_req *req);
+static int jmap_calendar_set(struct jmap_req *req);
+static int jmap_calendarevent_get(struct jmap_req *req);
+static int jmap_calendarevent_changes(struct jmap_req *req);
+static int jmap_calendarevent_query(struct jmap_req *req);
+static int jmap_calendarevent_set(struct jmap_req *req);
+static int jmap_calendarevent_copy(struct jmap_req *req);
 
 jmap_method_t jmap_calendar_methods[] = {
-    { "Calendar/get",             &getCalendars },
-    { "Calendar/changes",         &getCalendarsUpdates },
-    { "Calendar/set",             &setCalendars },
-    { "CalendarEvent/get",        &getCalendarEvents },
-    { "CalendarEvent/changes",    &getCalendarEventsUpdates },
-    { "CalendarEvent/query",      &getCalendarEventsList },
-    { "CalendarEvent/set",        &setCalendarEvents },
-    { "CalendarEvent/copy",       &copyCalendarEvent },
-    { "CalendarPreference/get",   &getCalendarPreferences },
+    { "Calendar/get",             &jmap_calendar_get },
+    { "Calendar/changes",         &jmap_calendar_changes },
+    { "Calendar/set",             &jmap_calendar_set },
+    { "CalendarEvent/get",        &jmap_calendarevent_get },
+    { "CalendarEvent/changes",    &jmap_calendarevent_changes },
+    { "CalendarEvent/query",      &jmap_calendarevent_query },
+    { "CalendarEvent/set",        &jmap_calendarevent_set },
+    { "CalendarEvent/copy",       &jmap_calendarevent_copy },
     { NULL,                       NULL}
 };
 
@@ -145,7 +143,7 @@ static int readprop_full(json_t *root,
 #define readprop(root, name,  mandatory, invalid, fmt, dst) \
     readprop_full((root), NULL, (name), (mandatory), (invalid), (fmt), (dst))
 
-/* Helper flags for setCalendarEvents */
+/* Helper flags for CalendarEvent/set */
 #define JMAP_CREATE     (1<<0) /* Current request is a create. */
 #define JMAP_UPDATE     (1<<1) /* Current request is an update. */
 #define JMAP_DESTROY    (1<<2) /* Current request is a destroy. */
@@ -430,7 +428,7 @@ static const jmap_property_t calendar_props[] = {
     { NULL,              0 }
 };
 
-static int getCalendars(struct jmap_req *req)
+static int jmap_calendar_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
@@ -501,14 +499,14 @@ done:
     return r;
 }
 
-struct calendarupdates_rock {
+struct calendarchanges_rock {
     jmap_req_t *req;
     struct jmap_changes *changes;
 };
 
-static int getcalendarupdates_cb(const mbentry_t *mbentry, void *vrock)
+static int getcalendarchanges_cb(const mbentry_t *mbentry, void *vrock)
 {
-    struct calendarupdates_rock *rock = (struct calendarupdates_rock *) vrock;
+    struct calendarchanges_rock *rock = (struct calendarchanges_rock *) vrock;
     mbname_t *mbname = NULL;
     jmap_req_t *req = rock->req;
     int r = 0;
@@ -567,7 +565,7 @@ done:
     return r;
 }
 
-static int getCalendarsUpdates(struct jmap_req *req)
+static int jmap_calendar_changes(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
@@ -588,11 +586,11 @@ static int getCalendarsUpdates(struct jmap_req *req)
         goto done;
     }
 
-    /* Lookup any updates. */
+    /* Lookup any changes. */
     char *mboxname = caldav_mboxname(req->accountid, NULL);
-    struct calendarupdates_rock rock = { req, &changes };
+    struct calendarchanges_rock rock = { req, &changes };
 
-    r = mboxlist_mboxtree(mboxname, getcalendarupdates_cb, &rock,
+    r = mboxlist_mboxtree(mboxname, getcalendarchanges_cb, &rock,
                           MBOXTREE_TOMBSTONES|MBOXTREE_SKIP_ROOT);
     free(mboxname);
     if (r) {
@@ -756,7 +754,7 @@ static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
     return r;
 }
 
-static int setCalendars(struct jmap_req *req)
+static int jmap_calendar_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
@@ -1337,7 +1335,7 @@ static const jmap_property_t event_props[] = {
     { NULL,            0 }
 };
 
-static int getCalendarEvents(struct jmap_req *req)
+static int jmap_calendarevent_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
@@ -1958,7 +1956,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     mboxevent_free(&mboxevent);
 
     /* Keep the VEVENT in the database but set alive to 0, to report
-     * with getCalendarEventsUpdates. */
+     * with CalendarEvents/changes. */
     cdata->dav.alive = 0;
     cdata->dav.modseq = record.modseq;
     cdata->dav.imap_uid = record.uid;
@@ -1973,7 +1971,7 @@ done:
     return r;
 }
 
-static int setCalendarEvents(struct jmap_req *req)
+static int jmap_calendarevent_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
@@ -2178,7 +2176,7 @@ done:
     return r;
 }
 
-struct geteventupdates_rock {
+struct geteventchanges_rock {
     jmap_req_t *req;
     struct jmap_changes *changes;
     size_t seen_records;
@@ -2187,7 +2185,7 @@ struct geteventupdates_rock {
     hash_table *mboxrights;
 };
 
-static void strip_spurious_deletes(struct geteventupdates_rock *urock)
+static void strip_spurious_deletes(struct geteventchanges_rock *urock)
 {
     /* if something is mentioned in both DELETEs and UPDATEs, it's probably
      * a move.  O(N*M) algorithm, but there are rarely many, and the alternative
@@ -2208,9 +2206,9 @@ static void strip_spurious_deletes(struct geteventupdates_rock *urock)
     }
 }
 
-static int geteventupdates_cb(void *vrock, struct caldav_data *cdata)
+static int geteventchanges_cb(void *vrock, struct caldav_data *cdata)
 {
-    struct geteventupdates_rock *rock = vrock;
+    struct geteventchanges_rock *rock = vrock;
     jmap_req_t *req = rock->req;
     struct jmap_changes *changes = rock->changes;
 
@@ -2242,7 +2240,7 @@ static int geteventupdates_cb(void *vrock, struct caldav_data *cdata)
     return 0;
 }
 
-static int getCalendarEventsUpdates(struct jmap_req *req)
+static int jmap_calendarevent_changes(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
@@ -2263,8 +2261,8 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
         goto done;
     }
 
-    /* Lookup updates. */
-    struct geteventupdates_rock rock = {
+    /* Lookup changes. */
+    struct geteventchanges_rock rock = {
         req,
         &changes,
         0            /*seen_records*/,
@@ -2275,7 +2273,7 @@ static int getCalendarEventsUpdates(struct jmap_req *req)
     r = caldav_get_updates(db, changes.since_modseq, NULL /*mboxname*/,
                            CAL_COMP_VEVENT, 
                            changes.max_changes ? (int) changes.max_changes + 1 : -1,
-                           &geteventupdates_cb, &rock);
+                           &geteventchanges_cb, &rock);
     if (r) goto done;
     strip_spurious_deletes(&rock);
 
@@ -2736,7 +2734,7 @@ static int validatecomparator(struct jmap_comparator *comp,
     return 0;
 }
 
-static int getCalendarEventsList(struct jmap_req *req)
+static int jmap_calendarevent_query(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
@@ -2783,14 +2781,6 @@ static int getCalendarEventsList(struct jmap_req *req)
 done:
     jmap_query_fini(&query);
     jmap_parser_fini(&parser);
-    return 0;
-}
-
-static int getCalendarPreferences(struct jmap_req *req)
-{
-    /* Just a dummy implementation to make the JMAP web client happy. */
-    jmap_ok(req, json_pack("{}"));
-
     return 0;
 }
 
@@ -2896,7 +2886,7 @@ done:
     jmap_parser_fini(&myparser);
 }
 
-static int copyCalendarEvent(struct jmap_req *req)
+static int jmap_calendarevent_copy(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_copy copy;
