@@ -71,24 +71,24 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-static int getContactGroups(struct jmap_req *req);
-static int getContactsGroupUpdates(struct jmap_req *req);
-static int setContactGroups(struct jmap_req *req);
-static int getContacts(struct jmap_req *req);
-static int getContactsUpdates(struct jmap_req *req);
-static int getContactsList(struct jmap_req *req);
-static int setContacts(struct jmap_req *req);
-static int copyContacts(struct jmap_req *req);
+static int jmap_contactgroup_get(struct jmap_req *req);
+static int jmap_contactgroup_changes(struct jmap_req *req);
+static int jmap_contactgroup_set(struct jmap_req *req);
+static int jmap_contact_get(struct jmap_req *req);
+static int jmap_contact_changes(struct jmap_req *req);
+static int jmap_contact_query(struct jmap_req *req);
+static int jmap_contact_set(struct jmap_req *req);
+static int jmap_contact_copy(struct jmap_req *req);
 
 jmap_method_t jmap_contact_methods[] = {
-    { "ContactGroup/get",        &getContactGroups },
-    { "ContactGroup/changes",    &getContactsGroupUpdates },
-    { "ContactGroup/set",        &setContactGroups },
-    { "Contact/get",             &getContacts },
-    { "Contact/changes",         &getContactsUpdates },
-    { "Contact/query",           &getContactsList },
-    { "Contact/set",             &setContacts },
-    { "Contact/copy",            &copyContacts },
+    { "ContactGroup/get",        &jmap_contactgroup_get },
+    { "ContactGroup/changes",    &jmap_contactgroup_changes },
+    { "ContactGroup/set",        &jmap_contactgroup_set },
+    { "Contact/get",             &jmap_contact_get },
+    { "Contact/changes",         &jmap_contact_changes },
+    { "Contact/query",           &jmap_contact_query },
+    { "Contact/set",             &jmap_contact_set },
+    { "Contact/copy",            &jmap_contact_copy },
     { NULL,                      NULL}
 };
 
@@ -120,14 +120,14 @@ int jmap_contact_init(jmap_settings_t *settings)
     return 0;
 }
 
-struct updates_rock {
+struct changes_rock {
     jmap_req_t *req;
     struct jmap_changes *changes;
     size_t seen_records;
     modseq_t highestmodseq;
 };
 
-static void strip_spurious_deletes(struct updates_rock *urock)
+static void strip_spurious_deletes(struct changes_rock *urock)
 {
     /* if something is mentioned in both DELETEs and UPDATEs, it's probably
      * a move.  O(N*M) algorithm, but there are rarely many, and the alternative
@@ -491,7 +491,7 @@ static int _contact_getargs_parse(const char *key,
     return r;
 }
 
-static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
+static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
@@ -563,9 +563,9 @@ static int jmap_contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
     return r;
 }
 
-static int getContactGroups(struct jmap_req *req)
+static int jmap_contactgroup_get(struct jmap_req *req)
 {
-    return jmap_contacts_get(req, &getgroups_cb, CARDDAV_KIND_GROUP);
+    return _contacts_get(req, &getgroups_cb, CARDDAV_KIND_GROUP);
 }
 
 static const char *_json_array_get_string(const json_t *obj, size_t index)
@@ -577,9 +577,9 @@ static const char *_json_array_get_string(const json_t *obj, size_t index)
 }
 
 
-static int getcontactupdates_cb(void *rock, struct carddav_data *cdata)
+static int getchanges_cb(void *rock, struct carddav_data *cdata)
 {
-    struct updates_rock *urock = (struct updates_rock *) rock;
+    struct changes_rock *urock = (struct changes_rock *) rock;
     struct dav_data dav = cdata->dav;
     const char *uid = cdata->vcard_uid;
 
@@ -612,7 +612,7 @@ static int getcontactupdates_cb(void *rock, struct carddav_data *cdata)
     return 0;
 }
 
-static int jmap_contacts_updates(struct jmap_req *req, int kind)
+static int _contacts_changes(struct jmap_req *req, int kind)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
@@ -638,9 +638,9 @@ static int jmap_contacts_updates(struct jmap_req *req, int kind)
     if (r) goto done;
 
     /* Lookup updates. */
-    struct updates_rock rock = { req, &changes, 0 /*seen_records*/, 0 /*highestmodseq*/};
+    struct changes_rock rock = { req, &changes, 0 /*seen_records*/, 0 /*highestmodseq*/};
     r = carddav_get_updates(db, changes.since_modseq, mboxname, kind,
-                            -1 /*max_records*/, &getcontactupdates_cb, &rock);
+                            -1 /*max_records*/, &getchanges_cb, &rock);
     if (r) goto done;
 
     strip_spurious_deletes(&rock);
@@ -661,9 +661,9 @@ static int jmap_contacts_updates(struct jmap_req *req, int kind)
     return r;
 }
 
-static int getContactsGroupUpdates(struct jmap_req *req)
+static int jmap_contactgroup_changes(struct jmap_req *req)
 {
-    return jmap_contacts_updates(req, CARDDAV_KIND_GROUP);
+    return _contacts_changes(req, CARDDAV_KIND_GROUP);
 }
 
 static const char *_resolve_contactid(struct jmap_req *req, const char *id)
@@ -736,7 +736,7 @@ static int _add_othergroup_entries(struct jmap_req *req,
     return r;
 }
 
-static int setContactGroups(struct jmap_req *req)
+static int jmap_contactgroup_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
@@ -1058,7 +1058,7 @@ static int setContactGroups(struct jmap_req *req)
         r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->accountid);
         if (r) {
             syslog(LOG_ERR,
-                   "IOERROR: setContactGroups remove failed for %s %u",
+                   "IOERROR: ContactGroup/set remove failed for %s %u",
                    mailbox->name, cdata->dav.imap_uid);
             goto done;
         }
@@ -1658,14 +1658,14 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
     return 0;
 }
 
-static int getContacts(struct jmap_req *req)
+static int jmap_contact_get(struct jmap_req *req)
 {
-    return jmap_contacts_get(req, &getcontacts_cb, CARDDAV_KIND_CONTACT);
+    return _contacts_get(req, &getcontacts_cb, CARDDAV_KIND_CONTACT);
 }
 
-static int getContactsUpdates(struct jmap_req *req)
+static int jmap_contact_changes(struct jmap_req *req)
 {
-    return jmap_contacts_updates(req, CARDDAV_KIND_CONTACT);
+    return _contacts_changes(req, CARDDAV_KIND_CONTACT);
 }
 
 typedef struct contact_filter {
@@ -1982,7 +1982,7 @@ static int validatecomparator(struct jmap_comparator *comp,
     return 0;
 }
 
-struct contactlist_rock {
+struct contactquery_rock {
     jmap_req_t *req;
     struct jmap_query *query;
     jmap_filter *filter;
@@ -1991,8 +1991,8 @@ struct contactlist_rock {
     struct carddav_db *carddavdb;
 };
 
-static int getcontactlist_cb(void *rock, struct carddav_data *cdata) {
-    struct contactlist_rock *crock = (struct contactlist_rock*) rock;
+static int getcontactquery_cb(void *rock, struct carddav_data *cdata) {
+    struct contactquery_rock *crock = (struct contactquery_rock*) rock;
     struct index_record record;
     json_t *contact = NULL;
     int r = 0;
@@ -2064,7 +2064,7 @@ done:
     return r;
 }
 
-static int getContactsList(struct jmap_req *req)
+static int jmap_contact_query(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
@@ -2109,10 +2109,10 @@ static int getContactsList(struct jmap_req *req)
     }
 
     /* Inspect every entry in this accounts addressbook mailboxes. */
-    struct contactlist_rock rock = {
+    struct contactquery_rock rock = {
         req, &query, parsed_filter, NULL, db
     };
-    r = carddav_foreach(db, NULL, getcontactlist_cb, &rock);
+    r = carddav_foreach(db, NULL, getcontactquery_cb, &rock);
     if (rock.mailbox) mailbox_close(&rock.mailbox);
     if (r) {
         err = jmap_server_error(r);
@@ -2881,7 +2881,7 @@ static int required_set_rights(json_t *props)
     return needrights;
 }
 
-static int setContacts_create(jmap_req_t *req, const char *account_id,
+static int _contact_set_create(jmap_req_t *req, const char *account_id,
                               json_t *jcard, struct carddav_data *cdata,
                               struct mailbox **mailbox, char **uidptr,
                               json_t *invalid)
@@ -2967,7 +2967,7 @@ done:
     return r;
 }
 
-static int setContacts(struct jmap_req *req)
+static int jmap_contact_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
@@ -3013,7 +3013,7 @@ static int setContacts(struct jmap_req *req)
     json_object_foreach(set.create, key, arg) {
         char *uid = NULL;
         json_t *invalid = json_pack("[]");
-        r = setContacts_create(req, req->accountid, arg,
+        r = _contact_set_create(req, req->accountid, arg,
                                NULL, &mailbox, &uid, invalid);
         if (r) {
             json_t *err = json_pack("{s:s s:s}",
@@ -3238,7 +3238,7 @@ static int setContacts(struct jmap_req *req)
                "jmap: remove contact %s/%s", req->accountid, uid);
         r = carddav_remove(mailbox, olduid, /*isreplace*/0, req->accountid);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: setContacts remove failed for %s %u",
+            syslog(LOG_ERR, "IOERROR: Contact/set remove failed for %s %u",
                    mailbox->name, olduid);
             goto done;
         }
@@ -3417,7 +3417,7 @@ static void _contact_copy(jmap_req_t *req,
     /* Create vcard */
     json_t *invalid = json_array();
     char *dst_uid = NULL;
-    r = setContacts_create(req, dst_account_id, dst_card,
+    r = _contact_set_create(req, dst_account_id, dst_card,
                            cdata, &dst_mbox, &dst_uid, invalid);
     if (r || json_array_size(invalid)) {
         if (!r) {
@@ -3445,7 +3445,7 @@ done:
     jmap_parser_fini(&myparser);
 }
 
-static int copyContacts(struct jmap_req *req)
+static int jmap_contact_copy(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_copy copy;
