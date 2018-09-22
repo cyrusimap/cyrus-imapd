@@ -207,6 +207,10 @@ ec HTTP_LOCKED,
 ec HTTP_FAILED_DEP,
    "424 Failed Dependency"
 
+# Using Early Data (RFC 8470)
+ec HTTP_TOO_EARLY,
+   "425 Too Early"
+
 ec HTTP_UPGRADE,
    "426 Upgrade Required"
 
