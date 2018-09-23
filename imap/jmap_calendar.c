@@ -875,44 +875,29 @@ static int jmap_calendar_set(struct jmap_req *req)
         }
         json_decref(invalid);
 
-        /* Prepare the ACL for this calendar */
-        struct buf acl = BUF_INITIALIZER;
-        if (strcmp(req->accountid, req->userid)) {
-            /* Make sure we are allowed to create the calendar */
-            char *parentname = caldav_mboxname(req->accountid, NULL);
-            mbentry_t *mbparent = NULL;
-            mboxlist_lookup(parentname, &mbparent, NULL);
-            free(parentname);
-            if (!jmap_hasrights(req, mbparent, DACL_MKCOL)) {
-                json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
-                json_object_set_new(set.not_created, key, err);
-                mboxlist_entry_free(&mbparent);
-                continue;
-            }
-            /* Copy the calendar home ACL for this shared calendar */
-            buf_setcstr(&acl, mbparent->acl);
+        /* Make sure we are allowed to create the calendar */
+        char *parentname = caldav_mboxname(req->accountid, NULL);
+        mbentry_t *mbparent = NULL;
+        mboxlist_lookup(parentname, &mbparent, NULL);
+        free(parentname);
+        if (!jmap_hasrights(req, mbparent, DACL_MKCOL)) {
+            json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
+            json_object_set_new(set.not_created, key, err);
             mboxlist_entry_free(&mbparent);
-        } else {
-            /* Users may always create their own calendars */
-            char rights[100];
-            cyrus_acl_masktostr(DACL_ALL | DACL_READFB, rights);
-            buf_printf(&acl, "%s\t%s\t", httpd_userid, rights);
-            cyrus_acl_masktostr(DACL_READFB, rights);
-            buf_printf(&acl, "%s\t%s\t", "anyone", rights);
+            continue;
         }
+        mboxlist_entry_free(&mbparent);
 
         /* Create the calendar */
         char *uid = xstrdup(makeuuid());
         char *mboxname = caldav_mboxname(req->accountid, uid);
-        r = mboxlist_createsync(mboxname, MBTYPE_CALENDAR,
-                                NULL /* partition */,
-                                req->userid, req->authstate,
-                                0 /* options */, 0 /* uidvalidity */,
-                                0 /* createdmodseq */,
-                                0 /* highestmodseq */, buf_cstring(&acl),
-                                NULL /* uniqueid */, 0 /* local_only */,
-                                NULL /* mboxptr */);
-        buf_free(&acl);
+        r = mboxlist_createmailbox(mboxname, MBTYPE_CALENDAR,
+                                   NULL /* partition */,
+                                   httpd_userisadmin || httpd_userisproxyadmin,
+                                   httpd_userid, httpd_authstate,
+                                   /*localonly*/0, /*forceuser*/0,
+                                   /*dbonly*/0, /*notify*/0,
+                                   /*mailboxptr*/NULL);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                    mboxname, error_message(r));
