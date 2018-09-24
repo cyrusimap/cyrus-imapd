@@ -1089,7 +1089,7 @@ sub test_calendarevent_get_participants
         'smithers@example.com' => {
             name => 'Monty Burns',
             email => 'smithers@example.com',
-            roles => ['owner'],
+            roles => ['owner', 'attendee'],
             rsvpResponse => 'accepted',
             participation => 'required',
         },
@@ -1171,7 +1171,7 @@ sub test_calendarevent_get_organizer_bogusuri
         '/foo-bar/principal/' => {
             name => 'Organizer',
             email => undef,
-            roles => ['owner'],
+            roles => ['owner', 'attendee'],
         },
         'attendee@local' => {
             name => '',
@@ -1197,7 +1197,7 @@ sub test_calendarevent_get_organizermailto
         'organizer@local' => {
             name => 'Organizer',
             email => 'organizer@local',
-            roles => ['owner'],
+            roles => ['owner', 'attendee'],
         },
         'attendee@local' => {
             name => 'Attendee',
@@ -2146,7 +2146,7 @@ sub test_calendarevent_set_participants
                 name => 'Foo',
                 email => 'foo@local',
                 kind => 'individual',
-                roles => [ 'owner', 'chair' ],
+                roles => [ 'owner', 'attendee', 'chair' ],
                 locationId => 'loc1',
                 rsvpResponse => 'accepted',
                 participation => 'required',
