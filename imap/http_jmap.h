@@ -156,6 +156,7 @@ extern void jmap_add_subreq(jmap_req_t *req, const char *method,
 
 /* Creation ids */
 extern const char *jmap_lookup_id(jmap_req_t *req, const char *creation_id);
+extern const char *jmap_id_string_value(jmap_req_t *req, json_t *item);
 extern void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id);
 extern int jmap_is_valid_id(const char *id);
 

@@ -799,6 +799,16 @@ const char *jmap_lookup_id(jmap_req_t *req, const char *creation_id)
     return hash_lookup(creation_id, req->new_creation_ids);
 }
 
+const char *jmap_id_string_value(jmap_req_t *req, json_t *item)
+{
+    if (!item) return NULL;
+    if (!json_is_string(item)) return NULL;
+    const char *id = json_string_value(item);
+    if (*id == '#')
+        return jmap_lookup_id(req, id+1);
+    return id;
+}
+
 void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id)
 {
     /* It's OK to overwrite existing ids, as per Foo/set:
