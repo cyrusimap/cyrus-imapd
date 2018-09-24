@@ -136,20 +136,9 @@ static void _emailsubmission_create(jmap_req_t *req,
     struct buf buf = BUF_INITIALIZER;
 
     /* messageId */
-    const char *msgid = NULL;
     json_t *jemailId = json_object_get(emailsubmission, "emailId");
-    if (json_is_string(jemailId)) {
-        msgid = json_string_value(jemailId);
-        if (*msgid == '#') {
-            const char *id = jmap_lookup_id(req, msgid + 1);
-            if (id) {
-                msgid = id;
-            } else {
-                jmap_parser_invalid(&parser, "emailId");
-            }
-        }
-    }
-    else {
+    const char *msgid = jmap_id_string_value(req, jemailId);
+    if (!msgid) {
         jmap_parser_invalid(&parser, "emailId");
     }
 
@@ -612,7 +601,9 @@ extern int jmap_emailsubmission_set(jmap_req_t *req)
             if (!jsuccess) continue;
             json_t *jemailId = json_object_get(jsubmission, "emailId");
             if (!jemailId) continue;
-            json_object_set(updateEmails, json_string_value(jemailId), jemail);
+            const char *msgid = jmap_id_string_value(req, jemailId);
+            if (!msgid) continue;
+            json_object_set(updateEmails, msgid, jemail);
         }
     }
     json_t *destroyEmails = json_array();
@@ -630,7 +621,9 @@ extern int jmap_emailsubmission_set(jmap_req_t *req)
             if (!jsuccess) continue;
             json_t *jemailId = json_object_get(jsubmission, "emailId");
             if (!jemailId) continue;
-            json_array_append(destroyEmails, jemailId);
+            const char *msgid = jmap_id_string_value(req, jemailId);
+            if (!msgid) continue;
+            json_array_append_new(destroyEmails, json_string(msgid));
         }
     }
 
