@@ -120,6 +120,9 @@
 #include "imap/imap_err.h"
 #include "imap/mailbox_header_cache.h"
 
+static mailbox_wait_cb_t *mailbox_wait_cb = NULL;
+static void *mailbox_wait_cb_rock = NULL;
+
 struct mailboxlist {
     struct mailboxlist *next;
     struct mailbox m;
@@ -5561,6 +5564,8 @@ EXPORTED int mailbox_copyfile(const char *from, const char *to, int nolink)
     int flags = COPYFILE_MKDIR;
     if (nolink) flags |= COPYFILE_NOLINK;
 
+    if (mailbox_wait_cb) mailbox_wait_cb(mailbox_wait_cb_rock);
+
     if (cyrus_copyfile(from, to, flags))
         return IMAP_IOERROR;
 
@@ -6995,4 +7000,10 @@ int mailbox_cid_rename(struct mailbox *mailbox,
     mailbox_iter_done(&iter);
 
     return r;
+}
+
+EXPORTED void mailbox_set_wait_cb(void (*cb)(void *), void *rock)
+{
+    mailbox_wait_cb = cb;
+    mailbox_wait_cb_rock = rock;
 }

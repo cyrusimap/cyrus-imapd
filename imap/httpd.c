@@ -1734,6 +1734,9 @@ static void cmdloop(struct http_connection *conn)
     /* Enable command timer */
     cmdtime_settimer(1);
 
+    /* Enable provisional responses for long-running mailbox ops */
+    mailbox_set_wait_cb((mailbox_wait_cb_t *) &keepalive_response, &txn);
+
     for (;;) {
         int ret = 0;
 
@@ -2840,6 +2843,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 }
 
 
+EXPORTED inline void keepalive_response(struct transaction_t *txn)
+    __attribute__((always_inline, optimize("-O3")));
 EXPORTED void keepalive_response(struct transaction_t *txn)
 {
     if (gotsigalrm) {
