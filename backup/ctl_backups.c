@@ -935,7 +935,7 @@ static int lock_run_sqlite(const char *userid, const char *fname,
         fprintf(stderr, "unable to lock %s: %s\n",
                 userid ? userid : fname,
                 error_message(r));
-        r = backup_close(backup);
+        r = backup_close(&backup);
         return EC_SOFTWARE;
     }
 
@@ -996,7 +996,7 @@ static int lock_run_exec(const char *userid, const char *fname,
         fprintf(stderr, "unable to lock %s: %s\n",
                 userid ? userid : fname,
                 error_message(r));
-        r = backup_close(backup);
+        r = backup_close(&backup);
         return EC_SOFTWARE;
     }
 
