@@ -3880,15 +3880,10 @@ struct cyrusmsg {
     message_t *_m;                   /* Message loaded from message record */
     struct body *_mybody;            /* Bodystructure */
     struct buf _mymime;              /* Raw MIME buffer */
-    struct headers *_headers;        /* Parsed part0 headers */
-    hash_table *_headers_by_part_id; /* Parsed subpart headers */
+    struct headers *_headers;        /* Parsed part0 headers. Don't free. */
+    hash_table *_headers_by_part_id; /* Parsed subpart headers. Don't free. */
+    ptrarray_t _headers_mempool;     /* Allocated headers memory */
 };
-
-static void _headers_free_p(void *headersp)
-{
-    _headers_fini((struct headers*)headersp);
-    free(headersp);
-}
 
 static void _cyrusmsg_free(struct cyrusmsg **msgptr)
 {
@@ -3902,10 +3897,15 @@ static void _cyrusmsg_free(struct cyrusmsg **msgptr)
     buf_free(&msg->_mymime);
     json_decref(msg->imagesize_by_part);
     if (msg->_headers_by_part_id) {
-        free_hash_table(msg->_headers_by_part_id, _headers_free_p);
+        free_hash_table(msg->_headers_by_part_id, NULL);
         free(msg->_headers_by_part_id);
     }
-    if (msg->_headers) _headers_free_p(msg->_headers);
+    struct headers *hdrs;
+    while ((hdrs = ptrarray_pop(&msg->_headers_mempool))) {
+        _headers_fini(hdrs);
+        free(hdrs);
+    }
+    ptrarray_fini(&msg->_headers_mempool);
     free(*msgptr);
     *msgptr = NULL;
 }
@@ -4060,8 +4060,9 @@ static int _cyrusmsg_get_headers(struct cyrusmsg *msg,
                        header_part->header_size, headers);
     if (part && part->part_id)
         hash_insert(part->part_id, headers, msg->_headers_by_part_id);
-    else
+    else if (part == NULL)
         msg->_headers = headers;
+    ptrarray_append(&msg->_headers_mempool, headers);
     *headersptr = headers;
     return 0;
 }
