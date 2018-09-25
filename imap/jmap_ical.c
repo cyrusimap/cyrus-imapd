@@ -1092,7 +1092,7 @@ static json_t *participant_from_ical(icalproperty *prop,
     /* FIXME invitedBy */
 
     /* email */
-    const char *uri = normalized_uri(icalproperty_get_value_as_string(prop));
+    char *uri = normalized_uri(icalproperty_get_value_as_string(prop));
     char *email = mailaddr_from_uri(uri);
     json_object_set_new(p, "email", email ? json_string(email) : json_null());
     free(email);
@@ -1180,6 +1180,7 @@ static json_t *participant_from_ical(icalproperty *prop,
         const char *a = icalproperty_get_attendee(prop);
         if (!strcasecmpsafe(o, a)) {
             json_array_append_new(roles, json_string("owner"));
+            json_array_append_new(roles, json_string("attendee"));
         }
     }
     if (ical_role == ICAL_ROLE_CHAIR) {
@@ -1348,6 +1349,7 @@ static json_t *participant_from_ical(icalproperty *prop,
         }
     }
 
+    free(uri);
     buf_free(&buf);
     return p;
 }
@@ -2731,7 +2733,99 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 }
 
 static void
-participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p)
+participant_roles_to_ical(context_t *ctx,
+                          icalproperty *prop,
+                          json_t *roles,
+                          icalparameter_role ical_role,
+                          int is_replyto)
+{
+    if (!json_array_size(roles)) {
+        invalidprop(ctx, "roles");
+        return;
+    }
+
+    strarray_t sroles = STRARRAY_INITIALIZER;
+    size_t zi;
+    json_t *jval;
+    struct buf buf = BUF_INITIALIZER;
+    json_array_foreach(roles, zi, jval) {
+        const char *s = json_string_value(jval);
+        if (!s) continue;
+        buf_setcstr(&buf, s);
+        buf_lcase(&buf);
+        strarray_add(&sroles, buf_cstring(&buf)); // remove duplicates
+        buf_reset(&buf);
+    }
+
+    if (((size_t) strarray_size(&sroles)) != json_array_size(roles)) {
+        invalidprop(ctx, "roles");
+        goto done;
+    }
+
+    int has_owner = 0;
+    int has_chair = 0;
+    int has_attendee = 0;
+
+    int i;
+    for (i = 0; i < strarray_size(&sroles); i++) {
+        const char *role = strarray_nth(&sroles, i);
+        if (!has_owner)
+            has_owner = !strcmp(role, "owner");
+        if (!has_chair)
+            has_chair = !strcmp(role, "chair");
+        if (!has_attendee)
+            has_attendee = !strcmp(role, "attendee");
+    }
+
+    int xroles_count = strarray_size(&sroles);
+
+    /* Try to map roles to iCalendar without falling back to X-ROLE */
+    if (has_chair && ical_role == ICAL_ROLE_REQPARTICIPANT) {
+        /* Can use iCalendar ROLE=CHAIR parameter */
+        xroles_count--;
+    }
+    if (has_owner && is_replyto) {
+        /* This is the ORGANIZER or its ATTENDEE, which is implicit "owner" */
+        xroles_count--;
+    }
+    if (has_attendee) {
+        /* Default role for ATTENDEE without X-ROLE is "attendee" */
+        xroles_count--;
+    }
+    if (xroles_count == 0) {
+        /* No need to set X-ROLE parameters on this ATTENDEE */
+        if (has_chair) {
+            icalparameter *param = icalparameter_new_role(ICAL_ROLE_CHAIR);
+            icalproperty_add_parameter(prop, param);
+        }
+        goto done;
+    }
+
+    /* Map roles to X-ROLE */
+    json_array_foreach(roles, zi, jval) {
+        const char *role = json_string_value(jval);
+        if (!role) {
+            beginprop_idx(ctx, "roles", i);
+            invalidprop(ctx, NULL);
+            endprop(ctx);
+            continue;
+        }
+        /* Try to use standard CHAIR role */
+        if (!strcasecmp(role, "CHAIR") && ical_role == ICAL_ROLE_REQPARTICIPANT) {
+            icalparameter *param = icalparameter_new_role(ICAL_ROLE_CHAIR);
+            icalproperty_add_parameter(prop, param);
+        } else {
+            set_icalxparam(prop, JMAPICAL_XPARAM_ROLE, role, 0);
+        }
+    }
+
+done:
+    strarray_fini(&sroles);
+    buf_free(&buf);
+}
+
+static void
+participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p, int is_replyto)
 {
     icalparameter *param;
 
@@ -2796,37 +2890,7 @@ participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p)
     /* roles */
     json_t *roles = json_object_get(p, "roles");
     if (json_array_size(roles)) {
-        size_t i;
-        json_t *jval;
-        json_array_foreach(roles, i, jval) {
-            const char *s = json_string_value(jval);
-            if (!s) {
-                beginprop_idx(ctx, "roles", i);
-                invalidprop(ctx, NULL);
-                endprop(ctx);
-                continue;
-            }
-            char *role = NULL;
-            if (!strcasecmp(s, "attendee"))
-                role = "ATTENDEE";
-            else if (!strcasecmp(s, "chair"))
-                role = "CHAIR";
-            else if (!strcasecmp(s, "owner"))
-                role = "OWNER";
-            if (!role) {
-                beginprop_idx(ctx, "roles", i);
-                invalidprop(ctx, NULL);
-                endprop(ctx);
-                continue;
-            }
-            /* Try to use standard CHAIR role */
-            if (!strcmp(role, "CHAIR") && ical_role == ICAL_ROLE_REQPARTICIPANT) {
-                param = icalparameter_new_role(ICAL_ROLE_CHAIR);
-                icalproperty_add_parameter(prop, param);
-            } else {
-                set_icalxparam(prop, JMAPICAL_XPARAM_ROLE, role, 0);
-            }
-        }
+        participant_roles_to_ical(ctx, prop, roles, ical_role, is_replyto);
     }
     else if (roles) {
         invalidprop(ctx, "roles");
@@ -3108,9 +3172,11 @@ participants_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         }
 
         /* Either reuse the ORGANIZER property or create an ATTENDEE. */
+        int is_replyto = !strcasecmp(email, replyto_imip + 7);
         char *mailto = mailaddr_to_uri(email);
         icalproperty *prop = NULL;
-        if (!strcasecmp(email, replyto_imip + 7)) {
+
+        if (is_replyto) {
             json_t *roles = json_object_get(jval, "roles");
             if (json_array_size(roles) == 1) {
                 const char *role = json_string_value(json_array_get(roles, 0));
@@ -3141,7 +3207,7 @@ participants_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         free(mailto);
 
         /* Map participant to iCalendar */
-        participant_to_ical(ctx, prop, jval);
+        participant_to_ical(ctx, prop, jval, is_replyto);
         endprop(ctx);
     }
 }
