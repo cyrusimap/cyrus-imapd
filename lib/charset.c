@@ -2270,6 +2270,13 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
 
     if (!s) return;
 
+    /* Keep track of the decoding pipeline before the current
+     * encoded-word. This allows to share decoding state for
+     * multi-octet characters that are broken across words. */
+    int lastenc = ENCODING_UNKNOWN;
+    charset_t lastcs = CHARSET_UNKNOWN_CHARSET;
+    struct convert_rock *extract = NULL;
+
     /* set up the conversion path */
     if (flags & CHARSET_MIME_UTF8) {
         defaultcs = charset_lookupname("utf-8");
@@ -2324,6 +2331,13 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
             len = start - s - 1;
             convert_switch(input, defaultcs, 1/*to_uni*/);
             convert_catn(unfold, s, len);
+
+            /* Reset decoder pipeline */
+            charset_free(&lastcs);
+            lastcs = CHARSET_UNKNOWN_CHARSET;
+            lastenc = ENCODING_UNKNOWN;
+            basic_free(extract);
+            extract = NULL;
         }
 
         /*
@@ -2331,16 +2345,37 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
          */
         start++;
         cs = lookup_buf(start, endcharset-start);
+        int enc = encoding[1] == 'q' || encoding[1] == 'Q' ? ENCODING_QP : ENCODING_BASE64;
+
         if (cs == CHARSET_UNKNOWN_CHARSET) {
             /* Unrecognized charset, nothing will match here */
             convert_putc(input, U_REPLACEMENT); /* unknown character */
+            charset_free(&cs);
+            convert_switch(input, defaultcs, 1 /*to_uni*/);
+
+            /* Reset decoder pipeline */
+            charset_free(&lastcs);
+            lastcs = CHARSET_UNKNOWN_CHARSET;
+            lastenc = ENCODING_UNKNOWN;
+            basic_free(extract);
+            extract = NULL;
+        }
+        else if (!strcmp(charset_name(cs), charset_name(lastcs)) && enc == lastenc) {
+            /* Reuse the previous decoder */
+            charset_free(&cs);
+            p = encoding+3;
+            convert_catn(extract, p, end - p);
         }
         else {
-            struct convert_rock *extract;
+            /* Reset the previous decoder and start a new decoding pipeline */
             convert_switch(input, cs, 1/*to_uni*/);
-
+            charset_free(&lastcs);
+            lastcs = CHARSET_UNKNOWN_CHARSET;
+            lastenc = ENCODING_UNKNOWN;
+            basic_free(extract);
+            extract = NULL;
             /* choose decoder */
-            if (encoding[1] == 'q' || encoding[1] == 'Q') {
+            if (enc == ENCODING_QP) {
                 extract = qp_init(1, input);
             }
             else {
@@ -2349,11 +2384,9 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
             /* convert */
             p = encoding+3;
             convert_catn(extract, p, end - p);
-            /* clean up */
-            basic_free(extract);
+            lastcs = cs;
+            lastenc = enc;
         }
-        convert_switch(input, defaultcs, 1 /*to_uni*/);
-        charset_free(&cs);
 
         /* Prepare for the next iteration */
         s = start = end+2;
@@ -2370,6 +2403,8 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
     basic_free(unfold);
     convert_nfree(input, 1);
     charset_free(&defaultcs);
+    charset_free(&lastcs);
+    basic_free(extract);
 }
 
 /*

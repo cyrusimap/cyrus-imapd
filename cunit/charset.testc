@@ -470,6 +470,17 @@ static void test_mimeheader_badcharset(void)
     free(s);
 }
 
+static void test_mimeheader_mergeqwords(void)
+{
+    static const char SPLIT3[] = "=?utf-8?q?=E2=82?= =?utf-8?q?=AC?=";
+    int flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
+
+    char *s = charset_decode_mimeheader(SPLIT3, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, "\xe2\x82\xac");
+    free(s);
+}
+
 static void test_parse_mimexvalue(void)
 {
     char *s;
