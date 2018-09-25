@@ -618,6 +618,9 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     /* Process call stack */
     json_t *mc;
     while ((mc = ptrarray_pop(&method_calls))) {
+        /* Send provisional response, if necessary */
+        keepalive_response(txn);
+
         /* Mark method as processed */
         ptrarray_push(&processed_methods, mc);
 
