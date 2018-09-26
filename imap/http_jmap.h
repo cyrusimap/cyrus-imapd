@@ -52,6 +52,7 @@
 #include "mailbox.h"
 #include "mboxname.h"
 #include "msgrecord.h"
+#include "strarray.h"
 
 #define JMAP_URN_CORE       "urn:ietf:params:jmap:core"
 #define JMAP_URN_MAIL       "urn:ietf:params:jmap:mail"
@@ -79,8 +80,8 @@ enum {
 
 typedef struct {
     hash_table methods;
+    strarray_t can_use;
     json_t *capabilities;
-    json_t *collations;
     long limits[JMAP_NUM_LIMITS];
 } jmap_settings_t;
 
@@ -135,9 +136,13 @@ typedef struct {
 } jmap_method_t;
 
 /* Protocol implementations */
-extern int jmap_mail_init(jmap_settings_t *settings);
-extern int jmap_contact_init(jmap_settings_t *settings);
-extern int jmap_calendar_init(jmap_settings_t *settings);
+extern void jmap_mail_init(jmap_settings_t *settings);
+extern void jmap_contact_init(jmap_settings_t *settings);
+extern void jmap_calendar_init(jmap_settings_t *settings);
+
+extern void jmap_mail_capabilities(jmap_settings_t *settings);
+extern void jmap_contact_capabilities(jmap_settings_t *settings);
+extern void jmap_calendar_capabilities(jmap_settings_t *settings);
 
 /* Request-scoped mailbox cache */
 extern int  jmap_openmbox(jmap_req_t *req, const char *name,

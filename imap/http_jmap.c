@@ -79,6 +79,7 @@ static time_t compile_time;
 static void jmap_init(struct buf *serverinfo);
 static int  jmap_need_auth(struct transaction_t *txn);
 static int  jmap_auth(const char *userid);
+static void jmap_shutdown(void);
 
 /* HTTP method handlers */
 static int jmap_get(struct transaction_t *txn, void *params);
@@ -110,7 +111,7 @@ struct namespace_t namespace_jmap = {
     jmap_need_auth, /*authschemes*/0,
     /*mbtype*/0, 
     (ALLOW_READ | ALLOW_POST),
-    &jmap_init, &jmap_auth, NULL, NULL, NULL, /*bearer*/NULL,
+    &jmap_init, &jmap_auth, NULL, &jmap_shutdown, NULL, /*bearer*/NULL,
     {
         { NULL,                 NULL },                 /* ACL          */
         { NULL,                 NULL },                 /* BIND         */
@@ -142,16 +143,16 @@ struct namespace_t namespace_jmap = {
  */
 
 static jmap_settings_t my_jmap_settings = {
-    HASH_TABLE_INITIALIZER, NULL, NULL, { 0 }
+    HASH_TABLE_INITIALIZER, STRARRAY_INITIALIZER, NULL, { 0 }
 };
 
 jmap_method_t jmap_core_methods[] = {
     { "Core/echo",    &jmap_core_echo },
     { "Blob/copy",    &jmap_blob_copy },
-    { NULL,                      NULL}
+    { NULL,           NULL            }
 };
 
-static int jmap_core_init()
+static void jmap_core_init()
 {
 #define _read_opt(val, optkey) \
     val = config_getint(optkey); \
@@ -178,7 +179,18 @@ static int jmap_core_init()
               IMAPOPT_JMAP_MAX_OBJECTS_IN_SET);
 #undef _read_opt
 
-    my_jmap_settings.collations = json_array();
+    strarray_push(&my_jmap_settings.can_use, JMAP_URN_CORE);
+ 
+    construct_hash_table(&my_jmap_settings.methods, 128, 0);
+
+    jmap_method_t *mp;
+    for (mp = jmap_core_methods; mp->name; mp++) {
+        hash_insert(mp->name, mp, &my_jmap_settings.methods);
+    }
+}
+
+static void jmap_core_capabilities()
+{
     my_jmap_settings.capabilities =
         json_pack("{s:{s:i s:i s:i s:i s:i s:i s:i s:o}}",
                   JMAP_URN_CORE,
@@ -196,16 +208,16 @@ static int jmap_core_init()
                   my_jmap_settings.limits[MAX_OBJECTS_IN_GET],
                   "maxObjectsInSet",
                   my_jmap_settings.limits[MAX_OBJECTS_IN_SET],
-                  "collationAlgorithms", my_jmap_settings.collations
+                  "collationAlgorithms", json_array()
             );
 
-    construct_hash_table(&my_jmap_settings.methods, 128, 0);
-
-    jmap_method_t *mp;
-    for (mp = jmap_core_methods; mp->name; mp++) {
-        hash_insert(mp->name, mp, &my_jmap_settings.methods);
+    if (ws_enabled()) {
+        json_object_set_new(my_jmap_settings.capabilities, JMAP_URN_WEBSOCKET,
+                            json_pack("{s:s}", "wsUrl", JMAP_BASE_URL));
     }
-    return 0;
+
+    json_object_set_new(my_jmap_settings.capabilities,
+                        XML_NS_CYRUS "performance", json_object());
 }
 
 static void jmap_init(struct buf *serverinfo __attribute__((unused)))
@@ -223,14 +235,6 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
     jmap_mail_init(&my_jmap_settings);
     jmap_contact_init(&my_jmap_settings);
     jmap_calendar_init(&my_jmap_settings);
-
-    if (ws_enabled()) {
-        json_object_set_new(my_jmap_settings.capabilities, JMAP_URN_WEBSOCKET,
-                            json_pack("{s:s}", "wsUrl", JMAP_BASE_URL));
-    }
-
-    json_object_set_new(my_jmap_settings.capabilities,
-                        XML_NS_CYRUS "performance", json_object());
 }
 
 static int jmap_auth(const char *userid __attribute__((unused)))
@@ -246,6 +250,14 @@ static int jmap_need_auth(struct transaction_t *txn __attribute__((unused)))
     /* All endpoints require authentication */
     return HTTP_UNAUTHORIZED;
 }
+
+static void jmap_shutdown(void)
+{
+    free_hash_table(&my_jmap_settings.methods, NULL);
+    strarray_fini(&my_jmap_settings.can_use);
+    if (my_jmap_settings.capabilities)
+        json_decref(my_jmap_settings.capabilities);
+}   
 
 
 /*
@@ -1050,6 +1062,13 @@ static json_t *user_settings(const char *userid)
 static int jmap_settings(struct transaction_t *txn)
 {
     assert(httpd_userid);
+
+    if (!my_jmap_settings.capabilities) {
+        jmap_core_capabilities();
+        jmap_mail_capabilities(&my_jmap_settings);
+        jmap_contact_capabilities(&my_jmap_settings);
+        jmap_calendar_capabilities(&my_jmap_settings);
+    }
 
     /* Create the response object */
     json_t *res = user_settings(httpd_userid);

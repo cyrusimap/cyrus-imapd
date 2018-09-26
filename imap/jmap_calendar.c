@@ -96,17 +96,20 @@ jmap_method_t jmap_calendar_methods[] = {
     { NULL,                       NULL}
 };
 
-int jmap_calendar_init(jmap_settings_t *settings)
+HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
 {
     jmap_method_t *mp;
     for (mp = jmap_calendar_methods; mp->name; mp++) {
         hash_insert(mp->name, mp, &settings->methods);
     }
 
+    strarray_push(&settings->can_use, JMAP_URN_CALENDARS);
+}
+
+HIDDEN void jmap_calendar_capabilities(jmap_settings_t *settings)
+{
     json_object_set_new(settings->capabilities,
                         JMAP_URN_CALENDARS, json_object());
-
-    return 0;
 }
 
 static int readprop_full(json_t *root,

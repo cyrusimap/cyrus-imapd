@@ -71,6 +71,35 @@
 #include "imap/imap_err.h"
 
 
+static int jmap_mailbox_get(jmap_req_t *req);
+static int jmap_mailbox_set(jmap_req_t *req);
+static int jmap_mailbox_changes(jmap_req_t *req);
+static int jmap_mailbox_query(jmap_req_t *req);
+static int jmap_mailbox_querychanges(jmap_req_t *req);
+
+static jmap_method_t jmap_mailbox_methods[] = {
+    { "Mailbox/get",          &jmap_mailbox_get },
+    { "Mailbox/set",          &jmap_mailbox_set },
+    { "Mailbox/changes",      &jmap_mailbox_changes },
+    { "Mailbox/query",        &jmap_mailbox_query },
+    { "Mailbox/queryChanges", &jmap_mailbox_querychanges },
+    { NULL,                   NULL}
+};
+
+HIDDEN void jmap_mailbox_init(jmap_settings_t *settings)
+{
+    jmap_method_t *mp;
+    for (mp = jmap_mailbox_methods; mp->name; mp++) {
+        hash_insert(mp->name, mp, &settings->methods);
+    }
+}
+
+HIDDEN void jmap_mailbox_capabilities(jmap_settings_t *settings
+                                      __attribute__((unused)))
+{
+}
+
+
 /*
  * Mailboxes
  */
@@ -677,7 +706,7 @@ static const jmap_property_t mailbox_props[] = {
     { NULL,                 0 }
 };
 
-HIDDEN int jmap_mailbox_get(jmap_req_t *req)
+static int jmap_mailbox_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
@@ -1260,7 +1289,7 @@ static void _mbox_parse_filter(json_t *filter, struct jmap_parser *parser,
     }
 }
 
-HIDDEN int jmap_mailbox_query(jmap_req_t *req)
+static int jmap_mailbox_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
@@ -1307,7 +1336,7 @@ static int _mboxquerychanges_cb(const mbentry_t *mbentry, void *vrock)
     return 0;
 }
 
-HIDDEN int jmap_mailbox_querychanges(jmap_req_t *req)
+static int jmap_mailbox_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_querychanges query;
@@ -2892,7 +2921,7 @@ static void _mboxset_fini(struct mboxset *set)
     strarray_fini(&set->destroy);
 }
 
-HIDDEN int jmap_mailbox_set(jmap_req_t *req)
+static int jmap_mailbox_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct mboxset set;
@@ -3107,7 +3136,7 @@ done:
     return r;
 }
 
-HIDDEN int jmap_mailbox_changes(jmap_req_t *req)
+static int jmap_mailbox_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;

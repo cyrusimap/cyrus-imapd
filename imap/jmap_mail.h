@@ -63,16 +63,10 @@ extern char *jmap_mbox_get_role(jmap_req_t *req, const mbname_t *mbname);
 
 extern int jmap_email_set(jmap_req_t *req);
 
-extern int jmap_emailsubmission_get(jmap_req_t *req);
-extern int jmap_emailsubmission_set(jmap_req_t *req);
-extern int jmap_emailsubmission_changes(jmap_req_t *req);
-extern int jmap_emailsubmission_query(jmap_req_t *req);
-extern int jmap_emailsubmission_querychanges(jmap_req_t *req);
+extern void jmap_emailsubmission_init(jmap_settings_t *settings);
+extern void jmap_emailsubmission_capabilities(jmap_settings_t *settings);
 
-extern int jmap_mailbox_get(jmap_req_t *req);
-extern int jmap_mailbox_set(jmap_req_t *req);
-extern int jmap_mailbox_changes(jmap_req_t *req);
-extern int jmap_mailbox_query(jmap_req_t *req);
-extern int jmap_mailbox_querychanges(jmap_req_t *req);
+extern void jmap_mailbox_init(jmap_settings_t *settings);
+extern void jmap_mailbox_capabilities(jmap_settings_t *settings);
 
 #endif /* JMAP_MAIL_H */

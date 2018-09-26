@@ -111,12 +111,7 @@ static int jmap_thread_changes(jmap_req_t *req);
  * - Email/report
  */
 
-jmap_method_t jmap_mail_methods[] = {
-    { "Mailbox/get",                  &jmap_mailbox_get },
-    { "Mailbox/set",                  &jmap_mailbox_set },
-    { "Mailbox/changes",              &jmap_mailbox_changes },
-    { "Mailbox/query",                &jmap_mailbox_query },
-    { "Mailbox/queryChanges",         &jmap_mailbox_querychanges },
+static jmap_method_t jmap_mail_methods[] = {
     { "Email/query",                  &jmap_email_query },
     { "Email/queryChanges",           &jmap_email_querychanges },
     { "Email/get",                    &jmap_email_get },
@@ -129,11 +124,6 @@ jmap_method_t jmap_mail_methods[] = {
     { "Thread/get",                   &jmap_thread_get },
     { "Thread/changes",               &jmap_thread_changes },
     { "Identity/get",                 &jmap_identity_get },
-    { "EmailSubmission/get",          &jmap_emailsubmission_get },
-    { "EmailSubmission/set",          &jmap_emailsubmission_set },
-    { "EmailSubmission/changes",      &jmap_emailsubmission_changes },
-    { "EmailSubmission/query",        &jmap_emailsubmission_query },
-    { "EmailSubmission/queryChanges", &jmap_emailsubmission_querychanges },
     { NULL,                           NULL}
 };
 
@@ -143,13 +133,21 @@ static const char *msglist_sortfields[];
 #define JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL 20
 #define JMAP_MAIL_MAX_KEYWORDS_PER_EMAIL 100 /* defined in mailbox_user_flag */
 
-int jmap_mail_init(jmap_settings_t *settings)
+HIDDEN void jmap_mail_init(jmap_settings_t *settings)
 {
     jmap_method_t *mp;
     for (mp = jmap_mail_methods; mp->name; mp++) {
         hash_insert(mp->name, mp, &settings->methods);
     }
 
+    strarray_push(&settings->can_use, JMAP_URN_MAIL);
+
+    jmap_emailsubmission_init(settings);
+    jmap_mailbox_init(settings);
+}
+
+HIDDEN void jmap_mail_capabilities(jmap_settings_t *settings)
+{
     json_t *sortopts = json_array();
     const char **sp;
     for (sp = msglist_sortfields; *sp; sp++) {
@@ -175,49 +173,8 @@ int jmap_mail_init(jmap_settings_t *settings)
     json_object_set_new(settings->capabilities,
                         JMAP_URN_MAIL, email_capabilities);
 
-    static json_t *submit_ext = NULL;
-    if (!submit_ext) {
-        /* determine extensions from submission server */
-        smtpclient_t *smp = NULL;
-
-        submit_ext = json_object();
-
-        if (!smtpclient_open(&smp)) {
-            const char *smtp_capa[] = { "FUTURERELEASE", "SIZE", "DSN",
-                                        "DELIVERBY", "MT-PRIORITY", NULL };
-            const char **capa;
-            struct buf buf = BUF_INITIALIZER;
-
-            for (capa = smtp_capa; *capa; capa++) {
-                const char *args = smtpclient_has_ext(smp, *capa);
-
-                if (args) {
-                    strarray_t *sa = strarray_split(args, NULL, STRARRAY_TRIM);
-                    json_t *jargs = json_array();
-                    int i;
-
-                    for (i = 0; i < strarray_size(sa); i++) {
-                        buf_setcstr(&buf, strarray_nth(sa, i));
-                        json_array_append_new(jargs, json_string(buf_lcase(&buf)));
-                    }
-                    strarray_free(sa);
-
-                    buf_setcstr(&buf, *capa);
-                    json_object_set_new(submit_ext, buf_lcase(&buf), jargs);
-                }
-            }
-            smtpclient_close(&smp);
-            buf_free(&buf);
-        }
-    }
-
-    json_t *submit_capabilities = json_pack("{s:i s:O}",
-            "maxDelayedSend", 0,
-            "submissionExtensions", submit_ext);
-
-    json_object_set_new(settings->capabilities,
-                        JMAP_URN_SUBMISSION, submit_capabilities);
-    return 0;
+    jmap_emailsubmission_capabilities(settings);
+    jmap_mailbox_capabilities(settings);
 }
 
 #define JMAP_HAS_ATTACHMENT_FLAG "$HasAttachment"

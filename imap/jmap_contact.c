@@ -94,15 +94,14 @@ jmap_method_t jmap_contact_methods[] = {
 
 static char *_prodid = NULL;
 
-int jmap_contact_init(jmap_settings_t *settings)
+HIDDEN void jmap_contact_init(jmap_settings_t *settings)
 {
     jmap_method_t *mp;
     for (mp = jmap_contact_methods; mp->name; mp++) {
         hash_insert(mp->name, mp, &settings->methods);
     }
 
-    json_object_set_new(settings->capabilities,
-                        JMAP_URN_CONTACTS, json_object());
+    strarray_push(&settings->can_use, JMAP_URN_CONTACTS);
 
     /* Initialize PRODID value
      *
@@ -116,8 +115,12 @@ int jmap_contact_init(jmap_settings_t *settings)
         buf_appendcstr(&prodidbuf, "..//EN");
     }
     _prodid = buf_release(&prodidbuf);
+}
 
-    return 0;
+HIDDEN void jmap_contact_capabilities(jmap_settings_t *settings)
+{
+    json_object_set_new(settings->capabilities,
+                        JMAP_URN_CONTACTS, json_object());
 }
 
 struct changes_rock {

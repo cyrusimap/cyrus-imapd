@@ -63,6 +63,73 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
+static int jmap_emailsubmission_get(jmap_req_t *req);
+static int jmap_emailsubmission_set(jmap_req_t *req);
+static int jmap_emailsubmission_changes(jmap_req_t *req);
+static int jmap_emailsubmission_query(jmap_req_t *req);
+static int jmap_emailsubmission_querychanges(jmap_req_t *req);
+
+static jmap_method_t jmap_emailsubmission_methods[] = {
+    { "EmailSubmission/get",          &jmap_emailsubmission_get },
+    { "EmailSubmission/set",          &jmap_emailsubmission_set },
+    { "EmailSubmission/changes",      &jmap_emailsubmission_changes },
+    { "EmailSubmission/query",        &jmap_emailsubmission_query },
+    { "EmailSubmission/queryChanges", &jmap_emailsubmission_querychanges },
+    { NULL,                           NULL}
+};
+
+HIDDEN void jmap_emailsubmission_init(jmap_settings_t *settings)
+{
+    jmap_method_t *mp;
+    for (mp = jmap_emailsubmission_methods; mp->name; mp++) {
+        hash_insert(mp->name, mp, &settings->methods);
+    }
+
+    strarray_push(&settings->can_use, JMAP_URN_SUBMISSION);
+}
+
+HIDDEN void jmap_emailsubmission_capabilities(jmap_settings_t *settings)
+{
+    /* determine extensions from submission server */
+    json_t *submit_ext = json_object();
+    smtpclient_t *smp = NULL;
+
+    if (!smtpclient_open(&smp)) {
+        const char *smtp_capa[] = { "FUTURERELEASE", "SIZE", "DSN",
+                                    "DELIVERBY", "MT-PRIORITY", NULL };
+        const char **capa;
+        struct buf buf = BUF_INITIALIZER;
+
+        for (capa = smtp_capa; *capa; capa++) {
+            const char *args = smtpclient_has_ext(smp, *capa);
+
+            if (args) {
+                strarray_t *sa = strarray_split(args, NULL, STRARRAY_TRIM);
+                json_t *jargs = json_array();
+                int i;
+
+                for (i = 0; i < strarray_size(sa); i++) {
+                    buf_setcstr(&buf, strarray_nth(sa, i));
+                    json_array_append_new(jargs, json_string(buf_lcase(&buf)));
+                }
+                strarray_free(sa);
+
+                buf_setcstr(&buf, *capa);
+                json_object_set_new(submit_ext, buf_lcase(&buf), jargs);
+            }
+        }
+        smtpclient_close(&smp);
+        buf_free(&buf);
+    }
+
+    json_t *submit_capabilities = json_pack("{s:i s:O}",
+                                            "maxDelayedSend", 0,
+                                            "submissionExtensions", submit_ext);
+
+    json_object_set_new(settings->capabilities,
+                        JMAP_URN_SUBMISSION, submit_capabilities);
+}
+
 static int _emailsubmission_address_parse(json_t *addr,
                                           struct jmap_parser *parser)
 {
@@ -464,7 +531,7 @@ static const jmap_property_t submission_props[] = {
     { NULL,             0 }
 };
 
-extern int jmap_emailsubmission_get(jmap_req_t *req)
+HIDDEN int jmap_emailsubmission_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
@@ -534,7 +601,7 @@ static int _submission_setargs_parse(const char *key,
     return r;
 }
 
-extern int jmap_emailsubmission_set(jmap_req_t *req)
+HIDDEN int jmap_emailsubmission_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
@@ -648,7 +715,7 @@ done:
     return 0;
 }
 
-extern int jmap_emailsubmission_changes(jmap_req_t *req)
+HIDDEN int jmap_emailsubmission_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
@@ -719,7 +786,7 @@ static int _emailsubmission_parse_comparator(struct jmap_comparator *comp,
     return 0;
 }
 
-extern int jmap_emailsubmission_query(jmap_req_t *req)
+HIDDEN int jmap_emailsubmission_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
@@ -751,7 +818,7 @@ done:
     return 0;
 }
 
-extern int jmap_emailsubmission_querychanges(jmap_req_t *req)
+HIDDEN int jmap_emailsubmission_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_querychanges query;

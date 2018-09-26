@@ -419,7 +419,7 @@ static int validate_request(struct transaction_t *txn, json_t *req,
         else if (!strcmp(s, "ietf:jmapmail")) {
             syslog(LOG_DEBUG, "old capability %s used", s);
         }
-        else if (!json_object_get(settings->capabilities, s)) {
+        else if (strarray_find(&settings->can_use, s, 0) == -1) {
             return JMAP_UNKNOWN_CAPABILITY;
         }
     }
