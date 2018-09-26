@@ -658,7 +658,7 @@ static const jmap_property_t mailbox_props[] = {
     { "unreadEmails",       JMAP_PROP_SERVER_SET },
     { "totalThreads",       JMAP_PROP_SERVER_SET },
     { "unreadThreads",      JMAP_PROP_SERVER_SET },
-    { "myrights",           JMAP_PROP_SERVER_SET },
+    { "myRights",           JMAP_PROP_SERVER_SET },
     { "isSubscribed",       0 },
 
     /* FM extensions (do ALL of these get through to Cyrus?) */
@@ -672,6 +672,7 @@ static const jmap_property_t mailbox_props[] = {
     { "purgeOlderThanDays", 0 },
     { "onlyPurgeDeleted",   0 },
     { "suppressDuplicates", 0 },
+    { "shareWith",          JMAP_PROP_SERVER_SET },
 
     { NULL,                 0 }
 };
