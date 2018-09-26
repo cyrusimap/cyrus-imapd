@@ -490,6 +490,9 @@ static json_t *_mbox_get(jmap_req_t *req,
                 json_boolean(rights & ACL_SETSEEN));
         json_object_set_new(jrights, "maySetKeywords",
                 json_boolean(rights & ACL_WRITE));
+        // non-standard
+        json_object_set_new(jrights, "mayAdmin",
+                json_boolean(rights & ACL_ADMIN));
 
         int mayRename = 0;
         if (!is_inbox && (rights & ACL_DELETEMBOX)) {
@@ -507,6 +510,11 @@ static json_t *_mbox_get(jmap_req_t *req,
         } else {
             json_object_set_new(obj, "role", json_null());
         }
+    }
+
+    if (_wantprop(props, "shareWith")) {
+        json_t *sharewith = jmap_sharewith(mbentry, /*iscalendar*/0);
+        json_object_set_new(obj, "shareWith", sharewith);
     }
 
     if (share_type == _MBOX_SHARED) {
