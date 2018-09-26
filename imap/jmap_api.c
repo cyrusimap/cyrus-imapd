@@ -2307,3 +2307,62 @@ HIDDEN json_t *jmap_querychanges_reply(struct jmap_querychanges *query)
     json_object_set_new(res, "total", json_integer(query->total));
     return res;
 }
+
+static json_t *_json_has(int rights, int need)
+{
+  return (((rights & need) == need) ? json_true() : json_false());
+}
+
+HIDDEN json_t *jmap_sharewith(const mbentry_t *mbentry, int iscalendar)
+{
+    char *aclstr = xstrdup(mbentry->acl);
+    char *owner = mboxname_to_userid(mbentry->name);
+
+    json_t *sharewith = json_null();
+
+    // create, update, delete
+    int writerights = ACL_WRITE|ACL_INSERT|ACL_SETSEEN|ACL_DELETEMSG|ACL_EXPUNGE;
+
+    char *userid;
+    char *nextid;
+    for (userid = aclstr; userid; userid = nextid) {
+        int rights;
+        char *rightstr;
+
+        rightstr = strchr(userid, '\t');
+        if (!rightstr) break;
+        *rightstr++ = '\0';
+
+        nextid = strchr(rightstr, '\t');
+        if (!nextid) break;
+        *nextid++ = '\0';
+
+        cyrus_acl_strtomask(rightstr, &rights);
+
+        // skip system users and owner
+        if (is_system_user(userid)) continue;
+        if (!strcmp(userid, owner)) continue;
+
+        // we've got one! Create the object if this is the first
+        if (!JNOTNULL(sharewith))
+            sharewith = json_pack("{}");
+
+        json_t *obj = json_pack("{}");
+        json_object_set_new(sharewith, userid, obj);
+
+        if (iscalendar)
+            json_object_set_new(obj, "mayReadFreeBusy",
+                                _json_has(rights, DACL_READFB));
+        json_object_set_new(obj, "mayRead",
+                                _json_has(rights, ACL_READ|ACL_LOOKUP));
+        json_object_set_new(obj, "mayWrite",
+                                _json_has(rights, writerights));
+        json_object_set_new(obj, "mayAdmin",
+                                _json_has(rights, ACL_ADMIN));
+    }
+
+    free(aclstr);
+    free(owner);
+
+    return sharewith;
+}

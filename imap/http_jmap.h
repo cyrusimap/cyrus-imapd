@@ -433,4 +433,6 @@ extern void jmap_querychanges_fini(struct jmap_querychanges *query);
 
 extern json_t *jmap_querychanges_reply(struct jmap_querychanges *query);
 
+extern json_t *jmap_sharewith(const mbentry_t *mbentry, int iscalendar);
+
 #endif /* HTTP_JMAP_H */
