@@ -539,25 +539,37 @@ sub _parse_test_spec
 
     $neg = '!' if $neg eq '~';
 
-    foreach my $root (@test_roots)
-    {
-        return ($neg, 'd', $path, undef)
-            if ($root eq $path);
+    # Allow Cyrus::TesterJMAP and TesterJMAP to work
+    my @paths;
 
-        my $fpath = $path;
-        $fpath = "$root/$path"
-            if ("$root/" ne substr($path, 0, length($root)+1));
+    my @dirs = split('/', $path);
 
-        return ($neg, 'd', $fpath, undef)
-            if ( -d $fpath );
-        return ($neg, 'f', "$fpath.pm", undef)
-            if ( -f "$fpath.pm" );
+    while (@dirs) {
+        push @paths, join('/', @dirs);
+        shift @dirs;
+    }
 
-        my $test;
-        ($fpath, $test) = ($fpath =~ m/^(.*)\/([^\/]+)$/);
-        next unless defined $test;
-        return ($neg, 'f', "$fpath.pm", $test)
-            if ( -f "$fpath.pm" );
+    foreach my $candidate (@paths) {
+        foreach my $root (@test_roots)
+        {
+            return ($neg, 'd', $candidate, undef)
+                if ($root eq $candidate);
+
+            my $fpath = $candidate;
+            $fpath = "$root/$candidate"
+                if ("$root/" ne substr($candidate, 0, length($root)+1));
+
+            return ($neg, 'd', $fpath, undef)
+                if ( -d $fpath );
+            return ($neg, 'f', "$fpath.pm", undef)
+                if ( -f "$fpath.pm" );
+
+            my $test;
+            ($fpath, $test) = ($fpath =~ m/^(.*)\/([^\/]+)$/);
+            next unless defined $test;
+            return ($neg, 'f', "$fpath.pm", $test)
+                if ( -f "$fpath.pm" );
+        }
     }
 
     die "Unrecognised test specification: $name";
