@@ -325,9 +325,9 @@ static struct capa_struct base_capabilities[] = {
     { "THREAD=ORDEREDSUBJECT", 2 },
     { "THREAD=REFERENCES",     2 },
     { "THREAD=REFS",           2 }, /* draft-ietf-morg-inthread */
-    { "ANNOTATEMORE",          2 },
+    { "ANNOTATEMORE",          2 }, /* legacy SETANNOTATION/GETANNOTATION commands */
     { "ANNOTATE-EXPERIMENT-1", 2 },
-    { "METADATA",              2 },
+    { "METADATA",              2 }, /* RFC 5464 */
     { "LIST-EXTENDED",         2 },
     { "LIST-STATUS",           2 },
     { "LIST-MYRIGHTS",         2 }, /* RFC 8440 */
@@ -3453,6 +3453,10 @@ static void capa_response(int flags)
         /* Don't show "MAILBOX-REFERRALS" if disabled by config */
         if (config_getswitch(IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS) &&
             !strcmp(capa, "MAILBOX-REFERRALS"))
+            continue;
+        /* Don't show "ANNOTATEMORE" if not enabled by config */
+        if (!config_getswitch(IMAPOPT_ANNOTATION_ENABLE_LEGACY_COMMANDS) &&
+            !strcmp(capa, "ANNOTATEMORE"))
             continue;
         /* Don't show if they're not shown at this level of login */
         if (!(base_capabilities[i].mask & flags))
@@ -9919,26 +9923,32 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
         goto freeargs;
     }
 
-    astate = annotate_state_new();
-    annotate_state_set_auth(astate,
-                            imapd_userisadmin || imapd_userisproxyadmin,
-                            imapd_userid, imapd_authstate);
-    if (!*mboxpat) {
-        r = annotate_state_set_server(astate);
-        if (!r)
-            r = annotate_state_fetch(astate, &entries, &attribs,
-                                     getannotation_response, NULL);
+    if (config_getswitch(IMAPOPT_ANNOTATION_ENABLE_LEGACY_COMMANDS)) {
+        astate = annotate_state_new();
+        annotate_state_set_auth(astate,
+                                imapd_userisadmin || imapd_userisproxyadmin,
+                                imapd_userid, imapd_authstate);
+        if (!*mboxpat) {
+            r = annotate_state_set_server(astate);
+            if (!r)
+                r = annotate_state_fetch(astate, &entries, &attribs,
+                                        getannotation_response, NULL);
+        }
+        else {
+            struct annot_fetch_rock arock;
+            arock.entries = &entries;
+            arock.attribs = &attribs;
+            arock.callback = getannotation_response;
+            arock.cbrock = NULL;
+            r = apply_mailbox_pattern(astate, mboxpat, annot_fetch_cb, &arock);
+        }
+        /* we didn't write anything */
+        annotate_state_abort(&astate);
     }
     else {
-        struct annot_fetch_rock arock;
-        arock.entries = &entries;
-        arock.attribs = &attribs;
-        arock.callback = getannotation_response;
-        arock.cbrock = NULL;
-        r = apply_mailbox_pattern(astate, mboxpat, annot_fetch_cb, &arock);
+        /* nope, sorry */
+        r = IMAP_PERMISSION_DENIED;
     }
-    /* we didn't write anything */
-    annotate_state_abort(&astate);
 
     imapd_check(NULL, 0);
 
@@ -10307,25 +10317,31 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
         goto freeargs;
     }
 
-    astate = annotate_state_new();
-    annotate_state_set_auth(astate, imapd_userisadmin,
-                            imapd_userid, imapd_authstate);
-    if (!r) {
-        if (!*mboxpat) {
-            r = annotate_state_set_server(astate);
-            if (!r)
-                r = annotate_state_store(astate, entryatts);
+    if (config_getswitch(IMAPOPT_ANNOTATION_ENABLE_LEGACY_COMMANDS)) {
+        astate = annotate_state_new();
+        annotate_state_set_auth(astate, imapd_userisadmin,
+                                imapd_userid, imapd_authstate);
+        if (!r) {
+            if (!*mboxpat) {
+                r = annotate_state_set_server(astate);
+                if (!r)
+                    r = annotate_state_store(astate, entryatts);
+            }
+            else {
+                struct annot_store_rock arock;
+                arock.entryatts = entryatts;
+                r = apply_mailbox_pattern(astate, mboxpat, annot_store_cb, &arock);
+            }
         }
-        else {
-            struct annot_store_rock arock;
-            arock.entryatts = entryatts;
-            r = apply_mailbox_pattern(astate, mboxpat, annot_store_cb, &arock);
-        }
+        if (!r)
+            annotate_state_commit(&astate);
+        else
+            annotate_state_abort(&astate);
     }
-    if (!r)
-        annotate_state_commit(&astate);
-    else
-        annotate_state_abort(&astate);
+    else {
+        /* nope, sorry */
+        r = IMAP_PERMISSION_DENIED;
+    }
 
     imapd_check(NULL, 0);
 
