@@ -2360,7 +2360,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s, int flags
             basic_free(extract);
             extract = NULL;
         }
-        else if (!strcmp(charset_name(cs), charset_name(lastcs)) && enc == lastenc) {
+        else if (!strcmp(charset_name(cs), charset_name(lastcs)) && enc == lastenc && enc == ENCODING_QP) {
             /* Reuse the previous decoder */
             charset_free(&cs);
             p = encoding+3;
