@@ -352,7 +352,7 @@ static const struct prop_entry caldav_props[] = {
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_creationdate, NULL, NULL },
     { "displayname", NS_DAV,
-      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
+      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE | PROP_PERUSER,
       propfind_collectionname, proppatch_todb, NULL },
     { "getcontentlanguage", NS_DAV,
       PROP_ALLPROP | PROP_RESOURCE,
@@ -462,10 +462,10 @@ static const struct prop_entry caldav_props[] = {
       PROP_RESOURCE,
       propfind_scheduser, NULL, NULL },
     { "calendar-description", NS_CALDAV,
-      PROP_COLLECTION,
+      PROP_COLLECTION | PROP_PERUSER,
       propfind_fromdb, proppatch_todb, NULL },
     { "calendar-timezone", NS_CALDAV,
-      PROP_COLLECTION | PROP_PRESCREEN,
+      PROP_COLLECTION | PROP_PERUSER | PROP_PRESCREEN,
       propfind_timezone, proppatch_timezone, (void *) CALDAV_SUPP_DATA },
     { "supported-calendar-component-set", NS_CALDAV,
       PROP_COLLECTION,
@@ -497,17 +497,17 @@ static const struct prop_entry caldav_props[] = {
       PROP_COLLECTION,
       propfind_scheddefault, NULL, NULL },
     { "schedule-calendar-transp", NS_CALDAV,
-      PROP_COLLECTION,
+      PROP_COLLECTION | PROP_PERUSER,
       propfind_fromdb, proppatch_caltransp, NULL },
 
     /* Calendar Availability (RFC 7953) properties */
     { "calendar-availability", NS_CALDAV,
-      PROP_COLLECTION | PROP_PRESCREEN,
+      PROP_COLLECTION | PROP_PERUSER | PROP_PRESCREEN,
       propfind_availability, proppatch_availability, (void *) CALDAV_SUPP_DATA },
 
     /* Backwards compatibility with Apple VAVAILABILITY clients */
     { "calendar-availability", NS_CS,
-      PROP_COLLECTION | PROP_PRESCREEN,
+      PROP_COLLECTION | PROP_PERUSER | PROP_PRESCREEN,
       propfind_availability, proppatch_availability, (void *) CALDAV_SUPP_DATA },
 
     /* Time Zones by Reference (RFC 7809) properties */
@@ -515,7 +515,7 @@ static const struct prop_entry caldav_props[] = {
       PROP_COLLECTION,
       propfind_tzservset, NULL, NULL },
     { "calendar-timezone-id", NS_CALDAV,
-      PROP_COLLECTION,
+      PROP_COLLECTION | PROP_PERUSER,
       propfind_tzid, proppatch_tzid, NULL },
 
     /* RSCALE (RFC 7529) properties */

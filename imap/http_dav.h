@@ -423,8 +423,9 @@ enum {
     PROP_ALLPROP =      (1<<0),         /* Returned in <allprop> request */
     PROP_COLLECTION =   (1<<1),         /* Returned for collection */
     PROP_RESOURCE =     (1<<2),         /* Returned for resource */
-    PROP_PRESCREEN =    (1<<3),         /* Prescreen property using callback */
-    PROP_CLEANUP =      (1<<4)          /* Cleanup property using callback */
+    PROP_PERUSER =      (1<<3),         /* Per-user property */
+    PROP_PRESCREEN =    (1<<4),         /* Prescreen property using callback */
+    PROP_CLEANUP =      (1<<5)          /* Cleanup property using callback */
 };
 
 

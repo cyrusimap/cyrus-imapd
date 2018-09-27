@@ -3427,12 +3427,24 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
                          entry++);
 
                     if (entry->name) {
+                        int rights = httpd_myrights(httpd_authstate,
+                                                    pctx->txn->req_tgt.mbentry);
                         if (!entry->put) {
                             /* Protected property */
                             xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
                                          &propstat[PROPSTAT_FORBID],
                                          prop->name, prop->ns, NULL,
                                          DAV_PROT_PROP);
+                            *pctx->ret = HTTP_FORBIDDEN;
+                        }
+                        else if ((pctx->txn->meth == METH_PROPPATCH) &&
+                                 !(rights & ((entry->flags & PROP_PERUSER) ?
+                                             DACL_READ : DACL_PROPCOL))) {
+                            /* DAV:need-privileges */
+                            xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+                                         &propstat[PROPSTAT_FORBID],
+                                         prop->name, prop->ns, NULL,
+                                         DAV_NEED_PRIVS);
                             *pctx->ret = HTTP_FORBIDDEN;
                         }
                         else {
@@ -6115,7 +6127,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
 int meth_proppatch(struct transaction_t *txn, void *params)
 {
     struct meth_params *pparams = (struct meth_params *) params;
-    int ret = 0, r = 0, rights;
+    int ret = 0, r = 0;
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root, instr, resp;
     xmlNsPtr ns[NUM_NAMESPACE];
@@ -6136,16 +6148,6 @@ int meth_proppatch(struct transaction_t *txn, void *params)
     if (!txn->req_tgt.collection && !txn->req_tgt.userid) {
         txn->error.desc = "PROPPATCH requires a collection";
         return HTTP_NOT_ALLOWED;
-    }
-
-    /* Check ACL for current user */
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
-    if (!(rights & DACL_PROPCOL)) {
-        /* DAV:need-privileges */
-        txn->error.precond = DAV_NEED_PRIVS;
-        txn->error.resource = txn->req_tgt.path;
-        txn->error.rights = DACL_PROPCOL;
-        return HTTP_NO_PRIVS;
     }
 
     if (txn->req_tgt.mbentry->server) {
@@ -9100,7 +9102,7 @@ static const struct prop_entry notify_props[] = {
       PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
       propfind_creationdate, NULL, NULL },
     { "displayname", NS_DAV,
-      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE,
+      PROP_ALLPROP | PROP_COLLECTION | PROP_RESOURCE | PROP_PERUSER,
       propfind_fromdb, proppatch_todb, NULL },
     { "getcontentlanguage", NS_DAV,
       PROP_ALLPROP | PROP_RESOURCE,
