@@ -1549,6 +1549,7 @@ static void cmdloop(void)
 
                 cmd_getannotation(tag.s, arg1.s);
 
+                prometheus_increment(CYRUS_IMAP_GETANNOTATION_TOTAL);
                 snmp_increment(GETANNOTATION_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Getmetadata")) {
@@ -2028,6 +2029,7 @@ static void cmdloop(void)
 
                 cmd_setannotation(tag.s, arg1.s);
 
+                prometheus_increment(CYRUS_IMAP_SETANNOTATION_TOTAL);
                 snmp_increment(SETANNOTATION_COUNT, 1);
             }
             else if (!strcmp(cmd.s, "Setmetadata")) {
