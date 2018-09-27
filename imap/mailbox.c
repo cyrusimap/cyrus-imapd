@@ -6816,6 +6816,8 @@ EXPORTED void mailbox_iter_startuid(struct mailbox_iter *iter, uint32_t uid)
 
 EXPORTED const message_t *mailbox_iter_step(struct mailbox_iter *iter)
 {
+    if (mailbox_wait_cb) mailbox_wait_cb(mailbox_wait_cb_rock);
+
     for (iter->recno++; iter->recno <= iter->num_records; iter->recno++) {
         message_set_from_mailbox(iter->mailbox, iter->recno, iter->msg);
         const struct index_record *record = msg_record(iter->msg);
