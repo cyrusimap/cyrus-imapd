@@ -2324,6 +2324,7 @@ Cyrus Server configured components
    jmap:               $enable_jmap
    objectstore:        $enable_objectstore
    backup:             $enable_backup
+   com_err:            $with_com_err
 
 External dependencies:
    ldap:               $have_ldap
