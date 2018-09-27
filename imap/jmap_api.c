@@ -72,7 +72,6 @@ struct mymblist_rock {
     void *rock;
     struct auth_state *authstate;
     hash_table *mboxrights;
-    int all;
 };
 
 static int myrights(struct auth_state *authstate,
@@ -92,14 +91,10 @@ static int mymblist_cb(const mbentry_t *mbentry, void *rock)
 {
     struct mymblist_rock *myrock = rock;
 
-    if (!myrock->all) {
-        if (mbentry->mbtype & MBTYPE_DELETED)
-            return 0;
+    int rights = myrights(myrock->authstate, mbentry, myrock->mboxrights);
+    if (!(rights & ACL_LOOKUP))
+        return 0;
 
-        int rights = myrights(myrock->authstate, mbentry, myrock->mboxrights);
-        if (!(rights & ACL_LOOKUP))
-            return 0;
-    }
     return myrock->proc(mbentry, myrock->rock);
 }
 
@@ -108,24 +103,23 @@ static int mymblist(const char *userid,
                     struct auth_state *authstate,
                     hash_table *mboxrights,
                     mboxlist_cb *proc,
-                    void *rock,
-                    int all)
+                    void *rock)
 {
-    int flags = all ? (MBOXTREE_TOMBSTONES|MBOXTREE_DELETED) : 0;
+    int flags = MBOXTREE_INTERMEDIATES;
 
     /* skip ACL checks if account owner */
     if (!strcmp(userid, accountid))
         return mboxlist_usermboxtree(userid, authstate, proc, rock, flags);
 
     /* Open the INBOX first */
-    struct mymblist_rock myrock = { proc, rock, authstate, mboxrights, all };
+    struct mymblist_rock myrock = { proc, rock, authstate, mboxrights };
     return mboxlist_usermboxtree(accountid, authstate, mymblist_cb, &myrock, flags);
 }
 
 HIDDEN int jmap_mboxlist(jmap_req_t *req, mboxlist_cb *proc, void *rock)
 {
     return mymblist(req->userid, req->accountid, req->authstate,
-                    req->mboxrights, proc, rock, 0/*all*/);
+                    req->mboxrights, proc, rock);
 }
 
 HIDDEN int jmap_is_accessible(const mbentry_t *mbentry,
@@ -657,7 +651,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
             /* Check if any shared mailbox is accessible */
             if (!hash_lookup(accountid, &accounts)) {
                 r = mymblist(httpd_userid, accountid, httpd_authstate,
-                             &mboxrights, jmap_is_accessible, NULL, 0/*all*/);
+                             &mboxrights, jmap_is_accessible, NULL);
                 if (r != IMAP_OK_COMPLETED) {
                     json_t *err = json_pack("{s:s}", "type", "accountNotFound");
                     json_array_append_new(resp,
