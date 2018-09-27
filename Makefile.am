@@ -126,7 +126,7 @@ EXTRA_DIST = \
 
 if COM_ERR
 COMPILE_ET_DEP = com_err/et/compile_et
-BUILT_SOURCES += com_err/et/compile_et
+BUILT_SOURCES += com_err/et/compile_et com_err/et/libcyrus_com_err.la
 lib_LTLIBRARIES += com_err/et/libcyrus_com_err.la
 endif # COM_ERR
 
