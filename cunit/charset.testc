@@ -480,15 +480,19 @@ static void test_mimeheader_mergeqwords(void)
     CU_ASSERT_STRING_EQUAL(s, "\xe2\x82\xac");
     free(s);
 
-
-    static const char REGRESSION1[] =
-        "=?UTF-8?B?UkU6IEJ1Y2h1bmcgZGVyIFVudGVya3VuZnQg4oCeTGlzYm9uIERvd250b3duIFN1bm55IEFwYXJ0bWVudCAoIEJhaXhhIC0gUm8=?="
-        "=?UTF-8?B?c3NpbynigJwgKDE4LiBPa3RvYmVyIDIwMTggLSAyMi4gT2t0b2JlciAyMDE4KQ==?=";
+    static const char REGRESSION_Q[] = "=?utf-8?q?=C2=A1Hola,?=  =?utf-8?q?se=C3=B1or!?=";
+    static const char REGRESSION_B[] = "=?utf-8?b?wqFIb2xhLA==?=  =?utf-8?b?c2XDsW9yIQ==?=";
 
     flags |= CHARSET_SNIPPET;
-    s = charset_decode_mimeheader(REGRESSION1, flags);
+
+    s = charset_decode_mimeheader(REGRESSION_Q, flags);
     CU_ASSERT_PTR_NOT_NULL(s);
-    CU_ASSERT_STRING_EQUAL(s, "RE: Buchung der Unterkunft „Lisbon Downtown Sunny Apartment ( Baixa - Rossio)“ (18. Oktober 2018 - 22. Oktober 2018)");
+    CU_ASSERT_STRING_EQUAL(s, "¡Hola,señor!");
+    free(s);
+
+    s = charset_decode_mimeheader(REGRESSION_B, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, "¡Hola,señor!");
     free(s);
 }
 
