@@ -54,6 +54,7 @@
 
 #include <unicode/ustring.h>
 #include <unicode/unorm2.h>
+#include <unicode/utf8.h>
 
 #define U_REPLACEMENT   0xfffd
 
@@ -3158,4 +3159,30 @@ EXPORTED char *charset_extract_plain(const char *html) {
     charset_free(&utf8);
 
     return text;
+}
+
+EXPORTED struct char_counts charset_count_validutf8(const char *data, size_t datalen)
+{
+
+    if (datalen > INT32_MAX) {
+        datalen = INT32_MAX;
+    }
+
+    struct char_counts counts = { 0, 0, 0 };
+    int32_t i = 0;
+    int32_t length = (int32_t) datalen;
+    const uint8_t *data8 = (const uint8_t *) data;
+
+    while (i < length) {
+        UChar32 c;
+        U8_NEXT(data8, i, length, c);
+        if (c == 0xfffd)
+            counts.replacement++;
+        else if (c >= 0)
+            counts.valid++;
+        else
+            counts.invalid++;
+    }
+
+    return counts;
 }

@@ -1205,5 +1205,40 @@ static void test_utf8_normalize(void)
 #undef TESTCASE
 }
 
+static void test_count_validutf8(void)
+{
+    /* These tests are specific for the charset implementation in Cyrus.
+     * Breaking them is not necessarily an error, but check carefully.
+     *
+     * Example byte sequences are taken from
+     *    https://www.cl.cam.ac.uk/~mgk25/ucs/examples/UTF-8-test.txt
+     * licensed as
+     *    Markus Kuhn, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+     */
+
+    const char *data;
+    struct char_counts counts;
+
+    /* Correct UTF-8 text */
+    data = "\xce\xba\xe1\xbd\xb9\xcf\x83\xce\xbc\xce\xb5";
+    counts = charset_count_validutf8(data, strlen(data));
+    CU_ASSERT_EQUAL(5, counts.valid);
+    CU_ASSERT_EQUAL(0, counts.replacement);
+    CU_ASSERT_EQUAL(0, counts.invalid);
+
+    /* Two continuation bytes */
+    data = "a \x80\xbf\x80 text";
+    counts = charset_count_validutf8(data, strlen(data));
+    CU_ASSERT_EQUAL(7, counts.valid);
+    CU_ASSERT_EQUAL(0, counts.replacement);
+    CU_ASSERT_EQUAL(3, counts.invalid);
+
+    /* Lonely start character, followed by 3-byte char, plus replacement char */
+    data = "\xfc\xe2\x82\xac \xef\xbf\xbd";
+    counts = charset_count_validutf8(data, strlen(data));
+    CU_ASSERT_EQUAL(2, counts.valid);
+    CU_ASSERT_EQUAL(1, counts.replacement);
+    CU_ASSERT_EQUAL(1, counts.invalid);
+}
 
 /* vim: set ft=c: */

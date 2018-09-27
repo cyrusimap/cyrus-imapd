@@ -828,14 +828,49 @@ static int _email_extract_bodies(const struct body *root,
             &bodies->attslist);
 }
 
+static char *_decode_to_utf8(const char *charset, const char *data, size_t datalen, int enc)
+{
+    charset_t cs = charset_lookupname(charset);
+    char *text = charset_to_utf8(data, datalen, cs, enc);
+    if (!text) goto done;
+
+    const char *charset_id = charset_name(cs);
+    if (!strncasecmp(charset_id, "UTF-32", 6)) {
+        /* Special-handle UTF-32. Some clients announce the wrong endianess. */
+        size_t textlen = strlen(text);
+        struct char_counts counts = charset_count_validutf8(text, textlen);
+
+        if (counts.invalid || counts.replacement) {
+            charset_t guess_cs = CHARSET_UNKNOWN_CHARSET;
+            if (!strcasecmp(charset_id, "UTF-32") || !strcasecmp(charset_id, "UTF-32BE"))
+                guess_cs = charset_lookupname("UTF-32LE");
+            else
+                guess_cs = charset_lookupname("UTF-32BE");
+            char *guess = charset_to_utf8(data, datalen, guess_cs, enc);
+            if (guess) {
+                struct char_counts guess_counts = charset_count_validutf8(guess, strlen(guess));
+                if (guess_counts.valid > counts.valid) {
+                    free(text);
+                    text = guess;
+                }
+            }
+            charset_free(&guess_cs);
+        }
+    }
+
+done:
+    charset_free(&cs);
+    return text;
+}
+
 static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf *msg_buf)
 {
     if (bodies->textlist.count == 1) {
         struct body *textbody = ptrarray_nth(&bodies->textlist, 0);
-        charset_t cs = charset_lookupname(textbody->charset_id);
-        char *text = charset_to_utf8(msg_buf->s + textbody->content_offset,
-                textbody->content_size, cs, textbody->charset_enc);
-        charset_free(&cs);
+        char *text = _decode_to_utf8(textbody->charset_id,
+                                     msg_buf->s + textbody->content_offset,
+                                     textbody->content_size,
+                                     textbody->charset_enc);
         return text;
     }
 
@@ -849,11 +884,11 @@ static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf 
         if (i) buf_appendcstr(&buf, "\n");
 
         if (!strcmp(part->type, "TEXT")) {
-            charset_t cs = charset_lookupname(part->charset_id);
-            char *t = charset_to_utf8(msg_buf->s + part->content_offset,
-                    part->content_size, cs, part->charset_enc);
+            char *t = _decode_to_utf8(part->charset_id,
+                                      msg_buf->s + part->content_offset,
+                                      part->content_size,
+                                      part->charset_enc);
             if (t) buf_appendcstr(&buf, t);
-            charset_free(&cs);
             free(t);
         }
         else if (!strcmp(part->type, "IMAGE")) {
@@ -922,10 +957,10 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
 {
     if (bodies->htmllist.count == 1) {
         const struct body *part = ptrarray_nth(&bodies->htmllist, 0);
-        charset_t cs = charset_lookupname(part->charset_id);
-        char *html = charset_to_utf8(msg_buf->s + part->content_offset,
-                part->content_size, cs, part->charset_enc);
-        charset_free(&cs);
+        char *html = _decode_to_utf8(part->charset_id,
+                                     msg_buf->s + part->content_offset,
+                                     part->content_size,
+                                     part->charset_enc);
         return html;
     }
 
@@ -949,19 +984,18 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
         if (!i)
             buf_appendcstr(&buf, "<html>"); // XXX use HTML5?
 
-        charset_t cs = charset_lookupname(part->charset_id);
-        char *t = charset_to_utf8(msg_buf->s + part->content_offset,
-                part->content_size, cs, part->charset_enc);
-
-        if (!strcmp(part->subtype, "HTML")) {
+        char *t = _decode_to_utf8(part->charset_id,
+                                  msg_buf->s + part->content_offset,
+                                  part->content_size,
+                                  part->charset_enc);
+        if (t && !strcmp(part->subtype, "HTML")) {
             _html_concat_div(&buf, t);
         }
-        else {
+        else if (t) {
             buf_appendcstr(&buf, "<div>");
             buf_appendcstr(&buf, t);
             buf_appendcstr(&buf, "</div>");
         }
-        charset_free(&cs);
         free(t);
 
         if (i == bodies->htmllist.count - 1)
@@ -4695,10 +4729,40 @@ static json_t * _email_get_bodyvalue(struct body *part,
     struct _email_get_bodyvalue_rock rock = {
         BUF_INITIALIZER, max_body_bytes, /*is_truncated*/0
     };
-    charset_t cs = charset_lookupname(part->charset_id);
+
     int flags = CHARSET_SNIPPET|CHARSET_KEEPHTML;
+    charset_t cs = charset_lookupname(part->charset_id);
     int is_problem = !charset_extract(_email_get_bodyvalue_cb,
             &rock, &data, cs, part->charset_enc, part->subtype, flags);
+
+    /* Specially treat UTF-32, some clients announce the wrong endianess. */
+    const char *charset_id = charset_name(cs);
+    if (!strncasecmp(charset_id, "UTF-32", 6)) {
+        struct char_counts counts = charset_count_validutf8(buf_base(&rock.buf), buf_len(&rock.buf));
+        if (counts.invalid || counts.replacement) {
+            /* There's some replacement characters. Try to decode with the other endianess. */
+            charset_t guess_cs = CHARSET_UNKNOWN_CHARSET;
+            if (!strcasecmp(charset_id, "UTF-32") || !strcasecmp(charset_id, "UTF-32BE"))
+                guess_cs = charset_lookupname("UTF-32LE");
+            else
+                guess_cs = charset_lookupname("UTF-32BE");
+            struct _email_get_bodyvalue_rock guess_rock = {
+                BUF_INITIALIZER, max_body_bytes, /*is_truncated*/0
+            };
+            charset_extract(_email_get_bodyvalue_cb,
+                    &guess_rock, &data,
+                    guess_cs, part->charset_enc,
+                    part->subtype, flags);
+            struct char_counts guess_counts = charset_count_validutf8(buf_base(&guess_rock.buf),
+                    buf_len(&guess_rock.buf));
+            if (guess_counts.valid > counts.valid) {
+                buf_free(&rock.buf);
+                rock = guess_rock;
+                is_problem = 1;
+            }
+            charset_free(&guess_cs);
+        }
+    }
     charset_free(&cs);
     buf_cstring(&rock.buf);
 

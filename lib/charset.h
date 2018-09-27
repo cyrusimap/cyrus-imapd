@@ -142,4 +142,14 @@ extern int charset_extract(void (*cb)(const struct buf *text, void *rock),
  * to newlines and trimming space left by HTML-only lines. */
 EXPORTED char *charset_extract_plain(const char *html);
 
+struct char_counts {
+    size_t valid;
+    size_t replacement;
+    size_t invalid;
+};
+
+/* Count the number of valid, invalid and replacement UTF-8 characters
+ * in the first INT32_MAX bytes of data. */
+extern struct char_counts charset_count_validutf8(const char *data, size_t datalen);
+
 #endif /* INCLUDED_CHARSET_H */
