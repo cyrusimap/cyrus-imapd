@@ -2254,6 +2254,7 @@ Cyrus Server configured components
    calalarmd:          $enable_calalarmd
    objectstore:        $enable_objectstore
    backup:             $enable_backup
+   com_err:            $with_com_err
 
 External dependencies:
    ldap:               $have_ldap
