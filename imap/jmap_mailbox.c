@@ -2020,7 +2020,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 
     /* Check ACL */
     ptrarray_append(&strpool, oldmboxname);
-    mboxlist_lookup(oldmboxname, &mbentry, NULL);
+    mboxlist_lookup_allow_all(oldmboxname, &mbentry, NULL);
     if (!jmap_hasrights(req, mbentry, ACL_WRITE)) {
         result->err = json_pack("{s:s}", "type", "readOnly");
         goto done;
