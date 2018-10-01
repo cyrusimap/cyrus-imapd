@@ -2181,6 +2181,14 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
     struct jmap_changes changes;
     json_t *err = NULL;
     struct caldav_db *db;
+    struct geteventchanges_rock rock = {
+        req,
+        &changes,
+        0            /*seen_records*/,
+        0            /*highestmodseq*/,
+        strcmp(req->accountid, req->userid) /* check_acl */,
+        NULL         /*mboxrights*/
+    };
     int r = -1;
 
     db = caldav_open_userid(req->accountid);
@@ -2197,14 +2205,6 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
     }
 
     /* Lookup changes. */
-    struct geteventchanges_rock rock = {
-        req,
-        &changes,
-        0            /*seen_records*/,
-        0            /*highestmodseq*/,
-        strcmp(req->accountid, req->userid) /* check_acl */,
-        NULL         /*mboxrights*/
-    };
     r = caldav_get_updates(db, changes.since_modseq, NULL /*mboxname*/,
                            CAL_COMP_VEVENT, 
                            changes.max_changes ? (int) changes.max_changes + 1 : -1,
