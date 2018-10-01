@@ -38,6 +38,7 @@ metric counter cyrus_imap_expunge_total                 The total number of IMAP
 metric counter cyrus_imap_examine_total                 The total number of IMAP EXAMINEs
 metric counter cyrus_imap_fetch_total                   The total number of IMAP FETCHs
 metric counter cyrus_imap_getacl_total                  The total number of IMAP GETACLs
+metric counter cyrus_imap_getannotation_total           The total number of IMAP SETANNOTATIONs
 metric counter cyrus_imap_getmetadata_total             The total number of IMAP GETMETADATAs
 metric counter cyrus_imap_getquota_total                The total number of IMAP GETQUOTAs
 metric counter cyrus_imap_getquotaroot_total            The total number of IMAP GETQUOTAROOTs
@@ -56,6 +57,7 @@ metric counter cyrus_imap_select_total                  The total number of IMAP
 metric counter cyrus_imap_search_total                  The total number of IMAP SEARCHs
 metric counter cyrus_imap_subscribe_total               The total number of IMAP SUBSCRIBEs
 metric counter cyrus_imap_setacl_total                  The total number of IMAP SETACLs
+metric counter cyrus_imap_setannotation_total           The total number of IMAP SETANNOTATIONs
 metric counter cyrus_imap_setmetadata_total             The total number of IMAP SETMETADATAs
 metric counter cyrus_imap_setquota_total                The total number of IMAP SETQUOTAs
 metric counter cyrus_imap_sort_total                    The total number of IMAP SORTs

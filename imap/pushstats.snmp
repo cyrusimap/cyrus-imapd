@@ -126,6 +126,7 @@ C,SELECT_COUNT,"Number of select", auto
 C,SEARCH_COUNT,"Number of search", auto
 C,SUBSCRIBE_COUNT,"Number of subscribe", auto
 C,SETACL_COUNT,"Number of setacl", auto
+C,SETANNOTATION_COUNT,"Number of setannotation", auto
 C,SETMETADATA_COUNT,"Number of setmetadata", auto
 C,SETQUOTA_COUNT,"Number of setquota", auto
 C,STATUS_COUNT,"Number of status", auto
