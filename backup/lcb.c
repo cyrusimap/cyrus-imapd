@@ -182,6 +182,7 @@ HIDDEN int backup_real_open(struct backup **backupp,
         if (r) {
             syslog(LOG_ERR, "IOERROR: (f)stat %s: %m", backup->data_fname);
             r = IMAP_IOERROR;
+            close(fd);
             goto error;
         }
 
