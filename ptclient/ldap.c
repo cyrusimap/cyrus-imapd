@@ -1388,13 +1388,14 @@ static int ptsmodule_make_authstate_group(
 
     if (strncmp(canon_id, "group:", 6))  { // Sanity check
         *reply = "not a group identifier";
-        return PTSM_FAIL;
+        rc = RTSM_FAIL;
+        goto done;
     }
 
     rc = ptsmodule_connect();
     if (rc != PTSM_OK) {
         *reply = "ptsmodule_connect() failed";
-        return rc;
+        goto done;;
     }
 
     rc = ptsmodule_expand_tokens(ptsm->group_filter, canon_id+6, NULL, &filter);
@@ -1425,17 +1426,19 @@ static int ptsmodule_make_authstate_group(
 
         if (rc != LDAP_SUCCESS) {
             syslog(LOG_DEBUG, "(groups) Result from domain query not OK");
-            return rc;
+            goto done;
         } else {
             syslog(LOG_DEBUG, "(groups) Result from domain query OK");
         }
 
         if (ldap_count_entries(ptsm->ld, res) < 1) {
             syslog(LOG_ERR, "(groups) No domain %s found", domain);
-            return PTSM_FAIL;
+            rc = RTSM_FAIL;
+            goto done;
         } else if (ldap_count_entries(ptsm->ld, res) > 1) {
             syslog(LOG_ERR, "(groups) Multiple domains %s found", domain);
-            return PTSM_FAIL;
+            rc = RTSM_FAIL;
+            goto done;
         } else {
             syslog(LOG_DEBUG, "(groups) Domain %s found", domain);
             if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
@@ -1452,7 +1455,7 @@ static int ptsmodule_make_authstate_group(
                 }
 
                 if (rc != PTSM_OK) {
-                    return rc;
+                    goto done;
                 } else {
                     base = xstrdup(ptsm->group_base);
                     syslog(LOG_DEBUG, "Continuing with ptsm->group_base: %s", ptsm->group_base);
@@ -1462,7 +1465,7 @@ static int ptsmodule_make_authstate_group(
     } else {
         rc = ptsmodule_expand_tokens(ptsm->group_base, canon_id, NULL, &base);
         if (rc != PTSM_OK)
-            return rc;
+            goto done;
     }
 
     syslog(LOG_DEBUG, "(groups) about to search %s for %s", base, filter);
