@@ -1,0 +1,73 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 2.5.12 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the `stable 2.5 series <http://www.cyrusimap.org/stable>`_.
+
+    Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
+    about the 2.5 series, including upgrading instructions.
+
+Download via HTTPS:
+
+    * https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-2.5.12/cyrus-imapd-2.5.12.tar.gz
+    * https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-2.5.12/cyrus-imapd-2.5.12.tar.gz.sig
+
+.. _relnotes-2.5.12-changes:
+
+Changes Since 2.5.11
+====================
+
+Release changes
+---------------
+
+We’re trialing using the Github Releases feature. If you have trouble
+downloading this release, please report this to the mailing lists. Thanks!
+
+Dependency changes
+------------------
+
+ClamAV now configures and builds correctly, using pkg-config for detection.
+You can use the ``--without-clamav`` option to configure if you have ClamAV
+installed but do *not* want to build Cyrus with support for it.  The old
+``--with-clamav=DIR`` variant no longer works (but it also didn't work before!)
+
+Cyrus should now build cleanly with LibreSSL 2.7 (thanks Bernard Spil).
+
+Other changes
+-------------
+
+* Cyrus release version is now preserved across autoreconf runs.  This means
+  it is now safe to run autoreconf on a release tarball source tree.
+
+Bug fixes
+---------
+
+* Fixed: cyr_virusscan now integrates with event notifications properly
+* Fixed: mailbox expunge event notifications no longer cause a crash
+* Fixed :issue:`2378`: ACLs containing spaces no longer break mailboxes.db
+* Fixed :issue:`2253`: master now rejects unix domain listen paths that are too
+  long
+* Fixed: smilint warnings for CYRUS-MASTER.mib fixed (thanks Fabrice Bacchella)
+* Fixed :issue:`2177`: backend connections no longer ignore STARTTLS failures
+  (thanks Wolfgang Breyha)
+* Fixed :issue:`2222`: dav_reconstruct no longer crashes on expunged entries
+* Fixed :issue:`2221`: dav_reconstruct no longer crashes given bad user id
+  (thanks Wolfgang Breyha)
+* Fixed: tls_prune memory leak
+* Fixed: tls_prune doesn't fail when tls_sessions.db is missing
+* Fixed :issue:`2199`: recovery from mupdate failure now in correct order
+  (thanks Michael Menge)
+* Fixed: backend connections no longer crash if no banner found
+* Fixed: backend connections no longer return success on certain types of failure
+* Fixed :issue:`2185`: squatter no longer tries to index non-IMAP mailboxes
+  (thanks Wolfgang Breyha)
+* Fixed: special-use proxying in murder (thanks Wolfgang Breyha)
+* Fixed :issue:`1090`: send OK NIL to subsequent ID commands
+* Fixed :issue:`1434`: auth_pts will now error when given a too-long socket file name
+* Fixed :issue:`1964`: correctly detect when librt is needed
+* Fixed :issue:`1967`: tell EXISTS count earlier when needed
+* Fixed: memory leak in httpd DAV support
