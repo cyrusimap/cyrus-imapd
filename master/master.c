@@ -195,7 +195,9 @@ static int prom_frequency = 0;
 static struct timeval prom_prev_report = { 0, 0 };
 static char *prom_report_fname = NULL;
 
+#ifdef HAVE_SETRLIMIT
 static void limit_fds(rlim_t);
+#endif
 static void schedule_event(struct event *a);
 static void child_sighandler_setup(void);
 
@@ -756,8 +758,6 @@ static void run_startup(const char *name, const strarray_t *cmd)
 
         child_sighandler_setup();
 
-        limit_fds(256);
-
         syslog(LOG_DEBUG, "about to exec %s", path);
         execv(path, cmd->data);
         fatalf(EX_OSERR, "can't exec %s for startup: %m", path);
@@ -892,7 +892,9 @@ static void spawn_service(int si)
             snprintf(name_env3, sizeof(name_env3), "CYRUS_ISDAEMON=1");
             putenv(name_env3);
         }
-        limit_fds(s->maxfds);
+#ifdef HAVE_SETRLIMIT
+        if (s->maxfds) limit_fds(s->maxfds);
+#endif
 
         /* close all listeners */
         for (i = 0; i < nservices; i++) {
@@ -999,7 +1001,6 @@ static void spawn_schedule(struct timeval now)
                     xclose(Services[i].stat[0]);
                     xclose(Services[i].stat[1]);
                 }
-                limit_fds(256);
 
                 syslog(LOG_DEBUG, "about to exec %s", path);
                 execv(path, a->exec->data);
@@ -1654,7 +1655,7 @@ static void add_daemon(const char *name, struct entry *e, void *rock)
 {
     int ignore_err = rock ? 1 : 0;
     char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
-    rlim_t maxfds = (rlim_t) masterconf_getint(e, "maxfds", 256);
+    rlim_t maxfds = (rlim_t) masterconf_getint(e, "maxfds", 0);
     int maxforkrate = masterconf_getint(e, "maxforkrate", 0);
     int reconfig = 0;
     int i;
@@ -1745,7 +1746,7 @@ static void add_service(const char *name, struct entry *e, void *rock)
     char *listen = xstrdup(masterconf_getstring(e, "listen", ""));
     char *proto = xstrdup(masterconf_getstring(e, "proto", "tcp"));
     char *max = xstrdup(masterconf_getstring(e, "maxchild", "-1"));
-    rlim_t maxfds = (rlim_t) masterconf_getint(e, "maxfds", 256);
+    rlim_t maxfds = (rlim_t) masterconf_getint(e, "maxfds", 0);
     int reconfig = 0;
     int i, j;
 
@@ -1964,10 +1965,6 @@ static void limit_fds(rlim_t x)
                "setrlimit: Unable to set file descriptors limit to %ld: %m",
                rl.rlim_cur);
     }
-}
-#else
-static void limit_fds(rlim_t x)
-{
 }
 #endif /* HAVE_SETRLIMIT */
 
@@ -2452,8 +2449,6 @@ int main(int argc, char **argv)
             fatal("setsid failure", EX_OSERR);
         }
     }
-
-    limit_fds(1024);
 
     /* Write out the pidfile */
     pidfd = open(pidfile, O_CREAT|O_RDWR, 0644);
