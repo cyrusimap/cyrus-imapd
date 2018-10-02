@@ -953,12 +953,12 @@ static int ptsmodule_get_dn(
                 }
 
                 syslog(LOG_ERR, "LDAP search for domain failed: %s", ldap_err2string(rc));
-                rc = PTSM_FAIL:
+                rc = PTSM_FAIL;
                 goto done;
             }
             if (ldap_count_entries(ptsm->ld, res) < 1) {
                 syslog(LOG_ERR, "No domain found");
-                rc = RTSM_FAIL;
+                rc = PTSM_FAIL;
                 goto done;
             } else if (ldap_count_entries(ptsm->ld, res) >= 1) {
                 int count_matches = 0;
@@ -979,11 +979,11 @@ static int ptsmodule_get_dn(
 
                 if (count_matches > 1) {
                     syslog(LOG_ERR, "LDAP search for %s failed because it matches multiple accounts.", canon_id);
-                    rc = RTSM_FAIL;
+                    rc = PTSM_FAIL;
                     goto done;
                 } else if (count_matches == 0) {
                     syslog(LOG_ERR, "LDAP search for %s failed because it does not match any account in all domains.", canon_id);
-                    rc = RTSM_FAIL;
+                    rc = PTSM_FAIL;
                     goto done;
                 }
 
@@ -1011,22 +1011,22 @@ static int ptsmodule_get_dn(
                     ldap_unbind(ptsm->ld);
                     ptsm->ld = NULL;
                     syslog(LOG_ERR, "LDAP not available: %s", ldap_err2string(rc));
-                    rc = RTSM_RETRY;
+                    rc = PTSM_RETRY;
                     goto done;
                 }
 
                 syslog(LOG_ERR, "LDAP search for domain failed: %s", ldap_err2string(rc));
-                rc = RTSM_FAIL;
+                rc = PTSM_FAIL;
                 goto done;
             }
 
             if (ldap_count_entries(ptsm->ld, res) < 1) {
                 syslog(LOG_ERR, "No domain %s found", domain);
-                rc = RTSM_FAIL;
+                rc = PTSM_FAIL;
                 goto done;
             } else if (ldap_count_entries(ptsm->ld, res) > 1) {
                 syslog(LOG_ERR, "Multiple domains %s found", domain);
-                rc = RTSM_FAIL;
+                rc = PTSM_FAIL;
                 goto done;
             } else {
                 if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
@@ -1404,7 +1404,7 @@ static int ptsmodule_make_authstate_group(
 
     if (strncmp(canon_id, "group:", 6))  { // Sanity check
         *reply = "not a group identifier";
-        rc = RTSM_FAIL;
+        rc = PTSM_FAIL;
         goto done;
     }
 
@@ -1449,11 +1449,11 @@ static int ptsmodule_make_authstate_group(
 
         if (ldap_count_entries(ptsm->ld, res) < 1) {
             syslog(LOG_ERR, "(groups) No domain %s found", domain);
-            rc = RTSM_FAIL;
+            rc = PTSM_FAIL;
             goto done;
         } else if (ldap_count_entries(ptsm->ld, res) > 1) {
             syslog(LOG_ERR, "(groups) Multiple domains %s found", domain);
-            rc = RTSM_FAIL;
+            rc = PTSM_FAIL;
             goto done;
         } else {
             syslog(LOG_DEBUG, "(groups) Domain %s found", domain);
