@@ -119,14 +119,14 @@ struct shared_mboxes {
  *                 the parent mailbox of a shared mailbox.
  *                 E.g. it is reported in Mailbox/get but
  *                 some of its properties are anonymised.
- * - _MBOX_SHARED: this mailbox is fully readable by the current
+ * - _MBOX_VISIBLE: this mailbox is fully readable by the current
  *                 user, that is, its ACL provides at least
  *                 ACL_LOOKUP and ACL_READ rights
  *
  * If the mailbox is a child of the authenticated user's INBOX,
- * it is trivially _MBOX_SHARED, without checking ACL rights.
+ * it is trivially _MBOX_VISIBLE, without checking ACL rights.
  */
-enum shared_mbox_type { _MBOX_HIDDEN, _MBOX_PARENT, _MBOX_SHARED };
+enum shared_mbox_type { _MBOX_HIDDEN, _MBOX_PARENT, _MBOX_VISIBLE };
 
 static int _shared_mboxes_cb(const mbentry_t *mbentry, void *rock)
 {
@@ -173,7 +173,7 @@ static enum shared_mbox_type _shared_mbox_type(struct shared_mboxes *sm,
 {
     /* Handle trivial cases */
     if (sm->is_owner)
-        return _MBOX_SHARED;
+        return _MBOX_VISIBLE;
     if (sm->mboxes.count == 0)
         return _MBOX_HIDDEN;
 
@@ -185,7 +185,7 @@ static enum shared_mbox_type _shared_mbox_type(struct shared_mboxes *sm,
         const char *sharedname = strarray_nth(&sm->mboxes, i);
         int cmp = bsearch_compare_mbox(sharedname, name);
         if (!cmp)
-            return _MBOX_SHARED;
+            return _MBOX_VISIBLE;
 
         if (cmp > 0 && mboxname_is_prefix(sharedname, name)) {
             // if this isn't a user's INBOX, then it's definitely a
@@ -546,7 +546,7 @@ static json_t *_mbox_get(jmap_req_t *req,
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
-    if (share_type == _MBOX_SHARED) {
+    if (share_type == _MBOX_VISIBLE) {
         /* Lookup status. */
         struct statusdata sdata = STATUSDATA_INIT;
         r = status_lookup_mbname(mbname, req->userid, statusitems, &sdata);
