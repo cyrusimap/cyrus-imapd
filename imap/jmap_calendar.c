@@ -760,8 +760,8 @@ static int jmap_calendar_set(struct jmap_req *req)
         json_t *invalid = json_pack("[]");
         const char *name = NULL;
         const char *color = NULL;
-        int32_t sortOrder = -1;
-        int isVisible = 0;
+        int32_t sortOrder = 0;
+        int isVisible = 1;
         int pe; /* parse error */
         short flag;
 
@@ -773,14 +773,11 @@ static int jmap_calendar_set(struct jmap_req *req)
 
         readprop(arg, "color", 1,  invalid, "s", &color);
 
-        pe = readprop(arg, "sortOrder", 1,  invalid, "i", &sortOrder);
+        pe = readprop(arg, "sortOrder", 0,  invalid, "i", &sortOrder);
         if (pe > 0 && sortOrder < 0) {
             json_array_append_new(invalid, json_string("sortOrder"));
         }
-        pe = readprop(arg, "isVisible", 1,  invalid, "b", &isVisible);
-        if (pe > 0 && !isVisible) {
-            json_array_append_new(invalid, json_string("isVisible"));
-        }
+        readprop(arg, "isVisible", 0,  invalid, "b", &isVisible);
         /* Optional properties. If present, these MUST be set to true. */
         flag = 1; readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
         if (!flag) {
