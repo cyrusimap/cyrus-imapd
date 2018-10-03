@@ -585,7 +585,7 @@ sub test_calendar_set_error
     my $errProp = $res->[0][1]{notCreated}{"1"}{properties};
     $self->assert_str_equals("invalidProperties", $errType);
     $self->assert_deep_equals($errProp, [
-            "name", "color", "sortOrder", "isVisible"
+            "name", "color",
     ]);
 
     xlog "create calendar with invalid optional attributes";
