@@ -231,7 +231,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     if (_wantprop(rock->get->props, "name")) {
-        struct buf attrib = BUF_INITIALIZER;
+        buf_reset(&attrib);
         static const char *displayname_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
         r = annotatemore_lookupmask(mbentry->name, displayname_annot,
@@ -254,7 +254,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     if (_wantprop(rock->get->props, "sortOrder")) {
-        struct buf attrib = BUF_INITIALIZER;
+        buf_reset(&attrib);
         static const char *order_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order";
         r = annotatemore_lookupmask(mbentry->name, order_annot,
@@ -271,11 +271,10 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
                        buf_cstring(&attrib));
             }
         }
-        buf_free(&attrib);
     }
 
     if (_wantprop(rock->get->props, "isVisible")) {
-        struct buf attrib = BUF_INITIALIZER;
+        buf_reset(&attrib);
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
         r = annotatemore_lookupmask(mbentry->name, color_annot,
@@ -293,7 +292,40 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
                 json_object_set_new(obj, "isVisible", json_string("true"));
             }
         }
-        buf_free(&attrib);
+    }
+
+    if (_wantprop(rock->get->props, "isSubscribed")) {
+        if (mboxname_userownsmailbox(httpd_userid, mbentry->name)) {
+            /* Users always subscribe their own calendars */
+            json_object_set_new(obj, "isSubscribed", json_true());
+        }
+        else {
+            /* Lookup mailbox subscriptions */
+            if (mboxlist_checksub(mbentry->name, httpd_userid) == 0) {
+                /* It's listed in the mailbox subscription database,
+                 * so it must be subscribed. */
+                json_object_set_new(obj, "isSubscribed", json_true());
+            }
+            else {
+                /* Support legacy shared calendars: they are subscribed
+                 * by default, if the user did not explicitly set the
+                 * invite-status DAV property */
+                buf_reset(&attrib);
+                static const char *invite_annot =
+                    DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
+                r = annotatemore_lookupmask(mbentry->name, invite_annot,
+                                            httpd_userid, &attrib);
+                if (!strcmp(buf_cstring(&attrib), "invite-accepted")) {
+                    json_object_set_new(obj, "isSubscribed", json_true());
+                }
+                else if (buf_len(&attrib)) {
+                    json_object_set_new(obj, "isSubscribed", json_false());
+                }
+                else {
+                    json_object_set_new(obj, "isSubscribed", json_true());
+                }
+            }
+        }
     }
 
     int writerights = DACL_WRITECONT|DACL_WRITEPROPS;
@@ -346,6 +378,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     json_array_append_new(rock->get->list, obj);
 
 done:
+    buf_free(&attrib);
     mbname_free(&mbname);
     return r;
 }
@@ -356,6 +389,7 @@ static const jmap_property_t calendar_props[] = {
     { "color",           0 },
     { "sortOrder",       0 },
     { "isVisible",       0 },
+    { "isSubscribed",    0 },
     { "mayReadFreeBusy", JMAP_PROP_SERVER_SET },
     { "mayReadItems",    JMAP_PROP_SERVER_SET },
     { "mayAddItems",     JMAP_PROP_SERVER_SET },
@@ -570,7 +604,8 @@ static int setcalendars_update(jmap_req_t *req,
                                const char *name,
                                const char *color,
                                int sortOrder,
-                               int isVisible)
+                               int isVisible,
+                               int isSubscribed)
 {
     struct mailbox *mbox = NULL;
     annotate_state_t *astate = NULL;
@@ -597,8 +632,7 @@ static int setcalendars_update(jmap_req_t *req,
         buf_setcstr(&val, name);
         static const char *displayname_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-        r = annotate_state_writemask(astate, displayname_annot,
-                                     httpd_userid, &val);
+        r = annotate_state_writemask(astate, displayname_annot, req->userid, &val);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     displayname_annot, error_message(r));
@@ -610,7 +644,7 @@ static int setcalendars_update(jmap_req_t *req,
         buf_setcstr(&val, color);
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
-        r = annotate_state_writemask(astate, color_annot, httpd_userid, &val);
+        r = annotate_state_writemask(astate, color_annot, req->userid, &val);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     color_annot, error_message(r));
@@ -622,8 +656,7 @@ static int setcalendars_update(jmap_req_t *req,
         buf_printf(&val, "%d", sortOrder);
         static const char *sortOrder_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order";
-        r = annotate_state_writemask(astate, sortOrder_annot,
-                                     httpd_userid, &val);
+        r = annotate_state_writemask(astate, sortOrder_annot, req->userid, &val);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     sortOrder_annot, error_message(r));
@@ -633,13 +666,29 @@ static int setcalendars_update(jmap_req_t *req,
     /* isVisible */
     if (!r && isVisible >= 0) {
         buf_setcstr(&val, isVisible ? "true" : "false");
-        static const char *sortOrder_annot =
+        static const char *visible_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
-        r = annotate_state_writemask(astate, sortOrder_annot,
-                                     httpd_userid, &val);
+        r = annotate_state_writemask(astate, visible_annot, req->userid, &val);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
-                    sortOrder_annot, error_message(r));
+                    visible_annot, error_message(r));
+        }
+        buf_reset(&val);
+    }
+    /* isSubscribed */
+    if (!r && isSubscribed >= 0) {
+        /* Update subscription database */
+        r = mboxlist_changesub(mboxname, req->userid, req->authstate,
+                               isSubscribed, 0, /*notify*/1);
+
+        /* Set invite status for CalDAV */
+        buf_setcstr(&val, isSubscribed ? "invite-accepted" : "invite-declined");
+        static const char *invite_annot =
+            DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
+        r = annotate_state_writemask(astate, invite_annot, req->userid, &val);
+        if (r) {
+            syslog(LOG_ERR, "failed to write annotation %s: %s",
+                    invite_annot, error_message(r));
         }
         buf_reset(&val);
     }
@@ -683,6 +732,9 @@ static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
         return r;
     }
     jmap_myrights_delete(req, mboxname);
+
+    /* Remove from subscriptions db */
+    mboxlist_changesub(mboxname, req->userid, req->authstate, 0, 1, 0);
 
     struct mboxevent *mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
     if (mboxlist_delayed_delete_isenabled()) {
@@ -762,6 +814,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         const char *color = NULL;
         int32_t sortOrder = 0;
         int isVisible = 1;
+        int isSubscribed = 1;
         int pe; /* parse error */
         short flag;
 
@@ -778,6 +831,16 @@ static int jmap_calendar_set(struct jmap_req *req)
             json_array_append_new(invalid, json_string("sortOrder"));
         }
         readprop(arg, "isVisible", 0,  invalid, "b", &isVisible);
+        pe = readprop(arg, "isSubscribed", 0,  invalid, "b", &isSubscribed);
+        if (pe > 0 && !strcmp(req->accountid, req->userid)) {
+            if (!isSubscribed) {
+                /* XXX unsubscribing own calendars isn't supported */
+                json_array_append_new(invalid, json_string("isSubscribed"));
+            }
+            else {
+                isSubscribed = -1; // ignore
+            }
+        }
         /* Optional properties. If present, these MUST be set to true. */
         flag = 1; readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
         if (!flag) {
@@ -855,8 +918,7 @@ static int jmap_calendar_set(struct jmap_req *req)
             free(mboxname);
             goto done;
         }
-        r = setcalendars_update(req, mboxname,
-                                name, color, sortOrder, isVisible);
+        r = setcalendars_update(req, mboxname, name, color, sortOrder, isVisible, isSubscribed);
         if (r) {
             free(uid);
             int rr = mboxlist_delete(mboxname);
@@ -867,7 +929,6 @@ static int jmap_calendar_set(struct jmap_req *req)
             free(mboxname);
             goto done;
         }
-
         free(mboxname);
 
         /* Report calendar as created. */
@@ -903,6 +964,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         const char *color = NULL;
         int32_t sortOrder = -1;
         int isVisible = -1;
+        int isSubscribed = -1;
         int flag;
         int pe = 0; /* parse error */
         pe = readprop(arg, "name", 0,  invalid, "s", &name);
@@ -915,6 +977,17 @@ static int jmap_calendar_set(struct jmap_req *req)
             json_array_append_new(invalid, json_string("sortOrder"));
         }
         readprop(arg, "isVisible", 0,  invalid, "b", &isVisible);
+        pe = readprop(arg, "isSubscribed", 0,  invalid, "b", &isSubscribed);
+        if (pe > 0 && !strcmp(req->accountid, req->userid)) {
+            if (!isSubscribed) {
+                /* XXX unsubscribing own calendars isn't supported */
+                json_array_append_new(invalid, json_string("isSubscribed"));
+            }
+            else {
+                isSubscribed = -1; // ignore
+            }
+        }
+
         
         /* The mayFoo properties are immutable and MUST NOT set. */
         pe = readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
@@ -969,8 +1042,8 @@ static int jmap_calendar_set(struct jmap_req *req)
         mbname_free(&mbname);
 
         /* Update the calendar */
-        r = setcalendars_update(req, mboxname,
-                                name, color, sortOrder, isVisible);
+        r = setcalendars_update(req, mboxname, name, color, sortOrder,
+                                isVisible, isSubscribed);
         free(mboxname);
         if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
             json_t *err = json_pack("{s:s}", "type", "notFound");
