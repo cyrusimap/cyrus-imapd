@@ -337,7 +337,12 @@ static int cyrusdb_zeroskip_foreach(struct dbengine *db,
     if (r)
         goto done;
 
-    r = zsdb_foreach(db->db, prefix, prefixlen, goodp, cb,
+    /* FIXME: The *ugly* typecasts  be removed as soon as we * update the
+     * CyrusDB interfaces to support `unsigned char *` instead of * `char *`.
+     */
+    r = zsdb_foreach(db->db, (unsigned char *)prefix, prefixlen,
+                     (int (*)(void*, const unsigned char *, size_t , const unsigned char *, size_t))goodp,
+                     (int (*)(void*, const unsigned char *, size_t , const unsigned char *, size_t))cb,
                      rock, tidptr ? &tid->t : NULL);
     if (r != ZS_OK) {
         r = CYRUSDB_IOERROR;
@@ -473,10 +478,13 @@ static int cyrusdb_zeroskip_delete(struct dbengine *db,
 static int cyrusdb_zeroskip_commit(struct dbengine *db, struct txn *tid)
 {
     int r = 0;
+    struct zsdb_txn *t;
 
     assert(db);
 
-    r = zsdb_commit(db->db, tid ? tid->t : NULL);
+    t = tid ? tid->t : NULL;
+
+    r = zsdb_commit(db->db, &t);
     if (r)
         r = CYRUSDB_IOERROR;
     else
@@ -541,7 +549,7 @@ static int cyrusdb_zeroskip_checkpoint(struct dbengine *db)
         r = CYRUSDB_IOERROR;
     else
         r = CYRUSDB_OK;
-fail:
+
     if (zsdb_pack_lock_release(db->db) != ZS_OK) {
         r = CYRUSDB_IOERROR;
     }
