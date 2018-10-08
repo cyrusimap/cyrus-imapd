@@ -683,22 +683,20 @@ if test "$enable_pcre" != "no"; then
         else
             cyrus_cv_pcre_utf8="no"
         fi
+fi
 
-        if test "$cyrus_cv_pcre_utf8" = "yes"; then
-                LIBS="$LIBS -lpcre -lpcreposix";
-                AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
-                AC_DEFINE(HAVE_PCREPOSIX_H, [], [Do we have usable pcre library?])
+if test "$cyrus_cv_pcre_utf8" = "yes"; then
+        LIBS="$LIBS -lpcre -lpcreposix";
+        AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
+        AC_DEFINE(HAVE_PCREPOSIX_H, [], [Do we have usable pcre library?])
+else
+        AC_CHECK_HEADERS(rxposix.h)
+        if test "$ac_cv_header_rxposix_h" = "yes"; then
+            LIBS="$LIBS -lrx"
+            AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
         else
-                AC_CHECK_HEADERS(rxposix.h)
-                if test "$ac_cv_header_rxposix_h" = "yes"; then
-                        LIBS="$LIBS -lrx"
-                        AC_DEFINE(ENABLE_REGEX, [],
-                                  [Do we have a regex library?])
-                else
-                        AC_SEARCH_LIBS(regcomp, regex,
-                                        AC_DEFINE(ENABLE_REGEX, [],
-                                        [Do we have a regex library?]), [])
-                fi
+            AC_SEARCH_LIBS(regcomp, regex,
+                           AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?]), [])
         fi
 fi
 
