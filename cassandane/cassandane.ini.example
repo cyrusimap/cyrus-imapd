@@ -180,7 +180,7 @@
 # This section describes how Cassandane interacts with the JMAP::TestSuite
 # test suite, which is a test suite for JMAP services available from
 # https://github.com/fastmail/JMAP-TestSuite
-[jmaptester]
+[jmaptestsuite]
 # The base directory of a git checkout of JMAP::TestSuite.  If empty, no
 # JMAP tests will be found or run
 ## basedir =

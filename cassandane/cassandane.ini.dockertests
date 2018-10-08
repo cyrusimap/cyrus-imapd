@@ -65,6 +65,6 @@ suppress = urlauth urlauth2
 # still buggy, skip for now
 #basedir = /srv/caldavtester.git
 
-[jmaptester]
+[jmaptestsuite]
 basedir = /srv/jmaptest.git
 suppress =

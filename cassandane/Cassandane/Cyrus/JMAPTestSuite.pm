@@ -37,7 +37,7 @@
 #  OF THIS SOFTWARE.
 #
 
-package Cassandane::Cyrus::TesterJMAP;
+package Cassandane::Cyrus::JMAPTestSuite;
 use strict;
 use warnings;
 use Cwd qw(abs_path);
@@ -75,11 +75,11 @@ sub cyrus_version_supports_jmap
 sub init
 {
     my $cassini = Cassandane::Cassini->instance();
-    $basedir = $cassini->val('jmaptester', 'basedir');
+    $basedir = $cassini->val('jmaptestsuite', 'basedir');
     return unless defined $basedir;
     $basedir = abs_path($basedir);
 
-    my $supp = $cassini->val('jmaptester', 'suppress', '');
+    my $supp = $cassini->val('jmaptestsuite', 'suppress', '');
     map { $suppressed{$_} = 1; } split(/\s+/, $supp);
 
     $testdir = "$basedir/t";
@@ -170,7 +170,7 @@ sub list_tests
 
     if (!defined $basedir)
     {
-        return ( 'test_warning_jmaptester_is_not_installed' );
+        return ( 'test_warning_jmaptestsuite_is_not_installed' );
     }
 
     @tests = find_tests($testdir);
@@ -190,7 +190,7 @@ sub run_test
     {
         xlog "JMAP Tests are not enabled.  To enabled them, please";
         xlog "install JMAP-TestSuite from https://github.com/fastmail/JMAP-TestSuite";
-        xlog "and edit [jmaptester]basedir in cassandane.ini";
+        xlog "and edit [jmaptestsuite]basedir in cassandane.ini";
         xlog "This is not a failure";
         return;
     }
