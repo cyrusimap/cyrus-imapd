@@ -8,7 +8,7 @@
 Storage Considerations
 ======================
 
-Storage considerations are a complex matter as the various options
+Storage considerations are a complex matter, as the various options
 provide or restrict one's ability to adjust the necessary parameters as
 the need arises. It is foremost a challenge to clearly articulate and
 prioritize the criteria for storage, and map the theory on to a
