@@ -7169,7 +7169,8 @@ int meth_put(struct transaction_t *txn, void *params)
         }
 
         /* Make sure method is allowed (only allowed on resources) */
-        if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
+        if (!((txn->req_tgt.allow & ALLOW_WRITE) && txn->req_tgt.resource))
+            return HTTP_NOT_ALLOWED;
 
         reqd_rights = DACL_WRITECONT;
 
