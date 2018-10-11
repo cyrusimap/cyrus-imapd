@@ -603,6 +603,8 @@ int service_init(int argc __attribute__((unused)),
 {
     int r, events, opt, i;
     int allow_trace = config_getswitch(IMAPOPT_HTTPALLOWTRACE);
+    unsigned long version;
+    unsigned int status, patch, fix, minor, major;
 
     LIBXML_TEST_VERSION
 
@@ -676,16 +678,30 @@ int service_init(int argc __attribute__((unused)),
     ws_init(&serverinfo);
 
 #ifdef HAVE_SSL
-    buf_printf(&serverinfo, " OpenSSL/%s", SHLIB_VERSION_NUMBER);
+    version = OPENSSL_VERSION_NUMBER;
+    status  = version & 0x0f; version >>= 4;
+    patch   = version & 0xff; version >>= 8;
+    fix     = version & 0xff; version >>= 8;
+    minor   = version & 0xff; version >>= 8;
+    major   = version & 0xff;
+    
+    buf_printf(&serverinfo, " OpenSSL/%u.%u.%u", major, minor, fix);
+
+    if (status == 0) buf_appendcstr(&serverinfo, "-dev");
+    else if (status < 15) buf_printf(&serverinfo, "-beta%u", status);
+    else if (patch) buf_putc(&serverinfo, patch + 'a' - 1);
 #endif
 
 #ifdef HAVE_ZLIB
     buf_printf(&serverinfo, " Zlib/%s", ZLIB_VERSION);
 #endif
 #ifdef HAVE_BROTLI
-    uint32_t version = BrotliEncoderVersion();
-    buf_printf(&serverinfo, " Brotli/%u.%u.%u",
-               (version >> 24) & 0xfff, (version >> 12) & 0xfff, version & 0xfff);
+    version = BrotliEncoderVersion();
+    fix     = version & 0xfff; version >>= 12;
+    minor   = version & 0xfff; version >>= 12;
+    major   = version & 0xfff;
+
+    buf_printf(&serverinfo, " Brotli/%u.%u.%u", major, minor, fix);
 #endif
 
     /* Initialize libical */
