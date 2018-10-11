@@ -1161,11 +1161,6 @@ static int _rights_for_mbentry(jmap_req_t *req, const mbentry_t *mbentry)
     }
     mbname_free(&mbname);
 
-    // intermediate mailboxes have limited rights, just see, create sub,
-    // rename and delete:
-    if (mbentry->mbtype & MBTYPE_INTERMEDIATE)
-        rights &= ACL_LOOKUP | ACL_CREATE | ACL_DELETEMBOX;
-
     return rights;
 }
 
