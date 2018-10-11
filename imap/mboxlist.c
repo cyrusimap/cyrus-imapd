@@ -1145,6 +1145,20 @@ EXPORTED int mboxlist_create_intermediaries(const char *mboxname,
     return r;
 }
 
+static int _mbentry_undeleted_cb(void *rock,
+                                 const char *key, size_t keylen,
+                                 const char *data, size_t datalen)
+{
+    const char *ignore = rock;
+    mbentry_t *mbentry = NULL;
+    int r = mboxlist_parse_entry(&mbentry, key, keylen, data, datalen);
+    if (!r && strcmp(ignore, mbentry->name)) {
+        r = mbentry->mbtype & MBTYPE_DELETED ? 0 : IMAP_OK_COMPLETED;
+    }
+    mboxlist_entry_free(&mbentry);
+    return r;
+}
+
 static int mboxlist_delete_intermediaries(const char *mboxname,
                                           const char *untilname,
                                           modseq_t modseq,
@@ -1175,6 +1189,14 @@ static int mboxlist_delete_intermediaries(const char *mboxname,
         r = mboxlist_mylookup(parent, &mbentry, tid, 1);
         if (mbentry) {
             if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+                /* Stop if parent has any undeleted children. */
+                /* XXX this doesn't need to be O(n^2) */
+                r = cyrusdb_foreach(mbdb, parent, strlen(parent),
+                                    NULL /* foreach_p */,
+                                    _mbentry_undeleted_cb,
+                                    (void*) parent /* rock */, tid);
+                if (r) break;
+                /* Mark deleted */
                 mbentry->mbtype |= MBTYPE_DELETED;
                 mbentry->foldermodseq = modseq;
 
