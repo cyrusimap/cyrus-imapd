@@ -186,6 +186,9 @@ int mboxname_isoutbox(const char *name);
 int mboxname_is_prefix(const char *longstr, const char *shortstr);
 /* check if one mboxname contains the parent of the other mboxname */
 int mboxname_contains_parent(const char *mboxname, const char *prev);
+/* Return the internal mailbox name that is ancestor to mboxname1
+ * and mboxname2. Return NULL for INBOX or different owners. */
+char *mboxname_common_ancestor(const char *mboxname1, const char *mboxname2);
 
 void mboxname_hash(char *buf, size_t buf_len,
                    const char *root,

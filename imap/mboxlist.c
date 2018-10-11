@@ -1146,6 +1146,7 @@ EXPORTED int mboxlist_create_intermediaries(const char *mboxname,
 }
 
 static int mboxlist_delete_intermediaries(const char *mboxname,
+                                          const char *untilname,
                                           modseq_t modseq,
                                           strarray_t *inter,
                                           struct txn **tid)
@@ -1168,6 +1169,8 @@ static int mboxlist_delete_intermediaries(const char *mboxname,
 
         parent = mbname_intname(mbname);
         if (!*parent) break;  /* root of hierarchy ("") */
+
+        if (untilname && !strcmp(parent, untilname)) break;
 
         r = mboxlist_mylookup(parent, &mbentry, tid, 1);
         if (mbentry) {
@@ -1603,7 +1606,8 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                force, 1);
 
     if (!r && !mboxlist_haschildren(name)) {
-        r = mboxlist_delete_intermediaries(name, mbentry->foldermodseq+1,
+        r = mboxlist_delete_intermediaries(name, NULL /*untilname */,
+                                           mbentry->foldermodseq+1,
                                            NULL /* inter */, NULL /* tid */);
     }
 
@@ -1733,7 +1737,8 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         r = mboxlist_update(newmbentry, /*localonly*/1);
 
         if (!r && !haschildren) {
-            r = mboxlist_delete_intermediaries(name, newmbentry->foldermodseq,
+            r = mboxlist_delete_intermediaries(name, NULL /* untilname */,
+                                               newmbentry->foldermodseq,
                                                NULL /* inter */, NULL /* tid */);
         }
 
@@ -2075,9 +2080,11 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
             r = mboxlist_update_entry(oldname, oldmbentry, &tid);
 
             if (!r && !mboxname_isdeletedmailbox(newname, NULL)) {
-                r = mboxlist_delete_intermediaries(oldname,
+                char *untilname = mboxname_common_ancestor(oldname, newname);
+                r = mboxlist_delete_intermediaries(oldname, untilname,
                                                    oldmbentry->foldermodseq,
                                                    &inter, &tid);
+                free(untilname);
             }
 
             mboxlist_entry_free(&oldmbentry);

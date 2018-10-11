@@ -807,6 +807,33 @@ static void test_nextmodseq(void)
     CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 5, 0, 0), 102);
 }
 
+static void test_common_ancestor(void)
+{
+    char *ancestor;
+
+    ancestor = mboxname_common_ancestor("user.foo.A.B", "user.foo.A");
+    CU_ASSERT_PTR_NULL(ancestor);
+
+    ancestor = mboxname_common_ancestor("user.foo.A.B", "user.foo.C.D");
+    CU_ASSERT_PTR_NULL(ancestor);
+
+    ancestor = mboxname_common_ancestor("user.foo.A.B.C", "user.foo.A.B");
+    CU_ASSERT_STRING_EQUAL("user.foo.A", ancestor);
+    free(ancestor);
+
+    ancestor = mboxname_common_ancestor("user.foo.A.B.C", "user.foo.A.X.Y");
+    CU_ASSERT_STRING_EQUAL("user.foo.A", ancestor);
+    free(ancestor);
+
+    ancestor = mboxname_common_ancestor("user.foo.A.B.C", "user.bar.A.B");
+    CU_ASSERT_PTR_NULL(ancestor);
+
+    ancestor = mboxname_common_ancestor("user.foo.A.B.C", "user.bar.A.X.Y");
+    CU_ASSERT_PTR_NULL(ancestor);
+}
+
+
+
 static enum enum_value old_config_virtdomains;
 static union config_value old_config_unixhierarchysep;
 static union config_value old_config_altnamespace;

@@ -2547,4 +2547,30 @@ EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
     return val;
 }
 
+EXPORTED char *mboxname_common_ancestor(const char *mboxname1, const char *mboxname2)
+{
+    mbname_t *mbname1 = mbname_from_intname(mboxname1);
+    mbname_t *mbname2 = mbname_from_intname(mboxname2);
+    char *ancestor = NULL;
 
+    if (!mbname_same_userid(mbname1, mbname2))
+        goto done;
+
+    const strarray_t *boxes1 = mbname_boxes(mbname1);
+    const strarray_t *boxes2 = mbname_boxes(mbname2);
+    int len = boxes1->count < boxes2->count ? boxes1->count : boxes2->count;
+    int i;
+    for (i = 0; i < len - 1; i++) {
+        if (strcmp(strarray_nth(boxes1, i), strarray_nth(boxes2, i)))
+            break;
+    }
+    if (i > 0) {
+        mbname_truncate_boxes(mbname1, i);
+        ancestor = xstrdup(mbname_intname(mbname1));
+    }
+
+done:
+    mbname_free(&mbname1);
+    mbname_free(&mbname2);
+    return ancestor;
+}
