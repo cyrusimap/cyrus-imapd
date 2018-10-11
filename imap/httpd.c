@@ -1958,7 +1958,7 @@ static int parse_connection(struct transaction_t *txn)
                             txn->flags.upgrade |= UPGRADE_HTTP2;
                         }
                         else if (ws_enabled() &&
-                                 !strncmp(upgrade[0], WS_TOKEN,
+                                 !strncasecmp(upgrade[0], WS_TOKEN,
                                           strcspn(upgrade[0], " ,"))) {
                             /* Upgrade to WebSockets */
                             txn->flags.conn |= CONN_UPGRADE;
