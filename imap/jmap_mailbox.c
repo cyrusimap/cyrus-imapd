@@ -113,20 +113,25 @@ struct shared_mboxes {
 /*
  * We distinguish shared mailboxes by the following types:
  *
- * - _MBOX_HIDDEN: this mailbox is not visible at all to the
- *                 currently authenticated account
- * - _MBOX_PARENT: this mailbox is not readable, but it is
- *                 the parent mailbox of a shared mailbox.
- *                 E.g. it is reported in Mailbox/get but
- *                 some of its properties are anonymised.
- * - _MBOX_VISIBLE: this mailbox is fully readable by the current
- *                 user, that is, its ACL provides at least
- *                 ACL_LOOKUP and ACL_READ rights
+ * it is trivially _MBOX_VISIBLE, without checking ACL rights.
+ * - _SHAREDMBOX_HIDDEN: this mailbox is not visible at all to the
+ *                       currently authenticated account
+ * - _SHAREDMBOX_PARENT: this mailbox is not readable, but it is
+ *                       the parent mailbox of a shared mailbox.
+ *                       E.g. it is reported in Mailbox/get but
+ *                       some of its properties are anonymised.
+ * - _SHAREDMBOX_SHARED: this mailbox is fully readable by the current
+ *                       user, that is, its ACL provides at least
+ *                       ACL_LOOKUP and ACL_READ rights
  *
  * If the mailbox is a child of the authenticated user's INBOX,
- * it is trivially _MBOX_VISIBLE, without checking ACL rights.
+ * it is trivially _SHAREDMBOX_SHARED, without checking ACL rights.
  */
-enum shared_mbox_type { _MBOX_HIDDEN, _MBOX_PARENT, _MBOX_VISIBLE };
+enum shared_mbox_type {
+    _SHAREDMBOX_HIDDEN,
+    _SHAREDMBOX_PARENT,
+    _SHAREDMBOX_SHARED
+};
 
 static int _shared_mboxes_cb(const mbentry_t *mbentry, void *rock)
 {
@@ -173,9 +178,9 @@ static enum shared_mbox_type _shared_mbox_type(struct shared_mboxes *sm,
 {
     /* Handle trivial cases */
     if (sm->is_owner)
-        return _MBOX_VISIBLE;
+        return _SHAREDMBOX_SHARED;
     if (sm->mboxes.count == 0)
-        return _MBOX_HIDDEN;
+        return _SHAREDMBOX_HIDDEN;
 
     /* This is a worst case O(n) search, which *could* turn out to
      * be an issue if caller iterates over all mailboxes of an
@@ -185,7 +190,7 @@ static enum shared_mbox_type _shared_mbox_type(struct shared_mboxes *sm,
         const char *sharedname = strarray_nth(&sm->mboxes, i);
         int cmp = bsearch_compare_mbox(sharedname, name);
         if (!cmp)
-            return _MBOX_VISIBLE;
+            return _SHAREDMBOX_SHARED;
 
         if (cmp > 0 && mboxname_is_prefix(sharedname, name)) {
             // if this isn't a user's INBOX, then it's definitely a
@@ -193,7 +198,7 @@ static enum shared_mbox_type _shared_mbox_type(struct shared_mboxes *sm,
             mbname_t *mbname = mbname_from_intname(name);
             if (strarray_size(mbname_boxes(mbname))) {
                 mbname_free(&mbname);
-                return _MBOX_PARENT;
+                return _SHAREDMBOX_PARENT;
             }
             mbname_free(&mbname);
 
@@ -202,7 +207,7 @@ static enum shared_mbox_type _shared_mbox_type(struct shared_mboxes *sm,
             mbname_t *sharedmbname = mbname_from_intname(sharedname);
             if (!strcmpsafe(strarray_nth(mbname_boxes(sharedmbname), 0), "INBOX")) {
                 mbname_free(&sharedmbname);
-                return _MBOX_PARENT;
+                return _SHAREDMBOX_PARENT;
             }
             mbname_free(&sharedmbname);
 
@@ -213,7 +218,7 @@ static enum shared_mbox_type _shared_mbox_type(struct shared_mboxes *sm,
         }
     }
 
-    return _MBOX_HIDDEN;
+    return _SHAREDMBOX_HIDDEN;
 }
 
 
@@ -546,7 +551,7 @@ static json_t *_mbox_get(jmap_req_t *req,
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
-    if (share_type == _MBOX_VISIBLE) {
+    if (share_type == _SHAREDMBOX_SHARED) {
         /* Lookup status. */
         struct statusdata sdata = STATUSDATA_INIT;
         r = status_lookup_mbname(mbname, req->userid, statusitems, &sdata);
@@ -650,7 +655,7 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     /* Check share_type for this mailbox */
     enum shared_mbox_type share_type =
         _shared_mbox_type(rock->shared_mboxes, mbentry->name);
-    if (share_type == _MBOX_HIDDEN)
+    if (share_type == _SHAREDMBOX_HIDDEN)
         return 0;
 
     /* Convert mbox to JMAP object. */
@@ -1040,7 +1045,7 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
         return 0;
 
     enum shared_mbox_type shared_mbtype = _shared_mbox_type(q->shared_mboxes, mbentry->name);
-    if (shared_mbtype == _MBOX_HIDDEN && !q->include_hidden)
+    if (shared_mbtype == _SHAREDMBOX_HIDDEN && !q->include_hidden)
         return 0;
 
     mbname_t *_mbname = mbname_from_intname(mbentry->name);
@@ -1404,7 +1409,7 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
                 hash_insert(mbrec->id, (void*)1, &removed);
             }
         }
-        else if (mbrec->foldermodseq > sincemodseq && mbrec->shared_mbtype != _MBOX_HIDDEN) {
+        else if (mbrec->foldermodseq > sincemodseq && mbrec->shared_mbtype != _SHAREDMBOX_HIDDEN) {
             json_array_append_new(query.added, json_pack("{s:s s:i}", "id", mbrec->id, "index", i));
             hash_insert(mbrec->id, (void*)1, &removed);
             if (highestmodseq < mbrec->foldermodseq) {
