@@ -1201,7 +1201,7 @@ HIDDEN int jmap_myrights_byname(jmap_req_t *req, const char *mboxname)
         // if unable to read, that means no rights
         int rights = 0;
         mbentry_t *mbentry = NULL;
-        if (!mboxlist_lookup(mboxname, &mbentry, NULL)) {
+        if (!mboxlist_lookup_allow_all(mboxname, &mbentry, NULL)) {
             rights = _rights_for_mbentry(req, mbentry);
             mboxlist_entry_free(&mbentry);
         }
