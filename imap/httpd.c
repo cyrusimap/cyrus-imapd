@@ -1975,7 +1975,7 @@ static int parse_connection(struct transaction_t *txn)
                         }
                         else if (ws_enabled() &&
                                  !strncasecmp(upgrade[0], WS_TOKEN,
-                                          strcspn(upgrade[0], " ,"))) {
+                                              strcspn(upgrade[0], " ,"))) {
                             /* Upgrade to WebSockets */
                             txn->flags.conn |= CONN_UPGRADE;
                             txn->flags.upgrade |= UPGRADE_WS;
