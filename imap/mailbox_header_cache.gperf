@@ -89,3 +89,9 @@ struct mailbox_header_cache {
 "x-uniform-type-identifier", 6
 "x-apple-base-url", 6
 "x-apple-mail-remote-attachments", 6
+"arc-seal", BIT32_MAX
+"arc-message-signature", BIT32_MAX
+"arc-authentication-results", BIT32_MAX
+"authentication-results", BIT32_MAX
+"received-spf", BIT32_MAX
+"archived-at", BIT32_MAX
