@@ -86,7 +86,7 @@ static struct ws_extension {
 /* WebSocket channel context */
 struct ws_context {
     wslay_event_context_ptr event;
-    char accept[WS_AKEY_LEN+1];
+    const char *accept;
     const char *protocol;
     int (*data_cb)(struct buf *inbuf, struct buf *outbuf,
                    struct buf *logbuf, void **rock);
@@ -488,8 +488,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
                                            struct buf *logbuf, void **rock))
 {
     int r;
-    const char **hdr, *clientkey = NULL;
-    unsigned char sha1buf[SHA1_DIGEST_LENGTH];
+    const char **hdr, *accept = NULL;
     wslay_event_context_ptr ev;
     struct ws_context *ctx;
     struct wslay_event_callbacks callbacks = {
@@ -501,25 +500,6 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
         NULL,
         on_msg_recv_cb
     };
-
-    if (txn->flags.ver == VER_1_1) {
-        /* Check for WebSocket client key */
-        hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Key");
-        if (!hdr) {
-            txn->error.desc = "Missing WebSocket client key";
-            return HTTP_BAD_REQUEST;
-        }
-        else if (hdr[1]) {
-            txn->error.desc = "Multiple WebSocket client keys";
-            return HTTP_BAD_REQUEST;
-        }
-        else if (strlen(hdr[0]) != WS_CKEY_LEN) {
-            txn->error.desc = "Invalid WebSocket client key";
-            return HTTP_BAD_REQUEST;
-        }
-
-        clientkey = hdr[0];
-    }
 
     /* Check for supported WebSocket version */
     hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Version");
@@ -564,6 +544,37 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
         }
     }
 
+    if (txn->flags.ver == VER_1_1) {
+        unsigned char sha1buf[SHA1_DIGEST_LENGTH];
+
+        /* Check for WebSocket client key */
+        hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Key");
+        if (!hdr) {
+            txn->error.desc = "Missing WebSocket client key";
+            return HTTP_BAD_REQUEST;
+        }
+        else if (hdr[1]) {
+            txn->error.desc = "Multiple WebSocket client keys";
+            return HTTP_BAD_REQUEST;
+        }
+        else if (strlen(hdr[0]) != WS_CKEY_LEN) {
+            txn->error.desc = "Invalid WebSocket client key";
+            return HTTP_BAD_REQUEST;
+        }
+
+        /* Create WebSocket accept key */
+        buf_setcstr(&txn->buf, hdr[0]);
+        buf_appendcstr(&txn->buf, WS_GUID);
+        xsha1((u_char *) buf_base(&txn->buf), buf_len(&txn->buf), sha1buf);
+
+        buf_ensure(&txn->buf, WS_AKEY_LEN+1);
+        accept = buf_base(&txn->buf);
+
+        r = sasl_encode64((char *) sha1buf, SHA1_DIGEST_LENGTH,
+                          (char *) accept, WS_AKEY_LEN+1, NULL);
+        if (r != SASL_OK) syslog(LOG_WARNING, "sasl_encode64: %d", r);
+    }
+
     /* Create server context */
     r = wslay_event_context_server_init(&ev, &callbacks, txn);
     if (r) {
@@ -575,19 +586,10 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
     /* Create channel context */
     ctx = xzmalloc(sizeof(struct ws_context));
     ctx->event = ev;
+    ctx->accept = accept;
     ctx->protocol = protocol;
     ctx->data_cb = data_cb;
     txn->ws_ctx = ctx;
-
-    if (clientkey) {
-        /* Create WebSocket accept key */
-        buf_setcstr(&txn->buf, clientkey);
-        buf_appendcstr(&txn->buf, WS_GUID);
-        xsha1((u_char *) buf_base(&txn->buf), buf_len(&txn->buf), sha1buf);
-
-        r = sasl_encode64((char *) sha1buf, SHA1_DIGEST_LENGTH,
-                          ctx->accept, WS_AKEY_LEN+1, NULL);
-    }
 
     /* Check for supported WebSocket extensions */
     parse_extensions(txn);
@@ -622,11 +624,12 @@ HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn)
 {
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
 
-    simple_hdr(txn, "Sec-WebSocket-Version", WS_VERSION);
+    if (!ctx) {
+        simple_hdr(txn, "Sec-WebSocket-Version", WS_VERSION);
+        return;
+    }
 
-    if (!ctx) return;
-
-    if (txn->flags.ver != VER_2) {
+    if (ctx->accept) {
         simple_hdr(txn, "Sec-WebSocket-Accept", ctx->accept);
     }
 
@@ -796,4 +799,3 @@ HIDDEN void ws_input(struct transaction_t *txn __attribute__((unused)))
 }
 
 #endif /* HAVE_WSLAY */
-
