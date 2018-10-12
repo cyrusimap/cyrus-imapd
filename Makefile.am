@@ -1346,7 +1346,7 @@ lib/htmlchar.h: lib/htmlchar.st
 	$(AM_V_GEN)${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
 
 imap/mailbox_header_cache.h: imap/mailbox_header_cache.gperf
-	$(AM_V_GEN)gperf --ignore-case -p -j1 -i 1 -g -o -t -H mailbox_header_cache_hash -N mailbox_header_cache_lookup -k1,3,$ $< > $@.NEW && mv $@.NEW $@
+	$(AM_V_GEN)gperf --ignore-case --initializer-suffix=,0 -p -j1 -i 1 -g -o -t -H mailbox_header_cache_hash -N mailbox_header_cache_lookup -k1,3,$$ $< > $@.NEW && mv $@.NEW $@
 endif
 
 imtest_imtest_SOURCES = imtest/imtest.c
