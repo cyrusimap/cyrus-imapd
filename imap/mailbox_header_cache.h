@@ -1,5 +1,5 @@
 /* ANSI-C code produced by gperf version 3.1 */
-/* Command-line: gperf --ignore-case -p -j1 -i 1 -g -o -t -H mailbox_header_cache_hash -N mailbox_header_cache_lookup -k'1,3,$' mailbox_header_cache.gperf  */
+/* Command-line: gperf --ignore-case -p -j1 -i 1 -g -o -t -H mailbox_header_cache_hash -N mailbox_header_cache_lookup -k'1,3,$' --initializer-suffix=,0 mailbox_header_cache.gperf  */
 
 #if !((' ' == 32) && ('!' == 33) && ('"' == 34) && ('#' == 35) \
       && ('%' == 37) && ('&' == 38) && ('\'' == 39) && ('(' == 40) \
@@ -187,10 +187,11 @@ mailbox_header_cache_lookup (register const char *str, register size_t len)
 {
   static struct mailbox_header_cache wordlist[] =
     {
-      {""}, {""}, {""}, {""},
+      {"",0}, {"",0}, {"",0}, {"",0},
 #line 71 "mailbox_header_cache.gperf"
       {"cc", BIT32_MAX},
-      {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""},
+      {"",0}, {"",0}, {"",0}, {"",0}, {"",0}, {"",0}, {"",0},
+      {"",0},
 #line 62 "mailbox_header_cache.gperf"
       {"x-msoesrec", 2},
 #line 66 "mailbox_header_cache.gperf"
@@ -275,13 +276,14 @@ mailbox_header_cache_lookup (register const char *str, register size_t len)
       {"in-reply-to", BIT32_MAX},
 #line 56 "mailbox_header_cache.gperf"
       {"followup-to", 0},
-      {""}, {""}, {""}, {""}, {""},
+      {"",0}, {"",0}, {"",0}, {"",0}, {"",0},
 #line 67 "mailbox_header_cache.gperf"
       {"x-truedomain-domain", 3},
-      {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""},
+      {"",0}, {"",0}, {"",0}, {"",0}, {"",0}, {"",0}, {"",0},
+      {"",0},
 #line 82 "mailbox_header_cache.gperf"
       {"subject", BIT32_MAX},
-      {""},
+      {"",0},
 #line 52 "mailbox_header_cache.gperf"
       {"priority", 0}
     };
