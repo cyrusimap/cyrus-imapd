@@ -52,6 +52,17 @@ if [ ! $ITEM ] || [ $ITEM == icu ] ; then
 )
 fi
 
+if [ ! $ITEM ] || [ $ITEM == zeroskip ] ; then
+(
+  cd zeroskip
+  git clean -f -x -d
+  autoreconf -v -i
+  ./configure --prefix=$PREFIX
+  make $MAKEOPTS
+  sudo make install
+)
+fi
+
 if [ ! $ITEM ] || [ $ITEM == jansson ] ; then
 (
   cd jansson

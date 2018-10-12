@@ -23,3 +23,6 @@
 [submodule "cre2"]
 	path = cre2
 	url = https://github.com/marcomaggi/cre2
+[submodule "zeroskip"]
+	path = zeroskip
+	url = https://github.com/cyrusimap/zeroskip.git
