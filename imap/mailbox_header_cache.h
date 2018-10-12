@@ -80,12 +80,12 @@ struct mailbox_header_cache {
     bit32 min_cache_version;
 };
 
-#define TOTAL_KEYWORDS 40
+#define TOTAL_KEYWORDS 46
 #define MIN_WORD_LENGTH 2
 #define MAX_WORD_LENGTH 31
 #define MIN_HASH_VALUE 4
-#define MAX_HASH_VALUE 48
-/* maximum key range = 45, duplicates = 0 */
+#define MAX_HASH_VALUE 71
+/* maximum key range = 68, duplicates = 0 */
 
 #ifndef GPERF_DOWNCASE
 #define GPERF_DOWNCASE 1
@@ -140,32 +140,32 @@ mailbox_header_cache_hash (register const char *str, register size_t len)
 {
   static unsigned char asso_values[] =
     {
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49,  4, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 28, 49, 49,
-      49, 49, 49, 49, 49, 10, 32,  1,  1,  2,
-      13, 49, 29, 17, 49, 49, 10,  1, 13, 14,
-      12, 49,  1,  4,  2,  5, 14, 13,  2,  5,
-      49, 49, 49, 49, 49, 49, 49, 10, 32,  1,
-       1,  2, 13, 49, 29, 17, 49, 49, 10,  1,
-      13, 14, 12, 49,  1,  4,  2,  5, 14, 13,
-       2,  5, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49, 49, 49, 49, 49,
-      49, 49, 49, 49, 49, 49
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72,  2, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 35, 72, 72,
+      72, 72, 72, 72, 72,  1, 42,  1,  2,  1,
+      21, 72, 15, 28, 72, 72, 10,  1, 22, 12,
+      15, 72,  7,  2, 18, 11, 25, 14,  1, 20,
+      72, 72, 72, 72, 72, 72, 72,  1, 42,  1,
+       2,  1, 21, 72, 15, 28, 72, 72, 10,  1,
+      22, 12, 15, 72,  7,  2, 18, 11, 25, 14,
+       1, 20, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72, 72, 72, 72, 72,
+      72, 72, 72, 72, 72, 72
     };
   register unsigned int hval = len;
 
@@ -187,89 +187,103 @@ mailbox_header_cache_lookup (register const char *str, register size_t len)
 {
   static struct mailbox_header_cache wordlist[] =
     {
-      {"", 0}, {"", 0}, {"", 0}, {"", 0},
+      {""}, {""}, {""}, {""},
 #line 71 "mailbox_header_cache.gperf"
       {"cc", BIT32_MAX},
-      {"", 0}, {"", 0}, {"", 0}, {"", 0},
-#line 72 "mailbox_header_cache.gperf"
-      {"date", BIT32_MAX},
-      {"", 0},
-#line 79 "mailbox_header_cache.gperf"
-      {"received", BIT32_MAX},
-#line 57 "mailbox_header_cache.gperf"
-      {"x-mailer", 1},
-#line 58 "mailbox_header_cache.gperf"
-      {"x-trace", 1},
+      {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""},
 #line 62 "mailbox_header_cache.gperf"
       {"x-msoesrec", 2},
 #line 66 "mailbox_header_cache.gperf"
       {"x-mail-from", 3},
 #line 87 "mailbox_header_cache.gperf"
       {"message-id", BIT32_MAX},
-#line 54 "mailbox_header_cache.gperf"
-      {"resent-from", 0},
-#line 83 "mailbox_header_cache.gperf"
-      {"to", BIT32_MAX},
-#line 68 "mailbox_header_cache.gperf"
-      {"x-me-message-id", 4},
 #line 63 "mailbox_header_cache.gperf"
       {"x-spam-score", 3},
-#line 59 "mailbox_header_cache.gperf"
-      {"x-ref", 2},
+#line 57 "mailbox_header_cache.gperf"
+      {"x-mailer", 1},
+#line 79 "mailbox_header_cache.gperf"
+      {"received", BIT32_MAX},
+#line 68 "mailbox_header_cache.gperf"
+      {"x-me-message-id", 4},
+#line 92 "mailbox_header_cache.gperf"
+      {"arc-seal", BIT32_MAX},
+#line 54 "mailbox_header_cache.gperf"
+      {"resent-from", 0},
 #line 69 "mailbox_header_cache.gperf"
       {"x-cyrus-session-id", 4},
 #line 85 "mailbox_header_cache.gperf"
       {"domainkey-signature", BIT32_MAX},
-#line 81 "mailbox_header_cache.gperf"
-      {"sender", 7},
-#line 61 "mailbox_header_cache.gperf"
-      {"x-msmail-priority", 2},
+#line 93 "mailbox_header_cache.gperf"
+      {"arc-message-signature", BIT32_MAX},
+#line 72 "mailbox_header_cache.gperf"
+      {"date", BIT32_MAX},
 #line 73 "mailbox_header_cache.gperf"
       {"delivery-date", BIT32_MAX},
-#line 77 "mailbox_header_cache.gperf"
-      {"mime-version", BIT32_MAX},
-#line 53 "mailbox_header_cache.gperf"
-      {"references", 0},
-#line 60 "mailbox_header_cache.gperf"
-      {"x-priority", 2},
-#line 64 "mailbox_header_cache.gperf"
-      {"x-resolved-to", 3},
+#line 58 "mailbox_header_cache.gperf"
+      {"x-trace", 1},
+#line 90 "mailbox_header_cache.gperf"
+      {"x-apple-base-url", 6},
 #line 65 "mailbox_header_cache.gperf"
       {"x-delivered-to", 3},
+#line 94 "mailbox_header_cache.gperf"
+      {"arc-authentication-results", BIT32_MAX},
+#line 97 "mailbox_header_cache.gperf"
+      {"archived-at", BIT32_MAX},
+#line 83 "mailbox_header_cache.gperf"
+      {"to", BIT32_MAX},
+#line 64 "mailbox_header_cache.gperf"
+      {"x-resolved-to", 3},
+#line 59 "mailbox_header_cache.gperf"
+      {"x-ref", 2},
+#line 91 "mailbox_header_cache.gperf"
+      {"x-apple-mail-remote-attachments", 6},
+#line 77 "mailbox_header_cache.gperf"
+      {"mime-version", BIT32_MAX},
+#line 81 "mailbox_header_cache.gperf"
+      {"sender", 7},
 #line 75 "mailbox_header_cache.gperf"
       {"from", BIT32_MAX},
+#line 61 "mailbox_header_cache.gperf"
+      {"x-msmail-priority", 2},
+#line 53 "mailbox_header_cache.gperf"
+      {"references", 0},
+#line 96 "mailbox_header_cache.gperf"
+      {"received-spf", BIT32_MAX},
+#line 78 "mailbox_header_cache.gperf"
+      {"reply-to", 7},
+#line 95 "mailbox_header_cache.gperf"
+      {"authentication-results", BIT32_MAX},
 #line 89 "mailbox_header_cache.gperf"
       {"x-uniform-type-identifier", 6},
 #line 84 "mailbox_header_cache.gperf"
       {"dkim-signature", BIT32_MAX},
-#line 78 "mailbox_header_cache.gperf"
-      {"reply-to", 7},
-#line 67 "mailbox_header_cache.gperf"
-      {"x-truedomain-domain", 3},
+#line 60 "mailbox_header_cache.gperf"
+      {"x-priority", 2},
 #line 70 "mailbox_header_cache.gperf"
       {"bcc", BIT32_MAX},
-#line 90 "mailbox_header_cache.gperf"
-      {"x-apple-base-url", 6},
-#line 88 "mailbox_header_cache.gperf"
-      {"x-universally-unique-identifier", 6},
 #line 55 "mailbox_header_cache.gperf"
       {"newsgroups", 0},
 #line 74 "mailbox_header_cache.gperf"
       {"envelope-to", BIT32_MAX},
-#line 52 "mailbox_header_cache.gperf"
-      {"priority", 0},
+#line 88 "mailbox_header_cache.gperf"
+      {"x-universally-unique-identifier", 6},
 #line 80 "mailbox_header_cache.gperf"
       {"return-path", BIT32_MAX},
 #line 86 "mailbox_header_cache.gperf"
       {"domainkey-x509", BIT32_MAX},
-#line 82 "mailbox_header_cache.gperf"
-      {"subject", BIT32_MAX},
 #line 76 "mailbox_header_cache.gperf"
       {"in-reply-to", BIT32_MAX},
-#line 91 "mailbox_header_cache.gperf"
-      {"x-apple-mail-remote-attachments", 6},
 #line 56 "mailbox_header_cache.gperf"
-      {"followup-to", 0}
+      {"followup-to", 0},
+      {""}, {""}, {""}, {""}, {""},
+#line 67 "mailbox_header_cache.gperf"
+      {"x-truedomain-domain", 3},
+      {""}, {""}, {""}, {""}, {""}, {""}, {""}, {""},
+#line 82 "mailbox_header_cache.gperf"
+      {"subject", BIT32_MAX},
+      {""},
+#line 52 "mailbox_header_cache.gperf"
+      {"priority", 0}
     };
 
   if (len <= MAX_WORD_LENGTH && len >= MIN_WORD_LENGTH)
