@@ -415,7 +415,12 @@ static int stream_close_cb(nghttp2_session *session, int32_t stream_id,
     if (txn) {
         if (txn->ws_ctx) {
             /* Decrement WebSocket stream count */
-            ((struct http2_context *) txn->conn->http2_ctx)->ws_count--;
+            struct http2_context *http2_ctx =
+                (struct http2_context *) txn->conn->http2_ctx;
+            if (--http2_ctx->ws_count == 0) {
+                /* No WebSockets -  block next time (for client timeout) */
+                prot_BLOCK(txn->conn->pin);
+            }
         }
 
         /* Memory cleanup */
