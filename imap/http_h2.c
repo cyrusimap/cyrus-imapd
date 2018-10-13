@@ -353,12 +353,13 @@ static int frame_recv_cb(nghttp2_session *session,
             break;
         }
 
-        /* Check that the client request has finished */
-        if (txn->meth != METH_CONNECT &&
-            !(frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) break;
-
-        /* Check that we still want to process the request */
-        if (txn->req_body.flags & BODY_DISCARD) break;
+        if (txn->meth != METH_CONNECT) {
+            /* Check that the client request has finished */
+            if (!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) break;
+              
+            /* Check that we still want to process the request */
+            if (txn->req_body.flags & BODY_DISCARD) break;
+        }
 
         /* Process the requested method */
         if (txn->req_tgt.namespace->premethod) {
