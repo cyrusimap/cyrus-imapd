@@ -745,12 +745,14 @@ static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
         r = mboxlist_delayed_deletemailbox(mboxname,
                 httpd_userisadmin || httpd_userisproxyadmin,
                 httpd_userid, req->authstate, mboxevent,
-                1 /* checkacl */, 0 /* local_only */, 0 /* force */);
+                1 /* checkacl */, 0 /* local_only */, 0 /* force */,
+                0 /* keep_intermediaries */);
     } else {
         r = mboxlist_deletemailbox(mboxname,
                 httpd_userisadmin || httpd_userisproxyadmin,
                 httpd_userid, req->authstate, mboxevent,
-                1 /* checkacl */, 0 /* local_only */, 0 /* force */);
+                1 /* checkacl */, 0 /* local_only */, 0 /* force */,
+                0 /* keep_intermediaries */);
     }
     mboxevent_free(&mboxevent);
 

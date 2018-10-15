@@ -4054,13 +4054,16 @@ static int remove_collection(const mbentry_t *mbentry,
         r = mboxlist_delayed_deletemailbox(mbentry->name, 1, /* admin */
                                            httpd_userid, httpd_authstate,
                                            NULL, 1 /* checkacl */,
-                                           0 /* localonly */, 0 /* force */);
+                                           0 /* localonly */, 0 /* force */,
+                                           0 /* keep_intermediaries */);
+
     }
     else {
         r = mboxlist_deletemailbox(mbentry->name, 1, /* admin */
                                    httpd_userid, httpd_authstate,
                                    NULL, 1 /* checkacl */,
-                                   0 /* localonly */, 0 /* force */);
+                                   0 /* localonly */, 0 /* force */,
+                                   0 /* keep_intermediaries */);
     }
 
     return r;
@@ -4137,14 +4140,17 @@ static int dav_move_collection(struct transaction_t *txn,
                                                httpd_userisadmin,
                                                httpd_userid, httpd_authstate,
                                                mboxevent, 1 /* checkacl */,
-                                               0 /* localonly*/, 0 /* force */);
+                                               0 /* localonly*/, 0 /* force */,
+                                               0 /* keep_intermediaries */);
+
         }
         else {
             r = mboxlist_deletemailbox(newmailboxname,
                                        httpd_userisadmin,
                                        httpd_userid, httpd_authstate,
                                        mboxevent, 1 /* checkacl */,
-                                       0 /* localonly*/, 0 /* force */);
+                                       0 /* localonly*/, 0 /* force */,
+                                       0 /* keep_intermediaries */);
         }
 
         if (!r) mboxevent_notify(&mboxevent);
@@ -4768,13 +4774,15 @@ int meth_delete(struct transaction_t *txn, void *params)
             r = mboxlist_delayed_deletemailbox(txn->req_tgt.mbentry->name,
                                        httpd_userisadmin || httpd_userisproxyadmin,
                                        httpd_userid, httpd_authstate, mboxevent,
-                                       /*checkack*/1, /*localonly*/0, /*force*/0);
+                                       /*checkack*/1, /*localonly*/0, /*force*/0,
+                                       /* keep_intermediaries */0);
         }
         else {
             r = mboxlist_deletemailbox(txn->req_tgt.mbentry->name,
                                        httpd_userisadmin || httpd_userisproxyadmin,
                                        httpd_userid, httpd_authstate, mboxevent,
-                                       /*checkack*/1, /*localonly*/0, /*force*/0);
+                                       /*checkack*/1, /*localonly*/0, /*force*/0,
+                                       /* keep_intermediaries */0);
         }
         if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
         else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
@@ -5457,7 +5465,8 @@ int meth_mkcol(struct transaction_t *txn, void *params)
             mailbox_close(&mailbox);
             mboxlist_deletemailbox(txn->req_tgt.mbentry->name,
                                    /*isadmin*/1, NULL, NULL, NULL,
-                                   /*checkacl*/0, /*localonly*/0, /*force*/1);
+                                   /*checkacl*/0, /*localonly*/0, /*force*/1,
+                                   /*keep_intermediaries*/0);
 
             if (!ret) {
                 /* Output the XML response */

@@ -3394,7 +3394,7 @@ static int rmgroup(message_data_t *msg)
 
     if (!r) r = mboxlist_deletemailbox(mailboxname, 0,
                                        newsmaster, newsmaster_authstate,
-                                       1, 0, 0);
+                                       1, 0, 0, 0);
 
     if (!r) sync_log_mailbox(mailboxname);
 

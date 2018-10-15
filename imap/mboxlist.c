@@ -1589,7 +1589,8 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                struct mboxevent *mboxevent,
                                int checkacl,
                                int localonly,
-                               int force)
+                               int force,
+                               int keep_intermediaries)
 {
     mbentry_t *mbentry = NULL;
     strarray_t existing = STRARRAY_INITIALIZER;
@@ -1658,7 +1659,8 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
         const char *subname = strarray_nth(&existing, i);
         syslog(LOG_NOTICE, "too many subfolders for %s, deleting %s (%d / %d)",
                newname, subname, i+1, (int)existing.count);
-        r = mboxlist_deletemailbox(subname, 1, userid, auth_state, NULL, 0, 1, 1);
+        r = mboxlist_deletemailbox(subname, 1, userid, auth_state, NULL, 0, 1, 1,
+                                   keep_intermediaries);
         if (r) goto done;
     }
 
@@ -1674,7 +1676,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                localonly /* local_only */,
                                force, 1);
 
-    if (!r && !mboxlist_haschildren(name)) {
+    if (!r && !mboxlist_haschildren(name) && !keep_intermediaries) {
         r = mboxlist_delete_intermediaries(name, NULL /*untilname */,
                                            mbentry->foldermodseq+1,
                                            NULL /* inter */, NULL /* tid */);
@@ -1706,7 +1708,8 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
                                     const struct auth_state *auth_state,
                                     struct mboxevent *mboxevent,
                                     int checkacl,
-                                    int local_only, int force)
+                                    int local_only, int force,
+                                    int keep_intermediaries)
 {
     mbentry_t *mbentry = NULL;
     int r = 0;
@@ -1805,7 +1808,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         }
         r = mboxlist_update(newmbentry, /*localonly*/1);
 
-        if (!r && !haschildren) {
+        if (!r && !haschildren && !keep_intermediaries) {
             r = mboxlist_delete_intermediaries(name, NULL /* untilname */,
                                                newmbentry->foldermodseq,
                                                NULL /* inter */, NULL /* tid */);

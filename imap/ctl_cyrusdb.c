@@ -156,7 +156,7 @@ static int fixmbox(const mbentry_t *mbentry,
 
     /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
     if (mbentry->mbtype & MBTYPE_RESERVE) {
-        r = mboxlist_deletemailbox(mbentry->name, 1, NULL, NULL, NULL, 0, 0, 1);
+        r = mboxlist_deletemailbox(mbentry->name, 1, NULL, NULL, NULL, 0, 0, 1, 0);
         if (r) {
             /* log the error */
             syslog(LOG_ERR,

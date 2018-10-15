@@ -525,11 +525,11 @@ static void do_dump(enum mboxop op, const char *part, int purge)
 
             wipe_head = wipe_head->next;
             if (!mboxlist_delayed_delete_isenabled()) {
-                ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1);
+                ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1, 0);
             } else if (mboxname_isdeletedmailbox(me->mailbox, NULL)) {
-                ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1);
+                ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1, 0);
             } else {
-                ret = mboxlist_delayed_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1);
+                ret = mboxlist_delayed_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1, 0);
             }
 
             if (ret) {

@@ -3198,7 +3198,7 @@ int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
     /* Delete with admin privileges */
     return mboxlist_deletemailbox(mboxname, sstate->userisadmin,
                                   sstate->userid, sstate->authstate,
-                                  NULL, 0, sstate->local_only, 1);
+                                  NULL, 0, sstate->local_only, 1, 0);
 }
 
 int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
@@ -3478,7 +3478,7 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
         const char *name = strarray_nth(list, i-1);
         r = mboxlist_deletemailbox(name, sstate->userisadmin,
                                    sstate->userid, sstate->authstate,
-                                   NULL, 0, sstate->local_only, 1);
+                                   NULL, 0, sstate->local_only, 1, 0);
         if (r) goto done;
     }
 

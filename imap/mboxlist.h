@@ -174,8 +174,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin, const char *userid
                                const struct auth_state *auth_state,
                                struct mboxevent *mboxevent,
                                int checkacl,
-                               int localonly,
-                               int force);
+                               int localonly, int force, int keep_intermediaries);
 /* Delete a mailbox. */
 /* setting local_only disables any communication with the mupdate server
  * and deletes the mailbox from the filesystem regardless of if it is
@@ -187,7 +186,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin, const char *userid,
                            const struct auth_state *auth_state,
                            struct mboxevent *mboxevent,
                            int checkacl,
-                           int local_only, int force);
+                           int local_only, int force, int keep_intermediaries);
 
 /* rename a tree of mailboxes - renames mailbox plus any children */
 int mboxlist_renametree(const char *oldname, const char *newname,
