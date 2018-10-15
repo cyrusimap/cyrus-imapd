@@ -296,6 +296,9 @@ int mboxlist_unsetquota(const char *root);
 /* handle interemediates */
 int mboxlist_create_intermediaries(const char *mboxname, modseq_t modseq,
                                    strarray_t *inter, struct txn **tid);
+int mboxlist_delete_intermediaries(const char *mboxname, const char *untilname,
+                                   modseq_t modseq, strarray_t *inter,
+                                   struct txn **tid);
 int mboxlist_haschildren(const char *mboxname);
 
 /* open the mailboxes db */
