@@ -318,4 +318,7 @@ int mboxlist_abort(struct txn *tid);
 
 int mboxlist_delayed_delete_isenabled(void);
 
+/* Promote an intermediary mailbox to a real mailbox. */
+int mboxlist_promote_intermediary(const char *mboxname);
+
 #endif

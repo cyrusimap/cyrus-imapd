@@ -1226,6 +1226,53 @@ static int mboxlist_delete_intermediaries(const char *mboxname,
     return r;
 }
 
+EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
+{
+    mbentry_t *mbentry = NULL, *parent = NULL;
+    struct mailbox *mailbox = NULL;
+    int r = 0;
+    struct txn *tid = NULL;
+
+    r = mboxlist_lookup_allow_all(mboxname, &mbentry, &tid);
+    if (r || !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) goto done;
+
+    r = mboxlist_findparent(mboxname, &parent);
+    if (r) goto done;
+
+    r = mboxlist_create_partition(mboxname, parent->partition,
+                                  &mbentry->partition);
+    if (r) goto done;
+    mbentry->mbtype &= ~MBTYPE_INTERMEDIATE;
+    free(mbentry->acl);
+    mbentry->acl = xstrdupnull(parent->acl);
+
+    r = mailbox_create(mboxname, mbentry->mbtype,
+                       mbentry->partition, parent->acl,
+                       mbentry->uniqueid, 0 /* options */,
+                       mbentry->uidvalidity,
+                       mbentry->createdmodseq,
+                       mbentry->foldermodseq, &mailbox);
+    if (r) goto done;
+
+    r = mailbox_add_conversations(mailbox, /*silent*/1);
+    if (r) goto done;
+
+    r = mboxlist_update_entry(mboxname, mbentry, &tid);
+    if (r) goto done;
+
+done:
+    mailbox_close(&mailbox);
+    if (tid) {
+        if (r) cyrusdb_abort(mbdb, tid);
+        else {
+            r = cyrusdb_commit(mbdb, tid);
+        }
+    }
+    mboxlist_entry_free(&mbentry);
+    mboxlist_entry_free(&parent);
+    return r;
+}
+
 /*
  * Create a mailbox
  *
