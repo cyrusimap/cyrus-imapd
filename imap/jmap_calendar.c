@@ -554,14 +554,14 @@ static int jmap_calendar_changes(struct jmap_req *req)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
     json_t *err = NULL;
-    int r;
+    int r = 0;
 
     r = caldav_create_defaultcalendars(req->accountid);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* The account exists but does not have a root mailbox. */
         jmap_error(req, json_pack("{s:s}", "type", "accountNoCalendars"));
         return 0;
-    } else if (r) return r;
+    } else if (r) goto done;
 
     /* Parse request */
     jmap_changes_parse(req->args, &parser, NULL, NULL, &changes, &err);
@@ -579,6 +579,7 @@ static int jmap_calendar_changes(struct jmap_req *req)
     free(mboxname);
     if (r) {
         jmap_error(req, json_pack("{s:s}", "type", "cannotCalculateChanges"));
+        r = 0;
         goto done;
     }
 
@@ -592,7 +593,10 @@ static int jmap_calendar_changes(struct jmap_req *req)
   done:
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
-    return r;
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+    }
+    return 0;
 }
 
 /* jmap calendar APIs */
@@ -2259,12 +2263,13 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
         strcmp(req->accountid, req->userid) /* check_acl */,
         NULL         /*mboxrights*/
     };
-    int r = -1;
+    int r = 0;
 
     db = caldav_open_userid(req->accountid);
     if (!db) {
         syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->accountid);
-        return IMAP_INTERNAL;
+        r = IMAP_INTERNAL;
+        goto done;
     }
 
     /* Parse request */
@@ -2297,7 +2302,10 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
         free(rock.mboxrights);
     }
     if (db) caldav_close(db);
-    return r;
+    if (r) {
+        jmap_error(req, jmap_server_error(r));
+    }
+    return 0;
 }
 
 static void match_fuzzy(search_expr_t *parent, const char *s, const char *name)

@@ -1754,7 +1754,7 @@ HIDDEN void jmap_changes_parse(json_t *jargs,
             if (json_is_string(arg)) {
                 changes->since_modseq = atomodseq_t(json_string_value(arg));
             }
-            if (!changes->since_modseq) {
+            else {
                 jmap_parser_invalid(parser, "sinceState");
             }
         }
@@ -1776,6 +1776,9 @@ HIDDEN void jmap_changes_parse(json_t *jargs,
     if (json_array_size(parser->invalid)) {
         *err = json_pack("{s:s s:O}", "type", "invalidArguments",
                 "arguments", parser->invalid);
+    }
+    else if (!changes->since_modseq) {
+        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
     }
 }
 
