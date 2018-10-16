@@ -2132,6 +2132,12 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
 
     if (!oldprop) return (newprop != NULL);
     else if (!newprop) return 1;
+    else if (kind == ICAL_DURATION_PROPERTY) {
+        struct icaldurationtype olddur = icalproperty_get_duration(oldprop);
+        struct icaldurationtype newdur = icalproperty_get_duration(newprop);
+
+        return (icaldurationtype_as_int(olddur) != icaldurationtype_as_int(newdur));
+    }
     else if ((kind == ICAL_RDATE_PROPERTY) || (kind == ICAL_EXDATE_PROPERTY)) {
         const char *str;
         uint32_t old_crc = 0, new_crc = 0;
