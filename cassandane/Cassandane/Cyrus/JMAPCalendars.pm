@@ -2936,6 +2936,20 @@ sub test_calendarevent_changes
     $state = $res->[0][1]{newState};
 }
 
+sub test_calendarevent_changes_issue2558
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "get calendar event updates with bad state";
+    my $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => '0' }, "R1"]]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+    $self->assert_str_equals('R1', $res->[0][2]);
+}
+
 sub test_calendarevent_query
     :min_version_3_1 :needs_component_jmap
 {
