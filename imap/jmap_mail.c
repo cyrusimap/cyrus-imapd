@@ -184,6 +184,35 @@ typedef enum MsgType {
         MSG_IS_ATTACHED = 1,
 } MsgType;
 
+struct _mbentry_by_uniqueid_rock {
+    const char *uniqueid;
+    mbentry_t **mbentry;
+};
+
+static int _mbentry_by_uniqueid_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct _mbentry_by_uniqueid_rock *data = rock;
+    if (strcmp(mbentry->uniqueid, data->uniqueid))
+        return 0;
+    *(data->mbentry) = mboxlist_entry_copy(mbentry);
+    return IMAP_OK_COMPLETED;
+}
+
+static mbentry_t *_mbentry_by_uniqueid(jmap_req_t *req, const char *id)
+{
+    mbentry_t *mbentry = NULL;
+
+    struct _mbentry_by_uniqueid_rock rock = { id, &mbentry };
+    int r = mboxlist_usermboxtree(req->accountid, req->authstate,
+                                  _mbentry_by_uniqueid_cb, &rock,
+                                  MBOXTREE_INTERMEDIATES);
+    if (r != IMAP_OK_COMPLETED && mbentry) {
+        mboxlist_entry_free(&mbentry);
+        mbentry = NULL;
+    }
+    return mbentry;
+}
+
 
 /*
  * Emails
@@ -1468,12 +1497,13 @@ static void _email_search_type(search_expr_t *parent, const char *s)
 }
 
 static void _email_search_mbox(jmap_req_t *req, search_expr_t *parent,
-                          json_t *mailbox, int is_not)
+                               json_t *mailbox, int is_not)
 {
     search_expr_t *e;
     const char *s = json_string_value(mailbox);
-    char *mboxname = jmap_mbox_find(req, s);
-    if (!mboxname) {
+    mbentry_t *mbentry = _mbentry_by_uniqueid(req, s);
+    if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
+        mboxlist_entry_free(&mbentry);
         /* XXX - add a "never match" terminal */
         return;
     }
@@ -1484,7 +1514,8 @@ static void _email_search_mbox(jmap_req_t *req, search_expr_t *parent,
 
     e = search_expr_new(parent, SEOP_MATCH);
     e->attr = search_attr_find("folder");
-    e->value.s = mboxname; // takes ownership
+    e->value.s = xstrdup(mbentry->name);
+    mboxlist_entry_free(&mbentry);
 }
 
 static void _email_search_keyword(search_expr_t *parent, const char *keyword)
@@ -1735,12 +1766,15 @@ static void _email_parse_filter(json_t *filter, struct jmap_parser *parser,
 
     json_object_foreach(filter, field, arg) {
         if (!strcmp(field, "inMailbox")) {
-            char *n = NULL;
-            if (!json_is_string(arg) ||
-                !(n = jmap_mbox_find(req, json_string_value(arg)))) {
+            if (!json_is_string(arg)) {
+                jmap_parser_invalid(parser, field);
+                continue;
+            }
+            mbentry_t *mbentry = _mbentry_by_uniqueid(req, json_string_value(arg));
+            if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
                 jmap_parser_invalid(parser, field);
             }
-            free(n);
+            mboxlist_entry_free(&mbentry);
         }
         else if (!strcmp(field, "inMailboxOtherThan")) {
             if (!json_is_array(arg)) {
@@ -1749,15 +1783,18 @@ static void _email_parse_filter(json_t *filter, struct jmap_parser *parser,
             else {
                 size_t i;
                 json_array_foreach(arg, i, val) {
-                    char *n = NULL;
-                    if (!json_is_string(val) ||
-                        !(s = json_string_value(val)) ||
-                        !(n = jmap_mbox_find(req, s))) {
+                    const char *s = json_string_value(val);
+                    int is_valid = 0;
+                    if (s) {
+                        mbentry_t *mbentry = _mbentry_by_uniqueid(req, s);
+                        is_valid = mbentry && jmap_hasrights(req, mbentry, ACL_LOOKUP);
+                        mboxlist_entry_free(&mbentry);
+                    }
+                    if (!is_valid) {
                         jmap_parser_push_index(parser, field, i, s);
                         jmap_parser_invalid(parser, NULL);
                         jmap_parser_pop(parser);
                     }
-                    free(n);
                 }
             }
         }
@@ -5739,32 +5776,46 @@ static void _email_append(jmap_req_t *req,
     /* Pick the mailbox to create the message in, prefer Drafts */
     mailboxes = json_pack("{}"); /* maps mailbox ids to mboxnames */
     json_object_foreach(mailboxids, id, val) {
+        /* Lookup mailbox */
         if (id && *id == '#') {
             id = jmap_lookup_id(req, id + 1);
         }
         if (!id) continue;
+        mbentry_t *mbentry = _mbentry_by_uniqueid(req, id);
+        if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
+            r = IMAP_MAILBOX_NONEXISTENT;
+            goto done;
+        }
 
-        char *name = jmap_mbox_find(req, id);
-        if (!name) continue;
+        /* Convert intermediary mailbox to real mailbox */
+        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+            r = mboxlist_promote_intermediary(mbentry->name);
+            if (r) goto done;
+        }
 
-        mbname_t *mbname = mbname_from_intname(name);
-        char *role = jmap_mbox_get_role(req, mbname);
-        mbname_free(&mbname);
-        if (role) {
-            if (!strcmp(role, "drafts")) {
-                if (mboxname) {
-                    free(mboxname);
-                }
-                mboxname = xstrdup(name);
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
+
+        /* Is this the draft mailbox? */
+        struct buf buf = BUF_INITIALIZER;
+        annotatemore_lookup(mbname_intname(mbname), "/specialuse",
+                            req->accountid, &buf);
+        if (buf.len) {
+            strarray_t *uses = strarray_split(buf_cstring(&buf), " ", STRARRAY_TRIM);
+            if (strarray_find_case(uses, "\\Drafts", 0)) {
+                if (mboxname) free(mboxname);
+                mboxname = xstrdup(mbentry->name);
             }
+            strarray_free(uses);
         }
+        buf_free(&buf);
+        mbname_free(&mbname);
 
-        if (!mboxname) {
-            mboxname = xstrdup(name);
-        }
-        json_object_set_new(mailboxes, id, json_string(name));
-        if (name) free(name);
-        if (role) free(role);
+        /* If we haven't picked a mailbox, pick this one. */
+        if (!mboxname) mboxname = xstrdup(mbentry->name);
+
+        /* Map mailbox id to mailbox name. */
+        json_object_set_new(mailboxes, id, json_string(mbentry->name));
+        mboxlist_entry_free(&mbentry);
     }
     if (!mboxname) {
         char *s = json_dumps(mailboxids, 0);
@@ -8703,7 +8754,16 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
         struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
         if (!plan) {
             struct mailbox *mbox = NULL;
-            int r = jmap_openmbox(req, mboxrec->mboxname, &mbox, /*rw*/1);
+            mbentry_t *mbentry = _mbentry_by_uniqueid(req, mboxrec->mbox_id);
+            int r = 0;
+            if (mbentry && mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+                r = mboxlist_promote_intermediary(mbentry->name);
+            }
+            else if (!mbentry) {
+                r = IMAP_MAILBOX_NONEXISTENT;
+            }
+            mboxlist_entry_free(&mbentry);
+            if (!r) r = jmap_openmbox(req, mboxrec->mboxname, &mbox, /*rw*/1);
             if (r) {
                 int j;
                 for (j = 0; j < ptrarray_size(&mboxrec->uidrecs); j++) {
@@ -8771,9 +8831,13 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
                 continue;
             }
             struct mailbox *mbox = NULL;
-            char *mboxname = mboxlist_find_uniqueid(mbox_id, req->accountid, req->authstate);
-            if (mboxname) {
-                jmap_openmbox(req, mboxname, &mbox, /*rw*/1);
+            mbentry_t *mbentry = _mbentry_by_uniqueid(req, mbox_id);
+            if (mbentry) {
+                int r = 0;
+                if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+                    r = mboxlist_promote_intermediary(mbentry->name);
+                }
+                if (!r) jmap_openmbox(req, mbentry->name, &mbox, /*rw*/1);
             }
             if (mbox) {
                 struct email_mboxrec *mboxrec = xzmalloc(sizeof(struct email_mboxrec));
@@ -8787,7 +8851,7 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
                         json_pack("{s:s s:[s]}", "type", "invalidProperties",
                             "properties", "mailboxIds"));
             }
-            free(mboxname);
+            mboxlist_entry_free(&mbentry);
         }
     }
 
@@ -9557,11 +9621,15 @@ static int jmap_email_import(jmap_req_t *req)
                 if (*mboxid == '#') {
                     mboxid = jmap_lookup_id(req, mboxid + 1);
                 }
-                char *mboxname = jmap_mbox_find(req, mboxid);
-                if (!mboxid || !mboxname || val != json_true()) {
+                if (!mboxid || val != json_true()) {
+                    jmap_parser_invalid(&parser, s);
+                    continue;
+                }
+                mbentry_t *mbentry = _mbentry_by_uniqueid(req, mboxid);
+                if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
                     jmap_parser_invalid(&parser, s);
                 }
-                free(mboxname);
+                mboxlist_entry_free(&mbentry);
             }
             jmap_parser_pop(&parser);
         }
@@ -9617,8 +9685,8 @@ static int _email_copy_checkmbox_cb(const mbentry_t *mbentry, void *_rock)
 {
     struct _email_copy_checkmbox_rock *rock = _rock;
 
-    /* Ignore unwanted mailboxes */
-    if (!mbentry || mbentry->mbtype != MBTYPE_EMAIL) {
+    /* Ignore anything but regular and intermediate mailboxes */
+    if (!mbentry || (mbentry->mbtype & ~MBTYPE_INTERMEDIATE)) {
         return 0;
     }
     if (!json_object_get(rock->dst_mboxids, mbentry->uniqueid)) {
@@ -9928,7 +9996,8 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
         req, json_object_get(copy_email, "mailboxIds"), &dst_mboxnames
     };
     r = mboxlist_usermboxtree(to_account_id, httpd_authstate,
-                              _email_copy_checkmbox_cb, &checkmbox_rock, 0);
+                              _email_copy_checkmbox_cb, &checkmbox_rock,
+                              MBOXTREE_INTERMEDIATES);
     if (r != IMAP_OK_COMPLETED) {
         if (r == 0 || r == IMAP_PERMISSION_DENIED) {
             *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
@@ -9941,14 +10010,22 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     /* Copy message record to mailboxes */
     char *dst_mboxname;
     while ((dst_mboxname = strarray_pop(&dst_mboxnames))) {
-        struct mailbox *dst_mbox = NULL;
-        r = jmap_openmbox(req, dst_mboxname, &dst_mbox, /*rw*/1);
-        if (!r) {
-            r = _copy_msgrecord(httpd_authstate, to_account_id,
-                    &jmap_namespace, src_mbox, dst_mbox, src_mr);
+        mbentry_t *mbentry = NULL;
+        r = mboxlist_lookup_allow_all(dst_mboxname, &mbentry, NULL);
+        if (!r && (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
+            r = mboxlist_promote_intermediary(dst_mboxname);
         }
-        jmap_closembox(req, &dst_mbox);
-        free(dst_mboxname);
+        if (!r) {
+            struct mailbox *dst_mbox = NULL;
+            r = jmap_openmbox(req, dst_mboxname, &dst_mbox, /*rw*/1);
+            if (!r) {
+                r = _copy_msgrecord(httpd_authstate, to_account_id,
+                        &jmap_namespace, src_mbox, dst_mbox, src_mr);
+            }
+            jmap_closembox(req, &dst_mbox);
+            free(dst_mboxname);
+        }
+        mboxlist_entry_free(&mbentry);
         if (r) goto done;
     }
 
