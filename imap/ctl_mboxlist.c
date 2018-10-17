@@ -406,7 +406,7 @@ static int yes(void)
  *    mupdate.
  */
 
-static void do_dump(enum mboxop op, const char *part, int purge)
+static void do_dump(enum mboxop op, const char *part, int purge, int intermediary)
 {
     struct dumprock d;
     int ret;
@@ -460,7 +460,9 @@ static void do_dump(enum mboxop op, const char *part, int purge)
     }
 
     /* Dump Database */
-    mboxlist_allmbox("", &dump_cb, &d, MBOXTREE_TOMBSTONES);
+    int flags = MBOXTREE_TOMBSTONES;
+    if (intermediary) flags |= MBOXTREE_INTERMEDIATES;
+    mboxlist_allmbox("", &dump_cb, &d, flags);
 
     if (op == M_POPULATE) {
         /* Remove MBTYPE_MOVING flags (unflag_head) */
@@ -873,7 +875,7 @@ static void do_verify(void)
 static void usage(void)
 {
     fprintf(stderr, "DUMP:\n");
-    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -d [-x] [-p partition] [-f filename]\n");
+    fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -d [-x] [-y] [-p partition] [-f filename]\n");
     fprintf(stderr, "UNDUMP:\n");
     fprintf(stderr,
             "  ctl_mboxlist [-C <alt_config>] -u [-f filename]"
@@ -893,8 +895,9 @@ int main(int argc, char *argv[])
     int opt;
     enum mboxop op = NONE;
     char *alt_config = NULL;
+    int dointermediary = 0;
 
-    while ((opt = getopt(argc, argv, "C:awmdurcxf:p:vi")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:awmdurcxf:p:viy")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -968,6 +971,10 @@ int main(int argc, char *argv[])
             interactive = 1;
             break;
 
+        case 'y':
+            dointermediary = 1;
+            break;
+
         default:
             usage();
             break;
@@ -977,6 +984,7 @@ int main(int argc, char *argv[])
     if (op != M_POPULATE && (local_authoritative || warn_only)) usage();
     if (op != DUMP && partition) usage();
     if (op != DUMP && dopurge) usage();
+    if (op != DUMP && dointermediary) usage();
 
     if (op == RECOVER) {
         syslog(LOG_NOTICE, "running mboxlist recovery");
@@ -1009,7 +1017,7 @@ int main(int argc, char *argv[])
         mboxlist_init(0);
         mboxlist_open(mboxdb_fname);
 
-        do_dump(op, partition, dopurge);
+        do_dump(op, partition, dopurge, dointermediary);
 
         mboxlist_close();
         mboxlist_done();
