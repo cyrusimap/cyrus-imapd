@@ -992,7 +992,15 @@ sub test_mailbox_querychanges_name
     $res = $jmap->CallMethods([['Mailbox/query', {
         filter => { parentId => $inboxId },
         sort => [{ property => "name" }],
-    }, "R1"]]);
+    }, "R1"],
+    [
+        'Mailbox/get', { '#ids' => {
+                resultOf => 'R1',
+                name => 'Mailbox/query',
+                path => '/ids'
+            },
+        }, 'R2'
+    ]]);
     my $state = $res->[0][1]->{queryState};
     $self->assert_not_null($state);
     $self->assert_equals(JSON::true, $res->[0][1]->{canCalculateChanges});
@@ -1298,7 +1306,7 @@ sub test_mailbox_set_inbox_children
         or die "Cannot create mailbox INBOX.INBOX.foo.bar: $@";
 
     xlog "get existing mailboxes";
-    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    my $res = $jmap->CallMethods([['Mailbox/get', { properties => ['name', 'parentId']}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'Mailbox/get');
     $self->assert_str_equals($res->[0][2], 'R1');
@@ -1327,7 +1335,7 @@ sub test_mailbox_set_inbox_children
         },
     }, "R1"]]);
 
-    $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $res = $jmap->CallMethods([['Mailbox/get', { properties => ['name', 'parentId']}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'Mailbox/get');
     $self->assert_str_equals($res->[0][2], 'R1');
@@ -12637,56 +12645,6 @@ sub test_mailbox_set_issue2377
     $self->assert_not_null($res->[0][1]{notCreated}{'1'});
 }
 
-sub test_mailbox_intermediate_folders
-    :min_version_3_1 :needs_component_jmap
-{
-    my ($self) = @_;
-
-    my $jmap = $self->{jmap};
-
-    my $imaptalk = $self->{store}->get_client();
-
-    $imaptalk->create("INBOX.A.B.C");
-
-    xlog "get existing mailboxes";
-    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals($res->[0][0], 'Mailbox/get');
-    $self->assert_str_equals($res->[0][2], 'R1');
-
-    my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    $self->assert_num_equals(scalar keys %m, 4);
-    my $inbox = $m{"Inbox"};
-    my $a = $m{"A"};
-    my $b = $m{"B"};
-    my $c = $m{"C"};
-
-    $self->assert_null($inbox->{parentId});
-    $self->assert_null($a->{parentId});
-    $self->assert_str_equals($b->{parentId}, $a->{id});
-    $self->assert_str_equals($c->{parentId}, $b->{id});
-
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { create => { "1" => {
-                            name => "A",
-             }}}, "R1"]
-    ]);
-
-    $self->assert_not_null($res->[0][1]{created}{1});
-
-    $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals($res->[0][0], 'Mailbox/get');
-    $self->assert_str_equals($res->[0][2], 'R1');
-    %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    $self->assert_num_equals(scalar keys %m, 4);
-    $a = $m{"A"};
-    $b = $m{"B"};
-
-    $self->assert_null($a->{parentId});
-    $self->assert_str_equals($b->{parentId}, $a->{id});
-}
-
 sub test_implementation_email_query
     :min_version_3_1 :needs_component_jmap
 {
@@ -13453,6 +13411,666 @@ EOF
     $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{bodyValues}{1}{isEncodingProblem});
 }
 
+sub test_mailbox_querychanges_intermediary_added
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Fetch initial mailbox state";
+    my $res = $jmap->CallMethods([['Mailbox/query', {
+        sort => [{ property => "name" }],
+    }, "R1"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_equals(JSON::true, $res->[0][1]->{canCalculateChanges});
+    my $state = $res->[0][1]->{queryState};
+    $self->assert_not_null($state);
+
+    xlog "Create intermediate mailboxes via IMAP";
+    $imap->create("INBOX.A.B.Z") or die;
+
+    xlog "Fetch updated mailbox state";
+    $res = $jmap->CallMethods([['Mailbox/queryChanges', {
+        sinceQueryState => $state,
+        sort => [{ property => "name" }],
+    }, "R1"]]);
+    $self->assert_str_not_equals($state, $res->[0][1]->{newQueryState});
+    my @ids = map { $_->{id} } @{$res->[0][1]->{added}};
+    $self->assert_num_equals(3, scalar @ids);
+
+    xlog "Make sure intermediate mailboxes got reported";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            ids => \@ids, properties => ['name'],
+        }, "R1"]
+    ]);
+    $self->assert_not_null('A', $res->[0][1]{list}[0]{name});
+    $self->assert_not_null('B', $res->[0][1]{list}[1]{name});
+    $self->assert_not_null('Z', $res->[0][1]{list}[2]{name});
+}
+
+sub test_mailbox_querychanges_intermediary_removed
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Create intermediate mailboxes via IMAP";
+    $imap->create("INBOX.A.B.Z") or die;
+
+    xlog "Fetch initial mailbox state";
+    my $res = $jmap->CallMethods([['Mailbox/query', {
+        sort => [{ property => "name" }],
+    }, "R1"]]);
+    $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
+    $self->assert_equals(JSON::true, $res->[0][1]->{canCalculateChanges});
+    my $state = $res->[0][1]->{queryState};
+    $self->assert_not_null($state);
+
+    xlog "Delete intermediate mailboxes via IMAP";
+    $imap->delete("INBOX.A.B.Z") or die;
+
+    xlog "Fetch updated mailbox state";
+    $res = $jmap->CallMethods([['Mailbox/queryChanges', {
+        sinceQueryState => $state,
+        sort => [{ property => "name" }],
+    }, "R1"]]);
+    $self->assert_str_not_equals($state, $res->[0][1]->{newQueryState});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{removed}});
+}
+
+sub test_mailbox_get_intermediate
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Create intermediate mailbox via IMAP";
+    $imap->create("INBOX.A.Z") or die;
+
+    xlog "Get mailboxes";
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{list}});
+
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxA = $mboxByName{"A"};
+
+    $self->assert_str_equals('A', $mboxA->{name});
+    $self->assert_null($mboxA->{parentId});
+    $self->assert_null($mboxA->{role});
+    $self->assert_num_equals(0, $mboxA->{sortOrder}, 0);
+    $self->assert_equals(JSON::true, $mboxA->{myRights}->{mayReadItems});
+    $self->assert_equals(JSON::true, $mboxA->{myRights}->{mayAddItems});
+    $self->assert_equals(JSON::true, $mboxA->{myRights}->{mayRemoveItems});
+    $self->assert_equals(JSON::true, $mboxA->{myRights}->{mayCreateChild});
+    $self->assert_equals(JSON::true, $mboxA->{myRights}->{mayRename});
+    $self->assert_equals(JSON::true, $mboxA->{myRights}->{mayDelete});
+    $self->assert_num_equals($mboxA->{totalEmails}, 0);
+    $self->assert_num_equals($mboxA->{unreadEmails}, 0);
+    $self->assert_num_equals($mboxA->{totalThreads}, 0);
+    $self->assert_num_equals($mboxA->{unreadThreads}, 0);
+}
+
+sub test_mailbox_intermediary_imaprename_preservetree
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Create mailboxes";
+    $imap->create("INBOX.i1.i2.i3.foo") or die;
+    $imap->create("INBOX.i1.i2.bar") or die;
+    my $res = $jmap->CallMethods([['Mailbox/get', {
+        properties => ['name', 'parentId'],
+    }, "R1"]]);
+
+    xlog "Assert mailbox tree";
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(6, scalar keys %mboxByName);
+    $self->assert_not_null($mboxByName{'Inbox'});
+    $self->assert_not_null($mboxByName{'i1'});
+    $self->assert_not_null($mboxByName{'i2'});
+    $self->assert_not_null($mboxByName{'i3'});
+    $self->assert_not_null($mboxByName{'foo'});
+    $self->assert_not_null($mboxByName{'bar'});
+    $self->assert_null($mboxByName{i1}->{parentId});
+    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i2}->{parentId});
+    $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{i3}->{parentId});
+    $self->assert_str_equals($mboxByName{i3}->{id}, $mboxByName{foo}->{parentId});
+    $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{bar}->{parentId});
+
+    xlog "Rename mailbox";
+    $imap->rename("INBOX.i1.i2.i3.foo", "INBOX.i1.i4.baz") or die;
+
+    xlog "Assert mailbox tree";
+    $res = $jmap->CallMethods([['Mailbox/get', {
+        properties => ['name', 'parentId'],
+    }, "R1"]]);
+    %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(6, scalar keys %mboxByName);
+    $self->assert_not_null($mboxByName{'Inbox'});
+    $self->assert_not_null($mboxByName{'i1'});
+    $self->assert_not_null($mboxByName{'i2'});
+    $self->assert_not_null($mboxByName{'i4'});
+    $self->assert_not_null($mboxByName{'bar'});
+    $self->assert_not_null($mboxByName{'baz'});
+    $self->assert_null($mboxByName{i1}->{parentId});
+    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i2}->{parentId});
+    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i4}->{parentId});
+    $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{bar}->{parentId});
+    $self->assert_str_equals($mboxByName{i4}->{id}, $mboxByName{baz}->{parentId});
+}
+
+sub test_mailbox_set_intermediary_createchild
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Create mailboxes";
+    $imap->create("INBOX.i1.i2.i3.foo") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                1 => {
+                    name => 'bar',
+                    parentId => $mboxByName{'i2'}->{id},
+                },
+            }
+        }, 'R1']
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{1}{id});
+
+    xlog "Assert mailbox tree";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(6, scalar keys %mboxByName);
+    $self->assert_not_null($mboxByName{'Inbox'});
+    $self->assert_not_null($mboxByName{'i1'});
+    $self->assert_not_null($mboxByName{'i2'});
+    $self->assert_not_null($mboxByName{'i3'});
+    $self->assert_not_null($mboxByName{'foo'});
+    $self->assert_not_null($mboxByName{'bar'});
+    $self->assert_null($mboxByName{i1}->{parentId});
+    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i2}->{parentId});
+    $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{i3}->{parentId});
+    $self->assert_str_equals($mboxByName{i3}->{id}, $mboxByName{foo}->{parentId});
+    $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{bar}->{parentId});
+}
+
+sub test_mailbox_set_intermediary_rename
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Create mailboxes";
+    $imap->create("INBOX.i1.i2.foo") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxId = $mboxByName{'i2'}->{id};
+    my $mboxIdParent = $mboxByName{'i2'}->{parentId};
+    $self->assert_not_null($mboxIdParent);
+
+    xlog "Rename intermediate";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxId => {
+                    name => 'i3',
+                },
+            }
+        }, 'R1'],
+        ['Mailbox/get', {
+            ids => [$mboxId],
+            properties => ['name', 'parentId'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$mboxId});
+    $self->assert_str_equals('i3', $res->[1][1]{list}[0]{name});
+    $self->assert_str_equals($mboxIdParent, $res->[1][1]{list}[0]{parentId});
+
+    xlog "Assert mailbox tree";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(4, scalar keys %mboxByName);
+    $self->assert_not_null($mboxByName{'Inbox'});
+    $self->assert_not_null($mboxByName{'i1'});
+    $self->assert_not_null($mboxByName{'i3'});
+    $self->assert_not_null($mboxByName{'foo'});
+    $self->assert_null($mboxByName{i1}->{parentId});
+    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i3}->{parentId});
+    $self->assert_str_equals($mboxByName{i3}->{id}, $mboxByName{foo}->{parentId});
+}
+
+sub test_mailbox_set_intermediary_annotation
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Create mailboxes";
+    $imap->create("INBOX.i1.foo") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId', 'sortOrder'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxId = $mboxByName{'i1'}->{id};
+    $self->assert_num_equals(0, $mboxByName{'i1'}->{sortOrder});
+    $self->assert_null($mboxByName{'i1'}->{parentId});
+
+    xlog "Set annotation on intermediate";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxId => {
+                    sortOrder => 7,
+                },
+            }
+        }, 'R1'],
+        ['Mailbox/get', {
+            ids => [$mboxId],
+            properties => ['name', 'parentId', 'sortOrder'],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$mboxId});
+    $self->assert_num_equals(7, $res->[1][1]{list}[0]->{sortOrder});
+
+    xlog "Assert mailbox tree";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(3, scalar keys %mboxByName);
+    $self->assert_not_null($mboxByName{'Inbox'});
+    $self->assert_not_null($mboxByName{'i1'});
+    $self->assert_not_null($mboxByName{'foo'});
+    $self->assert_null($mboxByName{i1}->{parentId});
+    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{foo}->{parentId});
+}
+
+sub test_mailbox_set_intermediary_destroy_child
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Create mailboxes";
+    $imap->create("INBOX.i1.i2.foo") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxIdFoo = $mboxByName{'foo'}->{id};
+    my $mboxId1 = $mboxByName{'i1'}->{id};
+    my $mboxId2 = $mboxByName{'i2'}->{id};
+    my $state = $res->[0][1]{state};
+
+    xlog "Destroy child of intermediate";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            destroy => [$mboxIdFoo],
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals($mboxIdFoo, $res->[0][1]{destroyed}[0]);
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $state = $res->[0][1]{newState};
+
+    xlog "Assert mailbox tree and changes";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"],
+        ['Mailbox/changes', {
+            sinceState => $state,
+        }, 'R2'],
+    ]);
+
+    # All intermediaries without real children are gone.
+    %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(1, scalar keys %mboxByName);
+    $self->assert_not_null($mboxByName{'Inbox'});
+
+    # But Mailbox/changes reports the implicitly destroyed mailboxes.
+    $self->assert_num_equals(2, scalar @{$res->[1][1]{destroyed}});
+    my %destroyed = map { $_ => 1 } @{$res->[1][1]{destroyed}};
+    $self->assert_not_null($destroyed{$mboxId1});
+    $self->assert_not_null($destroyed{$mboxId2});
+}
+
+sub test_mailbox_set_intermediary_move_child
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Create mailboxes";
+    $imap->create("INBOX.i1.i2.foo") or die;
+    $imap->create("INBOX.i1.i3.bar") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxIdFoo = $mboxByName{'foo'}->{id};
+    my $mboxId1 = $mboxByName{'i1'}->{id};
+    my $mboxId2 = $mboxByName{'i2'}->{id};
+    my $mboxId3 = $mboxByName{'i3'}->{id};
+    my $mboxIdBar = $mboxByName{'bar'}->{id};
+    my $state = $res->[0][1]{state};
+
+    xlog "Move child of intermediary to another intermediary";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxIdBar => {
+                    parentId => $mboxId2,
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$mboxIdBar});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $state = $res->[0][1]{newState};
+
+    xlog "Assert mailbox tree and changes";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"],
+        ['Mailbox/changes', {
+            sinceState => $state,
+        }, 'R2'],
+    ]);
+
+    # All intermediaries without real children are gone.
+    %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(5, scalar keys %mboxByName);
+    $self->assert_not_null($mboxByName{'Inbox'});
+    $self->assert_not_null($mboxByName{'i1'});
+    $self->assert_not_null($mboxByName{'i2'});
+    $self->assert_not_null($mboxByName{'foo'});
+    $self->assert_not_null($mboxByName{'bar'});
+    $self->assert_null($mboxByName{i1}->{parentId});
+    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{i2}->{parentId});
+    $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{foo}->{parentId});
+    $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{bar}->{parentId});
+
+    # But Mailbox/changes reports the implicitly destroyed mailboxes.
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{destroyed}});
+    $self->assert_str_equals($mboxId3, $res->[1][1]{destroyed}[0]);
+}
+
+sub test_mailbox_set_intermediary_destroy
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Create mailboxes";
+    $imap->create("INBOX.i1.i2.foo") or die;
+    $imap->create("INBOX.i1.bar") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxIdFoo = $mboxByName{'foo'}->{id};
+    my $mboxId2 = $mboxByName{'i2'}->{id};
+
+    xlog "Destroy intermediate";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            destroy => [$mboxId2, $mboxIdFoo],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{destroyed}});
+
+    xlog "Assert mailbox tree and changes";
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"],
+    ]);
+
+    # Intermediaries with real children are kept.
+    %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    $self->assert_num_equals(3, scalar keys %mboxByName);
+    $self->assert_not_null($mboxByName{'Inbox'});
+    $self->assert_not_null($mboxByName{'i1'});
+    $self->assert_not_null($mboxByName{'bar'});
+    $self->assert_null($mboxByName{i1}->{parentId});
+    $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{bar}->{parentId});
+}
+
+sub test_email_set_intermediary_create
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Create mailboxes";
+    $imap->create("INBOX.i1.foo") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxId1 = $mboxByName{'i1'}->{id};
+
+    xlog "Create email in intermediary mailbox";
+    my $email =  {
+        mailboxIds => {
+            $mboxId1 => JSON::true
+        },
+        from => [{
+            email => q{test1@local},
+            name => q{}
+        }],
+        to => [{
+            email => q{test2@local},
+            name => '',
+        }],
+        subject => 'foo',
+    };
+
+    xlog "create and get email";
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R1"],
+        ['Email/get', { ids => [ "#1" ] }, "R2" ],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{1});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{mailboxIds}{$mboxId1});
+}
+
+sub test_email_set_intermediary_move
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Create mailboxes";
+    $imap->create("INBOX.i1.foo") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxId1 = $mboxByName{'i1'}->{id};
+    my $mboxIdFoo = $mboxByName{'foo'}->{id};
+
+    xlog "Create email";
+    my $email =  {
+        mailboxIds => {
+            $mboxIdFoo => JSON::true
+        },
+        from => [{
+            email => q{test1@local},
+            name => q{}
+        }],
+        to => [{
+            email => q{test2@local},
+            name => '',
+        }],
+        subject => 'foo',
+    };
+    xlog "create and get email";
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { "1" => $email }}, "R1"],
+    ]);
+    my $emailId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($emailId);
+
+    xlog "Move email to intermediary mailbox";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailId => {
+                    mailboxIds => {
+                        $mboxId1 => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+        ['Email/get', { ids => [ $emailId ] }, "R2" ],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$emailId});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{mailboxIds}{$mboxId1});
+}
+
+sub test_email_copy_intermediary
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "Create user and share mailbox";
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.other", "cassandane", "lrsiwntex") or die;
+    $admintalk->create("user.other.i1.box") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            accountId => 'other',
+            properties => ['name'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $dstMboxId = $mboxByName{'i1'}->{id};
+    $self->assert_not_null($dstMboxId);
+
+    my $srcInboxId = $self->getinbox()->{id};
+    $self->assert_not_null($srcInboxId);
+
+    xlog "create email";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                1 => {
+                    mailboxIds => {
+                        $srcInboxId => JSON::true,
+                    },
+                    keywords => {
+                        'foo' => JSON::true,
+                    },
+                    subject => 'hello',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'world',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $emailId = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($emailId);
+
+    xlog "move email";
+    $res = $jmap->CallMethods([
+        ['Email/copy', {
+            fromAccountId => undef,
+            toAccountId => 'other',
+            create => {
+                1 => {
+                    id => $emailId,
+                    mailboxIds => {
+                        $dstMboxId => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+
+    my $copiedEmailId = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($copiedEmailId);
+
+    xlog "get copied email";
+    $res = $jmap->CallMethods([
+        ['Email/get', {
+            accountId => 'other',
+            ids => [$copiedEmailId],
+            properties => ['mailboxIds'],
+        }, 'R1']
+    ]);
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{mailboxIds}{$dstMboxId});
+}
 
 
 1;
