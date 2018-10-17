@@ -1660,7 +1660,8 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                auth_state,
                                mboxevent,
                                localonly /* local_only */,
-                               force, 1);
+                               force, 1,
+                               keep_intermediaries);
 
     if (!r && !mboxlist_haschildren(name) && !keep_intermediaries) {
         r = mboxlist_delete_intermediaries(name, NULL /*untilname */,
@@ -1872,6 +1873,7 @@ struct renmboxdata {
     int local_only;
     int ignorequota;
     int found;
+    int keep_intermediaries;
 };
 
 static int renamecheck(const mbentry_t *mbentry, void *rock)
@@ -1908,7 +1910,8 @@ static int dorename(const mbentry_t *mbentry, void *rock)
                                /*isadmin*/1, text->userid,
                                text->authstate,
                                /*mboxevent*/NULL,
-                               text->local_only, /*forceuser*/1, text->ignorequota);
+                               text->local_only, /*forceuser*/1, text->ignorequota,
+                               text->keep_intermediaries);
 
     return r;
 }
@@ -1918,7 +1921,8 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
                                  int isadmin, const char *userid,
                                  const struct auth_state *auth_state,
                                  struct mboxevent *mboxevent,
-                                 int local_only, int forceuser, int ignorequota)
+                                 int local_only, int forceuser, int ignorequota,
+                                 int keep_intermediaries)
 {
     struct renmboxdata rock;
     memset(&rock, 0, sizeof(struct renmboxdata));
@@ -1930,6 +1934,7 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
     rock.userid = userid;
     rock.local_only = local_only;
     rock.ignorequota = ignorequota;
+    rock.keep_intermediaries = keep_intermediaries;
     int r;
 
     /* first check that we can rename safely */
@@ -1942,7 +1947,8 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
                                isadmin, userid,
                                auth_state,
                                mboxevent,
-                               local_only, forceuser, ignorequota);
+                               local_only, forceuser, ignorequota,
+                               keep_intermediaries);
     // special-case only children exist
     if (r == IMAP_MAILBOX_NONEXISTENT && rock.found) r = 0;
     if (r) return r;
@@ -1962,7 +1968,8 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
                            int isadmin, const char *userid,
                            const struct auth_state *auth_state,
                            struct mboxevent *mboxevent,
-                           int local_only, int forceuser, int ignorequota)
+                           int local_only, int forceuser, int ignorequota,
+                           int keep_intermediaries)
 {
     int r;
     int mupdatecommiterror = 0;
@@ -2137,7 +2144,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 
             r = mboxlist_update_entry(oldname, oldmbentry, &tid);
 
-            if (!r && !mboxname_isdeletedmailbox(newname, NULL)) {
+            if (!r && !mboxname_isdeletedmailbox(newname, NULL) && !keep_intermediaries) {
                 char *untilname = mboxname_common_ancestor(oldname, newname);
                 r = mboxlist_delete_intermediaries(oldname, untilname,
                                                    oldmbentry->foldermodseq,

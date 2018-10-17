@@ -3220,7 +3220,8 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
 
     return mboxlist_renamemailbox(oldmboxname, newmboxname, partition,
                                   uidvalidity, 1, sstate->userid,
-                                  sstate->authstate, NULL, sstate->local_only, 1, 1);
+                                  sstate->authstate, NULL, sstate->local_only, 1, 1,
+                                  0/*keep_intermediaries*/);
 }
 
 int sync_apply_changesub(struct dlist *kin, struct sync_state *sstate)
