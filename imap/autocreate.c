@@ -197,7 +197,7 @@ static int autocreate_sieve(const char *userid, const char *source_script)
     sieve_script_t *s = NULL;
     bytecode_info_t *bc = NULL;
     char *err = NULL;
-    FILE *in_stream, *out_fp;
+    FILE *in_stream = NULL, *out_fp;
     int out_fd, in_fd, r, w;
     int do_compile = 0;
     const char *compiled_source_script = NULL;
