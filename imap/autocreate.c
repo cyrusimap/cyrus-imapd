@@ -94,7 +94,7 @@ static const char *get_script_name(const char *filename)
 }
 
 enum SieveFileType {
-    SIEVE_TMP_1 = 1,
+    SIEVE_TMP_1 = 0,
     SIEVE_TMP_2,
     SIEVE_BC_TMP,
     SIEVE_SCRIPT,
