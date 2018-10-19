@@ -75,8 +75,9 @@ my @dirvars = (
 
 my $boilerplate = << 'EOT'
 ## Boilerplate added by Cyrus fixsearchpath.pl
-my $__cyrus_destdir = '';
+my $__cyrus_destdir;
 BEGIN {
+    $__cyrus_destdir = '';
     if ($0 =~ m/\//) {
         my $d = $0;
 EOT
