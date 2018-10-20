@@ -290,36 +290,54 @@ EXPORTED char *mbentry_datapath(const struct mboxlist_entry *mbentry, uint32_t u
                              uid);
 }
 
+static void mboxlist_dbname_to_key(const char *dbname, size_t len,
+                                   struct buf *key)
+{
+    buf_setcstr(key, "N");
+    buf_appendmap(key, dbname, len);
+}
+
+static void mboxlist_dbname_from_key(const char *key, size_t len,
+                                     struct buf *dbname)
+{
+    buf_init_ro(dbname, key+1, len-1);
+}
+
 /*
  * read a single record from the mailboxes.db and return a pointer to it
  */
 static int mboxlist_read(const char *name, const char **dataptr, size_t *datalenptr,
                          struct txn **tid, int wrlock)
 {
+    struct buf key = BUF_INITIALIZER;
     int namelen = strlen(name);
     int r;
 
     if (!namelen)
         return IMAP_MAILBOX_NONEXISTENT;
 
+    mboxlist_dbname_to_key(name, namelen, &key);
+
     if (wrlock) {
-        r = cyrusdb_fetchlock(mbdb, name, namelen, dataptr, datalenptr, tid);
+        r = cyrusdb_fetchlock(mbdb, buf_base(&key), buf_len(&key),
+                              dataptr, datalenptr, tid);
     } else {
-        r = cyrusdb_fetch(mbdb, name, namelen, dataptr, datalenptr, tid);
+        r = cyrusdb_fetch(mbdb, buf_base(&key), buf_len(&key),
+                          dataptr, datalenptr, tid);
     }
 
     switch (r) {
     case CYRUSDB_OK:
         /* no entry required, just checking if it exists */
-        return 0;
+        r = 0;
         break;
 
     case CYRUSDB_AGAIN:
-        return IMAP_AGAIN;
+        r = IMAP_AGAIN;
         break;
 
     case CYRUSDB_NOTFOUND:
-        return IMAP_MAILBOX_NONEXISTENT;
+        r = IMAP_MAILBOX_NONEXISTENT;
         break;
 
     default:
@@ -329,12 +347,13 @@ static int mboxlist_read(const char *name, const char **dataptr, size_t *datalen
                          "mailbox=<%s> error=<%s>",
                          intname, cyrusdb_strerror(r));
         free(intname);
-        return IMAP_IOERROR;
+        r = IMAP_IOERROR;
         break;
     }
     }
 
-    /* never get here */
+    buf_free(&key);
+    return r;
 }
 
 EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
@@ -829,6 +848,7 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
 static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, struct txn **txn)
 {
     char *dbname = mboxname_to_dbname(name);
+    struct buf key = BUF_INITIALIZER;
     mbentry_t *old = NULL;
     int r = 0;
 
@@ -839,9 +859,13 @@ static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, str
         /* XXX return value here is discarded? */
     }
 
+    mboxlist_dbname_to_key(dbname, strlen(dbname), &key);
+    free(dbname);
+
     if (mbentry) {
         char *mboxent = mboxlist_entry_cstring(mbentry);
-        r = cyrusdb_store(mbdb, dbname, strlen(dbname), mboxent, strlen(mboxent), txn);
+        r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
+                          mboxent, strlen(mboxent), txn);
         free(mboxent);
 
         if (!r && config_auditlog) {
@@ -856,11 +880,12 @@ static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, str
         }
     }
     else {
-        r = cyrusdb_delete(mbdb, dbname, strlen(dbname), txn, /*force*/1);
+        r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key),
+                           txn, /*force*/1);
     }
-    free(dbname);
 
     mboxlist_entry_free(&old);
+    buf_free(&key);
     return r;
 }
 
@@ -3025,17 +3050,16 @@ static int find_p(void *rockp,
                   const char *data, size_t datalen)
 {
     struct find_rock *rock = (struct find_rock *) rockp;
-    char intname[MAX_MAILBOX_PATH+1];
+    struct buf dbname = BUF_INITIALIZER;
     int i;
 
     /* skip any $RACL or future $ space keys */
     if (key[0] == '$') return 0;
 
-    memcpy(intname, key, keylen);
-    intname[keylen] = 0;
+    mboxlist_dbname_from_key(key, keylen, &dbname);
 
     assert(!rock->mbname);
-    rock->mbname = mbname_from_dbname(intname);
+    rock->mbname = mbname_from_dbname(buf_cstring(&dbname));
 
     if (!rock->isadmin && !config_getswitch(IMAPOPT_CROSSDOMAINS)) {
         /* don't list mailboxes outside of the default domain */
@@ -3070,7 +3094,9 @@ static int find_p(void *rockp,
         goto good;
 
     /* ignore entirely deleted records */
-    if (mboxlist_parse_entry(&rock->mbentry, key, keylen, data, datalen))
+    if (mboxlist_parse_entry(&rock->mbentry,
+                             buf_cstring(&dbname), buf_len(&dbname),
+                             data, datalen))
         goto nomatch;
 
     /* nobody sees tombstones */
@@ -3090,6 +3116,8 @@ static int find_p(void *rockp,
     }
 
 good:
+    buf_free(&dbname);
+
     if (rock->p) {
         struct findall_data fdata = { extname, 0, rock->mbentry, rock->mbname, 0 };
         /* mbname confirms that it's an exact match */
@@ -3105,6 +3133,7 @@ good:
 nomatch:
     mboxlist_entry_free(&rock->mbentry);
     mbname_free(&rock->mbname);
+    buf_free(&dbname);
     return 0;
 }
 
@@ -3189,7 +3218,13 @@ static int allmbox_cb(void *rock,
     struct allmb_rock *mbrock = (struct allmb_rock *)rock;
 
     if (!mbrock->mbentry) {
-        int r = mboxlist_parse_entry(&mbrock->mbentry, key, keylen, data, datalen);
+        struct buf dbname = BUF_INITIALIZER;
+
+        mboxlist_dbname_from_key(key, keylen, &dbname);
+        int r = mboxlist_parse_entry(&mbrock->mbentry,
+                                     buf_base(&dbname), buf_len(&dbname),
+                                     data, datalen);
+        buf_free(&dbname);
         if (r) return r;
     }
 
@@ -3203,15 +3238,19 @@ static int allmbox_p(void *rock,
                      size_t datalen)
 {
     struct allmb_rock *mbrock = (struct allmb_rock *)rock;
+    struct buf dbname = BUF_INITIALIZER;
     int r;
 
-    /* skip any dollar keys */
-    if (keylen && key[0] == '$') return 0;
+    /* skip any non-name keys */
+    if (!(keylen && key[0] == 'N')) return 0;
 
     /* free previous record */
     mboxlist_entry_free(&mbrock->mbentry);
 
-    r = mboxlist_parse_entry(&mbrock->mbentry, key, keylen, data, datalen);
+    mboxlist_dbname_from_key(key, keylen, &dbname);
+    r = mboxlist_parse_entry(&mbrock->mbentry,
+                             buf_base(&dbname), buf_len(&dbname), data, datalen);
+    buf_free(&dbname);
     if (r) return 0;
 
     if (!(mbrock->flags & MBOXTREE_TOMBSTONES) && (mbrock->mbentry->mbtype & MBTYPE_DELETED))
@@ -3226,6 +3265,7 @@ static int allmbox_p(void *rock,
 EXPORTED int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock, int flags)
 {
     struct allmb_rock mbrock = { NULL, proc, rock, flags };
+    struct buf key = BUF_INITIALIZER;
     char *freeme = NULL;
     int r = 0;
 
@@ -3242,10 +3282,13 @@ EXPORTED int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock,
         mbname_free(&mbname);
     }
 
-    r = cyrusdb_foreach(mbdb, prefix, strlen(prefix),
+    mboxlist_dbname_to_key(prefix, strlen(prefix), &key);
+
+    r = cyrusdb_foreach(mbdb, buf_base(&key), buf_len(&key),
                         allmbox_p, allmbox_cb, &mbrock, 0);
 
     mboxlist_entry_free(&mbrock.mbentry);
+    buf_free(&key);
     free(freeme);
 
     return r;
@@ -3255,18 +3298,23 @@ EXPORTED int mboxlist_mboxtree(const char *mboxname, mboxlist_cb *proc, void *ro
 {
     struct allmb_rock mbrock = { NULL, proc, rock, flags };
     char *dbname = mboxname_to_dbname(mboxname);
+    struct buf key = BUF_INITIALIZER;
     int r = 0;
 
     init_internal();
 
     if (!(flags & MBOXTREE_SKIP_ROOT)) {
-        r = cyrusdb_forone(mbdb, dbname, strlen(dbname), allmbox_p, allmbox_cb, &mbrock, 0);
+        mboxlist_dbname_to_key(dbname, strlen(dbname), &key);
+        r = cyrusdb_forone(mbdb, buf_base(&key), buf_len(&key),
+                           allmbox_p, allmbox_cb, &mbrock, 0);
         if (r) goto done;
     }
 
     if (!(flags & MBOXTREE_SKIP_CHILDREN)) {
         char *prefix = strconcat(dbname, DB_HIERSEP_STR, (char *)NULL);
-        r = cyrusdb_foreach(mbdb, prefix, strlen(prefix), allmbox_p, allmbox_cb, &mbrock, 0);
+        mboxlist_dbname_to_key(prefix, strlen(prefix), &key);
+        r = cyrusdb_foreach(mbdb, buf_base(&key), buf_len(&key),
+                            allmbox_p, allmbox_cb, &mbrock, 0);
         free(prefix);
         if (r) goto done;
     }
@@ -3285,13 +3333,16 @@ EXPORTED int mboxlist_mboxtree(const char *mboxname, mboxlist_cb *proc, void *ro
                        dp, DB_HIERSEP_CHAR, dbname, DB_HIERSEP_CHAR);
         }
         const char *prefix = buf_cstring(&buf);
-        r = cyrusdb_foreach(mbdb, prefix, strlen(prefix), allmbox_p, allmbox_cb, &mbrock, 0);
+        mboxlist_dbname_to_key(prefix, strlen(prefix), &key);
+        r = cyrusdb_foreach(mbdb, buf_base(&key), buf_len(&key),
+                            allmbox_p, allmbox_cb, &mbrock, 0);
         buf_free(&buf);
         if (r) goto done;
     }
 
  done:
     mboxlist_entry_free(&mbrock.mbentry);
+    buf_free(&key);
     free(dbname);
     return r;
 }
@@ -3476,6 +3527,7 @@ EXPORTED int mboxlist_usermboxtree(const char *userid,
     if (flags & MBOXTREE_PLUS_RACL) {
         /* we're using reverse ACLs */
         struct allmb_rock mbrock = { NULL, proc, rock, flags };
+        struct buf key = BUF_INITIALIZER;
         int i;
         strarray_t matches = STRARRAY_INITIALIZER;
 
@@ -3483,7 +3535,8 @@ EXPORTED int mboxlist_usermboxtree(const char *userid,
         mboxlist_racl_matches(mbdb, 1, userid, auth_state, NULL, 0, &matches);
         for (i = 0; !r && i < strarray_size(&matches); i++) {
             const char *mboxname = strarray_nth(&matches, i);
-            r = cyrusdb_forone(mbdb, mboxname, strlen(mboxname),
+            mboxlist_dbname_to_key(mboxname, strlen(mboxname), &key);
+            r = cyrusdb_forone(mbdb, buf_base(&key), buf_len(&key),
                                allmbox_p, allmbox_cb, &mbrock, 0);
         }
 
@@ -3493,10 +3546,12 @@ EXPORTED int mboxlist_usermboxtree(const char *userid,
         mboxlist_racl_matches(mbdb, 0, userid, auth_state, NULL, 0, &matches);
         for (i = 0; !r && i < strarray_size(&matches); i++) {
             const char *mboxname = strarray_nth(&matches, i);
-            r = cyrusdb_forone(mbdb, mboxname, strlen(mboxname),
+            mboxlist_dbname_to_key(mboxname, strlen(mboxname), &key);
+            r = cyrusdb_forone(mbdb, buf_base(&key), buf_len(&key),
                                allmbox_p, allmbox_cb, &mbrock, 0);
         }
 
+        buf_free(&key);
         strarray_fini(&matches);
         mboxlist_entry_free(&mbrock.mbentry);
     }
@@ -3507,6 +3562,7 @@ EXPORTED int mboxlist_usermboxtree(const char *userid,
 
 static int mboxlist_find_category(struct find_rock *rock, const char *prefix, size_t len)
 {
+    struct buf key = BUF_INITIALIZER;
     int r = 0;
 
     init_internal();
@@ -3525,16 +3581,21 @@ static int mboxlist_find_category(struct find_rock *rock, const char *prefix, si
 
         /* now call the callbacks */
         for (i = 0; !r && i < strarray_size(&matches); i++) {
-            const char *key = strarray_nth(&matches, i);
-            r = cyrusdb_forone(rock->db, key, strlen(key), &find_p, &find_cb, rock, NULL);
+            const char *dbname = strarray_nth(&matches, i);
+            mboxlist_dbname_to_key(dbname, strlen(dbname), &key);
+            r = cyrusdb_forone(rock->db, buf_base(&key), buf_len(&key),
+                               &find_p, &find_cb, rock, NULL);
         }
         strarray_fini(&matches);
     }
     else {
-        r = cyrusdb_foreach(rock->db, prefix, len, &find_p, &find_cb, rock, NULL);
+        mboxlist_dbname_to_key(prefix, len, &key);
+        r = cyrusdb_foreach(rock->db, buf_base(&key), buf_len(&key),
+                            &find_p, &find_cb, rock, NULL);
     }
 
     if (r == CYRUSDB_DONE) r = 0;
+    buf_free(&key);
     return r;
 }
 
@@ -3553,7 +3614,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
 {
     const char *userid = rock->userid;
     int isadmin = rock->isadmin;
-
+    struct buf key = BUF_INITIALIZER;
     int crossdomains = config_getswitch(IMAPOPT_CROSSDOMAINS);
     int allowdeleted = config_getswitch(IMAPOPT_ALLOWDELETED);
     char inbox[MAX_MAILBOX_BUFFER];
@@ -3635,14 +3696,18 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
     if (userid && !isadmin) {
         /* first the INBOX */
         rock->mb_category = MBNAME_INBOX;
-        r = cyrusdb_forone(rock->db, inbox, inboxlen, &find_p, &find_cb, rock, NULL);
+        mboxlist_dbname_to_key(inbox, inboxlen, &key);
+        r = cyrusdb_forone(rock->db, buf_base(&key), buf_len(&key),
+                           &find_p, &find_cb, rock, NULL);
         if (r == CYRUSDB_DONE) r = 0;
         if (r) goto done;
 
         if (rock->namespace->isalt) {
             /* do exact INBOX subs before resetting the namebuffer */
             rock->mb_category = MBNAME_INBOXSUB;
-            r = cyrusdb_foreach(rock->db, inbox, inboxlen+7, &find_p, &find_cb, rock, NULL);
+            mboxlist_dbname_to_key(inbox, inboxlen+7, &key);
+            r = cyrusdb_foreach(rock->db, buf_base(&key), buf_len(&key),
+                                &find_p, &find_cb, rock, NULL);
             if (r == CYRUSDB_DONE) r = 0;
             if (r) goto done;
 
@@ -3654,7 +3719,9 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
 
         /* iterate through all the mailboxes under the user's inbox */
         rock->mb_category = MBNAME_OWNER;
-        r = cyrusdb_foreach(rock->db, inbox, inboxlen+1, &find_p, &find_cb, rock, NULL);
+        mboxlist_dbname_to_key(inbox, inboxlen+1, &key);
+        r = cyrusdb_foreach(rock->db, buf_base(&key), buf_len(&key),
+                            &find_p, &find_cb, rock, NULL);
         if (r == CYRUSDB_DONE) r = 0;
         if (r) goto done;
 
@@ -3670,13 +3737,17 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             /* special case user.foo.INBOX.  If we're singlepercent == 2, this could
              return DONE, in which case we don't need to foreach the rest of the
              altprefix space */
-            r = cyrusdb_forone(rock->db, inbox, inboxlen+6, &find_p, &find_cb, rock, NULL);
+            mboxlist_dbname_to_key(inbox, inboxlen+6, &key);
+            r = cyrusdb_forone(rock->db, buf_base(&key), buf_len(&key),
+                               &find_p, &find_cb, rock, NULL);
             if (r == CYRUSDB_DONE) goto skipalt;
             if (r) goto done;
 
             /* special case any other altprefix stuff */
             rock->mb_category = MBNAME_ALTPREFIX;
-            r = cyrusdb_foreach(rock->db, inbox, inboxlen+1, &find_p, &find_cb, rock, NULL);
+            mboxlist_dbname_to_key(inbox, inboxlen+1, &key);
+            r = cyrusdb_foreach(rock->db, buf_base(&key), buf_len(&key),
+                                &find_p, &find_cb, rock, NULL);
         skipalt: /* we got a done, so skip out of the foreach early */
             if (r == CYRUSDB_DONE) r = 0;
             if (r) goto done;
@@ -3762,7 +3833,9 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             r = (*rock->cb)(NULL, rock->procrock);
         if (r) goto done;
 
-        r = cyrusdb_foreach(rock->db, prefix, prefixlen+1, &find_p, &find_cb, rock, NULL);
+        mboxlist_dbname_to_key(prefix, prefixlen+1, &key);
+        r = cyrusdb_foreach(rock->db, buf_base(&key), buf_len(&key),
+                            &find_p, &find_cb, rock, NULL);
         if (r) goto done;
     }
 
@@ -3790,6 +3863,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
         glob_free(&g);
     }
     ptrarray_fini(&rock->globs);
+    buf_free(&key);
 
     return r;
 }
@@ -3901,6 +3975,7 @@ EXPORTED int mboxlist_findone_withp(struct namespace *namespace,
         if (domp) cbrock.domain = domp + 1;
     }
 
+    struct buf key = BUF_INITIALIZER;
     mbname_t *mbname = mbname_from_intname(intname);
     char *dbname = mbname_dbname(mbname);
     glob *g = glob_init(mbname_extname(mbname, namespace, userid),
@@ -3908,8 +3983,11 @@ EXPORTED int mboxlist_findone_withp(struct namespace *namespace,
     ptrarray_append(&cbrock.globs, g);
     mbname_free(&mbname);
 
-    r = cyrusdb_forone(cbrock.db, dbname, strlen(dbname), &find_p, &find_cb, &cbrock, NULL);
+    mboxlist_dbname_to_key(dbname, strlen(dbname), &key);
+    r = cyrusdb_forone(cbrock.db, buf_base(&key), buf_len(&key),
+                       &find_p, &find_cb, &cbrock, NULL);
 
+    buf_free(&key);
     free(dbname);
     glob_free(&g);
     ptrarray_fini(&cbrock.globs);
@@ -4501,14 +4579,18 @@ static int subsadd_cb(void *rock, const char *key, size_t keylen,
                       size_t vallen __attribute__((unused)))
 {
     strarray_t *list = (strarray_t *)rock;
-    char mboxname[MAX_MAILBOX_NAME+1];
-    snprintf(mboxname, MAX_MAILBOX_NAME, "%.*s", (int) keylen, key);
-    strarray_appendm(list, mboxname_from_dbname(mboxname));
+    struct buf dbname = BUF_INITIALIZER;
+
+    mboxlist_dbname_from_key(key, keylen, &dbname);
+    strarray_appendm(list, mboxname_from_dbname(buf_cstring(&dbname)));
+    buf_free(&dbname);
+
     return 0;
 }
 
 EXPORTED strarray_t *mboxlist_sublist(const char *userid)
 {
+    struct buf key = BUF_INITIALIZER;
     struct db *subs = NULL;
     strarray_t *list = strarray_new();
     int r;
@@ -4519,7 +4601,10 @@ EXPORTED strarray_t *mboxlist_sublist(const char *userid)
     r = mboxlist_opensubs(userid, &subs);
     if (r) goto done;
 
-    r = cyrusdb_foreach(subs, "", 0, NULL, subsadd_cb, list, 0);
+    /* faster to do it all in a single slurp! */
+    mboxlist_dbname_to_key("", 0, &key);
+    r = cyrusdb_foreach(subs, buf_base(&key), buf_len(&key),
+                        NULL, subsadd_cb, list, 0);
 
     mboxlist_closesubs(subs);
 
@@ -4528,6 +4613,7 @@ done:
         strarray_free(list);
         return NULL;
     }
+    buf_free(&key);
     return list;
 }
 
@@ -4546,15 +4632,15 @@ static int usersubs_cb(void *rock, const char *key, size_t keylen,
                       size_t datalen __attribute__((unused)))
 {
     struct submb_rock *mbrock = (struct submb_rock *) rock;
-    char mboxname[MAX_MAILBOX_NAME+1];
+    struct buf dbname = BUF_INITIALIZER;
     mbname_t *mbname = NULL;
     int r;
 
     /* free previous record */
     mboxlist_entry_free(&mbrock->mbentry);
 
-    snprintf(mboxname, MAX_MAILBOX_NAME, "%.*s", (int) keylen, key);
-    mbname = mbname_from_dbname(mboxname);
+    mboxlist_dbname_from_key(key, keylen, &dbname);
+    mbname = mbname_from_dbname(buf_cstring(&dbname));
 
     if ((mbrock->flags & MBOXTREE_SKIP_PERSONAL) &&
         !strcmpsafe(mbrock->userid, mbname_userid(mbname))) {
@@ -4562,9 +4648,7 @@ static int usersubs_cb(void *rock, const char *key, size_t keylen,
         goto done;
     }
 
-    char *dbname = mbname_dbname(mbname);
-    r = mboxlist_mylookup(dbname, &mbrock->mbentry, NULL, 0, 0);
-    free(dbname);
+    r = mboxlist_mylookup(buf_cstring(&dbname), &mbrock->mbentry, NULL, 0, 0);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         r = 0;
         goto done;
@@ -4580,6 +4664,7 @@ static int usersubs_cb(void *rock, const char *key, size_t keylen,
 
   done:
     mbname_free(&mbname);
+    buf_free(&dbname);
     return r;
 }
 
@@ -4588,6 +4673,7 @@ EXPORTED int mboxlist_usersubs(const char *userid, mboxlist_cb *proc,
 {
     struct db *subs = NULL;
     struct submb_rock mbrock = { NULL, userid, flags, proc, rock };
+    struct buf key = BUF_INITIALIZER;
     int r = 0;
 
     init_internal();
@@ -4597,11 +4683,14 @@ EXPORTED int mboxlist_usersubs(const char *userid, mboxlist_cb *proc,
     if (r) return r;
 
     /* faster to do it all in a single slurp! */
-    r = cyrusdb_foreach(subs, "", 0, NULL, usersubs_cb, &mbrock, 0);
+    mboxlist_dbname_to_key("", 0, &key);
+    r = cyrusdb_foreach(subs, buf_base(&key), buf_len(&key),
+                        NULL, usersubs_cb, &mbrock, 0);
 
     mboxlist_entry_free(&mbrock.mbentry);
 
     mboxlist_closesubs(subs);
+    buf_free(&key);
 
     return r;
 }
@@ -4622,10 +4711,14 @@ EXPORTED int mboxlist_checksub(const char *name, const char *userid)
     r = mboxlist_opensubs(userid, &subs);
 
     if (!r) {
+        struct buf key = BUF_INITIALIZER;
         char *dbname = mboxname_to_dbname(name);
 
-        r = cyrusdb_fetch(subs, dbname, strlen(dbname), &val, &vallen, NULL);
+        mboxlist_dbname_to_key(dbname, strlen(dbname), &key);
         free(dbname);
+        r = cyrusdb_fetch(subs, buf_base(&key), buf_len(&key),
+                          &val, &vallen, NULL);
+        buf_free(&key);
     }
 
     mboxlist_closesubs(subs);
@@ -4642,6 +4735,7 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
                                 const struct auth_state *auth_state,
                                 int add, int force, int notify)
 {
+    struct buf key = BUF_INITIALIZER;
     mbentry_t *mbentry = NULL;
     int r;
     struct db *subs;
@@ -4669,10 +4763,11 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
         }
     }
 
+    mboxlist_dbname_to_key(dbname, strlen(dbname), &key);
     if (add) {
-        r = cyrusdb_store(subs, dbname, strlen(dbname), "", 0, NULL);
+        r = cyrusdb_store(subs, buf_base(&key), buf_len(&key), "", 0, NULL);
     } else {
-        r = cyrusdb_delete(subs, dbname, strlen(dbname), NULL, 0);
+        r = cyrusdb_delete(subs, buf_base(&key), buf_len(&key), NULL, 0);
         /* if it didn't exist, that's ok */
         if (r == CYRUSDB_EXISTS) r = CYRUSDB_OK;
     }
@@ -4690,6 +4785,7 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
     sync_log_subscribe(userid, name);
     mboxlist_closesubs(subs);
     mboxlist_entry_free(&mbentry);
+    buf_free(&key);
 
     /* prepare a MailboxSubscribe or MailboxUnSubscribe event notification */
     if (notify && r == 0) {
