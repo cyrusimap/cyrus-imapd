@@ -310,7 +310,7 @@ static void mboxlist_id_to_key(const char *id, struct buf *key)
 }
 
 /*
- * read a single record from the mailboxes.db and return a pointer to it
+ * read a single _N_ame record from the mailboxes.db and return a pointer to it
  */
 static int mboxlist_read(const char *name, const char **dataptr, size_t *datalenptr,
                          struct txn **tid, int wrlock)
@@ -677,57 +677,68 @@ EXPORTED char *mboxlist_find_specialuse(const char *use, const char *userid)
     return rock.mboxname;
 }
 
-struct _find_uniqueid_data {
-    const char *uniqueid;
-    mbentry_t **entryptr;
-};
+/*
+ * read a single unique_I_d record from the mailboxes.db and return a pointer to it
+ */
+static int mboxlist_read_uniqueid(const char *uniqueid,
+                                  const char **dataptr, size_t *datalenptr,
+                                  struct txn **tid, int wrlock)
+{
+    struct buf key = BUF_INITIALIZER;
+    int r;
 
-static int _find_uniqueid(const mbentry_t *mbentry, void *rock) {
-    struct _find_uniqueid_data *d = (struct _find_uniqueid_data *) rock;
-    int r = 0;
-    if (!strcmpsafe(d->uniqueid, mbentry->uniqueid)) {
-        *(d->entryptr) = mboxlist_entry_copy(mbentry);
-        r = CYRUSDB_DONE;
+    if (!uniqueid)
+        return IMAP_MAILBOX_NONEXISTENT;
+
+    mboxlist_id_to_key(uniqueid, &key);
+
+    if (wrlock) {
+        r = cyrusdb_fetchlock(mbdb, buf_base(&key), buf_len(&key),
+                              dataptr, datalenptr, tid);
+    } else {
+        r = cyrusdb_fetch(mbdb, buf_base(&key), buf_len(&key),
+                          dataptr, datalenptr, tid);
     }
+
+    switch (r) {
+    case CYRUSDB_OK:
+        /* no entry required, just checking if it exists */
+        r = 0;
+        break;
+
+    case CYRUSDB_AGAIN:
+        r = IMAP_AGAIN;
+        break;
+
+    case CYRUSDB_NOTFOUND:
+        r = IMAP_MAILBOX_NONEXISTENT;
+        break;
+
+    default:
+        syslog(LOG_ERR, "DBERROR: error fetching mboxlist %s: %s",
+               uniqueid, cyrusdb_strerror(r));
+        r = IMAP_IOERROR;
+        break;
+    }
+
+    buf_free(&key);
     return r;
 }
 
-// calling this function without a userid is fine, it will scan the entire server!
-static int _mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
-                                    const struct auth_state *auth_state,
-                                    mbentry_t **entryptr)
+EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid,
+                                      const char *userid __attribute__((unused)),
+                                      const struct auth_state *auth_state __attribute__((unused)))
 {
-    struct _find_uniqueid_data rock = { uniqueid, entryptr };
-
-    int flags = MBOXTREE_INTERMEDIATES|MBOXTREE_PLUS_RACL;
+    int r;
+    const char *data;
+    size_t datalen;
 
     init_internal();
 
-    if (userid)
-        return mboxlist_usermboxtree(userid, auth_state, _find_uniqueid, &rock, flags);
-    else
-        return mboxlist_allmbox("", _find_uniqueid, &rock, flags);
-}
+    r = mboxlist_read_uniqueid(uniqueid, &data, &datalen, NULL, 0);
+    if (r) return NULL;
 
-EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
-                                      const struct auth_state *auth_state)
-{
-    mbentry_t *mbentry = NULL;
-    char *mboxname = NULL;
-
-    _mboxlist_find_uniqueid(uniqueid, userid, auth_state, &mbentry);
-
-    if (mbentry) {
-        mboxname = xstrdup(mbentry->name);
-        mboxlist_entry_free(&mbentry);
-    }
-
-    return mboxname;
-}
-
-EXPORTED int mboxlist_lookup_by_uniqueid(const char *uniqueid, mbentry_t **entryptr)
-{
-    return _mboxlist_find_uniqueid(uniqueid, NULL, NULL, entryptr);
+    return xstrndup(data, datalen);
 }
 
 /* given a mailbox name, find the staging directory.  XXX - this should
