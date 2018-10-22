@@ -903,6 +903,8 @@ static int mboxlist_update_id(const char *id,
     struct buf key = BUF_INITIALIZER;
     int r;
 
+    if (!id) return 0;  // DB doesn't store mailbox ids (MUPDATE)
+
     mboxlist_id_to_key(id, &key);
 
     if (dbname) {
