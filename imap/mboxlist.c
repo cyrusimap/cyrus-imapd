@@ -87,6 +87,9 @@
 #define DB config_mboxlist_db
 #define SUBDB config_subscription_db
 
+#define KEY_TYPE_NAME 'N'
+#define KEY_TYPE_ID   'I'
+
 #define DB_DOMAINSEP_STR    "\x1D"  /* group separator (GS) */
 #define DB_DOMAINSEP_CHAR   DB_DOMAINSEP_STR[0]
 #define DB_HIERSEP_STR      "\x1F"  /* unit separator  (US) */
@@ -293,7 +296,8 @@ EXPORTED char *mbentry_datapath(const struct mboxlist_entry *mbentry, uint32_t u
 static void mboxlist_dbname_to_key(const char *dbname,
                                    size_t len, struct buf *key)
 {
-    buf_setcstr(key, "N");
+    buf_reset(key);
+    buf_putc(key, KEY_TYPE_NAME);
     buf_appendmap(key, dbname, len);
 }
 
@@ -305,7 +309,8 @@ static void mboxlist_dbname_from_key(const char *key, size_t len,
 
 static void mboxlist_id_to_key(const char *id, struct buf *key)
 {
-    buf_setcstr(key, "I");
+    buf_reset(key);
+    buf_putc(key, KEY_TYPE_ID);
     buf_appendcstr(key, id);
 }
 
@@ -3130,8 +3135,8 @@ static int find_p(void *rockp,
     struct buf dbname = BUF_INITIALIZER;
     int i;
 
-    /* skip any $RACL or future $ space keys */
-    if (key[0] == '$') return 0;
+    /* skip any non-name keys */
+    if (key[0] != KEY_TYPE_NAME) return 0;
 
     mboxlist_dbname_from_key(key, keylen, &dbname);
 
@@ -3319,7 +3324,7 @@ static int allmbox_p(void *rock,
     int r;
 
     /* skip any non-name keys */
-    if (!(keylen && key[0] == 'N')) return 0;
+    if (!(keylen && key[0] == KEY_TYPE_NAME)) return 0;
 
     /* free previous record */
     mboxlist_entry_free(&mbrock->mbentry);
