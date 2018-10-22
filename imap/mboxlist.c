@@ -303,6 +303,12 @@ static void mboxlist_dbname_from_key(const char *key, size_t len,
     buf_init_ro(dbname, key+1, len-1);
 }
 
+static void mboxlist_id_to_key(const char *id, struct buf *key)
+{
+    buf_setcstr(key, "I");
+    buf_appendcstr(key, id);
+}
+
 /*
  * read a single record from the mailboxes.db and return a pointer to it
  */
@@ -750,7 +756,8 @@ HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
     return 0;
 }
 
-static void mboxlist_racl_key(int isuser, const char *keyuser, const char *mbname, struct buf *buf)
+static void mboxlist_racl_key(int isuser, const char *keyuser,
+                              const char *dbname, struct buf *buf)
 {
     buf_setcstr(buf, "$RACL$");
     buf_putc(buf, isuser ? 'U' : 'S');
@@ -759,10 +766,8 @@ static void mboxlist_racl_key(int isuser, const char *keyuser, const char *mbnam
         buf_appendcstr(buf, keyuser);
         buf_putc(buf, '$');
     }
-    if (mbname) {
-        char *dbname = mboxname_to_dbname(mbname);
+    if (dbname) {
         buf_appendcstr(buf, dbname);
-        free(dbname);
     }
 }
 
@@ -791,15 +796,19 @@ static int mboxlist_update_raclmodseq(const char *acluser)
     return 0;
 }
 
-static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, const mbentry_t *newmbentry, struct txn **txn)
+static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
+                                const mbentry_t *newmbentry, struct txn **txn)
 {
     static strarray_t *admins = NULL;
     struct buf buf = BUF_INITIALIZER;
-    char *userid = mboxname_to_userid(name);
     strarray_t *oldusers = NULL;
     strarray_t *newusers = NULL;
     int i;
     int r = 0;
+
+    mbname_t *mbname = mbname_from_dbname(dbname);
+    char *userid = xstrdupnull(mbname_userid(mbname));
+    mbname_free(&mbname);
 
     if (!admins) admins = strarray_split(config_getstring(IMAPOPT_ADMINS), NULL, 0);
 
@@ -816,7 +825,7 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
             if (!strcmpsafe(userid, acluser)) continue;
             if (strarray_find(admins, acluser, 0) >= 0) continue;
             if (user_can_read(newusers, acluser)) continue;
-            mboxlist_racl_key(!!userid, acluser, name, &buf);
+            mboxlist_racl_key(!!userid, acluser, dbname, &buf);
             r = cyrusdb_delete(mbdb, buf.s, buf.len, txn, /*force*/1);
             if (r) goto done;
             mboxlist_update_raclmodseq(acluser);
@@ -830,7 +839,7 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
             if (!strcmpsafe(userid, acluser)) continue;
             if (strarray_find(admins, acluser, 0) >= 0) continue;
             if (user_can_read(oldusers, acluser)) continue;
-            mboxlist_racl_key(!!userid, acluser, name, &buf);
+            mboxlist_racl_key(!!userid, acluser, dbname, &buf);
             r = cyrusdb_store(mbdb, buf.s, buf.len, "", 0, txn);
             if (r) goto done;
             mboxlist_update_raclmodseq(acluser);
@@ -845,9 +854,9 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
     return r;
 }
 
-static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, struct txn **txn)
+static int mboxlist_update_name(const char *dbname,
+                                const mbentry_t *mbentry, struct txn **txn)
 {
-    char *dbname = mboxname_to_dbname(name);
     struct buf key = BUF_INITIALIZER;
     mbentry_t *old = NULL;
     int r = 0;
@@ -855,29 +864,17 @@ static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, str
     mboxlist_mylookup(dbname, &old, txn, 0, 1); // ignore errors, it will be NULL
 
     if (have_racl) {
-        r = mboxlist_update_racl(name, old, mbentry, txn);
+        r = mboxlist_update_racl(dbname, old, mbentry, txn);
         /* XXX return value here is discarded? */
     }
 
     mboxlist_dbname_to_key(dbname, strlen(dbname), &key);
-    free(dbname);
 
     if (mbentry) {
         char *mboxent = mboxlist_entry_cstring(mbentry);
         r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
                           mboxent, strlen(mboxent), txn);
         free(mboxent);
-
-        if (!r && config_auditlog) {
-            /* XXX is there a difference between "" and NULL? */
-            xsyslog(LOG_NOTICE, "auditlog: acl",
-                                "sessionid=<%s> "
-                                "mailbox=<%s> uniqueid=<%s> mbtype=<%s> "
-                                "oldacl=<%s> acl=<%s> foldermodseq=<%llu>",
-                   session_id(),
-                   name, mbentry->uniqueid, mboxlist_mbtype_to_string(mbentry->mbtype),
-                   old ? old->acl : "NONE", mbentry->acl, mbentry->foldermodseq);
-        }
     }
     else {
         r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key),
@@ -886,6 +883,71 @@ static int mboxlist_update_entry(const char *name, const mbentry_t *mbentry, str
 
     mboxlist_entry_free(&old);
     buf_free(&key);
+    return r;
+}
+
+static int mboxlist_update_id(const char *id,
+                              const char *dbname, struct txn **txn)
+{
+    struct buf key = BUF_INITIALIZER;
+    int r;
+
+    mboxlist_id_to_key(id, &key);
+
+    if (dbname) {
+        r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
+                          dbname, strlen(dbname), txn);
+    }
+    else {
+        r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key),
+                           txn, /*force*/1);
+    }
+
+    buf_free(&key);
+    return r;
+}
+
+static int mboxlist_update_entry(const char *name,
+                                 const mbentry_t *mbentry, struct txn **txn)
+{
+    char *dbname = mboxname_to_dbname(name);
+    mbentry_t *old = NULL;
+    int r = 0;
+
+    mboxlist_mylookup(dbname, &old, txn, 0, 1); // ignore errors, it will be NULL
+
+    if (!cyrusdb_fetch(mbdb, "$RACL", 5, NULL, NULL, txn)) {
+        r = mboxlist_update_racl(dbname, old, mbentry, txn);
+        /* XXX return value here is discarded? */
+    }
+
+    r = mboxlist_update_name(dbname, mbentry, txn);
+    if (!r) {
+        if (mbentry) {
+            r = mboxlist_update_id(mbentry->uniqueid, dbname, txn);
+
+            if (!r && config_auditlog) {
+                /* XXX is there a difference between "" and NULL? */
+                xsyslog(LOG_NOTICE, "auditlog: acl",
+                                    "sessionid=<%s> "
+                                    "mailbox=<%s> uniqueid=<%s> "
+                                    "mbtype=<%s> "
+                                    "oldacl=<%s> acl=<%s> "
+                                    "foldermodseq=<%llu>",
+                        session_id(),
+                        name, mbentry->uniqueid,
+                        mboxlist_mbtype_to_string(mbentry->mbtype),
+                        old ? old->acl : "NONE",
+                        mbentry->acl, mbentry->foldermodseq);
+            }
+        }
+        else {
+            r = mboxlist_update_id(old->uniqueid, NULL, txn);
+        }
+    }
+
+    mboxlist_entry_free(&old);
+    free(dbname);
     return r;
 }
 
