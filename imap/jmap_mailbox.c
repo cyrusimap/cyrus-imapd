@@ -554,6 +554,16 @@ static json_t *_mbox_get(jmap_req_t *req,
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
+    if (_wantprop(props, "isSeenShared")) {
+        struct mailbox *mbox = NULL;
+
+        r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+        if (r) goto done;
+        json_object_set_new(obj, "isSeenShared",
+                            json_boolean(mbox->i.options & OPT_IMAP_SHAREDSEEN));
+        jmap_closembox(req, &mbox);
+    }
+
     if (share_type == _SHAREDMBOX_SHARED && !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
         /* Lookup status. */
         struct statusdata sdata = STATUSDATA_INIT;
@@ -710,6 +720,7 @@ static const jmap_property_t mailbox_props[] = {
     { "onlyPurgeDeleted",   0 },
     { "suppressDuplicates", 0 },
     { "shareWith",          JMAP_PROP_SERVER_SET },
+    { "isSeenShared",       0 },
 
     { NULL,                 0 }
 };
@@ -1567,6 +1578,7 @@ struct mboxset_args {
     char *role;       // empty string means delete
     char *specialuse; // empty string means delete
     int is_subscribed; /* -1 if not set */
+    int is_seenshared; /* -1 if not set */
     int is_toplevel;
     int sortorder;
 };
@@ -1722,6 +1734,18 @@ static void _mbox_setargs_parse(json_t *jargs,
     }
     else {
         args->is_subscribed = -1;
+    }
+
+    /* isSeenShared */
+    json_t *jisSeenShared = json_object_get(jargs, "isSeenShared");
+    if (json_is_boolean(jisSeenShared)) {
+        args->is_seenshared = json_boolean_value(jisSeenShared);
+    }
+    else if (jisSeenShared) {
+        jmap_parser_invalid(parser, "isSeenSHared");
+    }
+    else {
+        args->is_seenshared = -1;
     }
 
     /* All of these are server-set. */
@@ -1915,10 +1939,12 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     r = 0;
 
     /* Create mailbox using parent ACL */
+    uint32_t options = 0;
+    if (args->is_seenshared > 0) options |= OPT_IMAP_SHAREDSEEN;
     r = mboxlist_createsync(mboxname, 0 /* MBTYPE */,
             NULL /* partition */,
             req->userid, req->authstate,
-            0 /* options */, 0 /* uidvalidity */,
+            options, 0 /* uidvalidity */,
             0 /* createdmodseq */,
             0 /* highestmodseq */, mbparent->acl,
             NULL /* uniqueid */, 0 /* local_only */,
@@ -1946,6 +1972,9 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     /* Set server defaults */
     if (args->is_subscribed < 0) {
         json_object_set_new(*mbox, "isSubscribed", json_false());
+    }
+    if (args->is_seenshared < 0) {
+        json_object_set_new(*mbox, "isSeenShared", json_false());
     }
 
 done:
@@ -2201,6 +2230,25 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     if (!r && args->is_subscribed >= 0) {
         r = mboxlist_changesub(mboxname, req->userid, httpd_authstate,
                                args->is_subscribed, 0, 0);
+    }
+    if (!r && args->is_seenshared >= 0) {
+        struct mailbox *mbox = NULL;
+        uint32_t newopts;
+
+        r = jmap_openmbox(req, mboxname, &mbox, 1);
+        if (r) goto done;
+
+        newopts = mbox->i.options;
+        if (args->is_seenshared) newopts |= OPT_IMAP_SHAREDSEEN;
+        else newopts &= ~OPT_IMAP_SHAREDSEEN;
+
+        /* only mark dirty if there's been a change */
+        if (mbox->i.options != newopts) {
+            mailbox_index_dirty(mbox);
+            mbox->i.options = newopts;
+            mboxlist_foldermodseq_dirty(mbox);
+        }
+        jmap_closembox(req, &mbox);
     }
     if (r) goto done;
 
