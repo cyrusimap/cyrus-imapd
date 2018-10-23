@@ -554,16 +554,6 @@ static json_t *_mbox_get(jmap_req_t *req,
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
-    if (_wantprop(props, "isSeenShared")) {
-        struct mailbox *mbox = NULL;
-
-        r = jmap_openmbox(req, mbentry->name, &mbox, 0);
-        if (r) goto done;
-        json_object_set_new(obj, "isSeenShared",
-                            json_boolean(mbox->i.options & OPT_IMAP_SHAREDSEEN));
-        jmap_closembox(req, &mbox);
-    }
-
     if (share_type == _SHAREDMBOX_SHARED && !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
         /* Lookup status. */
         struct statusdata sdata = STATUSDATA_INIT;
@@ -595,6 +585,15 @@ static json_t *_mbox_get(jmap_req_t *req,
             int sortOrder = _mbox_get_sortorder(req, mbname);
             json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
         }
+        if (_wantprop(props, "isSeenShared")) {
+            struct mailbox *mbox = NULL;
+
+            r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+            if (r) goto done;
+            json_object_set_new(obj, "isSeenShared",
+                                json_boolean(mbox->i.options & OPT_IMAP_SHAREDSEEN));
+            jmap_closembox(req, &mbox);
+        }
     }
     else {
         if (_wantprop(props, "totalEmails")) {
@@ -611,6 +610,9 @@ static json_t *_mbox_get(jmap_req_t *req,
         }
         if (_wantprop(props, "sortOrder")) {
             json_object_set_new(obj, "sortOrder", json_integer(0));
+        }
+        if (_wantprop(props, "isSeenShared")) {
+            json_object_set_new(obj, "isSeenShared", json_false());
         }
     }
 
