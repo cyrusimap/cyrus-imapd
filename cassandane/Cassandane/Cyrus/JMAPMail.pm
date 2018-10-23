@@ -5206,6 +5206,83 @@ sub test_emailsubmission_set_with_envelope
     $self->assert_not_null($msgsubid);
 }
 
+sub test_emailsubmission_set_creationid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityId = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityId);
+
+    xlog "create mailboxes";
+    $imap->create("INBOX.A") or die;
+    $imap->create("INBOX.B") or die;
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { properties => ['name'], }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxIdA = $mboxByName{A}->{id};
+    my $mboxIdB = $mboxByName{B}->{id};
+
+    xlog "create, send and update email";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'm1' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'hello',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'world',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+        [ 'EmailSubmission/set', {
+            create => {
+                's1' => {
+                    identityId => $identityId,
+                    emailId  => '#m1',
+                }
+           },
+           onSuccessUpdateEmail => {
+               '#s1' => {
+                    mailboxIds => {
+                        $mboxIdB => JSON::true,
+                    },
+               },
+           },
+        }, 'R2' ],
+        [ 'Email/get', {
+            ids => ['#m1'],
+            properties => ['mailboxIds'],
+        }, 'R3'],
+    ]);
+    my $emailId = $res->[0][1]->{created}{m1}{id};
+    $self->assert_not_null($emailId);
+    my $msgSubId = $res->[1][1]->{created}{s1}{id};
+    $self->assert_not_null($msgSubId);
+    $self->assert(exists $res->[2][1]{updated}{$emailId});
+    $self->assert_num_equals(1, scalar keys %{$res->[3][1]{list}[0]{mailboxIds}});
+    $self->assert(exists $res->[3][1]{list}[0]{mailboxIds}{$mboxIdB});
+}
+
 sub test_email_seen_shared
     :min_version_3_1 :needs_component_jmap
 {
