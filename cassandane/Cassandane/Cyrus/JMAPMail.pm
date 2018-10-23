@@ -13572,6 +13572,7 @@ sub test_mailbox_get_intermediate
     $self->assert_num_equals($mboxA->{unreadEmails}, 0);
     $self->assert_num_equals($mboxA->{totalThreads}, 0);
     $self->assert_num_equals($mboxA->{unreadThreads}, 0);
+    $self->assert_num_equals($mboxA->{isSeenShared}, JSON::false);
 }
 
 sub test_mailbox_intermediary_imaprename_preservetree
