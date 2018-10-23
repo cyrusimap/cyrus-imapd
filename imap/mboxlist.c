@@ -378,11 +378,11 @@ int parseentry_cb(int type, struct dlistsax_data *d)
         }
         else {
             const char *key = buf_cstring(&d->kbuf);
-            if (!strcmp(key, "F")) {
-                rock->mbentry->foldermodseq = atoll(d->data);
-            }
-            else if (!strcmp(key, "C")) {
+            if (!strcmp(key, "C")) {
                 rock->mbentry->createdmodseq = atoll(d->data);
+            }
+            else if (!strcmp(key, "F")) {
+                rock->mbentry->foldermodseq = atoll(d->data);
             }
             else if (!strcmp(key, "I")) {
                 rock->mbentry->uniqueid = xstrdupnull(d->data);
@@ -414,8 +414,8 @@ int parseentry_cb(int type, struct dlistsax_data *d)
  * full dlist format is:
  *  A: _a_cl
  *  C  _c_reatedmodseq
- *  I: unique_i_d
  *  F: _f_oldermodseq
+ *  I: unique_i_d
  *  M: _m_time
  *  P: _p_artition
  *  S: _s_erver
