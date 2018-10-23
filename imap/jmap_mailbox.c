@@ -1744,7 +1744,7 @@ static void _mbox_setargs_parse(json_t *jargs,
         args->is_seenshared = json_boolean_value(jisSeenShared);
     }
     else if (jisSeenShared) {
-        jmap_parser_invalid(parser, "isSeenSHared");
+        jmap_parser_invalid(parser, "isSeenShared");
     }
     else {
         args->is_seenshared = -1;
