@@ -239,7 +239,7 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
     return buf_cstring(&buf);
 }
 
-static char *mboxlist_entry_cstring(const mbentry_t *mbentry)
+static char *mboxlist_name_entry_cstring(const mbentry_t *mbentry)
 {
     struct buf buf = BUF_INITIALIZER;
     struct dlist *dl = dlist_newkvlist(NULL, mbentry->name);
@@ -269,6 +269,20 @@ static char *mboxlist_entry_cstring(const mbentry_t *mbentry)
         dlist_setnum64(dl, "F", mbentry->foldermodseq);
 
     dlist_setdate(dl, "M", time(NULL));
+
+    dlist_printbuf(dl, 0, &buf);
+
+    dlist_free(&dl);
+
+    return buf_release(&buf);
+}
+
+static char *mboxlist_id_entry_cstring(const char *id, const char *name)
+{
+    struct buf buf = BUF_INITIALIZER;
+    struct dlist *dl = dlist_newkvlist(NULL, id);
+
+    dlist_setatom(dl, "N", name);
 
     dlist_printbuf(dl, 0, &buf);
 
@@ -318,17 +332,18 @@ static void mboxlist_id_to_key(const char *id, struct buf *key)
 /*
  * read a single _N_ame record from the mailboxes.db and return a pointer to it
  */
-static int mboxlist_read(const char *name, const char **dataptr, size_t *datalenptr,
-                         struct txn **tid, int wrlock)
+static int mboxlist_read_name(const char *dbname,
+                              const char **dataptr, size_t *datalenptr,
+                              struct txn **tid, int wrlock)
 {
     struct buf key = BUF_INITIALIZER;
-    int namelen = strlen(name);
+    int namelen = strlen(dbname);
     int r;
 
     if (!namelen)
         return IMAP_MAILBOX_NONEXISTENT;
 
-    mboxlist_dbname_to_key(name, namelen, &key);
+    mboxlist_dbname_to_key(dbname, namelen, &key);
 
     if (wrlock) {
         r = cyrusdb_fetchlock(mbdb, buf_base(&key), buf_len(&key),
@@ -354,7 +369,7 @@ static int mboxlist_read(const char *name, const char **dataptr, size_t *datalen
 
     default:
     {
-        char *intname = mboxname_from_dbname(name);
+        char *intname = mboxname_from_dbname(dbname);
         xsyslog(LOG_ERR, "DBERROR: error fetching mboxlist",
                          "mailbox=<%s> error=<%s>",
                          intname, cyrusdb_strerror(r));
@@ -427,7 +442,7 @@ struct parseentry_rock {
     int doingacl;
 };
 
-int parseentry_cb(int type, struct dlistsax_data *d)
+static int parse_name_entry_cb(int type, struct dlistsax_data *d)
 {
     struct parseentry_rock *rock = (struct parseentry_rock *)d->rock;
 
@@ -480,7 +495,7 @@ int parseentry_cb(int type, struct dlistsax_data *d)
 }
 
 /*
- * parse a record read from the mailboxes.db into its parts.
+ * parse a name record read from the mailboxes.db into its parts.
  *
  * full dlist format is:
  *  A: _a_cl
@@ -493,9 +508,9 @@ int parseentry_cb(int type, struct dlistsax_data *d)
  *  T: _t_ype
  *  V: uid_v_alidity
  */
-EXPORTED int mboxlist_parse_entry(mbentry_t **mbentryptr,
-                                  const char *name, size_t namelen,
-                                  const char *data, size_t datalen)
+static int mboxlist_parse_name_entry(mbentry_t **mbentryptr,
+                                     const char *name, size_t namelen,
+                                     const char *data, size_t datalen)
 {
     static struct buf aclbuf;
     int r = IMAP_MAILBOX_BADFORMAT;
@@ -520,7 +535,7 @@ EXPORTED int mboxlist_parse_entry(mbentry_t **mbentryptr,
         rock.mbentry = mbentry;
         rock.aclbuf = &aclbuf;
         aclbuf.len = 0;
-        r = dlist_parsesax(data, datalen, 0, parseentry_cb, &rock);
+        r = dlist_parsesax(data, datalen, 0, parse_name_entry_cb, &rock);
         if (!r) mbentry->acl = buf_newcstring(&aclbuf);
         goto done;
     }
@@ -577,6 +592,58 @@ done:
     return r;
 }
 
+static int parse_id_entry_cb(int type, struct dlistsax_data *d)
+{
+    struct parseentry_rock *rock = (struct parseentry_rock *)d->rock;
+    const char *key;
+
+    switch(type) {
+    case DLISTSAX_STRING:
+        key = buf_cstring(&d->kbuf);
+
+        if (!strcmp(key, "N")) {
+            rock->mbentry->name = mboxname_from_dbname(d->data);
+        }
+        break;
+    }
+
+    return 0;
+}
+
+/*
+ * parse an id record read from the mailboxes.db into its parts.
+ *
+ * full dlist format is:
+ *  N: _n_ame
+ */
+static int mboxlist_parse_id_entry(mbentry_t **mbentryptr,
+                                   const char *id, size_t idlen,
+                                   const char *data, size_t datalen)
+{
+    int r = IMAP_MAILBOX_BADFORMAT;
+    mbentry_t *mbentry = mboxlist_entry_create();
+
+    if (!datalen)
+        goto done;
+
+    /* copy id */
+    if (idlen)
+        mbentry->uniqueid = xstrndup(id, idlen);
+    else
+        mbentry->uniqueid = xstrdup(id);
+
+    struct parseentry_rock rock;
+    memset(&rock, 0, sizeof(struct parseentry_rock));
+    rock.mbentry = mbentry;
+    r = dlist_parsesax(data, datalen, 0, parse_id_entry_cb, &rock);
+
+done:
+    if (!r && mbentryptr)
+        *mbentryptr = mbentry;
+    else mboxlist_entry_free(&mbentry);
+    return r;
+}
+
 /* read a record and parse into parts */
 static int mboxlist_mylookup(const char *dbname,
                              mbentry_t **mbentryptr,
@@ -589,10 +656,10 @@ static int mboxlist_mylookup(const char *dbname,
 
     init_internal();
 
-    r = mboxlist_read(dbname, &data, &datalen, tid, wrlock);
+    r = mboxlist_read_name(dbname, &data, &datalen, tid, wrlock);
     if (r) return r;
 
-    r = mboxlist_parse_entry(&entry, dbname, 0, data, datalen);
+    r = mboxlist_parse_name_entry(&entry, dbname, 0, data, datalen);
     if (r) return r;
 
     if (!allow_all) {
@@ -738,15 +805,22 @@ EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid,
     int r;
     const char *data;
     size_t datalen;
-    char dbname[MAX_MAILBOX_NAME];
+    mbentry_t *mbentry = NULL;
+    char *mbname;
 
     init_internal();
 
     r = mboxlist_read_uniqueid(uniqueid, &data, &datalen, NULL, 0);
     if (r) return NULL;
 
-    snprintf(dbname, sizeof(dbname), "%.*s", (int) datalen, data);
-    return mboxname_from_dbname(dbname);
+    r = mboxlist_parse_id_entry(&mbentry, uniqueid, 0, data, datalen);
+    if (r) return NULL;
+
+    mbname = mbentry->name;
+    mbentry->name = NULL;
+    mboxlist_entry_free(&mbentry);
+
+    return mbname;
 }
 
 /* given a mailbox name, find the staging directory.  XXX - this should
@@ -894,7 +968,7 @@ static int mboxlist_update_name(const char *dbname,
     mboxlist_dbname_to_key(dbname, strlen(dbname), &key);
 
     if (mbentry) {
-        char *mboxent = mboxlist_entry_cstring(mbentry);
+        char *mboxent = mboxlist_name_entry_cstring(mbentry);
         r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
                           mboxent, strlen(mboxent), txn);
         free(mboxent);
@@ -920,8 +994,10 @@ static int mboxlist_update_id(const char *id,
     mboxlist_id_to_key(id, &key);
 
     if (dbname) {
+        char *mboxent = mboxlist_id_entry_cstring(id, dbname);
         r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
-                          dbname, strlen(dbname), txn);
+                          mboxent, strlen(mboxent), txn);
+        free(mboxent);
     }
     else {
         r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key),
@@ -3184,9 +3260,9 @@ static int find_p(void *rockp,
         goto good;
 
     /* ignore entirely deleted records */
-    if (mboxlist_parse_entry(&rock->mbentry,
-                             buf_cstring(&dbname), buf_len(&dbname),
-                             data, datalen))
+    if (mboxlist_parse_name_entry(&rock->mbentry,
+                                  buf_cstring(&dbname), buf_len(&dbname),
+                                  data, datalen))
         goto nomatch;
 
     /* nobody sees tombstones */
@@ -3311,9 +3387,9 @@ static int allmbox_cb(void *rock,
         struct buf dbname = BUF_INITIALIZER;
 
         mboxlist_dbname_from_key(key, keylen, &dbname);
-        int r = mboxlist_parse_entry(&mbrock->mbentry,
-                                     buf_base(&dbname), buf_len(&dbname),
-                                     data, datalen);
+        int r = mboxlist_parse_name_entry(&mbrock->mbentry,
+                                          buf_base(&dbname), buf_len(&dbname),
+                                          data, datalen);
         buf_free(&dbname);
         if (r) return r;
     }
@@ -3338,8 +3414,9 @@ static int allmbox_p(void *rock,
     mboxlist_entry_free(&mbrock->mbentry);
 
     mboxlist_dbname_from_key(key, keylen, &dbname);
-    r = mboxlist_parse_entry(&mbrock->mbentry,
-                             buf_base(&dbname), buf_len(&dbname), data, datalen);
+    r = mboxlist_parse_name_entry(&mbrock->mbentry,
+                                  buf_base(&dbname), buf_len(&dbname),
+                                  data, datalen);
     buf_free(&dbname);
     if (r) return 0;
 
