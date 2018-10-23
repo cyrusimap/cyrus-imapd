@@ -116,11 +116,14 @@ EXPORTED void idle_init(void)
     struct sockaddr_un local;
     int fdflags;
     int s;
+    int r;
 
     if (!idle_enabled()) return;
 
-    assert(idle_make_client_address(&local));
-    assert(idle_make_server_address(&idle_remote));
+    r = idle_make_client_address(&local);
+    assert(r);
+    r = idle_make_server_address(&idle_remote);
+    assert(r);
 
     idle_method_desc = "poll";
 
