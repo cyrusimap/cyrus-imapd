@@ -2382,6 +2382,65 @@ sub test_mailbox_set_issubscribed
     $self->assert_equals(JSON::false, $res->[0][1]{list}[1]{isSubscribed});
 }
 
+sub test_mailbox_set_isseenshared
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                "A" => {
+                    name => "A",
+                },
+                "B" => {
+                    name => "B",
+                    isSeenShared => JSON::true,
+                }
+            }
+        }, "R1"]
+    ]);
+    $self->assert_equals(JSON::false, $res->[0][1]{created}{A}{isSeenShared});
+    $self->assert(not exists $res->[0][1]{created}{B}{isSeenShared});
+    my $mboxIdA = $res->[0][1]{created}{A}{id};
+    my $mboxIdB = $res->[0][1]{created}{B}{id};
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            ids => [$mboxIdA, $mboxIdB],
+            properties => ['isSeenShared'],
+        }, 'R1']
+    ]);
+    $self->assert_equals($mboxIdA, $res->[0][1]{list}[0]{id});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]{isSeenShared});
+    $self->assert_equals($mboxIdB, $res->[0][1]{list}[1]{id});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[1]{isSeenShared});
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => {
+                $mboxIdA => {
+                    isSeenShared => JSON::true,
+                },
+                $mboxIdB => {
+                    isSeenShared => JSON::false,
+                },
+            }
+        }, "R1"]
+    ]);
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            ids => [$mboxIdA, $mboxIdB],
+            properties => ['isSeenShared'],
+        }, 'R1']
+    ]);
+    $self->assert_equals($mboxIdA, $res->[0][1]{list}[0]{id});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{isSeenShared});
+    $self->assert_equals($mboxIdB, $res->[0][1]{list}[1]{id});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[1]{isSeenShared});
+}
+
 sub test_mailbox_changes
     :min_version_3_1 :needs_component_jmap
 {
