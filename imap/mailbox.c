@@ -1044,9 +1044,10 @@ static int mailbox_open_advanced(const char *name,
 
     mailbox->part = xstrdup(mbentry->partition);
 
-    /* Note that the header does have the ACL information, but it is only
-     * a backup, and the mboxlist data is considered authoritative, so
-     * we will just use what we were passed */
+    /* Note that the header does have the uniqueid and ACL information,
+     * but it is only backup, and the mboxlist data is considered authoritative,
+     * so we will just use what we were passed */
+    mailbox->uniqueid = xstrdup(mbentry->uniqueid);
     mailbox->acl = xstrdup(mbentry->acl);
     mailbox->mbtype = mbentry->mbtype;
     mailbox->foldermodseq = mbentry->foldermodseq;
