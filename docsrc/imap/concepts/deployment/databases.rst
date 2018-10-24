@@ -370,20 +370,20 @@ slow for reads and writes, and is easily corrupted.
 Twoskip
 -------
 
-**Recommended**. A robust implementation of `https://en.wikipedia.org/wiki/Skip_list <Skip List>`_.
-Developers interested in the details can find more information at `http://opera.brong.fastmail.fm.user.fm/talks/twoskip/twoskip-yapc12.pdf <these talk slides>`_.
+**Recommended**. A robust implementation of `Skip List <https://en.wikipedia.org/wiki/Skip_list>`_.
+Developers interested in the details can find more information at `these talk slides <http://opera.brong.fastmail.fm.user.fm/talks/twoskip/twoskip-yapc12.pdf>`_.
 
 Skiplist
 --------
 
-An implementation of the `https://en.wikipedia.org/wiki/Skip_list <Skip List>`_
+An implementation of the `Skip List <https://en.wikipedia.org/wiki/Skip_list>`_
 data structure. Deprecated in favour of `Twoskip`_ as it is not robust in
 the face of disk failure.
 
 lmdb
 ----
 
-`http://symas.com/mdb <Lightning Memory-Mapped Database (lmdb)>`_ is a
+`Lightning Memory-Mapped Database (lmdb) <http://symas.com/mdb>`_ is a
 high-performance transactional key-value store.
 
 Fast while in memory, but slow when the database is loaded. Best for databases
