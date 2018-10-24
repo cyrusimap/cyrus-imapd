@@ -85,6 +85,13 @@ enum {
     SEA_FUZZABLE =      (1<<1),
 };
 
+/* Sets the scope of a match expression. Attributes silently ignore
+ * unsupported match scopes and evaluate to false. */
+enum search_match {
+    SEARCH_MATCH_UID = 0,
+    SEARCH_MATCH_GUID
+};
+
 typedef struct search_attr search_attr_t;
 struct search_attr {
     const char *name;
@@ -94,7 +101,7 @@ struct search_attr {
     void (*internalise)(struct index_state *, const union search_value *,
                        void **internalisedp);
     int (*cmp)(message_t *, const union search_value *, void *internalised, void *data1);
-    int (*match)(message_t *, const union search_value *, void *internalised, void *data1);
+    int (*match)(message_t *, const union search_value *, void *internalised, enum search_match match, void *data1);
     void (*serialise)(struct buf *, const union search_value *);
     int (*unserialise)(struct protstream*, union search_value *);
     unsigned int (*get_countability)(const union search_value *);
@@ -112,6 +119,7 @@ struct search_expr {
     const search_attr_t *attr;
     union search_value value;
     void *internalised;
+    enum search_match match;
 };
 
 /* flags for search_expr_get_countability */
