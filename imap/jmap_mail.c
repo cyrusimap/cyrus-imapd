@@ -1895,6 +1895,7 @@ static struct sortcrit *_email_buildsort(json_t *sort)
         sortcrit = xzmalloc(2 * sizeof(struct sortcrit));
         sortcrit[0].flags |= SORT_REVERSE;
         sortcrit[0].key = SORT_ARRIVAL;
+        sortcrit[1].flags |= SORT_REVERSE;
         sortcrit[1].key = SORT_SEQUENCE;
         return sortcrit;
     }
@@ -1949,7 +1950,9 @@ static struct sortcrit *_email_buildsort(json_t *sort)
         }
     }
 
-    sortcrit[json_array_size(sort)].key = SORT_SEQUENCE;
+    i = json_array_size(sort);
+    sortcrit[i].flags |= SORT_REVERSE;
+    sortcrit[i].key = SORT_SEQUENCE;
 
     return sortcrit;
 }
