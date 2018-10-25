@@ -1948,6 +1948,12 @@ static struct sortcrit *_email_buildsort(json_t *sort)
                 sortcrit[i].args.flag.name = xstrdup(flagname);
             }
         }
+        // FM specific
+        if (!strcmp(prop, "savedDates")) {
+            // XXX: this is really cheating, but it works because we only
+            // use this sort when searching on a single mailbox
+            sortcrit[i].key = SORT_SEQUENCE;
+        }
     }
 
     i = json_array_size(sort);
@@ -2109,6 +2115,8 @@ static const char *msglist_sortfields[] = {
     "to",
     "hasKeyword",
     "someInThreadHaveKeyword",
+    // FM specific
+    "addedDates",
     NULL
 };
 
