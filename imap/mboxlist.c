@@ -767,6 +767,37 @@ EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid,
     return mbname;
 }
 
+/*
+ * Lookup 'uniqueid' in the mailbox list, ignoring reserved records
+ */
+EXPORTED int mboxlist_lookup_by_uniqueid(const char *uniqueid,
+                                         mbentry_t **entryptr, struct txn **tid)
+{
+    mbentry_t *entry = NULL;
+    const char *data;
+    size_t datalen;
+    int r;
+
+    init_internal();
+
+    r = mboxlist_read_uniqueid(uniqueid, &data, &datalen, tid, 0);
+    if (r) return r;
+
+    r = mboxlist_parse_entry(&entry, NULL, 0, data, datalen);
+    if (r) return r;
+
+    /* Ignore "reserved" entries, like they aren't there */
+    if (entry->mbtype & MBTYPE_RESERVE) {
+        mboxlist_entry_free(&entry);
+        return IMAP_MAILBOX_RESERVED;
+    }
+
+    if (entryptr) *entryptr = entry;
+    else mboxlist_entry_free(&entry);
+
+    return 0;
+}
+
 /* given a mailbox name, find the staging directory.  XXX - this should
  * require more locking, and staging directories should be by pid */
 HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
