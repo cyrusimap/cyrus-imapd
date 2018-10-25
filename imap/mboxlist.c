@@ -1088,6 +1088,9 @@ EXPORTED int mboxlist_create_intermediaries(const char *mboxname,
                                             strarray_t *inter,
                                             struct txn **tid)
 {
+    if (mboxname_isdeletedmailbox(mboxname, NULL))
+        return 0;
+
     mbname_t *mbname = mbname_from_intname(mboxname);
     strarray_t myinter = STRARRAY_INITIALIZER;
     struct txn *mytid = NULL;
@@ -1151,6 +1154,9 @@ EXPORTED int mboxlist_delete_intermediaries(const char *mboxname,
                                             strarray_t *inter,
                                             struct txn **tid)
 {
+    if (mboxname_isdeletedmailbox(mboxname, NULL))
+        return 0;
+
     mbname_t *mbname = mbname_from_intname(mboxname);
     strarray_t myinter = STRARRAY_INITIALIZER;
     struct txn *mytid = NULL;
@@ -2144,7 +2150,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 
             r = mboxlist_update_entry(oldname, oldmbentry, &tid);
 
-            if (!r && !mboxname_isdeletedmailbox(newname, NULL) && !keep_intermediaries) {
+            if (!r && !is_deleted_ancestor && !keep_intermediaries) {
                 char *untilname = mboxname_common_ancestor(oldname, newname);
                 r = mboxlist_delete_intermediaries(oldname, untilname,
                                                    oldmbentry->foldermodseq,
@@ -2160,7 +2166,7 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
             r = mboxlist_update_entry(newname, newmbentry, &tid);
 
             /* create any missing intermediaries */
-            if (!r && !mboxname_isdeletedmailbox(newname, NULL)) {
+            if (!r) {
                 r = mboxlist_create_intermediaries(newname,
                                                    newmbentry->foldermodseq,
                                                    &inter, &tid);
