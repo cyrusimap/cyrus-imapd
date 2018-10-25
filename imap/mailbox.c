@@ -1269,9 +1269,120 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
     remove_listitem(listitem);
 }
 
+struct parseentry_rock {
+    struct mailbox *mailbox;
+    struct buf *aclbuf;
+    int doingacl;
+    int doingflags;
+    int nflags;
+};
+
+static int parseentry_cb(int type, struct dlistsax_data *d)
+{
+    struct parseentry_rock *rock = (struct parseentry_rock *)d->rock;
+
+    switch(type) {
+    case DLISTSAX_KVLISTSTART:
+        if (!strcmp(buf_cstring(&d->kbuf), "A")) {
+            rock->doingacl = 1;
+        }
+        break;
+    case DLISTSAX_KVLISTEND:
+        if (rock->doingacl) {
+            rock->doingacl = 0;
+        }
+        break;
+    case DLISTSAX_LISTSTART:
+        if (!strcmp(buf_cstring(&d->kbuf), "U")) {
+            rock->doingflags = 1;
+        }
+        break;
+    case DLISTSAX_LISTEND:
+        if (rock->doingflags) {
+            rock->doingflags = 0;
+
+            /* zero out the rest */
+            for (; rock->nflags < MAX_USER_FLAGS; rock->nflags++) {
+                free(rock->mailbox->flagname[rock->nflags]);
+                rock->mailbox->flagname[rock->nflags] = NULL;
+            }
+        }
+        break;
+    case DLISTSAX_STRING:
+        if (rock->doingacl) {
+            if (rock->aclbuf) {
+                buf_append(rock->aclbuf, &d->kbuf);
+                buf_putc(rock->aclbuf, '\t');
+                buf_appendcstr(rock->aclbuf, d->data);
+                buf_putc(rock->aclbuf, '\t');
+            }
+        }
+        else if (rock->doingflags) {
+            free(rock->mailbox->flagname[rock->nflags]);
+            rock->mailbox->flagname[rock->nflags++] = xstrdupnull(d->data);
+        }
+        else {
+            const char *key = buf_cstring(&d->kbuf);
+            if (!strcmp(key, "I")) {
+                rock->mailbox->uniqueid = xstrdupnull(d->data);
+            }
+            else if (!strcmp(key, "N")) {
+                if (!rock->mailbox->name)
+                    rock->mailbox->name = xstrdupnull(d->data);
+            }
+            else if (!strcmp(key, "T")) {
+                rock->mailbox->mbtype = mboxlist_string_to_mbtype(d->data);
+            }
+            else if (!strcmp(key, "Q")) {
+                free(rock->mailbox->quotaroot);
+                rock->mailbox->quotaroot = xstrdupnull(d->data);
+            }
+        }
+    }
+
+    return 0;
+}
+
+/*
+ * parse data read from cyrus.header into its parts.
+ *
+ * full dlist format is:
+ *  A: _a_cl
+ *  I: unique_i_d
+ *  N: _n_ame
+ *  Q: _q_uotaroot
+ *  T: _t_ype
+ *  U: user_f_lags
+ */
+static int mailbox_parse_header_data(struct mailbox *mailbox,
+                                     const char *data, size_t datalen,
+                                     char **aclptr)
+{
+    static struct buf aclbuf;
+
+    if (!datalen) return IMAP_MAILBOX_BADFORMAT;
+
+    struct parseentry_rock rock;
+    memset(&rock, 0, sizeof(struct parseentry_rock));
+    rock.mailbox = mailbox;
+    if (aclptr) {
+        rock.aclbuf = &aclbuf;
+        buf_reset(&aclbuf);
+    }
+
+    int r = dlist_parsesax(data, datalen, 0, parseentry_cb, &rock);
+    if (!r && aclptr) *aclptr = buf_newcstring(&aclbuf);
+
+    return r;
+}
+
 /*
  * Read the header of 'mailbox'
- * format:
+ * new format:
+ * MAGIC
+ * dlist (see above)
+ *
+ * old format:
  * MAGIC
  * quotaroot TAB uniqueid
  * userflag1 SPACE userflag2 SPACE userflag3 [...] (with no trailing space)
@@ -1329,8 +1440,18 @@ static int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
         goto done;
     }
 
-    /* quotaroot (if present) */
     free(mailbox->quotaroot);
+    mailbox->quotaroot = NULL;
+    free(mailbox->uniqueid);
+    mailbox->uniqueid = NULL;
+
+    /* check for DLIST mboxlist */
+    if (*p == '%') {
+        r = mailbox_parse_header_data(mailbox, p, eol - p, aclptr);
+        goto done;
+    }
+
+    /* quotaroot (if present) */
     if (!tab || tab > eol) {
         syslog(LOG_DEBUG, "mailbox '%s' has old cyrus.header",
                mailbox->name);
@@ -1339,13 +1460,8 @@ static int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
     if (p < tab) {
         mailbox->quotaroot = xstrndup(p, tab - p);
     }
-    else {
-        mailbox->quotaroot = NULL;
-    }
 
     /* read uniqueid (should always exist unless old format) */
-    free(mailbox->uniqueid);
-    mailbox->uniqueid = NULL;
     if (tab < eol) {
         p = tab + 1;
         if (p == eol) {
@@ -2482,15 +2598,47 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
     }
 }
 
+static char *mailbox_header_data_cstring(struct mailbox *mailbox)
+{
+    struct buf buf = BUF_INITIALIZER;
+    struct dlist *dl = dlist_newkvlist(NULL, mailbox->name);
+
+    dlist_setatom(dl, "N", mailbox->name);
+
+    dlist_setatom(dl, "I", mailbox->uniqueid);
+
+    if (mailbox->mbtype)
+        dlist_setatom(dl, "T", mboxlist_mbtype_to_string(mailbox->mbtype));
+
+    if (mailbox->quotaroot)
+        dlist_setatom(dl, "Q", mailbox->quotaroot);
+
+    if (mailbox->acl)
+        dlist_stitch(dl, mailbox_acl_to_dlist(mailbox->acl));
+
+    if (mailbox->flagname[0]) {
+        int flag = 0;
+        struct dlist *fl = dlist_newlist(dl, "U");
+
+        do {
+            dlist_setatom(fl, "U", mailbox->flagname[flag]);
+        } while (++flag < MAX_USER_FLAGS && mailbox->flagname[flag]);
+    }
+
+    dlist_printbuf(dl, 0, &buf);
+
+    dlist_free(&dl);
+
+    return buf_release(&buf);
+}
+
 /*
  * Write the header file for 'mailbox'
  */
 static int mailbox_commit_header(struct mailbox *mailbox)
 {
-    int flag;
     int fd;
     int r = 0;
-    const char *quotaroot;
     const char *newfname;
     struct iovec iov[10];
     int niov;
@@ -2518,31 +2666,8 @@ static int mailbox_commit_header(struct mailbox *mailbox)
 
     if (r != -1) {
         niov = 0;
-        quotaroot = mailbox->quotaroot ? mailbox->quotaroot : "";
-        WRITEV_ADDSTR_TO_IOVEC(iov,niov,quotaroot);
-        WRITEV_ADD_TO_IOVEC(iov,niov,"\t",1);
-        WRITEV_ADDSTR_TO_IOVEC(iov,niov,mailbox->uniqueid);
-        WRITEV_ADD_TO_IOVEC(iov,niov,"\n",1);
-        r = retry_writev(fd, iov, niov);
-    }
-
-    if (r != -1) {
-        for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-            if (mailbox->flagname[flag]) {
-                niov = 0;
-                WRITEV_ADDSTR_TO_IOVEC(iov,niov,mailbox->flagname[flag]);
-                WRITEV_ADD_TO_IOVEC(iov,niov," ",1);
-                r = retry_writev(fd, iov, niov);
-                if(r == -1) break;
-            }
-        }
-    }
-
-    if (r != -1) {
-        niov = 0;
-        WRITEV_ADD_TO_IOVEC(iov,niov,"\n",1);
-        WRITEV_ADDSTR_TO_IOVEC(iov,niov,mailbox->acl);
-        WRITEV_ADD_TO_IOVEC(iov,niov,"\n",1);
+        WRITEV_ADDSTR_TO_IOVEC(iov, niov, mailbox_header_data_cstring(mailbox));
+        WRITEV_ADD_TO_IOVEC(iov, niov, "\n", 1);
         r = retry_writev(fd, iov, niov);
     }
 
@@ -7603,4 +7728,37 @@ EXPORTED int mailbox_crceq(struct synccrcs a, struct synccrcs b)
     if (a.basic && b.basic && a.basic != b.basic) return 0;
     if (a.annot && b.annot && a.annot != b.annot) return 0;
     return 1;
+}
+
+EXPORTED struct dlist *mailbox_acl_to_dlist(const char *aclstr)
+{
+    const char *p, *q;
+    struct dlist *al = dlist_newkvlist(NULL, "A");
+
+    p = aclstr;
+
+    while (p && *p) {
+        char *name,*val;
+
+        q = strchr(p, '\t');
+        if (!q) break;
+
+        name = xstrndup(p, q-p);
+        q++;
+
+        p = strchr(q, '\t');
+        if (p) {
+            val = xstrndup(q, p-q);
+            p++;
+        }
+        else
+            val = xstrdup(q);
+
+        dlist_setatom(al, name, val);
+
+        free(name);
+        free(val);
+    }
+
+    return al;
 }

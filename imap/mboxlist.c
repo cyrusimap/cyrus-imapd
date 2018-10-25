@@ -178,37 +178,6 @@ EXPORTED void mboxlist_entry_free(mbentry_t **mbentryptr)
     *mbentryptr = NULL;
 }
 
-static void _write_acl(struct dlist *dl, const char *aclstr)
-{
-    const char *p, *q;
-    struct dlist *al = dlist_newkvlist(dl, "A");
-
-    p = aclstr;
-
-    while (p && *p) {
-        char *name,*val;
-
-        q = strchr(p, '\t');
-        if (!q) break;
-
-        name = xstrndup(p, q-p);
-        q++;
-
-        p = strchr(q, '\t');
-        if (p) {
-            val = xstrndup(q, p-q);
-            p++;
-        }
-        else
-            val = xstrdup(q);
-
-        dlist_setatom(al, name, val);
-
-        free(name);
-        free(val);
-    }
-}
-
 EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
 {
     static struct buf buf = BUF_INITIALIZER;
@@ -291,7 +260,7 @@ static struct dlist *mboxlist_entry_dlist(const char *dbname,
     dlist_setdate(dl, "M", time(NULL));
 
     if (mbentry->acl)
-        _write_acl(dl, mbentry->acl);
+        dlist_stitch(dl, mailbox_acl_to_dlist(mbentry->acl));
 
     return dl;
 }

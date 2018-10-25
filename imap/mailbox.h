@@ -720,4 +720,6 @@ extern void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const cha
 
 extern int mailbox_crceq(struct synccrcs a, struct synccrcs b);
 
+extern struct dlist *mailbox_acl_to_dlist(const char *aclstr);
+
 #endif /* INCLUDED_MAILBOX_H */
