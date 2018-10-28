@@ -2665,10 +2665,12 @@ static int mailbox_commit_header(struct mailbox *mailbox)
               sizeof(MAILBOX_HEADER_MAGIC) - 1);
 
     if (r != -1) {
+        char *data = mailbox_header_data_cstring(mailbox);
         niov = 0;
-        WRITEV_ADDSTR_TO_IOVEC(iov, niov, mailbox_header_data_cstring(mailbox));
+        WRITEV_ADDSTR_TO_IOVEC(iov, niov, data);
         WRITEV_ADD_TO_IOVEC(iov, niov, "\n", 1);
         r = retry_writev(fd, iov, niov);
+        free(data);
     }
 
     if (r == -1 || fsync(fd)) {
