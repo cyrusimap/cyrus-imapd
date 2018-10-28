@@ -2590,34 +2590,48 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
                                   isadmin, forceuser);
     if (r) goto done;
 
-    r = mboxlist_create_partition(newname, partition, &newpartition);
-    if (r) goto done;
+    if (isusermbox) {
+        r = mboxlist_create_partition(newname, partition, &newpartition);
+        if (r) goto done;
 
-    if (!newpartition) newpartition = xstrdup(config_defpartition);
+        if (!newpartition) newpartition = xstrdup(config_defpartition);
 
-    /* keep uidvalidity on rename unless specified */
-    if (!uidvalidity)
-        uidvalidity = oldmailbox->i.uidvalidity;
+        /* keep uidvalidity on rename unless specified */
+        if (!uidvalidity)
+            uidvalidity = oldmailbox->i.uidvalidity;
 
-    /* Rename the actual mailbox */
-    r = mailbox_rename_copy(oldmailbox, newname, newpartition, uidvalidity,
-                            isusermbox ? userid : NULL, ignorequota,
-                            silent, &newmailbox);
+        /* Rename the actual mailbox */
+        r = mailbox_rename_copy(oldmailbox, newname, newpartition, uidvalidity,
+                                isusermbox ? userid : NULL, ignorequota,
+                                silent, &newmailbox);
 
-    if (r) goto done;
+        if (r) goto done;
+
+        /* create new entry */
+        newmbentry = mboxlist_entry_create();
+        newmbentry->name = xstrdupnull(newmailbox->name);
+        newmbentry->mbtype = newmailbox->mbtype;
+        newmbentry->partition = xstrdupnull(newmailbox->part);
+        newmbentry->acl = xstrdupnull(newmailbox->acl);
+        newmbentry->uidvalidity = newmailbox->i.uidvalidity;
+        newmbentry->uniqueid = xstrdupnull(newmailbox->uniqueid);
+        newmbentry->createdmodseq = newmailbox->i.createdmodseq;
+        newmbentry->foldermodseq = newmailbox->i.highestmodseq;
+    }
+    else {
+        /* rewrite entry with new name */
+        newmbentry = mboxlist_entry_create();
+        newmbentry->name = xstrdupnull(newname);
+        newmbentry->mbtype = oldmailbox->mbtype;
+        newmbentry->partition = xstrdupnull(oldmailbox->part);
+        newmbentry->acl = xstrdupnull(oldmailbox->acl);
+        newmbentry->uidvalidity = oldmailbox->i.uidvalidity;
+        newmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
+        newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
+        newmbentry->foldermodseq = oldmailbox->i.highestmodseq;
+    }
 
     syslog(LOG_INFO, "Rename: %s -> %s", oldname, newname);
-
-    /* create new entry */
-    newmbentry = mboxlist_entry_create();
-    newmbentry->name = xstrdupnull(newmailbox->name);
-    newmbentry->mbtype = newmailbox->mbtype;
-    newmbentry->partition = xstrdupnull(newmailbox->part);
-    newmbentry->acl = xstrdupnull(newmailbox->acl);
-    newmbentry->uidvalidity = newmailbox->i.uidvalidity;
-    newmbentry->uniqueid = xstrdupnull(newmailbox->uniqueid);
-    newmbentry->createdmodseq = newmailbox->i.createdmodseq;
-    newmbentry->foldermodseq = newmailbox->i.highestmodseq;
 
   dbupdate:
 
@@ -2811,8 +2825,28 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
             /* no event notification */
             if (mboxevent) mboxevent->type = EVENT_CANCELLED;
         }
-        else
-            abort(); /* impossible, in theory */
+        else {
+            /* simple rename */
+            /* prepare the event notification */
+            if (mboxevent) {
+
+                /* case of delayed delete */
+                if (mboxevent->type == EVENT_MAILBOX_DELETE)
+                    mboxevent_extract_mailbox(mboxevent, oldmailbox);
+                else {
+                    /* New maibox is the same as old, except for the name */
+                    oldname = oldmailbox->name;
+                    oldmailbox->name = (char *) newname;
+                    mboxevent_extract_mailbox(mboxevent, oldmailbox);
+                    oldmailbox->name = (char *) oldname;
+
+                    mboxevent_extract_old_mailbox(mboxevent, oldmailbox);
+                }
+
+                mboxevent_set_access(mboxevent, NULL, NULL, userid, newname, 1);
+            }
+            mailbox_close(&oldmailbox);
+        }
     }
 
     /* free memory */
