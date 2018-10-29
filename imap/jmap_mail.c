@@ -2562,9 +2562,10 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
         if (r == IMAP_SEARCH_SLOW) {
             *err = json_pack("{s:s, s:s}", "type", "cannotCalculateChanges",
                                            "description", "search too slow");
-            return;
         }
-        *err = jmap_server_error(r);
+        else {
+            *err = jmap_server_error(r);
+        }
         goto done;
     }
 
@@ -2760,9 +2761,10 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
         if (r == IMAP_SEARCH_SLOW) {
             *err = json_pack("{s:s, s:s}", "type", "cannotCalculateChanges",
                                            "description", "search too slow");
-            return;
         }
-        *err = jmap_server_error(r);
+        else {
+            *err = jmap_server_error(r);
+        }
         goto done;
     }
 
