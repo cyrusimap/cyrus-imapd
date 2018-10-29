@@ -1646,6 +1646,12 @@ HIDDEN int mboxname_policycheck(const char *name)
     // (would conflict with backups of shared mailboxes)
     if (!strncmp(name, "user.%", 6)) return IMAP_MAILBOX_BADNAME;
 
+    // exact "INBOX" child
+    if (!strncmp(name, "user.", 5)) {
+        p = strchr(name+5, '.');
+        if (p && !strcmp(p+1, "INBOX")) return IMAP_MAILBOX_BADNAME;
+    }
+
     while (*name) {
         if (*name == '&') {
             /* Modified UTF-7 */
