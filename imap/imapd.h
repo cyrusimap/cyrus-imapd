@@ -134,7 +134,8 @@ enum {
     FETCH_EMAILID =             (1<<22),
     FETCH_THREADID =            (1<<23),
     FETCH_SAVEDATE =            (1<<24),
-    FETCH_CREATEDMODSEQ =       (1<<25)
+    FETCH_CREATEDMODSEQ =       (1<<25),
+    FETCH_XMAILBOXID =          (1<<26),
 };
 
 enum {

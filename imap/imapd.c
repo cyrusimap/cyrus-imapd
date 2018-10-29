@@ -5004,6 +5004,13 @@ badannotation:
             else goto badatt;
             break;
 
+        case 'X':
+            if (!strcmp(fetchatt.s, "X-MAILBOXID")) {
+                fa->fetchitems |= FETCH_XMAILBOXID;
+            }
+            else goto badatt;
+            break;
+
         default:
         badatt:
             prot_printf(imapd_out, "%s BAD Invalid %s attribute %s\r\n", tag, cmd, fetchatt.s);
@@ -5105,7 +5112,7 @@ badannotation:
         }
     }
 
-    if (fa->fetchitems & (FETCH_ANNOTATION|FETCH_FOLDER)) {
+    if (fa->fetchitems & (FETCH_ANNOTATION|FETCH_FOLDER|FETCH_XMAILBOXID)) {
         fa->namespace = &imapd_namespace;
         fa->userid = imapd_userid;
     }

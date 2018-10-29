@@ -3813,6 +3813,96 @@ static int index_fetchannotations(struct index_state *state,
     return r;
 }
 
+struct mailboxid_rock {
+    struct index_state *state;
+    int sep;
+    const struct fetchargs *fetchargs;
+};
+
+static int _mailboxid_cb(const conv_guidrec_t *rec, void *rock)
+{
+    static const int needrights = ACL_READ|ACL_LOOKUP;
+    struct mailboxid_rock *mbid_rock = (struct mailboxid_rock *) rock;
+    mbentry_t *mbentry = NULL;
+    int myrights = 0;
+    struct mailbox *mailbox = NULL;
+    msgrecord_t *msgrecord = NULL;
+    uint32_t system_flags, internal_flags;
+    char *extname = NULL;
+    int r = 0;
+
+    assert(mbid_rock->state != NULL);
+    assert(mbid_rock->fetchargs != NULL);
+
+    /* make sure we have appropriate rights */
+    r = mboxlist_lookup(rec->mboxname, &mbentry, NULL);
+    if (r) goto done;
+    myrights = cyrus_acl_myrights(mbid_rock->state->authstate, mbentry->acl);
+    if ((myrights & needrights) != needrights)
+        goto done;
+
+    /* open rec->mboxname */
+    r = mailbox_open_irl(rec->mboxname, &mailbox);
+    if (r) goto done;
+
+    /* find record for rec->uid */
+    r = msgrecord_find(mailbox, rec->uid, &msgrecord);
+    if (r) goto done;
+
+    /* skip if flag deleted or flag internal expunged */
+    r = msgrecord_get_systemflags(msgrecord, &system_flags);
+    if (!r) r = msgrecord_get_internalflags(msgrecord, &internal_flags);
+    if (r
+        || (system_flags & FLAG_DELETED)
+        || (internal_flags & FLAG_INTERNAL_EXPUNGED))
+        goto done;
+
+    extname = mboxname_to_external(rec->mboxname,
+                                   mbid_rock->fetchargs->namespace,
+                                   mbid_rock->fetchargs->userid);
+
+    if (mbid_rock->sep)
+        prot_putc(mbid_rock->sep, mbid_rock->state->out);
+    prot_printf(mbid_rock->state->out, "%s", extname);
+    mbid_rock->sep = ' ';
+
+done:
+    if (extname) free(extname);
+    if (msgrecord) msgrecord_unref(&msgrecord);
+    if (mailbox) mailbox_close(&mailbox);
+    if (mbentry) mboxlist_entry_free(&mbentry);
+    return r;
+}
+
+/*
+ * Helper function to send FETCH data for the X-MAILBOXID
+ * fetch item.
+ */
+static int index_fetchmailboxids(struct index_state *state,
+                                 uint32_t msgno,
+                                 const struct fetchargs *fetchargs)
+{
+    struct conversations_state *cstate = NULL;
+    struct mailboxid_rock rock = { state, 0, fetchargs};
+    struct index_record record;
+    int r;
+
+    /* FIXME nasty, one open/close per message :/ */
+    r = conversations_open_user(state->userid, &cstate);
+    if (r) goto done;
+
+    r = index_reload_record(state, msgno, &record);
+    if (r) goto done;
+
+    r = conversations_guid_foreach(cstate,
+                                   message_guid_encode(&record.guid),
+                                   &_mailboxid_cb,
+                                   &rock);
+done:
+    if (cstate) conversations_commit(&cstate);
+    return r;
+}
+
 /*
  * Helper function to send * FETCH (FLAGS data.
  * Does not send the terminating close paren or CRLF.
@@ -4106,6 +4196,13 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if ((fetchitems & FETCH_UIDVALIDITY)) {
         prot_printf(state->out, "%cUIDVALIDITY %u", sepchar,
                     state->mailbox->i.uidvalidity);
+        sepchar = ' ';
+    }
+    if ((fetchitems & FETCH_XMAILBOXID)) {
+        prot_printf(state->out, "%cX-MAILBOXID (", sepchar);
+        r = index_fetchmailboxids(state, msgno, fetchargs);
+        r = 0;
+        prot_printf(state->out, ")");
         sepchar = ' ';
     }
     if (fetchitems & FETCH_ENVELOPE) {
