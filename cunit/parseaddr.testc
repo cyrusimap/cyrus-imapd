@@ -700,4 +700,39 @@ static void test_getparts_nodomain(void)
     parseaddr_free(a);
 }
 
+static void test_quoted_crlf(void)
+{
+    struct address *head, *a;
+
+    a = NULL;
+    parseaddr_list("foo@example.com, bar@example.com,\r\n  \"Baz\\\r\n Baz\" <baz@example.com>,\r\n  bam@example.com", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    head = a;
+
+    CU_ASSERT_PTR_NULL(a->name);
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "foo");
+    CU_ASSERT_STRING_EQUAL(a->domain, "example.com");
+    CU_ASSERT_PTR_NOT_NULL(a->next);
+
+    a = a->next;
+    CU_ASSERT_PTR_NULL(a->name);
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "bar");
+    CU_ASSERT_STRING_EQUAL(a->domain, "example.com");
+    CU_ASSERT_PTR_NOT_NULL(a->next);
+
+    a = a->next;
+    CU_ASSERT_STRING_EQUAL(a->name, "Baz Baz");
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "baz");
+    CU_ASSERT_STRING_EQUAL(a->domain, "example.com");
+    CU_ASSERT_PTR_NOT_NULL(a->next);
+
+    a = a->next;
+    CU_ASSERT_PTR_NULL(a->name);
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "bam");
+    CU_ASSERT_STRING_EQUAL(a->domain, "example.com");
+    CU_ASSERT_PTR_NULL(a->next);
+
+    parseaddr_free(head);
+}
+
 /* vim: set ft=c: */

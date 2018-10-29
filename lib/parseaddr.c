@@ -239,6 +239,13 @@ static int parseaddr_phrase(char **inp, char **phrasep, const char *specials)
         if (c == '"') {
             while ((c = *src)) {
                 src++;
+                if (c == '\\' && *src == '\r' && *(src+1) == '\n') {
+                    /* Ignore quote right in front of CR+LF. There's no
+                     * point in accepting lone CR or stray LF, and there's
+                     * clients out there that produce these bogus addresses. */
+                    c = *src;
+                    src++;
+                }
                 if (c == '\r' && *src == '\n') {
                     /* CR+LF combination */
                     src++;
