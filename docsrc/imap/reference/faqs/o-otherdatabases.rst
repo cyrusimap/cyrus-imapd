@@ -16,5 +16,5 @@ mailboxes.
 Cyrus DOES have the option of using databases of various types for 
 storing some other information, such as authentication data, mailbox 
 lists, etc. There may be reasons to add a SQL backend to these databases 
-in the future (in addition to flat, skiplist, and berkeley). 
+in the future (in addition to flat, and skiplist).
 

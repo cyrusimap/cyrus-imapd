@@ -132,17 +132,6 @@ This behavior can be changed with the use of the
 <tt>allowplaintext</tt> option in <tt>imapd.conf.5</tt>.</p>
 </dd>
 
-<dt><b>Q:</b> I'm getting syslog'd messages from the master process
-saying processes are "signaled to death by 10". What's up?</dt>
-
-<dd>
-<p><b>A:</b> If you're using Berkeley DB 3.0.55, try installing
-some <a
-href="http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html">patches
-to Berkeley DB</a> available from <a
-href="http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html">http://www.sleepycat.com/update/3.0.55/patch.3.0.55.html</a>.</p>
-</dd>
-
 <dt><b>Q:</b> I've used <tt>saslpasswd2</tt> to create CRAM-MD5
 secrets, but imapd doesn't say <tt>AUTH=CRAM-MD5</tt>. Why?</dt>
 
@@ -242,21 +231,6 @@ tls.c:</p>
         off |= SSL_OP_NO_SSLv3;
     }
 </pre>
-</dd>
-
-<dt><b>Q:</b> I'm getting messages in <tt>imapd.log</tt> like
-"DBERROR db3: 16 lockers".  What's wrong?
-</dt>
-
-<dd>
-<p><b>A:</b> Nothing is wrong. These messages are logged whenever
-Berkeley DB encounters lock contention, but aren't necessarily
-problems. This is especially likely when you have an
-empty or small duplicate delivery database and are receiving a large
-volume of e-mail.</p>
-
-<p>Berkeley DB 4.0 has a bug where the number of lockers isn't
-decremented properly, causing this number to be unreliable.</p>
 </dd>
 
 <dt><b>Q:</b> All of the 8bit characters in the headers of messages

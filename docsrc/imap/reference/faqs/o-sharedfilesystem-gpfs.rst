@@ -27,7 +27,7 @@ Our Cyrus installation has about 80K users, close to 1TB of disk, and
 many millions of files. Just the number of files alone would be enough 
 to kill the idea of using GPFS. 
 
-Cyrus makes pretty extensive use of mmap(), and so does Berkeley DB. 
+Cyrus makes pretty extensive use of mmap().
 While GPFS implements mmap(), the GPFS architect had some words about 
 the way certain operations are accomplished in Cyrus. I think there are 
 (or used to be) places where an mmap'd file is opened for write with 

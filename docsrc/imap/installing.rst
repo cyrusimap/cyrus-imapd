@@ -440,7 +440,6 @@ Check the output of `groups cyrus` to see what groups it currently belongs to.
 Incorrect groups settings results in saslauthd reporting permission failures::
 
     SASL cannot connect to saslauthd server: Permission denied
-    SASL unable to open Berkeley db /etc/sasldb2: Permission denied
 
 Master will need to be restarted if you needed to change the groups.
 

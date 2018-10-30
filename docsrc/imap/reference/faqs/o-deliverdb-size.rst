@@ -10,7 +10,7 @@ of data there.
 
 Note also that it is common for databases to have unused 
 space that may not be immediately recovered for performance reasons 
-(this is the case with Berkeley DB and Cyrus Skiplist) You can control 
+(this is the case with Cyrus Skiplist) You can control
 the size by increasing the frequency at which it gets pruned. 
 
 
