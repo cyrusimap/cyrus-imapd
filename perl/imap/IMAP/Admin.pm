@@ -575,9 +575,10 @@ sub listquotaroot {
   $self->addcallback({-trigger => 'QUOTAROOT',
                       -callback => sub {
                         my %d = @_;
-                        return unless ( $d{-text} =~ /^[^\"]\S+ (\S+)/ or
+                        return unless ( $d{-text} =~ /^\"[^\"]+\" \"([^\"]+)\"/ or
                                        $d{-text} =~ /^\"[^\"]+\" (\S+)/ or
-                                       $d{-text} =~ /^\"[^\"]+\" \"([^\"]+)\"/
+                                       $d{-text} =~ /[^\"]\S+ \"([^\"]+)\"/ or
+                                       $d{-text} =~ /^[^\"]\S+ (\S+)/
                                        );
                         ${$d{-rock}} = $1;
                       },
