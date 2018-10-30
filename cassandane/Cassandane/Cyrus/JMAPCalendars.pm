@@ -892,17 +892,13 @@ sub normalize_event
             if (not exists $p->{linkIds}) {
                 $p->{linkIds} = undef;
             }
-            if (not exists $p->{participation}) {
-                $p->{participation} = 'required';
+            if (not exists $p->{attendance}) {
+                $p->{attendance} = 'required';
             }
-            if ((not exists $p->{rsvpResponse})) {
-                if (exists $p->{rsvpWanted} and $p->{rsvpWanted} eq 'true') {
-                    $p->{rsvpResponse} = 'needs-action';
+            if ((not exists $p->{participationStatus})) {
+                if (exists $p->{expectReply} and $p->{expectReply} eq 'true') {
+                    $p->{participationStatus} = 'needs-action';
                 }
-            }
-            if (exists $p->{roles}) {
-                my @roles = sort @{$p->{roles}};
-                $p->{roles} = \@roles;
             }
         }
     }
@@ -1083,10 +1079,17 @@ sub test_calendarevent_get_relatedto
     $self->assert_not_null($event);
     $self->assert_str_equals($id, $event->{uid});
     $self->assert_deep_equals($event->{relatedTo}, {
-            "58ADE31-001" => { relation => ['first'] },
-            "58ADE31-003" => { relation => ['next'] },
-            "foo" => { relation => ['x-unknown1', 'x-unknown2'] },
-            "bar" => { relation => []},
+            "58ADE31-001" => { relation => {
+                'first' => JSON::true,
+            }},
+            "58ADE31-003" => { relation => {
+                'next' => JSON::true,
+            }},
+            "foo" => { relation => {
+                'x-unknown1' => JSON::true,
+                'x-unknown2' => JSON::true,
+            }},
+            "bar" => { relation => undef},
     });
 }
 
@@ -1099,7 +1102,7 @@ sub test_calendarevent_get_links
     my $uri = "http://jmap.io/spec.html#calendar-events";
 
     my $links = {
-        'link1' => {
+        'fad3249914b09ede1558fa01004f4f8149559591' => {
             href => $uri,
             type => "text/html",
             size => 4480,
@@ -1187,45 +1190,77 @@ sub test_calendarevent_get_participants
     my ($id, $ical) = $self->icalfile('participants');
 
     my $participants = {
-        'smithers@example.com' => {
+        '375507f588e65ec6eb800757ab94ccd10ad58599' => {
             name => 'Monty Burns',
             email => 'smithers@example.com',
-            roles => ['owner', 'attendee'],
-            rsvpResponse => 'accepted',
-            participation => 'required',
+            roles => {
+                'owner' => JSON::true,
+                'attendee' => JSON::true,
+            },
+            participationStatus => 'accepted',
+            attendance => 'required',
+            sendTo => {
+                imip => 'mailto:smithers@example.com',
+            }
         },
-        'homer@example.com' => {
+        '39b16b858076733c1d890cbcef73eca0e874064d' => {
             name => 'Homer Simpson',
-            rsvpResponse => 'accepted',
-            participation => 'optional',
+            participationStatus => 'accepted',
+            attendance => 'optional',
             email => 'homer@example.com',
-            roles => ['attendee'],
+            roles => {
+                'attendee' => JSON::true,
+            },
             locationId => 'loc1',
+            sendTo => {
+                imip => 'mailto:homer@example.com',
+            }
         },
         'carl' => {
             name => 'Carl Carlson',
-            rsvpResponse => 'tentative',
+            participationStatus => 'tentative',
             email => 'carl@example.com',
-            roles => ['attendee'],
+            roles => {
+                'attendee' => JSON::true,
+            },
             scheduleSequence => 3,
             scheduleUpdated => '2017-01-02T03:04:05Z',
-            delegatedFrom => [ 'lenny@example.com' ],
+            delegatedFrom => {
+                'a6ef900d284067bb327d7be1469fb44693a5ec13' => JSON::true,
+            },
+            sendTo => {
+                imip => 'mailto:carl@example.com',
+            }
         },
-        'lenny@example.com' => {
+        'a6ef900d284067bb327d7be1469fb44693a5ec13' => {
             name => 'Lenny Leonard',
-            rsvpResponse => 'tentative',
+            participationStatus => 'tentative',
             email => 'lenny@example.com',
-            roles => ['attendee'],
-            delegatedTo => [ 'carl' ],
+            roles => {
+                'attendee' => JSON::true,
+            },
+            delegatedTo => {
+                'carl' => JSON::true,
+            },
+            sendTo => {
+                imip => 'mailto:lenny@example.com',
+            }
         },
-        'larry@example.com' => {
+        'd6db3540fe51335b7154f144456e9eac2778fc8f' => {
             name => 'Larry Burns',
-            rsvpResponse => 'declined',
+            participationStatus => 'declined',
             email => 'larry@example.com',
-            roles => ['attendee'],
-            memberOf => ['projectA@example.com'],
-            participation => 'required',
+            roles => {
+                'attendee' => JSON::true,
+            },
+            memberOf => {
+                '29a545214b66cbd7635fdec3a35d074ff3484479' => JSON::true,
+            },
+            attendance => 'required',
             scheduleUpdated => '2015-09-29T14:44:23Z',
+            sendTo => {
+                imip => 'mailto:larry@example.com',
+            }
         },
     };
 
@@ -1241,15 +1276,25 @@ sub test_calendarevent_get_organizer
     my ($id, $ical) = $self->icalfile('organizer');
 
     my $participants = {
-        'organizer@local' => {
+        'bf8360ce374961f497599431c4bacb50d4a67ca1' => {
             name => 'Organizer',
             email => 'organizer@local',
-            roles => ['owner'],
+            roles => {
+                'owner' => JSON::true,
+            },
+            sendTo => {
+                imip => 'mailto:organizer@local',
+            },
         },
-        'attendee@local' => {
+        '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             name => '',
             email => 'attendee@local',
-            roles => ['attendee'],
+            roles => {
+                'attendee' => JSON::true,
+            },
+            sendTo => {
+                imip => 'mailto:attendee@local',
+            },
         },
     };
 
@@ -1269,15 +1314,26 @@ sub test_calendarevent_get_organizer_bogusuri
     my ($id, $ical) = $self->icalfile('organizer_bogusuri');
 
     my $participants = {
-        '/foo-bar/principal/' => {
+        '55d3677ce6a79b250d0fc3b5eed5130807d93dd3' => {
             name => 'Organizer',
             email => undef,
-            roles => ['owner', 'attendee'],
+            roles => {
+                'attendee' => JSON::true,
+                'owner' => JSON::true,
+            },
+            sendTo => {
+                other => '/foo-bar/principal/',
+            },
         },
-        'attendee@local' => {
+        '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             name => '',
             email => 'attendee@local',
-            roles => ['attendee'],
+            roles => {
+                'attendee' => JSON::true,
+            },
+            sendTo => {
+                imip => 'mailto:attendee@local',
+            },
         },
     };
 
@@ -1295,15 +1351,26 @@ sub test_calendarevent_get_organizermailto
     my ($id, $ical) = $self->icalfile('organizermailto');
 
     my $participants = {
-        'organizer@local' => {
+        'bf8360ce374961f497599431c4bacb50d4a67ca1' => {
             name => 'Organizer',
             email => 'organizer@local',
-            roles => ['owner', 'attendee'],
+            roles => {
+                'owner' => JSON::true,
+                'attendee' => JSON::true,
+            },
+            sendTo => {
+                imip => 'mailto:organizer@local',
+            },
         },
-        'attendee@local' => {
+        '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             name => 'Attendee',
             email => 'attendee@local',
-            roles => ['attendee'],
+            roles => {
+                'attendee' => JSON::true,
+            },
+            sendTo => {
+                imip => 'mailto:attendee@local',
+            },
         },
     };
 
@@ -1447,7 +1514,10 @@ sub test_calendarevent_get_locations_uri
     my $links = $event->{links};
     $self->assert_num_equals(1, scalar @locations);
     $self->assert_str_equals("On planet Earth", $locations[0]{name});
-    $self->assert_str_equals("skype:foo", $links->{$locations[0]{linkIds}[0]}->{href});
+
+    my @linkIds = keys %{$locations[0]{linkIds}};
+    $self->assert_num_equals(1, scalar @linkIds);
+    $self->assert_equals("skype:foo", $links->{$linkIds[0]}->{href});
 }
 
 sub test_calendarevent_get_locations_geo
@@ -1495,45 +1565,6 @@ sub test_calendarevent_get_virtuallocations_conference
     my $loc2 = $virtualLocations->{loc2};
     $self->assert_str_equals('Chat room', $loc2->{name});
     $self->assert_str_equals('xmpp:chat123@conference.example.com', $loc2->{uri});
-}
-
-sub test_calendarevent_get_infinite_delegates
-    :min_version_3_1 :needs_component_jmap
-{
-    my ($self) = @_;
-
-    # makes sure that delegated partstats may not cause an endless loop
-
-    my $id = "642FDC66-B1C9-45D7-8441-B57BE3ADF3C6";
-    my $ical = <<EOF;
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
-CALSCALE:GREGORIAN
-BEGIN:VEVENT
-TRANSP:TRANSPARENT
-DTSTART;TZID=Europe/Vienna:20160928T160000
-DTEND;TZID=Europe/Vienna:20160928T170000
-UID:$id
-DTSTAMP:20150928T132434Z
-SEQUENCE:9
-SUMMARY:Moebian Delegates
-LAST-MODIFIED:20150928T132434Z
-ATTENDEE;PARTSTAT=DELEGATED;DELEGATED-FROM="mailto:lenny\@example.com";DELEGATED-TO="mailto:lenny\@example.com";CN=Carl Carlson:mailto:carl\@example.com
-ATTENDEE;PARTSTAT=DELEGATED;DELEGATED-TO="mailto:carl\@example.com";CN=Lenny Leonard:mailto:lenny\@example.com
-ORGANIZER;CN="Monty Burns":mailto:smithers\@example.com
-END:VEVENT
-END:VCALENDAR
-EOF
-
-    my $event = $self->putandget_vevent($id, $ical);
-    my $p = $event->{participants}{"lenny\@example.com"};
-    $self->assert_null($p->{rsvpResponse});
-    $self->assert_deep_equals(["carl\@example.com"], $p->{delegatedTo});
-    $p = $event->{participants}{"carl\@example.com"};
-    $self->assert_null($p->{rsvpResponse});
-    $self->assert_deep_equals(["lenny\@example.com"], $p->{delegatedTo});
-    $self->assert_deep_equals(["lenny\@example.com"], $p->{delegatedFrom});
 }
 
 sub createandget_event
@@ -1694,7 +1725,7 @@ sub test_calendarevent_set_bymonth
                 "locations"=> undef,
                 "links"=> undef,
                 "isAllDay"=> JSON::false,
-                "duration"=> "P0D",
+                "duration"=> "PT0S",
                 "timeZone"=> undef,
                 "recurrenceOverrides"=> undef,
                 "status"=> "confirmed",
@@ -1721,10 +1752,17 @@ sub test_calendarevent_set_relatedto
         "calendarId" => $calid,
         "uid" => "58ADE31-custom-UID",
         "relatedTo" => {
-            "uid1" => { relation => ['first'] },
-            "uid2" => { relation => ['next'] },
-            "uid3" => { relation => ['x-unknown1', 'x-unknown2'] },
-            "uid4" => { relation => [] },
+            "uid1" => { relation => {
+                'first' => JSON::true,
+            }},
+            "uid2" => { relation => {
+                'next' => JSON::true,
+            }},
+            "uid3" => { relation => {
+                'x-unknown1' => JSON::true,
+                'x-unknown2' => JSON::true
+            }},
+            "uid4" => { relation => undef },
         },
         "title"=> "foo",
         "start"=> "2015-11-07T09:00:00",
@@ -1984,7 +2022,7 @@ sub test_calendarevent_set_links
         "description"=> "",
         "freeBusyStatus"=> "busy",
         "links" => {
-            "http://jmap.io/spec.html#calendar-events" => {
+            "spec" => {
                 href => "http://jmap.io/spec.html#calendar-events",
                 title => "the spec",
             },
@@ -2036,7 +2074,10 @@ sub test_calendarevent_set_locations
         },
         locE => {
             name => "location E",
-            linkIds => [ 'link1', 'link2' ],
+            linkIds => {
+                'link1' => JSON::true,
+                'link2' => JSON::true,
+            },
         },
         # A full-blown location
         locG => {
@@ -2044,7 +2085,10 @@ sub test_calendarevent_set_locations
             description => "a description",
             timeZone => "Europe/Vienna",
             coordinates => "geo:48.2010,16.3695,183",
-            linkIds =>  [ 'link1', 'link2' ],
+            linkIds => {
+                'link1' => JSON::true,
+                'link2' => JSON::true,
+            },
         },
         # A location with name that needs escaping
         locH => {
@@ -2173,11 +2217,11 @@ sub test_calendarevent_set_recurrenceoverrides
             },
         },
         "links" => {
-            "http://jmap.io/spec.html#calendar-events" => {
+            "link1" => {
                 href => "http://jmap.io/spec.html#calendar-events",
                 title => "the spec",
             },
-            "https://tools.ietf.org/html/rfc5545" => {
+            "link2" => {
                 href => "https://tools.ietf.org/html/rfc5545",
             },
         },
@@ -2188,7 +2232,7 @@ sub test_calendarevent_set_recurrenceoverrides
             "2016-04-01T10:00:00" => {
                 "description" => "don't come in without an April's joke!",
                 "locations/locA/name" => "location A exception",
-                "links/https:~1~1tools.ietf.org~1html~1rfc5545/title" => "RFC 5545",
+                "links/link2/title" => "RFC 5545",
             },
             "2016-05-01T10:00:00" => {
                 "title" => "Labour Day",
@@ -2241,58 +2285,99 @@ sub test_calendarevent_set_participants
             "web" => "http://local/rsvp",
 
         },
-        participantId => 'foo@local',
+        participantId => 'foo',
         "participants" => {
-            'foo@local' => {
+            'foo' => {
                 name => 'Foo',
                 email => 'foo@local',
                 kind => 'individual',
-                roles => [ 'owner', 'attendee', 'chair' ],
+                roles => {
+                    'owner' => JSON::true,
+                    'attendee' => JSON::true,
+                    'chair' => JSON::true,
+                },
                 locationId => 'loc1',
-                rsvpResponse => 'accepted',
-                participation => 'required',
-                rsvpWanted => JSON::false,
-                linkIds => [ 'loc1' ],
+                participationStatus => 'accepted',
+                attendance => 'required',
+                expectReply => JSON::false,
+                linkIds => {
+                    'link1' => JSON::true,
+                },
+                # Auto-generated sendTo{imip}
             },
-            'bar@local' => {
+            'bar' => {
                 name => 'Bar',
                 email => 'bar@local',
                 kind => 'individual',
-                roles => [ 'attendee' ],
+                roles => {
+                    'attendee' => JSON::true,
+                },
                 locationId => 'loc2',
-                rsvpResponse => 'needs-action',
-                participation => 'required',
-                rsvpWanted => JSON::true,
-                delegatedTo => [ 'bam@local' ],
-                memberOf => [ 'group@local' ],
-                linkIds => [ 'link1' ],
+                participationStatus => 'needs-action',
+                attendance => 'required',
+                expectReply => JSON::true,
+                delegatedTo => {
+                    'bam' => JSON::true,
+                },
+                memberOf => {
+                    'group' => JSON::true,
+                },
+                linkIds => {
+                    'link1' => JSON::true,
+                },
+                sendTo => {
+                    imip => 'mailto:bar@local',
+                },
             },
-            'bam@local' => {
+            'bam' => {
                 name => 'Bam',
                 email => 'bam@local',
-                roles => [ 'attendee' ],
-                delegatedFrom => [ 'bar@local' ],
+                roles => {
+                    'attendee' => JSON::true,
+                },
+                delegatedFrom => {
+                    'bar' => JSON::true,
+                },
                 scheduleSequence => 7,
                 scheduleUpdated => '2018-07-06T05:03:02Z',
+                sendTo => {
+                    imip => 'mailto:bam@local',
+                },
             },
-            'group@local' => {
+            'group' => {
                 name => 'Group',
                 kind => 'group',
-                roles => [ 'attendee' ],
+                roles => {
+                    'attendee' => JSON::true,
+                },
                 email => 'group@local',
+                sendTo => {
+                    'imip' => 'mailto:groupimip@local',
+                    'other' => 'tel:+1-123-5555-1234',
+                },
             },
-            'resource@local' => {
+            'resource' => {
                 name => 'Some resource',
                 kind => 'resource',
-                roles => [ 'attendee' ],
+                roles => {
+                    'attendee' => JSON::true,
+                },
                 email => 'resource@local',
+                sendTo => {
+                    imip => 'mailto:resource@local',
+                },
             },
-            'location@local' => {
+            'location' => {
                 name => 'Some location',
                 kind => 'location',
-                roles => [ 'attendee' ],
+                roles => {
+                    'attendee' => JSON::true,
+                },
                 email => 'location@local',
                 locationId => 'loc1',
+                sendTo => {
+                    imip => 'mailto:location@local',
+                },
             },
         },
         locations => {
@@ -2312,6 +2397,7 @@ sub test_calendarevent_set_participants
     };
 
     my $ret = $self->createandget_event($event);
+    $event->{participants}{foo}{sendTo} = { imip => 'mailto:foo@local' };
     $self->assert_normalized_event_equals($ret, $event);
 }
 
@@ -2337,23 +2423,35 @@ sub test_calendarevent_set_participants_patch
             "imip" => "mailto:foo\@local",
         },
         "participants" => {
-            'bar@local' => {
+            'bar' => {
                 name => 'Bar',
                 email => 'bar@local',
-                roles => [ 'attendee' ],
-                rsvpResponse => 'needs-action',
-                participation => 'required',
-                rsvpWanted => JSON::true,
+                roles => {
+                    'attendee' => JSON::true,
+                },
+                participationStatus => 'needs-action',
+                attendance => 'required',
+                expectReply => JSON::true,
+                sendTo => {
+                    imip => 'mailto:bar@local',
+                },
             },
         },
         method => 'request',
     };
 
     my $ret = $self->createandget_event($event);
-    $event->{participants}{'foo@local'} = {
+
+    # Add auto-generated owner participant for ORGANIZER.
+    $event->{participants}{'3e6a0e46cc0af22aff762f2e1869f23de7aca482'} = {
         name => '',
         email => 'foo@local',
-        roles => ['owner'],
+        roles => {
+            'owner' => JSON::true,
+        },
+        sendTo => {
+            imip => 'mailto:foo@local',
+        },
     };
     $self->assert_normalized_event_equals($ret, $event);
     my $eventId = $ret->{id};
@@ -2362,7 +2460,7 @@ sub test_calendarevent_set_participants_patch
         ['CalendarEvent/set', {
             update => {
                 $eventId => {
-                    'participants/bar@local/rsvpResponse' => 'accepted',
+                    'participants/bar/participationStatus' => 'accepted',
                 },
             },
         }, 'R1'],
@@ -2371,7 +2469,7 @@ sub test_calendarevent_set_participants_patch
         }, 'R2'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId});
-    $event->{participants}{'bar@local'}{rsvpResponse} = 'accepted';
+    $event->{participants}{'bar'}{participationStatus} = 'accepted';
     $ret = $res->[1][1]{list}[0];
     $self->assert_normalized_event_equals($ret, $event);
 }
@@ -2433,16 +2531,27 @@ sub test_calendarevent_set_participantid
     my $calid = "Default";
 
     my $participants = {
-        "foo\@local" => {
+        "foo" => {
             name => "",
-            email => "foo\@local",
-            roles => ["attendee"],
+            email => 'foo@local',
+            roles => {
+                'attendee' => JSON::true,
+            },
             locationId => "locX",
+            sendTo => {
+                imip => 'mailto:foo@local',
+            },
         },
         "you" => {
             name => "Cassandane",
-            email => "cassandane\@example.com",
-            roles => ["owner", "attendee"],
+            email => 'cassandane@example.com',
+            roles => {
+                'owner' => JSON::true,
+                'attendee' => JSON::true,
+            },
+            sendTo => {
+                imip => 'mailto:cassandane@example.com',
+            },
         },
     };
 
@@ -3503,16 +3612,20 @@ sub test_calendarevent_query_text
                             "isAllDay"=> JSON::false,
                             "replyTo" => { imip => "mailto:tux\@local" },
                             "participants" => {
-                                "tux\@local" => {
+                                "tux" => {
                                     name => "",
                                     email => "tux\@local",
-                                    roles => ["owner"],
+                                    roles => {
+                                        'owner' => JSON::true,
+                                    },
                                     locationId => "loc1",
                                 },
-                                "qux\@local" => {
+                                "qux" => {
                                     name => "Quuks",
                                     email => "qux\@local",
-                                    roles => ["attendee"],
+                                    roles => {
+                                        'attendee' => JSON::true,
+                                    },
                                 },
                             },
                             recurrenceRule => {
@@ -3531,6 +3644,7 @@ sub test_calendarevent_query_text
                         },
                     }}, "R1"]]);
     my $id1 = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id1);
 
     xlog "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
@@ -3774,12 +3888,16 @@ sub test_calendarevent_set_schedule_request
         "org" => {
             "name" => "Cassandane",
             "email" => "cassandane\@example.com",
-            "roles" => ["owner"],
+            roles => {
+                'owner' => JSON::true,
+            },
         },
         "att" => {
             "name" => "Bugs Bunny",
             "email" => "bugs\@example.com",
-            "roles" => ["attendee"],
+            roles => {
+                'attendee' => JSON::true,
+            },
         },
     };
 
@@ -3826,12 +3944,16 @@ sub test_calendarevent_set_schedule_reply
         "org" => {
             "name" => "Bugs Bunny",
             "email" => "bugs\@example.com",
-            "roles" => ["owner"],
+            roles => {
+                'owner' => JSON::true,
+            },
         },
         "att" => {
             "name" => "Cassandane",
             "email" => "cassandane\@example.com",
-            "roles" => ["attendee"],
+            roles => {
+                'attendee' => JSON::true,
+            },
         },
     };
 
@@ -3856,7 +3978,7 @@ sub test_calendarevent_set_schedule_reply
     $self->{instance}->getnotify();
 
     xlog "send reply as attendee to organizer";
-    $participants->{att}->{rsvpResponse} = "tentative";
+    $participants->{att}->{participationStatus} = "tentative";
     $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
         $id => {
             replyTo => { imip => "mailto:bugs\@example.com" },
@@ -3909,12 +4031,16 @@ sub test_calendarevent_set_schedule_cancel
                                 "org" => {
                                     "name" => "Cassandane",
                                     "email" => "cassandane\@example.com",
-                                    "roles" => ["owner"],
+                                    roles => {
+                                        'owner' => JSON::true,
+                                    },
                                 },
                                 "att" => {
                                     "name" => "Bugs Bunny",
                                     "email" => "bugs\@example.com",
-                                    "roles" => ["attendee"],
+                                    roles => {
+                                        'attendee' => JSON::true,
+                                    },
                                 },
                             },
                         }
