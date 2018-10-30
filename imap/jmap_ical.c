@@ -2083,7 +2083,7 @@ static json_t* duration_from_ical(icalcomponent *comp)
         }
     }
 
-    json_t *ret = json_string(val && strcmp(val, "PT0S") ? val : "P0D");
+    json_t *ret = json_string(val ? val : "PT0S");
     if (val) free(val);
     return ret;
 }
@@ -2636,15 +2636,11 @@ static int location_is_endtimezone(json_t *loc)
 static void
 startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 {
-    const char *tzid;
     int pe;
-    const char *dur_old, *dur, *val, *endzoneid;
-    struct icaltimetype dtstart_old, dtstart;
-    json_t *locations;
-    json_t *duration;
+    const char *val;
 
     /* Determine current timezone */
-    tzid = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
+    const char *tzid = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     if (tzid) {
         ctx->tzstart_old = tz_from_tzid(tzid);
     } else {
@@ -2677,8 +2673,8 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     }
 
     /* Read new end timezone */
-    endzoneid = NULL;
-    locations = json_object_get(event, "locations");
+    const char *endzoneid = NULL;
+    json_t *locations = json_object_get(event, "locations");
     if (locations && !json_is_null(locations)) {
         json_t *loc;
         const char *id;
@@ -2730,34 +2726,26 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         ctx->tzend = ctx->tzend_old;
     }
 
-    /* Determine current duration */
-    duration = NULL;
-    dur_old = "P0D";
-
     /* Read new duration */
-    pe = readprop(ctx, event, "duration", 0, "s", &dur);
+    struct icaldurationtype dur = icaldurationtype_null_duration();
+    pe = readprop(ctx, event, "duration", 0, "s", &val);
     if (pe > 0) {
-        struct icaldurationtype d = icaldurationtype_from_string(dur);
-        if (!icaldurationtype_is_bad_duration(d)) {
-            /* Make sure that pointer equality works */
-            if (!strcmp(dur_old, dur)) {
-                dur = dur_old;
-            }
-        } else {
+        dur = icaldurationtype_from_string(val);
+        if (icaldurationtype_is_bad_duration(dur)) {
             invalidprop(ctx, "duration");
         }
-    } else {
-        dur = dur_old;
     }
-    if (ctx->is_allday && strchr(dur, 'T')) {
-        invalidprop(ctx, "duration");
+    if (ctx->is_allday) {
+        if (!icaldurationtype_is_bad_duration(dur) && (dur.hours || dur.minutes || dur.seconds)) {
+            invalidprop(ctx, "duration");
+        }
     }
 
     /* Determine current start */
-    dtstart_old = dtstart_from_ical(comp);
+    struct icaltimetype dtstart_old = dtstart_from_ical(comp);
 
     /* Read new start */
-    dtstart = dtstart_old;
+    struct icaltimetype dtstart = dtstart_old;
     pe = readprop(ctx, event, "start", 1, "s", &val);
     if (pe > 0) {
         if (!localdate_to_icaltime(val, &dtstart,
@@ -2786,16 +2774,14 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         icaltimetype dtend;
         icalproperty *prop;
 
-        dtend = icaltime_add(dtstart, icaldurationtype_from_string(dur));
+        dtend = icaltime_add(dtstart, dur);
         dtend = icaltime_convert_to_zone(dtend, ctx->tzend);
         prop = dtprop_to_ical(comp, dtend, ctx->tzend, 1, ICAL_DTEND_PROPERTY);
         xjmapid_to_ical(prop, endzoneid);
     } else {
         /* Add DURATION */
-        icalcomponent_set_duration(comp, icaldurationtype_from_string(dur));
+        icalcomponent_set_duration(comp, dur);
     }
-
-    json_decref(duration);
 }
 
 static void
