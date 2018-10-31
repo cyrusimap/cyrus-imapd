@@ -127,8 +127,9 @@ yourself, use <tt>cyrus_done()</tt>.</p>
 
 <h3>cyrusdb_sync(const char *backend)</h3>
 
-<p>Perform a checkpoint of the database environment.  Used by berkeley
-backend.  Is called by <tt>ctl_cyrusdb -c</tt> on a regular basis</p>
+<p>Perform a checkpoint of the database environment. Our current database
+backends do not require this, and implement it as a no-op. Is called by
+<tt>ctl_cyrusdb -c</tt> on a regular basis</p>
 
 <!-- XXX update this bit to document the cyrusdb_archiver api
 <h3>archive(const char **fnames, const char *dirname)</h3>
