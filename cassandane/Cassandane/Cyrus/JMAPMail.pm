@@ -7560,6 +7560,153 @@ sub test_email_query_inmailboxid_conjunction
     $self->assert_str_equals($emailIdAB, $res->[0][1]->{ids}[0]);
 }
 
+sub test_email_query_moved
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "create mailboxes";
+    $imap->create("INBOX.A") or die;
+    $imap->create("INBOX.B") or die;
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            properties => ['name', 'parentId'],
+        }, "R1"]
+    ]);
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxIdA = $mboxByName{'A'}->{id};
+    my $mboxIdB = $mboxByName{'B'}->{id};
+
+    xlog "create emails in mailbox A";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                'msg1' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'message 1',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+        ['Email/set', {
+            create => {
+                'msg2' => {
+                    mailboxIds => {
+                        $mboxIdA => JSON::true,
+                    },
+                    from => [{
+                        name => '', email => 'foo@local'
+                    }],
+                    to => [{
+                        name => '', email => 'bar@local'
+                    }],
+                    subject => 'message 2',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'test',
+                        }
+                    },
+                },
+            },
+        }, 'R2'],
+    ]);
+    my $emailId1 = $res->[0][1]->{created}{msg1}{id};
+    $self->assert_not_null($emailId1);
+    my $emailId2 = $res->[1][1]->{created}{msg2}{id};
+    $self->assert_not_null($emailId2);
+
+    xlog "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    xlog "query emails";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxIdA,
+                text => 'message',
+            },
+            sort => [{
+                property => 'subject',
+                isAscending => JSON::true,
+            }],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[1]);
+
+    xlog "move msg2 to mailbox B";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailId2 => {
+                    mailboxIds => {
+                        $mboxIdB => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$emailId2});
+
+    xlog "assert move";
+    $res = $jmap->CallMethods([
+        ['Email/get', {
+            ids => [$emailId1, $emailId2],
+            properties => ['mailboxIds'],
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals($emailId1, $res->[0][1]{list}[0]{id});
+    my $wantMailboxIds1 = { $mboxIdA => JSON::true };
+    $self->assert_deep_equals($wantMailboxIds1, $res->[0][1]{list}[0]{mailboxIds});
+
+    $self->assert_str_equals($emailId2, $res->[0][1]{list}[1]{id});
+    my $wantMailboxIds2 = { $mboxIdB => JSON::true };
+    $self->assert_deep_equals($wantMailboxIds2, $res->[0][1]{list}[1]{mailboxIds});
+
+    xlog "query emails";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxIdA,
+                text => 'message',
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                inMailbox => $mboxIdB,
+                text => 'message',
+            },
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]->{ids}});
+    $self->assert_str_equals($emailId2, $res->[1][1]->{ids}[0]);
+}
+
 
 sub test_misc_collapsethreads_issue2024
     :min_version_3_1 :needs_component_jmap
