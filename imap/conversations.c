@@ -1773,20 +1773,31 @@ struct guid_foreach_rock {
     void *cbrock;
 };
 
-static int _guid_one(const char *s, struct guid_foreach_rock *frock, conversation_id_t cid)
+static int _guid_one(const char *item,
+                     struct guid_foreach_rock *frock,
+                     conversation_id_t cid,
+                     uint32_t system_flags,
+                     uint32_t internal_flags,
+                     time_t internaldate,
+                     char version)
 {
     const char *p, *err;
     conv_guidrec_t rec;
     uint32_t res;
 
-    p = strchr(s, ':');
+    /* Set G record values */
+    rec.cid = cid;
+    rec.system_flags = system_flags;
+    rec.internal_flags = internal_flags;
+    rec.internaldate = internaldate;
+    rec.version = version;
+
+    /* Parse G record key */
+    p = strchr(item, ':');
     if (!p) return IMAP_INTERNAL;
 
-    /* cid */
-    rec.cid = cid;
-
     /* mboxname */
-    int r = parseuint32(s, &err, &res);
+    int r = parseuint32(item, &err, &res);
     if (r || err != p) return IMAP_INTERNAL;
     rec.mboxname = strarray_safenth(frock->state->folder_names, res);
     if (!rec.mboxname) return IMAP_INTERNAL;
@@ -1830,7 +1841,9 @@ static int _guid_cb(void *rock,
         strarray_t *recs = strarray_nsplit(data, datalen, ",", /*flags*/0);
         int i;
         for (i = 0; i < recs->count; i++) {
-            r = _guid_one(strarray_nth(recs, i), frock, /*cid*/0);
+            r = _guid_one(strarray_nth(recs, i), frock, /*cid*/0,
+                          /*system_flags*/0, /*internal_flags*/0,
+                          /*internaldate*/0, /*version*/0);
             if (r) break;
         }
         strarray_free(recs);
@@ -1842,14 +1855,41 @@ static int _guid_cb(void *rock,
         return IMAP_INTERNAL;
 
     conversation_id_t cid = 0;
+    uint32_t system_flags = 0;
+    uint32_t internal_flags = 0;
+    time_t internaldate = 0;
+    char version = 0;
     if (datalen >= 16) {
         const char *p = data;
-        r = parsehex(p, &p, 16, &cid);
-        if (r) return r;
+
+        /* version */
+        if (*p & 0x80) version = *p & 0x7f;
+        if (version > 0) p++;
+
+        if (version == 0) {
+            /* cid */
+            r = parsehex(p, &p, 16, &cid);
+            if (r) return r;
+        }
+        else {
+            /* cid */
+            cid = ntohll(*((bit64*)p));
+            p += 8;
+            /* system_flags */
+            system_flags = ntohl(*((bit32*)p));
+            p += 4;
+            /* internal flags */
+            internal_flags = ntohl(*((bit32*)p));
+            p += 4;
+            /* internaldate*/
+            internaldate = (time_t) ntohll(*((bit64*)p));
+            p += 8;
+        }
     }
 
     char *freeme = xstrndup(key+42, keylen-42);
-    r = _guid_one(freeme, frock, cid);
+    r = _guid_one(freeme, frock, cid, system_flags, internal_flags,
+                  internaldate, version);
     free(freeme);
 
     return r;
@@ -1891,8 +1931,14 @@ EXPORTED conversation_id_t conversations_guid_cid_lookup(struct conversations_st
 }
 
 
-static int conversations_guid_setitem(struct conversations_state *state, const char *guidrep,
-                                      const char *item, conversation_id_t cid, int add)
+static int conversations_guid_setitem(struct conversations_state *state,
+                                      const char *guidrep,
+                                      const char *item,
+                                      conversation_id_t cid,
+                                      uint32_t system_flags,
+                                      uint32_t internal_flags,
+                                      time_t internaldate,
+                                      int add)
 {
     struct buf key = BUF_INITIALIZER;
     buf_setcstr(&key, "G");
@@ -1928,13 +1974,17 @@ static int conversations_guid_setitem(struct conversations_state *state, const c
     buf_appendcstr(&key, item);
 
     if (add) {
-        char val[17];
-        size_t len = 0;
-        if (cid) {
-            snprintf(val, 17, "%016llx", cid);
-            len = 16;
-        }
-        r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key), val, len, &state->txn);
+        /* When bumping the G value version, make sure to update _guid_cb */
+        struct buf val = BUF_INITIALIZER;
+        buf_putc(&val, 0x80 | CONV_GUIDREC_VERSION);
+        buf_appendbit64(&val, cid);
+        buf_appendbit32(&val, system_flags);
+        buf_appendbit32(&val, internal_flags);
+        buf_appendbit64(&val, (bit64)internaldate);
+        r = cyrusdb_store(state->db, buf_base(&key), buf_len(&key),
+                                     buf_base(&val), buf_len(&val),
+                                     &state->txn);
+        buf_free(&val);
     }
     else {
         r = cyrusdb_delete(state->db, buf_base(&key), buf_len(&key), &state->txn, /*force*/1);
@@ -1946,7 +1996,10 @@ done:
     return r;
 }
 
-static int _guid_addbody(struct conversations_state *state, struct body *body,
+static int _guid_addbody(struct conversations_state *state,
+                         uint32_t system_flags, uint32_t internal_flags,
+                         time_t internaldate,
+                         struct body *body,
                          const char *base, int add)
 {
     int i;
@@ -1960,17 +2013,19 @@ static int _guid_addbody(struct conversations_state *state, struct body *body,
         buf_setcstr(&buf, base);
         buf_printf(&buf, "[%s]", body->part_id);
         const char *guidrep = message_guid_encode(&body->content_guid);
-        r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf), /*cid*/0, add);
+        r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf), /*cid*/0,
+                                       system_flags, internal_flags, internaldate,
+                                       add);
         buf_free(&buf);
 
         if (r) return r;
     }
 
-    r = _guid_addbody(state, body->subpart, base, add);
+    r = _guid_addbody(state, system_flags, internal_flags, internaldate, body->subpart, base, add);
     if (r) return r;
 
     for (i = 1; i < body->numparts; i++) {
-        r = _guid_addbody(state, body->subpart + i, base, add);
+        r = _guid_addbody(state, system_flags, internal_flags, internaldate, body->subpart + i, base, add);
         if (r) return r;
     }
 
@@ -1997,8 +2052,13 @@ static int conversations_set_guid(struct conversations_state *state,
     const char *base = buf_cstring(&item);
 
     r = conversations_guid_setitem(state, message_guid_encode(&record->guid),
-                                   base, record->cid, add);
-    if (!r) r = _guid_addbody(state, body, base, add);
+                                   base, record->cid,
+                                   record->system_flags,
+                                   record->internal_flags,
+                                   record->internaldate,
+                                   add);
+    if (!r) r = _guid_addbody(state, record->system_flags, record->internal_flags,
+                              record->internaldate, body, base, add);
 
     if (!r && (mailbox->mbtype == MBTYPE_ADDRESSBOOK) &&
         !strcmp(body->type, "TEXT") && !strcmp(body->subtype, "VCARD")) {
@@ -2013,7 +2073,11 @@ static int conversations_set_guid(struct conversations_state *state,
             if (photo && vcard_prop_decode_value(photo, NULL, NULL, &guid)) {
                 buf_printf(&item, "[%s/VCARD#PHOTO]", body->part_id);
                 r = conversations_guid_setitem(state, message_guid_encode(&guid),
-                                               buf_cstring(&item), 0 /*cid*/, add);
+                                               buf_cstring(&item), 0 /*cid*/,
+                                               record->system_flags,
+                                               record->internal_flags,
+                                               record->internaldate,
+                                               add);
             }
 
             vparse_free_card(vcard);
@@ -2154,7 +2218,9 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
         delta_num_records++;
         modseq = MAX(modseq, new->modseq);
-        if (!old) {
+        if (!old || old->system_flags != new->system_flags ||
+                    old->internal_flags != new->internal_flags ||
+                    old->internaldate != new->internaldate) {
             r = conversations_set_guid(cstate, mailbox, new, /*add*/1);
             if (r) return r;
         }

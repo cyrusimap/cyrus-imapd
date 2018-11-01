@@ -115,11 +115,17 @@ struct conv_folder {
     uint32_t        prev_exists;
 };
 
+#define CONV_GUIDREC_VERSION 0x1 // (must be <= 127)
+
 struct conv_guidrec {
     const char      *mboxname;
     uint32_t        uid;
     const char      *part;
     conversation_id_t cid;
+    char            version;
+    uint32_t        system_flags;   // if version >= 1
+    uint32_t        internal_flags; // if version >= 1
+    time_t          internaldate;   // if version >= 1
 };
 
 struct conv_sender {
