@@ -2223,15 +2223,15 @@ static int geteventchanges_cb(void *vrock, struct caldav_data *cdata)
     jmap_req_t *req = rock->req;
     struct jmap_changes *changes = rock->changes;
 
+    /* Check permissions */
+    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ))
+        return 0;
+
     /* Count, but don't process items that exceed the maximum record count. */
     if (changes->max_changes && ++(rock->seen_records) > changes->max_changes) {
         changes->has_more_changes = 1;
         return 0;
     }
-
-    /* Check permissions */
-    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ))
-        return 0;
 
     /* Report item as updated or destroyed. */
     if (cdata->dav.alive) {
