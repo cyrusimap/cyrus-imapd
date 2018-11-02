@@ -39,23 +39,7 @@ do this.</p>
 the ultimate source of contention between <tt>imapd</tt> processes, especially if
 clients are inefficient about their use of the LIST command.  For this reason
 it is often better to use the skiplist backend which is optimized for
-enumeration of the database, as opposed to the default, Berkeley DB
-(use <tt>--with-mboxlist-db=skiplist</tt>).
-
-<p>Mika Iisakkila (<i>mika.iisakkila@pingrid.fi</i>) writes: Nevertheless,
-you can also tweak the Berkeley backend if you want to or have to stick
-with it. Cyrus doesn't do anything to increase the BDB cache size, and the
-default (256 kB) is way too small for any reasonably large site. With some
-50000 mailboxes and random operations, I found the hit rate for the default
-BDB cache to be 70-80%. After growing the cache size to 2M, the hit rate
-approached 99% and disk traffic was greatly reduced since most of the
-operations are reads anyway. Therefore processes could complete their work
-and release their locks much more quickly, and the dreaded "DBERROR: xxx
-lockers" messages stayed at a comfortable level. You can modify the source
-(<tt>/lib/cyrusdb_db3.c</tt>, the setting is commented out) or you can put
-a <tt>DB_CONFIG</tt> file under <tt>/var/imap/db</tt> with the appropriate
-setting. Read more about this in the Berkeley docs before trying it - typos
-and incorrect settings can wreak havoc.</p></li>
+enumeration of the database, which is currently the default.</li>
 
 <li><tt><b>/var/imap/deliverdb</b></tt> - Unless you disable
 duplicate delivery suppression, each time a mail message is

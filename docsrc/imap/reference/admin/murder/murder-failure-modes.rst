@@ -38,7 +38,7 @@ Don't have a backup? Well it is still easy if you have a frontend. The mailboxes
 4. Start everything backup
 5. Use ctl_mboxlist -m on each backend to update the murder master with any missing changes.
 
-If you are using skiplist for your mailboxes.db then you can just copy the file. If you are using a berkeley format then things are trickier since there is environmental state. It should be possible to run db_recover on both databases, then delete the db folder the mailboxes.db from the murder master and copy those from the frontend (this has not been tested)
+If you are using skiplist for your mailboxes.db then you can just copy the file.
 
 Hard recovery
 -------------

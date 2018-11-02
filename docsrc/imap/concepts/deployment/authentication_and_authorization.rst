@@ -9,11 +9,11 @@ For example, when a user wants to set group permissions on an IMAP folder, the m
 
 Similarly, many deployments choose to use the mail LDAP attribute value as the mailbox name, while mail is a multi-valued attribute and is not configured to be enforced globally unique in the LDAP information tree under the root dn. In addition, attributes such as amilAlternateAddress and/or alias could potentially hold the same value as anyone's mail attribute. These limitations or such implications become very clear when canonification of the authentication ID to the desired authorization ID is attempted.
 
-For example, if <literal>jdoe</literal> is the login username, and Cyrus IMAP has a default realm configured <literal>example.org</literal>, the authentication ID becomes <literal>jdoe@example.org</literal>. It is this authentication ID, and not the supplied login username, that Cyrus IMAP uses to verify the credentials.
+For example, if ``jdoe`` is the login username, and Cyrus IMAP has a default realm configured ``example.org``, the authentication ID becomes ``jdoe@example.org``. It is this authentication ID, and not the supplied login username, that Cyrus IMAP uses to verify the credentials.
 
-Cyrus IMAP thereafter allows authorization mechanisms, such as <emphasis>ptclient</emphasis> modules, to canonify the authentication ID to then ultimately return the authorization ID.
+Cyrus IMAP thereafter allows authorization mechanisms, such as *ptclient* modules, to canonify the authentication ID to then ultimately return the authorization ID.
 
-Suppose in the case of <literal>jdoe@example.org</literal>, where the authentication ID had been set, an LDAP module for ptloader could search LDAP for a <literal>uid=%U</literal> (where %U is the local part of the authentication ID), find the mail attribute value is <literal>john.doe@example.org</literal>, and authorize the user as such. Effectively, this enables Cyrus IMAP users to log in both with their username (uid) as well as their email address (or any of the aliases).
+Suppose in the case of ``jdoe@example.org``, where the authentication ID had been set, an LDAP module for ptloader could search LDAP for a ``uid=%U`` (where %U is the local part of the authentication ID), find the mail attribute value is ``john.doe@example.org``, and authorize the user as such. Effectively, this enables Cyrus IMAP users to log in both with their username (uid) as well as their email address (or any of the aliases).
 
 The process of client authentication and authorization
 
@@ -43,13 +43,13 @@ User mailboxes have a globally unique identifier which is not necessarily the sa
 
 The **user login credentials** that are associated with the user authentication entity and verify the user is who the user claims to be.
 
-For example, the user logs in with username <code>john.doe@example.org</code> and password <code>verysecret</code>.
+For example, the user logs in with username ``john.doe@example.org`` and password ``verysecret``.
 
 The **user's authentication entity** - with all attributes associated with it - can have one of those attributes be used to create the relationship between the user authentication entity on the one side, and the mailbox entity on the other side.
 
-For example, the user that authenticated as <code>john.doe@example.org</code> may have a mailbox named <code>jdoe</code>.
+For example, the user that authenticated as ``john.doe@example.org`` may have a mailbox named ``jdoe``.
 
 The **authorization entity**, used to assign certain permissions to the user, uses the same attribute used to determine the mailbox name.
 
-For example, the user that authenticated as <code>john.doe@example.com</code> and has mailbox <code>jdoe</code> needs an access control list entry on that mailbox that assigns <code>jdoe</code> certain rights on said mailbox.
+For example, the user that authenticated as ``john.doe@example.com`` and has mailbox ``jdoe`` needs an access control list entry on that mailbox that assigns ``jdoe`` certain rights on said mailbox.
 

@@ -54,8 +54,9 @@ just meta-data) become synchronous. This is good for reliability, but bad
 for performance.
 
 <p> The big problem used to be with the <tt>mailboxes</tt> file. The
-2.0 release and later addressed this problem by changing the flat file
-to a Berkeley DB database.
+2.0 release and later addressed this problem by changing the flat file first
+to a Berkeley DB database, and then to Cyrus' proprietary skiplist format
+since the 3.0 release.
 
 <p>Note this is for ext2fs. If you are using a newer filesystem (such
 as xfs, jfs, or reiserfs) the synchronous metadata issue shouldn't

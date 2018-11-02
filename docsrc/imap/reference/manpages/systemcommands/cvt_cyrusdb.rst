@@ -59,7 +59,7 @@ Examples
     ::
 
         Usage: /usr/lib/cyrus/bin/cvt_cyrusdb [-C altconfig] <old db> <old db backend> <new db> <new db backend>
-        Usable Backends:  berkeley, berkeley-nosync, berkeley-hash, berkeley-hash-nosync, flat, skiplist, quotalegacy
+        Usable Backends:  flat, skiplist, quotalegacy
 
 .. parsed-literal::
 

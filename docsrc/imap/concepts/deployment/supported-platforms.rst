@@ -72,22 +72,6 @@ Optional Software Components
 
 When including the following software components during the build process, and providing the options listed here, additional optional functionality can be implemented;
 
-**Berkeley DB** (Development headers)
-
-To enable using Berkeley DB as a database backend, include the Berkeley DB development headers and make sure to configure Cyrus IMAP with ``--with-bdb``.
-
-Berkeley DB Versions and Conversion
-
-The Cyrus IMAP ``configure`` process attempts to automatically detect and use the latest Berkeley DB technology available on the system. This may, however, not be the same version on your production systems. Since database conversions between versions of the Berkeley DB technology are particularly difficult and therefor NOT considered fully supported, we recommend you do NOT use Berkeley DB.
-
-Should the Berkeley DB development headers be installed in a non-standard location, or should you need a specific version when multiple versions are available on the system, please consider using any of the following options;
-
-::
-
-    --with-bdb=DIR            use Berkeley DB (in DIR) [yes]
-    --with-bdb-libdir=DIR     Berkeley DB lib files are in DIR
-    --with-bdb-incdir=DIR     Berkeley DB include files are in DIR</screen>
-
 **MySQL** (Development headers)
 
 To enable using MySQL as a database server backend, include the MySQL development headers and make sure to configure Cyrus IMAP with ``--with-mysql``.

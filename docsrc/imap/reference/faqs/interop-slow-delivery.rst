@@ -18,6 +18,5 @@ We experienced some filesystem locking problems when allowing to many
 lmtpd-processes to be started. Performance was seriously degraded, 
 resulting in timeouts and endless retries. We use a postfix instance 
 between to limit parallel deliveries to lmtpd resulting in much higher 
-throughput. With berkeley-nosync as duplicate suppression db, 50-100 
-Messages/sec are doable. 
+throughput.
 
