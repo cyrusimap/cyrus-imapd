@@ -1191,30 +1191,30 @@ static json_t *participant_from_ical(icalproperty *prop,
         json_object_set_new(p, "kind", json_string(kind));
     }
 
-    /* participation */
-    const char *participation = NULL;
+    /* attendance */
+    const char *attendance = NULL;
     icalparameter_role ical_role = ICAL_ROLE_REQPARTICIPANT;
     param = icalproperty_get_first_parameter(prop, ICAL_ROLE_PARAMETER);
     if (param) {
         ical_role = icalparameter_get_role(param);
         switch (ical_role) {
             case ICAL_ROLE_REQPARTICIPANT:
-                participation = "required";
+                attendance = "required";
                 break;
             case ICAL_ROLE_OPTPARTICIPANT:
-                participation = "optional";
+                attendance = "optional";
                 break;
             case ICAL_ROLE_NONPARTICIPANT:
-                participation = "non-participant";
+                attendance = "none";
                 break;
             case ICAL_ROLE_CHAIR:
                 /* fall through */
             default:
-                participation = "required";
+                attendance = "required";
         }
     }
-    if (participation) {
-        json_object_set_new(p, "participation", json_string(participation));
+    if (attendance) {
+        json_object_set_new(p, "attendance", json_string(attendance));
     }
 
     /* roles */
@@ -1251,26 +1251,26 @@ static json_t *participant_from_ical(icalproperty *prop,
         json_object_set_new(p, "locationId", json_string(locid));
     }
 
-    /* rsvpResponse */
-    const char *rsvp = NULL;
+    /* participationStatus */
+    const char *partstat = NULL;
     short depth = 0;
-    icalproperty *rsvp_prop = prop;
-    while (!rsvp) {
-        param = icalproperty_get_first_parameter(rsvp_prop, ICAL_PARTSTAT_PARAMETER);
+    icalproperty *partstat_prop = prop;
+    while (!partstat) {
+        param = icalproperty_get_first_parameter(partstat_prop, ICAL_PARTSTAT_PARAMETER);
         if (!param) break;
         icalparameter_partstat pst = icalparameter_get_partstat(param);
         switch (pst) {
             case ICAL_PARTSTAT_ACCEPTED:
-                rsvp = "accepted";
+                partstat = "accepted";
                 break;
             case ICAL_PARTSTAT_DECLINED:
-                rsvp = "declined";
+                partstat = "declined";
                 break;
             case ICAL_PARTSTAT_TENTATIVE:
-                rsvp = "tentative";
+                partstat = "tentative";
                 break;
             case ICAL_PARTSTAT_NEEDSACTION:
-                rsvp = "needs-action";
+                partstat = "needs-action";
                 break;
             case ICAL_PARTSTAT_DELEGATED:
                 /* Follow the delegate chain */
@@ -1279,33 +1279,33 @@ static json_t *participant_from_ical(icalproperty *prop,
                     const char *to = icalparameter_get_delegatedto(param);
                     if (!to) continue;
                     char *uri = normalized_uri(to);
-                    rsvp_prop = hash_lookup(uri, attendee_by_uri);
+                    partstat_prop = hash_lookup(uri, attendee_by_uri);
                     free(uri);
-                    if (rsvp_prop) {
+                    if (partstat_prop) {
                         /* Determine PARTSTAT from delegate. */
                         if (++depth > 64) {
                             /* This is a pathological case: libical does
                              * not check for infinite DELEGATE chains, so we
                              * make sure not to fall in an endless loop. */
-                            rsvp = "none";
+                            partstat = "none";
                         }
                         continue;
                     }
                 }
                 /* fallthrough */
             default:
-                rsvp = "none";
+                partstat = "none";
         }
     }
-    if (rsvp && strcmp(rsvp,  "none")) {
-        json_object_set_new(p, "rsvpResponse", json_string(rsvp));
+    if (partstat && strcmp(partstat,  "none")) {
+        json_object_set_new(p, "participationStatus", json_string(partstat));
     }
 
-    /* rsvpWanted */
+    /* expectReply */
     param = icalproperty_get_first_parameter(prop, ICAL_RSVP_PARAMETER);
     if (param) {
         icalparameter_rsvp val = icalparameter_get_rsvp(param);
-        json_object_set_new(p, "rsvpWanted",
+        json_object_set_new(p, "expectReply",
                 json_boolean(val == ICAL_RSVP_TRUE));
     }
 
@@ -2956,26 +2956,26 @@ participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p,
         invalidprop(ctx, "kind");
     }
 
-    /* participation */
+    /* attendance */
     icalparameter_role ical_role = ICAL_ROLE_REQPARTICIPANT;
-    json_t *participation = json_object_get(p, "participation");
-    if (json_is_string(participation)) {
-        const char *s = json_string_value(participation);
+    json_t *attendance = json_object_get(p, "attendance");
+    if (json_is_string(attendance)) {
+        const char *s = json_string_value(attendance);
         if (!strcasecmp(s, "required")) {
             ical_role = ICAL_ROLE_REQPARTICIPANT;
         }
         else if (!strcasecmp(s, "optional")) {
             ical_role = ICAL_ROLE_OPTPARTICIPANT;
         }
-        else if (!strcasecmp(s, "non-participant")) {
+        else if (!strcasecmp(s, "none")) {
             ical_role = ICAL_ROLE_NONPARTICIPANT;
         }
         if (ical_role != ICAL_ROLE_REQPARTICIPANT) {
             icalproperty_add_parameter(prop, icalparameter_new_role(ical_role));
         }
     }
-    else if (JNOTNULL(participation)) {
-        invalidprop(ctx, "participation");
+    else if (JNOTNULL(attendance)) {
+        invalidprop(ctx, "attendance");
     }
 
     /* roles */
@@ -2997,11 +2997,11 @@ participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p,
         invalidprop(ctx, "locationId");
     }
 
-    /* rsvpResponse */
+    /* participationStatus */
     icalparameter_partstat ps = ICAL_PARTSTAT_NONE;
-    json_t *rsvpResponse = json_object_get(p, "rsvpResponse");
-    if (json_is_string(rsvpResponse)) {
-        char *tmp = ucase(xstrdup(json_string_value(rsvpResponse)));
+    json_t *participationStatus = json_object_get(p, "participationStatus");
+    if (json_is_string(participationStatus)) {
+        char *tmp = ucase(xstrdup(json_string_value(participationStatus)));
         ps = icalparameter_string_to_enum(tmp);
         switch (ps) {
             case ICAL_PARTSTAT_NEEDSACTION:
@@ -3010,23 +3010,23 @@ participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p,
             case ICAL_PARTSTAT_TENTATIVE:
                 break;
             default:
-                invalidprop(ctx, "rsvpResponse");
+                invalidprop(ctx, "participationStatus");
                 ps = ICAL_PARTSTAT_NONE;
         }
         free(tmp);
     }
-    else if (JNOTNULL(rsvpResponse)) {
-        invalidprop(ctx, "rsvpResponse");
+    else if (JNOTNULL(participationStatus)) {
+        invalidprop(ctx, "participationStatus");
     }
     if (ps != ICAL_PARTSTAT_NONE) {
         param = icalparameter_new_partstat(ps);
         icalproperty_add_parameter(prop, param);
     }
 
-    /* rsvpWanted */
-    json_t *rsvpWanted = json_object_get(p, "rsvpWanted");
-    if (json_is_boolean(rsvpWanted)) {
-        if (rsvpWanted == json_true()) {
+    /* expectReply */
+    json_t *expectReply = json_object_get(p, "expectReply");
+    if (json_is_boolean(expectReply)) {
+        if (expectReply == json_true()) {
             param = icalparameter_new_rsvp(ICAL_RSVP_TRUE);
             if (ps == ICAL_PARTSTAT_NONE) {
                 icalproperty_add_parameter(prop,
@@ -3038,8 +3038,8 @@ participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p,
         }
         icalproperty_add_parameter(prop, param);
     }
-    else if (JNOTNULL(rsvpWanted)) {
-        invalidprop(ctx, "rsvpWanted");
+    else if (JNOTNULL(expectReply)) {
+        invalidprop(ctx, "expectReply");
     }
 
     /* delegatedTo */
@@ -3179,20 +3179,20 @@ participant_equals(json_t *jpart1, json_t *jpart2)
     if (!strcmpsafe(json_string_value(json_object_get(jval2, "name")), ""))
         json_object_del(jval2, "name");
 
-    if (!strcmpsafe(json_string_value(json_object_get(jval1, "rsvpResponse")), "needs-action"))
-        json_object_del(jval1, "rsvpResponse");
-    if (!strcmpsafe(json_string_value(json_object_get(jval2, "rsvpResponse")), "needs-action"))
-        json_object_del(jval2, "rsvpResponse");
+    if (!strcmpsafe(json_string_value(json_object_get(jval1, "participationStatus")), "needs-action"))
+        json_object_del(jval1, "participationStatus");
+    if (!strcmpsafe(json_string_value(json_object_get(jval2, "participationStatus")), "needs-action"))
+        json_object_del(jval2, "participationStatus");
 
-    if (!strcmpsafe(json_string_value(json_object_get(jval1, "participation")), "required"))
-        json_object_del(jval1, "participation");
-    if (!strcmpsafe(json_string_value(json_object_get(jval2, "participation")), "required"))
-        json_object_del(jval2, "participation");
+    if (!strcmpsafe(json_string_value(json_object_get(jval1, "attendance")), "required"))
+        json_object_del(jval1, "attendance");
+    if (!strcmpsafe(json_string_value(json_object_get(jval2, "attendance")), "required"))
+        json_object_del(jval2, "attendance");
 
-    if (!json_boolean_value(json_object_get(jval1, "rsvpWanted")))
-        json_object_del(jval1, "rsvpWanted");
-    if (!json_boolean_value(json_object_get(jval2, "rsvpWanted")))
-        json_object_del(jval2, "rsvpWanted");
+    if (!json_boolean_value(json_object_get(jval1, "expectReply")))
+        json_object_del(jval1, "expectReply");
+    if (!json_boolean_value(json_object_get(jval2, "expectReply")))
+        json_object_del(jval2, "expectReply");
 
     if (json_integer_value(json_object_get(jval1, "scheduleSequence")) == 0)
         json_object_del(jval1, "scheduleSequence");
