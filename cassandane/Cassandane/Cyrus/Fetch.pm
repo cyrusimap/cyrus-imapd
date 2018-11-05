@@ -803,5 +803,55 @@ sub test_tell_exists_count_earlier
     $admintalk->_imap_cmd("fetch", 1, \%handlers, \'3:*', '(uid flags)');
 }
 
+sub test_x_mailboxid
+    :min_version_3_1 :Conversations
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # make a message
+    my $msg = $self->make_message("test message");
+    my $uid = $msg->{attrs}->{uid};
+
+    # expect to find it in INBOX only
+    my $res = $imaptalk->fetch('1', '(X-MAILBOXID)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_deep_equals(['INBOX'], $res->{1}->{'x-mailboxid'});
+
+    # copy it to INBOX.target
+    $imaptalk->create("INBOX.target");
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $imaptalk->copy($uid, "INBOX.target");
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    # expect to find it in INBOX and INBOX.target
+    $res = $imaptalk->fetch('1', '(X-MAILBOXID)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_deep_equals(['INBOX', 'INBOX.target'],
+                              $res->{1}->{'x-mailboxid'});
+
+    # delete it from INBOX
+    $imaptalk->store('1', '+FLAGS', '(\\Deleted)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    # expect to find it in INBOX.target only
+    $res = $imaptalk->fetch('1', '(X-MAILBOXID)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_deep_equals(['INBOX.target'],
+                              $res->{1}->{'x-mailboxid'});
+
+    # expunge INBOX
+    $imaptalk->expunge();
+
+    # expect to find it in INBOX.target only
+    $res = $imaptalk->fetch('1', '(X-MAILBOXID)');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $imaptalk->select('INBOX.target');
+    $res = $imaptalk->fetch('1', '(X-MAILBOXID)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_deep_equals(['INBOX.target'],
+                              $res->{1}->{'x-mailboxid'});
+}
 
 1;
