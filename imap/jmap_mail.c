@@ -8695,19 +8695,21 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
         }
     }
     hash_iter_reset(iter);
-    /* Check quota */
-    while (hash_iter_next(iter)) {
-        struct email_updateplan *plan = hash_iter_val(iter);
-        quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
-        int i;
-        for (i = 0; i < ptrarray_size(&plan->copy); i++) {
-            qdiffs[QUOTA_MESSAGE] += ptrarray_size(ptrarray_nth(&plan->copy, i));
-        }
-        qdiffs[QUOTA_MESSAGE] -= ptrarray_size(&plan->delete);
-        int r = mailbox_quota_check(plan->mbox, qdiffs);
-        if (r) {
-            _email_updateplan_error(plan, r, bulk->set_errors);
-            strarray_append(&erroneous_plans, plan->mbox_id);
+    if (!config_getswitch(IMAPOPT_SINGLEINSTANCESTORE)) {
+        /* Check quota */
+        while (hash_iter_next(iter)) {
+            struct email_updateplan *plan = hash_iter_val(iter);
+            quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+            int i;
+            for (i = 0; i < ptrarray_size(&plan->copy); i++) {
+                qdiffs[QUOTA_MESSAGE] += ptrarray_size(ptrarray_nth(&plan->copy, i));
+            }
+            qdiffs[QUOTA_MESSAGE] -= ptrarray_size(&plan->delete);
+            int r = mailbox_quota_check(plan->mbox, qdiffs);
+            if (r) {
+                _email_updateplan_error(plan, r, bulk->set_errors);
+                strarray_append(&erroneous_plans, plan->mbox_id);
+            }
         }
     }
     hash_iter_free(&iter);
