@@ -4947,3 +4947,11 @@ EXPORTED int message_get_encoding(message_t *m, int *encp)
     *encp = m->body->charset_enc;
     return 0;
 }
+
+EXPORTED int message_get_charset_id(message_t *m, const char **strp)
+{
+    int r = message_need(m, M_CACHEBODY);
+    if (r) return r;
+    *strp = m->body->charset_id;
+    return 0;
+}

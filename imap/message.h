@@ -286,7 +286,7 @@ extern int message_get_header(message_t *m, int format, struct buf *buf);
 extern int message_get_body(message_t *m, struct buf *buf);
 extern int message_get_type(message_t *m, const char **strp);
 extern int message_get_subtype(message_t *m, const char **strp);
-extern int message_get_charset(message_t *m, int *csp);
+extern int message_get_charset_id(message_t *m, const char **strp);
 extern int message_get_encoding(message_t *m, int *encp);
 extern int message_get_num_parts(message_t *m, unsigned int *np);
 extern int message_get_messageid(message_t *m, struct buf *buf);
