@@ -120,6 +120,8 @@ struct mboxlist_entry {
     char *uniqueid;
     /* legacy upgrade support */
     char *legacy_specialuse;
+    /* replication support */
+    struct dlist *synonyms;
 };
 
 typedef struct mboxlist_entry mbentry_t;
