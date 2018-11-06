@@ -231,6 +231,8 @@ typedef int dlistsax_cb_t(int type, struct dlistsax_data *data);
 int dlist_parsesax(const char *base, size_t len, int parsekey,
                    dlistsax_cb_t *proc, void *rock);
 
+void dlist_push(struct dlist *parent, struct dlist *child);
+struct dlist *dlist_pop(struct dlist *parent);
 void dlist_stitch(struct dlist *parent, struct dlist *child);
 void dlist_unstitch(struct dlist *parent, struct dlist *child);
 struct dlist *dlist_splice(struct dlist *parent, int num);
