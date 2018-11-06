@@ -1093,4 +1093,165 @@ sub test_audit_unindexed
     $self->assert_str_equals("Unindexed message(s) in user.cassandane: 2 \n", $audits[0]);
 }
 
+sub test_search_omit_html
+    :min_version_3_0 :needs_search_xapian
+{
+    my ($self) = @_;
+
+    xlog "Generate and index test messages.";
+    $self->make_message("toplevel",
+        mime_type => "text/html",
+        body => "<html><body><div>hello</div></body></html>"
+    ) || die;
+
+    $self->make_message("embedded",
+        mime_type => "multipart/related",
+        mime_boundary => "boundary_1",
+        body => ""
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "\r\n"
+          . "txt"
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/html\r\n"
+          . "\r\n"
+          . "<html><body><div>world</div></body></html>"
+          . "\r\n--boundary_1--\r\n"
+    ) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    my $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+
+    $uids = $talk->search('fuzzy', 'body', 'div') || die;
+    $self->assert_num_equals(0, scalar @$uids);
+
+    $uids = $talk->search('fuzzy', 'body', 'hello') || die;
+    $self->assert_num_equals(1, scalar @$uids);
+
+    $uids = $talk->search('fuzzy', 'body', 'world') || die;
+    $self->assert_num_equals(1, scalar @$uids);
+}
+
+sub test_search_omit_ical
+    :min_version_3_0 :needs_search_xapian
+{
+    my ($self) = @_;
+
+    xlog "Generate and index test messages.";
+
+    $self->make_message("test",
+        mime_type => "multipart/related",
+        mime_boundary => "boundary_1",
+        body => ""
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "\r\n"
+          . "txt body"
+          . "\r\n--boundary_1\r\n"
+          . "Content-Type: text/calendar;charset=utf-8\r\n"
+          . "Content-Transfer-Encoding: quoted-printable\r\n"
+          . "\r\n"
+          . "BEGIN:VCALENDAR\r\n"
+          . "VERSION:2.0\r\n"
+          . "PRODID:-//CyrusIMAP.org/Cyrus 3.1.3-606//EN\r\n"
+          . "CALSCALE:GREGORIAN\r\n"
+          . "BEGIN:VTIMEZONE\r\n"
+          . "TZID:Europe/Vienna\r\n"
+          . "BEGIN:STANDARD\r\n"
+          . "DTSTART:19700101T000000\r\n"
+          . "RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\n"
+          . "TZOFFSETFROM:+0200\r\n"
+          . "TZOFFSETTO:+0100\r\n"
+          . "END:STANDARD\r\n"
+          . "BEGIN:DAYLIGHT\r\n"
+          . "DTSTART:19700101T000000\r\n"
+          . "RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\n"
+          . "TZOFFSETFROM:+0100\r\n"
+          . "TZOFFSETTO:+0200\r\n"
+          . "END:DAYLIGHT\r\n"
+          . "END:VTIMEZONE\r\n"
+          . "BEGIN:VEVENT\r\n"
+          . "SUMMARY:icalsummary\r\n"
+          . "DESCRIPTION:icaldesc\r\n"
+          . "LOCATION:icallocation\r\n"
+          . "CREATED:20180518T090306Z\r\n"
+          . "DTEND;TZID=Europe/Vienna:20180518T100000\r\n"
+          . "DTSTAMP:20180518T090306Z\r\n"
+          . "DTSTART;TZID=Europe/Vienna:20180518T090000\r\n"
+          . "LAST-MODIFIED:20180518T090306Z\r\n"
+          . "RRULE:FREQ=DAILY\r\n"
+          . "SEQUENCE:1\r\n"
+          . "SUMMARY:K=C3=A4se\r\n"
+          . "TRANSP:OPAQUE\r\n"
+          . "UID:1234567890\r\n"
+          . "END:VEVENT\r\n"
+          . "END:VCALENDAR\r\n"
+          . "\r\n--boundary_1--\r\n"
+    ) || die;
+
+    $self->make_message("top",
+        mime_type => "text/calendar",
+        body => ""
+          . "BEGIN:VCALENDAR\r\n"
+          . "VERSION:2.0\r\n"
+          . "PRODID:-//CyrusIMAP.org/Cyrus 3.1.3-606//EN\r\n"
+          . "CALSCALE:GREGORIAN\r\n"
+          . "BEGIN:VTIMEZONE\r\n"
+          . "TZID:Europe/Vienna\r\n"
+          . "BEGIN:STANDARD\r\n"
+          . "DTSTART:19700101T000000\r\n"
+          . "RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=10\r\n"
+          . "TZOFFSETFROM:+0200\r\n"
+          . "TZOFFSETTO:+0100\r\n"
+          . "END:STANDARD\r\n"
+          . "BEGIN:DAYLIGHT\r\n"
+          . "DTSTART:19700101T000000\r\n"
+          . "RRULE:FREQ=YEARLY;BYDAY=-1SU;BYMONTH=3\r\n"
+          . "TZOFFSETFROM:+0100\r\n"
+          . "TZOFFSETTO:+0200\r\n"
+          . "END:DAYLIGHT\r\n"
+          . "END:VTIMEZONE\r\n"
+          . "BEGIN:VEVENT\r\n"
+          . "SUMMARY:icalsummary\r\n"
+          . "DESCRIPTION:icaldesc\r\n"
+          . "LOCATION:icallocation\r\n"
+          . "CREATED:20180518T090306Z\r\n"
+          . "DTEND;TZID=Europe/Vienna:20180518T100000\r\n"
+          . "DTSTAMP:20180518T090306Z\r\n"
+          . "DTSTART;TZID=Europe/Vienna:20180518T090000\r\n"
+          . "LAST-MODIFIED:20180518T090306Z\r\n"
+          . "RRULE:FREQ=DAILY\r\n"
+          . "SEQUENCE:1\r\n"
+          . "TRANSP:OPAQUE\r\n"
+          . "UID:1234567890\r\n"
+          . "END:VEVENT\r\n"
+          . "END:VCALENDAR\r\n"
+    ) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    my $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    my $uids = $talk->search('1:*', 'NOT', 'DELETED');
+
+    $uids = $talk->search('fuzzy', 'text', 'rrule') || die;
+    $self->assert_num_equals(0, scalar @$uids);
+
+    $uids = $talk->search('fuzzy', 'subject', 'icalsummary') || die;
+    $self->assert_num_equals(2, scalar @$uids);
+
+    $uids = $talk->search('fuzzy', 'text', 'icaldesc') || die;
+    $self->assert_num_equals(2, scalar @$uids);
+
+    $uids = $talk->search('fuzzy', 'text', 'icallocation') || die;
+    $self->assert_num_equals(2, scalar @$uids);
+}
+
 1;
