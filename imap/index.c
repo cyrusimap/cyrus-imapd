@@ -4800,107 +4800,32 @@ static void extract_cb(const struct buf *text, void *rock)
     str->receiver->append_text(str->receiver, text);
 }
 
-static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
-                            const char *type, const char *subtype,
-                            const struct param *type_params __attribute__((unused)),
-                            const char *disposition,
-                            const struct param *disposition_params,
-                            struct buf *data,
-                            void *rock)
-{
-    struct getsearchtext_rock *str = (struct getsearchtext_rock *)rock;
-    char *q;
-    struct buf text = BUF_INITIALIZER;
-
-    if (!isbody) {
-        if (!str->indexed_headers) {
-            /* Only index the headers of the top message */
-            q = charset_decode_mimeheader(buf_cstring(data), str->charset_flags);
-            buf_init_ro_cstr(&text, q);
-            stuff_part(str->receiver, SEARCH_PART_HEADERS, &text);
-            free(q);
-            buf_free(&text);
-            str->indexed_headers = 1;
-        }
-
-        /* Index attachment file names */
-        const struct param *param;
-        if (disposition && !strcmp(disposition, "ATTACHMENT")) {
-            /* Look for "Content-Disposition: attachment;filename=" header */
-            for (param = disposition_params; param; param = param->next) {
-                if (!strcmp(param->attribute, "FILENAME")) {
-                    char *tmp = charset_decode_mimeheader(param->value, charset_flags);
-                    buf_init_ro_cstr(&text, tmp);
-                    stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
-                    buf_free(&text);
-                    free(tmp);
-                }
-                else if (!strcmp(param->attribute, "FILENAME*")) {
-                    char *xval = charset_parse_mimexvalue(param->value, NULL);
-                    char *tmp = charset_decode_mimeheader(xval, charset_flags|CHARSET_MIME_UTF8);
-                    buf_init_ro_cstr(&text, tmp);
-                    stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
-                    buf_free(&text);
-                    free(tmp);
-                    free(xval);
-                }
-            }
-        }
-        for(param = type_params; param; param = param->next) {
-            /* Look for "Content-Type: foo;name=" header */
-            if (strcmp(param->attribute, "NAME"))
-                continue;
-            char *tmp = charset_decode_mimeheader(param->value, charset_flags);
-            buf_init_ro_cstr(&text, tmp);
-            stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
-            buf_free(&text);
-            free(tmp);
-        }
-    }
-    else if (buf_len(data) > 50 && !memcmp(data->s, "-----BEGIN PGP MESSAGE-----", 27)) {
-        /* PGP encrypted body part - we don't want to index this,
-         * it's a ton of random base64 noise */
-    }
-    else if (!strcmp(type, "TEXT")) {
-        /* body-like */
-        str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
-        charset_extract(extract_cb, str, data, charset, encoding, subtype,
-                        str->charset_flags);
-        str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
-    }
-
-    return 0;
-}
-
-static void append_alnum(struct buf *buf, const char *ss)
-{
-    const unsigned char *s = (const unsigned char *)ss;
-
-    for ( ; *s ; ++s) {
-        if (Uisalnum(*s))
-            buf_putc(buf, *s);
-    }
-}
-
 #ifdef USE_HTTPD
-static int index_icalmessage(message_t *msg, struct getsearchtext_rock *str)
+static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
+                           struct getsearchtext_rock *str)
 {
     icalcomponent *comp = NULL, *ical = NULL;
-    struct buf buf = BUF_INITIALIZER;
     const char *s;
-    int r, enc = 0;
+    int r = 0;
+    struct buf buf = BUF_INITIALIZER;
 
     /* Parse the message into an iCalendar object */
-    r = message_get_encoding(msg, &enc);
-    if (r) return r;
-    r = message_get_field(msg, "rawbody", MESSAGE_RAW, &buf);
-    if (r) return r;
-    ical = icalparser_parse_string(buf_cstring(&buf));
+    const struct buf *icalbuf = NULL;
+    if (encoding || strcasecmp(charset_name(charset), "utf-8")) {
+        char *tmp = charset_to_utf8(buf_cstring(raw), buf_len(raw), charset, encoding);
+        if (!tmp) return 0; /* could be a bogus header - ignore */
+        buf_initm(&buf, tmp, strlen(tmp));
+        icalbuf = &buf;
+    }
+    else {
+        icalbuf = raw;
+    }
+    ical = icalparser_parse_string(buf_cstring(icalbuf));
+    buf_reset(&buf);
     if (!ical) {
         r = IMAP_INTERNAL;
         goto done;
     }
-    buf_reset(&buf);
 
     for (comp = icalcomponent_get_first_real_component(ical);
          comp;
@@ -4914,7 +4839,7 @@ static int index_icalmessage(message_t *msg, struct getsearchtext_rock *str)
             buf_setcstr(&buf, s);
             charset_t utf8 = charset_lookupname("utf-8");
             str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
-            charset_extract(extract_cb, str, &buf, utf8, enc, "calendar",
+            charset_extract(extract_cb, str, &buf, utf8, 0, "calendar",
                             str->charset_flags);
             str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
             charset_free(&utf8);
@@ -4982,11 +4907,101 @@ static int index_icalmessage(message_t *msg, struct getsearchtext_rock *str)
     }
 
 done:
-    buf_free(&buf);
     if (ical) icalcomponent_free(ical);
+    buf_free(&buf);
     return r;
 }
 #endif /* USE_HTTPD */
+
+
+static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
+                            const char *type, const char *subtype,
+                            const struct param *type_params __attribute__((unused)),
+                            const char *disposition,
+                            const struct param *disposition_params,
+                            struct buf *data,
+                            void *rock)
+{
+    struct getsearchtext_rock *str = (struct getsearchtext_rock *)rock;
+    char *q;
+    struct buf text = BUF_INITIALIZER;
+
+    if (!isbody) {
+        if (!str->indexed_headers) {
+            /* Only index the headers of the top message */
+            q = charset_decode_mimeheader(buf_cstring(data), str->charset_flags);
+            buf_init_ro_cstr(&text, q);
+            stuff_part(str->receiver, SEARCH_PART_HEADERS, &text);
+            free(q);
+            buf_free(&text);
+            str->indexed_headers = 1;
+        }
+
+        /* Index attachment file names */
+        const struct param *param;
+        if (disposition && !strcmp(disposition, "ATTACHMENT")) {
+            /* Look for "Content-Disposition: attachment;filename=" header */
+            for (param = disposition_params; param; param = param->next) {
+                if (!strcmp(param->attribute, "FILENAME")) {
+                    char *tmp = charset_decode_mimeheader(param->value, charset_flags);
+                    buf_init_ro_cstr(&text, tmp);
+                    stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
+                    buf_free(&text);
+                    free(tmp);
+                }
+                else if (!strcmp(param->attribute, "FILENAME*")) {
+                    char *xval = charset_parse_mimexvalue(param->value, NULL);
+                    char *tmp = charset_decode_mimeheader(xval, charset_flags|CHARSET_MIME_UTF8);
+                    buf_init_ro_cstr(&text, tmp);
+                    stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
+                    buf_free(&text);
+                    free(tmp);
+                    free(xval);
+                }
+            }
+        }
+        for(param = type_params; param; param = param->next) {
+            /* Look for "Content-Type: foo;name=" header */
+            if (strcmp(param->attribute, "NAME"))
+                continue;
+            char *tmp = charset_decode_mimeheader(param->value, charset_flags);
+            buf_init_ro_cstr(&text, tmp);
+            stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
+            buf_free(&text);
+            free(tmp);
+        }
+    }
+    else if (buf_len(data) > 50 && !memcmp(data->s, "-----BEGIN PGP MESSAGE-----", 27)) {
+        /* PGP encrypted body part - we don't want to index this,
+         * it's a ton of random base64 noise */
+    }
+    else if (!strcmp(type, "TEXT")) {
+        if (!strcmp(subtype, "CALENDAR")) {
+#ifdef USE_HTTPD
+            extract_icalbuf(data, charset, encoding, str);
+#endif /* USE_HTTPD */
+        }
+        else {
+            /* body-like */
+            str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
+            charset_extract(extract_cb, str, data, charset, encoding, subtype,
+                    str->charset_flags);
+            str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
+        }
+    }
+
+    return 0;
+}
+
+static void append_alnum(struct buf *buf, const char *ss)
+{
+    const unsigned char *s = (const unsigned char *)ss;
+
+    for ( ; *s ; ++s) {
+        if (Uisalnum(*s))
+            buf_putc(buf, *s);
+    }
+}
 
 EXPORTED int index_getsearchtext(message_t *msg,
                                  search_text_receiver_t *receiver,
@@ -5019,15 +5034,26 @@ EXPORTED int index_getsearchtext(message_t *msg,
         format = MESSAGE_SNIPPET;
     }
 
-#ifdef USE_HTTPD
     /* Choose index scheme for Content=Type */
     if (!strcasecmp(type, "TEXT") && !strcasecmp(subtype, "CALENDAR")) {
+#ifdef USE_HTTPD
         /* An iCalendar entry. */
-        index_icalmessage(msg, &str);
+        struct buf buf = BUF_INITIALIZER;
+        int encoding = 0;
+        const char *charset_id = NULL;
+        charset_t charset = CHARSET_UNKNOWN_CHARSET;
+
+        r = message_get_field(msg, "rawbody", MESSAGE_RAW, &buf);
+        if (!r) r = message_get_encoding(msg, &encoding);
+        if (!r) r = message_get_charset_id(msg, &charset_id);
+        if (!r) charset = charset_lookupname(charset_id);
+        if (charset != CHARSET_UNKNOWN_CHARSET)
+            r = extract_icalbuf(&buf, charset, encoding, &str);
+        charset_free(&charset);
+        buf_free(&buf);
+#endif
     }
     else {
-#endif
-
         if (!message_get_field(msg, "From", format, &buf))
             stuff_part(receiver, SEARCH_PART_FROM, &buf);
 
@@ -5079,9 +5105,7 @@ EXPORTED int index_getsearchtext(message_t *msg,
 
         /* A regular message */
         message_foreach_section(msg, getsearchtext_cb, &str);
-#ifdef USE_HTTPD
     }
-#endif
 
     r = receiver->end_message(receiver);
     buf_free(&buf);
