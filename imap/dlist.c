@@ -266,6 +266,32 @@ error:
 
 /* DLIST STUFF */
 
+EXPORTED void dlist_push(struct dlist *parent, struct dlist *child)
+{
+    assert(!child->next);
+
+    if (parent->head) {
+        child->next = parent->head;
+        parent->head = child;
+    }
+    else {
+        parent->head = parent->tail = child;
+    }
+}
+
+EXPORTED struct dlist *dlist_pop(struct dlist *parent)
+{
+    struct dlist *child;
+
+    assert(parent->head);
+
+    child = parent->head;
+    parent->head = parent->head->next;
+    child->next = NULL;
+
+    return child;
+}
+
 EXPORTED void dlist_stitch(struct dlist *parent, struct dlist *child)
 {
     assert(!child->next);
