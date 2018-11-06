@@ -946,7 +946,8 @@ static int mboxlist_update_entry(const char *name,
         dlist_printbuf(dl, 0, &mboxent);
         r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
                           buf_cstring(&mboxent), buf_len(&mboxent), txn);
-        if (!r && mbentry->uniqueid && !(old && (old->mbtype & MBTYPE_DELETED))) {
+        if (!r && mbentry->uniqueid &&
+            !(old && (old->mbtype & MBTYPE_DELETED) && (mbentry->mbtype & MBTYPE_DELETED))) {
             /* Remove I field from N record value */
             struct dlist *id = dlist_pop(dl);
             dlist_free(&id);
