@@ -422,6 +422,7 @@ struct parseentry_rock {
     struct mboxlist_entry *mbentry;
     struct buf *aclbuf;
     int doingacl;
+    int doingsyns;
 };
 
 static int parseentry_cb(int type, struct dlistsax_data *d)
@@ -433,9 +434,14 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
         if (!strcmp(buf_cstring(&d->kbuf), "A")) {
             rock->doingacl = 1;
         }
+        else if (!strcmp(buf_cstring(&d->kbuf), "Y")) {
+            rock->doingsyns = 1;
+            rock->mbentry->synonyms = dlist_newkvlist(NULL, "Y");
+        }
         break;
     case DLISTSAX_KVLISTEND:
-        rock->doingacl = 0;
+        if (rock->doingacl) rock->doingacl = 0;
+        else if (rock->doingsyns) rock->doingsyns = 0;
         break;
     case DLISTSAX_STRING:
         if (rock->doingacl) {
@@ -443,6 +449,10 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
             buf_putc(rock->aclbuf, '\t');
             buf_appendcstr(rock->aclbuf, d->data);
             buf_putc(rock->aclbuf, '\t');
+        }
+        else if (rock->doingsyns) {
+            dlist_setatom(rock->mbentry->synonyms,
+                          buf_cstring(&d->kbuf), d->data);
         }
         else {
             const char *key = buf_cstring(&d->kbuf);
@@ -487,7 +497,6 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
  *  A: _a_cl
  *  C  _c_reatedmodseq
  *  F: _f_oldermodseq
- *  H: _h_istory (TODO)
  *  I: unique_i_d
  *  M: _m_time
  *  N: _n_ame
@@ -495,6 +504,7 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
  *  S: _s_erver
  *  T: _t_ype
  *  V: uid_v_alidity
+ *  Y: s_y_nonyms
  */
 static int mboxlist_parse_entry(mbentry_t **mbentryptr,
                                 const char *name, size_t namelen,
@@ -948,12 +958,36 @@ static int mboxlist_update_entry(const char *name,
                           buf_cstring(&mboxent), buf_len(&mboxent), txn);
         if (!r && mbentry->uniqueid &&
             !(old && (old->mbtype & MBTYPE_DELETED) && (mbentry->mbtype & MBTYPE_DELETED))) {
+            mbentry_t *oldid = NULL;
+            struct dlist *synonyms = NULL;
+
             /* Remove I field from N record value */
             struct dlist *id = dlist_pop(dl);
             dlist_free(&id);
 
             /* Add N field for I record value */
             dlist_push(dl, dlist_setatom(NULL, "N", dbname));
+
+            mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &oldid, txn);
+
+            if (oldid) {
+                synonyms = oldid->synonyms;
+                oldid->synonyms = NULL;
+
+                if (strcmp(name, oldid->name)) {
+                    /* Renamed mailbox */
+                    dlist_setnum64(synonyms, name, mbentry->foldermodseq);
+                }
+                mboxlist_entry_free(&oldid);
+            }
+            else {
+                /* New mailbox */
+                synonyms = dlist_newkvlist(NULL, "Y");
+                dlist_setnum64(synonyms, name, mbentry->foldermodseq);
+            }
+
+            /* Add Y field for I record value */
+            dlist_stitch(dl, synonyms);
 
             buf_reset(&mboxent);
             dlist_printbuf(dl, 0, &mboxent);
