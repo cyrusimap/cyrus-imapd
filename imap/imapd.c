@@ -7296,11 +7296,6 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
     int r = 0;
     uint32_t uidvalidity = mbentry->uidvalidity;
 
-    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-        /* ignore intermediates - will be created on new branch as needed */
-        goto done;
-    }
-
     if((text->nl + strlen(mbentry->name + text->ol)) >= MAX_MAILBOX_BUFFER)
         goto done;
 
@@ -7323,7 +7318,7 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
 
 
     /* don't notify implied rename in mailbox hierarchy */
-    r = mboxlist_renamemailbox(mbentry->name, text->newmailboxname,
+    r = mboxlist_renamemailbox(mbentry, text->newmailboxname,
                                text->partition, uidvalidity,
                                1, imapd_userid, imapd_authstate, NULL, 0, 0,
                                text->rename_user, 0);
@@ -7361,6 +7356,18 @@ done:
     free(newextname);
 
     return r;
+}
+
+/* Callback for use by cmd_rename */
+static int checkrenmacl(const mbentry_t *mbentry, void *rock)
+{
+    const struct auth_state *auth_state = (struct auth_state *) rock;
+    long myrights = cyrus_acl_myrights(auth_state, mbentry->acl);
+
+    if (myrights & ACL_DELETEMBOX) return IMAP_OK_COMPLETED;
+
+    return (myrights & ACL_LOOKUP) ?
+        IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 }
 
 /*
@@ -7415,6 +7422,27 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     strcpy(newmailboxname2, newmailboxname);
 
     r = mlookup(NULL, NULL, oldmailboxname, &mbentry);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        /* Check if the base mailbox is an intermediate */
+        r = mboxlist_lookup_allow_all(oldmailboxname, &mbentry, 0);
+
+        if (!r) {
+            if (mbentry->mbtype & (MBTYPE_RESERVE | MBTYPE_DELETED)) {
+                r = IMAP_MAILBOX_NONEXISTENT;
+            }
+            else if (!imapd_userisadmin &&
+                     (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
+                /* Make sure we can rename the first child */
+                r = mboxlist_allmbox(oldmailboxname,
+                                     checkrenmacl, imapd_authstate, 0);
+                if (r == IMAP_OK_COMPLETED) r = 0;
+            }
+        }
+    }
+    if (r) {
+        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+        goto done;
+    }
 
     if (!r && mbentry->mbtype & MBTYPE_REMOTE) {
         /* remote mailbox */
@@ -7622,7 +7650,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         }
         mboxlist_entry_free(&newmbentry);
 
-        r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, location,
+        r = mboxlist_renamemailbox(mbentry, newmailboxname, location,
                                    0 /* uidvalidity */, imapd_userisadmin,
                                    imapd_userid, imapd_authstate, mboxevent,
                                    0, 0, rename_user, 0);
@@ -7680,7 +7708,7 @@ submboxes:
 
         /* add submailboxes; we pretend we're an admin since we successfully
            renamed the parent - we're using internal names here */
-        r = mboxlist_allmbox(oldmailboxname, renmbox, &rock, 0);
+        r = mboxlist_allmbox(oldmailboxname, renmbox, &rock, MBOXTREE_INTERMEDIATES);
     }
 
     /* take care of deleting old ACLs, subscriptions, seen state and quotas */

@@ -1660,7 +1660,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     mboxname_todeleted(name, newname, 1);
 
     /* Get mboxlist_renamemailbox to do the hard work. No ACL checks needed */
-    r = mboxlist_renamemailbox((char *)name, newname, mbentry->partition,
+    r = mboxlist_renamemailbox(mbentry, newname, mbentry->partition,
                                0 /* uidvalidity */,
                                1 /* isadmin */, userid,
                                auth_state,
@@ -1911,7 +1911,7 @@ static int dorename(const mbentry_t *mbentry, void *rock)
 
     strcpy(text->newname + text->nl, mbentry->name + text->ol);
 
-    r = mboxlist_renamemailbox(mbentry->name, text->newname,
+    r = mboxlist_renamemailbox(mbentry, text->newname,
                                text->partition, /*uidvalidity*/0,
                                /*isadmin*/1, text->userid,
                                text->authstate,
@@ -1941,20 +1941,31 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
     rock.local_only = local_only;
     rock.ignorequota = ignorequota;
     rock.keep_intermediaries = keep_intermediaries;
+    mbentry_t *mbentry = NULL;
     int r;
 
     /* first check that we can rename safely */
     r = mboxlist_mboxtree(oldname, renamecheck, &rock, 0);
     if (r) return r;
 
+    r = mboxlist_lookup_allow_all(oldname, &mbentry, 0);
+    if (r) return r;
+
+    if (mbentry->mbtype & (MBTYPE_RESERVE | MBTYPE_DELETED)) {
+        mboxlist_entry_free(&mbentry);
+        return IMAP_MAILBOX_NONEXISTENT;
+    }
+
     // rename the root mailbox
-    r = mboxlist_renamemailbox(oldname, newname,
+    r = mboxlist_renamemailbox(mbentry, newname,
                                partition, uidvalidity,
                                isadmin, userid,
                                auth_state,
                                mboxevent,
                                local_only, forceuser, ignorequota,
                                keep_intermediaries);
+    mboxlist_entry_free(&mbentry);
+
     // special-case only children exist
     if (r == IMAP_MAILBOX_NONEXISTENT && rock.found) r = 0;
     if (r) return r;
@@ -1969,15 +1980,17 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
  * higher level).  This only supports local mailboxes.  Remote
  * mailboxes are handled up in imapd.c
  */
-EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
-                           const char *partition, unsigned uidvalidity,
-                           int isadmin, const char *userid,
-                           const struct auth_state *auth_state,
-                           struct mboxevent *mboxevent,
-                           int local_only, int forceuser, int ignorequota,
-                           int keep_intermediaries)
+EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
+                                    const char *newname,
+                                    const char *partition, unsigned uidvalidity,
+                                    int isadmin, const char *userid,
+                                    const struct auth_state *auth_state,
+                                    struct mboxevent *mboxevent,
+                                    int local_only, int forceuser,
+                                    int ignorequota, int keep_intermediaries)
 {
     int r;
+    const char *oldname = mbentry->name;
     int mupdatecommiterror = 0;
     long myrights;
     int isusermbox = 0; /* Are we renaming someone's inbox */
@@ -1990,23 +2003,35 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
     char *newpartition = NULL;
     mupdate_handle *mupdate_h = NULL;
     mbentry_t *newmbentry = NULL;
+    int is_deleted_ancestor = 0;
 
     init_internal();
 
-    /* 1. open mailbox */
-    r = mailbox_open_iwl(oldname, &oldmailbox);
-    if (r) return r;
+    /* special-case: intermediate mailbox */
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+        newmbentry = mboxlist_entry_copy(mbentry);
+        free(newmbentry->name);
+        newmbentry->name = xstrdupnull(newname);
+        newmbentry->foldermodseq++;
 
-    myrights = cyrus_acl_myrights(auth_state, oldmailbox->acl);
+        /* skip ahead to the database update */
+        goto dbupdate;
+    }
+
+    myrights = cyrus_acl_myrights(auth_state, mbentry->acl);
 
     /* check the ACLs up-front */
     if (!isadmin) {
         if (!(myrights & ACL_DELETEMBOX)) {
             r = (myrights & ACL_LOOKUP) ?
                 IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
-            goto done;
+            return r;
         }
     }
+
+    /* 1. open mailbox */
+    r = mailbox_open_iwl(oldname, &oldmailbox);
+    if (r) return r;
 
     /* 2. verify valid move */
     /* XXX - handle remote mailbox */
@@ -2130,8 +2155,10 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
     newmbentry->foldermodseq = newmailbox->i.highestmodseq;
 
     /* is this delayed delete of a mailbox with a children? */
-    int is_deleted_ancestor = (mboxname_isdeletedmailbox(newname, NULL)
-                               && mboxlist_haschildren(oldname));
+    is_deleted_ancestor = (mboxname_isdeletedmailbox(newname, NULL)
+                           && mboxlist_haschildren(oldname));
+
+  dbupdate:
 
     do {
         r = 0;
@@ -2140,13 +2167,14 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
         if (!isusermbox) {
             /* store a DELETED marker */
             mbentry_t *oldmbentry = mboxlist_entry_create();
-            oldmbentry->name = xstrdupnull(oldmailbox->name);
+            oldmbentry->name = xstrdupnull(mbentry->name);
             oldmbentry->mbtype =
                 is_deleted_ancestor ? MBTYPE_INTERMEDIATE : MBTYPE_DELETED;
-            oldmbentry->uidvalidity = oldmailbox->i.uidvalidity;
-            oldmbentry->uniqueid = xstrdupnull(oldmailbox->uniqueid);
-            newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
-            oldmbentry->foldermodseq = mailbox_modseq_dirty(oldmailbox);
+            oldmbentry->uidvalidity = mbentry->uidvalidity;
+            oldmbentry->uniqueid = xstrdupnull(mbentry->uniqueid);
+            oldmbentry->createdmodseq = mbentry->createdmodseq;
+            oldmbentry->foldermodseq = oldmailbox ?
+                mailbox_modseq_dirty(oldmailbox) : mbentry->foldermodseq + 1;
 
             r = mboxlist_update_entry(oldname, oldmbentry, &tid);
 
@@ -2308,6 +2336,10 @@ EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
             mailbox_delete_cleanup(NULL, oldpartition, oldname, olduniqueid);
             free(olduniqueid);
             free(oldpartition);
+        }
+        else if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+            /* no event notification */
+            if (mboxevent) mboxevent->type = EVENT_CANCELLED;
         }
         else
             abort(); /* impossible, in theory */

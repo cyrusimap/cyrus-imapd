@@ -3207,6 +3207,8 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     const char *newmboxname;
     const char *partition;
     uint32_t uidvalidity = 0;
+    mbentry_t *mbentry = NULL;
+    int r;
 
     if (!dlist_getatom(kin, "OLDMBOXNAME", &oldmboxname))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -3218,10 +3220,16 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     /* optional */
     dlist_getnum32(kin, "UIDVALIDITY", &uidvalidity);
 
-    return mboxlist_renamemailbox(oldmboxname, newmboxname, partition,
-                                  uidvalidity, 1, sstate->userid,
-                                  sstate->authstate, NULL, sstate->local_only, 1, 1,
-                                  0/*keep_intermediaries*/);
+    r = mboxlist_lookup(oldmboxname, &mbentry, 0);
+    if (r) return r;
+
+    r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
+                               uidvalidity, 1, sstate->userid,
+                               sstate->authstate, NULL, sstate->local_only, 1, 1,
+                               0/*keep_intermediaries*/);
+    mboxlist_entry_free(&mbentry);
+
+    return r;
 }
 
 int sync_apply_changesub(struct dlist *kin, struct sync_state *sstate)

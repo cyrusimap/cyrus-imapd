@@ -198,7 +198,7 @@ int mboxlist_renametree(const char *oldname, const char *newname,
                         int keep_intermediaries);
 /* Rename/move a mailbox (hierarchical) */
 /* prepare MailboxRename notification if mboxevent is not NULL */
-int mboxlist_renamemailbox(const char *oldname, const char *newname,
+int mboxlist_renamemailbox(const mbentry_t *mbentry, const char *newname,
                            const char *partition, unsigned uidvalidity,
                            int isadmin, const char *userid,
                            const struct auth_state *auth_state,

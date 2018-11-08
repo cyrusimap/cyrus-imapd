@@ -3408,6 +3408,7 @@ static int mvgroup(message_data_t *msg)
     char *group;
     char oldmailboxname[MAX_MAILBOX_BUFFER];
     char newmailboxname[MAX_MAILBOX_BUFFER];
+    struct mbentry_t *mbentry = NULL;
 
     /* isolate old newsgroup */
     group = msg->control + 7; /* skip "mvgroup" */
@@ -3425,8 +3426,12 @@ static int mvgroup(message_data_t *msg)
     snprintf(newmailboxname, sizeof(newmailboxname), "%s%.*s",
              newsprefix, (int)len, group);
 
-    r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, NULL, 0,
+    r = mlookup(oldmailboxname, &mbentry);
+    if (r) return r;
+
+    r = mboxlist_renamemailbox(mbentry, newmailboxname, NULL, 0,
                                newsmaster, newsmaster_authstate, 0, 0, 0);
+    mboxlist_entry_free(&mbentry);
 
     /* XXX check body of message for useful MIME parts */
 
