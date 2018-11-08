@@ -5700,14 +5700,6 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
         }
         break;
 
-    case URL_NS_CALENDAR:
-        /*  Inbox and Outbox can't appear unless they are the target */
-        if (!fctx->req_tgt->flags) {
-            if (!strncmp(p, SCHED_INBOX, strlen(SCHED_INBOX) - 1)) goto done;
-            if (!strncmp(p, SCHED_OUTBOX, strlen(SCHED_OUTBOX) - 1)) goto done;
-        }
-        /* fall through */
-
     default:
         /* Magic folder filter */
         if (httpd_extrafolder && strcasecmp(p, httpd_extrafolder)) goto done;
