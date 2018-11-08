@@ -750,7 +750,7 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
     return;
 }
 
-void mboxevent_add_flags(struct mboxevent *event, char *flagnames[MAX_USER_FLAGS],
+EXPORTED void mboxevent_add_flags(struct mboxevent *event, char *flagnames[MAX_USER_FLAGS],
                          bit32 system_flags, bit32 user_flags[MAX_USER_FLAGS/32])
 {
     unsigned flag, flagmask = 0;
@@ -793,7 +793,7 @@ void mboxevent_add_flags(struct mboxevent *event, char *flagnames[MAX_USER_FLAGS
     }
 }
 
-void mboxevent_add_flag(struct mboxevent *event, const char *flag)
+EXPORTED void mboxevent_add_flag(struct mboxevent *event, const char *flag)
 {
     if (!event)
         return;

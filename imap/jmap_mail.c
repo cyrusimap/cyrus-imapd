@@ -67,6 +67,7 @@
 #include "json_support.h"
 #include "mailbox.h"
 #include "mappedfile.h"
+#include "mboxevent.h"
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "msgrecord.h"
@@ -7881,16 +7882,26 @@ static void _email_update_free(struct email_update *update)
     free(update);
 }
 
-/* Set or patch the JMAP keywords on message record mrw.
+struct modified_flags {
+    int added_flags;
+    bit32 added_system_flags;
+    bit32 added_user_flags[MAX_USER_FLAGS/32];
+    int removed_flags;
+    bit32 removed_system_flags;
+    bit32 removed_user_flags[MAX_USER_FLAGS/32];
+};
+
+/* Overwrite or patch the JMAP keywords on message record mrw.
  * If add_seen_uids or del_seen_uids is not NULL, then
  * the record UID is added to respective sequence set,
  * if the flag must be set or deleted. */
 static int _email_setflags(json_t *keywords, int patch_keywords,
+                           msgrecord_t *mrw,
                            struct seqset *add_seen_uids,
                            struct seqset *del_seen_uids,
-                           msgrecord_t *mrw)
+                           struct modified_flags *modflags)
 {
-    uint32_t system_flags = 0, internal_flags = 0;
+    uint32_t internal_flags = 0;
     struct mailbox *mbox = NULL;
     uint32_t uid = 0;
 
@@ -7898,23 +7909,29 @@ static int _email_setflags(json_t *keywords, int patch_keywords,
     if (r) return r;
     r = msgrecord_get_uid(mrw, &uid);
     if (r) goto done;
-    r = msgrecord_get_systemflags(mrw, &system_flags);
-    if (r) goto done;
     r = msgrecord_get_internalflags(mrw, &internal_flags);
     if (r) goto done;
-    if ((system_flags & FLAG_DELETED) ||
-        (internal_flags & FLAG_INTERNAL_EXPUNGED)) goto done;
+    if (internal_flags & FLAG_INTERNAL_EXPUNGED) goto done;
+
+    uint32_t old_system_flags = 0;
+    r = msgrecord_get_systemflags(mrw, &old_system_flags);
+    if (r) goto done;
+
+    uint32_t old_user_flags[MAX_USER_FLAGS/32];
+    r = msgrecord_get_userflags(mrw, old_user_flags);
+    if (r) goto done;
 
     /* Determine if to patch or reset flags */
-    uint32_t user_flags[MAX_USER_FLAGS/32];
-    memset(user_flags, 0, sizeof(user_flags));
+    uint32_t new_system_flags = 0;
+    uint32_t new_user_flags[MAX_USER_FLAGS/32];
     if (patch_keywords) {
-        r = msgrecord_get_userflags(mrw, user_flags);
-        if (r) goto done;
+        new_system_flags = old_system_flags;
+        memcpy(new_user_flags, old_user_flags, sizeof(old_user_flags));
     }
     else {
-        system_flags = 0;
-        memset(user_flags, 0, sizeof(user_flags));
+        new_system_flags = (old_system_flags & ~FLAGS_SYSTEM) |
+                           (old_system_flags & FLAG_DELETED);
+        memset(new_user_flags, 0, sizeof(new_user_flags));
     }
 
     /* Update flags */
@@ -7923,58 +7940,81 @@ static int _email_setflags(json_t *keywords, int patch_keywords,
     json_object_foreach(keywords, keyword, jval) {
         if (!strcasecmp(keyword, "$Flagged")) {
             if (jval == json_true())
-                system_flags |= FLAG_FLAGGED;
+                new_system_flags |= FLAG_FLAGGED;
             else
-                system_flags &= ~FLAG_FLAGGED;
+                new_system_flags &= ~FLAG_FLAGGED;
         }
         else if (!strcasecmp(keyword, "$Answered")) {
             if (jval == json_true())
-                system_flags |= FLAG_ANSWERED;
+                new_system_flags |= FLAG_ANSWERED;
             else
-                system_flags &= ~FLAG_ANSWERED;
+                new_system_flags &= ~FLAG_ANSWERED;
         }
         else if (!strcasecmp(keyword, "$Seen")) {
             if (jval == json_true()) {
                 if (add_seen_uids)
                     seqset_add(add_seen_uids, uid, 1);
                 else
-                    system_flags |= FLAG_SEEN;
+                    new_system_flags |= FLAG_SEEN;
             }
             else {
                 if (del_seen_uids)
                     seqset_add(del_seen_uids, uid, 1);
                 else
-                    system_flags &= ~FLAG_SEEN;
+                    new_system_flags &= ~FLAG_SEEN;
             }
         }
         else if (!strcasecmp(keyword, "$Draft")) {
             if (jval == json_true())
-                system_flags |= FLAG_DRAFT;
+                new_system_flags |= FLAG_DRAFT;
             else
-                system_flags &= ~FLAG_DRAFT;
+                new_system_flags &= ~FLAG_DRAFT;
         }
         else {
             int userflag;
             r = mailbox_user_flag(mbox, keyword, &userflag, 1);
             if (r) goto done;
             if (jval == json_true())
-                user_flags[userflag/32] |= 1<<(userflag&31);
+                new_user_flags[userflag/32] |= 1<<(userflag&31);
             else
-                user_flags[userflag/32] &= ~(1<<(userflag&31));
+                new_user_flags[userflag/32] &= ~(1<<(userflag&31));
         }
     }
     if (!patch_keywords && del_seen_uids) {
-        if (json_object_get(keywords, "$seen") == NULL)
+        if (json_object_get(keywords, "$seen") == NULL) {
             seqset_add(del_seen_uids, uid, 1);
+        }
     }
 
     /* Write flags to record */
-    r = msgrecord_set_systemflags(mrw, system_flags);
+    r = msgrecord_set_systemflags(mrw, new_system_flags);
     if (r) goto done;
-    r = msgrecord_set_userflags(mrw, user_flags);
+    r = msgrecord_set_userflags(mrw, new_user_flags);
     if (r) goto done;
-
     r = msgrecord_rewrite(mrw);
+
+    /* Determine flag delta */
+    memset(modflags, 0, sizeof(struct modified_flags));
+    modflags->added_system_flags = ~old_system_flags & new_system_flags & FLAGS_SYSTEM;
+    if (modflags->added_system_flags) {
+        modflags->added_flags = 1;
+    }
+    modflags->removed_system_flags = old_system_flags & ~new_system_flags & FLAGS_SYSTEM;
+    if (modflags->removed_system_flags) {
+        modflags->removed_flags = 1;
+    }
+
+    size_t i;
+    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
+        modflags->added_user_flags[i] = ~old_user_flags[i] & new_user_flags[i];
+        if (modflags->added_user_flags[i]) {
+            modflags->added_flags = 1;
+        }
+        modflags->removed_user_flags[i] = old_user_flags[i] & ~new_user_flags[i];
+        if (modflags->removed_user_flags[i]) {
+            modflags->removed_flags = 1;
+        }
+    }
 
 done:
     return r;
@@ -9043,6 +9083,12 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
         struct seqset *add_seenseq = NULL;
         struct seqset *del_seenseq = NULL;
         const uint32_t last_uid = plan->mbox->i.last_uid;
+
+        struct mboxevent *flagsset = mboxevent_new(EVENT_FLAGS_SET);
+        int notify_flagsset = 0;
+        struct mboxevent *flagsclear = mboxevent_new(EVENT_FLAGS_CLEAR);
+        int notify_flagsclear = 0;
+
         if (plan->use_seendb) {
             add_seenseq = seqset_init(last_uid, SEQ_SPARSE);
             del_seenseq = seqset_init(last_uid, SEQ_SPARSE);
@@ -9061,10 +9107,29 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
             int patch_keywords = uidrec->is_new ? 0 : update->patch_keywords;
 
             /* Write keywords */
+            struct modified_flags modflags;
+            memset(&modflags, 0, sizeof(struct modified_flags));
             msgrecord_t *mrw = msgrecord_from_uid(plan->mbox, uidrec->uid);
-            int r = _email_setflags(keywords, patch_keywords, add_seenseq, del_seenseq, mrw);
-            msgrecord_unref(&mrw);
-            if (r) {
+            int r = _email_setflags(keywords, patch_keywords, mrw,
+                                    add_seenseq, del_seenseq, &modflags);
+            if (!r) {
+                if (modflags.added_flags) {
+                    mboxevent_add_flags(flagsset, plan->mbox->flagname,
+                                        modflags.added_system_flags,
+                                        modflags.added_user_flags);
+                    mboxevent_extract_msgrecord(flagsset, mrw);
+                    notify_flagsset = 1;
+                }
+                if (modflags.removed_flags) {
+                    mboxevent_add_flags(flagsclear, plan->mbox->flagname,
+                                        modflags.removed_system_flags,
+                                        modflags.removed_user_flags);
+                    mboxevent_extract_msgrecord(flagsclear, mrw);
+                    notify_flagsclear = 1;
+                }
+                msgrecord_unref(&mrw);
+            }
+            else {
                 json_object_set_new(bulk->set_errors, email_id, jmap_server_error(r));
             }
         }
@@ -9105,6 +9170,20 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
                 seen_freedata(&sd);
             }
         }
+        if (notify_flagsset) {
+            mboxevent_extract_mailbox(flagsset, plan->mbox);
+            mboxevent_set_access(flagsset, NULL, NULL, bulk->req->userid,
+                                 plan->mbox->name, 0);
+            mboxevent_notify(&flagsset);
+        }
+        if (notify_flagsclear) {
+            mboxevent_extract_mailbox(flagsclear, plan->mbox);
+            mboxevent_set_access(flagsclear, NULL, NULL, bulk->req->userid,
+                                 plan->mbox->name, 0);
+            mboxevent_notify(&flagsclear);
+        }
+        mboxevent_free(&flagsset);
+        mboxevent_free(&flagsclear);
     }
     hash_iter_free(&iter);
 }
@@ -9740,6 +9819,10 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
     jmap_req_t *req = rock->req;
+    struct mboxevent *flagsset = mboxevent_new(EVENT_FLAGS_SET);
+    struct mboxevent *flagsclear = mboxevent_new(EVENT_FLAGS_CLEAR);
+    int notify_flagsset = 0;
+    int notify_flagsclear = 0;
 
     if (rec->part) {
         return 0;
@@ -9773,7 +9856,25 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
         }
 
         /* Write the flags on the record */
-        if (!r) r = _email_setflags(rock->keywords, 0, addseen, delseen, mr);
+        struct modified_flags modflags;
+        memset(&modflags, 0, sizeof(struct modified_flags));
+        if (!r) r = _email_setflags(rock->keywords, 0, mr, addseen, delseen, &modflags);
+        if (!r) {
+            if (modflags.added_flags) {
+                mboxevent_extract_msgrecord(flagsset, mr);
+                mboxevent_add_flags(flagsset, mbox->flagname,
+                                    modflags.added_system_flags,
+                                    modflags.added_user_flags);
+                notify_flagsset = 1;
+            }
+            if (modflags.removed_flags) {
+                mboxevent_extract_msgrecord(flagsclear, mr);
+                mboxevent_add_flags(flagsclear, mbox->flagname,
+                                    modflags.removed_system_flags,
+                                    modflags.removed_user_flags);
+                notify_flagsclear = 1;
+            }
+        }
 
         /* Write back changes to seen.db */
         if (!r && need_seendb && (addseen->len || delseen->len)) {
@@ -9809,11 +9910,25 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
     if (!r) r = msgrecord_rewrite(mr);
     if (r) goto done;
 
+    /* Write mboxevents */
+    if (notify_flagsset) {
+        mboxevent_extract_mailbox(flagsset, mbox);
+        mboxevent_set_access(flagsset, NULL, NULL, req->userid, mbox->name, 0);
+        mboxevent_notify(&flagsset);
+    }
+    if (notify_flagsclear) {
+        mboxevent_extract_mailbox(flagsclear, mbox);
+        mboxevent_set_access(flagsclear, NULL, NULL, req->userid, mbox->name, 0);
+        mboxevent_notify(&flagsclear);
+    }
+
     /* Read output values */
     if (!rock->cid) rock->cid = rec->cid;
     if (!rock->size) r = msgrecord_get_size(mr, &rock->size);
 
 done:
+    mboxevent_free(&flagsset);
+    mboxevent_free(&flagsclear);
     if (mr) msgrecord_unref(&mr);
     jmap_closembox(rock->req, &mbox);
     return r;
