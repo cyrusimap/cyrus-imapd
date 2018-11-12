@@ -690,10 +690,17 @@ static int create_upload_collection(const char *accountid,
                                    httpd_authstate, 0, 0, 0, 0, mailbox);
         /* we lost the race, that's OK */
         if (r == IMAP_MAILBOX_LOCKED) r = 0;
-        if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                      mbentry->name, error_message(r));
+        else {
+            if (r) {
+                syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                        mbentry->name, error_message(r));
+            }
+            goto done;
+        }
     }
-    else if (mailbox) {
+    else if (r) goto done;
+
+    if (mailbox) {
         /* Open mailbox for writing */
         r = mailbox_open_iwl(mbentry->name, mailbox);
         if (r) {
