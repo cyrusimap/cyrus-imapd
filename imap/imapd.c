@@ -5120,6 +5120,15 @@ badannotation:
         fa->isadmin = imapd_userisadmin || imapd_userisproxyadmin;
         fa->authstate = imapd_authstate;
     }
+    if (config_getswitch(IMAPOPT_CONVERSATIONS)
+        && (fa->fetchitems & FETCH_XMAILBOXID)) {
+        int r = conversations_open_user(imapd_userid, &fa->convstate);
+        if (r) {
+            syslog(LOG_WARNING, "error opening conversations for %s: %s",
+                                imapd_userid,
+                                error_message(r));
+        }
+    }
 
     strarray_free(newfields);
     return 0;
@@ -5139,6 +5148,7 @@ static void fetchargs_fini (struct fetchargs *fa)
     strarray_fini(&fa->headers_not);
     strarray_fini(&fa->entries);
     strarray_fini(&fa->attribs);
+    conversations_commit(&fa->convstate);
 
     memset(fa, 0, sizeof(struct fetchargs));
 }

@@ -3882,25 +3882,19 @@ static int index_fetchmailboxids(struct index_state *state,
                                  uint32_t msgno,
                                  const struct fetchargs *fetchargs)
 {
-    struct conversations_state *cstate = NULL;
     struct mailboxid_rock rock = { state, 0, fetchargs};
     struct index_record record;
     int r;
 
-    /* FIXME nasty, one open/close per message :/ */
-    r = conversations_open_user(state->userid, &cstate);
-    if (r) goto done;
+    if (!fetchargs->convstate) return 0;
 
     r = index_reload_record(state, msgno, &record);
-    if (r) goto done;
+    if (r) return r;
 
-    r = conversations_guid_foreach(cstate,
-                                   message_guid_encode(&record.guid),
-                                   &_mailboxid_cb,
-                                   &rock);
-done:
-    if (cstate) conversations_commit(&cstate);
-    return r;
+    return conversations_guid_foreach(fetchargs->convstate,
+                                      message_guid_encode(&record.guid),
+                                      &_mailboxid_cb,
+                                      &rock);
 }
 
 /*

@@ -105,6 +105,7 @@ struct fetchargs {
     int isadmin;
     struct auth_state *authstate;
     hash_table *cidhash;          /* for XCONVFETCH */
+    struct conversations_state *convstate; /* for FETCH_XMAILBOXID */
 };
 
 /* Bitmasks for fetchitems */
