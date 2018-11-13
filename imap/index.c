@@ -3841,19 +3841,26 @@ static int _mailboxid_cb(const conv_guidrec_t *rec, void *rock)
     if ((myrights & needrights) != needrights)
         goto done;
 
-    /* open rec->mboxname */
-    r = mailbox_open_irl(rec->mboxname, &mailbox);
-    if (r) goto done;
+    if (rec->version >= 1) {
+        /* grab flags from convdb, if it has them */
+        system_flags = rec->system_flags;
+        internal_flags = rec->internal_flags;
+    }
+    else {
+        /* grab flags from message record */
+        r = mailbox_open_irl(rec->mboxname, &mailbox);
+        if (r) goto done;
 
-    /* find record for rec->uid */
-    r = msgrecord_find(mailbox, rec->uid, &msgrecord);
-    if (r) goto done;
+        r = msgrecord_find(mailbox, rec->uid, &msgrecord);
+        if (r) goto done;
+
+        r = msgrecord_get_systemflags(msgrecord, &system_flags);
+        if (!r) r = msgrecord_get_internalflags(msgrecord, &internal_flags);
+        if (r) goto done;
+    }
 
     /* skip if flag deleted or flag internal expunged */
-    r = msgrecord_get_systemflags(msgrecord, &system_flags);
-    if (!r) r = msgrecord_get_internalflags(msgrecord, &internal_flags);
-    if (r
-        || (system_flags & FLAG_DELETED)
+    if ((system_flags & FLAG_DELETED)
         || (internal_flags & FLAG_INTERNAL_EXPUNGED))
         goto done;
 
