@@ -4896,7 +4896,11 @@ badannotation:
             break;
 
         case 'M':
-            if (!strcmp(fetchatt.s, "MODSEQ")) {
+            if (config_getswitch(IMAPOPT_CONVERSATIONS)
+                && !strcmp(fetchatt.s, "MAILBOXIDS")) {
+                fa->fetchitems |= FETCH_MAILBOXIDS;
+            }
+            else if (!strcmp(fetchatt.s, "MODSEQ")) {
                 fa->fetchitems |= FETCH_MODSEQ;
             }
             else goto badatt;
@@ -5004,14 +5008,6 @@ badannotation:
             else goto badatt;
             break;
 
-        case 'X':
-            if (config_getswitch(IMAPOPT_CONVERSATIONS)
-                && !strcmp(fetchatt.s, "X-MAILBOXID")) {
-                fa->fetchitems |= FETCH_XMAILBOXID;
-            }
-            else goto badatt;
-            break;
-
         default:
         badatt:
             prot_printf(imapd_out, "%s BAD Invalid %s attribute %s\r\n", tag, cmd, fetchatt.s);
@@ -5113,7 +5109,7 @@ badannotation:
         }
     }
 
-    if (fa->fetchitems & (FETCH_ANNOTATION|FETCH_FOLDER|FETCH_XMAILBOXID)) {
+    if (fa->fetchitems & (FETCH_ANNOTATION|FETCH_FOLDER)) {
         fa->namespace = &imapd_namespace;
         fa->userid = imapd_userid;
     }
@@ -5122,7 +5118,7 @@ badannotation:
         fa->authstate = imapd_authstate;
     }
     if (config_getswitch(IMAPOPT_CONVERSATIONS)
-        && (fa->fetchitems & FETCH_XMAILBOXID)) {
+        && (fa->fetchitems & FETCH_MAILBOXIDS)) {
         int r = conversations_open_user(imapd_userid, &fa->convstate);
         if (r) {
             syslog(LOG_WARNING, "error opening conversations for %s: %s",

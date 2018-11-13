@@ -105,7 +105,7 @@ struct fetchargs {
     int isadmin;
     struct auth_state *authstate;
     hash_table *cidhash;          /* for XCONVFETCH */
-    struct conversations_state *convstate; /* for FETCH_XMAILBOXID */
+    struct conversations_state *convstate; /* for FETCH_MAILBOXIDS */
 };
 
 /* Bitmasks for fetchitems */
@@ -136,7 +136,7 @@ enum {
     FETCH_THREADID =            (1<<23),
     FETCH_SAVEDATE =            (1<<24),
     FETCH_CREATEDMODSEQ =       (1<<25),
-    FETCH_XMAILBOXID =          (1<<26),
+    FETCH_MAILBOXIDS =          (1<<26),
 };
 
 enum {

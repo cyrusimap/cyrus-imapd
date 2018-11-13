@@ -3828,7 +3828,6 @@ static int _mailboxid_cb(const conv_guidrec_t *rec, void *rock)
     struct mailbox *mailbox = NULL;
     msgrecord_t *msgrecord = NULL;
     uint32_t system_flags, internal_flags;
-    char *extname = NULL;
     int r = 0;
 
     assert(mbid_rock->state != NULL);
@@ -3864,17 +3863,12 @@ static int _mailboxid_cb(const conv_guidrec_t *rec, void *rock)
         || (internal_flags & FLAG_INTERNAL_EXPUNGED))
         goto done;
 
-    extname = mboxname_to_external(rec->mboxname,
-                                   mbid_rock->fetchargs->namespace,
-                                   mbid_rock->fetchargs->userid);
-
     if (mbid_rock->sep)
         prot_putc(mbid_rock->sep, mbid_rock->state->out);
-    prot_printf(mbid_rock->state->out, "%s", extname);
+    prot_printf(mbid_rock->state->out, "%s", mbentry->uniqueid);
     mbid_rock->sep = ' ';
 
 done:
-    if (extname) free(extname);
     if (msgrecord) msgrecord_unref(&msgrecord);
     if (mailbox) mailbox_close(&mailbox);
     if (mbentry) mboxlist_entry_free(&mbentry);
@@ -3882,7 +3876,7 @@ done:
 }
 
 /*
- * Helper function to send FETCH data for the X-MAILBOXID
+ * Helper function to send FETCH data for the MAILBOXIDS
  * fetch item.
  */
 static int index_fetchmailboxids(struct index_state *state,
@@ -4200,8 +4194,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if (config_getswitch(IMAPOPT_CONVERSATIONS)
-        && (fetchitems & FETCH_XMAILBOXID)) {
-        prot_printf(state->out, "%cX-MAILBOXID (", sepchar);
+        && (fetchitems & FETCH_MAILBOXIDS)) {
+        prot_printf(state->out, "%cMAILBOXIDS (", sepchar);
         r = index_fetchmailboxids(state, msgno, fetchargs);
         r = 0;
         prot_printf(state->out, ")");
