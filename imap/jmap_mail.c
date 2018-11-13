@@ -1918,7 +1918,7 @@ static struct sortcrit *_email_buildsort(json_t *sort)
             sortcrit[i].key = SORT_ARRIVAL;
         }
         if (!strcmp(prop, "from")) {
-            sortcrit[i].key = SORT_FROM;
+            sortcrit[i].key = SORT_DISPLAYFROM;
         }
         if (!strcmp(prop, "id")) {
             sortcrit[i].key = SORT_GUID;
@@ -1933,7 +1933,7 @@ static struct sortcrit *_email_buildsort(json_t *sort)
             sortcrit[i].key = SORT_SUBJECT;
         }
         if (!strcmp(prop, "to")) {
-            sortcrit[i].key = SORT_TO;
+            sortcrit[i].key = SORT_DISPLAYTO;
         }
         if (!strcmp(prop, "hasKeyword")) {
             const char *name = json_string_value(json_object_get(jcomp, "keyword"));
