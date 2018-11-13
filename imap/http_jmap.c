@@ -534,7 +534,8 @@ static int jmap_download(struct transaction_t *txn)
     char *accept_mime = NULL;
 
     /* Find part containing blob */
-    r = jmap_findblob(&req, blobid, &mbox, &mr, &body, &part, &msg_buf);
+    r = jmap_findblob(&req, NULL/*accountid*/, blobid,
+                      &mbox, &mr, &body, &part, &msg_buf);
     if (r) {
         res = HTTP_NOT_FOUND; // XXX errors?
         txn->error.desc = "failed to find blob by id";
@@ -1115,8 +1116,8 @@ static int jmap_copyblob(jmap_req_t *req,
     FILE *to_fp = NULL;
     struct stagemsg *stage = NULL;
 
-    req->accountid = from_accountid;
-    int r = jmap_findblob(req, blobid, &mbox, &mr, &body, &part, &msg_buf);
+    int r = jmap_findblob(req, from_accountid, blobid,
+                          &mbox, &mr, &body, &part, &msg_buf);
     if (r) return r;
 
     if (!part)
@@ -1203,6 +1204,7 @@ static int jmap_blob_copy(jmap_req_t *req)
     json_t *val, *err = NULL;
     size_t i = 0;
     int r = 0;
+    struct mailbox *to_mbox = NULL;
 
     /* Parse request */
     jmap_copy_parse(req->args, &parser, req, NULL, &copy, &err);
@@ -1211,11 +1213,8 @@ static int jmap_blob_copy(jmap_req_t *req)
         goto cleanup;
     }
 
-    /* No return from here on */
-    struct mailbox *to_mbox = NULL;
-
     /* Check if we can upload to toAccountId */
-    r = create_upload_collection(copy.to_account_id, &to_mbox);
+    r = create_upload_collection(req->accountid, &to_mbox);
     if (r == IMAP_PERMISSION_DENIED) {
         json_array_foreach(copy.create, i, val) {
             json_object_set(copy.not_created, json_string_value(val),
@@ -1224,26 +1223,15 @@ static int jmap_blob_copy(jmap_req_t *req)
         goto done;
     } else if (r) {
         syslog(LOG_ERR, "jmap_blob_copy: create_upload_collection(%s): %s",
-               copy.to_account_id, error_message(r));
+               req->accountid, error_message(r));
         goto cleanup;
-    }
-
-    /* Check if we can access any mailbox of fromAccountId */
-    req->accountid = copy.from_account_id;
-    r = jmap_mboxlist(req, jmap_is_accessible, NULL);
-    if (r != IMAP_OK_COMPLETED) {
-        json_array_foreach(copy.create, i, val) {
-            json_object_set(copy.not_created, json_string_value(val),
-                    json_pack("{s:s}", "type", "fromAccountNotFound"));
-        }
-        goto done;
     }
 
     /* Copy blobs one by one. XXX should we batch copy here? */
     json_array_foreach(copy.create, i, val) {
         const char *blobid = json_string_value(val);
         r = jmap_copyblob(req, blobid, copy.from_account_id, to_mbox);
-        if (r == IMAP_NOTFOUND) {
+        if (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED) {
             json_object_set_new(copy.not_created, blobid,
                     json_pack("{s:s}", "type", "blobNotFound"));
         }

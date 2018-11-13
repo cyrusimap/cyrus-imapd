@@ -907,7 +907,7 @@ HIDDEN void jmap_set_blobid(const struct message_guid *guid, char *buf)
 
 struct findblob_data {
     jmap_req_t *req;
-    const char *accountid;
+    const char *from_accountid;
     int is_shared_account;
     struct mailbox *mbox;
     msgrecord_t *mr;
@@ -923,7 +923,7 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
     /* Ignore blobs that don't belong to the current accountId */
     mbname_t *mbname = mbname_from_intname(rec->mboxname);
     int is_accountid_mbox =
-        (mbname && !strcmp(mbname_userid(mbname), d->accountid));
+        (mbname && !strcmp(mbname_userid(mbname), d->from_accountid));
     mbname_free(&mbname);
     if (!is_accountid_mbox)
         return 0;
@@ -957,28 +957,43 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
     return IMAP_OK_COMPLETED;
 }
 
-HIDDEN int jmap_findblob(jmap_req_t *req, const char *blobid,
+HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
+                         const char *blobid,
                          struct mailbox **mbox, msgrecord_t **mr,
                          struct body **body, const struct body **part,
                          struct buf *blob)
 {
 
     struct findblob_data data = {
-        req, /* req */
-        req->accountid, /* accountid */
-        strcmp(req->userid, req->accountid), /* is_shared_account */
-        NULL, /* mbox */
-        NULL, /* mr */
-        NULL  /* part_id */
+        req,
+        /* from_accountid */
+        from_accountid ? from_accountid : req->accountid, /* from_accountid */
+        /* is_shared_account */
+        strcmp(req->userid, from_accountid ? from_accountid : req->accountid),
+        /* mbox */
+        NULL,
+        /* mr */
+        NULL,
+        /* part_id */
+        NULL
     };
     struct body *mybody = NULL;
     const struct body *mypart = NULL;
     int i, r;
+    struct conversations_state *mycstate = NULL;
+
+    if (from_accountid && strcmp(req->accountid, from_accountid)) {
+        r = conversations_open_user(from_accountid, &mycstate);
+        if (r) goto done;
+    }
+    else {
+        mycstate = req->cstate;
+    }
 
     if (blobid[0] != 'G')
         return IMAP_NOTFOUND;
 
-    r = conversations_guid_foreach(req->cstate, blobid+1, findblob_cb, &data);
+    r = conversations_guid_foreach(mycstate, blobid+1, findblob_cb, &data);
     if (r != IMAP_OK_COMPLETED) {
         if (!r) r = IMAP_NOTFOUND;
         goto done;
@@ -1026,6 +1041,9 @@ HIDDEN int jmap_findblob(jmap_req_t *req, const char *blobid,
     r = 0;
 
 done:
+    if (mycstate && mycstate != req->cstate) {
+        conversations_commit(&mycstate);
+    }
     if (r) {
         if (data.mbox) jmap_closembox(req, &data.mbox);
         if (mybody) message_free_body(mybody);
@@ -1825,14 +1843,11 @@ HIDDEN void jmap_copy_parse(json_t *jargs,
             }
         }
 
-        /* toAccountId */
-        else if (!strcmp(key, "toAccountId")) {
-            if (json_is_string(arg)) {
-                copy->to_account_id = json_string_value(arg);
-            }
-            else if (JNOTNULL(arg)) {
-                jmap_parser_invalid(parser, "toAccountId");
-            }
+        /* accountId */
+        else if (!strcmp(key, "accountId")) {
+            /* JMAP request parser already set it */
+            assert(req->accountid);
+            continue;
         }
 
         /* blobIds */
@@ -1890,11 +1905,10 @@ HIDDEN void jmap_copy_parse(json_t *jargs,
                 "arguments", parser->invalid);
     }
 
-    if (!copy->from_account_id) {
-        copy->from_account_id = req->accountid;
-    }
-    if (!copy->to_account_id) {
-        copy->to_account_id = req->accountid;
+    if (!req->accountid || !copy->from_account_id ||
+        !strcmp(req->accountid, copy->from_account_id)) {
+        *err = json_pack("{s:s s:[s,s]}", "type", "invalidArguments",
+                "arguments", "accountId", "fromAccountId");
     }
 }
 
@@ -1911,7 +1925,6 @@ HIDDEN json_t *jmap_copy_reply(struct jmap_copy *copy)
     json_t *res = json_object();
     json_object_set_new(res, "fromAccountId",
                         json_string(copy->from_account_id));
-    json_object_set_new(res, "toAccountId", json_string(copy->to_account_id));
     json_object_set(res, copy->blob_copy ? "copied" : "created",
                     json_object_size(copy->created) ?
                     copy->created : json_null());

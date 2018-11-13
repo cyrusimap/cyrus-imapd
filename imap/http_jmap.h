@@ -182,7 +182,8 @@ extern int  jmap_hasrights_byname(jmap_req_t *req, const char *mboxname,
 extern void jmap_myrights_delete(jmap_req_t *req, const char *mboxname);
 
 /* Blob services */
-extern int jmap_findblob(jmap_req_t *req, const char *blobid,
+extern int jmap_findblob(jmap_req_t *req, const char *accountid,
+                         const char *blobid,
                          struct mailbox **mbox, msgrecord_t **mr,
                          struct body **body, const struct body **part,
                          struct buf *blob);
@@ -332,7 +333,6 @@ extern json_t *jmap_changes_reply(struct jmap_changes *changes);
 struct jmap_copy {
     /* Request arguments */
     const char *from_account_id;
-    const char *to_account_id;
     json_t *create;
     int blob_copy;
     int on_success_destroy_original;

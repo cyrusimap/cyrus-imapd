@@ -2801,8 +2801,6 @@ done:
 
 static void _calendarevent_copy(jmap_req_t *req,
                                 json_t *jevent,
-                                const char *src_account_id __attribute__((unused)),
-                                const char *dst_account_id,
                                 struct caldav_db *src_db,
                                 struct caldav_db *dst_db,
                                 json_t **new_event,
@@ -2874,7 +2872,7 @@ static void _calendarevent_copy(jmap_req_t *req,
     /* Create event */
     json_t *invalid = json_array();
     char *dst_uid = NULL;
-    r = setcalendarevents_create(req, dst_account_id, dst_event,
+    r = setcalendarevents_create(req, req->accountid, dst_event,
                                  dst_db, &dst_uid, invalid);
     if (r || json_array_size(invalid)) {
         if (!r) {
@@ -2922,7 +2920,7 @@ static int jmap_calendarevent_copy(struct jmap_req *req)
         jmap_error(req, json_pack("{s:s}", "type", "fromAccountNotFound"));
         goto done;
     }
-    dst_db = caldav_open_userid(copy.to_account_id);
+    dst_db = caldav_open_userid(req->accountid);
     if (!dst_db) {
         jmap_error(req, json_pack("{s:s}", "type", "toAccountNotFound"));
         goto done;
@@ -2936,8 +2934,7 @@ static int jmap_calendarevent_copy(struct jmap_req *req)
         json_t *set_err = NULL;
         json_t *new_event = NULL;
 
-        _calendarevent_copy(req, jevent, copy.from_account_id, copy.to_account_id,
-                            src_db, dst_db, &new_event, &set_err);
+        _calendarevent_copy(req, jevent, src_db, dst_db, &new_event, &set_err);
         if (set_err) {
             json_object_set_new(copy.not_created, creation_id, set_err);
             continue;

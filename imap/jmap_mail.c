@@ -5499,7 +5499,8 @@ static int jmap_email_parse(jmap_req_t *req)
         struct body *body = NULL;
         const struct body *part = NULL;
 
-        int r = jmap_findblob(req, blobid, &mbox, &mr, &body, &part, NULL);
+        int r = jmap_findblob(req, NULL/*accountid*/, blobid,
+                              &mbox, &mr, &body, &part, NULL);
         if (r) {
             json_array_append_new(notFound, json_string(blobid));
             continue;
@@ -7406,7 +7407,8 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     const struct body *part = NULL;
 
     /* Find body part containing blob */
-    int r = jmap_findblob(req, emailpart->blob_id, &mbox, &mr, &body, &part, NULL);
+    int r = jmap_findblob(req, NULL/*accountid*/, emailpart->blob_id,
+                          &mbox, &mr, &body, &part, NULL);
     if (r) goto done;
 
     /* Map the blob into memory */
@@ -9556,7 +9558,8 @@ static void _email_import(jmap_req_t *req,
     const struct body *subpart = NULL;
     msgrecord_t *mr = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
-    int r = jmap_findblob(req, blob_id, &mbox, &mr, &body, &subpart, NULL);
+    int r = jmap_findblob(req, NULL/*accountid*/, blob_id,
+                          &mbox, &mr, &body, &subpart, NULL);
     if (r) {
         if (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED)
             *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
@@ -10026,7 +10029,6 @@ done:
 
 static void _email_copy(jmap_req_t *req, json_t *copy_email,
                         const char *from_account_id,
-                        const char *to_account_id,
                         struct seen *seendb,
                         json_t **new_email, json_t **err)
 {
@@ -10055,7 +10057,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
         _email_keywords_init(&pickrecord_rock.keywords, req->userid, seendb, &seenseq_by_mbox_id);
         pickrecord_rock.gather_keywords = 1;
     }
-    if (strcmp(from_account_id, req->userid)) {
+    if (strcmp(from_account_id, req->accountid)) {
         struct conversations_state *mycstate = NULL;
         r = conversations_open_user(from_account_id, &mycstate);
         if (!r) r = conversations_guid_foreach(mycstate, _guid_from_id(email_id),
@@ -10109,16 +10111,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
 
     /* Check if email already exists in to_account */
     struct _email_exists_rock data = { req, 0 };
-    if (strcmp(to_account_id, req->userid)) {
-        struct conversations_state *mycstate = NULL;
-        r = conversations_open_user(to_account_id, &mycstate);
-        if (r) goto done;
-        conversations_guid_foreach(mycstate, blob_id, _email_exists_cb, &data);
-        conversations_commit(&mycstate);
-    }
-    else {
-        conversations_guid_foreach(req->cstate, blob_id, _email_exists_cb, &data);
-    }
+    conversations_guid_foreach(req->cstate, blob_id, _email_exists_cb, &data);
     if (data.exists) {
         *err = json_pack("{s:s s:s}", "type", "alreadyExists", "existingId", email_id);
         goto done;
@@ -10128,7 +10121,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     struct _email_copy_checkmbox_rock checkmbox_rock = {
         req, json_object_get(copy_email, "mailboxIds"), &dst_mboxnames
     };
-    r = mboxlist_usermboxtree(to_account_id, httpd_authstate,
+    r = mboxlist_usermboxtree(req->accountid, httpd_authstate,
                               _email_copy_checkmbox_cb, &checkmbox_rock,
                               MBOXTREE_INTERMEDIATES);
     if (r != IMAP_OK_COMPLETED) {
@@ -10152,7 +10145,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
             struct mailbox *dst_mbox = NULL;
             r = jmap_openmbox(req, dst_mboxname, &dst_mbox, /*rw*/1);
             if (!r) {
-                r = _copy_msgrecord(httpd_authstate, to_account_id,
+                r = _copy_msgrecord(httpd_authstate, req->accountid,
                         &jmap_namespace, src_mbox, dst_mbox, src_mr);
             }
             jmap_closembox(req, &dst_mbox);
@@ -10170,19 +10163,8 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     struct _email_copy_writeprops_rock writeprops_rock = {
         req, receivedAt, new_keywords, seendb, has_attachment, /*cid*/0, /*size*/0
     };
-    struct conversations_state *mycstate = NULL;
-    if (strcmp(req->userid, to_account_id)) {
-        r = conversations_open_user(to_account_id, &mycstate);
-        if (r) goto done;
-    }
-    else {
-        mycstate = req->cstate;
-    }
-    r = conversations_guid_foreach(mycstate, email_id + 1,
+    r = conversations_guid_foreach(req->cstate, email_id + 1,
                                    _email_copy_writeprops_cb, &writeprops_rock);
-    if (mycstate != req->cstate) {
-        conversations_commit(&mycstate);
-    }
 
     if (!r) {
         char thread_id[18];
@@ -10307,7 +10289,7 @@ static int jmap_email_copy(jmap_req_t *req)
         json_t *set_err = NULL;
         json_t *new_email = NULL;
         /* Copy message */
-        _email_copy(req, copy_email, copy.from_account_id, copy.to_account_id,
+        _email_copy(req, copy_email, copy.from_account_id,
                     seendb, &new_email, &set_err);
         if (set_err) {
             json_object_set_new(copy.not_created, creation_id, set_err);

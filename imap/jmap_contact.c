@@ -2511,7 +2511,8 @@ static int _blob_to_card(struct jmap_req *req,
     if (!blobid) return -1;
 
     /* Find body part containing blob */
-    r = jmap_findblob(req, blobid, &mbox, &mr, &body, &part, &blob_buf);
+    r = jmap_findblob(req, NULL/*accountid*/, blobid,
+                      &mbox, &mr, &body, &part, &blob_buf);
     if (r) goto done;
 
     if (!buf_base(&blob_buf)) {
@@ -3354,8 +3355,6 @@ const struct body *jmap_contact_findblob(struct message_guid *content_guid,
 
 static void _contact_copy(jmap_req_t *req,
                           json_t *jcard,
-                          const char *src_account_id __attribute__((unused)),
-                          const char *dst_account_id,
                           struct carddav_db *src_db,
                           json_t **new_card,
                           json_t **set_err)
@@ -3420,7 +3419,7 @@ static void _contact_copy(jmap_req_t *req,
     /* Create vcard */
     json_t *invalid = json_array();
     char *dst_uid = NULL;
-    r = _contact_set_create(req, dst_account_id, dst_card,
+    r = _contact_set_create(req, req->accountid, dst_card,
                            cdata, &dst_mbox, &dst_uid, invalid);
     if (r || json_array_size(invalid)) {
         if (!r) {
@@ -3477,8 +3476,7 @@ static int jmap_contact_copy(struct jmap_req *req)
         json_t *set_err = NULL;
         json_t *new_card = NULL;
 
-        _contact_copy(req, jcard, copy.from_account_id, copy.to_account_id,
-                      src_db, /*dst_db,*/ &new_card, &set_err);
+        _contact_copy(req, jcard, src_db, /*dst_db,*/ &new_card, &set_err);
         if (set_err) {
             json_object_set_new(copy.not_created, creation_id, set_err);
             continue;
