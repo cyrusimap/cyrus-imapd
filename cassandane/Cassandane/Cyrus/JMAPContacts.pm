@@ -2134,8 +2134,8 @@ sub test_contact_copy
 
     xlog "move card $cardId";
     $res = $jmap->CallMethods([['Contact/copy', {
-        fromAccountId => undef,
-        toAccountId => 'other',
+        fromAccountId => 'cassandane',
+        accountId => 'other',
         create => {
             1 => {
                 id => $cardId,

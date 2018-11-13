@@ -4575,7 +4575,7 @@ sub test_blob_copy
     xlog "copy blob to shared account";
     $res = $jmap->CallMethods([['Blob/copy', {
         fromAccountId => 'cassandane',
-        toAccountId => 'foo',
+        accountId => 'foo',
         blobIds => [ $data->{blobId} ],
     }, 'R1']]);
 
@@ -4603,7 +4603,7 @@ sub test_blob_copy
     xlog "copy Email blob to shared account";
     $res = $jmap->CallMethods([['Blob/copy', {
         fromAccountId => 'cassandane',
-        toAccountId => 'foo',
+        accountId => 'foo',
         blobIds => [ $msgblobId ],
     }, 'R1']]);
 
@@ -13251,8 +13251,8 @@ sub test_email_copy
     xlog "move email";
     $res = $jmap->CallMethods([
         ['Email/copy', {
-            fromAccountId => undef,
-            toAccountId => 'other',
+            fromAccountId => 'cassandane',
+            accountId => 'other',
             create => {
                 1 => {
                     id => $emailId,
@@ -13288,7 +13288,7 @@ sub test_email_copy
     xlog "copy email back";
     $res = $jmap->CallMethods([
         ['Email/copy', {
-            toAccountId => undef,
+            accountId => 'cassandane',
             fromAccountId => 'other',
             create => {
                 1 => {
@@ -13309,7 +13309,7 @@ sub test_email_copy
     xlog "copy email back (again)";
     $res = $jmap->CallMethods([
         ['Email/copy', {
-            toAccountId => undef,
+            accountId => 'cassandane',
             fromAccountId => 'other',
             create => {
                 1 => {
@@ -13387,8 +13387,8 @@ sub test_email_copy_hasattachment
     xlog "copy email";
     $res = $jmap->CallMethods([
         ['Email/copy', {
-            fromAccountId => undef,
-            toAccountId => 'other',
+            fromAccountId => 'cassandane',
+            accountId => 'other',
             create => {
                 1 => {
                     id => $emailId,
@@ -14520,8 +14520,8 @@ sub test_email_copy_intermediary
     xlog "move email";
     $res = $jmap->CallMethods([
         ['Email/copy', {
-            fromAccountId => undef,
-            toAccountId => 'other',
+            fromAccountId => 'cassandane',
+            accountId => 'other',
             create => {
                 1 => {
                     id => $emailId,

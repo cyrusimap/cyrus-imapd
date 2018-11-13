@@ -4128,8 +4128,8 @@ sub test_calendarevent_copy
 
     xlog "copy event";
     $res = $jmap->CallMethods([['CalendarEvent/copy', {
-        fromAccountId => undef,
-        toAccountId => 'other',
+        fromAccountId => 'cassandane',
+        accountId => 'other',
         create => {
             1 => {
                 id => $eventId,
