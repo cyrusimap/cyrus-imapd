@@ -803,58 +803,67 @@ sub test_tell_exists_count_earlier
     $admintalk->_imap_cmd("fetch", 1, \%handlers, \'3:*', '(uid flags)');
 }
 
-sub test_x_mailboxid
+sub test_mailboxids
     :min_version_3_1 :Conversations
 {
     my ($self) = @_;
 
     my $imaptalk = $self->{store}->get_client();
 
+    my $res = $imaptalk->status('INBOX', ['mailboxid']);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    my $inbox_id = $res->{'mailboxid'}->[0];
+    $self->assert_not_null($inbox_id);
+
+    $imaptalk->create("INBOX.target");
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $res = $imaptalk->status('INBOX.target', ['mailboxid']);
+    my $target_id = $res->{'mailboxid'}->[0];
+    $self->assert_not_null($target_id);
+
     # make a message
     my $msg = $self->make_message("test message");
     my $uid = $msg->{attrs}->{uid};
 
     # expect to find it in INBOX only
-    my $res = $imaptalk->fetch('1', '(X-MAILBOXID)');
+    $res = $imaptalk->fetch('1', '(MAILBOXIDS)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals(['INBOX'], $res->{1}->{'x-mailboxid'});
+    $self->assert_deep_equals([$inbox_id], $res->{1}->{'mailboxids'});
 
     # copy it to INBOX.target
-    $imaptalk->create("INBOX.target");
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $imaptalk->copy($uid, "INBOX.target");
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
     # expect to find it in INBOX and INBOX.target
-    $res = $imaptalk->fetch('1', '(X-MAILBOXID)');
+    $res = $imaptalk->fetch('1', '(MAILBOXIDS)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals(['INBOX', 'INBOX.target'],
-                              $res->{1}->{'x-mailboxid'});
+    $self->assert_deep_equals([$inbox_id, $target_id],
+                              $res->{1}->{'mailboxids'});
 
     # delete it from INBOX
     $imaptalk->store('1', '+FLAGS', '(\\Deleted)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
     # expect to find it in INBOX.target only
-    $res = $imaptalk->fetch('1', '(X-MAILBOXID)');
+    $res = $imaptalk->fetch('1', '(MAILBOXIDS)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals(['INBOX.target'],
-                              $res->{1}->{'x-mailboxid'});
+    $self->assert_deep_equals([$target_id],
+                              $res->{1}->{'mailboxids'});
 
     # expunge INBOX
     $imaptalk->expunge();
 
     # expect to find it in INBOX.target only
-    $res = $imaptalk->fetch('1', '(X-MAILBOXID)');
+    $res = $imaptalk->fetch('1', '(MAILBOXIDS)');
     $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
     $imaptalk->select('INBOX.target');
-    $res = $imaptalk->fetch('1', '(X-MAILBOXID)');
+    $res = $imaptalk->fetch('1', '(MAILBOXIDS)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals(['INBOX.target'],
-                              $res->{1}->{'x-mailboxid'});
+    $self->assert_deep_equals([$target_id],
+                              $res->{1}->{'mailboxids'});
 }
 
-sub test_x_mailboxid_noconversations
+sub test_mailboxids_noconversations
     :min_version_3_1
 {
     my ($self) = @_;
@@ -865,8 +874,8 @@ sub test_x_mailboxid_noconversations
     my $msg = $self->make_message("test message");
     my $uid = $msg->{attrs}->{uid};
 
-    # expect FETCH X-MAILBOXID to be rejected
-    my $res = $imaptalk->fetch('1', '(X-MAILBOXID)');
+    # expect FETCH MAILBOXIDS to be rejected
+    my $res = $imaptalk->fetch('1', '(MAILBOXIDS)');
     $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
 }
 
