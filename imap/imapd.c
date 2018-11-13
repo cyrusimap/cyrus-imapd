@@ -4897,6 +4897,10 @@ badannotation:
 
         case 'M':
             if (config_getswitch(IMAPOPT_CONVERSATIONS)
+                && !strcmp(fetchatt.s, "MAILBOXES")) {
+                fa->fetchitems |= FETCH_MAILBOXES;
+            }
+            else if (config_getswitch(IMAPOPT_CONVERSATIONS)
                 && !strcmp(fetchatt.s, "MAILBOXIDS")) {
                 fa->fetchitems |= FETCH_MAILBOXIDS;
             }
@@ -5109,7 +5113,7 @@ badannotation:
         }
     }
 
-    if (fa->fetchitems & (FETCH_ANNOTATION|FETCH_FOLDER)) {
+    if (fa->fetchitems & (FETCH_ANNOTATION|FETCH_FOLDER|FETCH_MAILBOXES)) {
         fa->namespace = &imapd_namespace;
         fa->userid = imapd_userid;
     }
@@ -5118,7 +5122,7 @@ badannotation:
         fa->authstate = imapd_authstate;
     }
     if (config_getswitch(IMAPOPT_CONVERSATIONS)
-        && (fa->fetchitems & FETCH_MAILBOXIDS)) {
+        && (fa->fetchitems & (FETCH_MAILBOXIDS|FETCH_MAILBOXES))) {
         int r = conversations_open_user(imapd_userid, &fa->convstate);
         if (r) {
             syslog(LOG_WARNING, "error opening conversations for %s: %s",
