@@ -854,4 +854,20 @@ sub test_x_mailboxid
                               $res->{1}->{'x-mailboxid'});
 }
 
+sub test_x_mailboxid_noconversations
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # make a message
+    my $msg = $self->make_message("test message");
+    my $uid = $msg->{attrs}->{uid};
+
+    # expect FETCH X-MAILBOXID to be rejected
+    my $res = $imaptalk->fetch('1', '(X-MAILBOXID)');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+}
+
 1;
