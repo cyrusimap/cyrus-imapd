@@ -5005,7 +5005,8 @@ badannotation:
             break;
 
         case 'X':
-            if (!strcmp(fetchatt.s, "X-MAILBOXID")) {
+            if (config_getswitch(IMAPOPT_CONVERSATIONS)
+                && !strcmp(fetchatt.s, "X-MAILBOXID")) {
                 fa->fetchitems |= FETCH_XMAILBOXID;
             }
             else goto badatt;

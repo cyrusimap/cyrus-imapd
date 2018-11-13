@@ -4192,7 +4192,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                     state->mailbox->i.uidvalidity);
         sepchar = ' ';
     }
-    if ((fetchitems & FETCH_XMAILBOXID)) {
+    if (config_getswitch(IMAPOPT_CONVERSATIONS)
+        && (fetchitems & FETCH_XMAILBOXID)) {
         prot_printf(state->out, "%cX-MAILBOXID (", sepchar);
         r = index_fetchmailboxids(state, msgno, fetchargs);
         r = 0;
