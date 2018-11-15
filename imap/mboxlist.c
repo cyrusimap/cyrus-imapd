@@ -985,7 +985,7 @@ static int mboxlist_update_entry(const char *name,
         r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
                           buf_cstring(&mboxent), buf_len(&mboxent), txn);
         if (!r && mbentry->uniqueid &&
-            !(old && (old->mbtype & MBTYPE_DELETED) && (mbentry->mbtype & MBTYPE_DELETED))) {
+            !(old && (old->mbtype & mbentry->mbtype & MBTYPE_DELETED))) {
             mbentry_t *oldid = NULL;
             struct dlist *synonyms = dlist_newlist(NULL, "Y");
 
