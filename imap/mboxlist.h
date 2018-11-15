@@ -121,10 +121,16 @@ struct mboxlist_entry {
     /* legacy upgrade support */
     char *legacy_specialuse;
     /* replication support */
-    struct dlist *synonyms;
+    ptrarray_t synonyms;
 };
 
 typedef struct mboxlist_entry mbentry_t;
+
+typedef struct {
+    char dbname[MAX_MAILBOX_NAME+1];
+    modseq_t foldermodseq;
+    time_t mtime;
+} synonym_t;
 
 mbentry_t *mboxlist_entry_create();
 
