@@ -5004,20 +5004,20 @@ static int _email_get_bodies(jmap_req_t *req,
             /* Parse decoded data to iCalendar object */
             r = _cyrusmsg_need_mime(msg);
             if (r) goto done;
-            char *tmp;
-            size_t tmp_size;
+            char *decbuf = NULL;
+            size_t declen = 0;
             const char *rawical = charset_decode_mimebody(msg->mime->s + part->content_offset,
-                    part->content_size, part->charset_enc, &tmp, &tmp_size);
+                    part->content_size, part->charset_enc, &decbuf, &declen);
             if (!rawical) continue;
             struct buf buf = BUF_INITIALIZER;
-            buf_init_ro_cstr(&buf, rawical);
+            buf_setmap(&buf, rawical, declen);
             icalcomponent *ical = ical_string_as_icalcomponent(&buf);
             buf_free(&buf);
-            free(tmp);
+            free(decbuf);
             if (!ical) continue;
             /* Parse iCalendar object to JSCalendar */
             json_t *jsevents = jmapical_tojmap_all(ical, NULL, NULL);
-            if (jsevents) {
+            if (json_array_size(jsevents)) {
                 json_object_set_new(calendar_events, part->part_id, jsevents);
             }
             icalcomponent_free(ical);
