@@ -294,4 +294,6 @@ extern int conversations_rename_folder(struct conversations_state *state,
                                        const char *from_name,
                                        const char *to_name);
 
+extern int conversations_check_msgid(const char *msgid, size_t len);
+
 #endif /* __CYRUS_CONVERSATIONS_H_ */

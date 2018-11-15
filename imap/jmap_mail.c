@@ -6359,54 +6359,6 @@ done:
     return ret;
 }
 
-static int check_msgid(const char *s, int is_raw)
-{
-    struct buf buf = BUF_INITIALIZER;
-    buf_setcstr(&buf, s);
-    int is_valid = 0;
-
-    /* Remove leading and trailing whitespace */
-    buf_trim(&buf);
-
-    if (!is_raw) {
-        /* Trimmed version must match original input */
-        if (strcmp(buf_cstring(&buf), s)) {
-            goto done;
-        }
-        if (strchr(buf_cstring(&buf), '<')) {
-            goto done;
-        }
-        if (strchr(buf_cstring(&buf), '>')) {
-            goto done;
-        }
-    }
-    else {
-        /* Trimmed raw header must be enclosed in angle brackets */
-        if (buf.s[0] != '<' || buf.s[buf.len-1] != '>') {
-            goto done;
-        }
-    }
-
-    /* RFC5322 section 3.6.4.  Identification Fields":
-     * msg-id          =   [CFWS] "<" id-left "@" id-right ">" [CFWS]
-     * id-left         =   dot-atom-text / obs-id-left
-     * id-right        =   dot-atom-text / no-fold-literal / obs-id-right
-     */
-    struct address *addr = NULL;
-    parseaddr_list(buf_cstring(&buf), &addr);
-    is_valid = addr->name == NULL &&
-               addr->route == NULL &&
-               addr->next == NULL &&
-               addr->mailbox != NULL &&
-               addr->domain != NULL &&
-               strcmp(addr->domain, "unspecified-domain");
-    parseaddr_free(addr);
-
-done:
-    buf_free(&buf);
-    return is_valid;
-}
-
 static json_t *_header_from_messageids(json_t *jmessageids,
                                        struct jmap_parser *parser,
                                        const char *prop_name,
@@ -6420,18 +6372,21 @@ static json_t *_header_from_messageids(json_t *jmessageids,
     size_t i;
     json_t *jval;
     struct buf val = BUF_INITIALIZER;
+    struct buf msgid = BUF_INITIALIZER;
     json_t *jstrings = json_array();
     json_t *ret = NULL;
 
     json_array_foreach(jmessageids, i, jval) {
         const char *s = json_string_value(jval);
-        if (!s || !check_msgid(s, /*is_raw*/0)) {
+        buf_setcstr(&msgid, s);
+        buf_trim(&msgid);
+        buf_putc(&val, '<');
+        buf_appendcstr(&val, buf_cstring(&msgid));
+        buf_putc(&val, '>');
+        if (!s || conversations_check_msgid(buf_base(&val), buf_len(&val))) {
             jmap_parser_invalid(parser, prop_name);
             goto done;
         }
-        buf_appendcstr(&val, "<");
-        buf_appendcstr(&val, s);
-        buf_appendcstr(&val, ">");
         json_array_append_new(jstrings, json_string(buf_cstring(&val)));
         buf_reset(&val);
     }
@@ -6439,6 +6394,7 @@ static json_t *_header_from_messageids(json_t *jmessageids,
 
 done:
     json_decref(jstrings);
+    buf_free(&msgid);
     buf_free(&val);
     return ret;
 }
@@ -7259,7 +7215,7 @@ static void _email_parse(json_t *jemail,
         else if (!strcasecmp("Message-ID", name) || !strcasecmp("In-Reply-To", name)) {
             /* conversations.db will barf if these are invalid raw headers,
              * so make sure we reject invalid values here. */
-            if (!check_msgid(val, /*is_raw*/1)) {
+            if (conversations_check_msgid(val, strlen(val))) {
                 char *tmp = strconcat("header:", name, NULL);
                 jmap_parser_invalid(parser, tmp);
                 free(tmp);

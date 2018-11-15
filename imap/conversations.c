@@ -418,13 +418,29 @@ static int check_msgid(const char *msgid, size_t len, size_t *lenp)
     if (!len)
         len = strlen(msgid);
 
-    if (msgid[0] != '<' || msgid[len-1] != '>' || strchr(msgid, '@') == NULL)
+    if (msgid[0] != '<' || msgid[len-1] != '>' || len < 3)
         return IMAP_INVALID_IDENTIFIER;
+
+    /* Leniently accept msg-id without @, but refuse multiple @ */
+    if (memchr(msgid, '@', len) != memrchr(msgid, '@', len))
+        return IMAP_INVALID_IDENTIFIER;
+
+    /* Leniently accept specials, but refuse the outright broken */
+    size_t i;
+    for (i = 1; i < len - 1; i++) {
+        if (!isprint(msgid[i]) || isspace(msgid[i]))
+            return IMAP_INVALID_IDENTIFIER;
+    }
 
     if (lenp)
         *lenp = len;
 
     return 0;
+}
+
+EXPORTED int conversations_check_msgid(const char *msgid, size_t len)
+{
+    return check_msgid(msgid, len, NULL);
 }
 
 static int _conversations_set_key(struct conversations_state *state,
