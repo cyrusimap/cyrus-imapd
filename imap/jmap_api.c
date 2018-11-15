@@ -690,7 +690,6 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         req.method = mname;
         req.userid = httpd_userid;
         req.accountid = accountid;
-        req.inboxname = inboxname;
         req.cstate = cstate;
         req.authstate = httpd_authstate;
         req.args = args;
@@ -1106,8 +1105,9 @@ HIDDEN modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype)
 
 HIDDEN json_t* jmap_getstate(jmap_req_t *req, int mbtype, int refresh)
 {
+    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
     if (refresh)
-        assert (!mboxname_read_counters(req->inboxname, &req->counters));
+        assert (!mboxname_read_counters(inboxname, &req->counters));
     struct buf buf = BUF_INITIALIZER;
     json_t *state = NULL;
     modseq_t modseq = jmap_highestmodseq(req, mbtype);
@@ -1116,6 +1116,7 @@ HIDDEN json_t* jmap_getstate(jmap_req_t *req, int mbtype, int refresh)
     state = json_string(buf_cstring(&buf));
     buf_free(&buf);
 
+    free(inboxname);
     return state;
 }
 

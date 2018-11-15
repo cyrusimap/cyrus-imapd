@@ -1871,7 +1871,9 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     mbentry_t *mbinbox = NULL, *mbparent = NULL, *mbentry = NULL;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
 
-    mboxlist_lookup_allow_all(req->inboxname, &mbinbox, NULL);
+    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
+    mboxlist_lookup_allow_all(inboxname, &mbinbox, NULL);
+    free(inboxname);
 
     /* Lookup parent creation id, if any. This also deals with
      * bogus Mailbox/set operations that attempt to create
@@ -2002,8 +2004,11 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     ptrarray_t strpool = PTRARRAY_INITIALIZER;
     int r = 0;
     mbentry_t *mbinbox = NULL, *mbparent = NULL, *mbentry = NULL;
-    mboxlist_lookup_allow_all(req->inboxname, &mbinbox, NULL);
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+
+    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
+    mboxlist_lookup_allow_all(inboxname, &mbinbox, NULL);
+    free(inboxname);
 
     const char *parent_id = args->parent_id;
     if (parent_id && *parent_id == '#') {
@@ -2276,8 +2281,11 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
 {
     int r = 0;
     mbentry_t *mbinbox = NULL, *mbentry = NULL;
-    mboxlist_lookup_allow_all(req->inboxname, &mbinbox, NULL);
     int is_intermediate = 0;
+
+    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
+    mboxlist_lookup_allow_all(inboxname, &mbinbox, NULL);
+    free(inboxname);
 
     /* Do not allow to remove INBOX. */
     if (!strcmpsafe(mboxid, mbinbox->uniqueid)) {

@@ -2071,7 +2071,9 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
     search->init.authstate = req->authstate;
     search->init.want_expunged = want_expunged;
 
-    r = index_open(req->inboxname, &search->init, &search->state);
+    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
+    r = index_open(inboxname, &search->init, &search->state);
+    free(inboxname);
     if (r) {
         syslog(LOG_ERR, "jmap: _emailsearch_new: %s", error_message(r));
         freesearchargs(search->args);
@@ -3214,7 +3216,9 @@ static int _snippet_get(jmap_req_t *req, json_t *filter, json_t *messageids,
     init.userid = req->userid;
     init.authstate = req->authstate;
 
-    r = index_open(req->inboxname, &init, &state);
+    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
+    r = index_open(inboxname, &init, &state);
+    free(inboxname);
     if (r) goto done;
 
     bx = search_begin_search(state->mailbox, SEARCH_MULTIPLE);

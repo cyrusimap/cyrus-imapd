@@ -92,7 +92,6 @@ typedef struct jmap_req {
     const char           *method;
     const char           *userid;
     const char           *accountid;
-    const char           *inboxname;
     struct conversations_state *cstate;
     struct auth_state    *authstate;
     json_t               *args;

@@ -2621,7 +2621,9 @@ static int jmapevent_search(jmap_req_t *req,  struct jmap_query *jquery)
     init.want_expunged = 0;
     init.want_mbtype = MBTYPE_CALENDAR;
 
-    r = index_open(req->inboxname, &init, &state);
+    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
+    r = index_open(inboxname, &init, &state);
+    free(inboxname);
     if (r) goto done;
 
     query = search_query_new(state, searchargs);

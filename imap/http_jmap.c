@@ -501,7 +501,6 @@ static int jmap_download(struct transaction_t *txn)
 
     /* now we're allocating memory, so don't return from here! */
 
-    char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
     char *blobid = NULL;
     char *ctype = NULL;
 
@@ -511,7 +510,6 @@ static int jmap_download(struct transaction_t *txn)
 
     req.userid = httpd_userid;
     req.accountid = accountid;
-    req.inboxname = inboxname;
     req.cstate = cstate;
     req.authstate = httpd_authstate;
     req.txn = txn;
@@ -602,7 +600,6 @@ static int jmap_download(struct transaction_t *txn)
     buf_free(&msg_buf);
     free(blobid);
     jmap_finireq(&req);
-    free(inboxname);
     return res;
 }
 
