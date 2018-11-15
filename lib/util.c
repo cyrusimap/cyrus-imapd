@@ -80,9 +80,6 @@
 #ifdef HAVE_ZLIB
 #include "zlib.h"
 #endif
-#ifdef HAVE_LIBUUID
-#include <uuid/uuid.h>
-#endif
 
 
 #define BEAUTYBUFSIZE 4096
@@ -1838,8 +1835,8 @@ EXPORTED int warmup_file(const char *filename,
 EXPORTED const char *makeuuid()
 {
     /* 36 bytes of uuid plus \0 */
-    static char res[37];
-    memset(res, 0, 37);
+    static char res[UUID_STR_LEN];
+    memset(res, 0, UUID_STR_LEN);
 #ifdef HAVE_LIBUUID
     uuid_t uu;
     uuid_clear(uu); /* Just In Case */
