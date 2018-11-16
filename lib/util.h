@@ -74,9 +74,10 @@ extern const char CYRUS_VERSION[];
 
 #ifdef HAVE_LIBUUID
 #include <uuid/uuid.h>
-#else /* !HAVE_LIBUUID */
+#endif
+#ifndef UUID_STR_LEN
 #define UUID_STR_LEN  37
-#endif /* HAVE_LIBUUID */
+#endif
 
 #define BIT32_MAX 4294967295U
 
