@@ -722,4 +722,7 @@ extern int mailbox_crceq(struct synccrcs a, struct synccrcs b);
 
 extern struct dlist *mailbox_acl_to_dlist(const char *aclstr);
 
+extern int mailbox_changequotaroot(struct mailbox *mailbox,
+                                   const char *root, int silent);
+
 #endif /* INCLUDED_MAILBOX_H */
