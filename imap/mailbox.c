@@ -7759,3 +7759,41 @@ EXPORTED struct dlist *mailbox_acl_to_dlist(const char *aclstr)
 
     return al;
 }
+
+HIDDEN int mailbox_changequotaroot(struct mailbox *mailbox,
+                                   const char *root, int silent)
+{
+    int r = 0;
+    int res;
+    quota_t quota_usage[QUOTA_NUMRESOURCES];
+
+    mailbox_get_usage(mailbox, quota_usage);
+
+    if (mailbox->quotaroot) {
+        quota_t quota_diff[QUOTA_NUMRESOURCES];
+
+        if (root && strlen(mailbox->quotaroot) >= strlen(root)) {
+            /* Part of a child quota root - skip */
+            goto done;
+        }
+
+        /* remove usage from the old quotaroot */
+        for (res = 0; res < QUOTA_NUMRESOURCES ; res++) {
+            quota_diff[res] = -quota_usage[res];
+        }
+        r = quota_update_useds(mailbox->quotaroot, quota_diff,
+                               mailbox->name, silent);
+    }
+
+    /* update (or set) the quotaroot */
+    r = mailbox_set_quotaroot(mailbox, root);
+    if (r) goto done;
+
+    if (root) {
+        /* update the new quota root */
+      r = quota_update_useds(root, quota_usage, mailbox->name, silent);
+    }
+
+  done:
+    return r;
+}
