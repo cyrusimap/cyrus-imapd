@@ -1287,7 +1287,7 @@ EXPORTED int mboxname_userownsmailbox(const char *userid, const char *name)
 
 /*
  * If (internal) mailbox 'name' is a user's mailbox (optionally INBOX),
- * returns the userid, otherwise returns NULL.
+ * returns 1, otherwise returns 0.
  */
 EXPORTED int mboxname_isusermailbox(const char *name, int isinbox)
 {
