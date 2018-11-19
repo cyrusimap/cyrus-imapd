@@ -3202,7 +3202,6 @@ static int _mbox_changes(jmap_req_t *req,
     r = mboxlist_usermboxtree(req->accountid, req->authstate,
                               _mbox_changes_cb, &data,
                               MBOXTREE_TOMBSTONES|
-                              MBOXTREE_DELETED|
                               MBOXTREE_INTERMEDIATES);
     if (r) goto done;
 
