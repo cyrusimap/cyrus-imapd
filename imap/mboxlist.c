@@ -2629,6 +2629,17 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
                                     hasquota ? quotaroot: NULL, silent);
         if (r) goto done;
 
+        if (mailbox_has_conversations(oldmailbox)) {
+            struct conversations_state *oldcstate =
+                conversations_get_mbox(oldname);
+
+            assert(oldcstate);
+
+            /* we can just rename within the same user */
+            r = conversations_rename_folder(oldcstate, oldname, newname);
+            if (r) goto done;
+        }
+
         /* rewrite entry with new name */
         newmbentry = mboxlist_entry_create();
         newmbentry->name = xstrdupnull(newname);
