@@ -1952,7 +1952,7 @@ static struct sortcrit *_email_buildsort(json_t *sort)
             }
         }
         // FM specific
-        if (!strcmp(prop, "savedDates")) {
+        if (!strcmp(prop, "addedDates")) {
             // XXX: this is really cheating, but it works because we only
             // use this sort when searching on a single mailbox
             sortcrit[i].key = SORT_SEQUENCE;
