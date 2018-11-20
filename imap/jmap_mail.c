@@ -9136,12 +9136,14 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
         }
         if (notify_flagsset) {
             mboxevent_extract_mailbox(flagsset, plan->mbox);
+            mboxevent_set_numunseen(flagsset, plan->mbox, -1);
             mboxevent_set_access(flagsset, NULL, NULL, bulk->req->userid,
                                  plan->mbox->name, 0);
             mboxevent_notify(&flagsset);
         }
         if (notify_flagsclear) {
             mboxevent_extract_mailbox(flagsclear, plan->mbox);
+            mboxevent_set_numunseen(flagsset, plan->mbox, -1);
             mboxevent_set_access(flagsclear, NULL, NULL, bulk->req->userid,
                                  plan->mbox->name, 0);
             mboxevent_notify(&flagsclear);
@@ -9878,11 +9880,13 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
     /* Write mboxevents */
     if (notify_flagsset) {
         mboxevent_extract_mailbox(flagsset, mbox);
+        mboxevent_set_numunseen(flagsset, mbox, -1);
         mboxevent_set_access(flagsset, NULL, NULL, req->userid, mbox->name, 0);
         mboxevent_notify(&flagsset);
     }
     if (notify_flagsclear) {
         mboxevent_extract_mailbox(flagsclear, mbox);
+        mboxevent_set_numunseen(flagsset, mbox, -1);
         mboxevent_set_access(flagsclear, NULL, NULL, req->userid, mbox->name, 0);
         mboxevent_notify(&flagsclear);
     }
