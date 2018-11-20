@@ -5975,6 +5975,44 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
     return r;
 }
 
+
+HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
+                                 const char *newname, int silent)
+{
+    char quotaroot[MAX_MAILBOX_BUFFER];
+    int hasquota = quota_findroot(quotaroot, sizeof(quotaroot), newname);
+
+    /* Move any quota usage */
+    int r = mailbox_changequotaroot(oldmailbox,
+                                    hasquota ? quotaroot: NULL, silent);
+
+    if (!r) {
+        /* copy any mailbox annotations */
+        struct mailbox newmailbox = { .name = (char *) newname,
+                                      .index_locktype = LOCK_EXCLUSIVE };
+        r = annotate_rename_mailbox(oldmailbox, &newmailbox, /*copy*/0);
+    }
+
+    if (!r && mailbox_has_conversations(oldmailbox)) {
+        struct conversations_state *oldcstate =
+            conversations_get_mbox(oldmailbox->name);
+
+        assert(oldcstate);
+
+        if (mboxname_isdeletedmailbox(newname, NULL)) {
+            /* we never store data about deleted mailboxes */
+            r = mailbox_delete_conversations(oldmailbox);
+        }
+        else {
+            /* we can just rename within the same user */
+            r = conversations_rename_folder(oldcstate, oldmailbox->name, newname);
+            syslog(LOG_INFO, "XXXXX  convb rename: %d", r);
+        }
+    }
+
+    return r;
+}
+
 /* if 'userid' is set, we perform the funky RENAME INBOX INBOX.old
    semantics, regardless of whether or not the name of the mailbox is
    'user.foo'.*/
