@@ -3357,7 +3357,6 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
     int i;
     int j;
     int r = 0;
-    char *msgid = NULL;
     struct mailbox *local_mailbox = NULL;
 
     /*
@@ -3422,6 +3421,7 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
 
     for (i = 0 ; i < 4 ; i++) {
         int hcount = 0;
+        char *msgid = NULL;
         while ((msgid = find_msgid(hdrs[i], &hdrs[i])) != NULL) {
             hcount++;
             if (hcount > 20) {
@@ -3569,7 +3569,6 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
         record->internal_flags |= FLAG_INTERNAL_SPLITCONVERSATION;
 
 out:
-    free(msgid);
     strarray_fini(&msgidlist);
     arrayu64_fini(&matchlist);
     arrayu64_fini(&cids);
