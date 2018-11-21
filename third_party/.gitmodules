@@ -26,3 +26,6 @@
 [submodule "zeroskip"]
 	path = zeroskip
 	url = https://github.com/cyrusimap/zeroskip.git
+[submodule "wslay"]
+	path = wslay
+	url = https://github.com/tatsuhiro-t/wslay

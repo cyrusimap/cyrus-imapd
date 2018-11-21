@@ -111,3 +111,15 @@ if [ ! $ITEM ] || [ $ITEM == xapian ] ; then
   sudo make install
 )
 fi
+
+if [ ! $ITEM ] || [ $ITEM == wslay ] ; then
+(
+  cd wslay
+  git clean -f -x -d
+  autoreconf -i
+  automake
+  autoconf
+  ./configure --enable-silent-rules --prefix=$PREFIX
+  sudo make install-exec $MAKEOPTS
+)
+fi
