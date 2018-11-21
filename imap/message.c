@@ -3446,6 +3446,12 @@ EXPORTED int message_update_conversations(struct conversations_state *state,
                 continue;
             }
 
+            /* won't be accepted as valid, ignore it! */
+            if (conversations_check_msgid(msgid, strlen(msgid))) {
+                free(msgid);
+                continue;
+            }
+
             strarray_appendm(&msgidlist, msgid);
 
             /* Lookup the conversations database to work out which
