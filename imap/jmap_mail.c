@@ -1960,7 +1960,6 @@ static struct sortcrit *_email_buildsort(json_t *sort)
     }
 
     i = json_array_size(sort);
-    sortcrit[i].flags |= SORT_REVERSE;
     sortcrit[i].key = SORT_SEQUENCE;
 
     return sortcrit;
