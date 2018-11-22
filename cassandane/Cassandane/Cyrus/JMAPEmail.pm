@@ -5078,6 +5078,64 @@ sub test_email_query_from
     $self->assert_str_equals($emailId3, $res->[0][1]{ids}[3]);
 }
 
+sub test_email_query_addedDates
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "create messages";
+    $self->make_message('uid1') || die;
+    $self->make_message('uid2') || die;
+    $self->make_message('uid3') || die;
+
+    xlog "run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{
+                property => 'subject',
+                isAscending => JSON::true
+            }],
+        }, 'R1'],
+    ]);
+    my $emailId1 = $res->[0][1]{ids}[0];
+    my $emailId2 = $res->[0][1]{ids}[1];
+    my $emailId3 = $res->[0][1]{ids}[2];
+    $self->assert_not_null($emailId1);
+    $self->assert_not_null($emailId2);
+    $self->assert_not_null($emailId3);
+
+    xlog "query emails sorted by addedDates";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{
+                property => 'addedDates',
+                isAscending => JSON::true
+            }],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[1]);
+    $self->assert_str_equals($emailId3, $res->[0][1]->{ids}[2]);
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{
+                property => 'addedDates',
+                isAscending => JSON::false,
+            }],
+        }, 'R1'],
+    ]);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId3, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[1]);
+    $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[2]);
+}
+
 
 sub test_misc_collapsethreads_issue2024
     :min_version_3_1 :needs_component_jmap
