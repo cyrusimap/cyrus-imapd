@@ -1146,16 +1146,17 @@ static json_t *participant_from_ical(icalproperty *prop,
     json_object_set_new(p, "sendTo", sendTo ? sendTo : json_null());
 
     /* email */
-    const char *email = NULL;
+    char *email = NULL;
     param = icalproperty_get_first_parameter(prop, ICAL_EMAIL_PARAMETER);
     if (param) {
-        email = icalparameter_get_value_as_string(param);
+        email = xstrdupnull(icalparameter_get_value_as_string(param));
     }
     else if (json_object_get(sendTo, "imip")) {
         const char *uri = json_string_value(json_object_get(sendTo, "imip"));
-        if (!strncmp(uri, "mailto:", 7)) email = uri + 7;
+        email = mailaddr_from_uri(uri);
     }
     json_object_set_new(p, "email", email ? json_string(email) : json_null());
+    free(email);
 
     /* name */
     const char *name = NULL;
