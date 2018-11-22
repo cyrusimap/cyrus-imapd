@@ -5726,6 +5726,13 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
     return (reverse ? -ret : ret);
 }
 
+static int sortcrit_is_uid(const struct sortcrit *sortcrit)
+{
+    if ((sortcrit->flags & SORT_REVERSE)) return 0;
+    if (!(sortcrit->key == SORT_SEQUENCE)) return 0;
+    return 1;
+}
+
 static int sortcrit_is_reverse_uid(const struct sortcrit *sortcrit)
 {
     if (!(sortcrit->flags & SORT_REVERSE)) return 0;
@@ -5786,6 +5793,20 @@ static int index_sort_compare_generic_qsort(const void *v1, const void *v2)
     return index_sort_compare(md1, md2, the_sortcrit);
 }
 
+static inline int index_sort_compare_uid(const void *v1, const void *v2)
+    __attribute__((pure, always_inline, optimize("-O3")));
+static int index_sort_compare_uid(const void *v1, const void *v2)
+{
+    MsgData *md1 = *(MsgData **)v1;
+    MsgData *md2 = *(MsgData **)v2;
+    int ret;
+
+    ret = md1->uid - md2->uid;
+    if (ret) return ret;
+
+    return message_guid_cmp(&md1->guid, &md2->guid);
+}
+
 static inline int index_sort_compare_reverse_uid(const void *v1, const void *v2)
     __attribute__((pure, always_inline, optimize("-O3")));
 static int index_sort_compare_reverse_uid(const void *v1, const void *v2)
@@ -5794,7 +5815,7 @@ static int index_sort_compare_reverse_uid(const void *v1, const void *v2)
     MsgData *md2 = *(MsgData **)v2;
     int ret;
 
-    ret = md1->uid - md2->uid;
+    ret = md2->uid - md1->uid;
     if (ret) return ret;
 
     return message_guid_cmp(&md1->guid, &md2->guid);
@@ -5873,7 +5894,10 @@ static int index_sort_compare_reverse_flagged(const void *v1, const void *v2)
 
 void index_msgdata_sort(MsgData **msgdata, int n, const struct sortcrit *sortcrit)
 {
-    if (sortcrit_is_reverse_uid(sortcrit)) {
+    if (sortcrit_is_uid(sortcrit)) {
+        qsort(msgdata, n, sizeof(MsgData *), index_sort_compare_uid);
+    }
+    else if (sortcrit_is_reverse_uid(sortcrit)) {
         qsort(msgdata, n, sizeof(MsgData *), index_sort_compare_reverse_uid);
     }
     else if (sortcrit_is_modseq(sortcrit)) {
