@@ -1521,7 +1521,7 @@ link_from_ical(context_t *ctx __attribute__((unused)), icalproperty *prop)
         }
         href = icalattach_get_url(attach);
     }
-    else if (icalproperty_isa(prop) == ICAL_X_PROPERTY) {
+    else if (icalproperty_isa(prop) == ICAL_URL_PROPERTY) {
         href = icalproperty_get_value_as_string(prop);
     }
     if (!href || *href == '\0') return NULL;
@@ -1560,8 +1560,10 @@ link_from_ical(context_t *ctx __attribute__((unused)), icalproperty *prop)
 
     /* rel */
     const char *rel = get_icalxparam_value(prop, JMAPICAL_XPARAM_REL);
-    if (!rel) rel = "enclosure";
-    if (*rel) json_object_set_new(link, "rel", json_string(rel));
+    if (!rel)
+        rel = icalproperty_isa(prop) == ICAL_URL_PROPERTY ? "describedby" :
+                                                            "enclosure";
+    json_object_set_new(link, "rel", json_string(rel));
 
     /* display */
     if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_DISPLAY))) {
@@ -1592,16 +1594,10 @@ links_from_ical(context_t *ctx, icalcomponent *comp)
         free(id);
     }
 
-    /* Read iCalendar X-ATTACH properties. They look the same as ATTACH,
-     * but might occur at places where ATTACH is forbidden or restricted
-     * to a single occurence. */
-    for (prop = icalcomponent_get_first_property(comp, ICAL_X_PROPERTY);
+    /* Read iCalendar URL property. Should only be one. */
+    for (prop = icalcomponent_get_first_property(comp, ICAL_URL_PROPERTY);
          prop;
-         prop = icalcomponent_get_next_property(comp, ICAL_X_PROPERTY)) {
-
-        if (strcasecmp(icalproperty_get_x_name(prop), JMAPICAL_XPROP_ATTACH)) {
-            continue;
-        }
+         prop = icalcomponent_get_next_property(comp, ICAL_URL_PROPERTY)) {
 
         char *id = xstrdupnull(get_icalxparam_value(prop, JMAPICAL_XPARAM_ID));
         if (!id) id = sha1key(icalproperty_get_value_as_string(prop));
@@ -3345,15 +3341,28 @@ participants_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     free_hash_table(&caladdress_by_participant_id, free);
 }
 
+static int is_valid_regrel(const char *rel)
+{
+    // RFC 8288, section 3.3, reg-rel-type:
+    const char *p = rel;
+    while ((('a' <= *p) && (*p <= 'z')) ||
+           (('0' <= *p) && (*p <= '9')) ||
+           ((*p == '.') && p > rel) ||
+           ((*p == '-') && p > rel)) {
+        p++;
+    }
+    return *p == '\0' && p > rel;
+}
+
 static void
-links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links,
-              const char *propname, icalproperty_kind icalkind)
+links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links, const char *propname)
 {
     icalproperty *prop;
     struct buf buf = BUF_INITIALIZER;
 
     /* Purge existing attachments */
-    remove_icalprop(comp, icalkind);
+    remove_icalprop(comp, ICAL_ATTACH_PROPERTY);
+    remove_icalprop(comp, ICAL_URL_PROPERTY);
 
     const char *id;
     json_t *link;
@@ -3401,19 +3410,24 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links,
             }
         }
         readprop(ctx, link, "rel", 0, "s", &rel);
+        if (rel && !is_valid_regrel(rel)) {
+            invalidprop(ctx, "rel");
+        }
 
         if (href && !have_invalid_props(ctx)) {
 
             /* Build iCalendar property */
-            if (icalkind == ICAL_ATTACH_PROPERTY) {
+            if (!strcmpsafe(rel, "describedby") &&
+                !icalcomponent_get_first_property(comp, ICAL_URL_PROPERTY) &&
+                json_object_size(link) == 2) {
+
+                prop = icalproperty_new(ICAL_URL_PROPERTY);
+                icalproperty_set_value(prop, icalvalue_new_uri(href));
+            }
+            else {
                 icalattach *icalatt = icalattach_new_from_url(href);
                 prop = icalproperty_new_attach(icalatt);
                 icalattach_unref(icalatt);
-            }
-            else {
-                prop = icalproperty_new(ICAL_X_PROPERTY);
-                icalproperty_set_x_name(prop, JMAPICAL_XPROP_ATTACH);
-                icalproperty_set_value(prop, icalvalue_new_uri(href));
             }
 
             /* type */
@@ -3439,10 +3453,8 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links,
             }
 
             /* rel */
-            if (rel)
+            if (rel && strcmp(rel, "enclosure"))
                 set_icalxparam(prop, JMAPICAL_XPARAM_REL, rel, 1);
-            else
-                set_icalxparam(prop, JMAPICAL_XPARAM_REL, "", 1);
 
             /* Set custom id */
             set_icalxparam(prop, JMAPICAL_XPARAM_ID, id, 1);
@@ -4581,7 +4593,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     pe = readprop(ctx, event, "links", 0, "o", &links);
     if (pe > 0) {
         if (json_is_null(links) || json_object_size(links)) {
-            links_to_ical(ctx, comp, links, "links", ICAL_ATTACH_PROPERTY);
+            links_to_ical(ctx, comp, links, "links");
         } else {
             invalidprop(ctx, "links");
         }

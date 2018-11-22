@@ -62,7 +62,6 @@ extern "C" {
 #define JMAPICAL_XPROP_LOCATION      "X-JMAP-LOCATION"
 /* FIXME libical doesn't parse USEDEFAULTALERTS, must use X-prefix */
 #define JMAPICAL_XPROP_USEDEFALERTS  "X-JMAP-USEDEFAULTALERTS"
-#define JMAPICAL_XPROP_ATTACH        "X-ATTACH" /* used for DISPLAY/AUDIO VALARMs */
 
 /* Custom iCalendar parameters */
 #define JMAPICAL_XPARAM_CID           "X-JMAP-CID"
