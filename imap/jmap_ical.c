@@ -1559,9 +1559,9 @@ link_from_ical(context_t *ctx __attribute__((unused)), icalproperty *prop)
     }
 
     /* rel */
-    if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_REL))) {
-        json_object_set_new(link, "rel", json_string(s));
-    }
+    const char *rel = get_icalxparam_value(prop, JMAPICAL_XPARAM_REL);
+    if (!rel) rel = "enclosure";
+    if (*rel) json_object_set_new(link, "rel", json_string(rel));
 
     /* display */
     if ((s = get_icalxparam_value(prop, JMAPICAL_XPARAM_DISPLAY))) {
@@ -3439,9 +3439,10 @@ links_to_ical(context_t *ctx, icalcomponent *comp, json_t *links,
             }
 
             /* rel */
-            if (rel && strcmp(rel, "rel")) {
+            if (rel)
                 set_icalxparam(prop, JMAPICAL_XPARAM_REL, rel, 1);
-            }
+            else
+                set_icalxparam(prop, JMAPICAL_XPARAM_REL, "", 1);
 
             /* Set custom id */
             set_icalxparam(prop, JMAPICAL_XPARAM_ID, id, 1);
