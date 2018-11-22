@@ -1103,12 +1103,16 @@ sub test_calendarevent_get_links
 
     my $links = {
         'fad3249914b09ede1558fa01004f4f8149559591' => {
-            href => $uri,
+            href => "http://jmap.io/spec.html#calendar-events",
             type => "text/html",
             size => 4480,
             title => "the spec",
             rel => "enclosure",
             cid => '123456789asd',
+        },
+        '113fa6c507397df199a18d1371be615577f9117f' => {
+            href => "http://example.com/some.url",
+            rel => "enclosure",
         }
     };
 
@@ -2035,6 +2039,10 @@ sub test_calendarevent_set_links
                rel => "icon",
                cid => '123456789asd',
                display => 'badge',
+            },
+            "attach" => {
+               href => "http://example.com/some.url",
+               rel => "enclosure",
             },
         },
     };
