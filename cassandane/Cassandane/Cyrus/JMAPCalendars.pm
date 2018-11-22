@@ -1113,6 +1113,14 @@ sub test_calendarevent_get_links
         '113fa6c507397df199a18d1371be615577f9117f' => {
             href => "http://example.com/some.url",
             rel => "enclosure",
+        },
+        'describedby-attach' => {
+            href => "http://describedby/attach",
+            rel => "describedby",
+        },
+        'describedby-url' => {
+            href => "http://describedby/url",
+            rel => "describedby",
         }
     };
 
@@ -2029,6 +2037,7 @@ sub test_calendarevent_set_links
             "spec" => {
                 href => "http://jmap.io/spec.html#calendar-events",
                 title => "the spec",
+                rel => "enclosure",
             },
             "rfc5545" => {
                href => "https://tools.ietf.org/html/rfc5545",
@@ -2125,8 +2134,8 @@ sub test_calendarevent_set_locations
         "locations" => $locations,
         "virtualLocations" => $virtualLocations,
         "links" => {
-            link1 => { href => 'https://foo.local' },
-            link2 => { href => 'https://bar.local' },
+            link1 => { href => 'https://foo.local', rel => "enclosure" },
+            link2 => { href => 'https://bar.local', rel => "enclosure" },
         },
     };
 
@@ -2228,9 +2237,11 @@ sub test_calendarevent_set_recurrenceoverrides
             "link1" => {
                 href => "http://jmap.io/spec.html#calendar-events",
                 title => "the spec",
+                rel => 'enclosure',
             },
             "link2" => {
                 href => "https://tools.ietf.org/html/rfc5545",
+                rel => 'enclosure',
             },
         },
         "recurrenceRule" => $recurrence,
@@ -2399,6 +2410,7 @@ sub test_calendarevent_set_participants
         links => {
             link1 => {
                 href => 'https://somelink.local',
+                rel => "enclosure",
             },
         },
         method => 'request',
