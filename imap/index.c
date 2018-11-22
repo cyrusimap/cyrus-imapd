@@ -3829,11 +3829,17 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     struct mailbox *mailbox = NULL;
     msgrecord_t *msgrecord = NULL;
     char *extname = NULL;
-    uint32_t system_flags, internal_flags;
     int r = 0;
 
     assert(fmb_rock->state != NULL);
     assert(fmb_rock->fetchargs != NULL);
+
+    /* convdb has flags: skip if flag deleted or flag internal expunged */
+    if (rec->version >= 1) {
+        if ((rec->system_flags & FLAG_DELETED)
+            || (rec->internal_flags & FLAG_INTERNAL_EXPUNGED))
+            goto done;
+    }
 
     /* make sure we have appropriate rights */
     r = mboxlist_lookup(rec->mboxname, &mbentry, NULL);
@@ -3842,13 +3848,10 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     if ((myrights & needrights) != needrights)
         goto done;
 
-    if (rec->version >= 1) {
-        /* grab flags from convdb, if it has them */
-        system_flags = rec->system_flags;
-        internal_flags = rec->internal_flags;
-    }
-    else {
-        /* grab flags from message record */
+    /* convdb does not have flags: grab them from message record */
+    if (rec->version == 0) {
+        uint32_t system_flags, internal_flags;
+
         r = mailbox_open_irl(rec->mboxname, &mailbox);
         if (r) goto done;
 
@@ -3858,12 +3861,11 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
         r = msgrecord_get_systemflags(msgrecord, &system_flags);
         if (!r) r = msgrecord_get_internalflags(msgrecord, &internal_flags);
         if (r) goto done;
-    }
 
-    /* skip if flag deleted or flag internal expunged */
-    if ((system_flags & FLAG_DELETED)
-        || (internal_flags & FLAG_INTERNAL_EXPUNGED))
-        goto done;
+        if ((system_flags & FLAG_DELETED)
+            || (internal_flags & FLAG_INTERNAL_EXPUNGED))
+            goto done;
+    }
 
     if (fmb_rock->wantname) {
         extname = mboxname_to_external(rec->mboxname,
