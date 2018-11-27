@@ -268,6 +268,8 @@ struct mboxname_counters {
     modseq_t caldavfoldersmodseq;
     modseq_t carddavfoldersmodseq;
     modseq_t notesfoldersmodseq;
+    modseq_t quotamodseq;
+    modseq_t raclmodseq;
     uint32_t uidvalidity;
 };
 
@@ -277,5 +279,11 @@ modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val, int mbtype, int 
 uint32_t mboxname_readuidvalidity(const char *mboxname);
 uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last);
 uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val);
+modseq_t mboxname_readquotamodseq(const char *mboxname);
+modseq_t mboxname_nextquotamodseq(const char *mboxname, modseq_t last);
+modseq_t mboxname_setquotamodseq(const char *mboxname, modseq_t val);
+modseq_t mboxname_readraclmodseq(const char *mboxname);
+modseq_t mboxname_nextraclmodseq(const char *mboxname, modseq_t last);
+modseq_t mboxname_setraclmodseq(const char *mboxname, modseq_t val);
 
 #endif

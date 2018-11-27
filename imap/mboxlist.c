@@ -712,6 +712,9 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
             mboxlist_racl_key(!!userid, acluser, name, &buf);
             r = cyrusdb_delete(mbdb, buf.s, buf.len, txn, /*force*/1);
             if (r) goto done;
+            char *aclusermbox = mboxname_user_mbox(acluser, NULL);
+            mboxname_nextraclmodseq(aclusermbox, 0);
+            free(aclusermbox);
         }
     }
 
@@ -724,6 +727,9 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
             mboxlist_racl_key(!!userid, acluser, name, &buf);
             r = cyrusdb_store(mbdb, buf.s, buf.len, "", 0, txn);
             if (r) goto done;
+            char *aclusermbox = mboxname_user_mbox(acluser, NULL);
+            mboxname_nextraclmodseq(aclusermbox, 0);
+            free(aclusermbox);
         }
     }
 
@@ -3528,7 +3534,8 @@ static int exists_cb(const mbentry_t *mbentry __attribute__((unused)), void *roc
  * Set all the resource quotas on, or create a quota root.
  */
 EXPORTED int mboxlist_setquotas(const char *root,
-                       quota_t newquotas[QUOTA_NUMRESOURCES], int force)
+                       quota_t newquotas[QUOTA_NUMRESOURCES],
+                       modseq_t quotamodseq, int force)
 {
     struct quota q;
     int r;
@@ -3585,7 +3592,9 @@ EXPORTED int mboxlist_setquotas(const char *root,
             }
         }
         if (changed) {
-            r = quota_write(&q, &tid);
+            if (quotamodseq)
+                q.modseq = quotamodseq;
+            r = quota_write(&q, force, &tid);
 
             if (quotachange_event == NULL) {
                 quotachange_event = mboxevent_enqueue(EVENT_QUOTA_CHANGE, &mboxevents);
@@ -3636,7 +3645,9 @@ EXPORTED int mboxlist_setquotas(const char *root,
 
     /* initialise the quota */
     memcpy(q.limits, newquotas, sizeof(q.limits));
-    r = quota_write(&q, &tid);
+    if (quotamodseq)
+        q.modseq = quotamodseq;
+    r = quota_write(&q, force, &tid);
     if (r) goto done;
 
     /* prepare a QuotaChange event notification */
@@ -3700,7 +3711,7 @@ EXPORTED int mboxlist_unsetquota(const char *root)
      */
     mboxlist_mboxtree(root, mboxlist_rmquota, (void *)root, /*flags*/0);
 
-    r = quota_deleteroot(root);
+    r = quota_deleteroot(root, 0);
     quota_changelockrelease();
 
     if (!r) sync_log_quota(root);

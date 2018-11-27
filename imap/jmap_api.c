@@ -538,7 +538,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     json_t *jreq = NULL, *resp = NULL;
     size_t i;
     int ret, do_perf = 0;
-    char *inboxname = NULL;
+    char *account_inboxname = NULL;
     hash_table *client_creation_ids = NULL;
     hash_table *new_creation_ids = NULL;
     hash_table accounts = HASH_TABLE_INITIALIZER;
@@ -546,6 +546,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     strarray_t methods = STRARRAY_INITIALIZER;
     ptrarray_t method_calls = PTRARRAY_INITIALIZER;
     ptrarray_t processed_methods = PTRARRAY_INITIALIZER;
+    strarray_t capabilities = STRARRAY_INITIALIZER;
 
     ret = parse_json_body(txn, &jreq);
     if (ret) return json_error_response(txn, ret, res);
@@ -600,6 +601,11 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         txn->error.desc = "Invalid createdIds argument";
         ret = HTTP_BAD_REQUEST;
         goto done;
+    }
+
+    json_t *jusing = json_object_get(jreq, "using");
+    for (i = 0; i < json_array_size(jusing); i++) {
+        strarray_add(&capabilities, json_string_value(json_array_get(jusing, i)));
     }
 
     /* Push client method calls on call stack */
@@ -662,8 +668,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
                 hash_insert(accountid, (void*)1, &accounts);
             }
         }
-        free(inboxname);
-        inboxname = mboxname_user_mbox(accountid, NULL);
+        account_inboxname = mboxname_user_mbox(accountid, NULL);
 
         /* Pre-process result references */
         if (process_resultrefs(args, resp, &err)) {
@@ -700,6 +705,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         req.txn = txn;
         req.mboxrights = &mboxrights;
         req.method_calls = &method_calls;
+        req.capabilities = &capabilities;
 
         if (do_perf) {
             struct rusage usage;
@@ -712,7 +718,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         }
 
         /* Read the current state data in */
-        r = mboxname_read_counters(inboxname, &req.counters);
+        r = mboxname_read_counters(account_inboxname, &req.counters);
         if (r) {
             jmap_finireq(&req);
             json_decref(args);
@@ -742,13 +748,19 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
                          strarray_join(&methods, ","), txn->req_hdrs);
 
 
-    /* Build responses */
+    /* Build response */
     *res = json_pack("{s:O}", "methodResponses", resp);
     if (client_creation_ids) {
         json_t *jcreatedIds = json_object();
         hash_enumerate(new_creation_ids, _make_created_ids, jcreatedIds);
         json_object_set_new(*res, "createdIds", jcreatedIds);
     }
+    char *user_inboxname = mboxname_user_mbox(httpd_userid, NULL);
+    struct buf state = BUF_INITIALIZER;
+    buf_printf(&state, MODSEQ_FMT, mboxname_readraclmodseq(user_inboxname));
+    free(user_inboxname);
+    json_object_set_new(*res, "sessionState", json_string(buf_cstring(&state)));
+    buf_free(&state);
 
   done:
     {
@@ -769,10 +781,11 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     free(new_creation_ids);
     free_hash_table(&accounts, NULL);
     free_hash_table(&mboxrights, free);
-    free(inboxname);
+    free(account_inboxname);
     json_decref(jreq);
     json_decref(resp);
     strarray_fini(&methods);
+    strarray_fini(&capabilities);
 
     return ret;
 }
@@ -2374,4 +2387,9 @@ HIDDEN json_t *jmap_sharewith(const mbentry_t *mbentry, int iscalendar)
     free(owner);
 
     return sharewith;
+}
+
+HIDDEN int jmap_hascapa(jmap_req_t *req, const char *capa)
+{
+    return strarray_find(req->capabilities, capa, 0) >= 0;
 }

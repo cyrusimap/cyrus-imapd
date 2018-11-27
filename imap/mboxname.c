@@ -2079,7 +2079,7 @@ static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
     return fileval;
 }
 
-#define MV_VERSION 3
+#define MV_VERSION 4
 
 #define MV_OFF_GENERATION 0
 #define MV_OFF_VERSION 4
@@ -2092,9 +2092,11 @@ static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
 #define MV_OFF_CALDAVFOLDERSMODSEQ 56
 #define MV_OFF_CARDDAVFOLDERSMODSEQ 64
 #define MV_OFF_NOTESFOLDERSMODSEQ 72
-#define MV_OFF_UIDVALIDITY 80
-#define MV_OFF_CRC 84
-#define MV_LENGTH 88
+#define MV_OFF_QUOTAMODSEQ 80
+#define MV_OFF_RACLMODSEQ 88
+#define MV_OFF_UIDVALIDITY 96
+#define MV_OFF_CRC 100
+#define MV_LENGTH 104
 
 /* NOTE: you need a MV_LENGTH byte base here */
 static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxname_counters *vals)
@@ -2174,6 +2176,25 @@ static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxnam
         vals->uidvalidity = ntohl(*((uint32_t *)(base+80)));
         break;
 
+    case 4:
+        if (len != 104) return IMAP_MAILBOX_CHECKSUM;
+        if (crc32_map(base, 100) != ntohl(*((uint32_t *)(base+100))))
+            return IMAP_MAILBOX_CHECKSUM;
+
+        vals->highestmodseq = ntohll(*((uint64_t *)(base+8)));
+        vals->mailmodseq = ntohll(*((uint64_t *)(base+16)));
+        vals->caldavmodseq = ntohll(*((uint64_t *)(base+24)));
+        vals->carddavmodseq = ntohll(*((uint64_t *)(base+32)));
+        vals->notesmodseq = ntohll(*((uint64_t *)(base+40)));
+        vals->mailfoldersmodseq = ntohll(*((uint64_t *)(base+48)));
+        vals->caldavfoldersmodseq = ntohll(*((uint64_t *)(base+56)));
+        vals->carddavfoldersmodseq = ntohll(*((uint64_t *)(base+64)));
+        vals->notesfoldersmodseq = ntohll(*((uint64_t *)(base+72)));
+        vals->quotamodseq = ntohll(*((uint64_t *)(base+80)));
+        vals->raclmodseq = ntohll(*((uint64_t *)(base+88)));
+        vals->uidvalidity = ntohl(*((uint32_t *)(base+96)));
+        break;
+
     default:
         return IMAP_MAILBOX_BADFORMAT;
     }
@@ -2196,6 +2217,8 @@ static void mboxname_counters_to_buf(const struct mboxname_counters *vals, char 
     align_htonll(base+MV_OFF_CARDDAVFOLDERSMODSEQ, vals->carddavfoldersmodseq);
     align_htonll(base+MV_OFF_NOTESFOLDERSMODSEQ, vals->notesfoldersmodseq);
     *((uint32_t *)(base+MV_OFF_UIDVALIDITY)) = htonl(vals->uidvalidity);
+    align_htonll(base+MV_OFF_QUOTAMODSEQ, vals->quotamodseq);
+    align_htonll(base+MV_OFF_RACLMODSEQ, vals->raclmodseq);
     *((uint32_t *)(base+MV_OFF_CRC)) = htonl(crc32_map(base, MV_OFF_CRC));
 }
 
@@ -2418,7 +2441,14 @@ EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counte
     return r;
 }
 
-static modseq_t mboxname_domodseq(const char *mboxname, modseq_t last, int mbtype, int dofolder, modseq_t add)
+enum domodseq { MAILBOXMODSEQ, QUOTAMODSEQ, RACLMODSEQ };
+
+static modseq_t mboxname_domodseq(const char *mboxname,
+                                  modseq_t last,
+                                  enum domodseq domodseq,
+                                  int mbtype,   // for MAILBOXMODSEQ
+                                  int dofolder, // for MAILBOXMODSEQ
+                                  modseq_t add)
 {
     struct mboxname_counters counters;
     struct mboxname_counters oldcounters;
@@ -2435,21 +2465,31 @@ static modseq_t mboxname_domodseq(const char *mboxname, modseq_t last, int mbtyp
 
     oldcounters = counters;
 
-    if (mboxname_isaddressbookmailbox(mboxname, mbtype)) {
-        typemodseqp = &counters.carddavmodseq;
-        foldersmodseqp = &counters.carddavfoldersmodseq;
+    if (domodseq == MAILBOXMODSEQ) {
+        if (mboxname_isaddressbookmailbox(mboxname, mbtype)) {
+            typemodseqp = &counters.carddavmodseq;
+            foldersmodseqp = &counters.carddavfoldersmodseq;
+        }
+        else if (mboxname_iscalendarmailbox(mboxname, mbtype)) {
+            typemodseqp = &counters.caldavmodseq;
+            foldersmodseqp = &counters.caldavfoldersmodseq;
+        }
+        else if (mboxname_isnotesmailbox(mboxname, mbtype)) {
+            typemodseqp = &counters.notesmodseq;
+            foldersmodseqp = &counters.notesfoldersmodseq;
+        }
+        else {
+            typemodseqp = &counters.mailmodseq;
+            foldersmodseqp = &counters.mailfoldersmodseq;
+        }
     }
-    else if (mboxname_iscalendarmailbox(mboxname, mbtype)) {
-        typemodseqp = &counters.caldavmodseq;
-        foldersmodseqp = &counters.caldavfoldersmodseq;
+    else if (domodseq == QUOTAMODSEQ) {
+        typemodseqp = &counters.quotamodseq;
+        dofolder = 0;
     }
-    else if (mboxname_isnotesmailbox(mboxname, mbtype)) {
-        typemodseqp = &counters.notesmodseq;
-        foldersmodseqp = &counters.notesfoldersmodseq;
-    }
-    else {
-        typemodseqp = &counters.mailmodseq;
-        foldersmodseqp = &counters.mailfoldersmodseq;
+    else if (domodseq == RACLMODSEQ) {
+        typemodseqp = &counters.raclmodseq;
+        dofolder = 0;
     }
 
     /* make sure all counters are at least the old value */
@@ -2477,12 +2517,58 @@ static modseq_t mboxname_domodseq(const char *mboxname, modseq_t last, int mbtyp
 
 EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last, int mbtype, int dofolder)
 {
-    return mboxname_domodseq(mboxname, last, mbtype, dofolder, 1);
+    return mboxname_domodseq(mboxname, last, MAILBOXMODSEQ, mbtype, dofolder, 1);
 }
 
 EXPORTED modseq_t mboxname_setmodseq(const char *mboxname, modseq_t last, int mbtype, int dofolder)
 {
-    return mboxname_domodseq(mboxname, last, mbtype, dofolder, 0);
+    return mboxname_domodseq(mboxname, last, MAILBOXMODSEQ, mbtype, dofolder, 0);
+}
+
+EXPORTED modseq_t mboxname_readquotamodseq(const char *mboxname)
+{
+    struct mboxname_counters counters;
+
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+        return 0;
+
+    if (mboxname_read_counters(mboxname, &counters))
+        return 0;
+
+    return counters.quotamodseq;
+}
+
+EXPORTED modseq_t mboxname_nextquotamodseq(const char *mboxname, modseq_t last)
+{
+    return mboxname_domodseq(mboxname, last, QUOTAMODSEQ, 0, 0, 1);
+}
+
+EXPORTED modseq_t mboxname_setquotamodseq(const char *mboxname, modseq_t last)
+{
+    return mboxname_domodseq(mboxname, last, QUOTAMODSEQ, 0, 0, 0);
+}
+
+EXPORTED modseq_t mboxname_readraclmodseq(const char *mboxname)
+{
+    struct mboxname_counters counters;
+
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+        return 0;
+
+    if (mboxname_read_counters(mboxname, &counters))
+        return 0;
+
+    return counters.raclmodseq;
+}
+
+EXPORTED modseq_t mboxname_nextraclmodseq(const char *mboxname, modseq_t last)
+{
+    return mboxname_domodseq(mboxname, last, RACLMODSEQ, 0, 0, 1);
+}
+
+EXPORTED modseq_t mboxname_setraclmodseq(const char *mboxname, modseq_t last)
+{
+    return mboxname_domodseq(mboxname, last, RACLMODSEQ, 0, 0, 0);
 }
 
 EXPORTED uint32_t mboxname_readuidvalidity(const char *mboxname)

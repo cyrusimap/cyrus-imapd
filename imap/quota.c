@@ -336,7 +336,7 @@ static int fixquota_addroot(struct quota *q,
         free(localq.scanmbox);
         localq.scanmbox = NULL;
 
-        r = quota_write(&localq, &tid);
+        r = quota_write(&localq, 0, &tid);
         if (r) {
             errmsg("failed writing quota record for '%s'",
                    q->root, r);
@@ -516,7 +516,7 @@ static int fixquota_dombox(const mbentry_t *mbentry, void *rock)
         free(localq.scanmbox);
         localq.scanmbox = xstrdup(mbentry->name);
 
-        r = quota_write(&localq, &txn);
+        r = quota_write(&localq, 0, &txn);
         quota_free(&localq);
 
         if (r) {
@@ -563,7 +563,7 @@ int fixquota_finish(int thisquota)
     if (!quotaroots[thisquota].refcount) {
         quotaroots[thisquota].deleted = 1;
         fprintf(stderr, "%s: removed\n", root);
-        r = quota_deleteroot(root);
+        r = quota_deleteroot(root, 0);
         if (r) {
             errmsg("failed deleting quotaroot '%s'", root, r);
         }
@@ -594,7 +594,7 @@ int fixquota_finish(int thisquota)
     free(localq.scanmbox);
     localq.scanmbox = NULL;
 
-    r = quota_write(&localq, &tid);
+    r = quota_write(&localq, 0, &tid);
     if (r) {
         errmsg("failed writing quotaroot: '%s'", root, r);
         goto done;

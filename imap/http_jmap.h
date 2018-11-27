@@ -62,6 +62,8 @@
 #define JMAP_URN_CALENDARS  "urn:ietf:params:jmap:calendars"
 #define JMAP_URN_WEBSOCKET  "urn:ietf:params:jmap:websocket"
 
+#define JMAP_QUOTA_EXTENSION   "http://cyrusimap.org/ns/quota"
+
 #define _wantprop(props, name) ((props) ? (hash_lookup(name, props) != NULL) : 1)
 
 extern struct namespace jmap_namespace;
@@ -123,11 +125,13 @@ typedef struct jmap_req {
     hash_table *client_creation_ids;
     hash_table *new_creation_ids;
     ptrarray_t *method_calls;
+    const strarray_t *capabilities;
 } jmap_req_t;
 
 extern int jmap_initreq(jmap_req_t *req);
 extern void jmap_finireq(jmap_req_t *req);
 
+extern int jmap_hascapa(jmap_req_t *req, const char *capa);
 
 typedef struct {
     const char *name;

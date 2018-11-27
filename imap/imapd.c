@@ -7061,7 +7061,7 @@ localcreate:
                     newquotas[QUOTA_STORAGE] = autocreatequotastorage;
                     newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
 
-                    (void) mboxlist_setquotas(mbname_intname(mbname), newquotas, 0);
+                    (void) mboxlist_setquotas(mbname_intname(mbname), newquotas, 0, 0);
                 } // (autocreatequotastorage > 0) || (autocreatequotamessage > 0)
 
             } else { // (autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATEQUOTA))
@@ -8805,7 +8805,7 @@ void cmd_setquota(const char *tag, const char *quotaroot)
         return;
     }
 
-    r = mboxlist_setquotas(intname, newquotas, force);
+    r = mboxlist_setquotas(intname, newquotas, 0, force);
 
     imapd_check(NULL, 0);
 out:

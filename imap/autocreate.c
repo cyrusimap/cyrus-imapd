@@ -734,7 +734,7 @@ int autocreate_user(struct namespace *namespace, const char *userid)
         if (autocreatequotamessage)
             newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
 
-        r = mboxlist_setquotas(inboxname, newquotas, 0);
+        r = mboxlist_setquotas(inboxname, newquotas, 0, 0);
         if (r) {
             syslog(LOG_ERR, "autocreateinbox: User %s, QUOTA failed. %s",
                    userid, error_message(r));

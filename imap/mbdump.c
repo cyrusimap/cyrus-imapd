@@ -1267,7 +1267,7 @@ EXPORTED int undump_mailbox(const char *mbname,
             }
         }
         if (res < QUOTA_NUMRESOURCES) {
-            mboxlist_setquotas(mbname, newquotas, 0);
+            mboxlist_setquotas(mbname, newquotas, 0, 0);
         }
     }
 

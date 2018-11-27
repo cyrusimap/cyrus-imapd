@@ -423,7 +423,7 @@ EXPORTED int user_copyquotaroot(const char *oldname, const char *newname)
     quota_init(&q, oldname);
     r = quota_read(&q, NULL, 0);
     if (!r)
-        mboxlist_setquotas(newname, q.limits, 0);
+        mboxlist_setquotas(newname, q.limits, 0, 0);
     quota_free(&q);
 
     return r;
@@ -450,7 +450,7 @@ static int find_cb(void *rockp __attribute__((unused)),
     int r;
 
     root = xstrndup(key, keylen);
-    r = quota_deleteroot(root);
+    r = quota_deleteroot(root, 0);
     free(root);
 
     return r;

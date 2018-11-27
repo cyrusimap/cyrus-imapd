@@ -3076,6 +3076,19 @@ static int jmap_mailbox_set(jmap_req_t *req)
     _mboxset(req, &set);
     jmap_ok(req, jmap_set_reply(&set.super));
 
+    if (jmap_hascapa(req, JMAP_QUOTA_EXTENSION)) {
+        int have_changes = json_object_size(set.super.created) ||
+                           json_object_size(set.super.updated) ||
+                           json_array_size(set.super.destroyed);
+
+        if (have_changes) {
+            json_t *args = json_object();
+            json_object_set_new(args, "accountId", json_string(req->accountid));
+            json_object_set_new(args, "ids", json_pack("[s]", "mail"));
+            jmap_add_subreq(req, "Quota/get", args, NULL);
+        }
+    }
+
 done:
     jmap_parser_fini(&parser);
     _mboxset_fini(&set);

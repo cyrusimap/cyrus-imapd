@@ -160,6 +160,7 @@ static int quota_parseval(const char *data, size_t datalen,
     int res = QUOTA_STORAGE;
     struct dlist *dl = NULL;
     quota_t temp;
+    modseq_t modseq = 0;
 
     /* new dlist format */
     if (data[0] == '%') {
@@ -180,14 +181,16 @@ static int quota_parseval(const char *data, size_t datalen,
         if (iswrite) {
             struct dlist *scan = dlist_getchild(dl, "SCAN");
             const char *mboxname = NULL;
-            if (!scan) goto done;
-            if (!dlist_getatom(scan, "MBOX", &mboxname)) goto done;
-            quota->scanmbox = xstrdup(mboxname);
-            for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-                struct dlist *val = dlist_getchild(scan, quota_db_names[res]);
-                if (val) quota->scanuseds[res] = dlist_num(val);
+            if (scan && dlist_getatom(scan, "MBOX", &mboxname)) {
+                quota->scanmbox = xstrdup(mboxname);
+                for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+                    struct dlist *val = dlist_getchild(scan, quota_db_names[res]);
+                    if (val) quota->scanuseds[res] = dlist_num(val);
+                }
             }
         }
+
+        dlist_getnum64(dl, "MODSEQ", &modseq);
 
         goto done;
     }
@@ -220,6 +223,7 @@ static int quota_parseval(const char *data, size_t datalen,
     }
 
 done:
+    quota->modseq = modseq;
     r = 0;
 out:
     dlist_free(&dl);
@@ -408,7 +412,7 @@ EXPORTED void quota_abort(struct txn **tid)
 /*
  * Write out the quota entry 'quota'
  */
-EXPORTED int quota_write(struct quota *quota, struct txn **tid)
+EXPORTED int quota_write(struct quota *quota, int silent, struct txn **tid)
 {
     int r;
     int qrlen;
@@ -422,6 +426,14 @@ EXPORTED int quota_write(struct quota *quota, struct txn **tid)
 
     qrlen = strlen(quota->root);
     if (!qrlen) return IMAP_QUOTAROOT_NONEXISTENT;
+
+    if (mboxname_isusermailbox(quota->root, /*isinbox*/0)) {
+        if (silent)
+            quota->modseq = mboxname_setquotamodseq(quota->root, quota->modseq);
+        else
+            quota->modseq = mboxname_nextquotamodseq(quota->root, quota->modseq);
+
+    }
 
     dl = dlist_newkvlist(NULL, NULL);
 
@@ -438,6 +450,8 @@ EXPORTED int quota_write(struct quota *quota, struct txn **tid)
         for (res = 0; res < QUOTA_NUMRESOURCES; res++)
             dlist_setnum64(scan, quota_db_names[res], quota->scanuseds[res]);
     }
+
+    dlist_setnum64(dl, "MODSEQ", quota->modseq);
 
     dlist_printbuf(dl, 0, &buf);
 
@@ -501,7 +515,7 @@ EXPORTED int quota_update_useds(const char *quotaroot,
                 mboxevent_extract_quota(mboxevent, &q, res);
             }
         }
-        r = quota_write(&q, &tid);
+        r = quota_write(&q, 0/*force*/, &tid);
     }
 
     if (r) {
@@ -569,7 +583,7 @@ done:
 /*
  * Remove the quota root 'quota'
  */
-EXPORTED int quota_deleteroot(const char *quotaroot)
+EXPORTED int quota_deleteroot(const char *quotaroot, int silent)
 {
     int r;
 
@@ -583,7 +597,8 @@ EXPORTED int quota_deleteroot(const char *quotaroot)
     switch (r) {
     case CYRUSDB_OK:
     case CYRUSDB_NOTFOUND:  /* shouldn't happen anyway */
-        return 0;
+        r = 0;
+        break;
 
     case CYRUSDB_AGAIN:
         return IMAP_AGAIN;
@@ -593,6 +608,11 @@ EXPORTED int quota_deleteroot(const char *quotaroot)
                quotaroot, cyrusdb_strerror(r));
         return IMAP_IOERROR;
     }
+
+    if (!silent && mboxname_isusermailbox(quotaroot, /*isinbox*/0)) {
+        mboxname_nextquotamodseq(quotaroot, 0);
+    }
+    return r;
 }
 
 /*

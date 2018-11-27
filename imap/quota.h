@@ -50,6 +50,7 @@
 #endif
 
 #include "cyrusdb.h"
+#include "util.h"
 #include <config.h>
 
 #define FNAME_QUOTADB "/quotas.db"
@@ -81,6 +82,8 @@ struct quota {
     /* information for scanning */
     char *scanmbox;
     quota_t scanuseds[QUOTA_NUMRESOURCES];
+
+    modseq_t modseq;
 };
 
 /* special value to indicate no limit applies */
@@ -109,7 +112,7 @@ extern void quota_commit(struct txn **tid);
 
 extern void quota_abort(struct txn **tid);
 
-extern int quota_write(struct quota *quota, struct txn **tid);
+extern int quota_write(struct quota *quota, int silent, struct txn **tid);
 
 extern int quota_update_useds(const char *quotaroot,
                               const quota_t diff[QUOTA_NUMRESOURCES],
@@ -117,7 +120,7 @@ extern int quota_update_useds(const char *quotaroot,
 extern int quota_check_useds(const char *quotaroot,
                              const quota_t diff[QUOTA_NUMRESOURCES]);
 
-extern int quota_deleteroot(const char *quotaroot);
+extern int quota_deleteroot(const char *quotaroot, int silent);
 
 extern int quota_findroot(char *ret, size_t retlen, const char *name);
 

@@ -2434,7 +2434,11 @@ int sync_apply_quota(struct dlist *kin,
     if (!dlist_getatom(kin, "ROOT", &root))
         return IMAP_PROTOCOL_BAD_PARAMETERS;
     sync_decode_quota_limits(kin, limits);
-    return mboxlist_setquotas(root, limits, 1);
+
+    modseq_t modseq = 0;
+    dlist_getnum64(kin, "MODSEQ", &modseq);
+
+    return mboxlist_setquotas(root, limits, modseq, 1);
 }
 
 /* ====================================================================== */
@@ -2956,6 +2960,7 @@ static void print_quota(struct quota *q, struct protstream *pout)
     kl = dlist_newkvlist(NULL, "QUOTA");
     dlist_setatom(kl, "ROOT", q->root);
     sync_encode_quota_limits(kl, q->limits);
+    dlist_setnum64(kl, "MODSEQ", q->modseq);
     sync_send_response(kl, pout);
     dlist_free(&kl);
 }
@@ -4592,6 +4597,7 @@ static int update_quota_work(struct quota *client, struct sync_quota *server,
     kl = dlist_newkvlist(NULL, cmd);
     dlist_setatom(kl, "ROOT", client->root);
     sync_encode_quota_limits(kl, client->limits);
+    dlist_setnum64(kl, "MODSEQ", client->modseq);
     sync_send_apply(kl, sync_be->out);
     dlist_free(&kl);
 
