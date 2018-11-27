@@ -707,7 +707,6 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
         for (i = 0; i+1 < strarray_size(oldusers); i+=2) {
             const char *acluser = strarray_nth(oldusers, i);
             const char *aclval = strarray_nth(oldusers, i+1);
-            if (!strchr(aclval, 'l')) continue; /* non-lookup ACLs can be skipped */
             if (!strcmpsafe(userid, acluser)) continue;
             if (strarray_find(admins, acluser, 0) >= 0) continue;
             if (user_is_in(newusers, acluser)) continue;
@@ -721,7 +720,6 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
         for (i = 0; i+1 < strarray_size(newusers); i+=2) {
             const char *acluser = strarray_nth(newusers, i);
             const char *aclval = strarray_nth(newusers, i+1);
-            if (!strchr(aclval, 'l')) continue; /* non-lookup ACLs can be skipped */
             if (!strcmpsafe(userid, acluser)) continue;
             if (strarray_find(admins, acluser, 0) >= 0) continue;
             if (user_is_in(oldusers, acluser)) continue;
