@@ -1473,7 +1473,7 @@ participants_from_ical(context_t *ctx __attribute__((unused)),
     }
 
 
-    /* Traverse ATTENDEES - find organizer first to not mess up the iterator */
+    /* Map ATTENDEE to JSCalendar */
     icalproperty *orga = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
          prop;
@@ -1491,7 +1491,8 @@ participants_from_ical(context_t *ctx __attribute__((unused)),
         char *uri = normalized_uri(caladdress);
         if (!hash_lookup(uri, &attendee_by_uri)) {
             /* Add a default participant for the organizer. */
-            char *id = sha1key(uri);
+            char *id = xstrdupnull(get_icalxparam_value(orga, JMAPICAL_XPARAM_ID));
+            if (!id) id = sha1key(uri);
             json_t *jorga = participant_from_icalorganizer(orga);
             json_object_set_new(participants, id, jorga);
             free(id);
@@ -2854,321 +2855,29 @@ static int is_valid_rsvpmethod(const char *s)
     return i > 0;
 }
 
-
-static void
-participant_to_ical(context_t *ctx, icalproperty *prop, json_t *p,
-                    json_t *participants,
-                    json_t *links,
-                    int is_replyto,
-                    hash_table *caladdress_by_participant_id)
-{
-    icalparameter *param;
-
-    /* name */
-    json_t *name = json_object_get(p, "name");
-    if (json_is_string(name)) {
-        param = icalparameter_new_cn(json_string_value(name));
-        icalproperty_add_parameter(prop, param);
-    }
-    else if (JNOTNULL(name)) {
-        invalidprop(ctx, "name");
-    }
-
-    /* sendTo */
-    json_t *sendTo = json_object_get(p, "sendTo");
-    if (json_object_size(sendTo)) {
-        beginprop(ctx, "sendTo");
-        struct buf buf = BUF_INITIALIZER;
-
-        /* Only set RSVP URI x-params if not trivial */
-        int set_rsvp_uris = 0;
-        if (json_object_size(sendTo) > 1) {
-            set_rsvp_uris = 1;
-        }
-        else {
-            const char *method = json_object_iter_key(json_object_iter(sendTo));
-            set_rsvp_uris = strcmp(method, "imip") && strcmp(method, "other");
-        }
-
-        const char *key;
-        json_t *jval;
-        /* Process RSVP URIs */
-        json_object_foreach(sendTo, key, jval) {
-            if (!is_valid_rsvpmethod(key) || !json_is_string(jval)) {
-                invalidprop(ctx, key);
-                continue;
-            }
-            if (!set_rsvp_uris) continue;
-
-            buf_setcstr(&buf, key);
-            buf_putc(&buf, ':');
-            buf_appendcstr(&buf, json_string_value(jval));
-            set_icalxparam(prop, JMAPICAL_XPARAM_RSVP_URI, buf_cstring(&buf), 0);
-        }
-
-        buf_free(&buf);
-        endprop(ctx);
-    }
-    else if (JNOTNULL(sendTo)) {
-        invalidprop(ctx, "sendTo");
-    }
-
-    /* email */
-    json_t *jemail = json_object_get(p, "email");
-    if (json_is_string(jemail)) {
-        const char *caladdress = icalproperty_get_value_as_string(prop);
-        const char *email = json_string_value(jemail);
-        if (!match_uri(caladdress, email)) {
-            param = icalparameter_new_email(email);
-            icalproperty_add_parameter(prop, param);
-        }
-    }
-    else if (JNOTNULL(jemail)) {
-        invalidprop(ctx, "email");
-    }
-
-    /* kind */
-    json_t *kind = json_object_get(p, "kind");
-    if (json_is_string(kind)) {
-        char *tmp = ucase(xstrdup(json_string_value(kind)));
-        icalparameter_cutype cu;
-        if (!strcmp(tmp, "LOCATION"))
-            cu = ICAL_CUTYPE_ROOM;
-        else
-            cu = icalparameter_string_to_enum(tmp);
-        switch (cu) {
-            case ICAL_CUTYPE_INDIVIDUAL:
-            case ICAL_CUTYPE_GROUP:
-            case ICAL_CUTYPE_RESOURCE:
-            case ICAL_CUTYPE_ROOM:
-                param = icalparameter_new_cutype(cu);
-                icalproperty_add_parameter(prop, param);
-                break;
-            default:
-                /* ignore */ ;
-        }
-        free(tmp);
-    }
-    else if (JNOTNULL(kind)) {
-        invalidprop(ctx, "kind");
-    }
-
-    /* attendance */
-    icalparameter_role ical_role = ICAL_ROLE_REQPARTICIPANT;
-    json_t *attendance = json_object_get(p, "attendance");
-    if (json_is_string(attendance)) {
-        const char *s = json_string_value(attendance);
-        if (!strcasecmp(s, "required")) {
-            ical_role = ICAL_ROLE_REQPARTICIPANT;
-        }
-        else if (!strcasecmp(s, "optional")) {
-            ical_role = ICAL_ROLE_OPTPARTICIPANT;
-        }
-        else if (!strcasecmp(s, "none")) {
-            ical_role = ICAL_ROLE_NONPARTICIPANT;
-        }
-        if (ical_role != ICAL_ROLE_REQPARTICIPANT) {
-            icalproperty_add_parameter(prop, icalparameter_new_role(ical_role));
-        }
-    }
-    else if (JNOTNULL(attendance)) {
-        invalidprop(ctx, "attendance");
-    }
-
-    /* roles */
-    json_t *roles = json_object_get(p, "roles");
-    if (json_object_size(roles)) {
-        participant_roles_to_ical(ctx, prop, roles, ical_role, is_replyto);
-    }
-    else if (roles) {
-        invalidprop(ctx, "roles");
-    }
-
-    /* locationId */
-    json_t *locationId = json_object_get(p, "locationId");
-    if (json_is_string(locationId)) {
-        const char *s = json_string_value(locationId);
-        set_icalxparam(prop, JMAPICAL_XPARAM_LOCATIONID, s, 1);
-    }
-    else if (JNOTNULL(locationId)) {
-        invalidprop(ctx, "locationId");
-    }
-
-    /* participationStatus */
-    icalparameter_partstat ps = ICAL_PARTSTAT_NONE;
-    json_t *participationStatus = json_object_get(p, "participationStatus");
-    if (json_is_string(participationStatus)) {
-        char *tmp = ucase(xstrdup(json_string_value(participationStatus)));
-        ps = icalparameter_string_to_enum(tmp);
-        switch (ps) {
-            case ICAL_PARTSTAT_NEEDSACTION:
-            case ICAL_PARTSTAT_ACCEPTED:
-            case ICAL_PARTSTAT_DECLINED:
-            case ICAL_PARTSTAT_TENTATIVE:
-                break;
-            default:
-                invalidprop(ctx, "participationStatus");
-                ps = ICAL_PARTSTAT_NONE;
-        }
-        free(tmp);
-    }
-    else if (JNOTNULL(participationStatus)) {
-        invalidprop(ctx, "participationStatus");
-    }
-    if (ps != ICAL_PARTSTAT_NONE) {
-        param = icalparameter_new_partstat(ps);
-        icalproperty_add_parameter(prop, param);
-    }
-
-    /* expectReply */
-    json_t *expectReply = json_object_get(p, "expectReply");
-    if (json_is_boolean(expectReply)) {
-        if (expectReply == json_true()) {
-            param = icalparameter_new_rsvp(ICAL_RSVP_TRUE);
-            if (ps == ICAL_PARTSTAT_NONE) {
-                icalproperty_add_parameter(prop,
-                        icalparameter_new_partstat(ICAL_PARTSTAT_NEEDSACTION));
-            }
-        }
-        else {
-            param = icalparameter_new_rsvp(ICAL_RSVP_FALSE);
-        }
-        icalproperty_add_parameter(prop, param);
-    }
-    else if (JNOTNULL(expectReply)) {
-        invalidprop(ctx, "expectReply");
-    }
-
-    /* delegatedTo */
-    json_t *delegatedTo = json_object_get(p, "delegatedTo");
-    if (json_object_size(delegatedTo)) {
-        const char *id;
-        json_t *jval;
-        json_object_foreach(delegatedTo, id, jval) {
-            json_t *delegatee = json_object_get(participants, id);
-            if (is_valid_jmapid(id) && delegatee && jval == json_true()) {
-                const char *uri = hash_lookup(id, caladdress_by_participant_id);
-                if (uri) {
-                    param = icalparameter_new_delegatedto(uri);
-                    icalproperty_add_parameter(prop, param);
-                }
-            }
-            else {
-                beginprop_key(ctx, "delegatedTo", id);
-                invalidprop(ctx, NULL);
-                endprop(ctx);
-            }
-        }
-    }
-    else if (JNOTNULL(delegatedTo)) {
-        invalidprop(ctx, "delegatedTo");
-    }
-
-    /* delegatedFrom */
-    json_t *delegatedFrom = json_object_get(p, "delegatedFrom");
-    if (json_object_size(delegatedFrom)) {
-        const char *id;
-        json_t *jval;
-        json_object_foreach(delegatedFrom, id, jval) {
-            json_t *delegator = json_object_get(participants, id);
-            if (is_valid_jmapid(id) && delegator && jval == json_true()) {
-                const char *uri = hash_lookup(id, caladdress_by_participant_id);
-                if (uri) {
-                    param = icalparameter_new_delegatedfrom(uri);
-                    icalproperty_add_parameter(prop, param);
-                }
-            }
-            else {
-                beginprop_key(ctx, "delegatedFrom", id);
-                invalidprop(ctx, NULL);
-                endprop(ctx);
-            }
-        }
-    }
-    else if (JNOTNULL(delegatedFrom)) {
-        invalidprop(ctx, "delegatedFrom");
-    }
-
-    /* memberOf */
-    json_t *memberOf = json_object_get(p, "memberOf");
-    if (json_object_size(memberOf)) {
-        const char *id;
-        json_t *jval;
-        json_object_foreach(memberOf, id, jval) {
-            json_t *group = json_object_get(participants, id);
-            if (is_valid_jmapid(id) && group && jval == json_true()) {
-                const char *uri = hash_lookup(id, caladdress_by_participant_id);
-                if (uri) {
-                    param = icalparameter_new_member(uri);
-                    icalproperty_add_parameter(prop, param);
-                }
-            }
-            else {
-                beginprop_key(ctx, "memberOf", id);
-                invalidprop(ctx, NULL);
-                endprop(ctx);
-            }
-        }
-    }
-    else if (JNOTNULL(memberOf)) {
-        invalidprop(ctx, "memberOf");
-    }
-
-    /* linkIds */
-    json_t *linkIds = json_object_get(p, "linkIds");
-    if (json_object_size(linkIds)) {
-        const char *id;
-        json_t *jval;
-        json_object_foreach(linkIds, id, jval) {
-            if (!is_valid_jmapid(id) || !json_object_get(links, id) || jval != json_true()) {
-                beginprop_key(ctx, "linkIds", id);
-                invalidprop(ctx, NULL);
-                endprop(ctx);
-                continue;
-            }
-            set_icalxparam(prop, JMAPICAL_XPARAM_LINKID, id, 0);
-        }
-    }
-    else if (JNOTNULL(linkIds)) {
-        invalidprop(ctx, "linkIds");
-    }
-
-    /* scheduleSequence */
-    json_t *scheduleSequence = json_object_get(p, "scheduleSequence");
-    if (json_is_integer(scheduleSequence) && json_integer_value(scheduleSequence) >= 0) {
-        struct buf buf = BUF_INITIALIZER;
-        buf_printf(&buf, "%lld", json_integer_value(scheduleSequence));
-        set_icalxparam(prop, JMAPICAL_XPARAM_SEQUENCE, buf_cstring(&buf), 0);
-        buf_free(&buf);
-    }
-    else if (JNOTNULL(scheduleSequence)) {
-        invalidprop(ctx, "scheduleSequence");
-    }
-
-    /* scheduleUpdated */
-    json_t *scheduleUpdated = json_object_get(p, "scheduleUpdated");
-    if (json_is_string(scheduleUpdated)) {
-        const char *s = json_string_value(scheduleUpdated);
-        icaltimetype dtstamp;
-        if (utcdate_to_icaltime(s, &dtstamp)) {
-            char *tmp = icaltime_as_ical_string_r(dtstamp);
-            set_icalxparam(prop, JMAPICAL_XPARAM_DTSTAMP, tmp, 0);
-            free(tmp);
-        }
-        else {
-            invalidprop(ctx, "scheduleSequence");
-        }
-    }
-    else if (JNOTNULL(scheduleUpdated)) {
-        invalidprop(ctx, "scheduleSequence");
-    }
-}
-
 static int
 participant_equals(json_t *jpart1, json_t *jpart2)
 {
+    /* Special-case sendTo URI values */
+    json_t *jsendTo1 = json_object_get(jpart1, "sendTo");
+    json_t *jsendTo2 = json_object_get(jpart2, "sendTo");
+    if (json_object_size(jsendTo1) != json_object_size(jsendTo2)) return 0;
+    if (JNOTNULL(jsendTo1)) {
+        json_t *juri1;
+        const char *method;
+        json_object_foreach(jsendTo1, method, juri1) {
+            json_t *juri2 = json_object_get(jsendTo2, method);
+            if (!juri2) return 0;
+            const char *uri1 = json_string_value(juri1);
+            const char *uri2 = json_string_value(juri2);
+            if (!uri1 || !uri2 || !match_uri(uri1, uri2)) return 0;
+        }
+    }
+
     json_t *jval1 = json_copy(jpart1);
     json_t *jval2 = json_copy(jpart2);
+    json_object_del(jval1, "sendTo");
+    json_object_del(jval2, "sendTo");
 
     /* Remove default values */
     if (!strcmpsafe(json_string_value(json_object_get(jval1, "name")), ""))
@@ -3207,7 +2916,348 @@ participant_equals(json_t *jpart1, json_t *jpart2)
         if (json_is_null(jprop)) json_object_del(jval2, key);
     }
 
-    return json_equal(jval1, jval2);
+    int is_equal = json_equal(jval1, jval2);
+    json_decref(jval1);
+    json_decref(jval2);
+    return is_equal;
+}
+
+
+
+static void
+participant_to_ical(context_t *ctx,
+                    icalcomponent *comp,
+                    const char *id,
+                    json_t *jpart,
+                    json_t *participants,
+                    json_t *links,
+                    const char *orga_uri,
+                    hash_table *caladdress_by_participant_id)
+{
+    const char *caladdress = hash_lookup(id, caladdress_by_participant_id);
+    icalproperty *prop = icalproperty_new_attendee(caladdress);
+    set_icalxparam(prop, JMAPICAL_XPARAM_ID, id, 1);
+
+    icalproperty *orga = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    int is_orga = match_uri(caladdress, orga_uri);
+    if (is_orga) set_icalxparam(orga, JMAPICAL_XPARAM_ID, id, 1);
+
+    /* name */
+    json_t *jname = json_object_get(jpart, "name");
+    if (json_is_string(jname)) {
+        const char *name = json_string_value(jname);
+        icalproperty_add_parameter(prop, icalparameter_new_cn(name));
+        if (is_orga) {
+            icalproperty_add_parameter(orga, icalparameter_new_cn(name));
+        }
+    }
+    else if (JNOTNULL(jname)) {
+        invalidprop(ctx, "name");
+    }
+
+    /* sendTo */
+    json_t *sendTo = json_object_get(jpart, "sendTo");
+    if (json_object_size(sendTo)) {
+        beginprop(ctx, "sendTo");
+        struct buf buf = BUF_INITIALIZER;
+
+        /* Only set RSVP URI x-params if not trivial */
+        int set_rsvp_uris = 0;
+        if (json_object_size(sendTo) > 1) {
+            set_rsvp_uris = 1;
+        }
+        else {
+            const char *method = json_object_iter_key(json_object_iter(sendTo));
+            set_rsvp_uris = strcmp(method, "imip") && strcmp(method, "other");
+        }
+
+        const char *key;
+        json_t *jval;
+        /* Process RSVP URIs */
+        json_object_foreach(sendTo, key, jval) {
+            if (!is_valid_rsvpmethod(key) || !json_is_string(jval)) {
+                invalidprop(ctx, key);
+                continue;
+            }
+            if (!set_rsvp_uris) continue;
+
+            buf_setcstr(&buf, key);
+            buf_putc(&buf, ':');
+            buf_appendcstr(&buf, json_string_value(jval));
+            set_icalxparam(prop, JMAPICAL_XPARAM_RSVP_URI, buf_cstring(&buf), 0);
+        }
+
+        buf_free(&buf);
+        endprop(ctx);
+    }
+    else if (JNOTNULL(sendTo)) {
+        invalidprop(ctx, "sendTo");
+    }
+
+    /* email */
+    json_t *jemail = json_object_get(jpart, "email");
+    if (json_is_string(jemail)) {
+        const char *uri = icalproperty_get_value_as_string(prop);
+        const char *email = json_string_value(jemail);
+        if (!match_uri(uri, email)) {
+            icalproperty_add_parameter(prop, icalparameter_new_email(email));
+            if (is_orga) {
+                icalproperty_add_parameter(orga, icalparameter_new_email(email));
+            }
+        }
+    }
+    else if (JNOTNULL(jemail)) {
+        invalidprop(ctx, "email");
+    }
+
+    /* kind */
+    json_t *kind = json_object_get(jpart, "kind");
+    if (json_is_string(kind)) {
+        icalparameter *param = NULL;
+        char *tmp = ucase(xstrdup(json_string_value(kind)));
+        icalparameter_cutype cu;
+        if (!strcmp(tmp, "LOCATION"))
+            cu = ICAL_CUTYPE_ROOM;
+        else
+            cu = icalparameter_string_to_enum(tmp);
+        switch (cu) {
+            case ICAL_CUTYPE_INDIVIDUAL:
+            case ICAL_CUTYPE_GROUP:
+            case ICAL_CUTYPE_RESOURCE:
+            case ICAL_CUTYPE_ROOM:
+                param = icalparameter_new_cutype(cu);
+                icalproperty_add_parameter(prop, param);
+                break;
+            default:
+                /* ignore */ ;
+        }
+        free(tmp);
+    }
+    else if (JNOTNULL(kind)) {
+        invalidprop(ctx, "kind");
+    }
+
+    /* attendance */
+    icalparameter_role ical_role = ICAL_ROLE_REQPARTICIPANT;
+    json_t *attendance = json_object_get(jpart, "attendance");
+    if (json_is_string(attendance)) {
+        const char *s = json_string_value(attendance);
+        if (!strcasecmp(s, "required")) {
+            ical_role = ICAL_ROLE_REQPARTICIPANT;
+        }
+        else if (!strcasecmp(s, "optional")) {
+            ical_role = ICAL_ROLE_OPTPARTICIPANT;
+        }
+        else if (!strcasecmp(s, "none")) {
+            ical_role = ICAL_ROLE_NONPARTICIPANT;
+        }
+        if (ical_role != ICAL_ROLE_REQPARTICIPANT) {
+            icalproperty_add_parameter(prop, icalparameter_new_role(ical_role));
+        }
+    }
+    else if (JNOTNULL(attendance)) {
+        invalidprop(ctx, "attendance");
+    }
+
+    /* roles */
+    json_t *roles = json_object_get(jpart, "roles");
+    if (json_object_size(roles)) {
+        participant_roles_to_ical(ctx, prop, roles, ical_role, is_orga);
+    }
+    else if (roles) {
+        invalidprop(ctx, "roles");
+    }
+
+    /* locationId */
+    json_t *locationId = json_object_get(jpart, "locationId");
+    if (json_is_string(locationId)) {
+        const char *s = json_string_value(locationId);
+        set_icalxparam(prop, JMAPICAL_XPARAM_LOCATIONID, s, 1);
+    }
+    else if (JNOTNULL(locationId)) {
+        invalidprop(ctx, "locationId");
+    }
+
+    /* participationStatus */
+    icalparameter_partstat ps = ICAL_PARTSTAT_NONE;
+    json_t *participationStatus = json_object_get(jpart, "participationStatus");
+    if (json_is_string(participationStatus)) {
+        char *tmp = ucase(xstrdup(json_string_value(participationStatus)));
+        ps = icalparameter_string_to_enum(tmp);
+        switch (ps) {
+            case ICAL_PARTSTAT_NEEDSACTION:
+            case ICAL_PARTSTAT_ACCEPTED:
+            case ICAL_PARTSTAT_DECLINED:
+            case ICAL_PARTSTAT_TENTATIVE:
+                break;
+            default:
+                invalidprop(ctx, "participationStatus");
+                ps = ICAL_PARTSTAT_NONE;
+        }
+        free(tmp);
+    }
+    else if (JNOTNULL(participationStatus)) {
+        invalidprop(ctx, "participationStatus");
+    }
+    if (ps != ICAL_PARTSTAT_NONE) {
+        icalproperty_add_parameter(prop, icalparameter_new_partstat(ps));
+    }
+
+    /* expectReply */
+    json_t *expectReply = json_object_get(jpart, "expectReply");
+    if (json_is_boolean(expectReply)) {
+        icalparameter *param = NULL;
+        if (expectReply == json_true()) {
+            param = icalparameter_new_rsvp(ICAL_RSVP_TRUE);
+            if (ps == ICAL_PARTSTAT_NONE) {
+                icalproperty_add_parameter(prop,
+                        icalparameter_new_partstat(ICAL_PARTSTAT_NEEDSACTION));
+            }
+        }
+        else {
+            param = icalparameter_new_rsvp(ICAL_RSVP_FALSE);
+        }
+        icalproperty_add_parameter(prop, param);
+    }
+    else if (JNOTNULL(expectReply)) {
+        invalidprop(ctx, "expectReply");
+    }
+
+    /* delegatedTo */
+    json_t *delegatedTo = json_object_get(jpart, "delegatedTo");
+    if (json_object_size(delegatedTo)) {
+        const char *id;
+        json_t *jval;
+        json_object_foreach(delegatedTo, id, jval) {
+            json_t *delegatee = json_object_get(participants, id);
+            if (is_valid_jmapid(id) && delegatee && jval == json_true()) {
+                const char *uri = hash_lookup(id, caladdress_by_participant_id);
+                if (uri) {
+                    icalproperty_add_parameter(prop, icalparameter_new_delegatedto(uri));
+                }
+            }
+            else {
+                beginprop_key(ctx, "delegatedTo", id);
+                invalidprop(ctx, NULL);
+                endprop(ctx);
+            }
+        }
+    }
+    else if (JNOTNULL(delegatedTo)) {
+        invalidprop(ctx, "delegatedTo");
+    }
+
+    /* delegatedFrom */
+    json_t *delegatedFrom = json_object_get(jpart, "delegatedFrom");
+    if (json_object_size(delegatedFrom)) {
+        const char *id;
+        json_t *jval;
+        json_object_foreach(delegatedFrom, id, jval) {
+            json_t *delegator = json_object_get(participants, id);
+            if (is_valid_jmapid(id) && delegator && jval == json_true()) {
+                const char *uri = hash_lookup(id, caladdress_by_participant_id);
+                if (uri) {
+                    icalproperty_add_parameter(prop, icalparameter_new_delegatedfrom(uri));
+                }
+            }
+            else {
+                beginprop_key(ctx, "delegatedFrom", id);
+                invalidprop(ctx, NULL);
+                endprop(ctx);
+            }
+        }
+    }
+    else if (JNOTNULL(delegatedFrom)) {
+        invalidprop(ctx, "delegatedFrom");
+    }
+
+    /* memberOf */
+    json_t *memberOf = json_object_get(jpart, "memberOf");
+    if (json_object_size(memberOf)) {
+        const char *id;
+        json_t *jval;
+        json_object_foreach(memberOf, id, jval) {
+            json_t *group = json_object_get(participants, id);
+            if (is_valid_jmapid(id) && group && jval == json_true()) {
+                const char *uri = hash_lookup(id, caladdress_by_participant_id);
+                if (uri) {
+                    icalproperty_add_parameter(prop, icalparameter_new_member(uri));
+                }
+            }
+            else {
+                beginprop_key(ctx, "memberOf", id);
+                invalidprop(ctx, NULL);
+                endprop(ctx);
+            }
+        }
+    }
+    else if (JNOTNULL(memberOf)) {
+        invalidprop(ctx, "memberOf");
+    }
+
+    /* linkIds */
+    json_t *linkIds = json_object_get(jpart, "linkIds");
+    if (json_object_size(linkIds)) {
+        const char *id;
+        json_t *jval;
+        json_object_foreach(linkIds, id, jval) {
+            if (!is_valid_jmapid(id) || !json_object_get(links, id) || jval != json_true()) {
+                beginprop_key(ctx, "linkIds", id);
+                invalidprop(ctx, NULL);
+                endprop(ctx);
+                continue;
+            }
+            set_icalxparam(prop, JMAPICAL_XPARAM_LINKID, id, 0);
+        }
+    }
+    else if (JNOTNULL(linkIds)) {
+        invalidprop(ctx, "linkIds");
+    }
+
+    /* scheduleSequence */
+    json_t *scheduleSequence = json_object_get(jpart, "scheduleSequence");
+    if (json_is_integer(scheduleSequence) && json_integer_value(scheduleSequence) >= 0) {
+        struct buf buf = BUF_INITIALIZER;
+        buf_printf(&buf, "%lld", json_integer_value(scheduleSequence));
+        set_icalxparam(prop, JMAPICAL_XPARAM_SEQUENCE, buf_cstring(&buf), 0);
+        buf_free(&buf);
+    }
+    else if (JNOTNULL(scheduleSequence)) {
+        invalidprop(ctx, "scheduleSequence");
+    }
+
+    /* scheduleUpdated */
+    json_t *scheduleUpdated = json_object_get(jpart, "scheduleUpdated");
+    if (json_is_string(scheduleUpdated)) {
+        const char *s = json_string_value(scheduleUpdated);
+        icaltimetype dtstamp;
+        if (utcdate_to_icaltime(s, &dtstamp)) {
+            char *tmp = icaltime_as_ical_string_r(dtstamp);
+            set_icalxparam(prop, JMAPICAL_XPARAM_DTSTAMP, tmp, 0);
+            free(tmp);
+        }
+        else {
+            invalidprop(ctx, "scheduleSequence");
+        }
+    }
+    else if (JNOTNULL(scheduleUpdated)) {
+        invalidprop(ctx, "scheduleSequence");
+    }
+
+    if (is_orga) {
+        /* We might get away by not creating an ATTENDEE, if the
+         * participant is owner of the event and all its JSCalendar
+         * properties can be mapped to the ORGANIZER property. */
+        json_t *jorga = participant_from_icalorganizer(orga);
+        if (participant_equals(jorga, jpart)) {
+            icalproperty_free(prop);
+            prop = NULL;
+        }
+        json_decref(jorga);
+        if (!prop) return;
+    }
+
+    icalcomponent_add_property(comp, prop);
 }
 
 /* Create or update the ORGANIZER and ATTENDEEs in the VEVENT component comp as
@@ -3250,6 +3300,30 @@ participants_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     }
     endprop(ctx);
 
+    /* Map participant ids to their iCalendar CALADDRESS */
+    hash_table caladdress_by_participant_id = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&caladdress_by_participant_id, json_object_size(participants)+1, 0);
+    json_object_foreach(participants, key, jval) {
+        if (!is_valid_jmapid(key)) continue;
+        char *caladdress = NULL;
+        json_t *sendTo = json_object_get(jval, "sendTo");
+        if (json_object_get(sendTo, "imip")) {
+            caladdress = xstrdup(json_string_value(json_object_get(sendTo, "imip")));
+        }
+        else if (json_object_get(sendTo, "other")) {
+            caladdress = xstrdup(json_string_value(json_object_get(sendTo, "imip")));
+        }
+        else if (json_object_size(sendTo)) {
+            const char *anymethod = json_object_iter_key(json_object_iter(sendTo));
+            caladdress = xstrdup(json_string_value(json_object_get(sendTo, anymethod)));
+        }
+        else if (json_object_get(jval, "email")) {
+            caladdress = mailaddr_to_uri(json_string_value(json_object_get(jval, "email")));
+        }
+        if (!caladdress) continue; /* reported later as error */
+        hash_insert(key, caladdress, &caladdress_by_participant_id);
+    }
+
     /* Pick the ORGANIZER URI */
     const char *orga_method = NULL;
     if (json_object_get(replyTo, "imip")) {
@@ -3277,33 +3351,10 @@ participants_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         buf_free(&buf);
     }
     icalcomponent_add_property(comp, orga);
-    json_t *jorga = participant_from_icalorganizer(orga);
 
-    /* Map participant ids to their iCalendar CALADDRESS */
-    hash_table caladdress_by_participant_id = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&caladdress_by_participant_id, json_object_size(participants)+1, 0);
-    json_object_foreach(participants, key, jval) {
-        if (!is_valid_jmapid(key)) continue;
-        char *caladdress = NULL;
-        json_t *sendTo = json_object_get(jval, "sendTo");
-        if (json_object_get(sendTo, "imip")) {
-            caladdress = xstrdup(json_string_value(json_object_get(sendTo, "imip")));
-        }
-        else if (json_object_get(sendTo, "other")) {
-            caladdress = xstrdup(json_string_value(json_object_get(sendTo, "imip")));
-        }
-        else if (json_object_size(sendTo)) {
-            const char *anymethod = json_object_iter_key(json_object_iter(sendTo));
-            caladdress = xstrdup(json_string_value(json_object_get(sendTo, anymethod)));
-        }
-        else if (json_object_get(jval, "email")) {
-            caladdress = mailaddr_to_uri(json_string_value(json_object_get(jval, "email")));
-        }
-        if (!caladdress) continue; /* reported later as error */
-        hash_insert(key, caladdress, &caladdress_by_participant_id);
-    }
 
     /* Process participants */
+    json_t *links = json_object_get(event, "links");
     json_object_foreach(participants, key, jval) {
         beginprop_key(ctx, "participants", key);
         if (!is_valid_jmapid(key)) {
@@ -3320,22 +3371,9 @@ participants_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
             continue;
         }
 
-        /* Either reuse the ORGANIZER or create an ATTENDEE. */
-        icalproperty *prop = NULL;
-        if (participant_equals(jorga, jval)) {
-            prop = orga;
-        }
-        else {
-            prop = icalproperty_new_attendee(caladdress);
-            icalcomponent_add_property(comp, prop);
-        }
-        set_icalxparam(prop, JMAPICAL_XPARAM_ID, key, 1);
-
         /* Map participant to iCalendar */
-        json_t *links = json_object_get(event, "links");
-        participant_to_ical(ctx, prop, jval, participants, links,
-                            /* is_replyto */prop == orga,
-                            &caladdress_by_participant_id);
+        participant_to_ical(ctx, comp, key, jval, participants, links,
+                            orga_uri, &caladdress_by_participant_id);
         endprop(ctx);
     }
 
