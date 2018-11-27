@@ -2494,6 +2494,54 @@ sub test_calendarevent_set_participants_patch
     $self->assert_normalized_event_equals($ret, $event);
 }
 
+sub test_calendarevent_set_participants_organame
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $event =  {
+        "calendarId" => $calid,
+        "title"=> "title",
+        "description"=> "description",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/London",
+        "isAllDay"=> JSON::false,
+        "freeBusyStatus"=> "busy",
+        "status" => "confirmed",
+        "replyTo" => {
+            "imip" => "mailto:foo\@local",
+        },
+        "participants" => {
+            'foo' => {
+                name => 'Foo',
+                email => 'foo@local',
+                roles => {
+                    'owner' => JSON::true,
+                },
+                sendTo => {
+                    imip => 'mailto:foo@local',
+                }
+            },
+            'bar' => {
+                name => 'Bar',
+                email => 'bar@local',
+                kind => 'individual',
+                roles => {
+                    'attendee' => JSON::true,
+                },
+            },
+        },
+    };
+
+    my $ret = $self->createandget_event($event);
+    $event->{participants}{bar}{sendTo}{imip} = 'mailto:bar@local';
+    $self->assert_normalized_event_equals($ret, $event);
+}
+
 sub test_calendarevent_set_alerts
     :min_version_3_1 :needs_component_jmap
 {
