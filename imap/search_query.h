@@ -1,6 +1,6 @@
-/* search_result.h -- search result data structure
+/* search_query.h -- search query routines
  *
- * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2018 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
