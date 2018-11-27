@@ -3813,6 +3813,126 @@ static int index_fetchannotations(struct index_state *state,
     return r;
 }
 
+struct fetch_mailbox_rock {
+    struct index_state *state;
+    int sep;
+    int wantname;
+    const struct fetchargs *fetchargs;
+};
+
+static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
+{
+    static const int needrights = ACL_READ|ACL_LOOKUP;
+    struct fetch_mailbox_rock *fmb_rock = (struct fetch_mailbox_rock *) rock;
+    mbentry_t *mbentry = NULL;
+    int myrights = 0;
+    struct mailbox *mailbox = NULL;
+    msgrecord_t *msgrecord = NULL;
+    char *extname = NULL;
+    int r = 0;
+
+    assert(fmb_rock->state != NULL);
+    assert(fmb_rock->fetchargs != NULL);
+
+    /* convdb has flags: skip if flag deleted or flag internal expunged */
+    if (rec->version >= 1) {
+        if ((rec->system_flags & FLAG_DELETED)
+            || (rec->internal_flags & FLAG_INTERNAL_EXPUNGED))
+            goto done;
+    }
+
+    /* make sure we have appropriate rights */
+    r = mboxlist_lookup(rec->mboxname, &mbentry, NULL);
+    if (r) goto done;
+    myrights = cyrus_acl_myrights(fmb_rock->state->authstate, mbentry->acl);
+    if ((myrights & needrights) != needrights)
+        goto done;
+
+    /* convdb does not have flags: grab them from message record */
+    if (rec->version == 0) {
+        uint32_t system_flags, internal_flags;
+
+        r = mailbox_open_irl(rec->mboxname, &mailbox);
+        if (r) goto done;
+
+        r = msgrecord_find(mailbox, rec->uid, &msgrecord);
+        if (r) goto done;
+
+        r = msgrecord_get_systemflags(msgrecord, &system_flags);
+        if (!r) r = msgrecord_get_internalflags(msgrecord, &internal_flags);
+        if (r) goto done;
+
+        if ((system_flags & FLAG_DELETED)
+            || (internal_flags & FLAG_INTERNAL_EXPUNGED))
+            goto done;
+    }
+
+    if (fmb_rock->wantname) {
+        extname = mboxname_to_external(rec->mboxname,
+                                       fmb_rock->fetchargs->namespace,
+                                       fmb_rock->fetchargs->userid);
+    }
+
+    if (fmb_rock->sep)
+        prot_putc(fmb_rock->sep, fmb_rock->state->out);
+    prot_printf(fmb_rock->state->out, "%s",
+                fmb_rock->wantname ? extname : mbentry->uniqueid);
+    fmb_rock->sep = ' ';
+
+done:
+    if (extname) free(extname);
+    if (msgrecord) msgrecord_unref(&msgrecord);
+    if (mailbox) mailbox_close(&mailbox);
+    if (mbentry) mboxlist_entry_free(&mbentry);
+    return r;
+}
+
+/*
+ * Helper function to send FETCH data for the MAILBOXES
+ * fetch item.
+ */
+static int index_fetchmailboxes(struct index_state *state,
+                                uint32_t msgno,
+                                const struct fetchargs *fetchargs)
+{
+    struct fetch_mailbox_rock rock = { state, 0, /*wantname*/ 1, fetchargs};
+    struct index_record record;
+    int r;
+
+    if (!fetchargs->convstate) return 0;
+
+    r = index_reload_record(state, msgno, &record);
+    if (r) return r;
+
+    return conversations_guid_foreach(fetchargs->convstate,
+                                      message_guid_encode(&record.guid),
+                                      &fetch_mailbox_cb,
+                                      &rock);
+}
+
+/*
+ * Helper function to send FETCH data for the MAILBOXIDS
+ * fetch item.
+ */
+static int index_fetchmailboxids(struct index_state *state,
+                                 uint32_t msgno,
+                                 const struct fetchargs *fetchargs)
+{
+    struct fetch_mailbox_rock rock = { state, 0, /*wantname*/ 0, fetchargs};
+    struct index_record record;
+    int r;
+
+    if (!fetchargs->convstate) return 0;
+
+    r = index_reload_record(state, msgno, &record);
+    if (r) return r;
+
+    return conversations_guid_foreach(fetchargs->convstate,
+                                      message_guid_encode(&record.guid),
+                                      &fetch_mailbox_cb,
+                                      &rock);
+}
+
 /*
  * Helper function to send * FETCH (FLAGS data.
  * Does not send the terminating close paren or CRLF.
@@ -4107,6 +4227,22 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         prot_printf(state->out, "%cUIDVALIDITY %u", sepchar,
                     state->mailbox->i.uidvalidity);
         sepchar = ' ';
+    }
+    if (config_getswitch(IMAPOPT_CONVERSATIONS)) {
+        if (fetchitems & FETCH_MAILBOXES) {
+            prot_printf(state->out, "%cMAILBOXES (", sepchar);
+            r = index_fetchmailboxes(state, msgno, fetchargs);
+            r = 0;
+            prot_printf(state->out, ")");
+            sepchar = ' ';
+        }
+        if (fetchitems & FETCH_MAILBOXIDS) {
+            prot_printf(state->out, "%cMAILBOXIDS (", sepchar);
+            r = index_fetchmailboxids(state, msgno, fetchargs);
+            r = 0;
+            prot_printf(state->out, ")");
+            sepchar = ' ';
+        }
     }
     if (fetchitems & FETCH_ENVELOPE) {
         if (!mailbox_cacherecord(mailbox, &record)) {

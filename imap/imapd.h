@@ -105,6 +105,7 @@ struct fetchargs {
     int isadmin;
     struct auth_state *authstate;
     hash_table *cidhash;          /* for XCONVFETCH */
+    struct conversations_state *convstate; /* for FETCH_MAILBOXIDS */
 };
 
 /* Bitmasks for fetchitems */
@@ -134,7 +135,11 @@ enum {
     FETCH_EMAILID =             (1<<22),
     FETCH_THREADID =            (1<<23),
     FETCH_SAVEDATE =            (1<<24),
-    FETCH_CREATEDMODSEQ =       (1<<25)
+    FETCH_CREATEDMODSEQ =       (1<<25),
+    FETCH_MAILBOXIDS =          (1<<26),
+    FETCH_MAILBOXES =           (1<<27),
+
+    /* XXX fetchitems is an int, we're running low on bits */
 };
 
 enum {
