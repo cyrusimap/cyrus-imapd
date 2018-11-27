@@ -1,0 +1,67 @@
+:tocdepth: 3
+
+==========================
+Cyrus IMAP 3.1.6 Tag Notes
+==========================
+
+Unavailable for download as this is a development branch only.
+
+Access is via git.
+
+.. warning::
+
+    This should be considered for
+    **testing purposes** and **bleeding-edge features** only. We will try to tag these
+    snapshots at coherent development points, but there will generally be **large
+    breaking changes** occurring between releases in this series.
+
+.. _relnotes-3.1.6-changes:
+
+Major changes since the 3.0.x series
+====================================
+
+* Sieve bug fixes and features.
+* Caldav and Carddav improvements.
+* JMAP improvements.
+* Xapian bug fixes.
+* Improvements to Annotations handling.
+* DRAC support has been deprecated.
+* Support for Prometheus stats.
+* Support for the Sphinx backend to squatter searches has been removed.
+* new cyrus.index format v16 included in 3.1.5 - adds unseen count and
+  createdmodseq to index header, savedate and createdmodseq to index records
+* Support for WebSockets
+* Support for HTTP/2.0
+* Support for Zeroskip database format
+* Intermediate mailboxes are now recorded in mailboxes database
+* Conversations database format update - adds flags and internaldate fields,
+  and is now versioned for future-compatibility.  You will need to rebuild
+  your conversations databases with :cyrusman:`ctl_conversationsdb(8)` and
+  the `-b` switch to benefit from this.
+
+
+Updates to default configuration
+================================
+
+* The `specialusealways` option is now enabled by default. It must
+  explicitly be disabled for interoperability with legacy clients that
+  can't handle RFC 6154 attributes in extended LIST commands.
+* The values accepted by `expunge_mode` have changed, please see the
+  documentation for more information about the changes.
+* The legacy GETANNOTATIONS/SETANNOTATIONS IMAP commands will no longer
+  work unless `annotation_enable_legacy_commands` is enabled
+
+Security fixes
+==============
+* Contains fix for CVE-2017-14230.
+  [ http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-14230 ]
+
+Significant bugfixes
+====================
+
+*
+
+
+.. _Xapian: https://xapian.org
+.. _ClamAV: https://www.clamav.net
+.. _JMAP: http://jmap.io
