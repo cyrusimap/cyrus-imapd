@@ -137,6 +137,7 @@ sub test_settings
     $self->assert_not_null($settings->{apiUrl});
     $self->assert_not_null($settings->{downloadUrl});
     $self->assert_not_null($settings->{uploadUrl});
+    $self->assert_not_null($settings->{state});
     $self->assert(exists $settings->{capabilities}->{"urn:ietf:params:jmap:core"});
     $self->assert(exists $settings->{capabilities}->{"urn:ietf:params:jmap:mail"});
     $self->assert(exists $settings->{capabilities}->{"http://cyrusimap.org/ns/quota"});
@@ -327,6 +328,43 @@ sub test_echo
     $self->assert_str_equals('Core/echo', $res->[0][0]);
     $self->assert_deep_equals($req, $res->[0][1]);
     $self->assert_str_equals('R1', $res->[0][2]);
+}
+
+sub test_sessionstate
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user("other");
+
+    # Fetch sessionState
+    my $JMAPRequest = {
+        using => ['urn:ietf:params:jmap:core'],
+        methodCalls => [['Core/echo', { }, 'R1']],
+    };
+    my $JMAPResponse = $jmap->Request($JMAPRequest);
+    $self->assert_not_null($JMAPResponse->{sessionState});
+    my $sessionState = $JMAPResponse->{sessionState};
+
+    # Update ACL
+    $admintalk->setacl("user.other", "cassandane", "lr") or die;
+
+    # Fetch sessionState
+    $JMAPResponse = $jmap->Request($JMAPRequest);
+    $self->assert_str_not_equals($sessionState, $JMAPResponse->{sessionState});
+    $sessionState = $JMAPResponse->{sessionState};
+
+    # Update ACL
+    $admintalk->setacl("user.other", "cassandane", "") or die;
+
+    # Fetch sessionState
+    $JMAPResponse = $jmap->Request($JMAPRequest);
+    $self->assert_str_not_equals($sessionState, $JMAPResponse->{sessionState});
+    $sessionState = $JMAPResponse->{sessionState};
 }
 
 
