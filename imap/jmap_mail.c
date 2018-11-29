@@ -4057,7 +4057,7 @@ static int _cyrusmsg_need_part0(struct cyrusmsg *msg)
     if (!msg->mr)
         return IMAP_INTERNAL;
 
-    int r = msgrecord_get_bodystructure(msg->mr, &msg->_mybody);
+    int r = msgrecord_extract_bodystructure(msg->mr, &msg->_mybody);
     if (r) return r;
     msg->part0 = msg->_mybody;
     return 0;

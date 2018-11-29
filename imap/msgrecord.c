@@ -431,7 +431,7 @@ EXPORTED int msgrecord_get_body(msgrecord_t *mr, struct buf *buf)
     return 0;
 }
 
-EXPORTED int msgrecord_get_bodystructure(msgrecord_t *mr, struct body **body)
+EXPORTED int msgrecord_extract_bodystructure(msgrecord_t *mr, struct body **body)
 {
     int r = msgrecord_need(mr, M_CACHE);
     if (r) return r;

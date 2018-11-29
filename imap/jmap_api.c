@@ -998,7 +998,7 @@ HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
         goto done;
     }
 
-    r = msgrecord_get_bodystructure(data.mr, &mybody);
+    r = msgrecord_extract_bodystructure(data.mr, &mybody);
     if (r) goto done;
 
     /* Find part containing the data */

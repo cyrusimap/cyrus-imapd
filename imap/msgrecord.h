@@ -65,7 +65,6 @@ extern void msgrecord_set_from_recno(struct mailbox *mbox, uint32_t recno, msgre
 
 /* Getters: all pointer values are owned by msgrecord */
 extern int msgrecord_get_body(msgrecord_t *mr, struct buf *buf);
-extern int msgrecord_get_bodystructure(msgrecord_t *mr, struct body **body);
 extern int msgrecord_get_cid(msgrecord_t *mr, bit64 *cid);
 extern int msgrecord_get_guid(msgrecord_t *mr, struct message_guid *guid);
 extern int msgrecord_get_uid(msgrecord_t *mr, uint32_t *uid);
@@ -86,7 +85,10 @@ extern int msgrecord_get_fname(msgrecord_t *mr, const char **fname);
 extern int msgrecord_get_cache_env(msgrecord_t *mr, int token, char **tok);
 extern int msgrecord_get_cache_item(msgrecord_t *mr, int field, char **item);
 extern int msgrecord_get_mailbox(msgrecord_t *mr, struct mailbox **mailboxptr);
+
+/* Extract: all pointer values are owned by caller */
 extern int msgrecord_extract_flags(msgrecord_t *mr, const char *userid, strarray_t **flags);
+extern int msgrecord_extract_bodystructure(msgrecord_t *mr, struct body **body);
 
 extern int msgrecord_load_cache(msgrecord_t *mr);
 

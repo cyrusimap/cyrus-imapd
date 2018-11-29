@@ -1176,7 +1176,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         const char *resource = NULL;
         struct param *param;
 
-        r = msgrecord_get_bodystructure(msgrec, &body);
+        r = msgrecord_extract_bodystructure(msgrec, &body);
         if (r) return;
 
         for (param = body->disposition_params; param; param = param->next) {
@@ -1209,6 +1209,9 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
                 FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(""));
             }
         }
+
+        if (body) message_free_body(body);
+        free(body);
     }
 #endif // WITH_DAV
 }
