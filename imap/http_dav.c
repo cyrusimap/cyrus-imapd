@@ -3176,12 +3176,6 @@ static int allprop_cb(const char *mailbox __attribute__((unused)),
 
     /* Look for an instance of this namespace in our response */
     ns = hash_lookup(href, arock->fctx->ns_table);
-    if (!ns) {
-        char prefix[5];
-        snprintf(prefix, sizeof(prefix), "X%u", arock->fctx->prefix_count++);
-        ns = xmlNewNs(arock->fctx->root, BAD_CAST href, BAD_CAST prefix);
-        hash_insert(href, ns, arock->fctx->ns_table);
-    }
 
     /* XXX - can return the same property multiple times with annotate masks! */
 
@@ -3189,6 +3183,11 @@ static int allprop_cb(const char *mailbox __attribute__((unused)),
     node = xml_add_prop(HTTP_OK, arock->fctx->ns[NS_DAV],
                         &arock->propstat[PROPSTAT_OK],
                         BAD_CAST name, ns, NULL, 0);
+    if (!ns) {
+        char prefix[9];
+        snprintf(prefix, sizeof(prefix), "X%X", strhash(href));
+        xmlSetNs(node, xmlNewNs(node, BAD_CAST href, BAD_CAST prefix));
+    }
 
     if (arock->fctx->mode == PROPFIND_ALL) {
         xmlAddChild(node, xmlNewCDataBlock(arock->fctx->root->doc,
