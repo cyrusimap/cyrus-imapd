@@ -11516,4 +11516,91 @@ sub test_implementation_email_query
     $self->assert(not $res->[0][1]{canCalculateChanges});
 }
 
+sub _set_quotaroot
+{
+    my ($self, $quotaroot) = @_;
+    $self->{quotaroot} = $quotaroot;
+}
+
+sub _set_quotalimits
+{
+    my ($self, %resources) = @_;
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $quotaroot = delete $resources{quotaroot} || $self->{quotaroot};
+    my @quotalist;
+    foreach my $resource (keys %resources)
+    {
+        my $limit = $resources{$resource}
+            or die "No limit specified for $resource";
+        push(@quotalist, uc($resource), $limit);
+    }
+    $self->{limits}->{$quotaroot} = { @quotalist };
+    $admintalk->setquota($quotaroot, \@quotalist);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+}
+
+sub test_email_set_getquota
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    $self->_set_quotaroot('user.cassandane');
+    xlog "set ourselves a basic limit";
+    $self->_set_quotalimits(storage => 1000); # that's 1000 * 1024 bytes
+
+    my $jmap = $self->{jmap};
+    my $service = $self->{instance}->get_service("http");
+    my $inboxId = $self->getinbox()->{id};
+
+    my $res;
+
+    $res = $jmap->CallMethods([
+        ['Quota/get', {
+            accountId => 'cassandane',
+            ids => undef,
+        }, 'R1'],
+    ]);
+
+    my $mailQuota = $res->[0][1]{list}[0];
+    $self->assert_str_equals('mail', $mailQuota->{id});
+    $self->assert_num_equals(0, $mailQuota->{used});
+    $self->assert_num_equals(1000 * 1024, $mailQuota->{total});
+    my $quotaState = $res->[0][1]{state};
+    $self->assert_not_null($quotaState);
+
+    xlog "Create email";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                msgA1 => {
+                    mailboxIds => {
+                        $inboxId => JSON::true,
+                    },
+                    from => [{
+                            email => q{test1@local},
+                            name => q{}
+                        }],
+                    to => [{
+                            email => q{test2@local},
+                            name => '',
+                        }],
+                    subject => 'foo',
+                    keywords => {
+                        '$seen' => JSON::true,
+                    },
+                },
+            }
+        }, "R1"],
+    ], ['http://cyrusimap.org/ns/quota']);
+
+    $self->assert_str_equals('Quota/get', $res->[1][0]);
+    $mailQuota = $res->[1][1]{list}[0];
+    $self->assert_str_equals('mail', $mailQuota->{id});
+    $self->assert_num_not_equals(0, $mailQuota->{used});
+    $self->assert_num_equals(1000 * 1024, $mailQuota->{total});
+    $self->assert_str_not_equals($quotaState, $res->[1][1]{state});
+}
+
+
 1;

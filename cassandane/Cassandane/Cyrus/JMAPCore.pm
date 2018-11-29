@@ -139,6 +139,7 @@ sub test_settings
     $self->assert_not_null($settings->{uploadUrl});
     $self->assert(exists $settings->{capabilities}->{"urn:ietf:params:jmap:core"});
     $self->assert(exists $settings->{capabilities}->{"urn:ietf:params:jmap:mail"});
+    $self->assert(exists $settings->{capabilities}->{"http://cyrusimap.org/ns/quota"});
 
     my $cap = $settings->{capabilities}->{"urn:ietf:params:jmap:core"};
     $self->assert($cap->{maxSizeUpload} > 0);
@@ -191,6 +192,7 @@ sub test_settings
     $self->assert_equals(JSON::false, $acc->{isReadOnly});
     $self->assert_num_equals(2, scalar @{$acc->{hasDataFor}});
     $self->assert_str_equals('urn:ietf:params:jmap:mail', $acc->{hasDataFor}[0]);
+
 }
 
 sub test_blob_download
