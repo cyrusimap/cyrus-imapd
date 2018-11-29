@@ -1636,9 +1636,17 @@ alerts_from_ical(context_t *ctx, icalcomponent *comp)
          alarm;
          alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
 
-        icalproperty* prop = NULL;
         icalparameter *param = NULL;
         const char *uid = NULL;
+
+        /* Ignore alarms with NONE action. */
+        icalproperty *prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
+        if (prop) {
+            icalvalue *val = icalproperty_get_value(prop);
+            if (val && !strcasecmp(icalvalue_as_ical_string(val), "NONE")) {
+                continue;
+            }
+        }
 
         /* Check for RELATED-TO property... */
         prop = icalcomponent_get_first_property(alarm, ICAL_RELATEDTO_PROPERTY);
@@ -1718,11 +1726,8 @@ alerts_from_ical(context_t *ctx, icalcomponent *comp)
         /*  action */
         const char *action = "display";
         prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
-        if (prop) {
-            icalvalue* val = icalproperty_get_value(prop);
-            if (val && icalvalue_get_action(val) == ICAL_ACTION_EMAIL) {
-                action = "email";
-            }
+        if (prop && icalproperty_get_action(prop) == ICAL_ACTION_EMAIL) {
+            action = "email";
         }
         json_object_set_new(alert, "action", json_string(action));
 
