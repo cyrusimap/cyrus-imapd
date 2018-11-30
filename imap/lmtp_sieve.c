@@ -414,7 +414,7 @@ static int sieve_redirect(void *ac,
     /* if we have a msgid, we can track our redirects */
     if (m->id) {
         snprintf(buf, sizeof(buf), "%s-%s", m->id, rc->addr);
-        sievedb = make_sieve_db(mbname_userid(sd->mbname));
+        sievedb = make_sieve_db(mbname_recipient(sd->mbname, ((deliver_data_t *) mc)->ns));
 
         dkey.id = buf;
         dkey.to = sievedb;
@@ -735,7 +735,7 @@ static int send_response(void *ac,
     while (waitpid(sm_pid, &sm_stat, 0) < 0);
 
     if (sm_stat == 0) { /* sendmail exit value */
-        sievedb = make_sieve_db(mbname_userid(sdata->mbname));
+        sievedb = make_sieve_db(mbname_recipient(sdata->mbname, ((deliver_data_t *) mc)->ns));
 
         dkey.id = outmsgid;
         dkey.to = sievedb;
