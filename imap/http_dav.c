@@ -3184,6 +3184,8 @@ static int allprop_cb(const char *mailbox __attribute__((unused)),
                         &arock->propstat[PROPSTAT_OK],
                         BAD_CAST name, ns, NULL, 0);
     if (!ns) {
+        /* Add the namespace directly to the property -
+           its too late to add it to the root when chunking the responses */
         char prefix[9];
         snprintf(prefix, sizeof(prefix), "X%X", strhash(href));
         xmlSetNs(node, xmlNewNs(node, BAD_CAST href, BAD_CAST prefix));
