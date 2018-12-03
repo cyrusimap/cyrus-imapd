@@ -2866,6 +2866,24 @@ participant_equals(json_t *jpart1, json_t *jpart2)
     /* Special-case sendTo URI values */
     json_t *jsendTo1 = json_object_get(jpart1, "sendTo");
     json_t *jsendTo2 = json_object_get(jpart2, "sendTo");
+    if (jsendTo1 == NULL || jsendTo1 == json_null()) {
+        json_t *jemail = json_object_get(jpart1, "email");
+        if (json_is_string(jemail)) {
+            char *tmp = strconcat("mailto:", json_string_value(jemail), NULL);
+            json_object_set_new(jpart1, "sendTo", json_pack("{s:s}", "imip", tmp));
+            free(tmp);
+        }
+        jsendTo1 = json_object_get(jpart1, "sendTo");
+    }
+    if (jsendTo2 == NULL || jsendTo2 == json_null()) {
+        json_t *jemail = json_object_get(jpart2, "email");
+        if (json_is_string(jemail)) {
+            char *tmp = strconcat("mailto:", json_string_value(jemail), NULL);
+            json_object_set_new(jpart2, "sendTo", json_pack("{s:s}", "imip", tmp));
+            free(tmp);
+        }
+        jsendTo2 = json_object_get(jpart2, "sendTo");
+    }
     if (json_object_size(jsendTo1) != json_object_size(jsendTo2)) return 0;
     if (JNOTNULL(jsendTo1)) {
         json_t *juri1;
