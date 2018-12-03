@@ -1045,69 +1045,6 @@ sub test_email_set_issue2293
     $self->assert_deep_equals($email->{to}, $ret->{to});
 }
 
-sub test_email_set_inreplyto
-    :min_version_3_1 :needs_component_jmap
-{
-    my ($self) = @_;
-    my $jmap = $self->{jmap};
-
-    my $store = $self->{store};
-    my $talk = $store->get_client();
-
-    my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
-    my $origid = $res->[0][1]{list}[0]{id};
-
-    xlog "Create email to reply to";
-    $self->make_message("foo") || die;
-    $res = $jmap->CallMethods([
-        ['Email/query', { }, "R1"],
-        ['Email/get', {
-            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
-            properties => [ 'id', 'messageId' ],
-        }, 'R2'],
-    ]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
-
-    my $orig_msg = $res->[1][1]->{list}[0];
-    my $orig_id = $orig_msg->{id};
-    my $orig_msgid = $orig_msg->{messageId}[0];
-    $self->assert(not exists $orig_msg->{keywords}->{'$answered'});
-
-    xlog "create drafts mailbox";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { create => { "1" => {
-                            name => "drafts",
-                            parentId => undef,
-                            role => "drafts"
-             }}}, "R1"]
-    ]);
-    my $draftsmbox = $res->[0][1]{created}{"1"}{id};
-
-    my $draft =  {
-        mailboxIds =>  { $draftsmbox => JSON::true },
-        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
-        to => [
-            { name => "Bugs Bunny", email => "bugs\@acme.local" },
-        ],
-        subject => "Memo",
-        textBody => [{ partId => '1' }],
-        bodyValues => { '1' => { value => "I'm givin' ya one last chance ta surrenda!" }},
-        inReplyTo => [ $orig_msgid ],
-        keywords => { '$Draft' => JSON::true },
-    };
-
-    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $draft }}, "R1"]]);
-    my $id = $res->[0][1]{created}{"1"}{id};
-
-    $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
-    my $msg = $res->[0][1]->{list}[0];
-    $self->assert_str_equals($orig_msgid, $msg->{inReplyTo}[0]);
-
-    $res = $jmap->CallMethods([['Email/get', { ids => [$orig_id] }, "R1"]]);
-    $orig_msg = $res->[0][1]->{list}[0];
-    $self->assert_equals(JSON::true, $orig_msg->{keywords}->{'$answered'});
-}
-
 sub test_email_set_bodystructure
     :min_version_3_1 :needs_component_jmap
 {
