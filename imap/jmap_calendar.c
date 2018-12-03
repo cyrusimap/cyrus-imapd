@@ -1484,7 +1484,21 @@ static int setcalendarevents_schedule(jmap_req_t *req,
             sched_request(req->userid, *schedaddrp, oldical, ical);
         } else {
             /* Attendee scheduling object resource */
-            sched_reply(req->userid, *schedaddrp, oldical, ical);
+            int omit_reply = 0;
+            if (oldical && (mode & JMAP_DESTROY)) {
+                for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+                     prop;
+                     prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+                    const char *addr = icalproperty_get_attendee(prop);
+                    if (!addr || strncasecmp(addr, "mailto:", 7) || strcmp(addr + 7, *schedaddrp))
+                        continue;
+                    icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_PARTSTAT_PARAMETER);
+                    omit_reply = !param || icalparameter_get_partstat(param) == ICAL_PARTSTAT_NEEDSACTION;
+                    break;
+                }
+            }
+            if (!omit_reply)
+                sched_reply(req->userid, *schedaddrp, oldical, ical);
         }
     }
 
