@@ -99,6 +99,8 @@ static int json_error_response(struct transaction_t *txn, long tz_code,
                                struct strlist *param, icaltimetype *time);
 static struct buf *icaltimezone_as_tzif(icalcomponent* comp);
 static struct buf *icaltimezone_as_tzif_leap(icalcomponent* comp);
+static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
+                                         icaltimetype *startp, icaltimetype *endp);
 
 struct observance {
     const char *name;
@@ -1457,8 +1459,10 @@ static void truncate_vtimezone(icalcomponent *vtz,
 
                 if (trunc_dtstart) {
                     /* Bump RRULE start to 1 year prior to our window open */
-                    dtstart = start;
-                    dtstart.year--;
+                    dtstart.year = start.year - 1;
+                    dtstart.month = start.month;
+                    dtstart.day = start.day;
+                    icaltime_normalize(dtstart);
                 }
 
                 ritr = icalrecur_iterator_new(rrule, dtstart);
@@ -1528,6 +1532,11 @@ static void truncate_vtimezone(icalcomponent *vtz,
                             icalproperty_set_dtstart(dtstart_prop, recur);
                             dtstart = obs.onset;
                             trunc_dtstart = 0;
+
+                            if (last_dtstart &&
+                                icaltime_compare(dtstart, *last_dtstart) > 0) {
+                                *last_dtstart = dtstart;
+                            }
 
                             /* Check if new DSTART is within 1yr of UNTIL */
                             ydiff = rrule.until.year - recur.year;
@@ -1661,6 +1670,7 @@ static void truncate_vtimezone(icalcomponent *vtz,
         if (obsarray) {
             /* Add the tombstone to our array */
             tombstone.onset = start;
+            tombstone.is_gmt = tombstone.is_std = 1;
             icalarray_append(obsarray, &tombstone);
         }
 
@@ -1836,7 +1846,7 @@ static int action_get(struct transaction_t *txn)
         size_t msg_size = 0;
         icalcomponent *ical, *vtz;
         icalproperty *prop;
-        struct buf *buf;
+        struct buf *buf = NULL;
         int fd;
 
         /* Open, mmap, and parse the file */
@@ -1899,8 +1909,19 @@ static int action_get(struct transaction_t *txn)
             /* Add truncation parameter(s) to TZURL */
             buf_printf(&pathbuf, "?%s", URI_QUERY(txn->req_uri));
 
-            /* Truncate the VTIMEZONE */
-            truncate_vtimezone(vtz, &start, &end, NULL, NULL, NULL, NULL, NULL);
+            if (!strncmp(mime->content_type, "application/tzif", 16)) {
+                /* Truncate and convert the VTIMEZONE */
+                bit32 leapcnt = 0;
+
+                if (!strcmp(mime->content_type + 16, "-leap"))
+                    leapcnt = leap_seconds->count - 2;
+
+                buf =_icaltimezone_as_tzif(ical, leapcnt, &start, &end);
+            }
+            else {
+                /* Truncate the VTIMEZONE */
+                truncate_vtimezone(vtz, &start, &end, NULL, NULL, NULL, NULL, NULL);
+            }
         }
 
         /* Set TZURL property */
@@ -1908,7 +1929,7 @@ static int action_get(struct transaction_t *txn)
         icalcomponent_add_property(vtz, prop);
 
         /* Convert to requested MIME type */
-        buf = mime->from_object(ical);
+        if (!buf) buf = mime->from_object(ical);
         datalen = buf_len(buf);
         data = buf_release(buf);
         buf_destroy(buf);
@@ -2424,7 +2445,8 @@ static unsigned buf_append_rrule_as_posix_string(struct buf *buf,
 }
 
 /* Convert VTIMEZONE into tzif format (draft-murchison-tzdist-tzif) */
-static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt)
+static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
+                                         icaltimetype *startp, icaltimetype *endp)
 {
     icalcomponent *vtz, *eternal_std = NULL, *eternal_dst = NULL;
     icalarray *obsarray;
@@ -2461,9 +2483,12 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt)
         leap_init = leap->sec;
     }
 
+    if (!startp) startp = &start;
+    if (!endp || icaltime_is_null_time(*endp)) endp = &end;
+
     /* Create an array of observances */
     obsarray = icalarray_new(sizeof(struct observance), 100);
-    truncate_vtimezone(vtz, &start, &end, obsarray,
+    truncate_vtimezone(vtz, startp, endp, obsarray,
                        &proleptic, &eternal_std, &eternal_dst, &last_dtstart);
 
     /* Create an array of transitions */
@@ -2717,12 +2742,12 @@ static void tzdist_truncate_vtimezone(icalcomponent *vtz,
 
 static struct buf *icaltimezone_as_tzif(icalcomponent* ical)
 {
-    return _icaltimezone_as_tzif(ical, 0);
+    return _icaltimezone_as_tzif(ical, 0, NULL, NULL);
 }
 
 static struct buf *icaltimezone_as_tzif_leap(icalcomponent* ical)
 {
-    return _icaltimezone_as_tzif(ical, leap_seconds->count - 2);
+    return _icaltimezone_as_tzif(ical, leap_seconds->count - 2, NULL, NULL);
 }
 
 static icaltimezone *tz_from_tzid(const char *tzid)
