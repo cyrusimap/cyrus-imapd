@@ -46,7 +46,7 @@ Xapian requires a running :cyrusman:`squatter(8)` instance:
 
 * In :cyrusman:`cyrus.conf(5)` set up a daemon squatter to run: ::
 
-    START {
+    DAEMON {
       # run a rolling squatter
       squatter cmd="squatter -R"
     }
