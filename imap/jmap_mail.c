@@ -6022,88 +6022,6 @@ done:
     }
 }
 
-struct _email_set_answered_rock {
-    jmap_req_t* req;
-    const char *inreplyto;
-    int found;
-};
-
-static int _email_set_answered_cb(const conv_guidrec_t *rec, void *rock)
-{
-    struct _email_set_answered_rock *data = rock;
-    jmap_req_t *req = data->req;
-
-    struct mailbox *mbox = NULL;
-    msgrecord_t *mr = NULL;
-    struct buf buf = BUF_INITIALIZER;
-    int r;
-
-    if (rec->part) return 0;
-
-    r = jmap_openmbox(req, rec->mboxname, &mbox, 1);
-    if (r) return r;
-
-    r = msgrecord_find(mbox, rec->uid, &mr);
-    if (r) goto done;
-
-    /* Does this message-id match the one we are looking for? */
-    r = msgrecord_get_messageid(mr, &buf);
-    if (r || strcmp(data->inreplyto, buf_cstring(&buf))) goto done;
-
-    /* Ok, its the In-Reply-To message. Set the answered flag. */
-    r = msgrecord_add_systemflags(mr, FLAG_ANSWERED);
-    if (r) goto done;
-
-    /* Mark the message as found, but keep iterating. We might have
-     * the same message copied across mailboxes */
-    /* XXX could multiple GUIDs have the same Message-ID header value?*/
-    data->found = 1;
-
-    r = msgrecord_rewrite(mr);
-    if (r) goto done;
-
-done:
-    if (mr) msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
-    buf_free(&buf);
-    return r;
-}
-
-static int _email_set_answered(jmap_req_t *req, const char *inreplyto)
-{
-    int r = 0, i;
-    arrayu64_t cids = ARRAYU64_INITIALIZER;
-    conversation_t conv = CONVERSATION_INIT;
-    struct _email_set_answered_rock rock = { req, inreplyto, 0 /*found*/ };
-
-    r = conversations_get_msgid(req->cstate, inreplyto, &cids);
-    if (r) return r;
-
-    /* Iterate the threads returned for the inreplyto message-id. One
-     * of the entries is the message itself, which might have copies
-     * across mailboxes. */
-    for (i = 0; i < cids.count; i++) {
-        conversation_id_t cid = arrayu64_nth(&cids, i);
-        r = conversation_load_advanced(req->cstate, cid, &conv, CONV_WITHTHREAD);
-        if (r) continue;
-        struct conv_thread *thread = conv.thread;
-        while (thread) {
-            const char *guid = message_guid_encode(&thread->guid);
-            r = conversations_guid_foreach(req->cstate, guid, _email_set_answered_cb, &rock);
-            if (r) goto done;
-            if (rock.found) break;
-            thread = thread->next;
-        }
-        conversation_fini(&conv);
-    }
-
-done:
-    conversation_fini(&conv);
-    arrayu64_fini(&cids);
-    return r;
-
-}
-
 struct emailpart {
     /* Mandatory fields */
     struct headers headers;       /* raw headers */
@@ -7681,18 +7599,6 @@ static void _email_create(jmap_req_t *req,
                   email.has_attachment : 0, _email_to_mime, &email,
                   &detail, set_err);
     if (*set_err) goto done;
-
-    /* Update ANSWERED flags of replied-to messages */
-    json_t *jheaders = _headers_get(&email.headers, "In-Reply-To");
-    if (json_array_size(jheaders)) {
-        json_t *jheader = json_array_get(jheaders, 0);
-        struct buf buf = BUF_INITIALIZER;
-        buf_setcstr(&buf, json_string_value(json_object_get(jheader, "value")));
-        buf_trim(&buf);
-        r = _email_set_answered(req, buf_cstring(&buf));
-        buf_free(&buf);
-        if (r) goto done;
-    }
 
     /* Return newly created Email object */
     *new_email = json_pack("{s:s, s:s, s:s, s:i}",
