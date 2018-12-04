@@ -10371,7 +10371,7 @@ sub test_email_get_fixbrokenmessageids
     # An email with a folded reference id.
     my %params = (
         extra_headers => [
-            ['references', "<123\r\n\t456\@local>" ],
+            ['references', "<123\r\n\t456\@lo cal>" ],
         ],
     );
     $self->make_message("Email A", %params) || die;
