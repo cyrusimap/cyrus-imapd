@@ -320,8 +320,13 @@ static json_t *_header_as_date(const char *raw)
     if (!raw) return json_null();
 
     time_t t;
-    if (time_from_rfc5322(raw, &t, DATETIME_FULL) == -1)
-        return json_null();
+    if (time_from_rfc5322(raw, &t, DATETIME_FULL) == -1) {
+        if (!strchr(raw, '\r')) return json_null();
+        char *tmp = charset_unfold(raw, strlen(raw), CHARSET_UNFOLD_SKIPWS);
+        int r = time_from_rfc5322(tmp, &t, DATETIME_FULL);
+        free(tmp);
+        if (r == -1) return json_null();
+    }
 
     char cbuf[RFC3339_DATETIME_MAX+1];
     cbuf[RFC3339_DATETIME_MAX] = '\0';
@@ -364,22 +369,21 @@ static json_t *_header_as_messageids(const char *raw)
     if (!raw) return json_null();
 
     json_t *msgids = json_array();
-    struct buf buf = BUF_INITIALIZER;
     const char *lo = raw;
     while (*lo) {
         lo = strchr(lo, '<');
         if (!lo) break;
         const char *hi = strchr(lo + 1, '>');
         if (!hi) break;
-        buf_setmap(&buf, lo + 1, hi - lo - 1);
-        json_array_append_new(msgids, json_string(buf_cstring(&buf)));
+        char *tmp = charset_unfold(lo + 1, hi - lo - 1, CHARSET_UNFOLD_SKIPWS);
+        json_array_append_new(msgids, json_string(tmp));
+        free(tmp);
         lo = hi + 1;
     }
     if (!json_array_size(msgids)) {
         json_decref(msgids);
         msgids = json_null();
     }
-    buf_free(&buf);
     return msgids;
 }
 
@@ -459,7 +463,6 @@ static json_t *_header_as_urls(const char *raw)
     /* A poor man's implementation of RFC 2369, returning anything
      * between < and >. */
     json_t *urls = json_array();
-    struct buf buf = BUF_INITIALIZER;
     const char *base = raw;
     const char *top = raw + strlen(raw);
     while (base < top) {
@@ -467,15 +470,15 @@ static json_t *_header_as_urls(const char *raw)
         if (!lo) break;
         const char *hi = strchr(lo, '>');
         if (!hi) break;
-        buf_setmap(&buf, lo + 1, hi - lo - 1);
-        json_array_append_new(urls, json_string(buf_cstring(&buf)));
+        char *tmp = charset_unfold(lo + 1, hi - lo - 1, CHARSET_UNFOLD_SKIPWS);
+        json_array_append_new(urls, json_string(tmp));
+        free(tmp);
         base = hi + 1;
     }
     if (!json_array_size(urls)) {
         json_decref(urls);
         urls = json_null();
     }
-    buf_free(&buf);
     return urls;
 }
 
