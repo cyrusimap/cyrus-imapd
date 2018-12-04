@@ -10359,6 +10359,44 @@ EOF
     $self->assert_str_equals(' BASE64', uc($gotPart->{'header:Content-Transfer-Encoding'}));
 }
 
+sub test_email_get_fixbrokenmessageids
+    :min_version_3_1 :needs_component_jmap
+{
+
+    # See issue https://github.com/cyrusimap/cyrus-imapd/issues/2601
+
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    # An email with a folded reference id.
+    my %params = (
+        extra_headers => [
+            ['references', "<123\r\n\t456\@local>" ],
+        ],
+    );
+    $self->make_message("Email A", %params) || die;
+
+    xlog "get email";
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1'],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => [
+                'references'
+            ],
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    my $email = $res->[1][1]->{list}[0];
+
+    $self->assert_str_equals('123456@local', $email->{references}[0]);
+}
+
+
 sub test_email_body_alternative_without_html
     :min_version_3_1 :needs_component_jmap
 {
