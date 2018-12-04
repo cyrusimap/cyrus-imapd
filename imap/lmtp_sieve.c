@@ -496,7 +496,7 @@ static int sieve_reject(void *ac,
     body = msg_getheader(md, "original-recipient");
     origreceip = body ? body[0] : NULL;
     if ((res = send_rejection(md->id, md->return_path,
-                              origreceip, mbname_userid(sd->mbname),
+                              origreceip, mbname_recipient(sd->mbname, ((deliver_data_t *) mc)->ns),
                               rc->msg, md->data)) == 0) {
         snmp_increment(SIEVE_REJECT, 1);
         syslog(LOG_INFO, "sieve rejected: %s to: %s",
