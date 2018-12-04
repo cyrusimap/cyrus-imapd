@@ -364,6 +364,15 @@ static json_t *_header_as_text(const char *raw)
     return result;
 }
 
+static void _remove_ws(char *s)
+{
+    char *d = s;
+    do {
+        while (isspace(*s))
+            s++;
+    } while ((*d++ = *s++));
+}
+
 static json_t *_header_as_messageids(const char *raw)
 {
     if (!raw) return json_null();
@@ -376,7 +385,8 @@ static json_t *_header_as_messageids(const char *raw)
         const char *hi = strchr(lo + 1, '>');
         if (!hi) break;
         char *tmp = charset_unfold(lo + 1, hi - lo - 1, CHARSET_UNFOLD_SKIPWS);
-        json_array_append_new(msgids, json_string(tmp));
+        _remove_ws(tmp);
+        if (*tmp) json_array_append_new(msgids, json_string(tmp));
         free(tmp);
         lo = hi + 1;
     }
@@ -471,7 +481,8 @@ static json_t *_header_as_urls(const char *raw)
         const char *hi = strchr(lo, '>');
         if (!hi) break;
         char *tmp = charset_unfold(lo + 1, hi - lo - 1, CHARSET_UNFOLD_SKIPWS);
-        json_array_append_new(urls, json_string(tmp));
+        _remove_ws(tmp);
+        if (*tmp) json_array_append_new(urls, json_string(tmp));
         free(tmp);
         base = hi + 1;
     }
