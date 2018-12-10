@@ -1971,6 +1971,12 @@ static struct sortcrit *_email_buildsort(json_t *sort)
             // use this sort when searching on a single mailbox
             sortcrit[i].key = SORT_SEQUENCE;
         }
+        if (!strcmp(prop, "threadSize")) {
+            sortcrit[i].key = SORT_CONVSIZE;
+        }
+        if (!strcmp(prop, "spamScore")) {
+            sortcrit[i].key = SORT_SPAMSCORE;
+        }
     }
 
     i = json_array_size(sort);
@@ -2135,6 +2141,8 @@ static const char *msglist_sortfields[] = {
     "someInThreadHaveKeyword",
     // FM specific
     "addedDates",
+    "threadSize",
+    "spamScore",
     NULL
 };
 
