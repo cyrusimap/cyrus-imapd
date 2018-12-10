@@ -780,6 +780,10 @@ static int _email_extract_bodies_internal(const struct body *parts,
         enum parttype parttype;
         if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "PLAIN"))
             parttype = PLAIN;
+        if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "RICHTEXT"))
+            parttype = PLAIN; // RFC 1341
+        if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "ENRICHED"))
+            parttype = PLAIN; // RFC 1563
         else if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "HTML"))
             parttype = HTML;
         else if (!strcmp(part->type, "MULTIPART"))
