@@ -2171,6 +2171,13 @@ static int _emails_to_card(struct vparse_card *card,
         const char *value = NULL;
 
         readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        if (type) {
+            if (strcmp(type, "personal") && strcmp(type, "work") && strcmp(type, "other")) {
+                char *tmp = strconcat(prefix, ".type", NULL);
+                json_array_append_new(invalid, json_string(tmp));
+                free(tmp);
+            }
+        }
         readprop_full(item, prefix, "value", 1, invalid, "s", &value);
         if (JNOTNULL(json_object_get(item, "label"))) {
             readprop_full(item, prefix, "label", 1, invalid, "s", &label);
@@ -2224,6 +2231,14 @@ static int _phones_to_card(struct vparse_card *card,
         const char *value = NULL;
 
         readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        if (type) {
+            if (strcmp(type, "home") && strcmp(type, "work") && strcmp(type, "mobile") &&
+                strcmp(type, "fax") && strcmp(type, "pager") && strcmp(type, "other")) {
+                char *tmp = strconcat(prefix, ".type", NULL);
+                json_array_append_new(invalid, json_string(tmp));
+                free(tmp);
+            }
+        }
         readprop_full(item, prefix, "value", 1, invalid, "s", &value);
         if (JNOTNULL(json_object_get(item, "label"))) {
             readprop_full(item, prefix, "label", 1, invalid, "s", &label);
@@ -2293,6 +2308,13 @@ static int _online_to_card(struct vparse_card *card,
         const char *value = NULL;
 
         readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        if (type) {
+            if (strcmp(type, "uri") && strcmp(type, "username") && strcmp(type, "other")) {
+                char *tmp = strconcat(prefix, ".type", NULL);
+                json_array_append_new(invalid, json_string(tmp));
+                free(tmp);
+            }
+        }
         readprop_full(item, prefix, "value", 1, invalid, "s", &value);
         if (JNOTNULL(json_object_get(item, "label"))) {
             readprop_full(item, prefix, "label", 1, invalid, "s", &label);
@@ -2362,6 +2384,14 @@ static int _addresses_to_card(struct vparse_card *card,
 
         /* Mandatory */
         pe = readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        if (type) {
+            if (strcmp(type, "home") && strcmp(type, "work") && strcmp(type, "billing") &&
+                strcmp(type, "postal") && strcmp(type, "other")) {
+                char *tmp = strconcat(prefix, ".type", NULL);
+                json_array_append_new(invalid, json_string(tmp));
+                free(tmp);
+            }
+        }
         pe = readprop_full(item, prefix, "street", 1, invalid, "s", &street);
         pe = readprop_full(item, prefix, "locality", 1, invalid, "s", &locality);
         pe = readprop_full(item, prefix, "region", 1, invalid, "s", &region);
