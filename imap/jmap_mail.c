@@ -6321,12 +6321,16 @@ static json_t *_header_from_messageids(json_t *jmessageids,
 
     json_array_foreach(jmessageids, i, jval) {
         const char *s = json_string_value(jval);
+        if (!s) {
+            jmap_parser_invalid(parser, prop_name);
+            goto done;
+        }
         buf_setcstr(&msgid, s);
         buf_trim(&msgid);
         buf_putc(&val, '<');
         buf_appendcstr(&val, buf_cstring(&msgid));
         buf_putc(&val, '>');
-        if (!s || conversations_check_msgid(buf_base(&val), buf_len(&val))) {
+        if (conversations_check_msgid(buf_base(&val), buf_len(&val))) {
             jmap_parser_invalid(parser, prop_name);
             goto done;
         }
