@@ -386,7 +386,15 @@ static json_t *_header_as_messageids(const char *raw)
         if (!hi) break;
         char *tmp = charset_unfold(lo + 1, hi - lo - 1, CHARSET_UNFOLD_SKIPWS);
         _remove_ws(tmp);
-        if (*tmp) json_array_append_new(msgids, json_string(tmp));
+        if (*tmp) {
+            /* calculate the value that would be created if this was
+             * fed back into an Email/set and make sure it would
+             * validate */
+            char *msgid = strconcat("<", tmp, ">", NULL);
+            int r = conversations_check_msgid(msgid, strlen(msgid));
+            if (!r) json_array_append_new(msgids, json_string(tmp));
+            free(msgid);
+        }
         free(tmp);
         lo = hi + 1;
     }
