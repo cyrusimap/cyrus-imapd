@@ -777,12 +777,12 @@ static int _email_extract_bodies_internal(const struct body *parts,
         const struct body *part = parts + i;
 
         /* Determine part type */
-        enum parttype parttype;
+        enum parttype parttype = OTHER;
         if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "PLAIN"))
             parttype = PLAIN;
-        if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "RICHTEXT"))
+        else if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "RICHTEXT"))
             parttype = PLAIN; // RFC 1341
-        if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "ENRICHED"))
+        else if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "ENRICHED"))
             parttype = PLAIN; // RFC 1563
         else if (!strcmp(part->type, "TEXT") && !strcmp(part->subtype, "HTML"))
             parttype = HTML;
@@ -790,8 +790,6 @@ static int _email_extract_bodies_internal(const struct body *parts,
             parttype = MULTIPART;
         else if (!strcmp(part->type, "IMAGE") || !strcmp(part->type, "AUDIO") || !strcmp(part->type, "VIDEO"))
             parttype = INLINE_MEDIA;
-        else
-            parttype = OTHER;
 
         /* Determine disposition name, if any. */
         const char *dispname = NULL;
