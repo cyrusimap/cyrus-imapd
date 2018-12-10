@@ -541,6 +541,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
                                          time_t pop3_show_after,
                                          struct sync_annot_list *annots,
                                          modseq_t xconvmodseq,
+                                         modseq_t raclmodseq,
                                          int ispartial)
 {
     struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
@@ -571,6 +572,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->pop3_show_after = pop3_show_after;
     result->annots = annots; /* NOTE: not a copy! */
     result->xconvmodseq = xconvmodseq;
+    result->raclmodseq = raclmodseq;
     result->ispartial = ispartial;
 
     result->mark     = 0;
@@ -1955,6 +1957,8 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
         dlist_setdate(kl, "POP3_SHOW_AFTER", remote ? remote->pop3_show_after : 0);
         if (remote && remote->xconvmodseq)
             dlist_setnum64(kl, "XCONVMODSEQ", remote->xconvmodseq);
+        if (remote && remote->raclmodseq)
+            dlist_setnum64(kl, "RACLMODSEQ", remote->raclmodseq);
     }
     else {
         struct synccrcs synccrcs = mailbox_synccrcs(mailbox, /*force*/0);
@@ -1972,6 +1976,8 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
             if (!r && xconvmodseq)
                 dlist_setnum64(kl, "XCONVMODSEQ", xconvmodseq);
         }
+        modseq_t raclmodseq = mboxname_readraclmodseq(mailbox->name);
+        dlist_setnum64(kl, "RACLMODSEQ", raclmodseq);
     }
     dlist_setnum32(kl, "UIDVALIDITY", mailbox->i.uidvalidity);
     dlist_setatom(kl, "PARTITION", topart);
@@ -2640,6 +2646,7 @@ int sync_apply_mailbox(struct dlist *kin,
 
     /* optional fields */
     modseq_t xconvmodseq = 0;
+    modseq_t raclmodseq = 0;
     modseq_t createdmodseq = 0;
 
     struct mailbox *mailbox = NULL;
@@ -2706,6 +2713,7 @@ int sync_apply_mailbox(struct dlist *kin,
     dlist_getlist(kin, "ANNOTATIONS", &ka);
     dlist_getdate(kin, "POP3_SHOW_AFTER", &pop3_show_after);
     dlist_getnum64(kin, "XCONVMODSEQ", &xconvmodseq);
+    dlist_getnum64(kin, "RACLMODSEQ", &raclmodseq);
 
     /* Get the CRCs */
     dlist_getnum32(kin, "SYNC_CRC", &synccrcs.basic);
@@ -2906,6 +2914,10 @@ int sync_apply_mailbox(struct dlist *kin,
         r = mailbox_update_xconvmodseq(mailbox, xconvmodseq, opt_force);
     }
 
+    if (config_getswitch(IMAPOPT_REVERSEACLS) && raclmodseq) {
+        mboxname_setraclmodseq(mailbox->name, raclmodseq);
+    }
+
 done:
     sync_annot_list_free(&mannots);
     sync_annot_list_free(&rannots);
@@ -3022,6 +3034,8 @@ static int sync_mailbox_byname(const char *name, void *rock)
 
     r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 0,
                             /*XXX fullannots*/1);
+
+
     if (!r) sync_send_response(kl, mrock->pout);
 
 out:
@@ -4005,6 +4019,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                 goto bail;
             }
         }
+        modseq_t raclmodseq = mboxname_readraclmodseq(mbox->name);
 
         /* mailbox is open from here, no exiting without closing it! */
 
@@ -4035,7 +4050,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
                              mailbox->i.recentuid, mailbox->i.recenttime,
                              mailbox->i.pop3_last_login,
                              mailbox->i.pop3_show_after, NULL, xconvmodseq,
-                             ispartial);
+                             raclmodseq, ispartial);
 
 
         part_list = sync_reserve_partlist(reserve_list, topart ? topart : mailbox->part);
@@ -4257,6 +4272,7 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
             struct dlist *al = NULL;
             struct sync_annot_list *annots = NULL;
             modseq_t xconvmodseq = 0;
+            modseq_t raclmodseq = 0;
 
             if (!folder_list) goto parse_err;
             if (!dlist_getatom(kl, "UNIQUEID", &uniqueid)) goto parse_err;
@@ -4276,6 +4292,7 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
             dlist_getnum32(kl, "SYNC_CRC", &synccrcs.basic);
             dlist_getnum32(kl, "SYNC_CRC_ANNOT", &synccrcs.annot);
             dlist_getnum64(kl, "XCONVMODSEQ", &xconvmodseq);
+            dlist_getnum64(kl, "RACLMODSEQ", &xconvmodseq);
 
             if (dlist_getlist(kl, "ANNOTATIONS", &al))
                 decode_annotations(al, &annots, NULL);
@@ -4290,7 +4307,7 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
                                  recentuid, recenttime,
                                  pop3_last_login,
                                  pop3_show_after, annots,
-                                 xconvmodseq, /*ispartial*/0);
+                                 xconvmodseq, raclmodseq, /*ispartial*/0);
         }
         else
             goto parse_err;

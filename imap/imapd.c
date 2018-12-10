@@ -11425,6 +11425,7 @@ static int sync_mailbox(struct mailbox *mailbox,
     struct sync_folder *mfolder, *rfolder;
     struct sync_annot_list *annots = NULL;
     modseq_t xconvmodseq = 0;
+    modseq_t raclmodseq = 0;
     unsigned flags = SYNC_FLAG_LOGGING | SYNC_FLAG_LOCALONLY;
 
     if (!topart) topart = mailbox->part;
@@ -11448,6 +11449,10 @@ static int sync_mailbox(struct mailbox *mailbox,
             goto cleanup;
         }
     }
+    /* raclmodseq */
+    if (config_getswitch(IMAPOPT_REVERSEACLS)) {
+        raclmodseq = mboxname_readraclmodseq(mailbox->name);
+    }
 
     master_folders = sync_folder_list_create();
     sync_folder_list_add(master_folders,
@@ -11466,6 +11471,7 @@ static int sync_mailbox(struct mailbox *mailbox,
                          mailbox->i.pop3_show_after,
                          annots,
                          xconvmodseq,
+                         raclmodseq,
                          /* ispartial */0);
     annots = NULL; /* list took ownership */
 
