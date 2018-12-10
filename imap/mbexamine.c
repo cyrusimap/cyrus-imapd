@@ -208,11 +208,6 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
     r = mailbox_open_irl(name, &mailbox);
     if (r) return r;
 
-    if (chdir(mailbox_datapath(mailbox, 0)) == -1) {
-        r = IMAP_IOERROR;
-        goto done;
-    }
-
     printf(" Mailbox Header Info:\n");
     printf("  Path to mailbox: %s\n", mailbox_datapath(mailbox, 0));
     printf("  Mailbox ACL: %s\n", mailbox->acl); /* xxx parse */
@@ -347,7 +342,6 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
         printf("Desired message not found\n");
     }
 
- done:
     mailbox_close(&mailbox);
 
     return r;
@@ -378,11 +372,6 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
     /* Open/lock header */
     r = mailbox_open_irl(name, &mailbox);
     if (r) return r;
-
-    if (chdir(mailbox_datapath(mailbox, 0)) == -1) {
-        r = IMAP_IOERROR;
-        goto done;
-    }
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_EXPUNGED);
     const message_t *msg;
