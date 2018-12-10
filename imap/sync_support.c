@@ -5357,6 +5357,12 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     if (remote->options != options) return 0;
     if (strcmp(remote->acl, mailbox->acl)) return 0;
 
+    if (config_getswitch(IMAPOPT_REVERSEACLS)) {
+        modseq_t raclmodseq = mboxname_readraclmodseq(mailbox->name);
+        // don't bail if either are zero, that could be version skew
+        if (raclmodseq && remote->raclmodseq && remote->raclmodseq != raclmodseq) return 0;
+    }
+
     if (mailbox_has_conversations(mailbox)) {
         int r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
         if (r) return 0;
