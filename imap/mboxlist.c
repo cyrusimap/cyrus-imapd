@@ -714,6 +714,7 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
             if (r) goto done;
             char *aclusermbox = mboxname_user_mbox(acluser, NULL);
             mboxname_nextraclmodseq(aclusermbox, 0);
+            sync_log_mailbox(aclusermbox);
             free(aclusermbox);
         }
     }
@@ -729,6 +730,7 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
             if (r) goto done;
             char *aclusermbox = mboxname_user_mbox(acluser, NULL);
             mboxname_nextraclmodseq(aclusermbox, 0);
+            sync_log_mailbox(aclusermbox);
             free(aclusermbox);
         }
     }
