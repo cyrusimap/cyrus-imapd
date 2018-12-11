@@ -286,6 +286,14 @@ EXPORTED int encoding_lookupname(const char *s)
         if (!strcasecmp(s, "QUOTED-PRINTABLE"))
             return ENCODING_QP;
         break;
+    case 'u':
+    case 'U':
+        // this is rubbish, but it's been seen in the wild
+        if (!strcasecmp(s, "UTF-8"))
+            return ENCODING_NONE;
+        if (!strcasecmp(s, "UTF8"))
+            return ENCODING_NONE;
+        break;
     }
     return ENCODING_UNKNOWN;
 }
