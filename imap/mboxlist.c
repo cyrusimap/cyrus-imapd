@@ -685,6 +685,19 @@ static int user_is_in(const strarray_t *aclbits, const char *user)
     return 0;
 }
 
+static int mboxlist_update_raclmodseq(const char *acluser)
+{
+    char *aclusermbox = mboxname_user_mbox(acluser, NULL);
+    mbentry_t *raclmbentry = NULL;
+    if (mboxlist_lookup(aclusermbox, &raclmbentry, NULL) == 0) {
+        mboxname_nextraclmodseq(aclusermbox, 0);
+        sync_log_mailbox(aclusermbox);
+    }
+    mboxlist_entry_free(&raclmbentry);
+    free(aclusermbox);
+    return 0;
+}
+
 static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, const mbentry_t *newmbentry, struct txn **txn)
 {
     static strarray_t *admins = NULL;
@@ -712,10 +725,7 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
             mboxlist_racl_key(!!userid, acluser, name, &buf);
             r = cyrusdb_delete(mbdb, buf.s, buf.len, txn, /*force*/1);
             if (r) goto done;
-            char *aclusermbox = mboxname_user_mbox(acluser, NULL);
-            mboxname_nextraclmodseq(aclusermbox, 0);
-            sync_log_mailbox(aclusermbox);
-            free(aclusermbox);
+            mboxlist_update_raclmodseq(acluser);
         }
     }
 
@@ -728,10 +738,7 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
             mboxlist_racl_key(!!userid, acluser, name, &buf);
             r = cyrusdb_store(mbdb, buf.s, buf.len, "", 0, txn);
             if (r) goto done;
-            char *aclusermbox = mboxname_user_mbox(acluser, NULL);
-            mboxname_nextraclmodseq(aclusermbox, 0);
-            sync_log_mailbox(aclusermbox);
-            free(aclusermbox);
+            mboxlist_update_raclmodseq(acluser);
         }
     }
 
