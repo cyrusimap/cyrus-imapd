@@ -9371,19 +9371,6 @@ HIDDEN int jmap_email_set(jmap_req_t *req)
     }
     jmap_ok(req, reply);
 
-    if (jmap_hascapa(req, JMAP_QUOTA_EXTENSION)) {
-        int have_changes = json_object_size(set.created) ||
-                           json_object_size(set.updated) ||
-                           json_array_size(set.destroyed);
-
-        if (have_changes) {
-            json_t *args = json_object();
-            json_object_set_new(args, "accountId", json_string(req->accountid));
-            json_object_set_new(args, "ids", json_pack("[s]", "mail"));
-            jmap_add_subreq(req, "Quota/get", args, NULL);
-        }
-    }
-
 done:
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
@@ -9686,15 +9673,6 @@ static int jmap_email_import(jmap_req_t *req)
                 "accountId", req->accountid,
                 "created", created,
                 "notCreated", not_created));
-
-    if (jmap_hascapa(req, JMAP_QUOTA_EXTENSION)) {
-        if (json_object_size(created)) {
-            json_t *args = json_object();
-            json_object_set_new(args, "accountId", json_string(req->accountid));
-            json_object_set_new(args, "ids", json_pack("[s]", "mail"));
-            jmap_add_subreq(req, "Quota/get", args, NULL);
-        }
-    }
 
 done:
     json_decref(created);
@@ -10245,16 +10223,6 @@ static int jmap_email_copy(jmap_req_t *req)
         json_object_set_new(subargs, "accountId", json_string(copy.from_account_id));
         jmap_add_subreq(req, "Email/set", subargs, NULL);
     }
-
-    if (jmap_hascapa(req, JMAP_QUOTA_EXTENSION)) {
-        if (json_object_size(copy.created)) {
-            json_t *args = json_object();
-            json_object_set_new(args, "accountId", json_string(req->accountid));
-            json_object_set_new(args, "ids", json_pack("[s]", "mail"));
-            jmap_add_subreq(req, "Quota/get", args, NULL);
-        }
-    }
-
 
 done:
     json_decref(destroy_emails);
