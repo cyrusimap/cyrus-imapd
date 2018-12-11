@@ -3708,11 +3708,12 @@ alerts_to_ical(context_t *ctx, icalcomponent *comp, json_t *alerts)
             const char *summary = icalcomponent_get_summary(comp);
             if (!summary) summary = "Your event alert";
             icalcomponent_add_property(alarm, icalproperty_new_summary(summary));
-            /* DESCRIPTION */
-            const char *description = icalcomponent_get_description(comp);
-            if (!description) description = "";
-            icalcomponent_add_property(alarm, icalproperty_new_description(description));
         }
+
+        /* DESCRIPTION is required for both email and display */
+        const char *description = icalcomponent_get_description(comp);
+        if (!description) description = "";
+        icalcomponent_add_property(alarm, icalproperty_new_description(description));
 
         icalcomponent_add_component(comp, alarm);
         endprop(ctx);
