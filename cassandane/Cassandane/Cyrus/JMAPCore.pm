@@ -335,6 +335,13 @@ sub test_sessionstate
 {
     my ($self) = @_;
 
+    my $reverseAcls = $self->{instance}->{config}->get('reverseacls') || 'false';
+    my %trueValues = (yes => 1, on => 1, t => 1, true => 1, 1 => 1);
+    if (not exists $trueValues{$reverseAcls}) {
+        xlog "reverseacls config is not enabled. Ignoring test.";
+        return;
+    }
+
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
