@@ -1763,12 +1763,13 @@ static void annotation_get_usercounters(annotate_state_t *state,
     mboxname = mboxname_user_mbox(state->userid, NULL);
     int r = mboxname_read_counters(mboxname, &counters);
 
-    if (!r) buf_printf(&value, "%u %llu %llu %llu %llu %llu %llu %llu %llu %llu %u",
+    if (!r) buf_printf(&value, "%u %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %llu %u",
                        counters.version, counters.highestmodseq,
                        counters.mailmodseq, counters.caldavmodseq,
                        counters.carddavmodseq, counters.notesmodseq,
                        counters.mailfoldersmodseq, counters.caldavfoldersmodseq,
                        counters.carddavfoldersmodseq, counters.notesfoldersmodseq,
+                       counters.quotamodseq, counters.raclmodseq,
                        counters.uidvalidity);
 
     output_entryatt(state, entry->name, state->userid, &value);
