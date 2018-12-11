@@ -3685,6 +3685,35 @@ alerts_to_ical(context_t *ctx, icalcomponent *comp, json_t *alerts)
         prop = icalproperty_new_action(action);
         icalcomponent_add_property(alarm, prop);
 
+        if (action == ICAL_ACTION_EMAIL) {
+            /* ATTENDEE */
+            const char *annotname = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+            char *mailboxname = caldav_mboxname(httpd_userid, NULL);
+            struct buf buf = BUF_INITIALIZER;
+            int r = annotatemore_lookupmask(mailboxname, annotname, httpd_userid, &buf);
+
+            char *recipient = NULL;
+            if (!r && buf.len > 7 && !strncasecmp(buf_cstring(&buf), "mailto:", 7)) {
+                recipient = buf_release(&buf);
+            } else {
+                recipient = strconcat("mailto:", httpd_userid, NULL);
+            }
+            icalcomponent_add_property(alarm, icalproperty_new_attendee(recipient));
+            free(recipient);
+
+            buf_free(&buf);
+            free(mailboxname);
+
+            /* SUMMARY */
+            const char *summary = icalcomponent_get_summary(comp);
+            if (!summary) summary = "Your event alert";
+            icalcomponent_add_property(alarm, icalproperty_new_summary(summary));
+            /* DESCRIPTION */
+            const char *description = icalcomponent_get_description(comp);
+            if (!description) description = "";
+            icalcomponent_add_property(alarm, icalproperty_new_description(description));
+        }
+
         icalcomponent_add_component(comp, alarm);
         endprop(ctx);
     }
