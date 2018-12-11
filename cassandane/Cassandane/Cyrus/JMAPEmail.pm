@@ -11592,6 +11592,7 @@ sub test_email_set_getquota
                 },
             }
         }, "R1"],
+        ['Quota/get', {}, 'R2'],
     ], ['http://cyrusimap.org/ns/quota']);
 
     $self->assert_str_equals('Quota/get', $res->[1][0]);
