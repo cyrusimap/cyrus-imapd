@@ -55,7 +55,6 @@ cleanup = no
 # remove this when they're fixed!
 altnamespace = no
 unixhierarchysep = no
-reverseacls = yes
 
 [imaptest]
 basedir = /srv/imaptest.git
