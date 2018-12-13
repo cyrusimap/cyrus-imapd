@@ -157,6 +157,7 @@ static struct MsgFlagMap msgflagmap[] = {
     {"AR", FLAG_INTERNAL_ARCHIVED},
     {"UN", FLAG_INTERNAL_UNLINKED},
     {"EX", FLAG_INTERNAL_EXPUNGED}
+    /* ZZ -> invalid file found on disk */
 };
 /* The length of the msgflagmap list * 2 +
  * Total number of separators possible
@@ -3814,19 +3815,37 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
     return 0;
 }
 
+EXPORTED void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const char *flagstr)
+{
+    const char *spoolfname = mailbox_spool_fname(mailbox, uid);
+    const char *archivefname = mailbox_archive_fname(mailbox, uid);
+
+    if (unlink(spoolfname) == 0) {
+        if (config_auditlog) {
+            syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
+                   "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
+                   session_id(), mailbox->name, mailbox->uniqueid,
+                   uid, flagstr);
+        }
+    }
+
+    if (strcmp(spoolfname, archivefname)) {
+        if (unlink(archivefname) == 0) {
+            if (config_auditlog) {
+                syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
+                       "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
+                       session_id(), mailbox->name, mailbox->uniqueid,
+                       uid, flagstr);
+            }
+        }
+    }
+}
+
 static void mailbox_record_cleanup(struct mailbox *mailbox,
                                    struct index_record *record)
 {
-    const char *spoolfname = mailbox_spool_fname(mailbox, record->uid);
-    const char *archivefname = mailbox_archive_fname(mailbox, record->uid);
-    int object_storage_enabled = 0;
 #if defined ENABLE_OBJECTSTORE
-    object_storage_enabled = config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED);
-#endif
-    int r;
-
-    if (object_storage_enabled) {
-#if defined ENABLE_OBJECTSTORE
+    if (config_getswitch(IMAPOPT_OBJECT_STORAGE_ENABLED)) {
         /* we always remove the spool file here, because we've archived it */
         if (record->system_flags & FLAG_INTERNAL_ARCHIVED)
             unlink(spoolfname);
@@ -3834,52 +3853,40 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
         /* if the record is also deleted, we remove the objectstore copy */
         if (record->system_flags & FLAG_INTERNAL_UNLINKED)
             objectstore_delete(mailbox, record);
-#endif
+
+        return;
     }
+#endif
 
-    else if (record->internal_flags & FLAG_INTERNAL_UNLINKED) {
-        /* try to delete both */
+    if (record->internal_flags & FLAG_INTERNAL_UNLINKED) {
+        char flagstr[FLAGMAPSTR_MAXLEN];
+        flags_to_str(record, flagstr);
 
-        if (unlink(spoolfname) == 0) {
-            if (config_auditlog) {
-                char flagstr[FLAGMAPSTR_MAXLEN];
-                flags_to_str(record, flagstr);
-                syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
-                       "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
-                       session_id(), mailbox->name, mailbox->uniqueid,
-                       record->uid, flagstr);
-            }
-        }
+        /* remove both files */
+        mailbox_cleanup_uid(mailbox, record->uid, flagstr);
 
-        if (strcmp(spoolfname, archivefname)) {
-            if (unlink(archivefname) == 0) {
-                if (config_auditlog) {
-                    char flagstr[FLAGMAPSTR_MAXLEN];
-                    flags_to_str(record, flagstr);
-                    syslog(LOG_NOTICE, "auditlog: unlinkarchive sessionid=<%s> "
-                           "mailbox=<%s> uniqueid=<%s> uid=<%u> sysflags=<%s>",
-                           session_id(), mailbox->name, mailbox->uniqueid,
-                           record->uid, flagstr);
-                }
-            }
-        }
-
-        r = mailbox_get_annotate_state(mailbox, record->uid, NULL);
+        int r = mailbox_get_annotate_state(mailbox, record->uid, NULL);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to open annotations %s %u: %s",
                    mailbox->name, record->uid, error_message(r));
-            return;
         }
 
         r = annotate_msg_cleanup(mailbox, record->uid);
         if (r) {
             syslog(LOG_ERR, "IOERROR: failed to cleanup annotations %s %u: %s",
                    mailbox->name, record->uid, error_message(r));
-            return;
         }
+
+        return;
     }
 
-    else if (strcmp(spoolfname, archivefname)) {
+    /* file is still alive - check if there's anything to clean up */
+
+    const char *spoolfname = mailbox_spool_fname(mailbox, record->uid);
+    const char *archivefname = mailbox_archive_fname(mailbox, record->uid);
+
+    /* don't cleanup if it's the same file! */
+    if (strcmp(spoolfname, archivefname)) {
         if (record->internal_flags & FLAG_INTERNAL_ARCHIVED) {
             /* XXX - stat to make sure the other file exists first? - we mostly
             *  trust that we didn't do stupid things everywhere else, so maybe not */
@@ -3890,8 +3897,6 @@ static void mailbox_record_cleanup(struct mailbox *mailbox,
             unlink(archivefname);
         }
     }
-
-    /* else: nothing to cleanup if it's the same file! */
 }
 
 /* need a mailbox exclusive lock, we're removing files */

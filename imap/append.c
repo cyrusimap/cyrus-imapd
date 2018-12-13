@@ -936,9 +936,11 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
         mboxevent = mboxevent_enqueue(as->event_type, &as->mboxevents);
     }
 
+    uint32_t uid = as->baseuid + as->nummsg;
+
     /* we need to parse the record first */
     msgrec = msgrecord_new(mailbox);
-    r = msgrecord_set_uid(msgrec, as->baseuid + as->nummsg);
+    r = msgrecord_set_uid(msgrec, uid);
     if (r) goto out;
     r = msgrecord_set_internaldate(msgrec, internaldate);
     if (r) goto out;
@@ -958,6 +960,13 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
         r = msgrecord_add_internalflags(msgrec, FLAG_INTERNAL_ARCHIVED);
         if (r) goto out;
     }
+
+    /* unlink BOTH potential destination files to clean up any past failure.
+     * This was added because we found that a small message was partially
+     * delivered and got uid X. - then later a large message was delivered
+     * with the same UID which went straight to archive, and the file with
+     * the same name was left lying around in the filesystem */
+    mailbox_cleanup_uid(mailbox, uid, "ZZ");
 
     /* Create message file */
     as->nummsg++;

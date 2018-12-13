@@ -693,4 +693,6 @@ extern struct conversations_state *mailbox_get_cstate(struct mailbox *mailbox);
 typedef void mailbox_wait_cb_t(void *rock);
 extern void mailbox_set_wait_cb(mailbox_wait_cb_t *cb, void *rock);
 
+extern void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const char *flagstr);
+
 #endif /* INCLUDED_MAILBOX_H */
