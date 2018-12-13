@@ -17,6 +17,9 @@ SERVICES {
   lmtp          cmd="lmtpd" listen="lmtp" prefork=0
 #  lmtpunix     cmd="lmtpd" listen="/lmtp" prefork=0
 
+  # this is requied if using socketmap
+#  smmap        cmd="smmapd" listen="/smmap" prefork=0
+
   # this is only necessary if using notifications
 #  notify       cmd="notifyd" listen="/notify" proto="udp" prefork=1
 }

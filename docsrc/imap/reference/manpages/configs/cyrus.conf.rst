@@ -304,6 +304,7 @@ See Also
 :cyrusman:`imapd(8)`,
 :cyrusman:`pop3d(8)`,
 :cyrusman:`lmtpd(8)`,
+:cyrusman:`smmapd(8)`,
 :cyrusman:`timsieved(8)`,
 :cyrusman:`idled(8)`,
 :cyrusman:`notifyd(8)`,

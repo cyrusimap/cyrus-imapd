@@ -23,7 +23,13 @@ server and engineer delivery via LMTP.  The following examples show the
 1.  Setup your recipient maps, thus defining for which recipients the
     ``virtual`` destination will be used::
 
-        postconf -e "virtual_recipient_maps=hash:/etc/postfix/virtual_recipient_domains,hash:/etc/postfix/virtual_recipients"
+        postconf -e "virtual_mailbox_domains=hash:/etc/postfix/virtual_recipient_domains"
+        postconf -e "virtual_mailbox_maps=hash:/etc/postfix/virtual_recipients"
+
+    or, if you have enabled smmapd you can automatically track mailboxes with::
+
+        postconf -e "virtual_mailbox_domains=hash:/etc/postfix/virtual_recipient_domains"
+        postconf -e "virtual_mailbox_maps=socketmap:unix:/run/cyrus/socket/smmap"
 
 2.  Optional: Set the concurrency and recipient limits for LMTP delivery to the
     ``virtual`` destination::
