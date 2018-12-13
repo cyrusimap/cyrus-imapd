@@ -879,6 +879,7 @@ imap_cyr_sphinxmgr_SOURCES = imap/cli_fatal.c imap/cyr_sphinxmgr.c imap/mutex_fa
 imap_cyr_sphinxmgr_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
+imap_cyr_virusscan_CFLAGS = $(AM_CFLAGS) $(CLAMAV_CFLAGS) $(CFLAG_VISIBILITY)
 imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) $(CLAMAV_LIBS)
 
 imap_ctl_zoneinfo_SOURCES = imap/cli_fatal.c imap/ctl_zoneinfo.c imap/mutex_fake.c imap/zoneinfo_db.c
