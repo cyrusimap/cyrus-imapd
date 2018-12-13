@@ -193,8 +193,17 @@ int clamav_scanfile(void *state, const char *fname,
     int r;
 
     /* scan file */
+#if LIBCLAMAV_MAJORVER < 9
     r = cl_scanfile(fname, virname, NULL, st->av_engine,
                     CL_SCAN_STDOPT);
+#else
+    static struct cl_scan_options options;
+
+    memset(&options, 0, sizeof(struct cl_scan_options));
+    options.parse |= ~0; /* enable all parsers */
+
+    r = cl_scanfile(fname, virname, NULL, st->av_engine, &options);
+#endif
 
     switch (r) {
     case CL_CLEAN:
