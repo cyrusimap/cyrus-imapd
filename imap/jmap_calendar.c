@@ -1249,9 +1249,12 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     jmap_req_t *req = rock->req;
     char *schedule_address = NULL;
 
-    if (!cdata->dav.alive) {
+    if (!cdata->dav.alive)
         return 0;
-    }
+
+    /* check that it's the right type */
+    if (cdata->comp_type != CAL_COMP_VEVENT)
+        return 0;
 
     /* Check mailbox ACL rights */
     if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ))
