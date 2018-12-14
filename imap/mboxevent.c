@@ -958,8 +958,8 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
         char threadid[18];
         if (!record->cid) {
             threadid[0] = 'N';
-            threadid[0] = 'I';
-            threadid[0] = 'L';
+            threadid[1] = 'I';
+            threadid[2] = 'L';
             threadid[3] = '\0';
         }
         else {
@@ -1131,8 +1131,8 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         char threadid[18];
         if (!cid) {
             threadid[0] = 'N';
-            threadid[0] = 'I';
-            threadid[0] = 'L';
+            threadid[1] = 'I';
+            threadid[2] = 'L';
             threadid[3] = '\0';
         }
         else {

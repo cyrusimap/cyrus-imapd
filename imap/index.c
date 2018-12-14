@@ -4171,8 +4171,8 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         char threadid[18];
         if (!record.cid) {
             threadid[0] = 'N';
-            threadid[0] = 'I';
-            threadid[0] = 'L';
+            threadid[1] = 'I';
+            threadid[2] = 'L';
             threadid[3] = '\0';
         }
         else {
