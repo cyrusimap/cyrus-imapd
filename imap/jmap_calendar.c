@@ -1713,7 +1713,8 @@ static int setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
     if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive ||
-            !cdata->dav.rowid || !cdata->dav.imap_uid) {
+            !cdata->dav.rowid || !cdata->dav.imap_uid ||
+            cdata->comp_type != CAL_COMP_VEVENT) {
         r = IMAP_NOTFOUND;
         goto done;
     }
@@ -2244,6 +2245,9 @@ static int geteventchanges_cb(void *vrock, struct caldav_data *cdata)
     if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ))
         return 0;
 
+    if (cdata->comp_type != CAL_COMP_VEVENT)
+        return 0;
+
     /* Count, but don't process items that exceed the maximum record count. */
     if (changes->max_changes && ++(rock->seen_records) > changes->max_changes) {
         changes->has_more_changes = 1;
@@ -2515,6 +2519,10 @@ static int search_timerange_cb(void *vrock, struct caldav_data *cdata)
     if (!cdata->dav.alive) {
         return 0;
     }
+
+    /* check that it's the right type */
+    if (cdata->comp_type != CAL_COMP_VEVENT)
+        return 0;
 
     /* Check permissions */
     if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ))
@@ -2853,7 +2861,8 @@ static void _calendarevent_copy(jmap_req_t *req,
         syslog(LOG_ERR, "caldav_lookup_uid(%s) failed: %s", src_id, error_message(r));
         goto done;
     }
-    if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive || !cdata->dav.rowid || !cdata->dav.imap_uid) {
+    if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive || !cdata->dav.rowid ||
+            !cdata->dav.imap_uid || cdata->comp_type != CAL_COMP_VEVENT) {
         *set_err = json_pack("{s:s}", "type", "notFound");
         goto done;
     }
