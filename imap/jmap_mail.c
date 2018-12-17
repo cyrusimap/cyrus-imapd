@@ -7608,6 +7608,26 @@ static void _email_create(jmap_req_t *req,
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct email email = { HEADERS_INITIALIZER, NULL, NULL, 0 };
     _email_parse(jemail, &parser, &email);
+
+    /* Validate mailboxIds */
+    json_t *jmailboxids = json_object_get(jemail, "mailboxIds");
+    jmap_parser_push(&parser, "mailboxIds");
+    void *iter = json_object_iter(jmailboxids);
+    const char *mbox_id;
+    while ((mbox_id = json_object_iter_key(iter))) {
+        mbentry_t *mbentry = NULL;
+        if (*mbox_id == '#') {
+            mbox_id = jmap_lookup_id(req, mbox_id + 1);
+        }
+        if (mbox_id) {
+            mbentry = _mbentry_by_uniqueid(req, mbox_id);
+        }
+        if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP|ACL_INSERT)) {
+            jmap_parser_invalid(&parser, mbox_id);
+        }
+        mboxlist_entry_free(&mbentry);
+        iter = json_object_iter_next(jmailboxids, iter);
+    }
     if (json_array_size(parser.invalid)) {
         *set_err = json_pack("{s:s s:O}", "type", "invalidProperties",
                 "properties", parser.invalid);
@@ -7632,7 +7652,7 @@ static void _email_create(jmap_req_t *req,
     }
 
     /* Append MIME-encoded Email to mailboxes and write keywords */
-    json_t *jmailboxids = json_object_get(jemail, "mailboxIds");
+
     _email_append(req, jmailboxids, &keywords, time(NULL),
                   config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT) ?
                   email.has_attachment : 0, _email_to_mime, &email,
