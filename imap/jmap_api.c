@@ -668,7 +668,6 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
                 hash_insert(accountid, (void*)1, &accounts);
             }
         }
-        account_inboxname = mboxname_user_mbox(accountid, NULL);
 
         /* Pre-process result references */
         if (process_resultrefs(args, resp, &err)) {
@@ -718,7 +717,10 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         }
 
         /* Read the current state data in */
+        account_inboxname = mboxname_user_mbox(accountid, NULL);
         r = mboxname_read_counters(account_inboxname, &req.counters);
+        free(account_inboxname);
+        account_inboxname = NULL;
         if (r) {
             jmap_finireq(&req);
             json_decref(args);
