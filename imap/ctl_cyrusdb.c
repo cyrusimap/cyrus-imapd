@@ -125,18 +125,29 @@ static void usage(void)
     exit(-1);
 }
 
-struct fix_rock {
-    char *last_name;
-    int insert_intermediates;
-};
-
 /* Callback for use by process_mboxlist */
 static int fixmbox(const mbentry_t *mbentry,
-                   void *rock)
+                   void *rock __attribute__((unused)))
 {
     int r;
-    struct fix_rock *frock = (struct fix_rock *) rock;
 
+    /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
+    if (mbentry->mbtype & MBTYPE_RESERVE) {
+        r = mboxlist_deletemailbox(mbentry->name, 1, NULL, NULL, NULL, 0, 0, 1, 0);
+        if (r) {
+            /* log the error */
+            syslog(LOG_ERR,
+                   "could not remove reserved mailbox '%s': %s",
+                   mbentry->name, error_message(r));
+        } else {
+            syslog(LOG_NOTICE,
+                   "removed reserved mailbox '%s'",
+                   mbentry->name);
+        }
+        return 0;
+    }
+
+    /* clean out any legacy specialuse */
     if (mbentry->legacy_specialuse) {
         char *userid = mboxname_to_userid(mbentry->name);
         if (userid) {
@@ -154,48 +165,11 @@ static int fixmbox(const mbentry_t *mbentry,
         mboxlist_entry_free(&copy);
     }
 
-    /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
-    if (mbentry->mbtype & MBTYPE_RESERVE) {
-        r = mboxlist_deletemailbox(mbentry->name, 1, NULL, NULL, NULL, 0, 0, 1, 0);
-        if (r) {
-            /* log the error */
-            syslog(LOG_ERR,
-                   "could not remove reserved mailbox '%s': %s",
-                   mbentry->name, error_message(r));
-        } else {
-            syslog(LOG_NOTICE,
-                   "removed reserved mailbox '%s'",
-                   mbentry->name);
-        }
-    }
-    else {
-        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-            frock->insert_intermediates = 0;
-        }
-        else if (frock->insert_intermediates &&
-                 !mboxname_isdeletedmailbox(mbentry->name, NULL) &&
-                 !mboxname_contains_parent(mbentry->name, frock->last_name)) {
-            int r;
-
-            syslog(LOG_NOTICE,
-                   "inserting intermediaries to mailboxes list for %s",
-                   mbentry->name);
-
-            r = mboxlist_create_intermediaries(
-                mbentry->name,
-                mboxname_nextmodseq(mbentry->name, 0 /* last */,
-                                    mbentry->mbtype, 1 /* dofolder */),
-                NULL /* inter */, NULL /* tid */);
-
-            if (r) {
-                syslog(LOG_ERR,
-                       "failed to insert intermediaries to mailboxes list for %s: %s",
-                       mbentry->name, cyrusdb_strerror(r));
-            }
-        }
-
-        free(frock->last_name);
-        frock->last_name = xstrdupnull(mbentry->name);
+    r = mboxlist_update_intermediaries(mbentry->name, mbentry->mbtype, /*modseq*/0);
+    if (r) {
+        syslog(LOG_ERR,
+               "failed to update intermediaries to mailboxes list for %s: %s",
+               mbentry->name, cyrusdb_strerror(r));
     }
 
     return 0;
@@ -203,11 +177,8 @@ static int fixmbox(const mbentry_t *mbentry,
 
 static void process_mboxlist(void)
 {
-    struct fix_rock frock = { NULL, 1 };
-
     /* build a list of mailboxes - we're using internal names here */
-    mboxlist_allmbox(NULL, fixmbox, &frock, MBOXTREE_INTERMEDIATES);
-    free(frock.last_name);
+    mboxlist_allmbox(NULL, fixmbox, NULL, 0);
 
     /* enable or disable RACLs per config */
     mboxlist_set_racls(config_getswitch(IMAPOPT_REVERSEACLS));

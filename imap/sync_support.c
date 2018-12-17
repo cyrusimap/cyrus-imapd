@@ -2728,7 +2728,7 @@ int sync_apply_mailbox(struct dlist *kin,
                                 sstate->userid, sstate->authstate,
                                 options, uidvalidity, createdmodseq,
                                 highestmodseq, acl,
-                                uniqueid, sstate->local_only, &mailbox);
+                                uniqueid, sstate->local_only, 0, &mailbox);
         /* set a highestmodseq of 0 so ALL changes are future
          * changes and get applied */
         if (!r) mailbox->i.highestmodseq = 0;
@@ -3753,7 +3753,7 @@ int sync_restore_mailbox(struct dlist *kin,
                                 sstate->userid, sstate->authstate,
                                 options, uidvalidity, createdmodseq,
                                 highestmodseq, acl,
-                                uniqueid, sstate->local_only, &mailbox);
+                                uniqueid, sstate->local_only, 0, &mailbox);
         syslog(LOG_DEBUG, "%s: mboxlist_createsync %s: %s",
             __func__, mboxname, error_message(r));
 

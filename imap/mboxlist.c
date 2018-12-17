@@ -1084,147 +1084,92 @@ EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribut
     return r;
 }
 
-static void sync_log_intermediaries(strarray_t *sa)
+/* PLEASE NOTE - ALWAYS CALL AFTER MAKING THE CHANGES, as this function
+ * will check for children when deciding whether to create or remove
+ * intermediate folders */
+EXPORTED int mboxlist_update_intermediaries(const char *frommboxname, int mbtype, modseq_t modseq)
 {
-    char *name;
-
-    while ((name = strarray_pop(sa))) {
-        sync_log_mailbox(name);
-        free(name);
-    }
-}
-
-EXPORTED int mboxlist_create_intermediaries(const char *mboxname,
-                                            modseq_t modseq,
-                                            strarray_t *inter,
-                                            struct txn **tid)
-{
-    if (mboxname_isdeletedmailbox(mboxname, NULL))
-        return 0;
-
-    mbname_t *mbname = mbname_from_intname(mboxname);
-    strarray_t myinter = STRARRAY_INITIALIZER;
-    struct txn *mytid = NULL;
+    mbentry_t *mbentry = NULL;
+    mbname_t *mbname = mbname_from_intname(frommboxname);
     int r = 0;
 
-    if (!tid) {
-        tid = &mytid;
-        inter = &myinter;
-    }
+    /* only use intermediates for non-deleted user mailboxes */
+    if (mbname_isdeleted(mbname) || !mbname_userid(mbname))
+        goto out;
 
-    while (!r && strarray_size(mbname_boxes(mbname))) {
-        const char *parent;
-        mbentry_t *newmbentry = NULL;
+    for (; strarray_size(mbname_boxes(mbname)); free(mbname_pop_boxes(mbname))) {
 
-        free(mbname_pop_boxes(mbname));
-
-        parent = mbname_intname(mbname);
-        if (!*parent) break;  /* root of hierarchy ("") */
-
-        r = mboxlist_mylookup(parent, &newmbentry, tid, 1);
-        if (newmbentry) {
-            if (!(newmbentry->mbtype & MBTYPE_DELETED)) {
-                mboxlist_entry_free(&newmbentry);
-                break;  /* mailbox exists */
-            }
-            free(newmbentry->uniqueid); // from older deleted mailbox ?
-            newmbentry->uniqueid = NULL;
+        /* check for magic INBOX */
+        if (strarray_size(mbname_boxes(mbname)) == 1 &&
+            !strcmp(strarray_nth(mbname_boxes(mbname), 0), "INBOX")) {
+            /* don't generate magic INBOX intermediate, JMAP doesn't use it */
+            goto out;
         }
-        else if (r != IMAP_MAILBOX_NONEXISTENT) break;
-        else newmbentry = mboxlist_entry_create();
 
-        newmbentry->mbtype = MBTYPE_INTERMEDIATE;
+        const char *mboxname = mbname_intname(mbname);
+
+        mboxlist_entry_free(&mbentry);
+        r = mboxlist_mylookup(mboxname, &mbentry, NULL, 0);
+        if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
+        if (r) goto out;
+
+        if (mbentry) {
+            if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+                /* existing intermediate - delete unless it still has children */
+                if (mboxlist_haschildren(mboxname))
+                    continue;
+
+                /* bump modseq, we're removing a thing that can be seen */
+                if (!modseq)
+                    modseq = mboxname_nextmodseq(mboxname, mbentry->foldermodseq,
+                                                 mbtype, 1 /* dofolder */);
+
+                mbentry_t *newmbentry = mboxlist_entry_copy(mbentry);
+                newmbentry->mbtype = MBTYPE_DELETED;
+                newmbentry->foldermodseq = modseq;
+
+                syslog(LOG_NOTICE, "mboxlist: deleting intermediate with no children: %s", mboxname);
+                r = mboxlist_update_entry(mboxname, newmbentry, NULL);
+                if (r) goto out;
+                sync_log_mailbox(mboxname);
+
+                /* we've changed the type, we're done at this level */
+                continue;
+            }
+            else if (mbentry->mbtype & MBTYPE_DELETED) {
+                /* fall through to create a new intermediate */
+            }
+            else {
+                /* real mailbox, we're done at this level */
+                continue;
+            }
+        }
+
+        /* if there's no children, there's no need for intermediates */
+        if (!mboxlist_haschildren(mboxname))
+            continue;
+
+        /* bump modseq, we're adding a thing that can be seen */
+        if (!modseq)
+            modseq = mboxname_nextmodseq(mboxname, mbentry ? mbentry->foldermodseq : 0,
+                                         mbtype, 1 /* dofolder */);
+
+        mbentry_t *newmbentry = mboxlist_entry_create();
         newmbentry->uniqueid = xstrdupnull(makeuuid());
         newmbentry->createdmodseq = modseq;
         newmbentry->foldermodseq = modseq;
+        newmbentry->mbtype = MBTYPE_INTERMEDIATE;
+        newmbentry->foldermodseq = modseq;
 
-        r = mboxlist_update_entry(parent, newmbentry, tid);
-        if (!r) strarray_push(inter, parent);
-
-        mboxlist_entry_free(&newmbentry);
+        syslog(LOG_NOTICE, "mboxlist: creating intermediate with children: %s", mboxname);
+        r = mboxlist_update_entry(mboxname, newmbentry, NULL);
+        if (r) goto out;
+        sync_log_mailbox(mboxname);
     }
 
-    mbname_free(&mbname);
-
-    if (mytid) {
-        if (r) cyrusdb_abort(mbdb, mytid);
-        else {
-            r = cyrusdb_commit(mbdb, mytid);
-            if (!r) sync_log_intermediaries(&myinter);
-        }
-
-        strarray_fini(&myinter);
-    }
-
-    return r;
-}
-
-EXPORTED int mboxlist_delete_intermediaries(const char *mboxname,
-                                            const char *untilname,
-                                            modseq_t modseq,
-                                            strarray_t *inter,
-                                            struct txn **tid)
-{
-    if (mboxname_isdeletedmailbox(mboxname, NULL))
-        return 0;
-
-    mbname_t *mbname = mbname_from_intname(mboxname);
-    strarray_t myinter = STRARRAY_INITIALIZER;
-    struct txn *mytid = NULL;
-    int r = 0;
-
-    if (!tid) {
-        tid = &mytid;
-        inter = &myinter;
-    }
-
-    mbentry_t *mbentry = NULL;
-    while (!r && strarray_size(mbname_boxes(mbname))) {
-        const char *parent;
-
-        free(mbname_pop_boxes(mbname));
-
-        parent = mbname_intname(mbname);
-        if (!*parent) break;  /* root of hierarchy ("") */
-
-        if (untilname && !strcmp(parent, untilname)) break;
-
-        r = mboxlist_mylookup(parent, &mbentry, tid, 1);
-        if (mbentry) {
-            if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-                /* Stop if parent has any undeleted children. */
-                if (mboxlist_haschildren(parent)) break;
-                /* Mark deleted */
-                mbentry->mbtype |= MBTYPE_DELETED;
-                if (!modseq) {
-                    mbentry->foldermodseq = mboxname_nextmodseq(mbentry->name,
-                            mbentry->foldermodseq, mbentry->mbtype, 1);
-                }
-                else mbentry->foldermodseq = modseq;
-
-                r = mboxlist_update_entry(parent, mbentry, tid);
-                if (!r) strarray_push(inter, parent);
-            }
-            else r = IMAP_OK_COMPLETED;
-
-            mboxlist_entry_free(&mbentry);
-        }
-    }
+out:
     mboxlist_entry_free(&mbentry);
-
     mbname_free(&mbname);
-
-    if (r == IMAP_OK_COMPLETED) r = 0;
-
-    if (mytid) {
-        if (r) cyrusdb_abort(mbdb, mytid);
-        else {
-            r = cyrusdb_commit(mbdb, mytid);
-            if (!r) sync_log_intermediaries(&myinter);
-        }
-
-        strarray_fini(&myinter);
-    }
 
     return r;
 }
@@ -1296,6 +1241,7 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
                                 modseq_t highestmodseq,
                                 const char *copyacl, const char *uniqueid,
                                 int localonly, int forceuser, int dbonly,
+                                int keep_intermediaries,
                                 struct mailbox **mboxptr)
 {
     int r;
@@ -1304,8 +1250,6 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     struct mailbox *newmailbox = NULL;
     int isremote = mbtype & MBTYPE_REMOTE;
     mbentry_t *newmbentry = NULL;
-    strarray_t inter = STRARRAY_INITIALIZER;
-    struct txn *tid = NULL;
 
     r = mboxlist_create_namecheck(mboxname, userid, auth_state,
                                   isadmin, forceuser);
@@ -1342,21 +1286,12 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
         newmbentry->createdmodseq = newmailbox->i.createdmodseq;
         newmbentry->foldermodseq = newmailbox->i.highestmodseq;
     }
-    r = mboxlist_update_entry(mboxname, newmbentry, &tid);
+    r = mboxlist_update_entry(mboxname, newmbentry, NULL);
 
-    if (!r) {
+    if (!r && !keep_intermediaries) {
         /* create any missing intermediaries */
-        r = mboxlist_create_intermediaries(mboxname, newmbentry->foldermodseq,
-                                           &inter, &tid);
+        r = mboxlist_update_intermediaries(mboxname, mbtype, newmbentry->foldermodseq);
     }
-
-    if (r) cyrusdb_abort(mbdb, tid);
-    else {
-        r = cyrusdb_commit(mbdb, tid);
-        if (!r) sync_log_intermediaries(&inter);
-    }
-
-    strarray_fini(&inter);
 
     if (r) {
         syslog(LOG_ERR, "DBERROR: failed to insert to mailboxes list %s: %s",
@@ -1433,7 +1368,7 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
                                     isadmin, userid, auth_state,
                                     options, uidvalidity, createdmodseq, 0, NULL,
                                     uniqueid, localonly,
-                                    forceuser, dbonly, &mailbox);
+                                    forceuser, dbonly, 0, &mailbox);
 
     if (notify && !r) {
         /* send a MailboxCreate event notification */
@@ -1458,14 +1393,16 @@ EXPORTED int mboxlist_createsync(const char *name, int mbtype,
                         modseq_t createdmodseq,
                         modseq_t highestmodseq,
                         const char *acl, const char *uniqueid,
-                        int local_only, struct mailbox **mboxptr)
+                        int local_only, int keep_intermediaries,
+                        struct mailbox **mboxptr)
 {
     return mboxlist_createmailbox_full(name, mbtype, partition,
                                        1, userid, auth_state,
                                        options, uidvalidity,
                                        createdmodseq,
                                        highestmodseq, acl, uniqueid,
-                                       local_only, 1, 0, mboxptr);
+                                       local_only, 1, 0,
+                                       keep_intermediaries, mboxptr);
 }
 
 /* insert an entry for the proxy */
@@ -1680,10 +1617,12 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                force, 1,
                                keep_intermediaries);
 
-    if (!r && !mboxlist_haschildren(name) && !keep_intermediaries) {
-        r = mboxlist_delete_intermediaries(name, NULL /*untilname */,
-                                           mbentry->foldermodseq+1,
-                                           NULL /* inter */, NULL /* tid */);
+    if (!r && !keep_intermediaries) {
+        /* in theory this should take the modseq from the renamed mailbox, but we don't
+         * have a quick way to lift that, so just pass 0 to get another modseq for the
+         * each intermediate.  This codepath is only called on replication masters, so
+         * that's OK */
+        r = mboxlist_update_intermediaries(mbentry->name, mbentry->mbtype, 0);
     }
 
 done:
@@ -1812,10 +1751,9 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         }
         r = mboxlist_update(newmbentry, /*localonly*/1);
 
-        if (!r && !haschildren && !keep_intermediaries) {
-            r = mboxlist_delete_intermediaries(name, NULL /* untilname */,
-                                               newmbentry->foldermodseq,
-                                               NULL /* inter */, NULL /* tid */);
+        /* any other updated intermediates get the same modseq */
+        if (!r && !keep_intermediaries) {
+            r = mboxlist_update_intermediaries(mbentry->name, mbentry->mbtype, newmbentry->foldermodseq);
         }
 
         mboxlist_entry_free(&newmbentry);
@@ -1833,6 +1771,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         if (r && !force) goto done;
     }
 
+
     /* delete underlying mailbox */
     if (!isremote && mailbox) {
         /* only on a real delete do we delete from the remote end as well */
@@ -1845,6 +1784,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         if (r && mboxevent)
             mboxevent_free(&mboxevent);
     }
+
 
  done:
     mailbox_close(&mailbox);
@@ -2014,7 +1954,6 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
     char *newpartition = NULL;
     mupdate_handle *mupdate_h = NULL;
     mbentry_t *newmbentry = NULL;
-    int is_deleted_ancestor = 0;
 
     init_internal();
 
@@ -2023,7 +1962,8 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry = mboxlist_entry_copy(mbentry);
         free(newmbentry->name);
         newmbentry->name = xstrdupnull(newname);
-        newmbentry->foldermodseq++;
+        newmbentry->foldermodseq = mboxname_nextmodseq(newname, newmbentry->foldermodseq,
+                                                       newmbentry->mbtype, 1);
 
         /* skip ahead to the database update */
         goto dbupdate;
@@ -2165,10 +2105,6 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
     newmbentry->createdmodseq = newmailbox->i.createdmodseq;
     newmbentry->foldermodseq = newmailbox->i.highestmodseq;
 
-    /* is this delayed delete of a mailbox with a children? */
-    is_deleted_ancestor = (mboxname_isdeletedmailbox(newname, NULL)
-                           && mboxlist_haschildren(oldname));
-
   dbupdate:
 
     do {
@@ -2179,8 +2115,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
             /* store a DELETED marker */
             mbentry_t *oldmbentry = mboxlist_entry_create();
             oldmbentry->name = xstrdupnull(mbentry->name);
-            oldmbentry->mbtype =
-                is_deleted_ancestor ? MBTYPE_INTERMEDIATE : MBTYPE_DELETED;
+            oldmbentry->mbtype = MBTYPE_DELETED;
             oldmbentry->uidvalidity = mbentry->uidvalidity;
             oldmbentry->uniqueid = xstrdupnull(mbentry->uniqueid);
             oldmbentry->createdmodseq = mbentry->createdmodseq;
@@ -2189,27 +2124,12 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
             r = mboxlist_update_entry(oldname, oldmbentry, &tid);
 
-            if (!r && !is_deleted_ancestor && !keep_intermediaries) {
-                char *untilname = mboxname_common_ancestor(oldname, newname);
-                r = mboxlist_delete_intermediaries(oldname, untilname,
-                                                   oldmbentry->foldermodseq,
-                                                   &inter, &tid);
-                free(untilname);
-            }
-
             mboxlist_entry_free(&oldmbentry);
         }
 
         /* create a new entry */
         if (!r) {
             r = mboxlist_update_entry(newname, newmbentry, &tid);
-
-            /* create any missing intermediaries */
-            if (!r) {
-                r = mboxlist_create_intermediaries(newname,
-                                                   newmbentry->foldermodseq,
-                                                   &inter, &tid);
-            }
         }
 
         switch (r) {
@@ -2231,7 +2151,6 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
     /* 3. Commit transaction */
     r = cyrusdb_commit(mbdb, tid);
-    if (!r) sync_log_intermediaries(&inter);
 
     tid = NULL;
     if (r) {
@@ -2265,6 +2184,15 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
  done: /* Commit or cleanup */
     if (!r && newmailbox)
         r = mailbox_commit(newmailbox);
+
+    if (!keep_intermediaries) {
+        if (!r) {
+            r = mboxlist_update_intermediaries(newmbentry->name, newmbentry->mbtype, newmbentry->foldermodseq);
+        }
+        if (!r) {
+            r = mboxlist_update_intermediaries(oldname, newmbentry->mbtype, newmbentry->foldermodseq);
+        }
+    }
 
     if (r) {
         /* rollback DB changes if it was an mupdate failure */

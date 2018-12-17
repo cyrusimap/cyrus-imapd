@@ -1864,7 +1864,8 @@ static void _mboxset_result_fini(struct mboxset_result *result)
 
 static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
                          enum mboxset_runmode mode,
-                         json_t **mbox, struct mboxset_result *result)
+                         json_t **mbox, struct mboxset_result *result,
+                         strarray_t *update_intermediaries)
 {
     char *mboxname = NULL;
     int r = 0;
@@ -1952,12 +1953,14 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
             0 /* createdmodseq */,
             0 /* highestmodseq */, mbparent->acl,
             NULL /* uniqueid */, 0 /* local_only */,
+            1, /* keep_intermediaries */
             NULL /* mboxptr */);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                 mboxname, error_message(r));
         goto done;
     }
+    strarray_add(update_intermediaries, mboxname);
 
      /* invalidate ACL cache */
     jmap_myrights_delete(req, mboxname);
@@ -1998,7 +2001,8 @@ done:
 
 static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                          enum mboxset_runmode mode,
-                         struct mboxset_result *result)
+                         struct mboxset_result *result,
+                         strarray_t *update_intermediaries)
 {
     /* So many names... manage them in our own string pool */
     ptrarray_t strpool = PTRARRAY_INITIALIZER;
@@ -2201,6 +2205,8 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             mboxevent_free(&mboxevent);
             mboxlist_entry_free(&mbentry);
             mboxlist_lookup_allow_all(newmboxname, &mbentry, NULL);
+            strarray_add(update_intermediaries, oldmboxname);
+            strarray_add(update_intermediaries, newmboxname);
 
             /* Keep track of old IMAP name */
             if (!result->old_imapname)
@@ -2277,7 +2283,7 @@ done:
 
 static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
                           enum mboxset_runmode mode,
-                          struct mboxset_result *result)
+                          struct mboxset_result *result, strarray_t *update_intermediaries)
 {
     int r = 0;
     mbentry_t *mbinbox = NULL, *mbentry = NULL;
@@ -2365,6 +2371,8 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
     else if (r) {
         goto done;
     }
+
+    strarray_add(update_intermediaries, mbentry->name);
 
     /* invalidate ACL cache */
     jmap_myrights_delete(req, mbentry->name);
@@ -2546,7 +2554,7 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
 static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
                          struct mboxset_ops *ops,
                          enum mboxset_runmode mode,
-                         strarray_t *delete_intermediaries)
+                         strarray_t *update_intermediaries)
 {
     int i;
     strarray_t skipped_del = STRARRAY_INITIALIZER;
@@ -2565,7 +2573,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
         if (args->creation_id) {
             json_t *mbox = NULL;
             struct mboxset_result result = MBOXSET_RESULT_INITIALIZER;
-            _mbox_create(req, args, mode, &mbox, &result);
+            _mbox_create(req, args, mode, &mbox, &result, update_intermediaries);
             if (result.err) {
                 json_object_set(set->super.not_created,
                         args->creation_id, result.err);
@@ -2590,7 +2598,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
         /* Update */
         else {
             struct mboxset_result result = MBOXSET_RESULT_INITIALIZER;
-            _mbox_update(req, args, mode, &result);
+            _mbox_update(req, args, mode, &result, update_intermediaries);
             if (result.err) {
                 json_object_set(set->super.not_updated,
                         args->mbox_id, result.err);
@@ -2607,9 +2615,6 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
                     tmp->tmp_imapname = xstrdup(result.tmp_imapname);
                     ptrarray_append(&tmp_renames, tmp);
                 }
-                if (result.old_imapname) {
-                    strarray_append(delete_intermediaries, result.old_imapname);
-                }
             }
             _mboxset_result_fini(&result);
         }
@@ -2622,7 +2627,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
     for (i = 0; i < strarray_size(ops->del); i++) {
         const char *mbox_id = strarray_nth(ops->del, i);
         struct mboxset_result result = MBOXSET_RESULT_INITIALIZER;
-        _mbox_destroy(req, mbox_id, set->on_destroy_remove_msgs, mode, &result);
+        _mbox_destroy(req, mbox_id, set->on_destroy_remove_msgs, mode, &result, update_intermediaries);
         if (result.err) {
             json_object_set(set->super.not_destroyed, mbox_id, result.err);
         }
@@ -2631,7 +2636,6 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
         }
         else {
             json_array_append_new(set->super.destroyed, json_string(mbox_id));
-            strarray_append(delete_intermediaries, result.old_imapname);
         }
         _mboxset_result_fini(&result);
     }
@@ -2649,14 +2653,14 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
                 mboxevent,
                 0 /* local_only */, 0 /* forceuser */, 0 /* ignorequota */,
                 1 /* keep_intermediaries */);
+        strarray_add(update_intermediaries, tmp->tmp_imapname);
+        strarray_add(update_intermediaries, tmp->new_imapname);
         mboxevent_free(&mboxevent);
         if (r) {
             syslog(LOG_ERR, "jmap: mailbox rename failed half-way: old=%s tmp=%s new=%s: %s",
                     tmp->old_imapname ? tmp->old_imapname : "null",
                     tmp->tmp_imapname, tmp->new_imapname, error_message(r));
         }
-        /* Delete intermediaries of temporary mailbox */
-        strarray_append(delete_intermediaries, tmp->tmp_imapname);
         /* invalidate ACL cache */
         if (tmp->old_imapname) jmap_myrights_delete(req, tmp->old_imapname);
         jmap_myrights_delete(req, tmp->tmp_imapname);
@@ -2895,20 +2899,20 @@ static void _mboxset(jmap_req_t *req, struct mboxset *set)
      * error.
      */
     struct mboxset_ops *ops = _mboxset_newops(req, set);
-    strarray_t delete_intermediaries = STRARRAY_INITIALIZER;
+    strarray_t update_intermediaries = STRARRAY_INITIALIZER;
 
     /* Apply Mailbox/set operations */
     if (ops->is_cyclic) {
-        _mboxset_run(req, set, ops, _MBOXSET_FAIL, &delete_intermediaries);
+        _mboxset_run(req, set, ops, _MBOXSET_FAIL, &update_intermediaries);
     }
     else {
-        _mboxset_run(req, set, ops, _MBOXSET_SKIP, &delete_intermediaries);
+        _mboxset_run(req, set, ops, _MBOXSET_SKIP, &update_intermediaries);
         if (ptrarray_size(ops->put) || strarray_size(ops->del)) {
             if (_mboxset_state_is_valid(req->accountid, ops)) {
-                _mboxset_run(req, set, ops, _MBOXSET_TMPNAME, &delete_intermediaries);
+                _mboxset_run(req, set, ops, _MBOXSET_TMPNAME, &update_intermediaries);
             }
             else {
-                _mboxset_run(req, set, ops, _MBOXSET_FAIL, &delete_intermediaries);
+                _mboxset_run(req, set, ops, _MBOXSET_FAIL, &update_intermediaries);
             }
         }
     }
@@ -2922,15 +2926,18 @@ static void _mboxset(jmap_req_t *req, struct mboxset *set)
      * after we fetched the mailbox state, so clients are forced to
      * resync their mailbox trees after the Mailbox/set. */
     int i;
-    for (i = 0; i < strarray_size(&delete_intermediaries); i++) {
-        const char *old_imapname = strarray_nth(&delete_intermediaries, i);
-        mboxlist_delete_intermediaries(old_imapname, NULL, 0, NULL, NULL);
+    for (i = 0; i < strarray_size(&update_intermediaries); i++) {
+        const char *old_imapname = strarray_nth(&update_intermediaries, i);
+        /* XXX - we know these are mailboxes, so mbtype 0 is OK, but it's not an
+         * ideal interface */
+        mboxlist_update_intermediaries(old_imapname, 0, 0);
+        /* XXX error handling? */
     }
 
     assert(ptrarray_size(ops->put) == 0);
     assert(strarray_size(ops->del) == 0);
     _mboxset_ops_free(ops);
-    strarray_fini(&delete_intermediaries);
+    strarray_fini(&update_intermediaries);
 }
 
 static int _mboxset_args_parse(const char *key,

@@ -164,6 +164,7 @@ int mboxlist_createsync(const char *name, int mbtype, const char *partition,
                         modseq_t createdmodseq,
                         modseq_t highestmodseq, const char *acl,
                         const char *uniqueid, int local_only,
+                        int keep_intermediaries,
                         struct mailbox **mboxptr);
 
 /* delated delete */
@@ -297,11 +298,7 @@ int mboxlist_setquotas(const char *root,
 int mboxlist_unsetquota(const char *root);
 
 /* handle interemediates */
-int mboxlist_create_intermediaries(const char *mboxname, modseq_t modseq,
-                                   strarray_t *inter, struct txn **tid);
-int mboxlist_delete_intermediaries(const char *mboxname, const char *untilname,
-                                   modseq_t modseq, strarray_t *inter,
-                                   struct txn **tid);
+int mboxlist_update_intermediaries(const char *mboxname, int mbtype, modseq_t modseq);
 int mboxlist_haschildren(const char *mboxname);
 
 /* open the mailboxes db */
