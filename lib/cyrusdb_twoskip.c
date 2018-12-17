@@ -362,6 +362,7 @@ struct txn {
     /* logstart is where we start changes from on commit, where we truncate
        to on abort */
     int num;
+    int shared;
 };
 
 struct db_header {
@@ -1226,24 +1227,27 @@ static int read_lock(struct dbengine *db)
     return 0;
 }
 
-static int newtxn(struct dbengine *db, struct txn **tidptr)
+static int newtxn(struct dbengine *db, int shared, struct txn **tidptr)
 {
     int r;
 
     assert(!db->current_txn);
     assert(!*tidptr);
 
-    /* grab a r/w lock */
-    r = write_lock(db);
+    /* grab a lock */
+    r = shared ? read_lock(db) : write_lock(db);
     if (r) return r;
 
-    /* create the transaction */
     db->txn_num++;
-    db->current_txn = xmalloc(sizeof(struct txn));
-    db->current_txn->num = db->txn_num;
+
+    /* create the transaction */
+    struct txn *txn = xzmalloc(sizeof(struct txn));
+    txn->num = db->txn_num;
+    txn->shared = shared;
+    db->current_txn = txn;
 
     /* pass it back out */
-    *tidptr = db->current_txn;
+    *tidptr = txn;
 
     return 0;
 }
@@ -1361,7 +1365,7 @@ static int opendb(const char *fname, int flags, struct dbengine **ret, struct tx
     *ret = db;
 
     if (mytid) {
-        r = newtxn(db, mytid);
+        r = newtxn(db, flags & CYRUSDB_SHARED, mytid);
         if (r) goto done;
     }
 
@@ -1379,10 +1383,16 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     /* do we already have this DB open? */
     for (ent = open_twoskip; ent; ent = ent->next) {
         if (strcmp(FNAME(ent->db), fname)) continue;
-        if (ent->db->current_txn)
+        if (ent->db->current_txn) {
+            /* XXX we could gracefully handle attempts to open
+             * a shared-lock database multiple times.e.g by
+             * ref-counting transactions. But it's likely that
+             * multiple open attempts are a bug in the caller's
+             * logic, so error out here */
             return CYRUSDB_LOCKED;
+        }
         if (mytid) {
-            r = newtxn(ent->db, mytid);
+            r = newtxn(ent->db, flags & CYRUSDB_SHARED, mytid);
             if (r) return r;
         }
         ent->refcount++;
@@ -1458,7 +1468,7 @@ static int myfetch(struct dbengine *db,
 
     if (tidptr) {
         if (!*tidptr) {
-            r = newtxn(db, tidptr);
+            r = newtxn(db, 1/*shared*/, tidptr);
             if (r) return r;
         }
     } else {
@@ -1528,7 +1538,7 @@ static int myforeach(struct dbengine *db,
         tidptr = &db->current_txn;
     if (tidptr) {
         if (!*tidptr) {
-            r = newtxn(db, tidptr);
+            r = newtxn(db, 0/*shared*/, tidptr);
             if (r) return r;
         }
     } else {
@@ -1671,7 +1681,7 @@ static int mycommit(struct dbengine *db, struct txn *tid)
     assert(tid == db->current_txn);
 
     /* no need to abort if we're not dirty */
-    if (!(db->header.flags & DIRTY))
+    if (db->current_txn->shared || !(db->header.flags & DIRTY))
         goto done;
 
     /* build a commit record */
@@ -1705,7 +1715,7 @@ static int mycommit(struct dbengine *db, struct txn *tid)
         }
     }
     else {
-        if (!(db->open_flags & CYRUSDB_NOCOMPACT)
+        if (!db->current_txn->shared && !(db->open_flags & CYRUSDB_NOCOMPACT)
             && db->header.current_size > MINREWRITE
             && db->header.current_size > 2 * db->header.repack_size) {
             int r2 = mycheckpoint(db);
@@ -1760,13 +1770,17 @@ static int mystore(struct dbengine *db,
     assert(db);
     assert(key && keylen);
 
+    /* reject store for shared locks */
+    if (tidptr && *tidptr && (*tidptr)->shared)
+        return CYRUSDB_READONLY;
+
     /* not keeping the transaction, just create one local to
      * this function */
     if (!tidptr) tidptr = &localtid;
 
     /* make sure we're write locked and up to date */
     if (!*tidptr) {
-        r = newtxn(db, tidptr);
+        r = newtxn(db, 0/*shared*/, tidptr);
         if (r) return r;
     }
 
@@ -2170,11 +2184,11 @@ static int recovery1(struct dbengine *db, int *count)
     int cmp;
     int i;
 
-    assert(mappedfile_iswritelocked(db->mf));
-
     /* no need to run recovery if we're consistent */
     if (db_is_clean(db))
         return 0;
+
+    assert(mappedfile_iswritelocked(db->mf));
 
     /* we can't recovery a file that's not created yet */
     assert(db->header.current_size > HEADER_SIZE);

@@ -53,6 +53,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
 #include "util.h"
@@ -119,6 +120,17 @@ static int _myopen(const char *backend, const char *fname,
 
     if (!backend) backend = DEFAULT_BACKEND; /* not used yet, later */
     db->backend = cyrusdb_fromname(backend);
+
+    /* Check if shared lock is requested */
+    if (flags & CYRUSDB_SHARED) {
+        assert(tid && *tid == NULL);
+        if (flags & CYRUSDB_CONVERT) {
+            syslog(LOG_ERR, "DBERROR: CONVERT and SHARED are mutually exclusive, "
+                    "won't open db %s (backend %s)", fname, backend);
+            r = CYRUSDB_INTERNAL;
+            goto done;
+        }
+    }
 
     /* This whole thing is a fricking critical section.  We don't have the API
      * in place for a safe rename of a locked database, so the choices are
