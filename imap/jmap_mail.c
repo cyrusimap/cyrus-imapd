@@ -7610,23 +7610,43 @@ static void _email_create(jmap_req_t *req,
     _email_parse(jemail, &parser, &email);
 
     /* Validate mailboxIds */
-    json_t *jmailboxids = json_object_get(jemail, "mailboxIds");
+    json_t *jmailboxids = json_copy(json_object_get(jemail, "mailboxIds"));
     jmap_parser_push(&parser, "mailboxIds");
-    void *iter = json_object_iter(jmailboxids);
     const char *mbox_id;
-    while ((mbox_id = json_object_iter_key(iter))) {
-        mbentry_t *mbentry = NULL;
-        if (*mbox_id == '#') {
-            mbox_id = jmap_lookup_id(req, mbox_id + 1);
+    json_t *jval;
+    void *tmp;
+    json_object_foreach_safe(jmailboxids, tmp, mbox_id, jval) {
+        int need_rights = ACL_LOOKUP|ACL_INSERT;
+        if (*mbox_id == '$') {
+            /* Lookup mailbox by role */
+            const char *role = mbox_id + 1;
+            char *uniqueid = NULL;
+            char *mboxname = NULL;
+            if (!jmap_mailbox_find_role(req, role, &mboxname, &uniqueid) &&
+                jmap_hasrights_byname(req, mboxname, need_rights)) {
+                json_object_del(jmailboxids, mbox_id);
+                json_object_set_new(jmailboxids, uniqueid, json_true());
+            }
+            else {
+                jmap_parser_invalid(&parser, mbox_id);
+            }
+            free(uniqueid);
+            free(mboxname);
         }
-        if (mbox_id) {
-            mbentry = _mbentry_by_uniqueid(req, mbox_id);
+        else {
+            /* Lookup mailbox by id */
+            mbentry_t *mbentry = NULL;
+            if (*mbox_id == '#') {
+                mbox_id = jmap_lookup_id(req, mbox_id + 1);
+            }
+            if (mbox_id) {
+                mbentry = _mbentry_by_uniqueid(req, mbox_id);
+            }
+            if (!mbentry || !jmap_hasrights(req, mbentry, need_rights)) {
+                jmap_parser_invalid(&parser, mbox_id);
+            }
+            mboxlist_entry_free(&mbentry);
         }
-        if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP|ACL_INSERT)) {
-            jmap_parser_invalid(&parser, mbox_id);
-        }
-        mboxlist_entry_free(&mbentry);
-        iter = json_object_iter_next(jmailboxids, iter);
     }
     if (json_array_size(parser.invalid)) {
         *set_err = json_pack("{s:s s:O}", "type", "invalidProperties",
@@ -7675,6 +7695,7 @@ done:
         else
             *set_err = jmap_server_error(r);
     }
+    json_decref(jmailboxids);
     strarray_fini(&keywords);
     jmap_parser_fini(&parser);
     _email_fini(&email);
@@ -8014,7 +8035,7 @@ static void _email_update_parse(json_t *jemail,
     update->keywords = keywords;
 
     /* Are mailboxes being overwritten or patched? */
-    json_t *mailboxids = json_incref(json_object_get(jemail, "mailboxIds"));
+    json_t *mailboxids = json_copy(json_object_get(jemail, "mailboxIds"));
     if (mailboxids == NULL) {
         /* Collect mailboxids as patch */
         const char *field = NULL;
@@ -8810,32 +8831,52 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
         }
         json_t *jval;
         const char *mbox_id;
-        json_object_foreach(update->mailboxids, mbox_id, jval) {
-            if (hash_lookup(mbox_id, &bulk->plans_by_mbox_id)) {
-                continue;
-            }
+        void *tmp;
+        json_object_foreach_safe(update->mailboxids, tmp, mbox_id, jval) {
             struct mailbox *mbox = NULL;
-            mbentry_t *mbentry = _mbentry_by_uniqueid(req, mbox_id);
-            if (mbentry) {
-                int r = 0;
-                if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-                    r = mboxlist_promote_intermediary(mbentry->name);
+
+            if (*mbox_id == '$') {
+                /* Lookup mailbox by role */
+                const char *role = mbox_id + 1;
+                char *mboxname = NULL;
+                char *uniqueid = NULL;
+                if (!jmap_mailbox_find_role(bulk->req, role, &mboxname, &uniqueid)) {
+                    json_object_del(update->mailboxids, mbox_id);
+                    json_object_set(update->mailboxids, uniqueid, jval);
+                    jmap_openmbox(req, mboxname, &mbox, /*rw*/1);
                 }
-                if (!r) jmap_openmbox(req, mbentry->name, &mbox, /*rw*/1);
+                free(uniqueid);
+                free(mboxname);
             }
+            else {
+                /* Lookup mailbox by id */
+                mbentry_t *mbentry = _mbentry_by_uniqueid(req, mbox_id);
+                if (mbentry) {
+                    int r = 0;
+                    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+                        r = mboxlist_promote_intermediary(mbentry->name);
+                    }
+                    if (!r) jmap_openmbox(req, mbentry->name, &mbox, /*rw*/1);
+                }
+                mboxlist_entry_free(&mbentry);
+            }
+
+
             if (mbox) {
-                struct email_mboxrec *mboxrec = xzmalloc(sizeof(struct email_mboxrec));
-                mboxrec->mboxname = xstrdup(mbox->name);
-                mboxrec->mbox_id = xstrdup(mbox->uniqueid);
-                ptrarray_append(bulk->new_mboxrecs, mboxrec);
-                _email_bulkupdate_addplan(bulk, mbox, mboxrec);
+                if (!hash_lookup(mbox->uniqueid, &bulk->plans_by_mbox_id)) {
+                    struct email_mboxrec *mboxrec = xzmalloc(sizeof(struct email_mboxrec));
+                    mboxrec->mboxname = xstrdup(mbox->name);
+                    mboxrec->mbox_id = xstrdup(mbox->uniqueid);
+                    ptrarray_append(bulk->new_mboxrecs, mboxrec);
+                    _email_bulkupdate_addplan(bulk, mbox, mboxrec);
+                }
+                else jmap_closembox(req, &mbox); // already reference counted
             }
             else {
                 json_object_set_new(bulk->set_errors, update->email_id,
                         json_pack("{s:s s:[s]}", "type", "invalidProperties",
                             "properties", "mailboxIds"));
             }
-            mboxlist_entry_free(&mbentry);
         }
     }
 

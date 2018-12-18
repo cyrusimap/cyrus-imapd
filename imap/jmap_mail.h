@@ -66,4 +66,7 @@ extern void jmap_emailsubmission_capabilities(jmap_settings_t *settings);
 extern void jmap_mailbox_init(jmap_settings_t *settings);
 extern void jmap_mailbox_capabilities(jmap_settings_t *settings);
 
+extern int jmap_mailbox_find_role(jmap_req_t *req, const char *role,
+                                  char **mboxnameptr, char **uniqueid);
+
 #endif /* JMAP_MAIL_H */

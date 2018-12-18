@@ -257,6 +257,7 @@ struct _mbox_find_specialuse_rock {
     const char *userid;
     const char *accountid;
     char *mboxname;
+    char *uniqueid;
 };
 
 static int _mbox_find_specialuse_cb(const mbentry_t *mbentry, void *rock)
@@ -268,8 +269,11 @@ static int _mbox_find_specialuse_cb(const mbentry_t *mbentry, void *rock)
 
     if (attrib.len) {
         strarray_t *uses = strarray_split(buf_cstring(&attrib), " ", 0);
-        if (strarray_find_case(uses, d->use, 0) >= 0)
+        if (strarray_find_case(uses, d->use, 0) >= 0) {
             d->mboxname = xstrdup(mbentry->name);
+            d->uniqueid = xstrdup(mbentry->uniqueid);
+
+        }
         strarray_free(uses);
     }
 
@@ -279,17 +283,38 @@ static int _mbox_find_specialuse_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
-static char *_mbox_find_specialuse(jmap_req_t *req, const char *use)
+static int _mbox_find_specialuse(jmap_req_t *req, const char *use,
+                                 char **mboxnameptr,
+                                 char **uniqueidptr)
 {
     /* \\Inbox is magical */
-    if (!strcasecmp(use, "\\Inbox"))
-        return mboxname_user_mbox(req->accountid, NULL);
+    if (!strcasecmp(use, "\\Inbox")) {
+        char *inboxname = mboxname_user_mbox(req->accountid, NULL);
+        mbentry_t *mbentry = NULL;
+        int r = mboxlist_lookup(inboxname, &mbentry, NULL);
+        if (!r) {
+            if (mboxnameptr) *mboxnameptr = xstrdup(inboxname);
+            if (uniqueidptr) *uniqueidptr = xstrdup(mbentry->uniqueid);
+        }
+        free(inboxname);
+        mboxlist_entry_free(&mbentry);
+        return r;
+    }
 
     struct _mbox_find_specialuse_rock rock = {
-        use, req->userid, req->accountid, NULL
+        use, req->userid, req->accountid, NULL, NULL
     };
-    jmap_mboxlist(req, _mbox_find_specialuse_cb, &rock);
-    return rock.mboxname;
+    int ret = jmap_mboxlist(req, _mbox_find_specialuse_cb, &rock);
+
+    if (mboxnameptr) {
+        *mboxnameptr = rock.mboxname;
+    } else free(rock.mboxname);
+
+    if (uniqueidptr) {
+        *uniqueidptr = rock.uniqueid;
+    } else free(rock.uniqueid);
+
+    return ret == CYRUSDB_DONE ? 0 : IMAP_NOTFOUND;
 }
 
 static char *_mbox_get_role(jmap_req_t *req, const mbname_t *mbname)
@@ -1530,6 +1555,7 @@ struct _mbox_find_xrole_rock {
     const char *userid;
     const char *accountid;
     char *mboxname;
+    char *uniqueid;
 };
 
 static int _mbox_find_xrole_cb(const mbentry_t *mbentry, void *rock)
@@ -1540,23 +1566,35 @@ static int _mbox_find_xrole_cb(const mbentry_t *mbentry, void *rock)
     annotatemore_lookup(mbentry->name, IMAP_ANNOT_NS "x-role", d->accountid, &attrib);
 
     if (attrib.len && !strcmp(buf_cstring(&attrib), d->xrole)) {
-        d->mboxname = xstrdup(mbentry->name);
+        if (d->mboxname) d->mboxname = xstrdup(mbentry->name);
+        if (d->uniqueid) d->uniqueid = xstrdup(mbentry->uniqueid);
+        buf_free(&attrib);
+        return CYRUSDB_DONE;
     }
 
     buf_free(&attrib);
-
-    if (d->mboxname) return CYRUSDB_DONE;
     return 0;
 }
 
-static char *_mbox_find_xrole(jmap_req_t *req, const char *xrole)
+static int _mbox_find_xrole(jmap_req_t *req, const char *xrole,
+                            char **mboxnameptr,
+                            char **uniqueidptr)
 {
     struct _mbox_find_xrole_rock rock = {
-        xrole, req->userid, req->accountid, NULL
+        xrole, req->userid, req->accountid, NULL, NULL
     };
     /* INBOX can never have an x-role. */
-    jmap_mboxlist(req, _mbox_find_xrole_cb, &rock);
-    return rock.mboxname;
+    int ret = jmap_mboxlist(req, _mbox_find_xrole_cb, &rock);
+
+    if (mboxnameptr) {
+        *mboxnameptr = rock.mboxname;
+    } else free(rock.mboxname);
+
+    if (uniqueidptr) {
+        *uniqueidptr = rock.uniqueid;
+    } else free(rock.uniqueid);
+
+    return ret == CYRUSDB_DONE ? 0 : IMAP_NOTFOUND;
 }
 
 static int _mbox_has_children_cb(const mbentry_t *mbentry __attribute__ ((unused)), void *rock) {
@@ -1593,6 +1631,47 @@ static void _mbox_setargs_fini(struct mboxset_args *args)
     free(args->name);
     free(args->role);
     free(args->specialuse);
+}
+
+static const char *_mbox_role_to_specialuse(const char *role)
+{
+    if (!strcmp(role, "archive")) {
+        return "\\Archive";
+    } else if (!strcmp(role, "drafts")) {
+        return "\\Drafts";
+    } else if (!strcmp(role, "important")) {
+        return "\\Important";
+    } else if (!strcmp(role, "junk")) {
+        return "\\Junk";
+    } else if (!strcmp(role, "sent")) {
+        return "\\Sent";
+    } else if (!strcmp(role, "trash")) {
+        return "\\Trash";
+    } else if (!strcmp(role, "xchats")) {
+        return "\\XChats";
+    } else if (!strcmp(role, "xtemplates")) {
+        return "\\XTemplates";
+    } else if (!strcmp(role, "xnotes")) {
+        return "\\XNotes";
+    } else {
+        return NULL;
+    }
+}
+
+EXPORTED int jmap_mailbox_find_role(jmap_req_t *req, const char *role,
+                                    char **mboxnameptr,
+                                    char **uniqueidptr)
+{
+    const char *specialuse = _mbox_role_to_specialuse(role);
+    int r = 0;
+
+    if (specialuse) {
+        r = _mbox_find_specialuse(req, specialuse, mboxnameptr, uniqueidptr);
+    } else {
+        r = _mbox_find_xrole(req, role, mboxnameptr, uniqueidptr);
+    }
+
+    return r;
 }
 
 static void _mbox_setargs_parse(json_t *jargs,
@@ -1661,46 +1740,26 @@ static void _mbox_setargs_parse(json_t *jargs,
     json_t *jrole = json_object_get(jargs, "role");
     if (json_is_string(jrole)) {
         const char *role = json_string_value(jrole);
-        const char *specialuse = NULL;
+        const char *specialuse = _mbox_role_to_specialuse(role);
         int is_valid = 1;
         if (!strcmp(role, "inbox")) {
             /* inbox role is server-set */
             is_valid = 0;
-        } else if (!strcmp(role, "archive")) {
-            specialuse = "\\Archive";
-        } else if (!strcmp(role, "drafts")) {
-            specialuse = "\\Drafts";
-        } else if (!strcmp(role, "important")) {
-            specialuse = "\\Important";
-        } else if (!strcmp(role, "junk")) {
-            specialuse = "\\Junk";
-        } else if (!strcmp(role, "sent")) {
-            specialuse = "\\Sent";
-        } else if (!strcmp(role, "trash")) {
-            specialuse = "\\Trash";
-        } else if (!strcmp(role, "xchats")) {
-            specialuse = "\\XChats";
-        } else if (!strcmp(role, "xtemplates")) {
-            specialuse = "\\XTemplates";
-        } else if (!strcmp(role, "xnotes")) {
-            specialuse = "\\XNotes";
-        } else if (strncmp(role, "x-", 2)) {
+        } else {
+            specialuse = _mbox_role_to_specialuse(role);
+        }
+        if (is_valid && !specialuse && strncmp(role, "x-", 2)) {
             /* Does it start with an "x-"? If not, reject it. */
             is_valid = 0;
         }
         if (is_valid) {
-            char *exists = NULL;
-            if (specialuse) {
-                /* Check that no such IMAP specialuse mailbox already exists. */
-                exists = _mbox_find_specialuse(req, specialuse);
+            /* Check that no mailbox with this role exists */
+            if (jmap_mailbox_find_role(req, role, NULL, NULL) != 0) {
+                args->role = xstrdupnull(role);
+                args->specialuse = xstrdupnull(specialuse);
             } else {
-                /* Check that no mailbox with this x-role exists. */
-                exists = _mbox_find_xrole(req, role);
+                is_valid = 0;
             }
-            is_valid = exists == NULL;
-            free(exists);
-            args->role = xstrdupnull(role);
-            args->specialuse = xstrdupnull(specialuse);
         }
         if (!is_valid) {
             jmap_parser_invalid(parser, "role");
