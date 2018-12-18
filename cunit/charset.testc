@@ -1142,6 +1142,14 @@ static void test_charset_decode(void)
     TESTCASE("Hello", 5, "Hello", 5, ENCODING_NONE);
     TESTCASE("beefc0de", 8, "\x6d\xe7\x9f\x73\x47\x5e", 6, ENCODING_BASE64);
 
+    /* RFC 4648 examples */
+    TESTCASE("Zg==", 4, "f", 1, ENCODING_BASE64);
+    TESTCASE("Zm8=", 4, "fo", 2, ENCODING_BASE64);
+    TESTCASE("Zm9v", 4, "foo", 3, ENCODING_BASE64);
+    TESTCASE("Zm9vYg==", 8, "foob", 4, ENCODING_BASE64);
+    TESTCASE("Zm9vYmE=", 8, "fooba", 5, ENCODING_BASE64);
+    TESTCASE("Zm9vYmFy", 8, "foobar", 6, ENCODING_BASE64);
+
 #undef TESTCASE
 }
 
