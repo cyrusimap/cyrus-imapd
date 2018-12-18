@@ -472,18 +472,23 @@ static void test_mimeheader_badcharset(void)
 
 static void test_mimeheader_mergeqwords(void)
 {
-    static const char SPLIT3[] = "=?utf-8?q?=E2=82?= =?utf-8?q?=AC?=";
-    int flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
+    int flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE | CHARSET_SNIPPET;
 
-    char *s = charset_decode_mimeheader(SPLIT3, flags);
-    CU_ASSERT_PTR_NOT_NULL(s);
-    CU_ASSERT_STRING_EQUAL(s, "\xe2\x82\xac");
-    free(s);
+    static const char SPLIT_Q[] = "=?utf-8?q?=E2=82?= =?utf-8?q?=AC?=";
+    static const char SPLIT_B[] = "=?utf-8?b?wg==?= =?utf-8?b?oUhvbGEsc2XD?= =?utf-8?b?sW9yIQ==?=";
 
     static const char REGRESSION_Q[] = "=?utf-8?q?=C2=A1Hola,?=  =?utf-8?q?se=C3=B1or!?=";
     static const char REGRESSION_B[] = "=?utf-8?b?wqFIb2xhLA==?=  =?utf-8?b?c2XDsW9yIQ==?=";
 
-    flags |= CHARSET_SNIPPET;
+    char *s = charset_decode_mimeheader(SPLIT_Q, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, "\xe2\x82\xac");
+    free(s);
+
+    s = charset_decode_mimeheader(SPLIT_B, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, "¡Hola,señor!");
+    free(s);
 
     s = charset_decode_mimeheader(REGRESSION_Q, flags);
     CU_ASSERT_PTR_NOT_NULL(s);
