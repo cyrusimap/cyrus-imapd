@@ -7811,6 +7811,59 @@ EOF
     $self->assert_str_equals($sentAt, $res->[1][1]{list}[0]->{sentAt});
 }
 
+sub test_email_import_mailboxid_by_role
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $email = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: test email
+Date: Wed, 7 Dec 2016 22:11:11 +1100
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+This is a test email.
+EOF
+    $email =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($email, "message/rfc822");
+    my $blobid = $data->{blobId};
+
+    xlog "create drafts mailbox";
+    my $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R1"]
+    ]);
+    my $draftsMboxId = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($draftsMboxId);
+
+    xlog "import email from blob $blobid";
+    $res = eval {
+        $jmap->CallMethods([['Email/import', {
+            emails => {
+                "1" => {
+                    blobId => $blobid,
+                    mailboxIds => {
+                        '$drafts'=>  JSON::true
+                    },
+                    keywords => {
+                        '$Draft' => JSON::true,
+                    },
+                },
+            },
+        }, "R1"], ['Email/get', {ids => ["#1"]}, "R2"]]);
+    };
+
+    $self->assert_str_equals("Email/import", $res->[0][0]);
+    $self->assert_not_null($res->[1][1]{list}[0]->{mailboxIds}{$draftsMboxId});
+}
+
 sub test_thread_get_onemsg
     :min_version_3_1 :needs_component_jmap
 {
@@ -10672,6 +10725,75 @@ sub test_email_copy_hasattachment
         '$seen' => JSON::true,
     };
     $self->assert_deep_equals($wantKeywords, $res->[0][1]{list}[0]{keywords});
+}
+
+sub test_email_copy_mailboxid_by_role
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "Create user and share mailbox";
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.other", "cassandane", "lrsiwntex") or die;
+
+    my $srcInboxId = $self->getinbox()->{id};
+    $self->assert_not_null($srcInboxId);
+
+    my $dstInboxId = $self->getinbox({accountId => 'other'})->{id};
+    $self->assert_not_null($dstInboxId);
+
+    xlog "create email";
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                1 => {
+                    mailboxIds => {
+                        $srcInboxId => JSON::true,
+                    },
+                    keywords => {
+                        'foo' => JSON::true,
+                    },
+                    subject => 'hello',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part1',
+                    },
+                    bodyValues => {
+                        part1 => {
+                            value => 'world',
+                        }
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $emailId = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($emailId);
+
+    # Copy to other account, with mailbox identified by role
+    $res = $jmap->CallMethods([
+        ['Email/copy', {
+            fromAccountId => 'cassandane',
+            accountId => 'other',
+            create => {
+                1 => {
+                    id => $emailId,
+                    mailboxIds => {
+                        '$inbox' => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+        ['Email/get', {
+            accountId => 'other',
+            ids => ['#1'],
+            properties => ['mailboxIds'],
+        }, 'R2']
+    ]);
+    $self->assert_not_null($res->[1][1]{list}[0]{mailboxIds}{$dstInboxId});
 }
 
 sub test_email_set_destroy_bulk
