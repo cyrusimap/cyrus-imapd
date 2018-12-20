@@ -7124,12 +7124,9 @@ static void _email_parse(json_t *jemail,
         json_t *jval;
         jmap_parser_push(parser, "mailboxIds");
         json_object_foreach(jmailboxIds, mailboxid, jval) {
-            if (*mailboxid == '\0') {
+            if (*mailboxid == '\0' || jval != json_true()) {
                 jmap_parser_invalid(parser, NULL);
                 break;
-            }
-            if (jval != json_true()) {
-                jmap_parser_invalid(parser, mailboxid);
             }
         }
         jmap_parser_pop(parser);
@@ -7617,6 +7614,7 @@ static void _email_create(jmap_req_t *req,
     void *tmp;
     json_object_foreach_safe(jmailboxids, tmp, mbox_id, jval) {
         int need_rights = ACL_LOOKUP|ACL_INSERT;
+        int is_valid = 1;
         if (*mbox_id == '$') {
             /* Lookup mailbox by role */
             const char *role = mbox_id + 1;
@@ -7628,7 +7626,8 @@ static void _email_create(jmap_req_t *req,
                 json_object_set_new(jmailboxids, uniqueid, json_true());
             }
             else {
-                jmap_parser_invalid(&parser, mbox_id);
+                jmap_parser_invalid(&parser, NULL);
+                is_valid = 0;
             }
             free(uniqueid);
             free(mboxname);
@@ -7643,10 +7642,12 @@ static void _email_create(jmap_req_t *req,
                 mbentry = _mbentry_by_uniqueid(req, mbox_id);
             }
             if (!mbentry || !jmap_hasrights(req, mbentry, need_rights)) {
-                jmap_parser_invalid(&parser, mbox_id);
+                jmap_parser_invalid(&parser, NULL);
+                is_valid = 0;
             }
             mboxlist_entry_free(&mbentry);
         }
+        if (!is_valid) break;
     }
     if (json_array_size(parser.invalid)) {
         *set_err = json_pack("{s:s s:O}", "type", "invalidProperties",
@@ -9684,6 +9685,7 @@ static int jmap_email_import(jmap_req_t *req)
             const char *mbox_id;
             void *tmp;
             jmap_parser_push(&parser, "mailboxIds");
+            int is_valid = 1;
             json_object_foreach_safe(jmailboxids, tmp, mbox_id, jval) {
                 if (jval != json_true()) {
                     jmap_parser_invalid(&parser, s);
@@ -9701,7 +9703,8 @@ static int jmap_email_import(jmap_req_t *req)
                         json_object_set_new(jmailboxids, uniqueid, jval);
                     }
                     else {
-                        jmap_parser_invalid(&parser, s);
+                        jmap_parser_invalid(&parser, NULL);
+                        is_valid = 0;
                     }
                     free(mboxname);
                     free(uniqueid);
@@ -9717,10 +9720,12 @@ static int jmap_email_import(jmap_req_t *req)
                     }
                     mbentry_t *mbentry = _mbentry_by_uniqueid(req, mbox_id);
                     if (!mbentry || !jmap_hasrights(req, mbentry, need_rights)) {
-                        jmap_parser_invalid(&parser, s);
+                        jmap_parser_invalid(&parser, NULL);
+                        is_valid = 0;
                     }
                     mboxlist_entry_free(&mbentry);
                 }
+                if (!is_valid) break;
             }
             jmap_parser_pop(&parser);
         }
@@ -10227,7 +10232,8 @@ static void _email_copy_validate_props(json_t *jemail, json_t **err)
             json_t *jbool;
             json_object_foreach(prop, mbox_id, jbool) {
                 if (!strlen(mbox_id) || jbool != json_true()) {
-                    jmap_parser_invalid(&myparser, mbox_id);
+                    jmap_parser_invalid(&myparser, NULL);
+                    break;
                 }
             }
             jmap_parser_pop(&myparser);
