@@ -3260,7 +3260,7 @@ static int propfind_fromresource(const xmlChar *name, xmlNsPtr ns,
     buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s",
                (const char *) ns->href, name);
 
-    r = annotatemore_msg_lookup(fctx->mailbox->name, fctx->record->uid,
+    r = annotatemore_msg_lookup(fctx->mailbox, fctx->record->uid,
                                 buf_cstring(&fctx->buf), NULL, &attrib);
 
 done:
@@ -3301,9 +3301,9 @@ int propfind_fromdb(const xmlChar *name, xmlNsPtr ns,
                (const char *) ns->href, name);
 
     if (fctx->mbentry && !fctx->record) {
-        r = annotatemore_lookupmask(fctx->mbentry->name,
-                                    buf_cstring(&fctx->buf),
-                                    httpd_userid, &attrib);
+        r = annotatemore_lookupmask_mbe(fctx->mbentry,
+                                        buf_cstring(&fctx->buf),
+                                        httpd_userid, &attrib);
     }
 
     if (r) return HTTP_SERVER_ERROR;

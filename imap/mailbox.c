@@ -7465,7 +7465,7 @@ EXPORTED int mailbox_annotation_write(struct mailbox *mailbox, uint32_t uid,
     int r = 0;
     struct buf oldvalue = BUF_INITIALIZER;
 
-    annotatemore_msg_lookup(mailbox->name, uid, entry, userid, &oldvalue);
+    annotatemore_msg_lookup(mailbox, uid, entry, userid, &oldvalue);
     if (oldvalue.len == value->len && (!value->len || !memcmp(oldvalue.s, value->s, value->len)))
         goto done;
 
@@ -7500,7 +7500,7 @@ EXPORTED int mailbox_annotation_writemask(struct mailbox *mailbox, uint32_t uid,
     /* we don't lookupmask here - because we want to still write the value as the
      * user's own value rather than the masked value, regardless of whether they
      * have the same content */
-    annotatemore_msg_lookup(mailbox->name, uid, entry, userid, &oldvalue);
+    annotatemore_msg_lookup(mailbox, uid, entry, userid, &oldvalue);
     if (oldvalue.len == value->len && (!value->len || !memcmp(oldvalue.s, value->s, value->len)))
         goto done;
 
@@ -7528,14 +7528,14 @@ EXPORTED int mailbox_annotation_lookup(struct mailbox *mailbox, uint32_t uid,
                                        const char *entry, const char *userid,
                                        struct buf *value)
 {
-    return annotatemore_msg_lookup(mailbox->name, uid, entry, userid, value);
+    return annotatemore_msg_lookup(mailbox, uid, entry, userid, value);
 }
 
 EXPORTED int mailbox_annotation_lookupmask(struct mailbox *mailbox, uint32_t uid,
                                            const char *entry, const char *userid,
                                            struct buf *value)
 {
-    return annotatemore_msg_lookupmask(mailbox->name, uid, entry, userid, value);
+    return annotatemore_msg_lookupmask(mailbox, uid, entry, userid, value);
 }
 
 
