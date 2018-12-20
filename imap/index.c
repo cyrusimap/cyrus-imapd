@@ -1105,7 +1105,7 @@ EXPORTED void index_fetchresponses(struct index_state *state,
     /* Keep an open reference on the per-mailbox db to avoid
      * doing too many slow database opens during the fetch */
     if ((fetchargs->fetchitems & FETCH_ANNOTATION))
-        annotate_getdb(state->mboxname, &annot_db);
+        annotate_getdb(state->mailbox->uniqueid, &annot_db);
 
     start = 1;
     end = state->exists;
@@ -4282,7 +4282,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         const char *annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
         if (annot && !strncmp(annot, "/shared/", 8)) {
             struct buf previewbuf = BUF_INITIALIZER;
-            annotatemore_msg_lookup(mailbox->name, record.uid, annot+7,
+            annotatemore_msg_lookup(mailbox, record.uid, annot+7,
                                     /*userid*/"", &previewbuf);
             if (buf_len(&previewbuf) > 256)
                 buf_truncate(&previewbuf, 256); // XXX - utf8 chars
@@ -6234,7 +6234,7 @@ MsgData **index_msgdata_load(struct index_state *state,
             case SORT_ANNOTATION: {
                 struct buf value = BUF_INITIALIZER;
 
-                annotatemore_msg_lookup(state->mboxname,
+                annotatemore_msg_lookup(state->mailbox,
                                         record.uid,
                                         sortcrit[j].args.annot.entry,
                                         sortcrit[j].args.annot.userid,

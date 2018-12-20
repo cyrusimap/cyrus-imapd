@@ -333,19 +333,20 @@ EXPORTED void jmap_emailsubmission_envelope_to_smtp(smtp_envelope_t *smtpenv,
 EXPORTED json_t *jmap_fetch_snoozed(const char *mbox, uint32_t uid)
 {
     /* get the snoozed annotation */
+    struct mailbox mailbox = { .name = (char *) mbox, .uniqueid = NULL };
     const char *annot = IMAP_ANNOT_NS "snoozed";
     struct buf value = BUF_INITIALIZER;
     json_t *snooze = NULL;
     int r;
 
-    r = annotatemore_msg_lookup(mbox, uid, annot, "", &value);
+    r = annotatemore_msg_lookup(&mailbox, uid, annot, "", &value);
 
     if (!r) {
         if (!buf_len(&value)) {
             /* get the legacy snoozed-until annotation */
             annot = IMAP_ANNOT_NS "snoozed-until";
 
-            r = annotatemore_msg_lookup(mbox, uid, annot, "", &value);
+            r = annotatemore_msg_lookup(&mailbox, uid, annot, "", &value);
             if (!r && buf_len(&value)) {
                 /* build a SnoozeDetails object from the naked "until" value */
                 snooze = json_pack("{s:s}",

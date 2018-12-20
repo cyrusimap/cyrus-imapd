@@ -496,7 +496,7 @@ EXPORTED int msgrecord_annot_lookup(msgrecord_t *mr, const char *entry,
     int r = msgrecord_need(mr, M_MAILBOX|M_UID|M_ANNOTATIONS);
     if (r) return r;
 
-    return annotatemore_msg_lookup(mr->mbox->name, mr->record.uid, entry, userid, value);
+    return annotatemore_msg_lookup(mr->mbox, mr->record.uid, entry, userid, value);
 }
 
 

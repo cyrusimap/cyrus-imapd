@@ -730,7 +730,7 @@ static int read_lastalarm(struct mailbox *mailbox,
     const char *annotname = DAV_ANNOT_NS "lastalarm";
     struct buf annot_buf = BUF_INITIALIZER;
     mailbox_get_annotate_state(mailbox, record->uid, NULL);
-    annotatemore_msg_lookup(mailbox->name, record->uid,
+    annotatemore_msg_lookup(mailbox, record->uid,
                             annotname, "", &annot_buf);
 
     if (annot_buf.len &&

@@ -294,7 +294,7 @@ static int _mbox_find_specialuse_cb(const mbentry_t *mbentry, void *rock)
         return 0;
     }
 
-    annotatemore_lookup(mbentry->name, "/specialuse", req->accountid, &attrib);
+    annotatemore_lookup_mbe(mbentry, "/specialuse", req->accountid, &attrib);
 
     if (attrib.len) {
         strarray_t *uses = strarray_split(buf_cstring(&attrib), " ", STRARRAY_TRIM);

@@ -1833,7 +1833,7 @@ static json_t *jmap_contact_from_vcard(const char *userid,
     // NOTE: using buf_free here because annotatemore_msg_lookup uses
     // buf_init_ro on the buffer, which blats the base pointer.
     buf_free(&buf);
-    annotatemore_msg_lookupmask(mailbox->name, record->uid, annot, userid, &buf);
+    annotatemore_msg_lookupmask(mailbox, record->uid, annot, userid, &buf);
     double val = 0;
     if (buf.len) val = strtod(buf_cstring(&buf), NULL);
 

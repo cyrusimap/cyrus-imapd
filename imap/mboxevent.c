@@ -288,7 +288,7 @@ static int mboxevent_enabled_for_mailbox(struct mailbox *mailbox)
     if (strarray_size(excluded_specialuse) > 0) {
         userid = mboxname_to_userid(mailbox->name);
 
-        r = annotatemore_lookup(mailbox->name, "/specialuse", userid, &attrib);
+        r = annotatemore_lookup_mbox(mailbox, "/specialuse", userid, &attrib);
         if (r) goto done; /* XXX - return -1?  Failure? */
 
         /* get info and set flags */

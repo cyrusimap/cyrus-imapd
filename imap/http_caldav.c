@@ -1457,7 +1457,7 @@ static int _scheduling_enabled(struct transaction_t *txn,
     struct buf buf = BUF_INITIALIZER;
     int is_enabled = 1;
 
-    annotatemore_lookup(mailbox->name, entry, "", &buf);
+    annotatemore_lookupmask_mbox(mailbox, entry, "", &buf);
     /* legacy */
     if (!strcasecmp(buf_cstring(&buf), "no"))
         is_enabled = 0;
@@ -1920,8 +1920,8 @@ static int export_calendar(struct transaction_t *txn)
     txn->resp_body.type = mime->content_type;
 
     /* Set filename of resource */
-    r = annotatemore_lookupmask(mailbox->name, displayname_annot,
-                                httpd_userid, &name);
+    r = annotatemore_lookupmask_mbox(mailbox, displayname_annot,
+                                     httpd_userid, &name);
     /* fall back to last part of mailbox name */
     if (r || !name.len) buf_setcstr(&name, strrchr(mailbox->name, '.') + 1);
 
@@ -1995,10 +1995,10 @@ static int export_calendar(struct transaction_t *txn)
     construct_hash_table(&tzid_table, 10, 1);
 
     /* Get description and color of calendar */
-    r = annotatemore_lookupmask(mailbox->name, description_annot,
-                                httpd_userid, &desc);
-    r = annotatemore_lookupmask(mailbox->name, color_annot,
-                                httpd_userid, &color);
+    r = annotatemore_lookupmask_mbox(mailbox, description_annot,
+                                     httpd_userid, &desc);
+    r = annotatemore_lookupmask_mbox(mailbox, color_annot,
+                                     httpd_userid, &color);
 
     /* Begin (converted) iCalendar stream */
     sep = mime->begin_stream(buf, mailbox, ical_prodid, buf_cstring(&name),
@@ -2222,8 +2222,8 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
         goto done;
 
     /* Lookup DAV:displayname */
-    r = annotatemore_lookupmask(mbentry->name, displayname_annot,
-                                httpd_userid, &displayname);
+    r = annotatemore_lookupmask_mbe(mbentry, displayname_annot,
+                                    httpd_userid, &displayname);
     /* fall back to the last part of the mailbox name */
     if (r || !displayname.len) buf_setcstr(&displayname, shortname);
 
@@ -2268,16 +2268,16 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     }
 
     /* Is this calendar transparent? */
-    r = annotatemore_lookupmask(mbentry->name, schedtransp_annot,
-                                httpd_userid, &schedtransp);
+    r = annotatemore_lookupmask_mbe(mbentry, schedtransp_annot,
+                                    httpd_userid, &schedtransp);
     if (!r && !strcmp(buf_cstring(&schedtransp), "transparent")) {
         cal->flags |= CAL_IS_TRANSP;
     }
     buf_free(&schedtransp);
 
     /* Which component types are supported? */
-    r = annotatemore_lookupmask(mbentry->name, calcompset_annot,
-                                httpd_userid, &calcompset);
+    r = annotatemore_lookupmask_mbe(mbentry, calcompset_annot,
+                                    httpd_userid, &calcompset);
     if (!r && buf_len(&calcompset)) {
         cal->types = strtoul(buf_cstring(&calcompset), NULL, 10);
     }
@@ -6010,8 +6010,8 @@ static int propfind_calcompset(const xmlChar *name, xmlNsPtr ns,
 
     if (!fctx->req_tgt->collection) return HTTP_NOT_FOUND;
 
-    r = annotatemore_lookupmask(fctx->mbentry->name, prop_annot,
-                                httpd_userid, &attrib);
+    r = annotatemore_lookupmask_mbe(fctx->mbentry, prop_annot,
+                                    httpd_userid, &attrib);
     if (r) return HTTP_SERVER_ERROR;
 
     if (attrib.len) {
@@ -6521,8 +6521,8 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
         if (!out_type->content_type) return HTTP_BAD_MEDIATYPE;
 
         if (fctx->mailbox && !fctx->record) {
-            r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
-                                        httpd_userid, &attrib);
+            r = annotatemore_lookupmask_mbox(fctx->mailbox, prop_annot,
+                                             httpd_userid, &attrib);
         }
 
         if (r) r = HTTP_SERVER_ERROR;
@@ -6535,8 +6535,8 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
             prop_annot = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
 
             buf_free(&attrib);
-            r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
-                                        httpd_userid, &attrib);
+            r = annotatemore_lookupmask_mbox(fctx->mailbox, prop_annot,
+                                             httpd_userid, &attrib);
 
             if (r) r = HTTP_SERVER_ERROR;
             else if (!attrib.len) r = HTTP_NOT_FOUND;
@@ -6706,9 +6706,9 @@ static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
                    (const char *) ns->href, name);
 
         if (fctx->mailbox && !fctx->record) {
-            r = annotatemore_lookupmask(fctx->mailbox->name,
-                                        buf_cstring(&fctx->buf),
-                                        httpd_userid, &attrib);
+            r = annotatemore_lookupmask_mbox(fctx->mailbox,
+                                             buf_cstring(&fctx->buf),
+                                             httpd_userid, &attrib);
         }
 
         if (!attrib.len && xmlStrcmp(ns->href, BAD_CAST XML_NS_CALDAV)) {
@@ -6717,9 +6717,9 @@ static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
             buf_printf(&fctx->buf, DAV_ANNOT_NS "<%s>%s", XML_NS_CALDAV, name);
 
             if (fctx->mailbox && !fctx->record) {
-                r = annotatemore_lookupmask(fctx->mailbox->name,
-                                            buf_cstring(&fctx->buf),
-                                            httpd_userid, &attrib);
+                r = annotatemore_lookupmask_mbox(fctx->mailbox,
+                                                 buf_cstring(&fctx->buf),
+                                                 httpd_userid, &attrib);
             }
         }
 
@@ -6880,8 +6880,8 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
         !fctx->req_tgt->collection || fctx->req_tgt->resource)
         return HTTP_NOT_FOUND;
 
-    r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
-                                httpd_userid, &attrib);
+    r = annotatemore_lookupmask_mbox(fctx->mailbox, prop_annot,
+                                     httpd_userid, &attrib);
 
     if (r) r = HTTP_SERVER_ERROR;
     else if (attrib.len) {
@@ -6892,8 +6892,8 @@ static int propfind_tzid(const xmlChar *name, xmlNsPtr ns,
         prop_annot = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
 
         if (fctx->mailbox && !fctx->record) {
-            r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
-                                        httpd_userid, &attrib);
+            r = annotatemore_lookupmask_mbox(fctx->mailbox, prop_annot,
+                                             httpd_userid, &attrib);
         }
 
         if (r) r = HTTP_SERVER_ERROR;
@@ -8098,8 +8098,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
         return HTTP_FORBIDDEN;
     }
 
-    if (!annotatemore_lookupmask(mailbox->name,
-                                 prop_annot, httpd_userid, &attrib)
+    if (!annotatemore_lookupmask_mbox(mailbox, prop_annot, httpd_userid, &attrib)
         && attrib.len) {
         unsigned long supp_comp = strtoul(buf_cstring(&attrib), NULL, 10);
 
