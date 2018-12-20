@@ -9648,7 +9648,7 @@ static int jmap_email_import(jmap_req_t *req)
     json_object_foreach(emails, id, jemail_import) {
         /* Parse import */
         struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-        json_t *val;
+        json_t *jval;
         const char *s;
 
         /* blobId */
@@ -9660,10 +9660,9 @@ static int jmap_email_import(jmap_req_t *req)
         /* keywords */
         json_t *keywords = json_object_get(jemail_import, "keywords");
         if (json_is_object(keywords)) {
-            json_t *val;
             jmap_parser_push(&parser, "keywords");
-            json_object_foreach(keywords, s, val) {
-                if (val != json_true() || !_email_keyword_is_valid(s)) {
+            json_object_foreach(keywords, s, jval) {
+                if (jval != json_true() || !_email_keyword_is_valid(s)) {
                     jmap_parser_invalid(&parser, s);
                 }
             }
@@ -9680,23 +9679,48 @@ static int jmap_email_import(jmap_req_t *req)
                 jmap_parser_invalid(&parser, "receivedAt");
             }
         }
-        json_t *mboxids = json_object_get(jemail_import, "mailboxIds");
-        if (json_object_size(mboxids)) {
+        json_t *jmailboxids = json_copy(json_object_get(jemail_import, "mailboxIds"));
+        if (json_object_size(jmailboxids)) {
+            const char *mbox_id;
+            void *tmp;
             jmap_parser_push(&parser, "mailboxIds");
-            json_object_foreach(mboxids, s, val) {
-                const char *mboxid = s;
-                if (*mboxid == '#') {
-                    mboxid = jmap_lookup_id(req, mboxid + 1);
-                }
-                if (!mboxid || val != json_true()) {
+            json_object_foreach_safe(jmailboxids, tmp, mbox_id, jval) {
+                if (jval != json_true()) {
                     jmap_parser_invalid(&parser, s);
                     continue;
                 }
-                mbentry_t *mbentry = _mbentry_by_uniqueid(req, mboxid);
-                if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
-                    jmap_parser_invalid(&parser, s);
+                int need_rights = ACL_LOOKUP;
+                if (*mbox_id == '$') {
+                    /* Lookup mailbox by role */
+                    const char *role = mbox_id + 1;
+                    char *uniqueid = NULL;
+                    char *mboxname = NULL;
+                    if (!jmap_mailbox_find_role(req, role, &mboxname, &uniqueid) &&
+                        jmap_hasrights_byname(req, mboxname, need_rights)) {
+                        json_object_del(jmailboxids, mbox_id);
+                        json_object_set_new(jmailboxids, uniqueid, jval);
+                    }
+                    else {
+                        jmap_parser_invalid(&parser, s);
+                    }
+                    free(mboxname);
+                    free(uniqueid);
                 }
-                mboxlist_entry_free(&mbentry);
+                else {
+                    /* Lookup mailbox by id */
+                    if (*mbox_id == '#') {
+                        mbox_id = jmap_lookup_id(req, mbox_id + 1);
+                    }
+                    if (!mbox_id) {
+                        jmap_parser_invalid(&parser, s);
+                        continue;
+                    }
+                    mbentry_t *mbentry = _mbentry_by_uniqueid(req, mbox_id);
+                    if (!mbentry || !jmap_hasrights(req, mbentry, need_rights)) {
+                        jmap_parser_invalid(&parser, s);
+                    }
+                    mboxlist_entry_free(&mbentry);
+                }
             }
             jmap_parser_pop(&parser);
         }
@@ -9710,11 +9734,14 @@ static int jmap_email_import(jmap_req_t *req)
             json_t *err = json_pack("{s:s}", "type", "invalidProperties");
             json_object_set_new(err, "properties", invalid);
             json_object_set_new(not_created, id, err);
+            json_decref(jmailboxids);
             continue;
         }
         json_decref(invalid);
 
         /* Process import */
+        json_t *orig_mailboxids = json_incref(json_object_get(jemail_import, "mailboxIds"));
+        json_object_set_new(jemail_import, "mailboxIds", jmailboxids);
         json_t *new_email = NULL;
         json_t *err = NULL;
         _email_import(req, jemail_import, &new_email, &err);
@@ -9727,6 +9754,7 @@ static int jmap_email_import(jmap_req_t *req)
             const char *newid = json_string_value(json_object_get(new_email, "id"));
             jmap_add_id(req, id, newid);
         }
+        json_object_set_new(jemail_import, "mailboxIds", orig_mailboxids);
     }
 
     /* Reply */
@@ -10006,11 +10034,32 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     msgrecord_t *src_mr = NULL;
     char *src_mboxname = NULL;
     int r = 0;
+    char *blob_id = NULL;
+    json_t *new_keywords = NULL;
+    json_t *jmailboxids = json_copy(json_object_get(copy_email, "mailboxIds"));
+
+    /* Support mailboxids by role */
+    const char *mbox_id;
+    json_t *jval;
+    void *tmp;
+    json_object_foreach_safe(jmailboxids, tmp, mbox_id, jval) {
+        if (*mbox_id != '$') continue;
+        const char *role = mbox_id + 1;
+        char *uniqueid = NULL;
+        if (jmap_mailbox_find_role(req, role, NULL, &uniqueid) == 0) {
+            json_object_del(jmailboxids, mbox_id);
+            json_object_set_new(jmailboxids, uniqueid, jval);
+        }
+        else {
+            *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                    "properties", "mailboxIds");
+        }
+        free(uniqueid);
+        if (*err) goto done;
+    }
 
     const char *email_id = json_string_value(json_object_get(copy_email, "id"));
-    char *blob_id = NULL;
     uint32_t src_size = 0;
-    json_t *new_keywords = NULL;
 
     /* Lookup source message record and gather JMAP keywords */
     new_keywords = json_deep_copy(json_object_get(copy_email, "keywords"));
@@ -10088,7 +10137,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
 
     /* Lookup mailbox names and make sure they are all writeable */
     struct _email_copy_checkmbox_rock checkmbox_rock = {
-        req, json_object_get(copy_email, "mailboxIds"), &dst_mboxnames
+        req, jmailboxids, &dst_mboxnames
     };
     r = mboxlist_usermboxtree(req->accountid, httpd_authstate,
                               _email_copy_checkmbox_cb, &checkmbox_rock,
@@ -10146,7 +10195,8 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     }
 
 done:
-    if (r) {
+    json_decref(jmailboxids);
+    if (r && *err == NULL) {
         *err = jmap_server_error(r);
     }
     free(src_mboxname);

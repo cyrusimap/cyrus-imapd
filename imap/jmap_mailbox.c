@@ -1653,6 +1653,8 @@ static const char *_mbox_role_to_specialuse(const char *role)
         return "\\XTemplates";
     } else if (!strcmp(role, "xnotes")) {
         return "\\XNotes";
+    } else if (!strcmp(role, "inbox")) {
+        return "\\Inbox";
     } else {
         return NULL;
     }
