@@ -778,8 +778,8 @@ static int export_addressbook(struct transaction_t *txn)
     txn->resp_body.type = mime->content_type;
 
     /* Set filename of resource */
-    r = annotatemore_lookupmask(mailbox->name, displayname_annot,
-                                httpd_userid, &attrib);
+    r = annotatemore_lookupmask_mbox(mailbox, displayname_annot,
+                                     httpd_userid, &attrib);
     /* fall back to last part of mailbox name */
     if (r || !attrib.len) buf_setcstr(&attrib, strrchr(mailbox->name, '.') + 1);
 
@@ -897,8 +897,8 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     len = strlen(shortname);
 
     /* Lookup DAV:displayname */
-    r = annotatemore_lookupmask(mbentry->name, displayname_annot,
-                                httpd_userid, &displayname);
+    r = annotatemore_lookupmask_mbe(mbentry, displayname_annot,
+                                    httpd_userid, &displayname);
     /* fall back to the last part of the mailbox name */
     if (r || !displayname.len) buf_setcstr(&displayname, shortname);
 
