@@ -294,13 +294,13 @@ static struct header_t *__spool_cache_header(char *name, char *body, char *raw,
     hdr->raw = raw;
 
     /* add header to hash table */
-    name = lcase(xstrdup(name));
-    contents = (ptrarray_t *) hash_lookup(name, table);
+    char *lcname = lcase(xstrdup(name));
+    contents = (ptrarray_t *) hash_lookup(lcname, table);
 
-    if (!contents) contents = hash_insert(name, ptrarray_new(), table);
+    if (!contents) contents = hash_insert(lcname, ptrarray_new(), table);
     ptrarray_append(contents, hdr);
 
-    free(name);
+    free(lcname);
 
     return hdr;
 }
