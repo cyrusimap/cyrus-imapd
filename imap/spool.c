@@ -258,7 +258,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 
  ph_error:
     /* we still output on error */
-    fputs(buf_cstring(&raw), fout);
+    if (fout) fputs(buf_cstring(&raw), fout);
 
     /* put the last character back; we'll copy it later */
     if (c != EOF) prot_ungetc(c, fin);
@@ -271,7 +271,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
     return r;
 
  got_header:
-    fputs(buf_cstring(&raw), fout);
+    if (fout) fputs(buf_cstring(&raw), fout);
 
     /* Note: xstrdup()ing the string ensures we return
      * a minimal length string with no allocation slack
