@@ -6296,7 +6296,7 @@ static json_t *_header_from_addresses(json_t *addrs,
                 buf_putc(&buf, '"');
             }
             else if (name_type == HIGH_BIT) {
-                char *xname = charset_encode_mimeheader(name, strlen(name), 0);
+                char *xname = charset_encode_mimephrase(name);
                 buf_appendcstr(&buf, xname);
                 free(xname);
             }

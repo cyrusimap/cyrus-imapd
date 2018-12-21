@@ -1876,6 +1876,40 @@ static charset_t lookup_buf(const char *buf, size_t len)
     return cs;
 }
 
+/* RFC2047: In this case the set of characters that may be used in a “Q”-encoded
+  ‘encoded-word’ is restricted to: <upper and lower case ASCII
+  letters, decimal digits, "!", "*", "+", "-", "/", "=", and "_" */
+/* of course = and _ are not included in the set, because they themselves
+   need to be quoted it’s just saying they can be present in the Q wordi
+   itself, because they’re part of the quoting system */
+char QPMIMEPHRASESAFECHAR[256] = {
+/* control chars are unsafe */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+/* ASCII map... */
+/*     !  "  #  $  %  &  '  (  )  *  +  ,  -  .  /  */
+    0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1,
+/*  0  1  2  3  4  5  6  7  8  9  :  ;  <  =  >  ?  */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
+/*  @  A  B  C  D  E  F  G  H  I  J  K  L  M  N  O  */
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+/*  P  Q  R  S  T  U  V  W  X  Y  Z  [ \\  ]  ^  _  */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
+/*  `  a  b  c  d  e  f  g  h  i  j  k  l  m  n  o  */
+    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+/*  p  q  r  s  t  u  v  w  x  y  z  {  |  }  ~ DEL */
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
+/* all high bits are unsafe */
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
 
 /* API */
 
@@ -3108,6 +3142,53 @@ EXPORTED char *charset_encode_mimeheader(const char *header, size_t len, int for
     if (!len) len = strlen(header);
 
     return qp_encode(header, len, 1, force_quote, NULL);
+}
+
+/*
+ * If 'isheader' is non-zero "Q" encode (per RFC 2047), otherwise
+ * quoted-printable encode (per RFC 2045), the 'data' of 'len' bytes.
+ * Returns a buffer which the caller must free.
+ * Returns the number of encoded bytes in 'outlen'.
+ */
+EXPORTED char *charset_encode_mimephrase(const char *data)
+{
+    struct buf buf = BUF_INITIALIZER;
+    size_t n;
+
+    buf_setcstr(&buf, "=?UTF-8?Q?");
+    int cnt = 10;
+
+    for (n = 0; data[n]; n++) {
+        unsigned char this = data[n];
+
+        if (cnt >= BASE64_MAX_LINE_LEN) {
+            if (!ISUTF8CONTINUATION(this)) {
+                /* split encoded token with fold */
+                buf_appendcstr(&buf, "?=\r\n =?UTF-8?Q?");
+                cnt = 11;
+            }
+        }
+
+        if (QPMIMEPHRASESAFECHAR[this]) {
+            /* literal representation */
+            buf_putc(&buf, (char)this);
+            cnt++;
+        }
+        else if (this == ' ') {
+            /* per RFC 2047: represent SP in header as '_' for legibility */
+            buf_putc(&buf, '_');
+            cnt++;
+        }
+        else {
+            /* 8-bit representation */
+            buf_printf(&buf, "=%02X", this);
+            cnt += 3;
+        }
+    }
+
+    buf_appendcstr(&buf, "?=");
+
+    return buf_release(&buf);
 }
 
 static void extract_plain_cb(const struct buf *buf, void *rock)
