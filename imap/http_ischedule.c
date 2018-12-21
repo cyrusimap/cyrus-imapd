@@ -902,7 +902,8 @@ static DKIM_CBSTAT isched_get_key(DKIM *dkim, DKIM_SIGINFO *sig,
 }
 
 
-static void dkim_cachehdr(const char *name, const char *contents, void *rock)
+static void dkim_cachehdr(const char *name, const char *contents,
+                          const char *raw __attribute__((unused)), void *rock)
 {
     struct buf *hdrfield = &tmpbuf;
     static const char *lastname = NULL;

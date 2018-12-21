@@ -980,68 +980,12 @@ static int sieve_reject(void *ac, void *ic,
     }
 }
 
-static void dump_header(const char *name, const char *value, void *rock)
+static void dump_header(const char *name, const char *value, const char *raw, void *rock)
 {
-    /* Q-encode the value */
-    char *mimehdr = charset_encode_mimeheader(value, strlen(value), 0);
-    char *freeme = mimehdr;
-    size_t maxlen = 78 - (strlen(name) + 2);
+    FILE *f = (FILE *)rock;
 
-    /* write header name */
-    fprintf((FILE *) rock, "%s: ", name);
-
-    /* fold value */
-    /* XXX  Do we want/need to do smarter folding on structured headers? */
-    while (*mimehdr) {
-        char *p = mimehdr;
-        char *last_sp = NULL;
-  
-        if (isblank(*p)) {
-            /* write fold */
-            fputs("\r\n", (FILE *) rock);
-
-            /* skip FWS */
-            while (isblank(*++p));
-        }
-
-        for (; *p; p++) {
-            if (*p == '\t') {
-                /* assume a HTAB is where the header was folded */
-                break;
-            }
-            else if (*p == ' ') {
-                if (p[1] == ' ') {
-                    /* assume multiple SP is where the header was folded */
-                    break;
-                }
-                else if (strlen(mimehdr) <= maxlen) {
-                    /* don't care about single SP in short value */
-                    continue;
-                }
-                else if (!last_sp) {
-                    /* track last found SP */
-                    last_sp = p;
-                }
-                else if ((size_t) (p - mimehdr) <= maxlen) {
-                    /* update last found SP prior to maxlen */
-                    last_sp = p;
-                }
-            }
-        }
-
-        if (!*p && last_sp) p = last_sp;
-
-        /* write chunk of value */
-        fprintf((FILE *) rock, "%.*s", (int) (p - mimehdr), mimehdr);
-
-        mimehdr = p;
-        maxlen = 78;
-    }
-
-    /* write end of header value */
-    fputs("\r\n", (FILE *) rock);
-
-    free(freeme);
+    if (raw) fputs(raw, f);
+    else fprintf(f, "%s: %s\r\n", name, value);
 }
 
 static deliver_data_t *setup_special_delivery(deliver_data_t *mydata)

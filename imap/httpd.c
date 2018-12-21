@@ -3447,21 +3447,24 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
 
 
 /* Write cached header (redacting authorization credentials) to buffer. */
-static void log_cachehdr(const char *name, const char *contents, void *rock)
+static void log_cachehdr(const char *name, const char *contents, const char *raw, void *rock)
 {
     struct buf *buf = (struct buf *) rock;
 
     /* Ignore private headers in our cache */
     if (name[0] == ':') return;
 
-    buf_printf(buf, "%c%s: ", toupper(name[0]), name+1);
     if (!strcasecmp(name, "authorization")) {
         /* Replace authorization credentials with an ellipsis */
         const char *creds = strchr(contents, ' ') + 1;
-        buf_printf(buf, "%.*s%-*s\r\n", (int) (creds - contents), contents,
+        buf_printf(buf, "%c%s: %.*s%-*s\r\n", toupper(name[0]), name+1,
+                   (int) (creds - contents), contents,
                    (int) strlen(creds), "...");
     }
-    else buf_printf(buf, "%s\r\n", contents);
+    else if (raw)
+        buf_appendcstr(buf, raw);
+    else
+        buf_printf(buf, "%c%s: %s\r\n", toupper(name[0]), name+1, contents);
 }
 
 
@@ -4481,7 +4484,7 @@ static int meth_propfind_root(struct transaction_t *txn,
 
 
 /* Write cached header to buf, excluding any that might have sensitive data. */
-static void trace_cachehdr(const char *name, const char *contents, void *rock)
+static void trace_cachehdr(const char *name, const char *contents, const char *raw, void *rock)
 {
     struct buf *buf = (struct buf *) rock;
     const char **hdr, *sensitive[] =
@@ -4492,8 +4495,11 @@ static void trace_cachehdr(const char *name, const char *contents, void *rock)
 
     for (hdr = sensitive; *hdr && strcmp(name, *hdr); hdr++);
 
-    if (!*hdr) buf_printf(buf, "%c%s: %s\r\n",
-                          toupper(name[0]), name+1, contents);
+    if (!*hdr) {
+        if (raw) buf_appendcstr(buf, raw);
+        else buf_printf(buf, "%c%s: %s\r\n",
+                            toupper(name[0]), name+1, contents);
+    }
 }
 
 /* Perform an TRACE request */

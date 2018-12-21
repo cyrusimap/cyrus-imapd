@@ -62,6 +62,7 @@
 struct header_t {
     char *name;
     char *body;
+    char *raw;
     struct header_t *next;
     struct header_t *prev;
 };
@@ -110,11 +111,13 @@ typedef enum {
 */
 static int parseheader(struct protstream *fin, FILE *fout,
                        char **headname, char **contents,
+                       char **rawvalue,
                        const char **skipheaders)
 {
     int c;
     static struct buf name = BUF_INITIALIZER;
     static struct buf body = BUF_INITIALIZER;
+    static struct buf raw = BUF_INITIALIZER;
     state s = NAME_START;
     int r = 0;
     int reject8bit = config_getswitch(IMAPOPT_REJECT8BIT);
@@ -123,6 +126,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 
     buf_reset(&name);
     buf_reset(&body);
+    buf_reset(&raw);
 
     /* there are two ways out of this loop, both via gotos:
        either we successfully read a header (got_header)
@@ -175,7 +179,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
                      skip && *skip && strcasecmp(name.s, *skip); skip++);
                 if (!skip || !*skip) {
                     /* write the header name to the output */
-                    if (fout) fputs(name.s, fout);
+                    buf_appendcstr(&raw, name.s);
                     skip = NULL;
                 }
                 s = (c == ':' ? BODY_START : COLON);
@@ -194,7 +198,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
             } else if (c != ' ' && c != '\t') {
                 /* i want to avoid confusing dot-stuffing later */
                 while (c == '.') {
-                    if (fout && !skip) fputc(c, fout);
+                    if (!skip) buf_putc(&raw, c);
                     c = prot_getc(fin);
                 }
                 r = IMAP_MESSAGE_BADHEADER;
@@ -215,10 +219,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 
                 peek = prot_getc(fin);
 
-                if (fout && !skip) {
-                    fputc('\r', fout);
-                    fputc('\n', fout);
-                }
+                if (!skip) buf_appendcstr(&raw, "\r\n");
                 /* we should peek ahead to see if it's folded whitespace */
                 if (c == '\r' && peek == '\n') {
                     c = prot_getc(fin);
@@ -249,32 +250,40 @@ static int parseheader(struct protstream *fin, FILE *fout,
         }
 
         /* copy this to the output */
-        if (fout && s != NAME && !skip) fputc(c, fout);
+        if (s != NAME && !skip) buf_putc(&raw, c);
     }
 
     /* if we fall off the end of the loop, we hit some sort of error
        condition */
 
  ph_error:
+    /* we still output on error */
+    fputs(buf_cstring(&raw), fout);
+
     /* put the last character back; we'll copy it later */
     if (c != EOF) prot_ungetc(c, fin);
 
     /* and we didn't get a header */
     if (headname != NULL) *headname = NULL;
     if (contents != NULL) *contents = NULL;
+    if (rawvalue != NULL) *rawvalue = NULL;
+
     return r;
 
  got_header:
+    fputs(buf_cstring(&raw), fout);
+
     /* Note: xstrdup()ing the string ensures we return
      * a minimal length string with no allocation slack
      * at the end */
     if (headname != NULL) *headname = xstrdup(name.s);
     if (contents != NULL) *contents = xstrdup(body.s);
+    if (rawvalue != NULL) *rawvalue = xstrdup(raw.s);
 
     return 0;
 }
 
-static struct header_t *__spool_cache_header(char *name, char *body,
+static struct header_t *__spool_cache_header(char *name, char *body, char *raw,
                                              hash_table *table)
 {
     ptrarray_t *contents;
@@ -282,6 +291,7 @@ static struct header_t *__spool_cache_header(char *name, char *body,
 
     hdr->name = name;
     hdr->body = body;
+    hdr->raw = raw;
 
     /* add header to hash table */
     name = lcase(xstrdup(name));
@@ -295,22 +305,28 @@ static struct header_t *__spool_cache_header(char *name, char *body,
     return hdr;
 }
 
-EXPORTED void spool_prepend_header(char *name, char *body, hdrcache_t cache)
+EXPORTED void spool_prepend_header_raw(char *name, char *body, char *raw, hdrcache_t cache)
 {
-    struct header_t *hdr = __spool_cache_header(name, body, &cache->cache);
+    struct header_t *hdr = __spool_cache_header(name, body, raw, &cache->cache);
 
     /* link header at head of list */
     hdr->next = cache->head;
 
     if (cache->head) cache->head->prev = hdr;
     else cache->tail = hdr;
-    
+
     cache->head = hdr;
 }
 
-EXPORTED void spool_append_header(char *name, char *body, hdrcache_t cache)
+
+EXPORTED void spool_prepend_header(char *name, char *body, hdrcache_t cache)
 {
-    struct header_t *hdr = __spool_cache_header(name, body, &cache->cache);
+    spool_prepend_header_raw(name, body, NULL, cache);
+}
+
+EXPORTED void spool_append_header_raw(char *name, char *body, char *raw, hdrcache_t cache)
+{
+    struct header_t *hdr = __spool_cache_header(name, body, raw, &cache->cache);
 
     /* link header at tail of list */
     hdr->prev = cache->tail;
@@ -319,6 +335,11 @@ EXPORTED void spool_append_header(char *name, char *body, hdrcache_t cache)
     else cache->head = hdr;
 
     cache->tail = hdr;
+}
+
+EXPORTED void spool_append_header(char *name, char *body, hdrcache_t cache)
+{
+    spool_append_header_raw(name, body, NULL, cache);
 }
 
 EXPORTED void spool_replace_header(char *name, char *body, hdrcache_t cache)
@@ -384,9 +405,9 @@ EXPORTED int spool_fill_hdrcache(struct protstream *fin, FILE *fout,
 
     /* let's fill that header cache */
     for (;;) {
-        char *name = NULL, *body = NULL;
+        char *name = NULL, *body = NULL, *raw = NULL;
 
-        if ((r = parseheader(fin, fout, &name, &body, skipheaders)) < 0) {
+        if ((r = parseheader(fin, fout, &name, &body, &raw, skipheaders)) < 0) {
             break;
         }
         if (!name) {
@@ -396,7 +417,7 @@ EXPORTED int spool_fill_hdrcache(struct protstream *fin, FILE *fout,
         }
 
         /* put it in the hash table */
-        spool_append_header(name, body, cache);
+        spool_append_header_raw(name, body, raw, cache);
     }
 
     return r;
@@ -468,7 +489,7 @@ EXPORTED void spool_free_hdrcache(hdrcache_t cache)
 }
 
 EXPORTED void spool_enum_hdrcache(hdrcache_t cache,
-                         void (*proc)(const char *, const char *, void *),
+                         void (*proc)(const char *, const char *, const char *, void *),
                          void *rock)
 {
     struct header_t *hdr;
@@ -476,7 +497,7 @@ EXPORTED void spool_enum_hdrcache(hdrcache_t cache,
     if (!cache) return;
 
     for (hdr = cache->head; hdr; hdr = hdr->next) {
-        proc(hdr->name, hdr->body, rock);
+        proc(hdr->name, hdr->body, hdr->raw, rock);
     }
 }
 

@@ -621,7 +621,8 @@ static void write_forwarding_hdrs(struct transaction_t *txn, hdrcache_t hdrs,
 
 
 /* Write end-to-end header (ignoring hop-by-hop) from cache to protstream. */
-static void write_cachehdr(const char *name, const char *contents, void *rock)
+static void write_cachehdr(const char *name, const char *contents,
+                           const char *raw __attribute__((unused)), void *rock)
 {
     struct transaction_t *txn = (struct transaction_t *) rock;
     const char **hdr, *hop_by_hop[] =
