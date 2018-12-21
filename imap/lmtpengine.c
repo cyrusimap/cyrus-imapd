@@ -676,13 +676,11 @@ static int savemsg(struct clientdata *cd,
 
     struct buf rbuf = BUF_INITIALIZER;
     buf_setcstr(&rbuf, "Received: ");
-    fprintf(f, "Received: ");
     for (i = 0, p = addbody; i < nfold; p = fold[i], i++) {
         buf_printf(&rbuf, "%.*s\r\n\t", (int) (fold[i] - p), p);
-        fprintf(f, "%.*s\r\n\t", (int) (fold[i] - p), p);
     }
     buf_printf(&rbuf, "%s\r\n", p);
-    fprintf(f, "%s\r\n", p);
+    fputs(buf_cstring(&rbuf), f);
     spool_append_header_raw(xstrdup("Received"), addbody, buf_release(&rbuf), m->hdrcache);
 
     char *sid = xstrdup(session_id());
