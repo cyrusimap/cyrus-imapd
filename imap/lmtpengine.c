@@ -674,12 +674,16 @@ static int savemsg(struct clientdata *cd,
     fold[nfold++] = p;
     p += sprintf(p, " %s", datestr);
 
+    struct buf rbuf = BUF_INITIALIZER;
+    buf_setcstr(&rbuf, "Received: ");
     fprintf(f, "Received: ");
     for (i = 0, p = addbody; i < nfold; p = fold[i], i++) {
+        buf_printf(&rbuf, "%.*s\r\n\t", (int) (fold[i] - p), p);
         fprintf(f, "%.*s\r\n\t", (int) (fold[i] - p), p);
     }
+    buf_printf(&rbuf, "%s\r\n", p);
     fprintf(f, "%s\r\n", p);
-    spool_cache_header(xstrdup("Received"), addbody, m->hdrcache);
+    spool_append_header_raw(xstrdup("Received"), addbody, buf_release(&rbuf), m->hdrcache);
 
     char *sid = xstrdup(session_id());
     fprintf(f, "X-Cyrus-Session-Id: %s\r\n", sid);
