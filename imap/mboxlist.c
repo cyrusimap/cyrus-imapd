@@ -812,7 +812,10 @@ EXPORTED int mboxlist_lookup_by_uniqueid(const char *uniqueid,
         return IMAP_MAILBOX_RESERVED;
     }
 
-    if (entryptr) *entryptr = entry;
+    if (entryptr) {
+        entry->uniqueid = xstrdup(uniqueid);
+        *entryptr = entry;
+    }
     else mboxlist_entry_free(&entry);
 
     return 0;
