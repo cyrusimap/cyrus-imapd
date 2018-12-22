@@ -237,6 +237,10 @@ void mboxname_hash(char *buf, size_t buf_len,
                    const char *root,
                    const char *name) ;
 
+void mboxname_id_hash(char *buf, size_t buf_len,
+                      const char *root,
+                      const char *id);
+
 /*
  * Translate (internal) inboxname into corresponding userid,
  * and vice-versa.
