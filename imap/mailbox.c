@@ -5426,6 +5426,35 @@ EXPORTED int mailbox_create(const char *name,
         goto done;
     }
 
+    /* create initial mbentry for new users --
+       the uniqueid in the record is required to open
+       user metadata files (conversations, counters) */
+    if (mboxname_isusermailbox(mailbox->name, 1) &&
+        mboxlist_lookup_by_uniqueid(mailbox->uniqueid, NULL, NULL) != 0) {
+        mbentry_t mbentry;
+
+        memset(&mbentry, 0, sizeof(mbentry_t));
+        mbentry.mbtype = MBTYPE_INTERMEDIATE;
+        mbentry.name = mailbox->name;
+        mbentry.uniqueid = mailbox->uniqueid;
+        r = mboxlist_update(&mbentry, 1 /* localonly */);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: creating initial mbentry %s %s",
+                   mailbox->name, error_message(r));
+            r = IMAP_IOERROR;
+            goto done;
+        }
+    }
+
+    /* open conversations FIRST */
+    r = mailbox_lock_conversations(mailbox, LOCK_EXCLUSIVE);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: locking conversations %s %s",
+               mailbox->name, error_message(r));
+        r = IMAP_IOERROR;
+        goto done;
+    }
+
     fname = mailbox_meta_fname(mailbox, META_INDEX);
     if (!fname) {
         xsyslog(LOG_ERR, "IOERROR: Mailbox name too long",

@@ -86,6 +86,7 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -139,8 +140,6 @@ static int user_deleteacl(char *name, int matchlen, int category, void* rock)
 EXPORTED const char *user_sieve_path(const char *inuser)
 {
     static char sieve_path[2048];
-    size_t len, size = sizeof(sieve_path);
-    char hash, *domain;
     char *user = xstrdupnull(inuser);
     char *p;
 
@@ -153,25 +152,44 @@ EXPORTED const char *user_sieve_path(const char *inuser)
             *p = '.';
     }
 
-    len = strlcpy(sieve_path, config_getstring(IMAPOPT_SIEVEDIR), size);
+    mbname_t *mbname = mbname_from_userid(user);
+    const char *localpart = mbname_localpart(mbname);
 
-    if (config_virtdomains && (domain = strchr(user, '@'))) {
-        char d = (char) dir_hash_c(domain+1, config_fulldirhash);
-        *domain = '\0';  /* split user@domain */
-        len += snprintf(sieve_path + len, size - len, "%s%c/%s",
-                        FNAME_DOMAINDIR, d, domain+1);
-    }
+    if (localpart) {
+        /* user script */
+        char *inboxname = mboxname_user_mbox(user, NULL);
+        mbentry_t *mbentry = NULL;
 
-    if (user && *user) {
-        hash = (char) dir_hash_c(user, config_fulldirhash);
+        int r = mboxlist_lookup(inboxname, &mbentry, NULL);
+        free(inboxname);
 
-        snprintf(sieve_path + len, size - len, "/%c/%s", hash, user);
+        if (r) sieve_path[0] = '\0';
+        else {
+            mboxname_id_hash(sieve_path, sizeof(sieve_path),
+                             config_getstring(IMAPOPT_SIEVEDIR),
+                             mbentry->uniqueid);
+        }
+        mboxlist_entry_free(&mbentry);
     }
     else {
+        /* global script */
+        const char *domain = mbname_domain(mbname);
+        size_t len, size = sizeof(sieve_path);
+
+        len = strlcpy(sieve_path, config_getstring(IMAPOPT_SIEVEDIR), size);
+
+        if (config_virtdomains && domain) {
+            char d = (char) dir_hash_c(domain, config_fulldirhash);
+            len += snprintf(sieve_path + len, size - len, "%s%c/%s",
+                            FNAME_DOMAINDIR, d, domain);
+        }
+
         strlcat(sieve_path, "/global", size);
     }
 
+    mbname_free(&mbname);
     free(user);
+
     return sieve_path;
 }
 
@@ -263,7 +281,7 @@ EXPORTED int user_deletedata(const char *userid, int wipe_user)
 
     return 0;
 }
-
+#if 0
 struct rename_rock {
     const char *olduser;
     const char *newuser;
@@ -395,7 +413,7 @@ EXPORTED int user_renamedata(const char *olduser, const char *newuser)
 
     return 0;
 }
-
+#endif
 EXPORTED int user_renameacl(const struct namespace *namespace, const char *name,
                             const char *olduser, const char *newuser)
 {
