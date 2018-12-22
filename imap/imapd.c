@@ -7856,12 +7856,10 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         }
     }
 
-    /* If we're renaming a user, take care of changing quotaroot, ACL,
-       seen state, subscriptions and sieve scripts */
+    /* If we're renaming a user, take care of changing quotaroot and ACL */
     if (!r && rename_user) {
         user_copyquotaroot(oldmailboxname, newmailboxname);
         user_renameacl(&imapd_namespace, newmailboxname, olduser, newuser);
-        user_renamedata(olduser, newuser);
 
         /* XXX report status/progress of meta-data */
     }

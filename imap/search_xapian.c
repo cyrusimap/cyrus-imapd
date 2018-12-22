@@ -2044,7 +2044,6 @@ EXPORTED int xapian_basedir(const char *tier,
 {
     char *basedir = NULL;
     mbname_t *mbname = NULL;
-    char c[2], d[2];
     int r;
 
     if (!root)
@@ -2060,26 +2059,21 @@ EXPORTED int xapian_basedir(const char *tier,
         goto out;
     }
 
-    const char *domain = mbname_domain(mbname);
-    const char *localpart = mbname_localpart(mbname);
+    char *inboxname = mboxname_user_mbox(mbname_userid(mbname), NULL);
+    mbentry_t *mbentry = NULL;
 
-    if (domain)
-        basedir = strconcat(root,
-                            FNAME_DOMAINDIR,
-                            dir_hash_b(domain, config_fulldirhash, d),
-                            "/", domain,
-                            "/", dir_hash_b(localpart, config_fulldirhash, c),
-                            FNAME_USERDIR,
-                            localpart,
-                            (char *)NULL);
-    else
-        basedir = strconcat(root,
-                            "/", dir_hash_b(localpart, config_fulldirhash, c),
-                            FNAME_USERDIR,
-                            localpart,
-                            (char *)NULL);
+    r = mboxlist_lookup(inboxname, &mbentry, NULL);
+    free(inboxname);
+    if (!r) {
+        char path[MAX_MAILBOX_PATH+1];
+        mboxname_id_hash(path, MAX_MAILBOX_PATH, "", mbentry->uniqueid);
 
-    r = 0;
+        basedir = strconcat(root,
+                            FNAME_USERDIR,
+                            path,
+                            (char *)NULL);
+    }
+    mboxlist_entry_free(&mbentry);
 
 out:
     if (!r && basedirp)
