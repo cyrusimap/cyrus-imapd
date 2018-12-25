@@ -229,6 +229,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
                 if (c != ' ' && c != '\t') {
                     /* this is the end of the header */
                     buf_cstring(&body);
+                    buf_cstring(&raw);
                     prot_ungetc(c, fin);
                     goto got_header;
                 }
@@ -378,6 +379,7 @@ static void __spool_remove_header(char *name, int first, int last,
             /* free header_t */
             free(hdr->name);
             free(hdr->body);
+            free(hdr->raw);
             free(hdr);
         }
     }
@@ -413,6 +415,7 @@ EXPORTED int spool_fill_hdrcache(struct protstream *fin, FILE *fout,
         if (!name) {
             /* reached the end of headers */
             free(body);
+            free(raw);
             break;
         }
 
@@ -466,6 +469,7 @@ static void __spool_free_hdrcache(ptrarray_t *pa)
 
         free(hdr->name);
         free(hdr->body);
+        free(hdr->raw);
         free(hdr);
     }
     ptrarray_free(pa);
