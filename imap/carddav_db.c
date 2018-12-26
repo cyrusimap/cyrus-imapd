@@ -556,11 +556,11 @@ static int details_cb(sqlite3_stmt *stmt, void *rock)
 }
 
 EXPORTED strarray_t *carddav_getemail2details(struct carddav_db *carddavdb, const char *email,
-                                              const char *mboxname, int *ispinned)
+                                              const char *mailbox, int *ispinned)
 {
     struct sqldb_bindval bval[] = {
         { ":email", SQLITE_TEXT,   { .s = email } },
-        { ":mailbox", SQLITE_TEXT, { .s = mboxname } },
+        { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
         { NULL,     SQLITE_NULL,   { .s = NULL  } }
     };
     struct detailsdata data = { strarray_new(), 0 };
@@ -575,11 +575,11 @@ EXPORTED strarray_t *carddav_getemail2details(struct carddav_db *carddavdb, cons
 }
 
 EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *member_uid,
-                                           const char *mboxname, const char *otheruser)
+                                           const char *mailbox, const char *otheruser)
 {
     struct sqldb_bindval bval[] = {
         { ":member_uid", SQLITE_TEXT, { .s = member_uid } },
-        { ":mailbox", SQLITE_TEXT,    { .s = mboxname } },
+        { ":mailbox", SQLITE_TEXT,    { .s = mailbox   } },
         { ":otheruser",  SQLITE_TEXT, { .s = otheruser } },
         { NULL,          SQLITE_NULL, { .s = NULL  } }
     };
@@ -943,7 +943,7 @@ EXPORTED int carddav_write_jmapcache(struct carddav_db *carddavdb, int rowid, in
 }
 
 EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
-                               const char *abookname,
+                               const char *mailbox,
                                const char *vcard_uid, int kind,
                                int (*cb)(void *rock,
                                          struct carddav_data *cdata),
@@ -951,7 +951,7 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
 {
     struct sqldb_bindval bval[] = {
         { ":kind",      SQLITE_INTEGER, { .i = kind      } },
-        { ":mailbox",   SQLITE_TEXT,    { .s = abookname } },
+        { ":mailbox",   SQLITE_TEXT,    { .s = mailbox   } },
         { ":vcard_uid", SQLITE_TEXT,    { .s = vcard_uid } },
         { NULL,         SQLITE_NULL,    { .s = NULL      } }
     };
@@ -961,7 +961,7 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
 
     buf_setcstr(&sqlbuf, CMD_GETFIELDS_JMAP);
     buf_appendcstr(&sqlbuf, " WHERE alive = 1 AND kind = :kind");
-    if (abookname)
+    if (mailbox)
         buf_appendcstr(&sqlbuf, " AND mailbox = :mailbox");
     if (vcard_uid)
         buf_appendcstr(&sqlbuf, " AND vcard_uid = :vcard_uid");
@@ -985,14 +985,14 @@ EXPORTED int carddav_get_cards(struct carddav_db *carddavdb,
 #define BYMODSEQ  " modseq > :modseq;"
 
 EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
-                                 modseq_t oldmodseq, const char *mboxname,
+                                 modseq_t oldmodseq, const char *mailbox,
                                  int kind, int limit,
                                  int (*cb)(void *rock,
                                            struct carddav_data *cdata),
                                  void *rock)
 {
     struct sqldb_bindval bval[] = {
-        { ":mailbox", SQLITE_TEXT,    { .s = mboxname  } },
+        { ":mailbox", SQLITE_TEXT,    { .s = mailbox   } },
         { ":modseq",  SQLITE_INTEGER, { .i = oldmodseq } },
         { ":kind",    SQLITE_INTEGER, { .i = kind      } },
         /* SQLite interprets a negative limit as unbounded. */
@@ -1005,7 +1005,7 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
     int r;
 
     buf_setcstr(&sqlbuf, CMD_GETFIELDS " WHERE");
-    if (mboxname) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
+    if (mailbox) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
     if (kind >= 0) {
         /* Use a negative value to signal that we accept ALL card types */
         buf_appendcstr(&sqlbuf, " kind = :kind AND");

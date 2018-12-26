@@ -2019,7 +2019,7 @@ static int export_calendar(struct transaction_t *txn)
         struct caldav_data *cdata;
         icalcomponent *ical = NULL;
 
-        r = caldav_lookup_imapuid(caldavdb, mailbox->name,
+        r = caldav_lookup_imapuid(caldavdb, mailbox->uniqueid,
                                   record->uid, &cdata, 0);
 
         if (syncmodseq) { 
@@ -2048,7 +2048,7 @@ static int export_calendar(struct transaction_t *txn)
                 struct caldav_data *cdata;
 
                 /* Fetch the CalDAV db record */
-                r = caldav_lookup_imapuid(caldavdb, mailbox->name,
+                r = caldav_lookup_imapuid(caldavdb, mailbox->uniqueid,
                                           record->uid, &cdata, 0);
 
                 if (!r && need_tz && cdata->comp_flags.tzbyref) {
@@ -2755,7 +2755,7 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
 
             /* Fetch the new DAV and index records */
             /* NOTE: previous contents of cdata was freed by store_resource */
-            caldav_lookup_resource(caldavdb, mailbox->name,
+            caldav_lookup_resource(caldavdb, mailbox->uniqueid,
                                    txn->req_tgt.resource, &cdata, /*tombstones*/0);
 
             mailbox_find_index_record(mailbox, cdata->dav.imap_uid, record);
@@ -3011,7 +3011,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     caldavdb = caldav_open_mailbox(calendar);
 
     /* Find message UID for the cal resource */
-    caldav_lookup_resource(caldavdb, txn->req_tgt.mbentry->name,
+    caldav_lookup_resource(caldavdb, txn->req_tgt.mbentry->uniqueid,
                            txn->req_tgt.resource, &cdata, 0);
     if (!cdata->dav.rowid) ret = HTTP_NOT_FOUND;
     else if (!cdata->dav.imap_uid) ret = HTTP_CONFLICT;
@@ -4432,7 +4432,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 #endif /* HAVE_RSCALE */
 
     /* Check for changed UID */
-    caldav_lookup_resource(db, mailbox->name, resource, &cdata, 0);
+    caldav_lookup_resource(db, mailbox->uniqueid, resource, &cdata, 0);
     if (cdata->dav.imap_uid && strcmpsafe(cdata->ical_uid, uid)) {
         /* CALDAV:no-uid-conflict */
         txn->error.precond = CALDAV_UID_CONFLICT;
@@ -4441,7 +4441,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     else {
         /* Check for duplicate iCalendar UID */
         caldav_lookup_uid(db, uid, &cdata);
-        if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->name) ||
+        if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->uniqueid) ||
                                     strcmp(cdata->dav.resource, resource))) {
             /* CALDAV:unique-scheduling-object-resource */
             txn->error.precond = CALDAV_UNIQUE_OBJECT;
@@ -4449,12 +4449,12 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         }
     }
     if (ret) {
-        char *owner = mboxname_to_userid(cdata->dav.mailbox);
+        char *owner = mboxname_to_userid(mailbox->name);
 
         buf_reset(&txn->buf);
         buf_printf(&txn->buf, "%s/%s/%s/%s/%s",
                    namespace_calendar.prefix, USER_COLLECTION_PREFIX, owner,
-                   strrchr(cdata->dav.mailbox, '.')+1, cdata->dav.resource);
+                   strrchr(mailbox->name, '.')+1, cdata->dav.resource);
         txn->error.resource = buf_cstring(&txn->buf);
         free(owner);
         ret = HTTP_FORBIDDEN;
@@ -5322,7 +5322,7 @@ static int caldav_propfind_by_resource(void *rock, void *data)
 
             icalcomponent_free(ical);
 
-            caldav_lookup_resource(fctx->davdb, fctx->mailbox->name,
+            caldav_lookup_resource(fctx->davdb, fctx->mailbox->uniqueid,
                                    cdata->dav.resource, &cdata, 0);
             fctx->record = NULL;
         }
@@ -8111,7 +8111,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
     }
 
     /* Find message UID for the resource, if exists */
-    caldav_lookup_resource(caldavdb, mailbox->name, resource, &cdata, 0);
+    caldav_lookup_resource(caldavdb, mailbox->uniqueid, resource, &cdata, 0);
 
     /* does it already exist? */
     if (cdata->dav.imap_uid) {
