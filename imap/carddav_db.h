@@ -145,7 +145,7 @@ int carddav_get_cards(struct carddav_db *carddavdb,
  * If kind is non-negative, only process entries of this kind.
  * If max_records is positive, only call cb for at most this entries. */
 int carddav_get_updates(struct carddav_db *carddavdb,
-                        modseq_t oldmodseq, const char *mboxname, int kind,
+                        modseq_t oldmodseq, const char *mailbox, int kind,
                         int max_records, carddav_cb_t *cb, void *rock);
 
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */

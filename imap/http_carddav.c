@@ -618,7 +618,7 @@ static int store_resource(struct transaction_t *txn,
     }
 
     /* Check for changed UID on existing resource */
-    carddav_lookup_resource(davdb, mailbox->name, resource, &cdata, 0);
+    carddav_lookup_resource(davdb, mailbox->uniqueid, resource, &cdata, 0);
     if (cdata->dav.imap_uid && strcmpsafe(cdata->vcard_uid, uid)) {
         char *owner = mboxname_to_userid(cdata->dav.mailbox);
 
@@ -1635,7 +1635,7 @@ int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
         goto done;
     }
 
-    r = carddav_lookup_resource(davdb, fctx->req_tgt->mbentry->name,
+    r = carddav_lookup_resource(davdb, fctx->req_tgt->mbentry->uniqueid,
                                 fctx->req_tgt->resource, &cdata, 0);
     if (r)
         goto done;
