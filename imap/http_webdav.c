@@ -659,7 +659,7 @@ static int webdav_put(struct transaction_t *txn, void *obj,
     if (!buf) return HTTP_FORBIDDEN;
 
     /* Find message UID for the resource */
-    webdav_lookup_resource(db, mailbox->name, resource, &wdata, 0);
+    webdav_lookup_resource(db, mailbox->uniqueid, resource, &wdata, 0);
 
     if (wdata->dav.imap_uid) {
         /* Fetch index record for the resource */
