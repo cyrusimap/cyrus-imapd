@@ -1083,6 +1083,20 @@ HIDDEN int jmap_openmbox(jmap_req_t *req, const char *name,
     return 0;
 }
 
+HIDDEN int jmap_openmbox_by_uniqueid(jmap_req_t *req, const char *id,
+                                     struct mailbox **mboxp, int rw)
+{
+    mbentry_t *mbentry = NULL;
+
+    int r = mboxlist_lookup_by_uniqueid(id, &mbentry, NULL);
+
+    if (!r && mbentry) r = jmap_openmbox(req, mbentry->name, mboxp, rw);
+
+    mboxlist_entry_free(&mbentry);
+
+    return r;
+}
+
 HIDDEN int jmap_isopenmbox(jmap_req_t *req, const char *name)
 {
 
