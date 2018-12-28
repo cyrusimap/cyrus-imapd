@@ -165,7 +165,7 @@ HIDDEN void jmap_mail_capabilities(jmap_settings_t *settings)
         max_size_attachments_per_email = 0;
     }
 
-    json_t *email_capabilities = json_pack("{s:i s:i s:i s:O}",
+    json_t *email_capabilities = json_pack("{s:i s:i s:i s:o}",
             "maxMailboxesPerEmail", JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL,
             "maxKeywordsPerEmail", JMAP_MAIL_MAX_KEYWORDS_PER_EMAIL,
             "maxSizeAttachmentsPerEmail", max_size_attachments_per_email,

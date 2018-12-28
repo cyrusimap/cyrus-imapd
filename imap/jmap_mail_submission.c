@@ -122,7 +122,7 @@ HIDDEN void jmap_emailsubmission_capabilities(jmap_settings_t *settings)
         buf_free(&buf);
     }
 
-    json_t *submit_capabilities = json_pack("{s:i s:O}",
+    json_t *submit_capabilities = json_pack("{s:i s:o}",
                                             "maxDelayedSend", 0,
                                             "submissionExtensions", submit_ext);
 
