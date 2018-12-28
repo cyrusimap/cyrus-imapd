@@ -166,6 +166,10 @@ EXPORTED void mboxlist_entry_free(mbentry_t **mbentryptr)
 
     free(mbentry->legacy_specialuse);
 
+    synonym_t *syn;
+    while ((syn = ptrarray_pop(&mbentry->synonyms))) {
+        free(syn);
+    }
     ptrarray_fini(&mbentry->synonyms);
 
     free(mbentry);
@@ -1003,9 +1007,8 @@ static int mboxlist_update_entry(const char *name,
 
             if (oldid) {
                 /* Existing mailbox */
-                int i;
-                for (i = 0; i < oldid->synonyms.count; i++) {
-                    synonym_t *syn = ptrarray_nth(&oldid->synonyms, i);
+                while (oldid->synonyms.count) {
+                    synonym_t *syn = ptrarray_shift(&oldid->synonyms);
                     add_synonym(synonyms,
                                 syn->dbname, syn->mtime, syn->foldermodseq);
                     free(syn);
