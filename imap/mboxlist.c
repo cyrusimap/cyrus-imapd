@@ -1087,7 +1087,8 @@ EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribut
 /* PLEASE NOTE - ALWAYS CALL AFTER MAKING THE CHANGES, as this function
  * will check for children when deciding whether to create or remove
  * intermediate folders */
-EXPORTED int mboxlist_update_intermediaries(const char *frommboxname, int mbtype, modseq_t modseq)
+EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
+                                            int mbtype, modseq_t modseq)
 {
     mbentry_t *mbentry = NULL;
     mbname_t *mbname = mbname_from_intname(frommboxname);
@@ -1128,8 +1129,11 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname, int mbtype
                 newmbentry->mbtype = MBTYPE_DELETED;
                 newmbentry->foldermodseq = modseq;
 
-                syslog(LOG_NOTICE, "mboxlist: deleting intermediate with no children: %s", mboxname);
+                syslog(LOG_NOTICE,
+                       "mboxlist: deleting intermediate with no children: %s",
+                       mboxname);
                 r = mboxlist_update_entry(mboxname, newmbentry, NULL);
+                mboxlist_entry_free(&newmbentry);
                 if (r) goto out;
                 sync_log_mailbox(mboxname);
 
@@ -1151,7 +1155,8 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname, int mbtype
 
         /* bump modseq, we're adding a thing that can be seen */
         if (!modseq)
-            modseq = mboxname_nextmodseq(mboxname, mbentry ? mbentry->foldermodseq : 0,
+            modseq = mboxname_nextmodseq(mboxname,
+                                         mbentry ? mbentry->foldermodseq : 0,
                                          mbtype, 1 /* dofolder */);
 
         mbentry_t *newmbentry = mboxlist_entry_create();
@@ -1161,8 +1166,10 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname, int mbtype
         newmbentry->mbtype = MBTYPE_INTERMEDIATE;
         newmbentry->foldermodseq = modseq;
 
-        syslog(LOG_NOTICE, "mboxlist: creating intermediate with children: %s", mboxname);
+        syslog(LOG_NOTICE,
+               "mboxlist: creating intermediate with children: %s", mboxname);
         r = mboxlist_update_entry(mboxname, newmbentry, NULL);
+        mboxlist_entry_free(&newmbentry);
         if (r) goto out;
         sync_log_mailbox(mboxname);
     }
