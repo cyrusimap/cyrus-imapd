@@ -2440,6 +2440,7 @@ static void add_privs(int rights, unsigned flags,
                             BAD_CAST buf_cstring(&buf), NULL);
             }
         }
+        buf_free(&buf);
     }
 }
 
