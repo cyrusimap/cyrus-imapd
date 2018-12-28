@@ -11343,9 +11343,8 @@ static int xfer_addusermbox(const mbentry_t *mbentry, void *rock)
 
     struct xfer_item *item = xzmalloc(sizeof(struct xfer_item));
 
-    // re-read, because we don't have a handy clone function yet
-    int r = mboxlist_lookup(mbentry->name, &item->mbentry, 0);
-    if (r) return r;
+    item->mbentry = mboxlist_entry_copy(mbentry);
+
     char *extname = mboxname_to_external(item->mbentry->name, &imapd_namespace, imapd_userid);
     xstrncpy(item->extname, extname, sizeof(item->extname));
     free(extname);
