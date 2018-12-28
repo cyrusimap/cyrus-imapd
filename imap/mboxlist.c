@@ -1349,7 +1349,7 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
     int r;
     struct mailbox *mailbox = NULL;
     uint32_t uidvalidity = 0;
-    const char *uniqueid = NULL;
+    char *uniqueid = NULL;
     modseq_t createdmodseq = 0;
 
     init_internal();
@@ -1376,6 +1376,7 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
                                     options, uidvalidity, createdmodseq, 0, NULL,
                                     uniqueid, localonly,
                                     forceuser, dbonly, 0, &mailbox);
+    free(uniqueid);
 
     if (notify && !r) {
         /* send a MailboxCreate event notification */
