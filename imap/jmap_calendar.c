@@ -271,6 +271,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
                        buf_cstring(&attrib));
             }
         }
+        buf_free(&attrib);
     }
 
     if (_wantprop(rock->get->props, "isVisible")) {
@@ -292,6 +293,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
                 json_object_set_new(obj, "isVisible", json_string("true"));
             }
         }
+        buf_free(&attrib);
     }
 
     if (_wantprop(rock->get->props, "isSubscribed")) {
@@ -324,6 +326,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
                 else {
                     json_object_set_new(obj, "isSubscribed", json_true());
                 }
+                buf_free(&attrib);
             }
         }
     }
