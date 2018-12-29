@@ -11830,6 +11830,7 @@ static int xfer_delete(struct xfer_header *xfer)
         /* XXX - this code is awful... need a sane way to manage mbentries */
         newentry = mboxlist_entry_create();
         newentry->name = xstrdupnull(item->mbentry->name);
+        newentry->uniqueid = xstrdupnull(item->mbentry->uniqueid);
         newentry->acl = xstrdupnull(item->mbentry->acl);
         newentry->server = xstrdupnull(item->mbentry->server);
         newentry->partition = xstrdupnull(item->mbentry->partition);
