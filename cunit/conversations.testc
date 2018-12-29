@@ -399,12 +399,14 @@ static void test_folder_rename(void)
     conv = conversation_new();
     CU_ASSERT_PTR_NOT_NULL(conv);
 
-    conversation_update(state, conv, FOLDER1, /*num_records*/3,
+    conversation_update(state, conv, FOLDER1,
+                        /*is_trash*/0, /*num_records*/3,
                         /*exists*/3, /*unseen*/0,
                         /*size*/0, /*counts*/NULL,
                         /*modseq*/1,
                         /*createdmodseq*/1);
-    conversation_update(state, conv, FOLDER2, /*num_records*/3,
+    conversation_update(state, conv, FOLDER2,
+                        /*is_trash*/0, /*num_records*/3,
                         /*exists*/2, /*unseen*/0,
                         /*size*/0, /*counts*/NULL,
                         /*modseq*/8,
@@ -502,7 +504,8 @@ static void test_folders(void)
     counts[0] = 1;
     counts[1] = 0;
 
-    conversation_update(state, conv, FOLDER1, /*num_records*/13,
+    conversation_update(state, conv, FOLDER1,
+                        /*is_trash*/0, /*num_records*/13,
                         /*exists*/7, /*unseen*/5,
                         /*size*/0, counts,
                         /*modseq*/4,
@@ -567,7 +570,8 @@ static void test_folders(void)
 
     counts[1] = 2;
     /* some more updates should succeed */
-    conversation_update(state, conv, FOLDER2,/*num_records*/2,
+    conversation_update(state, conv, FOLDER2,
+                        /*is_trash*/0, /*num_records*/2,
                         /*exists*/1, /*unseen*/0,
                         /*size*/0, counts,
                         /*modseq*/7,
@@ -600,7 +604,8 @@ static void test_folders(void)
 
 
     counts[1] = 5;
-    conversation_update(state, conv, FOLDER3,/*num_records*/10,
+    conversation_update(state, conv, FOLDER3,
+                        /*is_trash*/0, /*num_records*/10,
                         /*exists*/10, /*unseen*/0,
                         /*size*/0, counts,
                         /*modseq*/55,
@@ -718,7 +723,8 @@ static void test_folders(void)
     /* decrementing a folder down to zero */
     counts[0] = -1;
     counts[1] = 0;
-    conversation_update(state, conv, FOLDER1,/*num_records*/-13,
+    conversation_update(state, conv, FOLDER1,
+                        /*is_trash*/0, /*num_records*/-13,
                         /*exists*/-7, /*unseen*/0,
                         /*size*/0, counts,
                         /*modseq*/56,
@@ -829,22 +835,24 @@ static void test_folder_ordering(void)
 
     /* set up the folder names in order - we are going to discard
      * this conversation, but the folder_number call will persist */
-    conversation_update(state, conv, FOLDER1, 0, 0, 0, 0, 0, 0, 0);
-    conversation_update(state, conv, FOLDER2, 0, 0, 0, 0, 0, 0, 0);
-    conversation_update(state, conv, FOLDER3, 0, 0, 0, 0, 0, 0, 0);
+    conversation_update(state, conv, FOLDER1, 0, 0, 0, 0, 0, 0, 0, 0);
+    conversation_update(state, conv, FOLDER2, 0, 0, 0, 0, 0, 0, 0, 0);
+    conversation_update(state, conv, FOLDER3, 0, 0, 0, 0, 0, 0, 0, 0);
 
     /* discard and recreate */
     conversation_free(conv);
     conv = conversation_new();
 
-    conversation_update(state, conv, FOLDER1, /*num_records*/1,
+    conversation_update(state, conv, FOLDER1,
+                        /*is_trash*/0, /*num_records*/1,
                         /*exists*/1, /*unseen*/0,
                         /*size*/0, counts,
                         /*modseq*/1,
                         /*createdmodseq*/0);
 
     /* add folders out of order */
-    conversation_update(state, conv, FOLDER3,/*num_records*/10,
+    conversation_update(state, conv, FOLDER3,
+                        /*is_trash*/0, /*num_records*/10,
                         /*exists*/10, /*unseen*/0,
                         /*size*/0, counts,
                         /*modseq*/55,
@@ -859,7 +867,8 @@ static void test_folder_ordering(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(conv);
 
-    conversation_update(state, conv, FOLDER2,/*num_records*/2,
+    conversation_update(state, conv, FOLDER2,
+                        /*is_trash*/0, /*num_records*/2,
                         /*exists*/1, /*unseen*/0,
                         /*size*/0, counts,
                         /*modseq*/7,
@@ -985,7 +994,8 @@ static void __test_senders(void)
     conversation_add_sender(conv, NAME2, NULL, MAILBOX2, DOMAIN2);
     conversation_add_sender(conv, NAME3, NULL, MAILBOX3, DOMAIN3);
 
-    conversation_update(state, conv, FOLDER, /*num_records*/1,
+    conversation_update(state, conv, FOLDER,
+                        /*is_trash*/0, /*num_records*/1,
                         /*exists*/1, /*unseen*/0,
                         /*size*/0, counts,
                         /*modseq*/1,
@@ -1176,7 +1186,7 @@ static void test_dump(void)
         CU_ASSERT_PTR_NOT_NULL(conv);
         for (j = 0 ; j < mboxnames.count ; j++) {
             conversation_update(state, conv, mboxnames.data[j],
-                                /*num_records*/1,
+                                /*is_trash*/0, /*num_records*/1,
                                 /*exists*/1, /*unseen*/0,
                                 /*size*/0, /*counts*/NULL,
                                 /*modseq*/100,

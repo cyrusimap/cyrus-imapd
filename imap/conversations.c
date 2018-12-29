@@ -2196,7 +2196,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
             delta_size -= old->size;
             /* drafts don't update the 'unseen' counter so that
              * they never turn a conversation "unread" */
-            if (!is_trash && !(old->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
+            if (!(old->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
                 delta_unseen--;
             if (cstate->counted_flags) {
                 for (i = 0; i < cstate->counted_flags->count; i++) {
@@ -2222,7 +2222,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
             delta_size += new->size;
             /* drafts don't update the 'unseen' counter so that
              * they never turn a conversation "unread" */
-            if (!is_trash && !(new->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
+            if (!(new->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
                 delta_unseen++;
             if (cstate->counted_flags) {
                 for (i = 0; i < cstate->counted_flags->count; i++) {
@@ -2274,7 +2274,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                                delta_exists);
 
     conversation_update(cstate, conv, mailbox->name,
-                        delta_num_records,
+                        is_trash, delta_num_records,
                         delta_exists, delta_unseen,
                         delta_size, delta_counts, modseq,
                         record->createdmodseq);
@@ -2289,7 +2289,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
 EXPORTED void conversation_update(struct conversations_state *state,
                          conversation_t *conv, const char *mboxname,
-                         int delta_num_records,
+                         int is_trash, int delta_num_records,
                          int delta_exists, int delta_unseen,
                          int delta_size, int *delta_counts,
                          modseq_t modseq, modseq_t createdmodseq)
@@ -2311,7 +2311,7 @@ EXPORTED void conversation_update(struct conversations_state *state,
         conv->flags |= CONV_ISDIRTY;
     }
     if (delta_unseen) {
-        _apply_delta(&conv->unseen, delta_unseen);
+        if (!is_trash) _apply_delta(&conv->unseen, delta_unseen);
         _apply_delta(&folder->unseen, delta_unseen);
         conv->flags |= CONV_ISDIRTY;
     }
