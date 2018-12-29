@@ -414,7 +414,7 @@ static void test_folder_rename(void)
 
     conv->subject = xstrdup("☃");
 
-    r = conversation_save(state, C_CID, conv);
+    r = conversation_save(state, C_CID, conv, NULL);
     CU_ASSERT_EQUAL(r, 0);
 
     conversation_free(conv);
@@ -535,7 +535,7 @@ static void test_folders(void)
     folder = conversation_find_folder(state, conv, FOLDER_N2);
     CU_ASSERT_PTR_NULL_FATAL(folder);
 
-    r = conversation_save(state, C_CID, conv);
+    r = conversation_save(state, C_CID, conv, NULL);
     CU_ASSERT_EQUAL(r, 0);
     conversation_free(conv);
     conv = NULL;
@@ -639,7 +639,7 @@ static void test_folders(void)
     folder = conversation_find_folder(state, conv, FOLDER_N2);
     CU_ASSERT_PTR_NULL_FATAL(folder);
 
-    r = conversation_save(state, C_CID, conv);
+    r = conversation_save(state, C_CID, conv, NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL((conv->flags & CONV_ISDIRTY), 0);
     conversation_free(conv);
@@ -760,7 +760,7 @@ static void test_folders(void)
     CU_ASSERT_EQUAL((conv->flags & CONV_ISDIRTY), CONV_ISDIRTY);
 
     /* folder goes away properly when saved & re-loaded */
-    r = conversation_save(state, C_CID, conv);
+    r = conversation_save(state, C_CID, conv, NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL((conv->flags & CONV_ISDIRTY), 0);
     conversation_free(conv);
@@ -859,7 +859,7 @@ static void test_folder_ordering(void)
                         /*createdmodseq*/0);
 
     /* save and reload here just to be sure */
-    r = conversation_save(state, C_CID, conv);
+    r = conversation_save(state, C_CID, conv, NULL);
     CU_ASSERT_EQUAL(r, 0);
     conversation_free(conv);
     conv = NULL;
@@ -890,7 +890,7 @@ static void test_folder_ordering(void)
     CU_ASSERT_PTR_EQUAL(folder2->next, folder3);
     CU_ASSERT_PTR_NULL(folder3->next);
 
-    r = conversation_save(state, C_CID, conv);
+    r = conversation_save(state, C_CID, conv, NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL((conv->flags & CONV_ISDIRTY), 0);
     conversation_free(conv);
@@ -1027,7 +1027,7 @@ static void __test_senders(void)
     CU_ASSERT_STRING_EQUAL(sender3->domain, DOMAIN2);
 
     /* save and reload here just to be sure */
-    r = conversation_save(state, C_CID, conv);
+    r = conversation_save(state, C_CID, conv, NULL);
     CU_ASSERT_EQUAL(r, 0);
     conversation_free(conv);
     conv = NULL;
@@ -1192,7 +1192,7 @@ static void test_dump(void)
                                 /*modseq*/100,
                                 /*createdmodseq*/0);
         }
-        r = conversation_save(state, cid, conv);
+        r = conversation_save(state, cid, conv, NULL);
         CU_ASSERT_EQUAL(r, 0);
         conversation_free(conv);
         conv = NULL;

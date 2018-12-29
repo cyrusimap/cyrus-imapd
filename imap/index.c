@@ -2028,8 +2028,8 @@ static int search_predict_total(struct index_state *state,
         conversation_getstatus(cstate, index_mboxname(state), &convstatus);
         /* always grab xconvmodseq, so we report a growing
          * highestmodseq to all callers */
-        if (xconvmodseqp) *xconvmodseqp = convstatus.modseq;
-        exists = convstatus.exists;
+        if (xconvmodseqp) *xconvmodseqp = convstatus.threadmodseq;
+        exists = convstatus.threadexists;
     }
     else {
         if (xconvmodseqp) *xconvmodseqp = state->highestmodseq;
@@ -2054,12 +2054,12 @@ static int search_predict_total(struct index_state *state,
 
     case SEC_CONVSEEN:
         assert(conversations);
-        assert(convstatus.exists >= convstatus.unseen);
-        return convstatus.exists - convstatus.unseen;
+        assert(convstatus.threadexists >= convstatus.threadunseen);
+        return convstatus.threadexists - convstatus.threadunseen;
 
     case SEC_CONVSEEN|SEC_NOT:
         assert(conversations);
-        return convstatus.unseen;
+        return convstatus.threadunseen;
 
     default:
         return UNPREDICTABLE;

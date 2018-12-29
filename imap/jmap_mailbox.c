@@ -600,10 +600,10 @@ static json_t *_mbox_get(jmap_req_t *req,
                 goto done;
             }
             if (_wantprop(props, "totalThreads")) {
-                json_object_set_new(obj, "totalThreads", json_integer(sdata.xconv.exists));
+                json_object_set_new(obj, "totalThreads", json_integer(sdata.xconv.threadexists));
             }
             if (_wantprop(props, "unreadThreads")) {
-                json_object_set_new(obj, "unreadThreads", json_integer(sdata.xconv.unseen));
+                json_object_set_new(obj, "unreadThreads", json_integer(sdata.xconv.threadunseen));
             }
         }
         if (_wantprop(props, "sortOrder")) {

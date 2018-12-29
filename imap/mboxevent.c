@@ -1558,11 +1558,11 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
             conversation_getstatus(cstate, mailbox->name, &status);
 
         if (mboxevent_expected_param(event->type, EVENT_CONVEXISTS)) {
-            FILL_UNSIGNED_PARAM(event, EVENT_CONVEXISTS, status.exists);
+            FILL_UNSIGNED_PARAM(event, EVENT_CONVEXISTS, status.threadexists);
         }
 
         if (mboxevent_expected_param(event->type, EVENT_CONVUNSEEN)) {
-            FILL_UNSIGNED_PARAM(event, EVENT_CONVUNSEEN, status.unseen);
+            FILL_UNSIGNED_PARAM(event, EVENT_CONVUNSEEN, status.threadunseen);
         }
     }
 

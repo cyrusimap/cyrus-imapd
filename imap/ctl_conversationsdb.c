@@ -452,7 +452,7 @@ static int fix_modseqs(struct conversations_state *a,
                 /* need to add record if it's zero */
                 r = conversation_parsestatus(ca.data, ca.datalen, &status);
                 if (r) return r;
-                if (status.exists == 0) {
+                if (status.threadexists == 0) {
                     r = conversation_storestatus(b, ca.key, ca.keylen, &status);
                     if (r) {
                         fprintf(stderr, "Failed to store conversations "
@@ -498,8 +498,8 @@ static int fix_modseqs(struct conversations_state *a,
                                 b->path, error_message(r));
                 goto next;
             }
-            if (statusa.modseq > statusb.modseq) {
-                statusb.modseq = statusa.modseq;
+            if (statusa.threadmodseq > statusb.threadmodseq) {
+                statusb.threadmodseq = statusa.threadmodseq;
                 r = conversation_storestatus(b, cb.key, cb.keylen, &statusb);
                 if (r) {
                     fprintf(stderr, "Failed to store conversations "

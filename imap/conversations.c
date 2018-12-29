@@ -104,7 +104,7 @@
 
 struct conversations_open *open_conversations;
 
-static conv_status_t NULLSTATUS = { 0, 0, 0};
+static conv_status_t NULLSTATUS = CONV_STATUS_INIT;
 
 static char *convdir = NULL;
 static char *suffix = NULL;
@@ -354,7 +354,7 @@ static void commitstatus_cb(const char *key, void *data, void *rock)
     conversation_storestatus(state, key, strlen(key), status);
     /* just in case convdb has a higher modseq for any reason (aka deleted and
      * recreated while a replica was still valid with the old user) */
-    mboxname_setmodseq(key+1, status->modseq, /*mbtype */0, /*dofolder*/0);
+    mboxname_setmodseq(key+1, status->threadmodseq, /*mbtype */0, /*dofolder*/0);
     sync_log_mailbox(key+1); /* skip the leading F */
 }
 
@@ -740,16 +740,18 @@ EXPORTED int conversation_storestatus(struct conversations_state *state,
                                       const char *key, size_t keylen,
                                       const conv_status_t *status)
 {
-    if (!status || !status->modseq) {
+    if (!status || !status->threadmodseq) {
         return cyrusdb_delete(state->db,
                               key, keylen,
                               &state->txn, /*force*/1);
     }
 
     struct dlist *dl = dlist_newlist(NULL, NULL);
-    dlist_setnum64(dl, "MODSEQ", status->modseq);
-    dlist_setnum32(dl, "EXISTS", status->exists);
-    dlist_setnum32(dl, "UNSEEN", status->unseen);
+    dlist_setnum64(dl, "THREADMODSEQ", status->threadmodseq);
+    dlist_setnum32(dl, "THREADEXISTS", status->threadexists);
+    dlist_setnum32(dl, "THREADUNSEEN", status->threadunseen);
+    dlist_setnum32(dl, "EMAILEXISTS", status->emailexists);
+    dlist_setnum32(dl, "EMAILUNSEEN", status->emailunseen);
 
     struct buf buf = BUF_INITIALIZER;
     buf_printf(&buf, "%d ", CONVERSATIONS_VERSION);
@@ -878,7 +880,8 @@ EXPORTED int conversation_store(struct conversations_state *state,
 
 static int _conversation_save(struct conversations_state *state,
                               const char *key, int keylen,
-                              conversation_t *conv)
+                              conversation_t *conv,
+                              struct emailcounts *ecounts)
 {
     const conv_folder_t *folder;
     int r;
@@ -888,6 +891,8 @@ static int _conversation_save(struct conversations_state *state,
         const char *mboxname = strarray_nth(state->folder_names, folder->number);
         int exists_diff = 0;
         int unseen_diff = 0;
+        int emailexists_diff = 0;
+        int emailunseen_diff = 0;
         conv_status_t status = CONV_STATUS_INIT;
 
         /* case: full removal of conversation - make sure to remove
@@ -913,17 +918,27 @@ static int _conversation_save(struct conversations_state *state,
              * in this folder, and wasn't previously either */
         }
 
+        if (ecounts && !strcmp(ecounts->mboxname, mboxname)) {
+            // do we have email diffs?
+            emailexists_diff = !!ecounts->post_emailexists - !!ecounts->pre_emailexists;
+            emailunseen_diff = !!ecounts->post_emailunseen - !!ecounts->pre_emailunseen;
+        }
+
         /* XXX - it's super inefficient to be doing this for
          * every cid in every folder in the transaction.  Big
          * wins available by caching these in memory and writing
          * once at the end of the transaction */
         r = conversation_getstatus(state, mboxname, &status);
         if (r) goto done;
-        if (exists_diff || unseen_diff || status.modseq < conv->modseq) {
-            if (status.modseq < conv->modseq)
-                status.modseq = conv->modseq;
-            status.exists += exists_diff;
-            status.unseen += unseen_diff;
+        if (exists_diff || unseen_diff
+         || emailexists_diff || emailunseen_diff
+         || status.threadmodseq < conv->modseq) {
+            if (status.threadmodseq < conv->modseq)
+                status.threadmodseq = conv->modseq;
+            status.threadexists += exists_diff;
+            status.threadunseen += unseen_diff;
+            status.emailexists += emailexists_diff;
+            status.emailunseen += emailunseen_diff;
             r = conversation_setstatus(state, mboxname, &status);
             if (r) goto done;
         }
@@ -947,7 +962,8 @@ done:
 
 EXPORTED int conversation_save(struct conversations_state *state,
                       conversation_id_t cid,
-                      conversation_t *conv)
+                      conversation_t *conv,
+                      struct emailcounts *ecounts)
 {
     char bkey[CONVERSATION_ID_STRMAX+2];
 
@@ -963,7 +979,7 @@ EXPORTED int conversation_save(struct conversations_state *state,
 
     snprintf(bkey, sizeof(bkey), "B" CONV_FMT, cid);
 
-    return _conversation_save(state, bkey, strlen(bkey), conv);
+    return _conversation_save(state, bkey, strlen(bkey), conv, ecounts);
 }
 
 struct convstatusrock {
@@ -977,15 +993,23 @@ int _saxconvstatus(int type, struct dlistsax_data *d)
     if (type != DLISTSAX_STRING) return 0;
     switch (rock->state) {
     case 0:
-        rock->status->modseq = atoll(d->data);
+        rock->status->threadmodseq = atoll(d->data);
         rock->state++;
         return 0;
     case 1:
-        rock->status->exists = atol(d->data);
+        rock->status->threadexists = atol(d->data);
         rock->state++;
         return 0;
     case 2:
-        rock->status->unseen = atol(d->data);
+        rock->status->threadunseen = atol(d->data);
+        rock->state++;
+        return 0;
+    case 3:
+        rock->status->emailexists = atol(d->data);
+        rock->state++;
+        return 0;
+    case 4:
+        rock->status->emailunseen = atol(d->data);
         rock->state++;
         return 0;
     }
@@ -1001,9 +1025,11 @@ EXPORTED int conversation_parsestatus(const char *data, size_t datalen,
     size_t restlen;
     int r;
 
-    status->modseq = 0;
-    status->exists = 0;
-    status->unseen = 0;
+    status->threadmodseq = 0;
+    status->threadexists = 0;
+    status->threadunseen = 0;
+    status->emailexists = 0;
+    status->emailunseen = 0;
 
     r = parsenum(data, &rest, datalen, &version);
     if (r) return IMAP_MAILBOX_BADFORMAT;
@@ -2106,6 +2132,33 @@ static int conversations_set_guid(struct conversations_state *state,
     return r;
 }
 
+static int _read_emailcounts_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct emailcounts *ecounts = (struct emailcounts *)rock;
+    if (rec->part) return 0;
+    if (strcmp(ecounts->mboxname, rec->mboxname)) return 0;
+    // ok, we're in the same folder - are we expunged?
+    if (rec->version > 0 &&
+         (rec->system_flags & FLAG_DELETED ||
+          rec->internal_flags & FLAG_INTERNAL_EXPUNGED))
+        return 0;
+    if (ecounts->ispost) {
+        // not expunged or unsure, count it as exists
+        ecounts->post_emailexists++;
+        // not seen or unsure, count it as unseen
+        if (rec->version == 0 || !(rec->system_flags & FLAG_SEEN))
+            ecounts->post_emailunseen++;
+    }
+    else {
+        // not expunged or unsure, count it as exists
+        ecounts->pre_emailexists++;
+        // not seen or unsure, count it as unseen
+        if (rec->version == 0 || !(rec->system_flags & FLAG_SEEN))
+            ecounts->pre_emailunseen++;
+    }
+    return 0;
+}
+
 EXPORTED int conversations_update_record(struct conversations_state *cstate,
                                          struct mailbox *mailbox,
                                          const struct index_record *old,
@@ -2172,9 +2225,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
     }
 
-    if (cstate->counted_flags)
-        delta_counts = xzmalloc(sizeof(int) * cstate->counted_flags->count);
-
     /* IRIS-2534: check if it's the trash folder - XXX - should be separate
      * conversation root or similar more useful method in future */
     mbname_t *mbname = mbname_from_intname(mailbox->name);
@@ -2186,6 +2236,16 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         is_trash = 1;
 
     mbname_free(&mbname);
+
+    if (cstate->counted_flags)
+        delta_counts = xzmalloc(sizeof(int) * cstate->counted_flags->count);
+
+    struct emailcounts ecounts = EMAILCOUNTS_INIT;
+    /* count the email state before making GUID changes */
+    ecounts.mboxname = mailbox->name;
+    r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
+                                   _read_emailcounts_cb, &ecounts);
+    if (r) return r;
 
     /* calculate the changes */
     if (old) {
@@ -2242,6 +2302,12 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
     }
 
+    /* we've made any set_guid, so count the state again! */
+    ecounts.ispost = 1;
+    r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
+                                   _read_emailcounts_cb, &ecounts);
+    if (r) return r;
+
     /* XXX - combine this with the earlier cache parsing */
     if (!mailbox_cacherecord(mailbox, record)) {
         char *env = NULL;
@@ -2279,7 +2345,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
                         delta_size, delta_counts, modseq,
                         record->createdmodseq);
 
-    r = conversation_save(cstate, record->cid, conv);
+    r = conversation_save(cstate, record->cid, conv, &ecounts);
 
     conversation_free(conv);
     free(delta_counts);
@@ -2484,9 +2550,9 @@ static int folder_key_rename(struct conversations_state *state,
     /* in theory there shouldn't be any EXISTS left because you've deleted the messages,
      * but DB corruption could mean this wasn't cleared - better to allow the rename to
      * succeed and clean up later */
-    if (status.exists) {
-        syslog(LOG_ERR, "IOERROR: conversationsdb corruption %s still had %d messages in folder key on delete",
-               from_name, status.exists);
+    if (status.threadexists || status.emailexists) {
+        syslog(LOG_ERR, "IOERROR: conversationsdb corruption %s still had %d/%d messages in folder key on delete",
+               from_name, status.threadexists, status.emailexists);
     }
 
     return 0;
@@ -2584,8 +2650,10 @@ static int zero_f_cb(void *rock,
     }
 
     /* leave modseq unchanged */
-    status.exists = 0;
-    status.unseen = 0;
+    status.threadexists = 0;
+    status.threadunseen = 0;
+    status.emailexists = 0;
+    status.emailunseen = 0;
 
     return conversation_storestatus(state, key, keylen, &status);
 }

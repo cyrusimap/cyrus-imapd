@@ -3590,7 +3590,8 @@ out:
     else if (convp)
         *convp = conv;
     else {
-        r = conversation_save(state, record->cid, conv);
+        // no emailcounts needed here, because we haven't changec counts for any messages
+        r = conversation_save(state, record->cid, conv, NULL);
         conversation_free(conv);
     }
 

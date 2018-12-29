@@ -9046,15 +9046,15 @@ static int print_statusline(const char *extname, unsigned statusitems,
         sepchar = ' ';
     }
     if (statusitems & STATUS_XCONVEXISTS) {
-        prot_printf(imapd_out, "%cXCONVEXISTS %u", sepchar, sd->xconv.exists);
+        prot_printf(imapd_out, "%cXCONVEXISTS %u", sepchar, sd->xconv.threadexists);
         sepchar = ' ';
     }
     if (statusitems & STATUS_XCONVUNSEEN) {
-        prot_printf(imapd_out, "%cXCONVUNSEEN %u", sepchar, sd->xconv.unseen);
+        prot_printf(imapd_out, "%cXCONVUNSEEN %u", sepchar, sd->xconv.threadunseen);
         sepchar = ' ';
     }
     if (statusitems & STATUS_XCONVMODSEQ) {
-        prot_printf(imapd_out, "%cXCONVMODSEQ " MODSEQ_FMT, sepchar, sd->xconv.modseq);
+        prot_printf(imapd_out, "%cXCONVMODSEQ " MODSEQ_FMT, sepchar, sd->xconv.threadmodseq);
         sepchar = ' ';
     }
 

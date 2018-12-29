@@ -139,11 +139,13 @@ struct conv_sender {
 };
 
 struct conv_status {
-    modseq_t modseq;
-    uint32_t exists;
-    uint32_t unseen;
+    modseq_t threadmodseq;
+    uint32_t threadexists;
+    uint32_t threadunseen;
+    uint32_t emailexists;
+    uint32_t emailunseen;
 };
-#define CONV_STATUS_INIT {0, 0, 0}
+#define CONV_STATUS_INIT { 0, 0, 0, 0, 0 }
 
 struct conversation {
     modseq_t        modseq;
@@ -162,6 +164,17 @@ struct conversation {
 };
 
 #define CONVERSATION_INIT { 0, 0, 0, 0, 0, 0, {0}, NULL, NULL, NULL, NULL, 0, CONV_ISDIRTY }
+
+struct emailcounts {
+    const char *mboxname;
+    int ispost;
+    int pre_emailexists;
+    int pre_emailunseen;
+    int post_emailexists;
+    int post_emailunseen;
+};
+
+#define EMAILCOUNTS_INIT { NULL, 0, 0, 0, 0, 0 }
 
 #include "mailbox.h"
 
@@ -227,7 +240,8 @@ extern int conversation_get_modseq(struct conversations_state *state,
                                    modseq_t *modseqp);
 extern int conversation_save(struct conversations_state *state,
                              conversation_id_t cid,
-                             conversation_t *conv);
+                             conversation_t *conv,
+                             struct emailcounts *ecounts);
 extern int conversation_load_advanced(struct conversations_state *state,
                                       conversation_id_t cid,
                                       conversation_t *convp,
