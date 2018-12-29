@@ -1922,7 +1922,7 @@ EXPORTED int conversations_guid_foreach(struct conversations_state *state,
     rock.cbrock = cbrock;
 
     char *key = strconcat("G", guidrep, (char *)NULL);
-    int r = cyrusdb_foreach(state->db, key, strlen(key), NULL, _guid_cb, &rock, NULL);
+    int r = cyrusdb_foreach(state->db, key, strlen(key), NULL, _guid_cb, &rock, &state->txn);
     free(key);
 
     return r;
