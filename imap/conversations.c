@@ -2146,14 +2146,14 @@ static int _read_emailcounts_cb(const conv_guidrec_t *rec, void *rock)
         // not expunged or unsure, count it as exists
         ecounts->post_emailexists++;
         // not seen or unsure, count it as unseen
-        if (rec->version == 0 || !(rec->system_flags & FLAG_SEEN))
+        if (rec->version == 0 || !(rec->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
             ecounts->post_emailunseen++;
     }
     else {
         // not expunged or unsure, count it as exists
         ecounts->pre_emailexists++;
         // not seen or unsure, count it as unseen
-        if (rec->version == 0 || !(rec->system_flags & FLAG_SEEN))
+        if (rec->version == 0 || !(rec->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
             ecounts->pre_emailunseen++;
     }
     return 0;
