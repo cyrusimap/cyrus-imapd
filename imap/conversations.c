@@ -878,6 +878,21 @@ EXPORTED int conversation_store(struct conversations_state *state,
     return r;
 }
 
+static void _apply_delta(uint32_t *valp, int delta)
+{
+    if (delta >= 0) {
+        *valp += delta;
+    }
+    else {
+        uint32_t decrease = -delta;
+        /* let us die where it broke */
+        if (decrease <= *valp)
+            *valp -= decrease;
+        else
+            *valp = 0;
+    }
+}
+
 static int _conversation_save(struct conversations_state *state,
                               const char *key, int keylen,
                               conversation_t *conv,
@@ -935,10 +950,10 @@ static int _conversation_save(struct conversations_state *state,
          || status.threadmodseq < conv->modseq) {
             if (status.threadmodseq < conv->modseq)
                 status.threadmodseq = conv->modseq;
-            status.threadexists += exists_diff;
-            status.threadunseen += unseen_diff;
-            status.emailexists += emailexists_diff;
-            status.emailunseen += emailunseen_diff;
+            _apply_delta(&status.threadexists, exists_diff);
+            _apply_delta(&status.threadunseen, unseen_diff);
+            _apply_delta(&status.emailexists, emailexists_diff);
+            _apply_delta(&status.emailunseen, emailunseen_diff);
             r = conversation_setstatus(state, mboxname, &status);
             if (r) goto done;
         }
@@ -1677,7 +1692,7 @@ static void conversation_update_thread(conversation_t *conv,
 
     message_guid_copy(&thread->guid, guid);
     thread->internaldate = internaldate;
-    thread->exists += delta_exists;
+    _apply_delta(&thread->exists, delta_exists);
 
     conversations_thread_sort(conv);
     // if we've sorted, it's probably dirty
@@ -1724,7 +1739,7 @@ EXPORTED void conversation_update_sender(conversation_t *conv,
     }
 
     /* otherwise update the counter */
-    sender->exists += delta_exists;
+    _apply_delta(&sender->exists, delta_exists);
 
     /* ensure the database is consistent regardless
      * of message arrival order, update the record if the newly
@@ -1769,21 +1784,6 @@ EXPORTED void conversation_update_sender(conversation_t *conv,
     *nextp = sender;
 
     conv->flags |= CONV_ISDIRTY;
-}
-
-static void _apply_delta(uint32_t *valp, int delta)
-{
-    if (delta >= 0) {
-        *valp += delta;
-    }
-    else {
-        uint32_t decrease = -delta;
-        /* let us die where it broke */
-        if (decrease <= *valp)
-            *valp -= decrease;
-        else
-            *valp = 0;
-    }
 }
 
 static int _match1(void *rock,

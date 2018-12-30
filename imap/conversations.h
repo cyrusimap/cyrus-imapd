@@ -101,7 +101,7 @@ typedef struct conv_thread  conv_thread_t;
 struct conv_thread {
     conv_thread_t *next;
     struct message_guid guid;
-    int exists;
+    uint32_t exists;
     time_t internaldate;
 };
 
