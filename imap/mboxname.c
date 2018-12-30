@@ -1304,6 +1304,26 @@ EXPORTED int mboxname_isusermailbox(const char *name, int isinbox)
 }
 
 /*
+ * If (internal) mailbox 'name' is a user's Trash folder returns 1,
+ * otherwise returns 0
+ * XXX: use roles rather than hard coded name?
+ */
+EXPORTED int mboxname_isusertrash(const char *name)
+{
+    mbname_t *mbname = mbname_from_intname(name);
+    int res = 0;
+
+    if (mbname_localpart(mbname) && !mbname_isdeleted(mbname)) {
+        const strarray_t *boxes = mbname_boxes(mbname);
+        if (strarray_size(boxes) == 1 && !strcmpsafe(strarray_nth(boxes, 0), "Trash"))
+            res = 1;
+    }
+
+    mbname_free(&mbname);
+    return res;
+}
+
+/*
  * If (internal) mailbox 'name' is a DELETED mailbox
  * returns boolean
  */
