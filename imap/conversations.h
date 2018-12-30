@@ -79,6 +79,7 @@ struct conversations_state {
     strarray_t *counted_flags;
     strarray_t *folder_names;
     hash_table folderstatus;
+    int trashfolder;
     char *path;
 };
 
@@ -153,6 +154,8 @@ struct conversation {
     uint32_t        exists;
     uint32_t        unseen;
     uint32_t        prev_unseen;
+    uint32_t        trash_unseen;
+    uint32_t        prev_trash_unseen;
     uint32_t        size;
     uint32_t        counts[32];
     conv_folder_t   *folders;
@@ -163,7 +166,7 @@ struct conversation {
     int             flags;
 };
 
-#define CONVERSATION_INIT { 0, 0, 0, 0, 0, 0, {0}, NULL, NULL, NULL, NULL, 0, CONV_ISDIRTY }
+#define CONVERSATION_INIT { 0, 0, 0, 0, 0, 0, 0, 0, {0}, NULL, NULL, NULL, NULL, 0, CONV_ISDIRTY }
 
 struct emailcounts {
     const char *mboxname;
