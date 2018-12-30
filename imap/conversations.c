@@ -924,7 +924,7 @@ static int _conversation_save(struct conversations_state *state,
         /* case: full removal of conversation - make sure to remove
          * unseen as well */
         if (folder->exists) {
-            if (!folder->prev_exists) {
+            if (folder->prev_exists) {
                 /* both exist, just check for unseen changes */
                 unseen_diff = !!unseen - !!prev_unseen;
             }
