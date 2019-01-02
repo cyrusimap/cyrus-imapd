@@ -63,14 +63,15 @@ EXPORTED struct hashset *hashset_new(size_t bytesize)
 }
 
 // returns 1 if added, 0 if already there
-EXPORTED int hashset_add(struct hashset *hs, const void *data)
+EXPORTED int hashset_add(struct hashset *hs, const void *value)
 {
     assert(hs);
-    uint32_t *pos = &hs->starts[*((uint16_t *)data)];
+    uint32_t *pos = &hs->starts[*((uint16_t *)value)];
+    uint32_t *base = pos;
     size_t offset = 0;
     while (*pos) {
         offset = hs->recsize * (*pos - 1);
-        if (!memcmp(hs->data+offset, data, hs->bytesize))
+        if (!memcmp(hs->data+offset, value, hs->bytesize))
             return 0; // found it
         pos = hs->data + offset + hs->bytesize;
     }
@@ -82,19 +83,23 @@ EXPORTED int hashset_add(struct hashset *hs, const void *data)
             hs->data = xmalloc(hs->alloc * hs->recsize);
         }
         else {
-            hs->alloc += hs->alloc;  // double
+            hs->alloc *= 2;  // double the allocation each time
             hs->data = xrealloc(hs->data, hs->alloc * hs->recsize);
+
+            // relocate after realloc if necessary
+            if (pos != base)
+                pos = hs->data + offset + hs->bytesize;
         }
 
-        // relocate after malloc
-        if (offset)
-            pos = hs->data + offset + hs->bytesize;
     }
 
     offset = hs->recsize * hs->count;
-    memcpy(hs->data + offset, data, hs->bytesize);
+    memcpy(hs->data + offset, value, hs->bytesize);
     memset(hs->data + offset + hs->bytesize, 0, 4);
-    *pos = ++hs->count;  // increment first so it's never zero
+
+    // make pointers start at 1 so the value is never zero
+    hs->count++;
+    *pos = hs->count;
 
     return 1; // added it
 }

@@ -22,7 +22,7 @@ int hashset_add(struct hashset *hs, const void *data);
 int hashset_exists(struct hashset *hs, const void *data);
 
 // XXX: add iterator and foreacher
-void hashset_foreach(struct hashset *hs, int (*)(void *, void *), void *rock);
+//void hashset_foreach(struct hashset *hs, int (*)(void *, void *), void *rock);
 
 void hashset_free(struct hashset **hsp);
 
