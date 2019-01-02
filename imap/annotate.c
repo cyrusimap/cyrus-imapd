@@ -151,8 +151,8 @@ struct annotate_state
 
     /* state for output_entryatt */
     struct attvaluelist *attvalues;
-    char lastname[MAX_MAILBOX_BUFFER];  /* internal */
-    char lastentry[MAX_MAILBOX_BUFFER];
+    char lastname[MAX_MAILBOX_PATH+1];  /* internal */
+    char lastentry[MAX_MAILBOX_PATH+1];
     uint32_t lastuid;
     annotate_fetch_cb_t callback;
     void *callback_rock;
@@ -1011,7 +1011,7 @@ static int find_cb(void *rock, const char *key, size_t keylen,
     struct find_rock *frock = (struct find_rock *) rock;
     const char *mboxname, *entry, *userid;
     unsigned int uid;
-    char newkey[MAX_MAILBOX_NAME+1];
+    char newkey[MAX_MAILBOX_PATH+1];
     size_t newkeylen;
     struct buf value = BUF_INITIALIZER;
     struct annotate_metadata mdata;
@@ -1365,7 +1365,7 @@ static void output_entryatt(annotate_state_t *state, const char *entry,
                             const char *userid, const struct buf *value)
 {
     const char *mboxname;
-    char key[MAX_MAILBOX_BUFFER]; /* XXX MAX_MAILBOX_NAME + entry + userid */
+    char key[MAX_MAILBOX_PATH+1]; /* XXX MAX_MAILBOX_NAME + entry + userid */
     struct buf buf = BUF_INITIALIZER;
 
     if (!userid) userid = "";
