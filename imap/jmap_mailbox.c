@@ -229,7 +229,7 @@ struct _mbentry_by_uniqueid_rock {
 static int _mbentry_by_uniqueid_cb(const mbentry_t *mbentry, void *rock)
 {
     struct _mbentry_by_uniqueid_rock *data = rock;
-    if (strcmp(mbentry->uniqueid, data->uniqueid))
+    if (strcmpnull(mbentry->uniqueid, data->uniqueid))
         return 0;
     *(data->mbentry) = mboxlist_entry_copy(mbentry);
     return IMAP_OK_COMPLETED;
