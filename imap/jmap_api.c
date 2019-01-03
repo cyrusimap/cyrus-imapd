@@ -1363,6 +1363,7 @@ HIDDEN void jmap_parser_push_index(struct jmap_parser *parser, const char *prop,
                                    size_t index, const char *name)
 {
     /* TODO make this more clever: won't need to printf most of the time */
+    buf_reset(&parser->buf);
     if (name) buf_printf(&parser->buf, "%s[%zu:%s]", prop, index, name);
     else buf_printf(&parser->buf, "%s[%zu]", prop, index);
     strarray_push(&parser->path, buf_cstring(&parser->buf));
@@ -1373,6 +1374,7 @@ HIDDEN void jmap_parser_push_name(struct jmap_parser *parser,
                                   const char *prop, const char *name)
 {
     /* TODO make this more clever: won't need to printf most of the time */
+    buf_reset(&parser->buf);
     buf_printf(&parser->buf, "%s{%s}", prop, name);
     strarray_push(&parser->path, buf_cstring(&parser->buf));
     buf_reset(&parser->buf);
