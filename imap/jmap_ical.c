@@ -4635,7 +4635,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     }
 
     /* title */
-    pe = readprop(ctx, event, "title", 1, "s", &val);
+    pe = readprop(ctx, event, "title", 0, "s", &val);
     if (pe > 0) {
         icalcomponent_set_summary(comp, val);
     }
