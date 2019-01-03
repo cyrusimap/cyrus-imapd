@@ -2218,16 +2218,13 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
 
     /* title */
     if (wantprop(ctx, "title")) {
+        const char *title= "";
         prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
         if (prop) {
-            json_object_set_new(event, "title",
-                                json_string(icalproperty_get_summary(prop)));
-        } else {
-            json_object_set_new(event, "title", json_string(""));
+            title = icalproperty_get_summary(prop);
+            if (!title) title = "";
         }
-        if (!wantprop(ctx, "title")) {
-            json_object_del(event, "title");
-        }
+        json_object_set_new(event, "title", json_string(title));
     }
 
     /* description */
