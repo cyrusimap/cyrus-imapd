@@ -1346,8 +1346,46 @@ static const jmap_property_t event_props[] = {
     { "calendarId",    0 },
     { "participantId", 0 },
 
-    { "x-href",        0 },  /* FM specific */
-    { "uid",           0 },  /* legacy */
+    /* JSCalendar common properties */
+    { "@type",         0 },
+    { "uid",           0 },
+    { "relatedTo",     0 },
+    { "prodId",        0 },
+    { "created",       0 },
+    { "updated",       0 },
+    { "sequence",      0 },
+    { "method",        0 },
+    { "title",         0 },
+    { "description",   0 },
+    { "descriptionContentType",   0 },
+    { "locations",     0 },
+    { "virtualLocations",     0 },
+    { "links",         0 },
+    { "locale",        0 },
+    { "keywords",      0 },
+    { "categories",    0 },
+    { "color",         0 },
+    { "recurrenceRule",      0 },
+    { "recurrenceOverrides",      0 },
+    { "excluded",      0 },
+    { "priority",      0 },
+    { "freeBusyStatus",      0 },
+    { "privacy",       0 },
+    { "replyTo",       0 },
+    { "participants",  0 },
+    { "useDefaultAlerts",  0 },
+    { "alerts",        0 },
+    { "localizations", 0 },
+
+    /* JSEvent properties */
+    { "start",         0 },
+    { "timeZone",      0 },
+    { "duration",      0 },
+    { "isAllDay",      0 },
+    { "status",        0 },
+
+    /* FM specific */
+    { "x-href",        0 },
 
     { NULL,            0 }
 };
