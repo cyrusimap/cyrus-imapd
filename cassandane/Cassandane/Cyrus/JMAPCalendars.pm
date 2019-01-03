@@ -4404,4 +4404,44 @@ sub test_calendarevent_copy
     $self->assert_str_equals($eventId, $res->[1][1]{notFound}[0]);
 }
 
+sub test_calendarevent_set_notitle
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        "calendarId" => $calid,
+        "uid" => "58ADE314231-some-UID",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "isAllDay"=> JSON::false,
+        "locale" => "en",
+    };
+
+    my $ret = $self->createandget_event($event);
+    $self->assert_str_equals("", $ret->{title});
+    my $eventId= $ret->{id};
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    title => 'foo',
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => ['title']
+        }, 'R2'],
+
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_str_equals('foo', $res->[1][1]{list}[0]{title});
+}
+
 1;
