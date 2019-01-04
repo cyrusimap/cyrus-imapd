@@ -890,4 +890,38 @@ sub test_mailboxids_noconversations
     $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
 }
 
+sub test_preview_args
+    :min_version_3_1 :Conversations
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    # make a message
+    my $msg = $self->make_message("test message");
+    my $uid = $msg->{attrs}->{uid};
+
+    my $res;
+
+    # expect no name to be accepted
+    $res = $imaptalk->fetch('1', '(PREVIEW)');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    # expect no name to be accepted
+    $res = $imaptalk->fetch('1', '(PREVIEW ())');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    # expect bad name to be rejected
+    $res = $imaptalk->fetch('1', '(PREVIEW (FUZZY=BUZZY))');
+    $self->assert_str_equals('bad', $imaptalk->get_last_completion_response());
+
+    # expect fuzzy name to be accepted
+    $res = $imaptalk->fetch('1', '(PREVIEW (FUZZY))');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    # expect lazy fuzzy name to be accepted
+    $res = $imaptalk->fetch('1', '(PREVIEW (LAZY=FUZZY))');
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+}
+
 1;
