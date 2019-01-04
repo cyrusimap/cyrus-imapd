@@ -346,6 +346,7 @@ static struct capa_struct base_capabilities[] = {
     { "OBJECTID",              2 }, /* draft-ietf-extra-imap-objectid */
     { "SAVEDATE",              2 }, /* draft-ietf-extra-imap-savedate */
     { "X-CREATEDMODSEQ",       2 }, /* Cyrus custom */
+    { "PREVIEW=FUZZY",         2 }, /* draft-ietf-extra-imap-fetch-preview */
 
 #ifdef HAVE_SSL
     { "URLAUTH",               2 },
@@ -4906,6 +4907,37 @@ badannotation:
             }
             else if (!strcmp(fetchatt.s, "MODSEQ")) {
                 fa->fetchitems |= FETCH_MODSEQ;
+            }
+            else goto badatt;
+            break;
+
+        case 'P':
+            if (!strcmp(fetchatt.s, "PREVIEW")) {
+                fa->fetchitems |= FETCH_PREVIEW;
+                if (c == ' ') {
+                    c = prot_getc(imapd_in);
+                    if (c == '(') {
+                        c = ' ';
+                        while (c == ' ') {
+                            c = getword(imapd_in, &fieldname);
+                            if (strcasecmp(fieldname.s, "") && strcasecmp(fieldname.s, "FUZZY") && strcasecmp(fieldname.s, "LAZY=FUZZY")) {
+                                prot_printf(imapd_out, "%s BAD FETCH contains invalid preview algorithm name (%s)\r\n", tag, fieldname.s);
+                                eatline(imapd_in, c);
+                                goto freeargs;
+                            }
+                        }
+                        if (c == ')') c = prot_getc(imapd_in);
+                        else {
+                            prot_printf(imapd_out, "%s BAD PREVIEW list not finished.\r\n", tag);
+                            eatline(imapd_in, c);
+                            goto freeargs;
+                        }
+                    }
+                    else {
+                        prot_ungetc(c, imapd_in);
+                        c = ' ';
+                    }
+                }
             }
             else goto badatt;
             break;

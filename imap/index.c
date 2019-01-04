@@ -4127,6 +4127,26 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         prot_printf(state->out, ")");
         sepchar = ' ';
     }
+    if (fetchitems & FETCH_PREVIEW) {
+        prot_printf(state->out, "%cPREVIEW (FUZZY ", sepchar);
+        const char *annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
+        if (annot && !strncmp(annot, "/shared/", 8)) {
+            struct buf previewbuf = BUF_INITIALIZER;
+            annotatemore_msg_lookup(mailbox->name, record.uid, annot+7,
+                                    /*userid*/"", &previewbuf);
+            if (buf_len(&previewbuf) > 256)
+                buf_truncate(&previewbuf, 256); // XXX - utf8 chars
+            prot_printastring(state->out, buf_cstring(&previewbuf));
+            buf_free(&previewbuf);
+        }
+        else {
+            prot_printf(state->out, "NIL");
+        }
+
+
+        prot_printf(state->out, ")");
+        sepchar = ' ';
+    }
     if (fetchitems & FETCH_FILESIZE) {
         unsigned int msg_size = buf.len;
         if (!buf.s) {

@@ -138,6 +138,7 @@ enum {
     FETCH_CREATEDMODSEQ =       (1<<25),
     FETCH_MAILBOXIDS =          (1<<26),
     FETCH_MAILBOXES =           (1<<27),
+    FETCH_PREVIEW =             (1<<28),
 
     /* XXX fetchitems is an int, we're running low on bits */
 };
