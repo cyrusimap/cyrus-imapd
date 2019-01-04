@@ -598,7 +598,7 @@ if test "x$enable_xapian" != xno ; then
         AC_LINK_IFELSE(
             [AC_LANG_PROGRAM(
                 [[#include <xapian.h>]],
-                [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS; unsigned snippet_flags = Xapian::MSet::SNIPPET_START_AT_NONSPACE; (void) cjk_flags; (void) snippet_flags]])],
+                [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS; (void) cjk_flags; ]])],
             [xapian_cyrusexts="yes"],
             [xapian_cyrusexts="no"])
         AC_MSG_RESULT($xapian_cyrusexts)

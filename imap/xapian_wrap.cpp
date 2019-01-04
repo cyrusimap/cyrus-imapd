@@ -1050,14 +1050,8 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
         Xapian::Enquire enquire(*snipgen->db);
         enquire.set_query(xapian_snipgen_build_query(snipgen));
 
-        unsigned flags = Xapian::MSet::SNIPPET_EXHAUSTIVE;
-
-#ifdef USE_XAPIAN_CYRUS_EXTENSIONS
-        flags |= Xapian::MSet::SNIPPET_EMPTY_WITHOUT_MATCH;
-        if (snipgen->partnum != SEARCH_PART_BODY) {
-            flags |= Xapian::MSet::SNIPPET_START_AT_NONSPACE;
-        }
-#endif
+        unsigned flags = Xapian::MSet::SNIPPET_EXHAUSTIVE |
+                         Xapian::MSet::SNIPPET_EMPTY_WITHOUT_MATCH;
 
         snippet = enquire.get_mset(0, 0).snippet(text,
                 config_getint(IMAPOPT_SEARCH_SNIPPET_LENGTH),
