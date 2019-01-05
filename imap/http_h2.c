@@ -492,13 +492,13 @@ HIDDEN void http2_done()
 }
 
 
-HIDDEN int http2_preface(struct transaction_t *txn)
+HIDDEN int http2_preface(struct http_connection *conn)
 {
     if (http2_enabled()) {
         /* Check initial client input for HTTP/2 preface */
         int c;
 
-        if (prot_lookahead(txn->conn->pin,
+        if (prot_lookahead(conn->pin,
                            NGHTTP2_CLIENT_MAGIC, NGHTTP2_CLIENT_MAGIC_LEN, &c)) {
             syslog(LOG_DEBUG, "HTTP/2 client connection preface");
             return 1;
@@ -898,7 +898,7 @@ HIDDEN int http2_enabled()
 
 HIDDEN void http2_done() {}
 
-HIDDEN int http2_preface(struct transaction_t *txn __attribute__((unused)))
+HIDDEN int http2_preface(struct http_connection *conn __attribute__((unused)))
 {
     return 0;
 }

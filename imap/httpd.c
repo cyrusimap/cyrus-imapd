@@ -832,6 +832,11 @@ int service_main(int argc __attribute__((unused)),
     if (https == 1) {
         if (starttls(NULL, &http_conn) != 0) shut_down(0);
     }
+    else if (http2_preface(&http_conn)) {
+        /* HTTP/2 client connection preface */
+        if (http2_start_session(NULL, &http_conn) != 0)
+            fatal("Failed initializing HTTP/2 session", EC_TEMPFAIL);
+    }
 
     /* Setup the signal handler for keepalive heartbeat */
     httpd_keepalive = config_getint(IMAPOPT_HTTPKEEPALIVE);
@@ -1583,15 +1588,6 @@ static int http1_input(struct transaction_t *txn)
 {
     struct request_line_t *req_line = &txn->req_line;
     int empty = 0, ret = 0;
-
-    if (http2_preface(txn)) {
-        /* HTTP/2 client connection preface */
-        ret = http2_start_session(txn, NULL);
-        if (ret) txn->flags.conn = CONN_CLOSE;
-
-        return ret;
-    }
-
 
     do {
         /* Read request-line */
