@@ -1616,7 +1616,7 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                         [Build WebSockets support into httpd?])
                 with_wslay=yes
                 ],
-                AC_MSG_NOTICE([httpd will not have support for WebSockets.  Consider installing wslay]))
+                AC_MSG_NOTICE([httpd will not have support for WebSockets.  Consider installing libwslay]))
 
 
         PKG_CHECK_MODULES([BROTLI], [libbrotlienc], [
