@@ -298,7 +298,7 @@ static int cyrusdb_zeroskip_fetchnext(struct dbengine *db,
                                       const char *key, size_t keylen,
                                       const char **foundkey, size_t *fklen,
                                       const char **data, size_t *datalen,
-                                      struct txn **tidptr)
+                                      struct txn **tidptr __attribute__((unused)))
 {
     int r = CYRUSDB_OK;
     struct txn *tid = NULL;
@@ -365,10 +365,11 @@ static int cyrusdb_zeroskip_foreach(struct dbengine *db,
     return r;
 }
 
-static int cyrusdb_zeroskip_create(struct dbengine *db,
-                                   const char *key, size_t keylen,
+static int cyrusdb_zeroskip_create(struct dbengine *db __attribute__((unused)),
+                                   const char *key __attribute__((unused)),
+                                   size_t keylen __attribute__((unused)),
                                    const char *data, size_t datalen,
-                                   struct txn **tidptr)
+                                   struct txn **tidptr __attribute__((unused)))
 {
     if (datalen) assert(data);
 
@@ -429,7 +430,8 @@ static int cyrusdb_zeroskip_store(struct dbengine *db,
 
 static int cyrusdb_zeroskip_delete(struct dbengine *db,
                                    const char *key, size_t keylen,
-                                   struct txn **tidptr, int force)
+                                   struct txn **tidptr,
+                                   int force __attribute__((unused)))
 {
     struct txn *tid = NULL;
     int r = 0;
@@ -528,7 +530,7 @@ static int cyrusdb_zeroskip_dump(struct dbengine *db,
     return r;
 }
 
-static int cyrusdb_zeroskip_consistent(struct dbengine *db)
+static int cyrusdb_zeroskip_consistent(struct dbengine *db __attribute__((unused)))
 {
     return 0;
 }
@@ -558,9 +560,11 @@ done:
     return r;
 }
 
-static int cyrusdb_zeroskip_compar(struct dbengine *db,
-                                   const char *a, int alen,
-                                   const char *b, int blen)
+static int cyrusdb_zeroskip_compar(struct dbengine *db __attribute__((unused)),
+                                   const char *a __attribute__((unused)),
+                                   int alen __attribute__((unused)),
+                                   const char *b __attribute__((unused)),
+                                   int blen __attribute__((unused)))
 {
     /* return db->compar(a, alen, b, blen); */
     return 0;
