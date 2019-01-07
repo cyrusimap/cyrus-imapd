@@ -1844,18 +1844,24 @@ EXPORTED xmlURIPtr parse_uri(unsigned meth, const char *uri, unsigned path_reqd,
         goto bad_request;
     }
     else if (p_uri->path) {
+        size_t pathlen = strlen(p_uri->path);
         if ((p_uri->path[0] != '/') &&
             (strcmp(p_uri->path, "*") || (meth != METH_OPTIONS))) {
             /* No special URLs except for "OPTIONS * HTTP/1.1" */
             *errstr = "Illegal request target URI";
             goto bad_request;
         }
-        else if (strstr(p_uri->path, "/..")) {
+        else if (strstr(p_uri->path, "/../")) {
             /* Don't allow access up directory tree */
             *errstr = "Illegal request target URI";
             goto bad_request;
         }
-        else if (strlen(p_uri->path) > MAX_MAILBOX_PATH) {
+        else if (pathlen >= 3 && !strcmp("/..", p_uri->path + pathlen - 3)) {
+            /* Don't allow access up directory tree */
+            *errstr = "Illegal request target URI";
+            goto bad_request;
+        }
+        else if (pathlen > MAX_MAILBOX_PATH) {
             *errstr = "Request target URI too long";
             goto bad_request;
         }
