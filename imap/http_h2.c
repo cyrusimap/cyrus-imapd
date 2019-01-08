@@ -46,7 +46,6 @@
 #include "exitcodes.h"
 #include "httpd.h"
 #include "md5.h"
-#include "prometheus.h"
 #include "util.h"
 
 int (*alpn_select_cb)(SSL *ssl,
@@ -63,6 +62,7 @@ int (*alpn_select_cb)(SSL *ssl,
 
 #include "http_h2.h"
 #include "http_ws.h"
+#include "prometheus.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
