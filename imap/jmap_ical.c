@@ -4625,6 +4625,7 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 
     json_t *jprio = json_object_get(event, "priority");
     if (json_integer_value(jprio) >= 0 || json_integer_value(jprio) <= 9) {
+        remove_icalprop(comp, ICAL_PRIORITY_PROPERTY);
         prop = icalproperty_new_priority(json_integer_value(jprio));
         icalcomponent_add_property(comp, prop);
     } else if (JNOTNULL(jprio)) {
