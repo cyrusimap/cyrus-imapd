@@ -4594,24 +4594,24 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 
     /* prodId */
     if (!is_exc) {
+        struct buf buf = BUF_INITIALIZER;
         val = NULL;
         if (!json_is_null(json_object_get(event, "prodId"))) {
-            pe = readprop(ctx, event, "prodId", 0, "s", &val);
-            struct buf buf = BUF_INITIALIZER;
-            if (!val) {
-                /* Use same product id like jcal.c */
-                buf_setcstr(&buf, "-//CyrusJMAP.org/Cyrus ");
-                buf_appendcstr(&buf, CYRUS_VERSION);
-                buf_appendcstr(&buf, "//EN");
-                val = buf_cstring(&buf);
-            }
-            /* Set PRODID in the VCALENDAR */
-            icalcomponent *ical = icalcomponent_get_parent(comp);
-            remove_icalprop(ical, ICAL_PRODID_PROPERTY);
-            prop = icalproperty_new_prodid(val);
-            icalcomponent_add_property(ical, prop);
-            buf_free(&buf);
+            readprop(ctx, event, "prodId", 0, "s", &val);
         }
+        if (!val) {
+            /* Use same product id like jcal.c */
+            buf_setcstr(&buf, "-//CyrusJMAP.org/Cyrus ");
+            buf_appendcstr(&buf, CYRUS_VERSION);
+            buf_appendcstr(&buf, "//EN");
+            val = buf_cstring(&buf);
+        }
+        /* Set PRODID in the VCALENDAR */
+        icalcomponent *ical = icalcomponent_get_parent(comp);
+        remove_icalprop(ical, ICAL_PRODID_PROPERTY);
+        prop = icalproperty_new_prodid(val);
+        icalcomponent_add_property(ical, prop);
+        buf_free(&buf);
     }
 
     /* created */
