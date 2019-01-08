@@ -514,9 +514,7 @@ static void test_parse_mimexvalue(void)
     free(s);
 
     s = charset_parse_mimexvalue("foo", NULL);
-    CU_ASSERT_PTR_NOT_NULL(s);
-    CU_ASSERT_STRING_EQUAL(s, "foo");
-    free(s);
+    CU_ASSERT_PTR_NULL(s);
 
     s = charset_parse_mimexvalue(SIMPLE, &lang);
     CU_ASSERT_PTR_NOT_NULL(s);

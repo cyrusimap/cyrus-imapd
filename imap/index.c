@@ -5107,6 +5107,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                 }
                 else if (!strcmp(param->attribute, "FILENAME*")) {
                     char *xval = charset_parse_mimexvalue(param->value, NULL);
+                    if (!xval) xval = param->value;
                     char *tmp = charset_decode_mimeheader(xval, charset_flags|CHARSET_MIME_UTF8);
                     buf_init_ro_cstr(&text, tmp);
                     stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);

@@ -4615,7 +4615,10 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     /* name */
     if (_wantprop(bodyprops, "name")) {
         const char *fname = NULL;
+        char *val = NULL;
         int is_extended = 0;
+
+        /* Lookup name parameter. Disposition header has precedence */
         for (param = part->disposition_params; param; param = param->next) {
             if (!strncasecmp(param->attribute, "filename", 8)) {
                 is_extended = param->attribute[8] == '*';
@@ -4623,6 +4626,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
                 break;
             }
         }
+        /* Lookup Content-Type parameters */
         if (!fname) {
             for (param = part->params; param; param = param->next) {
                 if (!strncasecmp(param->attribute, "name", 4)) {
@@ -4632,22 +4636,16 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
                 }
             }
         }
+        /* Decode header value */
         if (fname && is_extended) {
-            char *s = charset_parse_mimexvalue(fname, NULL);
-            json_object_set_new(jbodypart, "name",
-                    s ? json_string(s) : json_null());
-            free(s);
+            val = charset_parse_mimexvalue(fname, NULL);
         }
-        else if (fname) {
-            int mime_flags = charset_flags & CHARSET_MIME_UTF8;
-            char *s = charset_parse_mimeheader(fname, mime_flags);
-            json_object_set_new(jbodypart, "name",
-                    s ? json_string(s) : json_null());
-            free(s);
+        if (fname && !val) {
+            val = charset_parse_mimeheader(fname, CHARSET_SNIPPET|CHARSET_MIME_UTF8);
         }
-        else {
-            json_object_set_new(jbodypart, "name", json_null());
-        }
+        json_object_set_new(jbodypart, "name", val ?
+                json_string(val) : json_null());
+        free(val);
     }
 
     /* type */

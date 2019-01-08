@@ -2539,8 +2539,14 @@ EXPORTED char *charset_parse_mimeheader(const char *s, int flags)
 
 /* Decode extended MIME values (per RFC 2231). Returns a newly allocated UTF-8
  * encoded string, containing the decoded string, which must be free()d by the
- * caller. If lang is not NULL, sets the buffer contents to the 'language'
- * field as encoded in the MIME value */
+ * caller.
+ *
+ * If lang is not NULL, sets the buffer contents to the 'language' * field as
+ * encoded in the MIME value.
+ *
+ * If s can't be decoded to an extended value as defined in RFC 2231, then
+ * return NULL. E.g. it does not attempt to decode the value as RFC 2047 MIME
+ * header, nor returns the value verbatim. */
 EXPORTED char *charset_parse_mimexvalue(const char *s, struct buf *lang)
 {
     if (!s) return NULL;
@@ -2552,12 +2558,11 @@ EXPORTED char *charset_parse_mimexvalue(const char *s, struct buf *lang)
     /* Determine charset */
     p = s;
     q = strchr(p, '\'');
-    if (!q) return charset_parse_mimeheader(s, 0);
+    if (!q) return NULL;
 
     buf_setmap(&buf, p, q - p);
     cs = charset_lookupname(buf_cstring(&buf));
-    if (cs == CHARSET_UNKNOWN_CHARSET)
-        goto done;
+    if (cs == CHARSET_UNKNOWN_CHARSET) goto done;
 
     /* Determine language */
     p = q + 1;
