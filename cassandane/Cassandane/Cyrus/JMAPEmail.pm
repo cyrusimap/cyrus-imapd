@@ -511,6 +511,13 @@ sub test_email_get_attachment_name
     "Content-Disposition: attachment; filename*0*=utf-8''%F0%9F%98%80;\r\n filename*1=\".txt\"\r\n".
     "\r\n" .
     "baz".
+    "\r\n--sub\r\n".
+    "Content-Disposition: attachment;\r\n".
+    " filename*0*=\"Unencoded ' char\";\r\n" .
+    " filename*1*=\".txt\"\r\n" .
+    "Content-Type: application/bla\r\n" .
+    "\r\n" .
+    "bla".
     "\r\n--sub--\r\n";
 
     $exp_sub{A} = $self->make_message("foo",
@@ -557,6 +564,9 @@ sub test_email_get_attachment_name
 
     $att = $m{"application/tux"};
     $self->assert_str_equals("\N{GRINNING FACE}.txt", $att->{name});
+
+    $att = $m{"application/bla"};
+    $self->assert_str_equals("Unencoded ' char.txt", $att->{name});
 }
 
 sub test_email_get_body_notext
@@ -11850,6 +11860,5 @@ EOF
     $self->assert_equals('image/png', $msg->{bodyStructure}{subParts}[1]{type});
     $self->assert_equals("k\N{LATIN SMALL LETTER A WITH DIAERESIS}fer.png", $msg->{bodyStructure}{subParts}[1]{name});
 }
-
 
 1;
