@@ -553,7 +553,7 @@ static void httpd_reset(struct http_connection *conn)
 
     xmlFreeParserCtxt(conn->xml);
 
-    http2_end_session(conn->http2_ctx);
+    http2_end_session(conn->sess_ctx);
 
     cyrus_reset_stdio();
 
@@ -1712,7 +1712,7 @@ EXPORTED void transaction_free(struct transaction_t *txn)
     transaction_reset(txn);
 
     ws_end_channel(txn->ws_ctx);
-    http2_end_stream(txn->http2_strm);
+    http2_end_stream(txn->strm_ctx);
 
     zlib_done(txn->zstrm);
     brotli_done(txn->brotli);
@@ -1784,7 +1784,7 @@ static void cmdloop(struct http_connection *conn)
         /* Start command timer */
         cmdtime_starttimer();
 
-        if (txn.conn->http2_ctx) {
+        if (txn.conn->sess_ctx) {
             /* HTTP/2 input */
             http2_input(&txn);
         }
@@ -2818,9 +2818,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
     /* Add any auxiliary response data */
     sep = " (";
-    if (txn->http2_strm) {
+    if (txn->strm_ctx) {
         buf_printf(&log, "%sstream-id=%d", sep,
-                   http2_get_streamid(txn->http2_strm));
+                   http2_get_streamid(txn->strm_ctx));
         sep = "; ";
     }
     if (code == HTTP_SWITCH_PROT || code == HTTP_UPGRADE) {

@@ -162,7 +162,7 @@ static ssize_t send_cb(wslay_event_context_ptr ev,
     struct transaction_t *txn = (struct transaction_t *) user_data;
     int r;
 
-    if (txn->conn->http2_ctx) {
+    if (txn->conn->sess_ctx) {
         int last_chunk =
             (txn->flags.conn & CONN_CLOSE) && !(flags & WSLAY_MSG_MORE);
 
@@ -192,7 +192,7 @@ static ssize_t recv_cb(wslay_event_context_ptr ev,
     struct protstream *pin = txn->conn->pin;
     ssize_t n;
 
-    if (txn->conn->http2_ctx) {
+    if (txn->conn->sess_ctx) {
         pin = ((struct ws_context *) txn->ws_ctx)->h2_pin;
     }
 
@@ -288,9 +288,9 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
     /* Log the uncompressed client request */
     buf_truncate(&ctx->log, ctx->log_tail);
     buf_appendcstr(&ctx->log, " (");
-    if (txn->http2_strm) {
+    if (txn->strm_ctx) {
         buf_printf(&ctx->log, "stream-id=%d; ",
-                   http2_get_streamid(txn->http2_strm));
+                   http2_get_streamid(txn->strm_ctx));
     }
     buf_printf(&ctx->log, "opcode=%s; rsv=0x%x; length=%ld",
                wslay_str_opcode(arg->opcode), arg->rsv, arg->msg_length);
@@ -699,7 +699,7 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
     if (want_read) {
         /* Read frame(s) */
-        if (txn->conn->http2_ctx) {
+        if (txn->conn->sess_ctx) {
             /* Data has been read into request body */
             ctx->h2_pin = prot_readmap(buf_base(&txn->req_body.payload),
                                        buf_len(&txn->req_body.payload));
@@ -707,7 +707,7 @@ HIDDEN void ws_input(struct transaction_t *txn)
 
         int r = wslay_event_recv(ev);
 
-        if (txn->conn->http2_ctx) {
+        if (txn->conn->sess_ctx) {
             buf_reset(&txn->req_body.payload);
             prot_free(ctx->h2_pin);
         }

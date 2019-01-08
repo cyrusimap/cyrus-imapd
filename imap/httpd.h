@@ -323,7 +323,7 @@ struct http_connection {
     const char *clienthost;             /* Name of client host */
 
     void *tls_ctx;                      /* TLS context */
-    void *http2_ctx;                    /* HTTP/2 session context */
+    void *sess_ctx;                     /* HTTP/2+ session context */
 
     xmlParserCtxtPtr xml;               /* XML parser content */
 };
@@ -332,7 +332,7 @@ struct http_connection {
 /* Transaction context */
 struct transaction_t {
     struct http_connection *conn;       /* Global connection context */
-    void *http2_strm;                   /* HTTP/2 stream context */
+    void *strm_ctx;                     /* HTTP/2+ stream context */
     void *ws_ctx;                       /* WebSocket channel context */
     unsigned meth;                      /* Index of Method to be performed */
     struct txn_flags_t flags;           /* Flags for this txn */
