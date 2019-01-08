@@ -4903,6 +4903,12 @@ jmapical_toical(json_t *obj, jmapical_err_t *err)
         ical = NULL;
     }
 
+    if (ical &&
+        (!icalrestriction_check(ical) || icalcomponent_count_errors(ical))) {
+        syslog(LOG_ERR, "jmapical_toical: %s", get_icalcomponent_errstr(ical));
+        assert(0);
+    }
+
 done:
     context_free(ctx);
     return ical;
