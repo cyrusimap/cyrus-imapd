@@ -1151,24 +1151,33 @@ EXPORTED void message_parse_type(const char *hdr, char **typep, char **subtypep,
     int typelen;
     const char *subtype;
     int subtypelen;
+    char *decbuf = NULL;
 
     /* Skip leading whitespace, ignore header if blank */
     message_parse_rfc822space(&hdr);
     if (!hdr) return;
 
+    /* Very old versions of macOS Mail.app encode the Content-Type header
+     * in MIME words, if the attachment name contains non-ASCII characters */
+    if (strlen(hdr) > 2 && hdr[0] == '=' && hdr[1] == '?') {
+        int flags = CHARSET_SNIPPET;
+        decbuf = charset_decode_mimeheader(hdr, flags);
+        if (strcmpsafe(decbuf, hdr)) hdr = decbuf;
+    }
+
     /* Find end of type token */
     type = hdr;
     for (; *hdr && !Uisspace(*hdr) && *hdr != '/' && *hdr != '('; hdr++) {
-        if (*hdr < ' ' || strchr(MIME_TSPECIALS, *hdr)) return;
+        if (*hdr < ' ' || strchr(MIME_TSPECIALS, *hdr)) goto done;
     }
     typelen = hdr - type;
 
     /* Skip whitespace after type */
     message_parse_rfc822space(&hdr);
-    if (!hdr) return;
+    if (!hdr) goto done;
 
     /* Ignore header if no '/' character */
-    if (*hdr++ != '/') return;
+    if (*hdr++ != '/') goto done;
 
     /* Skip whitespace before subtype, ignore header if no subtype */
     message_parse_rfc822space(&hdr);
@@ -1177,7 +1186,7 @@ EXPORTED void message_parse_type(const char *hdr, char **typep, char **subtypep,
     /* Find end of subtype token */
     subtype = hdr;
     for (; *hdr && !Uisspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
-        if (*hdr < ' ' || strchr(MIME_TSPECIALS, *hdr)) return;
+        if (*hdr < ' ' || strchr(MIME_TSPECIALS, *hdr)) goto done;
     }
     subtypelen = hdr - subtype;
 
@@ -1185,7 +1194,7 @@ EXPORTED void message_parse_type(const char *hdr, char **typep, char **subtypep,
     message_parse_rfc822space(&hdr);
 
     /* Ignore header if not at end of header or parameter delimiter */
-    if (hdr && *hdr != ';') return;
+    if (hdr && *hdr != ';') goto done;
 
     /* Save content type & subtype */
     *typep = message_ucase(xstrndup(type, typelen));
@@ -1195,7 +1204,35 @@ EXPORTED void message_parse_type(const char *hdr, char **typep, char **subtypep,
     if (hdr) {
         message_parse_params(hdr+1, paramp);
         message_fold_params(paramp);
+        if (decbuf && paramp && *paramp) {
+            /* The type header was erroneously encoded as a RFC2407 encoded word
+             * (rather than encoding its attributes), and the parameter values
+             * might now contain non-ASCII characters. Let's reencode them. */
+            struct param *param = *paramp;
+            for (; param; param = param->next) {
+                const char *attr = param->attribute;
+                /* Skip extended parameters */
+                size_t attrlen = strlen(attr);
+                if (!attrlen || attr[attrlen-1] == '*') continue;
+                /* Check if the parameter value has non-ASCII characters */
+                int has_highbit = 0;
+                const char *val = param->value;
+                for (val = param->value; *val && !has_highbit; val++) {
+                    has_highbit = *val & 0x80;
+                }
+                if (!has_highbit) continue;
+                /* Reencode the parameter value */
+                char *encvalue = charset_encode_mimeheader(param->value, strlen(param->value), 0);
+                if (encvalue) {
+                    free(param->value);
+                    param->value = encvalue;
+                }
+            }
+        }
     }
+
+done:
+    free(decbuf);
 }
 
 static void message_parse_bodytype(const char *hdr, struct body *body)
