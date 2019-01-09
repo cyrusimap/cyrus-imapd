@@ -1729,7 +1729,6 @@ static void sched_deliver_local(const char *recipient,
     int r = 0, rights, reqd_privs, deliver_inbox = 1;
     const char *userid = sparam->userid, *attendee = NULL;
     static struct buf resource = BUF_INITIALIZER;
-    static unsigned sched_count = 0;
     char *mailboxname = NULL;
     mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL, *inbox = NULL;
@@ -1973,9 +1972,7 @@ static void sched_deliver_local(const char *recipient,
     if (deliver_inbox) {
         /* Create a name for the new iTIP message resource */
         buf_reset(&resource);
-        buf_printf(&resource, "%x-%d-%ld-%u.ics",
-                   strhash(icalcomponent_get_uid(sched_data->itip)), getpid(),
-                   time(0), sched_count++);
+        buf_printf(&resource, "%s.ics", makeuuid());
 
         /* Store the message in the recipient's Inbox */
         r = caldav_store_resource(&txn, sched_data->itip, inbox,
