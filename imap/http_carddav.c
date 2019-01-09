@@ -1177,7 +1177,6 @@ static int carddav_import(struct transaction_t *txn, void *obj,
 {
     struct vparse_card *vcard = obj;
     xmlBufferPtr xmlbuf = NULL;
-    unsigned count = 0;
     size_t baselen;
 
     if (!root) {
@@ -1203,7 +1202,7 @@ static int carddav_import(struct transaction_t *txn, void *obj,
         struct vparse_card *this, *next;
         xmlNodePtr resp, node;
         struct vparse_entry *entry;
-        const char *uid, *myuid = NULL;
+        const char *resource = makeuuid(), *uid, *myuid = NULL;
         int r;
 
         /* Create DAV:response element */
@@ -1226,15 +1225,14 @@ static int carddav_import(struct transaction_t *txn, void *obj,
             uid = entry->v.value;
         }
         else {
-            myuid = uid = makeuuid();
+            myuid = uid = resource;
             vparse_add_entry(this, NULL, "UID", uid);
         }
 
         /* Append a unique resource name to URL and perform a PUT */
         txn->req_tgt.reslen =
             snprintf(txn->req_tgt.resource, MAX_MAILBOX_PATH - baselen,
-                     "%x-%d-%ld-%u.ics",
-                     strhash(uid), getpid(), time(0), count++);
+                     "%s.vcf", resource);
 
         r = carddav_put(txn, vcard, mailbox,
                        txn->req_tgt.resource, destdb, flags);
@@ -1258,7 +1256,7 @@ static int carddav_import(struct transaction_t *txn, void *obj,
                                 BAD_CAST txn->resp_body.etag);
             }
 
-            if ((flags & PREFER_REP) && myuid) {
+            if ((flags & PREFER_REP) && myuid /* we added a UID */) {
                 /* Add CARDDAV:addressbook-data property */
                 struct buf *vcardbuf = vcard_as_buf(this);
                 xmlNodePtr cdata = xmlNewChild(node, ns[NS_CARDDAV],
@@ -1299,6 +1297,7 @@ static int carddav_import(struct transaction_t *txn, void *obj,
         vparse_free_card(this);
         vcard->objects = next;
 
+        /* Clear the buffer used for constructing href */
         buf_free(&txn->buf);
     }
 

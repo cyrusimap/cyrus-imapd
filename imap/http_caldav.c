@@ -3283,7 +3283,6 @@ struct import_rock {
 
     ptrarray_t *props;
     size_t baselen;
-    unsigned count;
     xmlBufferPtr xmlbuf;
 };
 
@@ -3332,8 +3331,7 @@ static void import_resource(const char *uid, void *data, void *rock)
     /* Append a unique resource name to URL and perform a PUT */
     txn->req_tgt.reslen =
         snprintf(txn->req_tgt.resource, MAX_MAILBOX_PATH - irock->baselen,
-                 "%x-%d-%ld-%u.ics",
-                 strhash(uid), getpid(), time(0), irock->count++);
+                 "%s.ics", makeuuid());
 
     r = caldav_put(txn, newical, irock->mailbox,
                    txn->req_tgt.resource, irock->caldavdb, irock->flags);
@@ -3408,7 +3406,7 @@ static int caldav_import(struct transaction_t *txn, void *obj,
     const char *uid;
     ptrarray_t *comps;
     struct import_rock irock = { txn, ical, mailbox, destdb, root, ns, flags,
-                                 NULL, 0, 0, NULL };
+                                 NULL/*props*/, 0/*baselen*/, NULL/*xmlbuf*/ };
 
     if (!root) {
         /* Validate the iCal data */
