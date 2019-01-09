@@ -2373,6 +2373,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         /* Force the response to the client immediately */
         prot_flush(httpd_out);
 
+        /* Restart method processing alarm (HTTP/1.1 only) */
+        if (txn->flags.ver == VER_1_1) alarm(httpd_keepalive);
+
         goto log;
     }
 
@@ -2867,7 +2870,6 @@ EXPORTED void keepalive_response(struct transaction_t *txn)
 {
     if (gotsigalrm) {
         response_header(HTTP_PROCESSING, txn);
-        alarm(httpd_keepalive);
     }
 }
 
