@@ -72,6 +72,7 @@
 #include "proxy.h"
 #include "smtpclient.h"
 #include "spool.h"
+#include "strhash.h"
 #include "stristr.h"
 #include "times.h"
 #include "util.h"
@@ -108,6 +109,10 @@ static int carddav_get(struct transaction_t *txn, struct mailbox *mailbox,
 static int carddav_put(struct transaction_t *txn, void *obj,
                        struct mailbox *mailbox, const char *resource,
                        void *destdb, unsigned flags);
+
+static int carddav_import(struct transaction_t *txn, void *obj,
+                          struct mailbox *mailbox, void *destdb,
+                          xmlNodePtr root, xmlNsPtr *ns, unsigned flags);
 
 static int propfind_getcontenttype(const xmlChar *name, xmlNsPtr ns,
                                    struct propfind_ctx *fctx,
@@ -330,7 +335,7 @@ static struct meth_params carddav_params = {
     { CARDDAV_LOCATION_OK, MBTYPE_ADDRESSBOOK },
     NULL,                                       /* No PATCH handling */
     { POST_ADDMEMBER | POST_SHARE, NULL,        /* No special POST handling */
-      { NS_CARDDAV, "addressbook-data", NULL } },
+      { NS_CARDDAV, "addressbook-data", &carddav_import } },
     { CARDDAV_SUPP_DATA, &carddav_put },
     { DAV_FINITE_DEPTH, carddav_props },        /* Disable infinite depth */
     carddav_reports
@@ -1162,6 +1167,146 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     }
 
     return store_resource(txn, vcard, mailbox, resource, db, /*dupcheck*/1);
+}
+
+
+/* Perform a bulk import */
+static int carddav_import(struct transaction_t *txn, void *obj,
+                          struct mailbox *mailbox, void *destdb,
+                          xmlNodePtr root, xmlNsPtr *ns, unsigned flags)
+{
+    struct vparse_card *vcard = obj;
+    xmlBufferPtr xmlbuf = NULL;
+    unsigned count = 0;
+    size_t baselen;
+
+    if (!root) {
+        /* Validate the vCard data */
+        if (!vcard ||
+            !vcard->objects ||
+            !vcard->objects->type ||
+            strcasecmp(vcard->objects->type, "vcard")) {
+            txn->error.precond = CARDDAV_VALID_DATA;
+            return HTTP_FORBIDDEN;
+        }
+
+        return 0;
+    }
+
+
+    /* Setup for appending resource name to request path */
+    baselen = strlen(txn->req_tgt.path);
+    txn->req_tgt.resource = txn->req_tgt.path + baselen;
+
+    /* Import vCards */
+    while (vcard->objects) {
+        struct vparse_card *this, *next;
+        xmlNodePtr resp, node;
+        struct vparse_entry *entry;
+        const char *uid, *myuid = NULL;
+        int r;
+
+        /* Create DAV:response element */
+        resp = xmlNewChild(root, ns[NS_DAV], BAD_CAST "response", NULL);
+        if (!resp) {
+            syslog(LOG_ERR,
+                   "import_resource()): Unable to add response XML element");
+            fatal("import_resource()): Unable to add response XML element",
+                  EC_SOFTWARE);
+        }
+
+        /* Isolate this card */
+        this = vcard->objects;
+        next = this->next;
+        this->next = NULL;
+
+        /* Get/create UID property */
+        entry = vparse_get_entry(this, NULL, "UID");
+        if (entry) {
+            uid = entry->v.value;
+        }
+        else {
+            myuid = uid = makeuuid();
+            vparse_add_entry(this, NULL, "UID", uid);
+        }
+
+        /* Append a unique resource name to URL and perform a PUT */
+        txn->req_tgt.reslen =
+            snprintf(txn->req_tgt.resource, MAX_MAILBOX_PATH - baselen,
+                     "%x-%d-%ld-%u.ics",
+                     strhash(uid), getpid(), time(0), count++);
+
+        r = carddav_put(txn, vcard, mailbox,
+                       txn->req_tgt.resource, destdb, flags);
+
+        switch (r) {
+        case HTTP_OK:
+        case HTTP_CREATED:
+        case HTTP_NO_CONTENT:
+            /* Success: Add DAV:href and DAV:propstat elements */
+            xml_add_href(resp, NULL, txn->req_tgt.path);
+
+            node = xmlNewChild(resp, ns[NS_DAV], BAD_CAST "propstat", NULL);
+            xmlNewChild(node, ns[NS_DAV], BAD_CAST "status",
+                        BAD_CAST http_statusline(VER_1_1, HTTP_OK));
+
+            node = xmlNewChild(node, ns[NS_DAV], BAD_CAST "prop", NULL);
+
+            if (txn->resp_body.etag) {
+                /* Add DAV:getetag property */
+                xmlNewTextChild(node, ns[NS_DAV], BAD_CAST "getetag",
+                                BAD_CAST txn->resp_body.etag);
+            }
+
+            if ((flags & PREFER_REP) && myuid) {
+                /* Add CARDDAV:addressbook-data property */
+                struct buf *vcardbuf = vcard_as_buf(this);
+                xmlNodePtr cdata = xmlNewChild(node, ns[NS_CARDDAV],
+                                               BAD_CAST "addressbook-data", NULL);
+
+                xmlAddChild(cdata, xmlNewCDataBlock(root->doc,
+                                                    BAD_CAST buf_cstring(vcardbuf),
+                                                    buf_len(vcardbuf)));
+                buf_free(vcardbuf);
+            }
+
+            break;
+
+        default:
+            /* Failure: Add DAV:href, DAV:status, and DAV:error elements */
+            xml_add_href(resp, NULL, NULL);
+
+            xmlNewChild(resp, ns[NS_DAV], BAD_CAST "status",
+                        BAD_CAST http_statusline(VER_1_1, r));
+
+            node = xml_add_error(resp, &txn->error, ns);
+            break;
+        }
+
+        /* Add CS:uid property */
+        xmlNewTextChild(node, ns[NS_CS], BAD_CAST "uid", BAD_CAST uid);
+
+        /* Add DAV:response element for this resource to output buffer.
+           Only output the xmlBuffer every PROT_BUFSIZE bytes */
+        xml_partial_response((xmlBufferLength(xmlbuf) > PROT_BUFSIZE) ? txn : NULL,
+                             root->doc, resp, 1, &xmlbuf);
+
+        /* Remove DAV:response element from root (no need to keep in memory) */
+        xmlReplaceNode(resp, NULL);
+        xmlFreeNode(resp);
+
+        /* Remove this vcard from the head of the list */
+        vparse_free_card(this);
+        vcard->objects = next;
+
+        buf_free(&txn->buf);
+    }
+
+    /* End XML response */
+    xml_partial_response(txn, root->doc, NULL /* end */, 0, &xmlbuf);
+    xmlBufferFree(xmlbuf);
+
+    return 0;
 }
 
 
