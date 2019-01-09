@@ -6837,7 +6837,6 @@ static int dav_post_import(struct transaction_t *txn,
 int meth_post(struct transaction_t *txn, void *params)
 {
     struct meth_params *pparams = (struct meth_params *) params;
-    static unsigned post_count = 0;
     struct strlist *action;
     int r, ret;
     size_t len;
@@ -6895,8 +6894,8 @@ int meth_post(struct transaction_t *txn, void *params)
     txn->req_tgt.resource = txn->req_tgt.path + len;
     txn->req_tgt.reslen =
         snprintf(txn->req_tgt.resource, MAX_MAILBOX_PATH - len,
-                 "%x-%d-%ld-%u.ics",
-                 strhash(txn->req_tgt.path), getpid(), time(0), post_count++);
+                 "%s.%s", makeuuid(), pparams->mime_types[0].file_ext ?
+                 pparams->mime_types[0].file_ext : "");
 
     /* Tell client where to find the new resource */
     txn->location = txn->req_tgt.path;
