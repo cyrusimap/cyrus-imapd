@@ -7645,7 +7645,9 @@ EOF
 
     my $msg = $res->[1][1]{list}[0];
     my $partId = $msg->{bodyStructure}{partId};
-    $self->assert_equals(JSON::true, $msg->{bodyValues}{$partId}{isEncodingProblem});
+    my $bodyValue = $msg->{bodyValues}{$partId};
+    $self->assert_str_equals("", $bodyValue->{value});
+    $self->assert_equals(JSON::true, $bodyValue->{isEncodingProblem});
 }
 
 sub test_misc_upload_sametype
