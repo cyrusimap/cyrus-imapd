@@ -141,7 +141,7 @@ int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata);
 
 /* write an entry form a vcard */
 int carddav_writecard(struct carddav_db *carddavdb, struct carddav_data *cdata,
-                      struct vparse_card *vcard);
+                      struct vparse_card *vcard, int ispinned);
 
 /* delete an entry from 'carddavdb' */
 int carddav_delete(struct carddav_db *carddavdb, unsigned rowid);

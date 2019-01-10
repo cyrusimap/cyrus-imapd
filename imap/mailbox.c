@@ -3167,6 +3167,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     else {
         /* Load message containing the resource and parse vcard data */
         struct vparse_card *vcard = record_to_vcard(mailbox, new);
+        int ispinned = (new->system_flags & FLAG_FLAGGED) ? 1 : 0;
 
         if (!vcard || !vcard->objects) {
             syslog(LOG_ERR, "record_to_vcard failed for record %u:%s",
@@ -3187,7 +3188,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
         if (!cdata->dav.creationdate)
             cdata->dav.creationdate = new->internaldate;
 
-        r = carddav_writecard(carddavdb, cdata, vcard->objects);
+        r = carddav_writecard(carddavdb, cdata, vcard->objects, ispinned);
 
         vparse_free_card(vcard);
     }

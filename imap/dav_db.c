@@ -117,6 +117,7 @@
     " pos INTEGER NOT NULL," /* for sorting */                          \
     " email TEXT NOT NULL COLLATE NOCASE,"                              \
     " ispref INTEGER NOT NULL DEFAULT 0,"                               \
+    " ispinned INTEGER NOT NULL DEFAULT 0,"                             \
     " FOREIGN KEY (objid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );" \
     "CREATE INDEX IF NOT EXISTS idx_vcard_email ON vcard_emails ( email COLLATE NOCASE );"
 
@@ -187,6 +188,9 @@
     "ALTER TABLE dav_objs ADD COLUMN createdmodseq INTEGER;"    \
     "UPDATE dav_objs SET createdmodseq = 1;"
 
+#define CMD_DBUPGRADEv8                                         \
+    "ALTER TABLE vcard_emails ADD COLUMN ispinned INTEGER NOT NULL DEFAULT 0;"
+
 
 struct sqldb_upgrade davdb_upgrade[] = {
   { 2, CMD_DBUPGRADEv2, NULL },
@@ -195,10 +199,11 @@ struct sqldb_upgrade davdb_upgrade[] = {
   { 5, CMD_DBUPGRADEv5, NULL },
   { 6, CMD_DBUPGRADEv6, NULL },
   { 7, CMD_DBUPGRADEv7, NULL },
+  { 8, CMD_DBUPGRADEv8, NULL },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 7
+#define DB_VERSION 8
 
 static int in_reconstruct = 0;
 

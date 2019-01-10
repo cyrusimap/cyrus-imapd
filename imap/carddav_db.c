@@ -568,16 +568,17 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *
 
 #define CMD_DELETE_EMAIL "DELETE FROM vcard_emails WHERE objid = :objid"
 #define CMD_INSERT_EMAIL                                                \
-    "INSERT INTO vcard_emails ( objid, pos, email, ispref )"            \
-    " VALUES ( :objid, :pos, :email, :ispref );"
+    "INSERT INTO vcard_emails ( objid, pos, email, ispref, ispinned )"            \
+    " VALUES ( :objid, :pos, :email, :ispref, :ispinned );"
 
-static int carddav_write_emails(struct carddav_db *carddavdb, int rowid, const strarray_t *emails)
+static int carddav_write_emails(struct carddav_db *carddavdb, int rowid, const strarray_t *emails, int ispinned)
 {
     struct sqldb_bindval bval[] = {
         { ":objid",        SQLITE_INTEGER, { .i = rowid  } },
         { ":pos",          SQLITE_INTEGER, { .i = 0      } },
         { ":email",        SQLITE_TEXT,    { .s = NULL   } },
         { ":ispref",       SQLITE_INTEGER, { .i = 0      } },
+        { ":ispinned",     SQLITE_INTEGER, { .i = 0      } },
         { NULL,            SQLITE_NULL,    { .s = NULL   } } };
     int r;
     int i;
@@ -590,6 +591,7 @@ static int carddav_write_emails(struct carddav_db *carddavdb, int rowid, const s
         bval[1].val.i = i;
         bval[2].val.s = strarray_safenth(emails, i*2);
         bval[3].val.i = *pref ? 1 : 0;
+        bval[4].val.i = ispinned ? 1 : 0;
         r = sqldb_exec(carddavdb->db, CMD_INSERT_EMAIL, bval, NULL, NULL);
         if (r) return r;
     }
@@ -811,7 +813,8 @@ EXPORTED int carddav_get_updates(struct carddav_db *carddavdb,
 
 EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
                                struct carddav_data *cdata,
-                               struct vparse_card *vcard)
+                               struct vparse_card *vcard,
+                               int ispinned)
 {
     struct vparse_entry *ventry;
 
@@ -871,7 +874,7 @@ EXPORTED int carddav_writecard(struct carddav_db *carddavdb,
     }
 
     int r = carddav_write(carddavdb, cdata);
-    if (!r) r = carddav_write_emails(carddavdb, cdata->dav.rowid, &emails);
+    if (!r) r = carddav_write_emails(carddavdb, cdata->dav.rowid, &emails, ispinned);
     if (!r) r = carddav_write_groups(carddavdb, cdata->dav.rowid, &member_uids);
 
     strarray_fini(&emails);
