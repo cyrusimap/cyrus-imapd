@@ -257,7 +257,7 @@ static void beginprop(context_t *ctx, const char *name)
 static void endprop(context_t *ctx)
 {
     strarray_t *str = &ctx->propstr;
-    assert(strarray_size(str));
+    if (!strarray_size(str)) return;
     free(strarray_pop(str));
 }
 
@@ -2583,7 +2583,8 @@ static int utcdate_to_icaltime(const char *src,
 /* Add or overwrite the datetime property kind in comp. If tz is not NULL, set
  * the TZID parameter on the property. Also take care to purge conflicting
  * datetime properties such as DTEND and DURATION. */
-static icalproperty *dtprop_to_ical(icalcomponent *comp,
+static icalproperty *dtprop_to_ical(context_t *ctx,
+                                    icalcomponent *comp,
                                     icaltimetype dt,
                                     icaltimezone *tz,
                                     int purge,
@@ -2605,7 +2606,11 @@ static icalproperty *dtprop_to_ical(icalcomponent *comp,
     /* backwards compatible way to set date or datetime */
     icalvalue *val =
         dt.is_date ? icalvalue_new_date(dt) : icalvalue_new_datetime(dt);
-    assert(val);  // no way to return errors from here
+    if (!val) {
+        syslog(LOG_ERR, "dtprop_to_ical: invalid time value");
+        if (!ctx->err->code) ctx->err->code = JMAPICAL_ERROR_UNKNOWN;
+        return NULL;
+    }
 
     /* Set the new property. */
     prop = icalproperty_new(kind);
@@ -2760,15 +2765,12 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     if (have_invalid_props(ctx))
         return;
 
-    /* Either all timezones float or none */
-    assert((ctx->tzstart != NULL) == (ctx->tzend != NULL));
-
     /* Purge and rebuild start and end */
     remove_icalprop(comp, ICAL_DTSTART_PROPERTY);
     remove_icalprop(comp, ICAL_DTEND_PROPERTY);
     remove_icalprop(comp, ICAL_DURATION_PROPERTY);
 
-    dtprop_to_ical(comp, dtstart, ctx->tzstart, 1, ICAL_DTSTART_PROPERTY);
+    dtprop_to_ical(ctx, comp, dtstart, ctx->tzstart, 1, ICAL_DTSTART_PROPERTY);
     if (ctx->tzstart != ctx->tzend) {
         /* Add DTEND */
         icaltimetype dtend;
@@ -2776,8 +2778,8 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
 
         dtend = icaltime_add(dtstart, dur);
         dtend = icaltime_convert_to_zone(dtend, ctx->tzend);
-        prop = dtprop_to_ical(comp, dtend, ctx->tzend, 1, ICAL_DTEND_PROPERTY);
-        xjmapid_to_ical(prop, endzoneid);
+        prop = dtprop_to_ical(ctx, comp, dtend, ctx->tzend, 1, ICAL_DTEND_PROPERTY);
+        if (prop) xjmapid_to_ical(prop, endzoneid);
     } else {
         /* Add DURATION */
         icalcomponent_set_duration(comp, dur);
@@ -4455,7 +4457,7 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
         if (excluded) {
             if (json_object_size(override) == 1 && excluded == json_true()) {
                 /* Add EXDATE */
-                dtprop_to_ical(comp, start, ctx->tzstart, 0, ICAL_EXDATE_PROPERTY);
+                dtprop_to_ical(ctx, comp, start, ctx->tzstart, 0, ICAL_EXDATE_PROPERTY);
             }
             else {
                 invalidprop(ctx, id);
@@ -4464,7 +4466,7 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
             }
         } else if (!json_object_size(override)) {
             /* Add RDATE */
-            dtprop_to_ical(comp, start, ctx->tzstart, 0, ICAL_RDATE_PROPERTY);
+            dtprop_to_ical(ctx, comp, start, ctx->tzstart, 0, ICAL_RDATE_PROPERTY);
         } else {
             /* Add VEVENT exception */
             context_t *toctx;
@@ -4510,7 +4512,7 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
                 remove_icalprop(excomp, ICAL_EXDATE_PROPERTY);
                 remove_icalprop(excomp, ICAL_RRULE_PROPERTY);
             }
-            dtprop_to_ical(excomp, start,
+            dtprop_to_ical(ctx, excomp, start,
                            ctx->tzstart, 1, ICAL_RECURRENCEID_PROPERTY);
 
             /* Convert the override event to iCalendar */
@@ -4615,10 +4617,10 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     }
 
     /* created */
-    dtprop_to_ical(comp, now, utc, 1, ICAL_CREATED_PROPERTY);
+    dtprop_to_ical(ctx, comp, now, utc, 1, ICAL_CREATED_PROPERTY);
 
     /* updated */
-    dtprop_to_ical(comp, now, utc, 1, ICAL_DTSTAMP_PROPERTY);
+    dtprop_to_ical(ctx, comp, now, utc, 1, ICAL_DTSTAMP_PROPERTY);
 
     /* sequence */
     icalcomponent_set_sequence(comp, 0);
@@ -4903,11 +4905,15 @@ jmapical_toical(json_t *obj, jmapical_err_t *err)
         ical = NULL;
     }
 
+#if 0
     if (ical &&
         (!icalrestriction_check(ical) || icalcomponent_count_errors(ical))) {
         syslog(LOG_ERR, "jmapical_toical: %s", get_icalcomponent_errstr(ical));
-        assert(0);
+        if (!ctx->err->code) ctx->err->code = JMAPICAL_ERROR_UNKNOWN;
+        icalcomponent_free(ical);
+        ical = NULL;
     }
+#endif
 
 done:
     context_free(ctx);
