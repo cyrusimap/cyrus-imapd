@@ -54,6 +54,10 @@
 
 #include <sasl/saslutil.h>
 
+#ifdef HAVE_LIBCHARDET
+#include <chardet/chardet.h>
+#endif
+
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
@@ -885,18 +889,31 @@ static int _email_extract_bodies(const struct body *root,
             &bodies->attslist);
 }
 
-static char *_decode_to_utf8(const char *charset, const char *data, size_t datalen, int enc)
+static char *_decode_to_utf8(const char *charset,
+                             const char *data, size_t datalen,
+                             int enc,
+                             int *is_encoding_problem)
 {
     charset_t cs = charset_lookupname(charset);
-    char *text = charset_to_utf8(data, datalen, cs, enc);
-    if (!text) goto done;
+    char *text = NULL;
+
+    if (cs == CHARSET_UNKNOWN_CHARSET || enc == ENCODING_UNKNOWN) {
+        *is_encoding_problem = 1;
+        goto done;
+    }
+    text = charset_to_utf8(data, datalen, cs, enc);
+    if (!text) {
+        *is_encoding_problem = 1;
+        goto done;
+    }
+
+    size_t textlen = strlen(text);
+    struct char_counts counts = charset_count_validutf8(text, textlen);
+    *is_encoding_problem = counts.invalid || counts.replacement;
 
     const char *charset_id = charset_name(cs);
     if (!strncasecmp(charset_id, "UTF-32", 6)) {
         /* Special-handle UTF-32. Some clients announce the wrong endianess. */
-        size_t textlen = strlen(text);
-        struct char_counts counts = charset_count_validutf8(text, textlen);
-
         if (counts.invalid || counts.replacement) {
             charset_t guess_cs = CHARSET_UNKNOWN_CHARSET;
             if (!strcasecmp(charset_id, "UTF-32") || !strcasecmp(charset_id, "UTF-32BE"))
@@ -909,11 +926,43 @@ static char *_decode_to_utf8(const char *charset, const char *data, size_t datal
                 if (guess_counts.valid > counts.valid) {
                     free(text);
                     text = guess;
+                    counts = guess_counts;
                 }
             }
             charset_free(&guess_cs);
         }
     }
+
+#ifdef HAVE_LIBCHARDET
+    if (counts.invalid || counts.replacement) {
+        static Detect *d = NULL;
+        if (!d) d = detect_init();
+
+        DetectObj *obj = detect_obj_init();
+        if (!obj) goto done;
+        detect_reset(&d);
+
+        struct buf buf = BUF_INITIALIZER;
+        charset_decode(&buf, data, datalen, enc);
+        if (detect_handledata_r(&d, buf_base(&buf), buf_len(&buf), &obj) == CHARDET_SUCCESS) {
+            charset_t guess_cs = charset_lookupname(obj->encoding);
+            if (guess_cs != CHARSET_UNKNOWN_CHARSET) {
+                char *guess = charset_to_utf8(data, datalen, guess_cs, enc);
+                if (guess) {
+                    struct char_counts guess_counts = charset_count_validutf8(guess, strlen(guess));
+                    if (guess_counts.valid > counts.valid) {
+                        free(text);
+                        text = guess;
+                        counts = guess_counts;
+                    }
+                }
+                charset_free(&guess_cs);
+            }
+        }
+        detect_obj_free(&obj);
+        buf_free(&buf);
+    }
+#endif
 
 done:
     charset_free(&cs);
@@ -923,11 +972,13 @@ done:
 static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf *msg_buf)
 {
     if (bodies->textlist.count == 1) {
+        int is_encoding_problem = 0;
         struct body *textbody = ptrarray_nth(&bodies->textlist, 0);
         char *text = _decode_to_utf8(textbody->charset_id,
                                      msg_buf->s + textbody->content_offset,
                                      textbody->content_size,
-                                     textbody->charset_enc);
+                                     textbody->charset_enc,
+                                     &is_encoding_problem);
         return text;
     }
 
@@ -941,10 +992,12 @@ static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf 
         if (i) buf_appendcstr(&buf, "\n");
 
         if (!strcmp(part->type, "TEXT")) {
+            int is_encoding_problem = 0;
             char *t = _decode_to_utf8(part->charset_id,
                                       msg_buf->s + part->content_offset,
                                       part->content_size,
-                                      part->charset_enc);
+                                      part->charset_enc,
+                                      &is_encoding_problem);
             if (t) buf_appendcstr(&buf, t);
             free(t);
         }
@@ -1014,10 +1067,12 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
 {
     if (bodies->htmllist.count == 1) {
         const struct body *part = ptrarray_nth(&bodies->htmllist, 0);
+        int is_encoding_problem = 0;
         char *html = _decode_to_utf8(part->charset_id,
                                      msg_buf->s + part->content_offset,
                                      part->content_size,
-                                     part->charset_enc);
+                                     part->charset_enc,
+                                     &is_encoding_problem);
         return html;
     }
 
@@ -1041,10 +1096,12 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
         if (!i)
             buf_appendcstr(&buf, "<html>"); // XXX use HTML5?
 
+        int is_encoding_problem = 0;
         char *t = _decode_to_utf8(part->charset_id,
                                   msg_buf->s + part->content_offset,
                                   part->content_size,
-                                  part->charset_enc);
+                                  part->charset_enc,
+                                  &is_encoding_problem);
         if (t && !strcmp(part->subtype, "HTML")) {
             _html_concat_div(&buf, t);
         }
@@ -4769,99 +4826,42 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     return jbodypart;
 }
 
-struct _email_get_bodyvalue_rock {
-    struct buf buf;
-    size_t max_body_bytes;
-    int is_truncated;
-};
-
-void _email_get_bodyvalue_cb(const struct buf *text, void *_rock)
-{
-    struct _email_get_bodyvalue_rock *rock = _rock;
-
-    /* Skip remaining text bodies */
-    if (rock->is_truncated) return;
-
-    const char *p = buf_base(text);
-    const char *top = p + buf_len(text);
-
-    while (p < top) {
-        const char *cr = memchr(p, '\r', top - p);
-        if (cr) {
-            /* Write bytes up to CR, but skip CR */
-            buf_appendmap(&rock->buf, p, cr - p);
-            p = cr + 1;
-        }
-        else {
-            /* Write remaining bytes */
-            buf_appendmap(&rock->buf, p, top - p);
-            p = top;
-        }
-    }
-
-    /* Truncate bytes */
-    if (rock->max_body_bytes && buf_len(&rock->buf) > rock->max_body_bytes) {
-        buf_truncate(&rock->buf, rock->max_body_bytes);
-        rock->is_truncated = 1;
-    }
-}
-
 static json_t * _email_get_bodyvalue(struct body *part,
                                      const struct buf *msg_buf,
                                      size_t max_body_bytes,
                                      int is_html)
 {
-    /* Determine the start byte of this part's body */
-    struct buf data = BUF_INITIALIZER;
-    buf_init_ro(&data, msg_buf->s + part->content_offset, part->content_size);
+    json_t *jbodyvalue = NULL;
+    int is_encoding_problem = 0;
+    int is_truncated = 0;
+    struct buf buf = BUF_INITIALIZER;
 
-    /* Extract up to max_body_bytes */
-    struct _email_get_bodyvalue_rock rock = {
-        BUF_INITIALIZER, max_body_bytes, /*is_truncated*/0
-    };
+    /* Decode into UTF-8 buffer */
+    char *raw = _decode_to_utf8(part->charset_id,
+            msg_buf->s + part->content_offset,
+            part->content_size, part->charset_enc,
+            &is_encoding_problem);
+    if (!raw) goto done;
 
-    int flags = CHARSET_SNIPPET|CHARSET_KEEPHTML;
-    charset_t cs = charset_lookupname(part->charset_id);
-    int is_problem = !charset_extract(_email_get_bodyvalue_cb,
-            &rock, &data, cs, part->charset_enc, part->subtype, flags);
-
-    /* Specially treat UTF-32, some clients announce the wrong endianess. */
-    const char *charset_id = charset_name(cs);
-    if (!strncasecmp(charset_id, "UTF-32", 6)) {
-        struct char_counts counts = charset_count_validutf8(buf_base(&rock.buf), buf_len(&rock.buf));
-        if (counts.invalid || counts.replacement) {
-            /* There's some replacement characters. Try to decode with the other endianess. */
-            charset_t guess_cs = CHARSET_UNKNOWN_CHARSET;
-            if (!strcasecmp(charset_id, "UTF-32") || !strcasecmp(charset_id, "UTF-32BE"))
-                guess_cs = charset_lookupname("UTF-32LE");
-            else
-                guess_cs = charset_lookupname("UTF-32BE");
-            struct _email_get_bodyvalue_rock guess_rock = {
-                BUF_INITIALIZER, max_body_bytes, /*is_truncated*/0
-            };
-            charset_extract(_email_get_bodyvalue_cb,
-                    &guess_rock, &data,
-                    guess_cs, part->charset_enc,
-                    part->subtype, flags);
-            struct char_counts guess_counts = charset_count_validutf8(buf_base(&guess_rock.buf),
-                    buf_len(&guess_rock.buf));
-            if (guess_counts.valid > counts.valid) {
-                buf_free(&rock.buf);
-                rock = guess_rock;
-                is_problem = 1;
-            }
-            charset_free(&guess_cs);
-        }
+    /* In-place remove CR characters from buffer */
+    size_t i, j, rawlen = strlen(raw);
+    for (i = 0, j = 0; j < rawlen; j++) {
+        if (raw[j] != '\r') raw[i++] = raw[j];
     }
-    charset_free(&cs);
-    buf_cstring(&rock.buf);
+    raw[i] = '\0';
 
-    /* Truncate UTF-8 (assuming sane UTF-8 to start from). */
-    /* XXX do not split between combining characters */
-    struct buf *txt = &rock.buf;
-    if (buf_len(txt) && max_body_bytes) {
-        const unsigned char *base = (unsigned char *) buf_base(txt);
-        const unsigned char *top = base + buf_len(txt);
+    /* Initialize return value */
+    buf_initm(&buf, raw, rawlen);
+
+    /* Truncate buffer */
+    if (buf_len(&buf) && max_body_bytes && max_body_bytes < buf_len(&buf)) {
+        /* Cut of excess bytes */
+        buf_truncate(&buf, max_body_bytes);
+        is_truncated = 1;
+        /* Clip to sane UTF-8 */
+        /* XXX do not split between combining characters */
+        const unsigned char *base = (unsigned char *) buf_base(&buf);
+        const unsigned char *top = base + buf_len(&buf);
         const unsigned char *p = top - 1;
         while (p >= base && ((*p & 0xc0) == 0x80))
             p--;
@@ -4883,38 +4883,35 @@ static json_t * _email_get_bodyvalue(struct body *part,
                     need_bytes = 1;
             }
             if (have_bytes < need_bytes)
-                buf_truncate(txt, p - base);
+                buf_truncate(&buf, p - base);
         }
         else {
-            buf_reset(txt);
+            buf_reset(&buf);
         }
     }
 
     /* Truncate HTML */
-    if (buf_len(txt) && max_body_bytes && is_html) {
+    if (buf_len(&buf) && max_body_bytes && is_html) {
         /* Truncate any trailing '<' start tag character without closing '>' */
-        const char *base = buf_base(txt);
-        const char *top  = base + buf_len(txt);
+        const char *base = buf_base(&buf);
+        const char *top  = base + buf_len(&buf);
         const char *p;
         for (p = top - 1; *p != '>' && p >= base; p--) {
             if (*p == '<') {
-                buf_truncate(txt, p - base + 1);
+                buf_truncate(&buf, p - base + 1);
+                is_truncated = 1;
                 break;
             }
         }
     }
 
-    /* Build value */
-    json_t *bodyvalue = json_object();
-    json_object_set_new(bodyvalue, "value",
-            json_string(buf_cstring(txt)));
-    json_object_set_new(bodyvalue, "isEncodingProblem",
-            json_boolean(is_problem));
-    json_object_set_new(bodyvalue, "isTruncated",
-            json_boolean(rock.is_truncated));
-
-    buf_free(&rock.buf);
-    return bodyvalue;
+done:
+    jbodyvalue = json_pack("{s:s s:b s:b}",
+            "value", buf_cstring(&buf),
+            "isEncodingProblem", is_encoding_problem,
+            "isTruncated", is_truncated);
+    buf_free(&buf);
+    return jbodyvalue;
 }
 
 static int _email_get_bodies(jmap_req_t *req,
@@ -4967,10 +4964,12 @@ static int _email_get_bodies(jmap_req_t *req,
         /* Fetch body values */
         for (i = 0; i < parts.count; i++) {
             struct body *part = ptrarray_nth(&parts, i);
-            if (strcmp("TEXT", part->type))
+            if (strcmp("TEXT", part->type)) {
                 continue;
-            if (part->part_id && json_object_get(body_values, part->part_id))
+            }
+            if (part->part_id && json_object_get(body_values, part->part_id)) {
                 continue;
+            }
             json_object_set_new(body_values, part->part_id,
                     _email_get_bodyvalue(part, msg->mime, args->max_body_bytes,
                                          !strcmp("HTML", part->subtype)));

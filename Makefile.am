@@ -677,6 +677,14 @@ cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
 
 CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --project $(CUNIT_PROJECT)
 
+if USE_LIBCHARDET
+AM_LDFLAGS += $(LIBCHARDET_LIBS)
+AM_CPPFLAGS += $(LIBCHARDET_CFLAGS)
+LD_SERVER_ADD += $(LIBCHARDET_LIBS)
+endif
+
+
+
 # don't discard the temporary source file if building with coverage
 if HAVE_COVERAGE
     CUNIT_RM = true
