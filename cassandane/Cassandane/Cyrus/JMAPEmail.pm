@@ -11238,6 +11238,56 @@ EOF
     $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{bodyValues}{1}{isEncodingProblem});
 }
 
+sub test_email_get_detect_iso_8859_1
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    if (not $self->{instance}->{buildinfo}->get('dependency', 'libchardet')) {
+        xlog "Cyrus instance doesn't support charset detection. Skipping test.";
+        return 0;
+    }
+
+    my $jmap = $self->{jmap};
+
+    my $email = <<'EOF';
+From: "Some Example Sender" <example@example.com>
+To: baseball@vitaead.com
+Subject: Here is some ISO-8859-1 text that claims to be ascii
+Date: Wed, 7 Dec 2016 00:21:50 -0500
+MIME-Version: 1.0
+Content-Type: text/plain
+Content-Transfer-Encoding: base64
+
+Ikvkc2Ugc2NobGllc3N0IGRlbiBNYWdlbiIsIGj2cnRlIGljaCBkZW4gU2NobG/faGVycm4gc2FnZW4uCg==
+
+EOF
+    $email =~ s/\r?\n/\r\n/gs;
+    my $data = $jmap->Upload($email, "message/rfc822");
+    my $blobid = $data->{blobId};
+    my $inboxid = $self->getinbox()->{id};
+
+    xlog "import and get email from blob $blobid";
+    my $res = $jmap->CallMethods([['Email/import', {
+        emails => {
+            "1" => {
+                blobId => $blobid,
+                mailboxIds => {$inboxid =>  JSON::true},
+            },
+        },
+    }, "R1"], ["Email/get", {
+        ids => ["#1"],
+        properties => ['textBody', 'bodyValues'],
+        fetchTextBodyValues => JSON::true,
+    }, "R2" ]]);
+
+    $self->assert_num_equals(0,
+        index($res->[1][1]{list}[0]{bodyValues}{1}{value},
+            "\"K\N{LATIN SMALL LETTER A WITH DIAERESIS}se")
+    );
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{bodyValues}{1}{isEncodingProblem});
+}
+
 sub test_email_set_intermediary_create
     :min_version_3_1 :needs_component_jmap
 {
