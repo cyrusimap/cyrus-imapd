@@ -123,3 +123,15 @@ if [ ! $ITEM ] || [ $ITEM == wslay ] ; then
   sudo make install-exec $MAKEOPTS
 )
 fi
+
+if [ ! $ITEM ] || [ $ITEM == libchardet ] ; then
+(
+  cd libchardet
+  git clean -f -x -d
+  autoreconf -i
+  automake
+  autoconf
+  ./configure --enable-silent-rules --prefix=$PREFIX
+  sudo make install-exec $MAKEOPTS
+)
+fi

@@ -29,3 +29,6 @@
 [submodule "wslay"]
 	path = wslay
 	url = https://github.com/cyrusimap/wslay
+[submodule "libchardet"]
+	path = libchardet
+	url = git@github.com:cyrusimap/libchardet.git
