@@ -81,7 +81,7 @@ if [ ! $ITEM ] || [ $ITEM == libical ] ; then
   git clean -f -x -d
   mkdir build
   cd build
-  cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DICU_BASE=$PREFIX \
+  cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DICU_BASE=$PREFIX -DENABLE_GTK_DOC=OFF \
         -DUSE_BUILTIN_TZDATA=true \
         -DCMAKE_SKIP_RPATH=ON -DICAL_ALLOW_EMPTY_PROPERTIES=true ..
   make $MAKEOPTS
