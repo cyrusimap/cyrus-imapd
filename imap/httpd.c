@@ -2325,13 +2325,11 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         httpdate_gen(datestr, sizeof(datestr), now);
         simple_hdr(txn, "Date", datestr);
 
-        if (txn->flags.ver == VER_2) break;
-
-        /* Fall through and specify connection options - HTTP/1.x only */
+        /* Fall through and specify connection options and/or links */
         GCC_FALLTHROUGH
 
     case HTTP_SWITCH_PROT:
-        if (txn->flags.conn) {
+        if (txn->flags.conn && (txn->flags.ver < VER_2)) {
             /* Construct Connection header */
             const char *conn_tokens[] =
                 { "close", "Upgrade", "Keep-Alive", NULL };
@@ -2352,7 +2350,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             }
         }
 
-        /* Fall through as provisional response */
+        /* Fall through and specify links */
         GCC_FALLTHROUGH
 
     case HTTP_EARLY_HINTS:
@@ -2454,7 +2452,6 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         }
     }
 
-    
     /* Response Context */
     if (txn->req_tgt.allow & ALLOW_ISCHEDULE) {
         simple_hdr(txn, "iSchedule-Version", "1.0");
