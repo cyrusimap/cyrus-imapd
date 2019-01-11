@@ -3920,10 +3920,18 @@ EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
 
     annotate_begin(d);
 
-    /* copy here - delete will dispose of old records later */
-    r = _annotate_rewrite(oldmailbox, 0, olduserid,
-                          newmailbox, 0, newuserid,
-                         /*copy*/1);
+    if (newmailbox->uniqueid &&
+        strcmp(oldmailbox->uniqueid, newmailbox->uniqueid)) {
+        /* copy here - delete will dispose of old records later
+
+           XXX  This code appears to only be necessary to allow
+           the annotate:rename unit test to pass.
+           In fact, that test may be obsolete for mbpath-by-id.
+        */
+        r = _annotate_rewrite(oldmailbox, 0, olduserid,
+                              newmailbox, 0, newuserid,
+                              /*copy*/1);
+    }
 
     /* delete displayname records only */
     struct rename_rock rrock = { oldmailbox, .newmailbox = NULL, .copy = 0 };
