@@ -3879,9 +3879,11 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
 }
 
 EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
-                                     struct mailbox *newmailbox __attribute__((unused)))
+                                     struct mailbox *newmailbox)
 {
     /* rename one mailbox */
+    char *olduserid = mboxname_to_userid(oldmailbox->name);
+    char *newuserid = mboxname_to_userid(newmailbox->name);
     annotate_db_t *d = NULL;
     int r = 0;
 
@@ -3897,6 +3899,11 @@ EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
     if (r) goto done;
 
     annotate_begin(d);
+
+    /* copy here - delete will dispose of old records later */
+    r = _annotate_rewrite(oldmailbox, 0, olduserid,
+                          newmailbox, 0, newuserid,
+                         /*copy*/1);
 
     /* delete displayname records only */
     struct rename_rock rrock = { oldmailbox, .newmailbox = NULL, .copy = 0 };
@@ -3915,6 +3922,8 @@ EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
 
  done:
     annotate_putdb(&d);
+    free(olduserid);
+    free(newuserid);
 
     return r;
 }
