@@ -486,7 +486,6 @@ static json_t *_mbox_get(jmap_req_t *req,
                          enum shared_mbox_type share_type,
                          strarray_t *sublist)
 {
-    unsigned statusitems = STATUS_MESSAGES | STATUS_UNSEEN;
     int is_inbox = 0, parent_is_inbox = 0;
     int r = 0;
     mbname_t *mbname = mbname_from_intname(mbentry->name);
@@ -580,30 +579,27 @@ static json_t *_mbox_get(jmap_req_t *req,
     }
 
     if (share_type == _SHAREDMBOX_SHARED && !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
-        /* Lookup status. */
-        struct statusdata sdata = STATUSDATA_INIT;
-        r = status_lookup_mbname(mbname, req->userid, statusitems, &sdata);
-        if (r) goto done;
-
-        if (_wantprop(props, "totalEmails")) {
-            json_object_set_new(obj, "totalEmails", json_integer(sdata.messages));
-        }
-        if (_wantprop(props, "unreadEmails")) {
-            json_object_set_new(obj, "unreadEmails", json_integer(sdata.unseen));
-        }
-
-        if (_wantprop(props, "totalThreads") || _wantprop(props, "unreadThreads")) {
-            if ((r = conversation_getstatus(req->cstate,
-                            mbname_intname(mbname), &sdata.xconv))) {
+        if (_wantprop(props, "totalThreads") || _wantprop(props, "unreadThreads") ||
+            _wantprop(props, "totalEmails") || _wantprop(props, "unreadEmails")) {
+            conv_status_t convstatus = CONV_STATUS_INIT;
+            r = conversation_getstatus(req->cstate,
+                            mbname_intname(mbname), &convstatus);
+            if (r) {
                 syslog(LOG_ERR, "conversation_getstatus(%s): %s",
                         mbname_intname(mbname), error_message(r));
                 goto done;
             }
+            if (_wantprop(props, "totalEmails")) {
+                json_object_set_new(obj, "totalEmails", json_integer(convstatus.emailexists));
+            }
+            if (_wantprop(props, "unreadEmails")) {
+                json_object_set_new(obj, "unreadEmails", json_integer(convstatus.emailunseen));
+            }
             if (_wantprop(props, "totalThreads")) {
-                json_object_set_new(obj, "totalThreads", json_integer(sdata.xconv.threadexists));
+                json_object_set_new(obj, "totalThreads", json_integer(convstatus.threadexists));
             }
             if (_wantprop(props, "unreadThreads")) {
-                json_object_set_new(obj, "unreadThreads", json_integer(sdata.xconv.threadunseen));
+                json_object_set_new(obj, "unreadThreads", json_integer(convstatus.threadunseen));
             }
         }
         if (_wantprop(props, "sortOrder")) {
