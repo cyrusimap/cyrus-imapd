@@ -670,6 +670,7 @@ static void test_delete(void)
     struct entryattlist *ealist = NULL;
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
+    struct buf path = BUF_INITIALIZER;
     struct mailbox *mailbox = NULL;
 
     annotate_init(NULL, NULL);
@@ -749,7 +750,9 @@ static void test_delete(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE2);
     buf_free(&val2);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), 0);
+    buf_printf(&path, "%s/data/%c/%c/%s/cyrus.annotations", DBDIR,
+               mailbox->uniqueid[0], mailbox->uniqueid[1], mailbox->uniqueid);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path)), 0);
     mailbox_close(&mailbox);
 
     /* delete all the entries associated with the mailbox */
@@ -760,7 +763,7 @@ static void test_delete(void)
     r = annotate_delete_mailbox(mailbox);
     CU_ASSERT_EQUAL(r, 0);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path)), -ENOENT);
 
     /* check that the values are gone */
 
@@ -781,7 +784,8 @@ static void test_delete(void)
 
     annotatemore_close();
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path)), -ENOENT);
+    buf_free(&path);
 
     strarray_fini(&entries);
     strarray_fini(&attribs);
@@ -798,9 +802,10 @@ static void test_rename(void)
     struct entryattlist *ealist = NULL;
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
+    struct buf path1 = BUF_INITIALIZER;
+    struct buf path3 = BUF_INITIALIZER;
     struct mailbox *mailbox1 = NULL;
     struct mailbox *mailbox3 = NULL;
-    const char *uniqueid = makeuuid();
 
     annotate_init(NULL, NULL);
 
@@ -879,21 +884,25 @@ static void test_rename(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE2);
     buf_free(&val2);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), 0);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfine/cyrus.annotations"), -ENOENT);
+    buf_printf(&path1, "%s/data/%c/%c/%s/cyrus.annotations", DBDIR,
+               mailbox1->uniqueid[0], mailbox1->uniqueid[1], mailbox1->uniqueid);
+    buf_printf(&path3, "%s/data/%c/%c/%s/cyrus.annotations", DBDIR,
+               mailbox3->uniqueid[0], mailbox3->uniqueid[1], mailbox3->uniqueid);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path1)), 0);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path3)), -ENOENT);
 
     /* rename MBOXNAME1 -> MBOXNAME3 */
 
-    r = annotate_rename_mailbox(mailbox1, mailbox3);
+    r = annotate_rename_mailbox(mailbox1, mailbox3, /*copy*/0);
     CU_ASSERT_EQUAL(r, 0);
-    r = mailbox_copy_files(mailbox1, PARTITION, MBOXNAME3_INT, uniqueid);
+    r = mailbox_copy_files(mailbox1, PARTITION, MBOXNAME3_INT, mailbox3->uniqueid);
     CU_ASSERT_EQUAL(r, 0);
     r = mailbox_rename_cleanup(&mailbox1, 0);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(mailbox1);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfine/cyrus.annotations"), 0);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path1)), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path3)), 0);
 
     /* check that the values are gone under the old name */
 
@@ -932,8 +941,10 @@ static void test_rename(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE2);
     buf_free(&val2);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfine/cyrus.annotations"), 0);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path1)), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path3)), 0);
+    buf_free(&path1);
+    buf_free(&path3);
 
     annotatemore_close();
 
@@ -1085,6 +1096,8 @@ static void test_msg_copy(void)
     struct entryattlist *ealist = NULL;
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
+    struct buf path1 = BUF_INITIALIZER;
+    struct buf path2 = BUF_INITIALIZER;
     struct mailbox *mailbox1 = NULL;
     struct mailbox *mailbox2 = NULL;
 
@@ -1162,8 +1175,12 @@ static void test_msg_copy(void)
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NULL_FATAL(val2.s);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), 0);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), 0);
+    buf_printf(&path1, "%s/data/%c/%c/%s/cyrus.annotations", DBDIR,
+               mailbox1->uniqueid[0], mailbox1->uniqueid[1], mailbox1->uniqueid);
+    buf_printf(&path2, "%s/data/%c/%c/%s/cyrus.annotations", DBDIR,
+               mailbox2->uniqueid[0], mailbox2->uniqueid[1], mailbox2->uniqueid);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path1)), 0);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path2)), 0);
     mailbox_close(&mailbox1);
 
     /* copy MBOXNAME1,1 -> MBOXNAME2,1 */
@@ -1182,8 +1199,8 @@ static void test_msg_copy(void)
     r = mailbox_commit(mailbox2);
     CU_ASSERT_EQUAL(r, 0);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), 0);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), 0);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path1)), 0);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path2)), 0);
 
     /* check that the values copied are present for both mailboxes */
 
@@ -1224,8 +1241,10 @@ static void test_msg_copy(void)
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NULL(val2.s);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), 0);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), 0);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path1)), 0);
+    CU_ASSERT_EQUAL(fexists(buf_cstring(&path2)), 0);
+    buf_free(&path1);
+    buf_free(&path2);
 
     annotatemore_close();
 
@@ -2077,9 +2096,6 @@ static int set_up(void)
         DBDIR"/db",
         DBDIR"/conf",
         DBDIR"/data",
-        DBDIR"/data/user",
-        DBDIR"/data/user/smurf",
-        DBDIR"/data/user/smurfette",
         NULL
     };
 
