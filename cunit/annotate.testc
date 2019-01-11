@@ -893,7 +893,7 @@ static void test_rename(void)
 
     /* rename MBOXNAME1 -> MBOXNAME3 */
 
-    r = annotate_rename_mailbox(mailbox1, mailbox3, /*copy*/0);
+    r = annotate_rename_mailbox(mailbox1, mailbox3);
     CU_ASSERT_EQUAL(r, 0);
     r = mailbox_copy_files(mailbox1, PARTITION, MBOXNAME3_INT, mailbox3->uniqueid);
     CU_ASSERT_EQUAL(r, 0);
