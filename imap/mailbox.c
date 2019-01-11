@@ -5990,7 +5990,7 @@ HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
         /* copy any mailbox annotations */
         struct mailbox newmailbox = { .name = (char *) newname,
                                       .index_locktype = LOCK_EXCLUSIVE };
-        r = annotate_rename_mailbox(oldmailbox, &newmailbox, /*copy*/0);
+        r = annotate_rename_mailbox(oldmailbox, &newmailbox);
     }
 
     if (!r && mailbox_has_conversations(oldmailbox)) {
