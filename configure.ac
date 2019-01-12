@@ -2100,7 +2100,7 @@ AX_PROG_PERL_MODULES([Pod::POM::View::Restructured],
                      [have_ppvr=yes],
                      [AC_MSG_WARN([No Pod::POM::View::Restructured, won't be able to regenerate docs])])
 
-AX_PYTHON_MODULE([git], [], [python2])
+AX_PYTHON_MODULE([git], [], [python])
 AS_CASE([$HAVE_PYMOD_GIT],
         [yes],  [],
         [*],    [AC_MSG_WARN([GitPython not found, won't be able to regenerate docs])])
