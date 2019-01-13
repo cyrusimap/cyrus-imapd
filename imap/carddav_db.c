@@ -423,8 +423,8 @@ EXPORTED strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const c
     " AND G.objid = GO.rowid AND E.email = :email" \
     " AND GO.alive = 1 AND CO.alive = 1;"
 
-#define CMD_GETEMAIL2UIDS \
-    "SELECT DISTINCT vcard_uid " \
+#define CMD_GETEMAIL2DETAILS \
+    "SELECT DISTINCT vcard_uid, ispinned " \
     " FROM vcard_objs CO JOIN vcard_emails E" \
     " WHERE E.objid = CO.rowid AND CO.alive = 1" \
     " AND E.email = :email AND CO.mailbox = :mailbox;"
@@ -474,19 +474,38 @@ EXPORTED strarray_t *carddav_getemail(struct carddav_db *carddavdb, const char *
     return groups;
 }
 
-EXPORTED strarray_t *carddav_getemail2uids(struct carddav_db *carddavdb, const char *email,
-                                           const char *mboxname)
+struct detailsdata {
+    strarray_t *uids;
+    int ispinned;
+};
+
+static int details_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct detailsdata *data = (struct detailsdata *)rock;
+    const char *value = (const char *)sqlite3_column_text(stmt, 0);
+    if (value) strarray_add(data->uids, value);
+    if (sqlite3_column_int(stmt, 1))
+        data->ispinned = 1;
+    return 0;
+}
+
+EXPORTED strarray_t *carddav_getemail2details(struct carddav_db *carddavdb, const char *email,
+                                              const char *mboxname, int *ispinned)
 {
     struct sqldb_bindval bval[] = {
         { ":email", SQLITE_TEXT,   { .s = email } },
         { ":mailbox", SQLITE_TEXT, { .s = mboxname } },
         { NULL,     SQLITE_NULL,   { .s = NULL  } }
     };
-    strarray_t *uids = strarray_new();
+    struct detailsdata data = { strarray_new(), 0 };
 
-    sqldb_exec(carddavdb->db, CMD_GETEMAIL2UIDS, bval, &addarray_cb, uids);
+    sqldb_exec(carddavdb->db, CMD_GETEMAIL2DETAILS, bval, &details_cb, &data);
 
-    return uids;
+    if (ispinned) {
+        *ispinned = data.ispinned;
+    }
+
+    return data.uids;
 }
 
 EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *member_uid,

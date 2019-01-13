@@ -689,7 +689,7 @@ static int listcompare(const char *text, size_t tlen __attribute__((unused)),
     if (ctx->carddavdb) {
         /* search for email address in addressbook */
         strarray_t *uids =
-            carddav_getemail2uids(ctx->carddavdb, text, abook);
+            carddav_getemail2details(ctx->carddavdb, text, abook, NULL);
         ret = strarray_size(uids);
 
         strarray_free(uids);
