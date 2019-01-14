@@ -71,11 +71,11 @@ static int dump_cb(void *rockp __attribute__((unused)),
 int main(int argc, char *argv[])
 {
     struct db *ptdb;
-    char fnamebuf[1024];
     extern char *optarg;
     int opt;
     int r;
-    char *alt_config = NULL;
+    const char *fname;
+    char *alt_config = NULL, *tofree = NULL;
 
     while ((opt = getopt(argc, argv, "C:")) != EOF) {
         switch (opt) {
@@ -95,14 +95,20 @@ int main(int argc, char *argv[])
     cyrus_init(alt_config, "ptdump", 0, 0);
 
     /* open database */
-    strcpy(fnamebuf, config_dir);
-    strcat(fnamebuf, PTS_DBFIL);
-    r = cyrusdb_open(config_ptscache_db, fnamebuf, CYRUSDB_CREATE, &ptdb);
+    fname = config_getstring(IMAPOPT_PTSCACHE_DB_PATH);
+    if (!fname) {
+        tofree = strconcat(config_dir, PTS_DBFIL, NULL);
+        fname = tofree;
+    }
+
+    r = cyrusdb_open(config_ptscache_db, fname, CYRUSDB_CREATE, &ptdb);
     if(r != CYRUSDB_OK) {
-        fprintf(stderr,"error opening %s (%s)", fnamebuf,
+        fprintf(stderr,"error opening %s (%s)", fname,
                cyrusdb_strerror(r));
         exit(1);
     }
+
+    if (tofree) free(tofree);
 
     /* iterate through db, wiping expired entries */
     cyrusdb_foreach(ptdb, "", 0, NULL, dump_cb, ptdb, NULL);

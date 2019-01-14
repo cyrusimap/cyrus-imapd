@@ -119,9 +119,6 @@ struct auth_state *ptsmodule_make_authstate(const char *identifier,
 /* config.c info (libimap) */
 const int config_need_data = 0;
 
-/* Globals */
-#define DB (config_ptscache_db)
-
 static char ptclient_debug = 0;
 struct db *ptsdb = NULL;
 
@@ -129,8 +126,9 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
 {
     int r;
     int opt;
-    char fnamebuf[1024];
     extern char *optarg;
+    const char *fname;
+    char *tofree = NULL;
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);
@@ -155,14 +153,20 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
         }
     }
 
-    strcpy(fnamebuf, config_dir);
-    strcat(fnamebuf, PTS_DBFIL);
-    r = cyrusdb_open(DB, fnamebuf, CYRUSDB_CREATE, &ptsdb);
+    fname = config_getstring(IMAPOPT_PTSCACHE_DB_PATH);
+    if (!fname) {
+        tofree = strconcat(config_dir, PTS_DBFIL, NULL);
+        fname = tofree;
+    }
+
+    r = cyrusdb_open(config_ptscache_db, fname, CYRUSDB_CREATE, &ptsdb);
     if (r != 0) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", fnamebuf,
+        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
                cyrusdb_strerror(ret));
         fatal("can't read pts database", EC_TEMPFAIL);
     }
+
+    if (tofree) free(tofree);
 
     ptsmodule_init();
 
