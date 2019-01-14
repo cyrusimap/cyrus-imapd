@@ -119,9 +119,7 @@ typedef struct context {
     /* Conversion to iCalendar context */
     icalcomponent *comp;       /* The current main event of an exception. */
 
-    icaltimezone *tzstart_old; /* The former startTimeZone. */
     icaltimezone *tzstart;     /* The current startTimeZone. */
-    icaltimezone *tzend_old;   /* The former endTimeZone. */
     icaltimezone *tzend;       /* The current endTimeZone. */
 } context_t;
 
@@ -2655,61 +2653,41 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     int pe;
     const char *val;
 
-    /* Determine current timezone */
-    const char *tzid = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
-    if (tzid) {
-        ctx->tzstart_old = tz_from_tzid(tzid);
-    } else {
-        ctx->tzstart_old = NULL;
-    }
-
-    /* Read new timezone */
-    if (!json_is_null(json_object_get(event, "timeZone"))) {
-        pe = readprop(ctx, event, "timeZone", !ctx->is_allday, "s", &val);
+    /* Read timezone */
+    if (JNOTNULL(json_object_get(event, "timeZone"))) {
+        pe = readprop(ctx, event, "timeZone", 1, "s", &val);
         if (pe > 0) {
             /* Lookup the new timezone. */
             ctx->tzstart = tz_from_tzid(val);
             if (!ctx->tzstart) {
                 invalidprop(ctx, "timeZone");
             }
-        } else if (!pe) {
-            ctx->tzstart = ctx->tzstart_old;
         }
-    } else {
-        ctx->tzstart = NULL;
-    }
-    ctx->tzstart_old = ctx->tzstart;
+    } else ctx->tzstart = NULL;
 
-    /* Determine current end timezone */
-    tzid = tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
-    if (tzid) {
-        ctx->tzend_old = tz_from_tzid(tzid);
-    } else {
-        ctx->tzend_old = ctx->tzstart_old;
-    }
+    /* Initialize end timezone */
+    ctx->tzend = ctx->tzstart;
 
-    /* Read new end timezone */
-    const char *endzoneid = NULL;
+    /* Read end timezone */
+    const char *endzone_location_id = NULL;
     json_t *locations = json_object_get(event, "locations");
-    if (locations && !json_is_null(locations)) {
+    if (JNOTNULL(locations)) {
         json_t *loc;
         const char *id;
 
         /* Pick the first location with timeZone and rel=end */
         json_object_foreach(json_object_get(event, "locations"), id, loc) {
-            json_t *timeZone;
-
             if (!location_is_endtimezone(loc)) {
                 continue;
             }
-            endzoneid = id;
-
             /* Prepare prefix for error reporting */
             beginprop_key(ctx, "locations", id);
 
-            timeZone = json_object_get(loc, "timeZone");
+            endzone_location_id = id;
+            json_t *timeZone = json_object_get(loc, "timeZone");
+
             if (!json_is_null(timeZone)) {
-                tzid = json_string_value(json_object_get(loc, "timeZone"));
+                const char *tzid = json_string_value(json_object_get(loc, "timeZone"));
                 if (tzid) {
                     ctx->tzend = tz_from_tzid(tzid);
                 } else {
@@ -2724,25 +2702,13 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
             if ((ctx->tzstart == NULL) != (ctx->tzend == NULL)) {
                 invalidprop(ctx, "timeZone");
             }
-            /* allDay requires floating time */
-            if (ctx->is_allday && ctx->tzend) {
-                invalidprop(ctx, "timeZone");
-            }
 
             endprop(ctx);
             break;
         }
-    } else if (json_is_null(locations)) {
-        ctx->tzend = NULL;
-    } else {
-        ctx->tzend = ctx->tzend_old;
-    }
-    ctx->tzend_old = endzoneid ? ctx->tzend : ctx->tzstart;
-    if (!endzoneid) {
-        ctx->tzend = ctx->tzend_old;
     }
 
-    /* Read new duration */
+    /* Read duration */
     struct icaldurationtype dur = icaldurationtype_null_duration();
     pe = readprop(ctx, event, "duration", 0, "s", &val);
     if (pe > 0) {
@@ -2757,19 +2723,14 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         }
     }
 
-    /* Determine current start */
-    struct icaltimetype dtstart_old = dtstart_from_ical(comp);
-
-    /* Read new start */
-    struct icaltimetype dtstart = dtstart_old;
+    /* Read start */
+    struct icaltimetype dtstart = icaltime_null_time();
     pe = readprop(ctx, event, "start", 1, "s", &val);
     if (pe > 0) {
         if (!localdate_to_icaltime(val, &dtstart,
                                    ctx->tzstart, ctx->is_allday, 0)) {
             invalidprop(ctx, "start");
         }
-    } else {
-        dtstart = dtstart_old;
     }
 
     /* Bail out for property errors */
@@ -2790,7 +2751,7 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
         dtend = icaltime_add(dtstart, dur);
         dtend = icaltime_convert_to_zone(dtend, ctx->tzend);
         prop = dtprop_to_ical(ctx, comp, dtend, ctx->tzend, 1, ICAL_DTEND_PROPERTY);
-        if (prop) xjmapid_to_ical(prop, endzoneid);
+        if (prop) xjmapid_to_ical(prop, endzone_location_id);
     } else {
         /* Add DURATION */
         icalcomponent_set_duration(comp, dur);
