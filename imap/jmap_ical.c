@@ -2063,30 +2063,26 @@ virtuallocations_from_ical(context_t *ctx, icalcomponent *comp)
     return locations;
 }
 
-static json_t* duration_from_ical(icalcomponent *comp)
+static struct icaldurationtype duration_from_ical(icalcomponent *comp)
 {
+    struct icaldurationtype dur = icaldurationtype_null_duration();
     struct icaltimetype dtstart, dtend;
-    char *val = NULL;
 
     dtstart = dtstart_from_ical(comp);
     dtend = dtend_from_ical(comp);
 
     if (!icaltime_is_null_time(dtend)) {
         time_t tstart, tend;
-        struct icaldurationtype dur;
 
         tstart = icaltime_as_timet_with_zone(dtstart, dtstart.zone);
         tend = icaltime_as_timet_with_zone(dtend, dtend.zone);
         dur = icaldurationtype_from_int((int)(tend - tstart));
-
-        if (!icaldurationtype_is_bad_duration(dur) && !dur.is_neg) {
-            val = icaldurationtype_as_ical_string_r(dur);
+        if (icaldurationtype_is_bad_duration(dur) || dur.is_neg) {
+            dur = icaldurationtype_null_duration();
         }
     }
 
-    json_t *ret = json_string(val ? val : "PT0S");
-    if (val) free(val);
-    return ret;
+    return dur;
 }
 
 static json_t*
@@ -2135,18 +2131,51 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
     event = json_pack("{s:s}", "@type", "jsevent");
 
     /* Always determine the event's start timezone. */
-    ctx->tzid_start = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
 
-    /* Always determine isAllDay to set start, end and timezone fields. */
-    ctx->is_allday = icaltime_is_date(icalcomponent_get_dtstart(comp));
-    if (ctx->is_allday && ctx->tzid_start) {
-        /* bogus iCalendar data */
+    /* Initialize isAllDay */
+    if (icaltime_is_date(icalcomponent_get_dtstart(comp))) {
+        ctx->is_allday = 1;
         ctx->tzid_start = NULL;
+    }
+    else ctx->is_allday = 0; // handle isAllDay:true with timeZone later
+
+    /* Initialize time fields */
+    struct icaltimetype dtstart = icalcomponent_get_dtstart(comp);
+    ctx->tzid_start = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
+    struct icaldurationtype dur = duration_from_ical(comp);
+
+    /* start */
+    if (wantprop(ctx, "start")) {
+        char *s = localdate_from_icaltime_r(dtstart);
+        json_object_set_new(event, "start", json_string(s));
+        free(s);
+    }
+
+    /* timeZone */
+    if (wantprop(ctx, "timeZone")) {
+        json_object_set_new(event, "timeZone",
+                ctx->tzid_start && !ctx->is_allday ?
+                json_string(ctx->tzid_start) : json_null());
+    }
+
+    /* duration */
+    if (wantprop(ctx, "duration")) {
+        char *s = icaldurationtype_as_ical_string_r(dur);
+        json_object_set_new(event, "duration", json_string(s));
+        free(s);
     }
 
     /* isAllDay */
     if (wantprop(ctx, "isAllDay") && !is_exc) {
-        json_object_set_new(event, "isAllDay", json_boolean(ctx->is_allday));
+        int is_allday = ctx->is_allday;
+        /* isAllDay may be true even if a timezone is set */
+        prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
+        if (!strcmpsafe(get_icalxparam_value(prop, JMAPICAL_XPARAM_ISALLDAY), "TRUE")) {
+            if (!(dur.hours || dur.minutes || dur.seconds)) {
+                is_allday = 1;
+            }
+        }
+        json_object_set_new(event, "isAllDay", json_boolean(is_allday));
     }
 
     /* uid */
@@ -2299,26 +2328,6 @@ calendarevent_from_ical(context_t *ctx, icalcomponent *comp)
     /* virtualLocations */
     if (wantprop(ctx, "virtualLocations")) {
         json_object_set_new(event, "virtualLocations", virtuallocations_from_ical(ctx, comp));
-    }
-
-    /* start */
-    if (wantprop(ctx, "start")) {
-        struct icaltimetype dt = icalcomponent_get_dtstart(comp);
-        char *s = localdate_from_icaltime_r(dt);
-        json_object_set_new(event, "start", json_string(s));
-        free(s);
-    }
-
-    /* timeZone */
-    if (wantprop(ctx, "timeZone")) {
-        json_object_set_new(event, "timeZone",
-                ctx->tzid_start && !ctx->is_allday ?
-                json_string(ctx->tzid_start) : json_null());
-    }
-
-    /* duration */
-    if (wantprop(ctx, "duration")) {
-        json_object_set_new(event, "duration", duration_from_ical(comp));
     }
 
     /* recurrenceRule */
@@ -2653,6 +2662,10 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     int pe;
     const char *val;
 
+    /* isAllDay */
+    ctx->is_allday = 0;
+    readprop(ctx, event, "isAllDay", 0, "b", &ctx->is_allday);
+
     /* Read timezone */
     if (JNOTNULL(json_object_get(event, "timeZone"))) {
         pe = readprop(ctx, event, "timeZone", 1, "s", &val);
@@ -2742,7 +2755,11 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     remove_icalprop(comp, ICAL_DTEND_PROPERTY);
     remove_icalprop(comp, ICAL_DURATION_PROPERTY);
 
-    dtprop_to_ical(ctx, comp, dtstart, ctx->tzstart, 1, ICAL_DTSTART_PROPERTY);
+    icalproperty *prop = dtprop_to_ical(ctx, comp, dtstart, ctx->tzstart, 1, ICAL_DTSTART_PROPERTY);
+    if (prop && ctx->is_allday && !dtstart.is_date) {
+        /* isAllDay is set to true on a non-floating start time */
+        set_icalxparam(prop, JMAPICAL_XPARAM_ISALLDAY, "TRUE", 1);
+    }
     if (ctx->tzstart != ctx->tzend) {
         /* Add DTEND */
         icaltimetype dtend;
@@ -4549,9 +4566,6 @@ calendarevent_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     else if (JNOTNULL(jtype)) {
         invalidprop(ctx, "@type");
     }
-
-    /* isAllDay */
-    readprop(ctx, event, "isAllDay", 1, "b", &ctx->is_allday);
 
     /* start, duration, timeZone */
     startend_to_ical(ctx, comp, event);
