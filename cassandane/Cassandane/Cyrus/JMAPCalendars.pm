@@ -1868,6 +1868,29 @@ sub test_calendarevent_set_endtimezone
     $self->assert_normalized_event_equals($ret, $event);
 }
 
+sub test_calendarevent_set_allday
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        "calendarId" => $calid,
+        "uid" => "58ADE39-custom-UID",
+        "title"=> "foo",
+        "start"=> "2015-11-07T00:00:00",
+        "duration"=> "P1D",
+        "timeZone"=> "America/New_York",
+        "isAllDay"=> JSON::true,
+        "description"=> "",
+    };
+
+    my $ret = $self->createandget_event($event);
+    $self->assert_normalized_event_equals($event, $ret);
+}
+
+
 sub test_calendarevent_set_keywords
     :min_version_3_1 :needs_component_jmap
 {
