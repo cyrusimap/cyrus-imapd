@@ -58,6 +58,7 @@
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
+#include "user.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -68,38 +69,126 @@ extern char *optarg;
 /* current namespace */
 static struct namespace mbpath_namespace;
 
-static int usage(void)
+static int usage(const char *error)
 {
-    fprintf(stderr,"usage: mbpath [-C <alt_config>] [-q] [-s] [-m] <mailbox name>...\n");
+    fprintf(stderr,"usage: mbpath [-C <alt_config>] [-l] [-m] [-q] [-s] [-u] [-A|D|M|S|U] <mailbox name>...\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr,"\t-a\tprint all values with prefixes\n");
+    fprintf(stderr,"\t-l\tlocal only (exit with error for remote/nonexistent)\n");
+    fprintf(stderr,"\t-m\toutput the path to the metadata files (if different from the message files)\n");
     fprintf(stderr,"\t-q\tquietly drop any error messages\n");
     fprintf(stderr,"\t-s\tstop on error\n");
-    fprintf(stderr,"\t-m\toutput the path to the metadata files (if different from the message files)\n");
+    fprintf(stderr,"\t-u\targuments are user, not mailbox\n");
+    fprintf(stderr,"\t-A\tpartition archive directory\n");
+    fprintf(stderr,"\t-D\tpartition data directory (*default*)\n");
+    fprintf(stderr,"\t-M\tpartition metadata file directory (duplicate of -m)\n");
+    fprintf(stderr,"\t-S\tsieve directory for the user\n");
+    fprintf(stderr,"\t-U\tuser files directory (seen, sub, etc)\n");
+    if (error) {
+        fprintf(stderr,"\n");
+        fprintf(stderr,"ERROR: %s", error);
+    }
     exit(-1);
 }
 
 int main(int argc, char **argv)
 {
     mbentry_t *mbentry = NULL;
-    int r, i, quiet = 0, stop_on_error=0, metadata=0;
+    int r, i;
     int opt;              /* getopt() returns an int */
     char *alt_config = NULL;
 
-    while ((opt = getopt(argc, argv, "C:qsm")) != EOF) {
+    // capture options
+    int quiet = 0;
+    int stop_on_error = 0;
+    int localonly = 0;
+    int usermode = 0;
+    int doall = 0;
+    int doA = 0;
+    int doD = 1; // default
+    int doM = 0;
+    int doS = 0;
+    int doU = 0;
+    int sel = 0;
+
+    while ((opt = getopt(argc, argv, "C:lmqsuADMSU")) != EOF) {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
+
+        case 'a':
+            if (sel)
+                usage("Duplicate selectors given");
+            doall = 1;
+            doD = 0;
+            sel = 1;
+            break;
+
+        case 'l':
+            localonly = 1;
+            break;
+
+        case 'm':
+            if (sel)
+                usage("Duplicate selectors given");
+            doM = 1;
+            doD = 0;
+            sel = 1;
+            break;
+
         case 'q':
             quiet = 1;
             break;
+
         case 's':
             stop_on_error = 1;
             break;
-        case 'm':
-            metadata = 1;
+
+        case 'u':
+            usermode = 1;
             break;
+
+        case 'A':
+            if (sel)
+                usage("Duplicate selectors given");
+            doA = 1;
+            doD = 0;
+            sel = 1;
+            break;
+
+        case 'D':
+            if (sel)
+                usage("Duplicate selectors given");
+            sel = 1;
+            break;
+
+        case 'M':
+            if (sel)
+                usage("Duplicate selectors given");
+            doM = 1;
+            doD = 0;
+            sel = 1;
+            break;
+
+        case 'S':
+            if (sel)
+                usage("Duplicate selectors given");
+            doS = 1;
+            doD = 0;
+            sel = 1;
+            break;
+
+        case 'U':
+            if (sel)
+                usage("Duplicate selectors given");
+            doU = 1;
+            doD = 0;
+            sel = 1;
+            break;
+
         default:
-            usage();
+            usage(NULL);
         }
     }
 
@@ -113,21 +202,60 @@ int main(int argc, char **argv)
 
     for (i = optind; i < argc; i++) {
         /* Translate mailboxname */
-        char *intname = mboxname_from_external(argv[i], &mbpath_namespace, NULL);
-        r = mboxlist_lookup(intname, &mbentry, NULL);
+        mbname_t *mbname = NULL;
+        if (usermode) {
+            mbname = mbname_from_userid(argv[i]);
+        }
+        else {
+            mbname = mbname_from_extsub(argv[i], &mbpath_namespace, NULL);
+        }
+        r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
         if (!r) {
             if (mbentry->mbtype & MBTYPE_REMOTE) {
-                printf("%s!%s\n", mbentry->server, mbentry->partition);
-            }
-            else if (metadata) {
-                const char *path = mbentry_metapath(mbentry, 0, 0);
-                printf("%s\n", path);
+                if (localonly) {
+                    if (stop_on_error) {
+                        if (quiet) {
+                            fatal("", -1);
+                        }
+                        else {
+                            fatal("Non-local mailbox. Stopping\n", -1);
+                        }
+                    }
+                }
+                else {
+                    // ignore all selectors and just print this
+                    printf("%s!%s\n", mbentry->server, mbentry->partition);
+                }
             }
             else {
-                const char *path = mbentry_datapath(mbentry, 0);
-                printf("%s\n", path);
+                if (doall || doA) {
+                    const char *path = mboxname_archivepath(mbentry->partition, mbentry->name, mbentry->uniqueid, 0);
+                    if (doall) printf("Archive: ");
+                    printf("%s\n", path);
+                }
+                if (doall || doD) {
+                    const char *path = mboxname_datapath(mbentry->partition, mbentry->name, mbentry->uniqueid, 0);
+                    if (doall) printf("Data: ");
+                    printf("%s\n", path);
+                }
+                if (doall || doM) {
+                    const char *path = mboxname_metapath(mbentry->partition, mbentry->name, mbentry->uniqueid, 0, 0);
+                    if (doall) printf("Meta: ");
+                    printf("%s\n", path);
+                }
+                if (doall || doS) {
+                    const char *path = user_sieve_path(mbname_userid(mbname));
+                    if (doall) printf("Sieve: ");
+                    printf("%s\n", path);
+                }
+                if (doall || doU) {
+                    // different interface - caller must free
+                    char *path = mboxname_conf_getpath(mbname, NULL);
+                    if (doall) printf("User: ");
+                    printf("%s\n", path);
+                    free(path);
+                }
             }
-            mboxlist_entry_free(&mbentry);
         }
         else {
             if (!quiet && (r == IMAP_MAILBOX_NONEXISTENT)) {
@@ -142,7 +270,7 @@ int main(int argc, char **argv)
                 }
             }
         }
-        free(intname);
+        mbname_free(&mbname);
     }
 
     cyrus_done();
