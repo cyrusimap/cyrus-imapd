@@ -103,11 +103,11 @@ static int expire_cb(void *rockp,
 int main(int argc, char *argv[])
 {
     struct db *ptdb;
-    char fnamebuf[1024];
     extern char *optarg;
     int opt;
     int r;
-    char *alt_config = NULL;
+    const char *fname;
+    char *alt_config = NULL, *tofree = NULL;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -143,14 +143,20 @@ int main(int argc, char *argv[])
     syslog(LOG_DEBUG, "%s", "ptexpire.c,v " _CYRUS_VERSION " " CYRUS_GITVERSION);
     
     /* open database */
-    strcpy(fnamebuf, config_dir);
-    strcat(fnamebuf, PTS_DBFIL);
-    r = cyrusdb_open(config_ptscache_db, fnamebuf, CYRUSDB_CREATE, &ptdb);
+    fname = config_getstring(IMAPOPT_PTSCACHE_DB_PATH);
+    if (!fname) {
+        tofree = strconcat(config_dir, PTS_DBFIL, NULL);
+        fname = tofree;
+    }
+
+    r = cyrusdb_open(config_ptscache_db, fname, CYRUSDB_CREATE, &ptdb);
     if(r != CYRUSDB_OK) {
-	syslog(LOG_ERR, "error opening %s (%s)", fnamebuf,
+        syslog(LOG_ERR, "error opening %s (%s)", fname,
 	       cyrusdb_strerror(r));
 	exit(1);
     }
+
+    if (tofree) free(tofree);
 
     /* iterate through db, wiping expired entries */
     cyrusdb_foreach(ptdb, "", 0, expire_p, expire_cb, ptdb, NULL);
