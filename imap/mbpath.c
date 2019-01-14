@@ -207,7 +207,7 @@ int main(int argc, char **argv)
             mbname = mbname_from_userid(argv[i]);
         }
         else {
-            mbname = mbname_from_extsub(argv[i], &mbpath_namespace, NULL);
+            mbname = mbname_from_extname(argv[i], &mbpath_namespace, NULL);
         }
         r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
         if (!r) {
