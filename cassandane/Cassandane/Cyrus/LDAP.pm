@@ -51,6 +51,12 @@ use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
 
+Cassandane::Cyrus::TestCase::magic(AltPTSDBPath => sub {
+    shift->config_set(
+        'ptscache_db_path' => '@basedir@/conf/non-default-ptscache.db'
+    );
+});
+
 sub new
 {
     my ($class, @args) = @_;
@@ -100,7 +106,6 @@ sub set_up
             '-l', realpath('data/directory.ldif'),
         ],
     );
-
     $self->_start_instances();
 
     $self->{instance}->create_user("otheruser");
@@ -111,6 +116,23 @@ sub tear_down
     my ($self) = @_;
 
     $self->SUPER::tear_down();
+}
+
+sub test_alternate_ptscache_db_path
+    :needs_dependency_ldap :AltPTSDBPath
+{
+    my ($self) = @_;
+
+    # just interact with the store, and it should work
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->list('user.cassandane', '*');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    my $confdir = $self->{instance}->{basedir} . "/conf";
+    $self->assert(-e $confdir . "/non-default-ptscache.db");
+    $self->assert(not -e $confdir . "/ptclient/ptscache.db");
 }
 
 sub test_setacl_groupid
