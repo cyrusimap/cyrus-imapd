@@ -2022,36 +2022,69 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
 
     if (mbname->domain) {
         if (mbname->localpart) {
-            fname = strconcat(config_dir,
-                              FNAME_DOMAINDIR,
-                              dir_hash_b(mbname->domain, config_fulldirhash, d),
-                              "/", mbname->domain,
-                              FNAME_USERDIR,
-                              dir_hash_b(mbname->localpart, config_fulldirhash, c),
-                              "/", mbname->localpart, ".", suffix,
-                              (char *)NULL);
+            if (suffix) {
+                fname = strconcat(config_dir,
+                                  FNAME_DOMAINDIR,
+                                  dir_hash_b(mbname->domain, config_fulldirhash, d),
+                                  "/", mbname->domain,
+                                  FNAME_USERDIR,
+                                  dir_hash_b(mbname->localpart, config_fulldirhash, c),
+                                  "/", mbname->localpart, ".", suffix,
+                                  (char *)NULL);
+            }
+            else {
+                fname = strconcat(config_dir,
+                                  FNAME_DOMAINDIR,
+                                  dir_hash_b(mbname->domain, config_fulldirhash, d),
+                                  "/", mbname->domain,
+                                  FNAME_USERDIR,
+                                  dir_hash_b(mbname->localpart, config_fulldirhash, c),
+                                  (char *)NULL);
+            }
         }
         else {
-            fname = strconcat(config_dir,
-                              FNAME_DOMAINDIR,
-                              dir_hash_b(mbname->domain, config_fulldirhash, d),
-                              "/", mbname->domain,
-                              "/", FNAME_SHAREDPREFIX, ".", suffix,
-                              (char *)NULL);
+            if (suffix) {
+                fname = strconcat(config_dir,
+                                  FNAME_DOMAINDIR,
+                                  dir_hash_b(mbname->domain, config_fulldirhash, d),
+                                  "/", mbname->domain,
+                                  "/", FNAME_SHAREDPREFIX, ".", suffix,
+                                  (char *)NULL);
+            }
+            else {
+                fname = strconcat(config_dir,
+                                  FNAME_DOMAINDIR,
+                                  dir_hash_b(mbname->domain, config_fulldirhash, d),
+                                  "/", mbname->domain,
+                                  (char *)NULL);
+            }
         }
     }
     else {
         if (mbname->localpart) {
-            fname = strconcat(config_dir,
-                              FNAME_USERDIR,
-                              dir_hash_b(mbname->localpart, config_fulldirhash, c),
-                              "/", mbname->localpart, ".", suffix,
-                              (char *)NULL);
+            if (suffix) {
+                fname = strconcat(config_dir,
+                                  FNAME_USERDIR,
+                                  dir_hash_b(mbname->localpart, config_fulldirhash, c),
+                                  "/", mbname->localpart, ".", suffix,
+                                  (char *)NULL);
+            }
+            else {
+                fname = strconcat(config_dir,
+                                  FNAME_USERDIR,
+                                  dir_hash_b(mbname->localpart, config_fulldirhash, c),
+                                  (char *)NULL);
+            }
         }
         else {
-            fname = strconcat(config_dir,
-                              "/", FNAME_SHAREDPREFIX, ".", suffix,
-                              (char *)NULL);
+            if (suffix) {
+                fname = strconcat(config_dir,
+                                  "/", FNAME_SHAREDPREFIX, ".", suffix,
+                                  (char *)NULL);
+            }
+            else {
+                fname = xstrdup(config_dir);
+            }
         }
     }
 
