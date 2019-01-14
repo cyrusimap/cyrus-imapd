@@ -6228,6 +6228,7 @@ static json_t *_header_from_addresses(json_t *addrs,
 
     size_t i;
     json_t *addr;
+    struct buf emailbuf = BUF_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     json_t *jstrings = json_array();
     json_t *ret = NULL;
@@ -6255,6 +6256,13 @@ static json_t *_header_from_addresses(json_t *addrs,
         const char *name = json_string_value(jname);
         const char *email = json_string_value (jemail);
         if (!name && !email) continue;
+
+        /* Trim whitespace from email */
+        if (email) {
+            buf_setcstr(&emailbuf, email);
+            buf_trim(&emailbuf);
+            email = buf_cstring(&emailbuf);
+        }
 
         if (name && strlen(name) && email) {
             enum name_type { ATOM, QUOTED_STRING, HIGH_BIT } name_type = ATOM;
@@ -6302,12 +6310,14 @@ static json_t *_header_from_addresses(json_t *addrs,
             buf_setcstr(&buf, email);
         }
         json_array_append_new(jstrings, json_string(buf_cstring(&buf)));
+        buf_reset(&emailbuf);
         buf_reset(&buf);
     }
     ret = _header_from_jstrings(jstrings, parser, prop_name, header_name, ',');
 
 done:
     json_decref(jstrings);
+    buf_free(&emailbuf);
     buf_free(&buf);
     return ret;
 }
@@ -7108,7 +7118,7 @@ static void _email_parse_bodies(json_t *jemail,
 }
 
 /* Parse a JMAP Email into its internal representation for creation. */
-static void _email_parse(json_t *jemail,
+static void _parse_email(json_t *jemail,
                          struct jmap_parser *parser,
                          struct email *email)
 {
@@ -7601,7 +7611,7 @@ static void _email_create(jmap_req_t *req,
     /* Parse Email object into internal representation */
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct email email = { HEADERS_INITIALIZER, NULL, NULL, 0 };
-    _email_parse(jemail, &parser, &email);
+    _parse_email(jemail, &parser, &email);
 
     /* Validate mailboxIds */
     json_t *jmailboxids = json_copy(json_object_get(jemail, "mailboxIds"));
