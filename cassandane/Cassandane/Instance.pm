@@ -1251,12 +1251,17 @@ sub _stop_pid
     #           want to leave processes around cluttering up the place.
     #
     my @sigs = ( SIGTERM, SIGILL, SIGKILL );
+    my %signame = (
+        SIGTERM, "TERM",
+        SIGILL,  "ILL",
+        SIGKILL, "KILL",
+    );
     my $r = 1;
 
     foreach my $sig (@sigs)
     {
-        xlog "_stop_pid: sending signal $sig to $pid";
-        kill($sig, $pid) or xlog "Can't send signal $sig to pid $pid: $!";
+        xlog "_stop_pid: sending signal $signame{$sig} to $pid";
+        kill($sig, $pid) or xlog "Can't send signal $signame{$sig} to pid $pid: $!";
         eval {
             timed_wait(sub {
                 eval { $reaper->() if (defined $reaper) };
@@ -1265,7 +1270,7 @@ sub _stop_pid
         };
         last unless $@;
         # Timed out -- No More Mr Nice Guy
-        xlog "_stop_pid: failed to shut down pid $pid with signal $sig";
+        xlog "_stop_pid: failed to shut down pid $pid with signal $signame{$sig}";
         $r = 0;
     }
     return $r;
