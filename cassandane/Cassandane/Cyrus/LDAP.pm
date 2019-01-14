@@ -119,7 +119,7 @@ sub tear_down
 }
 
 sub test_alternate_ptscache_db_path
-    :needs_dependency_ldap :AltPTSDBPath
+    :needs_dependency_ldap :min_version_3_0_8 :AltPTSDBPath
 {
     my ($self) = @_;
 
