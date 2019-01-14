@@ -71,7 +71,7 @@ static struct namespace mbpath_namespace;
 
 static int usage(const char *error)
 {
-    fprintf(stderr,"usage: mbpath [-C <alt_config>] [-l] [-m] [-q] [-s] [-u] [-A|D|M|S|U] <mailbox name>...\n");
+    fprintf(stderr,"usage: mbpath [-C <alt_config>] [-l] [-m] [-q] [-s] [-u] [-a|A|D|M|S|U] <mailbox name>...\n");
     fprintf(stderr, "\n");
     fprintf(stderr,"\t-a\tprint all values with prefixes\n");
     fprintf(stderr,"\t-l\tlocal only (exit with error for remote/nonexistent)\n");
@@ -111,7 +111,7 @@ int main(int argc, char **argv)
     int doU = 0;
     int sel = 0;
 
-    while ((opt = getopt(argc, argv, "C:lmqsuADMSU")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:almqsuADMSU")) != EOF) {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
