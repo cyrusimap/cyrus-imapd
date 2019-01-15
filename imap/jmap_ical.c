@@ -833,7 +833,7 @@ recurrence_from_ical(context_t *ctx, icalcomponent *comp)
     }
 
     if (rrule.by_month_day[0] != ICAL_RECURRENCE_ARRAY_MAX) {
-        json_object_set_new(recur, "byDate",
+        json_object_set_new(recur, "byMonthDay",
                 recurrence_byX_fromical(rrule.by_month_day,
                     ICAL_BY_MONTHDAY_SIZE, &identity_int));
     }
@@ -3907,17 +3907,6 @@ recurrence_to_ical(context_t *ctx, icalcomponent *comp, json_t *recur)
         invalidprop(ctx, "byDay");
     }
 
-    /* byDate */
-    json_t *bydate = NULL;
-    lower = -31;
-    upper = 31;
-    pe = readprop(ctx, recur, "byDate", 0, "o", &bydate);
-    if (pe > 0) {
-        recurrence_byX_to_ical(ctx, bydate, &buf, "BYDATE",
-                &lower, &upper, 0 /* allowZero */,
-                "byDate", int_to_ical);
-    }
-
     /* byMonth */
     json_t *bymonth = NULL;
     pe = readprop(ctx, recur, "byMonth", 0, "o", &bymonth);
@@ -3972,6 +3961,18 @@ recurrence_to_ical(context_t *ctx, icalcomponent *comp, json_t *recur)
                 &lower, &upper, 0 /* allowZero */,
                 "byWeekNo", int_to_ical);
     }
+
+    /* byMonthDay */
+    json_t *bymonthday = NULL;
+    lower = -31;
+    upper = 31;
+    pe = readprop(ctx, recur, "byMonthDay", 0, "o", &bymonthday);
+    if (pe > 0) {
+        recurrence_byX_to_ical(ctx, bymonthday, &buf, "BYMONTHDAY",
+                &lower, &upper, 0 /* allowZero */,
+                "byMonthDay", int_to_ical);
+    }
+
 
     /* byHour */
     json_t *byhour = NULL;
