@@ -2523,11 +2523,17 @@ static int localdate_to_tm(const char *buf, struct tm *tm) {
 }
 
 /* Convert the JMAP local datetime formatted buf into ical datetime dt
- * using timezone tz. Return non-zero on success. */
+ * using timezone tz. Return non-zero on success.
+ *
+ * FIXME the truncate_allday parameter is more of a workaround, but we
+ * are currently sanitizing the JSCalendar/iCalendar conversion code
+ * in a feature branch, so let's wait for that for a proper solution.
+ */
 static int localdate_to_icaltime(const char *buf,
                                  icaltimetype *dt,
                                  icaltimezone *tz,
-                                 int is_allday) {
+                                 int is_allday,
+                                 int truncate_allday) {
     struct tm tm;
     int r;
     char *s = NULL;
@@ -2539,7 +2545,12 @@ static int localdate_to_icaltime(const char *buf,
     if (!r) return 0;
 
     if (is_allday && (tm.tm_sec || tm.tm_min || tm.tm_hour)) {
-        return 0;
+        if (!truncate_allday) {
+            return 0;
+        }
+        tm.tm_sec = 0;
+        tm.tm_min = 0;
+        tm.tm_hour = 0;
     }
 
     is_utc = tz == icaltimezone_get_utc_timezone();
@@ -2575,7 +2586,7 @@ static int utcdate_to_icaltime(const char *src,
     }
 
     buf_setmap(&buf, src, len-1);
-    r = localdate_to_icaltime(buf_cstring(&buf), dt, utc, 0);
+    r = localdate_to_icaltime(buf_cstring(&buf), dt, utc, 0, 0);
     buf_free(&buf);
     return r;
 }
@@ -2754,7 +2765,7 @@ startend_to_ical(context_t *ctx, icalcomponent *comp, json_t *event)
     pe = readprop(ctx, event, "start", 1, "s", &val);
     if (pe > 0) {
         if (!localdate_to_icaltime(val, &dtstart,
-                                   ctx->tzstart, ctx->is_allday)) {
+                                   ctx->tzstart, ctx->is_allday, 0)) {
             invalidprop(ctx, "start");
         }
     } else {
@@ -4040,7 +4051,7 @@ recurrence_to_ical(context_t *ctx, icalcomponent *comp, json_t *recur)
     if (pe > 0) {
         icaltimetype dtloc;
 
-        if (localdate_to_icaltime(until, &dtloc, ctx->tzstart, ctx->is_allday)) {
+        if (localdate_to_icaltime(until, &dtloc, ctx->tzstart, ctx->is_allday, /*truncate*/1)) {
             icaltimezone *utc = icaltimezone_get_utc_timezone();
             icaltimetype dt = icaltime_convert_to_zone(dtloc, utc);
             buf_printf(&buf, ";UNTIL=%s", icaltime_as_ical_string(dt));
@@ -4448,7 +4459,7 @@ overrides_to_ical(context_t *ctx, icalcomponent *comp, json_t *overrides)
 
         beginprop_key(ctx, "recurrenceOverrides", id);
 
-        if (!localdate_to_icaltime(id, &start, ctx->tzstart, ctx->is_allday)) {
+        if (!localdate_to_icaltime(id, &start, ctx->tzstart, ctx->is_allday, 0/*truncate*/)) {
             invalidprop(ctx, NULL);
             endprop(ctx);
             continue;
