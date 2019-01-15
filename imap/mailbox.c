@@ -2062,7 +2062,7 @@ EXPORTED int mailbox_has_conversations(struct mailbox *mailbox)
     return 1;
 }
 
-static int mailbox_lock_conversations(struct mailbox *mailbox)
+static int mailbox_lock_conversations(struct mailbox *mailbox, int locktype)
 {
     /* does this mailbox have conversations? */
     if (!mailbox_has_conversations(mailbox))
@@ -2072,7 +2072,16 @@ static int mailbox_lock_conversations(struct mailbox *mailbox)
     if (conversations_get_mbox(mailbox->name))
         return 0;
 
-    return conversations_open_mbox(mailbox->name, &mailbox->local_cstate);
+    if (locktype == LOCK_EXCLUSIVE) {
+        return conversations_open_mbox(mailbox->name, 0/*shared*/, &mailbox->local_cstate);
+    }
+    else if (locktype == LOCK_SHARED) {
+        return conversations_open_mbox(mailbox->name, 1/*shared*/, &mailbox->local_cstate);
+    }
+    else {
+        /* this function does not support nonblocking locks */
+        fatal("invalid locktype for conversations", EC_SOFTWARE);
+    }
 }
 
 #ifdef WITH_DAV
@@ -2284,7 +2293,7 @@ EXPORTED int mailbox_lock_index(struct mailbox *mailbox, int locktype)
 
     /* always lock the conversations DB, since if we have the index file
      * locked at all, we can't open it later */
-    r = mailbox_lock_conversations(mailbox);
+    r = mailbox_lock_conversations(mailbox, locktype);
     if (r) return r;
 
     r = mailbox_lock_index_internal(mailbox, locktype);
@@ -3490,7 +3499,7 @@ EXPORTED struct conversations_state *mailbox_get_cstate(struct mailbox *mailbox)
     if (!mailbox_has_conversations(mailbox))
         return NULL;
 
-    mailbox_lock_conversations(mailbox);
+    mailbox_lock_conversations(mailbox, mailbox->is_readonly ? LOCK_SHARED : LOCK_EXCLUSIVE);
 
     return conversations_get_mbox(mailbox->name);
 }
@@ -4822,7 +4831,7 @@ EXPORTED int mailbox_create(const char *name,
     }
 
     /* open conversations FIRST */
-    r = mailbox_lock_conversations(mailbox);
+    r = mailbox_lock_conversations(mailbox, LOCK_EXCLUSIVE);
     if (r) {
         syslog(LOG_ERR, "IOERROR: locking conversations %s %s",
                mailbox->name, error_message(r));

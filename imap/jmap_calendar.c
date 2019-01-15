@@ -85,15 +85,15 @@ static int jmap_calendarevent_set(struct jmap_req *req);
 static int jmap_calendarevent_copy(struct jmap_req *req);
 
 jmap_method_t jmap_calendar_methods[] = {
-    { "Calendar/get",             &jmap_calendar_get },
-    { "Calendar/changes",         &jmap_calendar_changes },
-    { "Calendar/set",             &jmap_calendar_set },
-    { "CalendarEvent/get",        &jmap_calendarevent_get },
-    { "CalendarEvent/changes",    &jmap_calendarevent_changes },
-    { "CalendarEvent/query",      &jmap_calendarevent_query },
-    { "CalendarEvent/set",        &jmap_calendarevent_set },
-    { "CalendarEvent/copy",       &jmap_calendarevent_copy },
-    { NULL,                       NULL}
+    { "Calendar/get",             &jmap_calendar_get, JMAP_SHARED_CSTATE },
+    { "Calendar/changes",         &jmap_calendar_changes, JMAP_SHARED_CSTATE },
+    { "Calendar/set",             &jmap_calendar_set, /*flags*/0 },
+    { "CalendarEvent/get",        &jmap_calendarevent_get, JMAP_SHARED_CSTATE },
+    { "CalendarEvent/changes",    &jmap_calendarevent_changes, JMAP_SHARED_CSTATE },
+    { "CalendarEvent/query",      &jmap_calendarevent_query, JMAP_SHARED_CSTATE },
+    { "CalendarEvent/set",        &jmap_calendarevent_set, /*flags*/0 },
+    { "CalendarEvent/copy",       &jmap_calendarevent_copy, /*flags*/0 },
+    { NULL,                       NULL, 0}
 };
 
 HIDDEN void jmap_calendar_init(jmap_settings_t *settings)

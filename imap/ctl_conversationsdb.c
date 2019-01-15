@@ -95,7 +95,7 @@ static int do_dump(const char *fname, const char *userid)
         return -1;
     }
 
-    r = conversations_open_path(fname, userid, &state);
+    r = conversations_open_path(fname, userid, 0/*shared*/, &state);
     if (r) {
         fprintf(stderr, "Failed to open conversations database %s: %s\n",
                 fname, error_message(r));
@@ -113,7 +113,7 @@ static int do_undump(const char *fname, const char *userid)
     struct conversations_state *state;
     int r;
 
-    r = conversations_open_path(fname, userid, &state);
+    r = conversations_open_path(fname, userid, 0/*shared*/, &state);
     if (r) {
         fprintf(stderr, "Failed to open conversations database %s: %s\n",
                 fname, error_message(r));
@@ -179,7 +179,7 @@ static int do_zero(const char *userid)
     struct conversations_state *state = NULL;
     int r;
 
-    r = conversations_open_user(userid, &state);
+    r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
 
     r = mboxlist_usermboxtree(userid, NULL, zero_cid_cb, NULL, 0);
@@ -248,7 +248,7 @@ static int do_build(const char *userid)
     struct conversations_state *state = NULL;
     int r;
 
-    r = conversations_open_user(userid, &state);
+    r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
 
     r = mboxlist_usermboxtree(userid, NULL, build_cid_cb, NULL, 0);
@@ -298,7 +298,7 @@ static int do_recalc(const char *userid)
     struct conversations_state *state = NULL;
     int r;
 
-    r = conversations_open_user(userid, &state);
+    r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) return r;
 
     r = conversations_zero_counts(state);
@@ -592,7 +592,7 @@ int do_checkfolders(const char *userid)
     strarray_t *copy1, *copy2;
 
     /* open the DB */
-    r = conversations_open_user(userid, &state);
+    r = conversations_open_user(userid, 0/*shared*/, &state);
     if (r) {
         fprintf(stderr, "Cannot open conversations db %s: %s\n",
                 userid, error_message(r));
@@ -659,7 +659,7 @@ static int do_audit(const char *userid)
     }
 
     /* Begin recalculating in the temp db */
-    r = conversations_open_path(filename_temp, userid, &state_temp);
+    r = conversations_open_path(filename_temp, userid, 0/*shared*/, &state_temp);
     if (r) {
         fprintf(stderr, "Cannot open conversations db %s: %s\n",
                 filename_temp, error_message(r));
@@ -708,14 +708,14 @@ static int do_audit(const char *userid)
     if (verbose)
         printf("Pass 2: find differences from recalculated to live dbs\n");
 
-    r = conversations_open_path(filename_temp, userid, &state_temp);
+    r = conversations_open_path(filename_temp, userid, 0/*shared*/, &state_temp);
     if (r) {
         fprintf(stderr, "Cannot open conversations db %s: %s\n",
                 filename_temp, error_message(r));
         goto out;
     }
 
-    r = conversations_open_path(filename_real, userid, &state_real);
+    r = conversations_open_path(filename_real, userid, 0/*shared*/, &state_real);
     if (r) {
         fprintf(stderr, "Cannot open conversations db %s: %s\n",
                 filename_real, error_message(r));

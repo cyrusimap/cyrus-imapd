@@ -2424,7 +2424,7 @@ static int create_filter(const strarray_t *srcpaths, const strarray_t *destpaths
         /* assume a 4 million maximum records */
         bloom_init(&filter->bloom, 4000000, 0.01);
 
-        r = conversations_open_user(userid, &cstate);
+        r = conversations_open_user(userid, 1/*shared*/, &cstate);
         if (r) {
             printf("ERROR: failed to open conversations for %s\n", userid);
             goto done;

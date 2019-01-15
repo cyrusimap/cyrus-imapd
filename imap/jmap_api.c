@@ -607,7 +607,6 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     for (i = 0; i < json_array_size(jusing); i++) {
         strarray_add(&capabilities, json_string_value(json_array_get(jusing, i)));
     }
-
     /* Push client method calls on call stack */
     json_t *jmethod_calls = json_object_get(jreq, "methodCalls");
     for (i = json_array_size(jmethod_calls); i > 0; i--) {
@@ -679,7 +678,8 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         }
 
         struct conversations_state *cstate = NULL;
-        r = conversations_open_user(accountid, &cstate);
+        r = conversations_open_user(accountid, mp->flags & JMAP_SHARED_CSTATE, &cstate);
+
         if (r) {
             txn->error.desc = error_message(r);
             ret = HTTP_SERVER_ERROR;
@@ -722,6 +722,9 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         free(account_inboxname);
         account_inboxname = NULL;
         if (r) {
+            conversations_abort(&req.cstate);
+            txn->error.desc = error_message(r);
+            ret = HTTP_SERVER_ERROR;
             jmap_finireq(&req);
             json_decref(args);
             goto done;
@@ -997,7 +1000,7 @@ HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
     struct conversations_state *mycstate = NULL;
 
     if (from_accountid && strcmp(req->accountid, from_accountid)) {
-        r = conversations_open_user(from_accountid, &mycstate);
+        r = conversations_open_user(from_accountid, 1/*shared*/, &mycstate);
         if (r) goto done;
     }
     else {

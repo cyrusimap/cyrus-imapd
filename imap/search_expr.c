@@ -2051,7 +2051,7 @@ static void conv_rock_new(struct mailbox *mailbox,
 
     rock->cstate = conversations_get_mbox(mailbox->name);
     if (!rock->cstate) {
-        if (conversations_open_mbox(mailbox->name, &rock->cstate))
+        if (conversations_open_mbox(mailbox->name, 1/*shared*/, &rock->cstate))
             rock->num = -1;         /* invalid */
         else
             rock->cstate_is_ours = 1;

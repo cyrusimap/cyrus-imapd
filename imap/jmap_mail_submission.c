@@ -70,12 +70,12 @@ static int jmap_emailsubmission_query(jmap_req_t *req);
 static int jmap_emailsubmission_querychanges(jmap_req_t *req);
 
 static jmap_method_t jmap_emailsubmission_methods[] = {
-    { "EmailSubmission/get",          &jmap_emailsubmission_get },
-    { "EmailSubmission/set",          &jmap_emailsubmission_set },
-    { "EmailSubmission/changes",      &jmap_emailsubmission_changes },
-    { "EmailSubmission/query",        &jmap_emailsubmission_query },
-    { "EmailSubmission/queryChanges", &jmap_emailsubmission_querychanges },
-    { NULL,                           NULL}
+    { "EmailSubmission/get",          &jmap_emailsubmission_get, JMAP_SHARED_CSTATE },
+    { "EmailSubmission/set",          &jmap_emailsubmission_set, /*flags*/0 },
+    { "EmailSubmission/changes",      &jmap_emailsubmission_changes, JMAP_SHARED_CSTATE },
+    { "EmailSubmission/query",        &jmap_emailsubmission_query, JMAP_SHARED_CSTATE },
+    { "EmailSubmission/queryChanges", &jmap_emailsubmission_querychanges, JMAP_SHARED_CSTATE },
+    { NULL,                           NULL, 0}
 };
 
 HIDDEN void jmap_emailsubmission_init(jmap_settings_t *settings)

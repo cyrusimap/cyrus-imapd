@@ -133,9 +133,12 @@ extern void jmap_finireq(jmap_req_t *req);
 
 extern int jmap_hascapa(jmap_req_t *req, const char *capa);
 
+#define JMAP_SHARED_CSTATE 1 << 0
+
 typedef struct {
     const char *name;
     int (*proc)(struct jmap_req *req);
+    int flags;
 } jmap_method_t;
 
 /* Protocol implementations */

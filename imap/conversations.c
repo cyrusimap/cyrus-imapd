@@ -116,6 +116,8 @@ static int _conversations_set_key(struct conversations_state *state,
                                   const char *key, size_t keylen,
                                   const arrayu64_t *cids, time_t stamp);
 
+static void _conv_remove(struct conversations_state *state);
+
 EXPORTED void conversations_set_directory(const char *dir)
 {
     free(convdir);
@@ -170,11 +172,13 @@ static int _init_counted(struct conversations_state *state,
         val = config_getstring(IMAPOPT_CONVERSATIONS_COUNTED_FLAGS);
         if (!val) val = "";
         vallen = strlen(val);
-        r = cyrusdb_store(state->db, CFKEY, strlen(CFKEY),
-                          val, vallen, &state->txn);
-        if (r) {
-            syslog(LOG_ERR, "Failed to write counted_flags");
-            return r;
+        if (vallen) {
+            r = cyrusdb_store(state->db, CFKEY, strlen(CFKEY),
+                    val, vallen, &state->txn);
+            if (r) {
+                syslog(LOG_ERR, "Failed to write counted_flags");
+                return r;
+            }
         }
     }
 
@@ -253,7 +257,8 @@ static int folder_number(struct conversations_state *state,
     return pos;
 }
 
-EXPORTED int conversations_open_path(const char *fname, const char *userid, struct conversations_state **statep)
+EXPORTED int conversations_open_path(const char *fname, const char *userid, int shared,
+                                     struct conversations_state **statep)
 {
     struct conversations_open *open = NULL;
     const char *val = NULL;
@@ -271,20 +276,34 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, stru
 
     open = xzmalloc(sizeof(struct conversations_open));
 
-    r = cyrusdb_open(DB, fname, CYRUSDB_CREATE | CYRUSDB_CONVERT, &open->s.db);
+    /* open db */
+    int flags = CYRUSDB_CREATE | (shared ? CYRUSDB_SHARED : CYRUSDB_CONVERT);
+    r = cyrusdb_lockopen(DB, fname, flags, &open->s.db, &open->s.txn);
     if (r || open->s.db == NULL) {
         free(open);
         return IMAP_IOERROR;
     }
-
     open->s.path = xstrdup(fname);
     open->next = open_conversations;
     open_conversations = open;
 
-    /* ensure a write lock immediately, and also load the counted flags */
-    cyrusdb_fetchlock(open->s.db, CFKEY, strlen(CFKEY),
-                      &val, &vallen, &open->s.txn);
-    _init_counted(&open->s, val, vallen);
+    /* load or initialize counted flags */
+    cyrusdb_fetch(open->s.db, CFKEY, strlen(CFKEY), &val, &vallen, &open->s.txn);
+    r = _init_counted(&open->s, val, vallen);
+    if (r == CYRUSDB_READONLY) {
+        /* racy: drop shared lock, grab write lock */
+        cyrusdb_commit(open->s.db, open->s.txn);
+        open->s.txn = NULL;
+        flags &= ~CYRUSDB_SHARED;
+        r = cyrusdb_lockopen(DB, fname, flags, &open->s.db, &open->s.txn);
+        if (!r) r = _init_counted(&open->s, val, vallen);
+    }
+    if (r) {
+        cyrusdb_abort(open->s.db, open->s.txn);
+        _conv_remove(&open->s);
+        free(open);
+        return r;
+    }
 
     /* we should just read the folder names up front too */
     open->s.folder_names = strarray_new();
@@ -312,23 +331,24 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, stru
     return 0;
 }
 
-EXPORTED int conversations_open_user(const char *userid, struct conversations_state **statep)
+EXPORTED int conversations_open_user(const char *userid, int shared,
+                                     struct conversations_state **statep)
 {
     char *path = conversations_getuserpath(userid);
     int r;
     if (!path) return IMAP_MAILBOX_BADNAME;
-    r = conversations_open_path(path, userid, statep);
+    r = conversations_open_path(path, userid, shared, statep);
     free(path);
     return r;
 }
 
-EXPORTED int conversations_open_mbox(const char *mboxname, struct conversations_state **statep)
+EXPORTED int conversations_open_mbox(const char *mboxname, int shared, struct conversations_state **statep)
 {
     char *path = conversations_getmboxpath(mboxname);
     int r;
     if (!path) return IMAP_MAILBOX_BADNAME;
     char *userid = mboxname_to_userid(mboxname);
-    r = conversations_open_path(path, userid, statep);
+    r = conversations_open_path(path, userid, shared, statep);
     free(userid);
     free(path);
     return r;

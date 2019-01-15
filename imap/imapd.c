@@ -5155,7 +5155,7 @@ badannotation:
     }
     if (config_getswitch(IMAPOPT_CONVERSATIONS)
         && (fa->fetchitems & (FETCH_MAILBOXIDS|FETCH_MAILBOXES))) {
-        int r = conversations_open_user(imapd_userid, &fa->convstate);
+        int r = conversations_open_user(imapd_userid, 1/*shared*/, &fa->convstate);
         if (r) {
             syslog(LOG_WARNING, "error opening conversations for %s: %s",
                                 imapd_userid,
@@ -5580,7 +5580,7 @@ void cmd_xconvmeta(const char *tag)
         goto done;
     }
 
-    r = conversations_open_user(imapd_userid, &state);
+    r = conversations_open_user(imapd_userid, 1/*shared*/, &state);
     if (r) {
         prot_printf(imapd_out, "%s BAD failed to open db: %s\r\n",
                     tag, error_message(r));
@@ -5737,7 +5737,7 @@ static int do_xconvfetch(struct dlist *cidlist,
     struct index_init init;
     int i;
 
-    r = conversations_open_user(imapd_userid, &state);
+    r = conversations_open_user(imapd_userid, 1/*shared*/, &state);
     if (r) goto out;
 
     construct_hash_table(&wanted_cids, 1024, 0);
@@ -6202,7 +6202,7 @@ void cmd_xconvsort(char *tag, int updates)
 
     /* open the conversations state first - we don't care if it fails,
      * because that probably just means it's already open */
-    conversations_open_mbox(index_mboxname(imapd_index), &cstate);
+    conversations_open_mbox(index_mboxname(imapd_index), 1/*shared*/, &cstate);
 
     if (updates) {
         /* in XCONVUPDATES, need to force a re-read from scratch into
@@ -6345,7 +6345,7 @@ static void cmd_xconvmultisort(char *tag)
 
     /* open the conversations state first - we don't care if it fails,
      * because that probably just means it's already open */
-    conversations_open_mbox(index_mboxname(imapd_index), &cstate);
+    conversations_open_mbox(index_mboxname(imapd_index), 1/*shared*/, &cstate);
 
     /* need index loaded to even parse searchargs! */
     searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST,
@@ -9113,7 +9113,7 @@ static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
             conversations_abort(&global_conversations);
             global_conversations = NULL;
         }
-        r = conversations_open_mbox(mbentry->name, &state);
+        r = conversations_open_mbox(mbentry->name, 1/*shared*/, &state);
         if (r) {
             /* maybe the mailbox doesn't even have conversations - just ignore */
             goto nonconv;

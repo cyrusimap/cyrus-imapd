@@ -78,12 +78,12 @@ static int jmap_mailbox_query(jmap_req_t *req);
 static int jmap_mailbox_querychanges(jmap_req_t *req);
 
 static jmap_method_t jmap_mailbox_methods[] = {
-    { "Mailbox/get",          &jmap_mailbox_get },
-    { "Mailbox/set",          &jmap_mailbox_set },
-    { "Mailbox/changes",      &jmap_mailbox_changes },
-    { "Mailbox/query",        &jmap_mailbox_query },
-    { "Mailbox/queryChanges", &jmap_mailbox_querychanges },
-    { NULL,                   NULL}
+    { "Mailbox/get",          &jmap_mailbox_get, JMAP_SHARED_CSTATE },
+    { "Mailbox/set",          &jmap_mailbox_set, /*flags*/0 },
+    { "Mailbox/changes",      &jmap_mailbox_changes, JMAP_SHARED_CSTATE },
+    { "Mailbox/query",        &jmap_mailbox_query, JMAP_SHARED_CSTATE },
+    { "Mailbox/queryChanges", &jmap_mailbox_querychanges, JMAP_SHARED_CSTATE },
+    { NULL,                   NULL, 0}
 };
 
 HIDDEN void jmap_mailbox_init(jmap_settings_t *settings)

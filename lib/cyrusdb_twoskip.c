@@ -1468,7 +1468,7 @@ static int myfetch(struct dbengine *db,
 
     if (tidptr) {
         if (!*tidptr) {
-            r = newtxn(db, 1/*shared*/, tidptr);
+            r = newtxn(db, 0/*shared*/, tidptr);
             if (r) return r;
         }
     } else {

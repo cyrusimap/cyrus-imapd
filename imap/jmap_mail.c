@@ -117,19 +117,19 @@ static int jmap_thread_changes(jmap_req_t *req);
  */
 
 static jmap_method_t jmap_mail_methods[] = {
-    { "Email/query",                  &jmap_email_query },
-    { "Email/queryChanges",           &jmap_email_querychanges },
-    { "Email/get",                    &jmap_email_get },
-    { "Email/set",                    &jmap_email_set },
-    { "Email/changes",                &jmap_email_changes },
-    { "Email/import",                 &jmap_email_import },
-    { "Email/parse",                  &jmap_email_parse },
-    { "Email/copy",                   &jmap_email_copy },
-    { "SearchSnippet/get",            &jmap_searchsnippet_get },
-    { "Thread/get",                   &jmap_thread_get },
-    { "Thread/changes",               &jmap_thread_changes },
-    { "Identity/get",                 &jmap_identity_get },
-    { NULL,                           NULL}
+    { "Email/query",                  &jmap_email_query, JMAP_SHARED_CSTATE },
+    { "Email/queryChanges",           &jmap_email_querychanges, JMAP_SHARED_CSTATE },
+    { "Email/get",                    &jmap_email_get, JMAP_SHARED_CSTATE },
+    { "Email/set",                    &jmap_email_set, /*flags*/0 },
+    { "Email/changes",                &jmap_email_changes, JMAP_SHARED_CSTATE },
+    { "Email/import",                 &jmap_email_import, /*flags*/0 },
+    { "Email/parse",                  &jmap_email_parse, JMAP_SHARED_CSTATE },
+    { "Email/copy",                   &jmap_email_copy, /*flags*/ 0 },
+    { "SearchSnippet/get",            &jmap_searchsnippet_get, JMAP_SHARED_CSTATE },
+    { "Thread/get",                   &jmap_thread_get, JMAP_SHARED_CSTATE },
+    { "Thread/changes",               &jmap_thread_changes, JMAP_SHARED_CSTATE },
+    { "Identity/get",                 &jmap_identity_get, JMAP_SHARED_CSTATE },
+    { NULL,                           NULL, 0}
 };
 
 /* NULL terminated list of supported jmap_email_query sort fields */
@@ -1387,7 +1387,7 @@ static int _email_find_in_account(jmap_req_t *req,
     /* Open conversation state, if not already open */
     struct conversations_state *mycstate = NULL;
     if (strcmp(req->accountid, account_id)) {
-        r = conversations_open_user(account_id, &mycstate);
+        r = conversations_open_user(account_id, 1/*shared*/, &mycstate);
         if (r) return r;
     }
     else {
@@ -10089,7 +10089,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     }
     if (strcmp(from_account_id, req->accountid)) {
         struct conversations_state *mycstate = NULL;
-        r = conversations_open_user(from_account_id, &mycstate);
+        r = conversations_open_user(from_account_id, 0/*shared*/, &mycstate);
         if (!r) r = conversations_guid_foreach(mycstate, _guid_from_id(email_id),
                 _email_copy_pickrecord_cb, &pickrecord_rock);
         if (!r) r = conversations_commit(&mycstate);

@@ -188,11 +188,11 @@ extern void conversations_set_suffix(const char *suff);
 extern char *conversations_getmboxpath(const char *mboxname);
 extern char *conversations_getuserpath(const char *username);
 
-extern int conversations_open_path(const char *path, const char *userid,
+extern int conversations_open_path(const char *path, const char *userid, int shared,
                                    struct conversations_state **statep);
-extern int conversations_open_user(const char *username,
+extern int conversations_open_user(const char *username, int shared,
                                    struct conversations_state **statep);
-extern int conversations_open_mbox(const char *mboxname,
+extern int conversations_open_mbox(const char *mboxname, int shared,
                                    struct conversations_state **statep);
 extern struct conversations_state *conversations_get_path(const char *path);
 extern struct conversations_state *conversations_get_user(const char *username);

@@ -93,15 +93,15 @@ static int _json_to_card(struct jmap_req *req,
                          json_t *invalid);
 
 jmap_method_t jmap_contact_methods[] = {
-    { "ContactGroup/get",        &jmap_contactgroup_get },
-    { "ContactGroup/changes",    &jmap_contactgroup_changes },
-    { "ContactGroup/set",        &jmap_contactgroup_set },
-    { "Contact/get",             &jmap_contact_get },
-    { "Contact/changes",         &jmap_contact_changes },
-    { "Contact/query",           &jmap_contact_query },
-    { "Contact/set",             &jmap_contact_set },
-    { "Contact/copy",            &jmap_contact_copy },
-    { NULL,                      NULL}
+    { "ContactGroup/get",        &jmap_contactgroup_get, JMAP_SHARED_CSTATE },
+    { "ContactGroup/changes",    &jmap_contactgroup_changes, JMAP_SHARED_CSTATE },
+    { "ContactGroup/set",        &jmap_contactgroup_set, /*flags*/0 },
+    { "Contact/get",             &jmap_contact_get, JMAP_SHARED_CSTATE },
+    { "Contact/changes",         &jmap_contact_changes, JMAP_SHARED_CSTATE },
+    { "Contact/query",           &jmap_contact_query, JMAP_SHARED_CSTATE },
+    { "Contact/set",             &jmap_contact_set, /*flags*/0 },
+    { "Contact/copy",            &jmap_contact_copy, /*flags*/0 },
+    { NULL,                      NULL, 0}
 };
 
 static char *_prodid = NULL;

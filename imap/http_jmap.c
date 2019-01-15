@@ -148,10 +148,10 @@ static jmap_settings_t my_jmap_settings = {
 };
 
 jmap_method_t jmap_core_methods[] = {
-    { "Core/echo",    &jmap_core_echo },
-    { "Blob/copy",    &jmap_blob_copy },
-    { "Quota/get",    &jmap_quota_get },
-    { NULL,           NULL            }
+    { "Core/echo",    &jmap_core_echo, JMAP_SHARED_CSTATE },
+    { "Blob/copy",    &jmap_blob_copy, 0/*flags*/ },
+    { "Quota/get",    &jmap_quota_get, JMAP_SHARED_CSTATE },
+    { NULL,           NULL, 0/*flags*/ }
 };
 
 static void jmap_core_init()
@@ -494,7 +494,7 @@ static int jmap_download(struct transaction_t *txn)
     int res = 0;
 
     struct conversations_state *cstate = NULL;
-    int r = conversations_open_user(accountid, &cstate);
+    int r = conversations_open_user(accountid, 1/*shared*/, &cstate);
     if (r) {
         txn->error.desc = error_message(r);
         res = (r == IMAP_MAILBOX_BADNAME) ? HTTP_NOT_FOUND : HTTP_SERVER_ERROR;

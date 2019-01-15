@@ -601,7 +601,7 @@ static int expire_conversations(const mbentry_t *mbentry, void *rock)
 
     verbosep("Pruning conversations from db %s\n", filename);
 
-    if (!conversations_open_mbox(mbentry->name, &state)) {
+    if (!conversations_open_mbox(mbentry->name, 0/*shared*/, &state)) {
         conversations_prune(state, crock->expire_mark, &nseen, &ndeleted);
         conversations_commit(&state);
     }
