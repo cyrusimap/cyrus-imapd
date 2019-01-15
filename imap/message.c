@@ -584,7 +584,7 @@ static void message_find_part(struct body *body, const char *section,
 
         /* grow the array and add the new part */
         *parts = xrealloc(*parts, (*n+2)*sizeof(struct bodypart *));
-        (*parts)[*n] = xmalloc(sizeof(struct bodypart));
+        (*parts)[*n] = xzmalloc(sizeof(struct bodypart));
         strlcpy((*parts)[*n]->section, section, sizeof((*parts)[*n]->section));
         (*parts)[*n]->decoded_body = body->decoded_body;
         (*parts)[++(*n)] = NULL;
@@ -728,7 +728,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
     else if (strcmp(body->type, "MESSAGE") == 0 &&
         strcmp(body->subtype, "RFC822") == 0) {
         const char *base = msg->base + msg->offset;
-        body->subpart = (struct body *)xmalloc(sizeof(struct body));
+        body->subpart = (struct body *)xzmalloc(sizeof(struct body));
 
         if (sawboundary) {
             memset(body->subpart, 0, sizeof(struct body));
