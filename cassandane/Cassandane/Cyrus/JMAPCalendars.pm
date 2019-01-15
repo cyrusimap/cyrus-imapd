@@ -1065,7 +1065,7 @@ sub test_calendarevent_get_properties
     $self->assert_not_null($event->{uid});
     $self->assert_not_null($event->{"x-href"});
     $self->assert_not_null($event->{calendarId});
-    $self->assert_num_equals(scalar keys %$event, 5);
+    $self->assert_num_equals(5, scalar keys %$event);
 }
 
 sub test_calendarevent_get_relatedto
