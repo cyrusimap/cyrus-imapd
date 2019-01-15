@@ -1142,7 +1142,7 @@ sub test_calendarevent_get_rscale
     $self->assert_str_equals("yearly", $event->{recurrenceRule}{frequency});
     $self->assert_str_equals("hebrew", $event->{recurrenceRule}{rscale});
     $self->assert_str_equals("forward", $event->{recurrenceRule}{skip});
-    $self->assert_num_equals(8, $event->{recurrenceRule}{byDate}[0]);
+    $self->assert_num_equals(8, $event->{recurrenceRule}{byMonthDay}[0]);
     $self->assert_str_equals("5L", $event->{recurrenceRule}{byMonth}[0]);
 }
 
@@ -2278,6 +2278,37 @@ sub test_calendarevent_set_recurrenceoverrides
             title => "updated title",
     });
     $event->{title} = "updated title";
+    $self->assert_normalized_event_equals($ret, $event);
+}
+
+sub test_calendarevent_set_recurrence_bymonthday
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+	my $event =  {
+		"uid" => "90c2697e-acbc-4508-9e72-6b8828e8d9f3",
+		"calendarId" => $calid,
+		"start" => "2019-01-31T09:00:00",
+		"duration" => "PT1H",
+		"timeZone" => "Australia/Melbourne",
+		"\@type" => "jsevent",
+		"title" => "Recurrence test",
+		"description" => "",
+		"isAllDay" => JSON::false,
+		"recurrenceRule" => {
+			"frequency" => "monthly",
+			"byMonthDay" => [
+				-1
+			]
+		},
+	};
+
+    my $ret = $self->createandget_event($event);
+    $event->{id} = $ret->{id};
     $self->assert_normalized_event_equals($ret, $event);
 }
 
