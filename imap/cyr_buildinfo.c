@@ -187,6 +187,11 @@ static json_t *buildinfo()
 #else
     json_object_set_new(dependency, "zlib", json_false());
 #endif
+#ifdef HAVE_JANSSON
+    json_object_set_new(dependency, "jansson", json_true());
+#else
+    json_object_set_new(dependency, "jansson", json_false());
+#endif
 #if defined(ENABLE_REGEX) && defined(HAVE_PCREPOSIX_H)
     json_object_set_new(dependency, "pcre", json_true());
 #else
@@ -216,6 +221,11 @@ static json_t *buildinfo()
     json_object_set_new(dependency, "nghttp2", json_true());
 #else
     json_object_set_new(dependency, "nghttp2", json_false());
+#endif
+#ifdef HAVE_WSLAY
+    json_object_set_new(dependency, "wslay", json_true());
+#else
+    json_object_set_new(dependency, "wslay", json_false());
 #endif
 #ifdef HAVE_BROTLI
     json_object_set_new(dependency, "brotli", json_true());
