@@ -1396,7 +1396,10 @@ AC_MSG_RESULT($have_libcap)
 dnl
 dnl Check for jansson library, needed for JSON support
 dnl
-PKG_CHECK_MODULES([JANSSON], [jansson >= 2.3])
+PKG_CHECK_MODULES([JANSSON], [jansson >= 2.3],
+                  [ AC_DEFINE(HAVE_JANSSON, [], [Do we have Jansson?])
+                    with_jansson=yes ],
+                  with_jansson=no)
 dnl call AC_SUBST macro to support pkg-config version older than 0.24
 AC_SUBST([JANSSON_LIBS])
 AC_SUBST([JANSSON_CFLAGS])
@@ -2356,6 +2359,7 @@ External dependencies:
    ldap:               $have_ldap
    openssl:            $with_ssl
    zlib:               $with_zlib
+   jansson:            $with_jansson
    pcre:               $cyrus_cv_pcre_utf8
    clamav:             $with_clamav
    snmp:               $with_snmp
