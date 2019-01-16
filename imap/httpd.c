@@ -1193,7 +1193,7 @@ EXPORTED int client_need_auth(struct transaction_t *txn, int sasl_result)
             struct buf *html = &txn->resp_body.payload;
 
             /* Create https URL */
-            hdr = spool_getheader(txn->req_hdrs, "Host");
+            hdr = spool_getheader(txn->req_hdrs, ":authority");
             buf_printf(&txn->buf, "https://%s", hdr[0]);
             if (strcmp(path, "*")) {
                 buf_appendcstr(&txn->buf, path);
@@ -1254,20 +1254,27 @@ EXPORTED int examine_request(struct transaction_t *txn)
     }
 
     /* Check for mandatory Host header (HTTP/1.1+ only) */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Host")) && hdr[1]) {
-        txn->error.desc = "Too many Host headers";
-        return HTTP_BAD_REQUEST;
+    if ((hdr = spool_getheader(txn->req_hdrs, "Host"))) {
+        if (hdr[1]) {
+            txn->error.desc = "Too many Host headers";
+            return HTTP_BAD_REQUEST;
+        }
+
+        /* Create an :authority pseudo header from Host */
+        spool_cache_header(xstrdup(":authority"),
+                           xstrdup(hdr[0]), txn->req_hdrs);
     }
-    else if (!hdr) {
+    else {
         switch (txn->flags.ver) {
         case VER_2:
-            /* HTTP/2 - create a Host header from :authority */
-            hdr = spool_getheader(txn->req_hdrs, ":authority");
-            spool_cache_header(xstrdup("Host"), xstrdup(hdr[0]), txn->req_hdrs);
-            break;
+            /* HTTP/2 - check for :authority pseudo header */
+            if (spool_getheader(txn->req_hdrs, ":authority")) break;
+
+            /* Fall through and create an :authority pseudo header */
+            GCC_FALLTHROUGH
 
         case VER_1_0:
-            /* HTTP/1.0 - create a Host header from URI */
+            /* HTTP/1.0 - create an :authority pseudo header from URI */
             if (txn->req_uri->server) {
                 buf_setcstr(&txn->buf, txn->req_uri->server);
                 if (txn->req_uri->port)
@@ -1275,9 +1282,8 @@ EXPORTED int examine_request(struct transaction_t *txn)
             }
             else buf_setcstr(&txn->buf, config_servername);
 
-            spool_cache_header(xstrdup("Host"),
-                               xstrdup(buf_cstring(&txn->buf)), txn->req_hdrs);
-            buf_reset(&txn->buf);
+            spool_cache_header(xstrdup(":authority"),
+                               buf_release(&txn->buf), txn->req_hdrs);
             break;
 
         case VER_1_1:
@@ -1358,7 +1364,7 @@ EXPORTED int examine_request(struct transaction_t *txn)
             if (!strncmp(path, namespaces[i]->well_known, len) &&
                 (!path[len] || path[len] == '/')) {
 
-                hdr = spool_getheader(txn->req_hdrs, "Host");
+                hdr = spool_getheader(txn->req_hdrs, ":authority");
                 buf_reset(&txn->buf);
                 buf_printf(&txn->buf, "%s://%s",
                            https ? "https" : "http", hdr[0]);
@@ -1502,7 +1508,7 @@ EXPORTED int examine_request(struct transaction_t *txn)
 
             if ((https == o_https) &&
                 !strcasecmp(uri->server,
-                            *spool_getheader(txn->req_hdrs, "Host"))) {
+                            *spool_getheader(txn->req_hdrs, ":authority"))) {
                 txn->flags.cors = CORS_SIMPLE;
             }
             else {
@@ -2893,7 +2899,7 @@ EXPORTED void write_multipart_body(long code, struct transaction_t *txn,
 
         /* Create multipart boundary */
         snprintf(boundary, sizeof(boundary), "%s-%ld-%ld-%ld",
-                 *spool_getheader(txn->req_hdrs, "Host"),
+                 *spool_getheader(txn->req_hdrs, ":authority"),
                  (long) getpid(), (long) time(0), (long) rand());
 
         /* Create Content-Type w/ boundary */
@@ -3346,7 +3352,7 @@ EXPORTED void error_response(long code, struct transaction_t *txn)
         unsigned level = 0;
 
         if (txn->req_hdrs &&
-            (hdr = spool_getheader(txn->req_hdrs, "Host")) &&
+            (hdr = spool_getheader(txn->req_hdrs, ":authority")) &&
             hdr[0] && *hdr[0]) {
             host = (char *) hdr[0];
             if ((port = strchr(host, ':'))) *port++ = '\0';

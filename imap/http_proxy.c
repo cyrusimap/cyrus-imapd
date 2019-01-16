@@ -575,7 +575,7 @@ EXPORTED void http_proto_host(hdrcache_t req_hdrs, const char **proto, const cha
     else {
         /* Use our protocol and host */
         if (proto) *proto = https ? "https" : "http";
-        if (host) *host = *spool_getheader(req_hdrs, "Host");
+        if (host) *host = *spool_getheader(req_hdrs, ":authority");
     }
 }
 
@@ -599,7 +599,7 @@ static void write_forwarding_hdrs(struct transaction_t *txn, hdrcache_t hdrs,
 
     /* Create our own Forwarded header */
     if (proto) {
-        const char **host = spool_getheader(hdrs, "Host");
+        const char **host = spool_getheader(hdrs, ":authority");
         size_t len;
 
         assert(!buf_len(&txn->buf));
