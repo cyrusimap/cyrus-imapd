@@ -903,6 +903,7 @@ static int action_capa(struct transaction_t *txn)
             buf_truncate(&txn->buf, strcspn(mime->content_type, ";"));
             json_array_append_new(formats, json_string(buf_cstring(&txn->buf)));
         }
+        buf_reset(&txn->buf);
 
         /* Update lastmod */
         lastmod = txn->resp_body.lastmod;
