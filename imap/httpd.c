@@ -311,7 +311,6 @@ const char *httpd_localip = NULL, *httpd_remoteip = NULL;
 struct protstream *httpd_out = NULL;
 struct protstream *httpd_in = NULL;
 struct protgroup *protin = NULL;
-static int httpd_logfd = -1;
 
 static sasl_ssf_t extprops_ssf = 0;
 int https = 0;
@@ -558,9 +557,9 @@ static void httpd_reset(struct http_connection *conn)
     cyrus_reset_stdio();
 
     conn->clienthost = "[local]";
-    if (httpd_logfd != -1) {
-        close(httpd_logfd);
-        httpd_logfd = -1;
+    if (conn->logfd != -1) {
+        close(conn->logfd);
+        conn->logfd = -1;
     }
     if (httpd_authid != NULL) {
         free(httpd_authid);
@@ -758,6 +757,7 @@ int service_main(int argc __attribute__((unused)),
     memset(&http_conn, 0, sizeof(struct http_connection));
     http_conn.pin = httpd_in;
     http_conn.pout = httpd_out;
+    http_conn.logfd = -1;
 
     /* Create XML parser context */
     if (!(http_conn.xml = xmlNewParserCtxt())) {
@@ -796,7 +796,7 @@ int service_main(int argc __attribute__((unused)),
         /* Create pre-authentication telemetry log based on client IP */
         strlcpy(hbuf, httpd_remoteip, NI_MAXHOST);
         if ((p = strchr(hbuf, ';'))) *p = '\0';
-        httpd_logfd = telemetry_log(hbuf, httpd_in, httpd_out, 0);
+        http_conn.logfd = telemetry_log(hbuf, httpd_in, httpd_out, 0);
     }
 
     /* See which auth schemes are available to us */
@@ -3454,7 +3454,8 @@ static int proxy_authz(const char **authzid, struct transaction_t *txn)
 
 
 /* Write cached header (redacting authorization credentials) to buffer. */
-static void log_cachehdr(const char *name, const char *contents, const char *raw, void *rock)
+HIDDEN void log_cachehdr(const char *name, const char *contents,
+                         const char *raw, void *rock)
 {
     struct buf *buf = (struct buf *) rock;
 
@@ -3478,6 +3479,7 @@ static void log_cachehdr(const char *name, const char *contents, const char *raw
 static int auth_success(struct transaction_t *txn, const char *userid)
 {
     struct auth_scheme_t *scheme = txn->auth_chal.scheme;
+    int logfd = txn->conn->logfd;
     int i;
 
     httpd_userid = xstrdup(userid);
@@ -3501,26 +3503,29 @@ static int auth_success(struct transaction_t *txn, const char *userid)
     buf_appendmap(&txn->buf,                            /* buffered input */
                   (const char *) httpd_in->ptr, httpd_in->cnt);
 
-    if (httpd_logfd != -1) {
+    if (logfd != -1) {
         /* Rewind log to current request and truncate it */
-        off_t end = lseek(httpd_logfd, 0, SEEK_END);
+        off_t end = lseek(logfd, 0, SEEK_END);
 
-        if (ftruncate(httpd_logfd, end - buf_len(&txn->buf)))
+        if (ftruncate(logfd, end - buf_len(&txn->buf)))
             syslog(LOG_ERR, "IOERROR: failed to truncate http log");
 
         /* Close existing telemetry log */
-        close(httpd_logfd);
+        close(logfd);
     }
 
     prot_setlog(httpd_in, PROT_NO_FD);
     prot_setlog(httpd_out, PROT_NO_FD);
 
     /* Create telemetry log based on new userid */
-    httpd_logfd = telemetry_log(httpd_userid, httpd_in, httpd_out, 0);
+    if (txn->conn->sess_ctx)
+        txn->conn->logfd = logfd = telemetry_log(userid, NULL, NULL, 0);
+    else
+        txn->conn->logfd = logfd = telemetry_log(userid, httpd_in, httpd_out, 0);
 
-    if (httpd_logfd != -1) {
+    if (logfd != -1) {
         /* Log credential-redacted request */
-        if (write(httpd_logfd, buf_cstring(&txn->buf), buf_len(&txn->buf)) < 0)
+        if (write(logfd, buf_cstring(&txn->buf), buf_len(&txn->buf)) < 0)
             syslog(LOG_ERR, "IOERROR: failed to write to http log");
     }
 

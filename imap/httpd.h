@@ -321,6 +321,7 @@ struct http_connection {
     struct protstream *pin;             /* Input protstream */
     struct protstream *pout;            /* Output protstream */
     const char *clienthost;             /* Name of client host */
+    int logfd;                          /* Telemetry log file */
 
     void *tls_ctx;                      /* TLS context */
     void *sess_ctx;                     /* HTTP/2+ session context */
@@ -559,6 +560,9 @@ extern int meth_trace(struct transaction_t *txn, void *params);
 extern int etagcmp(const char *hdr, const char *etag);
 extern int check_precond(struct transaction_t *txn,
                          const char *etag, time_t lastmod);
+
+extern void log_cachehdr(const char *name, const char *contents,
+                         const char *raw, void *rock);
 
 extern int examine_request(struct transaction_t *txn);
 extern int client_need_auth(struct transaction_t *txn, int sasl_result);
