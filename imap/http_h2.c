@@ -621,6 +621,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         txn->flags.ver = VER_2;
     }
 
+    /* Don't do telemetry logging in prot layer */
     prot_setlog(conn->pin, PROT_NO_FD);
     prot_setlog(conn->pout, PROT_NO_FD);
 
