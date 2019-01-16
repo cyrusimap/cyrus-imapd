@@ -5051,7 +5051,7 @@ static int _email_get_bodies(jmap_req_t *req,
             free(decbuf);
             if (!ical) continue;
             /* Parse iCalendar object to JSCalendar */
-            json_t *jsevents = jmapical_tojmap_all(ical, NULL, NULL);
+            json_t *jsevents = jmapical_tojmap_all(ical, NULL);
             if (json_array_size(jsevents)) {
                 json_object_set_new(calendar_events, part->part_id, jsevents);
             }

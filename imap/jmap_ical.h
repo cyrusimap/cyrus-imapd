@@ -84,39 +84,20 @@ extern "C" {
 #define JMAPICAL_XPARAM_TITLE         "X-TITLE" /* Apple uses that for locations */
 
 
-const char* jmapical_strerror(int err);
-
-typedef struct {
-    int code;      /* one of the predefined jmapical error codes, or zero */
-    json_t *props; /* erroneous JMAP properties, if any. */
-} jmapical_err_t;
-
-/* Converts the iCalendar component ical to JMAP.
- *
- * Does not set the id, calendarId, participantId or any extension properties.
- *
- * ical:  must contain exactly one main VEVENT, and any number of recurrences
- * props: optional JSON object whose keys name the properties to be converted
- * err:   optional error receiver
+/* Converts the iCalendar component ical to JSCalendar.
+ * Returns NULL on error.
  */
-json_t* jmapical_tojmap(icalcomponent *ical, json_t *props, jmapical_err_t *err);
+json_t* jmapical_tojmap(icalcomponent *ical, hash_table *props);
 
-/* Converts the iCalendar component ical to an array of JMAP events.
- *
- * Does not set the id, calendarId, participantId or any extension properties.
- *
- * ical:  scontain at least one main VEVENT, and any number of recurrences
- * props: optional JSON object whose keys name the properties to be converted
- * err:   optional error receiver
+/* Converts the iCalendar component ical to an array of JSCalendar objects.
+ * Returns NULL on error.
  */
-json_t *jmapical_tojmap_all(icalcomponent *ical, json_t *props, jmapical_err_t *err);
+json_t *jmapical_tojmap_all(icalcomponent *ical, hash_table *props);
 
-/* Convert the JMAP object obj to iCalendar.
- *
- * ojb:  must contain a JMAP calendar event
- * err:  optional error receiver
+/* Convert the jsevent to iCalendar.
+ * Returns NULL on error.
  */
-icalcomponent* jmapical_toical(json_t *obj, jmapical_err_t *err);
+icalcomponent* jmapical_toical(json_t *jsevent, json_t *invalid);
 void icalcomponent_add_required_timezones(icalcomponent *ical);
 
 /* for CalDAV content negotiation */

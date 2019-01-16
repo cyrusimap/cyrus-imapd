@@ -1247,8 +1247,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     struct getcalendarevents_rock *rock = vrock;
     int r = 0;
     icalcomponent* ical = NULL;
-    json_t *obj, *jprops = NULL;
-    jmapical_err_t err;
+    json_t *jsevent = NULL;
     jmap_req_t *req = rock->req;
     char *schedule_address = NULL;
 
@@ -1280,21 +1279,10 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     }
 
     /* Convert to JMAP */
-    memset(&err, 0, sizeof(jmapical_err_t));
-    if (rock->get->props) {
-        /* XXX That's clumsy: the JMAP properties have already been converted
-         * to a Cyrus hash, but the jmapical API requires a JSON object. */
-        strarray_t *keys = hash_keys(rock->get->props);
-        int i;
-        jprops = json_pack("{}");
-        for (i = 0; i < strarray_size(keys); i++) {
-            json_object_set(jprops, strarray_nth(keys, i), json_null());
-        }
-        strarray_free(keys);
-    }
-    obj = jmapical_tojmap(ical, jprops,  &err);
-    if (!obj || err.code) {
-        syslog(LOG_ERR, "jmapical_tojson: %s\n", jmapical_strerror(err.code));
+    jsevent = jmapical_tojmap(ical, rock->get->props);
+    if (!jsevent) {
+        syslog(LOG_ERR, "jmapical_tojson: can't convert %u:%s",
+                cdata->dav.imap_uid, rock->mailbox->name);
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -1307,7 +1295,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
         if (schedule_address) {
             const char *key;
             json_t *participant;
-            json_object_foreach(json_object_get(obj, "participants"), key, participant) {
+            json_object_foreach(json_object_get(jsevent, "participants"), key, participant) {
                 const char *email = json_string_value(json_object_get(participant, "email"));
                 if (email && !strcmp(email, schedule_address)) {
                     participant_id = key;
@@ -1315,29 +1303,28 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
                 }
             }
         }
-        json_object_set_new(obj, "participantId", participant_id ?
+        json_object_set_new(jsevent, "participantId", participant_id ?
                 json_string(participant_id) : json_null());
     }
 
     /* Add JMAP-only fields. */
     if (_wantprop(rock->get->props, "x-href")) {
         char *xhref = jmap_xhref(cdata->dav.mailbox, cdata->dav.resource);
-        json_object_set_new(obj, "x-href", json_string(xhref));
+        json_object_set_new(jsevent, "x-href", json_string(xhref));
         free(xhref);
     }
     if (_wantprop(rock->get->props, "calendarId")) {
-        json_object_set_new(obj, "calendarId",
+        json_object_set_new(jsevent, "calendarId",
                             json_string(strrchr(cdata->dav.mailbox, '.')+1));
     }
-    json_object_set_new(obj, "id", json_string(cdata->ical_uid));
+    json_object_set_new(jsevent, "id", json_string(cdata->ical_uid));
 
     /* Add JMAP event to response */
-    json_array_append_new(rock->get->list, obj);
+    json_array_append_new(rock->get->list, jsevent);
 
 done:
     free(schedule_address);
     if (ical) icalcomponent_free(ical);
-    if (jprops) json_decref(jprops);
     return r;
 }
 
@@ -1636,13 +1623,10 @@ static int setcalendarevents_create(jmap_req_t *req,
     }
 
     /* Convert the JMAP calendar event to ical. */
-    jmapical_err_t err;
-    memset(&err, 0, sizeof(jmapical_err_t));
-
     if (!json_object_get(event, "uid")) {
         json_object_set_new(event, "uid", json_string(uid));
     }
-    ical = jmapical_toical(event, &err);
+    ical = jmapical_toical(event, invalid);
 
     json_t *jparticipantId = json_object_get(event, "participantId");
     if (json_is_string(jparticipantId)) {
@@ -1655,13 +1639,10 @@ static int setcalendarevents_create(jmap_req_t *req,
         json_array_append_new(invalid, json_string("participantId"));
     }
 
-    if (json_array_size(invalid) || err.code == JMAPICAL_ERROR_PROPS) {
-        json_array_extend(invalid, err.props);
-        json_decref(err.props);
+    if (json_array_size(invalid)) {
         free(uid);
         r = 0; goto done;
-    } else if (err.code) {
-        syslog(LOG_ERR, "jmapical_toical: %s", jmapical_strerror(err.code));
+    } else if (!ical) {
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -1804,18 +1785,16 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
 
     /* Patch the old JMAP calendar event */
-    jmapical_err_t err;
-    memset(&err, 0, sizeof(jmapical_err_t));
-    json_t *old_event = jmapical_tojmap(oldical, NULL,  &err);
-    if (!old_event || err.code) {
-        syslog(LOG_ERR, "jmapical_tojmap: %s\n", jmapical_strerror(err.code));
+    json_t *old_event = jmapical_tojmap(oldical, NULL);
+    if (!old_event) {
+        syslog(LOG_ERR, "jmapical_tojmap: can't convert oldical %u:%s",
+                cdata->dav.imap_uid, mbox->name);
         r = IMAP_INTERNAL;
         goto done;
     }
     json_t *new_event = jmap_patchobject_apply(old_event, event_patch);
-    memset(&err, 0, sizeof(jmapical_err_t));
-    ical = jmapical_toical(new_event, &err);
     json_decref(old_event);
+    ical = jmapical_toical(new_event, invalid);
 
     json_t *jparticipantId = json_object_get(new_event, "participantId");
     if (json_is_string(jparticipantId)) {
@@ -1829,12 +1808,10 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
     json_decref(new_event);
 
-    if (json_array_size(invalid) || err.code == JMAPICAL_ERROR_PROPS) {
-        /* Handle any property errors and bail out. */
-        json_array_extend(invalid, err.props);
-        r = 0; goto done;
-    } else if (err.code) {
-        syslog(LOG_ERR, "jmapical_toical: %s", jmapical_strerror(err.code));
+    if (json_array_size(invalid)) {
+        r = 0;
+        goto done;
+    } else if (!ical) {
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -2924,15 +2901,12 @@ static void _calendarevent_copy(jmap_req_t *req,
     }
 
     /* Patch JMAP event */
-    jmapical_err_t err;
-    memset(&err, 0, sizeof(jmapical_err_t));
-    json_t *src_event = jmapical_tojmap(src_ical, NULL, &err);
-    if (!err.code) {
+    json_t *src_event = jmapical_tojmap(src_ical, NULL);
+    if (src_event) {
         dst_event = jmap_patchobject_apply(src_event, jevent);
-        memset(&err, 0, sizeof(jmapical_err_t));
     }
     json_decref(src_event);
-    if (err.code) {
+    if (!dst_event) {
         syslog(LOG_ERR, "calendarevent_copy: can't convert to ical: %s", src_id);
         r = IMAP_INTERNAL;
         goto done;
