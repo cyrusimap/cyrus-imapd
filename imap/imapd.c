@@ -5155,6 +5155,8 @@ badannotation:
     }
     if (config_getswitch(IMAPOPT_CONVERSATIONS)
         && (fa->fetchitems & (FETCH_MAILBOXIDS|FETCH_MAILBOXES))) {
+        // annoyingly, this codepath COULD be called from xconv* commands, but it never is,
+        // in reality, so it's safe leaving this as shared
         int r = conversations_open_user(imapd_userid, 1/*shared*/, &fa->convstate);
         if (r) {
             syslog(LOG_WARNING, "error opening conversations for %s: %s",
@@ -5580,6 +5582,7 @@ void cmd_xconvmeta(const char *tag)
         goto done;
     }
 
+    // this one is OK, xconvmeta doesn't do an expunge
     r = conversations_open_user(imapd_userid, 1/*shared*/, &state);
     if (r) {
         prot_printf(imapd_out, "%s BAD failed to open db: %s\r\n",
@@ -5737,7 +5740,8 @@ static int do_xconvfetch(struct dlist *cidlist,
     struct index_init init;
     int i;
 
-    r = conversations_open_user(imapd_userid, 1/*shared*/, &state);
+    // this one expunges each mailbox it enters, so we need to lock exclusively
+    r = conversations_open_user(imapd_userid, 0/*shared*/, &state);
     if (r) goto out;
 
     construct_hash_table(&wanted_cids, 1024, 0);
@@ -6202,7 +6206,8 @@ void cmd_xconvsort(char *tag, int updates)
 
     /* open the conversations state first - we don't care if it fails,
      * because that probably just means it's already open */
-    conversations_open_mbox(index_mboxname(imapd_index), 1/*shared*/, &cstate);
+    // this codepath might expunge, so we can't open shared
+    conversations_open_mbox(index_mboxname(imapd_index), 0/*shared*/, &cstate);
 
     if (updates) {
         /* in XCONVUPDATES, need to force a re-read from scratch into
@@ -6345,7 +6350,8 @@ static void cmd_xconvmultisort(char *tag)
 
     /* open the conversations state first - we don't care if it fails,
      * because that probably just means it's already open */
-    conversations_open_mbox(index_mboxname(imapd_index), 1/*shared*/, &cstate);
+    // this codepath might expunge, so we can't open shared
+    conversations_open_mbox(index_mboxname(imapd_index), 0/*shared*/, &cstate);
 
     /* need index loaded to even parse searchargs! */
     searchargs = new_searchargs(tag, GETSEARCH_CHARSET_FIRST,
@@ -9113,6 +9119,7 @@ static int imapd_statusdata(const mbentry_t *mbentry, unsigned statusitems,
             conversations_abort(&global_conversations);
             global_conversations = NULL;
         }
+        // we never write anything in STATUS calls, so shared is fine
         r = conversations_open_mbox(mbentry->name, 1/*shared*/, &state);
         if (r) {
             /* maybe the mailbox doesn't even have conversations - just ignore */
