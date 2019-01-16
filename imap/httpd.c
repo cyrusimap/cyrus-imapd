@@ -2378,7 +2378,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         prot_flush(httpd_out);
 
         /* Restart method processing alarm (HTTP/1.1 only) */
-        if (txn->flags.ver == VER_1_1) alarm(httpd_keepalive);
+        if (!txn->ws_ctx && (txn->flags.ver == VER_1_1)) alarm(httpd_keepalive);
 
         goto log;
     }
