@@ -1883,7 +1883,8 @@ EXPORTED void mboxname_id_hash(char *dest, size_t destlen,
 {
     struct buf buf = BUF_INITIALIZER;
 
-    buf_printf(&buf, "%s/uuid/%c/%c/%s", root, id[0], id[1], id);
+    if (root) buf_printf(&buf, "%s/uuid/%c/%c/%s", root, id[0], id[1], id);
+    else buf_printf(&buf, "uuid/%c/%c/%s", id[0], id[1], id);
 
     /* for now, keep API even though we're doing a buffer inside here */
     strncpy(dest, buf_cstring(&buf), destlen);
@@ -2201,7 +2202,7 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
         if (!r) {
             char path[MAX_MAILBOX_PATH+1];
 
-            mboxname_id_hash(path, MAX_MAILBOX_PATH, "", mbentry->uniqueid);
+            mboxname_id_hash(path, MAX_MAILBOX_PATH, NULL, mbentry->uniqueid);
 
             if (suffix) {
                 fname = strconcat(config_dir,
