@@ -1715,7 +1715,7 @@ static int mycommit(struct dbengine *db, struct txn *tid)
         }
     }
     else {
-        if (!db->current_txn->shared && !(db->open_flags & CYRUSDB_NOCOMPACT)
+        if ((db->current_txn && !db->current_txn->shared) && !(db->open_flags & CYRUSDB_NOCOMPACT)
             && db->header.current_size > MINREWRITE
             && db->header.current_size > 2 * db->header.repack_size) {
             int r2 = mycheckpoint(db);
