@@ -56,6 +56,7 @@
 
 #include "http_h2.h"
 #include "http_ws.h"
+#include "retry.h"
 #include "tok.h"
 #include "xsha1.h"
 
@@ -304,6 +305,20 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
 
     case WSLAY_TEXT_FRAME:
     case WSLAY_BINARY_FRAME:
+        if (txn->conn->logfd != -1) {
+            /* Telemetry logging */
+            struct iovec iov[2];
+            int niov = 0;
+
+            assert(!buf_len(&txn->buf));
+            buf_printf(&txn->buf, "<%ld<", time(NULL));  /* timestamp */
+            WRITEV_ADD_TO_IOVEC(iov, niov,
+                                buf_base(&txn->buf), buf_len(&txn->buf));
+            WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&inbuf), buf_len(&inbuf));
+            writev(txn->conn->logfd, iov, niov);
+            buf_reset(&txn->buf);
+        }
+
         /* Process the request */
         r = ctx->data_cb(&inbuf, &outbuf, &ctx->log, &ctx->cb_rock);
         if (r) {
@@ -313,6 +328,20 @@ static void on_msg_recv_cb(wslay_event_context_ptr ev,
                         WSLAY_CODE_INVALID_FRAME_PAYLOAD_DATA);
             err_msg = error_message(r);
             goto err;
+        }
+
+        if (txn->conn->logfd != -1) {
+            /* Telemetry logging */
+            struct iovec iov[2];
+            int niov = 0;
+
+            assert(!buf_len(&txn->buf));
+            buf_printf(&txn->buf, ">%ld>", time(NULL));  /* timestamp */
+            WRITEV_ADD_TO_IOVEC(iov, niov,
+                                buf_base(&txn->buf), buf_len(&txn->buf));
+            WRITEV_ADD_TO_IOVEC(iov, niov, buf_base(&outbuf), buf_len(&outbuf));
+            writev(txn->conn->logfd, iov, niov);
+            buf_reset(&txn->buf);
         }
 
         /* Compress the server response, if supported by the client */
@@ -612,11 +641,26 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
                protocol ? protocol : "echo" , txn->req_line.ver);
     ctx->log_tail = buf_len(&ctx->log);
 
+    /* Tell client that WebSocket negotiation has succeeded */
+    if (txn->conn->sess_ctx) {
+        /* Treat WS data as chunked response */
+        txn->flags.te = TE_CHUNKED;
+
+        response_header(HTTP_OK, txn);
+
+        /* Force the response to the client immediately */
+        prot_flush(httpd_out);
+    }
+    else response_header(HTTP_SWITCH_PROT, txn);
+
     /* Set connection as non-blocking */
     prot_NONBLOCK(txn->conn->pin);
 
-    /* Tell client that WebSocket negotiation has succeeded */
-    return HTTP_SWITCH_PROT;
+    /* Don't do telemetry logging in prot layer */
+    prot_setlog(txn->conn->pin, PROT_NO_FD);
+    prot_setlog(txn->conn->pout, PROT_NO_FD);
+
+    return 0;
 }
 
 

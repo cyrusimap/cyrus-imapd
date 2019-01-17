@@ -4240,19 +4240,7 @@ HIDDEN int meth_connect(struct transaction_t *txn, void *params)
 
     int ret = ws_start_channel(txn, cparams->subprotocol, cparams->data_cb);
 
-    switch (ret) {
-    case HTTP_SWITCH_PROT:
-        /* Treat as chunked response */
-        txn->flags.te = TE_CHUNKED;
-
-        return HTTP_OK;
-
-    case HTTP_UPGRADE:
-        return HTTP_BAD_REQUEST;
-
-    default:
-        return ret;
-    }
+    return (ret == HTTP_UPGRADE) ? HTTP_BAD_REQUEST : ret;
 }
 
 
