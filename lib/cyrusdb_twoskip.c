@@ -1681,7 +1681,7 @@ static int mycommit(struct dbengine *db, struct txn *tid)
     assert(tid == db->current_txn);
 
     /* no need to abort if we're not dirty */
-    if (db->current_txn->shared || !(db->header.flags & DIRTY))
+    if ((db->current_txn && db->current_txn->shared) || !(db->header.flags & DIRTY))
         goto done;
 
     /* build a commit record */
