@@ -630,8 +630,13 @@ recurrence_from_ical(icalcomponent *comp)
     } else if (!icaltime_is_null_time(rrule.until)) {
         /* Convert iCalendar UNTIL to start timezone */
         const char *tzid = NULL;
-        icalproperty *dtstart_prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
-        if (dtstart_prop) tzid = icalproperty_get_tzid(dtstart_prop);
+        icalproperty *dtstart_prop =
+            icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
+        if (dtstart_prop) {
+            icalparameter *tzid_param =
+                icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+            if (tzid_param) tzid = icalparameter_get_tzid(tzid_param);
+        }
         icaltimezone *tz = tz_from_tzid(tzid);
         icaltimetype dtloc = icaltime_convert_to_zone(rrule.until, tz);
         char *until = localdate_from_icaltime_r(dtloc);
