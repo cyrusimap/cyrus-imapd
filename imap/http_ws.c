@@ -737,11 +737,12 @@ HIDDEN void ws_input(struct transaction_t *txn)
     wslay_event_context_ptr ev = ctx->event;
     int want_read = wslay_event_want_read(ev);
     int want_write = wslay_event_want_write(ev);
+    int goaway = txn->flags.conn & CONN_CLOSE;
 
     syslog(LOG_DEBUG, "ws_input()  eof: %d, want read: %d, want write: %d",
            txn->conn->pin->eof, want_read, want_write);
 
-    if (want_read) {
+    if (want_read && !goaway) {
         /* Read frame(s) */
         if (txn->conn->sess_ctx) {
             /* Data has been read into request body */
@@ -769,6 +770,7 @@ HIDDEN void ws_input(struct transaction_t *txn)
             /* Failure */
             syslog(LOG_DEBUG, "ws_event_recv: %s (%s)",
                    wslay_strerror(r), prot_error(txn->conn->pin));
+            goaway = 1;
 
             if (r == WSLAY_ERR_CALLBACK_FAILURE) {
                 /* Client timeout */
@@ -777,30 +779,32 @@ HIDDEN void ws_input(struct transaction_t *txn)
             else {
                 txn->error.desc = wslay_strerror(r);
             }
-
-            /* Tell client we are closing session */
-            syslog(LOG_WARNING, "%s, closing connection", txn->error.desc);
-
-            syslog(LOG_DEBUG, "wslay_event_queue_close()");
-            r = wslay_event_queue_close(ev, WSLAY_CODE_GOING_AWAY,
-                                        (uint8_t *) txn->error.desc,
-                                        strlen(txn->error.desc));
-            if (r) {
-                syslog(LOG_ERR,
-                       "wslay_event_queue_close: %s", wslay_strerror(r));
-            }
-
-            txn->flags.conn = CONN_CLOSE;
         }
-
-        /* Write frame(s) */
-        ws_output(txn);
     }
     else if (!want_write) {
         /* Connection is done */
         syslog(LOG_DEBUG, "connection closed");
         txn->flags.conn = CONN_CLOSE;
     }
+
+    if (goaway) {
+        /* Tell client we are closing session */
+        syslog(LOG_WARNING, "%s, closing connection", txn->error.desc);
+
+        syslog(LOG_DEBUG, "wslay_event_queue_close()");
+        int r = wslay_event_queue_close(ev, WSLAY_CODE_GOING_AWAY,
+                                        (uint8_t *) txn->error.desc,
+                                        strlen(txn->error.desc));
+        if (r) {
+            syslog(LOG_ERR,
+                   "wslay_event_queue_close: %s", wslay_strerror(r));
+        }
+
+        txn->flags.conn = CONN_CLOSE;
+    }
+
+    /* Write frame(s) */
+    ws_output(txn);
 
     return;
 }
