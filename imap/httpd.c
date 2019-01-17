@@ -1659,6 +1659,9 @@ static int http1_input(struct transaction_t *txn)
     }
 
   done:
+    /* Handle errors (success responses handled by method functions) */
+    if (ret) error_response(ret, txn);
+
     /* Read and discard any unread request body */
     if (!(txn->flags.conn & CONN_CLOSE)) {
         txn->req_body.flags |= BODY_DISCARD;
@@ -1667,7 +1670,7 @@ static int http1_input(struct transaction_t *txn)
         }
     }
 
-    return ret;
+    return 0;
 }
 
 
@@ -1755,7 +1758,7 @@ static void cmdloop(struct http_connection *conn)
     /* Enable provisional responses for long-running mailbox ops */
     mailbox_set_wait_cb((mailbox_wait_cb_t *) &keepalive_response, &txn);
 
-    for (;;) {
+    do {
         int ret = 0;
 
         /* Reset txn state */
@@ -1784,7 +1787,7 @@ static void cmdloop(struct http_connection *conn)
 
         } while (!proxy_check_input(protin, httpd_in, httpd_out,
                                     backend_current ? backend_current->in : NULL,
-                                    NULL, 0));
+                                    NULL, 30));
 
         
         /* Start command timer */
@@ -1798,26 +1801,22 @@ static void cmdloop(struct http_connection *conn)
             /* WebSocket over HTTP/1.1 input */
             ws_input(&txn);
         }
-        else {
+        else if (!ret) {
             /* HTTP/1.x request */
-            if (!ret) ret = http1_input(&txn);
-
-            /* Handle errors (success responses handled by method functions) */
-            if (ret) error_response(ret, &txn);
+            http1_input(&txn);
         }
 
         if (ret == HTTP_SHUTDOWN) {
+            syslog(LOG_WARNING,
+                   "Shutdown file: \"%s\", closing connection", txn.error.desc);
             protgroup_free(protin);
             shut_down(0);
         }
-        else if (txn.flags.conn & CONN_CLOSE) {
-            /* Memory cleanup */
-            transaction_free(&txn);
-            return;
-        }
 
-        continue;
-    }
+    } while (!(txn.flags.conn & CONN_CLOSE));
+
+    /* Memory cleanup */
+    transaction_free(&txn);
 }
 
 /****************************  Parsing Routines  ******************************/
