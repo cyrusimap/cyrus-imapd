@@ -1298,7 +1298,7 @@ static int carddav_import(struct transaction_t *txn, void *obj,
         vcard->objects = next;
 
         /* Clear the buffer used for constructing href */
-        buf_free(&txn->buf);
+        buf_reset(&txn->buf);
     }
 
     /* End XML response */
