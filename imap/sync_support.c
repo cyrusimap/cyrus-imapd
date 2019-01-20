@@ -4292,7 +4292,7 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
             dlist_getnum32(kl, "SYNC_CRC", &synccrcs.basic);
             dlist_getnum32(kl, "SYNC_CRC_ANNOT", &synccrcs.annot);
             dlist_getnum64(kl, "XCONVMODSEQ", &xconvmodseq);
-            dlist_getnum64(kl, "RACLMODSEQ", &xconvmodseq);
+            dlist_getnum64(kl, "RACLMODSEQ", &raclmodseq);
 
             if (dlist_getlist(kl, "ANNOTATIONS", &al))
                 decode_annotations(al, &annots, NULL);
