@@ -1713,7 +1713,9 @@ static void transaction_reset(struct transaction_t *txn)
            sizeof(struct resp_body_t) - sizeof(struct buf));
     buf_reset(&txn->resp_body.payload);
 
+    /* Pre-allocate our working buffer */
     buf_reset(&txn->buf);
+    buf_ensure(&txn->buf, 1024);
 }
 
 
@@ -1744,9 +1746,6 @@ static void cmdloop(struct http_connection *conn)
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
     txn.conn = conn;
-
-    /* Pre-allocate our working buffer */
-    buf_ensure(&txn.buf, 1024);
 
     if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
         txn.zstrm = zlib_init();
