@@ -221,7 +221,8 @@ HIDDEN void *brotli_init()
                                   BROTLI_DEFAULT_QUALITY);
         BrotliEncoderSetParameter(brotli, BROTLI_PARAM_LGWIN,
                                   BROTLI_DEFAULT_WINDOW);
-        BrotliEncoderSetParameter(brotli, BROTLI_PARAM_LGBLOCK, 0);
+        BrotliEncoderSetParameter(brotli, BROTLI_PARAM_LGBLOCK,
+                                  BROTLI_MAX_INPUT_BLOCK_BITS);
     }
 
     return brotli;
@@ -3021,9 +3022,10 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
         if (code) flags |= COMPRESS_START;
         if (last_chunk) flags |= COMPRESS_END;
 
-        if ((txn->resp_body.enc == CE_BR) &&
-            brotli_compress(txn, flags, buf, len) < 0) {
-            fatal("Brotli: Error while compressing data", EC_SOFTWARE);
+        if (txn->resp_body.enc == CE_BR) {
+            if (brotli_compress(txn, flags, buf, len) < 0) {
+                fatal("Brotli: Error while compressing data", EC_SOFTWARE);
+            }
         }
         else if (zlib_compress(txn, flags, buf, len) < 0) {
             fatal("zlib: Error while compressing data", EC_SOFTWARE);
