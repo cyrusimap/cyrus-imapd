@@ -1628,7 +1628,7 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 AC_MSG_NOTICE([httpd will not have support for HTTP/2.  Consider installing libnghttp2 >= 1.5]))
 
 
-        PKG_CHECK_MODULES([WSLAY], [libwslay], [
+        PKG_CHECK_MODULES([WSLAY], [libwslay >= 1.1.1], [
                 AC_DEFINE(HAVE_WSLAY,[],
                         [Build WebSockets support into httpd?])
                 with_wslay=yes
