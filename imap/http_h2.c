@@ -387,23 +387,7 @@ static int frame_recv_cb(nghttp2_session *session,
         }
 
         /* Process the requested method */
-        if (txn->req_tgt.namespace->premethod) {
-            ret = txn->req_tgt.namespace->premethod(txn);
-        }
-        if (!ret) {
-            const struct method_t *meth_t =
-                &txn->req_tgt.namespace->methods[txn->meth];
-
-            ret = (*meth_t->proc)(txn, meth_t->params);
-
-            prometheus_increment(prometheus_lookup_label(http_methods[txn->meth].metric,
-                                                         txn->req_tgt.namespace->name));
-        }
-
-        if (ret == HTTP_UNAUTHORIZED) {
-            /* User must authenticate */
-            ret = client_need_auth(txn, 0);
-        }
+        ret = process_request(txn);
 
         /* Handle errors (success responses handled by method functions) */
         if (ret) error_response(ret, txn);

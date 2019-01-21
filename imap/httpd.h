@@ -565,7 +565,7 @@ extern void log_cachehdr(const char *name, const char *contents,
                          const char *raw, void *rock);
 
 extern int examine_request(struct transaction_t *txn);
-extern int client_need_auth(struct transaction_t *txn, int sasl_result);
+extern int process_request(struct transaction_t *txn);
 extern void transaction_free(struct transaction_t *txn);
 
 extern int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbentry);

@@ -1172,7 +1172,7 @@ static int parse_request_line(struct transaction_t *txn)
 }
 
 
-EXPORTED int client_need_auth(struct transaction_t *txn, int sasl_result)
+static int client_need_auth(struct transaction_t *txn, int sasl_result)
 {
     if (httpd_tls_required) {
         /* We only support TLS+Basic, so tell client to use TLS */
@@ -1591,6 +1591,32 @@ EXPORTED int examine_request(struct transaction_t *txn)
 }
 
 
+EXPORTED int process_request(struct transaction_t *txn)
+{
+    int ret = 0;
+
+    if (txn->req_tgt.namespace->premethod) {
+        ret = txn->req_tgt.namespace->premethod(txn);
+    }
+    if (!ret) {
+        const struct method_t *meth_t =
+            &txn->req_tgt.namespace->methods[txn->meth];
+        
+        ret = (*meth_t->proc)(txn, meth_t->params);
+
+        prometheus_increment(prometheus_lookup_label(http_methods[txn->meth].metric,
+                                                     txn->req_tgt.namespace->name));
+    }
+
+    if (ret == HTTP_UNAUTHORIZED) {
+        /* User must authenticate */
+        ret = client_need_auth(txn, 0);
+    }
+
+    return ret;
+}
+
+
 static int http1_input(struct transaction_t *txn)
 {
     struct request_line_t *req_line = &txn->req_line;
@@ -1641,23 +1667,7 @@ static int http1_input(struct transaction_t *txn)
     if (txn->flags.ver == VER_1_1) alarm(httpd_keepalive);
 
     /* Process the requested method */
-    if (txn->req_tgt.namespace->premethod) {
-        ret = txn->req_tgt.namespace->premethod(txn);
-    }
-    if (!ret) {
-        const struct method_t *meth_t =
-            &txn->req_tgt.namespace->methods[txn->meth];
-        
-        ret = (*meth_t->proc)(txn, meth_t->params);
-
-        prometheus_increment(prometheus_lookup_label(http_methods[txn->meth].metric,
-                                                     txn->req_tgt.namespace->name));
-    }
-
-    if (ret == HTTP_UNAUTHORIZED) {
-        /* User must authenticate */
-        ret = client_need_auth(txn, 0);
-    }
+    ret = process_request(txn);
 
   done:
     /* Handle errors (success responses handled by method functions) */
