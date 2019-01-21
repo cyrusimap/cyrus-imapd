@@ -1594,7 +1594,7 @@ EXPORTED int examine_request(struct transaction_t *txn)
 static int http1_input(struct transaction_t *txn)
 {
     struct request_line_t *req_line = &txn->req_line;
-    int empty = 0, ret = 0;
+    int ignore_empty = 1, ret = 0;
 
     do {
         /* Read request-line */
@@ -1616,7 +1616,7 @@ static int http1_input(struct transaction_t *txn)
         }
 
         /* Ignore 1 empty line before request-line per RFC 7230 Sec 3.5 */
-    } while (!empty++ && !strcspn(req_line->buf, "\r\n"));
+    } while (ignore_empty-- && (strcspn(req_line->buf, "\r\n") == 0));
 
 
     /* Parse request-line = method SP request-target SP HTTP-version CRLF */
