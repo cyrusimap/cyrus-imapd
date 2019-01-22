@@ -2865,6 +2865,8 @@ static int _mboxset_state_is_valid(const char *account_id, struct mboxset_ops *o
     hash_enumerate(id_by_imapname, _mboxset_state_mkentry_cb, state);
 
     int i;
+    int is_valid = 0;
+
     /* Apply create and update */
     for (i = 0; i < ptrarray_size(ops->put); i++) {
         struct mboxset_args *args = ptrarray_nth(ops->put, i);
@@ -2880,6 +2882,7 @@ static int _mboxset_state_is_valid(const char *account_id, struct mboxset_ops *o
         }
         else {
             struct mboxset_entry *entry = hash_lookup(args->mbox_id, entry_by_id);
+            if (!entry) goto done;
             if (args->name) {
                 free(entry->name);
                 entry->name = xstrdup(args->name);
@@ -2894,13 +2897,15 @@ static int _mboxset_state_is_valid(const char *account_id, struct mboxset_ops *o
     /* Apply destroy */
     for (i = 0; i < strarray_size(ops->del); i++) {
         struct mboxset_entry *entry = hash_lookup(strarray_nth(ops->del, i), entry_by_id);
+        if (!entry) goto done;
         entry->is_deleted = 1;
     }
 
     /* Check state for conflicts. */
     hash_enumerate(entry_by_id, _mboxset_state_conflict_cb, state);
-    int is_valid = !state->has_conflict;
+    is_valid = !state->has_conflict;
 
+done:
     free_hash_table(state->entry_by_id, _mboxset_entry_free);
     free(state->entry_by_id);
     free_hash_table(state->id_by_imapname, free);
