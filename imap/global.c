@@ -849,10 +849,10 @@ EXPORTED void session_new_id(void)
     unsigned long long random;
     RAND_bytes((unsigned char *) &random, sizeof(random));
     snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d-%llu",
-             base, getpid(), session_id_time, session_id_count, random);
+             base, session_id_time, getpid(), session_id_count, random);
 #else
     snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d",
-             base, getpid(), session_id_time, session_id_count);
+             base, session_id_time, getpid(), session_id_count);
 #endif
 }
 
