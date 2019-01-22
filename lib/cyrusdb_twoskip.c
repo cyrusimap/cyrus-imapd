@@ -1680,9 +1680,13 @@ static int mycommit(struct dbengine *db, struct txn *tid)
     assert(db);
     assert(tid == db->current_txn);
 
-    /* no need to abort if we're not dirty */
-    if ((db->current_txn && db->current_txn->shared) || !(db->header.flags & DIRTY))
+    /* no need to commit if we're not dirty */
+    if (!(db->header.flags & DIRTY))
         goto done;
+
+    assert(db->current_txn);
+
+    if (db->current_txn->shared) goto done;
 
     /* build a commit record */
     memset(&newrecord, 0, sizeof(struct skiprecord));
@@ -1715,7 +1719,8 @@ static int mycommit(struct dbengine *db, struct txn *tid)
         }
     }
     else {
-        if ((db->current_txn && !db->current_txn->shared) && !(db->open_flags & CYRUSDB_NOCOMPACT)
+        if (db->current_txn && !db->current_txn->shared
+            && !(db->open_flags & CYRUSDB_NOCOMPACT)
             && db->header.current_size > MINREWRITE
             && db->header.current_size > 2 * db->header.repack_size) {
             int r2 = mycheckpoint(db);
