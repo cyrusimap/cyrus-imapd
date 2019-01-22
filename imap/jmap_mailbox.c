@@ -2758,9 +2758,11 @@ struct mboxset_state {
 static int _mboxset_state_mboxlist_cb(const mbentry_t *mbentry, void *rock)
 {
     struct mboxset_state *state = rock;
-    if (mbentry->mbtype != MBTYPE_EMAIL)
-        return 0;
-    hash_insert(mbentry->name, xstrdup(mbentry->uniqueid), state->id_by_imapname);
+    // annoyingly, MBTYPE_EMAIL isn't a flag of its own, it's just the absence of other flags, so we can't
+    // match that one with '&'.
+    if (mbentry->mbtype == MBTYPE_EMAIL || (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
+        hash_insert(mbentry->name, xstrdup(mbentry->uniqueid), state->id_by_imapname);
+    }
     return 0;
 }
 
