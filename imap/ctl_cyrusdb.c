@@ -178,7 +178,7 @@ static int fixmbox(const mbentry_t *mbentry,
 static void process_mboxlist(void)
 {
     /* build a list of mailboxes - we're using internal names here */
-    mboxlist_allmbox(NULL, fixmbox, NULL, 0);
+    mboxlist_allmbox(NULL, fixmbox, NULL, MBOXTREE_INTERMEDIATES);
 
     /* enable or disable RACLs per config */
     mboxlist_set_racls(config_getswitch(IMAPOPT_REVERSEACLS));
