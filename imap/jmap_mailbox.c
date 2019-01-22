@@ -2000,7 +2000,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     }
     r = 0;
 
-    /* Create mailbox using parent ACL */
+    /* Create mailbox */
     uint32_t options = 0;
     if (args->is_seenshared > 0) options |= OPT_IMAP_SHAREDSEEN;
     r = mboxlist_createsync(mboxname, 0 /* MBTYPE */,
@@ -2008,7 +2008,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
             req->userid, req->authstate,
             options, 0 /* uidvalidity */,
             0 /* createdmodseq */,
-            0 /* highestmodseq */, mbparent->acl,
+            0 /* highestmodseq */, NULL /* acl */,
             NULL /* uniqueid */, 0 /* local_only */,
             1, /* keep_intermediaries */
             NULL /* mboxptr */);
