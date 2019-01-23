@@ -2258,7 +2258,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                     httpd_userisadmin, req->userid, httpd_authstate,
                     mboxevent,
                     0 /* local_only */, 0 /* forceuser */, 0 /* ignorequota */,
-                    1 /* keep_intermediaries */);
+                    1 /* keep_intermediaries */, 1 /* move_subscription */);
             mboxevent_free(&mboxevent);
             mboxlist_entry_free(&mbentry);
             mboxlist_lookup_allow_all(newmboxname, &mbentry, NULL);
@@ -2413,6 +2413,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
                 1 /* keep_intermediaries */);
     }
     mboxevent_free(&mboxevent);
+
     if (r == IMAP_PERMISSION_DENIED) {
         result->err = json_pack("{s:s}", "type", "forbidden");
         r = 0;
@@ -2427,6 +2428,13 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
     }
     else if (r) {
         goto done;
+    }
+
+    /* Remove subscription */
+    int r2 = mboxlist_changesub(mbentry->name, req->userid, httpd_authstate, 0, 0, 0);
+    if (r2) {
+        syslog(LOG_ERR, "jmap: mbox_destroy: can't unsubscribe %s:%s",
+                mbentry->name, error_message(r2));
     }
 
     strarray_add(update_intermediaries, mbentry->name);
@@ -2709,7 +2717,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
                 httpd_userisadmin, req->userid, httpd_authstate,
                 mboxevent,
                 0 /* local_only */, 0 /* forceuser */, 0 /* ignorequota */,
-                1 /* keep_intermediaries */);
+                1 /* keep_intermediaries */, 1 /* move_subscription */);
         strarray_add(update_intermediaries, tmp->tmp_imapname);
         strarray_add(update_intermediaries, tmp->new_imapname);
         mboxevent_free(&mboxevent);

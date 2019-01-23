@@ -196,7 +196,7 @@ int mboxlist_renametree(const char *oldname, const char *newname,
                         const struct auth_state *auth_state,
                         struct mboxevent *mboxevent,
                         int local_only, int forceuser, int ignorequota,
-                        int keep_intermediaries);
+                        int keep_intermediaries, int move_subscription);
 /* Rename/move a mailbox (hierarchical) */
 /* prepare MailboxRename notification if mboxevent is not NULL */
 int mboxlist_renamemailbox(const mbentry_t *mbentry, const char *newname,
@@ -205,7 +205,7 @@ int mboxlist_renamemailbox(const mbentry_t *mbentry, const char *newname,
                            const struct auth_state *auth_state,
                            struct mboxevent *mboxevent,
                            int local_only, int forceuser, int ignorequota,
-                           int keep_intermediaries);
+                           int keep_intermediaries, int move_subscription);
 
 /* change ACL */
 int mboxlist_setacl(const struct namespace *namespace, const char *name,

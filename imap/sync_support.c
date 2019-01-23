@@ -3245,7 +3245,8 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
                                uidvalidity, 1, sstate->userid,
                                sstate->authstate, NULL, sstate->local_only, 1, 1,
-                               0/*keep_intermediaries*/);
+                               0/*keep_intermediaries*/,
+                               0/*move_subscription*/);
     mboxlist_entry_free(&mbentry);
 
     return r;

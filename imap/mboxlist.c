@@ -1623,7 +1623,8 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                mboxevent,
                                localonly /* local_only */,
                                force, 1,
-                               keep_intermediaries);
+                               keep_intermediaries,
+                               0 /* move_subscription */);
 
     if (!r && !keep_intermediaries) {
         /* in theory this should take the modseq from the renamed mailbox, but we don't
@@ -1839,6 +1840,7 @@ struct renmboxdata {
     int ignorequota;
     int found;
     int keep_intermediaries;
+    int move_subscription;
 };
 
 static int renamecheck(const mbentry_t *mbentry, void *rock)
@@ -1876,7 +1878,8 @@ static int dorename(const mbentry_t *mbentry, void *rock)
                                text->authstate,
                                /*mboxevent*/NULL,
                                text->local_only, /*forceuser*/1, text->ignorequota,
-                               text->keep_intermediaries);
+                               text->keep_intermediaries,
+                               text->move_subscription);
 
     return r;
 }
@@ -1887,7 +1890,7 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
                                  const struct auth_state *auth_state,
                                  struct mboxevent *mboxevent,
                                  int local_only, int forceuser, int ignorequota,
-                                 int keep_intermediaries)
+                                 int keep_intermediaries, int move_subscription)
 {
     struct renmboxdata rock;
     memset(&rock, 0, sizeof(struct renmboxdata));
@@ -1900,6 +1903,7 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
     rock.local_only = local_only;
     rock.ignorequota = ignorequota;
     rock.keep_intermediaries = keep_intermediaries;
+    rock.move_subscription = move_subscription;
     mbentry_t *mbentry = NULL;
     int r;
 
@@ -1922,7 +1926,7 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
                                auth_state,
                                mboxevent,
                                local_only, forceuser, ignorequota,
-                               keep_intermediaries);
+                               keep_intermediaries, move_subscription);
     mboxlist_entry_free(&mbentry);
 
     // special-case only children exist
@@ -1946,7 +1950,8 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
                                     const struct auth_state *auth_state,
                                     struct mboxevent *mboxevent,
                                     int local_only, int forceuser,
-                                    int ignorequota, int keep_intermediaries)
+                                    int ignorequota, int keep_intermediaries,
+                                    int move_subscription)
 {
     int r;
     const char *oldname = mbentry->name;
@@ -2166,6 +2171,23 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
                oldname, newname, cyrusdb_strerror(r));
         r = IMAP_IOERROR;
         goto done;
+    }
+
+    /* Move subscription */
+    if (move_subscription) {
+        int is_subscribed = mboxlist_checksub(oldname, userid) == 0;
+        int r2 = mboxlist_changesub(oldname, userid, auth_state, 0, 0, 0);
+        if (r2) {
+            syslog(LOG_ERR, "CHANGESUB: can't unsubscribe %s: %s",
+                    oldname, error_message(r2));
+        }
+        if (is_subscribed) {
+            r2 = mboxlist_changesub(newname, userid, auth_state, 1, 0, 0);
+            if (r2) {
+                syslog(LOG_ERR, "CHANGESUB: can't subscribe %s: %s",
+                        newname, error_message(r2));
+            }
+        }
     }
 
     if (!local_only && config_mupdate_server) {
