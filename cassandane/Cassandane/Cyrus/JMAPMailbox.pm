@@ -3265,4 +3265,114 @@ sub test_mailbox_set_intermediary_destroy
     $self->assert_str_equals($mboxByName{i1}->{id}, $mboxByName{bar}->{parentId});
 }
 
+sub test_mailbox_set_subscriptions_destroy
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            A => {
+                name => 'A', parentId => undef, role => undef,
+            },
+        },
+    }, "R1"]]);
+    my $idA =$res->[0][1]{created}{A}{id};
+    $self->assert_not_null($idA);
+
+    my $subdata = $imap->list([qw(SUBSCRIBED)], "", "*");
+    $self->assert_num_equals(0, scalar @{$subdata});
+
+    $imap->subscribe("INBOX.A") || die;
+
+    $subdata = $imap->list([qw(SUBSCRIBED)], "", "*");
+    $self->assert_num_equals(1, scalar @{$subdata});
+    $self->assert_str_equals('INBOX.A', $subdata->[0][2]);
+
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        destroy => [$idA],
+    }, "R1"]]);
+    $self->assert_str_equals($idA, $res->[0][1]{destroyed}[0]);
+
+    $subdata = $imap->list([qw(SUBSCRIBED)], "", "*");
+    $self->assert_num_equals(0, scalar @{$subdata});
+}
+
+sub test_mailbox_set_subscriptions_rename
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            A => {
+                name => 'A', parentId => undef, role => undef,
+            },
+        },
+    }, "R1"]]);
+    my $idA =$res->[0][1]{created}{A}{id};
+    $self->assert_not_null($idA);
+    $imap->subscribe("INBOX.A") || die;
+
+    my $subdata = $imap->list([qw(SUBSCRIBED)], "", "*");
+    $self->assert_num_equals(1, scalar @{$subdata});
+    $self->assert_str_equals('INBOX.A', $subdata->[0][2]);
+
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $idA => {
+                name => 'B',
+            },
+        },
+    }, "R1"]]);
+    $subdata = $imap->list([qw(SUBSCRIBED)], "", "*");
+    $self->assert_num_equals(1, scalar @{$subdata});
+    $self->assert_str_equals('INBOX.B', $subdata->[0][2]);
+}
+
+sub test_mailbox_set_subscriptions_rename_children
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    my $res = $jmap->CallMethods([['Mailbox/set', {
+        create => {
+            A => {
+                name => 'A', parentId => undef, role => undef,
+            },
+            C => {
+                name => 'C', parentId => '#A', role => undef,
+            },
+        },
+    }, "R1"]]);
+    my $idA =$res->[0][1]{created}{A}{id};
+    $self->assert_not_null($idA);
+    $imap->subscribe("INBOX.A.C") || die;
+
+    my $subdata = $imap->list([qw(SUBSCRIBED)], "", "*");
+    $self->assert_num_equals(1, scalar @{$subdata});
+    $self->assert_str_equals('INBOX.A.C', $subdata->[0][2]);
+
+    $res = $jmap->CallMethods([['Mailbox/set', {
+        update => {
+            $idA => {
+                name => 'B',
+            },
+        },
+    }, "R1"]]);
+    $subdata = $imap->list([qw(SUBSCRIBED)], "", "*");
+    $self->assert_num_equals(1, scalar @{$subdata});
+    $self->assert_str_equals('INBOX.B.C', $subdata->[0][2]);
+}
+
+
 1;
