@@ -3919,6 +3919,7 @@ static int personalize_resource(struct transaction_t *txn,
     const char *owner;
     icalcomponent *oldical = NULL;
     unsigned num_changes = 0;
+    struct auth_state *authstate = auth_newstate(userid);
 
     *store_me = ical;
 
@@ -3927,7 +3928,9 @@ static int personalize_resource(struct transaction_t *txn,
     owner = mbname_userid(mbname);
     is_owner = !strcmpsafe(owner, userid);
 
-    rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
+    rights = cyrus_acl_myrights(authstate, mailbox->acl);
+    auth_freestate(authstate);
+
     if (rights & DACL_WRITECONT) {
         /* User has read-write access */
         read_only = 0;
