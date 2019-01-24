@@ -495,21 +495,21 @@ static strarray_t *tzid_from_geo(struct transaction_t *txn,
                 /* Uninhabited */
                 tzid = "Etc/GMT";
             }
-            else if (longitude >= 142.033333) {     /* 142*  2' */
+            else if (longitude >= 142.033333) {     /* 142° 2' */
                 /* Australian Claim (George V / Oates Lands) */
                 tzid = "Etc/GMT+10";
             }
-            else if (longitude >= 136.183333) {     /* 136* 11' */
+            else if (longitude >= 136.183333) {     /* 136° 11' */
                 /* French Claim (Adelie Land) */
                 tzid = "Etc/GMT+10";
             }
-            else if (longitude >= 44.633333) {      /*  44* 38' */
+            else if (longitude >= 44.633333) {      /*  44° 38' */
                 /* Australian Claim */
-                if (longitude >= 100.5) {           /* 100* 30' */
+                if (longitude >= 100.5) {           /* 100° 30' */
                     /* Wilkes Land */
                     tzid = "Etc/GMT+8";
                 }
-                else if (longitude >= 72.583333) {  /*  72* 35' */
+                else if (longitude >= 72.583333) {  /*  72° 35' */
                     /* Princess Elizabeth / Kaiser Wilhelm II / Queen Mary Lands */
                     tzid = "Etc/GMT+7";
                 }
