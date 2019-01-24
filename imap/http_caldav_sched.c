@@ -914,6 +914,8 @@ int sched_busytime_query(struct transaction_t *txn,
             xmlNodePtr resp;
             const char *userid = sparam.userid;
             icalcomponent *busy = NULL;
+            mbentry_t *mbentry = NULL;
+            const char *status = REQSTAT_NOUSER;
 
             resp =
                 xml_add_schedresponse(root,
@@ -924,12 +926,14 @@ int sched_busytime_query(struct transaction_t *txn,
             /* Check ACL of ORGANIZER on attendee's Scheduling Inbox */
             char *inboxname = caldav_mboxname(userid, SCHED_INBOX);
 
-            r = mboxlist_lookup(inboxname, NULL, NULL);
+            r = mboxlist_lookup(inboxname, &mbentry, NULL);
             if (r) {
                 syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
                        inboxname, error_message(r));
-                xmlNewChild(resp, NULL, BAD_CAST "request-status",
-                            BAD_CAST REQSTAT_REJECTED);
+                status = REQSTAT_REJECTED;
+            }
+            else if (!(httpd_myrights(org_authstate, mbentry) & DACL_SCHEDFB)) {
+                status = REQSTAT_NOPRIVS;
             }
             else {
                 /* Start query at attendee's calendar-home-set */
@@ -943,6 +947,7 @@ int sched_busytime_query(struct transaction_t *txn,
                                             organizer, attendee);
                 free(mboxname);
             }
+            mboxlist_entry_free(&mbentry);
             free(inboxname);
 
             if (busy) {
@@ -980,7 +985,7 @@ int sched_busytime_query(struct transaction_t *txn,
             }
             else {
                 xmlNewChild(resp, NULL, BAD_CAST "request-status",
-                            BAD_CAST REQSTAT_NOUSER);
+                            BAD_CAST status);
             }
 
             icalproperty_free(prop);
