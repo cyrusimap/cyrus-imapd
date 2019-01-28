@@ -7327,6 +7327,9 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
     icalproperty *prop;
     unsigned n;
 
+    syslog(LOG_DEBUG, "busytime_query_local(mbox: '%s', org: '%s', att: '%s')",
+           mailboxname, organizer, attendee);
+
     fctx->open_db = (db_open_proc_t) &caldav_open_mailbox;
     fctx->close_db = (db_close_proc_t) &caldav_close;
     fctx->lookup_resource = (db_lookup_proc_t) &caldav_lookup_resource;

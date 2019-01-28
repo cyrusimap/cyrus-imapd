@@ -113,6 +113,10 @@ int caladdress_lookup(const char *addr,
 
     if (!strncasecmp(userid, "mailto:", 7)) userid += 7;
 
+    syslog(LOG_DEBUG,
+           "caladdress_lookup(userid: '%s', myuserid: '%s', testuser: '%s')",
+           userid, myuserid ? myuserid : "NULL", testuser ? testuser : "NULL");
+
     memset(param, 0, sizeof(struct caldav_sched_param));
 
     if (testuser && !strcasecmp(userid, testuser)) {
@@ -678,6 +682,9 @@ static void busytime_query_remote(const char *server __attribute__((unused)),
     xmlNodePtr resp;
     const char *status = NULL;
     int r;
+
+    syslog(LOG_DEBUG, "busytime_query_remote(server: '%s', flags: 0x%x)",
+           server, remote->flags);
 
     comp = icalcomponent_get_first_real_component(rrock->ical);
 
