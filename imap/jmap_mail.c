@@ -7517,10 +7517,19 @@ static void _emailpart_to_mime(jmap_req_t *req, FILE *fp,
         }
         /* Write sub parts */
         int j;
+        int is_digest = part->type && !strcasecmp(part->type, "MULTIPART") &&
+                        part->subtype && !strcasecmp(part->subtype, "DIGEST");
         for (j = 0; j < part->subparts.count; j++) {
+            struct emailpart *subpart = ptrarray_nth(&part->subparts, j);
+            if (is_digest && !subpart->type && subpart->blob_id) {
+                /* multipart/digest changes the default content type of this
+                 * part from text/plain to message/rfc822, so make sure that
+                 * emailpart_blob_to_mime will properly deal with it */
+                subpart->type = xstrdup("MESSAGE");
+                subpart->subtype = xstrdup("RFC822");
+            }
             fprintf(fp, "\r\n--%s\r\n", part->boundary);
-            _emailpart_to_mime(req, fp, ptrarray_nth(&part->subparts, j),
-                               missing_blobs);
+            _emailpart_to_mime(req, fp, subpart, missing_blobs);
         }
         fprintf(fp, "\r\n--%s--\r\n", part->boundary);
     }
@@ -7529,7 +7538,6 @@ static void _emailpart_to_mime(jmap_req_t *req, FILE *fp,
     }
     else if (part->blob_id) {
         _emailpart_blob_to_mime(req, fp, part, missing_blobs);
-        return;
     }
 }
 
