@@ -132,6 +132,6 @@ if [ ! $ITEM ] || [ $ITEM == libchardet ] ; then
   automake
   autoconf
   ./configure --enable-silent-rules --prefix=$PREFIX
-  sudo make install-exec $MAKEOPTS
+  sudo make install $MAKEOPTS
 )
 fi
