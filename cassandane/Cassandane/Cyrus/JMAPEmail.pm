@@ -11913,4 +11913,62 @@ EOF
     $self->assert_equals("k\N{LATIN SMALL LETTER A WITH DIAERESIS}fer.png", $msg->{bodyStructure}{subParts}[1]{name});
 }
 
+sub test_email_set_multipartdigest
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "Generate emails via IMAP";
+    $self->make_message() || die;
+    $self->make_message() || die;
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => ['blobId'],
+        }, 'R2' ],
+    ]);
+    my $emailBlobId1 = $res->[1][1]->{list}[0]->{blobId};
+    $self->assert_not_null($emailBlobId1);
+    my $emailBlobId2 = $res->[1][1]->{list}[1]->{blobId};
+    $self->assert_not_null($emailBlobId2);
+    $self->assert_str_not_equals($emailBlobId1, $emailBlobId2);
+
+    xlog "Create email with multipart/digest body";
+    my $inboxid = $self->getinbox()->{id};
+    my $email = {
+        mailboxIds => { $inboxid => JSON::true },
+        from => [{ name => "Test", email => q{test@local} }],
+        subject => "test",
+        bodyStructure => {
+            type => "multipart/digest",
+            subParts => [{
+                blobId => $emailBlobId1,
+            }, {
+                blobId => $emailBlobId2,
+            }],
+        },
+    };
+    $res = $jmap->CallMethods([
+        ['Email/set', { create => { '1' => $email } }, 'R1'],
+        ['Email/get', {
+            ids => [ '#1' ],
+            properties => [ 'bodyStructure' ],
+            bodyProperties => [ 'partId', 'blobId', 'type', 'headers' ],
+            fetchAllBodyValues => JSON::true,
+        }, 'R2' ],
+    ]);
+
+    my $subPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[0];
+    $self->assert_str_equals("message/rfc822", $subPart->{type});
+    $self->assert_deep_equals([], $subPart->{headers});
+    $subPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[1];
+    $self->assert_str_equals("message/rfc822", $subPart->{type});
+    $self->assert_deep_equals([], $subPart->{headers});
+}
+
 1;
