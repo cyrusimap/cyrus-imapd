@@ -1288,7 +1288,10 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
     }
     if (!r) {
         struct stagemsg *stage;
-        FILE *f = append_newstage(intname, time(NULL),
+        /* post-date by 1 sec in an effort to have
+           the FCC threaded AFTER the incoming message */
+        time_t internaldate = time(NULL) + 1;
+        FILE *f = append_newstage(intname, internaldate,
                                   strhash(intname) /* unique msgnum for reply */,
                                   &stage);
         if (f) {
@@ -1299,7 +1302,8 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
             fclose(f);
 
             r = append_fromstage(&as, &body, stage,
-                                 0, 0, fcc->imapflags, 0, /* annotations */ NULL);
+                                 internaldate, /* createdmodseq */ 0,
+                                 fcc->imapflags, 0, /* annotations */ NULL);
             if (!r) r = append_commit(&as);
 
             if (body) {
