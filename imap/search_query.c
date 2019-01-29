@@ -263,6 +263,12 @@ static search_folder_t *query_get_valid_folder(search_query_t *query,
 {
     search_folder_t *folder;
 
+    // check if we want to process this mailbox
+    if (query->checkfolder &&
+        !query->checkfolder(mboxname, query->checkfolderrock)) {
+        return NULL;
+    }
+
     if (mboxname_isdeletedmailbox(mboxname, 0) &&
         !(query->want_mbtype & MBTYPE_DELETED)) {
         return NULL;
