@@ -423,8 +423,7 @@ sub test_sigterm
 
     # User logged in SESSIONID=<0604061-1337148251-29539-1>
     my $rem = $talk->get_response_code('remainder');
-    xlog "rem is" . $rem;
-    my (undef, $start, $imapd_pid, $n) =
+    my (undef, $start, $imapd_pid, undef) =
         ($rem =~ m/SESSIONID=<([^-]+)-(\d+)-(\d+)-(\d+)/);
     # cyrus switched pid and start at one point - the start will ALWAYS
     # be larger than the pid, so....
