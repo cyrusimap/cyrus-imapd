@@ -866,6 +866,7 @@ static int eval_list(char *list, struct mailbox *mailbox, const char *etag,
 }
 
 static int eval_if(const char *hdr, struct meth_params *params,
+                   const struct namespace_t *namespace,
                    struct mailbox *tgt_mailbox, const char *tgt_resource,
                    const char *tgt_etag, const char *tgt_lock_token,
                    unsigned *locked)
@@ -902,6 +903,7 @@ static int eval_if(const char *hdr, struct meth_params *params,
                 int r;
 
                 memset(&tag_tgt, 0, sizeof(struct request_target_t));
+                tag_tgt.namespace = namespace;
 
                 if (!params->parse_path(uri->path, &tag_tgt, &err)) {
                     if (tag_tgt.mbentry && !tag_tgt.mbentry->server) {
@@ -1062,7 +1064,8 @@ EXPORTED int dav_check_precond(struct transaction_t *txn,
        Per RFC 7232, LOCK errors supercede preconditions */
     if ((hdr = spool_getheader(hdrcache, "If"))) {
         /* State tokens (sync-token, lock-token) and Etags */
-        if (!eval_if(hdr[0], params, mailbox, txn->req_tgt.resource,
+        if (!eval_if(hdr[0], params, txn->req_tgt.namespace,
+                     mailbox, txn->req_tgt.resource,
                      etag, lock_token, &locked))
             return HTTP_PRECOND_FAILED;
     }
