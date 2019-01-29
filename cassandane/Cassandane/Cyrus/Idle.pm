@@ -421,10 +421,14 @@ sub test_sigterm
     my $store = $svc->create_store(folder => 'INBOX');
     my $talk = $store->get_client();
 
-    # User logged in SESSIONID=<0604061-29539-1337148251-1>
+    # User logged in SESSIONID=<0604061-1337148251-29539-1>
     my $rem = $talk->get_response_code('remainder');
-    my ($name, $imapd_pid, $start, $n) =
+    xlog "rem is" . $rem;
+    my (undef, $start, $imapd_pid, $n) =
         ($rem =~ m/SESSIONID=<([^-]+)-(\d+)-(\d+)-(\d+)/);
+    # cyrus switched pid and start at one point - the start will ALWAYS
+    # be larger than the pid, so....
+    ($imapd_pid, $start) = ($start, $imapd_pid) if ($start < $imapd_pid);
     $self->assert_not_null($imapd_pid);
     $imapd_pid = 0 + $imapd_pid;
     $self->assert($imapd_pid > 1);
