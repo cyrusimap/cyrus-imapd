@@ -1416,12 +1416,21 @@ HIDDEN int jmap_email_find(jmap_req_t *req,
     return _email_find_in_account(req, req->accountid, email_id, mboxnameptr, uidptr);
 }
 
+struct email_getcid_rock {
+    jmap_req_t *req;
+    int checkacl;
+    conversation_id_t cid;
+};
+
 static int _email_get_cid_cb(const conv_guidrec_t *rec, void *rock)
 {
-    conversation_id_t *cidp = (conversation_id_t *)rock;
+    struct email_getcid_rock *d = (struct email_getcid_rock *)rock;
     if (rec->part) return 0;
     if (!rec->cid) return 0;
-    *cidp = rec->cid;
+    /* Make sure we are allowed to read this mailbox */
+    if (d->checkacl && !jmap_hasrights_byname(d->req, rec->mboxname, ACL_READ))
+            return 0;
+    d->cid = rec->cid;
     return IMAP_OK_COMPLETED;
 }
 
@@ -1437,8 +1446,11 @@ static int _email_get_cid(jmap_req_t *req, const char *msgid,
     if (strlen(msgid) != 25)
         return IMAP_NOTFOUND;
 
-    r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _email_get_cid_cb, cidp);
+    int checkacl = strcmp(req->userid, req->accountid);
+    struct email_getcid_rock rock = { req, checkacl, 0 };
+    r = conversations_guid_foreach(req->cstate, _guid_from_id(msgid), _email_get_cid_cb, &rock);
     if (r == IMAP_OK_COMPLETED) {
+        *cidp = rock.cid;
         r = 0;
     }
     return r;
