@@ -3585,6 +3585,14 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
             json_array_append_new(ids, json_string(email_id));
         }
 
+        /* if we didn't find any visible IDs, then the thread doesn't really
+           exist for this user */
+        if (!json_array_size(ids)) {
+            json_decref(ids);
+            json_array_append_new(not_found, json_string(threadid));
+            continue;
+        }
+
         json_t *jthread = json_pack("{s:s s:o}", "id", threadid, "emailIds", ids);
         json_array_append_new(list, jthread);
 
