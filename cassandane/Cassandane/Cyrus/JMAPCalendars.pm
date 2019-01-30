@@ -2305,6 +2305,39 @@ sub test_calendarevent_set_recurrenceoverrides
     $self->assert_normalized_event_equals($ret, $event);
 }
 
+sub test_calendarevent_set_recurrence_until
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $event = {
+        "status" =>"confirmed",
+        "calendarId" => $calid,
+        "isAllDay" => JSON::false,
+        "timeZone" => "America/New_York",
+        "freeBusyStatus" =>"busy",
+        "start" =>"2019-01-12T00:00:00",
+        "useDefaultAlerts" => JSON::false,
+        "uid" =>"76f46024-7284-4701-b93f-d9cd812f3f43",
+        "title" =>"timed event with non-zero time until",
+        "\@type" =>"jsevent",
+        "recurrenceRule" =>{
+            "frequency" =>"weekly",
+            "until" =>"2019-04-20T23:59:59"
+        },
+        "description" =>"",
+        "duration" =>"P1D"
+    };
+
+    my $ret = $self->createandget_event($event);
+    $event->{id} = $ret->{id};
+    $event->{recurrenceRule}->{until} = '2019-04-20T23:59:59';
+    $self->assert_normalized_event_equals($ret, $event);
+}
+
 sub test_calendarevent_set_recurrence_untilallday
     :min_version_3_1 :needs_component_jmap
 {
