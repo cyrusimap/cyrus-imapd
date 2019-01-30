@@ -81,6 +81,7 @@
 #define USER_COLLECTION_PREFIX  "user"
 #define GROUP_COLLECTION_PREFIX "group"
 
+#define LOCK_TOKEN_URL_SCHEME "urn:uuid:"
 #define SYNC_TOKEN_URL_SCHEME "data:,"
 
 #define SHARED_COLLECTION_DELIM '.'

@@ -1397,10 +1397,9 @@ void xml_add_lockdisc(xmlNodePtr node, const char *root, struct dav_data *data)
         xmlNewChild(active, NULL, BAD_CAST "depth", BAD_CAST "0");
 
         if (data->lock_owner) {
-            /* Last char of token signals href (1) or text (0) */
-            if (data->lock_token[strlen(data->lock_token)-1] == '1') {
+            if (!strncmp(data->lock_owner, "<DAV:href>", 10)) {
                 node1 = xmlNewChild(active, NULL, BAD_CAST "owner", NULL);
-                xml_add_href(node1, NULL, data->lock_owner);
+                xml_add_href(node1, NULL, data->lock_owner + 10);
             }
             else {
                 xmlNewTextChild(active, NULL, BAD_CAST "owner",
@@ -5095,7 +5094,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
-    xmlChar *owner = NULL;
+    xmlBufferPtr owner = NULL;
     time_t now = time(NULL);
     void *davdb = NULL;
 
@@ -5199,7 +5198,6 @@ int meth_lock(struct transaction_t *txn, void *params)
     if (ddata->lock_expire <= now) {
         /* Create new lock */
         xmlNodePtr node, sub;
-        unsigned owner_is_href = 0;
 
         /* Parse the required body */
         ret = parse_xml_body(txn, &root, NULL);
@@ -5246,10 +5244,11 @@ int meth_lock(struct transaction_t *txn, void *params)
             }
             else if (!xmlStrcmp(node->name, BAD_CAST "owner")) {
                 /* Find child element of owner */
+                owner = xmlBufferCreate();
                 for (sub = node->children;
                      sub && sub->type != XML_ELEMENT_NODE; sub = sub->next);
                 if (!sub) {
-                    owner = xmlNodeGetContent(node);
+                    xmlNodeBufGetContent(owner, node);
                 }
                 /* Make sure its a href element */
                 else if (xmlStrcmp(sub->name, BAD_CAST "href")) {
@@ -5257,20 +5256,18 @@ int meth_lock(struct transaction_t *txn, void *params)
                     goto done;
                 }
                 else {
-                    owner_is_href = 1;
-                    owner = xmlNodeGetContent(sub);
+                    xmlNodeBufGetContent(owner, sub);
+                    xmlBufferAddHead(owner, BAD_CAST "<DAV:href>", 10);
                 }
             }
         }
 
         ddata->lock_ownerid = httpd_userid;
-        if (owner) ddata->lock_owner = (const char *) owner;
+        if (owner) ddata->lock_owner = (const char *) xmlBufferContent(owner);
 
         /* Construct lock-token */
         assert(!buf_len(&txn->buf));
-        buf_printf(&txn->buf, XML_NS_CYRUS "lock/%s-%x-%u",
-                   mailbox->uniqueid, strhash(txn->req_tgt.resource),
-                   owner_is_href);
+        buf_printf(&txn->buf, LOCK_TOKEN_URL_SCHEME "%s", makeuuid());
 
         ddata->lock_token = buf_cstring(&txn->buf);
     }
@@ -5320,7 +5317,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     mailbox_close(&mailbox);
     if (outdoc) xmlFreeDoc(outdoc);
     if (indoc) xmlFreeDoc(indoc);
-    if (owner) xmlFree(owner);
+    if (owner) xmlBufferFree(owner);
 
     return ret;
 }
