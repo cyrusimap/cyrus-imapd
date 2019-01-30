@@ -503,13 +503,17 @@ static int getcalendarchanges_cb(const mbentry_t *mbentry, void *vrock)
         goto done;
     }
 
-    /* Ignore mailboxes that are hidden from us */
-    if (!jmap_hasrights(req, mbentry, DACL_READ))
-        return 0;
-
     /* Ignore any mailboxes that aren't (possibly deleted) calendars. */
     if (!mboxname_iscalendarmailbox(mbentry->name, mbentry->mbtype))
         return 0;
+
+    /* Ignore mailboxes that are hidden from us. */
+    /* XXX Deleted mailboxes loose their ACL so we can't determine
+     * if they ever could be read by the authenticated user. We
+     * need to leak these deleted entries to not mess up client state. */
+    if (!(mbentry->mbtype & MBTYPE_DELETED) || strcmpsafe(mbentry->acl, "")) {
+        if (!jmap_hasrights(req, mbentry, DACL_READ)) return 0;
+    }
 
     /* Ignore special-purpose calendar mailboxes. */
     mbname = mbname_from_intname(mbentry->name);

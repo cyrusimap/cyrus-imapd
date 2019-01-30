@@ -1179,25 +1179,21 @@ HIDDEN char *jmap_xhref(const char *mboxname, const char *resource)
 
 static int _rights_for_mbentry(jmap_req_t *req, const mbentry_t *mbentry)
 {
-    // for the mailbox owner, assume full rights
-    int rights = -1;
+    int rights = 0;
 
     mbname_t *mbname = mbname_from_intname(mbentry->name);
-    if (strcmp(mbname_userid(mbname), req->userid)) {
-        if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-            // if it's an intermediate mailbox, we get rights from the parent
-            mbentry_t *parententry = NULL;
-            if (mboxlist_findparent(mbentry->name, &parententry))
-                rights = 0;
-            else
-                rights = httpd_myrights(req->authstate, parententry);
-            mboxlist_entry_free(&parententry);
-        }
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+        // if it's an intermediate mailbox, we get rights from the parent
+        mbentry_t *parententry = NULL;
+        if (mboxlist_findparent(mbentry->name, &parententry))
+            rights = 0;
         else
-            rights = httpd_myrights(req->authstate, mbentry);
+            rights = httpd_myrights(req->authstate, parententry);
+        mboxlist_entry_free(&parententry);
     }
-    mbname_free(&mbname);
+    else rights = httpd_myrights(req->authstate, mbentry);
 
+    mbname_free(&mbname);
     return rights;
 }
 
