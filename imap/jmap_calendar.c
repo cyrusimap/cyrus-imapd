@@ -2503,7 +2503,8 @@ static void filter_timerange(json_t *filter, time_t *before, time_t *after,
             *after = caldav_epoch;
         }
 
-        if (json_object_get(filter, "text") ||
+        if (json_object_get(filter, "inCalendars") ||
+            json_object_get(filter, "text") ||
             json_object_get(filter, "title") ||
             json_object_get(filter, "description") ||
             json_object_get(filter, "location") ||
