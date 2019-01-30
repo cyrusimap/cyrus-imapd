@@ -78,6 +78,8 @@ static int myrights(struct auth_state *authstate,
                     const mbentry_t *mbentry,
                     hash_table *mboxrights)
 {
+    if (!mbentry) return 0;
+
     int *rightsptr = hash_lookup(mbentry->name, mboxrights);
     if (!rightsptr) {
         rightsptr = xmalloc(sizeof(int));
@@ -1179,6 +1181,8 @@ HIDDEN char *jmap_xhref(const char *mboxname, const char *resource)
 
 static int _rights_for_mbentry(jmap_req_t *req, const mbentry_t *mbentry)
 {
+    if (!mbentry) return 0;
+
     int rights = 0;
 
     mbname_t *mbname = mbname_from_intname(mbentry->name);
@@ -1200,6 +1204,8 @@ static int _rights_for_mbentry(jmap_req_t *req, const mbentry_t *mbentry)
 
 HIDDEN int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
 {
+    if (!mbentry) return 0;
+
     int *rightsptr = hash_lookup(mbentry->name, req->mboxrights);
 
     if (!rightsptr) {
@@ -1214,7 +1220,7 @@ HIDDEN int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
 // gotta have them all
 HIDDEN int jmap_hasrights(jmap_req_t *req, const mbentry_t *mbentry, int rights)
 {
-    int myrights = mbentry ? jmap_myrights(req, mbentry) : 0;
+    int myrights = jmap_myrights(req, mbentry);
     if ((myrights & rights) == rights) return 1;
     return 0;
 }
