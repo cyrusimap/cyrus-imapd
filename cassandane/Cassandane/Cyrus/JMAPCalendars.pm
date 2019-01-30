@@ -4532,4 +4532,80 @@ sub test_calendarevent_set_notitle
     $self->assert_str_equals('foo', $res->[1][1]{list}[0]{title});
 }
 
+sub test_calendarevent_set_readonly
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $admintalk = $self->{adminstore}->get_client();
+    my $service = $self->{instance}->get_service("http");
+
+    # Assert that calendar ACLs are enforced also for mailbox owner.
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                "1" => {
+                    name => "",
+                    color => "coral",
+                    isVisible => \1
+                }
+            }
+        }, "R1"],
+        ['Calendar/get', {
+            ids => ['#1'],
+            properties => ['name'],
+        }, "R2"],
+    ]);
+    my $calendarId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($calendarId);
+    my $name = $res->[1][1]{list}[0]{'name'};
+    $self->assert_not_null($name);
+
+    $admintalk->setacl("user.cassandane.#calendars." . $name, "cassandane" => 'lrskxcan9') or die;
+
+    $res = $jmap->CallMethods([
+            ['Calendar/get',{
+                ids => [$calendarId],
+            }, "R2"],
+            ['CalendarEvent/set',{
+                create => {
+                    "1" => {
+                        "calendarId" => $calendarId,
+                        "uid" => "58ADE31-custom-UID",
+                        "title"=> "foo",
+                        "start"=> "2015-11-07T09:00:00",
+                        "duration"=> "PT5M",
+                        "sequence"=> 42,
+                        "timeZone"=> "Etc/UTC",
+                        "isAllDay"=> JSON::false,
+                        "locale" => "en",
+                        "status" => "tentative",
+                        "description"=> "",
+                        "freeBusyStatus"=> "busy",
+                        "privacy" => "secret",
+                        "attachments"=> undef,
+                        "participants" => undef,
+                        "alerts"=> undef,
+                    }
+                }
+            }, "R2"],
+        ]);
+
+    my $calendar = $res->[0][1]{list}[0];
+    $self->assert_equals(JSON::true, $calendar->{mayReadFreeBusy});
+    $self->assert_equals(JSON::true, $calendar->{mayReadItems});
+    $self->assert_equals(JSON::false, $calendar->{mayAddItems});
+    $self->assert_equals(JSON::false, $calendar->{mayModifyItems});
+    $self->assert_equals(JSON::false, $calendar->{mayRemoveItems});
+    $self->assert_equals(JSON::true, $calendar->{mayRename});
+    $self->assert_equals(JSON::true, $calendar->{mayDelete});
+    $self->assert_equals(JSON::true, $calendar->{mayAdmin});
+
+    $self->assert_not_null($res->[1][1]{notCreated}{1});
+    $self->assert_str_equals("invalidProperties", $res->[1][1]{notCreated}{1}{type});
+    $self->assert_str_equals("calendarId", $res->[1][1]{notCreated}{1}{properties}[0]);
+}
+
 1;
