@@ -1214,7 +1214,7 @@ HIDDEN int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
 // gotta have them all
 HIDDEN int jmap_hasrights(jmap_req_t *req, const mbentry_t *mbentry, int rights)
 {
-    int myrights = jmap_myrights(req, mbentry);
+    int myrights = mbentry ? jmap_myrights(req, mbentry) : 0;
     if ((myrights & rights) == rights) return 1;
     return 0;
 }
