@@ -634,7 +634,7 @@ recurrence_from_ical(icalcomponent *comp)
             icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
         if (dtstart_prop) {
             icalparameter *tzid_param =
-                icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+                icalproperty_get_first_parameter(dtstart_prop, ICAL_TZID_PARAMETER);
             if (tzid_param) tzid = icalparameter_get_tzid(tzid_param);
         }
         icaltimezone *tz = tz_from_tzid(tzid);
