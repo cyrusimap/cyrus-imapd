@@ -152,6 +152,7 @@ static struct mboxevent event_template =
     { EVENT_CALENDAR_ALARM_RECIPIENTS, "alarmRecipients", EVENT_PARAM_ARRAY, { 0 }, 0 },
     { EVENT_CALENDAR_USER_ID, "userId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_CALENDAR_NAME, "calendarName", EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_CALENDAR_CALENDAR_ID, "calendarId", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_UID, "uid", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_ACTION, "action", EVENT_PARAM_STRING, { 0 }, 0 },
     { EVENT_CALENDAR_SUMMARY, "summary", EVENT_PARAM_STRING, { 0 }, 0 },
@@ -435,6 +436,7 @@ static int mboxevent_expected_calendar_param(enum event_param param)
     case EVENT_CALENDAR_ALARM_RECIPIENTS:
     case EVENT_CALENDAR_USER_ID:
     case EVENT_CALENDAR_CALENDAR_NAME:
+    case EVENT_CALENDAR_CALENDAR_ID:
     case EVENT_CALENDAR_UID:
     case EVENT_CALENDAR_ACTION:
     case EVENT_CALENDAR_SUMMARY:

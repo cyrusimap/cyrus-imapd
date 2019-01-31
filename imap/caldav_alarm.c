@@ -216,6 +216,10 @@ static int send_alarm(struct get_alarm_rock *rock,
     FILL_STRING_PARAM(event, EVENT_CALENDAR_USER_ID, xstrdup(userid));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_NAME, buf_release(&calname));
 
+    prop = icalcomponent_get_first_property(comp, ICAL_CALID_PROPERTY);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_ID,
+                      xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
+
     prop = icalcomponent_get_first_property(comp, ICAL_UID_PROPERTY);
     FILL_STRING_PARAM(event, EVENT_CALENDAR_UID,
                       xstrdup(prop ? icalproperty_get_value_as_string(prop) : ""));
