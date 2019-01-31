@@ -3044,7 +3044,7 @@ participants_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *ev
             caladdress = xstrdup(json_string_value(json_object_get(sendTo, "imip")));
         }
         else if (json_object_get(sendTo, "other")) {
-            caladdress = xstrdup(json_string_value(json_object_get(sendTo, "imip")));
+            caladdress = xstrdup(json_string_value(json_object_get(sendTo, "other")));
         }
         else if (json_object_size(sendTo)) {
             const char *anymethod = json_object_iter_key(json_object_iter(sendTo));
