@@ -1131,7 +1131,9 @@ Blank lines and lines beginning with ``#'' are ignored.
    %u   = user
    %U   = user portion of %u (%U = test when %u = test@domain.tld)
    %d   = domain portion of %u if available (%d = domain.tld when %u =
-          %test@domain.tld), otherwise same as %r
+          test@domain.tld), otherwise same as %R
+   %R   = domain portion of %u starting with @ (%R = @domain.tld
+          when %u = test@domain.tld)
    %D   = user dn.  (use when ldap_member_method: filter)
    %1-9 = domain tokens (%1 = tld, %2 = domain when %d = domain.tld)
 
