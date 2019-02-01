@@ -2094,6 +2094,8 @@ struct emailsearch {
 
 static void _emailsearch_free(struct emailsearch *search)
 {
+    if (!search) return;
+
     index_close(&search->state);
     search_query_free(search->query);
     freesearchargs(search->args);
