@@ -3225,7 +3225,6 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
         }
 
         conversation_fini(&conv);
-        memset(&conv, 0, sizeof(conversation_t));
     }
     hashset_free(&seen_threads);
 
