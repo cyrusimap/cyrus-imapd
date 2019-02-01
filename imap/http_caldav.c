@@ -154,6 +154,7 @@ static int my_caldav_auth(const char *userid);
 static void my_caldav_reset(void);
 static void my_caldav_shutdown(void);
 
+static unsigned long caldav_allow_cb(struct request_target_t *tgt);
 static int caldav_parse_path(const char *path, struct request_target_t *tgt,
                              const char **resultstr);
 
@@ -383,6 +384,9 @@ static const struct prop_entry caldav_props[] = {
     { "supported-report-set", NS_DAV,
       PROP_COLLECTION | PROP_PRESCREEN,
       propfind_reportset, NULL, (void *) caldav_reports },
+    { "supported-method-set", NS_DAV,
+      PROP_COLLECTION | PROP_RESOURCE,
+      propfind_methodset, NULL, (void *) &caldav_allow_cb },
 
     /* WebDAV ACL (RFC 3744) properties */
     { "owner", NS_DAV,
@@ -925,6 +929,42 @@ static void my_caldav_shutdown(void)
 }
 
 
+/* Determine allowed methods in CalDAV namespace */
+static unsigned long caldav_allow_cb(struct request_target_t *tgt)
+{
+    unsigned long allow = calcarddav_allow_cb(tgt);
+
+    if (!tgt->collection) {
+        if (tgt->userid) {
+            /* Allow POST to cal-home-set (share reply) */
+            allow |= ALLOW_POST;
+        }
+    }
+    else if (!strncmp(tgt->collection, MANAGED_ATTACH, strlen(MANAGED_ATTACH))) {
+        /* Read-only non-calendar collection */
+        allow = ALLOW_READ;
+    }
+    else if (!strncmp(tgt->collection, SCHED_INBOX, strlen(SCHED_INBOX))) {
+        /* Can only read and DELETE resources from this collection */
+        allow &= ALLOW_READ_MASK;
+
+        if (tgt->resource) allow |= ALLOW_DELETE;
+    }
+    else if (!strncmp(tgt->collection, SCHED_OUTBOX, strlen(SCHED_OUTBOX))){
+        /* Can only POST to this collection (free/busy request) */
+        allow &= ALLOW_READ_MASK;
+
+        if (!tgt->resource) allow |= ALLOW_POST;
+    }
+    else if (tgt->resource) {
+        /* Resource in regular calendar collection (POST for managed attach) */
+        allow |= ALLOW_POST;
+    }
+
+    return allow;
+}
+
+
 /* Parse request-target path in CalDAV namespace */
 static int caldav_parse_path(const char *path, struct request_target_t *tgt,
                              const char **resultstr)
@@ -942,8 +982,10 @@ static int caldav_parse_path(const char *path, struct request_target_t *tgt,
         tgt->allow = ALLOW_READ;
     }
     else if (!tgt->collection) {
-        /* Allow POST to cal-home-set (share reply) */
-        tgt->allow |= ALLOW_POST;
+        if (tgt->userid) {
+            /* Allow POST to cal-home-set (share reply) */
+            tgt->allow |= ALLOW_POST;
+        }
     }
     else if (!strncmp(tgt->collection, MANAGED_ATTACH, strlen(MANAGED_ATTACH))) {
         /* Read-only non-calendar collection */

@@ -683,6 +683,7 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                     xmlNodePtr inroot, struct propfind_ctx *fctx);
 
 
+unsigned long calcarddav_allow_cb(struct request_target_t *tgt);
 int dav_parse_req_target(struct transaction_t *txn,
                          struct meth_params *params);
 int calcarddav_parse_path(const char *path, struct request_target_t *tgt,
@@ -794,6 +795,11 @@ int propfind_suplock(const xmlChar *name, xmlNsPtr ns,
 int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
                        struct propfind_ctx *fctx,
                        xmlNodePtr prop, xmlNodePtr resp,
+                       struct propstat propstat[], void *rock);
+
+int propfind_methodset(const xmlChar *name, xmlNsPtr ns,
+                       struct propfind_ctx *fctx,
+                       xmlNodePtr prop, xmlNodePtr,
                        struct propstat propstat[], void *rock);
 
 int propfind_collationset(const xmlChar *name, xmlNsPtr ns,

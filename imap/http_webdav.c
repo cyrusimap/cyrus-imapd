@@ -69,6 +69,7 @@ static int my_webdav_auth(const char *userid);
 static void my_webdav_reset(void);
 static void my_webdav_shutdown(void);
 
+static unsigned long webdav_allow_cb(struct request_target_t *tgt);
 static int webdav_parse_path(const char *path, struct request_target_t *tgt,
                              const char **resultstr);
 
@@ -164,6 +165,9 @@ static const struct prop_entry webdav_props[] = {
     { "supported-report-set", NS_DAV,
       PROP_COLLECTION,
       propfind_reportset, NULL, (void *) webdav_reports },
+    { "supported-method-set", NS_DAV,
+      PROP_COLLECTION | PROP_RESOURCE,
+      propfind_methodset, NULL, (void *) &webdav_allow_cb },
 
     /* WebDAV ACL (RFC 3744) properties */
     { "owner", NS_DAV,
@@ -375,6 +379,22 @@ static void my_webdav_shutdown(void)
 {
     my_webdav_reset();
     webdav_done();
+}
+
+
+/* Determine allowed methods in WebDAV namespace */
+static unsigned long webdav_allow_cb(struct request_target_t *tgt)
+{
+    unsigned long allow = tgt->namespace->allow;
+
+    if (!tgt->userid) {
+        allow &= ALLOW_READ_MASK;
+    }
+    else if (tgt->resource) {
+        allow &= ~(ALLOW_MKCOL | ALLOW_POST);
+    }
+
+    return allow;
 }
 
 

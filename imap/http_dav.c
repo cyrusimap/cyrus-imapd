@@ -138,6 +138,7 @@ static void my_dav_shutdown(void);
 
 static int get_server_info(struct transaction_t *txn);
 
+static unsigned long principal_allow_cb(struct request_target_t *tgt);
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
                                 const char **resultstr);
 static int propfind_principalname(const xmlChar *name, xmlNsPtr ns,
@@ -228,6 +229,9 @@ static const struct prop_entry principal_props[] = {
     { "supported-report-set", NS_DAV,
       PROP_COLLECTION,
       propfind_reportset, NULL, (void *) principal_reports },
+    { "supported-method-set", NS_DAV,
+      PROP_COLLECTION,
+      propfind_methodset, NULL, (void *) &principal_allow_cb },
 
     /* WebDAV ACL (RFC 3744) properties */
     { "alternate-URI-set", NS_DAV,
@@ -472,6 +476,13 @@ static int principal_acl_check(const char *userid, struct auth_state *authstate)
 }
 
 
+/* Determine allowed methods in DAV principals namespace */
+static unsigned long principal_allow_cb(struct request_target_t *tgt)
+{
+    return tgt->namespace->allow;
+}
+
+
 /* Parse request-target path in DAV principals namespace */
 static int principal_parse_path(const char *path, struct request_target_t *tgt,
                                 const char **resultstr)
@@ -542,6 +553,28 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
     }
 
     return 0;
+}
+
+
+/* Determine allowed methods in Cal/CardDAV namespace */
+EXPORTED unsigned long calcarddav_allow_cb(struct request_target_t *tgt)
+{
+    unsigned long allow = tgt->namespace->allow;
+
+    if (!tgt->userid) {
+        allow &= ALLOW_READ_MASK;
+    }
+    else if (!tgt->collection) {
+        allow &= ~(ALLOW_DELETE | ALLOW_PATCH | ALLOW_POST | ALLOW_WRITE);
+    }
+    else if (!tgt->resource) {
+        allow &= ~(ALLOW_MKCOL | ALLOW_PATCH);
+    }
+    else {
+        allow &= ~(ALLOW_MKCOL | ALLOW_POST);
+    }
+
+    return allow;
 }
 
 
@@ -2029,7 +2062,98 @@ int propfind_reportset(const xmlChar *name, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch *DAV:supported-collection-set */
+/* Callback to fetch DAV:supported-method-set */
+int propfind_methodset(const xmlChar *name, xmlNsPtr ns,
+                       struct propfind_ctx *fctx,
+                       xmlNodePtr prop __attribute__((unused)),
+                       xmlNodePtr resp __attribute__((unused)),
+                       struct propstat propstat[],
+                       void *rock)
+{
+    unsigned long (*allow_cb)(struct request_target_t *) =
+        (unsigned long (*)(struct request_target_t *)) rock;
+    unsigned long allow = allow_cb(fctx->req_tgt);
+    xmlNodePtr top, node;
+
+    top = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                       name, ns, NULL, 0);
+
+    if (allow & ALLOW_ACL) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "ACL");
+    }
+    if (allow & ALLOW_READ) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "COPY");
+    }
+    if (allow & ALLOW_DELETE) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "DELETE");
+    }
+    if (allow & ALLOW_READ) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "GET");
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "HEAD");
+    }
+    if (allow & ALLOW_WRITE) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "LOCK");
+    }
+    if (allow & ALLOW_MKCOL) {
+        if (allow & ALLOW_CAL) {
+            node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+            xmlSetProp(node, BAD_CAST "name", BAD_CAST "MKCALENDAR");
+        }
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "MKCOL");
+    }
+    if (allow & ALLOW_DELETE) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "MOVE");
+    }
+    if (allow & ALLOW_READ) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "OPTIONS");
+    }
+    if (allow & ALLOW_PATCH) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "PATCH");
+    }
+    if (allow & ALLOW_POST) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "POST");
+    }
+    if (allow & ALLOW_READ) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "PROPFIND");
+    }
+    if (allow & ALLOW_PROPPATCH) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "PROPPATCH");
+    }
+    if (allow & ALLOW_WRITE) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "PUT");
+    }
+    if (allow & ALLOW_READ) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "REPORT");
+    }
+    if (allow & ALLOW_TRACE) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "TRACE");
+    }
+    if (allow & ALLOW_WRITE) {
+        node = xmlNewChild(top, NULL, BAD_CAST "supported-method", NULL);
+        xmlSetProp(node, BAD_CAST "name", BAD_CAST "UNLOCK");
+    }
+
+    return 0;
+}
+
+
+/* Callback to fetch *DAV:supported-collation-set */
 int propfind_collationset(const xmlChar *name, xmlNsPtr ns,
                           struct propfind_ctx *fctx,
                           xmlNodePtr prop __attribute__((unused)),
@@ -9028,6 +9152,8 @@ static int get_server_info(struct transaction_t *txn)
     return 0;
 }
 
+static unsigned long notify_allow_cb(struct request_target_t *tgt);
+
 static int notify_parse_path(const char *path, struct request_target_t *tgt,
                              const char **resultstr);
 
@@ -9130,6 +9256,9 @@ static const struct prop_entry notify_props[] = {
     { "supported-report-set", NS_DAV,
       PROP_COLLECTION,
       propfind_reportset, NULL, (void *) notify_reports },
+    { "supported-method-set", NS_DAV,
+      PROP_COLLECTION | PROP_RESOURCE,
+      propfind_methodset, NULL, (void *) &notify_allow_cb },
 
     /* WebDAV ACL (RFC 3744) properties */
     { "owner", NS_DAV,
@@ -10307,6 +10436,19 @@ static int propfind_notifytype(const xmlChar *name, xmlNsPtr ns,
     dlist_free(&dl);
 
     return 0;
+}
+
+
+/* Determine allowed methods in notify namespace */
+static unsigned long notify_allow_cb(struct request_target_t *tgt)
+{
+    unsigned long allow = tgt->namespace->allow;
+
+    if (!tgt->resource) {
+        allow &= ~(ALLOW_DELETE | ALLOW_POST);
+    }
+
+    return allow;
 }
 
 

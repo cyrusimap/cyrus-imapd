@@ -212,6 +212,9 @@ static const struct prop_entry carddav_props[] = {
     { "supported-report-set", NS_DAV,
       PROP_COLLECTION | PROP_PRESCREEN,
       propfind_reportset, NULL, (void *) carddav_reports },
+    { "supported-method-set", NS_DAV,
+      PROP_COLLECTION | PROP_RESOURCE,
+      propfind_methodset, NULL, (void *) &calcarddav_allow_cb },
 
     /* WebDAV ACL (RFC 3744) properties */
     { "owner", NS_DAV,
