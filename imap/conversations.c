@@ -2470,15 +2470,13 @@ EXPORTED void conversation_fini(conversation_t *conv)
         free(sender);
     }
 
-    free(conv->subject);
+    xzfree(conv->subject);
 
     conv_thread_t *thread;
     while ((thread = conv->thread)) {
         conv->thread = thread->next;
         free(thread);
     }
-
-    memset(&conv, 0, sizeof(conversation_t));
 }
 
 EXPORTED void conversation_free(conversation_t *conv)
