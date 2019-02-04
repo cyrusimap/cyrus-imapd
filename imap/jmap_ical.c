@@ -483,6 +483,9 @@ recurrence_from_ical(icalcomponent *comp)
         return json_null();
     }
     rrule = icalproperty_get_rrule(prop);
+    if (rrule.freq == ICAL_NO_RECURRENCE) {
+        return json_null();
+    }
 
     const char *freq = icalrecur_freq_to_string(rrule.freq);
     if (!freq) return json_null();
