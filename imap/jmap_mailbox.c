@@ -253,9 +253,8 @@ static mbentry_t *_mbentry_by_uniqueid(jmap_req_t *req, const char *id,
 }
 
 struct _mbox_find_specialuse_rock {
+    jmap_req_t *req;
     const char *use;
-    const char *userid;
-    const char *accountid;
     char *mboxname;
     char *uniqueid;
 };
@@ -264,8 +263,13 @@ static int _mbox_find_specialuse_cb(const mbentry_t *mbentry, void *rock)
 {
     struct _mbox_find_specialuse_rock *d = (struct _mbox_find_specialuse_rock *)rock;
     struct buf attrib = BUF_INITIALIZER;
+    jmap_req_t *req = d->req;
 
-    annotatemore_lookup(mbentry->name, "/specialuse", d->accountid, &attrib);
+    if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
+        return 0;
+    }
+
+    annotatemore_lookup(mbentry->name, "/specialuse", req->accountid, &attrib);
 
     if (attrib.len) {
         strarray_t *uses = strarray_split(buf_cstring(&attrib), " ", 0);
@@ -301,10 +305,8 @@ static int _mbox_find_specialuse(jmap_req_t *req, const char *use,
         return r;
     }
 
-    struct _mbox_find_specialuse_rock rock = {
-        use, req->userid, req->accountid, NULL, NULL
-    };
-    int ret = jmap_mboxlist(req, _mbox_find_specialuse_cb, &rock);
+    struct _mbox_find_specialuse_rock rock = { req, use, NULL, NULL };
+    int ret = mboxlist_usermboxtree(req->accountid, req->authstate, _mbox_find_specialuse_cb, &rock, MBOXTREE_INTERMEDIATES);
 
     if (mboxnameptr) {
         *mboxnameptr = rock.mboxname;
@@ -1547,9 +1549,8 @@ static char *_mbox_tmpname(const char *name, const char *parentname, int is_topl
 }
 
 struct _mbox_find_xrole_rock {
+    jmap_req_t *req;
     const char *xrole;
-    const char *userid;
-    const char *accountid;
     char *mboxname;
     char *uniqueid;
 };
@@ -1558,8 +1559,13 @@ static int _mbox_find_xrole_cb(const mbentry_t *mbentry, void *rock)
 {
     struct _mbox_find_xrole_rock *d = (struct _mbox_find_xrole_rock *)rock;
     struct buf attrib = BUF_INITIALIZER;
+    jmap_req_t *req = d->req;
 
-    annotatemore_lookup(mbentry->name, IMAP_ANNOT_NS "x-role", d->accountid, &attrib);
+    if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
+        return 0;
+    }
+
+    annotatemore_lookup(mbentry->name, IMAP_ANNOT_NS "x-role", req->accountid, &attrib);
 
     if (attrib.len && !strcmp(buf_cstring(&attrib), d->xrole)) {
         if (d->mboxname) d->mboxname = xstrdup(mbentry->name);
@@ -1576,11 +1582,9 @@ static int _mbox_find_xrole(jmap_req_t *req, const char *xrole,
                             char **mboxnameptr,
                             char **uniqueidptr)
 {
-    struct _mbox_find_xrole_rock rock = {
-        xrole, req->userid, req->accountid, NULL, NULL
-    };
+    struct _mbox_find_xrole_rock rock = { req, xrole, NULL, NULL };
     /* INBOX can never have an x-role. */
-    int ret = jmap_mboxlist(req, _mbox_find_xrole_cb, &rock);
+    int ret = mboxlist_usermboxtree(req->accountid, req->authstate, _mbox_find_xrole_cb, &rock, MBOXTREE_INTERMEDIATES);
 
     if (mboxnameptr) {
         *mboxnameptr = rock.mboxname;

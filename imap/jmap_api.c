@@ -74,68 +74,6 @@ struct mymblist_rock {
     hash_table *mboxrights;
 };
 
-static int myrights(struct auth_state *authstate,
-                    const mbentry_t *mbentry,
-                    hash_table *mboxrights)
-{
-    if (!mbentry) return 0;
-
-    int *rightsptr = hash_lookup(mbentry->name, mboxrights);
-    if (!rightsptr) {
-        rightsptr = xmalloc(sizeof(int));
-        *rightsptr = httpd_myrights(authstate, mbentry);
-        hash_insert(mbentry->name, rightsptr, mboxrights);
-    }
-    return *rightsptr;
-}
-
-static int mymblist_cb(const mbentry_t *mbentry, void *rock)
-{
-    struct mymblist_rock *myrock = rock;
-
-    int rights = myrights(myrock->authstate, mbentry, myrock->mboxrights);
-    if (!(rights & ACL_LOOKUP))
-        return 0;
-
-    return myrock->proc(mbentry, myrock->rock);
-}
-
-static int mymblist(const char *userid,
-                    const char *accountid,
-                    struct auth_state *authstate,
-                    hash_table *mboxrights,
-                    mboxlist_cb *proc,
-                    void *rock)
-{
-    int flags = MBOXTREE_INTERMEDIATES;
-
-    /* skip ACL checks if account owner */
-    if (!strcmp(userid, accountid))
-        return mboxlist_usermboxtree(userid, authstate, proc, rock, flags);
-
-    /* Open the INBOX first */
-    struct mymblist_rock myrock = { proc, rock, authstate, mboxrights };
-    return mboxlist_usermboxtree(accountid, authstate, mymblist_cb, &myrock, flags);
-}
-
-HIDDEN int jmap_mboxlist(jmap_req_t *req, mboxlist_cb *proc, void *rock)
-{
-    return mymblist(req->userid, req->accountid, req->authstate,
-                    req->mboxrights, proc, rock);
-}
-
-HIDDEN int jmap_is_accessible(const mbentry_t *mbentry,
-                              void *rock __attribute__((unused)))
-{
-    if ((mbentry->mbtype & MBTYPE_DELETED) ||
-        (mbentry->mbtype & MBTYPE_MOVING) ||
-        (mbentry->mbtype & MBTYPE_REMOTE) ||
-        (mbentry->mbtype & MBTYPE_RESERVE)) {
-        return 0;
-    }
-    return IMAP_OK_COMPLETED;
-}
-
 static json_t *extract_value(json_t *from, const char *path, ptrarray_t *refs);
 
 static json_t *extract_array_value(json_t *val, const char *idx,
@@ -533,6 +471,66 @@ static jmap_method_t *find_methodproc(const char *name, hash_table *jmap_methods
     return hash_lookup(name, jmap_methods);
 }
 
+/* Return the ACL for mbentry for the authstate of userid.
+ * Lookup and store ACL rights in the mboxrights cache. */
+static int _rights_for_mbentry(struct auth_state *authstate,
+                               const mbentry_t *mbentry,
+                               hash_table *mboxrights)
+{
+    if (!mbentry) return 0;
+
+    /* Lookup cached rights */
+    int *rightsptr = hash_lookup(mbentry->name, mboxrights);
+    if (rightsptr) return *rightsptr;
+
+    int rights = 0;
+
+    /* Lookup ACL */
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+        // if it's an intermediate mailbox, we get rights from the parent
+        mbentry_t *parententry = NULL;
+        if (mboxlist_findparent(mbentry->name, &parententry))
+            rights = 0;
+        else
+            rights = httpd_myrights(authstate, parententry);
+        mboxlist_entry_free(&parententry);
+    }
+    else rights = httpd_myrights(authstate, mbentry);
+
+    /* Cache rights */
+    rightsptr = xmalloc(sizeof(int));
+    *rightsptr = rights;
+    hash_insert(mbentry->name, rightsptr, mboxrights);
+
+    mbname_free(&mbname);
+    return rights;
+}
+
+
+struct is_accessible_rock {
+    const char *userid;
+    struct auth_state *authstate;
+    hash_table *mboxrights;
+};
+
+static int _is_accessible(const mbentry_t *mbentry, void *vrock)
+{
+    if (!mbentry) return 0;
+
+    if ((mbentry->mbtype & MBTYPE_DELETED) ||
+        (mbentry->mbtype & MBTYPE_MOVING) ||
+        (mbentry->mbtype & MBTYPE_REMOTE) ||
+        (mbentry->mbtype & MBTYPE_RESERVE)) {
+        return 0;
+    }
+
+    struct is_accessible_rock *rock = vrock;
+    int rights = _rights_for_mbentry(rock->authstate, mbentry, rock->mboxrights);
+    if (!(rights & ACL_LOOKUP)) return 0;
+    return IMAP_OK_COMPLETED;
+}
+
 /* Perform an API request */
 HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
                     jmap_settings_t *settings)
@@ -569,6 +567,8 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     /* Set up request-internal state */
     construct_hash_table(&accounts, 8, 0);
     construct_hash_table(&mboxrights, 64, 0);
+    /* User-owned account is always accessible */
+    hash_insert(httpd_userid, (void*)1, &accounts);
 
     /* Set up creation ids */
     long max_creation_ids = (settings->limits[MAX_CALLS_IN_REQUEST] + 1) *
@@ -657,8 +657,11 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
             }
             /* Check if any shared mailbox is accessible */
             if (!hash_lookup(accountid, &accounts)) {
-                r = mymblist(httpd_userid, accountid, httpd_authstate,
-                             &mboxrights, jmap_is_accessible, NULL);
+                struct is_accessible_rock rock = {
+                    httpd_userid, httpd_authstate, &mboxrights
+                };
+                r = mboxlist_usermboxtree(accountid, httpd_authstate,
+                        _is_accessible, &rock, MBOXTREE_INTERMEDIATES);
                 if (r != IMAP_OK_COMPLETED) {
                     json_t *err = json_pack("{s:s}", "type", "accountNotFound");
                     json_array_append_new(resp,
@@ -1179,42 +1182,9 @@ HIDDEN char *jmap_xhref(const char *mboxname, const char *resource)
     return buf_release(&buf);
 }
 
-static int _rights_for_mbentry(jmap_req_t *req, const mbentry_t *mbentry)
-{
-    if (!mbentry) return 0;
-
-    int rights = 0;
-
-    mbname_t *mbname = mbname_from_intname(mbentry->name);
-    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-        // if it's an intermediate mailbox, we get rights from the parent
-        mbentry_t *parententry = NULL;
-        if (mboxlist_findparent(mbentry->name, &parententry))
-            rights = 0;
-        else
-            rights = httpd_myrights(req->authstate, parententry);
-        mboxlist_entry_free(&parententry);
-    }
-    else rights = httpd_myrights(req->authstate, mbentry);
-
-    mbname_free(&mbname);
-    return rights;
-}
-
-
 HIDDEN int jmap_myrights(jmap_req_t *req, const mbentry_t *mbentry)
 {
-    if (!mbentry) return 0;
-
-    int *rightsptr = hash_lookup(mbentry->name, req->mboxrights);
-
-    if (!rightsptr) {
-        rightsptr = xmalloc(sizeof(int));
-        *rightsptr = _rights_for_mbentry(req, mbentry);
-        hash_insert(mbentry->name, rightsptr, req->mboxrights);
-    }
-
-    return *rightsptr;
+    return _rights_for_mbentry(req->authstate, mbentry, req->mboxrights);
 }
 
 // gotta have them all
@@ -1236,7 +1206,7 @@ HIDDEN int jmap_myrights_byname(jmap_req_t *req, const char *mboxname)
         int rights = 0;
         mbentry_t *mbentry = NULL;
         if (!mboxlist_lookup_allow_all(mboxname, &mbentry, NULL)) {
-            rights = _rights_for_mbentry(req, mbentry);
+            rights = _rights_for_mbentry(req->authstate, mbentry, req->mboxrights);
             mboxlist_entry_free(&mbentry);
         }
 

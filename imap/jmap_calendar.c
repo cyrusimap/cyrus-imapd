@@ -470,7 +470,7 @@ static int jmap_calendar_get(struct jmap_req *req)
     }
     else {
         // XXX: replace with a function which only looks inside INBOX.#calendars
-        r = jmap_mboxlist(req, &getcalendars_cb, &rock);
+        r = mboxlist_usermboxtree(req->accountid, req->authstate, &getcalendars_cb, &rock, MBOXTREE_INTERMEDIATES);
         if (r) goto done;
     }
 

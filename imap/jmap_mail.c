@@ -9544,7 +9544,7 @@ static void _email_import(jmap_req_t *req,
     /* Check mailboxes for ACL */
     if (strcmp(req->userid, req->accountid)) {
         struct msgimport_checkacl_rock rock = { req, jmailbox_ids };
-        int r = jmap_mboxlist(req, msgimport_checkacl_cb, &rock);
+        int r = mboxlist_usermboxtree(req->accountid, req->authstate, msgimport_checkacl_cb, &rock, MBOXTREE_INTERMEDIATES);
         if (r) {
             *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
                     "properties", "mailboxIds");
