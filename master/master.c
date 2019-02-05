@@ -142,7 +142,7 @@ const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 #define SERVICE_MAX  INT_MAX-10
 #define SERVICEPARAM(x) ((x) ? x : "unknown")
 
-#define MAX_READY_FAILS              5
+#define MAX_READY_FAILS            500
 #define MAX_READY_FAIL_INTERVAL     10  /* 10 seconds */
 
 #define FNAME_PROM_STATS_DIR        "/stats" /* keep in sync with prometheus.h */
