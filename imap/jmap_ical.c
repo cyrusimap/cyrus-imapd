@@ -483,14 +483,14 @@ recurrence_from_ical(icalcomponent *comp)
         return json_null();
     }
     rrule = icalproperty_get_rrule(prop);
-
-    const char *freq = icalrecur_freq_to_string(rrule.freq);
-    if (!freq) return json_null();
+    if (rrule.freq == ICAL_NO_RECURRENCE) {
+        return json_null();
+    }
 
     recur = json_pack("{}");
 
     /* frequency */
-    s = lcase(xstrdup(freq));
+    s = lcase(xstrdup(icalrecur_freq_to_string(rrule.freq)));
     json_object_set_new(recur, "frequency", json_string(s));
     free(s);
 
