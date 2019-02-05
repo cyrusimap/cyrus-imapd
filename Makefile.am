@@ -604,6 +604,12 @@ endif
 
 # ----
 
+if USE_LIBCHARDET
+AM_LDFLAGS += $(LIBCHARDET_LIBS)
+AM_CPPFLAGS += $(LIBCHARDET_CFLAGS)
+LD_SERVER_ADD += $(LIBCHARDET_LIBS)
+endif
+
 if CUNIT
 
 CUNIT_PROJECT = cunit/default.cunit
@@ -676,12 +682,6 @@ cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
 cunit_unit_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD) -lcunit
 
 CUNIT_PL = $(top_srcdir)/cunit/cunit.pl --project $(CUNIT_PROJECT)
-
-if USE_LIBCHARDET
-AM_LDFLAGS += $(LIBCHARDET_LIBS)
-AM_CPPFLAGS += $(LIBCHARDET_CFLAGS)
-LD_SERVER_ADD += $(LIBCHARDET_LIBS)
-endif
 
 
 
