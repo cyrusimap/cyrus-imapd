@@ -57,7 +57,7 @@
 #include "caldav_db.h"
 #include "carddav_db.h"
 #endif /* WITH_DAV */
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "imapurl.h"
 #include "libconfig.h"
@@ -1704,7 +1704,7 @@ static const char *event_to_name(enum event_type type)
     case EVENT_MAILBOX_MODSEQ:
         return "MailboxModseq";
     default:
-        fatal("Unknown message event", EC_SOFTWARE);
+        fatal("Unknown message event", EX_SOFTWARE);
     }
 
     /* never happen */

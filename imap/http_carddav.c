@@ -58,7 +58,7 @@
 #include "acl.h"
 #include "append.h"
 #include "carddav_db.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
@@ -387,7 +387,7 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
     if (!namespace_addressbook.enabled) return;
 
     if (!config_getstring(IMAPOPT_ADDRESSBOOKPREFIX)) {
-        fatal("Required 'addressbookprefix' option is not set", EC_CONFIG);
+        fatal("Required 'addressbookprefix' option is not set", EX_CONFIG);
     }
 
     carddav_init();
@@ -1214,7 +1214,7 @@ static int carddav_import(struct transaction_t *txn, void *obj,
             syslog(LOG_ERR,
                    "import_resource()): Unable to add response XML element");
             fatal("import_resource()): Unable to add response XML element",
-                  EC_SOFTWARE);
+                  EX_SOFTWARE);
         }
 
         /* Isolate this card */

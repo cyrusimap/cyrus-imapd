@@ -45,7 +45,7 @@
 #include <string.h>
 #include <limits.h>
 
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "imparse.h"
 #include "search_expr.h"
@@ -74,7 +74,7 @@ EXPORTED int getword(struct protstream *in, struct buf *buf)
         }
         buf_putc(buf, c);
         if (config_maxword && buf_len(buf) > config_maxword) {
-            fatal("word too long", EC_IOERR);
+            fatal("word too long", EX_IOERR);
         }
     }
 }
@@ -133,7 +133,7 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
             }
             buf_putc(buf, c);
             if (config_maxquoted && buf_len(buf) > config_maxquoted) {
-                fatal("quoted value too long", EC_IOERR);
+                fatal("quoted value too long", EX_IOERR);
             }
         }
 
@@ -262,7 +262,7 @@ EXPORTED int getint32(struct protstream *pin, int32_t *num)
     /* INT_MAX == 2147483647 */
     while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
         if (result > 214748364 || (result == 214748364 && (c > '7')))
-            fatal("num too big", EC_IOERR);
+            fatal("num too big", EX_IOERR);
         result = result * 10 + c - '0';
         gotchar = 1;
     }
@@ -315,7 +315,7 @@ EXPORTED int getuint32(struct protstream *pin, uint32_t *num)
     /* UINT_MAX == 4294967295U */
     while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
         if (result > 429496729 || (result == 429496729 && (c > '5')))
-            fatal("num too big", EC_IOERR);
+            fatal("num too big", EX_IOERR);
         result = result * 10 + c - '0';
         gotchar = 1;
     }
@@ -339,7 +339,7 @@ EXPORTED int getint64(struct protstream *pin, int64_t *num)
     /* LLONG_MAX == 9223372036854775807LL */
     while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
         if (result > 922337203685477580LL || (result == 922337203685477580LL && (c > '7')))
-            fatal("num too big", EC_IOERR);
+            fatal("num too big", EX_IOERR);
         result = result * 10 + c - '0';
         gotchar = 1;
     }
@@ -392,7 +392,7 @@ EXPORTED int getuint64(struct protstream *pin, uint64_t *num)
     /* ULLONG_MAX == 18446744073709551615ULL */
     while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
         if (result > 1844674407370955161ULL || (result == 1844674407370955161ULL && (c > '5')))
-            fatal("num too big", EC_IOERR);
+            fatal("num too big", EX_IOERR);
         result = result * 10 + c - '0';
         gotchar = 1;
     }

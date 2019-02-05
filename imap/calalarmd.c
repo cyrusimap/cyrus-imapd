@@ -57,7 +57,7 @@
 
 #include "global.h"
 #include "xmalloc.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "caldav_db.h"
 #include "caldav_alarm.h"
 
@@ -108,7 +108,7 @@ int main(int argc, char **argv)
             break;
         default:
             fprintf(stderr, "invalid argument\n");
-            exit(EC_USAGE);
+            exit(EX_USAGE);
             break;
         }
     }

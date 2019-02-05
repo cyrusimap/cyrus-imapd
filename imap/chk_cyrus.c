@@ -55,7 +55,7 @@
 #include <unistd.h>
 #endif
 
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "index.h"
 #include "global.h"
 #include "mboxlist.h"
@@ -84,7 +84,7 @@ static int chkmbox(struct findall_data *data, void *rock __attribute__((unused))
 
     if (r) {
         fprintf(stderr, "bad mailbox %s in chkmbox\n", name);
-        fatal("fatal error",EC_TEMPFAIL);
+        fatal("fatal error",EX_TEMPFAIL);
     }
 
     /* are we on the partition we are checking? */
@@ -120,7 +120,7 @@ int main(int argc, char **argv)
         case 'P':
             if(mailbox) {
                 usage();
-                exit(EC_USAGE);
+                exit(EX_USAGE);
             }
             check_part = optarg;
             break;
@@ -128,7 +128,7 @@ int main(int argc, char **argv)
         case 'M':
             if(check_part) {
                 usage();
-                exit(EC_USAGE);
+                exit(EX_USAGE);
             }
             mailbox = optarg;
             break;

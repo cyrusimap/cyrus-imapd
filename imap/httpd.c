@@ -78,7 +78,7 @@
 #include "tls.h"
 #include "map.h"
 
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "imapd.h"
 #include "proc.h"
 #include "version.h"
@@ -199,7 +199,7 @@ HIDDEN int zlib_compress(struct transaction_t *txn __attribute__((unused)),
                          const char *buf __attribute__((unused)),
                          unsigned len __attribute__((unused)))
 {
-    fatal("Compression requested, but no zlib", EC_SOFTWARE);
+    fatal("Compression requested, but no zlib", EX_SOFTWARE);
 }
 
 static void zlib_done(void *zstrm __attribute__((unused))) { }
@@ -277,7 +277,7 @@ static int brotli_compress(struct transaction_t *txn __attribute__((unused)),
                            const char *buf __attribute__((unused)),
                            unsigned len __attribute__((unused)))
 {
-    fatal("Brotli Compression requested, but not available", EC_SOFTWARE);
+    fatal("Brotli Compression requested, but not available", EX_SOFTWARE);
 }
 
 static void brotli_done(void *brotli __attribute__((unused))) {}
@@ -610,7 +610,7 @@ int service_init(int argc __attribute__((unused)),
 
     initialize_http_error_table();
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
     setproctitle_init(argc, argv, envp);
 
     /* set signal handlers */
@@ -625,7 +625,7 @@ int service_init(int argc __attribute__((unused)),
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&httpd_namespace, 1)) != 0) {
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     /* open the mboxevent system */
@@ -640,7 +640,7 @@ int service_init(int argc __attribute__((unused)),
             https = 1;
             if (!tls_enabled()) {
                 fatal("https: required OpenSSL options not present",
-                      EC_CONFIG);
+                      EX_CONFIG);
             }
             break;
 
@@ -762,7 +762,7 @@ int service_main(int argc __attribute__((unused)),
 
     /* Create XML parser context */
     if (!(http_conn.xml = xmlNewParserCtxt())) {
-        fatal("Unable to create XML parser", EC_TEMPFAIL);
+        fatal("Unable to create XML parser", EX_TEMPFAIL);
     }
 
     /* Find out name of client host */
@@ -778,7 +778,7 @@ int service_main(int argc __attribute__((unused)),
                         buf_cstringnull_ifempty(&saslprops.iplocalport),
                         buf_cstringnull_ifempty(&saslprops.ipremoteport),
                         NULL, SASL_USAGE_FLAGS, &httpd_saslconn) != SASL_OK)
-        fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL);
+        fatal("SASL failed initializing: sasl_server_new()",EX_TEMPFAIL);
 
     /* will always return something valid */
     secprops = mysasl_secprops(0);
@@ -787,9 +787,9 @@ int service_main(int argc __attribute__((unused)),
     secprops->max_ssf = 0;                              /* "auth" only */
     secprops->maxbufsize = 0;                           /* don't need maxbuf */
     if (sasl_setprop(httpd_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK)
-        fatal("Failed to set SASL property", EC_TEMPFAIL);
+        fatal("Failed to set SASL property", EX_TEMPFAIL);
     if (sasl_setprop(httpd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
-        fatal("Failed to set SASL property", EC_TEMPFAIL);
+        fatal("Failed to set SASL property", EX_TEMPFAIL);
 
     if (httpd_remoteip) {
         char hbuf[NI_MAXHOST], *p;
@@ -836,7 +836,7 @@ int service_main(int argc __attribute__((unused)),
     else if (http2_preface(&http_conn)) {
         /* HTTP/2 client connection preface */
         if (http2_start_session(NULL, &http_conn) != 0)
-            fatal("Failed initializing HTTP/2 session", EC_TEMPFAIL);
+            fatal("Failed initializing HTTP/2 session", EX_TEMPFAIL);
     }
 
     /* Setup the signal handler for keepalive heartbeat */
@@ -888,7 +888,7 @@ void usage(void)
     prot_printf(httpd_out, "%s: usage: httpd [-C <alt_config>] [-s]\r\n",
                 error_message(HTTP_SERVER_ERROR));
     prot_flush(httpd_out);
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 
@@ -1051,7 +1051,7 @@ static int starttls(struct transaction_t *txn, struct http_connection *conn)
     if (result != SASL_OK) {
         syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
         if (https == 0) {
-            fatal("saslprops_set_tls() failed: cmd_starttls()", EC_TEMPFAIL);
+            fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
         } else {
             shut_down(0);
         }
@@ -1071,7 +1071,7 @@ static int starttls(struct transaction_t *txn, struct http_connection *conn)
 static int starttls(struct transaction_t *txn __attribute__((unused)),
                     struct http_connection *conn __attribute__((unused)))
 {
-    fatal("starttls() called, but no OpenSSL", EC_SOFTWARE);
+    fatal("starttls() called, but no OpenSSL", EX_SOFTWARE);
 }
 #endif /* HAVE_SSL */
 
@@ -3033,11 +3033,11 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 
         if (txn->resp_body.enc == CE_BR) {
             if (brotli_compress(txn, flags, buf, len) < 0) {
-                fatal("Brotli: Error while compressing data", EC_SOFTWARE);
+                fatal("Brotli: Error while compressing data", EX_SOFTWARE);
             }
         }
         else if (zlib_compress(txn, flags, buf, len) < 0) {
-            fatal("zlib: Error while compressing data", EC_SOFTWARE);
+            fatal("zlib: Error while compressing data", EX_SOFTWARE);
         }
 
         buf = txn->zbuf.s;

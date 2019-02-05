@@ -70,7 +70,7 @@
 #include <netinet/tcp.h>
 
 #include "byteorder64.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "libconfig.h"
 #include "map.h"
 #include "retry.h"
@@ -438,7 +438,7 @@ EXPORTED void cyrus_reset_stdio(void)
     int devnull = open("/dev/null", O_RDWR, 0);
 
     if (devnull == -1) {
-        fatal("open() on /dev/null failed", EC_TEMPFAIL);
+        fatal("open() on /dev/null failed", EX_TEMPFAIL);
     }
 
     /* stdin */

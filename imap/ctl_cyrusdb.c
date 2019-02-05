@@ -74,7 +74,7 @@
 #include "cyrusdb.h"
 #include "duplicate.h"
 #include "global.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "seen.h"

@@ -58,7 +58,7 @@
 #include <errno.h>
 
 #include "assert.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "sync_log.h"
 #include "global.h"
 #include "cyr_lock.h"
@@ -234,7 +234,7 @@ static const char *sync_quote_name(const char *name)
     for (src = 0; name[src]; src++) {
         c = name[src];
         if ((c == '\r') || (c == '\n'))
-            fatal("Illegal line break in folder name", EC_IOERR);
+            fatal("Illegal line break in folder name", EX_IOERR);
 
         /* quoteable characters */
         if ((c == '\\') || (c == '\"') || (c == '{') || (c == '}')) {
@@ -250,7 +250,7 @@ static const char *sync_quote_name(const char *name)
         buf[dst++] = c;
 
         if (dst > MAX_MAILBOX_BUFFER)
-            fatal("word too long", EC_IOERR);
+            fatal("word too long", EX_IOERR);
     }
 
 end:

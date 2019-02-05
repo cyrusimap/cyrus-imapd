@@ -59,7 +59,7 @@
 #include "assert.h"
 #include "auth.h"
 #include "duplicate.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "lmtpd.h"
 #include "lmtp_sieve.h"
@@ -1568,7 +1568,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     res = sieve_register_vacation(interp, &vacation);
     if (res != SIEVE_OK) {
         syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);
-        fatal("sieve_register_vacation()", EC_SOFTWARE);
+        fatal("sieve_register_vacation()", EX_SOFTWARE);
     }
 
     duplicate.max_expiration =
@@ -1576,7 +1576,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     res = sieve_register_duplicate(interp, &duplicate);
     if (res != SIEVE_OK) {
         syslog(LOG_ERR, "sieve_register_duplicate() returns %d\n", res);
-        fatal("sieve_register_duplicate()", EC_SOFTWARE);
+        fatal("sieve_register_duplicate()", EX_SOFTWARE);
     }
 
 #ifdef WITH_DAV

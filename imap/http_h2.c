@@ -43,7 +43,7 @@
 
 #include <config.h>
 
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "httpd.h"
 #include "md5.h"
 #include "util.h"
@@ -964,7 +964,7 @@ HIDDEN int http2_preface(struct http_connection *conn __attribute__((unused)))
 HIDDEN int http2_start_session(struct transaction_t *txn __attribute__((unused)),
                                struct http_connection *c __attribute__((unused)))
 {
-    fatal("http2_start() called, but no Nghttp2", EC_SOFTWARE);
+    fatal("http2_start() called, but no Nghttp2", EX_SOFTWARE);
 }
 
 HIDDEN void http2_end_session(void *http2_ctx __attribute__((unused)))
@@ -973,30 +973,30 @@ HIDDEN void http2_end_session(void *http2_ctx __attribute__((unused)))
 
 HIDDEN void http2_output(struct transaction_t *txn __attribute__((unused)))
 {
-    fatal("http2_output() called, but no Nghttp2", EC_SOFTWARE);
+    fatal("http2_output() called, but no Nghttp2", EX_SOFTWARE);
 }
 
 HIDDEN void http2_input(struct transaction_t *txn __attribute__((unused)))
 {
-    fatal("http2_input() called, but no Nghttp2", EC_SOFTWARE);
+    fatal("http2_input() called, but no Nghttp2", EX_SOFTWARE);
 }
 
 HIDDEN int http2_begin_headers(struct transaction_t *txn __attribute__((unused)))
 {
-    fatal("http2_begin_headers() called, but no Nghttp2", EC_SOFTWARE);
+    fatal("http2_begin_headers() called, but no Nghttp2", EX_SOFTWARE);
 }
 
 HIDDEN void http2_add_header(struct transaction_t *txn __attribute__((unused)),
                              const char *name __attribute__((unused)),
                              struct buf *value __attribute__((unused)))
 {
-    fatal("http2_add_header() called, but no Nghttp2", EC_SOFTWARE);
+    fatal("http2_add_header() called, but no Nghttp2", EX_SOFTWARE);
 }
 
 HIDDEN int http2_end_headers(struct transaction_t *txn __attribute__((unused)),
                              long code __attribute__((unused)))
 {
-    fatal("http2_end_headers() called, but no Nghttp2", EC_SOFTWARE);
+    fatal("http2_end_headers() called, but no Nghttp2", EX_SOFTWARE);
 }
 
 HIDDEN int http2_data_chunk(struct transaction_t *txn __attribute__((unused)),
@@ -1005,7 +1005,7 @@ HIDDEN int http2_data_chunk(struct transaction_t *txn __attribute__((unused)),
                             int last_chunk __attribute__((unused)),
                             MD5_CTX *md5ctx __attribute__((unused)))
 {
-    fatal("http2_data_chunk() called, but no Nghttp2", EC_SOFTWARE);
+    fatal("http2_data_chunk() called, but no Nghttp2", EX_SOFTWARE);
 }
 
 HIDDEN int32_t http2_get_streamid(void *http2_strm __attribute__((unused)))

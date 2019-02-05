@@ -53,7 +53,7 @@
 #include <sys/types.h>
 
 #include "lib/bsearch.h"
-#include "lib/exitcodes.h"
+#include "lib/sysexits.h"
 #include "lib/imparse.h"
 #include "lib/map.h"
 #include "lib/signals.h"
@@ -183,7 +183,7 @@ EXPORTED int service_init(int argc __attribute__((unused)),
                  char **envp __attribute__((unused)))
 {
     // FIXME should this be calling fatal? fatal exits directly
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
     setproctitle_init(argc, argv, envp);
 
     /* set signal handlers */
@@ -244,15 +244,15 @@ EXPORTED int service_main(int argc __attribute__((unused)),
         /* other params should be filled in */
         if (sasl_server_new("csync", config_servername, NULL, NULL, NULL,
                             NULL, 0, &backupd_saslconn) != SASL_OK)
-            fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL);
+            fatal("SASL failed initializing: sasl_server_new()",EX_TEMPFAIL);
 
         /* will always return something valid */
         secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
         if (sasl_setprop(backupd_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK)
-            fatal("Failed to set SASL property", EC_TEMPFAIL);
+            fatal("Failed to set SASL property", EX_TEMPFAIL);
 
         if (sasl_setprop(backupd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
-            fatal("Failed to set SASL property", EC_TEMPFAIL);
+            fatal("Failed to set SASL property", EX_TEMPFAIL);
 
         if (localip) {
             sasl_setprop(backupd_saslconn, SASL_IPLOCALPORT, localip);
@@ -261,7 +261,7 @@ EXPORTED int service_main(int argc __attribute__((unused)),
 
         if (remoteip) {
             if (sasl_setprop(backupd_saslconn, SASL_IPREMOTEPORT, remoteip) != SASL_OK)
-                fatal("failed to set sasl property", EC_TEMPFAIL);
+                fatal("failed to set sasl property", EX_TEMPFAIL);
             saslprops.ipremoteport = xstrdup(remoteip);
         }
 

@@ -57,7 +57,7 @@
 #include <sys/msg.h>
 
 #include "cyrusdb.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "mailbox.h"
 #include "util.h"
@@ -107,14 +107,14 @@ int main(int argc, char *argv[])
                "This is because some database backends (mainly berkeley) do not\n"
                "always do what you would expect with them.\n"
                "\nPlease use absolute pathnames instead.\n\n");
-        exit(EC_OSERR);
+        exit(EX_OSERR);
     }
 
     OLDDB = argv[optind+1];
     NEWDB = argv[optind+3];
 
     if (NEWDB == OLDDB) {
-        fatal("no conversion required", EC_TEMPFAIL);
+        fatal("no conversion required", EX_TEMPFAIL);
     }
 
     cyrus_init(alt_config, "cvt_cyrusdb", 0, 0);

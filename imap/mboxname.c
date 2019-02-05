@@ -53,7 +53,7 @@
 #include "assert.h"
 #include "byteorder64.h"
 #include "crc32.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "glob.h"
 #include "global.h"
 #include "mailbox.h"
@@ -174,7 +174,7 @@ static void remove_lockitem(struct mboxlocklist *remitem)
         previtem = item;
     }
 
-    fatal("didn't find item in list", EC_SOFTWARE);
+    fatal("didn't find item in list", EX_SOFTWARE);
 }
 
 /* name locking support */
@@ -1904,7 +1904,7 @@ EXPORTED char *mboxname_metapath(const char *partition,
     case 0:
         break;
     default:
-        fatal("Unknown meta file requested", EC_SOFTWARE);
+        fatal("Unknown meta file requested", EX_SOFTWARE);
     }
 
     if (*confkey)

@@ -50,7 +50,7 @@
 
 #include "caldav_alarm.h"
 #include "cyrusdb.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "httpd.h"
 #include "http_dav.h"
 #include "ical_support.h"
@@ -97,7 +97,7 @@ EXPORTED int caldav_alarm_init(void)
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&caldav_alarm_namespace, 1))) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     return sqldb_init();

@@ -78,7 +78,7 @@
 #include "dav_db.h"
 #endif /* WITH_DAV */
 #include "dlist.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "hash.h"
 #include "imparse.h"
@@ -233,7 +233,7 @@ int service_init(int argc __attribute__((unused)),
 {
     int opt, r;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
     setproctitle_init(argc, argv, envp);
 
     /* set signal handlers */
@@ -258,7 +258,7 @@ int service_init(int argc __attribute__((unused)),
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(sync_namespacep, 1)) != 0) {
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     return 0;
@@ -336,15 +336,15 @@ int service_main(int argc __attribute__((unused)),
                             buf_cstringnull_ifempty(&saslprops.iplocalport),
                             buf_cstringnull_ifempty(&saslprops.ipremoteport),
                             NULL, 0, &sync_saslconn) != SASL_OK)
-            fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL);
+            fatal("SASL failed initializing: sasl_server_new()",EX_TEMPFAIL);
 
         /* will always return something valid */
         secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
         if (sasl_setprop(sync_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK)
-            fatal("Failed to set SASL property", EC_TEMPFAIL);
+            fatal("Failed to set SASL property", EX_TEMPFAIL);
 
         if (sasl_setprop(sync_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
-            fatal("Failed to set SASL property", EC_TEMPFAIL);
+            fatal("Failed to set SASL property", EX_TEMPFAIL);
 
         tcp_disable_nagle(1); /* XXX magic fd */
     }
@@ -384,7 +384,7 @@ static void usage(void)
 {
     prot_printf(sync_out, "* usage: sync_server [-C <alt_config>]\r\n");
     prot_flush(sync_out);
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 /*
@@ -821,7 +821,7 @@ static void cmd_starttls(void)
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&saslprops, sync_saslconn);
     if (result != SASL_OK) {
-        fatal("saslprops_set_tls() failed: cmd_starttls()", EC_TEMPFAIL);
+        fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */
@@ -835,7 +835,7 @@ static void cmd_starttls(void)
 #else
 static void cmd_starttls(void)
 {
-    fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
+    fatal("cmd_starttls() called, but no OpenSSL", EX_SOFTWARE);
 }
 #endif /* HAVE_SSL */
 

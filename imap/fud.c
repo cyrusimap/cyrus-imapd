@@ -63,7 +63,7 @@
 #include "acl.h"
 #include "mboxlist.h"
 #include "global.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxname.h"
@@ -151,7 +151,7 @@ void shut_down(int code)
  */
 int service_init(int argc, char **argv, char **envp)
 {
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
     setproctitle_init(argc, argv, envp);
 
@@ -175,7 +175,7 @@ int service_main(int argc __attribute__((unused)),
     /* Set namespace */
     if ((r = mboxname_init_namespace(&fud_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     r = begin_handling();

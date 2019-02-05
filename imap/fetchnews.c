@@ -57,7 +57,7 @@
 #include <sys/un.h>
 
 #include "cyrusdb.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "gmtoff.h"
 #include "cyr_lock.h"

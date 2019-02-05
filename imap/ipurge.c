@@ -56,7 +56,7 @@
 
 /* cyrus includes */
 #include "global.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
@@ -185,7 +185,7 @@ int main (int argc, char *argv[]) {
     int r;
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
     expand_mboxnames(argc-optind, (const char **)argv+optind);
   } else {

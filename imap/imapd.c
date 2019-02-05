@@ -82,7 +82,7 @@
 #include "bufarray.h"
 #include "charset.h"
 #include "dlist.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "idle.h"
 #include "global.h"
 #include "times.h"
@@ -770,7 +770,7 @@ static void imapd_reset(void)
 #ifdef HAVE_SSL
     if (tls_conn) {
         if (tls_reset_servertls(&tls_conn) == -1) {
-            fatal("tls_reset() failed", EC_TEMPFAIL);
+            fatal("tls_reset() failed", EX_TEMPFAIL);
         }
         tls_conn = NULL;
     }
@@ -825,7 +825,7 @@ int service_init(int argc, char **argv, char **envp)
 {
     int opt, events;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
     setproctitle_init(argc, argv, envp);
 
     /* set signal handlers */
@@ -854,7 +854,7 @@ int service_init(int argc, char **argv, char **envp)
             if (!tls_enabled()) {
                 syslog(LOG_ERR, "imaps: required OpenSSL options not present");
                 fatal("imaps: required OpenSSL options not present",
-                      EC_CONFIG);
+                      EX_CONFIG);
             }
             break;
         case 'p': /* external protection */
@@ -938,14 +938,14 @@ int service_main(int argc __attribute__((unused)),
                         buf_cstringnull_ifempty(&saslprops.iplocalport),
                         buf_cstringnull_ifempty(&saslprops.ipremoteport),
                         NULL, 0, &imapd_saslconn) != SASL_OK) {
-        fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
+        fatal("SASL failed initializing: sasl_server_new()", EX_TEMPFAIL);
     }
 
     secprops = mysasl_secprops(0);
     if (sasl_setprop(imapd_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK)
-        fatal("Failed to set SASL property", EC_TEMPFAIL);
+        fatal("Failed to set SASL property", EX_TEMPFAIL);
     if (sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
-        fatal("Failed to set SASL property", EC_TEMPFAIL);
+        fatal("Failed to set SASL property", EX_TEMPFAIL);
 
     imapd_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 
@@ -2590,7 +2590,7 @@ static void authentication_success(void)
 
     if (r) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     /* Make a copy of the external userid for use in proxying */
@@ -7860,7 +7860,7 @@ static void cmd_reconstruct(const char *tag, const char *name, int recursive)
             ret = snprintf(buf, sizeof(buf), "%s/reconstruct", SBIN_DIR);
             if(ret < 0 || ret >= (int) sizeof(buf)) {
                 /* in child, so fatailing won't disconnect our user */
-                fatal("reconstruct buffer not sufficiently big", EC_CONFIG);
+                fatal("reconstruct buffer not sufficiently big", EX_CONFIG);
             }
 
             if(recursive) {
@@ -7921,7 +7921,7 @@ static void cmd_reconstruct(const char *tag, const char *name, int recursive)
             ret = snprintf(buf, sizeof(buf), "%s/quota", SBIN_DIR);
             if(ret < 0 || ret >= (int) sizeof(buf)) {
                 /* in child, so fatailing won't disconnect our user */
-                fatal("quota buffer not sufficiently big", EC_CONFIG);
+                fatal("quota buffer not sufficiently big", EX_CONFIG);
             }
 
             execl(buf, buf, "-C", config_filename, "-f", quotaroot, NULL);
@@ -8933,7 +8933,7 @@ static void cmd_starttls(char *tag, int imaps)
     if (result != SASL_OK) {
         syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
         if (imaps == 0) {
-            fatal("saslprops_set_tls() failed: cmd_starttls()", EC_TEMPFAIL);
+            fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
         } else {
             shut_down(0);
         }
@@ -8955,7 +8955,7 @@ void cmd_starttls(char *tag __attribute__((unused)),
                   int imaps __attribute__((unused)))
 {
     fatal("cmd_starttls() executed, but starttls isn't implemented!",
-          EC_SOFTWARE);
+          EX_SOFTWARE);
 }
 #endif // (OPENSSL_VERSION_NUMBER >= 0x0090800fL)
 

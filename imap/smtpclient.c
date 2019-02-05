@@ -54,7 +54,7 @@
 #include "backend.h"
 #include "xmalloc.h"
 #include "global.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "smtpclient.h"
 #include "telemetry.h"
 

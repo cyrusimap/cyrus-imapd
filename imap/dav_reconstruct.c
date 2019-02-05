@@ -55,7 +55,7 @@
 #include <libical/ical.h>
 
 #include "annotate.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "http_dav.h"
 #include "mailbox.h"
@@ -124,7 +124,7 @@ int main(int argc, char **argv)
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     signals_set_shutdown(&shut_down);
@@ -154,7 +154,7 @@ void usage(void)
 {
     fprintf(stderr,
             "usage: dav_reconstruct [-C <alt_config>] userid\n");
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 /*

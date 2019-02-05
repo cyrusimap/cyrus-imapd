@@ -53,7 +53,7 @@
 /* cyrus includes */
 #include "assert.h"
 #include "bsearch.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "index.h"
 #include "search_engines.h"
@@ -326,7 +326,7 @@ int main(int argc, char **argv)
 static int usage(const char *name)
 {
     fprintf(stderr, "usage: %s [format-options] -m mailbox -u userid searchprogram...\n", name);
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 void fatal(const char* s, int code)

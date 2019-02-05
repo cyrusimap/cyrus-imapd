@@ -55,7 +55,7 @@
 
 #include "auth_pts.h"
 #include "cyrusdb.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "libcyr_cfg.h"
 #include "retry.h"
 #include "strhash.h"
@@ -352,7 +352,7 @@ static int ptload(const char *identifier, struct auth_state **state)
     }
 
     if(!state || *state) {
-        fatal("bad state pointer passed to ptload()", EC_TEMPFAIL);
+        fatal("bad state pointer passed to ptload()", EX_TEMPFAIL);
     }
 
     fname = libcyrus_config_getstring(CYRUSOPT_PTSCACHE_DB_PATH);

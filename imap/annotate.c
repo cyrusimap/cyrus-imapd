@@ -64,7 +64,7 @@
 #include "acl.h"
 #include "assert.h"
 #include "cyrusdb.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "glob.h"
 #include "hash.h"
 #include "imapd.h"
@@ -748,7 +748,7 @@ EXPORTED void annotatemore_open(void)
     /* force opening the global annotations db */
     r = _annotate_getdb(NULL, 0, CYRUSDB_CREATE, &d);
     if (r)
-        fatal("can't open global annotations database", EC_TEMPFAIL);
+        fatal("can't open global annotations database", EX_TEMPFAIL);
 
     annotatemore_dbopen = 1;
 }

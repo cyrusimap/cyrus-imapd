@@ -86,7 +86,7 @@
 
 #include "acl.h"
 #include "append.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "mboxlist.h"
 #include "mupdate-client.h"
@@ -172,7 +172,7 @@ int service_init(int argc, char **argv, char **envp)
 {
     int r;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
     setproctitle_init(argc, argv, envp);
 
@@ -185,7 +185,7 @@ int service_init(int argc, char **argv, char **envp)
     /* Set namespace */
     if ((r = mboxname_init_namespace(&map_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     return 0;

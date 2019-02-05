@@ -62,7 +62,7 @@
 #ifdef WITH_DAV
 #include "dav_util.h"
 #endif
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "map.h"
 #include "mappedfile.h"
@@ -391,7 +391,7 @@ static int dump_file(int first, int sync,
         /* we need to check real file size since actual mmap size may be larger */
         if (stat(filename, &sbuf) == -1) {
             syslog(LOG_ERR, "IOERROR: stat on %s: %m", filename);
-            fatal("can't stat message file", EC_OSFILE);
+            fatal("can't stat message file", EX_OSFILE);
         }
         if ((unsigned long)sbuf.st_size > flen) {
            syslog(LOG_ERR, "IOERROR: size mismatch on %s", filename);
@@ -410,7 +410,7 @@ static int dump_file(int first, int sync,
 
         if (fstat(filefd, &sbuf) == -1) {
             syslog(LOG_ERR, "IOERROR: fstat on %s: %m", filename);
-            fatal("can't fstat message file", EC_OSFILE);
+            fatal("can't fstat message file", EX_OSFILE);
         }
 
         base = NULL;
@@ -649,7 +649,7 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
                 break;
             }
             default:
-                fatal("unknown user data file", EC_OSFILE);
+                fatal("unknown user data file", EX_OSFILE);
             }
 
             r = dump_file(0, !tag, pin, pout, fname, ftag, NULL, 0);
@@ -1064,7 +1064,7 @@ EXPORTED int undump_mailbox(const char *mbname,
             digit = c - '0';
             /* check for overflow */
             if (size > cutoff || (size == cutoff && digit > cutlim)) {
-                fatal("literal too big", EC_IOERR);
+                fatal("literal too big", EX_IOERR);
             }
             size = size*10 + digit;
         }

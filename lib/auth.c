@@ -44,7 +44,7 @@
 #include <string.h>
 
 #include "auth.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
 
@@ -77,7 +77,7 @@ static struct auth_mech *auth_fromname(void)
         char errbuf[1024];
         snprintf(errbuf, sizeof(errbuf),
                  "Authorization mechanism %s not supported", name);
-        fatal(errbuf, EC_CONFIG);
+        fatal(errbuf, EX_CONFIG);
     }
 
     return auth;

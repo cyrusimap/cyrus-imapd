@@ -74,7 +74,7 @@
 
 #include "bsearch.h"
 #include "global.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -176,7 +176,7 @@ int main(int argc,char **argv)
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&quota_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     if (config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT))
@@ -223,7 +223,7 @@ static void usage(void)
 {
     fprintf(stderr,
             "usage: quota [-C <alt_config>] [-d <domain>] [-f] [-q] [-u] [mailbox-spec]...\n");
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 static void errmsg(const char *fmt, const char *arg, int err)

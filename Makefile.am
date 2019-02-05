@@ -751,7 +751,6 @@ include_HEADERS = \
 	lib/crc32c.h \
 	lib/cyr_lock.h \
 	lib/cyrusdb.h \
-	lib/exitcodes.h \
 	lib/glob.h \
 	lib/gmtoff.h \
 	lib/hash.h \

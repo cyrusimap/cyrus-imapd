@@ -62,7 +62,7 @@
 #include <sys/select.h>
 #endif
 
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "mupdate.h"
 #include "prot.h"
@@ -108,7 +108,7 @@ EXPORTED int mupdate_connect(const char *server,
     if (!server) {
         server = config_mupdate_server;
         if (server == NULL) {
-            fatal("couldn't get mupdate server name", EC_UNAVAILABLE);
+            fatal("couldn't get mupdate server name", EX_UNAVAILABLE);
         }
     }
 
@@ -791,7 +791,7 @@ EXPORTED void kick_mupdate(void)
         syslog(LOG_ERR, "kick_mupdate: configured socket path '%s' is too long"
                         " (maximum length is " SIZE_T_FMT ")",
                         buf_cstring(&addrbuf), sizeof(srvaddr.sun_path) - 1);
-        fatal("socket path too long", EC_CONFIG);
+        fatal("socket path too long", EX_CONFIG);
     }
 
     memset((char *)&srvaddr, 0, sizeof(srvaddr));

@@ -53,7 +53,7 @@
 #include <signal.h>
 
 #include "duplicate.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "libcyr_cfg.h"
 #include "util.h"
@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
 
         r = snprintf(buf, sizeof(buf), "%s/cyr_expire", SBIN_DIR);
         if(r < 0 || r >= (int) sizeof(buf)) {
-            fatal("cyr_expire command buffer not sufficiently big", EC_CONFIG);
+            fatal("cyr_expire command buffer not sufficiently big", EX_CONFIG);
         }
 
         if (alt_config)

@@ -53,7 +53,7 @@
 /* cyrus includes */
 #include "assert.h"
 #include "bsearch.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "index.h"
 #include "search_engines.h"
@@ -303,7 +303,7 @@ static int usage(const char *name)
     fprintf(stderr, "-p         dump message part tree\n");
     fprintf(stderr, "-s         dump text sections\n");
     fprintf(stderr, "-t         dump output from search text receiver\n");
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 void fatal(const char* s, int code)

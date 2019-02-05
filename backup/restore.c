@@ -50,7 +50,7 @@
 #include <syslog.h>
 #include <unistd.h>
 
-#include "lib/exitcodes.h"
+#include "lib/sysexits.h"
 
 #include "imap/global.h"
 #include "imap/imap_err.h"
@@ -101,7 +101,7 @@ static void usage(void)
             "    -u                  # specified backup interpreted as userid (default)\n"
     );
 
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 static void save_argv0(const char *s)
@@ -512,7 +512,7 @@ done:
     backup_cleanup_staging_path();
     cyrus_done();
 
-    exit(r ? EC_TEMPFAIL : EC_OK);
+    exit(r ? EX_TEMPFAIL : EX_OK);
 }
 
 static struct backend *restore_connect(const char *servername,
@@ -575,7 +575,7 @@ static struct backend *restore_connect(const char *servername,
 
         if (sync_parse_response("COMPRESS", backend->in, NULL)) {
             if (options->require_compression)
-                fatal("Failed to enable compression, aborting", EC_SOFTWARE);
+                fatal("Failed to enable compression, aborting", EX_SOFTWARE);
             syslog(LOG_NOTICE, "Failed to enable compression, continuing uncompressed");
         }
         else {
@@ -584,7 +584,7 @@ static struct backend *restore_connect(const char *servername,
         }
     }
     else if (options->require_compression) {
-        fatal("Backend does not support compression, aborting", EC_SOFTWARE);
+        fatal("Backend does not support compression, aborting", EX_SOFTWARE);
     }
 #endif
 

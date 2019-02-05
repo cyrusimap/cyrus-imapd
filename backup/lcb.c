@@ -51,7 +51,7 @@
 
 #include "lib/cyrusdb.h"
 #include "lib/cyr_lock.h"
-#include "lib/exitcodes.h"
+#include "lib/sysexits.h"
 #include "lib/gzuncat.h"
 #include "lib/map.h"
 #include "lib/sqldb.h"
@@ -617,7 +617,7 @@ EXPORTED int backup_reindex(const char *name,
 
             if (member_start_ts == -1) {
                 if (prev_member_ts != -1 && prev_member_ts > ts) {
-                    fatal("member timestamp older than previous", EC_DATAERR);
+                    fatal("member timestamp older than previous", EX_DATAERR);
                 }
                 member_start_ts = ts;
                 char file_sha1[2 * SHA1_DIGEST_LENGTH + 1];
@@ -626,7 +626,7 @@ EXPORTED int backup_reindex(const char *name,
                                          member_offset, file_sha1, 1, 0);
             }
             else if (member_start_ts > ts)
-                fatal("line timestamp older than previous", EC_DATAERR);
+                fatal("line timestamp older than previous", EX_DATAERR);
 
             if (strcmp(buf_cstring(&cmd), "APPLY") != 0) {
                 dlist_unlink_files(dl);

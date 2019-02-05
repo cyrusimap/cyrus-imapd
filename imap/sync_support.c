@@ -63,7 +63,7 @@
 #include "global.h"
 #include "imap_proxy.h"
 #include "mboxlist.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "mailbox.h"
 #include "quota.h"
 #include "xmalloc.h"
@@ -237,7 +237,7 @@ EXPORTED const char *sync_get_config(const char *channel, const char *val)
         else if (!strcmp(val, "sync_shutdown_file"))
             response = config_getstring(IMAPOPT_SYNC_SHUTDOWN_FILE);
         else
-            fatal("unknown config variable requested", EC_SOFTWARE);
+            fatal("unknown config variable requested", EX_SOFTWARE);
     }
 
     return response;
@@ -346,7 +346,7 @@ static int sync_getline(struct protstream *in, struct buf *buf)
             return c;
         }
         if (buf->len > config_maxword)
-            fatal("word too long", EC_IOERR);
+            fatal("word too long", EX_IOERR);
         buf_putc(buf, c);
     }
     return c;

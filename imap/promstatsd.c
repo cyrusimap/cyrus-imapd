@@ -53,7 +53,7 @@
 #include <unistd.h>
 
 #include "lib/cyr_lock.h"
-#include "lib/exitcodes.h"
+#include "lib/sysexits.h"
 #include "lib/retry.h"
 #include "lib/util.h"
 
@@ -87,7 +87,7 @@ static void usage(void)
     fprintf(stderr, "Usage:\n");
     fprintf(stderr, "    %s [-C alt_config] [-v] [-f frequency] [-d]\n", argv0);
     fprintf(stderr, "    %s [-C alt_config] [-v] -c\n", argv0);
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 static void save_argv0(const char *s)
@@ -109,7 +109,7 @@ static int do_cleanup(void)
     if (!dh) {
         if (errno == ENOENT) return 0; /* nothing to do */
         syslog(LOG_ERR, "IOERROR: opendir(%s): %m", basedir);
-        return EC_IOERR;
+        return EX_IOERR;
     }
 
     while ((dirent = readdir(dh))) {
@@ -300,15 +300,15 @@ static void do_write_report(struct mappedfile *mf, const struct buf *report)
     int r;
 
     r = mappedfile_writelock(mf);
-    if (r) fatal("couldn't write lock report file", EC_IOERR);
+    if (r) fatal("couldn't write lock report file", EX_IOERR);
 
     r = mappedfile_pwritebuf(mf, report, 0);
-    if (r < 0) fatal("error writing report file", EC_IOERR);
+    if (r < 0) fatal("error writing report file", EX_IOERR);
 
     mappedfile_truncate(mf, buf_len(report));
 
     r = mappedfile_commit(mf);
-    if (r) fatal("error committing report file", EC_IOERR);
+    if (r) fatal("error committing report file", EX_IOERR);
 
     mappedfile_unlock(mf);
 }
@@ -371,7 +371,7 @@ int main(int argc, char **argv)
     if (!config_getswitch(IMAPOPT_PROMETHEUS_ENABLED)) {
         fatal("Prometheus metrics are not being tracked."
               "  Set prometheus_enable in imapd.conf",
-              EC_CONFIG);
+              EX_CONFIG);
     }
 
     /* fork unless we were given the -d option or we're running as a daemon */
@@ -379,7 +379,7 @@ int main(int argc, char **argv)
         pid_t pid = fork();
 
         if (pid == -1) {
-            fatal("fork failed", EC_OSERR);
+            fatal("fork failed", EX_OSERR);
         }
 
         if (pid != 0) { /* parent */
@@ -396,7 +396,7 @@ int main(int argc, char **argv)
     unlink(report_fname);
     r = mappedfile_open(&report_file, report_fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
     free(report_fname);
-    if (r) fatal("couldn't open report file", EC_IOERR);
+    if (r) fatal("couldn't open report file", EX_IOERR);
 
     for (;;) {
         int sig;
@@ -422,5 +422,5 @@ int main(int argc, char **argv)
     }
 
     /* NOTREACHED */
-    shut_down(EC_SOFTWARE);
+    shut_down(EX_SOFTWARE);
 }

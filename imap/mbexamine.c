@@ -72,7 +72,7 @@
 #endif
 
 #include "assert.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "index.h"
 #include "global.h"
 #include "mailbox.h"
@@ -147,7 +147,7 @@ int main(int argc, char **argv)
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&mbexamine_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     signals_set_shutdown(&shut_down);
@@ -174,7 +174,7 @@ static void usage(void)
             "       mbexamine [-C <alt_config>] [-u uid] mailbox...\n"
             "       mbexamine [-C <alt_config>] -q mailbox...\n"
             "       mbexamine [-C <alt_config>] -c mailbox...\n");
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 static void print_rec(const char *name, const struct buf *citem)

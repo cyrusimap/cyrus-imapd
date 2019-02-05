@@ -210,7 +210,7 @@ int make_changes;
 /* DEPRECATED */
 for (recno = 1; recno &lt;= mailbox-&gt;i.num_records; recno++) {
     if (mailbox_read_index_record(mailbox, recno, &amp;record))
-        fatal("invalid record", EC_SOFTWARE); // or return an error
+        fatal("invalid record", EX_SOFTWARE); // or return an error
     if (record.internal_flags &amp; FLAG_INTERNAL_EXPUNGED)
         continue; // skip expunged records
     make_changes = do_stuff(mailbox, &amp;record);
@@ -295,11 +295,11 @@ format documentation.</p>
 <pre>
 for (recno = 1; recno &lt;= mailbox-&gt;i.num_records; recno++) {
     if (mailbox_read_index_record(mailbox, recno, &amp;record))
-        fatal("invalid record", EC_SOFTWARE); // or return an error
+        fatal("invalid record", EX_SOFTWARE); // or return an error
     if (record.internal_flags &amp; FLAG_INTERNAL_EXPUNGED)
         continue; // skip expunged records
     if (mailbox_cacherecord(mailbox, &amp;record))
-        fatal("failed to read cache", EC_SOFTWARE);
+        fatal("failed to read cache", EX_SOFTWARE);
     ...
     envelope_length = cacheitem_size(&amp;record, CACHE_ENVELOPE);
 }

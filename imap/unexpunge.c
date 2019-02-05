@@ -54,7 +54,7 @@
 #include <signal.h>
 
 #include "annotate.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "index.h"
 #include "libcyr_cfg.h"
@@ -358,13 +358,13 @@ int main(int argc, char *argv[])
 
     if (addflag && addflag[0] == '\\') {
         syslog(LOG_ERR, "can't set a system flag");
-        fatal("can't set a system flag", EC_SOFTWARE);
+        fatal("can't set a system flag", EX_SOFTWARE);
     }
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&unex_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     /* Translate mailboxname */

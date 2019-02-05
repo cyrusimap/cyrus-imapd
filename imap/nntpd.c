@@ -80,7 +80,7 @@
 #include "auth.h"
 #include "backend.h"
 #include "duplicate.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "hash.h"
 #include "idle.h"
@@ -306,7 +306,7 @@ static int read_response(struct backend *s, int force_notfatal, char **result)
     if (!prot_fgets(buf, sizeof(buf), s->in)) {
         /* uh oh */
         if (s == backend_current && !force_notfatal)
-            fatal("Lost connection to selected backend", EC_UNAVAILABLE);
+            fatal("Lost connection to selected backend", EX_UNAVAILABLE);
         proxy_downserver(s);
         return IMAP_SERVER_UNAVAILABLE;
     }
@@ -325,7 +325,7 @@ static int pipe_to_end_of_response(struct backend *s, int force_notfatal)
         if (!prot_fgets(buf, sizeof(buf), s->in)) {
             /* uh oh */
             if (s == backend_current && !force_notfatal)
-                fatal("Lost connection to selected backend", EC_UNAVAILABLE);
+                fatal("Lost connection to selected backend", EX_UNAVAILABLE);
             proxy_downserver(s);
             return IMAP_SERVER_UNAVAILABLE;
         }
@@ -425,7 +425,7 @@ int service_init(int argc __attribute__((unused)),
 
     initialize_nntp_error_table();
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
     setproctitle_init(argc, argv, envp);
 
     /* set signal handlers */
@@ -445,7 +445,7 @@ int service_init(int argc __attribute__((unused)),
     if (duplicate_init(NULL) != 0) {
         syslog(LOG_ERR,
                "unable to init duplicate delivery database\n");
-        fatal("unable to init duplicate delivery database", EC_SOFTWARE);
+        fatal("unable to init duplicate delivery database", EX_SOFTWARE);
     }
 
     /* setup for sending IMAP IDLE notifications */
@@ -458,7 +458,7 @@ int service_init(int argc __attribute__((unused)),
             if (!tls_enabled()) {
                 syslog(LOG_ERR, "nntps: required OpenSSL options not present");
                 fatal("nntps: required OpenSSL options not present",
-                      EC_CONFIG);
+                      EX_CONFIG);
             }
             break;
 
@@ -521,7 +521,7 @@ int service_main(int argc __attribute__((unused)),
                         buf_cstringnull_ifempty(&saslprops.iplocalport),
                         buf_cstringnull_ifempty(&saslprops.ipremoteport),
                         NULL, SASL_SUCCESS_DATA, &nntp_saslconn) != SASL_OK)
-        fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL);
+        fatal("SASL failed initializing: sasl_server_new()",EX_TEMPFAIL);
 
     /* will always return something valid */
     secprops = mysasl_secprops(0);
@@ -588,7 +588,7 @@ static void usage(void)
 {
     prot_printf(nntp_out, "503 usage: nntpd [-C <alt_config>] [-s]\r\n");
     prot_flush(nntp_out);
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 /*
@@ -1539,7 +1539,7 @@ static int getuserpass(struct protstream *in, struct buf *buf)
         }
         buf_putc(buf, c);
         if (buf_len(buf) > MAX_NNTP_ARG) {
-            fatal("argument too long", EC_IOERR);
+            fatal("argument too long", EX_IOERR);
         }
     }
 }
@@ -4019,7 +4019,7 @@ static void cmd_starttls(int nntps)
         if (nntps == 0)
             prot_printf(nntp_out, "580 %s\r\n", "Error initializing TLS");
         else
-            fatal("tls_init() failed",EC_TEMPFAIL);
+            fatal("tls_init() failed",EX_TEMPFAIL);
 
         return;
     }
@@ -4054,7 +4054,7 @@ static void cmd_starttls(int nntps)
     if (result != SASL_OK) {
         syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
         if (nntps == 0) {
-            fatal("saslprops_set_tls() failed: cmd_starttls()", EC_TEMPFAIL);
+            fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
         } else {
             shut_down(0);
         }
@@ -4083,7 +4083,7 @@ static void cmd_starttls(int nntps)
 static void cmd_starttls(int nntps __attribute__((unused)))
 {
     /* XXX should never get here */
-    fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
+    fatal("cmd_starttls() called, but no OpenSSL", EX_SOFTWARE);
 }
 #endif /* HAVE_SSL */
 

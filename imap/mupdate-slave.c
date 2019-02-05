@@ -67,7 +67,7 @@
 #include "global.h"
 #include "mpool.h"
 #include "mupdate.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 
 /* Returns file descriptor of kick socket (or does not return) */
 static int open_kick_socket(void)
@@ -80,7 +80,7 @@ static int open_kick_socket(void)
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
         syslog(LOG_ERR, "socket: %m");
-        fatal("socket failed", EC_OSERR);
+        fatal("socket failed", EX_OSERR);
     }
 
     strlcpy(fnamebuf, config_dir, sizeof(fnamebuf));
@@ -97,12 +97,12 @@ static int open_kick_socket(void)
     chmod(fnamebuf, 0777); /* for DUX */
     if (r == -1) {
         syslog(LOG_ERR, "bind: %s: %m", fnamebuf);
-        fatal("bind failed", EC_OSERR);
+        fatal("bind failed", EX_OSERR);
     }
     r = listen(s, 10);
     if (r == -1) {
         syslog(LOG_ERR, "listen: %m");
-        fatal("listen failed", EC_OSERR);
+        fatal("listen failed", EX_OSERR);
     }
 
     return s;
@@ -298,12 +298,12 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
     srand(time(NULL) * getpid());
 
     if(!config_mupdate_server) {
-        fatal("couldn't get mupdate server name", EC_UNAVAILABLE);
+        fatal("couldn't get mupdate server name", EX_UNAVAILABLE);
     }
 
     retry_delay = config_getint(IMAPOPT_MUPDATE_RETRY_DELAY);
     if(retry_delay < 0) {
-        fatal("invalid value for mupdate_retry_delay", EC_UNAVAILABLE);
+        fatal("invalid value for mupdate_retry_delay", EX_UNAVAILABLE);
     }
 
     while(1) {

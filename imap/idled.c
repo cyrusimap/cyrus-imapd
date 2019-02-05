@@ -60,7 +60,7 @@
 #include "mboxlist.h"
 #include "xmalloc.h"
 #include "hash.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 
 extern int optind;
 extern char *optarg;
@@ -282,7 +282,7 @@ int main(int argc, char **argv)
             break;
         default:
             fprintf(stderr, "invalid argument\n");
-            exit(EC_USAGE);
+            exit(EX_USAGE);
             break;
         }
     }

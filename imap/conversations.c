@@ -60,7 +60,7 @@
 #include "charset.h"
 #include "crc32.h"
 #include "dlist.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "hash.h"
 #include "global.h"
 #include "imapd.h"
@@ -409,7 +409,7 @@ static void _conv_remove(struct conversations_state *state)
         prevp = &cur->next;
     }
 
-    fatal("unknown conversation db closed", EC_SOFTWARE);
+    fatal("unknown conversation db closed", EX_SOFTWARE);
 }
 
 static void conversations_abortcache(struct conversations_state *state)

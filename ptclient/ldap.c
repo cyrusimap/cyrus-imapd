@@ -43,7 +43,7 @@
 #include <syslog.h>
 #include <config.h>
 #include "ptloader.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "util.h"
 #include "assert.h"
 
@@ -454,7 +454,7 @@ static void myinit(void)
 
     ptsm = xmalloc(sizeof(t_ptsm));
     if (ptsm == NULL) {
-        fatal("xmalloc() failed", EC_CONFIG);
+        fatal("xmalloc() failed", EX_CONFIG);
     }
 
     ptsm->uri = (config_getstring(IMAPOPT_LDAP_URI) ?
@@ -1582,7 +1582,7 @@ retry:;
 
 static void myinit(void)
 {
-    fatal("PTS module (ldap) not compiled in", EC_CONFIG);
+    fatal("PTS module (ldap) not compiled in", EX_CONFIG);
 }
 
 static struct auth_state *myauthstate(
@@ -1591,7 +1591,7 @@ static struct auth_state *myauthstate(
     const char **reply __attribute__((unused)),
     int *dsize __attribute__((unused)))
 {
-    fatal("PTS module (ldap) not compiled in", EC_CONFIG);
+    fatal("PTS module (ldap) not compiled in", EX_CONFIG);
 }
 
 #endif /* HAVE_LDAP */

@@ -86,7 +86,7 @@
 #endif /* WITH_DAV */
 #include "crc32.h"
 #include "md5.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "imparse.h"
 #include "cyr_lock.h"
@@ -273,7 +273,7 @@ static void remove_listitem(struct mailboxlist *remitem)
         previtem = item;
     }
 
-    fatal("didn't find item in list", EC_SOFTWARE);
+    fatal("didn't find item in list", EX_SOFTWARE);
 }
 
 EXPORTED const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
@@ -830,7 +830,7 @@ static int _map_local_record(const struct mailbox *mailbox, const char *fname, s
 
     if (fstat(msgfd, &sbuf) == -1) {
         syslog(LOG_ERR, "IOERROR: fstat on %s: %m", fname);
-        fatal("can't fstat message file", EC_OSFILE);
+        fatal("can't fstat message file", EX_OSFILE);
     }
 
     buf_init_mmap(buf, /*onceonly*/1, msgfd, fname, sbuf.st_size, mailbox->name);
@@ -2080,7 +2080,7 @@ static int mailbox_lock_conversations(struct mailbox *mailbox, int locktype)
     }
     else {
         /* this function does not support nonblocking locks */
-        fatal("invalid locktype for conversations", EC_SOFTWARE);
+        fatal("invalid locktype for conversations", EX_SOFTWARE);
     }
 }
 
@@ -2215,7 +2215,7 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
     }
     else {
         /* this function does not support nonblocking locks */
-        fatal("invalid locktype for index", EC_SOFTWARE);
+        fatal("invalid locktype for index", EX_SOFTWARE);
     }
 
     /* double check that the index exists and has at least enough
@@ -4015,7 +4015,7 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
         repack->i.record_size = 112;
         break;
     default:
-        fatal("index version not supported", EC_SOFTWARE);
+        fatal("index version not supported", EX_SOFTWARE);
     }
 
     /* upgrades or downgrades across version 12 boundary?  Sort out seen state */
@@ -4947,7 +4947,7 @@ static void mailbox_delete_files(const char *path)
 
     if(strlen(buf) >= sizeof(buf) - 2) {
         syslog(LOG_ERR, "IOERROR: Path too long (%s)", buf);
-        fatal("path too long", EC_OSFILE);
+        fatal("path too long", EX_OSFILE);
     }
 
     tail = buf + strlen(buf);
@@ -4969,7 +4969,7 @@ static void mailbox_delete_files(const char *path)
             if(strlen(buf) + strlen(f->d_name) >= sizeof(buf)) {
                 syslog(LOG_ERR, "IOERROR: Path too long (%s + %s)",
                        buf, f->d_name);
-                fatal("Path too long", EC_OSFILE);
+                fatal("Path too long", EX_OSFILE);
             }
             strcpy(tail, f->d_name);
             unlink(buf);

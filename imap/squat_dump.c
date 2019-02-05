@@ -65,7 +65,7 @@
 
 #include "assert.h"
 #include "global.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -87,7 +87,7 @@ static int usage(const char *name)
             "usage: %s [-C <alt_config>] mailbox [...]\n",
             name);
 
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 static const char *squat_strerror(int err)

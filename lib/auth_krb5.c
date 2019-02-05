@@ -44,7 +44,7 @@
 #include <stdlib.h>
 
 #include "auth.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "xmalloc.h"
 
 #include "syslog.h"
@@ -210,7 +210,7 @@ static int mymemberof(
     const struct auth_state *auth_state __attribute__((unused)),
     const char *identifier __attribute__((unused)))
 {
-        fatal("Authentication mechanism (krb5) not compiled in", EC_CONFIG);
+        fatal("Authentication mechanism (krb5) not compiled in", EX_CONFIG);
         return 0;
 }
 
@@ -218,27 +218,27 @@ static const char *mycanonifyid(
     const char *identifier __attribute__((unused)),
     size_t len __attribute__((unused)))
 {
-        fatal("Authentication mechanism (krb5) not compiled in", EC_CONFIG);
+        fatal("Authentication mechanism (krb5) not compiled in", EX_CONFIG);
         return NULL;
 }
 
 static struct auth_state *mynewstate(
     const char *identifier __attribute__((unused)))
 {
-        fatal("Authentication mechanism (krb5) not compiled in", EC_CONFIG);
+        fatal("Authentication mechanism (krb5) not compiled in", EX_CONFIG);
         return NULL;
 }
 
 static void myfreestate(
     struct auth_state *auth_state __attribute__((unused)))
 {
-        fatal("Authentication mechanism (krb5) not compiled in", EC_CONFIG);
+        fatal("Authentication mechanism (krb5) not compiled in", EX_CONFIG);
 }
 
 static strarray_t *mygroups(
     const struct auth_state *auth_state __attribute__((unused)))
 {
-        fatal("Authentication mechanism (krb5) not compiled in", EC_CONFIG);
+        fatal("Authentication mechanism (krb5) not compiled in", EX_CONFIG);
 }
 
 #endif

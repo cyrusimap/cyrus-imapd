@@ -51,7 +51,7 @@
 #include <sys/statvfs.h>
 #include <sys/types.h>
 
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -101,7 +101,7 @@ static void usage(void)
 {
     fprintf(stderr,
             "usage: cyr_df [-C <alt_config>] [-m]\n");
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 

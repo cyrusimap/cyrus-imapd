@@ -57,7 +57,7 @@
 #include "bsearch.h"
 #include "cyrusdb.h"
 #include "util.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -105,7 +105,7 @@ static struct cyrusdb_backend *cyrusdb_fromname(const char *name)
         char errbuf[1024];
         snprintf(errbuf, sizeof(errbuf),
                  "cyrusdb backend %s not supported", name);
-        fatal(errbuf, EC_CONFIG);
+        fatal(errbuf, EX_CONFIG);
     }
 
     return db;

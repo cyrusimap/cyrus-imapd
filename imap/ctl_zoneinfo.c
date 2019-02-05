@@ -58,7 +58,7 @@
 #include <libxml/tree.h>
 
 #include "annotate.h" /* for strlist functionality */
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "hash.h"
 #include "map.h"
@@ -324,7 +324,7 @@ void usage(void)
     fprintf(stderr,
             "usage: zoneinfo_reconstruct [-C <alt_config>] [-v]"
             " -r <publisher>:<version>\n");
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 

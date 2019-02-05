@@ -43,7 +43,7 @@
 
 #include <config.h>
 
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "httpd.h"
 #include "util.h"
 
@@ -827,7 +827,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn __attribute__((unused)),
                                            struct buf *logbuf,
                                            void **rock) __attribute__((unused)))
 {
-    fatal("ws_start() called, but no Wslay", EC_SOFTWARE);
+    fatal("ws_start() called, but no Wslay", EX_SOFTWARE);
 }
 
 HIDDEN void ws_add_resp_hdrs(struct transaction_t *txn __attribute__((unused)))
@@ -838,12 +838,12 @@ HIDDEN void ws_end_channel(void *ws_ctx __attribute__((unused))) {}
 
 HIDDEN void ws_output(struct transaction_t *txn __attribute__((unused)))
 {
-    fatal("ws_output() called, but no Wslay", EC_SOFTWARE);
+    fatal("ws_output() called, but no Wslay", EX_SOFTWARE);
 }
 
 HIDDEN void ws_input(struct transaction_t *txn __attribute__((unused)))
 {
-    fatal("ws_input() called, but no Wslay", EC_SOFTWARE);
+    fatal("ws_input() called, but no Wslay", EX_SOFTWARE);
 }
 
 #endif /* HAVE_WSLAY */

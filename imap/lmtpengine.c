@@ -71,7 +71,7 @@
 #include "prot.h"
 #include "times.h"
 #include "global.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "prometheus.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -984,7 +984,7 @@ void lmtpmode(struct lmtp_func *func,
                         buf_cstringnull_ifempty(&saslprops.ipremoteport),
                         (func->preauth ? localauth_override_cb : NULL),
                         0, &cd.conn) != SASL_OK) {
-        fatal("SASL failed initializing: sasl_server_new()", EC_TEMPFAIL);
+        fatal("SASL failed initializing: sasl_server_new()", EX_TEMPFAIL);
     }
 
     /* set my allowable security properties */
@@ -1001,7 +1001,7 @@ void lmtpmode(struct lmtp_func *func,
         saslprops.ssf = 2;
         buf_setcstr(&saslprops.authid, auth_id);
         if (saslprops_set_tls(&saslprops, cd.conn) != SASL_OK)
-            fatal("saslprops_set_tls() failed: preauth",EC_TEMPFAIL);
+            fatal("saslprops_set_tls() failed: preauth",EX_TEMPFAIL);
 
         deliver_logfd = telemetry_log(auth_id, pin, pout, 0);
     }
@@ -1495,7 +1495,7 @@ void lmtpmode(struct lmtp_func *func,
                 /* tell SASL about the negotiated layer */
                 r = saslprops_set_tls(&saslprops, cd.conn);
                 if (r != SASL_OK) {
-                    fatal("saslprops_set_tls() failed: STARTTLS", EC_TEMPFAIL);
+                    fatal("saslprops_set_tls() failed: STARTTLS", EX_TEMPFAIL);
                 }
                 if (buf_len(&saslprops.authid)) {
                     cd.authenticated = TLSCERT_AUTHED;

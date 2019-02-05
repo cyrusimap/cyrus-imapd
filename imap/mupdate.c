@@ -75,7 +75,7 @@
 
 #include "strarray.h"
 #include "assert.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "mailbox.h"
 #include "mboxlist.h"
@@ -485,34 +485,34 @@ int service_init(int argc, char **argv,
     int opt, autoselect = 0;
     pthread_t t;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
     /* Do minor configuration checking */
     workers_to_start = config_getint(IMAPOPT_MUPDATE_WORKERS_START);
 
     if (config_getint(IMAPOPT_MUPDATE_WORKERS_MAX) < config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)) {
         syslog(LOG_CRIT, "Maximum total worker threads is less than minimum spare worker threads");
-        return EC_SOFTWARE;
+        return EX_SOFTWARE;
     }
 
     if (workers_to_start < config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)) {
         syslog(LOG_CRIT, "Starting worker threads is less than minimum spare worker threads");
-        return EC_SOFTWARE;
+        return EX_SOFTWARE;
     }
 
     if (config_getint(IMAPOPT_MUPDATE_WORKERS_MAXSPARE) < workers_to_start) {
         syslog(LOG_CRIT, "Maximum spare worker threads is less than starting worker threads");
-        return EC_SOFTWARE;
+        return EX_SOFTWARE;
     }
 
     if (config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE) > workers_to_start) {
         syslog(LOG_CRIT, "Minimum spare worker threads is greater than starting worker threads");
-        return EC_SOFTWARE;
+        return EX_SOFTWARE;
     }
 
     if (config_getint(IMAPOPT_MUPDATE_WORKERS_MAX) < workers_to_start) {
         syslog(LOG_CRIT, "Maximum total worker threads is less than starting worker threads");
-        return EC_SOFTWARE;
+        return EX_SOFTWARE;
     }
 
     /* set signal handlers */
@@ -544,12 +544,12 @@ int service_init(int argc, char **argv,
          * to the slave.  We can probably fix this by prepending
          * config_servername onto the entries before updating the slaves.
          */
-        fatal("cannot run mupdate master on a unified server", EC_USAGE);
+        fatal("cannot run mupdate master on a unified server", EX_USAGE);
     }
 
     if (pipe(conn_pipe) == -1) {
         syslog(LOG_ERR, "could not setup connection signaling pipe %m");
-        return EC_OSERR;
+        return EX_OSERR;
     }
 
     database_init();
@@ -566,7 +566,7 @@ int service_init(int argc, char **argv,
             pthread_detach(t);
         } else {
             syslog(LOG_ERR, "could not start client thread");
-            return EC_SOFTWARE;
+            return EX_SOFTWARE;
         }
 
         /* Wait until they sync the database */
@@ -582,7 +582,7 @@ int service_init(int argc, char **argv,
             pthread_detach(t);
         } else {
             syslog(LOG_ERR, "could not start placebo kick thread");
-            return EC_SOFTWARE;
+            return EX_SOFTWARE;
         }
 
         mupdate_ready();
@@ -595,7 +595,7 @@ int service_init(int argc, char **argv,
             pthread_detach(t);
         } else {
             syslog(LOG_ERR, "could not start client thread");
-            return EC_SOFTWARE;
+            return EX_SOFTWARE;
         }
     }
 
@@ -1019,7 +1019,7 @@ int service_main_fd(int fd,
 
         syslog(LOG_CRIT,
                "write to conn_pipe to signal new connection failed: %m");
-        return EC_TEMPFAIL;
+        return EX_TEMPFAIL;
     }
     return 0;
 }
@@ -1043,7 +1043,7 @@ static void dobanner(struct conn *c)
     if (!masterp) {
         if (!config_mupdate_server)
             fatal("mupdate server was not specified for slave",
-                  EC_TEMPFAIL);
+                  EX_TEMPFAIL);
 
         snprintf(slavebuf, sizeof(slavebuf), "mupdate://%s",
                  config_mupdate_server);
@@ -1187,7 +1187,7 @@ static void *thread_main(void *rock __attribute__((unused)))
         if (prot_select(protin, conn_pipe[0],
                        &protout, &connflag, NULL) == -1) {
             syslog(LOG_ERR, "prot_select() failed in thread_main: %m");
-            fatal("prot_select() failed in thread_main", EC_TEMPFAIL);
+            fatal("prot_select() failed in thread_main", EX_TEMPFAIL);
         }
 
         /* we've got work to do */
@@ -1226,7 +1226,7 @@ static void *thread_main(void *rock __attribute__((unused)))
             if (read(conn_pipe[0], &new_fd, sizeof(new_fd)) == -1) {
                 syslog(LOG_CRIT,
                        "read from conn_pipe for new connection failed: %m");
-                fatal("conn_pipe read failed", EC_TEMPFAIL);
+                fatal("conn_pipe read failed", EX_TEMPFAIL);
             }
         } else {
             new_fd = NO_NEW_CONNECTION;
@@ -1350,7 +1350,7 @@ static void *thread_main(void *rock __attribute__((unused)))
             if (write(conn_pipe[1], &NO_NEW_CONNECTION,
                      sizeof(NO_NEW_CONNECTION)) == -1) {
                 fatal("write to conn_pipe to signal docmd done failed",
-                      EC_TEMPFAIL);
+                      EX_TEMPFAIL);
             }
         }
 
@@ -1999,7 +1999,7 @@ static void cmd_starttls(struct conn *C, const char *tag)
     /* tell SASL about the negotiated layer */
     result = saslprops_set_tls(&C->saslprops, C->saslconn);
     if (result != SASL_OK) {
-        fatal("saslprops_set_tls() failed: cmd_starttls()", EC_TEMPFAIL);
+        fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */
@@ -2018,7 +2018,7 @@ void cmd_starttls(struct conn *C __attribute__((unused)),
                   const char *tag __attribute__((unused)))
 {
     fatal("cmd_starttls() executed, but starttls isn't implemented!",
-          EC_SOFTWARE);
+          EX_SOFTWARE);
 }
 #endif /* HAVE_SSL */
 
@@ -2062,7 +2062,7 @@ void cmd_compress(struct conn *C __attribute__((unused)),
                   const char *alg __attribute__((unused)))
 {
     fatal("cmd_compress() executed, but COMPRESS isn't implemented!",
-          EC_SOFTWARE);
+          EX_SOFTWARE);
 }
 #endif /* HAVE_ZLIB */
 
@@ -2509,7 +2509,7 @@ void mupdate_ready(void)
 
     if (ready_for_connections) {
         syslog(LOG_CRIT, "mupdate_ready called when already ready");
-        fatal("mupdate_ready called when already ready", EC_TEMPFAIL);
+        fatal("mupdate_ready called when already ready", EX_TEMPFAIL);
     }
 
     ready_for_connections = 1;

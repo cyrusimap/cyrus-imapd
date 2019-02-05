@@ -58,7 +58,7 @@
 
 #include "assert.h"
 #include "cyrusdb.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "mailbox.h"
 #include "util.h"
@@ -97,7 +97,7 @@ static int read_key_value(char **keyptr, size_t *keylen, char **valptr, size_t *
     }
     if (*keylen + *vallen >= STACKSIZE - 1) {
       printf("Error, stack overflow\n");
-      fatal("stack overflow", EC_DATAERR);
+      fatal("stack overflow", EX_DATAERR);
     }
   }
   (*keyptr)[*keylen] = '\0';
@@ -320,7 +320,7 @@ int main(int argc, char *argv[])
                "This is because some database backends (mainly berkeley) do not\n"
                "always do what you would expect with them.\n"
                "\nPlease use absolute pathnames instead.\n\n");
-        exit(EC_OSERR);
+        exit(EX_OSERR);
     }
 
     outfd = fileno(stdout);
@@ -329,7 +329,7 @@ int main(int argc, char *argv[])
 
     r = cyrusdb_open(argv[optind+1], fname, db_flags, &db);
     if(r != CYRUSDB_OK)
-        fatal("can't open database", EC_TEMPFAIL);
+        fatal("can't open database", EX_TEMPFAIL);
 
     if (( is_get = !strcmp(action, "get"))  ||
       (is_delete = !strcmp(action, "delete")) ||

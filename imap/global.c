@@ -64,7 +64,7 @@
 #include "assert.h"
 #include "charset.h"
 #include "cyr_lock.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "gmtoff.h"
 #include "iptostring.h"
 #include "global.h"
@@ -191,7 +191,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     const char *facility;
 
     if(cyrus_init_run != NOT_RUNNING) {
-        fatal("cyrus_init called twice!", EC_CONFIG);
+        fatal("cyrus_init called twice!", EX_CONFIG);
     } else {
         cyrus_init_run = RUNNING;
     }
@@ -209,7 +209,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
      * or IPC::Run from Perl.  Make sure we don't accidentally reuse low FD numbers */
     while(1) {
         int fd = open("/dev/null", 0);
-        if (fd == -1) fatal("can't open /dev/null", EC_SOFTWARE);
+        if (fd == -1) fatal("can't open /dev/null", EX_SOFTWARE);
         if (fd >= 3) {
             close(fd);
             break;
@@ -217,7 +217,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     }
 
     if(!ident)
-        fatal("service name was not specified to cyrus_init", EC_CONFIG);
+        fatal("service name was not specified to cyrus_init", EX_CONFIG);
 
     config_ident = ident;
 
@@ -230,7 +230,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 
     /* changed user if needed */
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
+        fatal("must run as the Cyrus user", EX_USAGE);
     }
 
 
@@ -262,7 +262,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     for (p = (char *)config_defpartition; p && *p; p++) {
         if (!Uisalnum(*p))
           fatal("defaultpartition option contains non-alphanumeric character",
-                EC_CONFIG);
+                EX_CONFIG);
         if (Uisupper(*p)) *p = tolower((unsigned char) *p);
     }
 
@@ -406,11 +406,11 @@ EXPORTED void global_sasl_init(int client, int server, const sasl_callback_t *ca
                    (sasl_mutex_free_t *) &cyrus_mutex_free);
 
     if(client && sasl_client_init(callbacks)) {
-        fatal("could not init sasl (client)", EC_SOFTWARE);
+        fatal("could not init sasl (client)", EX_SOFTWARE);
     }
 
     if(server && sasl_server_init(callbacks, "Cyrus")) {
-        fatal("could not init sasl (server)", EC_SOFTWARE);
+        fatal("could not init sasl (server)", EX_SOFTWARE);
     }
 }
 
@@ -1046,7 +1046,7 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
                 *remoteip = ripbuf;
             }
         } else {
-            fatal("can't get local addr", EC_SOFTWARE);
+            fatal("can't get local addr", EX_SOFTWARE);
         }
     } else {
         /* we're not connected to a internet socket! */

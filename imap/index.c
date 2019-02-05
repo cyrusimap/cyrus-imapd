@@ -65,7 +65,7 @@
 #include "charset.h"
 #include "conversations.h"
 #include "dlist.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "hash.h"
 #include "hashu64.h"
 #include "global.h"
@@ -759,7 +759,7 @@ static void index_refresh_locked(struct index_state *state)
             char buf[2048];
             sprintf(buf, "Exists wrong %u %u %u %u", msgno,
                     state->mapsize, mailbox->i.exists, mailbox->i.num_records);
-            fatal(buf, EC_IOERR);
+            fatal(buf, EX_IOERR);
         }
     }
     mailbox_iter_done(&iter);
@@ -881,7 +881,7 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
                    "Mailbox %s has been (re)moved out from under client",
                    state->mboxname);
             mailbox_close(&state->mailbox);
-            fatal("Mailbox has been (re)moved", EC_IOERR);
+            fatal("Mailbox has been (re)moved", EX_IOERR);
         }
 
         if (state->exists && (client_capa & CAPA_QRESYNC)) {

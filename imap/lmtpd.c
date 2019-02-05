@@ -75,7 +75,7 @@
 #include "carddav_db.h"
 #endif
 #include "duplicate.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "idle.h"
 #include "mailbox.h"
@@ -224,7 +224,7 @@ int service_init(int argc __attribute__((unused)),
             /* initialize duplicate delivery database */
             if (duplicate_init(NULL) != 0) {
                 fatal("lmtpd: unable to init duplicate delivery database",
-                      EC_SOFTWARE);
+                      EX_SOFTWARE);
             }
         }
 
@@ -235,7 +235,7 @@ int service_init(int argc __attribute__((unused)),
     /* Set namespace */
     if ((r = mboxname_init_namespace(&lmtpd_namespace, 0)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     mboxevent_setnamespace(&lmtpd_namespace);
@@ -332,7 +332,7 @@ static void usage(void)
 {
     fprintf(stderr, "421-4.3.0 usage: lmtpd [-C <alt_config>] [-a]\r\n");
     fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 struct fuzz_rock {

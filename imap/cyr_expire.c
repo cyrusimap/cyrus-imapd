@@ -68,7 +68,7 @@
 
 #include "annotate.h"
 #include "duplicate.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "hash.h"
 #include "libcyr_cfg.h"
@@ -184,11 +184,11 @@ static void cyr_expire_init(const char *progname, struct cyr_expire_ctx *ctx)
     action.sa_flags = 0;
     action.sa_handler = sighandler;
     if (sigaction(SIGQUIT, &action, NULL) < 0)
-        fatal("unable to install signal handler for SIGQUIT", EC_TEMPFAIL);
+        fatal("unable to install signal handler for SIGQUIT", EX_TEMPFAIL);
     if (sigaction(SIGINT, &action, NULL) < 0)
-        fatal("unable to install signal handler for SIGINT", EC_TEMPFAIL);
+        fatal("unable to install signal handler for SIGINT", EX_TEMPFAIL);
     if (sigaction(SIGTERM, &action, NULL) < 0)
-        fatal("unable to install signal handler for SIGTERM", EC_TEMPFAIL);
+        fatal("unable to install signal handler for SIGTERM", EX_TEMPFAIL);
 
     construct_hash_table(&ctx->erock.table, 10000, 1);
     strarray_init(&ctx->drock.to_delete);
@@ -240,7 +240,7 @@ static void usage(void)
 
     fprintf(stderr, "\n");
 
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 /*
@@ -882,7 +882,7 @@ int main(int argc, char *argv[])
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&expire_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     mboxevent_setnamespace(&expire_namespace);

@@ -51,7 +51,7 @@
 
 #include <libical/ical.h>
 
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"
@@ -791,7 +791,7 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
         case 200:  /* Successful */
             /* Create XML parser context */
             if (!(conn.xml = xmlNewParserCtxt())) {
-                fatal("Unable to create XML parser", EC_TEMPFAIL);
+                fatal("Unable to create XML parser", EX_TEMPFAIL);
             }
 
             r = parse_xml_body(&txn, xml, NULL);

@@ -56,7 +56,7 @@
 #include <unistd.h>
 
 #include "lib/cyrusdb.h"
-#include "lib/exitcodes.h"
+#include "lib/sysexits.h"
 #include "lib/util.h"
 #include "lib/xmalloc.h"
 
@@ -129,7 +129,7 @@ static void usage(void)
             "    Modes -A, -D, -P not available for all commands\n" /* FIXME which */
     );
 
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 enum ctlbu_mode {
@@ -578,7 +578,7 @@ int main(int argc, char **argv)
 
     backup_cleanup_staging_path();
     cyrus_done();
-    exit(r || ctlbu_skips_fails ? EC_TEMPFAIL : EC_OK);
+    exit(r || ctlbu_skips_fails ? EX_TEMPFAIL : EX_OK);
 }
 
 static int cmd_compact_one(void *rock,
@@ -956,7 +956,7 @@ static int lock_run_pipe(const char *userid, const char *fname,
     if (r) {
         printf("NO failed (%s)\n", error_message(r));
         r = backup_close(&backup);
-        return EC_SOFTWARE; // FIXME would something else be more appropriate?
+        return EX_SOFTWARE; // FIXME would something else be more appropriate?
     }
 
     printf("OK locked\n");
@@ -995,7 +995,7 @@ static int lock_run_sqlite(const char *userid, const char *fname,
                 userid ? userid : fname,
                 error_message(r));
         r = backup_close(&backup);
-        return EC_SOFTWARE;
+        return EX_SOFTWARE;
     }
 
     index_fname = backup_get_index_fname(backup);
@@ -1007,7 +1007,7 @@ static int lock_run_sqlite(const char *userid, const char *fname,
     switch (pid) {
     case -1:
         perror("fork");
-        r = EC_SOFTWARE;
+        r = EX_SOFTWARE;
         break;
 
     case 0:
@@ -1016,7 +1016,7 @@ static int lock_run_sqlite(const char *userid, const char *fname,
         execlp("sqlite3", "sqlite3", index_fname, NULL);
         /* execlp never returns */
         perror("execlp sqlite3");
-        _exit(EC_SOFTWARE);
+        _exit(EX_SOFTWARE);
         break;
 
     default:
@@ -1025,7 +1025,7 @@ static int lock_run_sqlite(const char *userid, const char *fname,
         if (WIFEXITED(status))
             r = WEXITSTATUS(status);
         else
-            r = EC_SOFTWARE;
+            r = EX_SOFTWARE;
         break;
     }
 
@@ -1056,7 +1056,7 @@ static int lock_run_exec(const char *userid, const char *fname,
                 userid ? userid : fname,
                 error_message(r));
         r = backup_close(&backup);
-        return EC_SOFTWARE;
+        return EX_SOFTWARE;
     }
 
     setenv(data_fname_env, fname, 1);
@@ -1068,11 +1068,11 @@ static int lock_run_exec(const char *userid, const char *fname,
     unsetenv(index_fname_env);
 
     if (r == -1)
-        r = EC_SOFTWARE;
+        r = EX_SOFTWARE;
     else if (WIFEXITED(r))
         r = WEXITSTATUS(r);
     else
-        r = EC_SOFTWARE;
+        r = EX_SOFTWARE;
 
     backup_close(&backup);
     return r;

@@ -49,7 +49,7 @@
 
 #include "xmalloc.h"
 #include "map.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 
 #define SLOP (4*1024)
 
@@ -73,7 +73,7 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
             syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
                    mboxname ? " for " : "", mboxname ? mboxname : "");
             snprintf(buf, sizeof(buf), "failed to fstat %s file", name);
-            fatal(buf, EC_IOERR);
+            fatal(buf, EX_IOERR);
         }
         newlen = sbuf.st_size;
     }
@@ -103,7 +103,7 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
                        mboxname ? " for " : "", mboxname ? mboxname : "");
             }
             snprintf(buf, sizeof(buf), "failed to read %s file", name);
-            fatal(buf, EC_IOERR);
+            fatal(buf, EX_IOERR);
         }
         p += n;
         left -= n;

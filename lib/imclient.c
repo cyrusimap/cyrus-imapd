@@ -71,7 +71,7 @@
 #endif /* HAVE_SSL */
 
 #include "assert.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "strarray.h"
@@ -506,7 +506,7 @@ imclient_send(struct imclient *imclient, imclient_proc_t *finishproc,
 
         default:
             fatal("internal error: invalid format specifier in imclient_send",
-                  EC_SOFTWARE);
+                  EX_SOFTWARE);
         }
         fmt = percent + 1;
     }

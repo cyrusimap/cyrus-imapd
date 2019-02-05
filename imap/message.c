@@ -60,7 +60,7 @@
 #include "assert.h"
 #include "crc32.h"
 #include "dlist.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "prot.h"
 #include "hash.h"
 #include "map.h"
@@ -371,7 +371,7 @@ EXPORTED int message_parse_file(FILE *infile,
 
     if (fstat(fd, &sbuf) == -1) {
         syslog(LOG_ERR, "IOERROR: fstat on new message in spool: %m");
-        fatal("can't fstat message file", EC_OSFILE);
+        fatal("can't fstat message file", EX_OSFILE);
     }
     map_refresh(fd, 1, msg_base, msg_len, sbuf.st_size,
                 "new message", 0);
@@ -409,7 +409,7 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
 
     if (fstat(fd, &sbuf) == -1) {
         syslog(LOG_ERR, "IOERROR: fstat on new message in spool: %m");
-        fatal("can't fstat message file", EC_OSFILE);
+        fatal("can't fstat message file", EX_OSFILE);
     }
     msg.len = sbuf.st_size;
     msg.base = xmalloc(msg.len);
@@ -566,7 +566,7 @@ static void message_find_part(struct body *body, const char *section,
         /* matching part, sanity check the size against the mmap'd file */
         if (body->content_offset + body->content_size > msg_len) {
             syslog(LOG_ERR, "IOERROR: body part exceeds size of message file");
-            fatal("body part exceeds size of message file", EC_OSFILE);
+            fatal("body part exceeds size of message file", EX_OSFILE);
         }
 
         if (!body->decoded_body) {
@@ -4372,7 +4372,7 @@ static int message_map_file(message_t *m, const char *fname)
 
     if (fstat(fd, &sbuf) == -1) {
         syslog(LOG_ERR, "IOERROR: fstat on %s: %m", fname);
-        fatal("can't fstat message file", EC_OSFILE);
+        fatal("can't fstat message file", EX_OSFILE);
     }
     if (!S_ISREG(sbuf.st_mode)) {
         close(fd);

@@ -65,7 +65,7 @@
 #include <sasl/saslutil.h>
 
 #include "backend.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "iptostring.h"
 #include "nonblock.h"

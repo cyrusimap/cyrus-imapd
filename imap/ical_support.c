@@ -45,7 +45,7 @@
 
 #include <string.h>
 
-#include "lib/exitcodes.h"
+#include "lib/sysexits.h"
 
 #include "caldav_db.h"
 #include "global.h"
@@ -1766,7 +1766,7 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical __attribute__((unuse
                                         int *num_changes __attribute__((unused)),
                                         const char **errstr __attribute__((unused)))
 {
-    fatal("icalcomponent_apply_vpatch() called, but no VPATCH", EC_SOFTWARE);
+    fatal("icalcomponent_apply_vpatch() called, but no VPATCH", EX_SOFTWARE);
 }
 #endif /* HAVE_VPATCH */
 

@@ -64,7 +64,7 @@
 #include "global.h"
 #include "append.h"
 #include "mboxlist.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "mailbox.h"
 #include "quota.h"
 #include "xmalloc.h"
@@ -127,7 +127,7 @@ static int usage(const char *name)
     fprintf(stderr,
             "usage: %s -S <servername> [-C <alt_config>] [-r] [-v] mailbox...\n", name);
 
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 EXPORTED void fatal(const char *s, int code)
@@ -743,7 +743,7 @@ static void replica_connect(const char *channel)
         prot_flush(sync_backend->out);
 
         if (sync_parse_response("COMPRESS", sync_backend->in, NULL)) {
-            if (do_compress) fatal("Failed to enable compression, aborting", EC_SOFTWARE);
+            if (do_compress) fatal("Failed to enable compression, aborting", EX_SOFTWARE);
             syslog(LOG_NOTICE, "Failed to enable compression, continuing uncompressed");
         }
         else {
@@ -751,7 +751,7 @@ static void replica_connect(const char *channel)
             prot_setcompress(sync_backend->out);
         }
     }
-    else if (do_compress) fatal("Backend does not support compression, aborting", EC_SOFTWARE);
+    else if (do_compress) fatal("Backend does not support compression, aborting", EX_SOFTWARE);
 #endif
 
     /* links to sockets */
@@ -953,31 +953,31 @@ int main(int argc, char **argv)
 
         case 'R':
             if (mode != MODE_UNKNOWN)
-                fatal("Mutually exclusive options defined", EC_USAGE);
+                fatal("Mutually exclusive options defined", EX_USAGE);
             mode = MODE_REPEAT;
             break;
 
         case 'A':
             if (mode != MODE_UNKNOWN)
-                fatal("Mutually exclusive options defined", EC_USAGE);
+                fatal("Mutually exclusive options defined", EX_USAGE);
             mode = MODE_ALLUSER;
             break;
 
         case 'u':
             if (mode != MODE_UNKNOWN)
-                fatal("Mutually exclusive options defined", EC_USAGE);
+                fatal("Mutually exclusive options defined", EX_USAGE);
             mode = MODE_USER;
             break;
 
         case 'm':
             if (mode != MODE_UNKNOWN)
-                fatal("Mutually exclusive options defined", EC_USAGE);
+                fatal("Mutually exclusive options defined", EX_USAGE);
             mode = MODE_MAILBOX;
             break;
 
         case 's':
             if (mode != MODE_UNKNOWN)
-                fatal("Mutually exclusive options defined", EC_USAGE);
+                fatal("Mutually exclusive options defined", EX_USAGE);
             mode = MODE_META;
             break;
 
@@ -986,7 +986,7 @@ int main(int argc, char **argv)
             do_compress = 1;
 #else
             do_compress = 0;
-            fatal("Compress not available without zlib compiled in", EC_SOFTWARE);
+            fatal("Compress not available without zlib compiled in", EX_SOFTWARE);
 #endif
             break;
 
@@ -1005,7 +1005,7 @@ int main(int argc, char **argv)
     }
 
     if (mode == MODE_UNKNOWN)
-        fatal("No replication mode specified", EC_USAGE);
+        fatal("No replication mode specified", EX_USAGE);
 
     if (verbose) flags |= SYNC_FLAG_VERBOSE;
     if (verbose_logging) flags |= SYNC_FLAG_LOGGING;
@@ -1034,7 +1034,7 @@ int main(int argc, char **argv)
         servername = sync_get_config(channel, "sync_host");
 
     if (!servername)
-        fatal("sync_host not defined", EC_SOFTWARE);
+        fatal("sync_host not defined", EX_SOFTWARE);
 
     /* Just to help with debugging, so we have time to attach debugger */
     if (wait > 0) {
@@ -1044,7 +1044,7 @@ int main(int argc, char **argv)
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&sync_namespace, 1)) != 0) {
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     signals_set_shutdown(&shut_down);

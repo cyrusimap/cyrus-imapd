@@ -68,7 +68,7 @@
 #include "append.h"
 #include "caldav_db.h"
 #include "dlist.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "http_proxy.h"
 #include "index.h"
@@ -8863,7 +8863,7 @@ static void my_dav_init(struct buf *serverinfo __attribute__((unused)))
     if (!namespace_principal.enabled) return;
 
     if (!config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX)) {
-        fatal("Required 'davnotificationsprefix' option is not set", EC_CONFIG);
+        fatal("Required 'davnotificationsprefix' option is not set", EX_CONFIG);
     }
 
     namespace_notify.enabled = 1;

@@ -58,7 +58,7 @@
 #endif
 
 #include "assert.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "imparse.h"
 #include "libcyr_cfg.h"
 #include "map.h"
@@ -1161,7 +1161,7 @@ int prot_flush_internal(struct protstream *s, int force)
                     syslog(LOG_ERR, "write to protstream buffer failed: %s",
                            strerror(errno));
 
-                    fatal("write to big buffer failed", EC_OSFILE);
+                    fatal("write to big buffer failed", EX_OSFILE);
                 }
                 if (n > 0) {
                     ptr += n;
@@ -1172,7 +1172,7 @@ int prot_flush_internal(struct protstream *s, int force)
             /* We did a write to the bigbuffer, refresh the memory map */
             if (fstat(s->big_buffer, &sbuf) == -1) {
                 syslog(LOG_ERR, "IOERROR: fstating temp protlayer buffer: %m");
-                fatal("failed to fstat protlayer buffer", EC_IOERR);
+                fatal("failed to fstat protlayer buffer", EX_IOERR);
             }
 
             s->bigbuf_len = sbuf.st_size;
@@ -1806,14 +1806,14 @@ EXPORTED inline int prot_ungetc(int c, struct protstream *s)
     if (c == EOF) return EOF;
 
     if (!s->can_unget)
-        fatal("Can't unwind any more", EC_SOFTWARE);
+        fatal("Can't unwind any more", EX_SOFTWARE);
 
     s->cnt++;
     s->can_unget--;
     s->bytes_in--;
     s->ptr--;
     if (*s->ptr != c)
-        fatal("Trying to unput wrong character", EC_SOFTWARE);
+        fatal("Trying to unput wrong character", EX_SOFTWARE);
 
     return c;
 }

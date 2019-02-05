@@ -56,7 +56,7 @@
 #include <unistd.h>
 
 #include "lib/cyrusdb.h"
-#include "lib/exitcodes.h"
+#include "lib/sysexits.h"
 #include "lib/gzuncat.h"
 #include "lib/map.h"
 #include "lib/strarray.h"
@@ -114,7 +114,7 @@ static void usage(void)
             "    -u                  # specified backup interpreted as userid (default)\n"
     );
 
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 static void save_argv0(const char *s)
@@ -394,7 +394,7 @@ int main(int argc, char **argv)
     cyrus_done();
 
     strarray_free(options.argv);
-    exit(r ? EC_TEMPFAIL : EC_OK);
+    exit(r ? EX_TEMPFAIL : EX_OK);
 }
 
 static int cmd_list_all(struct backup *backup,

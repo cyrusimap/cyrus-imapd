@@ -52,7 +52,7 @@
 #include "acl.h"
 #include "annotate.h"
 #include "backend.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "imap_proxy.h"
 #include "proxy.h"
@@ -162,7 +162,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
     if (tag) {
         taglen = strlen(tag);
         if(taglen >= sizeof(buf) + 1) {
-            fatal("tag too large",EC_TEMPFAIL);
+            fatal("tag too large",EX_TEMPFAIL);
         }
     }
 
@@ -179,7 +179,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
         if (!prot_fgets(buf, sizeof(buf), s->in)) {
             /* uh oh */
             if(s == backend_current && !force_notfatal)
-                fatal("Lost connection to selected backend", EC_UNAVAILABLE);
+                fatal("Lost connection to selected backend", EX_UNAVAILABLE);
             proxy_downserver(s);
             return PROXY_NOCONNECTION;
         }
@@ -203,7 +203,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
                 default: /* huh? no result? */
                     if(s == backend_current && !force_notfatal)
                         fatal("Lost connection to selected backend",
-                              EC_UNAVAILABLE);
+                              EX_UNAVAILABLE);
                     proxy_downserver(s);
                     r = PROXY_NOCONNECTION;
                     break;
@@ -576,7 +576,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
         if(c == EOF) {
             if(s == backend_current && !force_notfatal)
-                fatal("Lost connection to selected backend", EC_UNAVAILABLE);
+                fatal("Lost connection to selected backend", EX_UNAVAILABLE);
             proxy_downserver(s);
             r = PROXY_NOCONNECTION;
             goto out;
@@ -587,7 +587,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
             if(!prot_fgets(buf, sizeof(buf), s->in)) {
                 if(s == backend_current && !force_notfatal)
                     fatal("Lost connection to selected backend",
-                          EC_UNAVAILABLE);
+                          EX_UNAVAILABLE);
                 proxy_downserver(s);
                 r = PROXY_NOCONNECTION;
                 goto out;
@@ -609,7 +609,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
             default: /* huh? no result? */
                 if(s == backend_current && !force_notfatal)
                     fatal("Lost connection to selected backend",
-                          EC_UNAVAILABLE);
+                          EX_UNAVAILABLE);
                 proxy_downserver(s);
                 r = PROXY_NOCONNECTION;
                 break;
@@ -621,7 +621,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
         if(c == EOF) {
             if(s == backend_current && !force_notfatal)
-                fatal("Lost connection to selected backend", EC_UNAVAILABLE);
+                fatal("Lost connection to selected backend", EX_UNAVAILABLE);
             proxy_downserver(s);
             r = PROXY_NOCONNECTION;
             goto out;
@@ -668,7 +668,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
             if(c != ' ') {
                 if(s == backend_current && !force_notfatal)
                     fatal("Bad LSUB response from selected backend",
-                          EC_UNAVAILABLE);
+                          EX_UNAVAILABLE);
                 proxy_downserver(s);
                 r = PROXY_NOCONNECTION;
                 goto out;
@@ -680,7 +680,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
             if(c != ' ') {
                 if(s == backend_current && !force_notfatal)
                     fatal("Bad LSUB response from selected backend",
-                          EC_UNAVAILABLE);
+                          EX_UNAVAILABLE);
                 proxy_downserver(s);
                 r = PROXY_NOCONNECTION;
                 goto out;
@@ -706,7 +706,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
             if(c != '\n') {
                 if(s == backend_current && !force_notfatal)
                     fatal("Bad LSUB response from selected backend",
-                          EC_UNAVAILABLE);
+                          EX_UNAVAILABLE);
                 proxy_downserver(s);
                 r = PROXY_NOCONNECTION;
                 goto out;
@@ -1019,7 +1019,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
     }
     if (c == EOF) {
         /* uh oh, we're not happy */
-        fatal("Lost connection to selected backend", EC_UNAVAILABLE);
+        fatal("Lost connection to selected backend", EX_UNAVAILABLE);
     }
 
     /* start the append */
@@ -1247,7 +1247,7 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
     }
     if (c == EOF) {
         /* uh oh, we're not happy */
-        fatal("Lost connection to backend", EC_UNAVAILABLE);
+        fatal("Lost connection to backend", EX_UNAVAILABLE);
     }
 
     if (url->uidvalidity && (uidvalidity != url->uidvalidity)) {
@@ -1359,7 +1359,7 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
     }
     if (c == EOF) {
         /* uh oh, we're not happy */
-        fatal("Lost connection to backend", EC_UNAVAILABLE);
+        fatal("Lost connection to backend", EX_UNAVAILABLE);
     }
 
   unselect:
@@ -1384,7 +1384,7 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
     }
     if (c == EOF) {
         /* uh oh, we're not happy */
-        fatal("Lost connection to backend", EC_UNAVAILABLE);
+        fatal("Lost connection to backend", EX_UNAVAILABLE);
     }
 
     if (!r && !found) {
@@ -1606,7 +1606,7 @@ static void proxy_part_filldata(partlist_t *part_list, int idx)
         }
         if (c == EOF) {
             /* uh oh, we're not happy */
-            fatal("Lost connection to backend", EC_UNAVAILABLE);
+            fatal("Lost connection to backend", EX_UNAVAILABLE);
         }
 
         /* unique id */

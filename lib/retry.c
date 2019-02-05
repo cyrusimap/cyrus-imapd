@@ -48,7 +48,7 @@
 #include <unistd.h>
 #endif
 
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "retry.h"
 #include "xmalloc.h"
 
@@ -159,7 +159,7 @@ EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
             n -= iov[i].iov_len;
             iov++;
             iovcnt--;
-            if (!iovcnt) fatal("ran out of iov", EC_SOFTWARE);
+            if (!iovcnt) fatal("ran out of iov", EX_SOFTWARE);
         }
 
         n = writev(fd, iov, iovcnt > iov_max ? iov_max : iovcnt);

@@ -52,7 +52,7 @@
 
 /* cyrus includes */
 #include "assert.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "index.h"
 #include "imapurl.h"
@@ -136,7 +136,7 @@ static int usage(void)
 
     fprintf(stderr, "\n");
 
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 static void generate_boundary(char *boundary, size_t size)

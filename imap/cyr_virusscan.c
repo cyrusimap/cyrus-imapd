@@ -53,7 +53,7 @@
 
 /* cyrus includes */
 #include "global.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "append.h"
 #include "index.h"
 #include "mailbox.h"
@@ -137,24 +137,24 @@ void *clamav_init()
     /* initialise ClamAV library */
     if ((r = cl_init(0)) != CL_SUCCESS) {
         syslog(LOG_ERR, "cl_init: %s", cl_strerror(r));
-        fatal("Failed to initialise ClamAV library", EC_SOFTWARE);
+        fatal("Failed to initialise ClamAV library", EX_SOFTWARE);
     }
 
     struct clamav_state *st = xzmalloc(sizeof(struct clamav_state));
     if (st == NULL) {
-        fatal("memory allocation failed", EC_SOFTWARE);
+        fatal("memory allocation failed", EX_SOFTWARE);
     }
 
     st->av_engine = cl_engine_new();
     if ( ! st->av_engine ) {
-        fatal("Failed to initialize AV engine", EC_SOFTWARE);
+        fatal("Failed to initialize AV engine", EX_SOFTWARE);
     }
 
     /* load all available databases from default directory */
     if (verbose) puts("Loading virus signatures...");
     if ((r = cl_load(cl_retdbdir(), st->av_engine, &sigs, CL_DB_STDOPT))) {
         syslog(LOG_ERR, "cl_load: %s", cl_strerror(r));
-        fatal(cl_strerror(r), EC_SOFTWARE);
+        fatal(cl_strerror(r), EX_SOFTWARE);
     }
 
     printf("Loaded %d virus signatures.\n", sigs);
@@ -164,7 +164,7 @@ void *clamav_init()
         syslog(LOG_ERR,
                "Database initialization error: %s", cl_strerror(r));
         cl_engine_free(st->av_engine);
-        fatal(cl_strerror(r), EC_SOFTWARE);
+        fatal(cl_strerror(r), EX_SOFTWARE);
     }
 
     /* set up archive av_limits */
@@ -302,7 +302,7 @@ int main (int argc, char *argv[]) {
         /* Set namespace -- force standard (internal) */
         if ((r = mboxname_init_namespace(&scan_namespace, 1)) != 0) {
             syslog(LOG_ERR, "%s", error_message(r));
-            fatal(error_message(r), EC_CONFIG);
+            fatal(error_message(r), EX_CONFIG);
         }
 
         srock.searchargs = new_searchargs("*", GETSEARCH_CHARSET_KEYWORD,
@@ -314,7 +314,7 @@ int main (int argc, char *argv[]) {
 
         if (c == EOF) {
             syslog(LOG_ERR, "Invalid search string");
-            fatal("Invalid search string", EC_USAGE);
+            fatal("Invalid search string", EX_USAGE);
         }
     }
     else {

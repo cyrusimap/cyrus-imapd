@@ -54,7 +54,7 @@
 
 #include "util.h"
 #include "global.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"

@@ -44,7 +44,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "sequence.h"
 #include "string.h"
 #include "util.h"
@@ -75,7 +75,7 @@ EXPORTED struct seqset *seqset_init(unsigned maxval, int flags)
     /* make sure flags are sane - be explicit about what
      * sort of list we're building */
     if (flags != SEQ_SPARSE && flags != SEQ_MERGE)
-        fatal("invalid flags", EC_SOFTWARE);
+        fatal("invalid flags", EX_SOFTWARE);
 
     seq->maxval = maxval;
     seq->flags = flags;
@@ -99,7 +99,7 @@ EXPORTED void seqset_add(struct seqset *seq, unsigned num, int ismember)
         return;
 
     if (num <= seq->prev)
-        fatal("numbers out of order", EC_SOFTWARE);
+        fatal("numbers out of order", EX_SOFTWARE);
 
     if (!ismember) {
         seq->prev = num;
@@ -244,11 +244,11 @@ EXPORTED struct seqset *seqset_parse(const char *sequence,
 
     while (*sequence) {
         if (read_num(&sequence, maxval, &start))
-            fatal("invalid sequence", EC_SOFTWARE);
+            fatal("invalid sequence", EX_SOFTWARE);
         if (*sequence == ':') {
             sequence++;
             if (read_num(&sequence, maxval, &end))
-                fatal("invalid sequence", EC_SOFTWARE);
+                fatal("invalid sequence", EX_SOFTWARE);
         }
         else
             end = start;

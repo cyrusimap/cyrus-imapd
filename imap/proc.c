@@ -53,7 +53,7 @@
 #include <sys/stat.h>
 
 #include "assert.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "proc.h"
 #include "retry.h"
@@ -90,10 +90,10 @@ static char *proc_getpath(pid_t pid, int isnew)
         const char *procpath = config_getstring(IMAPOPT_PROC_PATH);
 
         if (procpath[0] != '/')
-            fatal("proc path must be fully qualified", EC_CONFIG);
+            fatal("proc path must be fully qualified", EX_CONFIG);
 
         if (strlen(procpath) < 2)
-            fatal("proc path must not be '/'", EC_CONFIG);
+            fatal("proc path must not be '/'", EX_CONFIG);
 
         buf_setcstr(&buf, procpath);
 
@@ -135,14 +135,14 @@ EXPORTED int proc_register(const char *servicename, const char *clienthost,
     procfile = fopen(newfname, "w+");
     if (!procfile) {
         if (cyrus_mkdir(newfname, 0755) == -1) {
-            fatal("couldn't create proc directory", EC_IOERR);
+            fatal("couldn't create proc directory", EX_IOERR);
         }
         else {
             syslog(LOG_NOTICE, "created proc directory");
             procfile = fopen(newfname, "w+");
             if (!procfile) {
                 syslog(LOG_ERR, "IOERROR: creating %s: %m", newfname);
-                fatal("can't write proc file", EC_IOERR);
+                fatal("can't write proc file", EX_IOERR);
             }
         }
     }
@@ -158,7 +158,7 @@ EXPORTED int proc_register(const char *servicename, const char *clienthost,
     if (rename(newfname, procfname)) {
         syslog(LOG_ERR, "IOERROR: renaming %s to %s: %m", newfname, procfname);
         unlink(newfname);
-        fatal("can't write proc file", EC_IOERR);
+        fatal("can't write proc file", EX_IOERR);
     }
 
     setproctitle("%s: %s %s %s %s", servicename, clienthost, userid, mailbox, cmd);

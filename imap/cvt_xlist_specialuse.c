@@ -48,7 +48,7 @@
 #include <syslog.h>
 #include <unistd.h>
 
-#include "lib/exitcodes.h"
+#include "lib/sysexits.h"
 #include "lib/hash.h"
 #include "lib/libconfig.h"
 
@@ -70,7 +70,7 @@ static void usage(void)
             "    -v                  # verbose\n"
     );
 
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 static void save_argv0(const char *s)
@@ -202,5 +202,5 @@ done:
     strarray_fini(&patterns);
 
     cyrus_done();
-    return r ? EC_TEMPFAIL : EC_OK;
+    return r ? EX_TEMPFAIL : EX_OK;
 }

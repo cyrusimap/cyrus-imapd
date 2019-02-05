@@ -60,7 +60,7 @@
 
 #include "notifyd.h"
 
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "imap/global.h"
 #include "libconfig.h"
 #include "imap/notify.h"
@@ -189,7 +189,7 @@ static int do_notify(void)
         else {
             reply = strdup("NO unknown notification method");
             if (!reply) {
-                fatal("strdup failed", EC_OSERR);
+                fatal("strdup failed", EX_OSERR);
             }
         }
 #endif
@@ -220,7 +220,7 @@ EXPORTED void fatal(const char *s, int code)
 static void usage(void)
 {
     syslog(LOG_ERR, "usage: notifyd [-C <alt_config>]");
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 EXPORTED int service_init(int argc, char **argv, char **envp __attribute__((unused)))
@@ -228,7 +228,7 @@ EXPORTED int service_init(int argc, char **argv, char **envp __attribute__((unus
     int opt;
     char *method = "null";
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
 
     while ((opt = getopt(argc, argv, "m:")) != EOF) {
         switch(opt) {
@@ -246,7 +246,7 @@ EXPORTED int service_init(int argc, char **argv, char **envp __attribute__((unus
         default_method++;
     }
 
-    if (!default_method) fatal("unknown notification method %s", EC_USAGE);
+    if (!default_method) fatal("unknown notification method %s", EX_USAGE);
 
     signals_set_shutdown(&shut_down);
 

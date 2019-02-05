@@ -51,7 +51,7 @@
 #include "caldav_alarm.h"
 #include "caldav_db.h"
 #include "cyrusdb.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "httpd.h"
 #include "http_dav.h"
 #include "ical_support.h"
@@ -103,7 +103,7 @@ EXPORTED int caldav_init(void)
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&caldav_namespace, 1))) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     /* Get min date-time */

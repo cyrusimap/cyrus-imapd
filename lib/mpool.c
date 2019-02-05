@@ -53,7 +53,7 @@
 
 #include "mpool.h"
 #include "xmalloc.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 
 struct mpool
 {
@@ -98,7 +98,7 @@ EXPORTED void free_mpool(struct mpool *pool)
 
     if (!pool) return;
     if (!pool->blob) {
-        fatal("memory pool without a blob", EC_TEMPFAIL);
+        fatal("memory pool without a blob", EX_TEMPFAIL);
         return;
     }
 
@@ -130,7 +130,7 @@ EXPORTED void *mpool_malloc(struct mpool *pool, size_t size)
     size_t remain;
 
     if(!pool || !pool->blob) {
-        fatal("mpool_malloc called without a valid pool", EC_TEMPFAIL);
+        fatal("mpool_malloc called without a valid pool", EX_TEMPFAIL);
     }
     if(!size) {
         /* This is legal under ANSI C, so we should allow it too */

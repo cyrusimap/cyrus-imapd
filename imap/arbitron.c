@@ -55,7 +55,7 @@
 #include <sys/stat.h>
 
 #include "global.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "hash.h"
 #include "mailbox.h"
 #include "mpool.h"
@@ -188,7 +188,7 @@ int main(int argc,char **argv)
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&arb_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     if (optind != argc) strlcpy(pattern, argv[optind], sizeof(pattern));
@@ -236,7 +236,7 @@ static void usage(void)
             "usage: arbitron [-o] [-u] [-l] [-C alt_config] "
             "[-d days | -D mmddyyy[:mmddyyyy]]\n"
             "                [-p months] [mboxpattern]\n");
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 static int do_mailbox(struct findall_data *data, void *rock __attribute__((unused)))
@@ -276,7 +276,7 @@ static void run_users(void)
 
     dirp = opendir(prefix);
     if(!dirp) {
-        fatal("can't open user directory", EC_SOFTWARE);
+        fatal("can't open user directory", EX_SOFTWARE);
     }
 
     while((dirent1 = readdir(dirp)) != NULL) {

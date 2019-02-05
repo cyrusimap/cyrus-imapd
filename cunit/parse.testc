@@ -1,6 +1,6 @@
 #include "config.h"
 #include "cunit/cyrunit.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "xmalloc.h"
 #include "prot.h"
 #include "imap/global.h"
@@ -73,7 +73,7 @@ static void test_getint32(void)
     /* test a string with too many digits */
     CU_EXPECT_CYRFATAL_BEGIN;
         wrap_int_parser(getint32, int32_t, STR3, &c, &val, NULL);
-    CU_EXPECT_CYRFATAL_END(EC_IOERR, "num too big");
+    CU_EXPECT_CYRFATAL_END(EX_IOERR, "num too big");
 
     /* test a valid value with a different terminator */
     wrap_int_parser(getint32, int32_t, STR4, &c, &val, &bytes_in);
@@ -142,7 +142,7 @@ static void test_getsint32(void)
     /* test a string with too many digits */
     CU_EXPECT_CYRFATAL_BEGIN;
         wrap_int_parser(getsint32, int32_t, STR3, &c, &val, NULL);
-    CU_EXPECT_CYRFATAL_END(EC_IOERR, "num too big");
+    CU_EXPECT_CYRFATAL_END(EX_IOERR, "num too big");
 
     /* test a valid value with a different terminator */
     wrap_int_parser(getsint32, int32_t, STR4, &c, &val, &bytes_in);
@@ -209,7 +209,7 @@ static void test_getuint32(void)
     /* test a string with too many digits */
     CU_EXPECT_CYRFATAL_BEGIN;
         wrap_int_parser(getuint32, uint32_t, STR3, &c, &val, NULL);
-    CU_EXPECT_CYRFATAL_END(EC_IOERR, "num too big");
+    CU_EXPECT_CYRFATAL_END(EX_IOERR, "num too big");
 
     /* test a valid value with a different terminator */
     wrap_int_parser(getuint32, uint32_t, STR4, &c, &val, &bytes_in);
@@ -276,7 +276,7 @@ static void test_getint64(void)
     /* test a string with too many digits */
     CU_EXPECT_CYRFATAL_BEGIN;
         wrap_int_parser(getint64, int64_t, STR3, &c, &val, NULL);
-    CU_EXPECT_CYRFATAL_END(EC_IOERR, "num too big");
+    CU_EXPECT_CYRFATAL_END(EX_IOERR, "num too big");
 
     /* test a valid value with a different terminator */
     wrap_int_parser(getint64, int64_t, STR4, &c, &val, &bytes_in);
@@ -345,7 +345,7 @@ static void test_getsint64(void)
     /* test a string with too many digits */
     CU_EXPECT_CYRFATAL_BEGIN;
         wrap_int_parser(getsint64, int64_t, STR3, &c, &val, NULL);
-    CU_EXPECT_CYRFATAL_END(EC_IOERR, "num too big");
+    CU_EXPECT_CYRFATAL_END(EX_IOERR, "num too big");
 
     /* test a valid value with a different terminator */
     wrap_int_parser(getsint64, int64_t, STR4, &c, &val, &bytes_in);
@@ -412,7 +412,7 @@ static void test_getuint64(void)
     /* test a string with too many digits */
     CU_EXPECT_CYRFATAL_BEGIN;
         wrap_int_parser(getuint64, uint64_t, STR3, &c, &val, NULL);
-    CU_EXPECT_CYRFATAL_END(EC_IOERR, "num too big");
+    CU_EXPECT_CYRFATAL_END(EX_IOERR, "num too big");
 
     /* test a valid value with a different terminator */
     wrap_int_parser(getuint64, uint64_t, STR4, &c, &val, &bytes_in);

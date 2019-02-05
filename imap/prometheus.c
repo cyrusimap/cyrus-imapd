@@ -53,7 +53,7 @@
 
 #include "lib/assert.h"
 #include "lib/cyr_lock.h"
-#include "lib/exitcodes.h"
+#include "lib/sysexits.h"
 #include "lib/libconfig.h"
 #include "lib/map.h"
 #include "lib/ptrarray.h"
@@ -82,10 +82,10 @@ EXPORTED const char *prometheus_stats_dir(void)
 
     if ((tmp = config_getstring(IMAPOPT_PROMETHEUS_STATS_DIR))) {
         if (tmp[0] != '/')
-            fatal("prometheus_stats_dir must be fully qualified", EC_CONFIG);
+            fatal("prometheus_stats_dir must be fully qualified", EX_CONFIG);
 
         if (strlen(tmp) < 2)
-            fatal("prometheus_stats_dir must not be '/'", EC_CONFIG);
+            fatal("prometheus_stats_dir must not be '/'", EX_CONFIG);
 
         buf_setcstr(&statsdir, tmp);
 
@@ -123,7 +123,7 @@ static void prometheus_init(void)
     r = snprintf(fname, sizeof(fname), "%s%jd",
                  prometheus_stats_dir(), (intmax_t) getpid());
     if (r < 0 || (size_t) r >= sizeof(fname))
-        fatal("unable to register stats for prometheus", EC_CONFIG);
+        fatal("unable to register stats for prometheus", EX_CONFIG);
 
     r = cyrus_mkdir(fname, 0755);
     if (r) return;
@@ -381,5 +381,5 @@ EXPORTED enum prom_metric_id prometheus_lookup_label(enum prom_labelled_metric m
             break;
     }
 
-    fatal("invalid metric value -- compile time bug", EC_SOFTWARE);
+    fatal("invalid metric value -- compile time bug", EX_SOFTWARE);
 }

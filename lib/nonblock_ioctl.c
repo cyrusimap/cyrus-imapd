@@ -47,7 +47,7 @@
 
 /* for fatal */
 #include "xmalloc.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 
 EXPORTED const char *nonblock_method_desc = "ioctl";
 
@@ -61,6 +61,6 @@ EXPORTED void nonblock(int fd, int mode)
     mode = mode ? 1 : 0;
 
     if (ioctl(fd, FIONBIO, (char *)&mode) < 0) {
-        fatal("Internal error: ioctl FIONBIO failed", EC_SOFTWARE);
+        fatal("Internal error: ioctl FIONBIO failed", EX_SOFTWARE);
     }
 }

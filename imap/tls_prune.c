@@ -45,7 +45,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "tls.h"
 #include "util.h"

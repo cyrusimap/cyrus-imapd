@@ -46,7 +46,7 @@
 #include <string.h>
 #include <syslog.h>
 
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "httpd.h"
 #include "http_dav.h"
 #include "http_proxy.h"
@@ -298,7 +298,7 @@ static void my_webdav_init(struct buf *serverinfo __attribute__((unused)))
     if (!namespace_drive.enabled) return;
 
     if (!config_getstring(IMAPOPT_DAVDRIVEPREFIX)) {
-        fatal("Required 'davdriveprefix' option is not set", EC_CONFIG);
+        fatal("Required 'davdriveprefix' option is not set", EX_CONFIG);
     }
 
     webdav_init();

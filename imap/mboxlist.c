@@ -67,7 +67,7 @@
 #include "util.h"
 #include "mailbox.h"
 #include "mboxevent.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "partlist.h"
@@ -3877,8 +3877,8 @@ EXPORTED void mboxlist_open(const char *fname)
         syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
                cyrusdb_strerror(ret));
             /* Exiting TEMPFAIL because Sendmail thinks this
-               EC_OSFILE == permanent failure. */
-        fatal("can't read mailboxes file", EC_TEMPFAIL);
+               EX_OSFILE == permanent failure. */
+        fatal("can't read mailboxes file", EX_TEMPFAIL);
     }
 
     free(tofree);

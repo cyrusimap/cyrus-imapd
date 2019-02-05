@@ -46,7 +46,7 @@
 #include <fcntl.h>
 
 #include "xmalloc.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "nonblock.h"
 
 #ifndef FNDELAY
@@ -71,7 +71,7 @@ EXPORTED void nonblock(int fd, int mode)
     int flags;
 
     flags = fcntl(fd, F_GETFL, 0);
-    if (flags < 0) fatal("Internal error: fcntl F_GETFL failed", EC_IOERR);
+    if (flags < 0) fatal("Internal error: fcntl F_GETFL failed", EX_IOERR);
     if (mode) {
         flags |= NON_BLOCKING_MODE;
     }

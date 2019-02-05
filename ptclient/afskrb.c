@@ -43,7 +43,7 @@
 #include <syslog.h>
 #include <config.h>
 #include "ptloader.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "util.h"
 #include "xmalloc.h"
 
@@ -445,7 +445,7 @@ static void myinit(void)
     int r = pr_Initialize (1L, AFSCONF_CLIENTNAME, config_getstring(IMAPOPT_AFSPTS_MYCELL));
     if (r) {
         syslog(LOG_DEBUG, "pr_Initialize failed: %d", r);
-        fatal("pr_initialize failed", EC_TEMPFAIL);
+        fatal("pr_initialize failed", EX_TEMPFAIL);
     }
 
     localrealms = config_getstring(IMAPOPT_AFSPTS_LOCALREALMS);
@@ -484,7 +484,7 @@ static struct auth_state *myauthstate(const char *identifier,
         rc = pr_Initialize (1L, AFSCONF_CLIENTNAME, config_getstring(IMAPOPT_AFSPTS_MYCELL));
         if (rc) {
             syslog(LOG_DEBUG, "pr_Initialize failed: %d", rc);
-            fatal("pr_Initialize failed", EC_TEMPFAIL);
+            fatal("pr_Initialize failed", EX_TEMPFAIL);
         }
         /* Okay, rerun it now */
         rc = pr_ListMembers(canon_id_tmp, &groups);
@@ -535,7 +535,7 @@ static struct auth_state *myauthstate(const char *identifier,
 
 static void myinit(void)
 {
-        fatal("PTS module (afskrb) not compiled in", EC_CONFIG);
+        fatal("PTS module (afskrb) not compiled in", EX_CONFIG);
 }
 
 static struct auth_state *myauthstate(
@@ -544,7 +544,7 @@ static struct auth_state *myauthstate(
     const char **reply __attribute__((unused)),
     int *dsize __attribute__((unused)))
 {
-        fatal("PTS module (afskrb) not compiled in", EC_CONFIG);
+        fatal("PTS module (afskrb) not compiled in", EX_CONFIG);
         return NULL;
 }
 

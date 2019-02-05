@@ -57,7 +57,7 @@
 #include <sasl/saslutil.h>
 
 #include "assert.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "libconfig.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -906,7 +906,7 @@ cleanup:
 reset:
   if(reset_saslconn(&sieved_saslconn) != SASL_OK)
       fatal("could not reset the sasl_conn_t after failure",
-            EC_TEMPFAIL);
+            EX_TEMPFAIL);
   ret = FALSE;
   goto cleanup;
 }
@@ -959,7 +959,7 @@ static int cmd_starttls(struct protstream *sieved_out,
     result = saslprops_set_tls(saslprops, sieved_saslconn);
 
     if (result != SASL_OK) {
-        fatal("saslprops_set_tls() failed: cmd_starttls()", EC_TEMPFAIL);
+        fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
     }
 
     /* tell the prot layer about our new layers */
@@ -977,6 +977,6 @@ static int cmd_starttls(struct protstream *sieved_out __attribute__((unused)),
                         struct protstream *sieved_in __attribute__((unused)),
                         struct saslprops_t *saslprops __attribute__((unused)))
 {
-    fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
+    fatal("cmd_starttls() called, but no OpenSSL", EX_SOFTWARE);
 }
 #endif /* HAVE_SSL */

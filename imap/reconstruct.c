@@ -82,7 +82,7 @@
 #include "crc32.h"
 #include "hash.h"
 #include "global.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "mailbox.h"
 #include "map.h"
 #include "message.h"
@@ -242,7 +242,7 @@ int main(int argc, char **argv)
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     if (mflag) {
@@ -259,7 +259,7 @@ int main(int argc, char **argv)
         if(optind == argc) {
             fprintf(stderr,
                     "When using -p, you must specify a mailbox to attempt to reconstruct.");
-            exit(EC_USAGE);
+            exit(EX_USAGE);
         }
 
         /* do any of the mailboxes exist in mboxlist already? */
@@ -267,7 +267,7 @@ int main(int argc, char **argv)
         for (i = optind; i < argc; i++) {
             if (strchr(argv[i],'%') || strchr(argv[i],'*')) {
                 fprintf(stderr, "Using wildcards with -p is not supported.\n");
-                exit(EC_USAGE);
+                exit(EX_USAGE);
             }
 
             /* Translate mailboxname */
@@ -282,7 +282,7 @@ int main(int argc, char **argv)
                 fprintf(stderr,
                         "Mailbox %s already exists.  Cannot specify -p.\n",
                         argv[i]);
-                exit(EC_USAGE);
+                exit(EX_USAGE);
             }
             free(intname);
         }
@@ -312,7 +312,7 @@ int main(int argc, char **argv)
         if (rflag || dousers) {
             fprintf(stderr, "please specify a mailbox to recurse from\n");
             cyrus_done();
-            exit(EC_USAGE);
+            exit(EX_USAGE);
         }
         assert(!rflag);
         buf_setcstr(&buf, "*");
@@ -413,7 +413,7 @@ static void usage(void)
 
     fprintf(stderr, "\n");
 
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 /*
@@ -576,5 +576,5 @@ static int do_reconstruct(struct findall_data *data, void *rock)
 static void do_mboxlist(void)
 {
     fprintf(stderr, "reconstructing mailboxes.db currently not supported\n");
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }

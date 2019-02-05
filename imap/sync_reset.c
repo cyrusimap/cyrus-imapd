@@ -60,7 +60,7 @@
 
 #include "global.h"
 #include "mboxlist.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "mailbox.h"
 #include "seen.h"
 #include "mboxname.h"
@@ -108,7 +108,7 @@ static int usage(const char *name)
     fprintf(stderr,
             "usage: %s [-C <alt_config>] [-v] [-f] user...\n", name);
 
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 EXPORTED void fatal(const char* s, int code)
@@ -208,7 +208,7 @@ main(int argc, char **argv)
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(sync_namespacep, 1)) != 0) {
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     signals_set_shutdown(&shut_down);

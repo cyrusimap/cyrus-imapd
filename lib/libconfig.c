@@ -53,7 +53,7 @@
 #include <sys/stat.h>
 
 #include "assert.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "hash.h"
 #include "libconfig.h"
 #include "xmalloc.h"
@@ -165,7 +165,7 @@ EXPORTED const char *config_getoverflowstring(const char *key, const char *def)
 
     if (config_ident) {
         if (snprintf(buf,sizeof(buf),"%s_%s",config_ident,key) == -1)
-            fatal("key too long in config_getoverflowstring", EC_TEMPFAIL);
+            fatal("key too long in config_getoverflowstring", EX_TEMPFAIL);
 
         lcase(buf);
         ret = hash_lookup(buf, &confighash);
@@ -382,11 +382,11 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     else config_filename = xstrdup(CONFIG_FILENAME);
 
     if (!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
-        fatal("could not construct configuration hash table", EC_CONFIG);
+        fatal("could not construct configuration hash table", EX_CONFIG);
     }
 
     if (!construct_hash_table(&includehash, INCLUDEHASHSIZE, 1)) {
-        fatal("could not construct include file  hash table", EC_CONFIG);
+        fatal("could not construct include file  hash table", EX_CONFIG);
     }
 
     config_read_file(config_filename);
@@ -396,7 +396,7 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
     /* Check configdirectory config option */
     if (!config_dir) {
         fatal("configdirectory option not specified in configuration file",
-              EC_CONFIG);
+              EX_CONFIG);
     }
 
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
@@ -454,7 +454,7 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
             syslog(LOG_ERR, "INVALID defaultpartition: %s",
                    config_defpartition);
             fatal("defaultpartition option contains non-alnum character",
-                  EC_CONFIG);
+                  EX_CONFIG);
         }
         if (Uisupper(*p)) *p = tolower((unsigned char) *p);
     }
@@ -485,7 +485,7 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
             snprintf(buf, sizeof(buf),
                      "partition-%s option not specified in configuration file",
                      config_defpartition ? config_defpartition : "<name>");
-            fatal(buf, EC_CONFIG);
+            fatal(buf, EX_CONFIG);
         }
     }
 
@@ -559,14 +559,14 @@ static void config_read_file(const char *filename)
     if (!infile) {
         snprintf(buf, bufsize, "can't open configuration file %s: %s",
                  filename, strerror(errno));
-        fatal(buf, EC_CONFIG);
+        fatal(buf, EX_CONFIG);
     }
 
     /* check to see if we've already read this file */
     if (hash_lookup(filename, &includehash)) {
         snprintf(buf, bufsize, "configuration file %s included twice",
                  filename);
-        fatal(buf, EC_CONFIG);
+        fatal(buf, EX_CONFIG);
     }
     else {
         hash_insert(filename, (void*) 0xDEADBEEF, &includehash);
@@ -615,7 +615,7 @@ static void config_read_file(const char *filename)
             snprintf(errbuf, sizeof(errbuf),
                     "invalid option name on line %d of configuration file %s",
                     lineno, filename);
-            fatal(errbuf, EC_CONFIG);
+            fatal(errbuf, EX_CONFIG);
         }
         *p++ = '\0';
 
@@ -631,7 +631,7 @@ static void config_read_file(const char *filename)
             snprintf(errbuf, sizeof(errbuf),
                     "empty option value on line %d of configuration file",
                     lineno);
-            fatal(errbuf, EC_CONFIG);
+            fatal(errbuf, EX_CONFIG);
         }
 
         srvkey = NULL;
@@ -646,7 +646,7 @@ static void config_read_file(const char *filename)
                 snprintf(errbuf, sizeof(errbuf),
                          "invalid directive on line %d of configuration file %s",
                          lineno, filename);
-                fatal(errbuf, EC_CONFIG);
+                fatal(errbuf, EX_CONFIG);
             }
         }
 
@@ -698,7 +698,7 @@ static void config_read_file(const char *filename)
                 sprintf(errbuf,
                         "option '%s' was specified twice in config file (second occurrence on line %d)",
                         fullkey, lineno);
-                fatal(errbuf, EC_CONFIG);
+                fatal(errbuf, EX_CONFIG);
 
             } else if (imapopts[opt].seen == 2 && !service_specific) {
                 continue;
@@ -735,7 +735,7 @@ static void config_read_file(const char *filename)
                     /* error during conversion */
                     sprintf(errbuf, "non-integer value for %s in line %d",
                             imapopts[opt].optname, lineno);
-                    fatal(errbuf, EC_CONFIG);
+                    fatal(errbuf, EX_CONFIG);
                 }
 
                 imapopts[opt].val.i = val;
@@ -755,7 +755,7 @@ static void config_read_file(const char *filename)
                     /* error during conversion */
                     sprintf(errbuf, "non-switch value for %s in line %d",
                             imapopts[opt].optname, lineno);
-                    fatal(errbuf, EC_CONFIG);
+                    fatal(errbuf, EX_CONFIG);
                 }
                 break;
             }
@@ -798,7 +798,7 @@ static void config_read_file(const char *filename)
                         /* error during conversion */
                         sprintf(errbuf, "invalid value '%s' for %s in line %d",
                                 p, imapopts[opt].optname, lineno);
-                        fatal(errbuf, EC_CONFIG);
+                        fatal(errbuf, EX_CONFIG);
                     }
                     else if (imapopts[opt].t == OPT_STRINGLIST)
                         imapopts[opt].val.s = e->name;
@@ -831,7 +831,7 @@ static void config_read_file(const char *filename)
                 sprintf(errbuf,
                         "option '%s' is unknown on line %d of config file",
                         fullkey, lineno);
-                fatal(errbuf, EC_CONFIG);
+                fatal(errbuf, EX_CONFIG);
             }
 */
 
@@ -842,7 +842,7 @@ static void config_read_file(const char *filename)
                 snprintf(errbuf, sizeof(errbuf),
                         "option '%s' was specified twice in config file (second occurrence on line %d)",
                         fullkey, lineno);
-                fatal(errbuf, EC_CONFIG);
+                fatal(errbuf, EX_CONFIG);
             }
         }
     }

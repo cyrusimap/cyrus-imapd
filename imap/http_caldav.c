@@ -67,7 +67,7 @@
 #include "caldav_db.h"
 #include "charset.h"
 #include "css3_color.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"
@@ -702,7 +702,7 @@ static void my_caldav_init(struct buf *serverinfo)
     if (!namespace_calendar.enabled) return;
 
     if (!config_getstring(IMAPOPT_CALENDARPREFIX)) {
-        fatal("Required 'calendarprefix' option is not set", EC_CONFIG);
+        fatal("Required 'calendarprefix' option is not set", EX_CONFIG);
     }
 
 #ifdef HAVE_IANA_PARAMS
@@ -3346,7 +3346,7 @@ static void import_resource(const char *uid, void *data, void *rock)
         syslog(LOG_ERR,
                "import_resource()): Unable to add response XML element");
         fatal("import_resource()): Unable to add response XML element",
-              EC_SOFTWARE);
+              EX_SOFTWARE);
     }
 
     /* Create new object, making copies of PRODID, VERSION, CALSCALE */
@@ -4103,7 +4103,7 @@ static int caldav_patch(struct transaction_t *txn __attribute__((unused)),
                         void *obj __attribute__((unused)))
 
 {
-    fatal("caldav_patch() called, but no VPATCH", EC_SOFTWARE);
+    fatal("caldav_patch() called, but no VPATCH", EX_SOFTWARE);
 }
 
 static int personalize_resource(struct transaction_t *txn __attribute__((unused)),
@@ -4114,7 +4114,7 @@ static int personalize_resource(struct transaction_t *txn __attribute__((unused)
                                 icalcomponent **store_me __attribute__((unused)),
                                 icalcomponent **userdata __attribute__((unused)))
 {
-    fatal("personalize_resource() called, but no VPATCH", EC_SOFTWARE);
+    fatal("personalize_resource() called, but no VPATCH", EX_SOFTWARE);
 }
 
 static int write_personal_data(const char *userid __attribute__((unused)),
@@ -4123,7 +4123,7 @@ static int write_personal_data(const char *userid __attribute__((unused)),
                                modseq_t modseq __attribute__((unused)),
                                icalcomponent *vpatch __attribute__((unused)))
 {
-    fatal("write_personalize_data() called, but no VPATCH", EC_SOFTWARE);
+    fatal("write_personalize_data() called, but no VPATCH", EX_SOFTWARE);
 }
 #endif /* HAVE_VPATCH */
 

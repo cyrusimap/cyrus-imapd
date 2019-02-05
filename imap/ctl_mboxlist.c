@@ -73,7 +73,7 @@
 #include "assert.h"
 #include "annotate.h"
 #include "dlist.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
@@ -276,7 +276,7 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
                             mbentry->name, realpart, mbentry->acl );
                     fprintf( stderr, "mupdate says: %s %s %s\n",
                             mdata->mailbox, mdata->location, mdata->acl );
-                    fatal("mupdate said not us before it said us", EC_SOFTWARE);
+                    fatal("mupdate said not us before it said us", EX_SOFTWARE);
                 }
 
                 /*

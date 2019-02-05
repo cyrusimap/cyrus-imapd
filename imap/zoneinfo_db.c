@@ -55,7 +55,7 @@
 
 #include "assert.h"
 #include "cyrusdb.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "tok.h"
 #include "util.h"

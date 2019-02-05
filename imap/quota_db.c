@@ -52,7 +52,7 @@
 
 #include "cyrusdb.h"
 #include "dlist.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "mailbox.h"
 #include "mboxname.h"
@@ -696,8 +696,8 @@ EXPORTED void quotadb_open(const char *fname)
         syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
                cyrusdb_strerror(ret));
             /* Exiting TEMPFAIL because Sendmail thinks this
-               EC_OSFILE == permanent failure. */
-        fatal("can't read quotas file", EC_TEMPFAIL);
+               EX_OSFILE == permanent failure. */
+        fatal("can't read quotas file", EX_TEMPFAIL);
     }
 
     free(tofree);

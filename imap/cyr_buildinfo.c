@@ -51,7 +51,7 @@
 #include <jansson.h>
 
 #include "global.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "proc.h"
 #include "util.h"
 #include "../master/masterconf.h"

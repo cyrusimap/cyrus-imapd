@@ -84,7 +84,7 @@
 #include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "hash.h"
 #include "map.h"
 #include "libcyr_cfg.h"
@@ -162,7 +162,7 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
     unsigned len;
 
     if ((len = snprintf(buf, size, "%s", path)) >= size) {
-        fatal("insufficient buffer size in hash_quota", EC_TEMPFAIL);
+        fatal("insufficient buffer size in hash_quota", EX_TEMPFAIL);
     }
     buf += len;
     size -= len;
@@ -172,7 +172,7 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
         c = (char) dir_hash_c(qr, config_fulldirhash);
         if ((len = snprintf(buf, size, "%s%c/%s",
                             FNAME_DOMAINDIR, c, qr)) >= size) {
-            fatal("insufficient buffer size in hash_quota", EC_TEMPFAIL);
+            fatal("insufficient buffer size in hash_quota", EX_TEMPFAIL);
         }
         *p++ = '!';  /* reassemble domain!qr */
         qr = p;
@@ -183,7 +183,7 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
             /* quota for entire domain */
             if (snprintf(buf, size, "%sroot", FNAME_QUOTADIR) >= (int) size) {
                 fatal("insufficient buffer size in hash_quota",
-                      EC_TEMPFAIL);
+                      EX_TEMPFAIL);
             }
             return;
         }
@@ -192,7 +192,7 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
     c = name_to_hashchar(qr, 0);
 
     if (snprintf(buf, size, "%s%c/%s", FNAME_QUOTADIR, c, qr) >= (int) size) {
-        fatal("insufficient buffer size in hash_quota", EC_TEMPFAIL);
+        fatal("insufficient buffer size in hash_quota", EX_TEMPFAIL);
     }
 }
 

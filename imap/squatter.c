@@ -68,7 +68,7 @@
 #include "bsearch.h"
 #include "mboxlist.h"
 #include "global.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "search_engines.h"
 #include "sync_log.h"
 #include "mailbox.h"
@@ -151,7 +151,7 @@ static int usage(const char *name)
             "  -h          show usage\n",
         name);
 
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 /* ====================================================================== */
@@ -646,7 +646,7 @@ static void do_rolling(const char *channel)
         }
 
         if (shutdown_file(NULL, 0))
-            shut_down(EC_TEMPFAIL);
+            shut_down(EX_TEMPFAIL);
 
         r = sync_log_reader_begin(slr);
         if (r) { /* including IMAP_AGAIN */
@@ -661,7 +661,7 @@ static void do_rolling(const char *channel)
             rx = search_begin_update(verbose);
             if (NULL == rx) {
                 /* XXX if xapian, probably don't have conversations enabled? */
-                fatal("could not construct search text receiver", EC_CONFIG);
+                fatal("could not construct search text receiver", EX_CONFIG);
             }
             for (i = 0; i < strarray_size(mboxnames); i++) {
                 const char *mboxname = strarray_nth(mboxnames, i);
@@ -924,15 +924,15 @@ int main(int argc, char **argv)
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&squat_namespace, 1)) != 0) {
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     /* make sure we're correctly configured */
     if ((r = search_check_config(&errstr))) {
         if (errstr)
-            fatal(errstr, EC_CONFIG);
+            fatal(errstr, EX_CONFIG);
         else
-            fatal(error_message(r), EC_CONFIG);
+            fatal(error_message(r), EX_CONFIG);
     }
 
     if (mode == ROLLING || mode == SYNCLOG) {
@@ -978,5 +978,5 @@ int main(int argc, char **argv)
     }
 
     strarray_fini(&mboxnames);
-    shut_down(r ? EC_TEMPFAIL : 0);
+    shut_down(r ? EX_TEMPFAIL : 0);
 }

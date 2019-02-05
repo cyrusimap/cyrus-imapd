@@ -53,7 +53,7 @@
 /* cyrus includes */
 #include "assert.h"
 #include "bsearch.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "index.h"
 #include "conversations.h"
@@ -760,48 +760,48 @@ static int do_user(const char *userid, void *rock __attribute__((unused)))
         fprintf(stderr, "Unable to get conversations database "
                         "filename for userid \"%s\"\n",
                         userid);
-        return EC_USAGE;
+        return EX_USAGE;
     }
 
     switch (mode)
     {
     case DUMP:
         if (do_dump(fname, userid))
-            r = EC_NOINPUT;
+            r = EX_NOINPUT;
         break;
 
     case UNDUMP:
         if (do_undump(fname, userid))
-            r = EC_NOINPUT;
+            r = EX_NOINPUT;
         break;
 
     case ZERO:
         if (do_zero(userid))
-            r = EC_NOINPUT;
+            r = EX_NOINPUT;
         break;
 
     case BUILD:
         if (do_build(userid))
-            r = EC_NOINPUT;
+            r = EX_NOINPUT;
         break;
 
     case RECALC:
         if (do_recalc(userid))
-            r = EC_NOINPUT;
+            r = EX_NOINPUT;
         break;
 
     case AUDIT:
         if (do_audit(userid))
-            r = EC_NOINPUT;
+            r = EX_NOINPUT;
         break;
 
     case CHECKFOLDERS:
         if (do_checkfolders(userid))
-            r = EC_NOINPUT;
+            r = EX_NOINPUT;
         break;
 
     case UNKNOWN:
-        fatal("UNKNOWN MODE", EC_SOFTWARE);
+        fatal("UNKNOWN MODE", EX_SOFTWARE);
     }
 
     free(fname);
@@ -928,7 +928,7 @@ static int usage(const char *name)
     fprintf(stderr, "\n");
     fprintf(stderr, "    -r             recursive mode: username is a prefix\n");
 
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 void fatal(const char* s, int code)

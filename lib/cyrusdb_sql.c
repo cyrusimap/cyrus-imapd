@@ -49,7 +49,7 @@
 #include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
 #include "util.h"
@@ -443,7 +443,7 @@ static int init(const char *dbdir __attribute__((unused)),
         char errbuf[1024];
         snprintf(errbuf, sizeof(errbuf),
                  "SQL engine %s not supported", engine_name);
-        fatal(errbuf, EC_CONFIG);
+        fatal(errbuf, EX_CONFIG);
     }
 
     if (!engine_name) {

@@ -199,7 +199,7 @@ An example of iterating through a mailbox
     /* DEPRECATED */
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
         if (mailbox_read_index_record(mailbox, recno, &record))
-            fatal("invalid record", EC_SOFTWARE); // or return an error
+            fatal("invalid record", EX_SOFTWARE); // or return an error
         if (record.internal_flags & FLAG_INTERNAL_EXPUNGED)
             continue; // skip expunged records
         make_changes = do_stuff(mailbox, &record);
@@ -284,11 +284,11 @@ those fields in the mailbox internal format documentation.
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
         if (mailbox_read_index_record(mailbox, recno, &record))
-            fatal("invalid record", EC_SOFTWARE); // or return an error
+            fatal("invalid record", EX_SOFTWARE); // or return an error
         if (record.internal_flags & FLAG_INTERNAL_EXPUNGED)
             continue; // skip expunged records
         if (mailbox_cacherecord(mailbox, &record))
-            fatal("failed to read cache", EC_SOFTWARE);
+            fatal("failed to read cache", EX_SOFTWARE);
         ...
         envelope_length = cacheitem_size(&record, CACHE_ENVELOPE);
     }

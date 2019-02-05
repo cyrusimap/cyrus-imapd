@@ -64,7 +64,7 @@
 
 #include "auth_pts.h"
 #include "cyrusdb.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "imap/global.h"
 #include "libconfig.h"
 #include "xmalloc.h"

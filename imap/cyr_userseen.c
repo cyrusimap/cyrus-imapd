@@ -52,7 +52,7 @@
 #include <sys/stat.h>
 
 #include "global.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "libcyr_cfg.h"
 #include "mailbox.h"
 #include "mboxlist.h"

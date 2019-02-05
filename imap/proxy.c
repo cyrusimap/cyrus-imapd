@@ -50,7 +50,7 @@
 #include <sys/un.h>
 
 #include "backend.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "global.h"
 #include "mupdate-client.h"
 #include "proxy.h"
@@ -227,7 +227,7 @@ EXPORTED int proxy_check_input(struct protgroup *protin,
                     timeout_sec ? &timeout : NULL);
     if (n == -1 && errno != EINTR) {
         syslog(LOG_ERR, "prot_select() failed in proxy_check_input(): %m");
-        fatal("prot_select() failed in proxy_check_input()", EC_TEMPFAIL);
+        fatal("prot_select() failed in proxy_check_input()", EX_TEMPFAIL);
     }
 
     if (n && protout) {
@@ -253,7 +253,7 @@ EXPORTED int proxy_check_input(struct protgroup *protin,
             else {
                 /* XXX shouldn't get here !!! */
                 fatal("unknown protstream returned by prot_select in proxy_check_input()",
-                      EC_SOFTWARE);
+                      EX_SOFTWARE);
             }
 
             if (pout) {
@@ -275,7 +275,7 @@ EXPORTED int proxy_check_input(struct protgroup *protin,
                     else {
                         /* uh oh, we're not happy */
                         fatal("Lost connection to input stream",
-                              EC_UNAVAILABLE);
+                              EX_UNAVAILABLE);
                     }
                 }
                 else {

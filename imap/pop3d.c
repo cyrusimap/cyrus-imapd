@@ -72,7 +72,7 @@
 #include "global.h"
 #include "tls.h"
 
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "imapd.h"
 #include "mailbox.h"
 #include "mboxevent.h"
@@ -413,7 +413,7 @@ int service_init(int argc __attribute__((unused)),
     int r;
     int opt;
 
-    if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
+    if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
     setproctitle_init(argc, argv, envp);
 
     /* set signal handlers */
@@ -429,7 +429,7 @@ int service_init(int argc __attribute__((unused)),
     /* Set namespace */
     if ((r = mboxname_init_namespace(&popd_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     mboxevent_setnamespace(&popd_namespace);
@@ -441,7 +441,7 @@ int service_init(int argc __attribute__((unused)),
             if (!tls_enabled()) {
                 syslog(LOG_ERR, "pop3s: required OpenSSL options not present");
                 fatal("pop3s: required OpenSSL options not present",
-                      EC_CONFIG);
+                      EX_CONFIG);
             }
             break;
 
@@ -502,14 +502,14 @@ int service_main(int argc __attribute__((unused)),
                         buf_cstringnull_ifempty(&saslprops.iplocalport),
                         buf_cstringnull_ifempty(&saslprops.ipremoteport),
                         NULL, 0, &popd_saslconn) != SASL_OK)
-        fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL);
+        fatal("SASL failed initializing: sasl_server_new()",EX_TEMPFAIL);
 
     /* will always return something valid */
     secprops = mysasl_secprops(0);
     if (sasl_setprop(popd_saslconn, SASL_SEC_PROPS, secprops) != SASL_OK)
-        fatal("Failed to set SASL property", EC_TEMPFAIL);
+        fatal("Failed to set SASL property", EX_TEMPFAIL);
     if (sasl_setprop(popd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
-        fatal("Failed to set SASL property", EC_TEMPFAIL);
+        fatal("Failed to set SASL property", EX_TEMPFAIL);
 
     if (localip) {
         popd_haveaddr = 1;
@@ -589,7 +589,7 @@ static void usage(void)
 {
     prot_printf(popd_out, "-ERR usage: pop3d [-C <alt_config>] [-k] [-s]\r\n");
     prot_flush(popd_out);
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 /*
@@ -733,7 +733,7 @@ void kpop(void)
     socklen_t len;
 
     if (!popd_haveaddr) {
-        fatal("Cannot get client's IP address", EC_OSERR);
+        fatal("Cannot get client's IP address", EX_OSERR);
     }
 
     srvtab = config_getstring(IMAPOPT_SRVTAB);
@@ -1284,7 +1284,7 @@ static void cmd_starttls(int pop3s)
     if (result != SASL_OK) {
         syslog(LOG_NOTICE, "saslprops_set_tls() failed: cmd_starttls()");
         if (pop3s == 0) {
-            fatal("saslprops_set_tls() failed: cmd_starttls()", EC_TEMPFAIL);
+            fatal("saslprops_set_tls() failed: cmd_starttls()", EX_TEMPFAIL);
         } else {
             shut_down(0);
         }
@@ -1300,7 +1300,7 @@ static void cmd_starttls(int pop3s)
 #else
 static void cmd_starttls(int pop3s __attribute__((unused)))
 {
-    fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
+    fatal("cmd_starttls() called, but no OpenSSL", EX_SOFTWARE);
 }
 #endif /* HAVE_SSL */
 

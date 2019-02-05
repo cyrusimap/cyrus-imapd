@@ -44,7 +44,7 @@
 #include <errno.h>
 #include <syslog.h>
 
-#include "lib/exitcodes.h"
+#include "lib/sysexits.h"
 #include "lib/sqldb.h"
 #include "lib/xmalloc.h"
 #include "lib/xsha1.h"
@@ -79,9 +79,9 @@ static int retry_gzwrite(gzFile gzfile, const char *str, size_t len, const char 
             syslog(LOG_ERR, "IOERROR: %s gzwrite %s: %s", __func__, fname, err);
 
             if (r == Z_STREAM_ERROR)
-                fatal("gzwrite: invalid stream", EC_IOERR);
+                fatal("gzwrite: invalid stream", EX_IOERR);
             else if (r == Z_MEM_ERROR)
-                fatal("gzwrite: out of memory", EC_TEMPFAIL);
+                fatal("gzwrite: out of memory", EX_TEMPFAIL);
 
             return r;
         }
@@ -100,7 +100,7 @@ HIDDEN int backup_real_append_start(struct backup *backup,
 
     if (backup->append_state != NULL
         && backup->append_state->mode != BACKUP_APPEND_INACTIVE) {
-        fatal("backup append already started", EC_SOFTWARE);
+        fatal("backup append already started", EX_SOFTWARE);
     }
 
     if (!backup->append_state)
@@ -181,7 +181,7 @@ EXPORTED int backup_append(struct backup *backup,
                            enum backup_append_flush flush)
 {
     if (!backup->append_state || backup->append_state->mode == BACKUP_APPEND_INACTIVE)
-        fatal("backup append not started", EC_SOFTWARE);
+        fatal("backup append not started", EX_SOFTWARE);
 
     off_t start = backup->append_state->wrote;
     size_t len = 0;
@@ -250,9 +250,9 @@ HIDDEN int backup_real_append_end(struct backup *backup, time_t ts)
     int r;
 
     if (!backup->append_state)
-        fatal("backup append not started", EC_SOFTWARE);
+        fatal("backup append not started", EX_SOFTWARE);
     if (backup->append_state->mode == BACKUP_APPEND_INACTIVE)
-        fatal("backup append not started", EC_SOFTWARE);
+        fatal("backup append not started", EX_SOFTWARE);
 
     if (!(backup->append_state->mode & BACKUP_APPEND_INDEXONLY)) {
         r = gzflush(backup->append_state->gzfile, Z_FINISH);
@@ -303,9 +303,9 @@ EXPORTED int backup_append_end(struct backup *backup, const time_t *tsp)
 EXPORTED int backup_append_abort(struct backup *backup)
 {
     if (!backup->append_state)
-        fatal("backup append not started", EC_SOFTWARE);
+        fatal("backup append not started", EX_SOFTWARE);
     if (backup->append_state == BACKUP_APPEND_INACTIVE)
-        fatal("backup append not started", EC_SOFTWARE);
+        fatal("backup append not started", EX_SOFTWARE);
 
     sqldb_rollback(backup->db, "backup_append");
 

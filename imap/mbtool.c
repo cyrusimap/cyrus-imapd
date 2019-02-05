@@ -72,7 +72,7 @@
 #endif
 
 #include "assert.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "index.h"
 #include "global.h"
 #include "mailbox.h"
@@ -142,7 +142,7 @@ int main(int argc, char **argv)
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&mbtool_namespace, 1)) != 0) {
         syslog(LOG_ERR, "%s", error_message(r));
-        fatal(error_message(r), EC_CONFIG);
+        fatal(error_message(r), EX_CONFIG);
     }
 
     signals_set_shutdown(&shut_down);
@@ -164,7 +164,7 @@ static void usage(void)
     fprintf(stderr, "    -t    normalise internaldates in specified mailboxes\n");
     fprintf(stderr, "\nOptions:\n");
     fprintf(stderr, "    -C alt_config  use alternate imapd.conf file\n");
-    exit(EC_USAGE);
+    exit(EX_USAGE);
 }
 
 /*

@@ -63,7 +63,7 @@
 #include <unistd.h>
 
 #include "auth.h"
-#include "exitcodes.h"
+#include "sysexits.h"
 #include "libconfig.h"
 #include "xmalloc.h"
 #include "imap/backend.h"
@@ -198,7 +198,7 @@ EXPORTED void fatal(const char *s, int code)
     prot_printf(sieved_out, "NO Fatal error: %s\r\n", s);
     prot_flush(sieved_out);
 
-    shut_down(EC_TEMPFAIL);
+    shut_down(EX_TEMPFAIL);
 }
 
 static struct sasl_callback mysasl_cb[] = {
@@ -277,7 +277,7 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     cmdloop();
 
     /* never reaches */
-    exit(EC_SOFTWARE);
+    exit(EX_SOFTWARE);
 }
 
 /* Reset the given sasl_conn_t to a sane state */
