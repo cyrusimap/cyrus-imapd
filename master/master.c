@@ -710,6 +710,9 @@ static int decode_wait_status(struct centry *c, pid_t pid, int status)
         if (!WEXITSTATUS(status)) {
             syslog(LOG_DEBUG, "%s exited normally", desc);
         }
+        else if (WEXITSTATUS(status) == EX_TEMPFAIL) {
+            syslog(LOG_DEBUG, "%s was killed", desc);
+        }
         else {
             syslog(LOG_ERR, "%s exited, status %d",
                    desc, WEXITSTATUS(status));
