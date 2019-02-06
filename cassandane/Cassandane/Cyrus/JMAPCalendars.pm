@@ -4641,4 +4641,38 @@ sub test_calendarevent_set_readonly
     $self->assert_str_equals("calendarId", $res->[1][1]{notCreated}{1}{properties}[0]);
 }
 
+sub test_calendarevent_set_rsvpsequence
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my ($id, $ical) = $self->icalfile('rsvpsequence');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_not_null($event);
+    $self->assert_num_equals(1, $event->{sequence});
+
+    my $participantId = (keys %{$event->{participants}})[0];
+    $self->assert_not_null($participantId);
+
+    my $eventId = $event->{id};
+
+    my $res = $jmap->CallMethods([
+            ['CalendarEvent/set',{
+                update => {
+                    $eventId => {
+                        ('participants/' . $participantId . '/participationStatus') => 'accepted',
+                    }
+                }
+            }, "R1"],
+            ['CalendarEvent/get',{
+                ids => [$eventId],
+                properties => ['sequence'],
+            }, "R2"],
+        ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_num_equals(1, $res->[1][1]{list}[0]->{sequence});
+}
+
 1;
