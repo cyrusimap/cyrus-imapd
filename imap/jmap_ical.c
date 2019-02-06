@@ -4127,43 +4127,27 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
     json_t *override, *master;
     const char *id;
     icalcomponent *excomp, *next, *ical;
-    hash_table recurs = HASH_TABLE_INITIALIZER;
-    int n;
 
     /* Purge EXDATE, RDATE */
     remove_icalprop(comp, ICAL_RDATE_PROPERTY);
     remove_icalprop(comp, ICAL_EXDATE_PROPERTY);
 
-    /* Determine value type of main event DTSTART */
-    int is_date = icalcomponent_get_dtstart(comp).is_date;
-    icaltimezone *tzstart = tz_from_tzid(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
-
-    /* Move VEVENT exceptions to a cache */
+    /* Remove existing VEVENT exceptions */
     ical = icalcomponent_get_parent(comp);
-    n = icalcomponent_count_components(ical, ICAL_VEVENT_COMPONENT);
-    construct_hash_table(&recurs, n + 1, 0);
     for (excomp = icalcomponent_get_first_component(ical, ICAL_VEVENT_COMPONENT);
          excomp;
          excomp = next) {
 
-        icaltimetype recurid;
-        char *t;
-
         next = icalcomponent_get_next_component(ical, ICAL_VEVENT_COMPONENT);
         if (excomp == comp) continue;
-
-        /* Index VEVENT by its LocalDate recurrence id */
         icalcomponent_remove_component(ical, excomp);
-        recurid = icalcomponent_get_recurrenceid(excomp);
-        t = localdate_from_icaltime_r(recurid);
-        hash_insert(t, excomp, &recurs);
-        free(t);
     }
 
-    if (json_is_null(overrides)) {
-        free_hash_table(&recurs, (void (*)(void *))icalcomponent_free);
-        return;
-    }
+    if (json_is_null(overrides)) return;
+
+    /* Determine value type of main event DTSTART */
+    int is_date = icalcomponent_get_dtstart(comp).is_date;
+    icaltimezone *tzstart = tz_from_tzid(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
 
     /* Convert current master event to JMAP */
     master = calendarevent_from_ical(comp, NULL, NULL);
@@ -4229,14 +4213,8 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
                 continue;
             }
 
-            /* Lookup or create the VEVENT for this override */
-            if ((excomp = hash_del(id, &recurs)) == NULL) {
-                excomp = icalcomponent_new_clone(comp);
-                remove_icalprop(excomp, ICAL_RDATE_PROPERTY);
-                remove_icalprop(excomp, ICAL_EXDATE_PROPERTY);
-                remove_icalprop(excomp, ICAL_RRULE_PROPERTY);
-            }
-            /* Set VEVENT exception identifier properties */
+            /* Create a new VEVENT for this override */
+            excomp = icalcomponent_new_vevent();
             dtprop_to_ical(excomp, start, tzstart, 1, ICAL_RECURRENCEID_PROPERTY);
             icalcomponent_set_uid(excomp, icalcomponent_get_uid(comp));
 
@@ -4252,7 +4230,6 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
     }
     jmap_parser_pop(parser);
 
-    free_hash_table(&recurs, (void (*)(void *))icalcomponent_free);
     json_decref(master);
 }
 
