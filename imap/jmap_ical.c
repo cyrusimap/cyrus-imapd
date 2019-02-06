@@ -345,7 +345,7 @@ static const char *tzid_from_icalprop(icalproperty *prop, int guess) {
     return tzid;
 }
 
-/* Determine the Olson TZID, if any, of the fist ical property of
+/* Determine the Olson TZID, if any, of the first ical property of
  * kind in component comp. */
 static const char *tzid_from_ical(icalcomponent *comp,
                                   icalproperty_kind kind) {
