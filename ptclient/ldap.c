@@ -1059,7 +1059,7 @@ static int ptsmodule_get_dn(
         rc = ldap_search_st(ptsm->ld, base, ptsm->scope, filter, attrs, 0, &(ptsm->timeout), &res);
 
         if (rc != LDAP_SUCCESS) {
-            syslog(LOG_DEBUG, "Searching %s with %s failed", base, base);
+            syslog(LOG_DEBUG, "Searching %s with %s failed", base, filter);
 
             if (rc == LDAP_SERVER_DOWN) {
                 ldap_unbind(ptsm->ld);
