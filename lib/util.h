@@ -206,7 +206,8 @@ extern int cyrus_mkdir(const char *path, mode_t mode);
 enum {
     COPYFILE_NOLINK = (1<<0),
     COPYFILE_MKDIR  = (1<<1),
-    COPYFILE_RENAME = (1<<2)
+    COPYFILE_RENAME = (1<<2),
+    COPYFILE_KEEPTIME = (1<<3)
 };
 
 extern int cyrus_copyfile(const char *from, const char *to, int flags);

@@ -518,6 +518,7 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     int n;
     int r = 0;
     int nolink = flags & COPYFILE_NOLINK;
+    int keeptime = flags & COPYFILE_KEEPTIME;
 
     /* try to hard link, but don't fail - fall back to regular copy */
     if (!nolink) {
@@ -567,6 +568,16 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
         r = -1;
         unlink(to);  /* remove any rubbish we created */
         goto done;
+    }
+
+    if (keeptime) {
+        struct timeval tv[2];
+        TIMESPEC_TO_TIMEVAL(&tv[0], &sbuf.st_atim);
+        TIMESPEC_TO_TIMEVAL(&tv[1], &sbuf.st_mtim);
+        if (futimes(destfd, tv)) {
+            syslog(LOG_ERR, "IOERROR: setting times on %s: %m", to);
+            r = -1;
+        }
     }
 
 done:
