@@ -7423,9 +7423,11 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
         size_t len64 = 0;
         /* Pre-flight base64 encoder to determine length */
         charset_encode_mimebody(NULL, len, NULL, &len64, NULL, 1 /* wrap */);
-        /* Now encode the body */
-        tmp = xmalloc(len64);
-        charset_encode_mimebody(base, len, tmp, &len64, NULL, 1 /* wrap */);
+        if (len64) {
+            /* Now encode the body */
+            tmp = xmalloc(len64);
+            charset_encode_mimebody(base, len, tmp, &len64, NULL, 1 /* wrap */);
+        }
         base = tmp;
         len = len64;
     }
