@@ -46,6 +46,7 @@
 #include <assert.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <unistd.h>
 
@@ -53,7 +54,6 @@
 #include <sys/types.h>
 
 #include "lib/bsearch.h"
-#include "lib/sysexits.h"
 #include "lib/imparse.h"
 #include "lib/map.h"
 #include "lib/signals.h"

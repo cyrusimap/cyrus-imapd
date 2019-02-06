@@ -39,11 +39,11 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
-#include <ctype.h>
-#include <syslog.h>
 #include <config.h>
+#include <ctype.h>
+#include <sysexits.h>
+#include <syslog.h>
 #include "ptloader.h"
-#include "sysexits.h"
 #include "util.h"
 #include "xmalloc.h"
 

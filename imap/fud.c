@@ -48,6 +48,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <signal.h>
 #include <sys/types.h>
@@ -63,7 +64,6 @@
 #include "acl.h"
 #include "mboxlist.h"
 #include "global.h"
-#include "sysexits.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxname.h"

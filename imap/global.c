@@ -46,6 +46,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/statvfs.h>
 #include <sys/types.h>
@@ -64,7 +65,6 @@
 #include "assert.h"
 #include "charset.h"
 #include "cyr_lock.h"
-#include "sysexits.h"
 #include "gmtoff.h"
 #include "iptostring.h"
 #include "global.h"

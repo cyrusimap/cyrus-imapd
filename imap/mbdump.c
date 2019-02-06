@@ -49,6 +49,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <fcntl.h>
@@ -62,7 +63,6 @@
 #ifdef WITH_DAV
 #include "dav_util.h"
 #endif
-#include "sysexits.h"
 #include "global.h"
 #include "map.h"
 #include "mappedfile.h"

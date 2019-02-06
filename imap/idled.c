@@ -45,6 +45,7 @@
 #endif
 
 #include <sys/types.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/stat.h>
 #include <stdlib.h>
@@ -60,7 +61,6 @@
 #include "mboxlist.h"
 #include "xmalloc.h"
 #include "hash.h"
-#include "sysexits.h"
 
 extern int optind;
 extern char *optarg;

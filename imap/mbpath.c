@@ -48,13 +48,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sysexits.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/param.h>
 
 #include "util.h"
 #include "global.h"
-#include "sysexits.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"

@@ -49,6 +49,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <ctype.h>
 #include <stdlib.h>
@@ -65,7 +66,6 @@
 #include "charset.h"
 #include "conversations.h"
 #include "dlist.h"
-#include "sysexits.h"
 #include "hash.h"
 #include "hashu64.h"
 #include "global.h"

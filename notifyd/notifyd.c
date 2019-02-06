@@ -47,6 +47,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -60,7 +61,6 @@
 
 #include "notifyd.h"
 
-#include "sysexits.h"
 #include "imap/global.h"
 #include "libconfig.h"
 #include "imap/notify.h"

@@ -59,6 +59,7 @@
 #include <sys/poll.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
 
@@ -68,7 +69,6 @@
 #include "bsearch.h"
 #include "mboxlist.h"
 #include "global.h"
-#include "sysexits.h"
 #include "search_engines.h"
 #include "sync_log.h"
 #include "mailbox.h"

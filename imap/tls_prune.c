@@ -43,9 +43,9 @@
 #include <config.h>
 
 #include <stdio.h>
+#include <sysexits.h>
 #include <unistd.h>
 
-#include "sysexits.h"
 #include "global.h"
 #include "tls.h"
 #include "util.h"

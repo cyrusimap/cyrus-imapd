@@ -42,12 +42,12 @@
 
 #include <config.h>
 #include <sys/ioctl.h>
+#include <sysexits.h>
 
 #include "nonblock.h"
 
 /* for fatal */
 #include "xmalloc.h"
-#include "sysexits.h"
 
 EXPORTED const char *nonblock_method_desc = "ioctl";
 

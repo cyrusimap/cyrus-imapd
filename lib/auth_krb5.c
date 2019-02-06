@@ -42,12 +42,11 @@
 
 #include <config.h>
 #include <stdlib.h>
+#include <sysexits.h>
+#include <syslog.h>
 
 #include "auth.h"
-#include "sysexits.h"
 #include "xmalloc.h"
-
-#include "syslog.h"
 
 #ifdef HAVE_GSSAPI_H
 

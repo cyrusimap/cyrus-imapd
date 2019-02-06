@@ -58,6 +58,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <signal.h>
 #include <errno.h>
@@ -68,7 +69,6 @@
 
 #include "annotate.h"
 #include "duplicate.h"
-#include "sysexits.h"
 #include "global.h"
 #include "hash.h"
 #include "libcyr_cfg.h"

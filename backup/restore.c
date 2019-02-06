@@ -48,9 +48,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
+#include <sysexits.h>
 #include <unistd.h>
 
-#include "lib/sysexits.h"
 
 #include "imap/global.h"
 #include "imap/imap_err.h"

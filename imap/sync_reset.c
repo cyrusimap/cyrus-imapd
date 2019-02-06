@@ -50,6 +50,7 @@
 #endif
 #include <stdlib.h>
 #include <stdio.h>
+#include <sysexits.h>
 #include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -60,7 +61,6 @@
 
 #include "global.h"
 #include "mboxlist.h"
-#include "sysexits.h"
 #include "mailbox.h"
 #include "seen.h"
 #include "mboxname.h"

@@ -46,6 +46,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -57,7 +58,6 @@
 
 #include "auth_pts.h"
 #include "cyrusdb.h"
-#include "sysexits.h"
 #include "imap/global.h"
 #include "libconfig.h"
 #include "retry.h"

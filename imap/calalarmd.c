@@ -45,6 +45,7 @@
 #endif
 
 #include <sys/types.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/stat.h>
 #include <stdlib.h>
@@ -57,7 +58,6 @@
 
 #include "global.h"
 #include "xmalloc.h"
-#include "sysexits.h"
 #include "caldav_db.h"
 #include "caldav_alarm.h"
 

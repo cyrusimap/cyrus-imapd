@@ -52,6 +52,7 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/param.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -72,7 +73,6 @@
 #include "global.h"
 #include "tls.h"
 
-#include "sysexits.h"
 #include "imapd.h"
 #include "mailbox.h"
 #include "mboxevent.h"

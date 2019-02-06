@@ -49,13 +49,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
 
 #include "global.h"
-#include "sysexits.h"
 #include "hash.h"
 #include "mailbox.h"
 #include "mpool.h"

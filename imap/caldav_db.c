@@ -43,6 +43,7 @@
 
 #include <config.h>
 
+#include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
 
@@ -51,7 +52,6 @@
 #include "caldav_alarm.h"
 #include "caldav_db.h"
 #include "cyrusdb.h"
-#include "sysexits.h"
 #include "httpd.h"
 #include "http_dav.h"
 #include "ical_support.h"

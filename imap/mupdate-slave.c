@@ -46,6 +46,7 @@
 #include <signal.h>
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <stdarg.h>
 #ifdef HAVE_UNISTD_H
@@ -67,7 +68,6 @@
 #include "global.h"
 #include "mpool.h"
 #include "mupdate.h"
-#include "sysexits.h"
 
 /* Returns file descriptor of kick socket (or does not return) */
 static int open_kick_socket(void)

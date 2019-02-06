@@ -50,11 +50,11 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <signal.h>
 
 #include "annotate.h"
-#include "sysexits.h"
 #include "global.h"
 #include "index.h"
 #include "libcyr_cfg.h"

@@ -49,12 +49,12 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sysexits.h>
 #include <syslog.h>
 
 #include "backend.h"
 #include "xmalloc.h"
 #include "global.h"
-#include "sysexits.h"
 #include "smtpclient.h"
 #include "telemetry.h"
 

@@ -45,6 +45,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sysexits.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -58,7 +59,6 @@
 
 #include "assert.h"
 #include "cyrusdb.h"
-#include "sysexits.h"
 #include "global.h"
 #include "mailbox.h"
 #include "util.h"

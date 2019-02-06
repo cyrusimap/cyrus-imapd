@@ -51,6 +51,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -71,7 +72,6 @@
 #include "prot.h"
 #include "times.h"
 #include "global.h"
-#include "sysexits.h"
 #include "prometheus.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"

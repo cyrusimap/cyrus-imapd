@@ -52,6 +52,7 @@
 #include <sys/stat.h>
 #include <sys/uio.h>
 #include <fcntl.h>
+#include <sysexits.h>
 #include <syslog.h>
 
 #include <sys/ipc.h>
@@ -67,7 +68,6 @@
 #include "util.h"
 #include "mailbox.h"
 #include "mboxevent.h"
-#include "sysexits.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "partlist.h"

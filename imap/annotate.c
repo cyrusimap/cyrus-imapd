@@ -59,12 +59,12 @@
 #include <sys/uio.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <sysexits.h>
 #include <syslog.h>
 
 #include "acl.h"
 #include "assert.h"
 #include "cyrusdb.h"
-#include "sysexits.h"
 #include "glob.h"
 #include "hash.h"
 #include "imapd.h"

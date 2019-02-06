@@ -54,11 +54,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <errno.h>
 
 #include "assert.h"
-#include "sysexits.h"
 #include "sync_log.h"
 #include "global.h"
 #include "cyr_lock.h"

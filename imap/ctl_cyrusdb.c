@@ -50,6 +50,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <errno.h>
 
@@ -74,7 +75,6 @@
 #include "cyrusdb.h"
 #include "duplicate.h"
 #include "global.h"
-#include "sysexits.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "seen.h"

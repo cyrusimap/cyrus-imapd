@@ -42,9 +42,9 @@
 
 #include <config.h>
 #include <stdio.h>
+#include <sysexits.h>
 
 #include "xmalloc.h"
-#include "sysexits.h"
 #include "assert.h"
 
 EXPORTED void

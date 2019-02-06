@@ -48,6 +48,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <sysexits.h>
 #include <syslog.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -57,7 +58,6 @@
 #include <sasl/saslutil.h>
 
 #include "assert.h"
-#include "sysexits.h"
 #include "libconfig.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"

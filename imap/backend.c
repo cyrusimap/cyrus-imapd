@@ -53,6 +53,7 @@
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/un.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -65,7 +66,6 @@
 #include <sasl/saslutil.h>
 
 #include "backend.h"
-#include "sysexits.h"
 #include "global.h"
 #include "iptostring.h"
 #include "nonblock.h"

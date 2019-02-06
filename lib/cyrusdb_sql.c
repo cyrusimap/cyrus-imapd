@@ -41,6 +41,7 @@
 
 #include <config.h>
 
+#include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
 #include <stdlib.h>
@@ -49,7 +50,6 @@
 #include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
-#include "sysexits.h"
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
 #include "util.h"

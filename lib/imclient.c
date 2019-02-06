@@ -49,6 +49,7 @@
 #include <unistd.h>
 #endif
 #include <stdarg.h>
+#include <sysexits.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -71,7 +72,6 @@
 #endif /* HAVE_SSL */
 
 #include "assert.h"
-#include "sysexits.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "strarray.h"

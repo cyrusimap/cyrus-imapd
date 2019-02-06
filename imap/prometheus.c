@@ -47,13 +47,13 @@
 #include <dirent.h>
 #include <errno.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "lib/assert.h"
 #include "lib/cyr_lock.h"
-#include "lib/sysexits.h"
 #include "lib/libconfig.h"
 #include "lib/map.h"
 #include "lib/ptrarray.h"

@@ -49,6 +49,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <sys/uio.h>
@@ -60,7 +61,6 @@
 #include "assert.h"
 #include "crc32.h"
 #include "dlist.h"
-#include "sysexits.h"
 #include "prot.h"
 #include "hash.h"
 #include "map.h"

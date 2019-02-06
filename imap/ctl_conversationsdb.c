@@ -46,6 +46,7 @@
 #endif
 #include <stdlib.h>
 #include <stdio.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -53,14 +54,12 @@
 /* cyrus includes */
 #include "assert.h"
 #include "bsearch.h"
-#include "sysexits.h"
 #include "global.h"
 #include "index.h"
 #include "conversations.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "message.h"
-#include "sysexits.h"
 #include "util.h"
 #include "xmalloc.h"
 

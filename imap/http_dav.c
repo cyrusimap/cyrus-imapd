@@ -62,13 +62,14 @@
  *
  */
 
+#include <sysexits.h>
+
 #include "http_dav.h"
 #include "annotate.h"
 #include "acl.h"
 #include "append.h"
 #include "caldav_db.h"
 #include "dlist.h"
-#include "sysexits.h"
 #include "global.h"
 #include "http_proxy.h"
 #include "index.h"

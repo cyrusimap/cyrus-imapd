@@ -49,11 +49,11 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <unistd.h>
 
 #include "lib/cyr_lock.h"
-#include "lib/sysexits.h"
 #include "lib/retry.h"
 #include "lib/util.h"
 

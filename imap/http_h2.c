@@ -42,8 +42,8 @@
  */
 
 #include <config.h>
+#include <sysexits.h>
 
-#include "sysexits.h"
 #include "httpd.h"
 #include "md5.h"
 #include "util.h"

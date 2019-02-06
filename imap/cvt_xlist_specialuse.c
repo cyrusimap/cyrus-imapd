@@ -45,10 +45,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <unistd.h>
 
-#include "lib/sysexits.h"
 #include "lib/hash.h"
 #include "lib/libconfig.h"
 

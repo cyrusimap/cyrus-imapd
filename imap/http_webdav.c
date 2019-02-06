@@ -44,9 +44,9 @@
 #include <config.h>
 
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 
-#include "sysexits.h"
 #include "httpd.h"
 #include "http_dav.h"
 #include "http_proxy.h"

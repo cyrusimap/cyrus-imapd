@@ -55,6 +55,7 @@
 
 #include <config.h>
 
+#include <sysexits.h>
 #include <syslog.h>
 
 #include <libical/ical.h>
@@ -67,7 +68,6 @@
 #include "caldav_db.h"
 #include "charset.h"
 #include "css3_color.h"
-#include "sysexits.h"
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"

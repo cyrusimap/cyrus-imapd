@@ -54,6 +54,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <utime.h>
 
@@ -86,7 +87,6 @@
 #endif /* WITH_DAV */
 #include "crc32.h"
 #include "md5.h"
-#include "sysexits.h"
 #include "global.h"
 #include "imparse.h"
 #include "cyr_lock.h"

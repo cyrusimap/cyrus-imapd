@@ -53,10 +53,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
+#include <sysexits.h>
 #include <unistd.h>
 
 #include "lib/cyrusdb.h"
-#include "lib/sysexits.h"
 #include "lib/gzuncat.h"
 #include "lib/map.h"
 #include "lib/strarray.h"

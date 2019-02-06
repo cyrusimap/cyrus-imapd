@@ -45,6 +45,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <time.h>
 #include <unistd.h>
@@ -57,7 +58,6 @@
 #include "caldav_db.h"
 #include "carddav_db.h"
 #endif /* WITH_DAV */
-#include "sysexits.h"
 #include "global.h"
 #include "imapurl.h"
 #include "libconfig.h"

@@ -81,12 +81,12 @@
 #endif
 #include <stdio.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <signal.h>
 
 #include "acl.h"
 #include "append.h"
-#include "sysexits.h"
 #include "global.h"
 #include "mboxlist.h"
 #include "mupdate-client.h"

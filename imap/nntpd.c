@@ -63,6 +63,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/param.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -80,7 +81,6 @@
 #include "auth.h"
 #include "backend.h"
 #include "duplicate.h"
-#include "sysexits.h"
 #include "global.h"
 #include "hash.h"
 #include "idle.h"

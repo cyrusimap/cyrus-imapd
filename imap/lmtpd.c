@@ -52,6 +52,7 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -75,7 +76,6 @@
 #include "carddav_db.h"
 #endif
 #include "duplicate.h"
-#include "sysexits.h"
 #include "global.h"
 #include "idle.h"
 #include "mailbox.h"

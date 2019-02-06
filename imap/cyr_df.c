@@ -47,11 +47,11 @@
 #endif
 #include <stdlib.h>
 #include <stdio.h>
+#include <sysexits.h>
 #include "string.h"
 #include <sys/statvfs.h>
 #include <sys/types.h>
 
-#include "sysexits.h"
 #include "global.h"
 #include "util.h"
 #include "xmalloc.h"

@@ -50,13 +50,13 @@
 #endif
 #include <stdlib.h>
 #include <stdio.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
 #include <netinet/in.h>
 
 /* cyrus includes */
 #include "global.h"
-#include "sysexits.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"

@@ -49,6 +49,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -72,7 +73,6 @@
 #endif
 
 #include "assert.h"
-#include "sysexits.h"
 #include "index.h"
 #include "global.h"
 #include "mailbox.h"

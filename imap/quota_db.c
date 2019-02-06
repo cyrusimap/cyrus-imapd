@@ -48,11 +48,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 
 #include "cyrusdb.h"
 #include "dlist.h"
-#include "sysexits.h"
 #include "global.h"
 #include "mailbox.h"
 #include "mboxname.h"

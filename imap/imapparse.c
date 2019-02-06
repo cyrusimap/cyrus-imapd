@@ -42,10 +42,10 @@
 #include <config.h>
 
 #include <ctype.h>
-#include <string.h>
 #include <limits.h>
+#include <string.h>
+#include <sysexits.h>
 
-#include "sysexits.h"
 #include "global.h"
 #include "imparse.h"
 #include "search_expr.h"

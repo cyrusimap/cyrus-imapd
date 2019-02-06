@@ -54,6 +54,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
 #include <sys/wait.h>
@@ -64,7 +65,6 @@
 #include "global.h"
 #include "append.h"
 #include "mboxlist.h"
-#include "sysexits.h"
 #include "mailbox.h"
 #include "quota.h"
 #include "xmalloc.h"

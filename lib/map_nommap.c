@@ -45,11 +45,11 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sysexits.h>
 #include <syslog.h>
 
 #include "xmalloc.h"
 #include "map.h"
-#include "sysexits.h"
 
 #define SLOP (4*1024)
 

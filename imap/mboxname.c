@@ -45,6 +45,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -53,7 +54,6 @@
 #include "assert.h"
 #include "byteorder64.h"
 #include "crc32.h"
-#include "sysexits.h"
 #include "glob.h"
 #include "global.h"
 #include "mailbox.h"

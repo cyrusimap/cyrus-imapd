@@ -48,11 +48,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sysexits.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 
 #include "global.h"
-#include "sysexits.h"
 #include "libcyr_cfg.h"
 #include "mailbox.h"
 #include "mboxlist.h"

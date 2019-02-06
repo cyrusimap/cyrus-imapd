@@ -49,13 +49,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <time.h>
 
 #include <libical/ical.h>
 
 #include "annotate.h"
-#include "sysexits.h"
 #include "global.h"
 #include "http_dav.h"
 #include "mailbox.h"

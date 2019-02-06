@@ -42,9 +42,9 @@
 #include <config.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sysexits.h>
 
 #include "auth.h"
-#include "sysexits.h"
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
 

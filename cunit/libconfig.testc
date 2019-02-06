@@ -39,10 +39,10 @@
  */
 
 #include <unistd.h>
+#include <sysexits.h>
 
 #include "cunit/cyrunit.h"
 
-#include "lib/sysexits.h"
 #include "lib/libconfig.h"
 #include "lib/retry.h"
 #include "lib/xmalloc.h"

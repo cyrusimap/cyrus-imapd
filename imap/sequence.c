@@ -44,7 +44,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "sysexits.h"
+#include <sysexits.h>
 #include "sequence.h"
 #include "string.h"
 #include "util.h"

@@ -44,9 +44,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sysexits.h>
 #include "xmalloc.h"
 
-#include "sysexits.h"
 
 EXPORTED void* xmalloc(size_t size)
 {

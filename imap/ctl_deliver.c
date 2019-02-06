@@ -48,12 +48,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sysexits.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <signal.h>
 
 #include "duplicate.h"
-#include "sysexits.h"
 #include "global.h"
 #include "libcyr_cfg.h"
 #include "util.h"

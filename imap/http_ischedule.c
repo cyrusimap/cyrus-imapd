@@ -47,11 +47,11 @@
 #include <unistd.h>
 #endif
 #include <errno.h>
+#include <sysexits.h>
 #include <syslog.h>
 
 #include <libical/ical.h>
 
-#include "sysexits.h"
 #include "global.h"
 #include "httpd.h"
 #include "http_caldav_sched.h"

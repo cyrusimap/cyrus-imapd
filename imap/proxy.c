@@ -46,11 +46,11 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/un.h>
 
 #include "backend.h"
-#include "sysexits.h"
 #include "global.h"
 #include "mupdate-client.h"
 #include "proxy.h"

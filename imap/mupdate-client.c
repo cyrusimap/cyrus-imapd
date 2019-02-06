@@ -48,6 +48,7 @@
 #include <ctype.h>
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <stdarg.h>
 #ifdef HAVE_UNISTD_H
@@ -62,7 +63,6 @@
 #include <sys/select.h>
 #endif
 
-#include "sysexits.h"
 #include "global.h"
 #include "mupdate.h"
 #include "prot.h"

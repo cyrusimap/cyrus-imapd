@@ -47,13 +47,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
 
 #include "assert.h"
-#include "sysexits.h"
 #include "hash.h"
 #include "libconfig.h"
 #include "xmalloc.h"

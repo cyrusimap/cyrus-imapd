@@ -45,13 +45,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
 #include <errno.h>
 
 #include "signals.h"
 #include "xmalloc.h"
-#include "sysexits.h"
 #include "util.h"
 
 #ifndef _NSIG

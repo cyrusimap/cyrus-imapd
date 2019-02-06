@@ -52,6 +52,7 @@
 #include <sys/types.h>
 #include <sys/param.h>
 #include <sys/stat.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -82,7 +83,6 @@
 #include "bufarray.h"
 #include "charset.h"
 #include "dlist.h"
-#include "sysexits.h"
 #include "idle.h"
 #include "global.h"
 #include "times.h"

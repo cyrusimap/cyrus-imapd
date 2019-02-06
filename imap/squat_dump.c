@@ -60,12 +60,12 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
 
 #include "assert.h"
 #include "global.h"
-#include "sysexits.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"

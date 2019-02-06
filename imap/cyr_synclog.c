@@ -46,11 +46,11 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sysexits.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 
-#include "sysexits.h"
 #include "global.h"
 #include "sync_log.h"
 #include "util.h"

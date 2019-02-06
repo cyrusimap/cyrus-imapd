@@ -49,6 +49,7 @@
 #include <pwd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <time.h>
 #include <sys/types.h>
@@ -59,7 +60,6 @@
 #include "assert.h"
 #include "auth.h"
 #include "duplicate.h"
-#include "sysexits.h"
 #include "global.h"
 #include "lmtpd.h"
 #include "lmtp_sieve.h"

@@ -44,11 +44,11 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/uio.h>
+#include <sysexits.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 
-#include "sysexits.h"
 #include "retry.h"
 #include "xmalloc.h"
 

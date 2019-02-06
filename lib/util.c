@@ -50,6 +50,7 @@
 #include <pwd.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -70,7 +71,6 @@
 #include <netinet/tcp.h>
 
 #include "byteorder64.h"
-#include "sysexits.h"
 #include "libconfig.h"
 #include "map.h"
 #include "retry.h"

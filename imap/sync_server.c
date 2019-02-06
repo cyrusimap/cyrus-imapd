@@ -58,6 +58,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/param.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -78,7 +79,6 @@
 #include "dav_db.h"
 #endif /* WITH_DAV */
 #include "dlist.h"
-#include "sysexits.h"
 #include "global.h"
 #include "hash.h"
 #include "imparse.h"

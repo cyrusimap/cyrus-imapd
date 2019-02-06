@@ -44,9 +44,9 @@
 #include <sys/types.h>
 #include <sys/file.h>
 #include <fcntl.h>
+#include <sysexits.h>
 
 #include "xmalloc.h"
-#include "sysexits.h"
 #include "nonblock.h"
 
 #ifndef FNDELAY

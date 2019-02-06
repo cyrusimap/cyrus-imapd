@@ -48,6 +48,7 @@
 
 #include <config.h>
 
+#include <sysexits.h>
 #include <syslog.h>
 
 #include <libxml/tree.h>
@@ -58,7 +59,6 @@
 #include "acl.h"
 #include "append.h"
 #include "carddav_db.h"
-#include "sysexits.h"
 #include "global.h"
 #include "hash.h"
 #include "httpd.h"

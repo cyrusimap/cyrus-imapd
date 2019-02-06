@@ -61,6 +61,7 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/file.h>
+#include <sysexits.h>
 #include <syslog.h>
 
 #include <pwd.h>
@@ -70,7 +71,6 @@
 #include "imclient.h"
 #include "util.h"
 #include "xmalloc.h"
-#include "sysexits.h"
 
 #include "readconfig.h"
 

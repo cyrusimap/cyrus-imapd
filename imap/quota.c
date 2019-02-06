@@ -49,6 +49,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -74,7 +75,6 @@
 
 #include "bsearch.h"
 #include "global.h"
-#include "sysexits.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"

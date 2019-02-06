@@ -59,11 +59,11 @@
 #include <sys/param.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <unistd.h>
 
 #include "auth.h"
-#include "sysexits.h"
 #include "libconfig.h"
 #include "xmalloc.h"
 #include "imap/backend.h"

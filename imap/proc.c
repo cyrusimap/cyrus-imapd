@@ -48,12 +48,12 @@
 #include <unistd.h>
 #endif
 #include <signal.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
 #include <sys/stat.h>
 
 #include "assert.h"
-#include "sysexits.h"
 #include "global.h"
 #include "proc.h"
 #include "retry.h"

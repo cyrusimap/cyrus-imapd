@@ -56,6 +56,7 @@
 #endif
 #include <stdio.h>
 #include <stdlib.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
 #include <errno.h>
@@ -84,7 +85,6 @@
 #include "assert.h"
 #include "bsearch.h"
 #include "cyrusdb.h"
-#include "sysexits.h"
 #include "hash.h"
 #include "map.h"
 #include "libcyr_cfg.h"

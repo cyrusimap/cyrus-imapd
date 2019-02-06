@@ -44,6 +44,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -58,7 +59,6 @@
 #endif
 
 #include "assert.h"
-#include "sysexits.h"
 #include "imparse.h"
 #include "libcyr_cfg.h"
 #include "map.h"

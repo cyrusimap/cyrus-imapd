@@ -45,6 +45,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/un.h>
 
@@ -52,7 +53,6 @@
 #include "acl.h"
 #include "annotate.h"
 #include "backend.h"
-#include "sysexits.h"
 #include "global.h"
 #include "imap_proxy.h"
 #include "proxy.h"

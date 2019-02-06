@@ -44,8 +44,8 @@
 #include <config.h>
 
 #include <string.h>
+#include <sysexits.h>
 
-#include "lib/sysexits.h"
 
 #include "caldav_db.h"
 #include "global.h"

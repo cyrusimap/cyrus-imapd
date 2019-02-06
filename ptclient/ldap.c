@@ -40,10 +40,10 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <sysexits.h>
 #include <syslog.h>
 #include <config.h>
 #include "ptloader.h"
-#include "sysexits.h"
 #include "util.h"
 #include "assert.h"
 

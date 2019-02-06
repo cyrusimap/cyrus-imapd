@@ -51,6 +51,7 @@
 #include <ctype.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <errno.h>
 
@@ -75,7 +76,6 @@
 
 #include "strarray.h"
 #include "assert.h"
-#include "sysexits.h"
 #include "global.h"
 #include "mailbox.h"
 #include "mboxlist.h"

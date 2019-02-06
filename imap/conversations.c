@@ -51,6 +51,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <sysexits.h>
 
 #include "acl.h"
 #include "annotate.h"
@@ -60,7 +61,6 @@
 #include "charset.h"
 #include "crc32.h"
 #include "dlist.h"
-#include "sysexits.h"
 #include "hash.h"
 #include "global.h"
 #include "imapd.h"

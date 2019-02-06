@@ -44,6 +44,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <ctype.h>
 #include <sys/stat.h>
@@ -70,7 +71,6 @@
 #include "assert.h"
 #include "xmalloc.h"
 #include "global.h"
-#include "sysexits.h"
 #include "util.h"
 #include "cyrusdb.h"
 

@@ -47,6 +47,7 @@
 #endif
 #include <stdio.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <signal.h>
 
@@ -57,7 +58,6 @@
 #include <sys/un.h>
 
 #include "cyrusdb.h"
-#include "sysexits.h"
 #include "global.h"
 #include "gmtoff.h"
 #include "cyr_lock.h"

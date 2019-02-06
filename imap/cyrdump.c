@@ -47,12 +47,12 @@
 #include <libgen.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
 
 /* cyrus includes */
 #include "assert.h"
-#include "sysexits.h"
 #include "global.h"
 #include "index.h"
 #include "imapurl.h"

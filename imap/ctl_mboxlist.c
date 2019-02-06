@@ -65,6 +65,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <sysexits.h>
 #include <syslog.h>
 #include <stdlib.h>
 #include <string.h>
@@ -73,7 +74,6 @@
 #include "assert.h"
 #include "annotate.h"
 #include "dlist.h"
-#include "sysexits.h"
 #include "global.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"

@@ -50,10 +50,10 @@
 #include <string.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <sysexits.h>
 
 #include "mpool.h"
 #include "xmalloc.h"
-#include "sysexits.h"
 
 struct mpool
 {

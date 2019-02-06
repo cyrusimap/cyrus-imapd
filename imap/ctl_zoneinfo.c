@@ -50,6 +50,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sysexits.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -58,7 +59,6 @@
 #include <libxml/tree.h>
 
 #include "annotate.h" /* for strlist functionality */
-#include "sysexits.h"
 #include "global.h"
 #include "hash.h"
 #include "map.h"

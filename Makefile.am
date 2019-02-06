@@ -777,7 +777,6 @@ include_HEADERS = \
 	lib/strarray.h \
 	lib/strhash.h \
 	lib/stristr.h \
-	lib/sysexits.h \
 	lib/times.h \
 	lib/tok.h \
 	lib/vparse.h \

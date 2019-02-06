@@ -48,11 +48,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sysexits.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 
 #include "global.h"
-#include "sysexits.h"
 #include "proc.h"
 #include "util.h"
 #include "../master/masterconf.h"

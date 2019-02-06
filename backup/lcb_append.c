@@ -43,8 +43,8 @@
 #include <assert.h>
 #include <errno.h>
 #include <syslog.h>
+#include <sysexits.h>
 
-#include "lib/sysexits.h"
 #include "lib/sqldb.h"
 #include "lib/xmalloc.h"
 #include "lib/xsha1.h"

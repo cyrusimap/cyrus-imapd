@@ -51,11 +51,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sysexits.h>
 #include <syslog.h>
 
 #include "assert.h"
 #include "cyrusdb.h"
-#include "sysexits.h"
 #include "global.h"
 #include "tok.h"
 #include "util.h"

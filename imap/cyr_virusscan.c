@@ -47,13 +47,13 @@
 #endif
 #include <stdlib.h>
 #include <stdio.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <string.h>
 #include <netinet/in.h>
 
 /* cyrus includes */
 #include "global.h"
-#include "sysexits.h"
 #include "append.h"
 #include "index.h"
 #include "mailbox.h"

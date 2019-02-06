@@ -47,11 +47,11 @@
 #include <dirent.h>
 #include <errno.h>
 #include <syslog.h>
+#include <sysexits.h>
 #include <zlib.h>
 
 #include "lib/cyrusdb.h"
 #include "lib/cyr_lock.h"
-#include "lib/sysexits.h"
 #include "lib/gzuncat.h"
 #include "lib/map.h"
 #include "lib/sqldb.h"

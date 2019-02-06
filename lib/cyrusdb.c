@@ -47,6 +47,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -57,7 +58,6 @@
 #include "bsearch.h"
 #include "cyrusdb.h"
 #include "util.h"
-#include "sysexits.h"
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"

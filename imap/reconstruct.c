@@ -50,6 +50,7 @@
 #include <errno.h>
 #include <string.h>
 #include <fcntl.h>
+#include <sysexits.h>
 #include <syslog.h>
 #include <sys/types.h>
 #include <netinet/in.h>
@@ -82,7 +83,6 @@
 #include "crc32.h"
 #include "hash.h"
 #include "global.h"
-#include "sysexits.h"
 #include "mailbox.h"
 #include "map.h"
 #include "message.h"

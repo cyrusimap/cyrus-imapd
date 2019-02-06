@@ -47,7 +47,7 @@
 
 #include <config.h>
 
-#include "sysexits.h"
+#include <sysexits.h>
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
