@@ -4515,7 +4515,7 @@ EXPORTED void mailbox_archive(struct mailbox *mailbox,
         if (!object_storage_enabled){
             /* got a file to copy! */
             if (strcmp(srcname, destname)) {
-                r = cyrus_copyfile(srcname, destname, COPYFILE_MKDIR);
+                r = cyrus_copyfile(srcname, destname, COPYFILE_MKDIR|COPYFILE_KEEPTIME);
                 if (r) {
                     syslog(LOG_ERR, "IOERROR archive %s %u failed to copyfile (%s => %s): %s",
                            mailbox->name, copyrecord.uid, srcname, destname, error_message(r));
@@ -5576,7 +5576,7 @@ EXPORTED int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox)
  */
 EXPORTED int mailbox_copyfile(const char *from, const char *to, int nolink)
 {
-    int flags = COPYFILE_MKDIR;
+    int flags = COPYFILE_MKDIR|COPYFILE_KEEPTIME;
     if (nolink) flags |= COPYFILE_NOLINK;
 
     if (mailbox_wait_cb) mailbox_wait_cb(mailbox_wait_cb_rock);
