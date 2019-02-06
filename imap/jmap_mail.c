@@ -7435,7 +7435,7 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
         base = charset_decode_mimebody(base, len, ENCODING_BASE64, &tmp, &len);
     }
     fputs("\r\n", fp);
-    fwrite(base, 1, len, fp);
+    if (len) fwrite(base, 1, len, fp);
     free(tmp);
 
 done:
