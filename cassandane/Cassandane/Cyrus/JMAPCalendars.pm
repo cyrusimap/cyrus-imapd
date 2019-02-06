@@ -1165,6 +1165,20 @@ sub test_calendarevent_get_endtimezone
     $self->assert_str_equals("end", $locations[0]{rel});
 }
 
+sub test_calendarevent_get_ms_timezone
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('ms_timezone');
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_not_null($event);
+    $self->assert_str_equals("2016-09-28T13:00:00", $event->{start});
+    $self->assert_str_equals("America/New_York", $event->{timeZone});
+    $self->assert_str_equals("PT1H", $event->{duration});
+}
+
 sub test_calendarevent_get_keywords
     :min_version_3_1 :needs_component_jmap
 {
