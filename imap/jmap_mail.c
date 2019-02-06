@@ -7434,7 +7434,7 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     }
     fputs("\r\n", fp);
     fwrite(base, 1, len, fp);
-    if (tmp != base) free(tmp);
+    free(tmp);
 
 done:
     if (r) json_array_append_new(missing_blobs, json_string(emailpart->blob_id));
