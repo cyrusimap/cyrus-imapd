@@ -55,6 +55,21 @@ Options
 Examples
 ========
 
+**smmapd** is commonly included in the SERVICES section of
+:cyrusman:`cyrus.conf(5)` like so:
+
+.. parsed-literal::
+    SERVICES {
+        imap        cmd="imapd -U 30" listen="imap" prefork=0
+        imaps       cmd="imapd -s -U 30" listen="imaps" prefork=0 maxchild=100
+        lmtpunix    cmd="lmtpd" listen="/var/run/cyrus/socket/lmtp" prefork=0 maxchild=20
+        **smmap       cmd="smmapd" listen="/var/run/cyrus/socket/smmap" prefork=0**
+        sieve       cmd="timsieved" listen="sieve" prefork=0
+        notify      cmd="notifyd" listen="/var/run/cyrus/socket/notify" proto="udp" prefork=1
+        httpd       cmd="httpd" listen=8080 prefork=1 maxchild=20
+    }
+
+
 Files
 =====
 
