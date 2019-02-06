@@ -7,13 +7,13 @@ Typically, an authentication and authorization database, such as for example LDA
 
 For example, when a user wants to set group permissions on an IMAP folder, the most intuitive attribute in LDAP to refer to the group is the Common Name (CN). This attribute however is not guaranteed to be unique. Uniqueness can be enforced within LDAP, although that may be too restrictive, and so the groups available in Cyrus IMAP can be limited to scope one, while the cn is used in the rdn (the cn is the naming attribute to compose the dn with); effectively enforcing uniqueness for those groups available to Cyrus IMAP.
 
-Similarly, many deployments choose to use the mail LDAP attribute value as the mailbox name, while mail is a multi-valued attribute and is not configured to be enforced globally unique in the LDAP information tree under the root dn. In addition, attributes such as amilAlternateAddress and/or alias could potentially hold the same value as anyone's mail attribute. These limitations or such implications become very clear when canonification of the authentication ID to the desired authorization ID is attempted.
+Similarly, many deployments choose to use the mail LDAP attribute value as the mailbox name, while mail is a multi-valued attribute and is not configured to be enforced globally unique in the LDAP information tree under the root dn. In addition, attributes such as ``mailAlternativeAddress`` and/or alias could potentially hold the same value as anyone's mail attribute. These limitations or such implications become very clear when canonification of the authentication ID to the desired authorization ID is attempted.
 
 For example, if ``jdoe`` is the login username, and Cyrus IMAP has a default realm configured ``example.org``, the authentication ID becomes ``jdoe@example.org``. It is this authentication ID, and not the supplied login username, that Cyrus IMAP uses to verify the credentials.
 
 Cyrus IMAP thereafter allows authorization mechanisms, such as *ptclient* modules, to canonify the authentication ID to then ultimately return the authorization ID.
 
-Suppose in the case of ``jdoe@example.org``, where the authentication ID had been set, an LDAP module for ptloader could search LDAP for a ``uid=%U`` (where %U is the local part of the authentication ID), find the mail attribute value is ``john.doe@example.org``, and authorize the user as such. Effectively, this enables Cyrus IMAP users to log in both with their username (uid) as well as their email address (or any of the aliases).
+Suppose in the case of ``jdoe@example.org``, where the authentication ID had been set, an LDAP module for ptloader could search LDAP for a ``uid=%U`` (where ``%U`` is the local part of the authentication ID), find the mail attribute value is ``john.doe@example.org``, and authorize the user as such. Effectively, this enables Cyrus IMAP users to log in both with their username (uid) as well as their email address (or any of the aliases).
 
 The process of client authentication and authorization
 
@@ -30,7 +30,7 @@ The exchange and verification of identity information provided by a client, othe
 
 The most common set of credentials is a *username* and *password*, but other forms exist like Kerberos v5 ticket exchange (for which, to obtain such, most often a password is supplied), or certificate based authentication (the secret keys for which are most often locked with a passphrase). In any case, authentication works based on a shared secret, and/or a trusted source for verification. Kerberos v5 works based on shared secrets (keytab), and certificate based authentication works based on shared, trusted sources for verification.
 
-In the case of usernames and passwords though, the exchange and verification of the credentials is at the basis of its security. Sending plain text usernames and passwords over the wire would not allow any application to verify the source of the credentials is actually the user &ndash;who is supposed to be the only party to know the unique combination of username and password.
+In the case of usernames and passwords though, the exchange and verification of the credentials is at the basis of its security. Sending plain text usernames and passwords over the wire would not allow any application to verify the source of the credentials is actually the user &mdash; who is supposed to be the only party to know the unique combination of username and password.
 
 To obfuscate the login credentials, authentication can be encrypted with CRAM-MD5 or DIGEST-MD5, but this requires the server to have a copy of the original, plain text password. The password in this case becomes the shared secret.
 
@@ -45,7 +45,7 @@ The **user login credentials** that are associated with the user authentication 
 
 For example, the user logs in with username ``john.doe@example.org`` and password ``verysecret``.
 
-The **user's authentication entity** - with all attributes associated with it - can have one of those attributes be used to create the relationship between the user authentication entity on the one side, and the mailbox entity on the other side.
+The **user's authentication entity** &mdash; with all attributes associated with it &mdash; can have one of those attributes be used to create the relationship between the user authentication entity on the one side, and the mailbox entity on the other side.
 
 For example, the user that authenticated as ``john.doe@example.org`` may have a mailbox named ``jdoe``.
 
