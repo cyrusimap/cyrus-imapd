@@ -4286,6 +4286,18 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
         jmap_parser_invalid(parser, "relatedTo");
     }
 
+    /* sequence */
+    jprop = json_object_get(event, "sequence");
+    if (json_is_integer(jprop)) {
+        json_int_t val = json_integer_value(jprop);
+        if (val >= 0 && val <= INT_MAX) {
+            icalcomponent_set_sequence(comp, (int)val);
+        }
+        else jmap_parser_invalid(parser, "sequence");
+    } else if (jprop) {
+        jmap_parser_invalid(parser, "sequence");
+    }
+
     /* prodId */
     if (!is_exc) {
         struct buf buf = BUF_INITIALIZER;
@@ -4319,9 +4331,6 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
 
     /* updated */
     dtprop_to_ical(comp, now, utc, 1, ICAL_DTSTAMP_PROPERTY);
-
-    /* sequence */
-    icalcomponent_set_sequence(comp, 0);
 
     jprop = json_object_get(event, "priority");
     if (json_integer_value(jprop) >= 0 || json_integer_value(jprop) <= 9) {
