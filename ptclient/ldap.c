@@ -1336,11 +1336,15 @@ static int ptsmodule_make_authstate_filter(
             syslog(LOG_ERR, "No values for attribute '%s' on entry '%s'",
                             ptsm->member_attribute,
                             errdn);
+            *reply = "no values";
+            rc = PTSM_FAIL;
+            ldap_value_free(vals);
+            vals = NULL;
+            goto done;
         } else if (ldap_count_values(vals) > 1) {
             syslog(LOG_ERR, "Too many values for attribute '%s' on entry '%s'",
                             ptsm->member_attribute,
                             errdn);
-        } else {
             *reply = "too many values";
             rc = PTSM_FAIL;
             ldap_value_free(vals);
