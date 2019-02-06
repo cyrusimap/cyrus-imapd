@@ -67,13 +67,6 @@
 #include "imap/jmap_err.h"
 
 
-struct mymblist_rock {
-    mboxlist_cb *proc;
-    void *rock;
-    struct auth_state *authstate;
-    hash_table *mboxrights;
-};
-
 static json_t *extract_value(json_t *from, const char *path, ptrarray_t *refs);
 
 static json_t *extract_array_value(json_t *val, const char *idx,
@@ -1198,23 +1191,18 @@ HIDDEN int jmap_hasrights(jmap_req_t *req, const mbentry_t *mbentry, int rights)
 HIDDEN int jmap_myrights_byname(jmap_req_t *req, const char *mboxname)
 {
     int *rightsptr = hash_lookup(mboxname, req->mboxrights);
+    if (rightsptr) return *rightsptr;
 
-    if (!rightsptr) {
-        rightsptr = xmalloc(sizeof(int));
+    // if unable to read, that means no rights
+    int rights = 0;
 
-        // if unable to read, that means no rights
-        int rights = 0;
-        mbentry_t *mbentry = NULL;
-        if (!mboxlist_lookup_allow_all(mboxname, &mbentry, NULL)) {
-            rights = _rights_for_mbentry(req->authstate, mbentry, req->mboxrights);
-            mboxlist_entry_free(&mbentry);
-        }
-
-        *rightsptr = rights;
-        hash_insert(mboxname, rightsptr, req->mboxrights);
+    mbentry_t *mbentry = NULL;
+    if (!mboxlist_lookup_allow_all(mboxname, &mbentry, NULL)) {
+        rights = _rights_for_mbentry(req->authstate, mbentry, req->mboxrights);
     }
+    mboxlist_entry_free(&mbentry);
 
-    return *rightsptr;
+    return rights;
 }
 
 // gotta have them all
