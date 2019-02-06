@@ -1267,6 +1267,7 @@ static void jmap_patchobject_diff(json_t *patch, struct buf *buf,
 
     if (!a || json_is_null(a) || json_typeof(b) != JSON_OBJECT) {
         json_object_set(patch, buf_cstring(buf), b);
+        return;
     }
 
     json_object_foreach(b, id, o) {
