@@ -1111,6 +1111,8 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/dav_util.h \
 	imap/ical_support.c \
 	imap/ical_support.h \
+	imap/icu_wrap.h \
+	imap/icu_wrap.cpp \
 	imap/vcard_support.c \
 	imap/vcard_support.h \
 	imap/webdav_db.c \

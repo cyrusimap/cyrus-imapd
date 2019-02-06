@@ -66,6 +66,7 @@
 #include "http_jmap.h"
 #include "http_proxy.h"
 #include "ical_support.h"
+#include "icu_wrap.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mboxlist.h"
@@ -292,6 +293,8 @@ static void xjmapid_to_ical(icalproperty *prop, const char *id)
 
 static icaltimezone *tz_from_tzid(const char *tzid)
 {
+    icaltimezone *tz = NULL;
+
     if (!tzid)
         return NULL;
 
@@ -299,7 +302,20 @@ static icaltimezone *tz_from_tzid(const char *tzid)
     if (!strcmp(tzid, "Etc/UTC") || !strcmp(tzid, "UTC"))
         return icaltimezone_get_utc_timezone();
 
-    return icaltimezone_get_builtin_timezone(tzid);
+    tz = icaltimezone_get_builtin_timezone(tzid);
+
+    if (!tz) {
+        /* see if its a MS Windows TZID */
+        char *my_tzid = icu_getIDForWindowsID(tzid);
+
+        if (!my_tzid) return NULL;
+
+        tz = icaltimezone_get_builtin_timezone(my_tzid);
+
+        free(my_tzid);
+    }
+
+    return tz;
 }
 
 /* Determine the Olson TZID, if any, of the ical property prop. */
