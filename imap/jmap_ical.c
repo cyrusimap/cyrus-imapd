@@ -334,7 +334,7 @@ static const char *tzid_from_icalprop(icalproperty *prop, int guess) {
             icaltimetype dt = icalvalue_get_datetime(val);
             tzid = dt.zone ? icaltimezone_get_location((icaltimezone*) dt.zone) : NULL;
             tzid = tzid && tz_from_tzid(tzid) ? tzid : NULL;
-        }
+        } else if (tz) return icaltimezone_get_tzid(tz);
     } else {
         icalvalue *val = icalproperty_get_value(prop);
         icaltimetype dt = icalvalue_get_datetime(val);
@@ -345,7 +345,8 @@ static const char *tzid_from_icalprop(icalproperty *prop, int guess) {
     return tzid;
 }
 
-/* Determine the Olson TZID, if any, of the ical property kind in component comp. */
+/* Determine the Olson TZID, if any, of the fist ical property of
+ * kind in component comp. */
 static const char *tzid_from_ical(icalcomponent *comp,
                                   icalproperty_kind kind) {
     icalproperty *prop = icalcomponent_get_first_property(comp, kind);
