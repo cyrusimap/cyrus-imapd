@@ -1176,7 +1176,7 @@ sub test_calendarevent_get_ms_timezone
     $self->assert_not_null($event);
     $self->assert_str_equals("2016-09-28T13:00:00", $event->{start});
     $self->assert_str_equals("America/New_York", $event->{timeZone});
-    $self->assert_str_equals("PT1H", $event->{duration});
+    $self->assert_str_equals("PT2H", $event->{duration});
 }
 
 sub test_calendarevent_get_keywords
