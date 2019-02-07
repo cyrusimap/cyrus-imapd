@@ -1282,7 +1282,8 @@ static void truncate_vtimezone(icalcomponent *vtz,
                                struct observance **proleptic,
                                icalcomponent **eternal_std,
                                icalcomponent **eternal_dst,
-                               icaltimetype *last_dtstart)
+                               icaltimetype *last_dtstart,
+                               int ms_compatible)
 {
     icaltimetype start = *startp, end = *endp;
     icalcomponent *comp, *nextc, *tomb_std = NULL, *tomb_day = NULL;
@@ -1507,7 +1508,7 @@ static void truncate_vtimezone(icalcomponent *vtz,
                                 icalcomponent_add_property(comp, prop);
                             }
                         }
-                        else {
+                        else if (!eternal) {
                             /* Set UNTIL to previous onset */
                             rrule.until = prev_onset;
                             icalproperty_set_rrule(rrule_prop, rrule);
@@ -1522,6 +1523,19 @@ static void truncate_vtimezone(icalcomponent *vtz,
                     if (r < 0) {
                         /* Observance is prior to our window open -
                            check it vs tombstone */
+                        if (ms_compatible) {
+                            /* XXX  We don't want to move DTSTART of the RRULE
+                               as Outlook/Exchange doesn't appear to like
+                               truncating the frontend of RRULEs */
+                            need_tomb = 0;
+                            trunc_dtstart = 0;
+                            if (proleptic_prop) {
+                                icalcomponent_remove_property(vtz,
+                                                              proleptic_prop);
+                                icalproperty_free(proleptic_prop);
+                                proleptic_prop = NULL;
+                            }
+                        }
                         if (need_tomb) check_tombstone(&tombstone, &obs);
                     }
                     else {
@@ -1921,7 +1935,8 @@ static int action_get(struct transaction_t *txn)
             }
             else {
                 /* Truncate the VTIMEZONE */
-                truncate_vtimezone(vtz, &start, &end, NULL, NULL, NULL, NULL, NULL);
+                truncate_vtimezone(vtz, &start, &end, NULL, NULL,
+                                   NULL, NULL, NULL, 0);
             }
         }
 
@@ -2081,7 +2096,7 @@ static int action_expand(struct transaction_t *txn)
         obsarray = icalarray_new(sizeof(struct observance), 20);
         vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
         truncate_vtimezone(vtz, &start, &end, obsarray, &proleptic,
-                           NULL, NULL, NULL);
+                           NULL, NULL, NULL, 0);
 
         if (zdump) {
             struct buf *body = &txn->resp_body.payload;
@@ -2490,7 +2505,7 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
     /* Create an array of observances */
     obsarray = icalarray_new(sizeof(struct observance), 100);
     truncate_vtimezone(vtz, startp, endp, obsarray,
-                       &proleptic, &eternal_std, &eternal_dst, &last_dtstart);
+                       &proleptic, &eternal_std, &eternal_dst, &last_dtstart, 0);
 
     /* Create an array of transitions */
     times = xmalloc((obsarray->num_elements+1) * sizeof(struct transition));
@@ -2738,7 +2753,8 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
 static void tzdist_truncate_vtimezone(icalcomponent *vtz,
                                       icaltimetype *startp, icaltimetype *endp)
 {
-    truncate_vtimezone(vtz, startp, endp, NULL, NULL, NULL, NULL, NULL);
+    truncate_vtimezone(vtz, startp, endp, NULL, NULL, NULL, NULL, NULL,
+                       1 /* ms_compatible */);
 }
 
 static struct buf *icaltimezone_as_tzif(icalcomponent* ical)
@@ -2833,9 +2849,11 @@ EXPORTED void icalcomponent_add_required_timezones(icalcomponent *ical)
         /* Truncate the timezone to the events timespan. */
         tzdist_truncate_vtimezone(tzcomp, &span.start, &span.end);
 
-        /* Add TZUNTIL to timezone */
-        icalproperty *tzuntil = icalproperty_new_tzuntil(span.end);
-        icalcomponent_add_property(tzcomp, tzuntil);
+        if (icaltime_as_timet_with_zone(span.end, NULL) < caldav_eternity) {
+            /* Add TZUNTIL to timezone */
+            icalproperty *tzuntil = icalproperty_new_tzuntil(span.end);
+            icalcomponent_add_property(tzcomp, tzuntil);
+        }
 
         /* Add the truncated timezone. */
         icalcomponent_add_component(ical, tzcomp);
