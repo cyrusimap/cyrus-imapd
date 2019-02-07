@@ -323,15 +323,16 @@ static int frame_recv_cb(nghttp2_session *session,
         if (frame->headers.cat == NGHTTP2_HCAT_REQUEST) {
             if (txn->conn->logfd != -1) {
                 /* telemetry log */
-                assert(!buf_len(&txn->buf));
-                buf_printf(&txn->buf, "<%ld<", time(NULL));   /* timestamp */
-                buf_printf(&txn->buf, "%s %s %s\r\n",         /* request-line*/
+                struct buf *logbuf = &txn->conn->logbuf;
+
+                buf_reset(logbuf);
+                buf_printf(logbuf, "<%ld<", time(NULL));   /* timestamp */
+                buf_printf(logbuf, "%s %s %s\r\n",         /* request-line*/
                            txn->req_line.meth, txn->req_line.uri, HTTP2_VERSION);
                 spool_enum_hdrcache(txn->req_hdrs,            /* header fields */
-                                    &log_cachehdr, &txn->buf);
-                buf_appendcstr(&txn->buf, "\r\n");            /* CRLF */
-                write(txn->conn->logfd, buf_base(&txn->buf), buf_len(&txn->buf));
-                buf_reset(&txn->buf);
+                                    &log_cachehdr, logbuf);
+                buf_appendcstr(logbuf, "\r\n");            /* CRLF */
+                write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
             }
 
             /* Examine request */
@@ -369,10 +370,11 @@ static int frame_recv_cb(nghttp2_session *session,
 
         if ((frame->hd.type == NGHTTP2_DATA) && (txn->conn->logfd != -1)) {
             /* telemetry log */
-            assert(!buf_len(&txn->buf));
-            buf_printf(&txn->buf, "<%ld<", time(NULL));   /* timestamp */
-            write(txn->conn->logfd, buf_base(&txn->buf), buf_len(&txn->buf));
-            buf_reset(&txn->buf);
+            struct buf *logbuf = &txn->conn->logbuf;
+
+            buf_reset(logbuf);
+            buf_printf(logbuf, "<%ld<", time(NULL));   /* timestamp */
+            write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
 
             write(txn->conn->logfd, buf_base(&txn->req_body.payload),
                   buf_len(&txn->req_body.payload));
@@ -729,10 +731,11 @@ HIDDEN void http2_begin_headers(struct transaction_t *txn)
 
     if (txn->conn->logfd != -1) {
         /* telemetry log */
-        assert(!buf_len(&txn->buf));
-        buf_printf(&txn->buf, ">%ld>", time(NULL));  /* timestamp */
-        write(txn->conn->logfd, buf_base(&txn->buf), buf_len(&txn->buf));
-        buf_reset(&txn->buf);
+        struct buf *logbuf = &txn->conn->logbuf;
+
+        buf_reset(logbuf);
+        buf_printf(logbuf, ">%ld>", time(NULL));  /* timestamp */
+        write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
     }
 }
 
@@ -864,16 +867,16 @@ HIDDEN int http2_data_chunk(struct transaction_t *txn,
 
     if (datalen && (txn->conn->logfd != -1)) {
         /* telemetry log */
+        struct buf *logbuf = &txn->conn->logbuf;
         struct iovec iov[2];
         int niov = 0;
 
-        assert(!buf_len(&txn->buf));
-        buf_printf(&txn->buf, ">%ld>", time(NULL));  /* timestamp */
+        buf_reset(logbuf);
+        buf_printf(logbuf, ">%ld>", time(NULL));  /* timestamp */
         WRITEV_ADD_TO_IOVEC(iov, niov,
-                            buf_base(&txn->buf), buf_len(&txn->buf));
+                            buf_base(logbuf), buf_len(logbuf));
         WRITEV_ADD_TO_IOVEC(iov, niov, data, datalen);
         writev(txn->conn->logfd, iov, niov);
-        buf_reset(&txn->buf);
     }
 
     /* NOTE: The protstream that we use as the data source MUST remain
