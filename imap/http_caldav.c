@@ -74,6 +74,7 @@
 #include "http_caldav.h"
 #include "http_caldav_sched.h"
 #include "http_dav.h"
+#include "http_dav_sharing.h"
 #include "http_proxy.h"
 #include "index.h"
 #include "ical_support.h"

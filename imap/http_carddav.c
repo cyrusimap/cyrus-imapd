@@ -63,6 +63,7 @@
 #include "hash.h"
 #include "httpd.h"
 #include "http_dav.h"
+#include "http_dav_sharing.h"
 #include "http_proxy.h"
 #include "index.h"
 #include "mailbox.h"

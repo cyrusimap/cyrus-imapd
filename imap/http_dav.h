@@ -282,6 +282,8 @@ enum {
 };
 
 
+extern struct meth_params princ_params;
+
 /* Function to fetch resource validators */
 typedef int (*get_validators_t)(struct mailbox *mailbox, void *data,
                                 const char *userid, struct index_record *record,
@@ -671,8 +673,6 @@ void dav_parse_propfilter(xmlNodePtr root, struct prop_filter **prop,
 void dav_free_propfilter(struct prop_filter *prop);
 int dav_apply_textmatch(xmlChar *text, struct text_match_t *match);
 
-int notify_post(struct transaction_t *txn);
-
 int report_expand_prop(struct transaction_t *txn, struct meth_params *rparams,
                        xmlNodePtr inroot, struct propfind_ctx *fctx);
 int report_acl_prin_prop(struct transaction_t *txn, struct meth_params *rparams,
@@ -707,6 +707,9 @@ struct mime_type_t *get_accept_type(const char **hdr, struct mime_type_t *types)
 int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root,
                    const char *mimetype);
 
+size_t make_collection_url(struct buf *buf, const char *urlprefix, int haszzzz,
+                           const mbname_t *mbname, const char *userid);
+
 /* Initialize an XML tree */
 xmlNodePtr init_xml_response(const char *resp, int ns,
                              xmlNodePtr req, xmlNsPtr *respNs);
@@ -730,6 +733,9 @@ int expand_property(xmlNodePtr inroot, struct propfind_ctx *fctx,
                     struct namespace_t *namespace, const char *href,
                     parse_path_t parse_path, const struct prop_entry *lprops,
                     xmlNodePtr root, int depth);
+
+int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx);
+void free_entry_list(struct propfind_entry_list *elist);
 
 /* DAV method processing functions */
 int meth_acl(struct transaction_t *txn, void *params);
@@ -879,21 +885,6 @@ int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
                          xmlNodePtr prop, xmlNodePtr resp,
                          struct propstat propstat[], void *rock);
 int propfind_abookhome(const xmlChar *name, xmlNsPtr ns,
-                       struct propfind_ctx *fctx,
-                       xmlNodePtr prop, xmlNodePtr resp,
-                       struct propstat propstat[], void *rock);
-
-void xml_add_shareaccess(struct propfind_ctx *fctx,
-                         xmlNodePtr resp, xmlNodePtr node, int legacy);
-int propfind_shareaccess(const xmlChar *name, xmlNsPtr ns,
-                         struct propfind_ctx *fctx,
-                         xmlNodePtr prop, xmlNodePtr resp,
-                         struct propstat propstat[], void *rock);
-int propfind_invite(const xmlChar *name, xmlNsPtr ns,
-                    struct propfind_ctx *fctx,
-                    xmlNodePtr prop, xmlNodePtr resp,
-                    struct propstat propstat[], void *rock);
-int propfind_sharedurl(const xmlChar *name, xmlNsPtr ns,
                        struct propfind_ctx *fctx,
                        xmlNodePtr prop, xmlNodePtr resp,
                        struct propstat propstat[], void *rock);

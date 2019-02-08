@@ -1221,6 +1221,8 @@ imap_httpd_SOURCES = \
 	imap/http_client.h \
 	imap/http_dav.c \
 	imap/http_dav.h \
+	imap/http_dav_sharing.c \
+	imap/http_dav_sharing.h \
 	imap/http_dblookup.c \
 	imap/http_h2.c \
 	imap/http_h2.h \
