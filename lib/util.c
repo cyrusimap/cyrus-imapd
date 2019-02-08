@@ -680,7 +680,6 @@ static int cap_setuid(int uid, int is_master)
 EXPORTED int become_cyrus(int is_master)
 {
     struct passwd *p;
-    struct group *g;
     uid_t newuid;
     gid_t newgid;
     int result;
@@ -689,7 +688,6 @@ EXPORTED int become_cyrus(int is_master)
     if (uid) return cap_setuid(uid, is_master);
 
     const char *cyrus = cyrus_user();
-    const char *mail = cyrus_group();
 
     p = getpwnam(cyrus);
     if (p == NULL) {
@@ -697,15 +695,9 @@ EXPORTED int become_cyrus(int is_master)
         return -1;
     }
 
-    g = getgrnam(mail);
-    if (g == NULL) {
-        syslog(LOG_ERR, "no entry in /etc/group for group %s", mail);
-        return -1;
-    }
-
     /* Save these in case initgroups does a getpw*() */
     newuid = p->pw_uid;
-    newgid = g->gr_gid;
+    newgid = p->pw_gid;
 
     if (newuid == geteuid() &&
         newuid == getuid() &&
@@ -744,15 +736,6 @@ EXPORTED const char *cyrus_user(void)
     if (!cyrus) cyrus = CYRUS_USER;
     assert(cyrus != NULL);
     return cyrus;
-}
-
-EXPORTED const char *cyrus_group(void)
-{
-    const char *mail = getenv("CYRUS_GROUP");
-    if (!mail) mail = config_getstring(IMAPOPT_CYRUS_GROUP);
-    if (!mail) mail = CYRUS_GROUP;
-    assert(mail != NULL);
-    return mail;
 }
 
 static int cmdtime_enabled = 0;
