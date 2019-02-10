@@ -2303,7 +2303,7 @@ static json_t *_json_has(int rights, int need)
   return (((rights & need) == need) ? json_true() : json_false());
 }
 
-HIDDEN json_t *jmap_sharewith(const mbentry_t *mbentry, int iscalendar)
+HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry, int iscalendar)
 {
     char *aclstr = xstrdup(mbentry->acl);
     char *owner = mboxname_to_userid(mbentry->name);

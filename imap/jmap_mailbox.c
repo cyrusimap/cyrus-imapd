@@ -576,7 +576,7 @@ static json_t *_mbox_get(jmap_req_t *req,
     }
 
     if (jmap_wantprop(props, "shareWith")) {
-        json_t *sharewith = jmap_sharewith(mbentry, /*iscalendar*/0);
+        json_t *sharewith = jmap_get_sharewith(mbentry, /*iscalendar*/0);
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
