@@ -512,7 +512,7 @@ static json_t *_mbox_get(jmap_req_t *req,
 
     char *role = _mbox_get_role(req, mbname);
 
-    if (_wantprop(props, "myRights") || _wantprop(props, "parentId")) {
+    if (jmap_wantprop(props, "myRights") || jmap_wantprop(props, "parentId")) {
         /* Need to lookup parent mailbox */
         _findparent(mbname_intname(mbname), &parent);
     }
@@ -521,21 +521,21 @@ static json_t *_mbox_get(jmap_req_t *req,
     obj = json_object();
 
     json_object_set_new(obj, "id", json_string(mbentry->uniqueid));
-    if (_wantprop(props, "name")) {
+    if (jmap_wantprop(props, "name")) {
         char *name = _mbox_get_name(req->accountid, mbname);
         if (!name) goto done;
         json_object_set_new(obj, "name", json_string(name));
         free(name);
     }
 
-    if (_wantprop(props, "parentId")) {
+    if (jmap_wantprop(props, "parentId")) {
         json_object_set_new(obj, "parentId",
                 (is_inbox || parent_is_inbox || !parent) ?
                 json_null() : json_string(parent->uniqueid));
     }
 
 
-    if (_wantprop(props, "myRights")) {
+    if (jmap_wantprop(props, "myRights")) {
         json_t *jrights = json_object();
         json_object_set_new(jrights, "mayReadItems",
                 json_boolean(rights & ACL_READ));
@@ -565,7 +565,7 @@ static json_t *_mbox_get(jmap_req_t *req,
 
         json_object_set_new(obj, "myRights", jrights);
     }
-    if (_wantprop(props, "role")) {
+    if (jmap_wantprop(props, "role")) {
         if (role && !hash_lookup(role, roles)) {
             /* In JMAP, only one mailbox have a role. First one wins. */
             json_object_set_new(obj, "role", json_string(role));
@@ -575,14 +575,14 @@ static json_t *_mbox_get(jmap_req_t *req,
         }
     }
 
-    if (_wantprop(props, "shareWith")) {
+    if (jmap_wantprop(props, "shareWith")) {
         json_t *sharewith = jmap_sharewith(mbentry, /*iscalendar*/0);
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
     if (share_type == _SHAREDMBOX_SHARED && !(mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
-        if (_wantprop(props, "totalThreads") || _wantprop(props, "unreadThreads") ||
-            _wantprop(props, "totalEmails") || _wantprop(props, "unreadEmails")) {
+        if (jmap_wantprop(props, "totalThreads") || jmap_wantprop(props, "unreadThreads") ||
+            jmap_wantprop(props, "totalEmails") || jmap_wantprop(props, "unreadEmails")) {
             conv_status_t convstatus = CONV_STATUS_INIT;
             r = conversation_getstatus(req->cstate,
                             mbname_intname(mbname), &convstatus);
@@ -591,24 +591,24 @@ static json_t *_mbox_get(jmap_req_t *req,
                         mbname_intname(mbname), error_message(r));
                 goto done;
             }
-            if (_wantprop(props, "totalEmails")) {
+            if (jmap_wantprop(props, "totalEmails")) {
                 json_object_set_new(obj, "totalEmails", json_integer(convstatus.emailexists));
             }
-            if (_wantprop(props, "unreadEmails")) {
+            if (jmap_wantprop(props, "unreadEmails")) {
                 json_object_set_new(obj, "unreadEmails", json_integer(convstatus.emailunseen));
             }
-            if (_wantprop(props, "totalThreads")) {
+            if (jmap_wantprop(props, "totalThreads")) {
                 json_object_set_new(obj, "totalThreads", json_integer(convstatus.threadexists));
             }
-            if (_wantprop(props, "unreadThreads")) {
+            if (jmap_wantprop(props, "unreadThreads")) {
                 json_object_set_new(obj, "unreadThreads", json_integer(convstatus.threadunseen));
             }
         }
-        if (_wantprop(props, "sortOrder")) {
+        if (jmap_wantprop(props, "sortOrder")) {
             int sortOrder = _mbox_get_sortorder(req, mbname);
             json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
         }
-        if (_wantprop(props, "isSeenShared")) {
+        if (jmap_wantprop(props, "isSeenShared")) {
             struct mailbox *mbox = NULL;
 
             r = jmap_openmbox(req, mbentry->name, &mbox, 0);
@@ -619,27 +619,27 @@ static json_t *_mbox_get(jmap_req_t *req,
         }
     }
     else {
-        if (_wantprop(props, "totalEmails")) {
+        if (jmap_wantprop(props, "totalEmails")) {
             json_object_set_new(obj, "totalEmails", json_integer(0));
         }
-        if (_wantprop(props, "unreadEmails")) {
+        if (jmap_wantprop(props, "unreadEmails")) {
             json_object_set_new(obj, "unreadEmails", json_integer(0));
         }
-        if (_wantprop(props, "totalThreads")) {
+        if (jmap_wantprop(props, "totalThreads")) {
             json_object_set_new(obj, "totalThreads", json_integer(0));
         }
-        if (_wantprop(props, "unreadThreads")) {
+        if (jmap_wantprop(props, "unreadThreads")) {
             json_object_set_new(obj, "unreadThreads", json_integer(0));
         }
-        if (_wantprop(props, "sortOrder")) {
+        if (jmap_wantprop(props, "sortOrder")) {
             json_object_set_new(obj, "sortOrder", json_integer(0));
         }
-        if (_wantprop(props, "isSeenShared")) {
+        if (jmap_wantprop(props, "isSeenShared")) {
             json_object_set_new(obj, "isSeenShared", json_false());
         }
     }
 
-    if (_wantprop(props, "isSubscribed")) {
+    if (jmap_wantprop(props, "isSubscribed")) {
         int is_subscribed = strarray_find(sublist, mbentry->name, 0) >= 0;
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
@@ -768,7 +768,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
     /* Build callback data */
     struct shared_mboxes *shared_mboxes = _shared_mboxes_new(req, /*flags*/0);
     strarray_t *sublist = NULL;
-    if (_wantprop(get.props, "isSubscribed")) {
+    if (jmap_wantprop(get.props, "isSubscribed")) {
         sublist = mboxlist_sublist(req->userid);
     }
     struct jmap_mailbox_get_cb_rock rock = { req, &get, NULL, NULL, shared_mboxes, sublist };

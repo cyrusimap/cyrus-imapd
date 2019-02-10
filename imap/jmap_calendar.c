@@ -188,7 +188,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     const char *id = strarray_nth(boxes, boxes->count-1);
     json_object_set_new(obj, "id", json_string(id));
 
-    if (_wantprop(rock->get->props, "x-href")) {
+    if (jmap_wantprop(rock->get->props, "x-href")) {
         // FIXME - should the x-ref for a shared calendar point
         // to the authenticated user's calendar home?
         char *xhref = jmap_xhref(mbentry->name, NULL);
@@ -196,7 +196,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         free(xhref);
     }
 
-    if (_wantprop(rock->get->props, "name")) {
+    if (jmap_wantprop(rock->get->props, "name")) {
         buf_reset(&attrib);
         static const char *displayname_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
@@ -208,7 +208,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (_wantprop(rock->get->props, "color")) {
+    if (jmap_wantprop(rock->get->props, "color")) {
         struct buf attrib = BUF_INITIALIZER;
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
@@ -219,7 +219,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (_wantprop(rock->get->props, "sortOrder")) {
+    if (jmap_wantprop(rock->get->props, "sortOrder")) {
         buf_reset(&attrib);
         static const char *order_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order";
@@ -240,7 +240,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (_wantprop(rock->get->props, "isVisible")) {
+    if (jmap_wantprop(rock->get->props, "isVisible")) {
         buf_reset(&attrib);
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
@@ -262,7 +262,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         buf_free(&attrib);
     }
 
-    if (_wantprop(rock->get->props, "isSubscribed")) {
+    if (jmap_wantprop(rock->get->props, "isSubscribed")) {
         if (mboxname_userownsmailbox(httpd_userid, mbentry->name)) {
             /* Users always subscribe their own calendars */
             json_object_set_new(obj, "isSubscribed", json_true());
@@ -299,47 +299,47 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
 
     int writerights = DACL_WRITECONT|DACL_WRITEPROPS;
 
-    if (_wantprop(rock->get->props, "mayReadFreeBusy")) {
+    if (jmap_wantprop(rock->get->props, "mayReadFreeBusy")) {
         json_object_set_new(obj, "mayReadFreeBusy",
                             ((rights & DACL_READFB) == DACL_READFB) ? json_true() : json_false());
     }
 
-    if (_wantprop(rock->get->props, "mayReadItems")) {
+    if (jmap_wantprop(rock->get->props, "mayReadItems")) {
         json_object_set_new(obj, "mayReadItems",
                             ((rights & DACL_READ) == DACL_READ) ? json_true() : json_false());
     }
 
-    if (_wantprop(rock->get->props, "mayAddItems")) {
+    if (jmap_wantprop(rock->get->props, "mayAddItems")) {
         json_object_set_new(obj, "mayAddItems",
                             ((rights & writerights) == writerights) ? json_true() : json_false());
     }
 
-    if (_wantprop(rock->get->props, "mayModifyItems")) {
+    if (jmap_wantprop(rock->get->props, "mayModifyItems")) {
         json_object_set_new(obj, "mayModifyItems",
                             ((rights & writerights) == writerights) ? json_true() : json_false());
     }
 
-    if (_wantprop(rock->get->props, "mayRemoveItems")) {
+    if (jmap_wantprop(rock->get->props, "mayRemoveItems")) {
         json_object_set_new(obj, "mayRemoveItems",
                             ((rights & DACL_RMRSRC) == DACL_RMRSRC) ? json_true() : json_false());
     }
 
-    if (_wantprop(rock->get->props, "mayRename")) {
+    if (jmap_wantprop(rock->get->props, "mayRename")) {
         json_object_set_new(obj, "mayRename",
                             ((rights & (DACL_RMCOL|DACL_MKCOL)) == (DACL_RMCOL|DACL_MKCOL)) ? json_true() : json_false());
     }
 
-    if (_wantprop(rock->get->props, "mayDelete")) {
+    if (jmap_wantprop(rock->get->props, "mayDelete")) {
         json_object_set_new(obj, "mayDelete",
                             ((rights & DACL_RMCOL) == DACL_RMCOL) ? json_true() : json_false());
     }
 
-    if (_wantprop(rock->get->props, "mayAdmin")) {
+    if (jmap_wantprop(rock->get->props, "mayAdmin")) {
         json_object_set_new(obj, "mayAdmin",
                             ((rights & ACL_ADMIN) == ACL_ADMIN) ? json_true() : json_false());
     }
 
-    if (_wantprop(rock->get->props, "shareWith")) {
+    if (jmap_wantprop(rock->get->props, "shareWith")) {
         json_t *sharewith = jmap_sharewith(mbentry, /*iscalendar*/1);
         json_object_set_new(obj, "shareWith", sharewith);
     }
@@ -1260,7 +1260,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     ical = NULL;
 
     /* Add participant id */
-    if (_wantprop(rock->get->props, "participantId")) {
+    if (jmap_wantprop(rock->get->props, "participantId")) {
         const char *participant_id = NULL;
         if (schedule_address) {
             const char *key;
@@ -1278,12 +1278,12 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     }
 
     /* Add JMAP-only fields. */
-    if (_wantprop(rock->get->props, "x-href")) {
+    if (jmap_wantprop(rock->get->props, "x-href")) {
         char *xhref = jmap_xhref(cdata->dav.mailbox, cdata->dav.resource);
         json_object_set_new(jsevent, "x-href", json_string(xhref));
         free(xhref);
     }
-    if (_wantprop(rock->get->props, "calendarId")) {
+    if (jmap_wantprop(rock->get->props, "calendarId")) {
         json_object_set_new(jsevent, "calendarId",
                             json_string(strrchr(cdata->dav.mailbox, '.')+1));
     }

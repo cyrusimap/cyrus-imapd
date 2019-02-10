@@ -1202,20 +1202,20 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     json_object_set_new(obj, "addressbookId",
                         json_string(strrchr(cdata->dav.mailbox, '.')+1));
 
-    if (_wantprop(props, "isFlagged")) {
+    if (jmap_wantprop(props, "isFlagged")) {
         json_object_set_new(obj, "isFlagged",
                             record->system_flags & FLAG_FLAGGED ? json_true() :
                             json_false());
     }
 
-    if (_wantprop(props, "x-href")) {
+    if (jmap_wantprop(props, "x-href")) {
         char *xhref = jmap_xhref(cdata->dav.mailbox, cdata->dav.resource);
         json_object_set_new(obj, "x-href", json_string(xhref));
         free(xhref);
     }
 
     // need to keep the x- version while AJAXUI is around
-    if (_wantprop(props, "x-importance")) {
+    if (jmap_wantprop(props, "x-importance")) {
         double val = 0;
         const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
 
@@ -1229,7 +1229,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     }
 
     // also fetchable without the x- for JMAPUI
-    if (_wantprop(props, "importance")) {
+    if (jmap_wantprop(props, "importance")) {
         double val = 0;
         const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
 
@@ -1249,12 +1249,12 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
 
     /* name fields: Family; Given; Middle; Prefix; Suffix. */
 
-    if (_wantprop(props, "lastName")) {
+    if (jmap_wantprop(props, "lastName")) {
         const char *family = strarray_safenth(n, 0);
         json_object_set_new(obj, "lastName", json_string(family));
     }
 
-    if (_wantprop(props, "firstName")) {
+    if (jmap_wantprop(props, "firstName")) {
         /* JMAP doesn't have a separate field for Middle (aka "Additional
          * Names"), so we just mash them into firstName. See reverse of this in
          * _json_to_card */
@@ -1267,25 +1267,25 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         }
         json_object_set_new(obj, "firstName", json_string(buf_cstring(&buf)));
     }
-    if (_wantprop(props, "prefix")) {
+    if (jmap_wantprop(props, "prefix")) {
         const char *prefix = strarray_safenth(n, 3);
         json_object_set_new(obj, "prefix",
                             json_string(prefix)); /* just prefix */
     }
-    if (_wantprop(props, "suffix")) {
+    if (jmap_wantprop(props, "suffix")) {
         const char *suffix = strarray_safenth(n, 4);
         json_object_set_new(obj, "suffix",
                             json_string(suffix)); /* just suffix */
     }
 
     /* org fields */
-    if (_wantprop(props, "company"))
+    if (jmap_wantprop(props, "company"))
         json_object_set_new(obj, "company",
                             json_string(strarray_safenth(org, 0)));
-    if (_wantprop(props, "department"))
+    if (jmap_wantprop(props, "department"))
         json_object_set_new(obj, "department",
                             json_string(strarray_safenth(org, 1)));
-    if (_wantprop(props, "jobTitle")) {
+    if (jmap_wantprop(props, "jobTitle")) {
         /* we used to store jobTitle in ORG[2] instead of TITLE, which confused
          * CardDAV clients. that's fixed, but there's now lots of cards with it
          * stored in the wrong place, so check both */
@@ -1296,7 +1296,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     }
 
     /* address - we need to open code this, because it's repeated */
-    if (_wantprop(props, "addresses")) {
+    if (jmap_wantprop(props, "addresses")) {
         json_t *adr = json_array();
 
         struct vparse_entry *entry;
@@ -1366,7 +1366,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     }
 
     /* address - we need to open code this, because it's repeated */
-    if (_wantprop(props, "emails")) {
+    if (jmap_wantprop(props, "emails")) {
         json_t *emails = json_array();
 
         struct vparse_entry *entry;
@@ -1417,7 +1417,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     }
 
     /* address - we need to open code this, because it's repeated */
-    if (_wantprop(props, "phones")) {
+    if (jmap_wantprop(props, "phones")) {
         json_t *phones = json_array();
 
         struct vparse_entry *entry;
@@ -1464,7 +1464,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     }
 
     /* address - we need to open code this, because it's repeated */
-    if (_wantprop(props, "online")) {
+    if (jmap_wantprop(props, "online")) {
         json_t *online = json_array();
 
         struct vparse_entry *entry;
@@ -1535,35 +1535,35 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
         json_object_set_new(obj, "online", online);
     }
 
-    if (_wantprop(props, "nickname")) {
+    if (jmap_wantprop(props, "nickname")) {
         const char *item = vparse_stringval(card, "nickname");
         json_object_set_new(obj, "nickname", json_string(item ? item : ""));
     }
 
-    if (_wantprop(props, "anniversary")) {
+    if (jmap_wantprop(props, "anniversary")) {
         struct vparse_entry *entry = vparse_get_entry(card, NULL, "anniversary");
         _date_to_jmap(entry, &buf);
         json_object_set_new(obj, "anniversary", json_string(buf_cstring(&buf)));
     }
 
-    if (_wantprop(props, "birthday")) {
+    if (jmap_wantprop(props, "birthday")) {
         struct vparse_entry *entry = vparse_get_entry(card, NULL, "bday");
         _date_to_jmap(entry, &buf);
         json_object_set_new(obj, "birthday", json_string(buf_cstring(&buf)));
     }
 
-    if (_wantprop(props, "notes")) {
+    if (jmap_wantprop(props, "notes")) {
         const char *item = vparse_stringval(card, "note");
         json_object_set_new(obj, "notes", json_string(item ? item : ""));
     }
 
-    if (_wantprop(props, "x-hasPhoto")) {
+    if (jmap_wantprop(props, "x-hasPhoto")) {
         const char *item = vparse_stringval(card, "photo");
         json_object_set_new(obj, "x-hasPhoto",
                             item ? json_true() : json_false());
     }
 
-    if (_wantprop(props, "avatar")) {
+    if (jmap_wantprop(props, "avatar")) {
         struct vparse_entry *photo = vparse_get_entry(card, NULL, "photo");
         struct message_guid guid;
         char *type = NULL;

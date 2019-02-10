@@ -4363,25 +4363,25 @@ static int _email_get_meta(jmap_req_t *req,
     char email_id[26];
 
     if (msg->rfc822part) {
-        if (_wantprop(props, "id")) {
+        if (jmap_wantprop(props, "id")) {
             json_object_set_new(email, "id", json_null());
         }
-        if (_wantprop(props, "blobId")) {
+        if (jmap_wantprop(props, "blobId")) {
             char blob_id[42];
             jmap_set_blobid(&msg->rfc822part->content_guid, blob_id);
             json_object_set_new(email, "blobId", json_string(blob_id));
         }
-        if (_wantprop(props, "threadId"))
+        if (jmap_wantprop(props, "threadId"))
             json_object_set_new(email, "threadId", json_null());
-        if (_wantprop(props, "mailboxIds"))
+        if (jmap_wantprop(props, "mailboxIds"))
             json_object_set_new(email, "mailboxIds", json_null());
-        if (_wantprop(props, "keywords"))
+        if (jmap_wantprop(props, "keywords"))
             json_object_set_new(email, "keywords", json_null());
-        if (_wantprop(props, "size")) {
+        if (jmap_wantprop(props, "size")) {
             size_t size = msg->rfc822part->header_size + msg->rfc822part->content_size;
             json_object_set_new(email, "size", json_integer(size));
         }
-        if (_wantprop(props, "receivedAt"))
+        if (jmap_wantprop(props, "receivedAt"))
             json_object_set_new(email, "receivedAt", json_null());
         return 0;
     }
@@ -4396,19 +4396,19 @@ static int _email_get_meta(jmap_req_t *req,
     _email_id_set_guid(&guid, email_id);
 
     /* id */
-    if (_wantprop(props, "id")) {
+    if (jmap_wantprop(props, "id")) {
         json_object_set_new(email, "id", json_string(email_id));
     }
 
     /* blobId */
-    if (_wantprop(props, "blobId")) {
+    if (jmap_wantprop(props, "blobId")) {
         char blob_id[42];
         jmap_set_blobid(&guid, blob_id);
         json_object_set_new(email, "blobId", json_string(blob_id));
     }
 
     /* threadid */
-    if (_wantprop(props, "threadId")) {
+    if (jmap_wantprop(props, "threadId")) {
         bit64 cid;
         r = msgrecord_get_cid(msg->mr, &cid);
         if (r) goto done;
@@ -4418,7 +4418,7 @@ static int _email_get_meta(jmap_req_t *req,
     }
 
     /* mailboxIds */
-    if (_wantprop(props, "mailboxIds")) {
+    if (jmap_wantprop(props, "mailboxIds")) {
         json_t *mboxids = json_object();
         json_t *mailboxes = _email_mailboxes(req, email_id);
 
@@ -4432,7 +4432,7 @@ static int _email_get_meta(jmap_req_t *req,
     }
 
     /* keywords */
-    if (_wantprop(props, "keywords")) {
+    if (jmap_wantprop(props, "keywords")) {
         json_t *keywords = NULL;
         r = _email_get_keywords(req, &args->ctx, email_id, &keywords);
         if (r) goto done;
@@ -4440,7 +4440,7 @@ static int _email_get_meta(jmap_req_t *req,
     }
 
     /* size */
-    if (_wantprop(props, "size")) {
+    if (jmap_wantprop(props, "size")) {
         uint32_t size;
         r = msgrecord_get_size(msg->mr, &size);
         if (r) goto done;
@@ -4448,7 +4448,7 @@ static int _email_get_meta(jmap_req_t *req,
     }
 
     /* receivedAt */
-    if (_wantprop(props, "receivedAt")) {
+    if (jmap_wantprop(props, "receivedAt")) {
         char datestr[RFC3339_DATETIME_MAX];
         time_t t;
         r = msgrecord_get_internaldate(msg->mr, &t);
@@ -4458,7 +4458,7 @@ static int _email_get_meta(jmap_req_t *req,
     }
 
     /* FastMail-extension properties */
-    if (_wantprop(props, "trustedSender")) {
+    if (jmap_wantprop(props, "trustedSender")) {
         json_t *trusted_sender = NULL;
         int has_trusted_flag = 0;
         r = msgrecord_hasflag(msg->mr, "$IsTrusted", &has_trusted_flag);
@@ -4475,7 +4475,7 @@ static int _email_get_meta(jmap_req_t *req,
                 trusted_sender : json_null());
     }
 
-    if (_wantprop(props, "spamScore")) {
+    if (jmap_wantprop(props, "spamScore")) {
         int r = 0;
         struct buf buf = BUF_INITIALIZER;
         json_t *jval = json_null();
@@ -4498,9 +4498,9 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
     int r = 0;
     hash_table *props = args->props;
 
-    if (_wantprop(props, "headers") || args->want_headers.count) {
+    if (jmap_wantprop(props, "headers") || args->want_headers.count) {
         /* headers */
-        if (_wantprop(props, "headers")) {
+        if (jmap_wantprop(props, "headers")) {
             struct headers *headers = NULL;
             r = _cyrusmsg_get_headers(msg, NULL, &headers);
             if (r) return r;
@@ -4519,19 +4519,19 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
     }
 
     /* references */
-    if (_wantprop(props, "references")) {
+    if (jmap_wantprop(props, "references")) {
         json_t *references = _email_get_header(msg, NULL, "references",
                                                HEADER_FORM_MESSAGEIDS,/*all*/0);
         json_object_set_new(email, "references", references);
     }
     /* sender */
-    if (_wantprop(props, "sender")) {
+    if (jmap_wantprop(props, "sender")) {
         json_t *sender = _email_get_header(msg, NULL, "sender",
                                            HEADER_FORM_ADDRESSES,/*all*/0);
         json_object_set_new(email, "sender", sender);
     }
     /* replyTo */
-    if (_wantprop(props, "replyTo")) {
+    if (jmap_wantprop(props, "replyTo")) {
         json_t *replyTo = _email_get_header(msg, NULL, "reply-to",
                                             HEADER_FORM_ADDRESSES, /*all*/0);
         json_object_set_new(email, "replyTo", replyTo);
@@ -4539,14 +4539,14 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
 
     /* The following fields are all read from the body-part structure */
     const struct body *part = NULL;
-    if (_wantprop(props, "messageId") ||
-        _wantprop(props, "inReplyTo") ||
-        _wantprop(props, "from") ||
-        _wantprop(props, "to") ||
-        _wantprop(props, "cc") ||
-        _wantprop(props, "bcc") ||
-        _wantprop(props, "subject") ||
-        _wantprop(props, "sentAt")) {
+    if (jmap_wantprop(props, "messageId") ||
+        jmap_wantprop(props, "inReplyTo") ||
+        jmap_wantprop(props, "from") ||
+        jmap_wantprop(props, "to") ||
+        jmap_wantprop(props, "cc") ||
+        jmap_wantprop(props, "bcc") ||
+        jmap_wantprop(props, "subject") ||
+        jmap_wantprop(props, "sentAt")) {
         if (msg->rfc822part) {
             part = msg->rfc822part->subpart;
         }
@@ -4557,42 +4557,42 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
         }
     }
     /* messageId */
-    if (_wantprop(props, "messageId")) {
+    if (jmap_wantprop(props, "messageId")) {
         json_object_set_new(email, "messageId",
                 _header_as_messageids(part->message_id));
     }
     /* inReplyTo */
-    if (_wantprop(props, "inReplyTo")) {
+    if (jmap_wantprop(props, "inReplyTo")) {
         json_object_set_new(email, "inReplyTo",
                 _header_as_messageids(part->in_reply_to));
     }
     /* from */
-    if (_wantprop(props, "from")) {
+    if (jmap_wantprop(props, "from")) {
         json_object_set_new(email, "from",
                 _emailaddresses_from_addr(part->from));
     }
     /* to */
-    if (_wantprop(props, "to")) {
+    if (jmap_wantprop(props, "to")) {
         json_object_set_new(email, "to",
                 _emailaddresses_from_addr(part->to));
     }
     /* cc */
-    if (_wantprop(props, "cc")) {
+    if (jmap_wantprop(props, "cc")) {
         json_object_set_new(email, "cc",
                 _emailaddresses_from_addr(part->cc));
     }
     /* bcc */
-    if (_wantprop(props, "bcc")) {
+    if (jmap_wantprop(props, "bcc")) {
         json_object_set_new(email, "bcc",
                 _emailaddresses_from_addr(part->bcc));
     }
     /* subject */
-    if (_wantprop(props, "subject")) {
+    if (jmap_wantprop(props, "subject")) {
         json_object_set_new(email, "subject",
                 _header_as_text(part->subject));
     }
     /* sentAt */
-    if (_wantprop(props, "sentAt")) {
+    if (jmap_wantprop(props, "sentAt")) {
         json_t *jsent_at = json_null();
         time_t t;
         if (time_from_rfc822(part->date, &t) != -1) {
@@ -4620,7 +4620,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     json_t *jbodypart = json_object();
 
     /* partId */
-    if (_wantprop(bodyprops, "partId")) {
+    if (jmap_wantprop(bodyprops, "partId")) {
         json_t *jpart_id = json_null();
         if (strcasecmp(part->type, "MULTIPART"))
             jpart_id = json_string(part->part_id);
@@ -4628,7 +4628,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     }
 
     /* blobId */
-    if (_wantprop(bodyprops, "blobId")) {
+    if (jmap_wantprop(bodyprops, "blobId")) {
         json_t *jblob_id = json_null();
         if (!message_guid_isnull(&part->content_guid)) {
             char blob_id[42];
@@ -4639,7 +4639,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     }
 
     /* size */
-    if (_wantprop(bodyprops, "size")) {
+    if (jmap_wantprop(bodyprops, "size")) {
         size_t size = 0;
         if (part->numparts && strcasecmp(part->type, "MESSAGE")) {
             /* Multipart */
@@ -4668,9 +4668,9 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     }
 
     /* headers */
-    if (_wantprop(bodyprops, "headers") || want_bodyheaders->count) {
+    if (jmap_wantprop(bodyprops, "headers") || want_bodyheaders->count) {
         /* headers */
-        if (_wantprop(bodyprops, "headers")) {
+        if (jmap_wantprop(bodyprops, "headers")) {
             struct headers *headers = NULL;
             int r = _cyrusmsg_get_headers(msg, part, &headers);
             if (!r) {
@@ -4693,7 +4693,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     }
 
     /* name */
-    if (_wantprop(bodyprops, "name")) {
+    if (jmap_wantprop(bodyprops, "name")) {
         const char *fname = NULL;
         char *val = NULL;
         int is_extended = 0;
@@ -4729,7 +4729,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     }
 
     /* type */
-    if (_wantprop(bodyprops, "type")) {
+    if (jmap_wantprop(bodyprops, "type")) {
         buf_setcstr(&buf, part->type);
         if (part->subtype) {
             buf_appendcstr(&buf, "/");
@@ -4739,7 +4739,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     }
 
     /* charset */
-    if (_wantprop(bodyprops, "charset")) {
+    if (jmap_wantprop(bodyprops, "charset")) {
         const char *charset_id = NULL;
         if (part->charset_id) {
             charset_id = part->charset_id;
@@ -4752,7 +4752,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     }
 
     /* disposition */
-    if (_wantprop(bodyprops, "disposition")) {
+    if (jmap_wantprop(bodyprops, "disposition")) {
         json_t *jdisp = json_null();
         if (part->disposition) {
             char *disp = lcase(xstrdup(part->disposition));
@@ -4764,7 +4764,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
 
 
     /* cid */
-    if (_wantprop(bodyprops, "cid")) {
+    if (jmap_wantprop(bodyprops, "cid")) {
         json_t *jcid = _email_get_header(msg, part, "content-id",
                                          HEADER_FORM_MESSAGEIDS, /*all*/0);
         json_object_set(jbodypart, "cid", json_array_size(jcid) ?
@@ -4774,7 +4774,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
 
 
     /* language */
-    if (_wantprop(bodyprops, "language")) {
+    if (jmap_wantprop(bodyprops, "language")) {
         json_t *jlanguage = json_null();
         json_t *jrawheader = _email_get_header(msg, part, "content-language",
                                                HEADER_FORM_RAW, /*all*/0);
@@ -4801,7 +4801,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
 
 
     /* location */
-    if (_wantprop(bodyprops, "location")) {
+    if (jmap_wantprop(bodyprops, "location")) {
         json_object_set_new(jbodypart, "location", part->location ?
                 json_string(part->location) : json_null());
     }
@@ -4818,13 +4818,13 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
         }
         json_object_set_new(jbodypart, "subParts", subparts);
     }
-    else if (_wantprop(bodyprops, "subParts")) {
+    else if (jmap_wantprop(bodyprops, "subParts")) {
         json_object_set_new(jbodypart, "subParts", json_array());
     }
 
 
     /* FastMail extension properties */
-    if (_wantprop(bodyprops, "imageSize")) {
+    if (jmap_wantprop(bodyprops, "imageSize")) {
         json_t *imagesize = json_null();
         if (msg->mr && msg->imagesize_by_part == NULL) {
             /* This is the first attempt to read the vendor annotation.
@@ -4839,7 +4839,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
         imagesize = json_object_get(msg->imagesize_by_part, part->part_id);
         json_object_set(jbodypart, "imageSize", imagesize ? imagesize : json_null());
     }
-    if (_wantprop(bodyprops, "isDeleted")) {
+    if (jmap_wantprop(bodyprops, "isDeleted")) {
         json_object_set_new(jbodypart, "isDeleted",
                 json_boolean(!strcmp(part->type, "TEXT") &&
                              !strcmp(part->subtype, "X-ME-REMOVED-FILE")));
@@ -4961,13 +4961,13 @@ static int _email_get_bodies(jmap_req_t *req,
     if (r) goto done;
 
     /* bodyStructure */
-    if (_wantprop(props, "bodyStructure")) {
+    if (jmap_wantprop(props, "bodyStructure")) {
         json_object_set_new(email, "bodyStructure",
                 _email_get_bodypart(req, args, msg, part));
     }
 
     /* bodyValues */
-    if (_wantprop(props, "bodyValues")) {
+    if (jmap_wantprop(props, "bodyValues")) {
         json_t *body_values = json_object();
         /* Determine which body value parts to fetch */
         int i;
@@ -5002,7 +5002,7 @@ static int _email_get_bodies(jmap_req_t *req,
     }
 
     /* textBody */
-    if (_wantprop(props, "textBody")) {
+    if (jmap_wantprop(props, "textBody")) {
         json_t *text_body = json_array();
         int i;
         for (i = 0; i < bodies.textlist.count; i++) {
@@ -5014,7 +5014,7 @@ static int _email_get_bodies(jmap_req_t *req,
     }
 
     /* htmlBody */
-    if (_wantprop(props, "htmlBody")) {
+    if (jmap_wantprop(props, "htmlBody")) {
         json_t *html_body = json_array();
         int i;
         for (i = 0; i < bodies.htmllist.count; i++) {
@@ -5026,7 +5026,7 @@ static int _email_get_bodies(jmap_req_t *req,
     }
 
     /* attachments */
-    if (_wantprop(props, "attachments")) {
+    if (jmap_wantprop(props, "attachments")) {
         json_t *attachments = json_array();
         int i;
         for (i = 0; i < bodies.attslist.count; i++) {
@@ -5038,7 +5038,7 @@ static int _email_get_bodies(jmap_req_t *req,
     }
 
     /* calendarEvents -- non-standard */
-    if (_wantprop(props, "calendarEvents")) {
+    if (jmap_wantprop(props, "calendarEvents")) {
         json_t *calendar_events = json_object();
         int i;
         for (i = 0; i < bodies.attslist.count; i++) {
@@ -5088,7 +5088,7 @@ static int _email_get_bodies(jmap_req_t *req,
     }
 
     /* hasAttachment */
-    if (_wantprop(props, "hasAttachment")) {
+    if (jmap_wantprop(props, "hasAttachment")) {
         int has_att = 0;
         if (msg->rfc822part == NULL) {
             msgrecord_hasflag(msg->mr, JMAP_HAS_ATTACHMENT_FLAG, &has_att);
@@ -5100,7 +5100,7 @@ static int _email_get_bodies(jmap_req_t *req,
     }
 
     /* preview */
-    if (_wantprop(props, "preview")) {
+    if (jmap_wantprop(props, "preview")) {
         const char *preview_annot = config_getstring(IMAPOPT_JMAP_PREVIEW_ANNOT);
         if (preview_annot && msg->rfc822part == NULL) {
             json_t *preview = _email_read_jannot(req, msg->mr, preview_annot, /*structured*/0);

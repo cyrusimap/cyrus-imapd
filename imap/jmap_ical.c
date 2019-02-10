@@ -1882,7 +1882,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     hash_table *wantprops = NULL;
     json_t *event = json_pack("{s:s}", "@type", "jsevent");
 
-    if (_wantprop(props, "recurrenceOverrides") && !is_exception) {
+    if (jmap_wantprop(props, "recurrenceOverrides") && !is_exception) {
         /* Fetch all properties if recurrenceOverrides are requested,
          * otherwise we might return incomplete override patches */
         wantprops = props;
@@ -1903,27 +1903,27 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     else is_allday = 0; // handle isAllDay:true with timeZone later
 
     /* start */
-    if (_wantprop(props, "start")) {
+    if (jmap_wantprop(props, "start")) {
         char *s = localdate_from_icaltime_r(dtstart);
         json_object_set_new(event, "start", json_string(s));
         free(s);
     }
 
     /* timeZone */
-    if (_wantprop(props, "timeZone")) {
+    if (jmap_wantprop(props, "timeZone")) {
         json_object_set_new(event, "timeZone", tzid_start ?
                 json_string(tzid_start) : json_null());
     }
 
     /* duration */
-    if (_wantprop(props, "duration")) {
+    if (jmap_wantprop(props, "duration")) {
         char *s = icaldurationtype_as_ical_string_r(dur);
         json_object_set_new(event, "duration", json_string(s));
         free(s);
     }
 
     /* isAllDay */
-    if (_wantprop(props, "isAllDay") && !is_exception) {
+    if (jmap_wantprop(props, "isAllDay") && !is_exception) {
         /* isAllDay may be true even if a timezone is set */
         prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
         if (!strcmpsafe(get_icalxparam_value(prop, JMAPICAL_XPARAM_ISALLDAY), "TRUE")) {
@@ -1941,12 +1941,12 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* relatedTo */
-    if (_wantprop(props, "relatedTo") && !is_exception) {
+    if (jmap_wantprop(props, "relatedTo") && !is_exception) {
         json_object_set_new(event, "relatedTo", relatedto_from_ical(comp));
     }
 
     /* prodId */
-    if (_wantprop(props, "prodId") && !is_exception) {
+    if (jmap_wantprop(props, "prodId") && !is_exception) {
         icalcomponent *ical = icalcomponent_get_parent(comp);
         const char *prodid = NULL;
         prop = icalcomponent_get_first_property(ical, ICAL_PRODID_PROPERTY);
@@ -1956,7 +1956,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* created */
-    if (_wantprop(props, "created")) {
+    if (jmap_wantprop(props, "created")) {
         json_t *val = json_null();
         prop = icalcomponent_get_first_property(comp, ICAL_CREATED_PROPERTY);
         if (prop) {
@@ -1970,7 +1970,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* updated */
-    if (_wantprop(props, "updated")) {
+    if (jmap_wantprop(props, "updated")) {
         json_t *val = json_null();
         prop = icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY);
         if (prop) {
@@ -1984,13 +1984,13 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* sequence */
-    if (_wantprop(props, "sequence")) {
+    if (jmap_wantprop(props, "sequence")) {
         json_object_set_new(event, "sequence",
                 json_integer(icalcomponent_get_sequence(comp)));
     }
 
     /* priority */
-    if (_wantprop(props, "priority")) {
+    if (jmap_wantprop(props, "priority")) {
         prop = icalcomponent_get_first_property(comp, ICAL_PRIORITY_PROPERTY);
         if (prop) {
             json_object_set_new(event, "priority",
@@ -1999,7 +1999,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* title */
-    if (_wantprop(props, "title")) {
+    if (jmap_wantprop(props, "title")) {
         const char *title= "";
         prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY);
         if (prop) {
@@ -2010,23 +2010,23 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* description */
-    if (_wantprop(props, "description") || _wantprop(props, "descriptionContentType")) {
+    if (jmap_wantprop(props, "description") || jmap_wantprop(props, "descriptionContentType")) {
         const char *desc = "";
         prop = icalcomponent_get_first_property(comp, ICAL_DESCRIPTION_PROPERTY);
         if (prop) {
             desc = icalproperty_get_description(prop);
             if (!desc) desc = "";
         }
-        if (_wantprop(props, "description")) {
+        if (jmap_wantprop(props, "description")) {
             json_object_set_new(event, "description", json_string(desc));
         }
-        if (_wantprop(props, "descriptionContentType")) {
+        if (jmap_wantprop(props, "descriptionContentType")) {
             json_object_set_new(event, "descriptionContentType", json_string("text/plain"));
         }
     }
 
     /* method */
-    if (_wantprop(props, "method")) {
+    if (jmap_wantprop(props, "method")) {
         icalcomponent *ical = icalcomponent_get_parent(comp);
         if (ical) {
             icalproperty_method icalmethod = icalcomponent_get_method(ical);
@@ -2040,7 +2040,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* color */
-    if (_wantprop(props, "color")) {
+    if (jmap_wantprop(props, "color")) {
         prop = icalcomponent_get_first_property(comp, ICAL_COLOR_PROPERTY);
         if (prop) {
             json_object_set_new(event, "color",
@@ -2049,25 +2049,25 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* keywords */
-    if (_wantprop(props, "keywords")) {
+    if (jmap_wantprop(props, "keywords")) {
         json_object_set_new(event, "keywords", keywords_from_ical(comp));
     }
 
     /* links */
-    if (_wantprop(props, "links")) {
+    if (jmap_wantprop(props, "links")) {
         json_object_set_new(event, "links", links_from_ical(comp));
-        if (!_wantprop(props, "links")) {
+        if (!jmap_wantprop(props, "links")) {
             json_object_del(event, "links");
         }
     }
 
     /* locale */
-    if (_wantprop(props, "locale")) {
+    if (jmap_wantprop(props, "locale")) {
         json_object_set_new(event, "locale", locale_from_ical(comp));
     }
 
     /* locations */
-    if (_wantprop(props, "locations")) {
+    if (jmap_wantprop(props, "locations")) {
         json_t *links = json_object();
         json_object_set_new(event, "locations", locations_from_ical(comp, links));
         if (json_object_size(links)) {
@@ -2081,17 +2081,17 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* virtualLocations */
-    if (_wantprop(props, "virtualLocations")) {
+    if (jmap_wantprop(props, "virtualLocations")) {
         json_object_set_new(event, "virtualLocations", virtuallocations_from_ical(comp));
     }
 
     /* recurrenceRule */
-    if (_wantprop(props, "recurrenceRule") && !is_exception) {
+    if (jmap_wantprop(props, "recurrenceRule") && !is_exception) {
         json_object_set_new(event, "recurrenceRule", recurrence_from_ical(comp));
     }
 
     /* status */
-    if (_wantprop(props, "status")) {
+    if (jmap_wantprop(props, "status")) {
         const char *status;
         switch (icalcomponent_get_status(comp)) {
             case ICAL_STATUS_TENTATIVE:
@@ -2110,7 +2110,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* freeBusyStatus */
-    if (_wantprop(props, "freeBusyStatus")) {
+    if (jmap_wantprop(props, "freeBusyStatus")) {
         const char *fbs = "busy";
         if ((prop = icalcomponent_get_first_property(comp,
                                                      ICAL_TRANSP_PROPERTY))) {
@@ -2122,7 +2122,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* privacy */
-    if (_wantprop(props, "privacy")) {
+    if (jmap_wantprop(props, "privacy")) {
         const char *prv = "public";
         if ((prop = icalcomponent_get_first_property(comp, ICAL_CLASS_PROPERTY))) {
             switch (icalproperty_get_class(prop)) {
@@ -2140,19 +2140,19 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* replyTo */
-    if (_wantprop(props, "replyTo") && !is_exception) {
+    if (jmap_wantprop(props, "replyTo") && !is_exception) {
         if ((prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY))) {
             json_object_set_new(event, "replyTo",rsvpto_from_ical(prop));
         }
     }
 
     /* participants */
-    if (_wantprop(props, "participants")) {
+    if (jmap_wantprop(props, "participants")) {
         json_object_set_new(event, "participants", participants_from_ical(comp));
     }
 
     /* useDefaultAlerts */
-    if (_wantprop(props, "useDefaultAlerts")) {
+    if (jmap_wantprop(props, "useDefaultAlerts")) {
         const char *v = get_icalxprop_value(comp, JMAPICAL_XPROP_USEDEFALERTS);
         if (v && !strcasecmp(v, "true")) {
             json_object_set_new(event, "useDefaultAlerts", json_true());
@@ -2160,15 +2160,15 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* alerts */
-    if (_wantprop(props, "alerts")) {
+    if (jmap_wantprop(props, "alerts")) {
         json_object_set_new(event, "alerts", alerts_from_ical(comp));
-        if (!_wantprop(props, "alerts")) {
+        if (!jmap_wantprop(props, "alerts")) {
             json_object_del(event, "alerts");
         }
     }
 
     /* recurrenceOverrides - must be last to generate patches */
-    if (_wantprop(props, "recurrenceOverrides") && !is_exception) {
+    if (jmap_wantprop(props, "recurrenceOverrides") && !is_exception) {
         json_object_set_new(event, "recurrenceOverrides",
                 overrides_from_ical(comp, event, tzid_start));
     }
