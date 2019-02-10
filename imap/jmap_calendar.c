@@ -340,7 +340,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     if (jmap_wantprop(rock->get->props, "shareWith")) {
-        json_t *sharewith = jmap_get_sharewith(mbentry, /*iscalendar*/1);
+        json_t *sharewith = jmap_get_sharewith(mbentry);
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
