@@ -112,40 +112,6 @@ HIDDEN void jmap_calendar_capabilities(jmap_settings_t *settings)
                         JMAP_URN_CALENDARS, json_object());
 }
 
-static int readprop_full(json_t *root,
-                         const char *prefix,
-                         const char *name,
-                         int mandatory,
-                         json_t *invalid,
-                         const char *fmt,
-                         void *dst)
-{
-    int r = 0;
-    json_t *jval = json_object_get(root, name);
-    if (!jval && mandatory) {
-        r = -1;
-    } else if (jval) {
-        json_error_t err;
-        if (json_unpack_ex(jval, &err, 0, fmt, dst)) {
-            r = -2;
-        } else {
-            r = 1;
-        }
-    }
-    if (r < 0 && prefix) {
-        struct buf buf = BUF_INITIALIZER;
-        buf_printf(&buf, "%s.%s", prefix, name);
-        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-        buf_free(&buf);
-    } else if (r < 0) {
-        json_array_append_new(invalid, json_string(name));
-    }
-    return r;
-}
-
-#define readprop(root, name,  mandatory, invalid, fmt, dst) \
-    readprop_full((root), NULL, (name), (mandatory), (invalid), (fmt), (dst))
-
 /* Helper flags for CalendarEvent/set */
 #define JMAP_CREATE     (1<<0) /* Current request is a create. */
 #define JMAP_UPDATE     (1<<1) /* Current request is an update. */
@@ -832,19 +798,19 @@ static int jmap_calendar_set(struct jmap_req *req)
         short flag;
 
         /* Mandatory properties. */
-        pe = readprop(arg, "name", 1,  invalid, "s", &name);
+        pe = jmap_readprop(arg, "name", 1,  invalid, "s", &name);
         if (pe > 0 && strnlen(name, 256) == 256) {
             json_array_append_new(invalid, json_string("name"));
         }
 
-        readprop(arg, "color", 1,  invalid, "s", &color);
+        jmap_readprop(arg, "color", 1,  invalid, "s", &color);
 
-        pe = readprop(arg, "sortOrder", 0,  invalid, "i", &sortOrder);
+        pe = jmap_readprop(arg, "sortOrder", 0,  invalid, "i", &sortOrder);
         if (pe > 0 && sortOrder < 0) {
             json_array_append_new(invalid, json_string("sortOrder"));
         }
-        readprop(arg, "isVisible", 0,  invalid, "b", &isVisible);
-        pe = readprop(arg, "isSubscribed", 0,  invalid, "b", &isSubscribed);
+        jmap_readprop(arg, "isVisible", 0,  invalid, "b", &isVisible);
+        pe = jmap_readprop(arg, "isSubscribed", 0,  invalid, "b", &isSubscribed);
         if (pe > 0 && !strcmp(req->accountid, req->userid)) {
             if (!isSubscribed) {
                 /* XXX unsubscribing own calendars isn't supported */
@@ -855,35 +821,35 @@ static int jmap_calendar_set(struct jmap_req *req)
             }
         }
         /* Optional properties. If present, these MUST be set to true. */
-        flag = 1; readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
+        flag = 1; jmap_readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
         if (!flag) {
             json_array_append_new(invalid, json_string("mayReadFreeBusy"));
         }
-        flag = 1; readprop(arg, "mayReadItems", 0,  invalid, "b", &flag);
+        flag = 1; jmap_readprop(arg, "mayReadItems", 0,  invalid, "b", &flag);
         if (!flag) {
             json_array_append_new(invalid, json_string("mayReadItems"));
         }
-        flag = 1; readprop(arg, "mayAddItems", 0,  invalid, "b", &flag);
+        flag = 1; jmap_readprop(arg, "mayAddItems", 0,  invalid, "b", &flag);
         if (!flag) {
             json_array_append_new(invalid, json_string("mayAddItems"));
         }
-        flag = 1; readprop(arg, "mayModifyItems", 0,  invalid, "b", &flag);
+        flag = 1; jmap_readprop(arg, "mayModifyItems", 0,  invalid, "b", &flag);
         if (!flag) {
             json_array_append_new(invalid, json_string("mayModifyItems"));
         }
-        flag = 1; readprop(arg, "mayRemoveItems", 0,  invalid, "b", &flag);
+        flag = 1; jmap_readprop(arg, "mayRemoveItems", 0,  invalid, "b", &flag);
         if (!flag) {
             json_array_append_new(invalid, json_string("mayRemoveItems"));
         }
-        flag = 1; readprop(arg, "mayRename", 0,  invalid, "b", &flag);
+        flag = 1; jmap_readprop(arg, "mayRename", 0,  invalid, "b", &flag);
         if (!flag) {
             json_array_append_new(invalid, json_string("mayRename"));
         }
-        flag = 1; readprop(arg, "mayDelete", 0,  invalid, "b", &flag);
+        flag = 1; jmap_readprop(arg, "mayDelete", 0,  invalid, "b", &flag);
         if (!flag) {
             json_array_append_new(invalid, json_string("mayDelete"));
         }
-        flag = 1; readprop(arg, "mayAdmin", 0,  invalid, "b", &flag);
+        flag = 1; jmap_readprop(arg, "mayAdmin", 0,  invalid, "b", &flag);
         if (!flag) {
             json_array_append_new(invalid, json_string("mayAdmin"));
         }
@@ -980,17 +946,17 @@ static int jmap_calendar_set(struct jmap_req *req)
         int isSubscribed = -1;
         int flag;
         int pe = 0; /* parse error */
-        pe = readprop(arg, "name", 0,  invalid, "s", &name);
+        pe = jmap_readprop(arg, "name", 0,  invalid, "s", &name);
         if (pe > 0 && strnlen(name, 256) == 256) {
             json_array_append_new(invalid, json_string("name"));
         }
-        readprop(arg, "color", 0,  invalid, "s", &color);
-        pe = readprop(arg, "sortOrder", 0,  invalid, "i", &sortOrder);
+        jmap_readprop(arg, "color", 0,  invalid, "s", &color);
+        pe = jmap_readprop(arg, "sortOrder", 0,  invalid, "i", &sortOrder);
         if (pe > 0 && sortOrder < 0) {
             json_array_append_new(invalid, json_string("sortOrder"));
         }
-        readprop(arg, "isVisible", 0,  invalid, "b", &isVisible);
-        pe = readprop(arg, "isSubscribed", 0,  invalid, "b", &isSubscribed);
+        jmap_readprop(arg, "isVisible", 0,  invalid, "b", &isVisible);
+        pe = jmap_readprop(arg, "isSubscribed", 0,  invalid, "b", &isSubscribed);
         if (pe > 0 && !strcmp(req->accountid, req->userid)) {
             if (!isSubscribed) {
                 /* XXX unsubscribing own calendars isn't supported */
@@ -1003,31 +969,31 @@ static int jmap_calendar_set(struct jmap_req *req)
 
         
         /* The mayFoo properties are immutable and MUST NOT set. */
-        pe = readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
+        pe = jmap_readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
         if (pe > 0) {
             json_array_append_new(invalid, json_string("mayReadFreeBusy"));
         }
-        pe = readprop(arg, "mayReadItems", 0,  invalid, "b", &flag);
+        pe = jmap_readprop(arg, "mayReadItems", 0,  invalid, "b", &flag);
         if (pe > 0) {
             json_array_append_new(invalid, json_string("mayReadItems"));
         }
-        pe = readprop(arg, "mayAddItems", 0,  invalid, "b", &flag);
+        pe = jmap_readprop(arg, "mayAddItems", 0,  invalid, "b", &flag);
         if (pe > 0) {
             json_array_append_new(invalid, json_string("mayAddItems"));
         }
-        pe = readprop(arg, "mayModifyItems", 0,  invalid, "b", &flag);
+        pe = jmap_readprop(arg, "mayModifyItems", 0,  invalid, "b", &flag);
         if (pe > 0) {
             json_array_append_new(invalid, json_string("mayModifyItems"));
         }
-        pe = readprop(arg, "mayRemoveItems", 0,  invalid, "b", &flag);
+        pe = jmap_readprop(arg, "mayRemoveItems", 0,  invalid, "b", &flag);
         if (pe > 0) {
             json_array_append_new(invalid, json_string("mayRemoveItems"));
         }
-        pe = readprop(arg, "mayRename", 0,  invalid, "b", &flag);
+        pe = jmap_readprop(arg, "mayRename", 0,  invalid, "b", &flag);
         if (pe > 0) {
             json_array_append_new(invalid, json_string("mayRename"));
         }
-        pe = readprop(arg, "mayDelete", 0,  invalid, "b", &flag);
+        pe = jmap_readprop(arg, "mayDelete", 0,  invalid, "b", &flag);
         if (pe > 0) {
             json_array_append_new(invalid, json_string("mayDelete"));
         }
@@ -1568,7 +1534,7 @@ static int setcalendarevents_create(jmap_req_t *req,
     }
 
     /* Validate calendarId */
-    pe = readprop(event, "calendarId", 1, invalid, "s", &calendarId);
+    pe = jmap_readprop(event, "calendarId", 1, invalid, "s", &calendarId);
     if (pe > 0 && *calendarId &&*calendarId == '#') {
         calendarId = jmap_lookup_id(req, calendarId + 1);
         if (!calendarId) {
@@ -1720,7 +1686,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     char *schedule_address = NULL;
 
     /* Validate calendarId */
-    pe = readprop(event_patch, "calendarId", 0, invalid, "s", &calendarId);
+    pe = jmap_readprop(event_patch, "calendarId", 0, invalid, "s", &calendarId);
     if (pe > 0 && *calendarId && *calendarId == '#') {
         calendarId = jmap_lookup_id(req, calendarId + 1);
         if (!calendarId) {

@@ -2361,3 +2361,30 @@ HIDDEN int jmap_hascapa(jmap_req_t *req, const char *capa)
 {
     return strarray_find(req->capabilities, capa, 0) >= 0;
 }
+
+HIDDEN int jmap_readprop_full(json_t *root, const char *prefix, const char *name,
+                              int mandatory, json_t *invalid, const char *fmt,
+                              void *dst)
+{
+    int r = 0;
+    json_t *jval = json_object_get(root, name);
+    if (!jval && mandatory) {
+        r = -1;
+    } else if (jval) {
+        json_error_t err;
+        if (json_unpack_ex(jval, &err, 0, fmt, dst)) {
+            r = -2;
+        } else {
+            r = 1;
+        }
+    }
+    if (r < 0 && prefix) {
+        struct buf buf = BUF_INITIALIZER;
+        buf_printf(&buf, "%s.%s", prefix, name);
+        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+        buf_free(&buf);
+    } else if (r < 0) {
+        json_array_append_new(invalid, json_string(name));
+    }
+    return r;
+}

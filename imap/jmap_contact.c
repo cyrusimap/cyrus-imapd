@@ -164,40 +164,6 @@ static void strip_spurious_deletes(struct changes_rock *urock)
     }
 }
 
-static int readprop_full(json_t *root,
-                         const char *prefix,
-                         const char *name,
-                         int mandatory,
-                         json_t *invalid,
-                         const char *fmt,
-                         void *dst)
-{
-    int r = 0;
-    json_t *jval = json_object_get(root, name);
-    if (!jval && mandatory) {
-        r = -1;
-    } else if (jval) {
-        json_error_t err;
-        if (json_unpack_ex(jval, &err, 0, fmt, dst)) {
-            r = -2;
-        } else {
-            r = 1;
-        }
-    }
-    if (r < 0 && prefix) {
-        struct buf buf = BUF_INITIALIZER;
-        buf_printf(&buf, "%s.%s", prefix, name);
-        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-        buf_free(&buf);
-    } else if (r < 0) {
-        json_array_append_new(invalid, json_string(name));
-    }
-    return r;
-}
-
-#define readprop(root, name,  mandatory, invalid, fmt, dst) \
-    readprop_full((root), NULL, (name), (mandatory), (invalid), (fmt), (dst))
-
 static int _match_text(const char *haystack, const char *needle) {
     /* XXX This is just a very crude text matcher. */
     return stristr(haystack, needle) != NULL;
@@ -322,8 +288,7 @@ static jmap_filter *buildfilter(json_t *arg, jmap_filterparse_cb *parse)
     int iscond = 1;
 
     /* operator */
-    pe = readprop_full(arg, NULL, "operator",
-                       0 /*mandatory*/, NULL, "s", &val);
+    pe = jmap_readprop(arg, "operator", 0 /*mandatory*/, NULL, "s", &val);
     if (pe > 0) {
         if (!strncmp("AND", val, 3)) {
             f->op = JMAP_FILTER_OP_AND;
@@ -1870,59 +1835,59 @@ static void *contact_filter_parse(json_t *arg)
 
     /* text */
     if (JNOTNULL(json_object_get(arg, "text"))) {
-        readprop_full(arg, NULL, "text", 0, NULL, "s", &f->text);
+        jmap_readprop(arg, "text", 0, NULL, "s", &f->text);
     }
     /* prefix */
     if (JNOTNULL(json_object_get(arg, "prefix"))) {
-        readprop_full(arg, NULL, "prefix", 0, NULL, "s", &f->prefix);
+        jmap_readprop(arg, "prefix", 0, NULL, "s", &f->prefix);
     }
     /* firstName */
     if (JNOTNULL(json_object_get(arg, "firstName"))) {
-        readprop_full(arg, NULL, "firstName", 0, NULL, "s", &f->firstName);
+        jmap_readprop(arg, "firstName", 0, NULL, "s", &f->firstName);
     }
     /* lastName */
     if (JNOTNULL(json_object_get(arg, "lastName"))) {
-        readprop_full(arg, NULL, "lastName", 0, NULL, "s", &f->lastName);
+        jmap_readprop(arg, "lastName", 0, NULL, "s", &f->lastName);
     }
     /* suffix */
     if (JNOTNULL(json_object_get(arg, "suffix"))) {
-        readprop_full(arg, NULL, "suffix", 0, NULL, "s", &f->suffix);
+        jmap_readprop(arg, "suffix", 0, NULL, "s", &f->suffix);
     }
     /* nickname */
     if (JNOTNULL(json_object_get(arg, "nickname"))) {
-        readprop_full(arg, NULL, "nickname", 0, NULL, "s", &f->nickname);
+        jmap_readprop(arg, "nickname", 0, NULL, "s", &f->nickname);
     }
     /* company */
     if (JNOTNULL(json_object_get(arg, "company"))) {
-        readprop_full(arg, NULL, "company", 0, NULL, "s", &f->company);
+        jmap_readprop(arg, "company", 0, NULL, "s", &f->company);
     }
     /* department */
     if (JNOTNULL(json_object_get(arg, "department"))) {
-        readprop_full(arg, NULL, "department", 0, NULL, "s", &f->department);
+        jmap_readprop(arg, "department", 0, NULL, "s", &f->department);
     }
     /* jobTitle */
     if (JNOTNULL(json_object_get(arg, "jobTitle"))) {
-        readprop_full(arg, NULL, "jobTitle", 0, NULL, "s", &f->jobTitle);
+        jmap_readprop(arg, "jobTitle", 0, NULL, "s", &f->jobTitle);
     }
     /* email */
     if (JNOTNULL(json_object_get(arg, "email"))) {
-        readprop_full(arg, NULL, "email", 0, NULL, "s", &f->email);
+        jmap_readprop(arg, "email", 0, NULL, "s", &f->email);
     }
     /* phone */
     if (JNOTNULL(json_object_get(arg, "phone"))) {
-        readprop_full(arg, NULL, "phone", 0, NULL, "s", &f->phone);
+        jmap_readprop(arg, "phone", 0, NULL, "s", &f->phone);
     }
     /* online */
     if (JNOTNULL(json_object_get(arg, "online"))) {
-        readprop_full(arg, NULL, "online", 0, NULL, "s", &f->online);
+        jmap_readprop(arg, "online", 0, NULL, "s", &f->online);
     }
     /* address */
     if (JNOTNULL(json_object_get(arg, "address"))) {
-        readprop_full(arg, NULL, "address", 0, NULL, "s", &f->address);
+        jmap_readprop(arg, "address", 0, NULL, "s", &f->address);
     }
     /* notes */
     if (JNOTNULL(json_object_get(arg, "notes"))) {
-        readprop_full(arg, NULL, "notes", 0, NULL, "s", &f->notes);
+        jmap_readprop(arg, "notes", 0, NULL, "s", &f->notes);
     }
 
     return f;
@@ -2175,7 +2140,7 @@ static int _emails_to_card(struct vparse_card *card,
         const char *label = NULL;
         const char *value = NULL;
 
-        readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        jmap_readprop_full(item, prefix, "type", 1, invalid, "s", &type);
         if (type) {
             if (strcmp(type, "personal") && strcmp(type, "work") && strcmp(type, "other")) {
                 char *tmp = strconcat(prefix, ".type", NULL);
@@ -2183,9 +2148,9 @@ static int _emails_to_card(struct vparse_card *card,
                 free(tmp);
             }
         }
-        readprop_full(item, prefix, "value", 1, invalid, "s", &value);
+        jmap_readprop_full(item, prefix, "value", 1, invalid, "s", &value);
         if (JNOTNULL(json_object_get(item, "label"))) {
-            readprop_full(item, prefix, "label", 1, invalid, "s", &label);
+            jmap_readprop_full(item, prefix, "label", 1, invalid, "s", &label);
         }
         json_t *jisDefault = json_object_get(item, "isDefault");
 
@@ -2235,7 +2200,7 @@ static int _phones_to_card(struct vparse_card *card,
         const char *label = NULL;
         const char *value = NULL;
 
-        readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        jmap_readprop_full(item, prefix, "type", 1, invalid, "s", &type);
         if (type) {
             if (strcmp(type, "home") && strcmp(type, "work") && strcmp(type, "mobile") &&
                 strcmp(type, "fax") && strcmp(type, "pager") && strcmp(type, "other")) {
@@ -2244,9 +2209,9 @@ static int _phones_to_card(struct vparse_card *card,
                 free(tmp);
             }
         }
-        readprop_full(item, prefix, "value", 1, invalid, "s", &value);
+        jmap_readprop_full(item, prefix, "value", 1, invalid, "s", &value);
         if (JNOTNULL(json_object_get(item, "label"))) {
-            readprop_full(item, prefix, "label", 1, invalid, "s", &label);
+            jmap_readprop_full(item, prefix, "label", 1, invalid, "s", &label);
         }
 
         /* Bail out for any property errors. */
@@ -2312,7 +2277,7 @@ static int _online_to_card(struct vparse_card *card,
         const char *label = NULL;
         const char *value = NULL;
 
-        readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        jmap_readprop_full(item, prefix, "type", 1, invalid, "s", &type);
         if (type) {
             if (strcmp(type, "uri") && strcmp(type, "username") && strcmp(type, "other")) {
                 char *tmp = strconcat(prefix, ".type", NULL);
@@ -2320,9 +2285,9 @@ static int _online_to_card(struct vparse_card *card,
                 free(tmp);
             }
         }
-        readprop_full(item, prefix, "value", 1, invalid, "s", &value);
+        jmap_readprop_full(item, prefix, "value", 1, invalid, "s", &value);
         if (JNOTNULL(json_object_get(item, "label"))) {
-            readprop_full(item, prefix, "label", 1, invalid, "s", &label);
+            jmap_readprop_full(item, prefix, "label", 1, invalid, "s", &label);
         }
 
         /* Bail out for any property errors. */
@@ -2388,7 +2353,7 @@ static int _addresses_to_card(struct vparse_card *card,
         int pe; /* parse error */
 
         /* Mandatory */
-        pe = readprop_full(item, prefix, "type", 1, invalid, "s", &type);
+        pe = jmap_readprop_full(item, prefix, "type", 1, invalid, "s", &type);
         if (type) {
             if (strcmp(type, "home") && strcmp(type, "work") && strcmp(type, "billing") &&
                 strcmp(type, "postal") && strcmp(type, "other")) {
@@ -2397,15 +2362,15 @@ static int _addresses_to_card(struct vparse_card *card,
                 free(tmp);
             }
         }
-        pe = readprop_full(item, prefix, "street", 1, invalid, "s", &street);
-        pe = readprop_full(item, prefix, "locality", 1, invalid, "s", &locality);
-        pe = readprop_full(item, prefix, "region", 1, invalid, "s", &region);
-        pe = readprop_full(item, prefix, "postcode", 1, invalid, "s", &postcode);
-        pe = readprop_full(item, prefix, "country", 1, invalid, "s", &country);
+        pe = jmap_readprop_full(item, prefix, "street", 1, invalid, "s", &street);
+        pe = jmap_readprop_full(item, prefix, "locality", 1, invalid, "s", &locality);
+        pe = jmap_readprop_full(item, prefix, "region", 1, invalid, "s", &region);
+        pe = jmap_readprop_full(item, prefix, "postcode", 1, invalid, "s", &postcode);
+        pe = jmap_readprop_full(item, prefix, "country", 1, invalid, "s", &country);
 
         /* Optional */
         if (JNOTNULL(json_object_get(item, "label"))) {
-            pe = readprop_full(item, prefix, "label", 0, invalid, "s", &label);
+            pe = jmap_readprop_full(item, prefix, "label", 0, invalid, "s", &label);
         }
 
         /* Bail out for any property errors. */
@@ -2980,7 +2945,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     const char *logfmt = NULL;
 
     if (kind == CARDDAV_KIND_GROUP) {
-        readprop(jcard, "name", 1, invalid, "s", &name);
+        jmap_readprop(jcard, "name", 1, invalid, "s", &name);
 
         vparse_add_entry(card, NULL, "N", name);
         vparse_add_entry(card, NULL, "FN", name);
