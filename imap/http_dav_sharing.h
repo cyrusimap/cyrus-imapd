@@ -48,6 +48,10 @@
 
 #define DAVSHARING_CONTENT_TYPE "application/davsharing+xml"
 
+/* Privileges assigned via WebDAV Sharing (draft-pot-webdav-resource-sharing) */
+#define DACL_SHARE      (DACL_READ|DACL_WRITEPROPS)
+#define DACL_SHARERW    (DACL_READ|DACL_WRITE)
+
 void xml_add_shareaccess(struct propfind_ctx *fctx,
                          xmlNodePtr resp, xmlNodePtr node, int legacy);
 int propfind_shareaccess(const xmlChar *name, xmlNsPtr ns,

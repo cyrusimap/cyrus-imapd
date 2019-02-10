@@ -172,10 +172,6 @@ enum {
                                            schedule-send-reply,
                                            schedule-send-freebusy) */
 
-/* Privileges assigned via WebDAV Sharing (draft-pot-webdav-resource-sharing) */
-#define DACL_SHARE      (DACL_READ|DACL_WRITEPROPS)
-#define DACL_SHARERW    (DACL_READ|DACL_WRITE)
-
 
 /* Index into preconditions array */
 enum {
