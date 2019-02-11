@@ -2078,6 +2078,7 @@ done:
 }
 
 static int _guid_addbody(struct conversations_state *state,
+                         conversation_id_t cid,
                          uint32_t system_flags, uint32_t internal_flags,
                          time_t internaldate,
                          struct body *body,
@@ -2094,7 +2095,7 @@ static int _guid_addbody(struct conversations_state *state,
         buf_setcstr(&buf, base);
         buf_printf(&buf, "[%s]", body->part_id);
         const char *guidrep = message_guid_encode(&body->content_guid);
-        r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf), /*cid*/0,
+        r = conversations_guid_setitem(state, guidrep, buf_cstring(&buf), cid,
                                        system_flags, internal_flags, internaldate,
                                        add);
         buf_free(&buf);
@@ -2102,11 +2103,11 @@ static int _guid_addbody(struct conversations_state *state,
         if (r) return r;
     }
 
-    r = _guid_addbody(state, system_flags, internal_flags, internaldate, body->subpart, base, add);
+    r = _guid_addbody(state, cid, system_flags, internal_flags, internaldate, body->subpart, base, add);
     if (r) return r;
 
     for (i = 1; i < body->numparts; i++) {
-        r = _guid_addbody(state, system_flags, internal_flags, internaldate, body->subpart + i, base, add);
+        r = _guid_addbody(state, cid, system_flags, internal_flags, internaldate, body->subpart + i, base, add);
         if (r) return r;
     }
 
@@ -2138,7 +2139,8 @@ static int conversations_set_guid(struct conversations_state *state,
                                    record->internal_flags,
                                    record->internaldate,
                                    add);
-    if (!r) r = _guid_addbody(state, record->system_flags, record->internal_flags,
+    if (!r) r = _guid_addbody(state, record->cid,
+                              record->system_flags, record->internal_flags,
                               record->internaldate, body, base, add);
 
     if (!r && (mailbox->mbtype == MBTYPE_ADDRESSBOOK) &&
