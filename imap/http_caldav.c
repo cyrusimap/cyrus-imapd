@@ -5582,9 +5582,79 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     static unsigned need_tz = 0;
     const char *data = NULL;
     size_t datalen = 0;
-    int r = 0;
 
-    if (propstat) {
+    if (!fctx) {
+        /* Cleanup "property" request - free partial component structure */
+        struct partial_comp_t *pcomp, *child, *sibling;
+
+        for (pcomp = partial->comp; pcomp; pcomp = child) {
+            child = pcomp->child;
+
+            do {
+                sibling = pcomp->sibling;
+                arrayu64_fini(&pcomp->props);
+                free(pcomp);
+            } while ((pcomp = sibling));
+        }
+
+        partial->comp = NULL;
+
+        return 0;
+    }
+
+    if (!propstat) {
+        /* Prescreen "property" request - read partial/expand children */
+        xmlNodePtr node;
+
+        /* Check for optional CalDAV-Timezones header */
+        const char **hdr =
+            spool_getheader(fctx->txn->req_hdrs, "CalDAV-Timezones");
+        if (hdr && !strcmp(hdr[0], "T")) need_tz = 1;
+        else need_tz = 0;
+
+        /* Initialize expand to be "empty" */
+        partial->range.start = icaltime_null_time();
+        partial->range.end = icaltime_null_time();
+        partial->comp = NULL;
+
+        /* Check for and parse child elements of CALDAV:calendar-data */
+        for (node = xmlFirstElementChild(prop); node;
+             node = xmlNextElementSibling(node)) {
+            xmlChar *prop;
+
+            if (!xmlStrcmp(node->name, BAD_CAST "expand") ||
+                !xmlStrcmp(node->name, BAD_CAST "limit-recurrence-set")) {
+                partial->expand = (node->name[0] == 'e');
+                prop = xmlGetProp(node, BAD_CAST "start");
+                if (!prop) return (*fctx->ret = HTTP_BAD_REQUEST);
+                partial->range.start = icaltime_from_string((char *) prop);
+                xmlFree(prop);
+
+                prop = xmlGetProp(node, BAD_CAST "end");
+                if (!prop) return (*fctx->ret = HTTP_BAD_REQUEST);
+                partial->range.end = icaltime_from_string((char *) prop);
+                xmlFree(prop);
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "comp")) {
+                partial->comp = parse_partial_comp(node);
+                if (!partial->comp ||
+                    partial->comp->kind != ICAL_VCALENDAR_COMPONENT) {
+                    return (*fctx->ret = HTTP_BAD_REQUEST);
+                }
+            }
+            else if (!xmlStrcmp(node->name, BAD_CAST "limit-freebusy-set")) {
+                syslog(LOG_NOTICE,
+                       "Client attempted to use CALDAV:limit-freebusy-set");
+                return (*fctx->ret = HTTP_NOT_IMPLEMENTED);
+            }
+        }
+
+        if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
+            /* We want to strip known VTIMEZONEs */
+            fctx->proc_by_resource = &caldav_propfind_by_resource;
+        }
+    }
+    else {
         struct caldav_data *cdata = (struct caldav_data *) fctx->data;
         icalcomponent *ical = NULL;
 
@@ -5656,81 +5726,9 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
             datalen = strlen(data);
         }
     }
-    else if (prop) {
-        /* Prescreen "property" request - read partial/expand children */
-        xmlNodePtr node;
 
-        /* Check for optional CalDAV-Timezones header */
-        const char **hdr =
-            spool_getheader(fctx->txn->req_hdrs, "CalDAV-Timezones");
-        if (hdr && !strcmp(hdr[0], "T")) need_tz = 1;
-        else need_tz = 0;
-
-        /* Initialize expand to be "empty" */
-        partial->range.start = icaltime_null_time();
-        partial->range.end = icaltime_null_time();
-        partial->comp = NULL;
-
-        /* Check for and parse child elements of CALDAV:calendar-data */
-        for (node = xmlFirstElementChild(prop); node;
-             node = xmlNextElementSibling(node)) {
-            xmlChar *prop;
-
-            if (!xmlStrcmp(node->name, BAD_CAST "expand") ||
-                !xmlStrcmp(node->name, BAD_CAST "limit-recurrence-set")) {
-                partial->expand = (node->name[0] == 'e');
-                prop = xmlGetProp(node, BAD_CAST "start");
-                if (!prop) return (*fctx->ret = HTTP_BAD_REQUEST);
-                partial->range.start = icaltime_from_string((char *) prop);
-                xmlFree(prop);
-
-                prop = xmlGetProp(node, BAD_CAST "end");
-                if (!prop) return (*fctx->ret = HTTP_BAD_REQUEST);
-                partial->range.end = icaltime_from_string((char *) prop);
-                xmlFree(prop);
-            }
-            else if (!xmlStrcmp(node->name, BAD_CAST "comp")) {
-                partial->comp = parse_partial_comp(node);
-                if (!partial->comp ||
-                    partial->comp->kind != ICAL_VCALENDAR_COMPONENT) {
-                    return (*fctx->ret = HTTP_BAD_REQUEST);
-                }
-            }
-            else if (!xmlStrcmp(node->name, BAD_CAST "limit-freebusy-set")) {
-                syslog(LOG_NOTICE,
-                       "Client attempted to use CALDAV:limit-freebusy-set");
-                return (*fctx->ret = HTTP_NOT_IMPLEMENTED);
-            }
-        }
-
-        if (namespace_calendar.allow & ALLOW_CAL_NOTZ) {
-            /* We want to strip known VTIMEZONEs */
-            fctx->proc_by_resource = &caldav_propfind_by_resource;
-        }
-    }
-    else {
-        /* Cleanup "property" request - free partial component structure */
-        struct partial_comp_t *pcomp, *child, *sibling;
-
-        for (pcomp = partial->comp; pcomp; pcomp = child) {
-            child = pcomp->child;
-
-            do {
-                sibling = pcomp->sibling;
-                arrayu64_fini(&pcomp->props);
-                free(pcomp);
-            } while ((pcomp = sibling));
-        }
-
-        partial->comp = NULL;
-
-        return 0;
-    }
-
-    r = propfind_getdata(name, ns, fctx, prop, propstat, caldav_mime_types,
-                         &out_type, data, datalen);
-
-    return r;
+    return propfind_getdata(name, ns, fctx, prop, propstat, caldav_mime_types,
+                            &out_type, data, datalen);
 }
 
 

@@ -1399,7 +1399,34 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
     const char *data = NULL;
     size_t datalen = 0;
 
-    if (propstat) {
+    if (!fctx) {
+        /* Cleanup "property" request - free partial property array */
+        strarray_fini(partial);
+
+        return 0;
+    }
+
+    if (!propstat) {
+        /* Prescreen "property" request - read partial properties */
+        xmlNodePtr node;
+
+        /* Initialize partial property array to be empty */
+        strarray_init(partial);
+
+        /* Check for and parse child elements of CARDDAV:address-data */
+        for (node = xmlFirstElementChild(prop); node;
+             node = xmlNextElementSibling(node)) {
+
+            if (!xmlStrcmp(node->name, BAD_CAST "prop")) {
+                xmlChar *name = xmlGetProp(node, BAD_CAST "name");
+                if (name) {
+                    strarray_add_case(partial, (const char *) name);
+                    xmlFree(name);
+                }
+            }
+        }
+    }
+    else {
         if (fctx->txn->meth != METH_REPORT) return HTTP_FORBIDDEN;
 
         if (!out_type->content_type) return HTTP_BAD_MEDIATYPE;
@@ -1426,32 +1453,6 @@ static int propfind_addrdata(const xmlChar *name, xmlNsPtr ns,
             data = buf_cstring(&fctx->msg_buf);
             datalen = buf_len(&fctx->msg_buf);
         }
-    }
-    else if (prop) {
-        /* Prescreen "property" request - read partial properties */
-        xmlNodePtr node;
-
-        /* Initialize partial property array to be empty */
-        strarray_init(partial);
-
-        /* Check for and parse child elements of CARDDAV:address-data */
-        for (node = xmlFirstElementChild(prop); node;
-             node = xmlNextElementSibling(node)) {
-
-            if (!xmlStrcmp(node->name, BAD_CAST "prop")) {
-                xmlChar *name = xmlGetProp(node, BAD_CAST "name");
-                if (name) {
-                    strarray_add_case(partial, (const char *) name);
-                    xmlFree(name);
-                }
-            }
-        }
-    }
-    else {
-        /* Cleanup "property" request - free partial property array */
-        strarray_fini(partial);
-
-        return 0;
     }
 
     return propfind_getdata(name, ns, fctx, prop, propstat, carddav_mime_types,
