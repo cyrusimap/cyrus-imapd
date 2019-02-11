@@ -2,10 +2,16 @@
 A wrapper script to pull in the library files required for cyrus-imapd and build them
 
 Dependencies for Debian Stretch clean installation:
-`./install-dependencies.sh`
+```
+./install-dependencies.sh
+```
 
 To build all libraries run:
-`./build.sh`
+```
+./build.sh
+```
 
 To fetch, build and install single dependency run:
-`./build.sh cyruslibs <component name>`
+```
+./build.sh cyruslibs <component name>
+```
