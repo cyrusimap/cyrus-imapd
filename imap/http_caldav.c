@@ -5579,13 +5579,13 @@ static int propfind_caldata(const xmlChar *name, xmlNsPtr ns,
     static struct mime_type_t *out_type = caldav_mime_types;
     static struct partial_caldata_t partial_caldata = { .comp = NULL };
     struct partial_caldata_t *partial = &partial_caldata;
-    struct caldav_data *cdata = (struct caldav_data *) fctx->data;
     static unsigned need_tz = 0;
     const char *data = NULL;
     size_t datalen = 0;
     int r = 0;
 
     if (propstat) {
+        struct caldav_data *cdata = (struct caldav_data *) fctx->data;
         icalcomponent *ical = NULL;
 
         if (fctx->txn->meth != METH_REPORT) return HTTP_FORBIDDEN;
