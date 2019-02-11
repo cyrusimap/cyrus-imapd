@@ -1864,6 +1864,21 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
     }
 
+    // always update the GUID information first, as it's used for search
+    // even if conversations have not been set on this email
+    if (new) {
+        if (!old) {
+            r = conversations_set_guid(cstate, mailbox, new, /*add*/1);
+            if (r) return r;
+        }
+    }
+    else {
+        if (old) {
+            r = conversations_set_guid(cstate, mailbox, old, /*add*/0);
+            if (r) return r;
+        }
+    }
+
     if (new && !old) {
         /* add the conversation */
         r = mailbox_cacherecord(mailbox, new); /* make sure it's loaded */
@@ -1928,10 +1943,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
         delta_num_records--;
         modseq = MAX(modseq, old->modseq);
-        if (!new) {
-            r = conversations_set_guid(cstate, mailbox, old, /*add*/0);
-            if (r) return r;
-        }
     }
 
     if (new) {
@@ -1953,10 +1964,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
         delta_num_records++;
         modseq = MAX(modseq, new->modseq);
-        if (!old) {
-            r = conversations_set_guid(cstate, mailbox, new, /*add*/1);
-            if (r) return r;
-        }
     }
 
     /* XXX - combine this with the earlier cache parsing */
