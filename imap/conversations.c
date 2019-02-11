@@ -2235,6 +2235,23 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
     }
 
+    // always update the GUID information first, as it's used for search
+    // even if conversations have not been set on this email
+    if (new) {
+        if (!old || old->system_flags != new->system_flags ||
+                    old->internal_flags != new->internal_flags ||
+                    old->internaldate != new->internaldate) {
+            r = conversations_set_guid(cstate, mailbox, new, /*add*/1);
+            if (r) return r;
+        }
+    }
+    else {
+        if (old) {
+            r = conversations_set_guid(cstate, mailbox, old, /*add*/0);
+            if (r) return r;
+        }
+    }
+
     if (new && !old && allowrenumber) {
         /* add the conversation */
         r = mailbox_cacherecord(mailbox, new); /* make sure it's loaded */
@@ -2299,10 +2316,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
         delta_num_records--;
         modseq = MAX(modseq, old->modseq);
-        if (!new) {
-            r = conversations_set_guid(cstate, mailbox, old, /*add*/0);
-            if (r) return r;
-        }
     }
 
     if (new) {
@@ -2325,12 +2338,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
         delta_num_records++;
         modseq = MAX(modseq, new->modseq);
-        if (!old || old->system_flags != new->system_flags ||
-                    old->internal_flags != new->internal_flags ||
-                    old->internaldate != new->internaldate) {
-            r = conversations_set_guid(cstate, mailbox, new, /*add*/1);
-            if (r) return r;
-        }
     }
 
     /* we've made any set_guid, so count the state again! */
