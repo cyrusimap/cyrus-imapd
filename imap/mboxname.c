@@ -1607,8 +1607,8 @@ HIDDEN int mboxname_policycheck(const char *name)
                     return IMAP_MAILBOX_BADNAME;
                 }
                 ucs4 = (c1 << 10) | (c2 << 4) | (c3 >> 2);
-                if ((ucs4 & 0xff80) == 0 || (ucs4 & 0xf800) == 0xd800) {
-                    /* US-ASCII or multi-word character */
+                if ((ucs4 & 0xff80) == 0) {
+                    /* US-ASCII character */
                     return IMAP_MAILBOX_BADNAME;
                 }
                 if (*name == '-') {
@@ -1626,8 +1626,8 @@ HIDDEN int mboxname_policycheck(const char *name)
                     return IMAP_MAILBOX_BADNAME;
                 }
                 ucs4 = ((c3 & 0x03) << 14) | (c4 << 8) | (c5 << 2) | (c6 >> 4);
-                if ((ucs4 & 0xff80) == 0 || (ucs4 & 0xf800) == 0xd800) {
-                    /* US-ASCII or multi-word character */
+                if ((ucs4 & 0xff80) == 0) {
+                    /* US-ASCII character */
                     return IMAP_MAILBOX_BADNAME;
                 }
                 if (*name == '-') {
@@ -1644,8 +1644,8 @@ HIDDEN int mboxname_policycheck(const char *name)
                     return IMAP_MAILBOX_BADNAME;
                 }
                 ucs4 = ((c6 & 0x0f) << 12) | (c7 << 6) | c8;
-                if ((ucs4 & 0xff80) == 0 || (ucs4 & 0xf800) == 0xd800) {
-                    /* US-ASCII or multi-word character */
+                if ((ucs4 & 0xff80) == 0) {
+                    /* US-ASCII character */
                     return IMAP_MAILBOX_BADNAME;
                 }
             }
