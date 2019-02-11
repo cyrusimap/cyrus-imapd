@@ -2213,7 +2213,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
     int *delta_counts = NULL;
     int i;
     modseq_t modseq = 0;
-    const struct index_record *record = NULL;
     int r = 0;
 
     if (old && new) {
@@ -2235,6 +2234,31 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
     }
 
+    const struct index_record *record = new ? new : old;
+    if (!record) return 0;
+
+    if (new && !old && allowrenumber) {
+        /* add the conversation */
+        r = mailbox_cacherecord(mailbox, new); /* make sure it's loaded */
+        if (r) return r;
+        r = message_update_conversations(cstate, mailbox, new, &conv);
+        if (r) return r;
+    }
+    else if (record->cid) {
+        r = conversation_load(cstate, record->cid, &conv);
+        if (r) return r;
+        if (!conv) {
+            if (!new) {
+                /* We're trying to delete a conversation that's already
+                 * gone...don't try to hard */
+                syslog(LOG_NOTICE, "conversation "CONV_FMT" already "
+                                   "deleted, ignoring", record->cid);
+                return 0;
+            }
+            conv = conversation_new();
+        }
+    }
+
     // always update the GUID information first, as it's used for search
     // even if conversations have not been set on this email
     if (new) {
@@ -2252,34 +2276,8 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
     }
 
-    if (new && !old && allowrenumber) {
-        /* add the conversation */
-        r = mailbox_cacherecord(mailbox, new); /* make sure it's loaded */
-        if (r) return r;
-        r = message_update_conversations(cstate, mailbox, new, &conv);
-        if (r) return r;
-        record = new;
-        /* possible if silent (i.e. replica) */
-        if (!record->cid) return 0;
-    }
-    else {
-        record = new ? new : old;
-        /* skip out on non-CIDed records */
-        if (!record->cid) return 0;
-
-        r = conversation_load(cstate, record->cid, &conv);
-        if (r) return r;
-        if (!conv) {
-            if (!new) {
-                /* We're trying to delete a conversation that's already
-                 * gone...don't try to hard */
-                syslog(LOG_NOTICE, "conversation "CONV_FMT" already "
-                                   "deleted, ignoring", record->cid);
-                return 0;
-            }
-            conv = conversation_new();
-        }
-    }
+    // the rest is bookkeeping purely for CIDed messages
+    if (!record->cid) return 0;
 
     /* IRIS-2534: check if it's the trash folder - XXX - should be separate
      * conversation root or similar more useful method in future */
