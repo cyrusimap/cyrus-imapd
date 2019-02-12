@@ -4689,4 +4689,88 @@ sub test_calendarevent_set_rsvpsequence
     $self->assert_num_equals(1, $res->[1][1]{list}[0]->{sequence});
 }
 
+sub test_calendarevent_set_participants_recur
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $event =  {
+        "calendarId" => $calid,
+        "title"=> "title",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/London",
+        "isAllDay"=> JSON::false,
+        "recurrenceRule"=> {
+            "frequency"=> "weekly",
+        },
+        "replyTo" => {
+            "imip" => "mailto:foo\@local",
+        },
+        "participants" => {
+            'bar' => {
+                roles => {
+                    'attendee' => JSON::true,
+                },
+                expectReply => JSON::true,
+                sendTo => {
+                    imip => 'mailto:bar@local',
+                },
+            },
+            'bam' => {
+                email => 'bam@local',
+                roles => {
+                    'attendee' => JSON::true,
+                },
+                expectReply => JSON::true,
+                sendTo => {
+                    imip => 'mailto:bam@local',
+                },
+            },
+        },
+        method => 'request',
+    };
+
+    my $ret = $self->createandget_event($event);
+    my $eventId = $ret->{id};
+    $self->assert_not_null($eventId);
+
+    my $barParticipantId;
+    while (my ($key, $value) = each(%{$ret->{participants}})) {
+        if ($value->{sendTo}{imip} eq 'mailto:bar@local') {
+            $barParticipantId = $key;
+            last;
+        }
+    }
+    $self->assert_not_null($barParticipantId);
+
+    my $recurrenceOverrides = {
+        "2015-11-14T09:00:00" => {
+            ('participants/' . $barParticipantId) => undef,
+        },
+    };
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'recurrenceOverrides' => $recurrenceOverrides
+                },
+            },
+       }, 'R1'],
+       ['CalendarEvent/get', {
+            ids => [$eventId],
+       }, 'R2'],
+   ]);
+   $self->assert(exists $res->[0][1]{updated}{$eventId});
+
+   $self->assert_deep_equals(
+       $recurrenceOverrides, $res->[1][1]{list}[0]{recurrenceOverrides}
+   );
+}
+
+
 1;
