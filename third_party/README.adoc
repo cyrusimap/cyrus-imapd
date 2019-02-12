@@ -19,7 +19,7 @@ To fetch, build and install particular library run:
 
 ## How tos
 
-### Building in Debian Stretch LXC container
+### Building inside Debian Stretch LXC container
 
 Assuming host machine is `Ubuntu 18.04` or `Debian Stretch`. 
 
@@ -37,3 +37,5 @@ git clone https://github.com/cyrusimap/cyruslibs.git
 ./install-dependencies.sh
 ./build.sh
 ```
+
+Libraries will be located at /usr/local/cyruslibs
