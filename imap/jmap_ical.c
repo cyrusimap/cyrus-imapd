@@ -4355,7 +4355,7 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     if (json_is_string(jprop)) {
         const char *method = json_string_value(jprop);
         icalproperty_method icalmethod = icalenum_string_to_method(method);
-        if (icalmethod != ICAL_METHOD_NONE) {
+        if (icalmethod != ICAL_METHOD_NONE && !is_exc) {
             icalcomponent *ical = icalcomponent_get_parent(comp);
             icalcomponent_set_method(ical, icalmethod);
         }

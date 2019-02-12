@@ -1506,6 +1506,22 @@ static int setcalendarevents_schedule(jmap_req_t *req,
     return 0;
 }
 
+static void remove_itip_properties(icalcomponent *ical)
+{
+    icalproperty *prop, *next;
+    icalproperty_kind kind = ICAL_METHOD_PROPERTY;
+
+    for (prop = icalcomponent_get_first_property(ical, kind);
+         prop;
+         prop = next) {
+
+        next = icalcomponent_get_next_property(ical, kind);
+        icalcomponent_remove_property(ical, prop);
+        icalproperty_free(prop);
+    }
+
+}
+
 static int setcalendarevents_create(jmap_req_t *req,
                                     const char *account_id,
                                     json_t *event,
@@ -1621,6 +1637,9 @@ static int setcalendarevents_create(jmap_req_t *req,
     r = setcalendarevents_schedule(req, &schedule_address,
                                    NULL, ical, JMAP_CREATE);
     if (r) goto done;
+
+    /* Remove METHOD property */
+    remove_itip_properties(ical);
 
     /* Store the VEVENT. */
     struct transaction_t txn;
@@ -1844,6 +1863,9 @@ static int setcalendarevents_update(jmap_req_t *req,
         mboxname = dstmboxname;
         dstmboxname = NULL;
     }
+
+    /* Remove METHOD property */
+    remove_itip_properties(ical);
 
     /* Store the updated VEVENT. */
     struct transaction_t txn;
