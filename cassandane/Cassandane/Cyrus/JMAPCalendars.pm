@@ -2553,6 +2553,7 @@ sub test_calendarevent_set_participants
 
     my $ret = $self->createandget_event($event);
     $event->{participants}{foo}{sendTo} = { imip => 'mailto:foo@local' };
+    delete $event->{method};
     $self->assert_normalized_event_equals($ret, $event);
 }
 
@@ -2596,6 +2597,7 @@ sub test_calendarevent_set_participants_patch
     };
 
     my $ret = $self->createandget_event($event);
+    delete $event->{method};
 
     # Add auto-generated owner participant for ORGANIZER.
     $event->{participants}{'3e6a0e46cc0af22aff762f2e1869f23de7aca482'} = {
