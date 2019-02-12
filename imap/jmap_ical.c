@@ -791,32 +791,35 @@ overrides_from_ical(icalcomponent *comp, json_t *event, const char *tzid_start)
         const char *exuid = icalcomponent_get_uid(excomp);
         if (strcmpsafe(exuid, uid)) continue;
 
-        json_t *ex, *diff;
-        struct icaltimetype recurid;
-        char *s;
-        const char *exstart;
-
         /* Convert VEVENT exception to JMAP */
-        ex = calendarevent_from_ical(excomp, NULL, comp);
+        json_t *ex = calendarevent_from_ical(excomp, NULL, comp);
         if (!ex) continue;
-        json_object_del(ex, "updated");
-        json_object_del(ex, "created");
 
-        /* Determine recurrence id */
-        recurid = icalcomponent_get_recurrenceid(excomp);
-        s = localdate_from_icaltime_r(recurid);
-        exstart = json_string_value(json_object_get(ex, "start"));
-        if (exstart && !strcmp(exstart, s)) {
+        char *recurid = localdate_from_icaltime_r(icalcomponent_get_recurrenceid(excomp));
+        const char *exstart = json_string_value(json_object_get(ex, "start"));
+        if (exstart && !strcmp(exstart, recurid)) {
             json_object_del(ex, "start");
         }
 
         /* Create override patch */
-        diff = jmap_patchobject_create(event, ex);
-        json_decref(ex);
+        json_t *diff = jmap_patchobject_create(event, ex);
+        json_object_del(diff, "@type");
+        json_object_del(diff, "uid");
+        json_object_del(diff, "relatedTo");
+        json_object_del(diff, "prodId");
+        json_object_del(diff, "method");
+        json_object_del(diff, "isAllDay");
+        json_object_del(diff, "recurrenceRule");
+        json_object_del(diff, "recurrenceOverrides");
+        json_object_del(diff, "replyTo");
+        if (json_is_null(json_object_get(diff, "start"))) {
+            json_object_del(diff, "start");
+        }
 
         /* Set override at recurrence id */
-        json_object_set_new(exceptions, s, diff);
-        free(s);
+        json_object_set_new(exceptions, recurid, diff);
+        json_decref(ex);
+        free(recurid);
     }
 
     json_object_update(overrides, exceptions);
