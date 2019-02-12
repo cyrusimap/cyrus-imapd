@@ -1,7 +1,8 @@
 # cyruslibs
+
 A wrapper script to pull in the library files required for cyrus-imapd and build them
 
-Dependencies for Debian Stretch clean installation:
+Dependency installation script for Debian clean installation. Tested on Debian Stretch lxc image.
 ```
 ./install-dependencies.sh
 ```
@@ -11,7 +12,28 @@ To build all libraries run:
 ./build.sh
 ```
 
-To fetch, build and install single dependency run:
+To fetch, build and install particular library run:
 ```
-./build.sh cyruslibs <component name>
+./build.sh cyruslibs <lib>
+```
+
+## How tos
+
+### Building in Debian Stretch LXC container
+
+Assuming host machine is `Ubuntu 18.04` or `Debian Stretch`. 
+
+On host machine run:
+```
+lxc launch images:debian/stretch cyrusimap-build
+lxc exec  cyrusimap-build bash
+```
+
+Inside container:
+```
+apt-get install git -y
+cd /usr/src
+git clone https://github.com/cyrusimap/cyruslibs.git
+./install-dependencies.sh
+./build.sh
 ```
