@@ -2261,6 +2261,13 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
         }
     }
 
+    struct emailcounts ecounts = EMAILCOUNTS_INIT;
+    /* count the email state before making GUID changes */
+    ecounts.mboxname = mailbox->name;
+    r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
+                                   _read_emailcounts_cb, &ecounts);
+    if (r) return r;
+
     // always update the GUID information first, as it's used for search
     // even if conversations have not been set on this email
     if (new) {
@@ -2287,13 +2294,6 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
     if (cstate->counted_flags)
         delta_counts = xzmalloc(sizeof(int) * cstate->counted_flags->count);
-
-    struct emailcounts ecounts = EMAILCOUNTS_INIT;
-    /* count the email state before making GUID changes */
-    ecounts.mboxname = mailbox->name;
-    r = conversations_guid_foreach(cstate, message_guid_encode(&record->guid),
-                                   _read_emailcounts_cb, &ecounts);
-    if (r) return r;
 
     /* calculate the changes */
     if (old) {
