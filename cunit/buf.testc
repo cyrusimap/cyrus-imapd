@@ -1553,7 +1553,44 @@ static void test_trim(void)
     _trimsto("\t  ", "");
 }
 
+static void test_appendoverlap(void)
+{
+    struct testcase {
+        const char *buf;
+        const char *str;
+        const char *want;
+    };
 
+    struct testcase testcases[] = {{
+        "abcdef", "efg", "abcdefg"
+    }, {
+        "abcd", "efg", "abcdefg"
+    }, {
+        "ab", "cdefg", "abcdefg"
+    }, {
+        "ab", "abcdefg", "abcdefg"
+    }, {
+        "a", "abcdefg", "abcdefg"
+    }, {
+        "", "abcdefg", "abcdefg"
+    }, {
+        "abcdefg", "", "abcdefg"
+    }, {
+        "abcdefg", "efg", "abcdefg"
+    }};
+
+    struct buf buf = BUF_INITIALIZER;
+
+    size_t i;
+    for (i = 0; i < sizeof(testcases) / sizeof(testcases[0]); i++) {
+        struct testcase tc = testcases[i];
+        buf_setcstr(&buf, tc.buf);
+        buf_appendoverlap(&buf, tc.str);
+        CU_ASSERT_STRING_EQUAL(tc.want, buf_cstring(&buf));
+        buf_reset(&buf);
+    }
+    buf_free(&buf);
+}
 
 /* TODO: test the Copy-On-Write feature of buf_ensure()...if anyone
  * actually uses it */

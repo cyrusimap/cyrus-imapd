@@ -1176,6 +1176,26 @@ EXPORTED void buf_appendcstr(struct buf *buf, const char *str)
     buf_appendmap(buf, str, strlen(str));
 }
 
+EXPORTED void buf_appendoverlap(struct buf *buf, const char *str)
+{
+    const char *t = buf_cstring(buf);
+    size_t matchlen = strlen(str);
+    if (matchlen < buf_len(buf)) {
+        t += buf_len(buf) - matchlen;
+    } else {
+        matchlen = buf_len(buf);
+    }
+
+    while (*t && matchlen && strncasecmp(t, str, matchlen)) {
+        t++; matchlen--;
+    }
+
+    if (*t && matchlen) {
+        buf_truncate(buf, buf_len(buf) - matchlen);
+    }
+    buf_appendcstr(buf, str);
+}
+
 EXPORTED void buf_appendbit32(struct buf *buf, bit32 num)
 {
     bit32 item = htonl(num);
