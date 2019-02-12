@@ -144,41 +144,74 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val, json_t *patch)
     return dst;
 }
 
-static void jmap_patchobject_diff(json_t *patch, struct buf *buf,
-                                  json_t *a, json_t *b)
+static void jmap_patchobject_set(json_t *diff, struct buf *path,
+                                 const char *key, json_t *val)
 {
-    const char *id;
-    json_t *o;
+    char *enckey = jmap_pointer_encode(key);
+    size_t len = buf_len(path);
+    if (len) buf_appendcstr(path, "/");
+    buf_appendcstr(path, enckey);
+    json_object_set(diff, buf_cstring(path), val);
+    buf_truncate(path, len);
+    free(enckey);
+}
 
-    if (b == NULL || json_equal(a, b)) {
+static void jmap_patchobject_diff(json_t *diff, struct buf *path,
+                                  json_t *src, json_t *dst)
+{
+    if (!json_is_object(src) || !json_is_object(dst))
         return;
-    }
 
-    if (!a || json_is_null(a) || json_typeof(b) != JSON_OBJECT) {
-        json_object_set(patch, buf_cstring(buf), b);
-        return;
-    }
+    const char *key;
+    json_t *val;
 
-    json_object_foreach(b, id, o) {
-        char *encid = jmap_pointer_encode(id);
-        size_t l = buf_len(buf);
-        if (!l) {
-            buf_setcstr(buf, encid);
-        } else {
-            buf_appendcstr(buf, "/");
-            buf_appendcstr(buf, encid);
+    // Add any properties that are set in dst but not in src
+    json_object_foreach(dst, key, val) {
+        if (json_object_get(src, key) == NULL) {
+            jmap_patchobject_set(diff, path, key, val);
         }
-        jmap_patchobject_diff(patch, buf, json_object_get(a, id), o);
-        buf_truncate(buf, l);
-        free(encid);
+    }
+
+    // Remove any properties that are set in src but not in dst
+    json_object_foreach(src, key, val) {
+        if (json_object_get(dst, key) == NULL) {
+            jmap_patchobject_set(diff, path, key, json_null());
+        }
+    }
+
+    // Handle properties that exist in both src and dst
+    json_object_foreach(dst, key, val) {
+        json_t *srcval = json_object_get(src, key);
+        if (!srcval) {
+            continue;
+        }
+        if (json_typeof(val) != JSON_OBJECT) {
+            if (!json_equal(val, srcval)) {
+                jmap_patchobject_set(diff, path, key, val);
+            }
+        }
+        else if (json_typeof(srcval) != JSON_OBJECT) {
+            jmap_patchobject_set(diff, path, key, val);
+        }
+        else {
+            char *enckey = jmap_pointer_encode(key);
+            size_t len = buf_len(path);
+            if (len) buf_appendcstr(path, "/");
+            buf_appendcstr(path, enckey);
+            jmap_patchobject_diff(diff, path, srcval, val);
+            buf_truncate(path, len);
+            free(enckey);
+        }
     }
 }
 
-EXPORTED json_t *jmap_patchobject_create(json_t *a, json_t *b)
+EXPORTED json_t *jmap_patchobject_create(json_t *src, json_t *dst)
 {
-    json_t *patch = json_object();
+    json_t *diff = json_object();
     struct buf buf = BUF_INITIALIZER;
-    jmap_patchobject_diff(patch, &buf, a, b);
+
+    jmap_patchobject_diff(diff, &buf, src, dst);
+
     buf_free(&buf);
-    return patch;
+    return diff;
 }

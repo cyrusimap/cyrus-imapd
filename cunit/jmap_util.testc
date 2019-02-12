@@ -1,0 +1,136 @@
+#include "config.h"
+#include "cunit/cyrunit.h"
+#include "xmalloc.h"
+#include "util.h"
+#include "imap/jmap_util.h"
+
+static void test_patchobject_create(void)
+{
+#define TESTCASE(src, dst, want) \
+    { \
+        json_t *jsrc = json_loads(src, JSON_DECODE_ANY, NULL); \
+        json_t *jdst = json_loads(dst, JSON_DECODE_ANY, NULL); \
+        \
+        json_t *jwant = json_loads(want, JSON_DECODE_ANY, NULL); \
+        json_t *jdiff = jmap_patchobject_create(jsrc, jdst); \
+        CU_ASSERT_PTR_NOT_NULL(jdiff); \
+        \
+        char *swant = json_dumps(jwant, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
+        char *sdiff = json_dumps(jdiff, JSON_SORT_KEYS|JSON_ENCODE_ANY); \
+        CU_ASSERT_STRING_EQUAL(swant, sdiff); \
+        \
+        free(sdiff); \
+        free(swant); \
+        json_decref(jdiff); \
+        json_decref(jwant); \
+        json_decref(jdst); \
+        json_decref(jsrc); \
+    }
+
+    const char *src, *dst, *want;
+
+    /* Remove one property at top-level */
+    src = "{"
+    "  \"a\": 1,"
+    "  \"b\": 1"
+    "}";
+    dst = "{"
+    "  \"a\": 1"
+    "}";
+    want = "{"
+    "  \"b\": null"
+    "}";
+    TESTCASE(src, dst, want);
+
+    /* Add one property at top-level */
+    src = "{"
+    "  \"a\": 1"
+    "}";
+    dst = "{"
+    "  \"a\": 1,"
+    "  \"b\": 1"
+    "}";
+    want = "{"
+    "  \"b\": 1"
+    "}";
+    TESTCASE(src, dst, want);
+
+    /* Replace one scalar property at top-level with another */
+    src = "{"
+    "  \"a\": 1"
+    "}";
+    dst = "{"
+    "  \"a\": 2"
+    "}";
+    want = "{"
+    "  \"a\": 2"
+    "}";
+    TESTCASE(src, dst, want);
+
+    /* Replace one object property at top-level with a scalar */
+    src = "{"
+    "  \"a\": {"
+    "    \"b\": 1"
+    "  }"
+    "}";
+    dst = "{"
+    "  \"a\": 2"
+    "}";
+    want = "{"
+    "  \"a\": 2"
+    "}";
+    TESTCASE(src, dst, want);
+
+    /* Replace one scalar property at top-level with an object */
+    src = "{"
+    "  \"a\": {"
+    "    \"b\": 1"
+    "  }"
+    "}";
+    dst = "{"
+    "  \"a\": 2"
+    "}";
+    want = "{"
+    "  \"a\": 2"
+    "}";
+    TESTCASE(src, dst, want);
+
+    /* Add a nested property */
+    src = "{"
+    "  \"a\": {"
+    "    \"b\": 1"
+    "  }"
+    "}";
+    dst = "{"
+    "  \"a\": {"
+    "    \"b\": 1,"
+    "    \"c\": 2"
+    "  }"
+    "}";
+    want = "{"
+    "  \"a/c\": 2"
+    "}";
+    TESTCASE(src, dst, want);
+
+    /* Remove a nested property */
+    src = "{"
+    "  \"a\": {"
+    "    \"b\": 1,"
+    "    \"c\": 2"
+    "  }"
+    "}";
+    dst = "{"
+    "  \"a\": {"
+    "    \"b\": 1"
+    "  }"
+    "}";
+    want = "{"
+    "  \"a/c\": null"
+    "}";
+    TESTCASE(src, dst, want);
+
+
+#undef TESTCASE
+}
+
+/* vim: set ft=c: */

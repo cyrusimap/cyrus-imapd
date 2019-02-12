@@ -1275,7 +1275,13 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/jmap_util.c \
 	jmap/jmap_util.h
 
-endif
+if CUNIT
+
+cunit_TESTS += cunit/jmap_util.testc
+
+endif # CUNIT
+
+endif # JMAP
 
 imap_httpd_LDADD = $(LD_SERVER_ADD)
 

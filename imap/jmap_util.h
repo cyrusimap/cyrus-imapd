@@ -49,7 +49,7 @@
 /* Apply patch to a deep copy of val and return the result. */
 extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch);
 
-/* Create a patch-object that transforms a to b. */
+/* Create a patch-object that transforms src into dst. */
 extern json_t *jmap_patchobject_create(json_t *a, json_t *b);
 
 /* Return non-zero src and its RFC6901 encoding differ */
