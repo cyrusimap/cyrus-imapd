@@ -1,6 +1,6 @@
-/* json_support.c -- Helper functions for jansson and JSON
+/* jmap_util.h -- Helper routines for JMAP
  *
- * Copyright (c) 2017 FastMail, Inc.  All rights reserved.
+ * Copyright (c) 1994-2018 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,69 +41,24 @@
  *
  */
 
-#include <string.h>
+#ifndef JMAP_UTIL_H
+#define JMAP_UTIL_H
 
 #include "json_support.h"
-#include "util.h"
 
-int json_pointer_needsencode(const char *src)
-{
-    return strchr(src, '/') || strchr(src, '~');
-}
+/* Apply patch to a deep copy of val and return the result. */
+extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch);
 
-char* json_pointer_encode(const char *src)
-{
-    struct buf buf = BUF_INITIALIZER;
-    const char *base, *top;
-    buf_ensure(&buf, strlen(src));
+/* Create a patch-object that transforms a to b. */
+extern json_t *jmap_patchobject_create(json_t *a, json_t *b);
 
-    base = src;
-    top = base;
-    while (*base) {
-        for (top = base; *top && *top != '~' && *top != '/'; top++)
-            ;
-        if (!*top) break;
+/* Return non-zero src and its RFC6901 encoding differ */
+extern int jmap_pointer_needsencode(const char *src);
 
-        buf_appendmap(&buf, base, top-base);
-        if (*top == '~') {
-            buf_appendmap(&buf, "~0", 2);
-            top++;
-        } else if (*top == '/') {
-            buf_appendmap(&buf, "~1", 2);
-            top++;
-        }
-        base = top;
-    }
-    buf_appendmap(&buf, base, top-base);
-    return buf_release(&buf);
-}
+/* Encode src according to RFC6901 */
+extern char *jmap_pointer_encode(const char *src);
 
-char *json_pointer_decode(const char *src, size_t len)
-{
-    struct buf buf = BUF_INITIALIZER;
-    const char *base, *top, *end;
+/* Decode src according to RFC6901 */
+extern char *jmap_pointer_decode(const char *src, size_t len);
 
-    buf_ensure(&buf, len);
-    end = src + len;
-
-    base = src;
-    while (base < end && (top = strchr(base, '~')) && top < end) {
-        buf_appendmap(&buf, base, top-base);
-
-        if (top < end-1 && *(top+1) == '0') {
-            buf_appendcstr(&buf, "~");
-            base = top + 2;
-        } else if (top < end-1 && *(top+1) == '1') {
-            buf_appendcstr(&buf, "/");
-            base = top + 2;
-        } else {
-            buf_appendcstr(&buf, "~");
-            base = top + 1;
-        }
-    }
-    if (base < end) {
-        buf_appendmap(&buf, base, end-base);
-    }
-
-    return buf_release(&buf);
-}
+#endif /* JMAP_UTIL_H */

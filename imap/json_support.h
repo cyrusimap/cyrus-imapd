@@ -52,11 +52,6 @@
 
 #define JNOTNULL(item)          ((item) ? (json_is_null(item) == 0) : 0)
 
-/* Helper functions for RFC 6901 JSON pointers */
-int json_pointer_needsencode(const char *src);
-char *json_pointer_encode(const char *src);
-char *json_pointer_decode(const char *src, size_t len);
-
 /* jansson replacement functions for those missing in older versions */
 
 #ifndef json_boolean

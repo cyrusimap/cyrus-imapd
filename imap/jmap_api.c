@@ -138,7 +138,7 @@ static json_t *extract_value(json_t *val, const char *path, ptrarray_t *pool)
         if (!(top = strchr(path, '/'))) {
             top = strchr(path, '\0');
         }
-        p = json_pointer_decode(path, top - path);
+        p = jmap_pointer_decode(path, top - path);
         if (*p == '\0') {
             return NULL;
         }
@@ -1220,80 +1220,6 @@ HIDDEN void jmap_myrights_delete(jmap_req_t *req, const char *mboxname)
     free(rightsptr);
 }
 
-HIDDEN json_t* jmap_patchobject_apply(json_t *val, json_t *patch)
-{
-    const char *path;
-    json_t *newval, *dst;
-
-    dst = json_deep_copy(val);
-    json_object_foreach(patch, path, newval) {
-        /* Start traversal at root object */
-        json_t *it = dst;
-        const char *base = path, *top;
-        /* Find path in object tree */
-        while ((top = strchr(base, '/'))) {
-            char *name = json_pointer_decode(base, top-base);
-            it = json_object_get(it, name);
-            free(name);
-            base = top + 1;
-        }
-        if (!it) {
-            /* No such path in 'val' */
-            json_decref(dst);
-            return NULL;
-        }
-        /* Replace value at path */
-        char *name = json_pointer_decode(base, strlen(base));
-        if (newval == json_null()) {
-            json_object_del(it, name);
-        } else {
-            json_object_set(it, name, newval);
-        }
-        free(name);
-    }
-
-    return dst;
-}
-
-static void jmap_patchobject_diff(json_t *patch, struct buf *buf,
-                                  json_t *a, json_t *b)
-{
-    const char *id;
-    json_t *o;
-
-    if (b == NULL || json_equal(a, b)) {
-        return;
-    }
-
-    if (!a || json_is_null(a) || json_typeof(b) != JSON_OBJECT) {
-        json_object_set(patch, buf_cstring(buf), b);
-        return;
-    }
-
-    json_object_foreach(b, id, o) {
-        char *encid = json_pointer_encode(id);
-        size_t l = buf_len(buf);
-        if (!l) {
-            buf_setcstr(buf, encid);
-        } else {
-            buf_appendcstr(buf, "/");
-            buf_appendcstr(buf, encid);
-        }
-        jmap_patchobject_diff(patch, buf, json_object_get(a, id), o);
-        buf_truncate(buf, l);
-        free(encid);
-    }
-}
-
-HIDDEN json_t *jmap_patchobject_create(json_t *a, json_t *b)
-{
-    json_t *patch = json_object();
-    struct buf buf = BUF_INITIALIZER;
-    jmap_patchobject_diff(patch, &buf, a, b);
-    buf_free(&buf);
-    return patch;
-}
-
 /* Add performance stats to method response */
 static void jmap_add_perf(jmap_req_t *req, json_t *res)
 {
@@ -1356,8 +1282,8 @@ HIDDEN const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf)
 
     for (i = 0; i < parser->path.count; i++) {
         const char *p = strarray_nth(&parser->path, i);
-        if (json_pointer_needsencode(p)) {
-            char *tmp = json_pointer_encode(p);
+        if (jmap_pointer_needsencode(p)) {
+            char *tmp = jmap_pointer_encode(p);
             buf_appendcstr(buf, tmp);
             free(tmp);
         } else {

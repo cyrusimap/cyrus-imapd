@@ -54,6 +54,8 @@
 #include "msgrecord.h"
 #include "strarray.h"
 
+#include "jmap_util.h"
+
 #define JMAP_URN_CORE       "urn:ietf:params:jmap:core"
 #define JMAP_URN_MAIL       "urn:ietf:params:jmap:mail"
 #define JMAP_URN_SUBMISSION "urn:ietf:params:jmap:submission"

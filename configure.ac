@@ -1403,6 +1403,7 @@ PKG_CHECK_MODULES([JANSSON], [jansson >= 2.3],
 dnl call AC_SUBST macro to support pkg-config version older than 0.24
 AC_SUBST([JANSSON_LIBS])
 AC_SUBST([JANSSON_CFLAGS])
+AM_CONDITIONAL([USE_JANSSON], [test "x$with_jansson" = xyes])
 
 dnl
 dnl Check for zeroskip library, needed for zeroskip support

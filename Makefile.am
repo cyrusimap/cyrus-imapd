@@ -65,6 +65,7 @@ AM_CPPFLAGS += $(LDAP_CPPFLAGS)
 endif # HAVE_LDAP
 
 AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
+
 BUILT_SOURCES = \
 	imap/imap_err.c \
 	lib/imapopts.c \
@@ -610,6 +611,12 @@ AM_CPPFLAGS += $(LIBCHARDET_CFLAGS)
 LD_SERVER_ADD += $(LIBCHARDET_LIBS)
 endif
 
+if USE_JANSSON
+AM_LDFLAGS += $(JANSSON_LIBS)
+AM_CPPFLAGS += $(JANSSON_CFLAGS)
+LD_SERVER_ADD += $(JANSSON_LIBS)
+endif
+
 if CUNIT
 
 CUNIT_PROJECT = cunit/default.cunit
@@ -838,7 +845,7 @@ backup_ctl_backups_LDADD = backup/libcyrus_backup.la $(LD_SIEVE_ADD) $(LD_UTILIT
 backup_cyr_backup_SOURCES = \
     imap/mutex_fake.c \
     backup/cyr_backup.c
-backup_cyr_backup_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD) $(JANSSON_LIBS)
+backup_cyr_backup_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD)
 
 backup_restore_SOURCES = \
     imap/mutex_fake.c \
@@ -890,7 +897,7 @@ imap_cyr_info_SOURCES = imap/cli_fatal.c imap/cyr_info.c imap/mutex_fake.c maste
 imap_cyr_info_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_buildinfo_SOURCES = imap/cli_fatal.c imap/cyr_buildinfo.c imap/mutex_fake.c master/masterconf.c
-imap_cyr_buildinfo_LDADD = $(LD_UTILITY_ADD) $(JANSSON_LIBS)
+imap_cyr_buildinfo_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_sequence_SOURCES = imap/cli_fatal.c imap/cyr_sequence.c imap/mutex_fake.c
 imap_cyr_sequence_LDADD = $(LD_UTILITY_ADD)
@@ -966,11 +973,10 @@ imap_libcyrus_imap_la_LIBADD = \
     $(COM_ERR_LIBS) \
     $(LIB_UUID) \
     $(GCOV_LIBS) \
-    $(JANSSON_LIBS) \
     lib/libcyrus_min.la \
     lib/libcyrus.la
 
-imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY) $(JANSSON_CFLAGS)
+imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 imap_libcyrus_imap_la_CXXFLAGS = $(AM_CXXFLAGS)
 
 imap_libcyrus_imap_la_SOURCES = \
@@ -1239,8 +1245,6 @@ imap_httpd_SOURCES = \
 	imap/httpd.h \
 	imap/jcal.c \
 	imap/jcal.h \
-	imap/json_support.c \
-	imap/json_support.h \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/smtpclient.c \
@@ -1266,6 +1270,11 @@ imap_httpd_SOURCES += \
 	imap/jmap_mail.c \
 	imap/jmap_mail_submission.c \
 	imap/jmap_mailbox.c
+
+imap_libcyrus_imap_la_SOURCES += \
+	imap/jmap_util.c \
+	jmap/jmap_util.h
+
 endif
 
 imap_httpd_LDADD = $(LD_SERVER_ADD)
@@ -1296,7 +1305,7 @@ imap_promstatsd_SOURCES = imap/promstatsd.c imap/mutex_fake.c
 imap_promstatsd_LDADD = $(LD_UTILITY_ADD)
 
 imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c imap/quota.h
-imap_quota_LDADD = $(LD_UTILITY_ADD) $(JANSSON_LIBS)
+imap_quota_LDADD = $(LD_UTILITY_ADD)
 
 imap_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/reconstruct.c
 imap_reconstruct_LDADD = $(LD_UTILITY_ADD)
