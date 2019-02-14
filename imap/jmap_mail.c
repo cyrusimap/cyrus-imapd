@@ -6085,7 +6085,6 @@ struct emailpart {
     json_t *jbody;                /* EmailBodyValue for text bodies */
     char *blob_id;                /* blobId to dump contents from */
     ptrarray_t subparts;          /* array of emailpart pointers */
-    int is_attachment;            /* neither text nor inline */
     char *type;                   /* Content-Type main type */
     char *subtype;                /* Content-Type subtype */
     char *charset;                /* Content-Type charset parameter */
@@ -6826,17 +6825,6 @@ static struct emailpart *_emailpart_parse(json_t *jpart,
         return NULL;
     }
 
-    /* Check if this part is marked as attachment */
-    if (part->type) {
-        if (strcasecmp(part->type, "TEXT") && strcasecmp(part->type, "MULTIPART")) {
-            if (!part->disposition || strcasecmp(part->disposition, "INLINE"))
-                part->is_attachment = 1;
-        }
-    }
-    else if (part->blob_id) {
-        part->is_attachment = 1;
-    }
-
     /* Finalize part definition */
     part->jbody = json_incref(bodyValue);
 
@@ -7126,11 +7114,22 @@ static void _email_parse_bodies(json_t *jemail,
 
         struct emailpart *part;
         while ((part = ptrarray_pop(&work))) {
-            int i;
-            if (part->is_attachment) {
+            if (part->disposition && strcasecmp(part->disposition, "INLINE")) {
                 email->has_attachment = 1;
                 break;
             }
+            else if (part->type && strcasecmp(part->type, "TEXT") &&
+                     strcasecmp(part->type, "MULTIPART") &&
+                     (!part->disposition || strcasecmp(part->disposition, "INLINE"))) {
+                email->has_attachment = 1;
+                break;
+            }
+            else if (part->blob_id) {
+                email->has_attachment = 1;
+                break;
+            }
+
+            int i;
             for (i = 0; i < part->subparts.count; i++) {
                 struct emailpart *subpart = ptrarray_nth(&part->subparts, i);
                 ptrarray_append(&work, subpart);
@@ -7376,38 +7375,34 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     /* Fetch blob contents and headers */
     const char *base = blob_buf.s;
     size_t len = blob_buf.len;
-    const char *encoding = NULL;
+    const char *src_encoding = body->encoding;
+    if (part) {
+        base += part->content_offset;
+        len = part->content_size;
+        src_encoding = part->encoding;
+    }
+
+    /* Determine target encoding */
+    const char *encoding = src_encoding;
     int encode_base64 = 0;
     int decode_base64 = 0;
 
-    if (part) {
-        /* Map into body part */
-        base += part->content_offset;
-        len = part->content_size;
-
-        /* Determine encoding. */
-        encoding = part->encoding;
-
-        if (!strcmpnull(emailpart->type, "MESSAGE")) {
+    if (!strcmpnull(emailpart->type, "MESSAGE")) {
+        if (!strcmpnull(src_encoding, "BASE64")) {
             /* This is a MESSAGE and hence it is only allowed
              * to be in 7bit, 8bit or binary encoding. Base64
              * is not allowed, so let's decode the blob and
              * assume it to be in binary encoding. */
-            if (!strcmpnull(encoding, "BASE64")) {
-                encoding = "BINARY";
-                decode_base64 = 1;
-            }
+            encoding = "BINARY";
+            decode_base64 = 1;
         }
-        else {
-            /* This isn't a MESSAGE, and we can't guarantee this
-             * email to only be sent verbatim to 8BITMIME-enabled
-             * mail servers. So base64-encode the blob if it isn't
-             * using a safe encoding already. */
-            if (!encoding || !strcmp(encoding, "BINARY") || !strcmp(encoding, "8BIT")) {
-                encoding = "BASE64";
-                encode_base64 = 1;
-            }
-        }
+        /* Never base64 encode message type */
+        encode_base64 = 0;
+    }
+    else {
+        /* Base64 encode all other types, including text */
+        encoding = "BASE64";
+        encode_base64 = strcmpnull("BASE64", src_encoding);
     }
 
     /* Write encoding header, if required */
