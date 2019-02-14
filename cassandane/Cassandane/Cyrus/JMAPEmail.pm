@@ -11958,17 +11958,71 @@ sub test_email_set_multipartdigest
         ['Email/get', {
             ids => [ '#1' ],
             properties => [ 'bodyStructure' ],
-            bodyProperties => [ 'partId', 'blobId', 'type', 'headers' ],
+            bodyProperties => [ 'partId', 'blobId', 'type', 'header:Content-Type' ],
             fetchAllBodyValues => JSON::true,
         }, 'R2' ],
     ]);
 
     my $subPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[0];
     $self->assert_str_equals("message/rfc822", $subPart->{type});
-    $self->assert_deep_equals([], $subPart->{headers});
+    $self->assert_null($subPart->{'header:Content-Type'});
     $subPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[1];
     $self->assert_str_equals("message/rfc822", $subPart->{type});
-    $self->assert_deep_equals([], $subPart->{headers});
+    $self->assert_null($subPart->{'header:Content-Type'});
 }
+
+sub test_email_set_encode_plain_text_attachment
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    if (not $self->{instance}->{buildinfo}->get('dependency', 'libchardet')) {
+        xlog "Cyrus instance doesn't support charset detection. Skipping test.";
+        return 0;
+    }
+
+    my $jmap = $self->{jmap};
+
+    my $text = "This line ends with a LF\nThis line does as well\n";
+
+    my $data = $jmap->Upload($text, "text/plain");
+    my $blobId = $data->{blobId};
+
+    my $email = {
+        mailboxIds => { '$inbox' => JSON::true },
+        from => [{ name => "Test", email => q{test@local} }],
+        subject => "test",
+        bodyStructure => {
+            type => "multipart/mixed",
+            subParts => [{
+                type => 'text/plain',
+                partId => '1',
+            }, {
+                type => 'text/plain',
+                disposition => 'attachment',
+                blobId => $blobId,
+            }]
+        },
+        bodyValues => {
+            1 => {
+                value => "A plain text body",
+            }
+        }
+    };
+    my $res = $jmap->CallMethods([
+        ['Email/set', { create => { '1' => $email } }, 'R1'],
+        ['Email/get', {
+            ids => [ '#1' ],
+            properties => [ 'bodyStructure', 'bodyValues' ],
+            bodyProperties => [
+                'partId', 'blobId', 'type', 'header:Content-Transfer-Encoding', 'size'
+            ],
+            fetchAllBodyValues => JSON::true,
+        }, 'R2' ],
+    ]);
+    my $subPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[1];
+    $self->assert_str_equals(' BASE64', $subPart->{'header:Content-Transfer-Encoding'});
+}
+
 
 1;
