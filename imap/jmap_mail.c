@@ -7112,27 +7112,28 @@ static void _email_parse_bodies(json_t *jemail,
         ptrarray_t work = PTRARRAY_INITIALIZER;
         ptrarray_append(&work, email->body);
 
-        struct emailpart *part;
-        while ((part = ptrarray_pop(&work))) {
+        while (!email->has_attachment && work.count) {
+            struct emailpart *part = ptrarray_pop(&work);
             if (part->disposition && strcasecmp(part->disposition, "INLINE")) {
                 email->has_attachment = 1;
-                break;
+            }
+            else if (part->filename) {
+                email->has_attachment = 1;
             }
             else if (part->type && strcasecmp(part->type, "TEXT") &&
                      strcasecmp(part->type, "MULTIPART") &&
                      (!part->disposition || strcasecmp(part->disposition, "INLINE"))) {
                 email->has_attachment = 1;
-                break;
             }
-            else if (part->blob_id) {
+            else if (part->blob_id && (!part->type || strcasecmp(part->type, "TEXT"))) {
                 email->has_attachment = 1;
-                break;
             }
-
-            int i;
-            for (i = 0; i < part->subparts.count; i++) {
-                struct emailpart *subpart = ptrarray_nth(&part->subparts, i);
-                ptrarray_append(&work, subpart);
+            else {
+                int i;
+                for (i = 0; i < part->subparts.count; i++) {
+                    struct emailpart *subpart = ptrarray_nth(&part->subparts, i);
+                    ptrarray_append(&work, subpart);
+                }
             }
         }
         ptrarray_fini(&work);
