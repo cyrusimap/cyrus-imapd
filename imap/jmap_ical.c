@@ -658,8 +658,18 @@ recurrence_from_ical(icalcomponent *comp)
             if (tzid_param) tzid = icalparameter_get_tzid(tzid_param);
         }
         icaltimezone *tz = tz_from_tzid(tzid);
-        icaltimetype dtloc = icaltime_convert_to_zone(rrule.until, tz);
-        char *until = localdate_from_icaltime_r(dtloc);
+        icaltimetype dtuntil;
+        if (rrule.until.is_date) {
+            dtuntil = rrule.until;
+            dtuntil.hour = 23;
+            dtuntil.minute = 59;
+            dtuntil.second = 59;
+            dtuntil.is_date = 0;
+        }
+        else {
+            dtuntil = icaltime_convert_to_zone(rrule.until, tz);
+        }
+        char *until = localdate_from_icaltime_r(dtuntil);
         if (until) json_object_set_new(recur, "until", json_string(until));
         free(until);
     }
@@ -1903,7 +1913,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
         is_allday = 1;
         tzid_start = NULL;
     }
-    else is_allday = 0; // handle isAllDay:true with timeZone later
+    else is_allday = 0;
 
     /* start */
     if (jmap_wantprop(props, "start")) {
@@ -1927,13 +1937,6 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
 
     /* isAllDay */
     if (jmap_wantprop(props, "isAllDay") && !is_exception) {
-        /* isAllDay may be true even if a timezone is set */
-        prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
-        if (!strcmpsafe(get_icalxparam_value(prop, JMAPICAL_XPARAM_ISALLDAY), "TRUE")) {
-            if (!(dur.hours || dur.minutes || dur.seconds)) {
-                is_allday = 1;
-            }
-        }
         json_object_set_new(event, "isAllDay", json_boolean(is_allday));
     }
 
@@ -2279,55 +2282,45 @@ static int localdate_to_tm(const char *buf, struct tm *tm) {
     return 1;
 }
 
-/* Convert the JMAP local datetime formatted buf into ical datetime dt
- * using timezone tz. Return non-zero on success.
- *
- * FIXME the truncate_allday parameter is more of a workaround, but we
- * are currently sanitizing the JSCalendar/iCalendar conversion code
- * in a feature branch, so let's wait for that for a proper solution.
- */
-static int localdate_to_icaltime(const char *buf,
-                                 icaltimetype *dt,
-                                 icaltimezone *tz,
-                                 int is_allday,
-                                 int truncate_allday) {
-    struct tm tm;
-    int r;
+static int tm_to_icaltime(struct tm tm,
+                          icaltimezone *tz,
+                          int is_allday,
+                          icaltimetype *dt)
+{
     char *s = NULL;
-    icaltimetype tmp;
-    int is_utc;
-    size_t n;
-
-    r = localdate_to_tm(buf, &tm);
-    if (!r) return 0;
-
-    if (is_allday && (tm.tm_sec || tm.tm_min || tm.tm_hour)) {
-        if (!truncate_allday) {
-            return 0;
-        }
-        tm.tm_sec = 0;
-        tm.tm_min = 0;
-        tm.tm_hour = 0;
+    if (is_allday) {
+        if (tm.tm_hour != 0 || tm.tm_min != 0 || tm.tm_sec != 0) return 0;
+        s = xcalloc(10, sizeof(char));
+        strftime(s, 9, "%Y%m%d", &tm);
     }
-
-    is_utc = tz == icaltimezone_get_utc_timezone();
-
-    /* Can't use icaltime_from_timet_with_zone since it tries to convert
-     * t from UTC into tz. Let's feed ical a DATETIME string, instead. */
-    s = xcalloc(19, sizeof(char));
-    n = strftime(s, 18, "%Y%m%dT%H%M%S", &tm);
-    if (is_utc) {
-        s[n]='Z';
+    else {
+        s = xcalloc(19, sizeof(char));
+        size_t n = strftime(s, 18, "%Y%m%dT%H%M%S", &tm);
+        if (tz == icaltimezone_get_utc_timezone()) s[n]='Z';
     }
-    tmp = icaltime_from_string(s);
+    icaltimetype tmp = icaltime_from_string(s);
     free(s);
     if (icaltime_is_null_time(tmp)) {
         return 0;
     }
     tmp.zone = tz;
-    tmp.is_date = is_allday && tz == NULL;
+    tmp.is_date = is_allday;
     *dt = tmp;
     return 1;
+}
+
+/* Convert the JMAP local datetime formatted buf into ical datetime dt
+ * using timezone tz. Return non-zero on success.
+ */
+static int localdate_to_icaltime(const char *buf,
+                                 icaltimezone *tz,
+                                 int is_allday,
+                                 icaltimetype *dt)
+{
+    struct tm tm;
+    int r = localdate_to_tm(buf, &tm);
+    if (!r) return 0;
+    return tm_to_icaltime(tm, tz, is_allday, dt);
 }
 
 static int utcdate_to_icaltime(const char *src,
@@ -2343,7 +2336,7 @@ static int utcdate_to_icaltime(const char *src,
     }
 
     buf_setmap(&buf, src, len-1);
-    r = localdate_to_icaltime(buf_cstring(&buf), dt, utc, 0, 0);
+    r = localdate_to_icaltime(buf_cstring(&buf), utc, 0, dt);
     buf_free(&buf);
     return r;
 }
@@ -2422,7 +2415,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     if (json_is_string(jprop)) {
         const char *val = json_string_value(jprop);
         tzstart = tz_from_tzid(val);
-        if (!tzstart) {
+        if (!tzstart || is_allday) {
             jmap_parser_invalid(parser, "timeZone");
         }
     } else if (JNOTNULL(jprop)) {
@@ -2484,7 +2477,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     jprop = json_object_get(event, "start");
     if (json_is_string(jprop)) {
         const char *val = json_string_value(jprop);
-        if (!localdate_to_icaltime(val, &dtstart, tzstart, is_allday, 0)) {
+        if (!localdate_to_icaltime(val, tzstart, is_allday, &dtstart)) {
             jmap_parser_invalid(parser, "start");
         }
     } else {
@@ -2500,11 +2493,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     remove_icalprop(comp, ICAL_DTEND_PROPERTY);
     remove_icalprop(comp, ICAL_DURATION_PROPERTY);
 
-    icalproperty *prop = dtprop_to_ical(comp, dtstart, tzstart, 1, ICAL_DTSTART_PROPERTY);
-    if (prop && is_allday && !dtstart.is_date) {
-        /* isAllDay is set to true on a non-floating start time */
-        set_icalxparam(prop, JMAPICAL_XPARAM_ISALLDAY, "TRUE", 1);
-    }
+    dtprop_to_ical(comp, dtstart, tzstart, 1, ICAL_DTSTART_PROPERTY);
     if (tzstart != tzend) {
         /* Add DTEND */
         icaltimetype dtend;
@@ -3778,12 +3767,22 @@ recurrence_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrul
     const char *until = json_string_value(jprop);
     if (until) {
         icaltimetype dtloc;
-        int is_date = icalcomponent_get_dtstart(comp).is_date;
+        int is_allday = icalcomponent_get_dtstart(comp).is_date;
         icaltimezone *tzstart = tz_from_tzid(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
-        if (localdate_to_icaltime(until, &dtloc, tzstart, is_date, /*truncate*/1)) {
-            icaltimezone *utc = icaltimezone_get_utc_timezone();
-            icaltimetype dt = icaltime_convert_to_zone(dtloc, utc);
-            buf_printf(&buf, ";UNTIL=%s", icaltime_as_ical_string(dt));
+        struct tm tm;
+        if (localdate_to_tm(until, &tm)) {
+            if (is_allday) {
+                tm.tm_hour = 0;
+                tm.tm_min = 0;
+                tm.tm_sec = 0;
+            }
+            if (tm_to_icaltime(tm, tzstart, is_allday, &dtloc)) {
+                icaltimezone *utc = icaltimezone_get_utc_timezone();
+                icaltimetype dt = icaltime_convert_to_zone(dtloc, utc);
+                buf_printf(&buf, ";UNTIL=%s", icaltime_as_ical_string(dt));
+            } else {
+                jmap_parser_invalid(parser, "until");
+            }
         } else {
             jmap_parser_invalid(parser, "until");
         }
@@ -4163,7 +4162,7 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
     json_object_foreach(overrides, id, override) {
         icaltimetype start = icaltime_null_time();
 
-        if (!localdate_to_icaltime(id, &start, tzstart, is_date, 0)) {
+        if (!localdate_to_icaltime(id, tzstart, is_date, &start)) {
             jmap_parser_invalid(parser, id);
             continue;
         }
