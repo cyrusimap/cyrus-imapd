@@ -2042,7 +2042,7 @@ If all partitions are over that limit, this feature is not used anymore.
 { "search_stopword_path", NULL, STRING }
 /* The absolute base path to the search stopword lists. If not specified,
    no stopwords will be taken into account during search indexing. Currently,
-   the only supported and default stop word file is english.list. */
+   the only supported and default stop word file is english.txt. */
 
 # Commented out - there's no such thing as "searchpartition-name",
 # but we need this for the man page

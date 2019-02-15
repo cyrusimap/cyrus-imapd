@@ -57,7 +57,7 @@ static Xapian::Stopper *get_stopper()
         struct buf buf = BUF_INITIALIZER;
         buf_setcstr(&buf, swpath);
         // XXX doesn't play nice with WIN32 paths
-        buf_appendcstr(&buf, "/english.list");
+        buf_appendcstr(&buf, "/english.txt");
 
         // Open the stopword file
         errno = 0;
