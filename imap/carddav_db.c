@@ -618,10 +618,39 @@ static int carddav_write_emails(struct carddav_db *carddavdb, int rowid, const s
     return 0;
 }
 
+static int carddav_delete_emails(struct carddav_db *carddavdb, int rowid)
+{
+    struct sqldb_bindval bval[] = {
+        { ":rowid", SQLITE_INTEGER, { .i = rowid } },
+        { NULL,     SQLITE_NULL,    { .s = NULL  } } };
+    int r;
+
+    r = sqldb_exec(carddavdb->db, CMD_DELETE_EMAIL, bval, NULL, NULL);
+    if (r) return r;
+
+    return 0;
+}
+
 #define CMD_DELETE_GROUP "DELETE FROM vcard_groups WHERE objid = :objid"
 #define CMD_INSERT_GROUP                                                \
     "INSERT INTO vcard_groups ( objid, pos, member_uid, otheruser )"    \
     " VALUES ( :objid, :pos, :member_uid, :otheruser );"
+
+static int carddav_delete_groups(struct carddav_db *carddavdb, int rowid)
+{
+    struct sqldb_bindval bval[] = {
+        { ":objid",        SQLITE_INTEGER, { .i = rowid        } },
+        { ":pos",          SQLITE_INTEGER, { .i = 0            } },
+        { ":member_uid",   SQLITE_TEXT,    { .s = NULL         } },
+        { ":otheruser",    SQLITE_TEXT,    { .s = NULL         } },
+        { NULL,            SQLITE_NULL,    { .s = NULL         } } };
+    int r;
+
+    r = sqldb_exec(carddavdb->db, CMD_DELETE_GROUP, bval, NULL, NULL);
+    if (r) return r;
+
+    return 0;
+}
 
 static int carddav_write_groups(struct carddav_db *carddavdb, int rowid, const strarray_t *member_uids)
 {
@@ -727,6 +756,8 @@ EXPORTED int carddav_delete(struct carddav_db *carddavdb, unsigned rowid)
     int r;
 
     r = sqldb_exec(carddavdb->db, CMD_DELETE, bval, NULL, NULL);
+    if (!r) r = carddav_delete_emails(carddavdb, rowid);
+    if (!r) r = carddav_delete_groups(carddavdb, rowid);
     if (r) return r;
 
     return 0;
