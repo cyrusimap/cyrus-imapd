@@ -341,9 +341,10 @@ static int jmap_get(struct transaction_t *txn,
 {
     int r = jmap_parse_path(txn);
 
-    if (r || !(txn->req_tgt.allow & ALLOW_READ)) {
+    if (!(txn->req_tgt.allow & ALLOW_READ)) {
         return HTTP_NOT_FOUND;
     }
+    else if (r) return r;
 
     if (txn->req_tgt.flags == JMAP_ENDPOINT_API) {
         /* Upgrade to WebSockets over HTTP/1.1 on API endpoint, if requested */
