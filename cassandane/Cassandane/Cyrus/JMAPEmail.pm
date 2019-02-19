@@ -11999,6 +11999,9 @@ sub test_email_set_encode_plain_text_attachment
                 partId => '1',
             }, {
                 type => 'text/plain',
+                blobId => $blobId,
+            }, {
+                type => 'text/plain',
                 disposition => 'attachment',
                 blobId => $blobId,
             }]
@@ -12021,6 +12024,8 @@ sub test_email_set_encode_plain_text_attachment
         }, 'R2' ],
     ]);
     my $subPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[1];
+    $self->assert_str_equals(' QUOTED-PRINTABLE', $subPart->{'header:Content-Transfer-Encoding'});
+    $subPart = $res->[1][1]{list}[0]{bodyStructure}{subParts}[2];
     $self->assert_str_equals(' BASE64', $subPart->{'header:Content-Transfer-Encoding'});
 }
 
