@@ -7362,6 +7362,60 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     r = msgrecord_get_size(mr, &size);
     if (r) goto done;
 
+    /* Fetch blob contents and headers */
+    const char *content = blob_buf.s;
+    size_t content_size = blob_buf.len;
+    const char *src_encoding = body->encoding;
+    if (part) {
+        content += part->content_offset;
+        content_size = part->content_size;
+        src_encoding = part->encoding;
+    }
+
+    /* Determine target encoding */
+    const char *encoding = src_encoding;
+    char *encbuf = NULL;
+
+    if (!strcasecmpsafe(emailpart->type, "MESSAGE")) {
+        if (!strcasecmpsafe(src_encoding, "BASE64")) {
+            /* This is a MESSAGE and hence it is only allowed
+             * to be in 7bit, 8bit or binary encoding. Base64
+             * is not allowed, so let's decode the blob and
+             * assume it to be in binary encoding. */
+            encoding = "BINARY";
+            content = charset_decode_mimebody(content, content_size,
+                    ENCODING_BASE64, &encbuf, &content_size);
+        }
+    }
+    else if (strcasecmpsafe(src_encoding, "QUOTED-PRINTABLE") &&
+             strcasecmpsafe(src_encoding, "BASE64")) {
+        /* Encode text to quoted-printable, if it isn't an attachment */
+        if (!strcasecmpsafe(emailpart->type, "TEXT") &&
+            (!strcasecmpsafe(emailpart->subtype, "PLAIN") ||
+             !strcasecmpsafe(emailpart->subtype, "HTML")) &&
+            (!emailpart->disposition || !strcasecmp(emailpart->disposition, "INLINE"))) {
+            encoding = "QUOTED-PRINTABLE";
+            size_t lenqp = 0;
+            encbuf = charset_qpencode_mimebody(content, content_size, 0, &lenqp);
+            content = encbuf;
+            content_size = lenqp;
+        }
+        /* Encode all other types to base64 */
+        else {
+            encoding = "BASE64";
+            size_t len64 = 0;
+            /* Pre-flight encoder to determine length */
+            charset_encode_mimebody(NULL, content_size, NULL, &len64, NULL, 1 /* wrap */);
+            if (len64) {
+                /* Now encode the body */
+                encbuf = xmalloc(len64);
+                charset_encode_mimebody(content, content_size, encbuf, &len64, NULL, 1 /* wrap */);
+            }
+            content = encbuf;
+            content_size = len64;
+        }
+    }
+
     /* Write headers defined by client. */
     size_t i;
     json_t *jheader;
@@ -7373,66 +7427,16 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
         fprintf(fp, "%s: %s\r\n", name, value);
     }
 
-    /* Fetch blob contents and headers */
-    const char *base = blob_buf.s;
-    size_t len = blob_buf.len;
-    const char *src_encoding = body->encoding;
-    if (part) {
-        base += part->content_offset;
-        len = part->content_size;
-        src_encoding = part->encoding;
-    }
-
-    /* Determine target encoding */
-    const char *encoding = src_encoding;
-    int encode_base64 = 0;
-    int decode_base64 = 0;
-
-    if (!strcmpnull(emailpart->type, "MESSAGE")) {
-        if (!strcmpnull(src_encoding, "BASE64")) {
-            /* This is a MESSAGE and hence it is only allowed
-             * to be in 7bit, 8bit or binary encoding. Base64
-             * is not allowed, so let's decode the blob and
-             * assume it to be in binary encoding. */
-            encoding = "BINARY";
-            decode_base64 = 1;
-        }
-        /* Never base64 encode message type */
-        encode_base64 = 0;
-    }
-    else {
-        /* Base64 encode all other types, including text */
-        encoding = "BASE64";
-        encode_base64 = strcmpnull("BASE64", src_encoding);
-    }
-
     /* Write encoding header, if required */
     if (encoding) {
         fputs("Content-Transfer-Encoding: ", fp);
         fputs(encoding, fp);
         fputs("\r\n", fp);
     }
-
     /* Write body */
-    char *tmp = NULL;
-    if (encode_base64) {
-        size_t len64 = 0;
-        /* Pre-flight base64 encoder to determine length */
-        charset_encode_mimebody(NULL, len, NULL, &len64, NULL, 1 /* wrap */);
-        if (len64) {
-            /* Now encode the body */
-            tmp = xmalloc(len64);
-            charset_encode_mimebody(base, len, tmp, &len64, NULL, 1 /* wrap */);
-        }
-        base = tmp;
-        len = len64;
-    }
-    else if (decode_base64) {
-        base = charset_decode_mimebody(base, len, ENCODING_BASE64, &tmp, &len);
-    }
     fputs("\r\n", fp);
-    if (len) fwrite(base, 1, len, fp);
-    free(tmp);
+    if (content_size) fwrite(content, 1, content_size, fp);
+    free(encbuf);
 
 done:
     if (r) json_array_append_new(missing_blobs, json_string(emailpart->blob_id));
