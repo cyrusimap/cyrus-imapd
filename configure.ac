@@ -1405,8 +1405,10 @@ dnl
 dnl Check for zeroskip library, needed for zeroskip support
 dnl
 AC_ARG_WITH([zeroskip],
-	AS_HELP_STRING([--without-zeroskip], [ignore presence of Zeroskip and disable it]))
-AS_IF([test "x$with_zeroskip" != "xno"],
+	[AS_HELP_STRING([--without-zeroskip], [ignore presence of Zeroskip and disable it])],
+    [],
+    [with_zeroskip=yes])
+AS_IF([test "x$with_zeroskip" = "xyes"],
 	[ PKG_CHECK_MODULES([ZEROSKIP], [libzeroskip],
 		[ AC_DEFINE(HAVE_ZEROSKIP, [], [Do we have Zeroskip?])
 		  with_zeroskip=yes ],
@@ -1419,8 +1421,10 @@ dnl
 dnl Check for libchardet library, needed for charset detection support
 dnl
 AC_ARG_WITH([libchardet],
-	AS_HELP_STRING([--without-libchardet], [ignore presence of libchardet and disable it]))
-AS_IF([test "x$with_libchardet" != "xno"],
+	[AS_HELP_STRING([--without-libchardet], [ignore presence of libchardet and disable it])],
+    [],
+    [with_libchardet=yes])
+AS_IF([test "x$with_libchardet" = "xyes"],
 	[ PKG_CHECK_MODULES([LIBCHARDET], [chardet],
 		[ AC_DEFINE(HAVE_LIBCHARDET, [], [Build with libchardet support])
 		  with_libchardet=yes ],
