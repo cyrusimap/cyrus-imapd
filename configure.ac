@@ -1418,20 +1418,20 @@ AC_SUBST([ZEROSKIP_CFLAGS])
 AM_CONDITIONAL([USE_ZEROSKIP], [test "x$with_zeroskip" = xyes])
 
 dnl
-dnl Check for libchardet library, needed for charset detection support
+dnl Check for chardet library, needed for charset detection support
 dnl
-AC_ARG_WITH([libchardet],
-	[AS_HELP_STRING([--without-libchardet], [ignore presence of libchardet and disable it])],
+AC_ARG_WITH([chardet],
+	[AS_HELP_STRING([--without-chardet], [ignore presence of chardet library and disable it])],
     [],
-    [with_libchardet=yes])
-AS_IF([test "x$with_libchardet" = "xyes"],
+    [with_chardet=yes])
+AS_IF([test "x$with_chardet" = "xyes"],
 	[ PKG_CHECK_MODULES([LIBCHARDET], [chardet],
-		[ AC_DEFINE(HAVE_LIBCHARDET, [], [Build with libchardet support])
-		  with_libchardet=yes ],
-		with_libchardet=no)])
+		[ AC_DEFINE(HAVE_LIBCHARDET, [], [Build with chardet library support])
+		  with_chardet=yes ],
+		with_chardet=no)])
 AC_SUBST([LIBCHARDET_LIBS])
 AC_SUBST([LIBCHARDET_CFLAGS])
-AM_CONDITIONAL([USE_LIBCHARDET], [test "x$with_libchardet" = xyes])
+AM_CONDITIONAL([USE_LIBCHARDET], [test "x$with_chardet" = xyes])
 
 dnl
 dnl Set pidfile location
@@ -2375,7 +2375,7 @@ External dependencies:
    ical:               $with_ical
    icu4c:              $with_icu4c
    shapelib:           $with_shapelib
-   libchardet:         $with_libchardet
+   chardet:            $with_chardet
 
 Database support:
    mysql:              $with_mysql

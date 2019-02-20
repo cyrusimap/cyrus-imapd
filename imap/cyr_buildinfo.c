@@ -253,9 +253,9 @@ static json_t *buildinfo()
     json_object_set_new(dependency, "shapelib", json_false());
 #endif
 #ifdef HAVE_LIBCHARDET
-    json_object_set_new(dependency, "libchardet", json_true());
+    json_object_set_new(dependency, "chardet", json_true());
 #else
-    json_object_set_new(dependency, "libchardet", json_false());
+    json_object_set_new(dependency, "chardet", json_false());
 #endif
 
     /* Enabled databases */
