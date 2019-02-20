@@ -32,3 +32,6 @@
 [submodule "libchardet"]
 	path = libchardet
 	url = https://github.com/cyrusimap/libchardet
+[submodule "cld2"]
+	path = cld2
+	url = https://github.com/cyrusimap/cld2.git

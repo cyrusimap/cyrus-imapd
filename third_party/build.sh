@@ -135,3 +135,12 @@ if [ ! $ITEM ] || [ $ITEM == libchardet ] ; then
   sudo make install $MAKEOPTS
 )
 fi
+
+if [ ! $ITEM ] || [ $ITEM == cld2 ] ; then
+(
+  cd cld2
+  git clean -f -x -d
+  ./build.sh
+  sudo ./install.sh --prefix=$PREFIX
+)
+fi
