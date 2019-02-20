@@ -11243,7 +11243,7 @@ sub test_email_get_detect_iso_8859_1
 {
     my ($self) = @_;
 
-    if (not $self->{instance}->{buildinfo}->get('dependency', 'libchardet')) {
+    if (not $self->{instance}->{buildinfo}->get('dependency', 'chardet')) {
         xlog "Cyrus instance doesn't support charset detection. Skipping test.";
         return 0;
     }
@@ -11976,7 +11976,7 @@ sub test_email_set_encode_plain_text_attachment
 {
     my ($self) = @_;
 
-    if (not $self->{instance}->{buildinfo}->get('dependency', 'libchardet')) {
+    if (not $self->{instance}->{buildinfo}->get('dependency', 'chardet')) {
         xlog "Cyrus instance doesn't support charset detection. Skipping test.";
         return 0;
     }
