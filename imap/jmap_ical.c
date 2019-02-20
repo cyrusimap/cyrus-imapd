@@ -409,16 +409,17 @@ static int timet_to_localdate(time_t t, char* buf, size_t size) {
  * The returned string is owned by the caller or NULL on error.
  */
 static char* localdate_from_icaltime_r(icaltimetype icaltime) {
-    char *s;
-    time_t t;
-
-    s = xzmalloc(RFC3339_DATETIME_MAX);
-    if (!s) {
-        return NULL;
+    icaltimetype myicaltime = icaltime;
+    if (myicaltime.is_date) {
+        myicaltime.hour = 0;
+        myicaltime.minute = 0;
+        myicaltime.second = 0;
     }
 
-    t = icaltime_as_timet(icaltime);
+    char *s = xzmalloc(RFC3339_DATETIME_MAX);
+    time_t t = icaltime_as_timet(myicaltime);
     if (!timet_to_localdate(t, s, RFC3339_DATETIME_MAX)) {
+        free(s);
         return NULL;
     }
     return s;
@@ -805,7 +806,30 @@ overrides_from_ical(icalcomponent *comp, json_t *event, const char *tzid_start)
         json_t *ex = calendarevent_from_ical(excomp, NULL, comp);
         if (!ex) continue;
 
-        char *recurid = localdate_from_icaltime_r(icalcomponent_get_recurrenceid(excomp));
+        /* Recurrence-id */
+        /* Convert the recurrence-id into the timezone of the main event.
+         * Some clients generate the recurrence id as UTC date time,
+         * even if the main VEVENT has a DTSTART with a TZID */
+        icaltimetype icalrecurid = icalcomponent_get_recurrenceid(excomp);
+        if ((prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))) {
+            icalrecurid.is_date = icalproperty_get_dtstart(prop).is_date;
+            if (!icalrecurid.is_date) {
+                icalparameter *tzid_param =
+                    icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+                if (tzid_param) {
+                    const char *start_tzid = icalparameter_get_tzid(tzid_param);
+                    if (start_tzid) {
+                        icaltimezone *start_tz = tz_from_tzid(start_tzid);
+                        if (start_tz) {
+                            icalrecurid = icaltime_convert_to_zone(icalrecurid, start_tz);
+                        }
+                    }
+                }
+            }
+        }
+        char *recurid = localdate_from_icaltime_r(icalrecurid);
+
+        /* start */
         const char *exstart = json_string_value(json_object_get(ex, "start"));
         if (exstart && !strcmp(exstart, recurid)) {
             json_object_del(ex, "start");
