@@ -1483,6 +1483,23 @@ sub test_calendarevent_get_recurrenceoverrides
     $self->assert(not exists $o->{"start"});
 }
 
+sub test_calendarevent_get_recurrenceid_utc
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('recurrenceid_utc');
+
+    my $event = $self->putandget_vevent($id, $ical);
+
+    my $wantRecurrenceOverrides = {
+        "2019-02-19T10:00:00" => {
+            title => "override",
+        },
+    };
+    $self->assert_deep_equals($wantRecurrenceOverrides, $event->{recurrenceOverrides});
+}
+
 sub test_calendarevent_get_alerts
     :min_version_3_1 :needs_component_jmap
 {
