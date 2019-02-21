@@ -2,86 +2,30 @@ language: c
 sudo: required
 dist: trusty
 group: edge
-addons:
-  apt:
-    packages:
-    - libxml2-dev
-    - libsqlite3-dev
-    - libsasl2-dev
-    - libssl-dev
-    - libopendkim-dev
-    - libcunit1-dev
-    - libpcre3-dev
-    - uuid-dev
-    - libdb-dev
-    - libbsd-dev
-    - libmilter-dev
-    - graphviz
-    - doxygen
-    - help2man
-    - python-docutils
-    - python-pygments
-    - libmagic-dev
-    - pkg-config
-env:
-  global:
-  - CYRUSLIBS="/usr/local/cyruslibs"
-  - PKG_CONFIG_PATH="$CYRUSLIBS/lib/pkgconfig:$PKG_CONFIG_PATH"
-  - LDFLAGS="-Wl,-rpath,$CYRUSLIBS/lib -Wl,-rpath,$CYRUSLIBS/lib/x86_64-linux-gnu"
-  - XAPIAN_CONFIG="$CYRUSLIBS/bin/xapian-config-1.5"
-  - PATH="$CYRUSLIBS/bin:$PATH"
-  - USE_CCACHE=1
-cache:
-  apt: true
-  ccache: true
-os: linux
-compiler: gcc
-install:
-# libjanson
-- git clone -b cyrus --single-branch https://github.com/cyrusimap/jansson.git janson
-- pushd janson
-- "autoreconf -v -i"
-- "./configure --enable-silent-rules --prefix=$CYRUSLIBS"
-- make -j 8
-- sudo make install
-- popd #janson
 
-# libical
-- git clone -b cyrus --single-branch https://github.com/cyrusimap/libical.git libical
-- pushd libical
-- mkdir build
-- cd build
-- cmake -DCMAKE_INSTALL_PREFIX=$CYRUSLIBS -DICU_BASE=$CYRUSLIBS -DUSE_BUILTIN_TZDATA=true -DCMAKE_SKIP_RPATH=ON -DICAL_ALLOW_EMPTY_PROPERTIES=true -DENABLE_GTK_DOC=OFF ..
-- make
-- sudo make install
-- popd #libical
+services:
+  - docker
 
-# Xapian
-- git clone -b cyrus --single-branch https://github.com/cyrusimap/xapian.git xapian
-- pushd xapian
-- "./bootstrap"
-- "./configure --enable-silent-rules --prefix=$CYRUSLIBS"
-- pushd xapian-core
-- make -j 8
-- sudo make install
-- popd #xapian-core
-- popd #xapian
-before_script:
-- ccache --version
-- ccache --zero-stats
-- autoreconf -i -s
-- ./configure CFLAGS="-W -Wno-unused-parameter -g -O0 -Wall -Wextra -Werror -fPIC"
-  --enable-coverage --enable-calalarmd --enable-autocreate --enable-nntp --enable-http
-  --enable-jmap --enable-xapian --enable-unit-tests --enable-replication --with-openssl=yes
-  --enable-murder --enable-idled --enable-sieve
-- make
+before_install:
+  - echo '{"ipv6":true,"fixed-cidr-v6":"2001:db8:1::/64"}' | sudo tee /etc/docker/daemon.json
+  - echo 'core' | sudo tee /proc/sys/kernel/core_pattern
+  - sudo service docker restart
+  - docker pull cyrusimapdocker/cyrus-jessie
+
 script:
-- make check
+  - docker run --ulimit core=-1 -it cyrusimapdocker/cyrus-jessie /bin/sh -c "cd / && ./entrypoint.sh"
+
 branches:
   only:
   - master
   - cyrus-imapd-3.0
 notifications:
+  email:
+    recipients:
+      - jenkins@cyrus.works
+    on_pull_requests: false
+    on_success: change
+    on_failure: always
   slack:
     on_pull_requests: false
     on_success: change
