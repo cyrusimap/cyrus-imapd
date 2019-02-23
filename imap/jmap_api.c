@@ -1197,7 +1197,7 @@ HIDDEN int jmap_myrights_byname(jmap_req_t *req, const char *mboxname)
     int rights = 0;
 
     mbentry_t *mbentry = NULL;
-    if (!mboxlist_lookup_allow_all(mboxname, &mbentry, NULL)) {
+    if (!jmap_mboxlist_lookup(mboxname, &mbentry, NULL)) {
         rights = _rights_for_mbentry(req->authstate, mbentry, req->mboxrights);
     }
     mboxlist_entry_free(&mbentry);
@@ -2314,4 +2314,35 @@ HIDDEN int jmap_readprop_full(json_t *root, const char *prefix, const char *name
         json_array_append_new(invalid, json_string(name));
     }
     return r;
+}
+
+/*
+ * Lookup 'name' in the mailbox list, ignoring reserved/deleted records
+ */
+HIDDEN int jmap_mboxlist_lookup(const char *name,
+                                mbentry_t **entryptr, struct txn **tid)
+{
+    mbentry_t *entry = NULL;
+    int r;
+
+    r = mboxlist_lookup_allow_all(name, &entry, tid);
+
+    if (r) return r;
+
+    /* Ignore "reserved" entries, like they aren't there */
+    if (entry->mbtype & MBTYPE_RESERVE) {
+        mboxlist_entry_free(&entry);
+        return IMAP_MAILBOX_RESERVED;
+    }
+
+    /* Ignore "deleted" entries, like they aren't there */
+    if (entry->mbtype & MBTYPE_DELETED) {
+        mboxlist_entry_free(&entry);
+        return IMAP_MAILBOX_NONEXISTENT;
+    }
+
+    if (entryptr) *entryptr = entry;
+    else mboxlist_entry_free(&entry);
+
+    return 0;
 }

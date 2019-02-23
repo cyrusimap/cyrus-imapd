@@ -454,18 +454,7 @@ static int _findparent(const char *mboxname, mbentry_t **mbentryp)
             !strcmp(strarray_nth(mbname_boxes(mbname), 0), "INBOX")) {
             free(mbname_pop_boxes(mbname));
         }
-        r = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry, NULL);
-        if (!r) {
-            /* Ignore "reserved" entries, like they aren't there */
-            if (mbentry->mbtype & MBTYPE_RESERVE) {
-                r = IMAP_MAILBOX_RESERVED;
-            }
-
-            /* Ignore "deleted" entries, like they aren't there */
-            else if (mbentry->mbtype & MBTYPE_DELETED) {
-                r = IMAP_MAILBOX_NONEXISTENT;
-            }
-        }
+        r = jmap_mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
 
         if (r != IMAP_MAILBOX_NONEXISTENT)
             break;
@@ -1533,9 +1522,7 @@ static char *_mbox_tmpname(const char *name, const char *parentname, int is_topl
         char *mboxname = _mbox_newname(buf_cstring(&buf), parentname, is_toplevel);
         buf_free(&buf);
         /* Make sure no such mailbox exists */
-        mbentry_t *mbentry = NULL;
-        int r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
-        mboxlist_entry_free(&mbentry);
+        int r = jmap_mboxlist_lookup(mboxname, NULL, NULL);
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             return mboxname;
         }
@@ -1934,7 +1921,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
 
     char *inboxname = mboxname_user_mbox(req->accountid, NULL);
-    mboxlist_lookup_allow_all(inboxname, &mbinbox, NULL);
+    jmap_mboxlist_lookup(inboxname, &mbinbox, NULL);
     free(inboxname);
 
     /* Lookup parent creation id, if any. This also deals with
@@ -1972,9 +1959,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     }
 
     /* Check if a mailbox with this name exists */
-    mbentry_t *mbexists = NULL;
-    r = mboxlist_lookup_allow_all(mboxname, &mbexists, NULL);
-    mboxlist_entry_free(&mbexists);
+    r = jmap_mboxlist_lookup(mboxname, NULL, NULL);
     if (r == 0) {
         if (mode == _MBOXSET_SKIP) {
             result->skipped = 1;
@@ -2034,7 +2019,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     if (r) goto done;
 
     /* Lookup and return the new mailbox id */
-    r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
+    r = jmap_mboxlist_lookup(mboxname, &mbentry, NULL);
     if (r) goto done;
     *mbox = json_pack("{s:s}", "id", mbentry->uniqueid);
     /* Set server defaults */
@@ -2072,7 +2057,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
 
     char *inboxname = mboxname_user_mbox(req->accountid, NULL);
-    mboxlist_lookup_allow_all(inboxname, &mbinbox, NULL);
+    jmap_mboxlist_lookup(inboxname, &mbinbox, NULL);
     free(inboxname);
 
     const char *parent_id = args->parent_id;
@@ -2179,7 +2164,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
 
             /* Reset pointers to parent */
             mboxlist_entry_free(&mbparent);
-            mboxlist_lookup_allow_all(newparentname, &mbparent, NULL);
+            jmap_mboxlist_lookup(newparentname, &mbparent, NULL);
 
             /* Check ACL of new parent - need WRITE to set displayname annot */
             if (!jmap_hasrights(req, mbparent, ACL_CREATE|ACL_WRITE)) {
@@ -2219,9 +2204,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             }
             ptrarray_append(&strpool, newmboxname);
 
-            mbentry_t *mbexists = NULL;
-            r = mboxlist_lookup_allow_all(newmboxname, &mbexists, NULL);
-            mboxlist_entry_free(&mbexists);
+            r = jmap_mboxlist_lookup(newmboxname, NULL, NULL);
             if (r == 0) {
                 if (mode == _MBOXSET_SKIP) {
                     result->skipped = 1;
@@ -2265,7 +2248,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                     1 /* keep_intermediaries */, 1 /* move_subscription */);
             mboxevent_free(&mboxevent);
             mboxlist_entry_free(&mbentry);
-            mboxlist_lookup_allow_all(newmboxname, &mbentry, NULL);
+            jmap_mboxlist_lookup(newmboxname, &mbentry, NULL);
             strarray_add(update_intermediaries, oldmboxname);
             strarray_add(update_intermediaries, newmboxname);
 
@@ -2297,7 +2280,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             r = mboxlist_promote_intermediary(mbentry->name);
             if (r) goto done;
             mboxlist_entry_free(&mbentry);
-            mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
+            jmap_mboxlist_lookup(mboxname, &mbentry, NULL);
         }
         if (!r) r = _mbox_set_annots(req, args, mboxname);
     }
@@ -2351,7 +2334,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
     int is_intermediate = 0;
 
     char *inboxname = mboxname_user_mbox(req->accountid, NULL);
-    mboxlist_lookup_allow_all(inboxname, &mbinbox, NULL);
+    jmap_mboxlist_lookup(inboxname, &mbinbox, NULL);
     free(inboxname);
 
     /* Do not allow to remove INBOX. */

@@ -10200,7 +10200,7 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
     char *dst_mboxname;
     while ((dst_mboxname = strarray_pop(&dst_mboxnames))) {
         mbentry_t *mbentry = NULL;
-        r = mboxlist_lookup_allow_all(dst_mboxname, &mbentry, NULL);
+        r = jmap_mboxlist_lookup(dst_mboxname, &mbentry, NULL);
         if (!r && (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
             r = mboxlist_promote_intermediary(dst_mboxname);
         }

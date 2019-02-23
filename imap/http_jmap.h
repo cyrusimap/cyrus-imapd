@@ -162,6 +162,9 @@ extern int  jmap_openmbox(jmap_req_t *req, const char *name,
 extern int  jmap_isopenmbox(jmap_req_t *req, const char *name);
 extern void jmap_closembox(jmap_req_t *req, struct mailbox **mboxp);
 
+extern int jmap_mboxlist_lookup(const char *name,
+                                mbentry_t **entryptr, struct txn **tid);
+
 /* Adds a JMAP sub request to be processed after req has
  * finished. Method must be a regular JMAP method name,
  * args the JSON-encoded method arguments. If client_id
