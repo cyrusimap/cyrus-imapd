@@ -629,7 +629,8 @@ static json_t *_mbox_get(jmap_req_t *req,
     }
 
     if (jmap_wantprop(props, "isSubscribed")) {
-        int is_subscribed = strarray_find(sublist, mbentry->name, 0) >= 0;
+        int is_subscribed =
+            sublist && strarray_find(sublist, mbentry->name, 0) >= 0;
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
 
