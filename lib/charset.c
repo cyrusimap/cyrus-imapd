@@ -3020,17 +3020,20 @@ static char *qp_encode(const char *data, size_t len, int isheader,
     int need_quote = 0;
 
     if (!force_quote) {
+        size_t prev_lf = 0;
         for (n = 0; n < len; n++) {
             unsigned char this = data[n];
             unsigned char next = (n < len - 1) ? data[n+1] : '\0';
 
             if (QPSAFECHAR[this] || this == '=' || this == ' ' || this == '\t') {
                 /* per RFC 5322: printable ASCII (decimal 33 - 126), SP, HTAB */
-                continue;
+                /* but only if the line doesn't exceed the 76 octet limit */
+                if (n - prev_lf <= 74) continue;
             }
             else if (!isheader && this == '\r' && next == '\n') {
                 /* line break (CRLF) */
                 n++;
+                prev_lf = n;
                 continue;
             }
             need_quote = 1;

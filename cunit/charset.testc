@@ -1252,4 +1252,38 @@ static void test_count_validutf8(void)
     CU_ASSERT_EQUAL(1, counts.invalid);
 }
 
+static void test_qpencode_mimebody(void)
+{
+#define TESTCASE(in, want, force_quote) \
+    { \
+        size_t outlen; \
+        const char *_in = (in); \
+        const char *_want = (want); \
+        char *out = charset_qpencode_mimebody(_in, strlen(_in), (force_quote), &outlen); \
+        CU_ASSERT_STRING_EQUAL(_want, out); \
+        CU_ASSERT_EQUAL(strlen(_want), outlen); \
+        free(out); \
+    }
+
+    /* Basic test */
+    TESTCASE("foo", "foo", 0);
+    TESTCASE("foo", "foo", 1);
+
+    /* Assert stray LFs are encoded */
+    TESTCASE("foo\nbar", "foo=0Abar", 0);
+    TESTCASE("foo\nbar", "foo=0Abar", 1);
+
+    /* Long lines are broken regardless of quote-forcing */
+    TESTCASE("0123456789" "0123456789" "0123456789" "0123456789"
+             "0123456789" "0123456789" "0123456789" "0123456789",
+             "0123456789" "0123456789" "0123456789" "0123456789"
+             "0123456789" "0123456789" "0123456789" "01=\r\n23456789", 0);
+    TESTCASE("0123456789" "0123456789" "0123456789" "0123456789"
+             "0123456789" "0123456789" "0123456789" "0123456789",
+             "0123456789" "0123456789" "0123456789" "0123456789"
+             "0123456789" "0123456789" "0123456789" "01=\r\n23456789", 1);
+
+#undef TESTCASE
+}
+
 /* vim: set ft=c: */
