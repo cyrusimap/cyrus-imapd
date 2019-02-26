@@ -891,11 +891,12 @@ static int _email_extract_bodies(const struct body *root,
 
 static char *_decode_to_utf8(const char *charset,
                              const char *data, size_t datalen,
-                             int enc,
+                             const char *encoding,
                              int *is_encoding_problem)
 {
     charset_t cs = charset_lookupname(charset);
     char *text = NULL;
+    int enc = encoding ? encoding_lookupname(encoding) : ENCODING_NONE;
 
     if (cs == CHARSET_UNKNOWN_CHARSET || enc == ENCODING_UNKNOWN) {
         *is_encoding_problem = 1;
@@ -977,7 +978,7 @@ static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf 
         char *text = _decode_to_utf8(textbody->charset_id,
                                      msg_buf->s + textbody->content_offset,
                                      textbody->content_size,
-                                     textbody->charset_enc,
+                                     textbody->encoding,
                                      &is_encoding_problem);
         return text;
     }
@@ -996,7 +997,7 @@ static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf 
             char *t = _decode_to_utf8(part->charset_id,
                                       msg_buf->s + part->content_offset,
                                       part->content_size,
-                                      part->charset_enc,
+                                      part->encoding,
                                       &is_encoding_problem);
             if (t) buf_appendcstr(&buf, t);
             free(t);
@@ -1071,7 +1072,7 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
         char *html = _decode_to_utf8(part->charset_id,
                                      msg_buf->s + part->content_offset,
                                      part->content_size,
-                                     part->charset_enc,
+                                     part->encoding,
                                      &is_encoding_problem);
         return html;
     }
@@ -1100,7 +1101,7 @@ static char *_emailbodies_to_html(struct emailbodies *bodies, const struct buf *
         char *t = _decode_to_utf8(part->charset_id,
                                   msg_buf->s + part->content_offset,
                                   part->content_size,
-                                  part->charset_enc,
+                                  part->encoding,
                                   &is_encoding_problem);
         if (t && !strcmp(part->subtype, "HTML")) {
             _html_concat_div(&buf, t);
@@ -4862,7 +4863,7 @@ static json_t * _email_get_bodyvalue(struct body *part,
     /* Decode into UTF-8 buffer */
     char *raw = _decode_to_utf8(part->charset_id,
             msg_buf->s + part->content_offset,
-            part->content_size, part->charset_enc,
+            part->content_size, part->encoding,
             &is_encoding_problem);
     if (!raw) goto done;
 
