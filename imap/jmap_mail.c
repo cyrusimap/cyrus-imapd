@@ -8773,6 +8773,46 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
     int i;
     bulk->req = req;
 
+    /* Map mailbox creation ids and role to mailbox identifiers */
+    for(i = 0; i < ptrarray_size(updates); i++) {
+        struct email_update *update = ptrarray_nth(updates, i);
+        if (!update->mailboxids) continue;
+
+        void *tmp;
+        const char *mbox_id;
+        json_t *jval;
+        json_object_foreach_safe(update->mailboxids, tmp, mbox_id, jval) {
+            int is_valid = 1;
+            if (*mbox_id == '$') {
+                const char *role = mbox_id + 1;
+                char *mboxname = NULL;
+                char *uniqueid = NULL;
+                if (!jmap_mailbox_find_role(bulk->req, role, &mboxname, &uniqueid)) {
+                    json_object_del(update->mailboxids, mbox_id);
+                    json_object_set(update->mailboxids, uniqueid, jval);
+                }
+                else is_valid = 0;
+                free(uniqueid);
+                free(mboxname);
+            }
+            else if (*mbox_id == '#') {
+                const char *resolved_mbox_id = jmap_lookup_id(req, mbox_id + 1);
+                if (resolved_mbox_id) {
+                    json_object_del(update->mailboxids, mbox_id);
+                    json_object_set(update->mailboxids, resolved_mbox_id, jval);
+                }
+                else is_valid = 0;
+            }
+            if (!is_valid) {
+                if (json_object_get(bulk->set_errors, update->email_id) == NULL) {
+                    json_object_set_new(bulk->set_errors, update->email_id,
+                            json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                                "properties", "mailboxIds"));
+                }
+            }
+        }
+    }
+
     /* Map updates to their email id */
     construct_hash_table(&bulk->updates_by_email_id, ptrarray_size(updates)+1, 0);
     for (i = 0; i < ptrarray_size(updates); i++) {
@@ -8875,34 +8915,15 @@ static void _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bul
         void *tmp;
         json_object_foreach_safe(update->mailboxids, tmp, mbox_id, jval) {
             struct mailbox *mbox = NULL;
-
-            if (*mbox_id == '$') {
-                /* Lookup mailbox by role */
-                const char *role = mbox_id + 1;
-                char *mboxname = NULL;
-                char *uniqueid = NULL;
-                if (!jmap_mailbox_find_role(bulk->req, role, &mboxname, &uniqueid)) {
-                    json_object_del(update->mailboxids, mbox_id);
-                    json_object_set(update->mailboxids, uniqueid, jval);
-                    jmap_openmbox(req, mboxname, &mbox, /*rw*/1);
+            mbentry_t *mbentry = _mbentry_by_uniqueid(req, mbox_id);
+            if (mbentry) {
+                int r = 0;
+                if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+                    r = mboxlist_promote_intermediary(mbentry->name);
                 }
-                free(uniqueid);
-                free(mboxname);
+                if (!r) jmap_openmbox(req, mbentry->name, &mbox, /*rw*/1);
             }
-            else {
-                /* Lookup mailbox by id */
-                mbentry_t *mbentry = _mbentry_by_uniqueid(req, mbox_id);
-                if (mbentry) {
-                    int r = 0;
-                    if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
-                        r = mboxlist_promote_intermediary(mbentry->name);
-                    }
-                    if (!r) jmap_openmbox(req, mbentry->name, &mbox, /*rw*/1);
-                }
-                mboxlist_entry_free(&mbentry);
-            }
-
-
+            mboxlist_entry_free(&mbentry);
             if (mbox) {
                 if (!hash_lookup(mbox->uniqueid, &bulk->plans_by_mbox_id)) {
                     struct email_mboxrec *mboxrec = xzmalloc(sizeof(struct email_mboxrec));
