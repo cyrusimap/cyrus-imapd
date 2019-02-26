@@ -1360,7 +1360,7 @@ static void message_parse_params(const char *hdr, struct param **paramp)
         }
         else {
             for (; *hdr && !Uisspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
-                if (*hdr < ' ' || strchr(MIME_TSPECIALS, *hdr)) goto skip;
+                if (*hdr < ' ') goto skip;
             }
         }
         valuelen = hdr - value;

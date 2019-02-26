@@ -4717,6 +4717,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
                 }
             }
         }
+
         /* Decode header value */
         if (fname && is_extended) {
             val = charset_parse_mimexvalue(fname, NULL);

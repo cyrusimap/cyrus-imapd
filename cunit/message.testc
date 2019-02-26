@@ -884,9 +884,12 @@ HTML_PART "\r\n"
     CU_ASSERT_STRING_EQUAL(body.type, "MULTIPART");
     CU_ASSERT_STRING_EQUAL(body.subtype, "RELATED");
     CU_ASSERT_PTR_NOT_NULL_FATAL(body.params);
-    CU_ASSERT_STRING_EQUAL(body.params->attribute, "BOUNDARY");
-    CU_ASSERT_STRING_EQUAL(body.params->value, "_related");
-    CU_ASSERT_PTR_NULL(body.params->next);
+    CU_ASSERT_STRING_EQUAL(body.params->attribute, "TYPE");
+    CU_ASSERT_STRING_EQUAL(body.params->value, "text/html");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(body.params->next);
+    CU_ASSERT_STRING_EQUAL(body.params->next->attribute, "BOUNDARY");
+    CU_ASSERT_STRING_EQUAL(body.params->next->value, "_related");
+    CU_ASSERT_PTR_NULL(body.params->next->next);
 
     CU_ASSERT_EQUAL(body.numparts, 2);
     CU_ASSERT_PTR_NOT_NULL(body.subpart);
