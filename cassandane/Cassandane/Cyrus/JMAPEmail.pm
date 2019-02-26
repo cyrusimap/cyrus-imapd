@@ -489,35 +489,42 @@ sub test_email_get_attachment_name
     "\r\n" .
     "012312312313".
     "\r\n--sub\r\n".
-    "Content-Type: application/foo;name=y.dat\r\n".
+    "Content-Type: application/test1;name=y.dat\r\n".
     "Content-Disposition: attachment; filename=z.dat\r\n".
     "\r\n" .
-    "foo".
+    "test1".
     "\r\n--sub\r\n".
-    "Content-Type: application/bar;name*0=looo;name*1=ooong;name*2=.name\r\n".
+    "Content-Type: application/test2;name*0=looo;name*1=ooong;name*2=.name\r\n".
     "\r\n" .
-    "bar".
+    "test2".
     "\r\n--sub\r\n".
-    "Content-Type: application/baz\r\n".
+    "Content-Type: application/test3\r\n".
     "Content-Disposition: attachment; filename*0=cont;\r\n filename*1=inue\r\n".
     "\r\n" .
-    "baz".
+    "test3".
     "\r\n--sub\r\n".
-    "Content-Type: application/bam; name=\"=?utf-8?Q?=F0=9F=98=80=2Etxt?=\"\r\n".
+    "Content-Type: application/test4; name=\"=?utf-8?Q?=F0=9F=98=80=2Etxt?=\"\r\n".
     "\r\n" .
-    "bam".
+    "test4".
     "\r\n--sub\r\n".
-    "Content-Type: application/tux\r\n".
+    "Content-Type: application/test5\r\n".
     "Content-Disposition: attachment; filename*0*=utf-8''%F0%9F%98%80;\r\n filename*1=\".txt\"\r\n".
     "\r\n" .
-    "baz".
+    "test5".
     "\r\n--sub\r\n".
+    "Content-Type: application/test6\r\n" .
     "Content-Disposition: attachment;\r\n".
     " filename*0*=\"Unencoded ' char\";\r\n" .
     " filename*1*=\".txt\"\r\n" .
-    "Content-Type: application/bla\r\n" .
     "\r\n" .
-    "bla".
+    "test6".
+    "\r\n--sub\r\n".
+    # RFC 2045, section 5.1. requires parameter values with tspecial
+    # characters to be quoted, but some clients don't implement this.
+    "Content-Type: application/test7; name==?iso-8859-1?b?Q2Fm6S5kb2M=?=\r\n".
+    "Content-Disposition: attachment; filename==?iso-8859-1?b?Q2Fm6S5kb2M=?=\r\n".
+    "\r\n" .
+    "test7".
     "\r\n--sub--\r\n";
 
     $exp_sub{A} = $self->make_message("foo",
@@ -550,23 +557,26 @@ sub test_email_get_attachment_name
     $att = $m{"image/jpeg"};
     $self->assert_str_equals("image1.jpg", $att->{name});
 
-    $att = $m{"application/foo"};
+    $att = $m{"application/test1"};
     $self->assert_str_equals("z.dat", $att->{name});
 
-    $att = $m{"application/bar"};
+    $att = $m{"application/test2"};
     $self->assert_str_equals("loooooong.name", $att->{name});
 
-    $att = $m{"application/baz"};
+    $att = $m{"application/test3"};
     $self->assert_str_equals("continue", $att->{name});
 
-    $att = $m{"application/bam"};
+    $att = $m{"application/test4"};
     $self->assert_str_equals("\N{GRINNING FACE}.txt", $att->{name});
 
-    $att = $m{"application/tux"};
+    $att = $m{"application/test5"};
     $self->assert_str_equals("\N{GRINNING FACE}.txt", $att->{name});
 
-    $att = $m{"application/bla"};
+    $att = $m{"application/test6"};
     $self->assert_str_equals("Unencoded ' char.txt", $att->{name});
+
+    $att = $m{"application/test7"};
+    $self->assert_str_equals("Caf\N{LATIN SMALL LETTER E WITH ACUTE}.doc", $att->{name});
 }
 
 sub test_email_get_body_notext
