@@ -945,6 +945,7 @@ static char *_decode_to_utf8(const char *charset,
 
         struct buf buf = BUF_INITIALIZER;
         charset_decode(&buf, data, datalen, enc);
+        buf_cstring(&buf);
         if (detect_handledata_r(&d, buf_base(&buf), buf_len(&buf), &obj) == CHARDET_SUCCESS) {
             charset_t guess_cs = charset_lookupname(obj->encoding);
             if (guess_cs != CHARSET_UNKNOWN_CHARSET) {
