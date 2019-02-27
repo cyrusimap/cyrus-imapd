@@ -226,6 +226,88 @@ static mbentry_t *_mbentry_by_uniqueid(jmap_req_t *req, const char *id)
  * Emails
  */
 
+static char *_decode_to_utf8(const char *charset,
+                             const char *data, size_t datalen,
+                             const char *encoding,
+                             int *is_encoding_problem)
+{
+    charset_t cs = charset_lookupname(charset);
+    char *text = NULL;
+    int enc = encoding ? encoding_lookupname(encoding) : ENCODING_NONE;
+
+    if (cs == CHARSET_UNKNOWN_CHARSET || enc == ENCODING_UNKNOWN) {
+        *is_encoding_problem = 1;
+        goto done;
+    }
+    text = charset_to_utf8(data, datalen, cs, enc);
+    if (!text) {
+        *is_encoding_problem = 1;
+        goto done;
+    }
+
+    size_t textlen = strlen(text);
+    struct char_counts counts = charset_count_validutf8(text, textlen);
+    *is_encoding_problem = counts.invalid || counts.replacement;
+
+    const char *charset_id = charset_name(cs);
+    if (!strncasecmp(charset_id, "UTF-32", 6)) {
+        /* Special-handle UTF-32. Some clients announce the wrong endianess. */
+        if (counts.invalid || counts.replacement) {
+            charset_t guess_cs = CHARSET_UNKNOWN_CHARSET;
+            if (!strcasecmp(charset_id, "UTF-32") || !strcasecmp(charset_id, "UTF-32BE"))
+                guess_cs = charset_lookupname("UTF-32LE");
+            else
+                guess_cs = charset_lookupname("UTF-32BE");
+            char *guess = charset_to_utf8(data, datalen, guess_cs, enc);
+            if (guess) {
+                struct char_counts guess_counts = charset_count_validutf8(guess, strlen(guess));
+                if (guess_counts.valid > counts.valid) {
+                    free(text);
+                    text = guess;
+                    counts = guess_counts;
+                }
+            }
+            charset_free(&guess_cs);
+        }
+    }
+
+#ifdef HAVE_LIBCHARDET
+    if (counts.invalid || counts.replacement) {
+        static Detect *d = NULL;
+        if (!d) d = detect_init();
+
+        DetectObj *obj = detect_obj_init();
+        if (!obj) goto done;
+        detect_reset(&d);
+
+        struct buf buf = BUF_INITIALIZER;
+        charset_decode(&buf, data, datalen, enc);
+        buf_cstring(&buf);
+        if (detect_handledata_r(&d, buf_base(&buf), buf_len(&buf), &obj) == CHARDET_SUCCESS) {
+            charset_t guess_cs = charset_lookupname(obj->encoding);
+            if (guess_cs != CHARSET_UNKNOWN_CHARSET) {
+                char *guess = charset_to_utf8(data, datalen, guess_cs, enc);
+                if (guess) {
+                    struct char_counts guess_counts = charset_count_validutf8(guess, strlen(guess));
+                    if (guess_counts.valid > counts.valid) {
+                        free(text);
+                        text = guess;
+                        counts = guess_counts;
+                    }
+                }
+                charset_free(&guess_cs);
+            }
+        }
+        detect_obj_free(&obj);
+        buf_free(&buf);
+    }
+#endif
+
+done:
+    charset_free(&cs);
+    return text;
+}
+
 struct headers {
     json_t *raw; /* JSON array of EmailHeader */
     json_t *all; /* JSON object: lower-case header name => list of values */
@@ -354,18 +436,36 @@ static json_t *_header_as_text(const char *raw)
         p = strchr(p + 1, '\r');
     }
     if (p) *p = '\0';
+
     /* Trim starting SP */
     const char *trimmed = unfolded;
     while (isspace(*trimmed)) {
         trimmed++;
     }
-    /* Decode header */
-    char *decoded = charset_decode_mimeheader(trimmed, CHARSET_SNIPPET);
-    /* Convert to Unicode NFC */
-    char *nfc = charset_utf8_normalize(decoded);
 
-    json_t *result = json_string(nfc);
-    free(nfc);
+    /* Decode header */
+    char *decoded = NULL;
+    int is_8bit = 0;
+    const char *q;
+    for (q = trimmed; *q; q++) {
+        if (*q & 0x80) {
+            is_8bit = 1;
+            break;
+        }
+    }
+    if (is_8bit) {
+        int err = 0;
+        decoded = _decode_to_utf8("utf-8", trimmed, strlen(trimmed), NULL, &err);
+    }
+    if (!decoded) {
+        decoded = charset_decode_mimeheader(trimmed, CHARSET_SNIPPET);
+    }
+
+    /* Convert to Unicode NFC */
+    char *normalized = charset_utf8_normalize(decoded);
+
+    json_t *result = json_string(normalized);
+    free(normalized);
     free(decoded);
     free(unfolded);
     return result;
@@ -887,88 +987,6 @@ static int _email_extract_bodies(const struct body *root,
     return _email_extract_bodies_internal(root, 1, "MIXED", 0,
             &bodies->textlist, &bodies->htmllist,
             &bodies->attslist);
-}
-
-static char *_decode_to_utf8(const char *charset,
-                             const char *data, size_t datalen,
-                             const char *encoding,
-                             int *is_encoding_problem)
-{
-    charset_t cs = charset_lookupname(charset);
-    char *text = NULL;
-    int enc = encoding ? encoding_lookupname(encoding) : ENCODING_NONE;
-
-    if (cs == CHARSET_UNKNOWN_CHARSET || enc == ENCODING_UNKNOWN) {
-        *is_encoding_problem = 1;
-        goto done;
-    }
-    text = charset_to_utf8(data, datalen, cs, enc);
-    if (!text) {
-        *is_encoding_problem = 1;
-        goto done;
-    }
-
-    size_t textlen = strlen(text);
-    struct char_counts counts = charset_count_validutf8(text, textlen);
-    *is_encoding_problem = counts.invalid || counts.replacement;
-
-    const char *charset_id = charset_name(cs);
-    if (!strncasecmp(charset_id, "UTF-32", 6)) {
-        /* Special-handle UTF-32. Some clients announce the wrong endianess. */
-        if (counts.invalid || counts.replacement) {
-            charset_t guess_cs = CHARSET_UNKNOWN_CHARSET;
-            if (!strcasecmp(charset_id, "UTF-32") || !strcasecmp(charset_id, "UTF-32BE"))
-                guess_cs = charset_lookupname("UTF-32LE");
-            else
-                guess_cs = charset_lookupname("UTF-32BE");
-            char *guess = charset_to_utf8(data, datalen, guess_cs, enc);
-            if (guess) {
-                struct char_counts guess_counts = charset_count_validutf8(guess, strlen(guess));
-                if (guess_counts.valid > counts.valid) {
-                    free(text);
-                    text = guess;
-                    counts = guess_counts;
-                }
-            }
-            charset_free(&guess_cs);
-        }
-    }
-
-#ifdef HAVE_LIBCHARDET
-    if (counts.invalid || counts.replacement) {
-        static Detect *d = NULL;
-        if (!d) d = detect_init();
-
-        DetectObj *obj = detect_obj_init();
-        if (!obj) goto done;
-        detect_reset(&d);
-
-        struct buf buf = BUF_INITIALIZER;
-        charset_decode(&buf, data, datalen, enc);
-        buf_cstring(&buf);
-        if (detect_handledata_r(&d, buf_base(&buf), buf_len(&buf), &obj) == CHARDET_SUCCESS) {
-            charset_t guess_cs = charset_lookupname(obj->encoding);
-            if (guess_cs != CHARSET_UNKNOWN_CHARSET) {
-                char *guess = charset_to_utf8(data, datalen, guess_cs, enc);
-                if (guess) {
-                    struct char_counts guess_counts = charset_count_validutf8(guess, strlen(guess));
-                    if (guess_counts.valid > counts.valid) {
-                        free(text);
-                        text = guess;
-                        counts = guess_counts;
-                    }
-                }
-                charset_free(&guess_cs);
-            }
-        }
-        detect_obj_free(&obj);
-        buf_free(&buf);
-    }
-#endif
-
-done:
-    charset_free(&cs);
-    return text;
 }
 
 static char *_emailbodies_to_plain(struct emailbodies *bodies, const struct buf *msg_buf)
