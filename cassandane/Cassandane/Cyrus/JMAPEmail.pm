@@ -7708,6 +7708,7 @@ EOF
 
 sub test_email_get_8bit_subject
     :min_version_3_1 :needs_component_jmap
+    :NoMunge8Bit :RFC2047_UTF8
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};

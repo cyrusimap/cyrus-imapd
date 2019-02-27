@@ -242,6 +242,12 @@ magic(FastMailEvent => sub {
         event_groups => 'mailbox message flags calendar applepushservice',
     );
 });
+magic(NoMunge8Bit => sub {
+    shift->config_set(munge8bit => 'no');
+});
+magic(RFC2047_UTF8 => sub {
+    shift->config_set(rfc2047_utf8 => 'yes');
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
