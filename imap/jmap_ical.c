@@ -449,6 +449,23 @@ static char* utcdate_from_icaltime_r(icaltimetype icaltime) {
     return s;
 }
 
+/* Convert RFC3339 formatted utcdate to icaltime.
+ * Return -1 on error.
+ */
+static int icaltime_from_utcdate(const char *utcdate, icaltimetype *icaltime) {
+    if (strlen(utcdate) != 20 || utcdate[19] != 'Z') {
+        return -1;
+    }
+
+    time_t tm;
+    int n = time_from_iso8601(utcdate, &tm);
+    if (n < 0) return -1;
+
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+    *icaltime = icaltime_from_timet_with_zone(tm, 0, utc);
+    return n;
+}
+
 /* Compare int in ascending order. */
 static int compare_int(const void *aa, const void *bb)
 {
@@ -4273,9 +4290,6 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     /* Do not preserve any current contents */
     json_incref(event);
 
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
-    icaltimetype now = icaltime_current_time_with_zone(utc);
-
     json_t *jprop = json_object_get(event, "excluded");
     if (jprop && jprop != json_false()) {
         jmap_parser_invalid(parser, "excluded");
@@ -4347,10 +4361,38 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     }
 
     /* created */
-    dtprop_to_ical(comp, now, utc, 1, ICAL_CREATED_PROPERTY);
+    jprop = json_object_get(event, "created");
+    if (json_is_string(jprop)) {
+        icaltimetype dt;
+        if (icaltime_from_utcdate(json_string_value(jprop), &dt) > 0) {
+            icaltimezone *utc = icaltimezone_get_utc_timezone();
+            dtprop_to_ical(comp, dt, utc, 1, ICAL_CREATED_PROPERTY);
+        }
+        else {
+            jmap_parser_invalid(parser, "created");
+        }
+    } else if (JNOTNULL(jprop)) {
+        jmap_parser_invalid(parser, "created");
+    }
 
     /* updated */
-    dtprop_to_ical(comp, now, utc, 1, ICAL_DTSTAMP_PROPERTY);
+    jprop = json_object_get(event, "updated");
+    if (json_is_string(jprop)) {
+        icaltimetype dt;
+        if (icaltime_from_utcdate(json_string_value(jprop), &dt) > 0) {
+            icaltimezone *utc = icaltimezone_get_utc_timezone();
+            dtprop_to_ical(comp, dt, utc, 1, ICAL_DTSTAMP_PROPERTY);
+        }
+        else {
+            jmap_parser_invalid(parser, "updated");
+        }
+    } else if (jprop == NULL) {
+        icaltimezone *utc = icaltimezone_get_utc_timezone();
+        icaltimetype now = icaltime_current_time_with_zone(utc);
+        dtprop_to_ical(comp, now, utc, 1, ICAL_DTSTAMP_PROPERTY);
+    } else {
+        jmap_parser_invalid(parser, "updated");
+    }
 
     jprop = json_object_get(event, "priority");
     if (json_integer_value(jprop) >= 0 || json_integer_value(jprop) <= 9) {

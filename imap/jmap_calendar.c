@@ -1612,6 +1612,18 @@ static int setcalendarevents_create(jmap_req_t *req,
     if (!json_object_get(event, "uid")) {
         json_object_set_new(event, "uid", json_string(uid));
     }
+
+    if (!json_object_get(event, "created") || !json_object_get(event, "updated")) {
+        char datestr[RFC3339_DATETIME_MAX+1];
+        time_to_rfc3339(time(NULL), datestr, RFC3339_DATETIME_MAX);
+        datestr[RFC3339_DATETIME_MAX] = '\0';
+        if (!json_object_get(event, "created")) {
+            json_object_set_new(event, "created", json_string(datestr));
+        }
+        if (!json_object_get(event, "updated")) {
+            json_object_set_new(event, "updated", json_string(datestr));
+        }
+    }
     ical = jmapical_toical(event, invalid);
 
     json_t *jparticipantId = json_object_get(event, "participantId");
@@ -1781,6 +1793,7 @@ static int setcalendarevents_update(jmap_req_t *req,
         r = IMAP_INTERNAL;
         goto done;
     }
+    json_object_del(old_event, "updated");
     json_t *new_event = jmap_patchobject_apply(old_event, event_patch);
     json_decref(old_event);
     ical = jmapical_toical(new_event, invalid);
