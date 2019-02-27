@@ -2387,13 +2387,13 @@ static int utcdate_to_icaltime(const char *src,
  * datetime properties such as DTEND and DURATION. */
 static icalproperty *dtprop_to_ical(icalcomponent *comp,
                                     icaltimetype dt,
-                                    icaltimezone *tz,
                                     int purge,
                                     enum icalproperty_kind kind) {
     icalproperty *prop;
 
     /* Purge existing property. */
     if (purge) {
+
         remove_icalprop(comp, kind);
     }
 
@@ -2415,10 +2415,11 @@ static icalproperty *dtprop_to_ical(icalcomponent *comp,
     /* Set the new property. */
     prop = icalproperty_new(kind);
     icalproperty_set_value(prop, val);
-    if (tz && !icaltime_is_utc(dt)) {
+    if (dt.zone && !icaltime_is_utc(dt)) {
         icalparameter *param =
             icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
-        const char *tzid = icaltimezone_get_location(tz);
+        /* XXX libical uses non-const icaltimezone pointer for read-only */
+        const char *tzid = icaltimezone_get_location((icaltimezone*)dt.zone);
         if (param) {
             icalparameter_set_tzid(param, tzid);
         } else {
@@ -2534,7 +2535,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     remove_icalprop(comp, ICAL_DTEND_PROPERTY);
     remove_icalprop(comp, ICAL_DURATION_PROPERTY);
 
-    dtprop_to_ical(comp, dtstart, tzstart, 1, ICAL_DTSTART_PROPERTY);
+    dtprop_to_ical(comp, dtstart, 1, ICAL_DTSTART_PROPERTY);
     if (tzstart != tzend) {
         /* Add DTEND */
         icaltimetype dtend;
@@ -2542,7 +2543,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
 
         dtend = icaltime_add(dtstart, dur);
         dtend = icaltime_convert_to_zone(dtend, tzend);
-        prop = dtprop_to_ical(comp, dtend, tzend, 1, ICAL_DTEND_PROPERTY);
+        prop = dtprop_to_ical(comp, dtend, 1, ICAL_DTEND_PROPERTY);
         if (prop) xjmapid_to_ical(prop, endzone_location_id);
     } else {
         /* Add DURATION */
@@ -4212,7 +4213,7 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
         if (excluded) {
             if (json_object_size(override) == 1 && excluded == json_true()) {
                 /* Add EXDATE */
-                dtprop_to_ical(comp, start, tzstart, 0, ICAL_EXDATE_PROPERTY);
+                dtprop_to_ical(comp, start, 0, ICAL_EXDATE_PROPERTY);
             }
             else {
                 jmap_parser_invalid(parser, id);
@@ -4220,7 +4221,7 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
             }
         } else if (!json_object_size(override)) {
             /* Add RDATE */
-            dtprop_to_ical(comp, start, tzstart, 0, ICAL_RDATE_PROPERTY);
+            dtprop_to_ical(comp, start, 0, ICAL_RDATE_PROPERTY);
         } else {
             /* Add VEVENT exception */
             json_t *ex, *val;
@@ -4259,7 +4260,7 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
 
             /* Create a new VEVENT for this override */
             excomp = icalcomponent_new_vevent();
-            dtprop_to_ical(excomp, start, tzstart, 1, ICAL_RECURRENCEID_PROPERTY);
+            dtprop_to_ical(excomp, start, 1, ICAL_RECURRENCEID_PROPERTY);
             icalcomponent_set_uid(excomp, icalcomponent_get_uid(comp));
 
             /* Convert the override event to iCalendar */
@@ -4365,8 +4366,7 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     if (json_is_string(jprop)) {
         icaltimetype dt;
         if (icaltime_from_utcdate(json_string_value(jprop), &dt) > 0) {
-            icaltimezone *utc = icaltimezone_get_utc_timezone();
-            dtprop_to_ical(comp, dt, utc, 1, ICAL_CREATED_PROPERTY);
+            dtprop_to_ical(comp, dt, 1, ICAL_CREATED_PROPERTY);
         }
         else {
             jmap_parser_invalid(parser, "created");
@@ -4380,16 +4380,15 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     if (json_is_string(jprop)) {
         icaltimetype dt;
         if (icaltime_from_utcdate(json_string_value(jprop), &dt) > 0) {
-            icaltimezone *utc = icaltimezone_get_utc_timezone();
-            dtprop_to_ical(comp, dt, utc, 1, ICAL_DTSTAMP_PROPERTY);
+            dtprop_to_ical(comp, dt, 1, ICAL_DTSTAMP_PROPERTY);
         }
         else {
             jmap_parser_invalid(parser, "updated");
         }
     } else if (jprop == NULL) {
-        icaltimezone *utc = icaltimezone_get_utc_timezone();
-        icaltimetype now = icaltime_current_time_with_zone(utc);
-        dtprop_to_ical(comp, now, utc, 1, ICAL_DTSTAMP_PROPERTY);
+        icaltimetype now = \
+            icaltime_current_time_with_zone(icaltimezone_get_utc_timezone());
+        dtprop_to_ical(comp, now, 1, ICAL_DTSTAMP_PROPERTY);
     } else {
         jmap_parser_invalid(parser, "updated");
     }
