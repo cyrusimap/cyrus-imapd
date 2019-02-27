@@ -7706,6 +7706,55 @@ EOF
     $self->assert_str_equals("This is a test.\n", $bodyValue->{value});
 }
 
+sub test_email_get_8bit_subject
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    # Москва - столица России. - "Moscow is the capital of Russia."
+    my $wantSubject =
+        "\xd0\x9c\xd0\xbe\xd1\x81\xd0\xba\xd0\xb2\xd0\xb0\x20\x2d\x20\xd1\x81".
+        "\xd1\x82\xd0\xbe\xd0\xbb\xd0\xb8\xd1\x86\xd0\xb0\x20\xd0\xa0\xd0\xbe".
+        "\xd1\x81\xd1\x81\xd0\xb8\xd0\xb8\x2e";
+    utf8::decode($wantSubject) || die $@;
+
+    my @testCases = ({
+        file => 'data/mime/ru-subject-utf8.bin',
+    }, {
+        file => 'data/mime/ru-subject-koi8r.bin',
+    });
+
+    foreach (@testCases) {
+        open(my $F, $_->{file});
+        $imap->append('INBOX', $F) || die $@;
+        close($F);
+
+        my $res = $jmap->CallMethods([
+                ['Email/query', { }, "R1"],
+                ['Email/get', {
+                        '#ids' => {
+                            resultOf => 'R1',
+                            name => 'Email/query',
+                            path => '/ids'
+                        },
+                        properties => ['subject'],
+                    }, 'R2' ],
+                ['Email/set', {
+                        '#destroy' => {
+                            resultOf => 'R1',
+                            name => 'Email/query',
+                            path => '/ids'
+                        },
+                    }, 'R3' ],
+            ]);
+        my $email = $res->[1][1]{list}[0];
+        $self->assert_str_equals($wantSubject, $email->{subject});
+    }
+}
+
+
 sub test_misc_upload_sametype
     :min_version_3_1 :needs_component_jmap
 {
