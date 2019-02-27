@@ -301,8 +301,12 @@ user's home calendar collection. (e.g. a mailbox named
 ``user.murch.#calendars``). To enable unauthenticated users (non-Cyrus) to
 access freebusy information, the freebusy ACL must be given to "anyone".
 
-Freebusy information is accessed via URLs of the following form:
-``https://<servername>/freebusy/user/<userid>``
+Freebusy information, consolidating the data of all user's calendars, is
+accessed via URLs of the following form:
+``https://<servername>/freebusy/user/<userid>``.  Querying individual CalDAV
+collections, when they have explicitly "freebusy" ACL (9) set, is done via
+``https://<servername>/freebusy/user/<userid>/<collection>``.
+
 
 Query parameters can be added to the URL per Section 4 of
 `Freebusy Read URL <http://www.calconnect.org/pubdocs/CD0903%20Freebusy%20Read%20URL.pdf>`_,
