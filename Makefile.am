@@ -1593,6 +1593,12 @@ dist_man8_MANS += \
 	man/httpd.8
 endif # HTTPD
 
+if BENCH
+check_PROGRAMS += bench/cyrdbbench
+bench_cyrdbbench_SOURCES = bench/cyrdbbench.c imap/mutex_fake.c
+bench_cyrdbbench_LDADD = $(LD_BASIC_ADD)
+endif # BENCH
+
 if REPLICATION
 dist_man8_MANS += \
 	man/sync_client.8 \

@@ -31,6 +31,7 @@ backup/backupd
 backup/ctl_backups
 backup/cyr_backup
 backup/restore
+bench/cyrdbbench
 cmulocal/
 compile
 config.guess

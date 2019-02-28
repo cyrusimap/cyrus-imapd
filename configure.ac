@@ -2031,6 +2031,18 @@ fi
 
 AM_CONDITIONAL([CUNIT], [test "$enable_unit_tests" = "yes"])
 
+dnl
+dnl Enable/disable cyrusdb benchmarks.
+dnl
+AC_ARG_ENABLE(cyrusdb-benchmarks,
+        [AS_HELP_STRING([--enable-cyrusdb-benchmarks], [enable cyrdb benchmarks])])
+
+if test "$enable_cyrusbd_benchmarks" = "yes" ; then
+    USE_MAINTAINER_MODE=yes
+fi
+
+AM_CONDITIONAL([BENCH], [test "$enable_cyrusdb_benchmarks" = "yes"])
+
 dnl Finally, now that we've checked everything else, we can see whether to link
 dnl in SQLite or not.
 dnl
