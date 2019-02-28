@@ -1607,7 +1607,16 @@ static void _email_search_type(search_expr_t *parent, const char *s)
     do {
         search_expr_t *e = search_expr_new(p, SEOP_FUZZYMATCH);
         e->attr = attr;
-        e->value.s = strarray_pop(&types); // Takes ownership
+        struct buf buf = BUF_INITIALIZER;
+        char *orig = strarray_pop(&types);
+        const unsigned char *s = (const unsigned char *)orig;
+        for ( ; *s ; ++s) {
+            if (Uisalnum(*s) || *s == '_')
+                buf_putc(&buf, *s);
+        }
+        e->value.s = buf_release(&buf);
+        free(orig);
+        buf_free(&buf);
     } while (types.count);
 
     strarray_fini(&types);
