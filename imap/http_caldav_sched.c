@@ -2052,7 +2052,7 @@ void sched_deliver(const char *sender, const char *recipient, void *data, void *
         return;
     }
 
-    if (caladdress_lookup(recipient, &sparam, httpd_userid)) {
+    if (caladdress_lookup(recipient, &sparam, sender)) {
         sched_data->status =
             sched_data->ischedule ? REQSTAT_NOUSER : SCHEDSTAT_NOUSER;
         /* Unknown user */
