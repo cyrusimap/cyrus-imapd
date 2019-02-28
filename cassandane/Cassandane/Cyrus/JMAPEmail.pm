@@ -7707,17 +7707,12 @@ EOF
 }
 
 sub test_email_get_8bit_subject
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :needs_dependency_chardet
     :NoMunge8Bit :RFC2047_UTF8
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
-
-    if (not $self->{instance}->{buildinfo}->get('dependency', 'chardet')) {
-        xlog "Cyrus instance doesn't support charset detection. Skipping test.";
-        return 0;
-    }
 
     # Москва - столица России. - "Moscow is the capital of Russia."
     my $wantSubject =
@@ -11350,14 +11345,9 @@ EOF
 }
 
 sub test_email_get_detect_iso_8859_1
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :needs_dependency_chardet
 {
     my ($self) = @_;
-
-    if (not $self->{instance}->{buildinfo}->get('dependency', 'chardet')) {
-        xlog "Cyrus instance doesn't support charset detection. Skipping test.";
-        return 0;
-    }
 
     my $jmap = $self->{jmap};
 
@@ -12166,14 +12156,9 @@ sub test_email_set_multipartdigest
 }
 
 sub test_email_set_encode_plain_text_attachment
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :needs_dependency_chardet
 {
     my ($self) = @_;
-
-    if (not $self->{instance}->{buildinfo}->get('dependency', 'chardet')) {
-        xlog "Cyrus instance doesn't support charset detection. Skipping test.";
-        return 0;
-    }
 
     my $jmap = $self->{jmap};
 
