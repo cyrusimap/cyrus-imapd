@@ -7714,6 +7714,11 @@ sub test_email_get_8bit_subject
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
+    if (not $self->{instance}->{buildinfo}->get('dependency', 'chardet')) {
+        xlog "Cyrus instance doesn't support charset detection. Skipping test.";
+        return 0;
+    }
+
     # Москва - столица России. - "Moscow is the capital of Russia."
     my $wantSubject =
         "\xd0\x9c\xd0\xbe\xd1\x81\xd0\xba\xd0\xb2\xd0\xb0\x20\x2d\x20\xd1\x81".
