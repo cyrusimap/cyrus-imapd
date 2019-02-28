@@ -1238,9 +1238,11 @@ EOF
     my $now = DateTime->now();
     $now->set_time_zone('Australia/Brisbane');
 
-    # define the event to start today
+    # define the event to start in 2 days
+    # (need to go 2 days out to account for the timezone of the testing location,
+    #  otherwise we may store the event locally AFTER the adjusted alarm trigger)
     my $startdt = $now->clone();
-    $startdt->add(DateTime::Duration->new(days => 1));
+    $startdt->add(DateTime::Duration->new(days => 2));
     $startdt->truncate(to => 'day');
     my $start = $startdt->strftime('%Y%m%d');
 
