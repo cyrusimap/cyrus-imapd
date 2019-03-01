@@ -308,6 +308,30 @@ done:
     return text;
 }
 
+static char *_decode_mimeheader(const char *raw)
+{
+    if (!raw) return NULL;
+
+    int is_8bit = 0;
+    const char *p;
+    for (p = raw; *p; p++) {
+        if (*p & 0x80) {
+            is_8bit = 1;
+            break;
+        }
+    }
+
+    char *val = NULL;
+    if (is_8bit) {
+        int err = 0;
+        val = _decode_to_utf8("utf-8", raw, strlen(raw), NULL, &err);
+    }
+    if (!val) {
+        val = charset_decode_mimeheader(raw, CHARSET_SNIPPET);
+    }
+    return val;
+}
+
 struct headers {
     json_t *raw; /* JSON array of EmailHeader */
     json_t *all; /* JSON object: lower-case header name => list of values */
@@ -444,22 +468,7 @@ static json_t *_header_as_text(const char *raw)
     }
 
     /* Decode header */
-    char *decoded = NULL;
-    int is_8bit = 0;
-    const char *q;
-    for (q = trimmed; *q; q++) {
-        if (*q & 0x80) {
-            is_8bit = 1;
-            break;
-        }
-    }
-    if (is_8bit) {
-        int err = 0;
-        decoded = _decode_to_utf8("utf-8", trimmed, strlen(trimmed), NULL, &err);
-    }
-    if (!decoded) {
-        decoded = charset_decode_mimeheader(trimmed, CHARSET_SNIPPET);
-    }
+    char *decoded = _decode_mimeheader(trimmed);
 
     /* Convert to Unicode NFC */
     char *normalized = charset_utf8_normalize(decoded);
@@ -538,7 +547,7 @@ static json_t *_emailaddresses_from_addr(struct address *addr)
 
         /* name */
         if (addr->name) {
-            char *tmp = charset_decode_mimeheader(addr->name, CHARSET_SNIPPET);
+            char *tmp = _decode_mimeheader(addr->name);
             if (tmp) json_object_set_new(e, "name", json_string(tmp));
             free(tmp);
         } else {
