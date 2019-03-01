@@ -7729,6 +7729,8 @@ sub test_email_get_8bit_headers
         "\xd0\xba\xd0\xb8\xd0\xb9";
     utf8::decode($wantName) || die $@;
 
+    my $wantEmail = 'fyodor@local';
+
     my @testCases = ({
         file => 'data/mime/headers-utf8.bin',
     }, {
@@ -7760,9 +7762,8 @@ sub test_email_get_8bit_headers
             ]);
         my $email = $res->[1][1]{list}[0];
         $self->assert_str_equals($wantSubject, $email->{subject});
-
         $self->assert_str_equals($wantName, $email->{from}[0]{name});
-        # FIXME
+        $self->assert_str_equals($wantEmail, $email->{from}[0]{email});
     }
 }
 
