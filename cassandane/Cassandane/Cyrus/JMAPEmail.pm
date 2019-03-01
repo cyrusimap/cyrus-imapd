@@ -7706,7 +7706,7 @@ EOF
     $self->assert_str_equals("This is a test.\n", $bodyValue->{value});
 }
 
-sub test_email_get_8bit_subject
+sub test_email_get_8bit_headers
     :min_version_3_1 :needs_component_jmap :needs_dependency_chardet
     :NoMunge8Bit :RFC2047_UTF8
 {
@@ -7716,15 +7716,23 @@ sub test_email_get_8bit_subject
 
     # Москва - столица России. - "Moscow is the capital of Russia."
     my $wantSubject =
-        "\xd0\x9c\xd0\xbe\xd1\x81\xd0\xba\xd0\xb2\xd0\xb0\x20\x2d\x20\xd1\x81".
-        "\xd1\x82\xd0\xbe\xd0\xbb\xd0\xb8\xd1\x86\xd0\xb0\x20\xd0\xa0\xd0\xbe".
-        "\xd1\x81\xd1\x81\xd0\xb8\xd0\xb8\x2e";
+        "\xd0\x9c\xd0\xbe\xd1\x81\xd0\xba\xd0\xb2\xd0\xb0\x20\x2d\x20\xd1".
+        "\x81\xd1\x82\xd0\xbe\xd0\xbb\xd0\xb8\xd1\x86\xd0\xb0\x20\xd0\xa0".
+        "\xd0\xbe\xd1\x81\xd1\x81\xd0\xb8\xd0\xb8\x2e";
     utf8::decode($wantSubject) || die $@;
 
+    # Фёдор Михайлович Достоевский - "Fyódor Mikháylovich Dostoyévskiy"
+    my $wantName =
+        "\xd0\xa4\xd1\x91\xd0\xb4\xd0\xbe\xd1\x80\x20\xd0\x9c\xd0\xb8\xd1".
+        "\x85\xd0\xb0\xd0\xb9\xd0\xbb\xd0\xbe\xd0\xb2\xd0\xb8\xd1\x87\x20".
+        "\xd0\x94\xd0\xbe\xd1\x81\xd1\x82\xd0\xbe\xd0\xb5\xd0\xb2\xd1\x81".
+        "\xd0\xba\xd0\xb8\xd0\xb9";
+    utf8::decode($wantName) || die $@;
+
     my @testCases = ({
-        file => 'data/mime/ru-subject-utf8.bin',
+        file => 'data/mime/headers-utf8.bin',
     }, {
-        file => 'data/mime/ru-subject-koi8r.bin',
+        file => 'data/mime/headers-koi8r.bin',
     });
 
     foreach (@testCases) {
@@ -7740,7 +7748,7 @@ sub test_email_get_8bit_subject
                             name => 'Email/query',
                             path => '/ids'
                         },
-                        properties => ['subject'],
+                        properties => ['subject', 'from'],
                     }, 'R2' ],
                 ['Email/set', {
                         '#destroy' => {
@@ -7752,6 +7760,9 @@ sub test_email_get_8bit_subject
             ]);
         my $email = $res->[1][1]{list}[0];
         $self->assert_str_equals($wantSubject, $email->{subject});
+
+        $self->assert_str_equals($wantName, $email->{from}[0]{name});
+        # FIXME
     }
 }
 
