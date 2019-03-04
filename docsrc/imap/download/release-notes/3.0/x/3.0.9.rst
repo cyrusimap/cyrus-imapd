@@ -1,0 +1,68 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.0.9 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 3.0 series.
+
+    Refer to the Cyrus IMAP 3.0.0 Release Notes for important information
+    about the 3.0 series, including upgrading instructions.
+
+Download via HTTPS:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.9/cyrus-imapd-3.0.9.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.9/cyrus-imapd-3.0.9.tar.gz.sig
+
+
+.. _relnotes-3.0.9-changes:
+
+Changes Since 3.0.8
+===================
+
+Release changes
+---------------
+
+We're trialing using the Github Releases feature.  If you have trouble downloading
+this release, please report this to the mailing lists.  Thanks!
+
+Dependency changes
+------------------
+
+* ClamAV 0.101 is now supported (thanks Adam Gołębiowski)
+
+New configuration options
+-------------------------
+
+* The new ``cyrus_group`` option in :cyrusman:`imapd.conf(5)` can be used to
+  set the UNIX group that Cyrus processes run as (thanks Jakob Gahde).  The
+  default is to use the primary group of the configured ``cyrus_user``.  The
+  old ``--with-cyrus-group`` configure option has been non-functional for many
+  years, and has been removed.
+
+Bug fixes
+---------
+
+* Fixed :issue:`2521`: cyradm getquotaroot now supports mailbox names
+  containing spaces (thanks Marco Favero)
+* Fixed :issue:`2524`: ipurge no longer crashes on partial name matches
+* Fixed: various memory leaks (thanks Pavel Zhukov)
+* Fixed :issue:`2534`: com_err now built early enough (thanks
+  Дилян Палаузов)
+* Fixed :issue:`2566`: idle socket setup no longer wrapped by asserts (thanks
+  Zan Lynx)
+* Fixed :issue:`2597`: lmtpd segfault with sieve redirections on shared folder
+  (thanks Anthony Prades)
+* Fixed :issue:`2449`: lmtpd segfault with sieve rejections on shared folder
+  (thanks Anthony Prades)
+* Fixed :issue:`2609`: mbexamine now correctly handles mailbox where all mail
+  is archived and ``archive-partition`` and ``meta-partition`` are enabled
+  (thanks Michael Menge)
+* Fixed :issue:`2625`: the ``ptscache_db_path`` setting now works correctly
+* Fixed :issue:`2643`: ptclient now returns correct group names when resolved
+  by filter (thanks Felix Schumacher)
+* Fixed: conversationsdb now stores GUID even if message has no CID
+* Fixed :issue:`2663`: Q-encoded MIME headers no longer split multi-octet
+  UTF words (thanks Дилян Палаузов)
