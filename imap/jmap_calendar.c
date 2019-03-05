@@ -1699,7 +1699,7 @@ static int setcalendarevents_update(jmap_req_t *req,
                                     const char *id,
                                     struct caldav_db *db,
                                     json_t *invalid,
-                                    json_t *update __attribute__((unused)))
+                                    json_t *update)
 {
     int r, pe;
     int needrights = DACL_RMRSRC|DACL_WRITEPROPS|DACL_WRITECONT;
@@ -1811,6 +1811,15 @@ static int setcalendarevents_update(jmap_req_t *req,
         json_array_append_new(invalid, json_string("participantId"));
     }
     json_decref(new_event);
+
+    json_t *jnewsequence = json_object_get(event_patch, "sequence");
+    if (!JNOTNULL(jnewsequence)) {
+        json_t *joldseq = json_object_get(old_event, "sequence");
+        int oldseq = joldseq ? json_integer_value(joldseq) : 0;
+        int newseq = oldseq + 1;
+        json_object_set_new(new_event, "sequence", json_integer(newseq));
+        json_object_set_new(update, "sequence", json_integer(newseq));
+    }
 
     if (json_array_size(invalid)) {
         r = 0;
