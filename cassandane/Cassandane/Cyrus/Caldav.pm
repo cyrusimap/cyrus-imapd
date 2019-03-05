@@ -3139,6 +3139,7 @@ EOF
        },
      },
    },
+   { recipient => "cassandane\@example.com", is_update => JSON::false, method => 'CANCEL' },
   );
 }
 
