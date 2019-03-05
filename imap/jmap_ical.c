@@ -367,30 +367,33 @@ static struct icaltimetype dtstart_from_ical(icalcomponent *comp)
     if ((tzid = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY))) {
         dt.zone = tz_from_tzid(tzid);
     }
+    else if ((tzid = tzid_from_ical(comp, ICAL_DTEND_PROPERTY))) {
+        /* Seen in the wild: a floating DTSTART and a DTEND with TZID */
+        dt.zone = tz_from_tzid(tzid);
+    }
 
     return dt;
 }
 
 static struct icaltimetype dtend_from_ical(icalcomponent *comp)
 {
-    struct icaltimetype dt;
+    struct icaltimetype dtend;
     icalproperty *prop;
-    const char *tzid;
+    struct icaltimetype dtstart = dtstart_from_ical(comp);
 
-    /* Handles DURATION vs DTEND */
-    dt = icalcomponent_get_dtend(comp);
-    if (dt.zone) return dt;
-
-    prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
-    if (prop) {
-        if ((tzid = tzid_from_icalprop(prop, 1))) {
-            dt.zone = tz_from_tzid(tzid);
+    if ((prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY))) {
+        dtend = icalproperty_get_dtend(prop);
+        if (!dtend.zone) {
+            const char *tzid = tzid_from_icalprop(prop, 1);
+            dtend.zone = tz_from_tzid(tzid);
         }
-    } else {
-        dt.zone = dtstart_from_ical(comp).zone;
     }
+    else dtend = icalcomponent_get_dtend(comp);
 
-    return dt;
+    /* Normalize floating DTEND to DTSTART time zone, if any */
+    if (!dtend.zone) dtend.zone = dtstart.zone;
+
+    return dtend;
 }
 
 
@@ -1945,9 +1948,12 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
 
     /* Initialize time fields */
     struct icaltimetype dtstart = icalcomponent_get_dtstart(comp);
-    const char *tzid_start = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     struct icaldurationtype dur = duration_from_ical(comp);
     int is_allday = 0;
+
+    /* Handle bogus mix of floating and time zoned types */
+    const char *tzid_start = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
+    if (!tzid_start) tzid_start = tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
 
     /* Initialize isAllDay */
     if (icaltime_is_date(icalcomponent_get_dtstart(comp))) {
