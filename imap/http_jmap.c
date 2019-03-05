@@ -91,8 +91,9 @@ static int jmap_download(struct transaction_t *txn);
 static int jmap_upload(struct transaction_t *txn);
 
 /* JMAP Core API Methods */
-static int jmap_core_echo(jmap_req_t *req);
+static int jmap_blob_get(jmap_req_t *req);
 static int jmap_blob_copy(jmap_req_t *req);
+static int jmap_core_echo(jmap_req_t *req);
 static int jmap_quota_get(jmap_req_t *req);
 
 /* WebSocket handler */
@@ -148,8 +149,9 @@ static jmap_settings_t my_jmap_settings = {
 };
 
 jmap_method_t jmap_core_methods[] = {
-    { "Core/echo",    &jmap_core_echo, JMAP_SHARED_CSTATE },
     { "Blob/copy",    &jmap_blob_copy, 0/*flags*/ },
+    { "Blob/get",     &jmap_blob_get,  JMAP_SHARED_CSTATE },
+    { "Core/echo",    &jmap_core_echo, JMAP_SHARED_CSTATE },
     { "Quota/get",    &jmap_quota_get, JMAP_SHARED_CSTATE },
     { NULL,           NULL, 0/*flags*/ }
 };
@@ -910,7 +912,7 @@ static int jmap_upload(struct transaction_t *txn)
     char datestr[RFC3339_DATETIME_MAX];
     time_to_rfc3339(now + 86400, datestr, RFC3339_DATETIME_MAX);
 
-    char blob_id[42];
+    char blob_id[JMAP_BLOBID_SIZE];
     jmap_set_blobid(&body->content_guid, blob_id);
 
     /* Create response object */
@@ -1260,6 +1262,190 @@ cleanup:
     mailbox_close(&to_mbox);
     return r;
 }
+
+/* Blob/get method */
+
+struct getblob_rec {
+    const char *blob_id;
+    uint32_t uid;
+    char *part;
+};
+
+struct getblob_cb_rock {
+    jmap_req_t *req;
+    const char *blob_id;
+    hash_table *getblobs_by_mboxname;
+};
+
+static int getblob_cb(const conv_guidrec_t* rec, void* vrock)
+{
+    struct getblob_cb_rock *rock = vrock;
+
+    struct getblob_rec *getblob = xzmalloc(sizeof(struct getblob_rec));
+    getblob->blob_id = rock->blob_id;
+    getblob->uid = rec->uid;
+    getblob->part = xstrdupnull(rec->part);
+
+    ptrarray_t *getblobs = hash_lookup(rec->mboxname, rock->getblobs_by_mboxname);
+    if (!getblobs) {
+        getblobs = ptrarray_new();
+        hash_insert(rec->mboxname, getblobs, rock->getblobs_by_mboxname);
+    }
+    ptrarray_append(getblobs, getblob);
+
+    return 0;
+}
+
+static int jmap_blob_get(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    json_t *err = NULL;
+    json_t *jval;
+    size_t i;
+
+    /* Parse request */
+    jmap_get_parse(req->args, &parser, req, NULL, NULL, NULL, &get, 0, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Sort blob lookups by mailbox */
+    hash_table getblobs_by_mboxname = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&getblobs_by_mboxname, 128, 0);
+    json_array_foreach(get.ids, i, jval) {
+        const char *blob_id = json_string_value(jval);
+        if (*blob_id == 'G') {
+            struct getblob_cb_rock rock = { req, blob_id, &getblobs_by_mboxname };
+            int r = conversations_guid_foreach(req->cstate, blob_id + 1, getblob_cb, &rock);
+            if (r) {
+                syslog(LOG_ERR, "jmap_blob_get: can't lookup guid %s: %s",
+                        blob_id, error_message(r));
+            }
+        }
+    }
+
+    /* Lookup blobs by mailbox */
+    json_t *found = json_object();
+    json_t *not_found = json_object();
+    hash_iter *iter = hash_table_iter(&getblobs_by_mboxname);
+    while (hash_iter_next(iter)) {
+        const char *mboxname = hash_iter_key(iter);
+        ptrarray_t *getblobs = hash_iter_val(iter);
+        struct mailbox *mbox = NULL;
+
+        /* Open mailbox */
+        if (!jmap_hasrights_byname(req, mboxname, ACL_READ|ACL_LOOKUP)) {
+            continue;
+        }
+        int r = jmap_openmbox(req, mboxname, &mbox, 0);
+        if (r) {
+            syslog(LOG_ERR, "jmap_blob_get: can't open mailbox %s: %s",
+                    mboxname, error_message(r));
+            continue;
+        }
+
+        int j;
+        for (j = 0; j < ptrarray_size(getblobs); j++) {
+            struct getblob_rec *getblob = ptrarray_nth(getblobs, j);
+
+            /* Read message record */
+            struct message_guid guid;
+            bit64 cid;
+            msgrecord_t *mr = NULL;
+            r = msgrecord_find(mbox, getblob->uid, &mr);
+            if (!r) r = msgrecord_get_guid(mr, &guid);
+            if (!r) r = msgrecord_get_cid(mr, &cid);
+            msgrecord_unref(&mr);
+            if (r) {
+                syslog(LOG_ERR, "jmap_blob_get: can't read msgrecord %s:%d: %s",
+                        mboxname, getblob->uid, error_message(r));
+                continue;
+            }
+
+            /* Report Blob entry */
+            json_t *jblob = json_object_get(found, getblob->blob_id);
+            if (!jblob) {
+                jblob = json_object();
+                json_object_set_new(found, getblob->blob_id, jblob);
+            }
+            if (jmap_wantprop(get.props, "mailboxIds")) {
+                json_t *jmailboxIds = json_object_get(jblob, "mailboxIds");
+                if (!jmailboxIds) {
+                    jmailboxIds = json_object();
+                    json_object_set_new(jblob, "mailboxIds", jmailboxIds);
+                }
+                json_object_set_new(jmailboxIds, mbox->uniqueid, json_true());
+            }
+            if (jmap_wantprop(get.props, "emailIds")) {
+                json_t *jemailIds = json_object_get(jblob, "emailIds");
+                if (!jemailIds) {
+                    jemailIds = json_object();
+                    json_object_set_new(jblob, "emailIds", jemailIds);
+                }
+                char emailid[JMAP_EMAILID_SIZE];
+                jmap_set_emailid(&guid, emailid);
+                json_object_set_new(jemailIds, emailid, json_true());
+            }
+            if (jmap_wantprop(get.props, "threadIds")) {
+                json_t *jthreadIds = json_object_get(jblob, "threadIds");
+                if (!jthreadIds) {
+                    jthreadIds = json_object();
+                    json_object_set_new(jblob, "threadIds", jthreadIds);
+                }
+                char threadid[JMAP_THREADID_SIZE];
+                jmap_set_threadid(cid, threadid);
+                json_object_set_new(jthreadIds, threadid, json_true());
+            }
+        }
+
+       jmap_closembox(req, &mbox);
+    }
+
+    /* Clean up memory */
+    hash_iter_reset(iter);
+    while (hash_iter_next(iter)) {
+        ptrarray_t *getblobs = hash_iter_val(iter);
+        struct getblob_rec *getblob;
+        while ((getblob = ptrarray_pop(getblobs))) {
+            free(getblob->part);
+            free(getblob);
+        }
+        ptrarray_free(getblobs);
+    }
+    hash_iter_free(&iter);
+    free_hash_table(&getblobs_by_mboxname, NULL);
+
+    /* Report found blobs */
+    if (json_object_size(found)) {
+        const char *blob_id;
+        json_t *jblob;
+        json_object_foreach(found, blob_id, jblob) {
+            json_array_append(get.list, jblob);
+        }
+    }
+
+    /* Report unknown or erroneous blobs */
+    json_array_foreach(get.ids, i, jval) {
+        const char *blob_id = json_string_value(jval);
+        if (!json_object_get(found, blob_id)) {
+            json_array_append_new(get.not_found, json_string(blob_id));
+        }
+    }
+
+    json_decref(not_found);
+    json_decref(found);
+
+    /* Reply */
+    jmap_ok(req, jmap_get_reply(&get));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
+    return 0;
+}
+
 
 /* Quota/get method */
 

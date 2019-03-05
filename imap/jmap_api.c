@@ -919,6 +919,19 @@ HIDDEN void jmap_set_blobid(const struct message_guid *guid, char *buf)
     buf[41] = '\0';
 }
 
+HIDDEN void jmap_set_emailid(const struct message_guid *guid, char *buf)
+{
+    buf[0] = 'M';
+    // appends NULL for us
+    bin_to_lchex(&guid->value, 12, buf+1);
+}
+
+HIDDEN void jmap_set_threadid(conversation_id_t cid, char *buf)
+{
+    buf[0] = 'T';
+    memcpy(buf+1, conversation_id_encode(cid), 16);
+    buf[17] = 0;
+}
 
 struct findblob_data {
     jmap_req_t *req;

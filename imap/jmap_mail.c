@@ -1213,25 +1213,10 @@ static char *_html_to_plain(const char *html) {
     return text;
 }
 
-static void _email_id_set_guid(const struct message_guid *guid, char *buf)
-{
-    buf[0] = 'M';
-    // appends NULL for us
-    bin_to_lchex(&guid->value, 12, buf+1);
-}
-
 static const char *_guid_from_id(const char *msgid)
 {
     return msgid + 1;
 }
-
-static void _thread_id_set_cid(conversation_id_t cid, char *buf)
-{
-    buf[0] = 'T';
-    memcpy(buf+1, conversation_id_encode(cid), 16);
-    buf[17] = 0;
-}
-
 
 static conversation_id_t _cid_from_id(const char *thrid)
 {
@@ -2508,7 +2493,7 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
 
     /* Initialize search result loop */
     size_t anchor_position = (size_t)-1;
-    char email_id[26];
+    char email_id[JMAP_EMAILID_SIZE];
 
     struct hashset *seen_emails = hashset_new(12);
     struct hashset *seen_threads = hashset_new(8);
@@ -2536,7 +2521,7 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
         /* This message matches the query. */
         size_t result_count = json_array_size(query->ids);
         query->total++;
-        _email_id_set_guid(&md->guid, email_id);
+        jmap_set_emailid(&md->guid, email_id);
 
         if (cache_db) strarray_append(&email_ids, email_id);
 
@@ -2718,7 +2703,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     }
 
     /* Prepare result loop */
-    char email_id[26];
+    char email_id[JMAP_EMAILID_SIZE];
     int found_up_to = 0;
     size_t mdcount = msgdata->count;
 
@@ -2760,7 +2745,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
             continue;
         }
 
-        _email_id_set_guid(&md->guid, email_id);
+        jmap_set_emailid(&md->guid, email_id);
 
         hash_insert(email_id, (void*)1, &touched_ids);
         hashu64_insert(md->cid, (void*)1, &touched_cids);
@@ -2770,7 +2755,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     for (i = 0 ; i < mdcount; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
 
-        _email_id_set_guid(&md->guid, email_id);
+        jmap_set_emailid(&md->guid, email_id);
 
         int is_expunged = (md->system_flags & FLAG_DELETED) ||
                 (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
@@ -2917,7 +2902,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     }
 
     /* Prepare result loop */
-    char email_id[26];
+    char email_id[JMAP_EMAILID_SIZE];
     int found_up_to = 0;
     size_t mdcount = msgdata->count;
 
@@ -2940,7 +2925,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
         // for this phase, we only care that it has a change
         if (md->modseq <= since_modseq) continue;
 
-        _email_id_set_guid(&md->guid, email_id);
+        jmap_set_emailid(&md->guid, email_id);
 
         hash_insert(email_id, (void*)1, &touched_ids);
     }
@@ -2949,7 +2934,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     for (i = 0 ; i < mdcount; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
 
-        _email_id_set_guid(&md->guid, email_id);
+        jmap_set_emailid(&md->guid, email_id);
 
         int is_expunged = (md->system_flags & FLAG_DELETED) ||
                 (md->internal_flags & FLAG_INTERNAL_EXPUNGED);
@@ -3098,7 +3083,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     }
 
     /* Process results */
-    char email_id[26];
+    char email_id[JMAP_EMAILID_SIZE];
     size_t changes_count = 0;
     modseq_t highest_modseq = 0;
     int i;
@@ -3109,7 +3094,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     for (i = 0 ; i < msgdata->count; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
 
-        _email_id_set_guid(&md->guid, email_id);
+        jmap_set_emailid(&md->guid, email_id);
 
         /* Skip already seen messages */
         if (hash_lookup(email_id, &seen_ids)) continue;
@@ -3226,7 +3211,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
 
     struct hashset *seen_threads = hashset_new(8);
 
-    char thread_id[18];
+    char thread_id[JMAP_THREADID_SIZE];
     conversation_t conv = CONVERSATION_INIT;
 
     for (i = 0 ; i < msgdata->count; i++) {
@@ -3250,7 +3235,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
             continue;
 
         /* Report thread */
-        _thread_id_set_cid(md->cid, thread_id);
+        jmap_set_threadid(md->cid, thread_id);
         if (conv.exists) {
             if (conv.createdmodseq <= changes->since_modseq)
                 json_array_append_new(changes->updated, json_string(thread_id));
@@ -3607,7 +3592,7 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
 
     json_array_foreach(ids, i, val) {
         conv_thread_t *thread;
-        char email_id[26];
+        char email_id[JMAP_EMAILID_SIZE];
 
         const char *threadid = json_string_value(val);
 
@@ -3634,7 +3619,7 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
                     continue;
                 }
             }
-            _email_id_set_guid(&thread->guid, email_id);
+            jmap_set_emailid(&thread->guid, email_id);
             json_array_append_new(ids, json_string(email_id));
         }
 
@@ -4398,14 +4383,14 @@ static int _email_get_meta(jmap_req_t *req,
 {
     int r = 0;
     hash_table *props = args->props;
-    char email_id[26];
+    char email_id[JMAP_EMAILID_SIZE];
 
     if (msg->rfc822part) {
         if (jmap_wantprop(props, "id")) {
             json_object_set_new(email, "id", json_null());
         }
         if (jmap_wantprop(props, "blobId")) {
-            char blob_id[42];
+            char blob_id[JMAP_BLOBID_SIZE];
             jmap_set_blobid(&msg->rfc822part->content_guid, blob_id);
             json_object_set_new(email, "blobId", json_string(blob_id));
         }
@@ -4431,7 +4416,7 @@ static int _email_get_meta(jmap_req_t *req,
     r = msgrecord_get_guid(msg->mr, &guid);
     if (r) goto done;
 
-    _email_id_set_guid(&guid, email_id);
+    jmap_set_emailid(&guid, email_id);
 
     /* id */
     if (jmap_wantprop(props, "id")) {
@@ -4440,7 +4425,7 @@ static int _email_get_meta(jmap_req_t *req,
 
     /* blobId */
     if (jmap_wantprop(props, "blobId")) {
-        char blob_id[42];
+        char blob_id[JMAP_BLOBID_SIZE];
         jmap_set_blobid(&guid, blob_id);
         json_object_set_new(email, "blobId", json_string(blob_id));
     }
@@ -4450,8 +4435,8 @@ static int _email_get_meta(jmap_req_t *req,
         bit64 cid;
         r = msgrecord_get_cid(msg->mr, &cid);
         if (r) goto done;
-        char thread_id[18];
-        _thread_id_set_cid(cid, thread_id);
+        char thread_id[JMAP_THREADID_SIZE];
+        jmap_set_threadid(cid, thread_id);
         json_object_set_new(email, "threadId", json_string(thread_id));
     }
 
@@ -4669,7 +4654,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     if (jmap_wantprop(bodyprops, "blobId")) {
         json_t *jblob_id = json_null();
         if (!message_guid_isnull(&part->content_guid)) {
-            char blob_id[42];
+            char blob_id[JMAP_BLOBID_SIZE];
             jmap_set_blobid(&part->content_guid, blob_id);
             jblob_id = json_string(blob_id);
         }
@@ -5297,8 +5282,8 @@ static void jmap_email_get_threadsonly(jmap_req_t *req, struct jmap_get *get)
 
         int r = _email_get_cid(req, id, &cid);
         if (!r && cid) {
-            char thread_id[18];
-            _thread_id_set_cid(cid, thread_id);
+            char thread_id[JMAP_THREADID_SIZE];
+            jmap_set_threadid(cid, thread_id);
             json_t *msg = json_pack("{s:s, s:s}", "id", id, "threadId", thread_id);
             json_array_append_new(get->list, msg);
         }
@@ -5848,9 +5833,9 @@ static void _email_multiexpunge(jmap_req_t *req, struct mailbox *mbox,
 }
 
 struct email_append_detail {
-    char blob_id[42];
-    char email_id[26];
-    char thread_id[18];
+    char blob_id[JMAP_BLOBID_SIZE];
+    char email_id[JMAP_EMAILID_SIZE];
+    char thread_id[JMAP_THREADID_SIZE];
     size_t size;
 };
 
@@ -5964,7 +5949,7 @@ static void _email_append(jmap_req_t *req,
     if ((addr = mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, 0))) {
         struct message_guid guid;
         message_guid_generate(&guid, addr, len);
-        _email_id_set_guid(&guid, detail->email_id);
+        jmap_set_emailid(&guid, detail->email_id);
         jmap_set_blobid(&guid, detail->blob_id);
         detail->size = len;
         munmap(addr, len);
@@ -6025,7 +6010,7 @@ static void _email_append(jmap_req_t *req,
     bit64 cid;
     r = msgrecord_get_cid(mr, &cid);
     if (r) goto done;
-    _thread_id_set_cid(cid, detail->thread_id);
+    jmap_set_threadid(cid, detail->thread_id);
 
     /* Complete message creation */
     if (stage) {
@@ -10290,8 +10275,8 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
                                    _email_copy_writeprops_cb, &writeprops_rock);
 
     if (!r) {
-        char thread_id[18];
-        _thread_id_set_cid(writeprops_rock.cid, thread_id);
+        char thread_id[JMAP_THREADID_SIZE];
+        jmap_set_threadid(writeprops_rock.cid, thread_id);
         *new_email = json_pack("{s:s s:s s:s s:i}",
                 "id", email_id,
                 "blobId", blob_id,
