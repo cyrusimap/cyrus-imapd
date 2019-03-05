@@ -1681,6 +1681,10 @@ static int setcalendarevents_create(jmap_req_t *req,
     r = 0;
     *uidptr = uid;
 
+    char *xhref = jmap_xhref(mbox->name, resource);
+    json_object_set_new(create, "x-href", json_string(xhref));
+    free(xhref);
+
 done:
     if (r) {
         *uidptr = NULL;
