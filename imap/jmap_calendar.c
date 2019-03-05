@@ -1801,7 +1801,6 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
     json_object_del(old_event, "updated");
     json_t *new_event = jmap_patchobject_apply(old_event, event_patch);
-    json_decref(old_event);
     ical = jmapical_toical(new_event, invalid);
 
     json_t *jparticipantId = json_object_get(new_event, "participantId");
@@ -1814,7 +1813,6 @@ static int setcalendarevents_update(jmap_req_t *req,
     else if (JNOTNULL(jparticipantId)) {
         json_array_append_new(invalid, json_string("participantId"));
     }
-    json_decref(new_event);
 
     json_t *jnewsequence = json_object_get(event_patch, "sequence");
     if (!JNOTNULL(jnewsequence)) {
@@ -1824,6 +1822,9 @@ static int setcalendarevents_update(jmap_req_t *req,
         json_object_set_new(new_event, "sequence", json_integer(newseq));
         json_object_set_new(update, "sequence", json_integer(newseq));
     }
+
+    json_decref(new_event);
+    json_decref(old_event);
 
     if (json_array_size(invalid)) {
         r = 0;
