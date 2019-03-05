@@ -1527,7 +1527,8 @@ static int setcalendarevents_create(jmap_req_t *req,
                                     json_t *event,
                                     struct caldav_db *db,
                                     char **uidptr,
-                                    json_t *invalid)
+                                    json_t *invalid,
+                                    json_t *create)
 {
     int r, pe;
     int needrights = DACL_WRITEPROPS|DACL_WRITECONT;
@@ -1697,7 +1698,8 @@ static int setcalendarevents_update(jmap_req_t *req,
                                     json_t *event_patch,
                                     const char *id,
                                     struct caldav_db *db,
-                                    json_t *invalid)
+                                    json_t *invalid,
+                                    json_t *update __attribute__((unused)))
 {
     int r, pe;
     int needrights = DACL_RMRSRC|DACL_WRITEPROPS|DACL_WRITECONT;
@@ -2086,12 +2088,14 @@ static int jmap_calendarevent_set(struct jmap_req *req)
 
         /* Create the calendar event. */
         json_t *invalid = json_pack("[]");
-        r = setcalendarevents_create(req, req->accountid, arg, db, &uid, invalid);
+        json_t *create = json_pack("{}");
+        r = setcalendarevents_create(req, req->accountid, arg, db, &uid, invalid, create);
         if (r) {
             json_t *err = json_pack("{s:s s:s}",
                                     "type", "internalError",
                                     "message", error_message(r));
             json_object_set_new(set.not_created, key, err);
+            json_decref(create);
             r = 0;
             free(uid);
             continue;
@@ -2107,7 +2111,8 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         json_decref(invalid);
 
         /* Report calendar event as created. */
-        json_object_set_new(set.created, key, json_pack("{s:s}", "id", uid));
+        json_object_set_new(create, "id", json_string(uid));
+        json_object_set_new(set.created, key, create);
         jmap_add_id(req, key, uid);
         free(uid);
     }
@@ -2147,15 +2152,18 @@ static int jmap_calendarevent_set(struct jmap_req *req)
 
         /* Update the calendar event. */
         json_t *invalid = json_pack("[]");
-        r = setcalendarevents_update(req, arg, uid, db, invalid);
+        json_t *update = json_pack("{}");
+        r = setcalendarevents_update(req, arg, uid, db, invalid, update);
         if (r == IMAP_NOTFOUND) {
             json_t *err = json_pack("{s:s}", "type", "notFound");
             json_object_set_new(set.not_updated, uid, err);
             json_decref(invalid);
+            json_decref(update);
             r = 0;
             continue;
         } else if (r) {
             json_decref(invalid);
+            json_decref(update);
             goto done;
         }
         if (json_array_size(invalid)) {
@@ -2167,8 +2175,13 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         }
         json_decref(invalid);
 
+        if(!json_object_size(update)) {
+            json_decref(update);
+            update = json_null();
+        }
+
         /* Report calendar event as updated. */
-        json_object_set_new(set.updated, uid, json_null());
+        json_object_set_new(set.updated, uid, update);
     }
 
 
@@ -2920,9 +2933,10 @@ static void _calendarevent_copy(jmap_req_t *req,
 
     /* Create event */
     json_t *invalid = json_array();
+    *new_event = json_pack("{}");
     char *dst_uid = NULL;
     r = setcalendarevents_create(req, req->accountid, dst_event,
-                                 dst_db, &dst_uid, invalid);
+                                 dst_db, &dst_uid, invalid, *new_event);
     if (r || json_array_size(invalid)) {
         if (!r) {
             *set_err = json_pack("{s:s s:o}", "type", "invalidProperties",
@@ -2931,7 +2945,7 @@ static void _calendarevent_copy(jmap_req_t *req,
         goto done;
     }
     json_decref(invalid);
-    *new_event = json_pack("{s:s}", "id", dst_uid);
+    json_object_set_new(*new_event, "id", json_string(dst_uid));
     free(dst_uid);
 
 done:
