@@ -2667,12 +2667,19 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             }
         }
         else {
+            /* Content-Length */
             switch (txn->meth) {
             case METH_CONNECT:
+                /* MUST NOT include per Section 4.3.6 of RFC 7231 */
                 break;
 
             case METH_HEAD:
-                if (!resp_body->len) break;
+                if (!resp_body->len) {
+                    /* We don't know if the length is zero or if it wasn't set -
+                       MUST NOT include if it doesn't match what would be
+                       returned for GET, per Section 3.3.2 of RFC 7231 */
+                    break;
+                }
 
                 GCC_FALLTHROUGH
 
