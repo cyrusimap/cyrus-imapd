@@ -12220,5 +12220,42 @@ sub test_email_set_encode_plain_text_attachment
     $self->assert_str_equals(' BASE64', $subPart->{'header:Content-Transfer-Encoding'});
 }
 
+sub test_blob_get
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    $self->make_message("foo") || die;
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', {}, "R1"],
+        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2'],
+    ]);
+
+    my $blobId = $res->[1][1]{list}[0]{blobId};
+    $self->assert_not_null($blobId);
+
+    my $wantMailboxIds = $res->[1][1]{list}[0]{mailboxIds};
+    my $wantEmailIds = {
+        $res->[1][1]{list}[0]{id} => JSON::true
+    };
+    my $wantThreadIds = {
+        $res->[1][1]{list}[0]{threadId} => JSON::true
+    };
+
+    $res = $jmap->CallMethods([
+        ['Blob/get', { ids => [$blobId]}, "R1"],
+    ]);
+
+    my $blob = $res->[0][1]{list}[0];
+    $self->assert_deep_equals($wantMailboxIds, $blob->{mailboxIds});
+    $self->assert_deep_equals($wantEmailIds, $blob->{emailIds});
+    $self->assert_deep_equals($wantThreadIds, $blob->{threadIds});
+
+}
 
 1;
