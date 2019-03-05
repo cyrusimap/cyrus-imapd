@@ -1526,7 +1526,6 @@ static int setcalendarevents_create(jmap_req_t *req,
                                     const char *account_id,
                                     json_t *event,
                                     struct caldav_db *db,
-                                    char **uidptr,
                                     json_t *invalid,
                                     json_t *create)
 {
@@ -1560,7 +1559,6 @@ static int setcalendarevents_create(jmap_req_t *req,
     }
     if (json_array_size(invalid)) {
         free(uid);
-        *uidptr = NULL;
         return 0;
     }
 
@@ -1592,7 +1590,6 @@ static int setcalendarevents_create(jmap_req_t *req,
     /* Check permissions. */
     if (!jmap_hasrights_byname(req, mboxname, needrights)) {
         json_array_append_new(invalid, json_string("calendarId"));
-        free(uid);
         r = 0; goto done;
     }
 
@@ -1604,8 +1601,6 @@ static int setcalendarevents_create(jmap_req_t *req,
             json_array_append_new(invalid, json_string("calendarId"));
             r = 0;
         }
-        free(uid);
-        *uidptr = NULL;
         goto done;
     }
 
@@ -1639,8 +1634,8 @@ static int setcalendarevents_create(jmap_req_t *req,
     }
 
     if (json_array_size(invalid)) {
-        free(uid);
-        r = 0; goto done;
+        r = 0;
+        goto done;
     } else if (!ical) {
         r = IMAP_INTERNAL;
         goto done;
@@ -1679,22 +1674,19 @@ static int setcalendarevents_create(jmap_req_t *req,
         goto done;
     }
     r = 0;
-    *uidptr = uid;
+    json_object_set_new(create, "uid", json_string(uid));
 
     char *xhref = jmap_xhref(mbox->name, resource);
     json_object_set_new(create, "x-href", json_string(xhref));
     free(xhref);
 
 done:
-    if (r) {
-        *uidptr = NULL;
-        free(uid);
-    }
     if (mbox) mailbox_close(&mbox);
     if (ical) icalcomponent_free(ical);
     free(schedule_address);
     free(resource);
     free(mboxname);
+    free(uid);
     return r;
 }
 
@@ -2091,8 +2083,6 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     const char *key;
     json_t *arg;
     json_object_foreach(set.create, key, arg) {
-        char *uid = NULL;
-
         /* Validate calendar event id. */
         if (!strlen(key)) {
             json_t *err= json_pack("{s:s}", "type", "invalidArguments");
@@ -2103,7 +2093,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         /* Create the calendar event. */
         json_t *invalid = json_pack("[]");
         json_t *create = json_pack("{}");
-        r = setcalendarevents_create(req, req->accountid, arg, db, &uid, invalid, create);
+        r = setcalendarevents_create(req, req->accountid, arg, db, invalid, create);
         if (r) {
             json_t *err = json_pack("{s:s s:s}",
                                     "type", "internalError",
@@ -2111,7 +2101,6 @@ static int jmap_calendarevent_set(struct jmap_req *req)
             json_object_set_new(set.not_created, key, err);
             json_decref(create);
             r = 0;
-            free(uid);
             continue;
         }
         if (json_array_size(invalid)) {
@@ -2119,16 +2108,15 @@ static int jmap_calendarevent_set(struct jmap_req *req)
                                     "type", "invalidProperties",
                                     "properties", invalid);
             json_object_set_new(set.not_created, key, err);
-            free(uid);
             continue;
         }
         json_decref(invalid);
 
         /* Report calendar event as created. */
+        const char *uid = json_string_value(json_object_get(create, "uid"));
         json_object_set_new(create, "id", json_string(uid));
         json_object_set_new(set.created, key, create);
         jmap_add_id(req, key, uid);
-        free(uid);
     }
 
 
@@ -2948,9 +2936,8 @@ static void _calendarevent_copy(jmap_req_t *req,
     /* Create event */
     json_t *invalid = json_array();
     *new_event = json_pack("{}");
-    char *dst_uid = NULL;
     r = setcalendarevents_create(req, req->accountid, dst_event,
-                                 dst_db, &dst_uid, invalid, *new_event);
+                                 dst_db, invalid, *new_event);
     if (r || json_array_size(invalid)) {
         if (!r) {
             *set_err = json_pack("{s:s s:o}", "type", "invalidProperties",
@@ -2959,8 +2946,7 @@ static void _calendarevent_copy(jmap_req_t *req,
         goto done;
     }
     json_decref(invalid);
-    json_object_set_new(*new_event, "id", json_string(dst_uid));
-    free(dst_uid);
+    json_object_set(*new_event, "id", json_object_get(*new_event, "uid"));
 
 done:
     if (r && *set_err == NULL) {
