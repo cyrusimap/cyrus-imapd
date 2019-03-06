@@ -1328,7 +1328,6 @@ static int jmap_blob_get(jmap_req_t *req)
 
     /* Lookup blobs by mailbox */
     json_t *found = json_object();
-    json_t *not_found = json_object();
     hash_iter *iter = hash_table_iter(&getblobs_by_mboxname);
     while (hash_iter_next(iter)) {
         const char *mboxname = hash_iter_key(iter);
@@ -1434,7 +1433,6 @@ static int jmap_blob_get(jmap_req_t *req)
         }
     }
 
-    json_decref(not_found);
     json_decref(found);
 
     /* Reply */
