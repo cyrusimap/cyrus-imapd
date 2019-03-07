@@ -2206,15 +2206,6 @@ static int search_text_match(message_t *m, const union search_value *v,
 
 static hash_table attrs_by_name = HASH_TABLE_INITIALIZER;
 
-enum search_cost {
-    SEARCH_COST_NONE = 0,
-    SEARCH_COST_INDEX,
-    SEARCH_COST_CONV,
-    SEARCH_COST_ANNOT,
-    SEARCH_COST_CACHE,
-    SEARCH_COST_BODY
-};
-
 static int search_attr_initialized = 0;
 
 static void done_cb(void *rock __attribute__((unused))) {
@@ -2792,5 +2783,10 @@ EXPORTED int search_attr_is_fuzzable(const search_attr_t *attr)
 {
     return (attr->part != SEARCH_PART_NONE &&
             (attr->flags & SEA_FUZZABLE));
+}
+
+EXPORTED enum search_cost search_attr_cost(const search_attr_t *attr)
+{
+    return attr->cost;
 }
 

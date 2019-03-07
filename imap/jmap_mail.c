@@ -1510,7 +1510,37 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
     return 0;
 }
 
-static void _email_search_string(search_expr_t *parent, const char *s, const char *name)
+static void _email_search_perf_attr(const search_attr_t *attr, strarray_t *perf_filters)
+{
+    const char *cost = NULL;
+
+    switch (search_attr_cost(attr)) {
+        case SEARCH_COST_INDEX:
+            cost = "index";
+            break;
+        case SEARCH_COST_CONV:
+            cost = "conversations";
+            break;
+        case SEARCH_COST_ANNOT:
+            cost = "annotations";
+            break;
+        case SEARCH_COST_CACHE:
+            cost = "cache";
+            break;
+        case SEARCH_COST_BODY:
+            cost = search_attr_is_fuzzable(attr) ? "xapian" : "body";
+            break;
+        default:
+            ; // ignore
+    }
+
+    if (cost) strarray_add(perf_filters, cost);
+}
+
+static void _email_search_string(search_expr_t *parent,
+                                 const char *s,
+                                 const char *name,
+                                 strarray_t *perf_filters)
 {
     charset_t utf8 = charset_lookupname("utf-8");
     search_expr_t *e;
@@ -1529,10 +1559,11 @@ static void _email_search_string(search_expr_t *parent, const char *s, const cha
         e->attr = NULL;
     }
 
+    _email_search_perf_attr(attr, perf_filters);
     charset_free(&utf8);
 }
 
-static void _email_search_type(search_expr_t *parent, const char *s)
+static void _email_search_type(search_expr_t *parent, const char *s, strarray_t *perf_filters)
 {
     strarray_t types = STRARRAY_INITIALIZER;
 
@@ -1612,12 +1643,14 @@ static void _email_search_type(search_expr_t *parent, const char *s)
         free(orig);
         buf_free(&buf);
     } while (types.count);
+    _email_search_perf_attr(attr, perf_filters);
 
     strarray_fini(&types);
 }
 
 static void _email_search_mbox(jmap_req_t *req, search_expr_t *parent,
-                               json_t *mailbox, int is_otherthan)
+                               json_t *mailbox, int is_otherthan,
+                               strarray_t *perf_filters)
 {
     search_expr_t *e;
     const char *s = json_string_value(mailbox);
@@ -1638,10 +1671,12 @@ static void _email_search_mbox(jmap_req_t *req, search_expr_t *parent,
     if (!is_otherthan) {
         e->match_guid = 1;
     }
+    strarray_add(perf_filters, "mailbox");
+
     mboxlist_entry_free(&mbentry);
 }
 
-static void _email_search_keyword(search_expr_t *parent, const char *keyword)
+static void _email_search_keyword(search_expr_t *parent, const char *keyword, strarray_t *perf_filters)
 {
     search_expr_t *e;
     if (!strcasecmp(keyword, "$Seen")) {
@@ -1669,10 +1704,11 @@ static void _email_search_keyword(search_expr_t *parent, const char *keyword)
         e->attr = search_attr_find("keyword");
         e->value.s = xstrdup(keyword);
     }
+    _email_search_perf_attr(e->attr, perf_filters);
 }
 
 static void _email_search_threadkeyword(search_expr_t *parent, const char *keyword,
-                                        int matchall)
+                                        int matchall, strarray_t *perf_filters)
 {
     const char *flag = jmap_keyword_to_imap(keyword);
     if (!flag) return;
@@ -1680,6 +1716,7 @@ static void _email_search_threadkeyword(search_expr_t *parent, const char *keywo
     search_expr_t *e = search_expr_new(parent, SEOP_MATCH);
     e->attr = search_attr_find(matchall ? "allconvflags" : "convflags");
     e->value.s = xstrdup(flag);
+    _email_search_perf_attr(e->attr, perf_filters);
 }
 
 static int _email_threadkeyword_is_valid(const char *keyword)
@@ -1714,7 +1751,8 @@ static int _email_threadkeyword_is_valid(const char *keyword)
 }
 
 static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
-                                         search_expr_t *parent)
+                                         search_expr_t *parent,
+                                         strarray_t *perf_filters)
 {
     search_expr_t *this, *e;
     json_t *val;
@@ -1741,7 +1779,7 @@ static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
         e = op == SEOP_NOT ? search_expr_new(this, SEOP_OR) : this;
 
         json_array_foreach(json_object_get(filter, "conditions"), i, val) {
-            _email_buildsearch(req, val, e);
+            _email_buildsearch(req, val, e, perf_filters);
         }
     } else {
         this = search_expr_new(parent, SEOP_AND);
@@ -1754,36 +1792,39 @@ static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
             e = search_expr_new(this, SEOP_GE);
             e->attr = search_attr_find("internaldate");
             e->value.u = t;
+            _email_search_perf_attr(e->attr, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "before")))) {
             time_from_iso8601(s, &t);
             e = search_expr_new(this, SEOP_LE);
             e->attr = search_attr_find("internaldate");
             e->value.u = t;
+            _email_search_perf_attr(e->attr, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "body")))) {
-            _email_search_string(this, s, "body");
+            _email_search_string(this, s, "body", perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "cc")))) {
-            _email_search_string(this, s, "cc");
+            _email_search_string(this, s, "cc", perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "bcc")))) {
-            _email_search_string(this, s, "bcc");
+            _email_search_string(this, s, "bcc", perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "from")))) {
-            _email_search_string(this, s, "from");
+            _email_search_string(this, s, "from", perf_filters);
         }
         if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
             e = val == json_false() ? search_expr_new(this, SEOP_NOT) : this;
             e = search_expr_new(e, SEOP_MATCH);
             e->attr = search_attr_find("keyword");
             e->value.s = xstrdup(JMAP_HAS_ATTACHMENT_FLAG);
+            _email_search_perf_attr(e->attr, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "attachmentName")))) {
-            _email_search_string(this, s, "attachmentname");
+            _email_search_string(this, s, "attachmentname", perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "attachmentType")))) {
-            _email_search_type(this, s);
+            _email_search_type(this, s, perf_filters);
         }
         if (JNOTNULL((val = json_object_get(filter, "header")))) {
             const char *k, *v;
@@ -1805,63 +1846,67 @@ static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
                 e->op = SEOP_FALSE;
                 e->attr = NULL;
             }
+            _email_search_perf_attr(e->attr, perf_filters);
             charset_free(&utf8);
         }
         if ((val = json_object_get(filter, "inMailbox"))) {
-            _email_search_mbox(req, this, val, /*is_otherthan*/0);
+            _email_search_mbox(req, this, val, /*is_otherthan*/0, perf_filters);
         }
 
         json_array_foreach(json_object_get(filter, "inMailboxOtherThan"), i, val) {
             e = search_expr_new(this, SEOP_AND);
-            _email_search_mbox(req, e, val, /*is_otherthan*/1);
+            _email_search_mbox(req, e, val, /*is_otherthan*/1, perf_filters);
         }
 
         if (JNOTNULL((val = json_object_get(filter, "allInThreadHaveKeyword")))) {
             /* This shouldn't happen, validate_sort should have reported
              * allInThreadHaveKeyword as unsupported. Let's ignore this
              * filter and return false positives. */
-            _email_search_threadkeyword(this, json_string_value(val), 1);
+            _email_search_threadkeyword(this, json_string_value(val), 1, perf_filters);
         }
         if (JNOTNULL((val = json_object_get(filter, "someInThreadHaveKeyword")))) {
-            _email_search_threadkeyword(this, json_string_value(val), 0);
+            _email_search_threadkeyword(this, json_string_value(val), 0, perf_filters);
         }
         if (JNOTNULL((val = json_object_get(filter, "noneInThreadHaveKeyword")))) {
             e = search_expr_new(this, SEOP_NOT);
-            _email_search_threadkeyword(e, json_string_value(val), 0);
+            _email_search_threadkeyword(e, json_string_value(val), 0, perf_filters);
         }
 
         if (JNOTNULL((val = json_object_get(filter, "hasKeyword")))) {
-            _email_search_keyword(this, json_string_value(val));
+            _email_search_keyword(this, json_string_value(val), perf_filters);
         }
         if (JNOTNULL((val = json_object_get(filter, "notKeyword")))) {
             e = search_expr_new(this, SEOP_NOT);
-            _email_search_keyword(e, json_string_value(val));
+            _email_search_keyword(e, json_string_value(val), perf_filters);
         }
 
         if (JNOTNULL((val = json_object_get(filter, "maxSize")))) {
             e = search_expr_new(this, SEOP_LE);
             e->attr = search_attr_find("size");
             e->value.u = json_integer_value(val);
+            _email_search_perf_attr(e->attr, perf_filters);
         }
         if (JNOTNULL((val = json_object_get(filter, "minSize")))) {
             e = search_expr_new(this, SEOP_GE);
             e->attr = search_attr_find("size");
             e->value.u = json_integer_value(val);
+            _email_search_perf_attr(e->attr, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "sinceEmailState")))) {
             /* non-standard */
             e = search_expr_new(this, SEOP_GT);
             e->attr = search_attr_find("modseq");
             e->value.u = atomodseq_t(s);
+            _email_search_perf_attr(e->attr, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "subject")))) {
-            _email_search_string(this, s, "subject");
+            _email_search_string(this, s, "subject", perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "text")))) {
-            _email_search_string(this, s, "text");
+            _email_search_string(this, s, "text", perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "to")))) {
-            _email_search_string(this, s, "to");
+            _email_search_string(this, s, "to", perf_filters);
         }
     }
 
@@ -2106,6 +2151,7 @@ static void _email_querychanges_destroyed(struct jmap_querychanges *query,
 struct emailsearch {
     int is_mutable;
     char *hash;
+    strarray_t perf_filters;
     /* Internal state */
     search_query_t *query;
     struct searchargs *args;
@@ -2124,6 +2170,7 @@ static void _emailsearch_free(struct emailsearch *search)
     freesearchargs(search->args);
     freesortcrit(search->sortcrit);
     free(search->hash);
+    strarray_fini(&search->perf_filters);
     free(search);
 }
 
@@ -2190,7 +2237,7 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
     /* Build search args */
     search->args = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
             &jmap_namespace, req->accountid, req->authstate, 0);
-    search->args->root = _email_buildsearch(req, filter, NULL);
+    search->args->root = _email_buildsearch(req, filter, NULL, &search->perf_filters);
 
     /* Build index state */
     search->init.userid = req->accountid;
@@ -2477,7 +2524,17 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
         _cached_emailquery_fini(&cache_record);
     }
 
-    json_object_set_new(req->perf_details, "isCached", json_boolean(is_cached));
+    /* Set performance info */
+    if (req->do_perf) {
+        json_object_set_new(req->perf_details, "isCached", json_boolean(is_cached));
+        int i;
+        json_t *jfilters = json_array();
+        for (i = 0; i < strarray_size(&search->perf_filters); i++) {
+            const char *cost = strarray_nth(&search->perf_filters, i);
+            json_array_append_new(jfilters, json_string(cost));
+        }
+        json_object_set_new(req->perf_details, "filters", jfilters);
+    }
     if (is_cached) goto done;
 
     /* Run search */
@@ -3335,9 +3392,11 @@ static int _snippet_get(jmap_req_t *req, json_t *filter, json_t *messageids,
     *notfound = json_pack("[]");
 
     /* Build searchargs */
+    strarray_t perf_filters = STRARRAY_INITIALIZER;
     searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
                                 &jmap_namespace, req->userid, req->authstate, 0);
-    searchargs->root = _email_buildsearch(req, filter, NULL);
+    searchargs->root = _email_buildsearch(req, filter, NULL, &perf_filters);
+    strarray_fini(&perf_filters);
 
     /* Build the search query */
     memset(&init, 0, sizeof(init));

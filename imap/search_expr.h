@@ -150,9 +150,19 @@ extern void search_expr_split_by_folder_and_index(search_expr_t *e,
                                                    void *rock),
                                         void *rock);
 
+enum search_cost {
+    SEARCH_COST_NONE = 0,
+    SEARCH_COST_INDEX,
+    SEARCH_COST_CONV,
+    SEARCH_COST_ANNOT,
+    SEARCH_COST_CACHE,
+    SEARCH_COST_BODY
+};
+
 extern void search_attr_init(void);
 extern const search_attr_t *search_attr_find(const char *);
 extern const search_attr_t *search_attr_find_field(const char *field);
 extern int search_attr_is_fuzzable(const search_attr_t *);
+extern enum search_cost search_attr_cost(const search_attr_t *);
 
 #endif
