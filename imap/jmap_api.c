@@ -457,6 +457,9 @@ HIDDEN void jmap_finireq(jmap_req_t *req)
 
     ptrarray_free(req->mboxes);
     req->mboxes = NULL;
+
+    json_decref(req->perf_details);
+    req->perf_details = NULL;
 }
 
 static jmap_method_t *find_methodproc(const char *name, hash_table *jmap_methods)
@@ -712,6 +715,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
             req.sys_start = timeval_get_double(&usage.ru_stime);
             req.real_start = now_ms() / 1000.0;
             req.do_perf = 1;
+            req.perf_details = json_object();
         }
 
         /* Read the current state data in */
@@ -1245,6 +1249,7 @@ static void jmap_add_perf(jmap_req_t *req, json_t *res)
             "real", (now_ms() / 1000.0) - req->real_start,
             "user", timeval_get_double(&usage.ru_utime) - req->user_start,
             "sys", timeval_get_double(&usage.ru_stime) - req->sys_start);
+        json_object_set(perf, "details", req->perf_details); // incref
 
         json_object_set_new(res, "performance", perf);
     }

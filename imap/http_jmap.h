@@ -112,6 +112,7 @@ typedef struct jmap_req {
     double real_start;
     double user_start;
     double sys_start;
+    json_t *perf_details;
 
     /* The JMAP request keeps its own cache of opened mailboxes,
      * which can be used by calling jmap_openmbox. If the
