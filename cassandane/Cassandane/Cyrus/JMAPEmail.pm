@@ -4621,18 +4621,13 @@ sub test_email_query_inmailbox_null
 }
 
 sub test_email_query_cached
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPSearchDB
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
     my $store = $self->{store};
     my $talk = $store->get_client();
-
-    my $search_db = $self->{instance}->{config}->get('jmap_emailsearch_db_path');
-    if (not defined $search_db) {
-        return;
-    }
 
     my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
     my $inboxid = $res->[0][1]{list}[0]{id};

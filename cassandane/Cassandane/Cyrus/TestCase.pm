@@ -248,6 +248,9 @@ magic(NoMunge8Bit => sub {
 magic(RFC2047_UTF8 => sub {
     shift->config_set(rfc2047_utf8 => 'yes');
 });
+magic(JMAPSearchDB => sub {
+    shift->config_set('jmap_emailsearch_db_path' => '@basedir@/search/jmap_emailsearch.db');
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
