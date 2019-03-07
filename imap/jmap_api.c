@@ -549,6 +549,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
 
     /* Validate Request object */
     if ((ret = validate_request(txn, jreq, settings, &do_perf))) {
+        json_decref(jreq);
         return json_error_response(txn, ret, res);
     }
 
