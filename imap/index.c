@@ -7299,7 +7299,7 @@ EXPORTED char *sortcrit_as_string(const struct sortcrit *sortcrit)
         "FOLDER", "RELEVANCY", "SPAMSCORE", "GUID"
     };
 
-    for ( ; sortcrit->key ; sortcrit++) {
+    do {
         if (b.len)
             buf_putc(&b, ' ');
         if (sortcrit->flags & SORT_REVERSE)
@@ -7318,7 +7318,9 @@ EXPORTED char *sortcrit_as_string(const struct sortcrit *sortcrit)
                             "value.priv" : "value.shared");
             break;
         }
-    }
+        sortcrit++;
+    } while (sortcrit->key);
+
     return buf_release(&b);
 }
 
