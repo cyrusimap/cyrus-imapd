@@ -2399,13 +2399,13 @@ done:
 
 static void _email_query(jmap_req_t *req, struct jmap_query *query,
                          int collapse_threads,
-                         json_t **err,
-                         int *is_cachedptr)
+                         json_t **err)
 {
     char *cache_fname = NULL;
     char *cache_key = NULL;
     struct db *cache_db = NULL;
     modseq_t current_modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
+    int is_cached = 0;
 
     struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort, 0, 0);
     if (!search) {
@@ -2433,7 +2433,6 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
             "/", collapse_threads ?  "collapsed" : "uncollapsed",
             "/", search->hash, NULL
     );
-    *is_cachedptr = 0;
 
     /* Lookup cache */
     if (cache_db) {
@@ -2473,11 +2472,13 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
             }
             query->result_position = from;
             query->total = cache_record.ids_count;
-            *is_cachedptr = 1;
+            is_cached = 1;
         }
         _cached_emailquery_fini(&cache_record);
-        if (*is_cachedptr) goto done;
     }
+
+    json_object_set_new(req->perf_details, "isCached", json_boolean(is_cached));
+    if (is_cached) goto done;
 
     /* Run search */
     const ptrarray_t *msgdata = NULL;
@@ -2649,8 +2650,7 @@ static int jmap_email_query(jmap_req_t *req)
     }
 
     /* Run query */
-    int is_cached = 0;
-    _email_query(req, &query, collapse_threads, &err, &is_cached);
+    _email_query(req, &query, collapse_threads, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -2659,7 +2659,6 @@ static int jmap_email_query(jmap_req_t *req)
     /* Build response */
     json_t *res = jmap_query_reply(&query);
     json_object_set(res, "collapseThreads", json_boolean(collapse_threads));
-    json_object_set_new(res, "isCached", json_boolean(is_cached));
     jmap_ok(req, res);
 
 done:
