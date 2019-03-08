@@ -558,6 +558,7 @@ static void httpd_reset(struct http_connection *conn)
     cyrus_reset_stdio();
 
     conn->clienthost = "[local]";
+    buf_free(&conn->logbuf);
     if (conn->logfd != -1) {
         close(conn->logfd);
         conn->logfd = -1;
