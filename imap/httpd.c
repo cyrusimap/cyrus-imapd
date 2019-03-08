@@ -2319,7 +2319,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     const char **hdr, *sep;
     struct auth_challenge_t *auth_chal = &txn->auth_chal;
     struct resp_body_t *resp_body = &txn->resp_body;
-    static struct buf log = BUF_INITIALIZER;
+    struct buf *logbuf = &txn->conn->logbuf;
     const char *upgrd_tokens[] =
         { TLS_VERSION, NGHTTP2_CLEARTEXT_PROTO_VERSION_ID, WS_TOKEN, NULL };
     const char *te[] = { "deflate", "gzip", "chunked", NULL };
@@ -2698,189 +2698,189 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 
   log:
     /* Log the client request and our response */
-    buf_reset(&log);
+    buf_reset(logbuf);
 
     /* Add client data */
-    buf_printf(&log, "%s", txn->conn->clienthost);
-    if (httpd_userid) buf_printf(&log, " as \"%s\"", httpd_userid);
+    buf_printf(logbuf, "%s", txn->conn->clienthost);
+    if (httpd_userid) buf_printf(logbuf, " as \"%s\"", httpd_userid);
     if (txn->req_hdrs &&
         (hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
-        buf_printf(&log, " with \"%s\"", hdr[0]);
+        buf_printf(logbuf, " with \"%s\"", hdr[0]);
         if ((hdr = spool_getheader(txn->req_hdrs, "X-Client")))
-            buf_printf(&log, " by \"%s\"", hdr[0]);
+            buf_printf(logbuf, " by \"%s\"", hdr[0]);
         else if ((hdr = spool_getheader(txn->req_hdrs, "X-Requested-With")))
-            buf_printf(&log, " by \"%s\"", hdr[0]);
+            buf_printf(logbuf, " by \"%s\"", hdr[0]);
     }
 
     /* Add request-line */
-    buf_appendcstr(&log, "; \"");
+    buf_appendcstr(logbuf, "; \"");
     if (txn->req_line.meth) {
-        buf_printf(&log, "%s",
+        buf_printf(logbuf, "%s",
                    txn->flags.override ? "POST" : txn->req_line.meth);
         if (txn->req_line.uri) {
-            buf_printf(&log, " %s", txn->req_line.uri);
+            buf_printf(logbuf, " %s", txn->req_line.uri);
             if (txn->req_line.ver) {
-                buf_printf(&log, " %s", txn->req_line.ver);
+                buf_printf(logbuf, " %s", txn->req_line.ver);
                 if (code != HTTP_URI_TOO_LONG && *txn->req_line.buf) {
                     char *p = txn->req_line.ver + strlen(txn->req_line.ver) + 1;
-                    if (*p) buf_printf(&log, " %s", p);
+                    if (*p) buf_printf(logbuf, " %s", p);
                 }
             }
         }
     }
-    buf_appendcstr(&log, "\"");
+    buf_appendcstr(logbuf, "\"");
 
     if (txn->req_hdrs) {
         /* Add any request modifying headers */
         sep = " (";
 
         if (txn->flags.override) {
-            buf_printf(&log, "%smethod-override=%s", sep, txn->req_line.meth);
+            buf_printf(logbuf, "%smethod-override=%s", sep, txn->req_line.meth);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "Origin"))) {
-            buf_printf(&log, "%sorigin=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%sorigin=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "Referer"))) {
-            buf_printf(&log, "%sreferer=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%sreferer=%s", sep, hdr[0]);
             sep = "; ";
         }
         if (txn->flags.upgrade &&
             (hdr = spool_getheader(txn->req_hdrs, "Upgrade"))) {
-            buf_printf(&log, "%supgrade=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%supgrade=%s", sep, hdr[0]);
             sep = "; ";
         }
         if (code == HTTP_CONTINUE || code == HTTP_EXPECT_FAILED) {
             hdr = spool_getheader(txn->req_hdrs, "Expect");
-            buf_printf(&log, "%sexpect=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%sexpect=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "Transfer-Encoding"))) {
-            buf_printf(&log, "%stx-encoding=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%stx-encoding=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "Content-Encoding"))) {
-            buf_printf(&log, "%scnt-encoding=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%scnt-encoding=%s", sep, hdr[0]);
             sep = "; ";
         }
         if (txn->auth_chal.scheme) {
-            buf_printf(&log, "%sauth=%s", sep, txn->auth_chal.scheme->name);
+            buf_printf(logbuf, "%sauth=%s", sep, txn->auth_chal.scheme->name);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
-            buf_printf(&log, "%sdestination=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%sdestination=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "Lock-Token"))) {
-            buf_printf(&log, "%slock-token=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%slock-token=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "If"))) {
-            buf_printf(&log, "%sif=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%sif=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "If-Schedule-Tag-Match"))) {
-            buf_printf(&log, "%sif-schedule-tag-match=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%sif-schedule-tag-match=%s", sep, hdr[0]);
             sep = "; ";
         }
         else if ((hdr = spool_getheader(txn->req_hdrs, "If-Match"))) {
-            buf_printf(&log, "%sif-match=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%sif-match=%s", sep, hdr[0]);
             sep = "; ";
         }
         else if ((hdr = spool_getheader(txn->req_hdrs, "If-Unmodified-Since"))) {
-            buf_printf(&log, "%sif-unmodified-since=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%sif-unmodified-since=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "If-None-Match"))) {
-            buf_printf(&log, "%sif-none-match=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%sif-none-match=%s", sep, hdr[0]);
             sep = "; ";
         }
         else if ((hdr = spool_getheader(txn->req_hdrs, "If-Modified-Since"))) {
-            buf_printf(&log, "%sif-modified-since=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%sif-modified-since=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, ":type"))) {
-            buf_printf(&log, "%stype=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%stype=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, ":token"))) {
-            buf_printf(&log, "%stoken=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%stoken=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, ":jmap"))) {
-            buf_printf(&log, "%sjmap=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%sjmap=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, ":dblookup"))) {
-            buf_printf(&log, "%slookup=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%slookup=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
-            buf_printf(&log, "%sdepth=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%sdepth=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "Prefer"))) {
-            buf_printf(&log, "%sprefer=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%sprefer=%s", sep, hdr[0]);
             sep = "; ";
         }
         else if ((hdr = spool_getheader(txn->req_hdrs, "Brief"))) {
-            buf_printf(&log, "%sbrief=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%sbrief=%s", sep, hdr[0]);
             sep = "; ";
         }
         if ((hdr = spool_getheader(txn->req_hdrs, "CalDAV-Timezones"))) {
-            buf_printf(&log, "%scaldav-timezones=%s", sep, hdr[0]);
+            buf_printf(logbuf, "%scaldav-timezones=%s", sep, hdr[0]);
             sep = "; ";
         }
 
-        if (*sep == ';') buf_appendcstr(&log, ")");
+        if (*sep == ';') buf_appendcstr(logbuf, ")");
     }
 
     /* Add response */
-    buf_printf(&log, " => \"%s\"", http_statusline(txn->flags.ver, code));
+    buf_printf(logbuf, " => \"%s\"", http_statusline(txn->flags.ver, code));
 
     /* Add any auxiliary response data */
     sep = " (";
     if (txn->strm_ctx) {
-        buf_printf(&log, "%sstream-id=%d", sep,
+        buf_printf(logbuf, "%sstream-id=%d", sep,
                    http2_get_streamid(txn->strm_ctx));
         sep = "; ";
     }
     if (code == HTTP_SWITCH_PROT || code == HTTP_UPGRADE) {
-        buf_printf(&log, "%supgrade=", sep);
-        comma_list_body(&log, upgrd_tokens, txn->flags.upgrade, NULL);
+        buf_printf(logbuf, "%supgrade=", sep);
+        comma_list_body(logbuf, upgrd_tokens, txn->flags.upgrade, NULL);
         sep = "; ";
     }
     if (txn->flags.te) {
-        buf_printf(&log, "%stx-encoding=", sep);
-        comma_list_body(&log, te, txn->flags.te, NULL);
+        buf_printf(logbuf, "%stx-encoding=", sep);
+        comma_list_body(logbuf, te, txn->flags.te, NULL);
         sep = "; ";
     }
     if (txn->resp_body.enc) {
-        buf_printf(&log, "%scnt-encoding=", sep);
-        comma_list_body(&log, ce, txn->resp_body.enc, NULL);
+        buf_printf(logbuf, "%scnt-encoding=", sep);
+        comma_list_body(logbuf, ce, txn->resp_body.enc, NULL);
         sep = "; ";
     }
     if (txn->location) {
-        buf_printf(&log, "%slocation=%s", sep, txn->location);
+        buf_printf(logbuf, "%slocation=%s", sep, txn->location);
         sep = "; ";
     }
     else if (txn->flags.cors) {
-        buf_printf(&log, "%sallow-origin", sep);
+        buf_printf(logbuf, "%sallow-origin", sep);
         sep = "; ";
     }
     else if (txn->error.desc) {
-        buf_printf(&log, "%serror=%s", sep, txn->error.desc);
+        buf_printf(logbuf, "%serror=%s", sep, txn->error.desc);
         sep = "; ";
     }
-    if (*sep == ';') buf_appendcstr(&log, ")");
+    if (*sep == ';') buf_appendcstr(logbuf, ")");
 
     /* Add timing stats */
     cmdtime_endtimer(&cmdtime, &nettime);
-    buf_printf(&log, " [timing: cmd=%f net=%f total=%f]",
+    buf_printf(logbuf, " [timing: cmd=%f net=%f total=%f]",
                cmdtime, nettime, cmdtime + nettime);
 
-    syslog(LOG_INFO, "%s", buf_cstring(&log));
+    syslog(LOG_INFO, "%s", buf_cstring(logbuf));
 }
 
 
