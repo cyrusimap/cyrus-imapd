@@ -535,10 +535,14 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         { NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL, 1 }  /* MUST be last */
     };
     size_t niv = (sizeof(iv) / sizeof(iv[0])) - !ws_enabled();
-    struct http2_context *ctx = xzmalloc(sizeof(struct http2_context));
+    struct http2_context *ctx;
     int r;
 
     if (!conn) conn = txn->conn;
+
+    if (conn->sess_ctx) return 0;
+
+    ctx = xzmalloc(sizeof(struct http2_context));
 
     r = nghttp2_option_new(&ctx->options);
     if (r) {
