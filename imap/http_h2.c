@@ -571,6 +571,8 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
 
     if (txn && (txn->flags.conn & CONN_UPGRADE)) {
         struct http2_stream *strm;
+        struct buf *buf = &txn->buf;
+        unsigned outlen;
 
         const char **hdr = spool_getheader(txn->req_hdrs, "HTTP2-Settings");
         if (!hdr || hdr[1]) return 0;
@@ -578,29 +580,28 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         /* base64url decode the settings.
            Use the SASL base64 decoder after replacing the encoded values
            for chars 62 and 63 and adding appropriate padding. */
-        unsigned outlen;
-        struct buf buf;
-        buf_init_ro_cstr(&buf, hdr[0]);
-        buf_replace_char(&buf, '-', '+');
-        buf_replace_char(&buf, '_', '/');
-        buf_appendmap(&buf, "==", (4 - (buf_len(&buf) % 4)) % 4);
-        r = sasl_decode64(buf_base(&buf), buf_len(&buf),
-                          (char *) buf_base(&buf), buf_len(&buf), &outlen);
+        buf_setcstr(buf, hdr[0]);
+        buf_replace_char(buf, '-', '+');
+        buf_replace_char(buf, '_', '/');
+        buf_appendmap(buf, "==", (4 - (buf_len(buf) % 4)) % 4);
+        r = sasl_decode64(buf_base(buf), buf_len(buf),
+                          (char *) buf_base(buf), buf_len(buf), &outlen);
         if (r != SASL_OK) {
             syslog(LOG_WARNING, "sasl_decode64 failed: %s",
                    sasl_errstring(r, NULL, NULL));
-            buf_free(&buf);
-            return HTTP_BAD_REQUEST;
         }
-        r = nghttp2_session_upgrade2(ctx->session,
-                                     (const uint8_t *) buf_base(&buf),
-                                     outlen, txn->meth == METH_HEAD, NULL);
-        buf_free(&buf);
-        if (r) {
-            syslog(LOG_WARNING, "nghttp2_session_upgrade: %s",
-                   nghttp2_strerror(r));
-            return HTTP_BAD_REQUEST;
+        else {
+            r = nghttp2_session_upgrade2(ctx->session,
+                                         (const uint8_t *) buf_base(buf),
+                                         outlen, txn->meth == METH_HEAD, NULL);
+            if (r) {
+                syslog(LOG_WARNING, "nghttp2_session_upgrade: %s",
+                       nghttp2_strerror(r));
+            }
         }
+
+        buf_reset(buf);
+        if (r) return HTTP_BAD_REQUEST;
 
         /* tell client to start h2c upgrade (RFC 7540) */
         response_header(HTTP_SWITCH_PROT, txn);
