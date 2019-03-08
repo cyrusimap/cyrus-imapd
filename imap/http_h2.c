@@ -310,6 +310,7 @@ static int frame_recv_cb(nghttp2_session *session,
     struct transaction_t *txn =
         nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
     struct http2_context *ctx;
+    struct buf *logbuf = NULL;
 
     if (!txn) return 0;
 
@@ -318,15 +319,21 @@ static int frame_recv_cb(nghttp2_session *session,
     syslog(LOG_DEBUG, "http2_frame_recv_cb(id=%d, type=%d, flags=%#x)",
            frame->hd.stream_id, frame->hd.type, frame->hd.flags);
 
+    if ((txn->conn->logfd != -1) && (frame->hd.type <= NGHTTP2_HEADERS)) {
+        /* telemetry log */
+        logbuf = &txn->conn->logbuf;
+
+        buf_reset(logbuf);
+        buf_printf(logbuf, "<%ld<", time(NULL));   /* timestamp */
+        write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
+    }
+
     switch (frame->hd.type) {
     case NGHTTP2_HEADERS:
         if (frame->headers.cat == NGHTTP2_HCAT_REQUEST) {
             if (txn->conn->logfd != -1) {
                 /* telemetry log */
-                struct buf *logbuf = &txn->conn->logbuf;
-
                 buf_reset(logbuf);
-                buf_printf(logbuf, "<%ld<", time(NULL));   /* timestamp */
                 buf_printf(logbuf, "%s %s %s\r\n",         /* request-line*/
                            txn->req_line.meth, txn->req_line.uri, HTTP2_VERSION);
                 spool_enum_hdrcache(txn->req_hdrs,            /* header fields */
@@ -368,14 +375,8 @@ static int frame_recv_cb(nghttp2_session *session,
             break;
         }
 
-        if ((frame->hd.type == NGHTTP2_DATA) && (txn->conn->logfd != -1)) {
+        if (txn->conn->logfd != -1) {
             /* telemetry log */
-            struct buf *logbuf = &txn->conn->logbuf;
-
-            buf_reset(logbuf);
-            buf_printf(logbuf, "<%ld<", time(NULL));   /* timestamp */
-            write(txn->conn->logfd, buf_base(logbuf), buf_len(logbuf));
-
             write(txn->conn->logfd, buf_base(&txn->req_body.payload),
                   buf_len(&txn->req_body.payload));
         }
