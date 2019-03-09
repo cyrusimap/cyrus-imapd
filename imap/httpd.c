@@ -1227,12 +1227,10 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
 }
 
 
-EXPORTED int examine_request(struct transaction_t *txn)
+static int preauth_check_hdrs(struct transaction_t *txn)
 {
-    int ret = 0, r = 0, i;
-    const char **hdr, *query;
-    const struct namespace_t *namespace;
-    const struct method_t *meth_t;
+    int ret = 0;
+    const char **hdr;
     struct request_line_t *req_line = &txn->req_line;
 
     /* Check for HTTP method override */
@@ -1248,12 +1246,6 @@ EXPORTED int examine_request(struct transaction_t *txn)
          txn->meth++);
 
     if (txn->meth == METH_UNKNOWN) return HTTP_NOT_IMPLEMENTED;
-
-    /* Parse request-target URI */
-    if (!(txn->req_uri = parse_uri(txn->meth, req_line->uri, 1,
-                                   &txn->error.desc))) {
-        return HTTP_BAD_REQUEST;
-    }
 
     /* Check for mandatory Host header (HTTP/1.1+ only) */
     if ((hdr = spool_getheader(txn->req_hdrs, "Host"))) {
@@ -1350,7 +1342,16 @@ EXPORTED int examine_request(struct transaction_t *txn)
     if (txn->flags.upgrade) txn->flags.conn |= CONN_UPGRADE;
     else txn->flags.conn &= ~CONN_UPGRADE;
 
-    query = URI_QUERY(txn->req_uri);
+    return 0;
+}
+
+
+static int find_namespace(struct transaction_t *txn)
+{
+    int i;
+    const char **hdr, *query = URI_QUERY(txn->req_uri);
+    const struct namespace_t *namespace;
+    const struct method_t *meth_t;
 
     /* Find the namespace of the requested resource */
     for (i = 0; namespaces[i]; i++) {
@@ -1416,6 +1417,15 @@ EXPORTED int examine_request(struct transaction_t *txn)
         }
     }
 
+    return 0;
+}
+
+
+static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
+{
+    int ret = 0, r = 0;
+    const char **hdr;
+
     /* Perform authentication, if necessary */
     if ((hdr = spool_getheader(txn->req_hdrs, "Authorization"))) {
         if (httpd_userid) {
@@ -1443,10 +1453,10 @@ EXPORTED int examine_request(struct transaction_t *txn)
                      * handler could have run into a timeout for the
                      * user's dabatase. In any case, there's no sense
                      * to challenge the client for authentication. */
-                    return HTTP_UNAVAILABLE;
+                    ret = HTTP_UNAVAILABLE;
                 }
                 else if (r == SASL_FAIL) {
-                    return HTTP_SERVER_ERROR;
+                    ret = HTTP_SERVER_ERROR;
                 }
                 else {
                     ret = HTTP_UNAUTHORIZED;
@@ -1481,24 +1491,18 @@ EXPORTED int examine_request(struct transaction_t *txn)
         }
         else {
             ret = auth_success(txn, authzid);
-            if (ret) return ret;
         }
     }
 
-    /* Register service/module and method */
-    buf_printf(&txn->buf, "%s%s", config_ident,
-               namespace->well_known ? strrchr(namespace->well_known, '/') :
-               namespace->prefix);
-    proc_register(buf_cstring(&txn->buf), txn->conn->clienthost, httpd_userid,
-                  txn->req_line.uri, txn->req_line.meth);
-    buf_reset(&txn->buf);
+    *sasl_result = r;
 
-    /* Request authentication, if necessary */
-    if (!httpd_userid && namespace->need_auth(txn)) {
-        ret = HTTP_UNAUTHORIZED;
-    }
+    return ret;
+}
 
-    if (ret) return client_need_auth(txn, r);
+
+static void postauth_check_hdrs(struct transaction_t *txn)
+{
+    const char **hdr;
 
     /* Check if this is a Cross-Origin Resource Sharing request */
     if (allow_cors && (hdr = spool_getheader(txn->req_hdrs, "Origin"))) {
@@ -1583,10 +1587,56 @@ EXPORTED int examine_request(struct transaction_t *txn)
         }
         if (enc) free(enc);
     }
+}
+
+
+EXPORTED int examine_request(struct transaction_t *txn)
+{
+    int ret = 0, sasl_result = 0;
+    const char *query;
+    const struct namespace_t *namespace;
+    struct request_line_t *req_line = &txn->req_line;
+
+    /* Parse request-target URI */
+    if (!(txn->req_uri = parse_uri(txn->meth,
+                                   req_line->uri, 1, &txn->error.desc))) {
+        return HTTP_BAD_REQUEST;
+    }
+
+    /* Perform pre-authentication check of headers */
+    if ((ret = preauth_check_hdrs(txn))) return ret;
+
+    /* Find the namespace of the requested resource */
+    if ((ret = find_namespace(txn))) return ret;
+
+    /* Perform check of authentication headers */
+    ret = auth_check_hdrs(txn, &sasl_result);
+
+    if (ret && ret != HTTP_UNAUTHORIZED) return ret;
+
+    /* Register service/module and method */
+    namespace = txn->req_tgt.namespace;
+    buf_printf(&txn->buf, "%s%s", config_ident,
+               namespace->well_known ? strrchr(namespace->well_known, '/') :
+               namespace->prefix);
+    proc_register(buf_cstring(&txn->buf), txn->conn->clienthost, httpd_userid,
+                  txn->req_tgt.path, txn->req_line.meth);
+    buf_reset(&txn->buf);
+
+    /* Request authentication, if necessary */
+    if (!httpd_userid && namespace->need_auth(txn)) {
+        ret = HTTP_UNAUTHORIZED;
+    }
+
+    if (ret) return client_need_auth(txn, sasl_result);
 
     /* Parse any query parameters */
     construct_hash_table(&txn->req_qparams, 10, 1);
+    query = URI_QUERY(txn->req_uri);
     if (query) parse_query_params(txn, query);
+
+    /* Perform post-authentication check of headers */
+    postauth_check_hdrs(txn);
 
     return 0;
 }
@@ -1605,8 +1655,9 @@ EXPORTED int process_request(struct transaction_t *txn)
         
         ret = (*meth_t->proc)(txn, meth_t->params);
 
-        prometheus_increment(prometheus_lookup_label(http_methods[txn->meth].metric,
-                                                     txn->req_tgt.namespace->name));
+        prometheus_increment(
+            prometheus_lookup_label(http_methods[txn->meth].metric,
+                                    txn->req_tgt.namespace->name));
     }
 
     if (ret == HTTP_UNAUTHORIZED) {
