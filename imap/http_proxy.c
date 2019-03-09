@@ -649,7 +649,7 @@ static void write_cachehdr(const char *name, const char *contents,
 }
 
 
-static long resp_code_to_http_err(unsigned code)
+HIDDEN long http_status_to_code(unsigned code)
 {
     int i, len, n_msgs = et_http_error_table.n_msgs;
     const char * const *msgs = et_http_error_table.msgs;
@@ -933,7 +933,7 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
                                &resp_hdrs, NULL, &txn->error.desc);
         if (r) break;
 
-        http_err = resp_code_to_http_err(code);
+        http_err = http_status_to_code(code);
 
         if (code == 100) { /* Continue */
             if (!sent_body++) {
@@ -1097,7 +1097,7 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
         default:
             /* Send failure response to client */
-            http_err = resp_code_to_http_err(code);
+            http_err = http_status_to_code(code);
             send_response(txn, http_err, resp_hdrs, &resp_body.payload);
             goto done;
         }
@@ -1138,7 +1138,7 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
     if (code != 200) {
         /* Send failure response to client */
-        http_err = resp_code_to_http_err(code);
+        http_err = http_status_to_code(code);
         send_response(txn, http_err, resp_hdrs, &resp_body.payload);
         goto done;
     }
@@ -1194,7 +1194,7 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     } while (code < 200);
 
     /* Send response to client */
-    http_err = resp_code_to_http_err(code);
+    http_err = http_status_to_code(code);
     send_response(txn, http_err, resp_hdrs, NULL);
     if (code != 204) {
         resp_body.framing = FRAMING_UNKNOWN;
