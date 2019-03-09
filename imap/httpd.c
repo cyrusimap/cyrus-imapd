@@ -2722,7 +2722,8 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             if (txn->req_line.ver) {
                 buf_printf(logbuf, " %s", txn->req_line.ver);
                 if (code != HTTP_URI_TOO_LONG && *txn->req_line.buf) {
-                    char *p = txn->req_line.ver + strlen(txn->req_line.ver) + 1;
+                    const char *p =
+                        txn->req_line.ver + strlen(txn->req_line.ver) + 1;
                     if (*p) buf_printf(logbuf, " %s", p);
                 }
             }

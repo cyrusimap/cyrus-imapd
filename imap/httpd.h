@@ -209,9 +209,9 @@ extern struct auth_scheme_t auth_schemes[];
 /* Request-line context */
 struct request_line_t {
     char buf[MAX_REQ_LINE+1];   /* working copy of request-line */
-    char *meth;                 /* method */
-    char *uri;                  /* request-target */
-    char *ver;                  /* HTTP-version */
+    const char *meth;           /* method */
+    const char *uri;            /* request-target */
+    const char *ver;            /* HTTP-version */
 };
 
 
