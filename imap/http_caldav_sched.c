@@ -433,8 +433,12 @@ static int imip_send_sendmail(icalcomponent *ical,
     fputs("Content-Type: text/plain; charset=utf-8\r\n", sm);
     fputs("Content-Disposition: inline\r\n", sm);
 
-    buf_printf(&plainbuf, "You have received %s from %s <%s>\r\n\r\n", msg_type,
-               originator->name ? originator->name : "", originator->addr);
+    if (originator->name && strcasecmp(originator->name, originator->addr))
+        buf_printf(&plainbuf, "You have received %s from %s <%s>\r\n\r\n", msg_type,
+                   originator->name, originator->addr);
+    else
+        buf_printf(&plainbuf, "You have received %s from %s\r\n\r\n", msg_type,
+                   originator->addr);
     if (summary) {
         buf_setcstr(&tmpbuf, summary);
         buf_replace_all(&tmpbuf, "\n", "\r\n" TEXT_INDENT);
@@ -454,8 +458,11 @@ static int imip_send_sendmail(icalcomponent *ical,
         if (status) buf_printf(&plainbuf, "Status     : %s\r\n", status);
 
         for (cp = "Attendees  : ", recip=recipients; recip; recip=recip->next) {
-            buf_printf(&plainbuf, "%s* %s <%s>",
-                       cp, recip->name ? recip->name : "", recip->addr);
+            if (recip->name && strcmp(recip->name, recip->addr))
+                buf_printf(&plainbuf, "%s* %s <%s>", cp, recip->name,
+                           recip->addr);
+            else
+                buf_printf(&plainbuf, "%s* %s", cp, recip->addr);
             if (recip->role) buf_printf(&plainbuf, "\t(%s)", recip->role);
             buf_appendcstr(&plainbuf, "\r\n");
 
