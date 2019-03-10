@@ -135,6 +135,7 @@ enum {
     URL_NS_ADMIN,
     URL_NS_APPLEPUSH,
     URL_NS_PROMETHEUS,
+    URL_NS_CGI,
 };
 
 /* Bitmask of features/methods to allow, based on URL */
@@ -298,6 +299,7 @@ struct resp_body_t {
     const char *stag;                   /* Schedule-Tag     */
     const char *cmid;                   /* Cal-Managed-ID   */
     time_t iserial;                     /* iSched serial#   */
+    hdrcache_t extra_hdrs;              /* Extra headers    */
     struct buf payload;                 /* Payload          */
 };
 
@@ -314,6 +316,7 @@ struct txn_flags_t {
     unsigned long ranges   : 1;         /* Accept range requests for resource */
     unsigned long vary     : 6;         /* Headers on which response can vary */
     unsigned long trailer  : 3;         /* Headers which will be in trailer */
+    unsigned long redirect : 1;         /* CGI local redirect */
 };
 
 /* HTTP connection context */
@@ -498,6 +501,7 @@ extern struct namespace_t namespace_dblookup;
 extern struct namespace_t namespace_admin;
 extern struct namespace_t namespace_applepush;
 extern struct namespace_t namespace_prometheus;
+extern struct namespace_t namespace_cgi;
 
 
 /* XXX  These should be included in struct transaction_t */
@@ -565,7 +569,7 @@ extern int check_precond(struct transaction_t *txn,
 extern void log_cachehdr(const char *name, const char *contents,
                          const char *raw, void *rock);
 
-extern int examine_request(struct transaction_t *txn);
+extern int examine_request(struct transaction_t *txn, const char *uri);
 extern int process_request(struct transaction_t *txn);
 extern void transaction_free(struct transaction_t *txn);
 

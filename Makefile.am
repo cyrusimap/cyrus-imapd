@@ -1223,6 +1223,7 @@ imap_httpd_SOURCES = \
 	imap/http_caldav_sched.h \
 	imap/http_carddav.c \
 	imap/http_carddav.h \
+	imap/http_cgi.c \
 	imap/http_client.c \
 	imap/http_client.h \
 	imap/http_dav.c \

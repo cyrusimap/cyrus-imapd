@@ -343,7 +343,7 @@ static int frame_recv_cb(nghttp2_session *session,
             }
 
             /* Examine request */
-            ret = examine_request(txn);
+            ret = examine_request(txn, NULL);
 
             if (ret) {
                 txn->req_body.flags |= BODY_DISCARD;

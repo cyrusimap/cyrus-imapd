@@ -487,6 +487,7 @@ struct namespace_t *namespaces[] = {
     &namespace_dblookup,
     &namespace_admin,
     &namespace_prometheus,
+    &namespace_cgi,
     &namespace_default,         /* MUST be present and be last!! */
     NULL,
 };
@@ -1233,6 +1234,8 @@ static int preauth_check_hdrs(struct transaction_t *txn)
     const char **hdr;
     struct request_line_t *req_line = &txn->req_line;
 
+    if (txn->flags.redirect) return 0;
+
     /* Check for HTTP method override */
     if (!strcmp(req_line->meth, "POST") &&
         (hdr = spool_getheader(txn->req_hdrs, "X-HTTP-Method-Override"))) {
@@ -1426,6 +1429,8 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
     int ret = 0, r = 0;
     const char **hdr;
 
+    if (txn->flags.redirect) return 0;
+
     /* Perform authentication, if necessary */
     if ((hdr = spool_getheader(txn->req_hdrs, "Authorization"))) {
         if (httpd_userid) {
@@ -1503,6 +1508,8 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
 static void postauth_check_hdrs(struct transaction_t *txn)
 {
     const char **hdr;
+
+    if (txn->flags.redirect) return;
 
     /* Check if this is a Cross-Origin Resource Sharing request */
     if (allow_cors && (hdr = spool_getheader(txn->req_hdrs, "Origin"))) {
@@ -1590,16 +1597,17 @@ static void postauth_check_hdrs(struct transaction_t *txn)
 }
 
 
-EXPORTED int examine_request(struct transaction_t *txn)
+EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
 {
     int ret = 0, sasl_result = 0;
     const char *query;
     const struct namespace_t *namespace;
     struct request_line_t *req_line = &txn->req_line;
 
+    if (!uri) uri = req_line->uri;
+
     /* Parse request-target URI */
-    if (!(txn->req_uri = parse_uri(txn->meth,
-                                   req_line->uri, 1, &txn->error.desc))) {
+    if (!(txn->req_uri = parse_uri(txn->meth, uri, 1, &txn->error.desc))) {
         return HTTP_BAD_REQUEST;
     }
 
@@ -1712,7 +1720,7 @@ static int http1_input(struct transaction_t *txn)
     }
 
     /* Examine request */
-    ret = examine_request(txn);
+    ret = examine_request(txn, NULL);
     if (ret) goto done;
 
     /* Start method processing alarm (HTTP/1.1 only) */
@@ -2361,6 +2369,27 @@ EXPORTED int end_resp_headers(struct transaction_t *txn, long code)
 }
 
 
+/* Write end-to-end header (ignoring hop-by-hop) from cache to protstream. */
+static void write_cachehdr(const char *name, const char *contents,
+                           const char *raw __attribute__((unused)), void *rock)
+{
+    struct transaction_t *txn = (struct transaction_t *) rock;
+    const char **hdr, *hop_by_hop[] =
+        { "connection", "content-length", "content-type", "date", "forwarded",
+          "keep-alive", "location", "status", "strict-transport-security",
+          "upgrade", "via", NULL };
+
+    /* Ignore private headers in our cache */
+    if (name[0] == ':') return;
+
+    for (hdr = hop_by_hop; *hdr; hdr++) {
+        if (!strcasecmp(name, *hdr)) return;
+    }
+
+    simple_hdr(txn, name, contents);
+}
+
+
 EXPORTED void response_header(long code, struct transaction_t *txn)
 {
     int i;
@@ -2743,6 +2772,12 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     }
 
 
+    /* Extra headers */
+    if (resp_body->extra_hdrs) {
+        spool_enum_hdrcache(resp_body->extra_hdrs, &write_cachehdr, txn);
+    }
+
+
     /* End of headers */
     end_resp_headers(txn, code);
 
@@ -2886,6 +2921,12 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         }
 
         if (*sep == ';') buf_appendcstr(logbuf, ")");
+    }
+
+    if (txn->flags.redirect) {
+        /* Add CGI local redirect */
+        buf_printf(logbuf, " => \"%s %s %s\"",
+                   txn->req_line.meth, txn->req_tgt.path, txn->req_line.ver);
     }
 
     /* Add response */
