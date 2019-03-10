@@ -2119,6 +2119,12 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
 
     if (!oldprop) return (newprop != NULL);
     else if (!newprop) return 1;
+    else if (kind == ICAL_DTSTART_PROPERTY || kind == ICAL_DTEND_PROPERTY || kind == ICAL_DUE_PROPERTY) {
+        //this could handle all DATE-TIME properties, like COMPLETED
+        //convert to UTC and compare, otherwise TZID is ignored
+        return icaltime_compare(icalproperty_get_datetime_with_component(oldprop, oldical),
+                                icalproperty_get_datetime_with_component(newprop, newical)) ? 1 : 0;
+    }
     else if ((kind == ICAL_RDATE_PROPERTY) || (kind == ICAL_EXDATE_PROPERTY)) {
         const char *str;
         uint32_t old_crc = 0, new_crc = 0;
