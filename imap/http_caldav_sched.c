@@ -2149,15 +2149,23 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
     icalproperty *oldprop = icalcomponent_get_first_property(oldical, kind);
     icalproperty *newprop = icalcomponent_get_first_property(newical, kind);
 
-    if (!oldprop) return (newprop != NULL);
-    else if (!newprop) return 1;
-    else if (kind == ICAL_DURATION_PROPERTY) {
+    if (!oldprop) return newprop != NULL;
+    if (!newprop) return 1;
+    if (kind == ICAL_DURATION_PROPERTY) {
         struct icaldurationtype olddur = icalproperty_get_duration(oldprop);
         struct icaldurationtype newdur = icalproperty_get_duration(newprop);
 
         return (icaldurationtype_as_int(olddur) != icaldurationtype_as_int(newdur));
     }
-    else if ((kind == ICAL_RDATE_PROPERTY) || (kind == ICAL_EXDATE_PROPERTY) ||
+#ifdef HAVE_RFC7986_COLOR
+    if (kind == ICAL_DTSTART_PROPERTY || kind == ICAL_DTEND_PROPERTY || kind == ICAL_DUE_PROPERTY) {
+        //this could handle all DATE-TIME properties, like COMPLETED
+        //convert to UTC and compare, otherwise TZID is ignored
+        return icaltime_compare(icalproperty_get_datetime_with_component(oldprop, oldical),
+                                icalproperty_get_datetime_with_component(newprop, newical)) ? 1 : 0;
+    }
+#endif /* HAVE_RFC7986_COLOR */
+    if ((kind == ICAL_RDATE_PROPERTY) || (kind == ICAL_EXDATE_PROPERTY) ||
              (kind == ICAL_ATTACH_PROPERTY)) {
         const char *str;
         uint32_t old_crc = 0, new_crc = 0;
@@ -2172,12 +2180,10 @@ static unsigned propcmp(icalcomponent *oldical, icalcomponent *newical,
             if (str) new_crc ^= crc32_cstring(str);
         } while ((newprop = icalcomponent_get_next_property(newical, kind)));
 
-        return (old_crc != new_crc);
+        return old_crc != new_crc;
     }
-    else {
-        return (strcmpsafe(icalproperty_get_value_as_string(oldprop),
-                           icalproperty_get_value_as_string(newprop)) != 0);
-    }
+    return strcmpsafe(icalproperty_get_value_as_string(oldprop),
+                      icalproperty_get_value_as_string(newprop)) != 0;
 }
 
 /*

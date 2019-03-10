@@ -1624,6 +1624,8 @@ dnl
                 AC_MSG_ERROR([Need libical 3.0.0 for http]))
 
         dnl icalproperty_new_color was overlooked, and eventually added in 3.0.5
+        dnl If HAVE_RFC7986_COLOR is defined, then libical is at least 3.0.5 and http_caldav_sched.c:propcmp()
+        dnl assumes that icalproperty_get_datetime_with_component() is available, too.
         AC_CHECK_LIB(ical, icalproperty_new_color,
                 AC_DEFINE(HAVE_RFC7986_COLOR,[],
                         [Do we have built-in support for RFC7986 color prop?]))
