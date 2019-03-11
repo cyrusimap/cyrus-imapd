@@ -146,6 +146,7 @@ enum {
     ALLOW_PATCH =       (1<<3), /* Patch resources */
     ALLOW_DELETE =      (1<<4), /* Delete resources/collections */
     ALLOW_TRACE =       (1<<5), /* TRACE a request */
+    ALLOW_CONNECT =     (1<<6), /* Establish a tunnel */
 
     ALLOW_DAV =         (1<<8), /* WebDAV specific methods/features */
     ALLOW_PROPPATCH  =  (1<<9), /* Modify properties */
