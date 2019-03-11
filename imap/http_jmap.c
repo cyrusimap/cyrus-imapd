@@ -1107,6 +1107,9 @@ static int jmap_settings(struct transaction_t *txn)
         return HTTP_SERVER_ERROR;
     }
 
+    /* Response should not be cached */
+    txn->flags.cc |= CC_NOCACHE | CC_NOSTORE | CC_REVALIDATE;
+
     /* Write the JSON response */
     return json_response(HTTP_OK, txn, res);
 }
