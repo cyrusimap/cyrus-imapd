@@ -2926,6 +2926,10 @@ EXPORTED const char *charset_decode_mimebody(const char *msg_base, size_t len, i
     return *decbuf;
 }
 
+/* Maximum octect length of base64 or QP-encoded text lines, excluding
+ * terminating CR LF and encoding-specific padding/footer. */
+#define ENCODED_MAX_LINE_LEN  72
+
 /*
  * Base64 encode the MIME body part (per RFC 2045) of 'len' bytes located at
  * 'msg_base'.  Encodes into 'retval' which must large enough to
@@ -2935,8 +2939,6 @@ EXPORTED const char *charset_decode_mimebody(const char *msg_base, size_t len, i
  * May be called with 'msg_base' as NULL to get the number of encoded
  * bytes for allocating 'retval' of the proper size.
  */
-#define BASE64_MAX_LINE_LEN  72
-
 static char base_64[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -2951,7 +2953,7 @@ EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
 
     b64_len = ((len + 2) / 3) * 4;
     if (wrap) {
-        b64_lines = (b64_len + BASE64_MAX_LINE_LEN - 1) / BASE64_MAX_LINE_LEN;
+        b64_lines = (b64_len + ENCODED_MAX_LINE_LEN - 1) / ENCODED_MAX_LINE_LEN;
 
         /* account for CRLF added to each line */
         b64_len += 2 * b64_lines;
@@ -2965,7 +2967,7 @@ EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
 
     for (s = (const unsigned char*) msg_base, d = retval, cnt = 0; len;
          s += 3, d += 4, cnt += 4) { /* process tuplets */
-        if (wrap && cnt == BASE64_MAX_LINE_LEN) {
+        if (wrap && cnt == ENCODED_MAX_LINE_LEN) {
             /* reset line len count, add CRLF */
             cnt = 0;
             *d++ = '\r';
@@ -3056,7 +3058,7 @@ static char *qp_encode(const char *data, size_t len, int isheader,
             unsigned char this = data[n];
             unsigned char next = (n < len - 1) ? data[n+1] : '\0';
 
-            if (cnt >= BASE64_MAX_LINE_LEN) {
+            if (cnt >= ENCODED_MAX_LINE_LEN) {
                 if (!isheader) {
                     /* add soft line break to body */
                     buf_appendcstr(&buf, "=\r\n");
@@ -3169,7 +3171,7 @@ EXPORTED char *charset_encode_mimephrase(const char *data)
     for (n = 0; data[n]; n++) {
         unsigned char this = data[n];
 
-        if (cnt >= BASE64_MAX_LINE_LEN) {
+        if (cnt >= ENCODED_MAX_LINE_LEN) {
             if (!ISUTF8CONTINUATION(this)) {
                 /* split encoded token with fold */
                 buf_appendcstr(&buf, "?=\r\n =?UTF-8?Q?");
