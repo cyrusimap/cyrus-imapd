@@ -203,8 +203,8 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     memset(cdata, 0, sizeof(struct carddav_data));
 
     cdata->dav.alive = sqlite3_column_int(stmt, 15);
-    cdata->dav.modseq = sqlite3_column_int(stmt, 16);
-    cdata->dav.createdmodseq = sqlite3_column_int(stmt, 17);
+    cdata->dav.modseq = sqlite3_column_int64(stmt, 16);
+    cdata->dav.createdmodseq = sqlite3_column_int64(stmt, 17);
     if (!rrock->tombstones && !cdata->dav.alive)
         return 0;
 
