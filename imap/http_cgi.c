@@ -156,7 +156,7 @@ static int meth_get(struct transaction_t *txn,
     int ret = 0;
     const char *prefix, *urls, *errstr = NULL;
     const char **hdr, *extra, *port, *query;
-    char *path;
+    char *script, *cwd;
     struct stat sbuf;
     strarray_t *env = NULL;
     struct command *cmd = NULL;
@@ -185,11 +185,21 @@ static int meth_get(struct transaction_t *txn,
     if (extra)
         buf_appendmap(&txn->buf, txn->req_uri->path, extra - txn->req_uri->path);
     else buf_appendcstr(&txn->buf, txn->req_uri->path);
-    path = buf_release(&txn->buf);
+    script = buf_release(&txn->buf);
+    cwd = strconcat(prefix, namespace_cgi.prefix, NULL);
 
-    /* See if script exists and is executable */
-    if (stat(path, &sbuf) || !S_ISREG(sbuf.st_mode) || access(path, X_OK)) {
+    /* See if script exists */
+    if (stat(script, &sbuf) || !S_ISREG(sbuf.st_mode)) {
         ret = HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    /* See if script is executable */
+    if (access(script, X_OK)) {
+        syslog(LOG_ERR, "CGI script %s is not executable",
+               txn->req_uri->path);
+        txn->error.desc = "CGI script is not executable";
+        ret = HTTP_SERVER_ERROR;
         goto done;
     }
 
@@ -222,7 +232,7 @@ static int meth_get(struct transaction_t *txn,
         }
     }
     buf_printf(&txn->buf, "\tREQUEST_METHOD=%s", http_methods[txn->meth].name);
-    buf_printf(&txn->buf, "\tSCRIPT_NAME=%s", path + strlen(prefix));
+    buf_printf(&txn->buf, "\tSCRIPT_NAME=%s", script + strlen(prefix));
     buf_printf(&txn->buf, "\tSERVER_NAME=%s", config_servername);
     buf_printf(&txn->buf, "\tSERVER_PORT=%s",
                (port = strchr(httpd_localip ? httpd_localip : "", ';')) ?
@@ -238,7 +248,7 @@ static int meth_get(struct transaction_t *txn,
     environ = env->data;
 
     /* Run script */
-    if (command_popen(&cmd, "rw", path, NULL)) {
+    if (command_popen(&cmd, "rw", cwd, script, NULL)) {
         ret = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -250,9 +260,23 @@ static int meth_get(struct transaction_t *txn,
     /* Read response headers */
     ret = http_read_headers(cmd->stdout_prot,
                             0 /* read_sep */, &resp_hdrs, &errstr);
-    if (!ret) {
-        /* Read LF separating headers and body */
-        if (prot_getc(cmd->stdout_prot) != '\n') ret = HTTP_BAD_REQUEST;
+    if (ret) {
+        syslog(LOG_ERR, "Failed to read headers from CGI script %s",
+               txn->req_uri->path);
+        txn->error.desc = "Failed to read headers from CGI script";
+        ret = HTTP_SERVER_ERROR;
+    }
+    else {
+        /* Read [CR]LF separating headers and body */
+        int c = prot_getc(cmd->stdout_prot);
+
+        if (c == '\r') c = prot_getc(cmd->stdout_prot);
+        if (c != '\n') {
+            syslog(LOG_ERR, "Failed to read newline from CGI script %s",
+                   txn->req_uri->path);
+            txn->error.desc = "Failed to read newline from CGI script";
+            ret = HTTP_SERVER_ERROR;
+        }
 
         if (!ret) {
             /* Check for and read response body */
@@ -263,6 +287,12 @@ static int meth_get(struct transaction_t *txn,
                 resp_body.flags = BODY_RESPONSE | BODY_CLOSE;
                 ret = http_read_body(cmd->stdout_prot,
                                      resp_hdrs, &resp_body, &errstr);
+                if (ret) {
+                    syslog(LOG_ERR, "Failed to body from CGI script %s",
+                           txn->req_uri->path);
+                    txn->error.desc = "Failed to read body from CGI script";
+                    ret = HTTP_SERVER_ERROR;
+                }
             }
         }
     }
@@ -315,7 +345,8 @@ static int meth_get(struct transaction_t *txn,
     spool_free_hdrcache(resp_hdrs);
     buf_free(&resp_body.payload);
     strarray_free(env);
-    free(path);
+    free(script);
+    free(cwd);
 
     return ret;
 }
