@@ -331,14 +331,18 @@ static int imip_send_sendmail(const char *userid, icalcomponent *ical, const cha
     }
 
     /* Create multipart/mixed + multipart/alternative iMIP message */
-    buf_printf(&msgbuf, "From: %s <%s>\r\n",
-            originator->qpname ? originator->qpname : "", sender);
+    if (originator->qpname && strcasecmp(originator->qpname, sender))
+        buf_printf(&msgbuf, "From: %s <%s>\r\n", originator->qpname, sender);
+    else
+        buf_printf(&msgbuf, "From: %s\r\n", sender);
 
     for (recip = recipients; recip; recip = recip->next) {
         if (strcmp(recip->addr, sender) &&
             (!recipient || !strcasecmp(recip->addr, recipient))) {
-            buf_printf(&msgbuf, "To: %s <%s>\r\n",
-                    recip->qpname ? recip->qpname : "", recip->addr);
+            if (recip->qpname && strcasecmp(recip->qpname, recip->addr))
+                buf_printf(&msgbuf, "To: %s <%s>\r\n", recip->qpname, recip->addr);
+            else
+                buf_printf(&msgbuf, "To: %s\r\n", recip->addr);
         }
     }
 
