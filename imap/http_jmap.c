@@ -84,6 +84,7 @@ static void jmap_shutdown(void);
 
 /* HTTP method handlers */
 static int jmap_get(struct transaction_t *txn, void *params);
+static int jmap_options(struct transaction_t *txn, void *params);
 static int jmap_post(struct transaction_t *txn, void *params);
 
 /* JMAP Requests */
@@ -127,7 +128,7 @@ struct namespace_t namespace_jmap = {
         { NULL,                 NULL },                 /* MKCALENDAR   */
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
-        { &meth_options,        NULL },                 /* OPTIONS      */
+        { &jmap_options,        NULL },                 /* OPTIONS      */
         { NULL,                 NULL },                 /* PATCH        */
         { &jmap_post,           NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
@@ -327,13 +328,12 @@ static int jmap_parse_path(struct transaction_t *txn)
             /* Get "resource" */
             tgt->resource = tgt->collection + strlen(JMAP_DOWNLOAD_COL);
         }
-        else if (!strncmp(tgt->collection,
-                          JMAP_WS_COL, strlen(JMAP_WS_COL))) {
+        else if (ws_enabled() && !strcmp(tgt->collection, JMAP_WS_COL)) {
             tgt->flags = JMAP_ENDPOINT_WS;
-            tgt->allow = ALLOW_READ;
+            tgt->allow = (txn->flags.ver == VER_2) ? ALLOW_CONNECT : ALLOW_READ;
         }
         else {
-            return HTTP_NOT_ALLOWED;
+            return HTTP_NOT_FOUND;
         }
     }
     else {
@@ -358,15 +358,16 @@ static int jmap_get(struct transaction_t *txn,
     if (txn->req_tgt.flags == JMAP_ENDPOINT_API) {
         return jmap_settings(txn);
     }
-    else if (txn->req_tgt.flags == JMAP_ENDPOINT_WS) {
-        /* Upgrade to WebSockets over HTTP/1.1 on WS endpoint, if requested */
-        if (txn->flags.upgrade & UPGRADE_WS) {
-            return ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
-        }
-        else return HTTP_NO_CONTENT;
+    else if (txn->req_tgt.flags == JMAP_ENDPOINT_DOWNLOAD) {
+        return jmap_download(txn);
+    }
+    /* Upgrade to WebSockets over HTTP/1.1 on WS endpoint, if requested */
+    else if ((txn->req_tgt.flags == JMAP_ENDPOINT_WS) &&
+             (txn->flags.upgrade & UPGRADE_WS)) {
+        return ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
     }
 
-    return jmap_download(txn);
+    return HTTP_NO_CONTENT;
 }
 
 static int json_response(int code, struct transaction_t *txn, json_t *root)
@@ -430,6 +431,16 @@ static int jmap_post(struct transaction_t *txn,
 
     syslog(LOG_DEBUG, ">>>> jmap_post: Exit\n");
     return ret;
+}
+
+/* Perform an OPTIONS request */
+static int jmap_options(struct transaction_t *txn, void *params)
+{
+    /* Parse the path */
+    int r = jmap_parse_path(txn);
+    if (r) return r;
+
+    return meth_options(txn, params);
 }
 
 
