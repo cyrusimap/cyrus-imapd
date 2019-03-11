@@ -65,6 +65,7 @@
 
 #define JMAP_ROOT          "/jmap"
 #define JMAP_BASE_URL      JMAP_ROOT "/"
+#define JMAP_WS_COL        "ws/"
 #define JMAP_UPLOAD_COL    "upload/"
 #define JMAP_UPLOAD_TPL    "{accountId}/"
 #define JMAP_DOWNLOAD_COL  "download/"
@@ -103,7 +104,7 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
                    struct buf *logbuf, void **rock);
 
 static struct connect_params ws_params = {
-    JMAP_BASE_URL, JMAP_WS_PROTOCOL, &jmap_ws
+    JMAP_BASE_URL JMAP_WS_COL, JMAP_WS_PROTOCOL, &jmap_ws
 };
 
 
@@ -218,7 +219,7 @@ static void jmap_core_capabilities()
 
     if (ws_enabled()) {
         json_object_set_new(my_jmap_settings.capabilities, JMAP_URN_WEBSOCKET,
-                            json_pack("{s:s}", "wsUrl", JMAP_BASE_URL));
+                            json_pack("{s:s}", "wsUrl", JMAP_BASE_URL JMAP_WS_COL));
     }
 
     json_object_set_new(my_jmap_settings.capabilities,
@@ -271,6 +272,7 @@ static void jmap_shutdown(void)
 
 enum {
     JMAP_ENDPOINT_API,
+    JMAP_ENDPOINT_WS,
     JMAP_ENDPOINT_UPLOAD,
     JMAP_ENDPOINT_DOWNLOAD
 };
@@ -325,6 +327,11 @@ static int jmap_parse_path(struct transaction_t *txn)
             /* Get "resource" */
             tgt->resource = tgt->collection + strlen(JMAP_DOWNLOAD_COL);
         }
+        else if (!strncmp(tgt->collection,
+                          JMAP_WS_COL, strlen(JMAP_WS_COL))) {
+            tgt->flags = JMAP_ENDPOINT_WS;
+            tgt->allow = ALLOW_READ;
+        }
         else {
             return HTTP_NOT_ALLOWED;
         }
@@ -349,12 +356,14 @@ static int jmap_get(struct transaction_t *txn,
     else if (r) return r;
 
     if (txn->req_tgt.flags == JMAP_ENDPOINT_API) {
-        /* Upgrade to WebSockets over HTTP/1.1 on API endpoint, if requested */
+        return jmap_settings(txn);
+    }
+    else if (txn->req_tgt.flags == JMAP_ENDPOINT_WS) {
+        /* Upgrade to WebSockets over HTTP/1.1 on WS endpoint, if requested */
         if (txn->flags.upgrade & UPGRADE_WS) {
             return ws_start_channel(txn, JMAP_WS_PROTOCOL, &jmap_ws);
         }
-
-        return jmap_settings(txn);
+        else return HTTP_NO_CONTENT;
     }
 
     return jmap_download(txn);
