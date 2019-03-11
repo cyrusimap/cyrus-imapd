@@ -1228,9 +1228,8 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
 }
 
 
-static int preauth_check_hdrs(struct transaction_t *txn)
+static int check_method(struct transaction_t *txn)
 {
-    int ret = 0;
     const char **hdr;
     struct request_line_t *req_line = &txn->req_line;
 
@@ -1249,6 +1248,16 @@ static int preauth_check_hdrs(struct transaction_t *txn)
          txn->meth++);
 
     if (txn->meth == METH_UNKNOWN) return HTTP_NOT_IMPLEMENTED;
+
+    return 0;
+}
+
+static int preauth_check_hdrs(struct transaction_t *txn)
+{
+    int ret = 0;
+    const char **hdr;
+
+    if (txn->flags.redirect) return 0;
 
     /* Check for mandatory Host header (HTTP/1.1+ only) */
     if ((hdr = spool_getheader(txn->req_hdrs, "Host"))) {
@@ -1349,7 +1358,7 @@ static int preauth_check_hdrs(struct transaction_t *txn)
 }
 
 
-static int find_namespace(struct transaction_t *txn)
+static int check_namespace(struct transaction_t *txn)
 {
     int i;
     const char **hdr, *query = URI_QUERY(txn->req_uri);
@@ -1606,6 +1615,9 @@ EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
 
     if (!uri) uri = req_line->uri;
 
+    /* Check method */
+    if ((ret = check_method(txn))) return ret;
+
     /* Parse request-target URI */
     if (!(txn->req_uri = parse_uri(txn->meth, uri, 1, &txn->error.desc))) {
         return HTTP_BAD_REQUEST;
@@ -1615,7 +1627,7 @@ EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
     if ((ret = preauth_check_hdrs(txn))) return ret;
 
     /* Find the namespace of the requested resource */
-    if ((ret = find_namespace(txn))) return ret;
+    if ((ret = check_namespace(txn))) return ret;
 
     /* Perform check of authentication headers */
     ret = auth_check_hdrs(txn, &sasl_result);
