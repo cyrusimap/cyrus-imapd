@@ -2309,7 +2309,8 @@ EXPORTED void allow_hdr(struct transaction_t *txn,
                         const char *name, unsigned allow)
 {
     const char *meths[] = {
-        "OPTIONS, GET, HEAD", "POST", "PUT", "PATCH", "DELETE", "TRACE", NULL
+        "OPTIONS, GET, HEAD", "POST", "PUT",
+        "PATCH", "DELETE", "TRACE", "CONNECT", NULL
     };
 
     comma_list_hdr(txn, name, meths, allow);
@@ -4527,12 +4528,22 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
             if (namespaces[i]->enabled)
                 txn->req_tgt.allow |= namespaces[i]->allow;
         }
+
+        if (ws_enabled() && (txn->flags.ver == VER_2)) {
+            /* CONNECT allowed for bootstrapping WebSocket over HTTP/2 */
+            txn->req_tgt.allow |= ALLOW_CONNECT;
+        }
     }
     else {
         if (parse_path) {
             /* Parse the path */
             r = parse_path(txn->req_uri->path, &txn->req_tgt, &txn->error.desc);
             if (r) return r;
+        }
+        else if (!strcmp(txn->req_uri->path, "/") &&
+                 ws_enabled() && (txn->flags.ver == VER_2)) {
+            /* WS 'echo' endpoint */
+            txn->req_tgt.allow |= ALLOW_CONNECT;
         }
 
         if (txn->flags.cors) {
