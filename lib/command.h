@@ -59,7 +59,8 @@ struct command {
 };
 
 extern int run_command(const char *argv0, ...);
-extern int command_popen(struct command **cmdp, const char *mode, const char *argv0, ...);
+extern int command_popen(struct command **cmdp, const char *mode,
+                         const char *cwd, const char *argv0, ...);
 extern int command_pclose(struct command **cmdp);
 extern int command_done_stdin(struct command *);
 

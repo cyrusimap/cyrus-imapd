@@ -103,7 +103,8 @@ out:
 #define PIPE_READ       0
 #define PIPE_WRITE      1
 
-EXPORTED int command_popen(struct command **cmdp, const char *mode, const char *argv0, ...)
+EXPORTED int command_popen(struct command **cmdp, const char *mode,
+                           const char *cwd, const char *argv0, ...)
 {
     va_list va;
     const char *p;
@@ -159,6 +160,11 @@ EXPORTED int command_popen(struct command **cmdp, const char *mode, const char *
             close(stdout_pipe[PIPE_READ]);
             dup2(stdout_pipe[PIPE_WRITE], STDOUT_FILENO);
             close(stdout_pipe[PIPE_WRITE]);
+        }
+
+        if (cwd) {
+            r = chdir(cwd);
+            if (r) syslog(LOG_ERR, "Failed to chdir(%s): %m", cwd);
         }
 
         r = execv(argv0, argv.data);
