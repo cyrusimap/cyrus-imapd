@@ -85,8 +85,6 @@ char QPSAFECHAR[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 };
 
-#define ISUTF8CONTINUATION(c) (((c) & 0xc0) == 0x80)
-
 struct qp_state {
     int isheader;
     int len;
