@@ -225,6 +225,8 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     memset(wdata, 0, sizeof(struct webdav_data));
 
     wdata->dav.alive = sqlite3_column_int(stmt, 14);
+    wdata->dav.modseq = sqlite3_column_int64(stmt, 15);
+    wdata->dav.createdmodseq = sqlite3_column_int64(stmt, 16);
     if (!rrock->tombstones && !wdata->dav.alive)
         return 0;
 
@@ -287,6 +289,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"          \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
     "  filename, type, subtype, res_uid, ref_count, alive"              \
+    "  modseq createdmodseq"                                            \
     " FROM dav_objs"                                                    \
 
 
