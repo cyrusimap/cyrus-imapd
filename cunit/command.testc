@@ -33,7 +33,7 @@ static void test_popen_r(void)
     struct command *cmd = NULL;
     char buf[32];
 
-    r = command_popen(&cmd, "r", "/bin/echo", WORD0, NULL);
+    r = command_popen(&cmd, "r", NULL, "/bin/echo", WORD0, NULL);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(cmd);
     CU_ASSERT_PTR_NULL_FATAL(cmd->stdin_prot);
@@ -65,7 +65,7 @@ static void test_popen_w(void)
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
     snprintf(buf, sizeof(buf), "cat > %s", canary);
-    r = command_popen(&cmd, "w", "/bin/sh", "-c", buf, NULL);
+    r = command_popen(&cmd, "w", NULL, "/bin/sh", "-c", buf, NULL);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(cmd);
     CU_ASSERT_PTR_NOT_NULL_FATAL(cmd->stdin_prot);
@@ -98,7 +98,7 @@ static void test_popen_rw(void)
     struct command *cmd = NULL;
     char buf[32];
 
-    r = command_popen(&cmd, "rw", "/usr/bin/tr", "a-z", "A-Z", NULL);
+    r = command_popen(&cmd, "rw", NULL, "/usr/bin/tr", "a-z", "A-Z", NULL);
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(cmd);
     CU_ASSERT_PTR_NOT_NULL_FATAL(cmd->stdin_prot);
