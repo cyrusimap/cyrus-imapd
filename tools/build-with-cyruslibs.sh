@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 : ${CYRUSLIBS:=cyruslibs}
 : ${LIBSDIR:=/usr/local/$CYRUSLIBS}
 : ${TARGET:=/usr/cyrus}
