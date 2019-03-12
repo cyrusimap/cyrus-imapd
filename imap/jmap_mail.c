@@ -9206,6 +9206,10 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
             add_seenseq = seqset_init(last_uid, SEQ_SPARSE);
             del_seenseq = seqset_init(last_uid, SEQ_SPARSE);
         }
+
+        /* Re-sort uid records before processing. */
+        ptrarray_sort(&plan->setflags, _email_uidrec_compareuid_cb);
+
         /* Process uid records */
         for (j = 0; j < ptrarray_size(&plan->setflags); j++) {
             struct email_uidrec *uidrec = ptrarray_nth(&plan->setflags, j);
