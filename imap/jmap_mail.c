@@ -8676,8 +8676,7 @@ static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrar
             /* Read seen sequence set */
             int r = seen_lockread(bulk->seendb, plan->mbox->uniqueid, &plan->old_seendata);
             if (!r) {
-                plan->old_seenseq = seqset_parse(plan->old_seendata.seenuids, NULL,
-                                                 plan->mbox->i.last_uid);
+                plan->old_seenseq = seqset_parse(plan->old_seendata.seenuids, NULL, 0);
                 hash_insert(plan->mbox_id, plan->old_seenseq, &seenseq_by_mbox_id);
             }
             else {
@@ -9195,7 +9194,7 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
         int j;
         struct seqset *add_seenseq = NULL;
         struct seqset *del_seenseq = NULL;
-        const uint32_t last_uid = plan->mbox->i.last_uid;
+        uint32_t last_uid = plan->mbox->i.last_uid;
 
         struct mboxevent *flagsset = mboxevent_new(EVENT_FLAGS_SET);
         int notify_flagsset = 0;
@@ -9203,8 +9202,8 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
         int notify_flagsclear = 0;
 
         if (plan->use_seendb) {
-            add_seenseq = seqset_init(last_uid, SEQ_SPARSE);
-            del_seenseq = seqset_init(last_uid, SEQ_SPARSE);
+            add_seenseq = seqset_init(0, SEQ_SPARSE);
+            del_seenseq = seqset_init(0, SEQ_SPARSE);
         }
 
         /* Re-sort uid records before processing. */
@@ -9245,6 +9244,9 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
                     notify_flagsclear = 1;
                 }
                 msgrecord_unref(&mrw);
+                if (last_uid < uidrec->uid) {
+                    last_uid = uidrec->uid;
+                }
             }
             else {
                 json_object_set_new(bulk->set_errors, email_id, jmap_server_error(r));
@@ -9253,7 +9255,7 @@ static void _email_bulkupdate_exec_setflags(struct email_bulkupdate *bulk)
         /* Write seen db for shared mailboxes */
         if (plan->use_seendb) {
             if (add_seenseq || del_seenseq) {
-                struct seqset *new_seenseq = seqset_init(last_uid, SEQ_SPARSE);
+                struct seqset *new_seenseq = seqset_init(0, SEQ_SPARSE);
                 if (del_seenseq->len) {
                     uint32_t uid;
                     while ((uid = seqset_getnext(plan->old_seenseq)))
@@ -9997,8 +9999,8 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
         /* Read the current seen sequence from seen.db */
         int need_seendb = !mailbox_internal_seen(mbox, req->userid);
         if (need_seendb) {
-            delseen = seqset_init(mbox->i.last_uid, SEQ_SPARSE);
-            addseen = seqset_init(mbox->i.last_uid, SEQ_SPARSE);
+            delseen = seqset_init(0, SEQ_SPARSE);
+            addseen = seqset_init(0, SEQ_SPARSE);
             struct seendata sd = SEENDATA_INITIALIZER;
             int r = seen_lockread(rock->seendb, mbox->uniqueid, &sd);
             if (!r) {
@@ -10031,7 +10033,7 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
         /* Write back changes to seen.db */
         if (!r && need_seendb && (addseen->len || delseen->len)) {
             if (delseen->len) {
-                struct seqset *newseen = seqset_init(mbox->i.last_uid, SEQ_SPARSE);
+                struct seqset *newseen = seqset_init(0, SEQ_SPARSE);
                 uint32_t uid;
                 while ((uid = seqset_getnext(seenseq))) {
                     if (!seqset_ismember(delseen, uid)) {
