@@ -274,6 +274,14 @@ static void test_encode_mimeheader(void)
         char *s = charset_encode_mimeheader(_in, 0); \
         CU_ASSERT_PTR_NOT_NULL(s); \
         CU_ASSERT_STRING_EQUAL(s, _exp); \
+        const char *p, *lf; \
+        for (lf = s, p = s; *p != '\0'; p++) { \
+            if (*p == '\n') { \
+                CU_ASSERT(p - lf <= 76); \
+                lf = p; \
+            } \
+        } \
+        CU_ASSERT(p - lf <= 76); \
         free(s); \
     }
 
@@ -286,6 +294,15 @@ static void test_encode_mimeheader(void)
 
     /* wrap */
     TESTCASE("abc\r\n xyz", "=?UTF-8?Q?abc?=\r\n =?UTF-8?Q?xyz?=");
+
+    /* three-byte UTF-8 word barely fits line length limit */
+    TESTCASE("0123456789012345678901234567890123456789012345678901234\xe2\x82\xac",
+            "=?UTF-8?Q?0123456789012345678901234567890123456789012345678901234=E2=82=AC?=");
+
+    /* three-byte UTF-8 word must not be split */
+    TESTCASE("01234567890123456789012345678901234567890123456789012345\xe2\x82\xac",
+            "=?UTF-8?Q?01234567890123456789012345678901234567890123456789012345?="
+            "\r\n ""=?UTF-8?Q?=E2=82=AC?=");
 
 #undef TESTCASE
 }

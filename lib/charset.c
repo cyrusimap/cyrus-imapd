@@ -2766,19 +2766,25 @@ static char *qp_encode(const char *data, size_t len, int isheader,
             unsigned char this = data[n];
             unsigned char next = (n < len - 1) ? data[n+1] : '\0';
 
-            if (cnt >= BASE64_MAX_LINE_LEN) {
-                if (isheader) {
-                    /* split encoded token with fold */
-                    buf_appendcstr(&buf, "?=");
-                    buf_appendcstr(&buf, "\r\n ");
-                    buf_appendcstr(&buf, "=?UTF-8?Q?");
+            /* Insert line break before exceeding line length limits */
+            if (isheader) {
+                /* RFC2047 forbids splitting multi-octet characters */
+                int needbytes;
+                if (this < 0x80) needbytes = 0;
+                else if (this < 0xc0) needbytes = 0; // UTF-8 continuation
+                else if (this < 0xe0) needbytes = 3;
+                else if (this < 0xf0) needbytes = 6;
+                else if (this < 0xf8) needbytes = 9;
+                else needbytes = 0; // impossible UTF-8 encoding
+                if (cnt + needbytes >= BASE64_MAX_LINE_LEN) {
+                    buf_appendcstr(&buf, "?=\r\n =?UTF-8?Q?");
                     cnt = 11;
                 }
-                else {
-                    /* add soft line break to body */
-                    buf_appendcstr(&buf, "=\r\n");
-                    cnt = 0;
-                }
+            }
+            else if (cnt >= BASE64_MAX_LINE_LEN) {
+                /* add soft line break to body */
+                buf_appendcstr(&buf, "=\r\n");
+                cnt = 0;
             }
 
             if ((QPSAFECHAR[this]
