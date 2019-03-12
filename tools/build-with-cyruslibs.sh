@@ -12,11 +12,11 @@ export CFLAGS="-g -fPIC -W -Wall -Wextra"
 export PATH="$LIBSDIR/bin:$PATH"
 autoreconf -v -i
 echo "./configure --prefix=$TARGET $CONFIGOPTS XAPIAN_CONFIG=$LIBSDIR/bin/xapian-config-1.5"
-./configure --prefix=$TARGET $CONFIGOPTS XAPIAN_CONFIG=$LIBSDIR/bin/xapian-config-1.5
-make lex-fix
-make -j 8
-make -j 8 check
-sudo make install
-sudo make install-binsymlinks
+./configure --prefix=$TARGET $CONFIGOPTS XAPIAN_CONFIG=$LIBSDIR/bin/xapian-config-1.5 && \
+make lex-fix && \
+make -j 8 && \
+make -j 8 check && \
+sudo make install && \
+sudo make install-binsymlinks && \
 sudo cp tools/mkimap /usr/cyrus/bin/mkimap
 
