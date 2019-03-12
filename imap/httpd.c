@@ -2811,6 +2811,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
             buf_printf(logbuf, " by \"%s\"", hdr[0]);
     }
 
+    /* Add session id */
+    buf_printf(logbuf, " via SESSIONID=<%s>", session_id());
+
     /* Add request-line */
     buf_appendcstr(logbuf, "; \"");
     if (txn->req_line.meth) {
