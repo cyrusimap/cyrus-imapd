@@ -2248,6 +2248,9 @@ static json_t *_json_has(int rights, int need)
   return (((rights & need) == need) ? json_true() : json_false());
 }
 
+/* create, update, delete */
+#define WRITERIGHTS  (ACL_WRITE|ACL_INSERT|ACL_SETSEEN|ACL_DELETEMSG|ACL_EXPUNGE)
+
 HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
 {
     char *aclstr = xstrdup(mbentry->acl);
@@ -2255,9 +2258,6 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
     int iscalendar = (mbentry->mbtype & MBTYPE_CALENDAR);
 
     json_t *sharewith = json_null();
-
-    // create, update, delete
-    int writerights = ACL_WRITE|ACL_INSERT|ACL_SETSEEN|ACL_DELETEMSG|ACL_EXPUNGE;
 
     char *userid;
     char *nextid;
@@ -2292,7 +2292,7 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
         json_object_set_new(obj, "mayRead",
                                 _json_has(rights, ACL_READ|ACL_LOOKUP));
         json_object_set_new(obj, "mayWrite",
-                                _json_has(rights, writerights));
+                                _json_has(rights, WRITERIGHTS));
         json_object_set_new(obj, "mayAdmin",
                                 _json_has(rights, ACL_ADMIN));
     }
@@ -2301,6 +2301,79 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
     free(owner);
 
     return sharewith;
+}
+
+HIDDEN int jmap_set_sharewith(struct mailbox *mbox, json_t *shareWith)
+{
+    int iscalendar = (mbox->mbtype & MBTYPE_CALENDAR);
+    char *owner = mboxname_to_userid(mbox->name);
+    char *acl = xstrdup(mbox->acl);
+    const char *userid;
+    json_t *rights;
+    int r;
+
+    json_object_foreach(shareWith, userid, rights) {
+        unsigned grant = 0, deny = 0;
+        const char *right;
+        json_t *val;
+
+        /* Validate user id and rights */
+        if (!(strlen(userid) && rights && json_is_object(rights))) {
+            continue;
+        }
+
+        /* skip system users and owner */
+        if (is_system_user(userid)) continue;
+        if (!strcmp(userid, owner)) continue;
+
+        /* accumulate rights be granted and denied */
+        json_object_foreach(rights, right, val) {
+            unsigned mask = 0;
+
+            if (!strcmp(right, "mayAdmin"))
+                mask = ACL_ADMIN;
+            else if (!strcmp(right, "mayWrite"))
+                mask = WRITERIGHTS;
+            else if (!strcmp(right, "mayRead"))
+                mask = ACL_READ|ACL_LOOKUP;
+            else if (iscalendar && !strcmp(right, "mayReadFreeBusy"))
+                mask = DACL_READFB;
+
+            if (json_boolean_value(val)) grant |= mask;
+            else deny |= mask;
+        }
+
+        r = cyrus_acl_set(&acl, userid, ACL_MODE_ADD, grant, NULL, NULL);
+        if (!r) {
+            r = cyrus_acl_set(&acl, userid, ACL_MODE_REMOVE, deny, NULL, NULL);
+        }
+        if (r) {
+            syslog(LOG_ERR, "cyrus_acl_set(%s, %s) failed: %s",
+                   mbox->name, userid, error_message(r));
+            goto done;
+        }
+    }
+
+    /* ok, change the mailboxes database */
+    r = mboxlist_sync_setacls(mbox->name, acl);
+    if (r) {
+        syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
+               mbox->name, error_message(r));
+    }
+    else {
+        /* ok, change the backup in cyrus.header */
+        r = mailbox_set_acl(mbox, acl, 1 /*dirty_modseq*/);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_set_acl(%s) failed: %s",
+                   mbox->name, error_message(r));
+        }
+    }
+
+  done:
+    free(owner);
+    free(acl);
+
+    return r;
 }
 
 HIDDEN int jmap_hascapa(jmap_req_t *req, const char *capa)
