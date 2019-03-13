@@ -7664,6 +7664,10 @@ static int _email_to_mime(jmap_req_t *req, FILE *fp, void *rock, json_t **err)
     size_t i;
 
     /* Set mandatory and quasi-mandatory headers */
+    if (!_email_have_toplevel_header(email, "mime-version")) {
+        header = json_pack("{s:s s:s}", "name", "Mime-Version", "value", "1.0");
+        _headers_shift_new(&email->headers, header);
+    }
     if (!_email_have_toplevel_header(email, "user-agent")) {
         char *tmp = strconcat("Cyrus-JMAP/", CYRUS_VERSION, NULL);
         header = json_pack("{s:s s:s}", "name", "User-Agent", "value", tmp);
