@@ -129,7 +129,7 @@ typedef struct jmap_req {
     /* Owned by JMAP HTTP handler */
     ptrarray_t *mboxes;
     hash_table *mboxrights;
-    hash_table *creation_ids;
+    hash_table *created_ids;
     ptrarray_t *method_calls;
     const strarray_t *capabilities;
 } jmap_req_t;

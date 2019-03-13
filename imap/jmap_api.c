@@ -535,8 +535,8 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     size_t i;
     int ret, do_perf = 0;
     char *account_inboxname = NULL;
-    int return_creation_ids = 0;
-    hash_table *creation_ids = NULL;
+    int return_created_ids = 0;
+    hash_table *created_ids = NULL;
     hash_table accounts = HASH_TABLE_INITIALIZER;
     hash_table mboxrights = HASH_TABLE_INITIALIZER;
     strarray_t methods = STRARRAY_INITIALIZER;
@@ -568,15 +568,15 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     hash_insert(httpd_userid, (void*)1, &accounts);
 
     /* Set up creation ids */
-    long max_creation_ids = (settings->limits[MAX_CALLS_IN_REQUEST] + 1) *
-                             settings->limits[MAX_OBJECTS_IN_SET];
-    creation_ids = xzmalloc(sizeof(hash_table));
-    construct_hash_table(creation_ids, max_creation_ids, 0);
+    long max_created_ids = (settings->limits[MAX_CALLS_IN_REQUEST] + 1) *
+                            settings->limits[MAX_OBJECTS_IN_SET];
+    created_ids = xzmalloc(sizeof(hash_table));
+    construct_hash_table(created_ids, max_created_ids, 0);
 
     /* Parse client-supplied creation ids */
     json_t *jcreatedIds = json_object_get(jreq, "createdIds");
     if (json_is_object(jcreatedIds)) {
-        return_creation_ids = 1;
+        return_created_ids = 1;
         const char *creation_id;
         json_t *jval;
         json_object_foreach(jcreatedIds, creation_id, jval) {
@@ -591,7 +591,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
                 ret = HTTP_BAD_REQUEST;
                 goto done;
             }
-            hash_insert(creation_id, xstrdup(id), creation_ids);
+            hash_insert(creation_id, xstrdup(id), created_ids);
         }
     }
     else if (jcreatedIds && jcreatedIds != json_null()) {
@@ -699,7 +699,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         req.args = args;
         req.response = resp;
         req.tag = tag;
-        req.creation_ids = creation_ids;
+        req.created_ids = created_ids;
         req.txn = txn;
         req.mboxrights = &mboxrights;
         req.method_calls = &method_calls;
@@ -755,9 +755,9 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
 
     /* Build response */
     *res = json_pack("{s:O}", "methodResponses", resp);
-    if (return_creation_ids) {
+    if (return_created_ids) {
         json_t *jcreatedIds = json_object();
-        hash_enumerate(creation_ids, _make_created_ids, jcreatedIds);
+        hash_enumerate(created_ids, _make_created_ids, jcreatedIds);
         json_object_set_new(*res, "createdIds", jcreatedIds);
     }
     char *user_inboxname = mboxname_user_mbox(httpd_userid, NULL);
@@ -780,8 +780,8 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         ptrarray_fini(&processed_methods);
         ptrarray_fini(&method_calls);
     }
-    free_hash_table(creation_ids, free);
-    free(creation_ids);
+    free_hash_table(created_ids, free);
+    free(created_ids);
     free_hash_table(&accounts, NULL);
     free_hash_table(&mboxrights, free);
     free(account_inboxname);
@@ -802,7 +802,7 @@ extern void jmap_add_subreq(jmap_req_t *req, const char *method,
 
 const char *jmap_lookup_id(jmap_req_t *req, const char *creation_id)
 {
-    return hash_lookup(creation_id, req->creation_ids);
+    return hash_lookup(creation_id, req->created_ids);
 }
 
 const char *jmap_id_string_value(jmap_req_t *req, json_t *item)
@@ -822,7 +822,7 @@ void jmap_add_id(jmap_req_t *req, const char *creation_id, const char *id)
      * request. If a creation id is reused, the server MUST map the creation
      * id to the most recently created item with that id."
      */
-    hash_insert(creation_id, xstrdup(id), req->creation_ids);
+    hash_insert(creation_id, xstrdup(id), req->created_ids);
 }
 
 HIDDEN int jmap_openmbox(jmap_req_t *req, const char *name,
