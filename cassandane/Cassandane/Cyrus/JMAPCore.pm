@@ -286,6 +286,7 @@ sub test_created_ids
     $JMAPResponse = $jmap->Request($JMAPRequest);
     $self->assert_str_equals($mboxid1, $JMAPResponse->{methodResponses}->[0][1]{list}[0]{id});
     $self->assert_not_null($JMAPResponse->{createdIds});
+    $self->assert_str_equals($mboxid1, $JMAPResponse->{createdIds}{1});
 
     xlog "create a mailbox with empty client-supplied creation ids";
     $JMAPRequest = {
@@ -304,6 +305,39 @@ sub test_created_ids
     $JMAPResponse = $jmap->Request($JMAPRequest);
     my $mboxid2 = $JMAPResponse->{methodResponses}->[0][1]{created}{2}{id};
     $self->assert_str_equals($mboxid2, $JMAPResponse->{createdIds}{2});
+
+    xlog "create a mailbox with client-supplied creation ids";
+    $JMAPRequest = {
+        using => ['urn:ietf:params:jmap:mail'],
+        methodCalls => [['Mailbox/set', {
+            create => {
+                "3" => {
+                    name => "baz",
+                    parentId => "#2",
+                    role => undef
+                }
+            }
+        }, "R1"]],
+        createdIds => {
+            1 => $mboxid1,
+            2 => $mboxid2,
+        },
+    };
+    $JMAPResponse = $jmap->Request($JMAPRequest);
+    my $mboxid3 = $JMAPResponse->{methodResponses}->[0][1]{created}{3}{id};
+    $self->assert_str_equals($mboxid1, $JMAPResponse->{createdIds}{1});
+    $self->assert_str_equals($mboxid2, $JMAPResponse->{createdIds}{2});
+    $self->assert_str_equals($mboxid3, $JMAPResponse->{createdIds}{3});
+
+    xlog "get mailbox and check parentid";
+    $JMAPRequest = {
+        using => ['urn:ietf:params:jmap:mail'],
+        methodCalls => [['Mailbox/get', { ids => [$mboxid3], properties => ['parentId'] }, 'R1']],
+    };
+    $JMAPResponse = $jmap->Request($JMAPRequest);
+    $self->assert_str_equals($mboxid3, $JMAPResponse->{methodResponses}->[0][1]{list}[0]{id});
+    $self->assert_str_equals($mboxid2, $JMAPResponse->{methodResponses}->[0][1]{list}[0]{parentId});
+    $self->assert_null($JMAPResponse->{createdIds});
 }
 
 sub test_echo
