@@ -288,8 +288,8 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 #define CMD_GETFIELDS                                                   \
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"          \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
-    "  filename, type, subtype, res_uid, ref_count, alive"              \
-    "  modseq createdmodseq"                                            \
+    "  filename, type, subtype, res_uid, ref_count, alive,"             \
+    "  modseq, createdmodseq"                                           \
     " FROM dav_objs"                                                    \
 
 
