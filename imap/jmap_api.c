@@ -2449,8 +2449,6 @@ HIDDEN void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith)
     }
 
     buf_free(&buf);
-
-    return 0;
 }
 
 HIDDEN int jmap_hascapa(jmap_req_t *req, const char *capa)
