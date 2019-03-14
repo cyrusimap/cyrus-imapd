@@ -456,7 +456,9 @@ extern void jmap_querychanges_fini(struct jmap_querychanges *query);
 extern json_t *jmap_querychanges_reply(struct jmap_querychanges *query);
 
 extern json_t *jmap_get_sharewith(const mbentry_t *mbentry);
-extern int jmap_set_sharewith(struct mailbox *mbox, json_t *shareWith);
+extern int jmap_set_sharewith(struct mailbox *mbox,
+                              json_t *shareWith, int isPatch);
+extern void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith);
 
 extern int jmap_readprop_full(json_t *root, const char *prefix, const char *name,
                               int mandatory, json_t *invalid, const char *fmt,

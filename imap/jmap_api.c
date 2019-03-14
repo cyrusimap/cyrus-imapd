@@ -2288,7 +2288,8 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
     return sharewith;
 }
 
-HIDDEN int jmap_set_sharewith(struct mailbox *mbox, json_t *shareWith)
+HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
+                              json_t *shareWith, int isPatch)
 {
     int iscalendar = (mbox->mbtype & MBTYPE_CALENDAR);
     char *owner = mboxname_to_userid(mbox->name);
@@ -2297,13 +2298,51 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox, json_t *shareWith)
     json_t *rights;
     int r;
 
+    if (!isPatch) {
+        /* Create a new ACL with existing owner and system users preserved */
+        char *newacl = xstrdup("");  /* start with empty ACL */
+        char *nextid;
+
+        for (userid = acl; userid; userid = nextid) {
+            char *rightstr;
+            int access;
+
+            rightstr = strchr(userid, '\t');
+            if (!rightstr) break;
+            *rightstr++ = '\0';
+
+            nextid = strchr(rightstr, '\t');
+            if (!nextid) break;
+            *nextid++ = '\0';
+
+            /* skip all but system users and owner */
+            if (strcmp(userid, owner) && !is_system_user(userid)) continue;
+
+            cyrus_acl_strtomask(rightstr, &access);
+
+            r = cyrus_acl_set(&newacl, userid,
+                              ACL_MODE_SET, access, NULL, NULL);
+            if (r) {
+                syslog(LOG_ERR, "cyrus_acl_set(%s, %s) failed: %s",
+                       mbox->name, userid, error_message(r));
+                free(newacl);
+                goto done;
+            }
+        }
+
+        free(acl);
+        acl = newacl;
+    }
+
+    /* Patch the ACL from shareWith */
     json_object_foreach(shareWith, userid, rights) {
         unsigned grant = 0, deny = 0;
         const char *right;
         json_t *val;
 
         /* Validate user id and rights */
-        if (!(strlen(userid) && rights && json_is_object(rights))) {
+        if (!(strlen(userid) && rights &&
+              (json_is_object(rights) || json_is_null(rights)))) {
             continue;
         }
 
@@ -2311,31 +2350,43 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox, json_t *shareWith)
         if (is_system_user(userid)) continue;
         if (!strcmp(userid, owner)) continue;
 
-        /* accumulate rights be granted and denied */
-        json_object_foreach(rights, right, val) {
-            unsigned mask = 0;
-
-            if (!strcmp(right, "mayAdmin"))
-                mask = ACL_ADMIN;
-            else if (!strcmp(right, "mayWrite"))
-                mask = WRITERIGHTS;
-            else if (!strcmp(right, "mayRead"))
-                mask = ACL_READ|ACL_LOOKUP;
-            else if (iscalendar && !strcmp(right, "mayReadFreeBusy"))
-                mask = DACL_READFB;
-
-            if (json_boolean_value(val)) grant |= mask;
-            else deny |= mask;
+        if (json_is_null(rights)) {
+            /* remove user from ACL */
+            r = cyrus_acl_remove(&acl, userid, NULL, NULL);
+            if (r) {
+                syslog(LOG_ERR, "cyrus_acl_remove(%s, %s) failed: %s",
+                       mbox->name, userid, error_message(r));
+                goto done;
+            }
         }
+        else {
+            /* accumulate rights be granted and denied */
+            json_object_foreach(rights, right, val) {
+                unsigned access = 0;
 
-        r = cyrus_acl_set(&acl, userid, ACL_MODE_ADD, grant, NULL, NULL);
-        if (!r) {
-            r = cyrus_acl_set(&acl, userid, ACL_MODE_REMOVE, deny, NULL, NULL);
-        }
-        if (r) {
-            syslog(LOG_ERR, "cyrus_acl_set(%s, %s) failed: %s",
-                   mbox->name, userid, error_message(r));
-            goto done;
+                if (!strcmp(right, "mayAdmin"))
+                    access = ACL_ADMIN;
+                else if (!strcmp(right, "mayWrite"))
+                    access = WRITERIGHTS;
+                else if (!strcmp(right, "mayRead"))
+                    access = ACL_READ|ACL_LOOKUP;
+                else if (iscalendar && !strcmp(right, "mayReadFreeBusy"))
+                    access = DACL_READFB;
+
+                if (json_boolean_value(val)) grant |= access;
+                else deny |= access;
+            }
+
+            r = cyrus_acl_set(&acl, userid, ACL_MODE_ADD, grant, NULL, NULL);
+            if (!r) {
+                r = cyrus_acl_set(&acl, userid,
+                                  ACL_MODE_REMOVE, deny, NULL, NULL);
+            }
+            if (r) {
+                syslog(LOG_ERR, "cyrus_acl_set(%s, %s) failed: %s",
+                       mbox->name, userid, error_message(r));
+                goto done;
+            }
         }
     }
 
@@ -2359,6 +2410,47 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox, json_t *shareWith)
     free(acl);
 
     return r;
+}
+
+HIDDEN void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith)
+{
+    struct buf buf = BUF_INITIALIZER;
+    const char *field = NULL;
+    json_t *jval;
+
+    json_object_foreach(arg, field, jval) {
+        if (!strncmp(field, "shareWith/", 10))  {
+            const char *userid = field + 10;
+            const char *right = strchr(userid, '/');
+
+            if (!*shareWith) *shareWith = json_object();
+
+            if (right) {
+                /* individual right */
+                buf_setmap(&buf, userid, right - userid);
+                userid = buf_cstring(&buf);
+
+                json_t *rights = json_object_get(*shareWith, userid);
+                if (rights) {
+                    /* add to existing ShareRights for this userid */
+                    json_object_set(rights, right+1, jval);
+                }
+                else {
+                    /* create new ShareRights for this userid */
+                    json_object_set_new(*shareWith, userid,
+                                        json_pack("{s:o}", right+1, jval));
+                }
+            }
+            else {
+                /* complete ShareRights */
+                json_object_set(*shareWith, userid, jval);
+            }
+        }
+    }
+
+    buf_free(&buf);
+
+    return 0;
 }
 
 HIDDEN int jmap_hascapa(jmap_req_t *req, const char *capa)

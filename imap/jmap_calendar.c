@@ -583,7 +583,8 @@ static int setcalendars_update(jmap_req_t *req,
                                int sortOrder,
                                int isVisible,
                                int isSubscribed,
-                               json_t *shareWith)
+                               json_t *shareWith,
+                               int isPatch)
 {
     struct mailbox *mbox = NULL;
     annotate_state_t *astate = NULL;
@@ -672,7 +673,7 @@ static int setcalendars_update(jmap_req_t *req,
     }
     /* shareWith */
     if (!r && shareWith) {
-        r = jmap_set_sharewith(mbox, shareWith);
+        r = jmap_set_sharewith(mbox, shareWith, isPatch);
     }
 
     buf_free(&val);
@@ -869,6 +870,7 @@ static int jmap_calendar_set(struct jmap_req *req)
                                     "type", "invalidProperties",
                                     "properties", invalid);
             json_object_set_new(set.not_created, key, err);
+            json_decref(shareWith);
             continue;
         }
         json_decref(invalid);
@@ -882,6 +884,7 @@ static int jmap_calendar_set(struct jmap_req *req)
             json_t *err = json_pack("{s:s}", "type", "accountReadOnly");
             json_object_set_new(set.not_created, key, err);
             mboxlist_entry_free(&mbparent);
+            json_decref(shareWith);
             continue;
         }
         mboxlist_entry_free(&mbparent);
@@ -904,10 +907,12 @@ static int jmap_calendar_set(struct jmap_req *req)
                 json_object_set_new(set.not_created, key, err);
             }
             free(mboxname);
+            json_decref(shareWith);
             goto done;
         }
         r = setcalendars_update(req, mboxname, name, color, sortOrder,
-                                isVisible, isSubscribed, shareWith);
+                                isVisible, isSubscribed, shareWith, 0/*isPatch*/);
+        json_decref(shareWith);
         if (r) {
             free(uid);
             int rr = mboxlist_delete(mboxname);
@@ -955,6 +960,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         int32_t sortOrder = -1;
         int isVisible = -1;
         int isSubscribed = -1;
+        int isPatch = 0;
         int flag;
         int pe = 0; /* parse error */
         pe = jmap_readprop(arg, "name", 0,  invalid, "s", &name);
@@ -978,9 +984,15 @@ static int jmap_calendar_set(struct jmap_req *req)
             }
         }
 
+        /* Is shareWith overwritten or patched? */
         pe = jmap_readprop(arg, "shareWith", 0,  invalid, "o", &shareWith);
         if (pe > 0 && !jmap_hasrights_byname(req, mboxname, ACL_ADMIN)) {
             json_array_append_new(invalid, json_string("shareWith"));
+        }
+        else if (pe == 0) {
+            /* Collect shareWith/ as a patch */
+            jmap_parse_sharewith_patch(arg, &shareWith);
+            if (shareWith) isPatch = 1;
         }
 
         
@@ -1021,6 +1033,7 @@ static int jmap_calendar_set(struct jmap_req *req)
                                     "properties", invalid);
             json_object_set_new(set.not_updated, uid, err);
             free(mboxname);
+            json_decref(shareWith);
             continue;
         }
         json_decref(invalid);
@@ -1032,14 +1045,16 @@ static int jmap_calendar_set(struct jmap_req *req)
             json_object_set_new(set.not_updated, uid, err);
             mbname_free(&mbname);
             free(mboxname);
+            json_decref(shareWith);
             continue;
         }
         mbname_free(&mbname);
 
         /* Update the calendar */
         r = setcalendars_update(req, mboxname, name, color, sortOrder,
-                                isVisible, isSubscribed, shareWith);
+                                isVisible, isSubscribed, shareWith, isPatch);
         free(mboxname);
+        json_decref(shareWith);
         if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
             json_t *err = json_pack("{s:s}", "type", "notFound");
             json_object_set_new(set.not_updated, uid, err);
