@@ -1319,6 +1319,13 @@ static int getblob_cb(const conv_guidrec_t* rec, void* vrock)
     return 0;
 }
 
+static const jmap_property_t blob_props[] = {
+    { "mailboxIds",      JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "threadIds",       JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { "emailIds",        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    { NULL,             0 }
+};
+
 static int jmap_blob_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -1328,7 +1335,7 @@ static int jmap_blob_get(jmap_req_t *req)
     size_t i;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, NULL, NULL, NULL, &get, 0, &err);
+    jmap_get_parse(req->args, &parser, req, blob_props, NULL, NULL, &get, 0, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
