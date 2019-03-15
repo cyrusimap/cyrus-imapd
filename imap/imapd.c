@@ -12969,15 +12969,32 @@ static void _addsubs(struct list_rock *rock)
 static int perform_output(const char *extname, const mbentry_t *mbentry, struct list_rock *rock)
 {
     /* skip non-responsive mailboxes early, so they don't break sub folder detection */
-    if (mbentry && !imapd_userisadmin) {
-        if (mbentry->mbtype == MBTYPE_NETNEWS) return 0;
-        if ((mbentry->mbtype & MBTYPE_INTERMEDIATE) &&
+    if (!imapd_userisadmin) {
+        int mbtype = mbentry ? mbentry->mbtype : 0;
+
+        if (mbtype == MBTYPE_NETNEWS) return 0;
+        if ((mbtype & MBTYPE_INTERMEDIATE) &&
             !(rock->listargs->sel & LIST_SEL_INTERMEDIATES)) return 0;
         if (!(rock->listargs->sel & LIST_SEL_DAV)) {
-            if (mboxname_iscalendarmailbox(mbentry->name, mbentry->mbtype)) return 0;
-            if (mboxname_isaddressbookmailbox(mbentry->name, mbentry->mbtype)) return 0;
-            if (mboxname_isdavdrivemailbox(mbentry->name, mbentry->mbtype)) return 0;
-            if (mboxname_isdavnotificationsmailbox(mbentry->name, mbentry->mbtype)) return 0;
+            char *intname = NULL, *freeme = NULL;
+            int skip = 0;
+
+            /* if we got here via subscribed_cb, mbentry isn't set */
+            if (mbentry) intname = mbentry->name;
+            else {
+                intname = freeme = mboxname_from_external(extname,
+                                                          &imapd_namespace,
+                                                          imapd_userid);
+            }
+            if (mboxname_iscalendarmailbox(intname, mbtype)    ||
+                mboxname_isaddressbookmailbox(intname, mbtype) ||
+                mboxname_isdavdrivemailbox(intname, mbtype)    ||
+                mboxname_isdavnotificationsmailbox(intname, mbtype)) {
+                skip = 1;
+            }
+            free(freeme);
+
+            if (skip) return 0;
         }
     }
 
