@@ -3982,7 +3982,7 @@ err:
     return EOF;
 }
 
-static int parse_bodystructure_part(struct protstream *prot, struct body *body)
+static int parse_bodystructure_part(struct protstream *prot, struct body *body, const char *part_id)
 {
     int c;
     int r = 0;
@@ -4005,7 +4005,12 @@ badformat:
             body->subpart = (struct body *)xrealloc((char *)body->subpart,
                                           body->numparts*sizeof(struct body));
 
-            r = parse_bodystructure_part(prot, &body->subpart[body->numparts-1]);
+            buf_reset(&buf);
+            if (part_id) buf_printf(&buf, "%s.", part_id);
+            buf_printf(&buf, "%d", body->numparts);
+            struct body *subbody = &body->subpart[body->numparts-1];
+            r = parse_bodystructure_part(prot, subbody, subbody->part_id);
+            subbody->part_id = buf_release(&buf);
             if (r) goto out;
 
             c = prot_getc(prot);
@@ -4072,7 +4077,7 @@ badformat:
             if (r) goto out;
 
             /* process body */
-            r = parse_bodystructure_part(prot, body->subpart);
+            r = parse_bodystructure_part(prot, body->subpart, part_id);
             if (r) goto out;
 
             /* skip trailing space (parse_bs_part doesn't eat it) */
@@ -4336,7 +4341,7 @@ static int message_parse_cbodystructure(message_t *m)
     prot_setisclient(prot, 1);  /* don't crash parsing literals */
 
     m->body = xzmalloc(sizeof(struct body));
-    r = parse_bodystructure_part(prot, m->body);
+    r = parse_bodystructure_part(prot, m->body, NULL);
     if (r) syslog(LOG_ERR, "IOERROR: parsing body structure for %s %u (%.*s)",
                   m->mailbox->name, m->record.uid,
                   (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE),
