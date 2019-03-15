@@ -96,7 +96,6 @@ static int jmap_upload(struct transaction_t *txn);
 static int jmap_blob_get(jmap_req_t *req);
 static int jmap_blob_copy(jmap_req_t *req);
 static int jmap_core_echo(jmap_req_t *req);
-static int jmap_quota_get(jmap_req_t *req);
 
 /* WebSocket handler */
 #define JMAP_WS_PROTOCOL   "jmap"
@@ -154,7 +153,6 @@ jmap_method_t jmap_core_methods[] = {
     { "Blob/copy",    &jmap_blob_copy, 0/*flags*/ },
     { "Blob/get",     &jmap_blob_get,  JMAP_SHARED_CSTATE },
     { "Core/echo",    &jmap_core_echo, JMAP_SHARED_CSTATE },
-    { "Quota/get",    &jmap_quota_get, JMAP_SHARED_CSTATE },
     { NULL,           NULL, 0/*flags*/ }
 };
 
@@ -186,7 +184,6 @@ static void jmap_core_init()
 #undef _read_opt
 
     strarray_push(&my_jmap_settings.can_use, JMAP_URN_CORE);
-    strarray_push(&my_jmap_settings.can_use, JMAP_QUOTA_EXTENSION);
  
     construct_hash_table(&my_jmap_settings.methods, 128, 0);
 
@@ -239,6 +236,7 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
     initialize_JMAP_error_table();
 
     jmap_core_init();
+    jmap_user_init(&my_jmap_settings);
     jmap_mail_init(&my_jmap_settings);
     jmap_contact_init(&my_jmap_settings);
     jmap_calendar_init(&my_jmap_settings);
@@ -1105,6 +1103,7 @@ static int jmap_settings(struct transaction_t *txn)
 
     if (!my_jmap_settings.capabilities) {
         jmap_core_capabilities();
+        jmap_user_capabilities(&my_jmap_settings);
         jmap_mail_capabilities(&my_jmap_settings);
         jmap_contact_capabilities(&my_jmap_settings);
         jmap_calendar_capabilities(&my_jmap_settings);
@@ -1471,77 +1470,6 @@ static int jmap_blob_get(jmap_req_t *req)
 done:
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
-    return 0;
-}
-
-
-/* Quota/get method */
-
-static const jmap_property_t quota_props[] = {
-    { "id",             JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "used",           JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "total",          JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-
-    { NULL,             0 }
-};
-static int jmap_quota_get(jmap_req_t *req)
-{
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
-    json_t *err = NULL;
-    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
-
-    /* Parse request */
-    jmap_get_parse(req->args, &parser, req, quota_props,  NULL, NULL,
-                   &get, /*allow_null_ids*/1, &err);
-    if (err) {
-        jmap_error(req, err);
-        goto done;
-    }
-
-    int want_mail_quota = !get.ids || json_is_null(get.ids);
-    size_t i;
-    json_t *jval;
-    json_array_foreach(get.ids, i, jval) {
-        if (strcmp("mail", json_string_value(jval))) {
-            json_array_append(get.not_found, jval);
-        }
-        else want_mail_quota = 1;
-    }
-
-    if (want_mail_quota) {
-        struct quota quota;
-        quota_init(&quota, inboxname);
-        int r = quota_read(&quota, NULL, 0);
-        if (!r) {
-            quota_t total = quota.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE];
-            quota_t used = quota.useds[QUOTA_STORAGE];
-            json_t *jquota = json_object();
-            json_object_set_new(jquota, "id", json_string("mail"));
-            json_object_set_new(jquota, "used", json_integer(used));
-            json_object_set_new(jquota, "total", json_integer(total));
-            json_array_append_new(get.list, jquota);
-        }
-        else {
-            syslog(LOG_ERR, "jmap_quota_get: can't read quota for %s: %s",
-                    inboxname, error_message(r));
-            json_array_append_new(get.not_found, json_string("mail"));
-        }
-        quota_free(&quota);
-    }
-
-
-    modseq_t quotamodseq = mboxname_readquotamodseq(inboxname);
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, MODSEQ_FMT, quotamodseq);
-    get.state = buf_release(&buf);
-
-    jmap_ok(req, jmap_get_reply(&get));
-
-done:
-    jmap_parser_fini(&parser);
-    jmap_get_fini(&get);
-    free(inboxname);
     return 0;
 }
 

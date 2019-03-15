@@ -148,10 +148,12 @@ typedef struct {
 } jmap_method_t;
 
 /* Protocol implementations */
+extern void jmap_user_init(jmap_settings_t *settings);
 extern void jmap_mail_init(jmap_settings_t *settings);
 extern void jmap_contact_init(jmap_settings_t *settings);
 extern void jmap_calendar_init(jmap_settings_t *settings);
 
+extern void jmap_user_capabilities(jmap_settings_t *settings);
 extern void jmap_mail_capabilities(jmap_settings_t *settings);
 extern void jmap_contact_capabilities(jmap_settings_t *settings);
 extern void jmap_calendar_capabilities(jmap_settings_t *settings);
