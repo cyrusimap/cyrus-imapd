@@ -108,6 +108,7 @@ struct known_meth_t {
     enum prom_labelled_metric metric;
 };
 extern const struct known_meth_t http_methods[];
+extern struct namespace_t *http_namespaces[];
 
 /* Flags for known methods*/
 enum {

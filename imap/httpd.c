@@ -465,7 +465,7 @@ struct namespace_t namespace_default = {
 };
 
 /* Array of different namespaces and features supported by the server */
-struct namespace_t *namespaces[] = {
+struct namespace_t *http_namespaces[] = {
 #ifdef WITH_JMAP
     &namespace_jmap,
 #endif
@@ -500,9 +500,9 @@ static void httpd_reset(struct http_connection *conn)
     int bytes_out = 0;
 
     /* Do any namespace specific cleanup */
-    for (i = 0; namespaces[i]; i++) {
-        if (namespaces[i]->enabled && namespaces[i]->reset)
-            namespaces[i]->reset();
+    for (i = 0; http_namespaces[i]; i++) {
+        if (http_namespaces[i]->enabled && http_namespaces[i]->reset)
+            http_namespaces[i]->reset();
     }
 
     /* Reset available authentication schemes */
@@ -711,9 +711,9 @@ int service_init(int argc __attribute__((unused)),
 
     /* Do any namespace specific initialization */
     config_httpmodules = config_getbitfield(IMAPOPT_HTTPMODULES);
-    for (i = 0; namespaces[i]; i++) {
-        if (allow_trace) namespaces[i]->allow |= ALLOW_TRACE;
-        if (namespaces[i]->init) namespaces[i]->init(&serverinfo);
+    for (i = 0; http_namespaces[i]; i++) {
+        if (allow_trace) http_namespaces[i]->allow |= ALLOW_TRACE;
+        if (http_namespaces[i]->init) http_namespaces[i]->init(&serverinfo);
     }
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
@@ -908,9 +908,9 @@ void shut_down(int code)
     if (allow_cors) free_wildmats(allow_cors);
 
     /* Do any namespace specific cleanup */
-    for (i = 0; namespaces[i]; i++) {
-        if (namespaces[i]->enabled && namespaces[i]->shutdown)
-            namespaces[i]->shutdown();
+    for (i = 0; http_namespaces[i]; i++) {
+        if (http_namespaces[i]->enabled && http_namespaces[i]->shutdown)
+            http_namespaces[i]->shutdown();
     }
 
     xmlCleanupParser();
@@ -1366,24 +1366,24 @@ static int check_namespace(struct transaction_t *txn)
     const struct method_t *meth_t;
 
     /* Find the namespace of the requested resource */
-    for (i = 0; namespaces[i]; i++) {
+    for (i = 0; http_namespaces[i]; i++) {
         const char *path = txn->req_uri->path;
         size_t len;
 
         /* Skip disabled namespaces */
-        if (!namespaces[i]->enabled) continue;
+        if (!http_namespaces[i]->enabled) continue;
 
         /* Handle any /.well-known/ bootstrapping */
-        if (namespaces[i]->well_known) {
-            len = strlen(namespaces[i]->well_known);
-            if (!strncmp(path, namespaces[i]->well_known, len) &&
+        if (http_namespaces[i]->well_known) {
+            len = strlen(http_namespaces[i]->well_known);
+            if (!strncmp(path, http_namespaces[i]->well_known, len) &&
                 (!path[len] || path[len] == '/')) {
 
                 hdr = spool_getheader(txn->req_hdrs, ":authority");
                 buf_reset(&txn->buf);
                 buf_printf(&txn->buf, "%s://%s",
                            https ? "https" : "http", hdr[0]);
-                buf_appendcstr(&txn->buf, namespaces[i]->prefix);
+                buf_appendcstr(&txn->buf, http_namespaces[i]->prefix);
                 buf_appendcstr(&txn->buf, path + len);
                 if (query) buf_printf(&txn->buf, "?%s", query);
                 txn->location = buf_cstring(&txn->buf);
@@ -1393,13 +1393,13 @@ static int check_namespace(struct transaction_t *txn)
         }
 
         /* See if the prefix matches - terminated with NUL or '/' */
-        len = strlen(namespaces[i]->prefix);
-        if (!strncmp(path, namespaces[i]->prefix, len) &&
+        len = strlen(http_namespaces[i]->prefix);
+        if (!strncmp(path, http_namespaces[i]->prefix, len) &&
             (!path[len] || (path[len] == '/') || !strcmp(path, "*"))) {
             break;
         }
     }
-    if ((namespace = namespaces[i])) {
+    if ((namespace = http_namespaces[i])) {
         txn->req_tgt.namespace = namespace;
         txn->req_tgt.allow = namespace->allow;
 
@@ -3659,9 +3659,9 @@ static int auth_success(struct transaction_t *txn, const char *userid)
     buf_reset(&txn->buf);
 
     /* Do any namespace specific post-auth processing */
-    for (i = 0; namespaces[i]; i++) {
-        if (namespaces[i]->enabled && namespaces[i]->auth) {
-            int ret = namespaces[i]->auth(httpd_userid);
+    for (i = 0; http_namespaces[i]; i++) {
+        if (http_namespaces[i]->enabled && http_namespaces[i]->auth) {
+            int ret = http_namespaces[i]->auth(httpd_userid);
             if (ret) return ret;
         }
     }
@@ -4300,13 +4300,13 @@ static int list_well_known(struct transaction_t *txn)
 
         /* Add the list of enabled /.well-known/ URLs */
         http_proto_host(txn->req_hdrs, &proto, &host);
-        for (i = 0; namespaces[i]; i++) {
+        for (i = 0; http_namespaces[i]; i++) {
 
-            if (namespaces[i]->enabled && namespaces[i]->well_known) {
+            if (http_namespaces[i]->enabled && http_namespaces[i]->well_known) {
                 buf_printf_markup(&body, level,
                                   "<li><a href=\"%s://%s%s\">%s</a></li>",
-                                  proto, host, namespaces[i]->prefix,
-                                  namespaces[i]->well_known);
+                                  proto, host, http_namespaces[i]->prefix,
+                                  http_namespaces[i]->well_known);
             }
         }
 
@@ -4527,9 +4527,9 @@ EXPORTED int meth_options(struct transaction_t *txn, void *params)
 
     /* Special case "*" - show all features/methods available on server */
     if (!strcmp(txn->req_uri->path, "*")) {
-        for (i = 0; namespaces[i]; i++) {
-            if (namespaces[i]->enabled)
-                txn->req_tgt.allow |= namespaces[i]->allow;
+        for (i = 0; http_namespaces[i]; i++) {
+            if (http_namespaces[i]->enabled)
+                txn->req_tgt.allow |= http_namespaces[i]->allow;
         }
 
         if (ws_enabled() && (txn->flags.ver == VER_2)) {
