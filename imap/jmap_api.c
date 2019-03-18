@@ -2288,20 +2288,52 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
     return sharewith;
 }
 
-HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
-                              json_t *shareWith, int isPatch)
+struct acl_change {
+    int old;
+    int new;
+};
+
+static void send_dav_invites(const char *userid, void *val,
+                             void *rock __attribute__((unused)))
 {
-    int iscalendar = (mbox->mbtype & MBTYPE_CALENDAR);
+    struct acl_change *change = (struct acl_change *) val;
+    long old = change->old & (ACL_READ|ACL_LOOKUP|WRITERIGHTS);
+    long new = change->new & (ACL_READ|ACL_LOOKUP|WRITERIGHTS);
+
+    if (old != new) {
+        /* send DAV sharing invite to sharee */
+        if (!new) syslog(LOG_INFO, "XXXX  no-access");
+        else if (new & WRITERIGHTS) syslog(LOG_INFO, "XXXX  r/w");
+        else syslog(LOG_INFO, "XXXX  r/o");
+    }
+}
+
+HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
+                              json_t *shareWith, int overwrite)
+{
+    hash_table user_access = HASH_TABLE_INITIALIZER;
+    int isdav = (mbox->mbtype & MBTYPES_DAV), iscalendar = 0;
     char *owner = mboxname_to_userid(mbox->name);
     char *acl = xstrdup(mbox->acl);
+    struct acl_change *change;
     const char *userid;
     json_t *rights;
     int r;
 
-    if (!isPatch) {
-        /* Create a new ACL with existing owner and system users preserved */
-        char *newacl = xstrdup("");  /* start with empty ACL */
-        char *nextid;
+    if (isdav) {
+        /* Create a hash table of user/access for DAV invites */
+        iscalendar = (mbox->mbtype & MBTYPE_CALENDAR);
+        construct_hash_table(&user_access, 10, 0);
+    }
+
+    if (isdav || overwrite) {
+        /* If DAV: Populate a table of existing users and their access.
+           If overwrite: Create a new ACL with only
+                         existing owner and system users preserved.
+        */
+        char *newacl, *nextid;
+
+        if (overwrite) newacl = xstrdup("");  /* start with empty ACL */
 
         for (userid = acl; userid; userid = nextid) {
             char *rightstr;
@@ -2315,23 +2347,33 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
             if (!nextid) break;
             *nextid++ = '\0';
 
-            /* skip all but system users and owner */
-            if (strcmp(userid, owner) && !is_system_user(userid)) continue;
+            /* Is this the owner or system user? */
+            if (strcmp(userid, owner) && !is_system_user(userid)) {
+                if (isdav) {
+                    /* Add regular user to our table */
+                    change = xzmalloc(sizeof(struct acl_change));
 
-            cyrus_acl_strtomask(rightstr, &access);
+                    cyrus_acl_strtomask(rightstr, &change->old);
+                    hash_insert(userid, (void *) change, &user_access);
+                }
+            }
+            else if (overwrite) {
+                /* Add owner or system user to new ACL */
+                cyrus_acl_strtomask(rightstr, &access);
 
-            r = cyrus_acl_set(&newacl, userid,
-                              ACL_MODE_SET, access, NULL, NULL);
-            if (r) {
-                syslog(LOG_ERR, "cyrus_acl_set(%s, %s) failed: %s",
-                       mbox->name, userid, error_message(r));
-                free(newacl);
-                goto done;
+                r = cyrus_acl_set(&newacl, userid,
+                                  ACL_MODE_SET, access, NULL, NULL);
+                if (r) {
+                    syslog(LOG_ERR, "cyrus_acl_set(%s, %s) failed: %s",
+                           mbox->name, userid, error_message(r));
+                    free(newacl);
+                    goto done;
+                }
             }
         }
 
         free(acl);
-        acl = newacl;
+        acl = overwrite ? newacl : xstrdup(mbox->acl);
     }
 
     /* Patch the ACL from shareWith */
@@ -2358,6 +2400,8 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                        mbox->name, userid, error_message(r));
                 goto done;
             }
+            if (isdav && (change = hash_lookup(userid, &user_access)))
+                change->new = 0;
         }
         else {
             /* accumulate rights be granted and denied */
@@ -2387,6 +2431,16 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                        mbox->name, userid, error_message(r));
                 goto done;
             }
+
+            if (isdav) {
+                change = hash_lookup(userid, &user_access);
+                if (!change) {
+                    change = xzmalloc(sizeof(struct acl_change));
+                    hash_insert(userid, (void *) change, &user_access);
+                }
+                change->new = change->old | grant;
+                change->new &= ~deny;
+            }
         }
     }
 
@@ -2405,7 +2459,12 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
         }
     }
 
+    if (!r && isdav) {
+        hash_enumerate(&user_access, send_dav_invites, NULL);
+    }
+
   done:
+    free_hash_table(&user_access, &free);
     free(owner);
     free(acl);
 
