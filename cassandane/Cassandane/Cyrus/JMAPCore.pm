@@ -364,6 +364,23 @@ sub test_echo
     $self->assert_str_equals('R1', $res->[0][2]);
 }
 
+sub test_identity_get
+    :min_version_3_1 :needs_component_jmap
+{
+
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([['Identity/get', {}, "R1"]]);
+
+    $self->assert_str_equals('Identity/get', $res->[0][0]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals('cassandane', $res->[0][1]{list}[0]{id});
+    $self->assert_not_null($res->[0][1]->{state});
+    $self->assert_str_equals('R1', $res->[0][2]);
+}
+
 sub test_sessionstate
     :min_version_3_1 :needs_component_jmap :ReverseACLs
 {
