@@ -1254,4 +1254,61 @@ sub test_search_omit_ical
     $self->assert_num_equals(2, scalar @$uids);
 }
 
+sub test_xapian_index_partid
+    :min_version_3_0 :needs_search_xapian :needs_component_jmap
+{
+    my ($self) = @_;
+
+    # UID 1: match
+    $self->make_message("xtext", body => "xbody",
+        from => Cassandane::Address->new(
+            localpart => "xfrom",
+            domain => "example.com"
+        )
+    ) || die;
+
+    # UID 2: no match
+    $self->make_message("xtext", body => "xtext",
+        from => Cassandane::Address->new(
+            localpart => "xfrom",
+            domain => "example.com"
+        )
+    ) || die;
+
+    # UID 3: no match
+    $self->make_message("xbody", body => "xtext",
+        from => Cassandane::Address->new(
+            localpart => "xfrom",
+            domain => "example.com"
+        )
+    ) || die;
+
+    # UID 4: match
+    $self->make_message("nomatch", body => "xbody xtext",
+        from => Cassandane::Address->new(
+            localpart => "xfrom",
+            domain => "example.com"
+        )
+    ) || die;
+
+    # UID 5: no match
+    $self->make_message("xtext", body => "xbody xtext",
+        from => Cassandane::Address->new(
+            localpart => "nomatch",
+            domain => "example.com"
+        )
+    ) || die;
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v');
+
+    my $talk = $self->{store}->get_client();
+    $talk->select("INBOX") || die;
+    my $uids = $talk->search('fuzzy', 'from', 'xfrom',
+                             'fuzzy', 'body', 'xbody',
+                             'fuzzy', 'text', 'xtext') || die;
+    $self->assert_num_equals(2, scalar @$uids);
+    $self->assert_num_equals(1, @$uids[0]);
+    $self->assert_num_equals(4, @$uids[1]);
+}
+
 1;
