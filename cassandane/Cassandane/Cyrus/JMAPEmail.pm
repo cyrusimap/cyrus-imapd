@@ -5136,8 +5136,7 @@ sub test_misc_collapsethreads_issue2024
     $self->assert_equals(JSON::false, $res->[0][1]->{collapseThreads});
 }
 
-sub test_email_query_window
-    :min_version_3_1 :needs_component_jmap
+sub email_query_window_internal
 {
     my ($self) = @_;
     my %exp;
@@ -5198,32 +5197,46 @@ sub test_email_query_window
     $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(1, $res->[0][1]->{position});
 
-    xlog "anchor at 2nd email and offset -1";
+    xlog "anchor at 2nd email and offset 1";
     $res = $jmap->CallMethods([['Email/query', {
-        anchor => @{$ids}[1], anchorOffset => -1,
+        anchor => @{$ids}[1], anchorOffset => 1,
     }, "R1"]]);
     @subids = @{$ids}[2..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(2, $res->[0][1]->{position});
 
-    xlog "anchor at 3rd email and offset 1";
+    xlog "anchor at 3rd email and offset -1";
     $res = $jmap->CallMethods([['Email/query', {
-        anchor => @{$ids}[2], anchorOffset => 1,
+        anchor => @{$ids}[2], anchorOffset => -1,
     }, "R1"]]);
     @subids = @{$ids}[1..3];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(1, $res->[0][1]->{position});
 
-    xlog "anchor at 1st email offset -1 and limit 2";
+    xlog "anchor at 1st email offset 1 and limit 2";
     $res = $jmap->CallMethods([['Email/query', {
-        anchor => @{$ids}[0], anchorOffset => -1, limit => 2
+        anchor => @{$ids}[0], anchorOffset => 1, limit => 2
     }, "R1"]]);
     @subids = @{$ids}[1..2];
     $self->assert_deep_equals(\@subids, $res->[0][1]->{ids});
     $self->assert_num_equals(4, $res->[0][1]->{total});
     $self->assert_num_equals(1, $res->[0][1]->{position});
+}
+
+sub test_email_query_window
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    $self->email_query_window_internal();
+}
+
+sub test_email_query_window_cached
+    :min_version_3_1 :needs_component_jmap :JMAPSearchDB
+{
+    my ($self) = @_;
+    $self->email_query_window_internal();
 }
 
 sub test_email_query_long
