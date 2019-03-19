@@ -2293,7 +2293,8 @@ struct acl_change {
     int new;
 };
 
-static void send_dav_invites(const char *userid, void *val,
+static void send_dav_invites(const char *userid __attribute__((unused)),
+                             void *val,
                              void *rock __attribute__((unused)))
 {
     struct acl_change *change = (struct acl_change *) val;
