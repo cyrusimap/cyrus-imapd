@@ -2483,12 +2483,12 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
                 for (i = 0; i < cache_record.ids_count; i++) {
                     const char *email_id = cache_record.ids + i * (cache_record.id_size + 1);
                     if (!strcmp(email_id, query->anchor)) {
-                        if (query->anchor_offset >= 0) {
-                            ssize_t sfrom = (ssize_t) i - query->anchor_offset;
-                            from = sfrom < 0 ? 0 : sfrom;
+                        if (query->anchor_offset < 0) {
+                            size_t neg_offset = (size_t) -query->anchor_offset;
+                            from = neg_offset < i ? i - neg_offset : 0;
                         }
                         else {
-                            from = i + -query->anchor_offset;
+                            from = i + query->anchor_offset;
                         }
                         break;
                     }
@@ -2582,14 +2582,18 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
                 json_t *anchored_ids = json_pack("[]");
                 size_t j;
                 /* Set countdown to enter the anchor window */
-                if (query->anchor_offset < 0) {
-                    anchor_position = -query->anchor_offset;
+                if (query->anchor_offset > 0) {
+                    anchor_position = query->anchor_offset;
                 } else {
                     anchor_position = 0;
                 }
                 /* Readjust the result list */
-                for (j = result_count - query->anchor_offset; j < result_count; j++) {
-                    json_array_append(anchored_ids, json_array_get(query->ids, j));
+                if (query->anchor_offset < 0) {
+                    size_t neg_offset = (size_t) -query->anchor_offset;
+                    size_t from = neg_offset < result_count ? result_count - neg_offset : 0;
+                    for (j = from; j < result_count; j++) {
+                        json_array_append(anchored_ids, json_array_get(query->ids, j));
+                    }
                 }
                 json_decref(query->ids);
                 query->ids = anchored_ids;
