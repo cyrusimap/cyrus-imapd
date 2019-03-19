@@ -5277,7 +5277,7 @@ sub test_email_query_long
     }, "R1"]]);
     $self->assert_num_equals(5, scalar @{$res->[0][1]->{ids}});
     $self->assert_num_equals(100, $res->[0][1]->{total});
-    $self->assert_num_equals(54, $res->[0][1]->{position});
+    $self->assert_num_equals(56, $res->[0][1]->{position});
 
     my $ids = $res->[0][1]->{ids};
     my @subids;
