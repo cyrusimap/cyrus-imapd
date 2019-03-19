@@ -172,6 +172,7 @@ static int jmap_identity_get(jmap_req_t *req)
     json_decref(me);
 
     /* Reply */
+    get.state = xstrdup("0");
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
