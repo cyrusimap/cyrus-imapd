@@ -998,20 +998,25 @@ HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
     struct body *mybody = NULL;
     const struct body *mypart = NULL;
     int i, r;
-    struct conversations_state *mycstate = NULL;
+    struct conversations_state *cstate, *mycstate = NULL;
 
     if (from_accountid && strcmp(req->accountid, from_accountid)) {
-        r = conversations_open_user(from_accountid, 1/*shared*/, &mycstate);
-        if (r) goto done;
+        cstate = conversations_get_user(from_accountid);
+        if (!cstate) {
+            r = conversations_open_user(from_accountid, 1/*shared*/, &mycstate);
+            if (r) goto done;
+
+            cstate = mycstate;
+        }
     }
     else {
-        mycstate = req->cstate;
+        cstate = req->cstate;
     }
 
     if (blobid[0] != 'G')
         return IMAP_NOTFOUND;
 
-    r = conversations_guid_foreach(mycstate, blobid+1, findblob_cb, &data);
+    r = conversations_guid_foreach(cstate, blobid+1, findblob_cb, &data);
     if (r != IMAP_OK_COMPLETED) {
         if (!r) r = IMAP_NOTFOUND;
         goto done;
@@ -1059,7 +1064,7 @@ HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
     r = 0;
 
 done:
-    if (mycstate && mycstate != req->cstate) {
+    if (mycstate) {
         conversations_commit(&mycstate);
     }
     if (r) {
