@@ -2104,6 +2104,7 @@ sub test_contact_copy
 
     xlog "create shared accounts";
     $admintalk->create("user.other");
+    $admintalk->create("user.other2");
 
     my $othercarddav = Net::CardDAVTalk->new(
         user => "other",
@@ -2115,24 +2116,47 @@ sub test_contact_copy
         expandurl => 1,
     );
 
-    xlog "share addressbook";
+    my $other2carddav = Net::CardDAVTalk->new(
+        user => "other2",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog "share addressbooks";
     $admintalk->setacl("user.other.#addressbooks.Default",
                        "cassandane" => 'lrswipkxtecdn') or die;
+    $admintalk->setacl("user.other2.#addressbooks.Default",
+                       "cassandane" => 'lrswipkxtecdn') or die;
+
+    # avatar
+    xlog "upload avatar";
+    my $res = $jmap->Upload("some photo", "image/jpeg");
+    my $blobid = $res->{blobId};
 
     my $card =  {
         "addressbookId" => "Default",
         "firstName"=> "foo",
         "lastName"=> "bar",
+        "avatar" => {
+            "blobId" => $blobid,
+            "size" => 10,
+            "type" => "image/jpeg",
+            "name" => JSON::null
+         }
     };
 
     xlog "create card";
-    my $res = $jmap->CallMethods([['Contact/set',{
+    $res = $jmap->CallMethods([['Contact/set',{
         create => {"1" => $card}},
     "R1"]]);
     $self->assert_not_null($res->[0][1]{created});
     my $cardId = $res->[0][1]{created}{"1"}{id};
 
-    xlog "move card $cardId";
+    xlog "copy card $cardId w/o changes";
     $res = $jmap->CallMethods([['Contact/copy', {
         fromAccountId => 'cassandane',
         accountId => 'other',
@@ -2142,7 +2166,6 @@ sub test_contact_copy
                 addressbookId => "Default",
             },
         },
-        onSuccessDestroyOriginal => JSON::true,
     },
     "R1"]]);
     $self->assert_not_null($res->[0][1]{created});
@@ -2159,6 +2182,40 @@ sub test_contact_copy
         }, 'R2'],
     ]);
     $self->assert_str_equals('foo', $res->[0][1]{list}[0]{firstName});
+    $self->assert_str_equals($blobid, $res->[0][1]{list}[0]{avatar}{blobId});
+    $self->assert_str_equals('foo', $res->[1][1]{list}[0]{firstName});
+
+    xlog "move card $cardId with changes";
+    $res = $jmap->CallMethods([['Contact/copy', {
+        fromAccountId => 'cassandane',
+        accountId => 'other2',
+        create => {
+            1 => {
+                id => $cardId,
+                addressbookId => "Default",
+                avatar => JSON::null,
+                nickname => "xxxxx"
+            },
+        },
+        onSuccessDestroyOriginal => JSON::true,
+    },
+    "R1"]]);
+    $self->assert_not_null($res->[0][1]{created});
+    $copiedCardId = $res->[0][1]{created}{"1"}{id};
+
+    $res = $jmap->CallMethods([
+        ['Contact/get', {
+            accountId => 'other2',
+            ids => [$copiedCardId],
+        }, 'R1'],
+        ['Contact/get', {
+            accountId => undef,
+            ids => [$cardId],
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('foo', $res->[0][1]{list}[0]{firstName});
+    $self->assert_str_equals('xxxxx', $res->[0][1]{list}[0]{nickname});
+    $self->assert_null($res->[0][1]{list}[0]{avatar});
     $self->assert_str_equals($cardId, $res->[1][1]{notFound}[0]);
 }
 
