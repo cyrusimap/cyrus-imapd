@@ -687,8 +687,8 @@ static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
 }
 
 
-static int send_notification(struct transaction_t *top_txn, xmlDocPtr doc,
-                             const char *userid, const char *resource)
+HIDDEN int dav_send_notification(xmlDocPtr doc,
+                                 const char *userid, const char *resource)
 {
     struct mailbox *mailbox = NULL;
     struct webdav_db *webdavdb = NULL;
@@ -702,12 +702,12 @@ static int send_notification(struct transaction_t *top_txn, xmlDocPtr doc,
     r = create_notify_collection(userid, &mailbox);
     if (r == IMAP_INVALID_USER) {
         syslog(LOG_NOTICE,
-               "send_notification(%s) failed: %s", userid, error_message(r));
+               "dav_send_notification(%s) failed: %s", userid, error_message(r));
         return 0;
     }
     else if (r) {
         syslog(LOG_ERR,
-               "send_notification: create_notify_collection(%s) failed: %s",
+               "dav_send_notification: create_notify_collection(%s) failed: %s",
                userid, error_message(r));
         return r;
     }
@@ -715,7 +715,7 @@ static int send_notification(struct transaction_t *top_txn, xmlDocPtr doc,
     /* Open the WebDAV DB corresponding to collection */
     webdavdb = webdav_open_mailbox(mailbox);
     if (!webdavdb) {
-        syslog(LOG_ERR, "send_notification: unable to open WebDAV DB (%s)",
+        syslog(LOG_ERR, "dav_send_notification: unable to open WebDAV DB (%s)",
                mailbox->name);
         r = HTTP_SERVER_ERROR;
         goto done;
@@ -723,12 +723,10 @@ static int send_notification(struct transaction_t *top_txn, xmlDocPtr doc,
 
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
-    txn.req_tgt.namespace = top_txn->req_tgt.namespace;
-    txn.req_tgt.mboxprefix = top_txn->req_tgt.mboxprefix;
 
     /* Create header cache */
     if (!(txn.req_hdrs = spool_new_hdrcache())) {
-        syslog(LOG_ERR, "send_notification: unable to create header cache");
+        syslog(LOG_ERR, "dav_send_notification: unable to create header cache");
         r = HTTP_SERVER_ERROR;
         goto done;
     }
@@ -739,7 +737,7 @@ static int send_notification(struct transaction_t *top_txn, xmlDocPtr doc,
     r = notify_put(&txn, doc, mailbox, resource, webdavdb, 0);
     if (r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR,
-               "send_notification: notify_put(%s, %s) failed: %s",
+               "dav_send_notification: notify_put(%s, %s) failed: %s",
                mailbox->name, resource, error_message(r));
     }
 
@@ -970,7 +968,9 @@ HIDDEN int notify_post(struct transaction_t *txn)
                strhash(XML_NS_DAV), strhash(SHARE_REPLY_NOTIFICATION),
                strhash(mboxname), strhash(txn->req_tgt.userid));
 
-    r = send_notification(txn, notify->doc, mbname_userid(mbname), buf_cstring(&txn->buf));
+    r = dav_send_notification(notify->doc,
+                              mbname_userid(mbname), buf_cstring(&txn->buf));
+
 
     if (add) {
         /* Accepted - create URL of sharee's new collection */
@@ -1084,13 +1084,33 @@ static int notify_put(struct transaction_t *txn, void *obj,
                  node = xmlNextElementSibling(node)) {
                 if (!xmlStrcmp(node->name, BAD_CAST "sharer-resource-uri")) {
                     struct request_target_t tgt;
-                    const char *errstr;
+                    struct meth_params *pparams;
+                    const char *path, *errstr;
+                    int i;
+
+                    value = xmlNodeGetContent(xmlFirstElementChild(node));
+                    path = (const char *) value;
+
+                    /* Find the namespace of the requested resource */
+                    for (i = 0; http_namespaces[i]; i++) {
+                        size_t len;
+
+                        /* Skip disabled namespaces */
+                        if (!http_namespaces[i]->enabled) continue;
+
+                        /* See if the prefix matches - terminated with NUL or '/' */
+                        len = strlen(http_namespaces[i]->prefix);
+                        if (!strncmp(path, http_namespaces[i]->prefix, len) &&
+                            (!path[len] || (path[len] == '/') || !strcmp(path, "*"))) {
+                            break;
+                        }
+                    }
 
                     memset(&tgt, 0, sizeof(struct request_target_t));
-                    tgt.namespace = txn->req_tgt.namespace;
-                    value = xmlNodeGetContent(xmlFirstElementChild(node));
-                    calcarddav_parse_path((const char *) value, &tgt,
-                                          txn->req_tgt.mboxprefix, &errstr);
+                    tgt.namespace = http_namespaces[i];
+                    pparams =
+                        (struct meth_params *) tgt.namespace->methods[METH_PUT].params;
+                    pparams->parse_path(path, &tgt, &errstr);
                     xmlFree(value);
                     free(tgt.userid);
 
@@ -2005,8 +2025,8 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
                                strhash(txn->req_tgt.mbentry->name),
                                strhash(userid));
 
-                    r = send_notification(txn, notify->doc,
-                                          userid, buf_cstring(&resource));
+                    r = dav_send_notification(notify->doc,
+                                              userid, buf_cstring(&resource));
                 }
 
                 free(userid);
