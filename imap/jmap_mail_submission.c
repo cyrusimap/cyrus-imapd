@@ -531,7 +531,7 @@ static const jmap_property_t submission_props[] = {
     { NULL,             0 }
 };
 
-HIDDEN int jmap_emailsubmission_get(jmap_req_t *req)
+static int jmap_emailsubmission_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
@@ -601,7 +601,7 @@ static int _submission_setargs_parse(const char *key,
     return r;
 }
 
-HIDDEN int jmap_emailsubmission_set(jmap_req_t *req)
+static int jmap_emailsubmission_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
@@ -715,7 +715,7 @@ done:
     return 0;
 }
 
-HIDDEN int jmap_emailsubmission_changes(jmap_req_t *req)
+static int jmap_emailsubmission_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
@@ -786,7 +786,7 @@ static int _emailsubmission_parse_comparator(struct jmap_comparator *comp,
     return 0;
 }
 
-HIDDEN int jmap_emailsubmission_query(jmap_req_t *req)
+static int jmap_emailsubmission_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
@@ -818,7 +818,7 @@ done:
     return 0;
 }
 
-HIDDEN int jmap_emailsubmission_querychanges(jmap_req_t *req)
+static int jmap_emailsubmission_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_querychanges query;
