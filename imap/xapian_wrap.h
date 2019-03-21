@@ -43,6 +43,7 @@
 #ifndef __CYRUS_IMAP_XAPIAN_WRAP__
 #define __CYRUS_IMAP_XAPIAN_WRAP__
 
+#include "message_guid.h"
 #include "util.h"
 #include "strarray.h"
 
@@ -63,10 +64,11 @@ extern void xapian_dbw_close(xapian_dbw_t *dbw);
 extern int xapian_dbw_begin_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_commit_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_cancel_txn(xapian_dbw_t *dbw);
-extern int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const char *cyrusid);
+extern int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype);
 extern int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part);
 extern int xapian_dbw_end_doc(xapian_dbw_t *dbw);
-extern int xapian_dbw_is_indexed(xapian_dbw_t *dbw, const char *cyrusid);
+extern int xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype);
+
 
 /* query-side interface */
 extern int xapian_db_open(const char **paths, xapian_db_t **dbp);
@@ -74,10 +76,10 @@ extern void xapian_db_close(xapian_db_t *);
 extern xapian_query_t *xapian_query_new_match(const xapian_db_t *, int num_part, const char *term);
 extern xapian_query_t *xapian_query_new_compound(const xapian_db_t *, int is_or, xapian_query_t **children, int n);
 extern xapian_query_t *xapian_query_new_not(const xapian_db_t *, xapian_query_t *);
+extern xapian_query_t *xapian_query_new_filter_doctype(const xapian_db_t *, char doctype, xapian_query_t *);
 extern void xapian_query_free(xapian_query_t *);
-extern int xapian_query_run(const xapian_db_t *, const xapian_query_t *,
+extern int xapian_query_run(const xapian_db_t *, const xapian_query_t *query, int is_legacy,
                             int (*cb)(void *base, size_t n, void *rock), void *rock);
-
 /* snippets interface */
 extern xapian_snipgen_t *xapian_snipgen_new(const char *hi_start, const char *hi_end, const char *omit);
 extern void xapian_snipgen_free(xapian_snipgen_t *);
@@ -90,5 +92,9 @@ extern int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *);
 extern int xapian_filter(const char *dest, const char **sources,
                          int (*cb)(const char *cyrusid, void *rock),
                          void *rock);
+/* XXX legacy DB support */
+extern int xapian_db_supports_legacy_version(const xapian_db_t *);
+extern int xapian_db_supports_current_version(const xapian_db_t *);
+extern int xapian_dbw_is_legacy(const xapian_dbw_t *);
 
 #endif

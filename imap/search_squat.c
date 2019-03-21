@@ -444,7 +444,7 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
         if (bv_isset(&bb->stack[0].msg_vector, uid)) {
             r = proc(bb->mailbox->name,
                      bb->mailbox->i.uidvalidity,
-                     uid, rock);
+                     uid, NULL, rock);
             if (r) goto out;
         }
     }
@@ -580,7 +580,8 @@ static int begin_message(search_text_receiver_t *rx,
     return 0;
 }
 
-static void begin_part(search_text_receiver_t *rx, int part)
+static void begin_part(search_text_receiver_t *rx, int part,
+                       const struct message_guid *content_guid __attribute__((unused)))
 {
     SquatReceiverData *d = (SquatReceiverData *) rx;
     char part_char = 0;

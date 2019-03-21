@@ -115,6 +115,8 @@ static int dump_one_section(int partno, charset_t charset, int encoding,
                             const struct param *type_params __attribute__((unused)),
                             const char *disposition __attribute__((unused)),
                             const struct param *disposition_params __attribute__((unused)),
+                            const struct message_guid *content_guid __attribute__((unused)),
+                            const char *part __attribute__((unused)),
                             struct buf *data,
                             void *rock __attribute__((unused)))
 {

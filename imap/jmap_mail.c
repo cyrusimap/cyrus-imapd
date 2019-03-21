@@ -140,6 +140,7 @@ HIDDEN void jmap_mail_init(jmap_settings_t *settings)
     }
 
     strarray_push(&settings->can_use, JMAP_URN_MAIL);
+    strarray_push(&settings->can_use, JMAP_SEARCH_EXTENSION);
 
     jmap_emailsubmission_init(settings);
     jmap_mailbox_init(settings);
@@ -171,6 +172,9 @@ HIDDEN void jmap_mail_capabilities(jmap_settings_t *settings)
 
     json_object_set_new(settings->capabilities,
                         JMAP_URN_MAIL, email_capabilities);
+
+    json_object_set_new(settings->capabilities,
+                        JMAP_SEARCH_EXTENSION, json_object());
 
     jmap_emailsubmission_capabilities(settings);
     jmap_mailbox_capabilities(settings);
@@ -2630,7 +2634,7 @@ done:
 
 static void _email_query(jmap_req_t *req, struct jmap_query *query,
                          int collapse_threads,
-                         json_t **err)
+                         json_t **jemailpartids, json_t **err)
 {
     char *cache_fname = NULL;
     char *cache_key = NULL;
@@ -2813,6 +2817,24 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
 
         /* Add message to result */
         json_array_append_new(query->ids, json_string(email_id));
+        if (*jemailpartids == NULL) {
+            *jemailpartids = json_object();
+        }
+        if (md->folder && md->folder->partids.size) {
+            const strarray_t *partids = hashu64_lookup(md->uid, &md->folder->partids);
+            if (partids && strarray_size(partids)) {
+                json_t *jpartids = json_array();
+                int k;
+                for (k = 0; k < strarray_size(partids); k++) {
+                    const char *partid = strarray_nth(partids, k);
+                    json_array_append_new(jpartids, json_string(partid));
+                }
+                json_object_set_new(*jemailpartids, email_id, jpartids);
+            }
+        }
+        if (!json_object_get(*jemailpartids, email_id)) {
+            json_object_set_new(*jemailpartids, email_id, json_null());
+        }
     }
     hashset_free(&seen_threads);
     hashset_free(&seen_emails);
@@ -2834,6 +2856,9 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
         }
     }
     strarray_fini(&email_ids);
+
+    if (jemailpartids && !*jemailpartids)
+        *jemailpartids = json_null();
 
 done:
     _emailsearch_free(search);
@@ -2870,6 +2895,7 @@ static int jmap_email_query(jmap_req_t *req)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
     int collapse_threads = 0;
+    json_t *jemailpartids = NULL;
 
     /* Parse request */
     json_t *err = NULL;
@@ -2895,7 +2921,7 @@ static int jmap_email_query(jmap_req_t *req)
     }
 
     /* Run query */
-    _email_query(req, &query, collapse_threads, &err);
+    _email_query(req, &query, collapse_threads, &jemailpartids, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -2904,9 +2930,13 @@ static int jmap_email_query(jmap_req_t *req)
     /* Build response */
     json_t *res = jmap_query_reply(&query);
     json_object_set(res, "collapseThreads", json_boolean(collapse_threads));
+    if (jmap_is_using(req, JMAP_SEARCH_EXTENSION)) {
+        json_object_set(res, "partIds", jemailpartids); // incref
+    }
     jmap_ok(req, res);
 
 done:
+    json_decref(jemailpartids);
     jmap_query_fini(&query);
     jmap_parser_fini(&parser);
     return 0;
@@ -3558,7 +3588,8 @@ static int _snippet_get_cb(struct mailbox *mbox __attribute__((unused)),
     return 0;
 }
 
-static int _snippet_get(jmap_req_t *req, json_t *filter, json_t *messageids,
+static int _snippet_get(jmap_req_t *req, json_t *filter,
+                        json_t *messageids, json_t *emailpartids,
                         json_t **snippets, json_t **notfound)
 {
     struct index_state *state = NULL;
@@ -3568,13 +3599,13 @@ static int _snippet_get(jmap_req_t *req, json_t *filter, json_t *messageids,
     struct mailbox *mbox = NULL;
     struct searchargs *searchargs = NULL;
     struct index_init init;
-    const char *msgid;
     json_t *snippet = NULL;
     int r = 0;
     json_t *val;
     size_t i;
     char *mboxname = NULL;
     static search_snippet_markup_t markup = { "<mark>", "</mark>", "..." };
+    strarray_t partids = STRARRAY_INITIALIZER;
 
     *snippets = json_pack("[]");
     *notfound = json_pack("[]");
@@ -3629,7 +3660,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter, json_t *messageids,
         msgrecord_t *mr = NULL;
         uint32_t uid;
 
-        msgid = json_string_value(val);
+        const char *msgid = json_string_value(val);
 
         r = jmap_email_find(req, msgid, &mboxname, &uid);
         if (r) {
@@ -3651,22 +3682,29 @@ static int _snippet_get(jmap_req_t *req, json_t *filter, json_t *messageids,
         r = msgrecord_get_message(mr, &msg);
         if (r) goto doneloop;
 
+        json_t *jpartids = json_object_get(emailpartids, msgid);
+        json_t *jpartid;
+        size_t j;
+        json_array_foreach(jpartids, j, jpartid) {
+            strarray_append(&partids, json_string_value(jpartid));
+        }
         json_object_set_new(snippet, "emailId", json_string(msgid));
         json_object_set_new(snippet, "subject", json_null());
         json_object_set_new(snippet, "preview", json_null());
-        index_getsearchtext(msg, rx, /*snippet*/1);
+        index_getsearchtext(msg, strarray_size(&partids) ? &partids : NULL, rx, 1);
         json_array_append_new(*snippets, json_deep_copy(snippet));
         json_object_clear(snippet);
+        strarray_truncate(&partids, 0);
         msgrecord_unref(&mr);
 
         r = rx->end_mailbox(rx, mbox);
-        if (r) goto done;
 
 doneloop:
         if (mr) msgrecord_unref(&mr);
         jmap_closembox(req, &mbox);
         free(mboxname);
         mboxname = NULL;
+        if (r) goto done;
     }
 
     if (!json_array_size(*notfound)) {
@@ -3681,6 +3719,7 @@ done:
     if (mboxname) free(mboxname);
     if (mbox) jmap_closembox(req, &mbox);
     if (searchargs) freesearchargs(searchargs);
+    strarray_fini(&partids);
     index_close(&state);
 
     return r;
@@ -3733,7 +3772,8 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
 {
     int r = 0;
     const char *key;
-    json_t *arg, *filter = NULL, *messageids = NULL, *snippets, *notfound;
+    json_t *arg, *jfilter = NULL, *jmessageids = NULL, *jemailpartids = NULL;
+    json_t *snippets, *notfound;
     struct buf buf = BUF_INITIALIZER;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
 
@@ -3747,10 +3787,10 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
 
         /* filter */
         else if (!strcmp(key, "filter")) {
-            filter = arg;
-            if (JNOTNULL(filter)) {
+            jfilter = arg;
+            if (JNOTNULL(jfilter)) {
                 jmap_parser_push(&parser, "filter");
-                jmap_filter_parse(filter, &parser,
+                jmap_filter_parse(jfilter, &parser,
                                   _email_parse_filter, unsupported_filter, req);
                 jmap_parser_pop(&parser);
             }
@@ -3758,17 +3798,44 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
 
         /* messageIds */
         else if (!strcmp(key, "emailIds")) {
-            messageids = arg;
-            if (json_array_size(messageids)) {
-                jmap_parse_strings(messageids, &parser, "emailIds");
+            jmessageids = arg;
+            if (json_array_size(jmessageids)) {
+                jmap_parse_strings(jmessageids, &parser, "emailIds");
             }
-            else if (!json_is_array(messageids)) {
+            else if (!json_is_array(jmessageids)) {
                 jmap_parser_invalid(&parser, "emailIds");
             }
         }
 
-        else {
-            jmap_parser_invalid(&parser, key);
+        /* partIds */
+        else if (jmap_is_using(req, JMAP_SEARCH_EXTENSION) && !strcmp(key, "partIds")) {
+            jemailpartids = arg;
+            int is_valid = 1;
+            if (json_is_object(jemailpartids)) {
+                const char *email_id;
+                json_t *jpartids;
+                json_object_foreach(jemailpartids, email_id, jpartids) {
+                    if (json_is_array(jpartids)) {
+                        size_t i;
+                        json_t *jpartid;
+                        json_array_foreach(jpartids, i, jpartid) {
+                            if (!json_is_string(jpartid)) {
+                                is_valid = 0;
+                                break;
+                            }
+                        }
+                    }
+                    if (!is_valid) break;
+                }
+            }
+            else is_valid = json_is_null(jemailpartids);
+            if (!is_valid) {
+                jmap_parser_invalid(&parser, "partIds");
+            }
+        }
+        else jmap_parser_invalid(&parser, key);
+        if (!json_object_size(jemailpartids)) {
+            jemailpartids = NULL;
         }
     }
 
@@ -3788,9 +3855,9 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     }
     json_decref(unsupported_filter);
 
-    if (json_array_size(messageids) && _email_filter_contains_text(filter)) {
+    if (json_array_size(jmessageids) && _email_filter_contains_text(jfilter)) {
         /* Render snippets */
-        r = _snippet_get(req, filter, messageids, &snippets, &notfound);
+        r = _snippet_get(req, jfilter, jmessageids, jemailpartids, &snippets, &notfound);
         if (r) goto done;
     } else {
         /* Trivial, snippets cant' match */
@@ -3800,7 +3867,7 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
         snippets = json_pack("[]");
         notfound = json_null();
 
-        json_array_foreach(messageids, i, val) {
+        json_array_foreach(jmessageids, i, val) {
             json_array_append_new(snippets, json_pack("{s:s s:n s:n}",
                         "emailId", json_string_value(val),
                         "subject", "preview"));
@@ -3810,7 +3877,7 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     /* Prepare response. */
     json_t *res = json_pack("{s:o s:o}",
                             "list", snippets, "notFound", notfound);
-    if (filter) json_object_set(res, "filter", filter);
+    if (jfilter) json_object_set(res, "filter", jfilter);
     jmap_ok(req, res);
 
 done:

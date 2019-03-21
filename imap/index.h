@@ -330,7 +330,7 @@ extern int index_search_evaluate(struct index_state *state, const search_expr_t 
 extern int index_expunge(struct index_state *state, char *uidsequence,
                          int need_deleted);
 
-extern int index_getsearchtext(struct message *msg,
+extern int index_getsearchtext(struct message *msg, const strarray_t *partids,
                                struct search_text_receiver *receiver,
                                int snippet);
 

@@ -84,6 +84,12 @@ EXPORTED search_query_t *search_query_new(struct index_state *state,
     return query;
 }
 
+static void folder_free_partids(uint64_t key __attribute__((unused)), void *data,
+                                void *rock __attribute__((unused)))
+{
+    strarray_free((strarray_t*)data);
+}
+
 static void folder_free(void *data)
 {
     search_folder_t *folder = data;
@@ -91,6 +97,8 @@ static void folder_free(void *data)
     free(folder->mboxname);
     bv_fini(&folder->uids);
     bv_fini(&folder->unchecked_uids);
+    hashu64_enumerate(&folder->partids, folder_free_partids, NULL);
+    free_hashu64_table(&folder->partids, NULL);
     free(folder);
 }
 
@@ -602,13 +610,21 @@ EXPORTED void search_build_query(search_builder_t *bx, search_expr_t *e)
 }
 
 static int add_unchecked_uid(const char *mboxname, uint32_t uidvalidity,
-                             uint32_t uid, void *rock)
+                             uint32_t uid, const strarray_t *partids,
+                             void *rock)
 {
     search_query_t *query = rock;
     search_folder_t *folder = query_get_valid_folder(query, mboxname, uidvalidity);
     if (folder) {
         bv_set(&folder->unchecked_uids, uid);
         folder->unchecked_dirty = 1;
+        if (partids) {
+            if (!folder->partids.size) {
+                if (!construct_hashu64_table(&folder->partids, 4096, 0))
+                    return IMAP_INTERNAL;
+                hashu64_insert(uid, strarray_dup(partids), &folder->partids);
+            }
+        }
     }
     return 0;
 }

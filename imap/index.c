@@ -2543,7 +2543,7 @@ EXPORTED int index_snippets(struct index_state *state,
             if (r) continue;
 
             msg = message_new_from_record(mailbox, &record);
-            index_getsearchtext(msg, rx, /*snippet*/1);
+            index_getsearchtext(msg, NULL, rx, /*snippet*/1);
             message_unref(&msg);
         }
 
@@ -4936,16 +4936,19 @@ struct getsearchtext_rock
     search_text_receiver_t *receiver;
     int indexed_headers;
     int charset_flags;
+    const strarray_t *partids;
 };
 
 static void stuff_part(search_text_receiver_t *receiver,
-                       int part, const struct buf *buf)
+                       int part,
+                       const struct message_guid *content_guid,
+                       const struct buf *buf)
 {
     if (part == SEARCH_PART_HEADERS &&
         !config_getswitch(IMAPOPT_SEARCH_INDEX_HEADERS))
         return;
 
-    receiver->begin_part(receiver, part);
+    receiver->begin_part(receiver, part, content_guid);
     receiver->append_text(receiver, buf);
     receiver->end_part(receiver, part);
 }
@@ -4958,6 +4961,7 @@ static void extract_cb(const struct buf *text, void *rock)
 
 #ifdef USE_HTTPD
 static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
+                           const struct message_guid *content_guid,
                            struct getsearchtext_rock *str)
 {
     icalcomponent *comp = NULL, *ical = NULL;
@@ -4994,7 +4998,7 @@ static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
         if ((s = icalcomponent_get_description(comp))) {
             buf_setcstr(&buf, s);
             charset_t utf8 = charset_lookupname("utf-8");
-            str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
+            str->receiver->begin_part(str->receiver, SEARCH_PART_BODY, content_guid);
             charset_extract(extract_cb, str, &buf, utf8, 0, "calendar",
                             str->charset_flags);
             str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
@@ -5006,7 +5010,7 @@ static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
         if ((prop = icalcomponent_get_first_property(comp, ICAL_SUMMARY_PROPERTY))) {
             if ((s = icalproperty_get_summary(prop))) {
                 buf_setcstr(&buf, s);
-                stuff_part(str->receiver, SEARCH_PART_SUBJECT, &buf);
+                stuff_part(str->receiver, SEARCH_PART_SUBJECT, NULL, &buf);
                 buf_reset(&buf);
             }
         }
@@ -5023,7 +5027,7 @@ static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
                 } else {
                     buf_setcstr(&buf, s);
                 }
-                stuff_part(str->receiver, SEARCH_PART_FROM, &buf);
+                stuff_part(str->receiver, SEARCH_PART_FROM, NULL, &buf);
                 buf_reset(&buf);
             }
         }
@@ -5048,7 +5052,7 @@ static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
             }
         }
         if (buf.len) {
-            stuff_part(str->receiver, SEARCH_PART_TO, &buf);
+            stuff_part(str->receiver, SEARCH_PART_TO, NULL, &buf);
             buf_reset(&buf);
         }
 
@@ -5056,7 +5060,7 @@ static int extract_icalbuf(struct buf *raw, charset_t charset, int encoding,
         if ((prop = icalcomponent_get_first_property(comp, ICAL_LOCATION_PROPERTY))) {
             if ((s = icalproperty_get_location(prop))) {
                 buf_setcstr(&buf, s);
-                stuff_part(str->receiver, SEARCH_PART_LOCATION, &buf);
+                stuff_part(str->receiver, SEARCH_PART_LOCATION, content_guid, &buf);
                 buf_reset(&buf);
             }
         }
@@ -5075,6 +5079,8 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                             const struct param *type_params __attribute__((unused)),
                             const char *disposition,
                             const struct param *disposition_params,
+                            const struct message_guid *content_guid,
+                            const char *part,
                             struct buf *data,
                             void *rock)
 {
@@ -5082,12 +5088,17 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
     char *q;
     struct buf text = BUF_INITIALIZER;
 
+    if (isbody && part && str->partids && strarray_find(str->partids, part, 0) < 0) {
+        /* Skip part */
+        return 0;
+    }
+
     if (!isbody) {
         if (!str->indexed_headers) {
             /* Only index the headers of the top message */
             q = charset_decode_mimeheader(buf_cstring(data), str->charset_flags);
             buf_init_ro_cstr(&text, q);
-            stuff_part(str->receiver, SEARCH_PART_HEADERS, &text);
+            stuff_part(str->receiver, SEARCH_PART_HEADERS, NULL, &text);
             free(q);
             buf_free(&text);
             str->indexed_headers = 1;
@@ -5101,7 +5112,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                 if (!strcmp(param->attribute, "FILENAME")) {
                     char *tmp = charset_decode_mimeheader(param->value, charset_flags);
                     buf_init_ro_cstr(&text, tmp);
-                    stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
+                    stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, NULL, &text);
                     buf_free(&text);
                     free(tmp);
                 }
@@ -5111,7 +5122,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                     if (xval) {
                         char *tmp = charset_decode_mimeheader(xval, charset_flags|CHARSET_MIME_UTF8);
                         buf_init_ro_cstr(&text, tmp);
-                        stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
+                        stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, NULL, &text);
                         buf_free(&text);
                         free(tmp);
                         free(xval);
@@ -5125,7 +5136,7 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
                 continue;
             char *tmp = charset_decode_mimeheader(param->value, charset_flags);
             buf_init_ro_cstr(&text, tmp);
-            stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, &text);
+            stuff_part(str->receiver, SEARCH_PART_ATTACHMENTNAME, NULL, &text);
             buf_free(&text);
             free(tmp);
         }
@@ -5137,12 +5148,12 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
     else if (!strcmp(type, "TEXT")) {
         if (!strcmp(subtype, "CALENDAR")) {
 #ifdef USE_HTTPD
-            extract_icalbuf(data, charset, encoding, str);
+            extract_icalbuf(data, charset, encoding, content_guid, str);
 #endif /* USE_HTTPD */
         }
         else {
             /* body-like */
-            str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
+            str->receiver->begin_part(str->receiver, SEARCH_PART_BODY, content_guid);
             charset_extract(extract_cb, str, data, charset, encoding, subtype,
                     str->charset_flags);
             str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
@@ -5162,7 +5173,7 @@ static void append_alnum(struct buf *buf, const char *ss)
     }
 }
 
-EXPORTED int index_getsearchtext(message_t *msg,
+EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
                                  search_text_receiver_t *receiver,
                                  int snippet)
 {
@@ -5187,6 +5198,7 @@ EXPORTED int index_getsearchtext(message_t *msg,
     str.receiver = receiver;
     str.indexed_headers = 0;
     str.charset_flags = charset_flags;
+    str.partids = partids;
 
     if (snippet) {
         str.charset_flags |= CHARSET_SNIPPET;
@@ -5201,37 +5213,39 @@ EXPORTED int index_getsearchtext(message_t *msg,
         int encoding = 0;
         const char *charset_id = NULL;
         charset_t charset = CHARSET_UNKNOWN_CHARSET;
+        const struct body *body = NULL;
 
         r = message_get_field(msg, "rawbody", MESSAGE_RAW, &buf);
+        if (!r) r = message_get_cachebody(msg, &body);
         if (!r) r = message_get_encoding(msg, &encoding);
         if (!r) r = message_get_charset_id(msg, &charset_id);
         if (!r) charset = charset_lookupname(charset_id);
         if (charset != CHARSET_UNKNOWN_CHARSET)
-            r = extract_icalbuf(&buf, charset, encoding, &str);
+            r = extract_icalbuf(&buf, charset, encoding, &body->content_guid, &str);
         charset_free(&charset);
         buf_free(&buf);
 #endif
     }
     else {
         if (!message_get_field(msg, "From", format, &buf))
-            stuff_part(receiver, SEARCH_PART_FROM, &buf);
+            stuff_part(receiver, SEARCH_PART_FROM, NULL, &buf);
 
         if (!message_get_field(msg, "To", format, &buf))
-            stuff_part(receiver, SEARCH_PART_TO, &buf);
+            stuff_part(receiver, SEARCH_PART_TO, NULL, &buf);
 
         if (!message_get_field(msg, "Cc", format, &buf))
-            stuff_part(receiver, SEARCH_PART_CC, &buf);
+            stuff_part(receiver, SEARCH_PART_CC, NULL, &buf);
 
         if (!message_get_field(msg, "Bcc", format, &buf))
-            stuff_part(receiver, SEARCH_PART_BCC, &buf);
+            stuff_part(receiver, SEARCH_PART_BCC, NULL, &buf);
 
         if (!message_get_field(msg, "Subject", format, &buf))
-            stuff_part(receiver, SEARCH_PART_SUBJECT, &buf);
+            stuff_part(receiver, SEARCH_PART_SUBJECT, NULL, &buf);
 
         if (!message_get_field(msg, "List-Id", format, &buf))
-            stuff_part(receiver, SEARCH_PART_LISTID, &buf);
+            stuff_part(receiver, SEARCH_PART_LISTID, NULL, &buf);
         if (!message_get_field(msg, "Mailing-List", format, &buf))
-            stuff_part(receiver, SEARCH_PART_LISTID, &buf);
+            stuff_part(receiver, SEARCH_PART_LISTID, NULL, &buf);
 
         if (!message_get_leaf_types(msg, &types) && types.count) {
             /* We add three search terms: the type, subtype, and a combined
@@ -5240,7 +5254,7 @@ EXPORTED int index_getsearchtext(message_t *msg,
              * example if the original message has "application/x-pdf" then
              * we index "APPLICATION" "XPDF" "APPLICATION_XPDF".  */
 
-            receiver->begin_part(receiver, SEARCH_PART_TYPE);
+            receiver->begin_part(receiver, SEARCH_PART_TYPE, NULL);
             for (i = 0 ; i < types.count ; i+= 2) {
                 buf_reset(&buf);
 

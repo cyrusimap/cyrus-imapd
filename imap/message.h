@@ -283,6 +283,7 @@ extern void message_unref(message_t **m);
 extern int message_get_field(message_t *m, const char *name,
                              int format, struct buf *buf);
 extern int message_get_header(message_t *m, int format, struct buf *buf);
+extern int message_get_cachebody(message_t *m, const struct body **bodyp);
 extern int message_get_body(message_t *m, struct buf *buf);
 extern int message_get_type(message_t *m, const char **strp);
 extern int message_get_subtype(message_t *m, const char **strp);
@@ -321,6 +322,8 @@ extern int message_foreach_section(message_t *m,
                                const struct param *type_params,
                                const char *disposition,
                                const struct param *disposition_params,
+                               const struct message_guid *content_guid,
+                               const char *part,
                                struct buf *data,
                                void *rock),
                    void *rock);

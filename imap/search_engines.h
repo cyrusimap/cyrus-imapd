@@ -52,7 +52,8 @@
 #include "search_part.h"
 
 typedef int (*search_hit_cb_t)(const char *mboxname, uint32_t uidvalidity,
-                               uint32_t uid, void *rock);
+                               uint32_t uid, const strarray_t *partids,
+                               void *rock);
 typedef int (*search_snippet_cb_t)(struct mailbox *, uint32_t uid,
                                    /* SEARCH_PART_* constants */int part,
                                    const char *snippet, void *rock);
@@ -82,7 +83,7 @@ extern search_snippet_markup_t default_snippet_markup;
 /* The functions in search_text_receiver_t get called at least once for each part of every message.
    The invocations form a sequence:
        begin_message(message_t)
-       receiver->begin_part(<part1>)
+       receiver->begin_part(<part1>, <contentid>)
        receiver->append_text(<text>)     (1 or more times)
        receiver->end_part(<part1>)
        ...
@@ -94,6 +95,7 @@ extern search_snippet_markup_t default_snippet_markup;
    The parts need not arrive in any particular order, but each part
    can only participate in one begin_part ... append_text ... end_part
    sequence, and the sequences for different parts cannot be interleaved.
+   Multiple parts can share the same <contentid>.
 */
 typedef struct search_text_receiver search_text_receiver_t;
 struct search_text_receiver {
@@ -102,7 +104,8 @@ struct search_text_receiver {
     uint32_t (*first_unindexed_uid)(search_text_receiver_t *);
     int (*is_indexed)(search_text_receiver_t *, message_t *msg);
     int (*begin_message)(search_text_receiver_t *, message_t *msg);
-    void (*begin_part)(search_text_receiver_t *, int part);
+    void (*begin_part)(search_text_receiver_t *, int part,
+                       const struct message_guid *content_guid);
     void (*append_text)(search_text_receiver_t *, const struct buf *);
     void (*end_part)(search_text_receiver_t *, int part);
     int (*end_message)(search_text_receiver_t *);
@@ -164,6 +167,7 @@ extern void search_end_search(search_builder_t *);
 #define SEARCH_UPDATE_BATCH (1<<2)
 #define SEARCH_UPDATE_XAPINDEXED (1<<3)
 #define SEARCH_UPDATE_AUDIT (1<<4)
+#define SEARCH_UPDATE_REINDEX_PARTS (1<<5)
 search_text_receiver_t *search_begin_update(int verbose);
 int search_update_mailbox(search_text_receiver_t *rx,
                           struct mailbox *mailbox,

@@ -174,7 +174,7 @@ static int flush_batch(search_text_receiver_t *rx,
 
     for (i = 0 ; i < batch->count ; i++) {
         message_t *msg = ptrarray_nth(batch, i);
-        if (!r) r = index_getsearchtext(msg, rx, 0);
+        if (!r) r = index_getsearchtext(msg, NULL, rx, 0);
         message_unref(&msg);
     }
     ptrarray_truncate(batch, 0);

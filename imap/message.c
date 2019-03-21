@@ -4454,6 +4454,8 @@ static int body_foreach_section(struct body *body, struct message *message,
                                     const struct param *type_params,
                                     const char *disposition,
                                     const struct param *disposition_params,
+                                    const struct message_guid *content_guid,
+                                    const char *part,
                                     struct buf *data, void *rock),
                                 void *rock)
 {
@@ -4484,7 +4486,8 @@ static int body_foreach_section(struct body *body, struct message *message,
 
         buf_init_ro(&data, message->map.s + body->header_offset, body->header_size);
         r = proc(/*isbody*/0, CHARSET_UNKNOWN_CHARSET, 0, body->type, body->subtype,
-                 body->params, disposition, disposition_params, &data, rock);
+                 body->params, disposition, disposition_params, &body->content_guid,
+                 body->part_id, &data, rock);
         buf_free(&data);
 
         if (tmpbody) {
@@ -4501,7 +4504,8 @@ static int body_foreach_section(struct body *body, struct message *message,
         message_parse_charset(body, &encoding, &charset);
         buf_init_ro(&data, message->map.s + body->content_offset, body->content_size);
         r = proc(/*isbody*/1, charset, encoding, body->type, body->subtype,
-                 body->params, NULL, NULL, &data, rock);
+                 body->params, NULL, NULL, &body->content_guid, body->part_id,
+                 &data, rock);
         buf_free(&data);
         charset_free(&charset);
 
@@ -4509,7 +4513,8 @@ static int body_foreach_section(struct body *body, struct message *message,
     } else {
         buf_init_ro(&data, message->map.s + body->content_offset, body->content_size);
         r = proc(/*isbody*/1, CHARSET_UNKNOWN_CHARSET, 0,
-                body->type, body->subtype, body->params, NULL, NULL, &data, rock);
+                body->type, body->subtype, body->params, NULL, NULL,
+                &body->content_guid, body->part_id, &data, rock);
         buf_free(&data);
     }
 
@@ -4537,6 +4542,8 @@ EXPORTED int message_foreach_section(message_t *m,
                                      const struct param *type_params,
                                      const char *disposition,
                                      const struct param *disposition_params,
+                                     const struct message_guid *content_guid,
+                                     const char *part,
                                      struct buf *data,
                                      void *rock),
                          void *rock)
@@ -5040,5 +5047,13 @@ EXPORTED int message_get_charset_id(message_t *m, const char **strp)
     int r = message_need(m, M_CACHEBODY);
     if (r) return r;
     *strp = m->body->charset_id;
+    return 0;
+}
+
+EXPORTED int message_get_cachebody(message_t *m, const struct body **bodyp)
+{
+    int r = message_need(m, M_CACHEBODY);
+    if (r) return r;
+    *bodyp = m->body;
     return 0;
 }

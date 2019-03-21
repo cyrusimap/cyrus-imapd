@@ -65,6 +65,7 @@
 #define JMAP_URN_WEBSOCKET  "urn:ietf:params:jmap:websocket"
 
 #define JMAP_QUOTA_EXTENSION   "http://cyrusimap.org/ns/quota"
+#define JMAP_SEARCH_EXTENSION   "http://cyrusimap.org/ns/search"
 
 extern struct namespace jmap_namespace;
 

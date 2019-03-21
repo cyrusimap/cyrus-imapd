@@ -85,9 +85,15 @@
 /* Name of columns */
 #define COL_CYRUSID     "cyrusid"
 
+/* Document types */
+#define SEARCH_XAPIAN_DOCTYPE_MSG  'G'
+#define SEARCH_XAPIAN_DOCTYPE_PART 'P'
+
 struct segment
 {
     int part;
+    struct message_guid guid;
+    char doctype;
     int sequence;       /* forces stable sort order JIC */
     int is_finished;
     struct buf text;
@@ -934,15 +940,6 @@ out:
 
 /* ====================================================================== */
 
-static const char *make_cyrusid(const struct message_guid *guid)
-{
-    static struct buf buf = BUF_INITIALIZER;
-    // *G*<encoded message guid>
-    buf_setcstr(&buf, "*G*");
-    buf_appendcstr(&buf, message_guid_encode(guid));
-    return buf_cstring(&buf);
-}
-
 /* XXX - replace with cyrus_mkdir and cyrus_copyfile */
 static void remove_dir(const char *dir)
 {
@@ -979,7 +976,7 @@ struct xapian_builder {
     int opts;
     struct opnode *root;
     ptrarray_t stack;       /* points to opnode* */
-    int (*proc)(const char *, uint32_t, uint32_t, void *);
+    int (*proc)(const char *, uint32_t, uint32_t, const strarray_t *, void *);
     void *rock;
 };
 
@@ -1033,6 +1030,58 @@ static void opnode_insert_child(struct opnode *parent __attribute__((unused)),
 {
     child->next = after->next;
     after->next = child;
+}
+static struct opnode *opnode_deep_copy(const struct opnode *on)
+{
+    if (!on) return NULL;
+
+    struct opnode *clone = opnode_new(on->op, on->arg);
+    const struct opnode *child;
+    for (child = on->children; child; child = child->next) {
+        opnode_append_child(clone, opnode_deep_copy(child));
+    }
+    return clone;
+}
+
+static const char *opnode_serialise(struct buf *buf, const struct opnode *on)
+{
+    if (!on) return "";
+
+    buf_putc(buf, '(');
+
+    if (on->op < SEARCH_NUM_PARTS) {
+        buf_appendcstr(buf, "MATCH");
+        buf_putc(buf, ' ');
+        const char *part = search_part_as_string(on->op);
+        buf_appendcstr(buf, part ? part : "ANY");
+    }
+    else if (on->op == SEARCH_OP_AND)
+        buf_appendcstr(buf, "AND");
+    else if (on->op == SEARCH_OP_OR)
+        buf_appendcstr(buf, "OR");
+    else if (on->op == SEARCH_OP_NOT)
+        buf_appendcstr(buf, "NOT");
+    else
+        buf_appendcstr(buf, "UNKNOWN");
+
+    if (on->arg) {
+        buf_putc(buf, ' ');
+        buf_putc(buf, '"');
+        buf_appendcstr(buf, on->arg);
+        buf_putc(buf, '"');
+    }
+
+    if (on->children) {
+        buf_putc(buf, ' ');
+        const struct opnode *child;
+        for (child = on->children ; child ; child = child->next) {
+            opnode_serialise(buf, child);
+        }
+    }
+
+    buf_putc(buf, ')');
+
+    return buf_cstring(buf);
 }
 
 static void optimise_nodes(struct opnode *parent, struct opnode *on)
@@ -1114,24 +1163,257 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on)
     return qq;
 }
 
+static int is_dnfclause(const struct opnode *on)
+{
+    if (on->op < SEARCH_NUM_PARTS) {
+        return 1;
+    }
+
+    if (on->op == SEARCH_OP_NOT) {
+        const struct opnode *child;
+        for (child = on->children; child; child = child->next) {
+            if (child->op >= SEARCH_NUM_PARTS)
+                return 0;
+        }
+        return 1;
+    }
+
+    if (on->op == SEARCH_OP_AND) {
+        const struct opnode *child;
+        for (child = on->children; child; child = child->next) {
+            if (child->op < SEARCH_NUM_PARTS)
+                continue;
+            else if (child->op == SEARCH_OP_NOT) {
+                const struct opnode *gchild;
+                for (gchild = child->children; gchild; gchild = gchild->next) {
+                    if (gchild->op >= SEARCH_NUM_PARTS)
+                        return 0;
+                }
+                continue;
+            }
+            else return 0;
+        }
+        return 1;
+    }
+
+    return 0;
+}
+
+static int split_query(const xapian_db_t *db,
+                       const struct opnode *expr,
+                       ptrarray_t *clauses)
+{
+    if (!is_dnfclause(expr)) {
+        // XXX convert to DNF?
+        struct buf buf = BUF_INITIALIZER;
+        opnode_serialise(&buf, expr);
+        syslog(LOG_ERR, "search_xapian: expected DNF clause, got %s", buf_cstring(&buf));
+        buf_free(&buf);
+        return IMAP_INTERNAL;
+    }
+
+    struct opnode *root = opnode_deep_copy(expr);
+
+    /* Normalise expression to an AND clause, with each child
+     * expression being a part MATCH or single-valued NOT. */
+
+    if (root->op == SEARCH_OP_NOT) {
+        /* Convert NOT(x,y) to AND(NOT(x),NOT(y)) */
+        struct opnode *newroot = opnode_new(SEARCH_OP_AND, NULL);
+        while (root->children) {
+            struct opnode *child = root->children;
+            opnode_detach_child(root, child);
+            struct opnode *notchild = opnode_new(SEARCH_OP_NOT, NULL);
+            opnode_append_child(notchild, child);
+            opnode_append_child(newroot, notchild);
+        }
+        opnode_delete(root);
+        root = newroot;
+    }
+    else if (root->op < SEARCH_NUM_PARTS) {
+        /* Convert MATCH to AND(MATCH) */
+        struct opnode *newroot = opnode_new(SEARCH_OP_AND, NULL);
+        opnode_append_child(newroot, root);
+        root = newroot;
+    }
+
+    assert(root->op == SEARCH_OP_AND);
+
+    struct opnode *child = root->children;
+    while (child) {
+        /* Convert AND(NOT(x,y)) to AND(NOT(x),NOT(y)) */
+        if (child->op != SEARCH_OP_NOT) {
+            child = child->next;
+            continue;
+        }
+        if (!child->children || !child->children->next) {
+            child = child->next;
+            continue;
+        }
+        while (child->children) {
+            struct opnode *grandchild = child->children;
+            opnode_detach_child(child, grandchild);
+            struct opnode *notgrandchild = opnode_new(SEARCH_OP_NOT, NULL);
+            opnode_append_child(notgrandchild, grandchild);
+            opnode_append_child(root, notgrandchild);
+        }
+        struct opnode *next = child->next;
+        opnode_detach_child(root, child);
+        opnode_delete(child);
+        child = next;
+    }
+
+    /* Split clause into subclauses for top-level guid
+     * search, body part search and any part. */
+
+    struct opnode *qguid = opnode_new(SEARCH_OP_AND, NULL);
+    struct opnode *qpart = opnode_new(SEARCH_OP_AND, NULL);
+    struct opnode *qany = opnode_new(SEARCH_OP_AND, NULL);
+
+    child = root->children;
+    while (child) {
+        struct opnode *next = child->next;
+        opnode_detach_child(root, child);
+
+        int part = child->op == SEARCH_OP_NOT ? child->children->op : child->op;
+
+        if (child->op == SEARCH_OP_NOT && part == SEARCH_PART_ANY) {
+            struct opnode *clone = opnode_deep_copy(child);
+            opnode_append_child(qguid, child);
+            opnode_append_child(qpart, clone);
+        }
+        else {
+            switch (part) {
+                /* Map search parts to their document type queries.
+                 * It's annoying that this mapping must be kept in
+                 * sync with the search part indexing in index.c */
+                case SEARCH_PART_ANY:
+                    opnode_append_child(qany, child);
+                    break;
+                case SEARCH_PART_FROM:
+                case SEARCH_PART_TO:
+                case SEARCH_PART_CC:
+                case SEARCH_PART_BCC:
+                case SEARCH_PART_SUBJECT:
+                case SEARCH_PART_LISTID:
+                case SEARCH_PART_TYPE:
+                case SEARCH_PART_HEADERS:
+                case SEARCH_PART_ATTACHMENTNAME:
+                    opnode_append_child(qguid, child);
+                    break;
+                case SEARCH_PART_BODY:
+                case SEARCH_PART_LOCATION:
+                    opnode_append_child(qpart, child);
+                    break;
+                default:
+                    syslog(LOG_ERR, "search_xapian: ignoring unexpected part: %s",
+                                     search_part_as_string(part));
+                    opnode_delete(child);
+                    child = NULL;
+            }
+        }
+        child = next;
+    }
+
+    /* Create Xapian queries for each subquery */
+
+    if (qguid->children) {
+        optimise_nodes(NULL, qguid);
+        xapian_query_t *xq = opnode_to_query(db, qguid);
+        if (xq) xq = xapian_query_new_filter_doctype(db, SEARCH_XAPIAN_DOCTYPE_MSG, xq);
+        if (xq) ptrarray_append(clauses, xq);
+    }
+    if (qpart->children) {
+        optimise_nodes(NULL, qpart);
+        xapian_query_t *xq = opnode_to_query(db, qpart);
+        if (xq) xq = xapian_query_new_filter_doctype(db, SEARCH_XAPIAN_DOCTYPE_PART, xq);
+        if (xq) ptrarray_append(clauses, xq);
+    }
+    if (qany->children) {
+        optimise_nodes(NULL, qany);
+        xapian_query_t *xq = opnode_to_query(db, qany);
+        if (xq) ptrarray_append(clauses, xq);
+    }
+
+    /* Clean up */
+
+    opnode_delete(qguid);
+    opnode_delete(qpart);
+    opnode_delete(qany);
+    opnode_delete(root);
+    return 0;
+}
+
+struct xapian_match {
+    bitvector_t uids;
+    hashu64_table partids_by_uid;
+};
+
+static void xapian_match_free_partids(uint64_t key __attribute__((unused)),
+                                      void *data,
+                                      void *rock __attribute__((unused)))
+{
+    strarray_free((strarray_t*)data);
+}
+
+static void xapian_match_fini(struct xapian_match *match)
+{
+    bv_fini(&match->uids);
+    if (match->partids_by_uid.size) {
+        hashu64_enumerate(&match->partids_by_uid, xapian_match_free_partids, NULL);
+    }
+    free_hashu64_table(&match->partids_by_uid, NULL);
+}
+
+struct xapian_run_rock {
+    xapian_builder_t *bb;
+    hash_table *matches;
+    int is_legacy;
+};
+
 static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
 {
-    xapian_builder_t *bb = (xapian_builder_t *)rock;
-
-    /* we only want full message matches here */
-    if (rec->part) return 0;
+    struct xapian_run_rock *xrock = rock;
+    xapian_builder_t *bb = xrock->bb;
+    hash_table *matches = xrock->matches;
 
     if (!(bb->opts & SEARCH_MULTIPLE)) {
         if (strcmp(rec->mboxname, bb->mailbox->name))
             return 0;
     }
 
-    return bb->proc(rec->mboxname, /*uidvalidity*/0, rec->uid, bb->rock);
+    if (xrock->is_legacy) {
+        if (rec->part) return 0;
+        return bb->proc(rec->mboxname, /*uidvalidity*/0, rec->uid, NULL, bb->rock);
+    }
+
+    struct xapian_match *match = hash_lookup(rec->mboxname, matches);
+    if (!match) {
+        match = xzmalloc(sizeof(struct xapian_match));
+        bv_init(&match->uids);
+        hash_insert(rec->mboxname, match, matches);
+    }
+
+    bv_set(&match->uids, rec->uid);
+    if (rec->part) {
+        if (!match->partids_by_uid.size) {
+            construct_hashu64_table(&match->partids_by_uid, 1024, 0);
+        }
+        strarray_t *partids = hashu64_lookup(rec->uid, &match->partids_by_uid);
+        if (!partids) {
+            partids = strarray_new();
+            hashu64_insert(rec->uid, partids, &match->partids_by_uid);
+        }
+        strarray_add(partids, rec->part);
+    }
+
+    return 0;
 }
 
 static int xapian_run_cb(void *data, size_t n, void *rock)
 {
-    xapian_builder_t *bb = (xapian_builder_t *)rock;
+    struct xapian_run_rock *xrock = rock;
+    xapian_builder_t *bb = xrock->bb;
 
     int r = cmd_cancelled(/*insearch*/1);
     if (r) goto done;
@@ -1150,8 +1432,9 @@ static int xapian_run_cb(void *data, size_t n, void *rock)
     guid[40] = '\0';
     size_t i;
     for (i = 0; i < n; i++) {
-        bin_to_lchex(data + (i*20), 20, guid);
-        r = conversations_guid_foreach(cstate, guid, xapian_run_guid_cb, bb);
+        char *entry = data + (i*21);
+        bin_to_lchex(entry + 1, 20, guid);
+        r = conversations_guid_foreach(cstate, guid, xapian_run_guid_cb, xrock);
         if (r) goto done;
     }
 
@@ -1160,10 +1443,141 @@ done:
     return r;
 }
 
+static int run_query(xapian_builder_t *bb)
+{
+    int i, r = 0;
+    hash_table *result = NULL;
+    ptrarray_t clauses = PTRARRAY_INITIALIZER;
+
+    /* Split into sub queries for each document type */
+    r = split_query(bb->db, bb->root, &clauses);
+    if (r) goto out;
+
+    /* Run clauses and intersect results */
+    for (i = 0; i < ptrarray_size(&clauses); i++) {
+        hash_table *matches = xzmalloc(sizeof(hash_table));
+        construct_hash_table(matches, 1024, 0); // XXX avoid magic size
+
+        struct xapian_run_rock xrock = { bb, matches, /*is_legacy*/0 };
+        xapian_query_t *xq = ptrarray_nth(&clauses, i);
+        r = xapian_query_run(bb->db, xq, /*is_legacy*/0, xapian_run_cb, &xrock);
+        if (r) goto out;
+
+        /* First clause, use as initial result */
+        if (result == NULL) {
+            result = matches;
+            continue;
+        }
+
+        /* Intersect mailbox names */
+        strarray_t *keys = hash_keys(result);
+        int j;
+        for (j = 0; j < strarray_size(keys); j++) {
+            const char *mboxname = strarray_nth(keys, j);
+            if (!hash_lookup(mboxname, matches)) {
+                struct xapian_match *match = hash_del(mboxname, result);
+                xapian_match_fini(match);
+                free(match);
+            }
+        }
+        strarray_free(keys);
+
+        /* Intersect UIDs */
+        hash_iter *iter = hash_table_iter(matches);
+        while (hash_iter_next(iter)) {
+            const char *mboxname = hash_iter_key(iter);
+            struct xapian_match *clause_match = hash_iter_val(iter);
+            struct xapian_match *result_match = hash_lookup(mboxname, result);
+            if (result_match) {
+                bv_andeq(&result_match->uids, &clause_match->uids);
+                if (result_match->partids_by_uid.size && clause_match->partids_by_uid.size) {
+                    /* Intersect partids */
+                    int uid;
+                    for (uid = bv_next_set(&result_match->uids, 0); uid != -1;
+                            uid = bv_next_set(&result_match->uids, uid+1)) {
+                        strarray_t *result_partids = hashu64_lookup(uid, &result_match->partids_by_uid);
+                        strarray_t *clause_partids = hashu64_lookup(uid, &clause_match->partids_by_uid);
+                        if (result_partids && clause_partids) {
+                            int i = 0, newlen = 0;
+                            for (i = 0; i < strarray_size(result_partids); i++) {
+                                const char *partid = strarray_nth(result_partids, i);
+                                if (strarray_find(clause_partids, partid, 0) >= 0) {
+                                    strarray_swap(result_partids, i, newlen);
+                                    newlen++;
+                                }
+                            }
+                            if (newlen) {
+                                strarray_truncate(result_partids, newlen);
+                            }
+                            else {
+                                hashu64_del(uid, &result_match->partids_by_uid);
+                                strarray_free(result_partids);
+                            }
+                        }
+                    }
+                }
+            }
+            xapian_match_fini(clause_match);
+            free(clause_match);
+        }
+        hash_iter_free(&iter);
+        free_hash_table(matches, NULL);
+        free(matches);
+    }
+
+    /* Return results */
+    if (result) {
+        hash_iter *iter = hash_table_iter(result);
+        while (hash_iter_next(iter)) {
+            const char *mboxname = hash_iter_key(iter);
+            struct xapian_match *match = hash_iter_val(iter);
+            int uid;
+            for (uid = bv_next_set(&match->uids, 0); uid != -1;
+                 uid = bv_next_set(&match->uids, uid+1)) {
+                strarray_t *partids = NULL;
+                if (match->partids_by_uid.size) {
+                    partids = hashu64_lookup(uid, &match->partids_by_uid);
+                }
+                r = bb->proc(mboxname, /*uidvalidity*/0, uid, partids, bb->rock);
+                if (r) goto out;
+            }
+        }
+        hash_iter_free(&iter);
+    }
+
+out:
+    if (result) {
+        hash_iter *iter = hash_table_iter(result);
+        while (hash_iter_next(iter)) {
+            struct xapian_match *match = hash_iter_val(iter);
+            xapian_match_fini(match);
+            free(match);
+        }
+        hash_iter_free(&iter);
+        free_hash_table(result, NULL);
+        free(result);
+    }
+    if (ptrarray_size(&clauses)) {
+        xapian_query_t *xq;
+        while ((xq = ptrarray_pop(&clauses))) xapian_query_free(xq);
+    }
+    ptrarray_fini(&clauses);
+    return r;
+}
+
+static int run_legacy_query(xapian_builder_t *bb)
+{
+    xapian_query_t *qq = opnode_to_query(bb->db, bb->root);
+    if (!qq) return 0;
+    struct xapian_run_rock xrock = { bb, NULL, /*is_legacy*/1 };
+    int r = xapian_query_run(bb->db, qq, /*is_legacy*/1, xapian_run_cb, &xrock);
+    if (qq) xapian_query_free(qq);
+    return r;
+}
+
 static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
-    xapian_query_t *qq = NULL;
     int r = 0;
 
     if (bb->db == NULL) {
@@ -1171,33 +1585,37 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
                 bb->mailbox ?  bb->mailbox->name : "<unknown>");
         return IMAP_NOTFOUND;       /* there's no index for this user */
     }
+    bb->proc = proc;
+    bb->rock = rock;
 
     /* Validate config */
     r = check_config(NULL);
     if (r) return r;
 
     optimise_nodes(NULL, bb->root);
-    qq = opnode_to_query(bb->db, bb->root);
-    if (!qq) goto out;
 
-    bb->proc = proc;
-    bb->rock = rock;
-
-    r = xapian_query_run(bb->db, qq, xapian_run_cb, bb);
-    if (r) goto out;
+    /* A database can contain current and legacy databases.*/
+    if (xapian_db_supports_current_version(bb->db)) {
+        r = run_query(bb);
+        if (r) goto out;
+    }
+    if (xapian_db_supports_legacy_version(bb->db)) {
+        r = run_legacy_query(bb);
+        if (r) goto out;
+    }
 
     /* add in the unindexed uids as false positives */
     if ((bb->opts & SEARCH_UNINDEXED)) {
         uint32_t uid;
         for (uid = seqset_firstnonmember(bb->indexed);
              uid <= bb->mailbox->i.last_uid ; uid++) {
-            r = proc(bb->mailbox->name, bb->mailbox->i.uidvalidity, uid, rock);
+            r = proc(bb->mailbox->name, bb->mailbox->i.uidvalidity,
+                     uid, NULL, rock);
             if (r) goto out;
         }
     }
 
 out:
-    if (qq) xapian_query_free(qq);
     return r;
 }
 
@@ -1398,6 +1816,7 @@ struct xapian_receiver
     struct message_guid guid;
     uint32_t uid;
     int part;
+    const struct message_guid *part_guid;
     unsigned int parts_total;
     int truncate_warning;
     ptrarray_t segs;
@@ -1419,6 +1838,7 @@ struct xapian_update_receiver
     strarray_t *activetiers;
     hash_table cached_seqs;
     int mode;
+    int reindex_parts;
 };
 
 /* receiver used for extracting snippets after a search */
@@ -1615,7 +2035,8 @@ static int audit_mailbox(search_text_receiver_t *rx, bitvector_t *unindexed)
         r = message_get_guid((message_t*) msg, &guid);
         if (r) goto done;
 
-        if (!xapian_dbw_is_indexed(tr->dbw, make_cyrusid(guid))) {
+        // XXX check for all parts of that message?
+        if (!xapian_dbw_is_indexed(tr->dbw, guid, SEARCH_XAPIAN_DOCTYPE_MSG)) {
             bv_set(unindexed, uid);
         }
     }
@@ -1655,11 +2076,13 @@ static int begin_message(search_text_receiver_t *rx, message_t *msg)
     return 0;
 }
 
-static void begin_part(search_text_receiver_t *rx, int part)
+static void begin_part(search_text_receiver_t *rx, int part,
+                       const struct message_guid *content_guid __attribute__((unused)))
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
 
     tr->part = part;
+    tr->part_guid = content_guid;
 }
 
 static void append_text(search_text_receiver_t *rx,
@@ -1685,6 +2108,13 @@ static void append_text(search_text_receiver_t *rx,
                 seg = (struct segment *)xzmalloc(sizeof(*seg));
                 seg->sequence = tr->segs.count;
                 seg->part = tr->part;
+                if (tr->part_guid) {
+                    message_guid_copy(&seg->guid, tr->part_guid);
+                    seg->doctype = SEARCH_XAPIAN_DOCTYPE_PART;
+                } else {
+                    message_guid_copy(&seg->guid, &tr->guid);
+                    seg->doctype = SEARCH_XAPIAN_DOCTYPE_MSG;
+                }
                 ptrarray_append(&tr->segs, seg);
             }
             buf_appendmap(&seg->text, text->s, len);
@@ -1710,13 +2140,28 @@ static void end_part(search_text_receiver_t *rx,
     tr->part = 0;
 }
 
+static int doctype_cmp(char doctype1, char doctype2)
+{
+    if (doctype1 == SEARCH_XAPIAN_DOCTYPE_MSG &&
+        doctype2 != SEARCH_XAPIAN_DOCTYPE_MSG) return -1;
+
+    if (doctype1 != SEARCH_XAPIAN_DOCTYPE_MSG &&
+        doctype2 == SEARCH_XAPIAN_DOCTYPE_MSG) return 1;
+
+    return doctype1 - doctype2;
+}
+
 static int compare_segs(const void **v1, const void **v2)
 {
     const struct segment *s1 = *(const struct segment **)v1;
     const struct segment *s2 = *(const struct segment **)v2;
     int r;
 
-    r = s1->part - s2->part;
+    r = doctype_cmp(s1->doctype, s2->doctype);
+    if (!r)
+        r = message_guid_cmp(&s1->guid, &s2->guid);
+    if (!r)
+        r = s1->part - s2->part;
     if (!r)
         r = s1->sequence - s2->sequence;
     return r;
@@ -1729,30 +2174,84 @@ static int end_message_update(search_text_receiver_t *rx)
     struct segment *seg;
     int r = 0;
 
+    if (!ptrarray_size(&tr->super.segs)) goto out;
+
     if (!tr->dbw) {
         r = xapian_dbw_open((const char **)tr->activedirs->data, &tr->dbw, tr->mode);
         if (r) goto out;
     }
 
-    r = xapian_dbw_begin_doc(tr->dbw, make_cyrusid(&tr->super.guid));
-    if (r) goto out;
-
     ptrarray_sort(&tr->super.segs, compare_segs);
+
+    if (xapian_dbw_is_legacy(tr->dbw)) {
+        r = xapian_dbw_begin_doc(tr->dbw, &tr->super.guid, SEARCH_XAPIAN_DOCTYPE_MSG);
+        if (r) goto out;
+
+        for (i = 0 ; i < tr->super.segs.count ; i++) {
+            seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
+            r = xapian_dbw_doc_part(tr->dbw, &seg->text, seg->part);
+            if (r) goto out;
+        }
+
+        if (!tr->uncommitted) {
+            r = xapian_dbw_begin_txn(tr->dbw);
+            if (r) goto out;
+        }
+        ++tr->uncommitted;
+        r = xapian_dbw_end_doc(tr->dbw);
+        goto out;
+    }
+
+    // XXX filter out already indexed parts?
+
+    const struct message_guid *last_guid = NULL;
 
     for (i = 0 ; i < tr->super.segs.count ; i++) {
         seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
+
+        /* Skip indexed parts, if not forced to re-index */
+        if ((seg->doctype == SEARCH_XAPIAN_DOCTYPE_PART) &&
+            !(tr->reindex_parts) &&
+            xapian_dbw_is_indexed(tr->dbw, &seg->guid, seg->doctype)) {
+            for (i = i + 1; i < tr->super.segs.count; i++) {
+                struct segment *next_seg = ptrarray_nth(&tr->super.segs, i);
+                if (message_guid_cmp(&seg->guid, &next_seg->guid)) {
+                    i--;
+                    break;
+                }
+            }
+            continue;
+        }
+
+        if (!last_guid || message_guid_cmp(last_guid, &seg->guid)) {
+            if (last_guid) {
+                if (!tr->uncommitted) {
+                    r = xapian_dbw_begin_txn(tr->dbw);
+                    if (r) goto out;
+                }
+                r = xapian_dbw_end_doc(tr->dbw);
+                if (r) goto out;
+                ++tr->uncommitted;
+            }
+
+            last_guid = &seg->guid;
+            r = xapian_dbw_begin_doc(tr->dbw, &seg->guid, seg->doctype);
+            if (r) goto out;
+        }
+
+        /* Index this segment */
         r = xapian_dbw_doc_part(tr->dbw, &seg->text, seg->part);
         if (r) goto out;
     }
-
-    if (!tr->uncommitted) {
-        r = xapian_dbw_begin_txn(tr->dbw);
+    if (last_guid) {
+        if (!tr->uncommitted) {
+            r = xapian_dbw_begin_txn(tr->dbw);
+            if (r) goto out;
+        }
+        r = xapian_dbw_end_doc(tr->dbw);
         if (r) goto out;
+        ++tr->uncommitted;
     }
-    r = xapian_dbw_end_doc(tr->dbw);
-    if (r) goto out;
-
-    ++tr->uncommitted;
 
 out:
     tr->super.uid = 0;
@@ -1854,6 +2353,7 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     if (seq) seqset_free(seq);
 
     tr->super.mailbox = mailbox;
+    tr->reindex_parts = flags & SEARCH_UPDATE_REINDEX_PARTS;
 
 out:
     free(fname);
@@ -1959,7 +2459,8 @@ static int is_indexed(search_text_receiver_t *rx, message_t *msg)
         free(guidrep);
     }
     else if (tr->mode == XAPIAN_DBW_XAPINDEXED) {
-        if (xapian_dbw_is_indexed(tr->dbw, make_cyrusid(guid)))
+        // XXX check for all parts of that message?
+        if (xapian_dbw_is_indexed(tr->dbw, guid, SEARCH_XAPIAN_DOCTYPE_MSG))
             ret = 1;
     }
 
@@ -1996,6 +2497,7 @@ static int end_mailbox_update(search_text_receiver_t *rx,
     }
 
     tr->super.mailbox = NULL;
+    tr->reindex_parts = 0;
 
     if (tr->dbw) {
         xapian_dbw_close(tr->dbw);
@@ -2137,8 +2639,13 @@ static int end_message_snippets(search_text_receiver_t *rx)
 
     ptrarray_sort(&tr->super.segs, compare_segs);
 
+    const struct message_guid *last_guid = NULL;
+
     for (i = 0 ; i < tr->super.segs.count ; i++) {
         seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
+        if (!last_guid || message_guid_cmp(last_guid, &seg->guid)) {
+            last_guid = &seg->guid;
+        }
 
         if (seg->part != last_part) {
 
@@ -2503,6 +3010,7 @@ static int reindex_mb(void *rock,
     r = xapian_dbw_open((const char **)filter->destpaths->data, &tr->dbw, tr->mode);
     if (r) goto done;
     tr->super.mailbox = mailbox;
+    tr->reindex_parts = 1; /* force re-indexing body parts */
 
     tr->activedirs = strarray_dup(filter->destpaths);
     tr->activetiers = strarray_dup(filter->desttiers);
@@ -2556,7 +3064,7 @@ static int reindex_mb(void *rock,
         /* index the messages */
         for (i = 0 ; i < batch.count ; i++) {
             message_t *msg = ptrarray_nth(&batch, i);
-            r = index_getsearchtext(msg, &tr->super.super, 0);
+            r = index_getsearchtext(msg, NULL, &tr->super.super, 0);
             if (r) goto done;
             message_unref(&msg);
         }

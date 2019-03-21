@@ -67,6 +67,7 @@ struct search_folder {
     bitvector_t uids;
     bitvector_t unchecked_uids;
     int unchecked_dirty;
+    hashu64_table partids; /* maps uid to starray_t* of part ids */
 };
 
 struct search_subquery {

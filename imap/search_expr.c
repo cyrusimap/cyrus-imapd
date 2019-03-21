@@ -2105,6 +2105,8 @@ static int searchmsg_cb(int isbody, charset_t charset, int encoding,
                         const struct param *type_params __attribute__((unused)),
                         const char *disposition __attribute__((unused)),
                         const struct param *disposition_params __attribute__((unused)),
+                        const struct message_guid *content_guid __attribute__((unused)),
+                        const char *part __attribute__((unused)),
                         struct buf *data, void *rock)
 {
     struct searchmsg_rock *sr = (struct searchmsg_rock *)rock;
