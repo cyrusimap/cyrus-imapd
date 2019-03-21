@@ -1791,18 +1791,95 @@ static xmlNodePtr get_props(struct request_target_t *req_tgt,
 }
 
 
-HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams)
+HIDDEN int dav_create_invite(xmlNodePtr *notify, xmlNsPtr *ns,
+                             struct request_target_t *tgt,
+                             const struct prop_entry *live_props,
+                             const char *sharee, int access,
+                             xmlChar *content)
 {
-    xmlNodePtr root = NULL, node, sharee, princ;
-    int rights, ret, legacy = 0;
-    struct buf resource = BUF_INITIALIZER;
-    char dtstamp[RFC3339_DATETIME_MAX];
-    xmlNodePtr notify = NULL, type, resp, share, comment;
-    xmlNsPtr ns[NUM_NAMESPACE];
+    static xmlNodePtr resp, share, comment, node;
+    struct buf buf = BUF_INITIALIZER;
     const char *invite_principal_props[] = { "displayname", NULL };
     const char *invite_collection_props[] = { "displayname", "resourcetype",
                                               "supported-calendar-component-set",
                                               NULL };
+    const char *annot = DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
+    const char *response = "invite-noresponse";
+    int r;
+
+    if (!*notify) {
+        /* Create share-invite-notification -
+           response and share-access will be replaced for each sharee */
+        char dtstamp[RFC3339_DATETIME_MAX];
+        xmlNodePtr type, princ;
+
+        *notify = init_xml_response("notification", NS_DAV, NULL, ns);
+        if (!*notify) return HTTP_SERVER_ERROR;
+
+        time_to_rfc3339(time(0), dtstamp, RFC3339_DATETIME_MAX);
+        xmlNewChild(*notify, NULL, BAD_CAST "dtstamp", BAD_CAST dtstamp);
+
+        type = xmlNewChild(*notify, NULL,
+                           BAD_CAST SHARE_INVITE_NOTIFICATION, NULL);
+
+        princ = xmlNewChild(type, NULL, BAD_CAST "principal", NULL);
+        buf_printf(&buf, "%s/%s/%s/", namespace_principal.prefix,
+                   USER_COLLECTION_PREFIX, tgt->userid);
+        xml_add_href(princ, NULL, buf_cstring(&buf));
+        node = get_props(tgt, invite_principal_props,
+                         *notify, ns, princ_params.propfind.lprops);
+        xmlAddChild(princ, node);
+
+        resp = xmlNewChild(type, NULL, BAD_CAST "invite-noresponse", NULL);
+
+        node = xmlNewChild(type, NULL, BAD_CAST "sharer-resource-uri", NULL);
+        xml_add_href(node, NULL, tgt->path);
+
+        node = xmlNewChild(type, NULL, BAD_CAST "share-access", NULL);
+        share = xmlNewChild(node, NULL, BAD_CAST "no-access", NULL);
+
+        node = get_props(tgt, invite_collection_props,
+                         *notify, ns, live_props);
+        xmlAddChild(type, node);
+
+        comment = xmlNewChild(type, NULL, BAD_CAST "comment", NULL);
+    }
+
+    /* Lookup invite status */
+    buf_reset(&buf);
+    r = annotatemore_lookupmask(tgt->mbentry->name,
+                                annot, sharee, &buf);
+    if (!r && buf_len(&buf)) response = buf_cstring(&buf);
+
+    /* Patch in response and share-access */
+    node = xmlNewNode(ns[NS_DAV], BAD_CAST response);
+    buf_free(&buf);
+    xmlReplaceNode(resp, node);
+    xmlFreeNode(resp);
+    resp = node;
+
+    node = xmlNewNode(ns[NS_DAV], BAD_CAST access_types[access]);
+    xmlReplaceNode(share, node);
+    xmlFreeNode(share);
+    share = node;
+
+    if (content) {
+        xmlNodeSetContent(comment, content);
+        xmlFree(content);
+    }
+    else xmlNodeSetContent(comment, BAD_CAST "");
+
+    return 0;
+}
+
+
+HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams)
+{
+    xmlNodePtr root = NULL, node, sharee;
+    int rights, ret, legacy = 0;
+    struct buf resource = BUF_INITIALIZER;
+    xmlNodePtr notify = NULL;
+    xmlNsPtr ns[NUM_NAMESPACE];
 
     /* Check ACL for current user */
     rights = httpd_myrights(httpd_authstate, txn->req_tgt.mbentry);
@@ -1845,45 +1922,11 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
         goto done;
     }
 
-    /* Create share-invite-notification -
-       response and share-access will be replaced for each sharee */
-    notify = init_xml_response("notification", NS_DAV, NULL, ns);
-
-    time_to_rfc3339(time(0), dtstamp, RFC3339_DATETIME_MAX);
-    xmlNewChild(notify, NULL, BAD_CAST "dtstamp", BAD_CAST dtstamp);
-
-    type = xmlNewChild(notify, NULL, BAD_CAST SHARE_INVITE_NOTIFICATION, NULL);
-
-    princ = xmlNewChild(type, NULL, BAD_CAST "principal", NULL);
-    buf_printf(&resource, "%s/%s/%s/", namespace_principal.prefix,
-               USER_COLLECTION_PREFIX, txn->req_tgt.userid);
-    xml_add_href(princ, NULL, buf_cstring(&resource));
-    node = get_props(&txn->req_tgt, invite_principal_props,
-                     notify, ns, princ_params.propfind.lprops);
-    xmlAddChild(princ, node);
-
-    resp = xmlNewChild(type, NULL, BAD_CAST "invite-noresponse", NULL);
-
-    node = xmlNewChild(type, NULL, BAD_CAST "sharer-resource-uri", NULL);
-    xml_add_href(node, NULL, txn->req_tgt.path);
-
-    node = xmlNewChild(type, NULL, BAD_CAST "share-access", NULL);
-    share = xmlNewChild(node, NULL, BAD_CAST "no-access", NULL);
-
-    node = get_props(&txn->req_tgt, invite_collection_props,
-                     notify, ns, pparams->propfind.lprops);
-    xmlAddChild(type, node);
-
-    comment = xmlNewChild(type, NULL, BAD_CAST "comment", NULL);
-
-
     /* Process each sharee */
     for (sharee = xmlFirstElementChild(root); sharee;
          sharee = xmlNextElementSibling(sharee)) {
-        xmlChar *href = NULL, *content;
+        xmlChar *href = NULL, *content = NULL;
         int access = SHARE_READONLY;
-
-        xmlNodeSetContent(comment, BAD_CAST "");
 
         if (legacy) {
             if (!xmlStrcmp(sharee->name, BAD_CAST "remove")) {
@@ -1906,8 +1949,6 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
                 }
                 else if (!xmlStrcmp(node->name, BAD_CAST "summary")) {
                     content = xmlNodeGetContent(node);
-                    xmlNodeSetContent(comment, content);
-                    xmlFree(content);
                 }
             }
             else if (!xmlStrcmp(node->name, BAD_CAST "share-access")) {
@@ -1922,8 +1963,6 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
             }
             else if (!xmlStrcmp(node->name, BAD_CAST "comment")) {
                 content = xmlNodeGetContent(node);
-                xmlNodeSetContent(comment, content);
-                xmlFree(content);
             }
         }
 
@@ -1992,27 +2031,10 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
                            error_message(r));
                 }
                 else {
-                    /* Notify sharee - patch in response and share-access */
-                    const char *annot =
-                        DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
-                    const char *response = "invite-noresponse";
-                    struct buf value = BUF_INITIALIZER;
-                    int r;
-
-                    /* Lookup invite status */
-                    r = annotatemore_lookupmask(txn->req_tgt.mbentry->name,
-                                                annot, userid, &value);
-                    if (!r && buf_len(&value)) response = buf_cstring(&value);
-                    node = xmlNewNode(ns[NS_DAV], BAD_CAST response);
-                    buf_free(&value);
-                    xmlReplaceNode(resp, node);
-                    xmlFreeNode(resp);
-                    resp = node;
-
-                    node = xmlNewNode(ns[NS_DAV], BAD_CAST access_types[access]);
-                    xmlReplaceNode(share, node);
-                    xmlFreeNode(share);
-                    share = node;
+                    /* Notify sharee */
+                    r = dav_create_invite(&notify, ns, &txn->req_tgt,
+                                          pparams->propfind.lprops,
+                                          userid, access, content);
 
                     /* Create a resource name for the notifications -
                        We use a consistent naming scheme so that multiple

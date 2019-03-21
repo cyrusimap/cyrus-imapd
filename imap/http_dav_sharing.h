@@ -74,6 +74,10 @@ int propfind_notifyurl(const xmlChar *name, xmlNsPtr ns,
 int propfind_csnotify_collection(struct propfind_ctx *fctx, xmlNodePtr props);
 
 int dav_post_share(struct transaction_t *txn, struct meth_params *pparams);
+int dav_create_invite(xmlNodePtr *notify, xmlNsPtr *ns,
+                      struct request_target_t *tgt,
+                      const struct prop_entry *live_props,
+                      const char *sharee, int access, xmlChar *content);
 int dav_send_notification(xmlDocPtr doc,
                           const char *userid, const char *resource);
 
