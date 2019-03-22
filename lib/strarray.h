@@ -79,6 +79,7 @@ const char *strarray_safenth(const strarray_t *sa, int idx);
 void strarray_truncate(strarray_t *sa, int newlen);
 strarray_t *strarray_dup(const strarray_t *);
 void strarray_cat(strarray_t *dest, const strarray_t *src);
+void strarray_swap(strarray_t *, int, int);
 
 #define strarray_shift(sa)          strarray_remove((sa), 0)
 #define strarray_unshift(sa, s)     strarray_insert((sa), 0, (s))

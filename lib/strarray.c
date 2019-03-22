@@ -285,6 +285,18 @@ EXPORTED void strarray_truncate(strarray_t *sa, int newlen)
     sa->count = newlen;
 }
 
+EXPORTED void strarray_swap(strarray_t *sa, int idxa, int idxb)
+{
+    if (idxa < 0 || idxa >= sa->count)
+        return;
+    if (idxb < 0 || idxb >= sa->count)
+        return;
+
+    char *tmp = sa->data[idxa];
+    sa->data[idxa] = sa->data[idxb];
+    sa->data[idxb] = tmp;
+}
+
 EXPORTED const char *strarray_nth(const strarray_t *sa, int idx)
 {
     if ((idx = adjust_index_ro(sa, idx)) < 0)

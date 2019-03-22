@@ -1554,4 +1554,35 @@ static void test_add_case(void)
 #undef WORD1
 }
 
+static void test_swap(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+#define WORD0   "lorem"
+#define WORD1   "ipsum"
+
+    /* swap is safe for bad index */
+    strarray_swap(&sa, 0, 1);
+
+    /* swap is safe for same index */
+    strarray_insert(&sa, 0, WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    strarray_swap(&sa, 0, 0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+
+    /* swap */
+    strarray_insert(&sa, 1, WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
+    strarray_swap(&sa, 0, 1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+
+    strarray_fini(&sa);
+#undef WORD0
+#undef WORD1
+}
+
+
 /* vim: set ft=c: */
