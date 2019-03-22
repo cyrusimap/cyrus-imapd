@@ -9,7 +9,7 @@ static void test_free(void)
     bitvector_t bv = BV_INITIALIZER;
     /* it's ok to call free() even if we never
      * set or cleared any bits */
-    bv_free(&bv);
+    bv_fini(&bv);
 }
 
 static void test_basic(void)
@@ -94,7 +94,7 @@ static void test_basic(void)
     CU_ASSERT_EQUAL(105, bv.length);
     CU_ASSERT_NOT_EQUAL(0, bv.alloc);
 
-    bv_free(&bv);
+    bv_fini(&bv);
 }
 
 static void test_andeq(void)
@@ -121,8 +121,8 @@ static void test_andeq(void)
     CU_ASSERT_EQUAL(0, bv_isset(&a, 3));
     CU_ASSERT_EQUAL(0, bv_isset(&a, 23));
 
-    bv_free(&a);
-    bv_free(&b);
+    bv_fini(&a);
+    bv_fini(&b);
 }
 
 static void test_andeq_noexpand(void)
@@ -152,8 +152,8 @@ static void test_andeq_noexpand(void)
     CU_ASSERT_EQUAL(0, bv_isset(&a, 7));
     CU_ASSERT_EQUAL(0, bv_isset(&a, 23));
 
-    bv_free(&a);
-    bv_free(&b);
+    bv_fini(&a);
+    bv_fini(&b);
 }
 
 static void test_oreq(void)
@@ -180,8 +180,8 @@ static void test_oreq(void)
     CU_ASSERT_EQUAL(1, bv_isset(&a, 3));
     CU_ASSERT_EQUAL(1, bv_isset(&a, 23));
 
-    bv_free(&a);
-    bv_free(&b);
+    bv_fini(&a);
+    bv_fini(&b);
 }
 
 static void test_oreq_empty(void)
@@ -201,8 +201,8 @@ static void test_oreq_empty(void)
     CU_ASSERT_EQUAL(1, bv_isset(&a, 0));
     CU_ASSERT_EQUAL(1, bv_isset(&a, 23));
 
-    bv_free(&a);
-    bv_free(&b);
+    bv_fini(&a);
+    bv_fini(&b);
 }
 
 static void test_oreq_noexpand(void)
@@ -229,8 +229,8 @@ static void test_oreq_noexpand(void)
     CU_ASSERT_EQUAL(1, bv_isset(&a, 3));
     CU_ASSERT_EQUAL(1, bv_isset(&a, 23));
 
-    bv_free(&a);
-    bv_free(&b);
+    bv_fini(&a);
+    bv_fini(&b);
 }
 
 static void test_shrink_expand(void)
@@ -273,7 +273,7 @@ static void test_shrink_expand(void)
         bv_setall(&bv);
     }
 
-    bv_free(&bv);
+    bv_fini(&bv);
 }
 
 static void test_copy(void)
@@ -322,8 +322,8 @@ static void test_copy(void)
     CU_ASSERT_EQUAL(1, bv_isset(&src, 23));
     CU_ASSERT_EQUAL(0, bv_isset(&src, 24));
 
-    bv_free(&dst);
-    bv_free(&src);
+    bv_fini(&dst);
+    bv_fini(&src);
 }
 
 static void test_cstring(void)
@@ -387,7 +387,7 @@ static void test_cstring(void)
     CU_ASSERT_STRING_EQUAL(s, "aa0a[1,3,5,7,9,11]");
     free(s);
 
-    bv_free(&bv);
+    bv_fini(&bv);
 }
 
 static void test_next_set(void)
@@ -406,7 +406,7 @@ static void test_next_set(void)
         } \
         bit = bv_next_set(&bv, bit+1); \
         CU_ASSERT_EQUAL(bit, -1); \
-        bv_free(&bv); \
+        bv_fini(&bv); \
     }
 
     /* empty vector never reports any set bits */
@@ -449,7 +449,7 @@ static void test_prev_set(void)
         } \
         bit = bv_prev_set(&bv, bit-1); \
         CU_ASSERT_EQUAL(bit, -1); \
-        bv_free(&bv); \
+        bv_fini(&bv); \
     }
 
     /* empty vector never reports any set bits */
@@ -487,7 +487,7 @@ static void test_count(void)
             bv_set(&bv, _in[i]); \
         count = bv_count(&bv); \
         CU_ASSERT_EQUAL(count, VECTOR_SIZE(_in)); \
-        bv_free(&bv); \
+        bv_fini(&bv); \
     }
 
     /* empty vector */

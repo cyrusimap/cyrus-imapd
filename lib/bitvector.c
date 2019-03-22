@@ -299,7 +299,7 @@ EXPORTED char *bv_cstring(const bitvector_t *bv)
     return buf_release(&buf);
 }
 
-EXPORTED void bv_free(bitvector_t *bv)
+EXPORTED void bv_fini(bitvector_t *bv)
 {
     if (bv->alloc)
         free(bv->bits);

@@ -750,7 +750,7 @@ static int do_audit(const strarray_t *mboxnames)
         }
         bv_clearall(&unindexed);
     }
-    bv_free(&unindexed);
+    bv_fini(&unindexed);
 
 done:
     search_end_update(rx);

@@ -89,8 +89,8 @@ static void folder_free(void *data)
     search_folder_t *folder = data;
 
     free(folder->mboxname);
-    bv_free(&folder->uids);
-    bv_free(&folder->unchecked_uids);
+    bv_fini(&folder->uids);
+    bv_fini(&folder->unchecked_uids);
     free(folder);
 }
 
@@ -154,7 +154,7 @@ EXPORTED void search_folder_use_msn(search_folder_t *folder, struct index_state 
         if (index_getuid(state, msgno) == (unsigned)uid)
             bv_set(&msns, msgno);
     }
-    bv_free(&folder->uids);
+    bv_fini(&folder->uids);
     folder->uids = msns;
 }
 

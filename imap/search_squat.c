@@ -239,7 +239,7 @@ static void opstack_pop(SquatBuilderData *bb)
         parent->valid = 1;
     }
 
-    bv_free(&child->msg_vector);
+    bv_fini(&child->msg_vector);
 
 #if DEBUG
     if (bb->verbose > 1)
@@ -996,7 +996,7 @@ static int end_update(search_text_receiver_t *rx)
         print_stats("Total", &d->total_stats);
     }
 
-    bv_free(&d->indexed);
+    bv_fini(&d->indexed);
     free(d);
     return 0;
 }

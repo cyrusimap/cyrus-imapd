@@ -77,6 +77,6 @@ extern int bv_first_set(const bitvector_t *);
 extern int bv_last_set(const bitvector_t *);
 extern unsigned bv_count(const bitvector_t *);
 extern char *bv_cstring(const bitvector_t *);
-extern void bv_free(bitvector_t *);
+extern void bv_fini(bitvector_t *);
 
 #endif /* __CYRUS_LIB_BITVECTOR_H__ */
