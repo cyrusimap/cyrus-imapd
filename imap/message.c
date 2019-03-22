@@ -4117,23 +4117,30 @@ out:
 }
 
 static int parse_bodystructure_sections(const char **cachestrp, const char *cacheend,
-                                        struct body *body, uint32_t cache_version)
+                                        struct body *body, uint32_t cache_version,
+                                        const char *part_id)
 {
     struct body *this;
     int nsubparts;
     int part;
     uint32_t cte;
+    struct buf buf = BUF_INITIALIZER;
+    int r = 0;
 
-    if (*cachestrp + 4 > cacheend)
-        return IMAP_MAILBOX_BADFORMAT;
+    if (*cachestrp + 4 > cacheend) {
+        r = IMAP_MAILBOX_BADFORMAT;
+        goto done;
+    }
 
     nsubparts = CACHE_ITEM_BIT32(*cachestrp);
     *cachestrp += 4;
 
     /* XXX - this size needs increasing for charset sizes and sha1s depending on version,
      * it won't crash, but it may overrun while reading */
-    if (*cachestrp + 4*5*nsubparts > cacheend)
-        return IMAP_MAILBOX_BADFORMAT;
+    if (*cachestrp + 4*5*nsubparts > cacheend) {
+        r = IMAP_MAILBOX_BADFORMAT;
+        goto done;
+    }
 
     if (strcmp(body->type, "MESSAGE") == 0
         && strcmp(body->subtype, "RFC822") == 0) {
@@ -4145,8 +4152,10 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
              * Nested parts of a message/rfc822 containing a multipart
              * are the sub-parts of the multipart.
              */
-            if (body->subpart->numparts + 1 != nsubparts)
-                return IMAP_MAILBOX_BADFORMAT;
+            if (body->subpart->numparts + 1 != nsubparts) {
+                r = IMAP_MAILBOX_BADFORMAT;
+                goto done;
+            }
 
             body->subpart->header_offset = CACHE_ITEM_BIT32(*cachestrp+0*4);
             body->subpart->header_size = CACHE_ITEM_BIT32(*cachestrp+1*4);
@@ -4204,8 +4213,13 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
             /* and parse subparts */
             for (part = 0; part < body->subpart->numparts; part++) {
                 this = &body->subpart->subpart[part];
-                if (parse_bodystructure_sections(cachestrp, cacheend, this, cache_version))
-                    return IMAP_MAILBOX_BADFORMAT;
+                buf_reset(&buf);
+                if (part_id) buf_printf(&buf, "%s.", part_id);
+                buf_printf(&buf, "%d", part + 1);
+                if (parse_bodystructure_sections(cachestrp, cacheend, this, cache_version, buf_cstring(&buf))) {
+                    r = IMAP_MAILBOX_BADFORMAT;
+                    goto done;
+                }
             }
         }
         else {
@@ -4215,8 +4229,10 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
              * is the message body.
              */
 
-            if (2 != nsubparts)
-                return IMAP_MAILBOX_BADFORMAT;
+            if (2 != nsubparts) {
+                r = IMAP_MAILBOX_BADFORMAT;
+                goto done;
+            }
 
             /* data is the same in body, just grab the first one */
             body->subpart->header_offset = CACHE_ITEM_BIT32(*cachestrp+0*4);
@@ -4247,6 +4263,13 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
                  * deprecated */
                 if (cache_version >= 4)
                     *cachestrp += (cte >> 16) & 0xffff;
+
+                if (!body->subpart->part_id) {
+                    buf_reset(&buf);
+                    if (part_id) buf_printf(&buf, "%s.", part_id);
+                    buf_printf(&buf, "%d", 1);
+                    body->subpart->part_id = buf_release(&buf);
+                }
             }
             /* CACHE_MINOR_VERSION 5 adds a sha1 after the charset */
             if (cache_version >= 5)
@@ -4263,8 +4286,10 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
             }
 
             /* and parse subpart */
-            if (parse_bodystructure_sections(cachestrp, cacheend, body->subpart, cache_version))
-                return IMAP_MAILBOX_BADFORMAT;
+            if (parse_bodystructure_sections(cachestrp, cacheend, body->subpart, cache_version, body->part_id)) {
+                r = IMAP_MAILBOX_BADFORMAT;
+                goto done;
+            }
         }
     }
     else if (body->numparts) {
@@ -4272,8 +4297,10 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
          * Cannot fetch part 0 of a multipart.
          * Nested parts of a multipart are the sub-parts.
          */
-        if (body->numparts + 1 != nsubparts)
-            return IMAP_MAILBOX_BADFORMAT;
+        if (body->numparts + 1 != nsubparts) {
+            r = IMAP_MAILBOX_BADFORMAT;
+            goto done;
+        }
         *cachestrp += 5*4;
         if (cache_version >= 5)
             *cachestrp += MESSAGE_GUID_SIZE;
@@ -4309,19 +4336,30 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
 
         for (part = 0; part < body->numparts; part++) {
             this = &body->subpart[part];
-            if (parse_bodystructure_sections(cachestrp, cacheend, this, cache_version))
-                return IMAP_MAILBOX_BADFORMAT;
+            buf_reset(&buf);
+            if (part_id) buf_printf(&buf, "%s.", part_id);
+            buf_printf(&buf, "%d", part + 1);
+            if (parse_bodystructure_sections(cachestrp, cacheend, this, cache_version, buf_cstring(&buf))) {
+                r = IMAP_MAILBOX_BADFORMAT;
+                goto done;
+            }
         }
     }
     else {
         /*
          * Leaf section--no part 0 or nested parts
          */
-        if (nsubparts != 0)
-            return IMAP_MAILBOX_BADFORMAT;
+        if (nsubparts != 0) {
+            r = IMAP_MAILBOX_BADFORMAT;
+            goto done;
+        }
+        if (!body->part_id)
+            body->part_id = xstrdupnull(part_id);
     }
 
-    return 0;
+done:
+    buf_free(&buf);
+    return r;
 }
 
 static int message_parse_cbodystructure(message_t *m)
@@ -4354,7 +4392,7 @@ static int message_parse_cbodystructure(message_t *m)
     toplevel.subtype = "RFC822";
     toplevel.subpart = m->body;
 
-    r = parse_bodystructure_sections(&cachestr, cacheend, &toplevel, m->record.cache_version);
+    r = parse_bodystructure_sections(&cachestr, cacheend, &toplevel, m->record.cache_version, NULL);
     if (r) syslog(LOG_ERR, "IOERROR: parsing section structure for %s %u (%.*s)",
                   m->mailbox->name, m->record.uid,
                   (int)cacheitem_size(&m->record, CACHE_BODYSTRUCTURE),
