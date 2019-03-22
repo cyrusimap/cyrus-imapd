@@ -1972,6 +1972,9 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
     /* special-case: intermediate mailbox */
     if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+        r = mboxlist_create_namecheck(newname, userid, auth_state,
+                                      isadmin, forceuser);
+        if (r) goto done;
         newmbentry = mboxlist_entry_copy(mbentry);
         free(newmbentry->name);
         newmbentry->name = xstrdupnull(newname);
