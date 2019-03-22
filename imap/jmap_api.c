@@ -53,11 +53,13 @@
 #include "hash.h"
 #include "httpd.h"
 #include "http_dav.h"
+#include "http_dav_sharing.h"
 #include "http_jmap.h"
 #include "mboxname.h"
 #include "msgrecord.h"
 #include "proxy.h"
 #include "times.h"
+#include "strhash.h"
 #include "syslog.h"
 #include "xstrlcpy.h"
 
@@ -2298,19 +2300,49 @@ struct acl_change {
     int new;
 };
 
-static void send_dav_invites(const char *userid __attribute__((unused)),
-                             void *val,
-                             void *rock __attribute__((unused)))
+struct invite_rock {
+    xmlNodePtr notify;
+    xmlNsPtr ns[NUM_NAMESPACE];
+    struct buf resource;
+    struct request_target_t tgt;
+    const struct prop_entry *live_props;
+};
+
+
+/* Create and send a sharing invite */
+static void send_dav_invite(const char *userid, void *val, void *rock)
 {
     struct acl_change *change = (struct acl_change *) val;
+    struct invite_rock *irock = (struct invite_rock *) rock;
     long old = change->old & (ACL_READ|ACL_LOOKUP|WRITERIGHTS);
     long new = change->new & (ACL_READ|ACL_LOOKUP|WRITERIGHTS);
 
     if (old != new) {
-        /* send DAV sharing invite to sharee */
-        if (!new) syslog(LOG_INFO, "XXXX  no-access");
-        else if (new & WRITERIGHTS) syslog(LOG_INFO, "XXXX  r/w");
-        else syslog(LOG_INFO, "XXXX  r/o");
+        int access, r;
+
+        if (!new) access = SHARE_NONE;
+        else if (new & WRITERIGHTS) access = SHARE_READWRITE;
+        else access = SHARE_READONLY;
+
+        /* Notify sharee */
+        r = dav_create_invite(&irock->notify, irock->ns, &irock->tgt,
+                              irock->live_props, userid, access,
+                              BAD_CAST "Shared via JMAP");
+        if (!r) {
+            /* Create a resource name for the notifications -
+               We use a consistent naming scheme so that multiple
+               notifications of the same type for the same resource
+               are coalesced (overwritten) */
+            buf_reset(&irock->resource);
+            buf_printf(&irock->resource, "%x-%x-%x-%x.xml",
+                       strhash(XML_NS_DAV),
+                       strhash(SHARE_INVITE_NOTIFICATION),
+                       strhash(irock->tgt.mbentry->name),
+                       strhash(userid));
+
+            r = dav_send_notification(irock->notify->doc,
+                                      userid, buf_cstring(&irock->resource));
+        }
     }
 }
 
@@ -2466,7 +2498,45 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
     }
 
     if (!r && isdav) {
-        hash_enumerate(&user_access, send_dav_invites, NULL);
+        /* Send sharing invites */
+        struct invite_rock irock;
+        struct meth_params *pparams;
+        mbname_t *mbname;
+        const char *errstr = NULL;
+
+        memset(&irock, 0, sizeof(struct invite_rock));
+
+        /* Find the DAV namespace for this mailbox */
+        if (iscalendar)
+            irock.tgt.namespace = &namespace_calendar;
+        else if (mbox->mbtype & MBTYPE_ADDRESSBOOK)
+            irock.tgt.namespace = &namespace_addressbook;
+        else
+            irock.tgt.namespace = &namespace_drive;
+
+        /* Get "live" properties for the namespace */
+        pparams = irock.tgt.namespace->methods[METH_PROPFIND].params;
+        irock.live_props = pparams->propfind.lprops;
+
+        /* Create DAV URL for this collection */
+        mbname = mbname_from_intname(mbox->name);
+        if (!mbname_domain(mbname)) mbname_set_domain(mbname, httpd_extradomain);
+
+        make_collection_url(&irock.resource, irock.tgt.namespace->prefix,
+                            /*haszzzz*/0, mbname, mbname_userid(mbname));
+
+        /* Create a request target for this collection */
+        pparams->parse_path(buf_cstring(&irock.resource), &irock.tgt, &errstr);
+
+        /* Process each user */
+        hash_enumerate(&user_access, send_dav_invite, &irock);
+
+        /* Cleanup */
+        if (irock.notify) xmlFreeDoc(irock.notify->doc);
+        mboxlist_entry_free(&irock.tgt.mbentry);
+        free(irock.tgt.userid);
+        buf_free(&irock.resource);
+        mbname_free(&mbname);
     }
 
   done:
