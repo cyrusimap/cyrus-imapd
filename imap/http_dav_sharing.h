@@ -52,6 +52,16 @@
 #define DACL_SHARE      (DACL_READ|DACL_WRITEPROPS)
 #define DACL_SHARERW    (DACL_READ|DACL_WRITE)
 
+#define SYSTEM_STATUS_NOTIFICATION  "systemstatus"
+#define SHARE_INVITE_NOTIFICATION   "share-invite-notification"
+#define SHARE_REPLY_NOTIFICATION    "share-reply-notification"
+
+enum {
+    SHARE_NONE = 0,
+    SHARE_READONLY,
+    SHARE_READWRITE
+};
+
 void xml_add_shareaccess(struct propfind_ctx *fctx,
                          xmlNodePtr resp, xmlNodePtr node, int legacy);
 int propfind_shareaccess(const xmlChar *name, xmlNsPtr ns,

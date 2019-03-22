@@ -61,10 +61,6 @@
 #define DAVNOTIFICATION_CONTENT_TYPE \
     "application/davnotification+xml; charset=utf-8"
 
-#define SYSTEM_STATUS_NOTIFICATION  "systemstatus"
-#define SHARE_INVITE_NOTIFICATION   "share-invite-notification"
-#define SHARE_REPLY_NOTIFICATION    "share-reply-notification"
-
 static struct webdav_db *auth_webdavdb = NULL;
 
 static void my_dav_init(struct buf *serverinfo);
@@ -1723,12 +1719,6 @@ HIDDEN int propfind_csnotify_collection(struct propfind_ctx *fctx,
 }
 
 
-enum {
-    SHARE_NONE = 0,
-    SHARE_READONLY,
-    SHARE_READWRITE
-};
-
 static const char *access_types[] = { "no-access", "read", "read-write" };
 
 static int set_share_access(const char *mboxname,
@@ -1863,11 +1853,7 @@ HIDDEN int dav_create_invite(xmlNodePtr *notify, xmlNsPtr *ns,
     xmlFreeNode(share);
     share = node;
 
-    if (content) {
-        xmlNodeSetContent(comment, content);
-        xmlFree(content);
-    }
-    else xmlNodeSetContent(comment, BAD_CAST "");
+    xmlNodeSetContent(comment, content ? content : BAD_CAST "");
 
     return 0;
 }
@@ -2056,6 +2042,7 @@ HIDDEN int dav_post_share(struct transaction_t *txn, struct meth_params *pparams
 
             xmlFree(href);
         }
+        if (content) xmlFree(content);
 
         ret = HTTP_NO_CONTENT;
     }
