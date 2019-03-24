@@ -83,9 +83,9 @@ static int  jmap_auth(const char *userid);
 static void jmap_shutdown(void);
 
 /* HTTP method handlers */
-static int jmap_get(struct transaction_t *txn, void *params);
-static int jmap_options(struct transaction_t *txn, void *params);
-static int jmap_post(struct transaction_t *txn, void *params);
+static int meth_get(struct transaction_t *txn, void *params);
+static int meth_options_jmap(struct transaction_t *txn, void *params);
+static int meth_post(struct transaction_t *txn, void *params);
 
 /* JMAP Requests */
 static int jmap_settings(struct transaction_t *txn);
@@ -121,15 +121,15 @@ struct namespace_t namespace_jmap = {
         { &meth_connect,        &ws_params },           /* CONNECT      */
         { NULL,                 NULL },                 /* COPY         */
         { NULL,                 NULL },                 /* DELETE       */
-        { &jmap_get,            NULL },                 /* GET          */
-        { &jmap_get,            NULL },                 /* HEAD         */
+        { &meth_get,            NULL },                 /* GET          */
+        { &meth_get,            NULL },                 /* HEAD         */
         { NULL,                 NULL },                 /* LOCK         */
         { NULL,                 NULL },                 /* MKCALENDAR   */
         { NULL,                 NULL },                 /* MKCOL        */
         { NULL,                 NULL },                 /* MOVE         */
-        { &jmap_options,        NULL },                 /* OPTIONS      */
+        { &meth_options_jmap,   NULL },                 /* OPTIONS      */
         { NULL,                 NULL },                 /* PATCH        */
-        { &jmap_post,           NULL },                 /* POST         */
+        { &meth_post,           NULL },                 /* POST         */
         { NULL,                 NULL },                 /* PROPFIND     */
         { NULL,                 NULL },                 /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
@@ -343,7 +343,7 @@ static int jmap_parse_path(struct transaction_t *txn)
 }
 
 /* Perform a GET/HEAD request */
-static int jmap_get(struct transaction_t *txn,
+static int meth_get(struct transaction_t *txn,
                     void *params __attribute__((unused)))
 {
     int r = jmap_parse_path(txn);
@@ -401,7 +401,7 @@ static int json_response(int code, struct transaction_t *txn, json_t *root)
 }
 
 /* Perform a POST request */
-static int jmap_post(struct transaction_t *txn,
+static int meth_post(struct transaction_t *txn,
                      void *params __attribute__((unused)))
 {
     int ret;
@@ -432,7 +432,7 @@ static int jmap_post(struct transaction_t *txn,
 }
 
 /* Perform an OPTIONS request */
-static int jmap_options(struct transaction_t *txn, void *params)
+static int meth_options_jmap(struct transaction_t *txn, void *params)
 {
     /* Parse the path */
     int r = jmap_parse_path(txn);
