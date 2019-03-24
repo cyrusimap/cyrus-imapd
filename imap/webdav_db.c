@@ -440,22 +440,22 @@ EXPORTED int webdav_write(struct webdav_db *webdavdb, struct webdav_data *wdata)
     if (wdata->dav.rowid) {
         cmd = CMD_UPDATE;
 
-        bval[12].name = ":rowid";
-        bval[12].type = SQLITE_INTEGER;
-        bval[12].val.i = wdata->dav.rowid;
+        bval[13].name = ":rowid";
+        bval[13].type = SQLITE_INTEGER;
+        bval[13].val.i = wdata->dav.rowid;
     }
     else {
         cmd = CMD_INSERT;
 
-        bval[12].name = ":creationdate";
-        bval[12].type = SQLITE_INTEGER;
-        bval[12].val.i = wdata->dav.creationdate;
-        bval[13].name = ":mailbox";
-        bval[13].type = SQLITE_TEXT;
-        bval[13].val.s = wdata->dav.mailbox;
-        bval[14].name = ":resource";
+        bval[13].name = ":creationdate";
+        bval[13].type = SQLITE_INTEGER;
+        bval[13].val.i = wdata->dav.creationdate;
+        bval[14].name = ":mailbox";
         bval[14].type = SQLITE_TEXT;
-        bval[14].val.s = wdata->dav.resource;
+        bval[14].val.s = wdata->dav.mailbox;
+        bval[15].name = ":resource";
+        bval[15].type = SQLITE_TEXT;
+        bval[15].val.s = wdata->dav.resource;
     }
 
     r = sqldb_exec(webdavdb->db, cmd, bval, NULL, NULL);
