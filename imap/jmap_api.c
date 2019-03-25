@@ -2358,6 +2358,8 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
     json_t *rights;
     int r;
 
+    if (json_is_null(shareWith)) overwrite = 1;
+
     if (isdav) {
         /* Create a hash table of user/access for DAV invites */
         iscalendar = (mbox->mbtype & MBTYPE_CALENDAR);
