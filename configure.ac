@@ -2097,9 +2097,9 @@ AS_IF([test -z "$SPHINX_BUILD"],
 AC_SUBST([SPHINX_BUILD])
 
 AX_PROG_PERL_MODULES([Pod::POM::View::Restructured],
-                     [have_ppvr=yes], [
-                         [AC_MSG_WARN([No Pod::POM::View::Restructured, won't be able to regenerate docs])]
-			 have_ppvr=no
+                     [have_ppvr=yes],
+                     [AC_MSG_WARN([No Pod::POM::View::Restructured, won't be able to regenerate docs])
+                       have_ppvr=no
                      ])
 
 AX_PYTHON_MODULE([git], [], [python2])
