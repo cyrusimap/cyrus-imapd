@@ -11864,6 +11864,12 @@ sub test_email_set_getquota
     my $service = $self->{instance}->get_service("http");
     my $inboxId = $self->getinbox()->{id};
 
+    my $using = [
+        'http://cyrusimap.org/ns/quota',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+    ];
+
     my $res;
 
     $res = $jmap->CallMethods([
@@ -11871,7 +11877,7 @@ sub test_email_set_getquota
             accountId => 'cassandane',
             ids => undef,
         }, 'R1'],
-    ]);
+    ], $using);
 
     my $mailQuota = $res->[0][1]{list}[0];
     $self->assert_str_equals('mail', $mailQuota->{id});
@@ -11904,7 +11910,7 @@ sub test_email_set_getquota
             }
         }, "R1"],
         ['Quota/get', {}, 'R2'],
-    ], ['http://cyrusimap.org/ns/quota']);
+    ], $using);
 
     $self->assert_str_equals('Quota/get', $res->[1][0]);
     $mailQuota = $res->[1][1]{list}[0];
