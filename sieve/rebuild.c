@@ -60,7 +60,7 @@
 #include "sieve/script.h"
 #include "sieve/sieve_interface.h"
 
-EXPORTED char *sieve_getbcfname(const char *script_fname)
+static char *sieve_getbcfname(const char *script_fname)
 {
     char tmp[MAX_MAILBOX_PATH + 1];
     char *ext;
@@ -82,7 +82,7 @@ EXPORTED char *sieve_getbcfname(const char *script_fname)
     return xstrdup(tmp);
 }
 
-EXPORTED char *sieve_getscriptfname(const char *bc_name)
+static char *sieve_getscriptfname(const char *bc_name)
 {
     char tmp[MAX_MAILBOX_PATH + 1];
     char *ext;
