@@ -17,8 +17,4 @@ to information contained within the Cyrus IMAP mailspool.
     *   :ref:`imap-admin-access-control-defaults`
     *   :ref:`imap-admin-access-control-identifiers`
 
-.. toctree::
-    :hidden:
-    :glob:
-
 Back to :ref:`imap-features`
