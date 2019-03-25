@@ -450,20 +450,24 @@ static int jmap_blob_get(jmap_req_t *req)
     json_t *found = json_object();
     hash_iter *iter = hash_table_iter(&getblobs_by_mboxid);
     while (hash_iter_next(iter)) {
-        const char *mboxname = hash_iter_key(iter);
+        const char *mboxid = hash_iter_key(iter);
         ptrarray_t *getblobs = hash_iter_val(iter);
+        mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid, 0);
         struct mailbox *mbox = NULL;
 
         /* Open mailbox */
-        if (!jmap_hasrights(req, mboxname, JACL_READITEMS)) {
+        if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+            mboxlist_entry_free(&mbentry);
             continue;
         }
-        int r = jmap_openmbox(req, mboxname, &mbox, 0);
+        int r = jmap_openmbox(req, mbentry->name, &mbox, 0);
         if (r) {
             syslog(LOG_ERR, "jmap_blob_get: can't open mailbox %s: %s",
-                    mboxname, error_message(r));
+                    mbentry->name, error_message(r));
+            mboxlist_entry_free(&mbentry);
             continue;
         }
+        mboxlist_entry_free(&mbentry);
 
         int j;
         for (j = 0; j < ptrarray_size(getblobs); j++) {
@@ -479,7 +483,7 @@ static int jmap_blob_get(jmap_req_t *req)
             msgrecord_unref(&mr);
             if (r) {
                 syslog(LOG_ERR, "jmap_blob_get: can't read msgrecord %s:%d: %s",
-                        mboxname, getblob->uid, error_message(r));
+                        mbox->name, getblob->uid, error_message(r));
                 continue;
             }
 
