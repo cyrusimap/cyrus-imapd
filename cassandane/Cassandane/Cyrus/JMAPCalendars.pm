@@ -1799,7 +1799,7 @@ sub test_calendarevent_set_relatedto
                 'first' => JSON::true,
             }},
             "uid2" => { relation => {
-                'next' => JSON::true,
+                'parent' => JSON::true,
             }},
             "uid3" => { relation => {
                 'x-unknown1' => JSON::true,
