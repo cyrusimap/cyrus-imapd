@@ -734,7 +734,7 @@ static const jmap_property_t mailbox_props[] = {
     { "purgeOlderThanDays", 0 },
     { "onlyPurgeDeleted",   0 },
     { "suppressDuplicates", 0 },
-    { "shareWith",          JMAP_PROP_SERVER_SET },
+    { "shareWith",          0 },
     { "isSeenShared",       0 },
 
     { NULL,                 0 }
@@ -1609,6 +1609,8 @@ struct mboxset_args {
     int is_seenshared; /* -1 if not set */
     int is_toplevel;
     int sortorder;
+    json_t *shareWith; /* NULL if not set */
+    int overwrite_acl;
 };
 
 static void _mbox_setargs_fini(struct mboxset_args *args)
@@ -1799,6 +1801,23 @@ static void _mbox_setargs_parse(json_t *jargs,
         args->is_seenshared = -1;
     }
 
+    if (!is_create) {
+        /* Is shareWith overwritten or patched? */
+        json_t *shareWith = NULL;
+        jmap_parse_sharewith_patch(jargs, &shareWith);
+        if (shareWith) {
+            args->overwrite_acl = 0;
+            json_object_set_new(jargs, "shareWith", shareWith);
+        }
+    }
+
+    /* shareWith */
+    args->shareWith = json_object_get(jargs, "shareWith");
+    if (args->shareWith && JNOTNULL(args->shareWith) &&
+        !json_is_object(args->shareWith)) {
+        jmap_parser_invalid(parser, "shareWith");
+    }
+
     /* All of these are server-set. */
     json_t *jrights = json_object_get(jargs, "myRights");
     if (json_is_object(jrights) && !is_create) {
@@ -1920,6 +1939,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     int r = 0;
     mbentry_t *mbinbox = NULL, *mbparent = NULL, *mbentry = NULL;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct mailbox *mailbox = NULL;
 
     char *inboxname = mboxname_user_mbox(req->accountid, NULL);
     jmap_mboxlist_lookup(inboxname, &mbinbox, NULL);
@@ -2001,7 +2021,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
             0 /* highestmodseq */, NULL /* acl */,
             NULL /* uniqueid */, 0 /* local_only */,
             1, /* keep_intermediaries */
-            NULL /* mboxptr */);
+            args->shareWith ? &mailbox : NULL);
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                 mboxname, error_message(r));
@@ -2011,6 +2031,13 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
 
      /* invalidate ACL cache */
     jmap_myrights_delete(req, mboxname);
+
+    /* shareWith */
+    if (args->shareWith) {
+        r = jmap_set_sharewith(mailbox, args->shareWith, args->overwrite_acl);
+        mailbox_close(&mailbox);
+    }
+    if (r) goto done;
 
     /* Write annotations and isSubscribed */
     r = _mbox_set_annots(req, args, mboxname);
@@ -2289,22 +2316,28 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         r = mboxlist_changesub(mboxname, req->userid, httpd_authstate,
                                args->is_subscribed, 0, 0);
     }
-    if (!r && args->is_seenshared >= 0) {
+    if (!r && (args->shareWith || args->is_seenshared >= 0)) {
         struct mailbox *mbox = NULL;
         uint32_t newopts;
 
         r = jmap_openmbox(req, mboxname, &mbox, 1);
         if (r) goto done;
 
-        newopts = mbox->i.options;
-        if (args->is_seenshared) newopts |= OPT_IMAP_SHAREDSEEN;
-        else newopts &= ~OPT_IMAP_SHAREDSEEN;
+        if (args->shareWith) {
+            r = jmap_set_sharewith(mbox, args->shareWith, args->overwrite_acl);
+        }
 
-        /* only mark dirty if there's been a change */
-        if (mbox->i.options != newopts) {
-            mailbox_index_dirty(mbox);
-            mbox->i.options = newopts;
-            mboxlist_foldermodseq_dirty(mbox);
+        if (!r && args->is_seenshared >= 0) {
+            newopts = mbox->i.options;
+            if (args->is_seenshared) newopts |= OPT_IMAP_SHAREDSEEN;
+            else newopts &= ~OPT_IMAP_SHAREDSEEN;
+
+            /* only mark dirty if there's been a change */
+            if (mbox->i.options != newopts) {
+                mailbox_index_dirty(mbox);
+                mbox->i.options = newopts;
+                mboxlist_foldermodseq_dirty(mbox);
+            }
         }
         jmap_closembox(req, &mbox);
     }
