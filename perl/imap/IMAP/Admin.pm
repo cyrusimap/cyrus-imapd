@@ -636,8 +636,13 @@ sub renamemailbox {
                         print $_ . "\n";
                       }});
 
-  my ($rc, $msg) = $self->send('', '', 'RENAME %s %s%a%a', $src, $dest,
-                               $ptn ? ' ' : $ptn, $ptn);
+  my ($rc, $msg);
+  if ($ptn) {
+    ($rc, $msg) = $self->send('', '', 'RENAME %s %s %a', $src, $dest, $ptn);
+  }
+  else {
+    ($rc, $msg) = $self->send('', '', 'RENAME %s %s', $src, $dest);
+  }
 
   $self->addcallback({-trigger => 'NO'});
 
