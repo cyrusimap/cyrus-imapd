@@ -374,7 +374,7 @@ struct getblob_rec {
 struct getblob_cb_rock {
     jmap_req_t *req;
     const char *blob_id;
-    hash_table *getblobs_by_mboxname;
+    hash_table *getblobs_by_mboxid;
 };
 
 static int getblob_cb(const conv_guidrec_t* rec, void* vrock)
@@ -386,10 +386,10 @@ static int getblob_cb(const conv_guidrec_t* rec, void* vrock)
     getblob->uid = rec->uid;
     getblob->part = xstrdupnull(rec->part);
 
-    ptrarray_t *getblobs = hash_lookup(rec->mboxname, rock->getblobs_by_mboxname);
+    ptrarray_t *getblobs = hash_lookup(rec->mboxid, rock->getblobs_by_mboxname);
     if (!getblobs) {
         getblobs = ptrarray_new();
-        hash_insert(rec->mboxname, getblobs, rock->getblobs_by_mboxname);
+        hash_insert(rec->mboxid, getblobs, rock->getblobs_by_mboxname);
     }
     ptrarray_append(getblobs, getblob);
 
@@ -432,12 +432,12 @@ static int jmap_blob_get(jmap_req_t *req)
     }
 
     /* Sort blob lookups by mailbox */
-    hash_table getblobs_by_mboxname = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&getblobs_by_mboxname, 128, 0);
+    hash_table getblobs_by_mboxid = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&getblobs_by_mboxid, 128, 0);
     json_array_foreach(get.ids, i, jval) {
         const char *blob_id = json_string_value(jval);
         if (*blob_id == 'G') {
-            struct getblob_cb_rock rock = { req, blob_id, &getblobs_by_mboxname };
+            struct getblob_cb_rock rock = { req, blob_id, &getblobs_by_mboxid };
             int r = conversations_guid_foreach(req->cstate, blob_id + 1, getblob_cb, &rock);
             if (r) {
                 syslog(LOG_ERR, "jmap_blob_get: can't lookup guid %s: %s",
@@ -448,7 +448,7 @@ static int jmap_blob_get(jmap_req_t *req)
 
     /* Lookup blobs by mailbox */
     json_t *found = json_object();
-    hash_iter *iter = hash_table_iter(&getblobs_by_mboxname);
+    hash_iter *iter = hash_table_iter(&getblobs_by_mboxid);
     while (hash_iter_next(iter)) {
         const char *mboxname = hash_iter_key(iter);
         ptrarray_t *getblobs = hash_iter_val(iter);
@@ -534,7 +534,7 @@ static int jmap_blob_get(jmap_req_t *req)
         ptrarray_free(getblobs);
     }
     hash_iter_free(&iter);
-    free_hash_table(&getblobs_by_mboxname, NULL);
+    free_hash_table(&getblobs_by_mboxid, NULL);
 
     /* Report found blobs */
     if (json_object_size(found)) {
