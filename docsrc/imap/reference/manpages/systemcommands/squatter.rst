@@ -20,8 +20,8 @@ Synopsis
 
     i.e.:
     **squatter** [ **-C** *config-file* ] [**-v**]
-    **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S *seconds*] [ **-r** ]  *mailbox*...
-    **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S *seconds*] [ **-r** ]  **-u** *user*...
+    **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S** *seconds*] [ **-r** ]  *mailbox*...
+    **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S** *seconds*] [ **-r** ]  **-u** *user*...
     **squatter** [ **-C** *config-file* ] **-R** [ **-n** *channel* ] [ **-d** ]
     **squatter** [ **-C** *config-file* ] **-f** *synclogfile*
     **squatter** [ **-C** *config-file* ] **-I** *file*
@@ -47,7 +47,7 @@ The index is a unified index of all of the header and body text
 of each message in a given mailbox.  This index is used to significantly
 reduce IMAP SEARCH times on a mailbox.
 
-By default, **squatter** creates  an index of ALL messages in the
+By default, **squatter** creates an index of ALL messages in the
 mailbox, not just those since the last time that it was run.  The
 **-i** option is used to select incremental updates.  Any messages
 appended to the mailbox after **squatter** is run, will NOT be included
