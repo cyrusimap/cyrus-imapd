@@ -1,9 +1,8 @@
-===================
 Notes for Packagers
 ===================
 
 Binary naming
-=============
+-------------
 
 Prevent namespace clashes. We suggest renaming all binaries with ``cyr_`` at
 the front, including renaming the ``ctl_*`` to ``cyr_``.
@@ -12,7 +11,7 @@ The Cyrus team are looking to fix this in the core bundle in upcoming releases
 so packagers have less to do.
 
 Sample configuration files
-==========================
+--------------------------
 
 There are several samples of :cyrusman:`cyrus.conf(5)` and
 :cyrusman:`imapd.conf(5)` located in the ``doc/examples`` directory of
@@ -21,10 +20,10 @@ documentation directory (i.e. ``/usr/share/doc/cyrus-imapd``) as a
 reference for your users.
 
 Predefined configurations
-=========================
+-------------------------
 
 The configuration file for master: cyrus.conf
----------------------------------------------
+`````````````````````````````````````````````
 
 When installing a predefined :cyrusman:`cyrus.conf(5)` for your users,
 please pay attention to new features and how these may impact users.
@@ -73,7 +72,7 @@ sections are:
       it should shut down and clean up after.
 
 The configuration file for the various programs: imapd.conf
------------------------------------------------------------
+```````````````````````````````````````````````````````````
 
 The sample :cyrusman:`imapd.conf(5)` files must be adapted for use from
 site to site.  Here, therefore, we'll attempt to point you towards some
@@ -163,7 +162,7 @@ Please consider enabling these features in the :cyrusman:`imapd.conf(5)`
 you ship  in your packages.
 
 Services in ``/etc/services``
-=============================
+-----------------------------
 
 Listing named services through ``/etc/services`` aids in cross-system consistency and cross-platform interoperability. Furthermore, it enables administrators and users to refer to the service by name (for example in ``/etc/cyrus.conf``, 'listen=mupdate' can be specified instead of 'listen=3905').
 

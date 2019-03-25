@@ -1,5 +1,6 @@
 .. _imap-index:
 
+===================
 What is Cyrus IMAP?
 ===================
 
@@ -41,6 +42,7 @@ Need help? We have :ref:`active mailing lists <feedback-mailing-lists>`.
 .. toctree::
     :maxdepth: 3
     :caption: Cyrus IMAP
+    :numbered:
 
     download
     quickstart
@@ -52,6 +54,7 @@ Need help? We have :ref:`active mailing lists <feedback-mailing-lists>`.
 
 --------
 
+===================
 What is Cyrus SASL?
 ===================
 Simple Authentication and Security Layer (SASL_) is a specification that describes how authentication mechanisms can be plugged into an application protocol on the wire. Cyrus SASL is an implementation of SASL that makes it easy for application developers to integrate authentication mechanisms into their application in a generic way.
