@@ -4354,7 +4354,7 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
 
         if (!prod_id) {
             /* Use same product id like jcal.c */
-            buf_setcstr(&buf, "-//CyrusJMAP.org/Cyrus ");
+            buf_setcstr(&buf, "-//CyrusIMAP.org/Cyrus ");
             buf_appendcstr(&buf, CYRUS_VERSION);
             buf_appendcstr(&buf, "//EN");
             prod_id = buf_cstring(&buf);
