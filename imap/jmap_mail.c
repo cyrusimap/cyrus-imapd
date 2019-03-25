@@ -5929,12 +5929,13 @@ static void _email_append(jmap_req_t *req,
     /* Pick the mailbox to create the message in, prefer Drafts */
     mailboxes = json_pack("{}"); /* maps mailbox ids to mboxnames */
     json_object_foreach(mailboxids, id, val) {
+        const char *mboxid = id;
         /* Lookup mailbox */
-        if (id && *id == '#') {
-            id = jmap_lookup_id(req, id + 1);
+        if (mboxid && mboxid[0] == '#') {
+            mboxid = jmap_lookup_id(req, mboxid + 1);
         }
-        if (!id) continue;
-        mbentry_t *mbentry = _mbentry_by_uniqueid(req, id);
+        if (!mboxid) continue;
+        mbentry_t *mbentry = _mbentry_by_uniqueid(req, mboxid);
         if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
             r = IMAP_MAILBOX_NONEXISTENT;
             goto done;
@@ -5967,7 +5968,7 @@ static void _email_append(jmap_req_t *req,
         if (!mboxname) mboxname = xstrdup(mbentry->name);
 
         /* Map mailbox id to mailbox name. */
-        json_object_set_new(mailboxes, id, json_string(mbentry->name));
+        json_object_set_new(mailboxes, mboxid, json_string(mbentry->name));
         mboxlist_entry_free(&mbentry);
     }
     if (!mboxname) {
