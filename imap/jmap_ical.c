@@ -1660,6 +1660,7 @@ relatedto_from_ical(icalcomponent *comp)
                 json_object_set_new(relation, s, json_true());
                 free(s);
             }
+            else json_object_set_new(relation, "parent", json_true());
         }
 
         if (!json_object_size(relation)) {
