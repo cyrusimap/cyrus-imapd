@@ -1816,6 +1816,8 @@ HIDDEN int dav_create_invite(xmlNodePtr *notify, xmlNsPtr *ns,
         buf_printf(&buf, "%s/%s/%s/", namespace_principal.prefix,
                    USER_COLLECTION_PREFIX, tgt->userid);
         xml_add_href(princ, NULL, buf_cstring(&buf));
+        buf_free(&buf);
+
         node = get_props(tgt, invite_principal_props,
                          *notify, ns, princ_params.propfind.lprops);
         xmlAddChild(princ, node);
@@ -1836,7 +1838,6 @@ HIDDEN int dav_create_invite(xmlNodePtr *notify, xmlNsPtr *ns,
     }
 
     /* Lookup invite status */
-    buf_reset(&buf);
     r = annotatemore_lookupmask(tgt->mbentry->name,
                                 annot, sharee, &buf);
     if (!r && buf_len(&buf)) response = buf_cstring(&buf);
