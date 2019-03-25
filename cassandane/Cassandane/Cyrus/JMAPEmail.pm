@@ -12323,4 +12323,59 @@ sub test_email_set_mimeversion
     $self->assert_str_equals(' 1.1', $res->[1][1]{list}[1]{'header:mime-version'});
 }
 
+sub test_issue_2664
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityId = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityId);
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                'mbox1' => {
+                    name => 'foo',
+                }
+            }
+        }, 'R1'],
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        '#mbox1' => JSON::true
+                    },
+                    from => [{ email => q{foo@bar} }],
+                    to => [{ email => q{bar@foo} }],
+                    subject => "test",
+                    bodyStructure => {
+                        partId => '1',
+                    },
+                    bodyValues => {
+                        "1" => {
+                            value => "A text body",
+                        },
+                    },
+                }
+            },
+        }, 'R2'],
+        ['EmailSubmission/set', {
+            create => {
+                'emailSubmission1' => {
+                    identityId => $identityId,
+                    emailId  => '#email1'
+                }
+           }
+        }, 'R3'],
+    ]);
+    $self->assert(exists $res->[0][1]{created}{mbox1});
+    $self->assert(exists $res->[1][1]{created}{email1});
+    $self->assert(exists $res->[2][1]{created}{emailSubmission1});
+}
+
 1;
