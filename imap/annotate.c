@@ -2097,6 +2097,15 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         /*set*/NULL,
         NULL
     },{
+        IMAP_ANNOT_NS "sortorder",
+        ATTRIB_TYPE_UINT,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED,
+        0,
+        annotation_get_fromdb,
+        annotation_set_todb,
+        NULL
+    },{
         IMAP_ANNOT_NS "squat",
         ATTRIB_TYPE_BOOLEAN,
         BACKEND_ONLY,
