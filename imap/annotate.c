@@ -2190,7 +2190,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
         /* The "usemodseq" was added with conversations support, to allow
          * a single value to show any changes to anything about a user */
         IMAP_ANNOT_NS "usercounters",
-        ATTRIB_TYPE_UINT,
+        ATTRIB_TYPE_STRING,
         BACKEND_ONLY,
         ATTRIB_VALUE_PRIV,
         0,
