@@ -1495,6 +1495,7 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
     if (!txn) {
         /* Create a transaction rock to use for API requests */
         txn = *txnp = xzmalloc(sizeof(struct transaction_t));
+        txn->meth = METH_UNKNOWN;
         txn->req_body.flags = BODY_DONE;
 
         /* Create header cache */
