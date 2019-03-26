@@ -425,13 +425,13 @@ static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
 
     /* Ignore lookup errors here. */
     annotatemore_lookup(mbname_intname(mbname),
-                        IMAP_ANNOT_NS "sortOrder", req->accountid, &attrib);
+                        IMAP_ANNOT_NS "sortorder", req->accountid, &attrib);
     if (attrib.len) {
         uint64_t t = str2uint64(buf_cstring(&attrib));
         if (t < INT_MAX) {
             sort_order = (int) t;
         } else {
-            syslog(LOG_ERR, "%s: bogus sortOrder annotation value", mbname_intname(mbname));
+            syslog(LOG_ERR, "%s: bogus sortorder annotation value", mbname_intname(mbname));
         }
     }
 
@@ -1895,7 +1895,7 @@ static int _mbox_set_annots(jmap_req_t *req,
     if (args->sortorder >= 0) {
         /* Set sortOrder annotation on mailbox. */
         buf_printf(&buf, "%d", args->sortorder);
-        static const char *sortorder_annot = IMAP_ANNOT_NS "sortOrder";
+        static const char *sortorder_annot = IMAP_ANNOT_NS "sortorder";
         r = annotatemore_write(mboxname, sortorder_annot, req->accountid, &buf);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
