@@ -359,7 +359,7 @@ sub test_shared
             '/shared' => undef,
     );
     # Note: annotsize/synccrcs new in 3.0
-    my ($maj, $min) = Cassandane::Instance->get_version();
+    my ($maj, $min, $rev) = Cassandane::Instance->get_version();
     if ($maj >= 3) {
         $specific_entries{'/shared/vendor/cmu/cyrus-imapd/annotsize'} = '0';
         $specific_entries{'/shared/vendor/cmu/cyrus-imapd/synccrcs'} = '0 0';
@@ -368,6 +368,10 @@ sub test_shared
     if ($maj > 3 or ($maj == 3 and $min >= 1)) {
         $specific_entries{'/shared/vendor/cmu/cyrus-imapd/archive'} = undef;
         $specific_entries{'/shared/vendor/cmu/cyrus-imapd/delete'} = undef;
+    }
+    # We introduced vendor/cmu/cyrus-imapd/sortorder in 3.1.3
+    if ($maj > 3 or ($maj == 3 and ($min > 1 or ($min == 1 and $rev >= 3)))) {
+        $specific_entries{'/shared/vendor/cmu/cyrus-imapd/sortorder'} = undef;
     }
     $self->assert_deep_equals(\%specific_entries, $r);
 
@@ -759,11 +763,15 @@ sub test_private
             '/private/specialuse' => undef,
             '/private' => undef,
     );
-    my ($maj, $min) = Cassandane::Instance->get_version();
+    my ($maj, $min, $rev) = Cassandane::Instance->get_version();
     # We introduced vendor/cmu/cyrus-imapd/{archive,delete} in 3.1.0
     if ($maj > 3 or ($maj == 3 and $min >= 1)) {
         $specific_entries{'/private/vendor/cmu/cyrus-imapd/archive'} = undef;
         $specific_entries{'/private/vendor/cmu/cyrus-imapd/delete'} = undef;
+    }
+    # We introduced vendor/cmu/cyrus-imapd/sortorder in 3.1.3
+    if ($maj > 3 or ($maj == 3 and ($min > 1 or ($min == 1 and $rev >= 3)))) {
+        $specific_entries{'/private/vendor/cmu/cyrus-imapd/sortorder'} = undef;
     }
     $self->assert_deep_equals(\%specific_entries, $r);
 
