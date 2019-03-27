@@ -377,18 +377,22 @@ static int imip_send_sendmail(icalcomponent *ical,
     }
 
     /* Create multipart/mixed + multipart/alternative iMIP message */
-    if (originator->qpname && strcasecmp(originator->qpname, originator->addr))
+    if (originator->qpname && strcasecmp(originator->qpname, originator->addr)) {
+        char *t = mime_quote_string(originator->qpname);
         fprintf(sm, "From: %s <%s>\r\n",
-                originator->qpname, originator->addr);
-    else
+                t ? t : originator->qpname, originator->addr);
+        free(t);
+    } else
         fprintf(sm, "From: %s\r\n", originator->addr);
 
     for (recip = recipients; recip; recip = recip->next) {
         if (strcmp(recip->addr, originator->addr) &&
             (!recipient || !strcasecmp(recip->addr, recipient))) {
-            if (recip->qpname && strcmp(recip->qpname, recip->addr))
-                fprintf(sm, "To: %s <%s>\r\n", recip->qpname, recip->addr);
-            else
+            if (recip->qpname && strcmp(recip->qpname, recip->addr)) {
+                char *t = mime_quote_string(recip->qpname);
+                fprintf(sm, "To: %s <%s>\r\n", t ? t : recip->qpname, recip->addr);
+                free(t);
+            }  else
                 fprintf(sm, "To: %s\r\n", recip->addr);
         }
     }
