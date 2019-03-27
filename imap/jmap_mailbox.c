@@ -1675,6 +1675,7 @@ static void _mbox_setargs_parse(json_t *jargs,
     /* Initialize arguments */
     memset(args, 0, sizeof(struct mboxset_args));
     args->sortorder = -1;
+    args->overwrite_acl = 1;
 
     /* id */
     json_t *jid = json_object_get(jargs, "id");
