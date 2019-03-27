@@ -6398,6 +6398,7 @@ sub test_email_querychanges_basic_mb_collapse
 
     $talk->select("INBOX");
     $talk->store("3", "+flags", "(\\Flagged)");
+    $self->assert_equals(JSON::true, $res->[0][1]{canCalculateChanges});
 
     my $old = $res->[0][1];
 
@@ -11889,7 +11890,7 @@ sub test_implementation_email_query
           } ],
         }, "R1"],
     ]);
-    $self->assert($res->[0][1]{canCalculateChanges});
+    $self->assert_equals(JSON::true, $res->[0][1]{canCalculateChanges});
 
     xlog "inMailbox query can calculate changes with mutable sort";
     $res = $jmap->CallMethods([
@@ -11905,7 +11906,7 @@ sub test_implementation_email_query
           } ],
         }, "R1"],
     ]);
-    $self->assert($res->[0][1]{canCalculateChanges});
+    $self->assert_equals(JSON::true, $res->[0][1]{canCalculateChanges});
 
     xlog "inMailbox query with keyword can not calculate changes";
     $res = $jmap->CallMethods([
@@ -11925,7 +11926,7 @@ sub test_implementation_email_query
             } ],
         }, "R1"],
     ]);
-    $self->assert(not $res->[0][1]{canCalculateChanges});
+    $self->assert_equals(JSON::false, $res->[0][1]{canCalculateChanges});
 }
 
 sub _set_quotaroot
