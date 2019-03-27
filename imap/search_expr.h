@@ -77,6 +77,7 @@ union search_value {
     uint64_t u;
     char *s;
     struct searchannot *annot;
+    void *rock;
 };
 
 /* search_attr.flags */
@@ -94,7 +95,7 @@ struct search_attr {
     void (*internalise)(struct index_state *, const union search_value *,
                        void **internalisedp);
     int (*cmp)(message_t *, const union search_value *, void *internalised, void *data1);
-    int (*match)(message_t *, const union search_value *, void *internalised, int match_guid, void *data1);
+    int (*match)(message_t *, const union search_value *, void *internalised, void *data1);
     void (*serialise)(struct buf *, const union search_value *);
     int (*unserialise)(struct protstream*, union search_value *);
     unsigned int (*get_countability)(const union search_value *);
@@ -112,7 +113,6 @@ struct search_expr {
     const search_attr_t *attr;
     union search_value value;
     void *internalised;
-    int match_guid;
 };
 
 /* flags for search_expr_get_countability */

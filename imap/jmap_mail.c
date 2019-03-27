@@ -1639,34 +1639,6 @@ static void _email_search_type(search_expr_t *parent, const char *s, strarray_t 
     strarray_fini(&types);
 }
 
-static void _email_search_mbox(jmap_req_t *req, search_expr_t *parent,
-                               json_t *mailbox, int is_otherthan,
-                               strarray_t *perf_filters)
-{
-    search_expr_t *e;
-    const char *s = json_string_value(mailbox);
-    mbentry_t *mbentry = _mbentry_by_uniqueid(req, s);
-    if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
-        mboxlist_entry_free(&mbentry);
-        /* XXX - add a "never match" terminal */
-        return;
-    }
-
-    if (is_otherthan) {
-        parent = search_expr_new(parent, SEOP_NOT);
-    }
-
-    e = search_expr_new(parent, SEOP_MATCH);
-    e->attr = search_attr_find("folder");
-    e->value.s = xstrdup(mbentry->name);
-    if (!is_otherthan) {
-        e->match_guid = 1;
-    }
-    strarray_add(perf_filters, "mailbox");
-
-    mboxlist_entry_free(&mbentry);
-}
-
 static void _email_search_keyword(search_expr_t *parent, const char *keyword, strarray_t *perf_filters)
 {
     search_expr_t *e;
@@ -1741,9 +1713,128 @@ static int _email_threadkeyword_is_valid(const char *keyword)
     return is_supported;
 }
 
-static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
-                                         search_expr_t *parent,
-                                         strarray_t *perf_filters)
+/* ====================================================================== */
+
+static void _emailsearch_folders_internalise(struct index_state *state,
+                                             const union search_value *v,
+                                             void **internalisedp)
+{
+    if (state && v) {
+        *internalisedp = mailbox_get_cstate(state->mailbox);
+    }
+}
+
+struct jmap_search_folder_match_rock {
+    const strarray_t *folders;
+    intptr_t is_otherthan;
+};
+
+static int _emailsearch_folders_match_cb(const conv_guidrec_t *rec, void *rock)
+{
+    if ((rec->system_flags & FLAG_DELETED) ||
+        (rec->internal_flags & FLAG_INTERNAL_EXPUNGED)) return 0;
+
+    // TODO we could match for mboxid, once the mailbox-id patch lands
+    struct jmap_search_folder_match_rock *myrock = rock;
+    int pos = strarray_find(myrock->folders, rec->mboxname, 0);
+    return ((pos >= 0) == (myrock->is_otherthan == 0)) ? IMAP_OK_COMPLETED : 0;
+}
+
+static int _emailsearch_folders_match(message_t *m, const union search_value *v,
+                                      void *internalised,
+                                      void *data1)
+{
+    struct conversations_state *cstate = internalised;
+    if (!cstate) return 0;
+    const struct message_guid *guid = NULL;
+    int r = message_get_guid(m, &guid);
+    if (r) return 0;
+    struct jmap_search_folder_match_rock rock = { v->rock, (intptr_t) data1 };
+    r = conversations_guid_foreach(cstate, message_guid_encode(guid),
+                                   _emailsearch_folders_match_cb, &rock);
+    return r == IMAP_OK_COMPLETED;
+}
+
+static void _emailsearch_folders_serialise(struct buf *buf,
+                                           const union search_value *v)
+{
+    char *tmp = strarray_join((strarray_t*)v->rock, " ");
+    buf_putc(buf, '(');
+    buf_appendcstr(buf, tmp);
+    buf_putc(buf, ')');
+    free(tmp);
+}
+
+static int _emailsearch_folders_unserialise(struct protstream* prot,
+                                            union search_value *v)
+{
+    struct dlist *dl = NULL;
+
+    int c = dlist_parse_asatomlist(&dl, 0, prot);
+    if (c == EOF) return EOF;
+
+    strarray_t *folders = strarray_new();
+    struct buf tmp = BUF_INITIALIZER;
+    struct dlist_print_iter *iter = dlist_print_iter_new(dl, /*printkeys*/ 0);
+    while (iter && dlist_print_iter_step(iter, &tmp)) {
+        if (buf_len(&tmp)) strarray_append(folders, buf_cstring(&tmp));
+        buf_reset(&tmp);
+    }
+    dlist_print_iter_free(&iter);
+    buf_free(&tmp);
+    v->rock = folders;
+    return c;
+}
+
+static void _emailsearch_folders_duplicate(union search_value *new,
+                                           const union search_value *old)
+{
+    new->rock = strarray_dup((strarray_t*)old->rock);
+}
+
+static void _emailsearch_folders_free(union search_value *v)
+{
+    strarray_free(v->rock);
+}
+
+static const search_attr_t _emailsearch_folders_attr = {
+    "jmap_folders",
+    SEA_MUTABLE,
+    SEARCH_PART_NONE,
+    SEARCH_COST_NONE,
+    _emailsearch_folders_internalise,
+    /*cmp*/NULL,
+    _emailsearch_folders_match,
+    _emailsearch_folders_serialise,
+    _emailsearch_folders_unserialise,
+    /*get_countability*/NULL,
+    _emailsearch_folders_duplicate,
+    _emailsearch_folders_free,
+    (void*)0 /*is_otherthan*/
+};
+
+static const search_attr_t _emailsearch_folders_otherthan_attr = {
+    "jmap_folders_otherthan",
+    SEA_MUTABLE,
+    SEARCH_PART_NONE,
+    SEARCH_COST_NONE,
+    _emailsearch_folders_internalise,
+    /*cmp*/NULL,
+    _emailsearch_folders_match,
+    _emailsearch_folders_serialise,
+    _emailsearch_folders_unserialise,
+    /*get_countability*/NULL,
+    _emailsearch_folders_duplicate,
+    _emailsearch_folders_free,
+    (void*)1 /*is_otherthan*/
+};
+
+
+/* ====================================================================== */
+
+static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
+                                             search_expr_t *parent,
+                                             strarray_t *perf_filters)
 {
     search_expr_t *this, *e;
     json_t *val;
@@ -1770,7 +1861,7 @@ static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
         e = op == SEOP_NOT ? search_expr_new(this, SEOP_OR) : this;
 
         json_array_foreach(json_object_get(filter, "conditions"), i, val) {
-            _email_buildsearch(req, val, e, perf_filters);
+            _email_buildsearchexpr(req, val, e, perf_filters);
         }
     } else {
         this = search_expr_new(parent, SEOP_AND);
@@ -1841,12 +1932,38 @@ static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
             charset_free(&utf8);
         }
         if ((val = json_object_get(filter, "inMailbox"))) {
-            _email_search_mbox(req, this, val, /*is_otherthan*/0, perf_filters);
+            strarray_t *folders = strarray_new();
+            const char *mboxid = json_string_value(val);
+            mbentry_t *mbentry = _mbentry_by_uniqueid(req, mboxid);
+            if (mbentry && jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
+                strarray_append(folders, mbentry->name);
+            }
+            mboxlist_entry_free(&mbentry);
+            if (strarray_size(folders)) {
+                search_expr_t *e = search_expr_new(this, SEOP_MATCH);
+                e->attr = &_emailsearch_folders_attr;
+                e->value.rock = folders;
+                strarray_add(perf_filters, "mailbox");
+            }
         }
 
-        json_array_foreach(json_object_get(filter, "inMailboxOtherThan"), i, val) {
-            e = search_expr_new(this, SEOP_AND);
-            _email_search_mbox(req, e, val, /*is_otherthan*/1, perf_filters);
+        if ((val = json_object_get(filter, "inMailboxOtherThan"))) {
+            strarray_t *folders = strarray_new();
+            json_t *jmboxid;
+            json_array_foreach(val, i, jmboxid) {
+                const char *mboxid = json_string_value(jmboxid);
+                mbentry_t *mbentry = _mbentry_by_uniqueid(req, mboxid);
+                if (mbentry && jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
+                    strarray_append(folders, mbentry->name);
+                }
+                mboxlist_entry_free(&mbentry);
+            }
+            if (strarray_size(folders)) {
+                search_expr_t *e = search_expr_new(this, SEOP_MATCH);
+                e->attr = &_emailsearch_folders_otherthan_attr;
+                e->value.rock = folders;
+                strarray_add(perf_filters, "mailbox");
+            }
         }
 
         if (JNOTNULL((val = json_object_get(filter, "allInThreadHaveKeyword")))) {
@@ -1903,6 +2020,61 @@ static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
 
     return this;
 }
+
+static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
+                                         strarray_t *perf_filters)
+{
+    search_expr_t *root = _email_buildsearchexpr(req, filter, /*parent*/NULL,
+                                                 perf_filters);
+
+    /* The search API internally optimises for IMAP folder queries
+     * and we'd like to benefit from this also for JMAP. To do so,
+     * we try to convert as many inMailboxId expressions to IMAP
+     * mailbox matches as possible. This includes the first
+     * inMailboxId that is part of a positive AND and any inMailboxId
+     * that is part of a positive OR expression. */
+    ptrarray_t todo = PTRARRAY_INITIALIZER;
+    int found_and_match = 0;
+    struct work {
+        search_expr_t *e;
+        int in_or;
+    };
+    struct work *w = xmalloc(sizeof(struct work));
+    w->e = root;
+    w->in_or = 0;
+    ptrarray_push(&todo, w);
+    while ((w = ptrarray_pop(&todo))) {
+        if (w->e->op == SEOP_MATCH) {
+            if (!strcmp(w->e->attr->name, "jmap_folders") &&
+                w->e->attr->data1 == 0 &&
+                strarray_size((strarray_t*)w->e->value.rock) == 1) {
+                /* Its's an inMailboxId expression */
+                if (w->in_or || !found_and_match) {
+                    char *folder = strarray_pop((strarray_t*)w->e->value.rock);
+                    _emailsearch_folders_free(&w->e->value);
+                    const search_attr_t *attr = search_attr_find("folder");
+                    w->e->value.s = folder;
+                    w->e->attr = attr;
+                    found_and_match = !w->in_or;
+                }
+            }
+        }
+        else if (w->e->op == SEOP_AND || w->e->op == SEOP_OR) {
+            search_expr_t *c;
+            for (c = w->e->children; c; c = c->next) {
+                struct work *ww = xmalloc(sizeof(struct work));
+                ww->e = c;
+                ww->in_or = w->in_or || w->e->op == SEOP_OR;
+                ptrarray_push(&todo, ww);
+            }
+        }
+        free(w);
+    }
+    ptrarray_fini(&todo);
+
+    return root;
+}
+
 
 HIDDEN int jmap_is_valid_utcdate(const char *s)
 {
@@ -2228,7 +2400,7 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
     /* Build search args */
     search->args = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
             &jmap_namespace, req->accountid, req->authstate, 0);
-    search->args->root = _email_buildsearch(req, filter, NULL, &search->perf_filters);
+    search->args->root = _email_buildsearch(req, filter, &search->perf_filters);
 
     /* Build index state */
     search->init.userid = req->accountid;
@@ -3390,7 +3562,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter, json_t *messageids,
     strarray_t perf_filters = STRARRAY_INITIALIZER;
     searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
                                 &jmap_namespace, req->userid, req->authstate, 0);
-    searchargs->root = _email_buildsearch(req, filter, NULL, &perf_filters);
+    searchargs->root = _email_buildsearch(req, filter, &perf_filters);
     strarray_fini(&perf_filters);
 
     /* Build the search query */
