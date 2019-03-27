@@ -2868,3 +2868,30 @@ EXPORTED char *charset_encode_mimeheader(const char *header, size_t len)
     return qp_encode(header, len, 1, NULL);
 }
 
+EXPORTED char* mime_quote_string(const char *input)
+{
+    size_t input_len, amount_quotes = 0, quotes = 0;
+    /* variable quotes indicates, if the input must be quoted */
+    for (input_len = 0; input[input_len] != '\0'; input_len++)
+        if (!quotes && strchr("()<>:;@\\,", input[input_len]))
+            quotes = 1;
+        else if (input[input_len] == '"') {
+            amount_quotes++;
+            quotes = 1;
+        }
+
+    if (!quotes) return NULL;
+    /* from now on variable quotes is the number of escaped qoutes + 1. */
+    quotes = 1;
+    char * ret = malloc(input_len + amount_quotes + 3);
+    ret[0] = ret[input_len + amount_quotes + 1] = '"';
+    ret[input_len + amount_quotes + 2] = '\0';
+    for (input_len = 0; input[input_len] != '\0'; input_len++) {
+        if (input[input_len] == '"') {
+            ret[input_len + quotes] = '\\';
+            quotes++;
+        }
+        ret[input_len + quotes] = input[input_len];
+    }
+    return ret;
+}

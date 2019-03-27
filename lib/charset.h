@@ -127,4 +127,8 @@ extern int charset_extract(void (*cb)(const struct buf *text, void *rock),
                            charset_t charset, int encoding,
                            const char *subtype, int flags);
 
+/* If input does not return special characters in terms of RFC 5322 section
+ * 3.2.4, the function returns NULL, otherwise does the quoting described there.
+ * The caller frees the return value */
+char* mime_quote_string(const char* input);
 #endif /* INCLUDED_CHARSET_H */
