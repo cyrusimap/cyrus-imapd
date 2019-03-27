@@ -11867,6 +11867,9 @@ sub test_implementation_email_query
     my $store = $self->{store};
     my $talk = $store->get_client();
 
+    # These assertions are implementation-specific. Breaking them
+    # isn't necessarly a regression, but change them with caution.
+
     my $now = DateTime->now();
 
     xlog "Generate a email in INBOX via IMAP";
@@ -11924,6 +11927,32 @@ sub test_implementation_email_query
                 isAscending => $JSON::false,
                 property => 'receivedAt',
             } ],
+        }, "R1"],
+    ]);
+    $self->assert_equals(JSON::false, $res->[0][1]{canCalculateChanges});
+
+    xlog "negated inMailbox query can not calculate changes";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+          filter => {
+            operator => 'NOT',
+            conditions => [
+              { inMailbox => $inbox->{id} },
+            ],
+          },
+        }, "R1"],
+    ]);
+    $self->assert_equals(JSON::false, $res->[0][1]{canCalculateChanges});
+
+    xlog "inMailboxOtherThan query can not calculate changes";
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+          filter => {
+            operator => 'NOT',
+            conditions => [
+              { inMailboxOtherThan => [$inbox->{id}] },
+            ],
+          },
         }, "R1"],
     ]);
     $self->assert_equals(JSON::false, $res->[0][1]{canCalculateChanges});
