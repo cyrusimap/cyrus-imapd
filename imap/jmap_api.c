@@ -2256,7 +2256,7 @@ static json_t *_json_has(int rights, int need)
 }
 
 /* create, update, delete */
-#define WRITERIGHTS  (ACL_WRITE|ACL_INSERT|ACL_SETSEEN|ACL_DELETEMSG|ACL_EXPUNGE)
+#define WRITERIGHTS  (ACL_WRITE|ACL_INSERT|ACL_SETSEEN|ACL_DELETEMSG|ACL_EXPUNGE|ACL_ANNOTATEMSG)
 
 HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
 {
@@ -2468,7 +2468,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                 else if (!strcmp(right, "mayWrite"))
                     access = WRITERIGHTS;
                 else if (!strcmp(right, "mayRead"))
-                    access = ACL_READ|ACL_LOOKUP;
+                    access = ACL_READ|ACL_LOOKUP|ACL_SETSEEN;
                 else if (iscalendar && !strcmp(right, "mayReadFreeBusy"))
                     access = DACL_READFB;
 
