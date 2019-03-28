@@ -669,11 +669,23 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     }
 
     mbname_t *mbname = mbname_from_intname(mbentry->name);
+    const char *topbox = strarray_nth(mbname_boxes(mbname), 0);
+
     /* skip INBOX.INBOX magic intermediate */
-    if (strarray_size(mbname_boxes(mbname)) == 1 && !strcmp(strarray_nth(mbname_boxes(mbname), 0), "INBOX")) {
+    if (strarray_size(mbname_boxes(mbname)) == 1 && !strcmp(topbox, "INBOX")) {
         mbname_free(&mbname);
         return 0;
     }
+
+    /* skip any of our magic mailboxes */
+    if (!strcmpsafe(topbox, config_getstring(IMAPOPT_CALENDARPREFIX))
+     || !strcmpsafe(topbox, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX))
+     || !strcmpsafe(topbox, config_getstring(IMAPOPT_DAVNOTIFICATIONSPREFIX))
+     || !strcmpsafe(topbox, config_getstring(IMAPOPT_JMAPUPLOADFOLDER))) {
+        mbname_free(&mbname);
+        return 0;
+    }
+
     mbname_free(&mbname);
 
     /* Do we need to process this mailbox? */
