@@ -1508,7 +1508,10 @@ static int _emailsearch_folders_match_cb(const conv_guidrec_t *rec, void *rock)
 
     // TODO we could match for mboxid, once the mailbox-id patch lands
     struct jmap_search_folder_match_rock *myrock = rock;
-    int pos = strarray_find(myrock->folders, rec->mboxname, 0);
+    mbentry_t *mbentry = NULL;
+    mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
+    int pos = mbentry ? strarray_find(myrock->folders, mbentry->name, 0) : -1;
+    mboxlist_entry_free(&mbentry);
     return ((pos >= 0) == (myrock->is_otherthan == 0)) ? IMAP_OK_COMPLETED : 0;
 }
 
