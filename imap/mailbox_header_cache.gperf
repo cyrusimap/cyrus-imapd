@@ -95,3 +95,6 @@ struct mailbox_header_cache {
 "authentication-results", BIT32_MAX
 "received-spf", BIT32_MAX
 "archived-at", BIT32_MAX
+"listbox-message-date", BIT32_MAX
+"topicbox-message-uuid", BIT32_MAX
+"topicbox-policy-reasoning", BIT32_MAX
