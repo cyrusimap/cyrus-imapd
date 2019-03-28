@@ -1039,7 +1039,7 @@ int _saxconvstatus(int type, struct dlistsax_data *d)
     if (type != DLISTSAX_STRING) return 0;
     switch (rock->state) {
     case 0:
-        rock->status->threadmodseq = atoll(d->data);
+        rock->status->threadmodseq = atomodseq_t(d->data);
         rock->state++;
         return 0;
     case 1:
@@ -1194,7 +1194,7 @@ int _saxconvparse(int type, struct dlistsax_data *d)
     case 1:
         // modseq
         if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
-        rock->conv->modseq = atoll(d->data);
+        rock->conv->modseq = atomodseq_t(d->data);
         rock->state = 2;
         return 0;
 
@@ -1268,7 +1268,7 @@ int _saxconvparse(int type, struct dlistsax_data *d)
             rock->substate = 1;
             return 0;
         case 1:
-            rock->folder->modseq = atoll(d->data);
+            rock->folder->modseq = atomodseq_t(d->data);
             rock->substate = 2;
             return 0;
         case 2:
@@ -1405,7 +1405,7 @@ int _saxconvparse(int type, struct dlistsax_data *d)
             return 0;
         }
         if (type != DLISTSAX_STRING) return IMAP_MAILBOX_BADFORMAT;
-        rock->conv->createdmodseq = atoll(d->data);
+        rock->conv->createdmodseq = atomodseq_t(d->data);
         rock->state = 19;
         return 0;
 

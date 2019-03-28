@@ -379,10 +379,10 @@ int parseentry_cb(int type, struct dlistsax_data *d)
         else {
             const char *key = buf_cstring(&d->kbuf);
             if (!strcmp(key, "C")) {
-                rock->mbentry->createdmodseq = atoll(d->data);
+                rock->mbentry->createdmodseq = atomodseq_t(d->data);
             }
             else if (!strcmp(key, "F")) {
-                rock->mbentry->foldermodseq = atoll(d->data);
+                rock->mbentry->foldermodseq = atomodseq_t(d->data);
             }
             else if (!strcmp(key, "I")) {
                 rock->mbentry->uniqueid = xstrdupnull(d->data);
