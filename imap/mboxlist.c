@@ -466,7 +466,7 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
             synonym_t *syn = ptrarray_tail(&rock->mbentry->synonyms);
 
             if (!strcmp(key, "F")) {
-                syn->foldermodseq = atoll(d->data);
+                syn->foldermodseq = atomodseq_t(d->data);
             }
             else if (!strcmp(key, "M")) {
                 syn->mtime = atoi(d->data);
