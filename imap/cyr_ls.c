@@ -88,10 +88,11 @@ static struct namespace cyr_ls_namespace;
 
 static int usage(const char *error)
 {
-    fprintf(stderr,"usage: cyr_ls [-C <alt_config>] [-l] [-m] <mailbox name>\n");
+    fprintf(stderr,"usage: cyr_ls [-C <alt_config>] [-R] [-l] [-m] [mailbox name]\n");
     fprintf(stderr, "\n");
+    fprintf(stderr,"\t-R\tlist submailboxes recursively\n");
     fprintf(stderr,"\t-l\tlong listing format\n");
-    fprintf(stderr,"\t-m\toutput the path to the metadata files (if different from the message files)\n");
+    fprintf(stderr,"\t-m\tlist the contents of the metadata directory (if different from the data directory)\n");
     if (error) {
         fprintf(stderr,"\n");
         fprintf(stderr,"ERROR: %s", error);
@@ -99,43 +100,128 @@ static int usage(const char *error)
     exit(-1);
 }
 
-static int list_cb(struct findall_data *data, void *rock __attribute__((unused)))
+struct list_opts {
+    int recurse;
+    int longlist;
+    int meta;
+    strarray_t *children;
+};
+
+static int list_cb(struct findall_data *data, void *rock)
 {
+    struct list_opts *opts = (struct list_opts *) rock;
     int r = 0;
 
     /* don't want partial matches */
     if (!data || !data->mbname) return 0;
 
     /* Convert internal name to external */
-    const char *extname = mbname_extname(data->mbname, &cyr_ls_namespace, "cyrus");
+    const char *extname =
+        mbname_extname(data->mbname, &cyr_ls_namespace, "cyrus");
     printf("%s\n", strrchr(extname, '/')+1);
+
+    if (opts->children) strarray_append(opts->children, extname);
 
     return r;
 }
 
+static void do_list(mbname_t *mbname, struct list_opts *opts)
+{
+    const char *path = NULL;
+    mbentry_t *mbentry = NULL;
+    int r;
+
+    printf("\n%s:\n\n", mbname_extname(mbname, &cyr_ls_namespace, "cyrus"));
+
+    r = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry, NULL);
+    if (!r) {
+        if (mbentry->mbtype & MBTYPE_RESERVE) r = IMAP_MAILBOX_NONEXISTENT;
+        else if (mbentry->mbtype & MBTYPE_DELETED) r = IMAP_MAILBOX_NONEXISTENT;
+        else if (mbentry->mbtype & MBTYPE_REMOTE) {
+            printf("Non-local mailbox: %s!%s\n",
+                   mbentry->server, mbentry->partition);
+        }
+        else if (opts->meta) {
+            path = mboxname_metapath(mbentry->partition,
+                                     mbentry->name, mbentry->uniqueid, 0, 0);
+        }
+        else {
+            path = mboxname_datapath(mbentry->partition,
+                                     mbentry->name, mbentry->uniqueid, 0);
+        }
+    }
+    else {
+        fprintf(stderr, "Invalid mailbox name\n");
+    }
+    mboxlist_entry_free(&mbentry);
+
+    /* Scan the directory */
+    if (path) {
+        DIR *dirp = opendir(path);
+        if (dirp) {
+            struct dirent *dirent;
+
+            while ((dirent = readdir(dirp))) {
+                if (dirent->d_name[0] == '.') continue;
+
+                printf("%s\n", dirent->d_name);
+            }
+            closedir(dirp);
+        }
+    }
+
+    if (!r) {
+        /* List children */
+        strarray_t *prev = opts->children;
+
+        if (opts->recurse) opts->children = strarray_new();
+
+        mbname_push_boxes(mbname, "%");
+        mboxlist_findall(&cyr_ls_namespace,
+                         mbname_extname(mbname, &cyr_ls_namespace, "cyrus"),
+                         1, 0, 0, &list_cb, opts);
+
+        if (opts->recurse) {
+            int i;
+
+            for (i = 0; i < strarray_size(opts->children); i++) {
+                mbname_t *mbname =
+                    mbname_from_extname(strarray_nth(opts->children, i),
+                                        &cyr_ls_namespace, NULL);
+                do_list(mbname, opts);
+                mbname_free(&mbname);
+            }
+            strarray_free(opts->children);
+            opts->children = prev;
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
-    mbentry_t *mbentry = NULL;
     int r;
     int opt;              /* getopt() returns an int */
     char *alt_config = NULL;
 
     // capture options
-    int longlist = 0;
-    int meta = 0;
+    struct list_opts opts = { 0, 0, 0, NULL };
 
-    while ((opt = getopt(argc, argv, "C:lm")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:Rlm")) != EOF) {
         switch(opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
             break;
 
+        case 'R':
+            opts.recurse = 1;
+            break;
+
         case 'l':
-            longlist = 1;
+            opts.longlist = 1;
             break;
 
         case 'm':
-            meta = 1;
+            opts.meta = 1;
             break;
 
         default:
@@ -154,53 +240,12 @@ int main(int argc, char **argv)
     /* Translate mailboxname */
     const char *path = (optind == argc) ? "." : argv[optind];
     mbname_t *mbname = NULL;
-    char *freeme = NULL;
 
     mbname = mbname_from_path(path, &cyr_ls_namespace);
-    path = NULL;
 
-    printf("%s:\n\n", mbname_extname(mbname, &cyr_ls_namespace, "cyrus"));
-
-    r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
-    if (!r) {
-        if (mbentry->mbtype & MBTYPE_REMOTE) {
-            printf("Non-local mailbox: %s!%s\n",
-                   mbentry->server, mbentry->partition);
-        }
-        else if (meta) {
-            path = mboxname_metapath(mbentry->partition, mbentry->name, mbentry->uniqueid, 0, 0);
-        }
-        else {
-            path = mboxname_datapath(mbentry->partition, mbentry->name, mbentry->uniqueid, 0);
-        }
-    }
-    else {
-        fprintf(stderr, "Invalid mailbox name: %s\n", argv[optind]);
-    }
-
-    /* Scan the directory */
-    if (path) {
-        DIR *dirp = opendir(path);
-        if (dirp) {
-            struct dirent *dirent;
-
-            while ((dirent = readdir(dirp))) {
-                if (dirent->d_name[0] == '.') continue;
-
-                printf("%s\n", dirent->d_name);
-            }
-            closedir(dirp);
-        }
-
-        /* List children */
-        mbname_push_boxes(mbname, "%");
-        mboxlist_findall(&cyr_ls_namespace,
-                         mbname_extname(mbname, &cyr_ls_namespace, "cyrus"),
-                         1, 0, 0, &list_cb, &longlist);
-    }
+    do_list(mbname, &opts);
 
     mbname_free(&mbname);
-    free(freeme);
 
     cyrus_done();
 
