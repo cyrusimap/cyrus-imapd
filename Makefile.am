@@ -1358,7 +1358,7 @@ imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 # the /dev/null redirection on cd is to prevent shell environments with
 # CDPATH echoing the path change on stdout and consequently into the .h file
 %_js.h: %.js
-	$(AM_V_GEN)(cd $(<D) > /dev/null && xxd -i $(<F)) > $@
+	$(AM_V_GEN)(cd $(<D) > /dev/null && xxd -i $(<F)) > $@.NEW && mv $@.NEW $@
 
 if MAINTAINER_MODE
 imap/rfc822_header.c: imap/rfc822_header.st
