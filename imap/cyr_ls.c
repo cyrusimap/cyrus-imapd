@@ -69,6 +69,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/param.h>
+#include <pwd.h>
+#include <grp.h>
 
 #include "util.h"
 #include "global.h"
@@ -101,6 +103,41 @@ static int usage(const char *error)
     exit(-1);
 }
 
+#define SECONDS_PER_YEAR 31536000  /* 365 * 24 * 60 * 60 */
+
+static void long_list(const char *path, const char *name)
+{
+    struct stat sbuf;
+    struct group *grp;
+    struct passwd *pwd;
+    time_t now = time(0);
+    const char *datefmt = "%b %d %k:%M";
+    char datestr[13];
+
+    memset(&sbuf, 0, sizeof(struct stat));
+    stat(path, &sbuf);
+    pwd = getpwuid(sbuf.st_uid);
+    grp = getgrgid(sbuf.st_gid);
+
+    if (now - sbuf.st_ctime > SECONDS_PER_YEAR) datefmt = "%b %d  %Y";
+
+    strftime(datestr, 13, datefmt, localtime(&(sbuf.st_ctime)));
+
+    printf("\n%c%c%c%c%c%c%c%c%c%c %lu %-8s %-8s % 10ld %s %s",
+           S_ISDIR(sbuf.st_mode) ? 'd' : '-',
+           (sbuf.st_mode & S_IRUSR) ? 'r' : '-',
+           (sbuf.st_mode & S_IWUSR) ? 'w' : '-',
+           (sbuf.st_mode & S_IXUSR) ? 'x' : '-',
+           (sbuf.st_mode & S_IRGRP) ? 'r' : '-',
+           (sbuf.st_mode & S_IWGRP) ? 'w' : '-',
+           (sbuf.st_mode & S_IXGRP) ? 'x' : '-',
+           (sbuf.st_mode & S_IROTH) ? 'r' : '-',
+           (sbuf.st_mode & S_IWOTH) ? 'w' : '-',
+           (sbuf.st_mode & S_IXOTH) ? 'x' : '-',
+           sbuf.st_nlink, pwd->pw_name, grp->gr_name,
+           sbuf.st_size, datestr, name ? name : path);
+}
+
 struct list_opts {
     int recurse;
     int longlist;
@@ -122,13 +159,27 @@ static int list_cb(struct findall_data *data, void *rock)
     /* don't want partial matches */
     if (!data || !data->mbname) return 0;
 
-    /* Convert internal name to external */
-    const char *extname =
-        mbname_extname(data->mbname, &cyr_ls_namespace, "cyrus");
-    printf("%c%s", !(lrock->count++ % lrock->opts->columns) ? '\n' : '\t',
-           strrchr(extname, '/')+1);
+    if (lrock->opts->longlist) {
+        const char *path;
 
-    if (lrock->children) strarray_append(lrock->children, extname);
+        if (lrock->opts->meta) {
+            path = mboxname_metapath(data->mbentry->partition,
+                                     data->mbentry->name,
+                                     data->mbentry->uniqueid, 0, 0);
+        }
+        else {
+            path = mboxname_datapath(data->mbentry->partition,
+                                     data->mbentry->name,
+                                     data->mbentry->uniqueid, 0);
+        }
+        long_list(path, strrchr(data->extname, '/')+1);
+    }
+    else {
+        printf("%c%s", !(lrock->count++ % lrock->opts->columns) ? '\n' : '\t',
+               strrchr(data->extname, '/')+1);
+    }
+
+    if (lrock->children) strarray_append(lrock->children, data->extname);
 
     return r;
 }
@@ -166,16 +217,21 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
 
     /* Scan the directory */
     if (path) {
-        DIR *dirp = opendir(path);
-        if (dirp) {
+        DIR *dirp;
+        if (!chdir(path) && (dirp = opendir("."))) {
             struct dirent *dirent;
 
             while ((dirent = readdir(dirp))) {
                 if (dirent->d_name[0] == '.') continue;
 
-                printf("%c%s",
-                       !(lrock.count++ % lrock.opts->columns) ? '\n' : '\t',
-                       dirent->d_name);
+                if (opts->longlist) {
+                    long_list(dirent->d_name, NULL);
+                }
+                else {
+                    printf("%c%s",
+                           !(lrock.count++ % lrock.opts->columns) ? '\n' : '\t',
+                           dirent->d_name);
+                }
             }
             closedir(dirp);
         }
