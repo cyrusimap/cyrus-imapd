@@ -766,6 +766,80 @@ EXPORTED mbname_t *mbname_from_extname(const char *extname, const struct namespa
     return mbname;
 }
 
+EXPORTED mbname_t *mbname_from_path(const char *path, const struct namespace *ns)
+{
+    int absolute = 0, relative = 0, r;
+    mbname_t *mbname = NULL;
+    mbentry_t *mbentry = NULL;
+
+    /* Is the mailbox argument absolute or relative to cwd? */
+    if (path[0] == '/') {
+        absolute = 1;
+        path++;
+    }
+    else if (path[0] == '.') {
+        relative = 1;
+    }
+
+    if (!relative) {
+        mbname = mbname_from_extname(path, ns, NULL);
+        r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
+    }
+    if (relative || (!absolute && (r == IMAP_MAILBOX_NONEXISTENT))) {
+        char cwd[MAX_MAILBOX_PATH+1];
+        const char *uid;
+
+        mbname_free(&mbname);
+        mboxlist_entry_free(&mbentry);
+
+        /* Construct a mailbox relative to cwd */
+        getcwd(cwd, MAX_MAILBOX_PATH);
+        uid = strrchr(cwd, '/');
+        if (uid) {
+            /* Lookup current mailbox by uniqueid */
+            r = mboxlist_lookup_by_uniqueid(uid+1, &mbentry, NULL);
+
+            if (!r) {
+                strarray_t *subs = NULL;
+                int i;
+
+                /* Build current mailbox name */
+                mbname = mbname_from_intname(mbentry->name);
+
+                if (relative) {
+                    if (path[1] == '\0') {
+                        /* Explicit . */
+                        path += 1;
+                    }
+                    if (path[1] == '/') {
+                        /* Explicit ./foo */
+                        path += 2;
+                    }
+                    else {
+                        while (path[0] == '.' && path[1] == '.' &&
+                               (path[2] == '\0' || path[2] == '/')) {
+                            /* Up to parent */
+                            free(mbname_pop_boxes(mbname));
+                            path += (path[2] == '/') ? 3 : 2;
+                        }
+                    }
+                }
+
+                /* Add submailbox(es) */
+                subs = strarray_split(path, "/", 0);
+                for (i = 0; i < strarray_size(subs); i++) {
+                    mbname_push_boxes(mbname, strarray_nth(subs, i));
+                }
+                strarray_free(subs);
+            }
+
+        }
+    }
+    mboxlist_entry_free(&mbentry);
+
+    return mbname ? mbname : xzmalloc(sizeof(mbname_t));
+}
+
 EXPORTED void mbname_free(mbname_t **mbnamep)
 {
     mbname_t *mbname = *mbnamep;

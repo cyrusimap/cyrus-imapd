@@ -294,7 +294,7 @@ int main(int argc, char **argv)
             mbname = mbname_from_userid(argv[i]);
         }
         else {
-            mbname = mbname_from_extname(argv[i], &mbpath_namespace, NULL);
+            mbname = mbname_from_path(argv[i], &mbpath_namespace);
         }
         r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
         if (!r) {
@@ -350,6 +350,8 @@ int main(int argc, char **argv)
         else {
             if (!quiet && (r == IMAP_MAILBOX_NONEXISTENT)) {
                 fprintf(stderr, "Invalid mailbox name: %s\n", argv[i]);
+                fprintf(stderr, "Invalid mailbox name: %s\n",
+                        mbname_extname(mbname, &mbpath_namespace, "cyrus"));
             }
             if (stop_on_error) {
                 if (quiet) {
@@ -361,6 +363,7 @@ int main(int argc, char **argv)
             }
         }
         mbname_free(&mbname);
+        mboxlist_entry_free(&mbentry);
     }
 
     cyrus_done();
