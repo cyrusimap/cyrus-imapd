@@ -104,12 +104,16 @@ struct list_opts {
     int recurse;
     int longlist;
     int meta;
+};
+
+struct list_rock {
+    struct list_opts *opts;
     strarray_t *children;
 };
 
 static int list_cb(struct findall_data *data, void *rock)
 {
-    struct list_opts *opts = (struct list_opts *) rock;
+    struct list_rock *lrock = (struct list_rock *) rock;
     int r = 0;
 
     /* don't want partial matches */
@@ -120,7 +124,7 @@ static int list_cb(struct findall_data *data, void *rock)
         mbname_extname(data->mbname, &cyr_ls_namespace, "cyrus");
     printf("%s\n", strrchr(extname, '/')+1);
 
-    if (opts->children) strarray_append(opts->children, extname);
+    if (lrock->children) strarray_append(lrock->children, extname);
 
     return r;
 }
@@ -130,8 +134,9 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
     const char *path = NULL;
     mbentry_t *mbentry = NULL;
     int r;
+    struct list_rock lrock = { opts, NULL };
 
-    printf("\n%s:\n\n", mbname_extname(mbname, &cyr_ls_namespace, "cyrus"));
+    printf("\n%s:\n", mbname_extname(mbname, &cyr_ls_namespace, "cyrus"));
 
     r = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry, NULL);
     if (!r) {
@@ -172,27 +177,24 @@ static void do_list(mbname_t *mbname, struct list_opts *opts)
 
     if (!r) {
         /* List children */
-        strarray_t *prev = opts->children;
-
-        if (opts->recurse) opts->children = strarray_new();
+        if (opts->recurse) lrock.children = strarray_new();
 
         mbname_push_boxes(mbname, "%");
         mboxlist_findall(&cyr_ls_namespace,
                          mbname_extname(mbname, &cyr_ls_namespace, "cyrus"),
-                         1, 0, 0, &list_cb, opts);
+                         1, 0, 0, &list_cb, &lrock);
 
         if (opts->recurse) {
             int i;
 
-            for (i = 0; i < strarray_size(opts->children); i++) {
+            for (i = 0; i < strarray_size(lrock.children); i++) {
                 mbname_t *mbname =
-                    mbname_from_extname(strarray_nth(opts->children, i),
+                    mbname_from_extname(strarray_nth(lrock.children, i),
                                         &cyr_ls_namespace, NULL);
                 do_list(mbname, opts);
                 mbname_free(&mbname);
             }
-            strarray_free(opts->children);
-            opts->children = prev;
+            strarray_free(lrock.children);
         }
     }
 }
@@ -204,7 +206,7 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
 
     // capture options
-    struct list_opts opts = { 0, 0, 0, NULL };
+    struct list_opts opts = { 0, 0, 0 };
 
     while ((opt = getopt(argc, argv, "C:Rlm")) != EOF) {
         switch(opt) {
