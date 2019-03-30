@@ -153,8 +153,7 @@ extern void sieverestart(FILE *f);
 %destructor  { strarray_free($$); } optstringlist stringlist strings string1
 %destructor  { free($$);          } STRING
 
-%parse-param { sieve_script_t *sscript }
-%lex-param   { sieve_script_t *sscript }
+%param   { sieve_script_t *sscript }
 %pure-parser
 
 %union {
