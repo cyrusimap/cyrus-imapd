@@ -3992,7 +3992,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         if (prop) nextorg = icalproperty_get_organizer(prop);
         /* if no toplevel organizer, use the one from here */
         if (!organizer && nextorg) organizer = nextorg;
-        if (nextorg && strcmp(organizer, nextorg)) {
+        if (nextorg && strcasecmp(organizer, nextorg)) {
             txn->error.precond = CALDAV_SAME_ORGANIZER;
             ret = HTTP_FORBIDDEN;
             goto done;
