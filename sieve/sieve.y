@@ -301,8 +301,7 @@ extern void sieverestart(FILE *f);
 %defines
 %destructor { free_tree($$); } commands command action elsif block
 
-%parse-param { sieve_script_t *parse_script }
-%lex-param { sieve_script_t *parse_script }
+%param { sieve_script_t *parse_script }
 %pure-parser
 
 
