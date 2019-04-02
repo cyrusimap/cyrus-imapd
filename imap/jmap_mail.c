@@ -483,32 +483,52 @@ static void _remove_ws(char *s)
 static json_t *_header_as_messageids(const char *raw)
 {
     if (!raw) return json_null();
-
     json_t *msgids = json_array();
-    const char *lo = raw;
-    while (*lo) {
-        lo = strchr(lo, '<');
-        if (!lo) break;
-        const char *hi = strchr(lo + 1, '>');
-        if (!hi) break;
-        char *tmp = charset_unfold(lo + 1, hi - lo - 1, CHARSET_UNFOLD_SKIPWS);
-        _remove_ws(tmp);
-        if (*tmp) {
+    char *unfolded = charset_unfold(raw, strlen(raw), CHARSET_UNFOLD_SKIPWS);
+
+    const char *p = unfolded;
+
+    while (*p) {
+        /* Skip preamble */
+        while (isspace(*p) || *p == ',') p++;
+        if (!*p) break;
+
+        /* Find end of id */
+        const char *q = p;
+        if (*p == '<') {
+            while (*q && *q != '>') q++;
+        }
+        else {
+            while (*q && !isspace(*q)) q++;
+        }
+
+        /* Read id */
+        char *val = xstrndup(*p == '<' ? p + 1 : p,
+                             *q == '>' ? q - p - 1 : q - p);
+        if (*p == '<') {
+            _remove_ws(val);
+        }
+        if (*val) {
             /* calculate the value that would be created if this was
              * fed back into an Email/set and make sure it would
              * validate */
-            char *msgid = strconcat("<", tmp, ">", NULL);
+            char *msgid = strconcat("<", val, ">", NULL);
             int r = conversations_check_msgid(msgid, strlen(msgid));
-            if (!r) json_array_append_new(msgids, json_string(tmp));
+            if (!r) json_array_append_new(msgids, json_string(val));
             free(msgid);
         }
-        free(tmp);
-        lo = hi + 1;
+        free(val);
+
+        /* Reset iterator */
+        p = *q ? q + 1 : q;
     }
+
+
     if (!json_array_size(msgids)) {
         json_decref(msgids);
         msgids = json_null();
     }
+    free(unfolded);
     return msgids;
 }
 
