@@ -4575,17 +4575,23 @@ EXPORTED void mboxlist_init(int myflags)
     mboxlist_initialized = 1;
 }
 
+static char *mboxlist_fname(void)
+{
+    const char *fname = config_getstring(IMAPOPT_MBOXLIST_DB_PATH);
+
+    if (fname) return xstrdup(fname);
+
+    return strconcat(config_dir, FNAME_MBOXLIST, (char *)NULL);
+}
+
 EXPORTED void mboxlist_open(const char *fname)
 {
     int ret, flags;
     char *tofree = NULL;
 
-    if (!fname)
-        fname = config_getstring(IMAPOPT_MBOXLIST_DB_PATH);
-
     /* create db file name */
     if (!fname) {
-        tofree = strconcat(config_dir, FNAME_MBOXLIST, (char *)NULL);
+        tofree = mboxlist_fname();
         fname = tofree;
     }
 
@@ -5103,4 +5109,128 @@ static char *mboxname_to_dbname(const char *intname)
     char *res = mbname_dbname(mbname);
     mbname_free(&mbname);
     return res;
+}
+
+
+static int _check_rec_cb(void *rock,
+                         const char *key, size_t keylen,
+                         const char *data, size_t datalen)
+{
+    int *do_upgrade = (int *) rock;
+
+    if (keylen && key[0] == KEY_TYPE_ID) {
+        /* Verify that we have a valid I record */
+        mbentry_t *mbentry = NULL;
+
+        int r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
+        if (r) return r;
+
+        *do_upgrade = (mbentry->name == NULL);
+        mboxlist_entry_free(&mbentry);
+    }
+    else *do_upgrade = 1;
+
+    return CYRUSDB_DONE;
+}
+
+struct upgrade_rock {
+    struct buf *namebuf;
+    struct txn **tid;
+};
+
+static int _upgrade_cb(void *rock,
+                       const char *key, size_t keylen,
+                       const char *data, size_t datalen)
+{
+    struct upgrade_rock *urock = (struct upgrade_rock *) rock;
+    mbentry_t *mbentry = NULL;
+    int r;
+
+    /* skip $RACL or other $ space keys */
+    if (key[0] == '$') return CYRUSDB_OK;
+
+    r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
+    if (r) return r;
+
+    buf_setmap(urock->namebuf, key, keylen);
+    mbentry->name = mboxname_to_dbname(buf_cstring(urock->namebuf));
+    r = mboxlist_update_entry(mbentry->name, mbentry, urock->tid);
+
+    mboxlist_entry_free(&mbentry);
+
+    return r;
+}
+
+EXPORTED int mboxlist_upgrade(int *upgraded)
+{
+    int r, r2 = 0, do_upgrade = 0;
+    struct buf buf = BUF_INITIALIZER;
+    struct db *backup = NULL;
+    struct txn *tid = NULL;
+    struct upgrade_rock urock = { &buf, &tid };
+    char *fname;
+
+    if (upgraded) *upgraded = 0;
+
+    /* check if we need to upgrade */
+    mboxlist_open(NULL);
+    r = cyrusdb_foreach(mbdb, "", 0, NULL, _check_rec_cb, &do_upgrade, NULL);
+    mboxlist_close();
+
+    if (r != CYRUSDB_DONE) return r;
+    else if (!do_upgrade) return 0;
+
+    /* create db file names */
+    fname = mboxlist_fname();
+    buf_setcstr(&buf, fname);
+    buf_appendcstr(&buf, ".OLD");
+
+    /* rename db file to backup */
+    r = rename(fname, buf_cstring(&buf));
+    free(fname);
+    if (r) goto done;
+    
+    /* open backup db file */
+    r = cyrusdb_open(DB, buf_cstring(&buf), 0, &backup);
+
+    if (r) {
+        syslog(LOG_ERR, "DBERROR: opening %s: %s", buf_cstring(&buf),
+               cyrusdb_strerror(r));
+        fatal("can't open mailboxes file", EX_TEMPFAIL);
+    }
+
+    /* open a new db file */
+    mboxlist_open(NULL);
+
+    /* perform upgrade from backup to new db */
+    r = cyrusdb_foreach(backup, "", 0, NULL, _upgrade_cb, &urock, NULL);
+
+    r2 = cyrusdb_close(backup);
+    if (r2) {
+        syslog(LOG_ERR, "DBERROR: error closing %s: %s", buf_cstring(&buf),
+               cyrusdb_strerror(r2));
+    }
+
+    /* complete txn on new db */
+    if (tid) {
+        if (r) {
+            r2 = mboxlist_abort(tid);
+        } else {
+            r2 = mboxlist_commit(tid);
+        }
+
+        if (r2) {
+            syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_upgrade: %s",
+                   r ? "aborting" : "committing", cyrusdb_strerror(r2));
+        }
+    }
+
+    mboxlist_close();
+
+    if (!r && upgraded) *upgraded = 1;
+
+  done:
+    buf_free(&buf);
+
+    return r;
 }
