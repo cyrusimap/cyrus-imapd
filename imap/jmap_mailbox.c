@@ -1237,30 +1237,30 @@ static int _mbox_query(jmap_req_t *req, struct jmap_query *query)
         mboxquery_record_t *rec = ptrarray_nth(&mbquery->result, i);
 
         /* Check anchor */
-        if (query->anchor && !seen_anchor) {
-            seen_anchor = !strcmp(rec->id, query->anchor);
+        if (query->anchor) {
             if (!seen_anchor) {
-                continue;
-            }
-            /* Found the anchor! Now apply anchor offsets */
-            if (query->anchor_offset < 0) {
-                skip_anchor = -query->anchor_offset;
-                continue;
-            }
-            else if (query->anchor_offset > 0) {
-                /* Prefill result list with all, but the current record */
-                size_t lo = query->anchor_offset < i ? i - query->anchor_offset : 0;
-                size_t hi = query->limit ? lo + query->limit : (size_t) i;
-                result_pos = lo;
-                while (lo < hi && lo < (size_t) i) {
-                    mboxquery_record_t *p = ptrarray_nth(&mbquery->result, lo);
-                    json_array_append_new(query->ids, json_string(p->id));
-                    lo++;
+                seen_anchor = !strcmp(rec->id, query->anchor);
+                if (!seen_anchor) {
+                    continue;
+                }
+                /* Found the anchor! Now apply anchor offsets */
+                if (query->anchor_offset > 0) {
+                    skip_anchor = query->anchor_offset;
+                    continue;
+                }
+                else if (query->anchor_offset < 0) {
+                    /* Prefill result list with all, but the current record */
+                    size_t lo = -query->anchor_offset < i ? i + query->anchor_offset : 0;
+                    size_t hi = query->limit ? lo + query->limit : (size_t) i;
+                    result_pos = lo;
+                    while (lo < hi && lo < (size_t) i) {
+                        mboxquery_record_t *p = ptrarray_nth(&mbquery->result, lo);
+                        json_array_append_new(query->ids, json_string(p->id));
+                        lo++;
+                    }
                 }
             }
-        }
-        else if (query->anchor && skip_anchor) {
-            if (--skip_anchor) continue;
+            if (skip_anchor && --skip_anchor) continue;
         }
 
         /* Check limit. */
