@@ -651,8 +651,21 @@ sub test_mailbox_query
     $res = $jmap->CallMethods([
         ['Mailbox/query', {
             sort => [{ property => "name" }],
-            anchor => $mboxids{'Inbox'},
-            anchorOffset => 2,
+            anchor => $mboxids{'AA'},
+            anchorOffset => 1,
+        }, "R1"]
+    ]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
+    $self->assert_num_equals(2, $res->[0][1]->{position});
+
+    xlog "list mailboxes (with negative anchor offset)";
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+            sort => [{ property => "name" }],
+            anchor => $mboxids{'B'},
+            anchorOffset => -1,
         }, "R1"]
     ]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
@@ -660,19 +673,6 @@ sub test_mailbox_query
     $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
     $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[2]);
     $self->assert_num_equals(1, $res->[0][1]->{position});
-
-    xlog "list mailboxes (with negative anchor offset)";
-    $res = $jmap->CallMethods([
-        ['Mailbox/query', {
-            sort => [{ property => "name" }],
-            anchor => $mboxids{'A'},
-            anchorOffset => -2,
-        }, "R1"]
-    ]);
-    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
-    $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[0]);
-    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
-    $self->assert_num_equals(2, $res->[0][1]->{position});
 
     xlog "list mailboxes (with position)";
     $res = $jmap->CallMethods([
@@ -696,7 +696,7 @@ sub test_mailbox_query
     $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
 }
 
-sub test_mailbox_query_parentname
+sub test_mailbox_query_sortastree
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
@@ -716,9 +716,9 @@ sub test_mailbox_query_parentname
     my %mboxids = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
     $self->assert(exists $mboxids{'Inbox'});
 
-    xlog "list mailboxes sorted by parent/name";
+    xlog "list mailboxes sorted by tree";
     $res = $jmap->CallMethods([
-        ['Mailbox/query', { sort => [{ property => "parent/name" }] }, "R1"]
+        ['Mailbox/query', { sortAsTree => JSON::true }, "R1"]
     ]);
     $self->assert_num_equals(5, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[0]);
@@ -727,10 +727,10 @@ sub test_mailbox_query_parentname
     $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[3]);
     $self->assert_str_equals($mboxids{'Spam'}, $res->[0][1]{ids}[4]);
 
-    xlog "list mailboxes sorted by parent/name, filtered by parentId";
+    xlog "list mailboxes sorted by tree, filtered by parentId";
     $res = $jmap->CallMethods([
         ['Mailbox/query', {
-            sort => [{ property => "parent/name" }],
+            sortAsTree => JSON::true,
             filter => {parentId => $mboxids{'Ham'}},
         }, "R1"]
     ]);
