@@ -838,6 +838,11 @@ typedef struct {
 } mboxquery_filter_t;
 
 typedef struct {
+    int sort_as_tree;
+    int filter_as_tree;
+} mboxquery_args_t;
+
+typedef struct {
     jmap_req_t *req;
     mboxquery_filter_t *filter;
     ptrarray_t sort;    /* Sort criteria (mboxquery_sort_t) */
@@ -852,6 +857,7 @@ typedef struct {
     int need_sort_order;
     int need_role;
     int need_sublist;
+    const mboxquery_args_t *args;
 } mboxquery_t;
 
 typedef struct {
@@ -1049,16 +1055,20 @@ static mboxquery_t *_mboxquery_new(jmap_req_t *req, json_t *filter, json_t *sort
     return q;
 }
 
-
 static int _mboxquery_compar(const void **a, const void **b, void *rock)
 {
     const mboxquery_record_t *pa = *a;
     const mboxquery_record_t *pb = *b;
-    ptrarray_t *criteria = rock;
+    const mboxquery_t *query = rock;
     int i;
 
-    for (i = 0; i < criteria->count; i++) {
-        mboxquery_sort_t *crit = ptrarray_nth(criteria, i);
+    if (query->args->sort_as_tree) {
+        int cmp = strcmp(pa->utf8mboxname, pb->utf8mboxname);
+        if (cmp) return cmp;
+    }
+
+    for (i = 0; i < query->sort.count; i++) {
+        mboxquery_sort_t *crit = ptrarray_nth(&query->sort, i);
         int cmp = 0;
         int sign = crit->desc ? -1 : 1;
 
@@ -1066,8 +1076,6 @@ static int _mboxquery_compar(const void **a, const void **b, void *rock)
             cmp = strcmp(pa->jmapname, pb->jmapname) * sign;
         else if (!strcmp(crit->field, "sortOrder"))
             cmp = (pa->sort_order - pb->sort_order) * sign;
-        else if (!strcmp(crit->field, "parent/name"))
-            cmp = strcmp(pa->utf8mboxname, pb->utf8mboxname) * sign;
 
         if (cmp) return cmp;
     }
@@ -1151,7 +1159,7 @@ done:
     return r;
 }
 
-static int _mboxquery_run(mboxquery_t *query)
+static int _mboxquery_run(mboxquery_t *query, const mboxquery_args_t *args)
 {
     /* Prepare internal query context. */
     int i;
@@ -1163,10 +1171,12 @@ static int _mboxquery_run(mboxquery_t *query)
         else if (!strcmp(crit->field, "sortOrder")) {
             query->need_sort_order = 1;
         }
-        else if (!strcmp(crit->field, "parent/name")) {
-            query->need_utf8mboxname = 1;
-        }
     }
+
+    if (args->sort_as_tree) {
+        query->need_utf8mboxname = 1;
+    }
+    query->args = args;
 
     if (query->need_sublist) {
         query->sublist = mboxlist_sublist(query->req->userid);
@@ -1185,8 +1195,7 @@ static int _mboxquery_run(mboxquery_t *query)
 
     /* Sort result */
     qsort_r(query->result.data, query->result.count, sizeof(void*),
-            (int(*)(const void*, const void*, void*)) _mboxquery_compar,
-            &query->sort);
+            (int(*)(const void*, const void*, void*)) _mboxquery_compar, query);
 
 done:
     return r;
@@ -1202,7 +1211,8 @@ static int _mboxquery_can_calculate_changes(mboxquery_t *mbquery)
     return !strcmp(mbquery->req->userid, mbquery->req->accountid);
 }
 
-static int _mbox_query(jmap_req_t *req, struct jmap_query *query)
+static int _mbox_query(jmap_req_t *req, struct jmap_query *query,
+                       const mboxquery_args_t *args)
 {
     int r = 0;
 
@@ -1210,7 +1220,7 @@ static int _mbox_query(jmap_req_t *req, struct jmap_query *query)
     mboxquery_t *mbquery = _mboxquery_new(req, query->filter, query->sort);
 
     /* Run the query */
-    r = _mboxquery_run(mbquery);
+    r = _mboxquery_run(mbquery, args);
     if (r) goto done;
 
     query->total = mbquery->result.count;
@@ -1295,13 +1305,12 @@ done:
     return r;
 }
 
-static int _mbox_parse_comparator(struct jmap_comparator *comp,
-                                  void *rock __attribute__((unused)))
+static int _mboxquery_parse_comparator(struct jmap_comparator *comp,
+                                       void *rock __attribute__((unused)))
 {
     /* Reject unsupported properties */
     if (strcmp(comp->property, "sortOrder") &&
-        strcmp(comp->property, "name") &&
-        strcmp(comp->property, "parent/name")) {
+        strcmp(comp->property, "name")) {
         return 0;
     }
     /* Reject any collation */
@@ -1311,9 +1320,9 @@ static int _mbox_parse_comparator(struct jmap_comparator *comp,
     return 1;
 }
 
-static void _mbox_parse_filter(json_t *filter, struct jmap_parser *parser,
-                               json_t *unsupported __attribute__((unused)),
-                               void *rock __attribute__((unused)))
+static void _mboxquery_parse_filter(json_t *filter, struct jmap_parser *parser,
+                                    json_t *unsupported __attribute__((unused)),
+                                    void *rock __attribute__((unused)))
 {
     json_t *val;
     const char *field;
@@ -1342,17 +1351,36 @@ static void _mbox_parse_filter(json_t *filter, struct jmap_parser *parser,
     }
 }
 
+static int _mboxquery_parse_args(const char *key,
+                                 json_t *arg,
+                                 struct jmap_parser *parser __attribute__((unused)),
+                                 void *rock)
+{
+    mboxquery_args_t *args = (mboxquery_args_t*) rock;
+
+    if (!strcmp(key, "sortAsTree") && json_is_boolean(arg)) {
+        args->sort_as_tree = json_boolean_value(arg);
+        return 1;
+    }
+    else if (!strcmp(key, "filterAsTree") && json_is_boolean(arg)) {
+        args->filter_as_tree = json_boolean_value(arg);
+        return 1;
+    }
+    else return 0;
+}
+
 static int jmap_mailbox_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
+    mboxquery_args_t args = { 0, 0 };
 
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req->args, &parser,
-                     _mbox_parse_filter, NULL,
-                     _mbox_parse_comparator, NULL,
-                     NULL, NULL,
+                     _mboxquery_parse_filter, NULL,
+                     _mboxquery_parse_comparator, NULL,
+                     _mboxquery_parse_args, &args,
                      &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -1360,7 +1388,7 @@ static int jmap_mailbox_query(jmap_req_t *req)
     }
 
     /* Search for the mailboxes */
-    int r = _mbox_query(req, &query);
+    int r = _mbox_query(req, &query, &args);
     if (r) {
         jmap_error(req, jmap_server_error(r));
         goto done;
@@ -1393,14 +1421,15 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_querychanges query;
+    mboxquery_args_t args = { 0, 0 };
     int r = 0;
 
     /* Parse arguments */
     json_t *err = NULL;
     jmap_querychanges_parse(req->args, &parser,
-                            _mbox_parse_filter, NULL,
-                            _mbox_parse_comparator, NULL,
-                            NULL, NULL,
+                            _mboxquery_parse_filter, NULL,
+                            _mboxquery_parse_comparator, NULL,
+                            _mboxquery_parse_args, &args,
                             &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -1424,7 +1453,7 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
     mbquery->include_tombstones = 1;
     mbquery->include_hidden = 1;
     mbquery->need_name = 1;
-    r = _mboxquery_run(mbquery);
+    r = _mboxquery_run(mbquery, &args);
     if (r) goto done;
 
     hash_table removed = HASH_TABLE_INITIALIZER;
