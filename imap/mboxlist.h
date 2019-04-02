@@ -423,4 +423,6 @@ int mboxlist_delayed_delete_isenabled(void);
 /* Promote an intermediary mailbox to a real mailbox. */
 int mboxlist_promote_intermediary(const char *mboxname);
 
+int mboxlist_upgrade(int *upgraded);
+
 #endif

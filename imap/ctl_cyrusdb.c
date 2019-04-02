@@ -178,6 +178,9 @@ static int fixmbox(const mbentry_t *mbentry,
 
 static void process_mboxlist(void)
 {
+    /* upgrade database to new mailboxes-by-id records */
+    mboxlist_upgrade(NULL);
+
     /* build a list of mailboxes - we're using internal names here */
     mboxlist_allmbox(NULL, fixmbox, NULL, MBOXTREE_INTERMEDIATES);
 
