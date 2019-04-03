@@ -63,6 +63,7 @@
 #include "mboxname.h"
 #include "msgrecord.h"
 #include "statuscache.h"
+#include "stristr.h"
 #include "util.h"
 #include "xmalloc.h"
 
@@ -853,7 +854,7 @@ typedef struct {
     enum search_op op;
     ptrarray_t args; /* array of mboxquery_filter_t */
     /* Arguments for the filter operator or condition. */
-    json_t *parent_id;
+    json_t *jparent_id;
     const char *name;
     json_t *role;
     json_t *has_any_role;
@@ -876,7 +877,6 @@ typedef struct {
     int include_hidden;
 
     int need_name;
-    int need_utf8mboxname;
     int need_sort_order;
     int need_role;
     int need_role_order;
@@ -889,7 +889,6 @@ typedef struct {
     char *id;
     mbname_t *mbname;
     char *mboxname;
-    char *utf8mboxname;
     char *jmapname;
     char *parent_id; // NULL for top-level
     int sort_order;
@@ -926,7 +925,6 @@ static void _mboxquery_record_fini(mboxquery_record_t *rec)
     free(rec->id);
     mbname_free(&rec->mbname);
     free(rec->mboxname);
-    free(rec->utf8mboxname);
     free(rec->parent_id);
     free(rec->jmapname);
 }
@@ -1000,17 +998,15 @@ static int _mboxquery_eval_filter(mboxquery_t *query,
             mbname_free(&mbname);
             if (!is_match) return 0;
         }
-        if (filter->parent_id) {
+        if (filter->jparent_id) {
             if (rec->parent_id) {
-                const char *want_parent = json_string_value(filter->parent_id);
+                const char *want_parent = json_string_value(filter->jparent_id);
                 if (strcmpsafe(rec->parent_id, want_parent)) return 0;
             }
-            else if (!json_is_null(filter->parent_id)) return 0;
+            else if (!json_is_null(filter->jparent_id)) return 0;
         }
-        if (filter->name) {
-            if (strcmp(filter->name, rec->utf8mboxname)) {
-                return 0;
-            }
+        if (filter->name && !stristr(rec->jmapname, filter->name)) {
+            return 0;
         }
         if (JNOTNULL(filter->is_subscribed)) {
             int want_subscribed = json_boolean_value(filter->is_subscribed);
@@ -1042,7 +1038,7 @@ static mboxquery_filter_t *_mboxquery_build_filter(mboxquery_t *query, json_t *j
     }
     else {
         filter->op = SEOP_UNKNOWN;
-        filter->parent_id = json_object_get(jfilter, "parentId");
+        filter->jparent_id = json_object_get(jfilter, "parentId");
         filter->name = json_string_value(json_object_get(jfilter, "name"));
         filter->role = json_object_get(jfilter, "role");
         filter->has_any_role = json_object_get(jfilter, "hasAnyRole");
@@ -1053,8 +1049,11 @@ static mboxquery_filter_t *_mboxquery_build_filter(mboxquery_t *query, json_t *j
         if (filter->is_subscribed) {
             query->need_sublist = 1;
         }
-        if (filter->parent_id) {
+        if (filter->jparent_id) {
             query->need_parent_id = 1;
+        }
+        if (filter->name) {
+            query->need_name = 1;
         }
     }
     return filter;
@@ -1148,22 +1147,6 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
         }
         mboxlist_entry_free(&mbparent);
         r = 0;
-    }
-    if (q->need_utf8mboxname) {
-        charset_t cs = charset_lookupname("imap-mailbox-name");
-        if (!cs) {
-            syslog(LOG_ERR, "_mboxquery_cb: no imap-mailbox-name charset");
-            r = IMAP_INTERNAL;
-            goto done;
-        }
-        /* XXX this is best we can get without resorting to replicating the
-         * mailbox tree in-memory. If mailbox siblings are not being allowed
-         * to share the same name and IMAP mailboxes always resemble the
-         * IMAP UTF-7 encoded hierarchical name, we are safe to compare the
-         * UTF-8 decoded IMAP mailbox names. */
-        rec->utf8mboxname = charset_to_utf8(mbentry->name, strlen(mbentry->name), cs, 0);
-        if (!rec->utf8mboxname) xstrdup(mbentry->name);
-        charset_free(&cs);
     }
 
     rec->id = xstrdup(mbentry->uniqueid);
