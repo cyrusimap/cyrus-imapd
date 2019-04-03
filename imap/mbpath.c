@@ -296,7 +296,17 @@ int main(int argc, char **argv)
         else {
             mbname = mbname_from_path(argv[i], &mbpath_namespace);
         }
-        r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
+        r = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry, NULL);
+        if (!r) {
+            /* Ignore "reserved" entries, like they aren't there */
+            if (mbentry->mbtype & MBTYPE_RESERVE) {
+                r = IMAP_MAILBOX_RESERVED;
+            }
+            /* Ignore "deleted" entries, like they aren't there */
+            else if (mbentry->mbtype & MBTYPE_DELETED) {
+                r = IMAP_MAILBOX_NONEXISTENT;
+            }
+        }    
         if (!r) {
             if (mbentry->mbtype & MBTYPE_REMOTE) {
                 if (localonly) {
