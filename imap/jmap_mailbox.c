@@ -77,6 +77,22 @@ static int jmap_mailbox_changes(jmap_req_t *req);
 static int jmap_mailbox_query(jmap_req_t *req);
 static int jmap_mailbox_querychanges(jmap_req_t *req);
 
+struct rolesort_data {
+    const char *name;
+    int order;
+};
+
+static struct rolesort_data ROLESORT[] = {
+    { "inbox", 1 },
+    { "archive", 2 },
+    { "drafts", 3 },
+    { "sent", 4 },
+    { "junk", 5 },
+    { "trash", 6 },
+    { "xtemplates", 7 },
+    { NULL, 10 }  // default
+};
+
 static jmap_method_t jmap_mailbox_methods[] = {
     { "Mailbox/get",          &jmap_mailbox_get, JMAP_SHARED_CSTATE },
     { "Mailbox/set",          &jmap_mailbox_set, /*flags*/0 },
@@ -415,6 +431,23 @@ static char *_mbox_get_name(const char *account_id, const mbname_t *mbname)
         extname = xstrdup("Inbox");
     }
     return extname;
+}
+
+static int _mbox_get_roleorder(jmap_req_t *req, const mbname_t *mbname)
+{
+    char *role = _mbox_get_role(req, mbname);
+    int role_order = 10;
+    int i;
+
+    for (i = 0; ROLESORT[i].name; i++) {
+        if (!strcmp(role, ROLESORT[i].name)) {
+            role_order = ROLESORT[i].order;
+            break;
+        }
+    }
+
+    free(role);
+    return role_order;
 }
 
 static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
@@ -854,6 +887,7 @@ typedef struct {
     int need_utf8mboxname;
     int need_sort_order;
     int need_role;
+    int need_role_order;
     int need_sublist;
     const mboxquery_args_t *args;
 } mboxquery_t;
@@ -865,6 +899,7 @@ typedef struct {
     char *utf8mboxname;
     char *jmapname;
     int sort_order;
+    int role_order;
     modseq_t foldermodseq;
     modseq_t createdmodseq;
     int mbtype;
@@ -1072,6 +1107,8 @@ static int _mboxquery_compar(const void **a, const void **b, void *rock)
 
         if (!strcmp(crit->field, "name"))
             cmp = strcmp(pa->jmapname, pb->jmapname) * sign;
+        else if (!strcmp(crit->field, "role"))
+            cmp = (pa->role_order - pb->role_order) * sign;
         else if (!strcmp(crit->field, "sortOrder"))
             cmp = (pa->sort_order - pb->sort_order) * sign;
 
@@ -1149,6 +1186,9 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
     if (q->need_sort_order) {
         rec->sort_order = _mbox_get_sortorder(q->req, rec->mbname);
     }
+    if (q->need_role_order) {
+        rec->role_order = _mbox_get_roleorder(q->req, rec->mbname);
+    }
     ptrarray_append(&q->result, rec);
 
 done:
@@ -1165,6 +1205,9 @@ static int _mboxquery_run(mboxquery_t *query, const mboxquery_args_t *args)
         mboxquery_sort_t *crit = ptrarray_nth(&query->sort, i);
         if (!strcmp(crit->field, "name")) {
             query->need_name = 1;
+        }
+        else if (!strcmp(crit->field, "role")) {
+            query->need_role_order = 1;
         }
         else if (!strcmp(crit->field, "sortOrder")) {
             query->need_sort_order = 1;
@@ -1308,6 +1351,7 @@ static int _mboxquery_parse_comparator(struct jmap_comparator *comp,
 {
     /* Reject unsupported properties */
     if (strcmp(comp->property, "sortOrder") &&
+        strcmp(comp->property, "role") &&
         strcmp(comp->property, "name")) {
         return 0;
     }
