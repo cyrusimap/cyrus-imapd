@@ -474,31 +474,23 @@ static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
 static int _findparent(const char *mboxname, mbentry_t **mbentryp)
 {
     mbentry_t *mbentry = NULL;
-    mbname_t *mbname = mbname_from_intname(mboxname);
-    int r = IMAP_MAILBOX_NONEXISTENT;
+    int r = mboxlist_findparent_allow_all(mboxname, &mbentry);
+    if (r) return r;
 
-    while (strarray_size(mbname_boxes(mbname))) {
-        free(mbname_pop_boxes(mbname));
+    /* Ignore "reserved" entries, like they aren't there */
+    if (mbentry->mbtype & MBTYPE_RESERVE) {
         mboxlist_entry_free(&mbentry);
-        /* skip exactly INBOX */
-        if (strarray_size(mbname_boxes(mbname)) == 1 &&
-            !strcmp(strarray_nth(mbname_boxes(mbname), 0), "INBOX")) {
-            free(mbname_pop_boxes(mbname));
-        }
-        r = jmap_mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
-
-        if (r != IMAP_MAILBOX_NONEXISTENT)
-            break;
+        return IMAP_MAILBOX_NONEXISTENT;
     }
 
-    if (r)
+    /* Ignore "deleted" entries, like they aren't there */
+    if (mbentry->mbtype & MBTYPE_DELETED) {
         mboxlist_entry_free(&mbentry);
-    else
-        *mbentryp = mbentry;
+        return IMAP_MAILBOX_NONEXISTENT;
+    }
 
-    mbname_free(&mbname);
-
-    return r;
+    *mbentryp = mbentry;
+    return 0;
 }
 
 static json_t *_mbox_get(jmap_req_t *req,
