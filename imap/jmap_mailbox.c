@@ -421,7 +421,6 @@ static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
 {
     struct buf attrib = BUF_INITIALIZER;
     int sort_order = 0;
-    char *role = NULL;
 
     /* Ignore lookup errors here. */
     annotatemore_lookup(mbname_intname(mbname),
@@ -435,7 +434,6 @@ static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
         }
     }
 
-    free(role);
     buf_free(&attrib);
     return sort_order;
 }
