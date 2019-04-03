@@ -881,6 +881,7 @@ typedef struct {
     int need_role;
     int need_role_order;
     int need_sublist;
+    int need_parent_id;
     const mboxquery_args_t *args;
 } mboxquery_t;
 
@@ -890,6 +891,7 @@ typedef struct {
     char *mboxname;
     char *utf8mboxname;
     char *jmapname;
+    char *parent_id; // NULL for top-level
     int sort_order;
     int role_order;
     modseq_t foldermodseq;
@@ -917,6 +919,18 @@ static void _mboxquery_filter_free(mboxquery_filter_t *filter)
     free(filter);
 }
 
+static void _mboxquery_record_fini(mboxquery_record_t *rec)
+{
+    if (!rec) return;
+
+    free(rec->id);
+    mbname_free(&rec->mbname);
+    free(rec->mboxname);
+    free(rec->utf8mboxname);
+    free(rec->parent_id);
+    free(rec->jmapname);
+}
+
 static void _mboxquery_free(mboxquery_t **qptr)
 {
     int i;
@@ -924,11 +938,7 @@ static void _mboxquery_free(mboxquery_t **qptr)
 
     for (i = 0; i < q->result.count; i++) {
         mboxquery_record_t *rec = ptrarray_nth(&q->result, i);
-        free(rec->id);
-        mbname_free(&rec->mbname);
-        free(rec->mboxname);
-        free(rec->utf8mboxname);
-        free(rec->jmapname);
+        _mboxquery_record_fini(rec);
         free(rec);
     }
     ptrarray_fini(&q->result);
@@ -950,9 +960,7 @@ static void _mboxquery_free(mboxquery_t **qptr)
 
 static int _mboxquery_eval_filter(mboxquery_t *query,
                                   mboxquery_filter_t *filter,
-                                  const mbentry_t *mbentry,
-                                  const mbname_t *mbname,
-                                  const char *utf8mboxname)
+                                  mboxquery_record_t *rec)
 {
     if (filter->op == SEOP_TRUE)
         return 1;
@@ -963,7 +971,7 @@ static int _mboxquery_eval_filter(mboxquery_t *query,
     if (filter->op != SEOP_UNKNOWN) {
         for (i = 0; i < filter->args.count; i++) {
             mboxquery_filter_t *arg = ptrarray_nth(&filter->args, i);
-            int m = _mboxquery_eval_filter(query, arg, mbentry, mbname, utf8mboxname);
+            int m = _mboxquery_eval_filter(query, arg, rec);
             if (m && filter->op == SEOP_OR)
                 return 1;
             else if (m && filter->op == SEOP_NOT)
@@ -975,7 +983,7 @@ static int _mboxquery_eval_filter(mboxquery_t *query,
     }
     else {
         if (JNOTNULL(filter->has_any_role) || filter->role) {
-            mbname_t *mbname = mbname_from_intname(mbentry->name);
+            mbname_t *mbname = mbname_from_intname(rec->mboxname);
             char *role = _mbox_get_role(query->req, mbname);
             int has_role = role != NULL;
             int is_match = 1;
@@ -993,28 +1001,20 @@ static int _mboxquery_eval_filter(mboxquery_t *query,
             if (!is_match) return 0;
         }
         if (filter->parent_id) {
-            int matches_parentid = 0;
-            if (json_is_string(filter->parent_id)) {
-                const char *parent_id = json_string_value(filter->parent_id);
-                mbentry_t *mbparent = NULL;
-                if (!_findparent(mbentry->name, &mbparent)) {
-                    matches_parentid = !strcmp(mbparent->uniqueid, parent_id);
-                }
-                mboxlist_entry_free(&mbparent);
-            } else {
-                /* parentId is null */
-                matches_parentid = strarray_size(mbname_boxes(mbname)) < 2;
+            if (rec->parent_id) {
+                const char *want_parent = json_string_value(filter->parent_id);
+                if (strcmpsafe(rec->parent_id, want_parent)) return 0;
             }
-            if (!matches_parentid) return 0;
+            else if (!json_is_null(filter->parent_id)) return 0;
         }
         if (filter->name) {
-            if (strcmp(filter->name, utf8mboxname)) {
+            if (strcmp(filter->name, rec->utf8mboxname)) {
                 return 0;
             }
         }
         if (JNOTNULL(filter->is_subscribed)) {
             int want_subscribed = json_boolean_value(filter->is_subscribed);
-            int is_subscribed = strarray_find(query->sublist, mbentry->name, 0);
+            int is_subscribed = strarray_find(query->sublist, rec->mboxname, 0);
             if (want_subscribed && is_subscribed < 0) return 0;
         }
         return 1;
@@ -1053,6 +1053,9 @@ static mboxquery_filter_t *_mboxquery_build_filter(mboxquery_t *query, json_t *j
         if (filter->is_subscribed) {
             query->need_sublist = 1;
         }
+        if (filter->parent_id) {
+            query->need_parent_id = 1;
+        }
     }
     return filter;
 }
@@ -1076,6 +1079,7 @@ static mboxquery_t *_mboxquery_new(jmap_req_t *req, json_t *filter, json_t *sort
         crit->desc = json_object_get(jval, "isAscending") == json_false();
         ptrarray_append(&q->sort, crit);
     }
+    ptrarray_init(&q->result);
 
     return q;
 }
@@ -1086,11 +1090,6 @@ static int _mboxquery_compar(const void **a, const void **b, void *rock)
     const mboxquery_record_t *pb = *b;
     const mboxquery_t *query = rock;
     int i;
-
-    if (query->args->sort_as_tree) {
-        int cmp = strcmp(pa->utf8mboxname, pb->utf8mboxname);
-        if (cmp) return cmp;
-    }
 
     for (i = 0; i < query->sort.count; i++) {
         mboxquery_sort_t *crit = ptrarray_nth(&query->sort, i);
@@ -1135,7 +1134,21 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
 
     int r = 0;
 
-    char *utf8mboxname = NULL;
+    /* Create record */
+    mboxquery_record_t *rec = xzmalloc(sizeof(mboxquery_record_t));
+
+    if (q->need_parent_id && strarray_size(mbname_boxes(mbname)) > 1) {
+        mbentry_t *mbparent = NULL;
+        r = _findparent(mbentry->name, &mbparent);
+        if (r && r != IMAP_MAILBOX_NONEXISTENT) {
+            goto done;
+        }
+        else if (!r) {
+            rec->parent_id = xstrdup(mbparent->uniqueid);
+        }
+        mboxlist_entry_free(&mbparent);
+        r = 0;
+    }
     if (q->need_utf8mboxname) {
         charset_t cs = charset_lookupname("imap-mailbox-name");
         if (!cs) {
@@ -1148,31 +1161,21 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
          * to share the same name and IMAP mailboxes always resemble the
          * IMAP UTF-7 encoded hierarchical name, we are safe to compare the
          * UTF-8 decoded IMAP mailbox names. */
-        utf8mboxname = charset_to_utf8(mbentry->name, strlen(mbentry->name), cs, 0);
-        if (!utf8mboxname) xstrdup(mbentry->name);
+        rec->utf8mboxname = charset_to_utf8(mbentry->name, strlen(mbentry->name), cs, 0);
+        if (!rec->utf8mboxname) xstrdup(mbentry->name);
         charset_free(&cs);
     }
 
-    /* Apply filters */
-    int matches = 1;
-    if (q->filter) {
-        matches = _mboxquery_eval_filter(q, q->filter, mbentry, mbname, utf8mboxname);
-    }
-    if (!matches) goto done;
-
-    /* Found a matching reccord. Add it to the result list. */
-    mboxquery_record_t *rec = xzmalloc(sizeof(mboxquery_record_t));
     rec->id = xstrdup(mbentry->uniqueid);
     rec->mbname = mbname;
-    mbname = NULL; /* rec takes ownership for mbname */
-    rec->utf8mboxname = xstrdupnull(utf8mboxname);
+    mbname = NULL; // takes ownership
     rec->foldermodseq = mbentry->foldermodseq;
     rec->createdmodseq = mbentry->createdmodseq;
     rec->mbtype = mbentry->mbtype;
     rec->shared_mbtype = shared_mbtype;
+    rec->mboxname = xstrdup(mbentry->name);
 
     if (q->need_name) {
-        rec->mboxname = xstrdup(mbentry->name);
         rec->jmapname = _mbox_get_name(q->req->accountid, rec->mbname);
     }
     if (q->need_sort_order) {
@@ -1185,15 +1188,63 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
 
 done:
     if (mbname) mbname_free(&mbname);
-    if (utf8mboxname) free(utf8mboxname);
     return r;
+}
+
+static int _mboxquery_sort(mboxquery_t *query)
+{
+    /* Apply comparators */
+    qsort_r(query->result.data, query->result.count, sizeof(void*),
+            (int(*)(const void*, const void*, void*)) _mboxquery_compar, query);
+
+    /* Sort as tree */
+    if (query->args->sort_as_tree) {
+        hash_table recs_by_parentid = HASH_TABLE_INITIALIZER;
+        ptrarray_t work = PTRARRAY_INITIALIZER;
+
+        construct_hash_table(&recs_by_parentid, ptrarray_size(&query->result) + 1, 0);
+
+        int i;
+        for (i = 0; i < ptrarray_size(&query->result); i++) {
+            mboxquery_record_t *rec = ptrarray_nth(&query->result, i);
+            if (!rec->parent_id) {
+                ptrarray_unshift(&work, rec);
+                continue;
+            }
+            ptrarray_t *recs = hash_lookup(rec->parent_id, &recs_by_parentid);
+            if (!recs) {
+                recs = ptrarray_new();
+                hash_insert(rec->parent_id, recs, &recs_by_parentid);
+            }
+            ptrarray_append(recs, rec);
+        }
+
+        ptrarray_truncate(&query->result, 0);
+
+        mboxquery_record_t *rec;
+        while ((rec = ptrarray_pop(&work))) {
+            ptrarray_push(&query->result, rec);
+            ptrarray_t *children = hash_del(rec->id, &recs_by_parentid);
+            if (!children) continue;
+            mboxquery_record_t *child;
+            while ((child = ptrarray_pop(children))) {
+                ptrarray_push(&work, child);
+            }
+            ptrarray_free(children);
+        }
+
+        ptrarray_fini(&work);
+        free_hash_table(&recs_by_parentid, NULL);
+    }
+
+    return 0;
 }
 
 static int _mboxquery_run(mboxquery_t *query, const mboxquery_args_t *args)
 {
     /* Prepare internal query context. */
     int i;
-    for (i = 0; i < query->sort.count; i++) {
+    for (i = 0; i < ptrarray_size(&query->sort); i++) {
         mboxquery_sort_t *crit = ptrarray_nth(&query->sort, i);
         if (!strcmp(crit->field, "name")) {
             query->need_name = 1;
@@ -1205,12 +1256,10 @@ static int _mboxquery_run(mboxquery_t *query, const mboxquery_args_t *args)
             query->need_sort_order = 1;
         }
     }
-
     if (args->sort_as_tree) {
-        query->need_utf8mboxname = 1;
+        query->need_parent_id = 1;
     }
     query->args = args;
-
     if (query->need_sublist) {
         query->sublist = mboxlist_sublist(query->req->userid);
         if (!query->sublist) {
@@ -1226,9 +1275,33 @@ static int _mboxquery_run(mboxquery_t *query, const mboxquery_args_t *args)
                                   _mboxquery_cb, query, flags);
     if (r) goto done;
 
-    /* Sort result */
-    qsort_r(query->result.data, query->result.count, sizeof(void*),
-            (int(*)(const void*, const void*, void*)) _mboxquery_compar, query);
+    /* Sort mailboxes */
+    r = _mboxquery_sort(query);
+    if (r) goto done;
+
+    /* Filter mailboxes */
+    ptrarray_t matches = PTRARRAY_INITIALIZER;
+    ptrarray_t rejects = PTRARRAY_INITIALIZER;
+    for (i = 0; i < ptrarray_size(&query->result); i++) {
+        mboxquery_record_t *rec = ptrarray_nth(&query->result, i);
+        if (_mboxquery_eval_filter(query, query->filter, rec)) {
+            ptrarray_append(&matches, rec);
+        }
+        else {
+            ptrarray_append(&rejects, rec);
+        }
+    }
+    for (i = 0; i < ptrarray_size(&rejects); i++) {
+        mboxquery_record_t *rec = ptrarray_nth(&rejects, i);
+        _mboxquery_record_fini(rec);
+        free(rec);
+    }
+    ptrarray_truncate(&query->result, 0);
+    for (i = 0; i < ptrarray_size(&matches); i++) {
+        ptrarray_append(&query->result, ptrarray_nth(&matches, i));
+    }
+    ptrarray_fini(&matches);
+    ptrarray_fini(&rejects);
 
 done:
     return r;
