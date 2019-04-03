@@ -246,6 +246,9 @@ int mboxlist_findone(struct namespace *namespace,
 int mboxlist_findparent(const char *mboxname,
                         mbentry_t **mbentryp);
 
+int mboxlist_findparent_allow_all(const char *mboxname,
+                                  mbentry_t **mbentryp);
+
 /* direct access to subs DB */
 typedef int user_cb(const char *userid, void *rock);
 int mboxlist_alluser(user_cb *proc, void *rock);

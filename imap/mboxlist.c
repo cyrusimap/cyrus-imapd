@@ -844,8 +844,7 @@ EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
     return r;
 }
 
-EXPORTED int mboxlist_findparent(const char *mboxname,
-                               mbentry_t **mbentryp)
+static int _findparent(const char *mboxname, mbentry_t **mbentryp, int allow_all)
 {
     mbentry_t *mbentry = NULL;
     mbname_t *mbname = mbname_from_intname(mboxname);
@@ -856,7 +855,10 @@ EXPORTED int mboxlist_findparent(const char *mboxname,
     while (strarray_size(mbname_boxes(mbname))) {
         free(mbname_pop_boxes(mbname));
         mboxlist_entry_free(&mbentry);
-        r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
+        if (allow_all)
+            r = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry, NULL);
+        else
+            r = mboxlist_lookup(mbname_intname(mbname), &mbentry, NULL);
         if (r != IMAP_MAILBOX_NONEXISTENT)
             break;
     }
@@ -869,6 +871,18 @@ EXPORTED int mboxlist_findparent(const char *mboxname,
     mbname_free(&mbname);
 
     return r;
+}
+
+EXPORTED int mboxlist_findparent(const char *mboxname,
+                               mbentry_t **mbentryp)
+{
+    return _findparent(mboxname, mbentryp, 0);
+}
+
+EXPORTED int mboxlist_findparent_allow_all(const char *mboxname,
+                                            mbentry_t **mbentryp)
+{
+    return _findparent(mboxname, mbentryp, 1);
 }
 
 static int mboxlist_create_partition(const char *mboxname,
