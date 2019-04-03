@@ -169,7 +169,7 @@ static int scriptname_valid(const struct buf *name)
           return TIMSIEVE_FAIL;
   }
 
-  return TIMSIEVE_OK;
+  return lup < 1013 ? TIMSIEVE_OK : TIMSIEVE_FAIL;
 }
 
 int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
