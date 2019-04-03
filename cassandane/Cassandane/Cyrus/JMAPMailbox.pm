@@ -704,39 +704,51 @@ sub test_mailbox_query_sortastree
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "create mailbox tree";
-    $imaptalk->create("INBOX.Ham") || die;
-    $imaptalk->create("INBOX.Spam", "(USE (\\Junk))") || die;
-    $imaptalk->create("INBOX.Ham.Zonk") || die;
-    $imaptalk->create("INBOX.Ham.Bonk") || die;
+    $imaptalk->create("INBOX.A") || die;
+    $imaptalk->create("INBOX.A.A1") || die;
+    $imaptalk->create("INBOX.A.A2") || die;
+    $imaptalk->create("INBOX.A.A2.A2A") || die;
+    $imaptalk->create("INBOX.B") || die;
+    $imaptalk->create("INBOX.C") || die;
+    $imaptalk->create("INBOX.C.C1") || die;
+    $imaptalk->create("INBOX.C.C1.C1A") || die;
+    $imaptalk->create("INBOX.C.C2") || die;
+    $imaptalk->create("INBOX.D") || die;
 
-    xlog "(re)fetch mailboxes";
     my $res = $jmap->CallMethods([['Mailbox/get', { properties => ["name"] }, 'R1' ]]);
-    $self->assert_num_equals(5, scalar @{$res->[0][1]{list}});
-    my %mboxids = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
-    $self->assert(exists $mboxids{'Inbox'});
+    $self->assert_num_equals(11, scalar @{$res->[0][1]{list}});
+    my %mboxIds = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
 
-    xlog "list mailboxes sorted by tree";
-    $res = $jmap->CallMethods([
-        ['Mailbox/query', { sortAsTree => JSON::true }, "R1"]
-    ]);
-    $self->assert_num_equals(5, scalar @{$res->[0][1]->{ids}});
-    $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[0]);
-    $self->assert_str_equals($mboxids{'Ham'}, $res->[0][1]{ids}[1]);
-    $self->assert_str_equals($mboxids{'Bonk'}, $res->[0][1]{ids}[2]);
-    $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[3]);
-    $self->assert_str_equals($mboxids{'Spam'}, $res->[0][1]{ids}[4]);
-
-    xlog "list mailboxes sorted by tree, filtered by parentId";
     $res = $jmap->CallMethods([
         ['Mailbox/query', {
             sortAsTree => JSON::true,
-            filter => {parentId => $mboxids{'Ham'}},
+            sort => [{ property => 'name' }]
         }, "R1"]
     ]);
-    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
-    $self->assert_str_equals($mboxids{'Bonk'}, $res->[0][1]{ids}[0]);
-    $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[1]);
+
+    my $wantMboxIds = [
+        $mboxIds{'A'}, $mboxIds{'A1'}, $mboxIds{'A2'}, $mboxIds{'A2A'},
+        $mboxIds{'B'},
+        $mboxIds{'C'}, $mboxIds{'C1'}, $mboxIds{'C1A'}, $mboxIds{'C2'},
+        $mboxIds{'D'},
+        $mboxIds{'Inbox'},
+    ];
+    $self->assert_deep_equals($wantMboxIds, $res->[0][1]->{ids});
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+            sortAsTree => JSON::true,
+            sort => [{ property => 'name', isAscending => JSON::false }]
+        }, "R1"]
+    ]);
+    $wantMboxIds = [
+        $mboxIds{'Inbox'},
+        $mboxIds{'D'},
+        $mboxIds{'C'}, $mboxIds{'C2'}, $mboxIds{'C1'}, $mboxIds{'C1A'},
+        $mboxIds{'B'},
+        $mboxIds{'A'}, $mboxIds{'A2'}, $mboxIds{'A2A'}, $mboxIds{'A1'},
+    ];
+    $self->assert_deep_equals($wantMboxIds, $res->[0][1]->{ids});
 }
 
 sub test_mailbox_query_limit_zero
