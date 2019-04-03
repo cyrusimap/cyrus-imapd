@@ -206,7 +206,8 @@ struct annotate_entrydesc
                 struct annotate_entry_list *entry);
                /* function to set the entry */
     int (*set)(annotate_state_t *state,
-               struct annotate_entry_list *entry);
+               struct annotate_entry_list *entry,
+               int maywrite);
     void *rock;                 /* rock passed to get() function */
 };
 
@@ -242,15 +243,20 @@ static int annotate_state_set_scope(annotate_state_t *state,
                                     unsigned int uid);
 static void init_annotation_definitions(void);
 static int annotation_set_tofile(annotate_state_t *state,
-                                 struct annotate_entry_list *entry);
+                                 struct annotate_entry_list *entry,
+                                 int maywrite);
 static int annotation_set_todb(annotate_state_t *state,
-                               struct annotate_entry_list *entry);
+                               struct annotate_entry_list *entry,
+                               int maywrite);
 static int annotation_set_mailboxopt(annotate_state_t *state,
-                                     struct annotate_entry_list *entry);
+                                     struct annotate_entry_list *entry,
+                                     int maywrite);
 static int annotation_set_pop3showafter(annotate_state_t *state,
-                                        struct annotate_entry_list *entry);
+                                        struct annotate_entry_list *entry,
+                                        int maywrite);
 static int annotation_set_specialuse(annotate_state_t *state,
-                                     struct annotate_entry_list *entry);
+                                     struct annotate_entry_list *entry,
+                                     int maywrite);
 static int _annotate_rewrite(struct mailbox *oldmailbox,
                              uint32_t olduid,
                              const char *olduserid,
@@ -2636,7 +2642,8 @@ static int write_entry(struct mailbox *mailbox,
                        const struct buf *value,
                        int ignorequota,
                        int silent,
-                       const struct annotate_metadata *mdata)
+                       const struct annotate_metadata *mdata,
+                       int maywrite)
 
 {
     char key[MAX_MAILBOX_PATH+1];
@@ -2668,6 +2675,11 @@ static int write_entry(struct mailbox *mailbox,
             quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
             qdiffs[QUOTA_ANNOTSTORAGE] = value->len - (quota_t)oldval.len;
             r = mailbox_quota_check(mailbox, qdiffs);
+            if (r) goto out;
+        }
+
+        if (!maywrite) {
+            r = IMAP_PERMISSION_DENIED;
             if (r) goto out;
         }
 
@@ -2783,7 +2795,7 @@ EXPORTED int annotatemore_write(const char *mboxname, const char *entry,
     }
 
     r = write_entry(mailbox, /*uid*/0, entry, userid, value,
-                    /*ignorequota*/1, /*silent*/0, NULL);
+                    /*ignorequota*/1, /*silent*/0, NULL, /*maywrite*/1);
     if (r) goto done;
 
     r = annotate_commit(d);
@@ -2802,7 +2814,7 @@ EXPORTED int annotate_state_write(annotate_state_t *state,
 {
     return write_entry(state->mailbox, state->uid,
                        entry, userid, value, /*ignorequota*/1,
-                       state->silent, NULL);
+                       state->silent, NULL, /*maywrite*/1);
 }
 
 EXPORTED int annotate_state_writesilent(annotate_state_t *state,
@@ -2812,7 +2824,7 @@ EXPORTED int annotate_state_writesilent(annotate_state_t *state,
 {
     return write_entry(state->mailbox, state->uid,
                        entry, userid, value, /*ignorequota*/1,
-                       /*silent*/1, NULL);
+                       /*silent*/1, NULL, /*maywrite*/1);
 }
 
 EXPORTED int annotate_state_writemdata(annotate_state_t *state,
@@ -2822,7 +2834,7 @@ EXPORTED int annotate_state_writemdata(annotate_state_t *state,
                                        const struct annotate_metadata *mdata)
 {
     return write_entry(state->mailbox, state->uid, entry, userid, value,
-                       /*ignorequota*/1, 0, mdata);
+                       /*ignorequota*/1, 0, mdata, /*maywrite*/1);
 }
 
 EXPORTED int annotate_state_writemask(annotate_state_t *state,
@@ -2915,6 +2927,7 @@ static int _annotate_store_entries(annotate_state_t *state)
 
     /* Loop through the list of provided entries to set */
     for (ee = state->entry_list ; ee ; ee = ee->next) {
+        int maystore = 1;
 
         /* Skip annotations that can't be stored on frontend */
         if ((ee->desc->proxytype == BACKEND_ONLY) &&
@@ -2923,17 +2936,15 @@ static int _annotate_store_entries(annotate_state_t *state)
 
         if (ee->have_shared &&
             !_annotate_may_store(state, /*shared*/1, ee->desc)) {
-            r = IMAP_PERMISSION_DENIED;
-            goto done;
+            maystore = 0;
         }
 
         if (ee->have_priv &&
             !_annotate_may_store(state, /*shared*/0, ee->desc)) {
-            r = IMAP_PERMISSION_DENIED;
-            goto done;
+            maystore = 0;
         }
 
-        r = ee->desc->set(state, ee);
+        r = ee->desc->set(state, ee, maystore);
         if (r)
             goto done;
 
@@ -3013,12 +3024,15 @@ static int _annotate_may_store(annotate_state_t *state,
 
 static int annotation_set_tofile(annotate_state_t *state
                                     __attribute__((unused)),
-                                 struct annotate_entry_list *entry)
+                                 struct annotate_entry_list *entry,
+                                 int maywrite)
 {
     const char *filename = (const char *)entry->desc->rock;
     char path[MAX_MAILBOX_PATH+1];
     int r;
     FILE *f;
+
+    if (!maywrite) return IMAP_PERMISSION_DENIED;
 
     snprintf(path, sizeof(path), "%s/msg/%s", config_dir, filename);
 
@@ -3043,24 +3057,26 @@ static int annotation_set_tofile(annotate_state_t *state
 }
 
 static int annotation_set_todb(annotate_state_t *state,
-                               struct annotate_entry_list *entry)
+                               struct annotate_entry_list *entry,
+                               int maywrite)
 {
     int r = 0;
 
     if (entry->have_shared)
         r = write_entry(state->mailbox, state->uid,
                         entry->name, "",
-                        &entry->shared, 0, state->silent, NULL);
+                        &entry->shared, 0, state->silent, NULL, maywrite);
     if (!r && entry->have_priv)
         r = write_entry(state->mailbox, state->uid,
                         entry->name, state->userid,
-                        &entry->priv, 0, state->silent, NULL);
+                        &entry->priv, 0, state->silent, NULL, maywrite);
 
     return r;
 }
 
 static int annotation_set_mailboxopt(annotate_state_t *state,
-                                     struct annotate_entry_list *entry)
+                                     struct annotate_entry_list *entry,
+                                     int maywrite)
 {
     struct mailbox *mailbox = state->mailbox;
     uint32_t flag = (unsigned long)entry->desc->rock;
@@ -3079,6 +3095,7 @@ static int annotation_set_mailboxopt(annotate_state_t *state,
 
     /* only mark dirty if there's been a change */
     if (mailbox->i.options != newopts) {
+        if (!maywrite) return IMAP_PERMISSION_DENIED;
         mailbox_index_dirty(mailbox);
         mailbox->i.options = newopts;
         mboxlist_foldermodseq_dirty(mailbox);
@@ -3088,7 +3105,8 @@ static int annotation_set_mailboxopt(annotate_state_t *state,
 }
 
 static int annotation_set_pop3showafter(annotate_state_t *state,
-                                        struct annotate_entry_list *entry)
+                                        struct annotate_entry_list *entry,
+                                        int maywrite)
 {
     struct mailbox *mailbox = state->mailbox;
     int r = 0;
@@ -3107,6 +3125,7 @@ static int annotation_set_pop3showafter(annotate_state_t *state,
     }
 
     if (date != mailbox->i.pop3_show_after) {
+        if (!maywrite) return IMAP_PERMISSION_DENIED;
         mailbox->i.pop3_show_after = date;
         mailbox_index_dirty(mailbox);
     }
@@ -3208,7 +3227,8 @@ done:
 }
 
 static int annotation_set_specialuse(annotate_state_t *state,
-                                     struct annotate_entry_list *entry)
+                                     struct annotate_entry_list *entry,
+                                     int maywrite)
 {
     struct buf res = BUF_INITIALIZER;
     int r = IMAP_PERMISSION_DENIED;
@@ -3218,7 +3238,7 @@ static int annotation_set_specialuse(annotate_state_t *state,
     /* Effectively removes the annotation */
     if (entry->priv.s == NULL) {
         r = write_entry(state->mailbox, state->uid, entry->name, state->userid,
-                        &entry->priv, /*ignorequota*/0, /*silent*/0, NULL);
+                        &entry->priv, /*ignorequota*/0, /*silent*/0, NULL, maywrite);
         goto done;
     }
 
@@ -3227,7 +3247,7 @@ static int annotation_set_specialuse(annotate_state_t *state,
     if (r) goto done;
 
     r = write_entry(state->mailbox, state->uid, entry->name, state->userid,
-                    &res, /*ignorequota*/0, state->silent, NULL);
+                    &res, /*ignorequota*/0, state->silent, NULL, maywrite);
 
 done:
     buf_free(&res);
@@ -3451,14 +3471,14 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
             newuserid = rrock->newuserid;
         }
         r = write_entry(rrock->newmailbox, rrock->newuid, entry, newuserid,
-                        value, /*ignorequota*/0, /*silent*/0, NULL);
+                        value, /*ignorequota*/0, /*silent*/0, NULL, /*maywrite*/1);
     }
 
     if (!rrock->copy && !r) {
         /* delete existing entry */
         struct buf dattrib = BUF_INITIALIZER;
         r = write_entry(rrock->oldmailbox, uid, entry, userid, &dattrib,
-                        /*ignorequota*/0, /*silent*/0, NULL);
+                        /*ignorequota*/0, /*silent*/0, NULL, /*maywrite*/1);
     }
 
     return r;
