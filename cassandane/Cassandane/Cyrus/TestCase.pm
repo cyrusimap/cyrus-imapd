@@ -251,6 +251,9 @@ magic(RFC2047_UTF8 => sub {
 magic(JMAPSearchDB => sub {
     shift->config_set('jmap_emailsearch_db_path' => '@basedir@/search/jmap_emailsearch.db');
 });
+magic(JMAPNoHasAttachment => sub {
+    shift->config_set('jmap_set_has_attachment' => 'no');
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
