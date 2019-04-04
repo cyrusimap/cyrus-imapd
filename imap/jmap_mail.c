@@ -10153,7 +10153,6 @@ struct _email_copy_writeprops_rock {
     const char *received_at;
     json_t *keywords;
     struct seen *seendb;
-    int has_attachment;
     /* Return values */
     conversation_id_t cid; /* Thread id of copied message */
     uint32_t size;         /* Byte size of copied message */
@@ -10453,20 +10452,16 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
         }
         goto done;
     }
-    if (json_object_get(copy_email, "keywords") ||
-        !config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT)) {
-        /* We either read the keywords from the client, or this server
-         * is configured to use an external annotator for this flag.
-         * In either way, don't write the flag on the new records. */
-        const char *key;
-        json_t *jval;
-        void *tmp;
-        json_object_foreach_safe(new_keywords, tmp, key, jval) {
-            if (!strcasecmp(key, JMAP_HAS_ATTACHMENT_FLAG)) {
-                json_object_del(new_keywords, key);
-            }
-        }
-    }
+
+    /* Override hasAttachment flag */
+    int has_attachment = 0;
+    r = msgrecord_hasflag(src_mr, JMAP_HAS_ATTACHMENT_FLAG, &has_attachment);
+    if (r) goto done;
+    if (has_attachment)
+        json_object_set_new(new_keywords, JMAP_HAS_ATTACHMENT_FLAG, json_true());
+    else
+        json_object_del(new_keywords, JMAP_HAS_ATTACHMENT_FLAG);
+
 
     struct message_guid guid;
     r = msgrecord_get_guid(src_mr, &guid);
@@ -10521,11 +10516,8 @@ static void _email_copy(jmap_req_t *req, json_t *copy_email,
 
     /* Rewrite new message record properties and lookup thread id */
     const char *receivedAt = json_string_value(json_object_get(copy_email, "receivedAt"));
-    int has_attachment = 0;
-    r = msgrecord_hasflag(src_mr, JMAP_HAS_ATTACHMENT_FLAG, &has_attachment);
-    if (r) goto done;
     struct _email_copy_writeprops_rock writeprops_rock = {
-        req, receivedAt, new_keywords, seendb, has_attachment, /*cid*/0, /*size*/0
+        req, receivedAt, new_keywords, seendb, /*cid*/0, /*size*/0
     };
     r = conversations_guid_foreach(req->cstate, email_id + 1,
                                    _email_copy_writeprops_cb, &writeprops_rock);
