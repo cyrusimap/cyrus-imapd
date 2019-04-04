@@ -751,6 +751,59 @@ sub test_mailbox_query_sortastree
     $self->assert_deep_equals($wantMboxIds, $res->[0][1]->{ids});
 }
 
+sub test_mailbox_query_filterastree
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.A") || die;
+    $imaptalk->create("INBOX.A.A1") || die;
+    $imaptalk->create("INBOX.B") || die;
+    $imaptalk->create("INBOX.B.X") || die;
+    $imaptalk->create("INBOX.C") || die;
+    $imaptalk->create("INBOX.C.C1") || die;
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { properties => ["name"] }, 'R1' ]]);
+    $self->assert_num_equals(7, scalar @{$res->[0][1]{list}});
+    my %mboxIds = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    name => 'B'
+                }]
+            },
+            filterAsTree => JSON::true,
+            sort => [{ property => 'name' }],
+            sortAsTree => JSON::true,
+        }, "R1"]
+    ]);
+
+    my $wantMboxIds = [
+        $mboxIds{'A'}, $mboxIds{'A1'}, $mboxIds{'C'}, $mboxIds{'C1'},
+    ];
+    $self->assert_deep_equals($wantMboxIds, $res->[0][1]->{ids});
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/query', {
+            filter => {
+                name => '1',
+            },
+            filterAsTree => JSON::true,
+            sort => [{ property => 'name' }],
+            sortAsTree => JSON::true,
+        }, "R1"]
+    ]);
+
+    $wantMboxIds = [ ]; # Can't match anything because top-level is missing
+    $self->assert_deep_equals($wantMboxIds, $res->[0][1]->{ids});
+}
+
 sub test_mailbox_query_limit_zero
     :min_version_3_1 :needs_component_jmap
 {
