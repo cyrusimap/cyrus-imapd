@@ -881,7 +881,6 @@ typedef struct {
     int need_role;
     int need_role_order;
     int need_sublist;
-    int need_parent_id;
     const mboxquery_args_t *args;
 } mboxquery_t;
 
@@ -897,6 +896,7 @@ typedef struct {
     modseq_t createdmodseq;
     int mbtype;
     enum shared_mbox_type shared_mbtype;
+    int matches; // non-zero, if filter matches
 } mboxquery_record_t;
 
 typedef struct {
@@ -1049,9 +1049,6 @@ static mboxquery_filter_t *_mboxquery_build_filter(mboxquery_t *query, json_t *j
         if (filter->is_subscribed) {
             query->need_sublist = 1;
         }
-        if (filter->jparent_id) {
-            query->need_parent_id = 1;
-        }
         if (filter->name) {
             query->need_name = 1;
         }
@@ -1136,7 +1133,7 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
     /* Create record */
     mboxquery_record_t *rec = xzmalloc(sizeof(mboxquery_record_t));
 
-    if (q->need_parent_id && strarray_size(mbname_boxes(mbname)) > 1) {
+    if (strarray_size(mbname_boxes(mbname)) > 1) {
         mbentry_t *mbparent = NULL;
         r = _findparent(mbentry->name, &mbparent);
         if (r && r != IMAP_MAILBOX_NONEXISTENT) {
@@ -1174,55 +1171,6 @@ done:
     return r;
 }
 
-static int _mboxquery_sort(mboxquery_t *query)
-{
-    /* Apply comparators */
-    qsort_r(query->result.data, query->result.count, sizeof(void*),
-            (int(*)(const void*, const void*, void*)) _mboxquery_compar, query);
-
-    /* Sort as tree */
-    if (query->args->sort_as_tree) {
-        hash_table recs_by_parentid = HASH_TABLE_INITIALIZER;
-        ptrarray_t work = PTRARRAY_INITIALIZER;
-
-        construct_hash_table(&recs_by_parentid, ptrarray_size(&query->result) + 1, 0);
-
-        int i;
-        for (i = 0; i < ptrarray_size(&query->result); i++) {
-            mboxquery_record_t *rec = ptrarray_nth(&query->result, i);
-            if (!rec->parent_id) {
-                ptrarray_unshift(&work, rec);
-                continue;
-            }
-            ptrarray_t *recs = hash_lookup(rec->parent_id, &recs_by_parentid);
-            if (!recs) {
-                recs = ptrarray_new();
-                hash_insert(rec->parent_id, recs, &recs_by_parentid);
-            }
-            ptrarray_append(recs, rec);
-        }
-
-        ptrarray_truncate(&query->result, 0);
-
-        mboxquery_record_t *rec;
-        while ((rec = ptrarray_pop(&work))) {
-            ptrarray_push(&query->result, rec);
-            ptrarray_t *children = hash_del(rec->id, &recs_by_parentid);
-            if (!children) continue;
-            mboxquery_record_t *child;
-            while ((child = ptrarray_pop(children))) {
-                ptrarray_push(&work, child);
-            }
-            ptrarray_free(children);
-        }
-
-        ptrarray_fini(&work);
-        free_hash_table(&recs_by_parentid, NULL);
-    }
-
-    return 0;
-}
-
 static int _mboxquery_run(mboxquery_t *query, const mboxquery_args_t *args)
 {
     /* Prepare internal query context. */
@@ -1238,9 +1186,6 @@ static int _mboxquery_run(mboxquery_t *query, const mboxquery_args_t *args)
         else if (!strcmp(crit->field, "sortOrder")) {
             query->need_sort_order = 1;
         }
-    }
-    if (args->sort_as_tree) {
-        query->need_parent_id = 1;
     }
     query->args = args;
     if (query->need_sublist) {
@@ -1258,33 +1203,99 @@ static int _mboxquery_run(mboxquery_t *query, const mboxquery_args_t *args)
                                   _mboxquery_cb, query, flags);
     if (r) goto done;
 
-    /* Sort mailboxes */
-    r = _mboxquery_sort(query);
-    if (r) goto done;
+    /* Apply comparators */
+    qsort_r(query->result.data, query->result.count, sizeof(void*),
+            (int(*)(const void*, const void*, void*)) _mboxquery_compar, query);
 
-    /* Filter mailboxes */
-    ptrarray_t matches = PTRARRAY_INITIALIZER;
-    ptrarray_t rejects = PTRARRAY_INITIALIZER;
+    /* Build in-memory tree */
+    hash_table recs_by_parentid = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&recs_by_parentid, ptrarray_size(&query->result) + 1, 0);
     for (i = 0; i < ptrarray_size(&query->result); i++) {
         mboxquery_record_t *rec = ptrarray_nth(&query->result, i);
-        if (_mboxquery_eval_filter(query, query->filter, rec)) {
-            ptrarray_append(&matches, rec);
+        const char *parent_id = rec->parent_id ? rec->parent_id : "";
+        ptrarray_t *recs = hash_lookup(parent_id, &recs_by_parentid);
+        if (!recs) {
+            recs = ptrarray_new();
+            hash_insert(parent_id, recs, &recs_by_parentid);
         }
-        else {
-            ptrarray_append(&rejects, rec);
+        ptrarray_append(recs, rec);
+    }
+
+    /* Sort as tree */
+    if (query->args->sort_as_tree) {
+        /* Reset result list */
+        ptrarray_truncate(&query->result, 0);
+        /* Add top-level nodes */
+        ptrarray_t work = PTRARRAY_INITIALIZER;
+        ptrarray_t *root = hash_lookup("", &recs_by_parentid);
+        if (root) {
+            for (i = ptrarray_size(root) - 1; i >= 0; i--) {
+                ptrarray_push(&work, ptrarray_nth(root, i));
+            }
         }
+        /* Descend tree */
+        mboxquery_record_t *rec;
+        while ((rec = ptrarray_pop(&work))) {
+            ptrarray_push(&query->result, rec);
+            ptrarray_t *children = hash_lookup(rec->id, &recs_by_parentid);
+            if (!children) continue;
+            for (i = ptrarray_size(children) - 1; i >= 0; i--) {
+                ptrarray_push(&work, ptrarray_nth(children, i));
+            }
+        }
+        ptrarray_fini(&work);
     }
-    for (i = 0; i < ptrarray_size(&rejects); i++) {
-        mboxquery_record_t *rec = ptrarray_nth(&rejects, i);
-        _mboxquery_record_fini(rec);
-        free(rec);
+
+    /* Apply filter */
+    for (i = 0; i < ptrarray_size(&query->result); i++) {
+        mboxquery_record_t *rec = ptrarray_nth(&query->result, i);
+        rec->matches = _mboxquery_eval_filter(query, query->filter, rec);
     }
-    ptrarray_truncate(&query->result, 0);
-    for (i = 0; i < ptrarray_size(&matches); i++) {
-        ptrarray_append(&query->result, ptrarray_nth(&matches, i));
+
+    /* Filter as tree */
+    if (query->args->filter_as_tree) {
+        /* Add top-level nodes */
+        ptrarray_t work = PTRARRAY_INITIALIZER;
+        ptrarray_t *root = hash_lookup("", &recs_by_parentid);
+        if (root) {
+            for (i = 0; i < ptrarray_size(root); i++) {
+                ptrarray_push(&work, ptrarray_nth(root, i));
+            }
+        }
+        /* Descend tree */
+        mboxquery_record_t *rec;
+        while ((rec = ptrarray_pop(&work))) {
+            ptrarray_t *children = hash_lookup(rec->id, &recs_by_parentid);
+            if (!children) continue;
+            for (i = 0; i < ptrarray_size(children); i++) {
+                mboxquery_record_t *child = ptrarray_nth(children, i);
+                if (!rec->matches) child->matches = 0;
+                ptrarray_push(&work, child);
+            }
+        }
+        ptrarray_fini(&work);
     }
-    ptrarray_fini(&matches);
-    ptrarray_fini(&rejects);
+
+    /* Prune result */
+    int newlen = 0;
+    for (i = 0; i < ptrarray_size(&query->result); i++) {
+        mboxquery_record_t *rec = ptrarray_nth(&query->result, i);
+        if (!rec->matches) {
+            _mboxquery_record_fini(rec);
+            free(rec);
+        }
+        else ptrarray_set(&query->result, newlen++, rec);
+    }
+    ptrarray_truncate(&query->result, newlen);
+
+    /* Free tree model */
+    hash_iter *it = hash_table_iter(&recs_by_parentid);
+    while (hash_iter_next(it)) {
+        ptrarray_t *recs = hash_iter_val(it);
+        ptrarray_free(recs);
+    }
+    hash_iter_free(&it);
+    free_hash_table(&recs_by_parentid, NULL);
 
 done:
     return r;
