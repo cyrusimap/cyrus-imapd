@@ -10884,7 +10884,7 @@ sub test_email_copy
 }
 
 sub test_email_copy_hasattachment
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPNoHasAttachment
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -10901,7 +10901,7 @@ sub test_email_copy_hasattachment
     my $dstInboxId = $self->getinbox({accountId => 'other'})->{id};
     $self->assert_not_null($dstInboxId);
 
-    xlog "create email";
+    xlog "create emails";
     my $res = $jmap->CallMethods([
         ['Email/set', {
             create => {
@@ -10913,30 +10913,50 @@ sub test_email_copy_hasattachment
                         'foo' => JSON::true,
                         '$seen' => JSON::true,
                     },
-                    subject => 'hello',
+                    subject => 'email1',
                     bodyStructure => {
                         type => 'text/plain',
                         partId => 'part1',
                     },
                     bodyValues => {
                         part1 => {
-                            value => 'world',
+                            value => 'part1',
+                        }
+                    },
+                },
+                2 => {
+                    mailboxIds => {
+                        $srcInboxId => JSON::true,
+                    },
+                    keywords => {
+                        'foo' => JSON::true,
+                        '$seen' => JSON::true,
+                    },
+                    subject => 'email2',
+                    bodyStructure => {
+                        type => 'text/plain',
+                        partId => 'part2',
+                    },
+                    bodyValues => {
+                        part2 => {
+                            value => 'part2',
                         }
                     },
                 },
             },
         }, 'R1'],
     ]);
-    my $emailId = $res->[0][1]->{created}{1}{id};
-    $self->assert_not_null($emailId);
+    my $emailId1 = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($emailId1);
+    my $emailId2 = $res->[0][1]->{created}{2}{id};
+    $self->assert_not_null($emailId2);
 
     xlog "set hasAttachment";
     my $store = $self->{store};
     $store->set_folder('INBOX');
     $store->_select();
     my $talk = $store->get_client();
-    $talk->store('1', '+flags', '($HasAttachment)') or die;
-
+    $talk->store('1:2', '+flags', '($HasAttachment)') or die;
 
     xlog "copy email";
     $res = $jmap->CallMethods([
@@ -10945,32 +10965,48 @@ sub test_email_copy_hasattachment
             accountId => 'other',
             create => {
                 1 => {
-                    id => $emailId,
+                    id => $emailId1,
                     mailboxIds => {
                         $dstInboxId => JSON::true,
+                    },
+                },
+                2 => {
+                    id => $emailId2,
+                    mailboxIds => {
+                        $dstInboxId => JSON::true,
+                    },
+                    keywords => {
+                        'baz' => JSON::true,
                     },
                 },
             },
         }, 'R1'],
     ]);
 
-    my $copiedEmailId = $res->[0][1]->{created}{1}{id};
-    $self->assert_not_null($copiedEmailId);
+    my $copiedEmailId1 = $res->[0][1]->{created}{1}{id};
+    $self->assert_not_null($copiedEmailId1);
+    my $copiedEmailId2 = $res->[0][1]->{created}{2}{id};
+    $self->assert_not_null($copiedEmailId2);
 
     xlog "get copied email";
     $res = $jmap->CallMethods([
         ['Email/get', {
             accountId => 'other',
-            ids => [$copiedEmailId],
+            ids => [$copiedEmailId1, $copiedEmailId2],
             properties => ['keywords'],
         }, 'R1']
     ]);
-    my $wantKeywords = {
+    my $wantKeywords1 = {
         '$hasattachment' => JSON::true,
         foo => JSON::true,
         '$seen' => JSON::true,
     };
-    $self->assert_deep_equals($wantKeywords, $res->[0][1]{list}[0]{keywords});
+    my $wantKeywords2 = {
+        '$hasattachment' => JSON::true,
+        baz => JSON::true,
+    };
+    $self->assert_deep_equals($wantKeywords1, $res->[0][1]{list}[0]{keywords});
+    $self->assert_deep_equals($wantKeywords2, $res->[0][1]{list}[1]{keywords});
 }
 
 sub test_email_copy_mailboxid_by_role
