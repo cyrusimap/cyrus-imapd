@@ -4009,8 +4009,8 @@ badformat:
             if (part_id) buf_printf(&buf, "%s.", part_id);
             buf_printf(&buf, "%d", body->numparts);
             struct body *subbody = &body->subpart[body->numparts-1];
-            r = parse_bodystructure_part(prot, subbody, subbody->part_id);
             subbody->part_id = buf_release(&buf);
+            r = parse_bodystructure_part(prot, subbody, subbody->part_id);
             if (r) goto out;
 
             c = prot_getc(prot);
