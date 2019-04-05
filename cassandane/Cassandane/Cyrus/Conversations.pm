@@ -183,6 +183,38 @@ sub test_append_reply_200
 }
 
 #
+# Test normalisation of Subjects containing nonascii whitespace
+#
+# At present, non-breaking space is the only nonascii whitespace
+# our normalisation supports
+#
+# The normalisation function is properly tested in the cunit tests,
+# but we need a test out here too to verify that it works when
+# decoded from the real world!
+#
+sub test_normalise_nonascii_whitespace
+    :min_version_3_0
+{
+    my ($self) = @_;
+    my %exp;
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    xlog "generating message A";
+    # we saw in the wild a message with an encoded nbsp in the subject...
+    $exp{A} = $self->make_message("=?UTF-8?Q?hello=C2=A0there?=");
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+
+    xlog "generating message B";
+    # ... but the reply had replaced this with a normal space
+    $exp{B} = $self->make_message("Re: hello there", references => [ $exp{A} ]);
+    $exp{B}->set_attributes(uid => 2, cid => $exp{A}->make_cid());
+    $self->check_messages(\%exp);
+}
+
+#
 # test reconstruct of larger conversation
 #
 sub test_reconstruct_splitconv
