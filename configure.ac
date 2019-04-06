@@ -1992,12 +1992,17 @@ AC_ARG_ENABLE(unit-tests,
 
 dnl Unit tests need the CUnit library, so check if we
 dnl have both the header and the library.
-if test "$enable_unit_tests" = "yes" ; then
+if test "x$enable_unit_tests" != xno ; then
     AC_CHECK_LIB(cunit,CU_initialize_registry,found_lib=yes,found_lib=no)
     AC_CHECK_HEADER([CUnit/CUnit.h],found_hdr=yes,found_hdr=no)
     if test "$found_lib$found_hdr" != "yesyes" ; then
+        if test "x$enable_unit_tests" = xyes; then
+            AC_MSG_ERROR([Unit tests explicitly requested, but CUnit library is not installed])
+        fi
         AC_MSG_NOTICE([Disabling unit tests because the required CUnit library is not installed])
         enable_unit_tests=no
+    else
+        enable_unit_tests=yes
     fi
     AC_CHECK_HEADER([CUnit/Basic.h],
         AC_CHECK_TYPE([CU_SetUpFunc],AC_DEFINE(HAVE_CU_SETUPFUNC,[],[Do we have CU_SetUpFunc?]),,
@@ -2421,4 +2426,5 @@ Build info:
    cxxflags:           $CXXFLAGS
    libs:               $LIBS
    ldflags:            $LDFLAGS
+   unit tests (cunit): $enable_unit_tests
 "
