@@ -1275,7 +1275,7 @@ imap_httpd_SOURCES += \
 
 imap_libcyrus_imap_la_SOURCES += \
 	imap/jmap_util.c \
-	jmap/jmap_util.h
+	imap/jmap_util.h
 
 if CUNIT
 
