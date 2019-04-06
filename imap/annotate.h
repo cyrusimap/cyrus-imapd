@@ -292,4 +292,6 @@ void annotate_putdb(annotate_db_t **dbp);
 int specialuse_validate(const char *mboxname, const char *userid,
                         const char *src, struct buf *dest, int allow_dups);
 
+int annotatemore_upgrade(void);
+
 #endif /* ANNOTATE_H */
