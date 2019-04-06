@@ -4401,3 +4401,121 @@ bad:
 
     fclose(f);
 }
+
+static int _check_rec_cb(void *rock,
+                         const char *key, size_t keylen,
+                         const char *data __attribute__((unused)),
+                         size_t datalen __attribute__((unused)))
+{
+    int *do_upgrade = (int *) rock;
+    annotate_db_t db = { NULL, 0, NULL, NULL, NULL, NULL, 0 };
+    const char *mboxid, *entry, *userid;
+    unsigned uid;
+
+    split_key(&db, key, keylen, &mboxid, &uid, &entry, &userid);
+    *do_upgrade = (mboxlist_lookup_by_uniqueid(mboxid, NULL, NULL) != 0);
+
+    return CYRUSDB_DONE;
+}
+
+static int _upgrade_cb(void *rock,
+                       const char *key, size_t keylen,
+                       const char *data, size_t datalen)
+{
+    annotate_db_t *db = (annotate_db_t *) rock;
+    mbentry_t *mbentry = NULL;
+    const char *mboxname, *entry, *userid;
+    char newkey[MAX_MAILBOX_PATH+1];
+    unsigned uid;
+    int r;
+
+    split_key(db, key, keylen, &mboxname, &uid, &entry, &userid);
+
+    r = mboxlist_lookup(mboxname, &mbentry, NULL);
+    if (r) return 0;
+
+    keylen = make_key(mboxname, mbentry->uniqueid, uid, entry, userid,
+                      newkey, sizeof(newkey));
+    mboxlist_entry_free(&mbentry);
+
+    do {
+        r = cyrusdb_store(db->db, newkey, keylen, data, datalen, tid(db));
+    } while (r == CYRUSDB_AGAIN);
+
+    return 0;
+}
+
+EXPORTED int annotatemore_upgrade(void)
+{
+    annotate_db_t *db;
+    int r, r2 = 0, do_upgrade = 0;
+    struct buf buf = BUF_INITIALIZER;
+    struct db *backup = NULL;
+    char *fname;
+
+    /* check if we need to upgrade */
+    annotatemore_open();
+    r = _annotate_getdb(NULL, 0, 0, &db);
+    if (r) goto done;
+
+    r = cyrusdb_foreach(db->db, "", 0, NULL, _check_rec_cb, &do_upgrade, NULL);
+    annotatemore_close();
+
+    if (r != CYRUSDB_DONE) return r;
+    else if (!do_upgrade) return 0;
+
+    /* create db file names */
+    annotate_dbname_mbentry(NULL, &fname);
+    buf_setcstr(&buf, fname);
+    buf_appendcstr(&buf, ".OLD");
+
+    /* rename db file to backup */
+    r = rename(fname, buf_cstring(&buf));
+    free(fname);
+    if (r) goto done;
+    
+    /* open backup db file */
+    r = cyrusdb_open(DB, buf_cstring(&buf), 0, &backup);
+
+    if (r) {
+        syslog(LOG_ERR, "DBERROR: opening %s: %s", buf_cstring(&buf),
+               cyrusdb_strerror(r));
+        fatal("can't open annotations file", EX_TEMPFAIL);
+    }
+
+    /* open a new db file */
+    annotatemore_open();
+    r = _annotate_getdb(NULL, 0, CYRUSDB_CREATE, &db);
+    if (r) goto done;
+
+    /* perform upgrade from backup to new db */
+    annotate_begin(db);
+    r = cyrusdb_foreach(backup, "", 0, NULL, _upgrade_cb, db, NULL);
+
+    r2 = cyrusdb_close(backup);
+    if (r2) {
+        syslog(LOG_ERR, "DBERROR: error closing %s: %s", buf_cstring(&buf),
+               cyrusdb_strerror(r2));
+    }
+
+    /* complete txn on new db */
+    if (db->in_txn) {
+        if (r) {
+            annotate_abort(db);
+        } else {
+            r2 = annotate_commit(db);
+        }
+
+        if (r2) {
+            syslog(LOG_ERR, "DBERROR: error %s txn in annotations_upgrade: %s",
+                   r ? "aborting" : "committing", cyrusdb_strerror(r2));
+        }
+    }
+
+    annotatemore_close();
+
+  done:
+    buf_free(&buf);
+
+    return r;
+}
