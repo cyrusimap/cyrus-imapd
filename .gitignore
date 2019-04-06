@@ -202,7 +202,4 @@ sieve/test
 sieve/tests/
 stamp-h1
 timsieved/timsieved
-vzic/test-output/
-vzic/vzic_test
-vzic/cyr_vzic
 ylwrap
