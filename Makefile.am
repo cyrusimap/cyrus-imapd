@@ -1992,6 +1992,7 @@ install-binsymlinks:
 SUFFIXES = .fig.png
 
 .fig.png:
+	mkdir -p $(@D)
 	fig2dev -L png $< $@
 
 valgrind:
