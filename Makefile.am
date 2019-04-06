@@ -262,8 +262,6 @@ endif # SIEVE
 
 else # SERVER
 EXTRA_DIST += \
-    imap/lmtpstats.c \
-    imap/pushstats.c \
     imap/promdata.c \
     imap/promdata.h \
     imap/rfc822_header.c \
@@ -906,12 +904,11 @@ imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) $(CLAMAV_LIBS)
 imap_deliver_SOURCES = \
 	imap/deliver.c \
 	imap/lmtpengine.c \
-	imap/lmtpstats.c \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/spool.c
 
-nodist_imap_deliver_SOURCES = imap/lmtp_err.c
+nodist_imap_deliver_SOURCES = imap/lmtp_err.c imap/lmtpstats.c
 
 imap_deliver_LDADD = $(LD_UTILITY_ADD)
 
@@ -933,13 +930,13 @@ imap_imapd_SOURCES = \
 	imap/imapd.c \
 	imap/imapd.h \
 	imap/mutex_fake.c \
-	imap/pushstats.c \
-	imap/pushstats.h \
 	imap/proxy.c \
 	imap/proxy.h \
 	imap/sync_support.c \
 	imap/sync_support.h \
 	master/service.c
+
+nodist_imap_imapd_SOURCES = imap/pushstats.c
 
 if AUTOCREATE
 imap_imapd_SOURCES += \
@@ -1131,14 +1128,12 @@ imap_lmtpd_SOURCES = \
 	imap/lmtpd.h \
 	imap/lmtpengine.c \
 	imap/lmtpengine.h \
-	imap/lmtpstats.c \
-	imap/lmtpstats.h \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/spool.c \
 	master/service.c
 
-nodist_imap_lmtpd_SOURCES = imap/lmtp_err.c
+nodist_imap_lmtpd_SOURCES = imap/lmtp_err.c imap/lmtpstats.c
 
 if AUTOCREATE
 imap_lmtpd_SOURCES += \
