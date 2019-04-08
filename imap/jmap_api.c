@@ -2603,7 +2603,7 @@ HIDDEN void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith)
     buf_free(&buf);
 }
 
-HIDDEN int jmap_hascapa(jmap_req_t *req, const char *capa)
+HIDDEN int jmap_is_using(jmap_req_t *req, const char *capa)
 {
     return strarray_find(req->capabilities, capa, 0) >= 0;
 }

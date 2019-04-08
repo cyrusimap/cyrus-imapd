@@ -131,7 +131,7 @@ typedef struct jmap_req {
 extern int jmap_initreq(jmap_req_t *req);
 extern void jmap_finireq(jmap_req_t *req);
 
-extern int jmap_hascapa(jmap_req_t *req, const char *capa);
+extern int jmap_is_using(jmap_req_t *req, const char *capa);
 
 #define JMAP_SHARED_CSTATE 1 << 0
 
