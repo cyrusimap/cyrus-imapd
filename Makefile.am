@@ -647,6 +647,7 @@ cunit_TESTS = \
 	cunit/charset.testc \
 	cunit/command.testc \
 	cunit/conversations.testc \
+	cunit/cyr_qsort_r.testc \
 	cunit/crc32.testc \
 	cunit/dlist.testc \
 	cunit/duplicate.testc \
@@ -757,6 +758,7 @@ include_HEADERS = \
 	lib/crc32.h \
 	lib/crc32c.h \
 	lib/cyr_lock.h \
+	lib/cyr_qsort_r.h \
 	lib/cyrusdb.h \
 	lib/glob.h \
 	lib/gmtoff.h \
@@ -1395,6 +1397,7 @@ lib_libcyrus_la_SOURCES = \
 	lib/bsearch.c \
 	lib/charset.c \
 	lib/command.c \
+	lib/cyr_qsort_r.c \
 	lib/cyrusdb.c \
 	lib/cyrusdb_flat.c \
 	lib/cyrusdb_quotalegacy.c \

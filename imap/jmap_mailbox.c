@@ -54,6 +54,7 @@
 #include "acl.h"
 #include "annotate.h"
 #include "bsearch.h"
+#include "cyr_qsort_r.h"
 #include "http_jmap.h"
 #include "jmap_mail.h"
 #include "json_support.h"
@@ -1080,7 +1081,9 @@ static mboxquery_t *_mboxquery_new(jmap_req_t *req, json_t *filter, json_t *sort
     return q;
 }
 
-static int _mboxquery_compar(const void **a, const void **b, void *rock)
+static int _mboxquery_compar QSORT_R_COMPAR_ARGS(const void **a,
+                                                 const void **b,
+                                                 void *rock)
 {
     const mboxquery_record_t *pa = *a;
     const mboxquery_record_t *pb = *b;
@@ -1204,8 +1207,8 @@ static int _mboxquery_run(mboxquery_t *query, const mboxquery_args_t *args)
     if (r) goto done;
 
     /* Apply comparators */
-    qsort_r(query->result.data, query->result.count, sizeof(void*),
-            (int(*)(const void*, const void*, void*)) _mboxquery_compar, query);
+    cyr_qsort_r(query->result.data, query->result.count, sizeof(void*),
+                (int(*)(const void*, const void*, void*)) _mboxquery_compar, query);
 
     /* Build in-memory tree */
     hash_table recs_by_parentid = HASH_TABLE_INITIALIZER;
