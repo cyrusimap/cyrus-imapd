@@ -115,6 +115,7 @@ struct mboxlist_entry {
     char *uniqueid;
     /* legacy upgrade support */
     char *legacy_specialuse;
+    int legacy_dir;
     /* replication support */
     ptrarray_t synonyms;
 };
