@@ -2986,6 +2986,42 @@ sub test_mailbox_get_intermediate
     $self->assert_num_equals($mboxA->{isSeenShared}, JSON::false);
 }
 
+sub test_mailbox_get_inboxsub
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    xlog "Create INBOX subfolder via IMAP";
+    $imap->create("INBOX.INBOX.foo") or die;
+
+    xlog "Get mailboxes";
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
+
+    my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+    my $mboxfoo = $mboxByName{"foo"};
+    my $inbox = $mboxByName{"Inbox"};
+
+    $self->assert_str_equals('foo', $mboxfoo->{name});
+    $self->assert_str_equals($inbox->{id}, $mboxfoo->{parentId});
+    $self->assert_null($mboxfoo->{role});
+    $self->assert_num_equals(0, $mboxfoo->{sortOrder}, 0);
+    $self->assert_equals(JSON::true, $mboxfoo->{myRights}->{mayReadItems});
+    $self->assert_equals(JSON::true, $mboxfoo->{myRights}->{mayAddItems});
+    $self->assert_equals(JSON::true, $mboxfoo->{myRights}->{mayRemoveItems});
+    $self->assert_equals(JSON::true, $mboxfoo->{myRights}->{mayCreateChild});
+    $self->assert_equals(JSON::true, $mboxfoo->{myRights}->{mayRename});
+    $self->assert_equals(JSON::true, $mboxfoo->{myRights}->{mayDelete});
+    $self->assert_num_equals($mboxfoo->{totalEmails}, 0);
+    $self->assert_num_equals($mboxfoo->{unreadEmails}, 0);
+    $self->assert_num_equals($mboxfoo->{totalThreads}, 0);
+    $self->assert_num_equals($mboxfoo->{unreadThreads}, 0);
+    $self->assert_num_equals($mboxfoo->{isSeenShared}, JSON::false);
+}
+
 sub test_mailbox_intermediary_imaprename_preservetree
     :min_version_3_1 :needs_component_jmap
 {
