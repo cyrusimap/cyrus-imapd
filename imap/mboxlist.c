@@ -854,6 +854,12 @@ static int _findparent(const char *mboxname, mbentry_t **mbentryp, int allow_all
 
     while (strarray_size(mbname_boxes(mbname))) {
         free(mbname_pop_boxes(mbname));
+        /* skip exactly INBOX, since it's not a real intermediate folder,
+         * and the parent of INBOX.INBOX.foo is INBOX */
+        if (strarray_size(mbname_boxes(mbname)) == 1 &&
+            !strcmp(strarray_nth(mbname_boxes(mbname), 0), "INBOX")) {
+            free(mbname_pop_boxes(mbname));
+        }
         mboxlist_entry_free(&mbentry);
         if (allow_all)
             r = mboxlist_lookup_allow_all(mbname_intname(mbname), &mbentry, NULL);
