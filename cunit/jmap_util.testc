@@ -2,6 +2,7 @@
 #include "cunit/cyrunit.h"
 #include "xmalloc.h"
 #include "util.h"
+#include "hash.h"
 #include "imap/jmap_util.h"
 
 static void test_patchobject_create(void)
