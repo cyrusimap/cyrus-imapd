@@ -71,4 +71,6 @@ extern char *jmap_pointer_encode(const char *src);
 /* Decode src according to RFC6901 */
 extern char *jmap_pointer_decode(const char *src, size_t len);
 
+extern json_t *jmap_filterprops(json_t *src, hash_table *props);
+
 #endif /* JMAP_UTIL_H */

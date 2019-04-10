@@ -45,6 +45,7 @@
 
 #include <string.h>
 
+#include "hash.h"
 #include "jmap_util.h"
 
 EXPORTED int jmap_readprop_full(json_t *root, const char *prefix, const char *name,
@@ -241,4 +242,17 @@ EXPORTED json_t *jmap_patchobject_create(json_t *src, json_t *dst)
 
     buf_free(&buf);
     return diff;
+}
+
+EXPORTED json_t *jmap_filterprops(json_t *src, hash_table *props)
+{
+    /* Remove all properties that weren't requested by the caller. */
+    json_t *dst = json_pack("{}");
+    void *iter = hash_table_iter(props);
+    while (hash_iter_has_next(iter)) {
+        const char *key = hash_iter_next(iter);
+        json_object_set(dst, key, json_object_get(src, key));
+    }
+    json_decref(src);
+    return dst;
 }
