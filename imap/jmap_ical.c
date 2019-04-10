@@ -2228,18 +2228,11 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     if (wantprops) {
-        /* Remove all properties that weren't requested by the caller. */
-        json_t *tmp = json_pack("{}");
-        void *iter = hash_table_iter(wantprops);
-        while (hash_iter_has_next(iter)) {
-            const char *key = hash_iter_next(iter);
-            json_object_set(tmp, key, json_object_get(event, key));
-        }
-        json_decref(event);
-        event = tmp;
+        return jmap_filterprops(event, wantprops);
     }
-
-    return event;
+    else {
+        return event;
+    }
 }
 
 json_t*
