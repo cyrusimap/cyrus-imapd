@@ -46,6 +46,16 @@
 
 #include "json_support.h"
 
+#define jmap_wantprop(props, name) \
+    ((props) ? (hash_lookup(name, props) != NULL) : 1)
+
+#define jmap_readprop(root, name,  mandatory, invalid, fmt, dst) \
+    jmap_readprop_full((root), NULL, (name), (mandatory), (invalid), (fmt), (dst))
+
+extern int jmap_readprop_full(json_t *root, const char *prefix, const char *name,
+                              int mandatory, json_t *invalid, const char *fmt,
+                              void *dst);
+
 /* Apply patch to a deep copy of val and return the result. */
 extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch);
 

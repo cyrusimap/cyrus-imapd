@@ -66,12 +66,6 @@
 
 #define JMAP_QUOTA_EXTENSION   "http://cyrusimap.org/ns/quota"
 
-#define jmap_wantprop(props, name) \
-    ((props) ? (hash_lookup(name, props) != NULL) : 1)
-
-#define jmap_readprop(root, name,  mandatory, invalid, fmt, dst) \
-    jmap_readprop_full((root), NULL, (name), (mandatory), (invalid), (fmt), (dst))
-
 extern struct namespace jmap_namespace;
 
 
