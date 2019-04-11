@@ -49,6 +49,12 @@
 #include "mailbox.h"
 #include "util.h"
 
+#define DAV_KEY_MBOX(mailbox) \
+    (mailbox->legacy_dir ? mailbox->name : mailbox->uniqueid)
+
+#define DAV_KEY_MBE(mbentry) \
+    (!mbentry ? NULL : (mbentry->legacy_dir ? mbentry->name : mbentry->uniqueid))
+
 struct dav_data {
     unsigned rowid;
     time_t creationdate;
