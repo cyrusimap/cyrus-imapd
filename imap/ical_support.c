@@ -458,7 +458,7 @@ const char *get_icalcomponent_errstr(icalcomponent *ical)
 
                 /* Check if this is an empty property error */
                 if (sscanf(errstr,
-                           "No value for %s property", propname) == 1) {
+                           "No value for %255s property", propname) == 1) {
                     /* Empty LOCATION is OK */
                     if (!strcasecmp(propname, "LOCATION")) continue;
                     if (!strcasecmp(propname, "COMMENT")) continue;
