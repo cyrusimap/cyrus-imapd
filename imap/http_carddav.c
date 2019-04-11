@@ -618,7 +618,7 @@ static int store_resource(struct transaction_t *txn,
     }
 
     /* Check for changed UID on existing resource */
-    carddav_lookup_resource(davdb, mailbox->uniqueid, resource, &cdata, 0);
+    carddav_lookup_resource(davdb, DAV_KEY_MBOX(mailbox), resource, &cdata, 0);
     if (cdata->dav.imap_uid && strcmpsafe(cdata->vcard_uid, uid)) {
         char *owner = mboxname_to_userid(cdata->dav.mailbox);
 
@@ -637,10 +637,11 @@ static int store_resource(struct transaction_t *txn,
     if (dupcheck) {
         /* Check for different resource with same UID */
         carddav_lookup_uid(davdb, uid, &cdata);
-        if (cdata->dav.imap_uid && (strcmp(cdata->dav.mailbox, mailbox->name) ||
-                                    strcmp(cdata->dav.resource, resource))) {
+        if (cdata->dav.imap_uid &&
+            (strcmp(cdata->dav.mailbox, DAV_KEY_MBOX(mailbox)) ||
+             strcmp(cdata->dav.resource, resource))) {
             /* CARDDAV:no-uid-conflict */
-            char *owner = mboxname_to_userid(cdata->dav.mailbox);
+            char *owner = mboxname_to_userid(mailbox->name);
 
             txn->error.precond = CARDDAV_UID_CONFLICT;
             assert(!buf_len(&txn->buf));
@@ -1635,7 +1636,7 @@ int propfind_addrgroups(const xmlChar *name, xmlNsPtr ns,
         goto done;
     }
 
-    r = carddav_lookup_resource(davdb, fctx->req_tgt->mbentry->uniqueid,
+    r = carddav_lookup_resource(davdb, DAV_KEY_MBE(fctx->req_tgt->mbentry),
                                 fctx->req_tgt->resource, &cdata, 0);
     if (r)
         goto done;
