@@ -3457,7 +3457,7 @@ static int caldav_import(struct transaction_t *txn, void *obj,
             txn->error.precond = CALDAV_VALID_DATA;
             return HTTP_FORBIDDEN;
         }
-        icalrestriction_check(ical);
+        cyrus_icalrestriction_check(ical);
         if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
             buf_setcstr(&txn->buf, txn->error.desc);
             txn->error.desc = buf_cstring(&txn->buf);
@@ -4166,7 +4166,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    icalrestriction_check(ical);
+    cyrus_icalrestriction_check(ical);
     if ((txn->error.desc = get_icalcomponent_errstr(ical))) {
         buf_setcstr(&txn->buf, txn->error.desc);
         txn->error.desc = buf_cstring(&txn->buf);

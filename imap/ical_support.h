@@ -79,6 +79,8 @@
 /* Initialize libical timezones. */
 extern void ical_support_init(void);
 
+extern int cyrus_icalrestriction_check(icalcomponent *ical);
+
 extern const char *icalparameter_get_value_as_string(icalparameter *param);
 extern struct icaldatetimeperiodtype
 icalproperty_get_datetimeperiod(icalproperty *prop);

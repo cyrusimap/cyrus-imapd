@@ -73,6 +73,28 @@ EXPORTED void ical_support_init(void)
     }
 }
 
+EXPORTED int cyrus_icalrestriction_check(icalcomponent *ical)
+{
+    icalcomponent *vtz;
+
+    /* Strip COMMENT properties from VTIMEZONEs */
+    /* XXX  These were added by KSM in a previous version of vzic,
+       but libical doesn't allow them in its restrictions checks */
+    for (vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
+         vtz;
+         vtz = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
+        icalproperty *prop =
+            icalcomponent_get_first_property(vtz, ICAL_COMMENT_PROPERTY);
+
+        if (prop) {
+            icalcomponent_remove_property(vtz, prop);
+            icalproperty_free(prop);
+        }
+    }
+
+    return icalrestriction_check(ical);
+}
+
 #if (SIZEOF_TIME_T > 4)
 static time_t epoch    = (time_t) LONG_MIN;
 static time_t eternity = (time_t) LONG_MAX;
