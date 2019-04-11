@@ -1062,7 +1062,8 @@ sub start_httpd {
 
         my $httpd = HTTP::Daemon->new(
             LocalAddr => $host,
-            LocalPort => $port
+            LocalPort => $port,
+            ReuseAddr => 1, # Reuse ports left in TIME_WAIT
         ) || die;
         while (my $conn = $httpd->accept) {
             while (my $req = $conn->get_request) {
