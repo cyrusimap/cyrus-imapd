@@ -255,6 +255,12 @@ magic(JMAPNoHasAttachment => sub {
     shift->config_set('jmap_set_has_attachment' => 'no');
 });
 
+magic(SearchAttachmentExtractor => sub {
+    my $port = Cassandane::PortManager::alloc();
+    shift->config_set('search_attachment_extractor_url' =>
+        "http://localhost:$port/extractor");
+});
+
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
 {

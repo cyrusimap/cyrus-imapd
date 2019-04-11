@@ -57,6 +57,7 @@ use AnyEvent::Handle;
 use AnyEvent::Socket;
 use AnyEvent::Util;
 use JSON;
+use HTTP::Daemon;
 
 use lib '.';
 use Cassandane::Util::DateTime qw(to_iso8601);
@@ -1040,6 +1041,52 @@ sub _start_smtpd {
         kill(15, $smtppid);
         waitpid($smtppid, 0);
     }
+}
+
+sub start_httpd {
+    my ($self, $handler, $port) = @_;
+
+    my $basedir = $self->{basedir};
+
+    my $host = 'localhost';
+    $port ||= Cassandane::PortManager::alloc();
+
+    my $httpdpid = fork();
+    unless ($httpdpid) {
+        # Child process.
+        $SIG{TERM} = sub { exit 0; };
+
+        POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
+
+        $0 = "cassandane httpd: $basedir";
+
+        my $httpd = HTTP::Daemon->new(
+            LocalAddr => $host,
+            LocalPort => $port
+        ) || die;
+        while (my $conn = $httpd->accept) {
+            while (my $req = $conn->get_request) {
+                $handler->($conn, $req);
+            }
+            $conn->close;
+            undef($conn);
+        }
+
+        exit 0; # Never reached
+    }
+
+    # Parent process.
+    $self->{httpdhost} = $host . ':' . $port;
+
+    xlog "started httpd as $httpdpid";
+    push @{$self->{_shutdowncallbacks}}, sub {
+        my $self = shift;
+        xlog "killing httpd $httpdpid";
+        kill(15, $httpdpid);
+        waitpid($httpdpid, 0);
+    };
+
+    return $port;
 }
 
 sub start

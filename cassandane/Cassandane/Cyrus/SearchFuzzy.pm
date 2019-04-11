@@ -1299,6 +1299,7 @@ sub test_xapian_index_partid
         )
     ) || die;
 
+
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v');
 
     my $talk = $self->{store}->get_client();

@@ -49,6 +49,7 @@ use Data::Dumper;
 use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
 use Cwd qw(abs_path getcwd);
+use URI;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -12603,6 +12604,137 @@ sub test_email_get_cid
     $self->assert_str_equals('1234567890', $bodyStructure->{subParts}[2]{cid});
     $self->assert_str_equals('1234567890', $bodyStructure->{subParts}[3]{cid});
 
+}
+
+sub test_searchsnippet_get_attachment
+    :min_version_3_0 :needs_search_xapian :SearchAttachmentExtractor
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $instance = $self->{instance};
+
+    my $uri = URI->new($instance->{config}->get('search_attachment_extractor_url'));
+
+    # Start a dummy extractor server.
+    my %seenPath;
+    my $handler = sub {
+        my ($conn, $req) = @_;
+        if ($seenPath{$req->uri->path}) {
+            my $res = HTTP::Response->new(200);
+            $res->content("dog cat bat");
+            $conn->send_response($res);
+        } else {
+            $conn->send_error(404);
+            $seenPath{$req->uri->path} = 1;
+        }
+    };
+    $instance->start_httpd($handler, $uri->port());
+
+    # Append an email with PDF attachment text "dog cat bat".
+    my $file = "data/dogcatbat.pdf.b64";
+    open my $input, '<', $file or die "can't open $file: $!";
+    my $body = ""
+    ."\r\n--boundary_1\r\n"
+    ."Content-Type: text/plain\r\n"
+    ."\r\n"
+    ."text body"
+    ."\r\n--boundary_1\r\n"
+    ."Content-Type: application/pdf\r\n"
+    ."Content-Transfer-Encoding: BASE64\r\n"
+    . "\r\n";
+    while (<$input>) {
+        chomp;
+        $body .= $_ . "\r\n";
+    }
+    $body .= "\r\n--boundary_1--\r\n";
+    close $input or die "can't close $file: $!";
+
+    $self->make_message("msg1",
+        mime_type => "multipart/related",
+        mime_boundary => "boundary_1",
+        body => $body
+    ) || die;
+
+    # Run squatter
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-v');
+
+    my $using = [
+        'http://cyrusimap.org/ns/search',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+    ];
+
+    # Test 0: query attachmentbody
+    my $filter = { attachmentBody => "cat" };
+    my $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => $filter
+        }, "R1"],
+    ], $using);
+    my $emailIds = $res->[0][1]{ids};
+    $self->assert_num_equals(1, scalar @{$emailIds});
+    my $partIds = $res->[0][1]{partIds};
+    $self->assert_not_null($partIds);
+
+    # Test 1: pass partIds
+    $res = $jmap->CallMethods([['SearchSnippet/get', {
+            emailIds => $emailIds,
+            partIds => $partIds,
+            filter => $filter
+    }, "R1"]], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
+    my $snippet = $res->[0][1]->{list}[0];
+    $self->assert_str_equals("dog <mark>cat</mark> bat", $snippet->{preview});
+
+    # Test 2: pass null partids
+    $res = $jmap->CallMethods([['SearchSnippet/get', {
+            emailIds => $emailIds,
+            partIds => {
+                $emailIds->[0] => undef
+            },
+            filter => $filter
+    }, "R1"]], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
+    $snippet = $res->[0][1]->{list}[0];
+    $self->assert_null($snippet->{preview});
+
+    # Test 3: pass no partids
+    $res = $jmap->CallMethods([['SearchSnippet/get', {
+            emailIds => $emailIds,
+            filter => $filter
+    }, "R1"]], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
+    $snippet = $res->[0][1]->{list}[0];
+    $self->assert_null($snippet->{preview});
+
+    # Test 4: test null partids for header-only match
+    $filter = {
+        text => "msg1"
+    };
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => $filter
+        }, "R1"],
+    ], $using);
+    $emailIds = $res->[0][1]{ids};
+    $self->assert_num_equals(1, scalar @{$emailIds});
+    $partIds = $res->[0][1]{partIds};
+    my $wantPartIds = {
+        $emailIds->[0] => undef
+    };
+    $self->assert_deep_equals($wantPartIds, $partIds);
+
+    # Test 5: query text
+    $filter = { text => "cat" };
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => $filter
+        }, "R1"],
+    ], $using);
+    $emailIds = $res->[0][1]{ids};
+    $self->assert_num_equals(1, scalar @{$emailIds});
+    $partIds = $res->[0][1]{partIds};
+    $self->assert_not_null($partIds);
 }
 
 1;
