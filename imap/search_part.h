@@ -58,7 +58,8 @@
 #define SEARCH_PART_BODY            9
 #define SEARCH_PART_LOCATION        10
 #define SEARCH_PART_ATTACHMENTNAME  11
-#define SEARCH_NUM_PARTS            12
+#define SEARCH_PART_ATTACHMENTBODY  12
+#define SEARCH_NUM_PARTS            13
 
 /* Implemented in search_engines.c */
 extern const char *search_part_as_string(int part);

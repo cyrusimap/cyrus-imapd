@@ -647,9 +647,11 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
         free(s);
     }
 
-    bx = search_begin_search(query->state->mailbox,
-                             (query->multiple ? SEARCH_MULTIPLE : 0)|
-                             SEARCH_VERBOSE(query->verbose));
+    int opts = SEARCH_VERBOSE(query->verbose);
+    if (query->multiple) opts |= SEARCH_MULTIPLE;
+    if (query->attachments_in_any) opts |= SEARCH_ATTACHMENTS_IN_ANY;
+
+    bx = search_begin_search(query->state->mailbox, opts);
     if (!bx) {
         r = IMAP_INTERNAL;
         goto out;

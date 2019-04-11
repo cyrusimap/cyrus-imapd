@@ -132,6 +132,7 @@ struct search_engine {
 #define SEARCH_COMPACT_REINDEX  (1<<7)  /* re-index all matching messages */
 #define SEARCH_COMPACT_ONLYUPGRADE (1<<8) /* only compact if reindexing */
 #define SEARCH_COMPACT_XAPINDEXED (1<<9) /* use XAPIAN index */
+#define SEARCH_ATTACHMENTS_IN_ANY (1<<10) /* search attachments in ANY part */
     search_builder_t *(*begin_search)(struct mailbox *, int opts);
     void (*end_search)(search_builder_t *);
     search_text_receiver_t *(*begin_update)(int verbose);
@@ -173,6 +174,16 @@ int search_update_mailbox(search_text_receiver_t *rx,
                           struct mailbox *mailbox,
                           int flags);
 int search_end_update(search_text_receiver_t *rx);
+
+/* Create a search text receiver for snippets. For each non-empty
+ * snippet generated from a message search part, callback proc is called.
+ *
+ * The callback is called in ascending order of SEARCH_PART definitions,
+ * where higher valued search parts are more costly to generate snippets.
+ * The callback may return 0 to continue snippet generation for the
+ * message, or return IMAP_OK_COMPLETED to indicate that it does not
+ * require more snippets for this message. It still must be prepared
+ * to receive more snippets for this message. */
 search_text_receiver_t *search_begin_snippets(void *internalised,
                                               int verbose,
                                               search_snippet_markup_t *markup,

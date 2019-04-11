@@ -132,7 +132,8 @@ static const char *get_term_prefix(int db_version, int partnum)
         "XH",                /* HEADERS */
         "",                  /* BODY */
         "XO",                /* LOCATION */
-        "XA"                 /* ATTACHMENTNAME */
+        "XA",                /* ATTACHMENTNAME */
+        "XAB"                /* ATTACHMENTBODY */
     };
 
     static const char * const term_prefixes_v0[SEARCH_NUM_PARTS] = {
@@ -147,7 +148,8 @@ static const char *get_term_prefix(int db_version, int partnum)
         "H",                /* HEADERS */
         "D",                /* BODY */
         "O",                /* LOCATION */
-        "A"                 /* ATTACHMENTNAME */
+        "A",                /* ATTACHMENTNAME */
+        "AB"                /* ATTACHMENTBODY */
     };
 
     return db_version > 0 ? term_prefixes[partnum] : term_prefixes_v0[partnum];
@@ -168,7 +170,8 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
         Xapian::TermGenerator::STEM_NONE,  /* HEADERS */
         Xapian::TermGenerator::STEM_SOME,  /* BODY */
         Xapian::TermGenerator::STEM_SOME,  /* LOCATION */
-        Xapian::TermGenerator::STEM_NONE   /* ATTACHMENTNAME */
+        Xapian::TermGenerator::STEM_NONE,  /* ATTACHMENTNAME */
+        Xapian::TermGenerator::STEM_SOME   /* ATTACHMENTBODY */
     };
 
     static Xapian::TermGenerator::stem_strategy stem_strategy_v1[SEARCH_NUM_PARTS] = {
@@ -184,7 +187,8 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
         Xapian::TermGenerator::STEM_ALL,   /* HEADERS */
         Xapian::TermGenerator::STEM_SOME,  /* BODY */
         Xapian::TermGenerator::STEM_SOME,  /* LOCATION */
-        Xapian::TermGenerator::STEM_NONE   /* ATTACHMENTNAME */
+        Xapian::TermGenerator::STEM_NONE,  /* ATTACHMENTNAME */
+        Xapian::TermGenerator::STEM_SOME   /* ATTACHMENTBODY */
     };
 
     static Xapian::TermGenerator::stem_strategy stem_strategy_v0[SEARCH_NUM_PARTS] = {
@@ -200,7 +204,8 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
         Xapian::TermGenerator::STEM_ALL,   /* HEADERS */
         Xapian::TermGenerator::STEM_ALL,   /* BODY */
         Xapian::TermGenerator::STEM_ALL,   /* LOCATION */
-        Xapian::TermGenerator::STEM_ALL    /* ATTACHMENTNAME */
+        Xapian::TermGenerator::STEM_ALL,   /* ATTACHMENTNAME */
+        Xapian::TermGenerator::STEM_ALL    /* ATTACHMENTBODY */
     };
 
     switch (db_version) {
@@ -1102,7 +1107,6 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
                 , Xapian::TermGenerator::FLAG_CJK_WORDS
 #endif
         );
-
 
         buf_setcstr(buf, snippet.c_str());
         buf_cstring(buf);

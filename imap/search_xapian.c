@@ -1117,7 +1117,7 @@ static void optimise_nodes(struct opnode *parent, struct opnode *on)
     }
 }
 
-static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on)
+static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on, int opts)
 {
     struct opnode *child;
     xapian_query_t *qq = NULL;
@@ -1127,12 +1127,12 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on)
     switch (on->op) {
     case SEARCH_OP_NOT:
         if (on->children)
-            qq = xapian_query_new_not(db, opnode_to_query(db, on->children));
+            qq = xapian_query_new_not(db, opnode_to_query(db, on->children, opts));
         break;
     case SEARCH_OP_OR:
     case SEARCH_OP_AND:
         for (child = on->children ; child ; child = child->next) {
-            qq = opnode_to_query(db, child);
+            qq = opnode_to_query(db, child, opts);
             if (qq) ptrarray_push(&childqueries, qq);
         }
         qq = NULL;
@@ -1144,8 +1144,12 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on)
     case SEARCH_PART_ANY:
         /* Xapian does not have a convenient way of search for "any
          * field"; instead we fake it by explicitly searching for
-         * all of the available prefixes */
+          * all of the available prefixes */
         for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
+            if (i == SEARCH_PART_ATTACHMENTBODY &&
+                !(opts & SEARCH_ATTACHMENTS_IN_ANY)) {
+                continue;
+            }
             void *q = xapian_query_new_match(db, i, on->arg);
             if (q) ptrarray_push(&childqueries, q);
         }
@@ -1199,7 +1203,7 @@ static int is_dnfclause(const struct opnode *on)
     return 0;
 }
 
-static int split_query(const xapian_db_t *db,
+static int split_query(xapian_builder_t *bb,
                        const struct opnode *expr,
                        ptrarray_t *clauses)
 {
@@ -1303,6 +1307,7 @@ static int split_query(const xapian_db_t *db,
                     break;
                 case SEARCH_PART_BODY:
                 case SEARCH_PART_LOCATION:
+                case SEARCH_PART_ATTACHMENTBODY:
                     opnode_append_child(qpart, child);
                     break;
                 default:
@@ -1319,19 +1324,19 @@ static int split_query(const xapian_db_t *db,
 
     if (qguid->children) {
         optimise_nodes(NULL, qguid);
-        xapian_query_t *xq = opnode_to_query(db, qguid);
-        if (xq) xq = xapian_query_new_filter_doctype(db, SEARCH_XAPIAN_DOCTYPE_MSG, xq);
+        xapian_query_t *xq = opnode_to_query(bb->db, qguid, bb->opts);
+        if (xq) xq = xapian_query_new_filter_doctype(bb->db, SEARCH_XAPIAN_DOCTYPE_MSG, xq);
         if (xq) ptrarray_append(clauses, xq);
     }
     if (qpart->children) {
         optimise_nodes(NULL, qpart);
-        xapian_query_t *xq = opnode_to_query(db, qpart);
-        if (xq) xq = xapian_query_new_filter_doctype(db, SEARCH_XAPIAN_DOCTYPE_PART, xq);
+        xapian_query_t *xq = opnode_to_query(bb->db, qpart, bb->opts);
+        if (xq) xq = xapian_query_new_filter_doctype(bb->db, SEARCH_XAPIAN_DOCTYPE_PART, xq);
         if (xq) ptrarray_append(clauses, xq);
     }
     if (qany->children) {
         optimise_nodes(NULL, qany);
-        xapian_query_t *xq = opnode_to_query(db, qany);
+        xapian_query_t *xq = opnode_to_query(bb->db, qany, bb->opts);
         if (xq) ptrarray_append(clauses, xq);
     }
 
@@ -1450,7 +1455,7 @@ static int run_query(xapian_builder_t *bb)
     ptrarray_t clauses = PTRARRAY_INITIALIZER;
 
     /* Split into sub queries for each document type */
-    r = split_query(bb->db, bb->root, &clauses);
+    r = split_query(bb, bb->root, &clauses);
     if (r) goto out;
 
     /* Run clauses and intersect results */
@@ -1567,7 +1572,7 @@ out:
 
 static int run_legacy_query(xapian_builder_t *bb)
 {
-    xapian_query_t *qq = opnode_to_query(bb->db, bb->root);
+    xapian_query_t *qq = opnode_to_query(bb->db, bb->root, bb->opts);
     if (!qq) return 0;
     struct xapian_run_rock xrock = { bb, NULL, /*is_legacy*/1 };
     int r = xapian_query_run(bb->db, qq, /*is_legacy*/1, xapian_run_cb, &xrock);
@@ -2618,7 +2623,7 @@ static void generate_snippet_terms(xapian_snipgen_t *snipgen,
     }
 }
 
-static int end_message_snippets(search_text_receiver_t *rx)
+static int flush_snippets(search_text_receiver_t *rx)
 {
     xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
     struct buf snippets = BUF_INITIALIZER;
@@ -2659,7 +2664,12 @@ static int end_message_snippets(search_text_receiver_t *rx)
             /* TODO: UINT_MAX doesn't behave as expected, which is probably
              * a bug, but really any value larger than a reasonable Subject
              * length will do */
-            context_length = (seg->part == SEARCH_PART_HEADERS || seg->part == SEARCH_PART_BODY ? 5 : 1000000);
+            if (seg->part == SEARCH_PART_HEADERS ||
+                seg->part == SEARCH_PART_BODY ||
+                seg->part == SEARCH_PART_ATTACHMENTBODY) {
+                context_length = 5;
+            }
+            else context_length = 1000000;
             r = xapian_snipgen_begin_doc(tr->snipgen, context_length);
             if (r) break;
 
@@ -2667,9 +2677,9 @@ static int end_message_snippets(search_text_receiver_t *rx)
         }
 
         r = xapian_snipgen_doc_part(tr->snipgen, &seg->text, seg->part);
-        if (r) break;
-
         last_part = seg->part;
+
+        if (r) break;
     }
 
     if (last_part != -1) {
@@ -2678,9 +2688,16 @@ static int end_message_snippets(search_text_receiver_t *rx)
             r = tr->proc(tr->super.mailbox, tr->super.uid, last_part, snippets.s, tr->rock);
     }
 
+    free_segments(&tr->super);
+
 out:
     buf_free(&snippets);
     return r;
+}
+
+static int end_message_snippets(search_text_receiver_t *rx)
+{
+    return flush_snippets(rx);
 }
 
 static int end_mailbox_snippets(search_text_receiver_t *rx,
@@ -2712,6 +2729,7 @@ static search_text_receiver_t *begin_snippets(void *internalised,
     tr->super.super.end_part = end_part;
     tr->super.super.end_message = end_message_snippets;
     tr->super.super.end_mailbox = end_mailbox_snippets;
+    tr->super.super.flush = flush_snippets;
 
     tr->super.verbose = verbose;
     tr->root = (struct opnode *)internalised;

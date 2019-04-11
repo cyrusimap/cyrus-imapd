@@ -4508,14 +4508,15 @@ static int body_foreach_section(struct body *body, struct message *message,
                  &data, rock);
         buf_free(&data);
         charset_free(&charset);
-
         if (r) return r;
     } else {
         buf_init_ro(&data, message->map.s + body->content_offset, body->content_size);
-        r = proc(/*isbody*/1, CHARSET_UNKNOWN_CHARSET, 0,
-                body->type, body->subtype, body->params, NULL, NULL,
-                &body->content_guid, body->part_id, &data, rock);
+        r = proc(/*isbody*/1, CHARSET_UNKNOWN_CHARSET,
+                 body->encoding ? encoding_lookupname(body->encoding) : ENCODING_NONE,
+                 body->type, body->subtype, body->params, NULL, NULL,
+                 &body->content_guid, body->part_id, &data, rock);
         buf_free(&data);
+        if (r) return r;
     }
 
     for (i = 0; i < body->numparts; i++) {
@@ -4523,7 +4524,7 @@ static int body_foreach_section(struct body *body, struct message *message,
         if (r) return r;
     }
 
-    return 0;
+    return r;
 }
 
 

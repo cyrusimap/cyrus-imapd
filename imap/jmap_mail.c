@@ -2037,6 +2037,9 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         if ((s = json_string_value(json_object_get(filter, "text")))) {
             _email_search_string(this, s, "text", perf_filters);
         }
+        if ((s = json_string_value(json_object_get(filter, "attachmentBody")))) {
+            _email_search_string(this, s, "attachmentbody", perf_filters);
+        }
         if ((s = json_string_value(json_object_get(filter, "to")))) {
             _email_search_string(this, s, "to", perf_filters);
         }
@@ -2198,7 +2201,9 @@ static void _email_parse_filter(json_t *filter, struct jmap_parser *parser,
                  !strcmp(field, "subject") ||
                  !strcmp(field, "body") ||
                  !strcmp(field, "attachmentName") ||  /* FM-specific */
-                 !strcmp(field, "attachmentType")) {  /* FM-specific */
+                 !strcmp(field, "attachmentType") ||  /* FM-specific */
+                 (!strcmp(field, "attachmentBody") &&
+                  jmap_is_using(req, JMAP_SEARCH_EXTENSION))) {
             if (!json_is_string(arg)) {
                 jmap_parser_invalid(parser, field);
             }
@@ -2452,6 +2457,7 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
     search->query->ignore_timer = ignore_timer;
     search->query->checkfolder = _jmap_checkfolder;
     search->query->checkfolderrock = req;
+    search->query->attachments_in_any = jmap_is_using(req, JMAP_SEARCH_EXTENSION);
     search->is_mutable = search_is_mutable(search->sortcrit, search->args);
 
     /* Make hash */
@@ -3573,11 +3579,10 @@ static int _snippet_get_cb(struct mailbox *mbox __attribute__((unused)),
     const char *propname = NULL;
     json_t *snippet = rock;
 
-
     if (part == SEARCH_PART_SUBJECT) {
         propname = "subject";
     }
-    else if (part == SEARCH_PART_BODY) {
+    else if (part == SEARCH_PART_BODY || part == SEARCH_PART_ATTACHMENTBODY) {
         propname = "preview";
     }
 
@@ -3585,11 +3590,12 @@ static int _snippet_get_cb(struct mailbox *mbox __attribute__((unused)),
         json_object_set_new(snippet, propname, json_string(s));
     }
 
-    return 0;
+    /* Avoid costly attachment body snippets, if possible */
+    return part == SEARCH_PART_BODY ? IMAP_OK_COMPLETED : 0;
 }
 
 static int _snippet_get(jmap_req_t *req, json_t *filter,
-                        json_t *messageids, json_t *emailpartids,
+                        json_t *messageids, json_t *jemailpartids,
                         json_t **snippets, json_t **notfound)
 {
     struct index_state *state = NULL;
@@ -3682,17 +3688,20 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
         r = msgrecord_get_message(mr, &msg);
         if (r) goto doneloop;
 
-        json_t *jpartids = json_object_get(emailpartids, msgid);
-        json_t *jpartid;
-        size_t j;
-        json_array_foreach(jpartids, j, jpartid) {
-            strarray_append(&partids, json_string_value(jpartid));
+        json_t *jpartids = json_object_get(jemailpartids, msgid);
+        if (jpartids) {
+            json_t *jpartid;
+            size_t j;
+            json_array_foreach(jpartids, j, jpartid) {
+                strarray_append(&partids, json_string_value(jpartid));
+            }
         }
         json_object_set_new(snippet, "emailId", json_string(msgid));
         json_object_set_new(snippet, "subject", json_null());
         json_object_set_new(snippet, "preview", json_null());
-        index_getsearchtext(msg, strarray_size(&partids) ? &partids : NULL, rx, 1);
-        json_array_append_new(*snippets, json_deep_copy(snippet));
+        r = index_getsearchtext(msg, jpartids ? &partids : NULL, rx, 1);
+        if (!r) json_array_append_new(*snippets, json_deep_copy(snippet));
+
         json_object_clear(snippet);
         strarray_truncate(&partids, 0);
         msgrecord_unref(&mr);
@@ -3738,6 +3747,9 @@ static int _email_filter_contains_text(json_t *filter)
             return 1;
         }
         if (JNOTNULL(json_object_get(filter, "body"))) {
+            return 1;
+        }
+        if (JNOTNULL(json_object_get(filter, "attachmentBody"))) {
             return 1;
         }
 
@@ -3824,6 +3836,10 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
                                 break;
                             }
                         }
+                    }
+                    else if (json_is_null(jpartids)) {
+                        /* JSON null means: no parts */
+                        continue;
                     }
                     if (!is_valid) break;
                 }
