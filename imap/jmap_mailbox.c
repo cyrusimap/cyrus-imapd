@@ -526,7 +526,9 @@ static int _mbox_get_readcounts(jmap_req_t *req,
                                 json_t *obj)
 {
     conv_status_t convstatus = CONV_STATUS_INIT;
-    int r = conversation_getstatus(req->cstate, mbentry->uniqueid, &convstatus);
+    int r = conversation_getstatus(req->cstate,
+                                   CONV_FOLDER_KEY_MBE(req->cstate, mbentry),
+                                   &convstatus);
     if (r) {
         syslog(LOG_ERR, "conversation_getstatus(%s): %s",
                 mbname_intname(mbname), error_message(r));

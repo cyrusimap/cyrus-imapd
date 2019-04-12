@@ -1675,7 +1675,8 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
 
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
         if (cstate)
-            conversation_getstatus(cstate, mailbox->uniqueid, &status);
+            conversation_getstatus(cstate,
+                                   CONV_FOLDER_KEY_MBOX(cstate, mailbox), &status);
 
         if (mboxevent_expected_param(event->type, EVENT_CONVEXISTS)) {
             FILL_UNSIGNED_PARAM(event, EVENT_CONVEXISTS, status.threadexists);
