@@ -2145,7 +2145,9 @@ static int search_predict_total(struct index_state *state,
     uint32_t exists;
 
     if (conversations) {
-        conversation_getstatus(cstate, state->mailbox->uniqueid, &convstatus);
+        conversation_getstatus(cstate,
+                               CONV_FOLDER_KEY_MBOX(cstate, state->mailbox),
+                               &convstatus);
         /* always grab xconvmodseq, so we report a growing
          * highestmodseq to all callers */
         if (xconvmodseqp) *xconvmodseqp = convstatus.threadmodseq;
@@ -3976,7 +3978,9 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     }
 
     /* make sure we have appropriate rights */
-    r = mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
+    r = (rec->version > CONV_GUIDREC_BYNAME_VERSION) ?
+        mboxlist_lookup_by_uniqueid(rec->mailbox, &mbentry, NULL) :
+        mboxlist_lookup(rec->mailbox, &mbentry, NULL);
     if (r) goto done;
     myrights = cyrus_acl_myrights(fmb_rock->state->authstate, mbentry->acl);
     if ((myrights & needrights) != needrights)
