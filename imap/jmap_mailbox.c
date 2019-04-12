@@ -400,18 +400,17 @@ static char *_mbox_get_role(jmap_req_t *req, const mbname_t *mbname)
 
 static char *_mbox_get_name(const char *account_id, const mbname_t *mbname)
 {
-	struct buf attrib = BUF_INITIALIZER;
+    struct buf attrib = BUF_INITIALIZER;
 
-	int r = annotatemore_lookup(mbname_intname(mbname),
-			IMAP_ANNOT_NS "displayname",
-			account_id, &attrib);
-	if (!r && attrib.len) {
-		/* We got a mailbox with a displayname annotation. Use it. */
-		char *name = buf_release(&attrib);
-		buf_free(&attrib);
-		return name;
-	}
-	buf_free(&attrib);
+    const char *annot = IMAP_ANNOT_NS "displayname";
+    int r = annotatemore_lookup(mbname_intname(mbname), annot, account_id, &attrib);
+    if (!r && attrib.len) {
+        /* We got a mailbox with a displayname annotation. Use it. */
+        char *name = buf_release(&attrib);
+        buf_free(&attrib);
+        return name;
+    }
+    buf_free(&attrib);
 
     /* No displayname annotation. Most probably this mailbox was
      * created via IMAP. In any case, determine name from the the
@@ -452,20 +451,21 @@ static int _mbox_get_roleorder(jmap_req_t *req, const mbname_t *mbname)
     return role_order;
 }
 
-static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
+static int _mbox_get_sortorder(const mbname_t *mbname)
 {
     struct buf attrib = BUF_INITIALIZER;
     int sort_order = 0;
 
     /* Ignore lookup errors here. */
-    annotatemore_lookup(mbname_intname(mbname),
-                        IMAP_ANNOT_NS "sortorder", req->accountid, &attrib);
+    const char *annot = IMAP_ANNOT_NS "sortorder";
+    annotatemore_lookupmask(mbname_intname(mbname), annot, httpd_userid, &attrib);
     if (attrib.len) {
         uint64_t t = str2uint64(buf_cstring(&attrib));
         if (t < INT_MAX) {
             sort_order = (int) t;
         } else {
-            syslog(LOG_ERR, "%s: bogus sortorder annotation value", mbname_intname(mbname));
+            syslog(LOG_ERR, "%s: bogus sortorder annotation value for %s",
+                   mbname_intname(mbname), httpd_userid);
         }
     }
 
@@ -619,7 +619,7 @@ static json_t *_mbox_get(jmap_req_t *req,
             }
         }
         if (jmap_wantprop(props, "sortOrder")) {
-            int sortOrder = _mbox_get_sortorder(req, mbname);
+            int sortOrder = _mbox_get_sortorder(mbname);
             json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
         }
         if (jmap_wantprop(props, "isSeenShared")) {
@@ -1162,7 +1162,7 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
         rec->jmapname = _mbox_get_name(q->req->accountid, rec->mbname);
     }
     if (q->need_sort_order) {
-        rec->sort_order = _mbox_get_sortorder(q->req, rec->mbname);
+        rec->sort_order = _mbox_get_sortorder(rec->mbname);
     }
     if (q->need_role_order) {
         rec->role_order = _mbox_get_roleorder(q->req, rec->mbname);
@@ -2002,7 +2002,8 @@ static int _mbox_set_annots(jmap_req_t *req,
     struct buf buf = BUF_INITIALIZER;
 
     if (args->name) {
-        /* Set displayname annotation on mailbox. */
+        /* Set displayname annotation on mailbox. This is a PRIVATE annotation,
+         * on the account owner */
         buf_setcstr(&buf, args->name);
         static const char *displayname_annot = IMAP_ANNOT_NS "displayname";
         r = annotatemore_write(mboxname, displayname_annot, req->accountid, &buf);
@@ -2014,7 +2015,8 @@ static int _mbox_set_annots(jmap_req_t *req,
         buf_reset(&buf);
     }
 
-    /* Set specialuse or x-role. specialuse takes precedence. */
+    /* Set specialuse or x-role. specialuse takes precedence.  These are PRIVATE
+     * annotations on the account owner */
     if (args->specialuse) {
         buf_setcstr(&buf, args->specialuse);
         static const char *annot = "/specialuse";
@@ -2039,10 +2041,11 @@ static int _mbox_set_annots(jmap_req_t *req,
     }
 
     if (args->sortorder >= 0) {
-        /* Set sortOrder annotation on mailbox. */
+        /* Set sortOrder annotation on mailbox.  This is a masked private annotation
+         * for the authenticated user */
         buf_printf(&buf, "%d", args->sortorder);
         static const char *sortorder_annot = IMAP_ANNOT_NS "sortorder";
-        r = annotatemore_write(mboxname, sortorder_annot, req->accountid, &buf);
+        r = annotatemore_writemask(mboxname, sortorder_annot, httpd_userid, &buf);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     sortorder_annot, error_message(r));
