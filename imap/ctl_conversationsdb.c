@@ -605,7 +605,7 @@ int do_checkfolders(const char *userid)
     }
 
     /* don't mess with the original */
-    copy1 = strarray_dup(state->folder_ids);
+    copy1 = strarray_dup(state->folders);
     /* remove empty folders first, they will duplicate for sure */
     strarray_remove_all(copy1, "-");
     copy2 = strarray_dup(copy1);

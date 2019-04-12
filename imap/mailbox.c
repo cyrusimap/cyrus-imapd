@@ -3789,7 +3789,8 @@ EXPORTED int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *modseqp)
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
     if (!cstate) return 0;
 
-    r = conversation_getstatus(cstate, mailbox->uniqueid, &status);
+    r = conversation_getstatus(cstate,
+                               CONV_FOLDER_KEY_MBOX(cstate, mailbox), &status);
     if (r) return r;
 
     *modseqp = status.threadmodseq;
@@ -3806,12 +3807,14 @@ EXPORTED int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t newmod
     struct conversations_state *cstate = mailbox_get_cstate(mailbox);
     if (!cstate) return 0;
 
-    r = conversation_getstatus(cstate, mailbox->uniqueid, &status);
+    r = conversation_getstatus(cstate,
+                               CONV_FOLDER_KEY_MBOX(cstate, mailbox), &status);
     if (r) return r;
 
     if (newmodseq > status.threadmodseq || (force && newmodseq < status.threadmodseq)) {
         status.threadmodseq = newmodseq;
-        r = conversation_setstatus(cstate, mailbox->uniqueid, &status);
+        r = conversation_setstatus(cstate,
+                                   CONV_FOLDER_KEY_MBOX(cstate, mailbox), &status);
     }
 
     return r;
@@ -5468,7 +5471,8 @@ EXPORTED int mailbox_add_conversations(struct mailbox *mailbox, int silent)
     /* add record for mailbox */
     conv_status_t status = CONV_STATUS_INIT;
     status.threadmodseq = mailbox->i.highestmodseq;
-    r = conversation_setstatus(cstate, mailbox->uniqueid, &status);
+    r = conversation_setstatus(cstate,
+                               CONV_FOLDER_KEY_MBOX(cstate, mailbox), &status);
     if (r) return r;
 
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);

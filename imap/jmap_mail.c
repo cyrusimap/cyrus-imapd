@@ -722,10 +722,12 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
 
     if (rec->part) return 0;
 
-    mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
+    r = (rec->version > CONV_GUIDREC_BYNAME_VERSION) ?
+        mboxlist_lookup_by_uniqueid(rec->mailbox, &mbentry, NULL) :
+        mboxlist_lookup(rec->mailbox, &mbentry, NULL);
 
     static int needrights = JACL_READITEMS;
-    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, needrights)) {
+    if (r || !jmap_hasrights_mbentry(req, mbentry, needrights)) {
         r = 0;
         goto done;
     }
@@ -1098,7 +1100,9 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
 
     if (rec->part) return 0;
 
-    r = mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
+    r = (rec->version > CONV_GUIDREC_BYNAME_VERSION) ?
+        mboxlist_lookup_by_uniqueid(rec->mailbox, &mbentry, NULL) :
+        mboxlist_lookup(rec->mailbox, &mbentry, NULL);
     if (r) goto done;
 
     if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
@@ -1212,7 +1216,10 @@ static int _email_get_cid_cb(const conv_guidrec_t *rec, void *rock)
     struct email_getcid_rock *d = (struct email_getcid_rock *)rock;
     mbentry_t *mbentry = NULL;
 
-    mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
+    if (rec->version > CONV_GUIDREC_BYNAME_VERSION)
+        mboxlist_lookup_by_uniqueid(rec->mailbox, &mbentry, NULL);
+    else
+        mboxlist_lookup(rec->mailbox, &mbentry, NULL);
 
     if (!mbentry || mbtype_isa(mbtype) != MBTYPE_EMAIL) {
         mboxlist_entry_free(&mbentry);
@@ -1267,7 +1274,9 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
 
     if (rec->part) return 0;
 
-    r = mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
+    r = (rec->version > CONV_GUIDREC_BYNAME_VERSION) ?
+        mboxlist_lookup_by_uniqueid(rec->mailbox, &mbentry, NULL) :
+        mboxlist_lookup(rec->mailbox, &mbentry, NULL);
     if (r) goto done;
 
     r = jmap_openmbox(check->req, mbentry->name, &mbox, 0);
@@ -1524,7 +1533,12 @@ static int _emailsearch_folders_match_cb(const conv_guidrec_t *rec, void *rock)
     // TODO we could match for mboxid, once the mailbox-id patch lands
     struct jmap_search_folder_match_rock *myrock = rock;
     mbentry_t *mbentry = NULL;
-    mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
+
+    if (rec->version > CONV_GUIDREC_BYNAME_VERSION)
+        mboxlist_lookup_by_uniqueid(rec->mailbox, &mbentry, NULL);
+    else
+        mboxlist_lookup(rec->mailbox, &mbentry, NULL);
+
     int pos = mbentry ? strarray_find(myrock->folders, mbentry->name, 0) : -1;
     mboxlist_entry_free(&mbentry);
     return ((pos >= 0) == (myrock->is_otherthan == 0)) ? IMAP_OK_COMPLETED : 0;
@@ -5471,7 +5485,10 @@ static int _thread_get_cb(const conv_guidrec_t *rec, void *vrock)
     mbentry_t *mbentry = NULL;
     int r = 0;
 
-    mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
+    if (rec->version > CONV_GUIDREC_BYNAME_VERSION)
+        mboxlist_lookup_by_uniqueid(rec->mailbox, &mbentry, NULL);
+    else
+        mboxlist_lookup(rec->mailbox, &mbentry, NULL);
 
     if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
         return 0;
@@ -5806,7 +5823,10 @@ static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *vrock)
 
     if (rec->part) return 0;
 
-    mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
+    if (rec->version > CONV_GUIDREC_BYNAME_VERSION)
+        mboxlist_lookup_by_uniqueid(rec->mailbox, &mbentry, NULL);
+    else
+        mboxlist_lookup(rec->mailbox, &mbentry, NULL);
 
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
         r = 0;
@@ -7365,12 +7385,14 @@ static int _warmup_mboxcache_cb(const conv_guidrec_t *rec, void* vrock)
     int i;
     for (i = 0; i < ptrarray_size(&rock->mboxes); i++) {
         struct mailbox *mbox = ptrarray_nth(&rock->mboxes, i);
-        if (!strcmp(rec->mboxid, mbox->uniqueid)) {
+        if (!strcmp(rec->mailbox, CONV_GUID_KEY_MBOX(rec, mbox))) {
             return 0;
         }
     }
     struct mailbox *mbox = NULL;
-    int r = jmap_openmbox_by_uniqueid(rock->req, rec->mboxid, &mbox, /*rw*/0);
+    int r = (rec->version > CONV_GUIDREC_BYNAME_VERSION) ?
+        jmap_openmbox_by_uniqueid(rock->req, rec->mailbox, &mbox, /*rw*/0) :
+        jmap_openmbox(rock->req, rec->mailbox, &mbox, /*rw*/0);
     if (!r) {
         if (mbtype_isa(mbox->mbtype) == MBTYPE_EMAIL) {
             ptrarray_append(&rock->mboxes, mbox);
@@ -10246,7 +10268,10 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
     ptrarray_t *mboxrecs = rock->mboxrecs;
     mbentry_t *mbentry = NULL;
 
-    mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
+    if (rec->version > CONV_GUIDREC_BYNAME_VERSION)
+        mboxlist_lookup_by_uniqueid(rec->mailbox, &mbentry, NULL);
+    else
+        mboxlist_lookup(rec->mailbox, &mbentry, NULL);
 
     /* don't process emails that have this email attached! */
     if (rec->part) return 0;
@@ -12760,7 +12785,9 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
     }
 
     /* Overwrite message record */
-    int r = jmap_openmbox_by_uniqueid(rock->req, rec->mboxid, &mbox, /*rw*/1);
+    int r = (rec->version > CONV_GUIDREC_BYNAME_VERSION) ?
+        jmap_openmbox_by_uniqueid(rock->req, rec->mailbox, &mbox, /*rw*/1) :
+        jmap_openmbox(rock->req, rec->mailbox, &mbox, /*rw*/1);
     if (r || mbtype_isa(mbox->mbtype) != MBTYPE_EMAIL) {
         goto done;
     }
@@ -12885,7 +12912,9 @@ static int _email_exists_cb(const conv_guidrec_t *rec, void *rock)
     mbentry_t *mbentry = NULL;
     int r = 0;
 
-    r = mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
+    r = (rec->version > CONV_GUIDREC_BYNAME_VERSION) ?
+        mboxlist_lookup_by_uniqueid(rec->mailbox, &mbentry, NULL) :
+        mboxlist_lookup(rec->mailbox, &mbentry, NULL);
     if (r) goto done;
 
     if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
@@ -12932,7 +12961,10 @@ static int _email_copy_pickrecord_cb(const conv_guidrec_t *rec, void *vrock)
     mbentry_t *mbentry = NULL;
     int r = 0;
 
-    mboxlist_lookup_by_uniqueid(rec->mboxid, &mbentry, NULL);
+    if (rec->version > CONV_GUIDREC_BYNAME_VERSION)
+        mboxlist_lookup_by_uniqueid(rec->mailbox, &mbentry, NULL);
+    else
+        mboxlist_lookup(rec->mailbox, &mbentry, NULL);
 
     if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
         goto done;
