@@ -174,6 +174,9 @@ int annotate_state_fetch(annotate_state_t *state,
 /* write a single annotation, avoiding all ACL checks and etc */
 int annotatemore_write(const char *mboxname, const char *entry,
                        const char *userid, const struct buf *value);
+/* same but write to shared if the user own the mailbox */
+int annotatemore_writemask(const char *mboxname, const char *entry,
+                           const char *userid, const struct buf *value);
 /* flat out ignore modseq and quota and everything */
 int annotatemore_rawwrite(const char *mboxname, const char *entry,
                        const char *userid, const struct buf *value);
