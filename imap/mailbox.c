@@ -2069,8 +2069,11 @@ static int mailbox_lock_conversations(struct mailbox *mailbox, int locktype)
         return 0;
 
     /* already locked */
-    if (conversations_get_mbox(mailbox->name))
+    struct conversations_state *cstate = conversations_get_mbox(mailbox->name);
+    if (cstate) {
+        if (locktype == LOCK_EXCLUSIVE) assert (!cstate->is_shared);
         return 0;
+    }
 
     if (locktype == LOCK_EXCLUSIVE) {
         return conversations_open_mbox(mailbox->name, 0/*shared*/, &mailbox->local_cstate);
