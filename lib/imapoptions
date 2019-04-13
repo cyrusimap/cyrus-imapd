@@ -813,9 +813,6 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Notifyd(8) method to use for "EVENT" notifications which are based on
    the RFC 5423.  If not set, "EVENT" notifications are disabled. */
 
-{ "expunge_deleted_on_open", 0, SWITCH }
-/* If set to true, expunge any messages marked \Deleted when opening a mailbox */
-
 { "expunge_mode", "delayed", ENUM("immediate", "semidelayed", "delayed") }
 /* The mode in which messages (and their corresponding cache entries)
    are expunged.  "semidelayed" mode is the old behavior in which the

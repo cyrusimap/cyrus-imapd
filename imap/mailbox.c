@@ -885,30 +885,6 @@ static void mailbox_release_resources(struct mailbox *mailbox)
 }
 
 /*
- * Used by mailbox_rename() to expunge all messages in INBOX
- */
-static unsigned expungeall(struct mailbox *mailbox __attribute__((unused)),
-                           const struct index_record *record __attribute__((unused)),
-                           void *rock __attribute__((unused)))
-{
-    return 1;
-}
-
-/*
- * Expunge decision proc used by mailbox_expunge()
- * to expunge \Deleted messages.
- */
-static unsigned expungedeleted(struct mailbox *mailbox __attribute__((unused)),
-                               const struct index_record *record,
-                               void *rock __attribute__((unused)))
-{
-    if (record->system_flags & FLAG_DELETED)
-        return 1;
-
-    return 0;
-}
-
-/*
  * Open the index file for 'mailbox'
  */
 static int mailbox_open_index(struct mailbox *mailbox)
@@ -1040,29 +1016,6 @@ static int mailbox_open_advanced(const char *name,
 
 lockindex:
     r = mailbox_lock_index(mailbox, index_locktype);
-    if (r) goto done;
-
-    /* we expunge any deleted records on open if configured to do so */
-    if (config_getswitch(IMAPOPT_EXPUNGE_DELETED_ON_OPEN) && mailbox->i.deleted) {
-        if (index_locktype == LOCK_EXCLUSIVE) {
-            r = mailbox_expunge(mailbox, expungedeleted, NULL, NULL, 0);
-            if (r) goto done;
-        }
-        else {
-            /* we need an exclusive lock to expunge! */
-            mailbox_unlock_index(mailbox, NULL);
-            r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
-            if (r) goto done;
-
-            r = mailbox_expunge(mailbox, expungedeleted, NULL, NULL, 0);
-            if (r) goto done;
-
-            /* now switch back to the requested lock */
-            mailbox_unlock_index(mailbox, NULL);
-            r = mailbox_lock_index(mailbox, index_locktype);
-            if (r) goto done;
-        }
-    }
 
     /* we always nuke expunged if the version is less than 12 */
     if (mailbox->i.minor_version < 12)
@@ -4393,6 +4346,30 @@ done:
     if (r) mailbox_repack_abort(&repack);
     else r = mailbox_repack_commit(&repack);
     return r;
+}
+
+/*
+ * Used by mailbox_rename() to expunge all messages in INBOX
+ */
+static unsigned expungeall(struct mailbox *mailbox __attribute__((unused)),
+                           const struct index_record *record __attribute__((unused)),
+                           void *rock __attribute__((unused)))
+{
+    return 1;
+}
+
+/*
+ * Expunge decision proc used by mailbox_expunge()
+ * to expunge \Deleted messages.
+ */
+static unsigned expungedeleted(struct mailbox *mailbox __attribute__((unused)),
+                               const struct index_record *record,
+                               void *rock __attribute__((unused)))
+{
+    if (record->system_flags & FLAG_DELETED)
+        return 1;
+
+    return 0;
 }
 
 EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
