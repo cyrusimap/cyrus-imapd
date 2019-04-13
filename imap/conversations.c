@@ -277,6 +277,7 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     open = xzmalloc(sizeof(struct conversations_open));
 
     /* open db */
+    open->s.is_shared = shared;
     int flags = CYRUSDB_CREATE | (shared ? CYRUSDB_SHARED : CYRUSDB_CONVERT);
     r = cyrusdb_lockopen(DB, fname, flags, &open->s.db, &open->s.txn);
     if (r || open->s.db == NULL) {
