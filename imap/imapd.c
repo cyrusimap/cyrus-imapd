@@ -742,7 +742,11 @@ static void imapd_reset(void)
     disable_referrals = 0;
     supports_referrals = 0;
 
-    if (imapd_index) index_close(&imapd_index);
+    if (imapd_index) {
+        if (config_getswitch(IMAPOPT_AUTOEXPUNGE) && index_hasrights(imapd_index, ACL_EXPUNGE))
+            index_expunge(imapd_index, NULL, 1);
+        index_close(&imapd_index);
+    }
 
     if (imapd_in) {
         /* Flush the incoming buffer */
@@ -1074,7 +1078,11 @@ void shut_down(int code)
     if (idling)
         idle_stop(index_mboxname(imapd_index));
 
-    if (imapd_index) index_close(&imapd_index);
+    if (imapd_index) {
+        if (config_getswitch(IMAPOPT_AUTOEXPUNGE) && index_hasrights(imapd_index, ACL_EXPUNGE))
+            index_expunge(imapd_index, NULL, 1);
+        index_close(&imapd_index);
+    }
 
     seen_done();
     mboxkey_done();
@@ -2997,7 +3005,11 @@ static void cmd_unauthenticate(char *tag)
 
         backend_current = NULL;
     }
-    else if (imapd_index) index_close(&imapd_index);
+    else if (imapd_index) {
+        if (config_getswitch(IMAPOPT_AUTOEXPUNGE) && index_hasrights(imapd_index, ACL_EXPUNGE))
+            index_expunge(imapd_index, NULL, 1);
+        index_close(&imapd_index);
+    }
 
     /* Reset authentication state */
     if (imapd_userid != NULL) {
@@ -4344,6 +4356,8 @@ static void cmd_select(char *tag, char *cmd, char *name)
     }
 
     if (imapd_index) {
+        if (config_getswitch(IMAPOPT_AUTOEXPUNGE) && index_hasrights(imapd_index, ACL_EXPUNGE))
+            index_expunge(imapd_index, NULL, 1);
         index_close(&imapd_index);
         wasopen = 1;
     }
@@ -4534,7 +4548,7 @@ static void cmd_close(char *tag, char *cmd)
     }
 
     /* local mailbox */
-    if ((cmd[0] == 'C') && index_hasrights(imapd_index, ACL_EXPUNGE)) {
+    if ((cmd[0] == 'C' || config_getswitch(IMAPOPT_AUTOEXPUNGE)) && index_hasrights(imapd_index, ACL_EXPUNGE)) {
         index_expunge(imapd_index, NULL, 1);
         /* don't tell changes here */
     }

@@ -450,6 +450,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* A space separated list of users and/or groups that are allowed their INBOX to be
    automatically created. */
 
+{ "autoexpunge", 0, SWITCH }
+/* If set to yes, then all \Deleted messages will be automatically expunged whenever
+   an index is closed, whether CLOSE, UNSELECT, SELECT or on disconnect */
+
 # Commented out - there's no such thing as "backuppartition-name",
 # but we need this for the man page
 # { "backuppartition-name", NULL, STRING }
