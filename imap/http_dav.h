@@ -298,24 +298,24 @@ typedef int (*db_close_proc_t)(void *davdb);
 /* Function to lookup DAV 'resource' in 'mailbox',
  * placing the record in 'data'
  */
-typedef int (*db_lookup_proc_t)(void *davdb, const char *mailbox,
+typedef int (*db_lookup_proc_t)(void *davdb, const mbentry_t *mbentry,
                                 const char *resource, void **data,
                                 int tombstones);
 
 /* Function to lookup DAV 'imapuid' in 'mailbox',
  * placing the record in 'data'
  */
-typedef int (*db_imapuid_proc_t)(void *davdb, const char *mailbox,
+typedef int (*db_imapuid_proc_t)(void *davdb, const mbentry_t *mbentry,
                                  int uid, void **data, int tombstones);
 
 /* Function to process each DAV resource in 'mailbox' with 'cb' */
-typedef int (*db_foreach_proc_t)(void *davdb, const char *mailbox,
+typedef int (*db_foreach_proc_t)(void *davdb, const mbentry_t *mbentry,
                                  int (*cb)(void *rock, void *data), void *rock);
 
 /* Function to process 'limit' DAV resources
    updated since 'oldmodseq' in 'mailbox' with 'cb' */
 typedef int (*db_updates_proc_t)(void *davdb, modseq_t oldmodseq,
-                                 const char *mailbox, int kind, int limit,
+                                 const mbentry_t *mbentry, int kind, int limit,
                                  int (*cb)(void *rock, void *data), void *rock);
 
 /* Context for fetching properties */

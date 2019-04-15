@@ -49,11 +49,7 @@
 #include "mailbox.h"
 #include "util.h"
 
-#define DAV_KEY_MBOX(mailbox) \
-    (mailbox->legacy_dir ? mailbox->name : mailbox->uniqueid)
-
-#define DAV_KEY_MBE(mbentry) \
-    (!mbentry ? NULL : (mbentry->legacy_dir ? mbentry->name : mbentry->uniqueid))
+#define DB_MBOXID_VERSION 11     /* first version with records by mboxid */
 
 struct dav_data {
     unsigned rowid;
@@ -68,6 +64,7 @@ struct dav_data {
     const char *lock_ownerid;
     time_t lock_expire;
     int alive;
+    int mailbox_byname;         /* NOT stored in record - derived from db ver */
 };
 
 /* get a database handle corresponding to mailbox */

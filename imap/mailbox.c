@@ -3311,7 +3311,10 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
     carddavdb = mailbox_open_carddav(mailbox);
 
     /* find existing record for this resource */
-    carddav_lookup_resource(carddavdb, DAV_KEY_MBOX(mailbox), resource, &cdata, /*tombstones*/1);
+    const mbentry_t mbentry = { .name = mailbox->name,
+                                .uniqueid = mailbox->uniqueid };
+
+    carddav_lookup_resource(carddavdb, &mbentry, resource, &cdata, /*tombstones*/1);
 
     /* does it still come from this UID? */
     if (cdata->dav.imap_uid > new->uid) goto done;
@@ -3355,8 +3358,6 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
         }
 
         /* Create mapping entry from resource name to UID */
-        cdata->dav.mailbox = DAV_KEY_MBOX(mailbox);
-        cdata->dav.resource = resource;
         cdata->dav.imap_uid = new->uid;
         cdata->dav.modseq = new->modseq;
         cdata->dav.createdmodseq = new->createdmodseq;
@@ -3420,7 +3421,10 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
     caldavdb = mailbox_open_caldav(mailbox);
 
     /* Find existing record for this resource */
-    caldav_lookup_resource(caldavdb, DAV_KEY_MBOX(mailbox), resource, &cdata, /*tombstones*/1);
+    const mbentry_t mbentry = { .name = mailbox->name,
+                                .uniqueid = mailbox->uniqueid };
+
+    caldav_lookup_resource(caldavdb, &mbentry, resource, &cdata, /*tombstones*/1);
 
     /* has this record already been replaced?  Don't write anything */
     if (cdata->dav.imap_uid > new->uid) goto done;
@@ -3469,12 +3473,10 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         }
 
         cdata->dav.creationdate = new->internaldate;
-        cdata->dav.mailbox = DAV_KEY_MBOX(mailbox);
         cdata->dav.imap_uid = new->uid;
         cdata->dav.modseq = new->modseq;
         cdata->dav.createdmodseq = new->createdmodseq;
         cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
-        cdata->dav.resource = resource;
         cdata->sched_tag = sched_tag;
         cdata->comp_flags.tzbyref = tzbyref;
         cdata->comp_flags.shared = shared;
@@ -3534,7 +3536,10 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
     webdavdb = mailbox_open_webdav(mailbox);
 
     /* Find existing record for this resource */
-    webdav_lookup_resource(webdavdb, DAV_KEY_MBOX(mailbox), resource, &wdata, /*tombstones*/1);
+    const mbentry_t mbentry = { .name = mailbox->name,
+                                .uniqueid = mailbox->uniqueid };
+
+    webdav_lookup_resource(webdavdb, &mbentry, resource, &wdata, /*tombstones*/1);
 
     /* if updated by a newer UID, skip - this record doesn't refer to the current item */
     if (wdata->dav.imap_uid > new->uid) goto done;
@@ -3567,13 +3572,11 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
         buf_free(&msg_buf);
 
         wdata->dav.creationdate = new->internaldate;
-        wdata->dav.mailbox = DAV_KEY_MBOX(mailbox);
         wdata->dav.imap_uid = new->uid;
         wdata->dav.modseq = new->modseq;
         wdata->dav.createdmodseq = new->createdmodseq;
         wdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
         wdata->ref_count *= wdata->dav.alive;
-        wdata->dav.resource = resource;
         wdata->filename = body->description;
         wdata->type = lcase(body->type);
         wdata->subtype = lcase(body->subtype);
@@ -5600,7 +5603,9 @@ static int mailbox_delete_caldav(struct mailbox *mailbox)
 
     caldavdb = caldav_open_mailbox(mailbox);
     if (caldavdb) {
-        int r = caldav_delmbox(caldavdb, DAV_KEY_MBOX(mailbox));
+        const mbentry_t mbentry = { .name = mailbox->name,
+                                    .uniqueid = mailbox->uniqueid };
+        int r = caldav_delmbox(caldavdb, &mbentry);
         caldav_close(caldavdb);
         if (r) return r;
     }
@@ -5617,7 +5622,9 @@ static int mailbox_delete_carddav(struct mailbox *mailbox)
 
     carddavdb = carddav_open_mailbox(mailbox);
     if (carddavdb) {
-        int r = carddav_delmbox(carddavdb, DAV_KEY_MBOX(mailbox));
+        const mbentry_t mbentry = { .name = mailbox->name,
+                                    .uniqueid = mailbox->uniqueid };
+        int r = carddav_delmbox(carddavdb, &mbentry);
         carddav_close(carddavdb);
         if (r) return r;
     }
@@ -5631,7 +5638,9 @@ static int mailbox_delete_webdav(struct mailbox *mailbox)
 
     webdavdb = webdav_open_mailbox(mailbox);
     if (webdavdb) {
-        int r = webdav_delmbox(webdavdb, DAV_KEY_MBOX(mailbox));
+        const mbentry_t mbentry = { .name = mailbox->name,
+                                    .uniqueid = mailbox->uniqueid };
+        int r = webdav_delmbox(webdavdb, &mbentry);
         webdav_close(webdavdb);
         if (r) return r;
     }

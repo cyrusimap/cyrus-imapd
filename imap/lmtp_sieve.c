@@ -646,11 +646,12 @@ static char *sieve_srs_forward(char *return_path __attribute__((unused)))
 #ifdef WITH_DAV
 #include <libxml/uri.h>
 
-static char *get_addrbook_mboxname(const char *list, const char *userid)
+static mbentry_t *get_addrbook_mbentry(const char *list, const char *userid)
 {
     const char *addrbook_urn_full = "urn:ietf:params:sieve:addrbook:";
     const char *addrbook_urn_abbrev = ":addrbook:";
     char *abook = NULL, *mboxname = NULL;
+    mbentry_t *mbentry = NULL;
 
     /* percent-decode list URI */
     char *uri = xmlURIUnescapeString(list, strlen(list), NULL);
@@ -674,22 +675,22 @@ static char *get_addrbook_mboxname(const char *list, const char *userid)
 
     /* construct mailbox name of addressbook */
     mboxname = carddav_mboxname(userid, abook);
+    free(abook);
 
     /* see if addressbook mailbox exists */
-    if (mboxlist_lookup(mboxname, NULL, NULL) == 0) return mboxname;
-    else {
-        free(mboxname);
-        return NULL;
-    }
+    mboxlist_lookup(mboxname, &mbentry, NULL);
+    free(mboxname);
+
+    return mbentry;
 }
 
 static int listvalidator(void *ic, const char *list)
 {
     struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) ic;
-    char *abook = get_addrbook_mboxname(list, ctx->userid);
-    int ret = abook ? SIEVE_OK : SIEVE_FAIL;
+    mbentry_t *mbentry = get_addrbook_mbentry(list, ctx->userid);
+    int ret = mbentry ? SIEVE_OK : SIEVE_FAIL;
 
-    free(abook);
+    mboxlist_entry_free(&mbentry);
 
     return ret;
 }
@@ -698,10 +699,10 @@ static int listcompare(const char *text, size_t tlen __attribute__((unused)),
                        const char *list, strarray_t *match_vars, void *rock)
 {
     struct sieve_interp_ctx *ctx = (struct sieve_interp_ctx *) rock;
-    char *abook = get_addrbook_mboxname(list, ctx->userid);
+    mbentry_t *mbentry = get_addrbook_mbentry(list, ctx->userid);
     int ret = 0;
 
-    if (!abook) return 0;
+    if (!mbentry) return 0;
 
     if (!ctx->carddavdb) {
         /* open user's CardDAV DB */
@@ -710,7 +711,7 @@ static int listcompare(const char *text, size_t tlen __attribute__((unused)),
     if (ctx->carddavdb) {
         /* search for email address in addressbook */
         strarray_t *uids =
-            carddav_getemail2details(ctx->carddavdb, text, abook, NULL);
+            carddav_getemail2details(ctx->carddavdb, text, mbentry, NULL);
         ret = strarray_size(uids);
 
         strarray_free(uids);
@@ -721,7 +722,7 @@ static int listcompare(const char *text, size_t tlen __attribute__((unused)),
         strarray_add(match_vars, text);
     }
 
-    free(abook);
+    mboxlist_entry_free(&mbentry);
 
     return ret;
 }
@@ -768,19 +769,19 @@ static int send_forward(sieve_redirect_context_t *rc,
 
     if (rc->is_ext_list) {
 #ifdef WITH_DAV
-        char *abook = get_addrbook_mboxname(rc->addr, ctx->userid);
+        mbentry_t *mbentry = get_addrbook_mbentry(rc->addr, ctx->userid);
 
-        if (abook && !ctx->carddavdb) {
+        if (mbentry && !ctx->carddavdb) {
             /* open user's CardDAV DB */
             ctx->carddavdb = carddav_open_userid(ctx->userid);
         }
-        if (!(abook && ctx->carddavdb)) {
+        if (!(mbentry && ctx->carddavdb)) {
             r = SIEVE_FAIL;
-            free(abook);
+            mboxlist_entry_free(&mbentry);
             goto done;
         }
-        carddav_foreach(ctx->carddavdb, abook, &list_addresses, &sm_env);
-        free(abook);
+        carddav_foreach(ctx->carddavdb, mbentry, &list_addresses, &sm_env);
+        mboxlist_entry_free(&mbentry);
 #endif
     }
     else {

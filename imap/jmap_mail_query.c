@@ -223,7 +223,12 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
         if (hash_lookup(groupid, &cfilter->contactgroups)) continue;
 
         /* Lookup group member email addresses */
-        strarray_t *members = carddav_getgroup(cfilter->carddavdb, cfilter->addrbook, groupid, othermb);
+        mbentry_t *mbentry = NULL;
+        strarray_t *members = NULL;
+        if (!mboxlist_lookup(cfilter->addrbook, &mbentry, NULL)) {
+            members = carddav_getgroup(cfilter->carddavdb, mbentry, groupid, othermb);
+        }
+        mboxlist_entry_free(&mbentry);
         if (!members) {
             jmap_parser_invalid(parser, c->field);
         }
