@@ -12608,6 +12608,7 @@ sub test_email_get_cid
 
 sub test_searchsnippet_get_attachment
     :min_version_3_0 :needs_search_xapian :SearchAttachmentExtractor
+    :needs_dependency_curl
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
