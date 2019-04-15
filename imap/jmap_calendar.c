@@ -1694,7 +1694,6 @@ static int setcalendarevents_create(jmap_req_t *req,
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR, "caldav_store_resource failed for user %s: %s",
                req->accountid, error_message(r));
-        r = IMAP_INTERNAL;
         goto done;
     }
     r = 0;
@@ -1929,11 +1928,6 @@ static int setcalendarevents_update(jmap_req_t *req,
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR, "caldav_store_resource failed for user %s: %s",
                req->accountid, error_message(r));
-        if (r == HTTP_FORBIDDEN)
-            r = IMAP_PERMISSION_DENIED;
-        else
-            r = IMAP_INTERNAL;
-
         goto done;
     }
     r = 0;
@@ -2119,9 +2113,18 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         json_t *create = json_pack("{}");
         r = setcalendarevents_create(req, req->accountid, arg, db, invalid, create);
         if (r) {
-            json_t *err = json_pack("{s:s s:s}",
-                                    "type", "internalError",
-                                    "message", error_message(r));
+            json_t *err;
+            switch (r) {
+                case HTTP_FORBIDDEN:
+                case IMAP_PERMISSION_DENIED:
+                    err = json_pack("{s:s}", "type", "forbidden");
+                    break;
+                case IMAP_QUOTA_EXCEEDED:
+                    err = json_pack("{s:s}", "type", "maxQuotaReached");
+                    break;
+                default:
+                    err = jmap_server_error(r);
+            }
             json_object_set_new(set.not_created, key, err);
             json_decref(create);
             r = 0;
@@ -2180,17 +2183,27 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         json_t *invalid = json_pack("[]");
         json_t *update = json_pack("{}");
         r = setcalendarevents_update(req, arg, uid, db, invalid, update);
-        if (r == IMAP_NOTFOUND) {
-            json_t *err = json_pack("{s:s}", "type", "notFound");
+        if (r) {
+            json_t *err;
+            switch (r) {
+                case IMAP_NOTFOUND:
+                    err = json_pack("{s:s}", "type", "notFound");
+                    break;
+                case HTTP_FORBIDDEN:
+                case IMAP_PERMISSION_DENIED:
+                    err = json_pack("{s:s}", "type", "forbidden");
+                    break;
+                case IMAP_QUOTA_EXCEEDED:
+                    err = json_pack("{s:s}", "type", "maxQuotaReached");
+                    break;
+                default:
+                    err = jmap_server_error(r);
+            }
             json_object_set_new(set.not_updated, uid, err);
             json_decref(invalid);
             json_decref(update);
             r = 0;
             continue;
-        } else if (r) {
-            json_decref(invalid);
-            json_decref(update);
-            goto done;
         }
         if (json_array_size(invalid)) {
             json_t *err = json_pack(

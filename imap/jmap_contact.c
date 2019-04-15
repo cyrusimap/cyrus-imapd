@@ -716,7 +716,7 @@ static int _add_othergroup_entries(struct jmap_req *req,
     return r;
 }
 
-static int _contacts_set(struct jmap_req *req, unsigned kind)
+static void _contacts_set(struct jmap_req *req, unsigned kind)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
@@ -727,7 +727,10 @@ static int _contacts_set(struct jmap_req *req, unsigned kind)
     struct mailbox *newmailbox = NULL;
 
     struct carddav_db *db = carddav_open_userid(req->accountid);
-    if (!db) return -1;
+    if (!db) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
 
     /* Parse arguments */
     jmap_set_parse(req->args, &parser, NULL, NULL, &set, &err);
@@ -765,9 +768,18 @@ static int _contacts_set(struct jmap_req *req, unsigned kind)
         r = _contact_set_create(req, kind, arg,
                                 NULL, &mailbox, &uid, invalid);
         if (r) {
-            json_t *err = json_pack("{s:s s:s}",
-                                    "type", "internalError",
-                                    "message", error_message(r));
+            json_t *err;
+            switch (r) {
+                case HTTP_FORBIDDEN:
+                case IMAP_PERMISSION_DENIED:
+                    err = json_pack("{s:s}", "type", "forbidden");
+                    break;
+                case IMAP_QUOTA_EXCEEDED:
+                    err = json_pack("{s:s}", "type", "maxQuotaReached");
+                    break;
+                default:
+                    err = jmap_server_error(r);
+            }
             json_object_set_new(set.not_created, key, err);
             r = 0;
             free(uid);
@@ -954,10 +966,20 @@ static int _contacts_set(struct jmap_req *req, unsigned kind)
         }
 
         if (r) {
-            json_t *err = json_pack("{s:s s:s}",
-                                    "type", "internalError",
-                                    "message", error_message(r));
+            json_t *err = NULL;
+            switch (r) {
+                case HTTP_FORBIDDEN:
+                case IMAP_PERMISSION_DENIED:
+                    err = json_pack("{s:s}", "type", "forbidden");
+                    break;
+                case IMAP_QUOTA_EXCEEDED:
+                    err = json_pack("{s:s}", "type", "maxQuotaReached");
+                    break;
+                default:
+                    err = jmap_server_error(r);
+            }
             json_object_set_new(set.not_updated, uid, err);
+            r = 0;
             goto finish;
         }
         if (json_array_size(invalid)) {
@@ -1044,20 +1066,22 @@ static int _contacts_set(struct jmap_req *req, unsigned kind)
     json_decref(jstate);
 
     jmap_ok(req, jmap_set_reply(&set));
+    r = 0;
 
 done:
+    if (r) jmap_error(req, jmap_server_error(r));
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
     jmap_closembox(req, &newmailbox);
     jmap_closembox(req, &mailbox);
 
     carddav_close(db);
-    return r;
 }
 
 static int jmap_contactgroup_set(struct jmap_req *req)
 {
-    return _contacts_set(req, CARDDAV_KIND_GROUP);
+    _contacts_set(req, CARDDAV_KIND_GROUP);
+    return 0;
 }
 
 /* Extract separate y,m,d from YYYY-MM-DD or (with ignore_hyphens) YYYYMMDD
@@ -2987,7 +3011,6 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR, "carddav_store failed for user %s: %s",
                req->accountid, error_message(r));
-        r = IMAP_INTERNAL;
         goto done;
     }
     r = 0;
@@ -3005,7 +3028,8 @@ done:
 
 static int jmap_contact_set(struct jmap_req *req)
 {
-    return _contacts_set(req, CARDDAV_KIND_CONTACT);
+    _contacts_set(req, CARDDAV_KIND_CONTACT);
+    return 0;
 }
 
 const struct body *jmap_contact_findblob(struct message_guid *content_guid,
