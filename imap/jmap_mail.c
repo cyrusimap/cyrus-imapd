@@ -2426,6 +2426,7 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
     search->init.userid = req->accountid;
     search->init.authstate = req->authstate;
     search->init.want_expunged = want_expunged;
+    search->init.examine_mode = 1;
 
     char *inboxname = mboxname_user_mbox(req->accountid, NULL);
     r = index_open(inboxname, &search->init, &search->state);
@@ -3589,6 +3590,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter, json_t *messageids,
     memset(&init, 0, sizeof(init));
     init.userid = req->userid;
     init.authstate = req->authstate;
+    init.examine_mode = 1;
 
     char *inboxname = mboxname_user_mbox(req->accountid, NULL);
     r = index_open(inboxname, &init, &state);
