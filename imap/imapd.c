@@ -5171,7 +5171,7 @@ badannotation:
         && (fa->fetchitems & (FETCH_MAILBOXIDS|FETCH_MAILBOXES))) {
         // annoyingly, this codepath COULD be called from xconv* commands, but it never is,
         // in reality, so it's safe leaving this as shared
-        int r = conversations_open_user(imapd_userid, 1/*shared*/, &fa->convstate);
+        int r = conversations_open_user(imapd_userid, 0/*shared*/, &fa->convstate);
         if (r) {
             syslog(LOG_WARNING, "error opening conversations for %s: %s",
                                 imapd_userid,
