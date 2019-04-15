@@ -337,6 +337,7 @@ static int query_begin_index(search_query_t *query,
         init.out = query->state->out;
         init.want_expunged = query->want_expunged;
         init.want_mbtype = query->want_mbtype;
+        init.examine_mode = 1;
 
         r = index_open(mboxname, &init, statep);
         if (r == IMAP_PERMISSION_DENIED) r = IMAP_MAILBOX_NONEXISTENT;
