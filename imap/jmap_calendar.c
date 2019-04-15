@@ -2708,6 +2708,7 @@ static int jmapevent_search(jmap_req_t *req,  struct jmap_query *jquery)
     init.authstate = req->authstate;
     init.want_expunged = 0;
     init.want_mbtype = MBTYPE_CALENDAR;
+    init.examine_mode = 1;
 
     char *inboxname = mboxname_user_mbox(req->accountid, NULL);
     r = index_open(inboxname, &init, &state);
