@@ -6187,7 +6187,7 @@ static void _email_append(jmap_req_t *req,
     struct stagemsg *stage = NULL;
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
-    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
     json_t *val, *mailboxes = NULL;
     size_t len;
     int r = 0;
@@ -6319,6 +6319,7 @@ static void _email_append(jmap_req_t *req,
 
     /* Append the message to the mailbox. */
     qdiffs[QUOTA_MESSAGE] = 1;
+    qdiffs[QUOTA_STORAGE] = len;
     r = append_setup_mbox(&as, mbox, req->userid, httpd_authstate,
             0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
     if (r) goto done;
