@@ -634,12 +634,14 @@ static char *contact_resource_name(message_t *msg, void *rock)
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
+    const mbentry_t mbentry = { .name = mailbox->name,
+                                .uniqueid = mailbox->uniqueid };
     struct contact_rock *crock = (struct contact_rock *) rock;
     struct carddav_data *cdata = NULL;
     char *resource = NULL;
 
     /* Get resource from CardDAV DB, if possible */
-    int r = carddav_lookup_imapuid(crock->carddavdb, mailbox->name,
+    int r = carddav_lookup_imapuid(crock->carddavdb, &mbentry,
                                    record->uid, &cdata, /*tombstones*/ 1);
     if (!r) {
         resource = xstrdup(cdata->dav.resource);
@@ -693,6 +695,8 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
             /* Add this card to the group vCard of recreated contacts */
             struct mailbox *mailbox = msg_mailbox(recreatemsg);
             const struct index_record *record = msg_record(recreatemsg);
+            const mbentry_t mbentry = { .name = mailbox->name,
+                                        .uniqueid = mailbox->uniqueid };
             struct contact_rock *crock = (struct contact_rock *) rock;
             struct vparse_card *vcard = record_to_vcard(mailbox, record);
 
@@ -712,7 +716,7 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
                     /* Look for existing group vCard with same date prefix */
                     struct group_rock grock = { buf_cstring(&crock->buf), 0 };
                     enum carddav_sort sort = CARD_SORT_FULLNAME | CARD_SORT_DESC;
-                    if (carddav_foreach_sort(crock->carddavdb, mailbox->name,
+                    if (carddav_foreach_sort(crock->carddavdb, &mbentry,
                                              &sort, 1, _group_name_cb, &grock)) {
                         buf_printf(&crock->buf, " (%u)", grock.num+1);
                     }
@@ -847,12 +851,14 @@ static char *ical_resource_name(message_t *msg, void *rock)
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
+    const mbentry_t mbentry = { .name = mailbox->name,
+                                .uniqueid = mailbox->uniqueid };
     struct calendar_rock *crock = (struct calendar_rock *) rock;
     struct caldav_data *cdata = NULL;
     char *resource = NULL;
 
     /* Get resource from CalDAV DB, if possible */
-    int r = caldav_lookup_imapuid(crock->caldavdb, mailbox->name,
+    int r = caldav_lookup_imapuid(crock->caldavdb, &mbentry,
                                   record->uid, &cdata, /*tombstones*/ 1);
     if (!r) {
         resource = xstrdup(cdata->dav.resource);
@@ -926,10 +932,12 @@ static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
     const struct index_record *record = msg_record(recreatemsg);
     const struct index_record *oldrecord =
         destroymsg ? msg_record(destroymsg) : NULL;
+    const mbentry_t mbentry = { .name = mailbox->name,
+                                .uniqueid = mailbox->uniqueid };
     struct caldav_data *cdata = NULL;
     int r;
 
-    r = caldav_lookup_imapuid(caldavdb, mailbox->name,
+    r = caldav_lookup_imapuid(caldavdb, &mbentry,
                               oldrecord ? oldrecord->uid : record->uid,
                               &cdata, /*tombstones*/ 1);
     if (r) return r;
@@ -990,9 +998,11 @@ static int destroy_ical(message_t *destroymsg, jmap_req_t *req,
     if (!is_replaced) {
         struct mailbox *mailbox = msg_mailbox(destroymsg);
         const struct index_record *record = msg_record(destroymsg);
+        const mbentry_t mbentry = { .name = mailbox->name,
+                                    .uniqueid = mailbox->uniqueid };
         struct caldav_data *cdata = NULL;
 
-        r = caldav_lookup_imapuid(caldavdb, mailbox->name,
+        r = caldav_lookup_imapuid(caldavdb, &mbentry,
                                   record->uid, &cdata, /*tombstones*/ 0);
 
         if (!r && cdata->organizer) {

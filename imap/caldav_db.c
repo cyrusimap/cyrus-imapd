@@ -288,6 +288,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
     memset(cdata, 0, sizeof(struct caldav_data));
 
+    cdata->dav.mailbox_byname = (db->db->version < DB_MBOXID_VERSION);
     cdata->dav.alive = sqlite3_column_int(stmt, 16);
     cdata->dav.modseq = sqlite3_column_int64(stmt, 17);
     cdata->dav.createdmodseq = sqlite3_column_int64(stmt, 18);
@@ -364,10 +365,12 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     " WHERE mailbox = :mailbox AND resource = :resource;"
 
 EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
-                           const char *mailbox, const char *resource,
+                           const mbentry_t *mbentry, const char *resource,
                            struct caldav_data **result,
                            int tombstones)
 {
+    const char *mailbox = (caldavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
     struct sqldb_bindval bval[] = {
         { ":mailbox",  SQLITE_TEXT, { .s = mailbox       } },
         { ":resource", SQLITE_TEXT, { .s = resource      } },
@@ -383,6 +386,7 @@ EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
 
     /* always add the mailbox and resource, so error responses don't
      * crash out */
+    cdata.dav.mailbox_byname = (caldavdb->db->version < DB_MBOXID_VERSION);
     cdata.dav.mailbox = mailbox;
     cdata.dav.resource = resource;
 
@@ -393,10 +397,12 @@ EXPORTED int caldav_lookup_resource(struct caldav_db *caldavdb,
     " WHERE mailbox = :mailbox AND imap_uid = :imap_uid;"
 
 EXPORTED int caldav_lookup_imapuid(struct caldav_db *caldavdb,
-                           const char *mailbox, int imap_uid,
+                           const mbentry_t *mbentry, int imap_uid,
                            struct caldav_data **result,
                            int tombstones)
 {
+    const char *mailbox = (caldavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
     struct sqldb_bindval bval[] = {
         { ":mailbox",  SQLITE_TEXT,    { .s = mailbox       } },
         { ":imap_uid", SQLITE_INTEGER, { .i = imap_uid      } },
@@ -448,9 +454,12 @@ EXPORTED int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 #define CMD_SELALIVE CMD_READFIELDS \
     " WHERE alive = 1;"
 
-EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
+EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const mbentry_t *mbentry,
                             caldav_cb_t *cb, void *rock)
 {
+    const char *mailbox = !mbentry ? NULL :
+        ((caldavdb->db->version >= DB_MBOXID_VERSION) ?
+         mbentry->uniqueid : mbentry->name);
     struct sqldb_bindval bval[] = {
         { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
         { NULL,       SQLITE_NULL, { .s = NULL    } } };
@@ -475,14 +484,17 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
     " AND alive = 1 "
 
 EXPORTED int caldav_foreach_timerange(struct caldav_db *caldavdb,
-                                      const char *mailbox,
+                                      const mbentry_t *mbentry,
                                       time_t after, time_t before,
                                       enum caldav_sort* sort, size_t nsort,
                                       caldav_cb_t *cb, void *rock)
 {
+    const char *mailbox = !mbentry ? NULL :
+        ((caldavdb->db->version >= DB_MBOXID_VERSION) ?
+         mbentry->uniqueid : mbentry->name);
     struct sqldb_bindval bval[] = {
-        { ":after",     SQLITE_TEXT, { .s = NULL    } },
-        { ":before",   SQLITE_TEXT, { .s = NULL    } },
+        { ":after",   SQLITE_TEXT, { .s = NULL    } },
+        { ":before",  SQLITE_TEXT, { .s = NULL    } },
         { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
         { NULL,       SQLITE_NULL, { .s = NULL    } } };
     struct caldav_data cdata;
@@ -627,8 +639,10 @@ EXPORTED int caldav_delete(struct caldav_db *caldavdb, unsigned rowid)
 
 #define CMD_DELMBOX "DELETE FROM ical_objs WHERE mailbox = :mailbox;"
 
-EXPORTED int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox)
+EXPORTED int caldav_delmbox(struct caldav_db *caldavdb, const mbentry_t *mbentry)
 {
+    const char *mailbox = (caldavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
     struct sqldb_bindval bval[] = {
         { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
         { NULL,       SQLITE_NULL, { .s = NULL    } } };
@@ -640,13 +654,16 @@ EXPORTED int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox)
 }
 
 EXPORTED int caldav_get_updates(struct caldav_db *caldavdb,
-                                modseq_t oldmodseq, const char *mboxname,
+                                modseq_t oldmodseq, const mbentry_t *mbentry,
                                 int kind, int limit,
                                 int (*cb)(void *rock, struct caldav_data *cdata),
                                 void *rock)
 {
+    const char *mailbox = !mbentry ? NULL :
+        ((caldavdb->db->version >= DB_MBOXID_VERSION) ?
+         mbentry->uniqueid : mbentry->name);
     struct sqldb_bindval bval[] = {
-        { ":mailbox",      SQLITE_TEXT,    { .s = mboxname  } },
+        { ":mailbox",      SQLITE_TEXT,    { .s = mailbox   } },
         { ":modseq",       SQLITE_INTEGER, { .i = oldmodseq } },
         { ":comp_type",    SQLITE_INTEGER, { .i = kind      } },
         /* SQLite interprets a negative limit as unbounded. */
@@ -660,7 +677,7 @@ EXPORTED int caldav_get_updates(struct caldav_db *caldavdb,
     int r;
 
     buf_setcstr(&sqlbuf, CMD_READFIELDS " WHERE");
-    if (mboxname) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
+    if (mailbox) buf_appendcstr(&sqlbuf, " mailbox = :mailbox AND");
     if (kind >= 0) {
         /* Use a negative value to signal that we accept ALL components types */
         buf_appendcstr(&sqlbuf, " comp_type = :comp_type AND");
@@ -801,9 +818,12 @@ EXPORTED char *caldav_mboxname(const char *userid, const char *name)
 }
 
 EXPORTED int caldav_get_events(struct caldav_db *caldavdb, const char *asuserid,
-                               const char *mailbox, const char *ical_uid,
+                               const mbentry_t *mbentry, const char *ical_uid,
                                caldav_cb_t *cb, void *rock)
 {
+    const char *mailbox = !mbentry ? NULL :
+        ((caldavdb->db->version >= DB_MBOXID_VERSION) ?
+         mbentry->uniqueid : mbentry->name);
     struct sqldb_bindval bval[] = {
         { ":mailbox",  SQLITE_TEXT, { .s = mailbox } },
         { ":ical_uid", SQLITE_TEXT, { .s = ical_uid } },

@@ -224,6 +224,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 
     memset(wdata, 0, sizeof(struct webdav_data));
 
+    wdata->dav.mailbox_byname = (db->db->version < DB_MBOXID_VERSION);
     wdata->dav.alive = sqlite3_column_int(stmt, 14);
     wdata->dav.modseq = sqlite3_column_int64(stmt, 15);
     wdata->dav.createdmodseq = sqlite3_column_int64(stmt, 16);
@@ -297,10 +298,13 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     " WHERE mailbox = :mailbox AND resource = :resource;"
 
 EXPORTED int webdav_lookup_resource(struct webdav_db *webdavdb,
-                                    const char *mailbox, const char *resource,
+                                    const mbentry_t *mbentry,
+                                    const char *resource,
                                     struct webdav_data **result,
                                     int tombstones)
 {
+    const char *mailbox = (webdavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
     struct sqldb_bindval bval[] = {
         { ":mailbox",  SQLITE_TEXT, { .s = mailbox       } },
         { ":resource", SQLITE_TEXT, { .s = resource      } },
@@ -314,6 +318,11 @@ EXPORTED int webdav_lookup_resource(struct webdav_db *webdavdb,
     r = sqldb_exec(webdavdb->db, CMD_SELRSRC, bval, &read_cb, &rrock);
     if (!r && !wdata.dav.rowid) r = CYRUSDB_NOTFOUND;
 
+    /* always mailbox and resource so error paths don't fail */
+    wdata.dav.mailbox_byname = (webdavdb->db->version < DB_MBOXID_VERSION);
+    wdata.dav.mailbox = mailbox;
+    wdata.dav.resource = resource;
+
     return r;
 }
 
@@ -322,10 +331,12 @@ EXPORTED int webdav_lookup_resource(struct webdav_db *webdavdb,
     " WHERE mailbox = :mailbox AND imap_uid = :imap_uid;"
 
 EXPORTED int webdav_lookup_imapuid(struct webdav_db *webdavdb,
-                                    const char *mailbox, int imap_uid,
+                                    const mbentry_t *mbentry, int imap_uid,
                                     struct webdav_data **result,
                                     int tombstones)
 {
+    const char *mailbox = (webdavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
     struct sqldb_bindval bval[] = {
         { ":mailbox",  SQLITE_TEXT,    { .s = mailbox       } },
         { ":imap_uid", SQLITE_INTEGER, { .i = imap_uid      } },
@@ -371,10 +382,12 @@ EXPORTED int webdav_lookup_uid(struct webdav_db *webdavdb, const char *res_uid,
 #define CMD_SELMBOX CMD_GETFIELDS                                       \
     " WHERE mailbox = :mailbox AND alive = 1;"
 
-EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const char *mailbox,
+EXPORTED int webdav_foreach(struct webdav_db *webdavdb, const mbentry_t *mbentry,
                             int (*cb)(void *rock, struct webdav_data *data),
                             void *rock)
 {
+    const char *mailbox = (webdavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
     struct sqldb_bindval bval[] = {
         { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
         { NULL,       SQLITE_NULL, { .s = NULL    } } };
@@ -481,8 +494,10 @@ EXPORTED int webdav_delete(struct webdav_db *webdavdb, unsigned rowid)
 
 #define CMD_DELMBOX "DELETE FROM dav_objs WHERE mailbox = :mailbox;"
 
-HIDDEN int webdav_delmbox(struct webdav_db *webdavdb, const char *mailbox)
+HIDDEN int webdav_delmbox(struct webdav_db *webdavdb, const mbentry_t *mbentry)
 {
+    const char *mailbox = (webdavdb->db->version >= DB_MBOXID_VERSION) ?
+        mbentry->uniqueid : mbentry->name;
     struct sqldb_bindval bval[] = {
         { ":mailbox", SQLITE_TEXT, { .s = mailbox } },
         { NULL,       SQLITE_NULL, { .s = NULL    } } };
