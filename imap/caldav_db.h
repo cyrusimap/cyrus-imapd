@@ -53,6 +53,7 @@ extern time_t caldav_eternity;
 
 #include "dav_db.h"
 #include "ical_support.h"
+#include "mboxlist.h"
 
 /* Bitmask of calendar components */
 enum {
@@ -126,14 +127,14 @@ int caldav_close(struct caldav_db *caldavdb);
 /* lookup an entry from 'caldavdb' by resource
    (optionally inside a transaction for updates) */
 int caldav_lookup_resource(struct caldav_db *caldavdb,
-                           const char *mailbox, const char *resource,
+                           const mbentry_t *mbentry, const char *resource,
                            struct caldav_data **result,
                            int tombstones);
 
 /* lookup an entry from 'caldavdb' by mailbox and IMAP uid
    (optionally inside a transaction for updates) */
 int caldav_lookup_imapuid(struct caldav_db *caldavdb,
-                          const char *mailbox, int uid,
+                          const mbentry_t *mbentry, int uid,
                           struct caldav_data **result,
                           int tombstones);
 
@@ -143,7 +144,7 @@ int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
                       struct caldav_data **result);
 
 /* process each entry for 'mailbox' in 'caldavdb' with cb() */
-int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
+int caldav_foreach(struct caldav_db *caldavdb, const mbentry_t *mbentry,
                    caldav_cb_t *cb, void *rock);
 
 enum caldav_sort {
@@ -160,7 +161,8 @@ enum caldav_sort {
  * timerange spans from caldav_epoch to caldav_eternity.
  * The callback is called in order of sort, or by an
  * arbitrary order if no sort is specified. */
-int caldav_foreach_timerange(struct caldav_db *caldavdb, const char *mailbox,
+int caldav_foreach_timerange(struct caldav_db *caldavdb,
+                             const mbentry_t *mbentry,
                              time_t after, time_t before,
                              enum caldav_sort* sort, size_t nsort,
                              caldav_cb_t *cb, void *rock);
@@ -174,7 +176,7 @@ int caldav_writeentry(struct caldav_db *caldavdb, struct caldav_data *cdata,
 int caldav_delete(struct caldav_db *caldavdb, unsigned rowid);
 
 /* delete all entries for 'mailbox' from 'caldavdb' */
-int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox);
+int caldav_delmbox(struct caldav_db *caldavdb, const mbentry_t *mbentry);
 
 /* begin transaction */
 int caldav_begin(struct caldav_db *caldavdb);
@@ -188,7 +190,7 @@ int caldav_abort(struct caldav_db *caldavdb);
 char *caldav_mboxname(const char *userid, const char *name);
 
 int caldav_get_events(struct caldav_db *caldavdb, const char *asuserid,
-                      const char *mailbox, const char *ical_uid,
+                      const mbentry_t *mbentry, const char *ical_uid,
                       caldav_cb_t *cb, void *rock);
 
 int caldav_write_jmapcache(struct caldav_db *caldavdb, int rowid,
@@ -201,7 +203,7 @@ int caldav_write_jmapcache(struct caldav_db *caldavdb, int rowid,
  * If kind is non-negative, only process entries of this kind.
  * If max_records is positive, only call cb for at most this entries. */
 int caldav_get_updates(struct caldav_db *caldavdb,
-                       modseq_t oldmodseq, const char *mailbox, int kind,
+                       modseq_t oldmodseq, const mbentry_t *mbentry, int kind,
                        int max_records, caldav_cb_t *cb, void *rock);
 
 /* Update all the share ACLs */

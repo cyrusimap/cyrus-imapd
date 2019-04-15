@@ -3366,3 +3366,17 @@ HIDDEN void jmap_getblob_ctx_fini(jmap_getblob_context_t *ctx)
     free(ctx->content_type);
     free(ctx->encoding);
 }
+
+EXPORTED mbentry_t *jmap_mbentry_from_dav(jmap_req_t *req, struct dav_data *dav)
+{
+    mbentry_t *mbentry = NULL;
+
+    if (dav->mailbox_byname) {
+        if (jmap_mboxlist_lookup(dav->mailbox, &mbentry, NULL)) return NULL;
+    }
+    else {
+        mbentry = jmap_mbentry_by_uniqueid_copy(req, dav->mailbox);
+    }
+
+    return mbentry;
+}

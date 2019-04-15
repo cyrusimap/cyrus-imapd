@@ -247,6 +247,10 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
             return NULL;
         }
         for (i = 0; upgrade[i].to; i++) {
+            /* Track the version through the upgrade process.
+               This allows us to leave the version as-is if we want. */
+            version = upgrade[i].to;
+
             if (upgrade[i].to <= open->version) continue;
 
             syslog(LOG_NOTICE, "sqldb_open(%s) upgrade to v%d", open->fname, upgrade[i].to);

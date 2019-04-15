@@ -959,7 +959,7 @@ static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
     jmap_mboxlist_lookup(mboxname, &mbentry, NULL);
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS))
         r = IMAP_NOTFOUND;
-    else if (!jmap_hasrights(req, mbentry, JACL_DELETE))
+    else if (!jmap_hasrights_mbentry(req, mbentry, JACL_DELETE))
         r = IMAP_PERMISSION_DENIED;
 
     /* XXX 
@@ -973,7 +973,7 @@ static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
      *
      * Need the Events API for this requirement.
      */
-    else if ((r = caldav_delmbox(db, DAV_KEY_MBE(mbentry)))) {
+    else if ((r = caldav_delmbox(db, mbentry))) {
         syslog(LOG_ERR, "failed to delete mailbox from caldav_db: %s",
                 error_message(r));
         free(userid);
@@ -1965,8 +1965,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     if (cdata->comp_type != CAL_COMP_VEVENT)
         return 0;
 
-    mbentry = jmap_mbentry_by_uniqueid_copy(req, cdata->dav.mailbox);
-    if (!mbentry) jmap_mboxlist_lookup(cdata->dav.mailbox, &mbentry, NULL);
+    mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
 
     /* Check mailbox ACL rights */
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
@@ -3145,8 +3144,7 @@ static int setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
 
-    mbentry = jmap_mbentry_by_uniqueid_copy(req, cdata->dav.mailbox);
-    if (!mbentry) jmap_mboxlist_lookup(cdata->dav.mailbox, &mbentry, NULL);
+    mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
 
     /* Check permissions. */
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, needrights)) {
@@ -3363,8 +3361,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         goto done;
     }
 
-    mbentry = jmap_mbentry_by_uniqueid_copy(req, cdata->dav.mailbox);
-    if (!mbentry) jmap_mboxlist_lookup(cdata->dav.mailbox, &mbentry, NULL);
+    mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
 
     /* Check permissions. */
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
@@ -3722,9 +3719,7 @@ static int geteventchanges_cb(void *vrock, struct caldav_data *cdata)
     struct geteventchanges_rock *rock = vrock;
     jmap_req_t *req = rock->req;
     struct jmap_changes *changes = rock->changes;
-    mbentry_t *mbentry = jmap_mbentry_by_uniqueid_copy(req, cdata->dav.mailbox);
-
-    if (!mbentry) jmap_mboxlist_lookup(cdata->dav.mailbox, &mbentry, NULL);
+    mbentry_t *mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
 
     /* Check permissions */
     int rights = mbentry ? jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS) : 0;
@@ -3791,7 +3786,7 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
     }
 
     /* Lookup changes. */
-    r = caldav_get_updates(db, changes.since_modseq, NULL /*mboxid*/,
+    r = caldav_get_updates(db, changes.since_modseq, NULL /*mbentry*/,
                            CAL_COMP_VEVENT, 
                            changes.max_changes ? (int) changes.max_changes + 1 : -1,
                            &geteventchanges_cb, &rock);
@@ -3989,8 +3984,7 @@ static int eventquery_cb(void *vrock, struct caldav_data *cdata)
         return 0;
     }
 
-    mbentry_t *mbentry = jmap_mbentry_by_uniqueid_copy(req, cdata->dav.mailbox);
-    if (!mbentry) jmap_mboxlist_lookup(cdata->dav.mailbox, &mbentry, NULL);
+    mbentry_t *mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
 
     /* Check permissions */
     int rights = mbentry ? jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS) : 0;
@@ -4189,7 +4183,7 @@ static int eventquery_search_run(jmap_req_t *req,
         }
 
         /* Fetch the CalDAV db record */
-        r = caldav_lookup_imapuid(db, DAV_KEY_MBE(mbentry), md->uid, &cdata, 0);
+        r = caldav_lookup_imapuid(db, mbentry, md->uid, &cdata, 0);
         mboxlist_entry_free(&mbentry);
         if (r) continue;
         else {
@@ -4732,8 +4726,7 @@ static void _calendarevent_copy(jmap_req_t *req,
         goto done;
     }
 
-    mbentry = jmap_mbentry_by_uniqueid_copy(req, cdata->dav.mailbox);
-    if (!mbentry) jmap_mboxlist_lookup(cdata->dav.mailbox, &mbentry, NULL);
+    mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
 
     if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
         *set_err = json_pack("{s:s}", "type", "notFound");

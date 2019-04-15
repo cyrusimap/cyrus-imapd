@@ -1787,7 +1787,18 @@ static void sched_deliver_local(const char *sender, const char *recipient,
                       icalcomponent_get_uid(sched_data->itip), &cdata);
 
     if (cdata->dav.mailbox) {
-        mailboxname = xstrdup(cdata->dav.mailbox);
+        if (cdata->dav.mailbox_byname)
+            mailboxname = xstrdup(cdata->dav.mailbox);
+        else {
+            mboxlist_lookup_by_uniqueid(cdata->dav.mailbox, &mbentry, NULL);
+            if (!mbentry) {
+                sched_data->status = sched_data->ischedule ?
+                    REQSTAT_TEMPFAIL : SCHEDSTAT_TEMPFAIL;
+                goto done;
+            }
+            mailboxname = xstrdup(mbentry->name);
+            mboxlist_entry_free(&mbentry);
+        }
         buf_setcstr(&resource, cdata->dav.resource);
     }
     else if (sched_data->is_reply) {
