@@ -1050,7 +1050,6 @@ static int mailbox_open_advanced(const char *name,
     mailbox->acl = xstrdup(mbentry->acl);
     mailbox->mbtype = mbentry->mbtype;
     mailbox->foldermodseq = mbentry->foldermodseq;
-    mailbox->legacy_dir = mbentry->legacy_dir;
 
     mboxlist_entry_free(&mbentry);
 
@@ -3598,12 +3597,14 @@ static int mailbox_update_dav(struct mailbox *mailbox,
     if (mboxname_isdeletedmailbox(mailbox->name, NULL))
         return 0;
 
-    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK)
+    switch (mbtype_isa(mailbox->mbtype)) {
+    case MBTYPE_ADDRESSBOOK:
         return mailbox_update_carddav(mailbox, old, new);
-    if (mailbox->mbtype & MBTYPE_CALENDAR)
+    case MBTYPE_CALENDAR:
         return mailbox_update_caldav(mailbox, old, new);
-    if (mailbox->mbtype & MBTYPE_COLLECTION)
+    case MBTYPE_COLLECTION:
         return mailbox_update_webdav(mailbox, old, new);
+    }
 
     return 0;
 }
@@ -3686,7 +3687,7 @@ static int mailbox_update_email_alarms(struct mailbox *mailbox,
     }
 
     /* remove associated alarms if canceled or final */
-    else if ((mailbox->mbtype & MBTYPE_SUBMISSION) &&
+    else if (mbtype_isa(mailbox->mbtype) == MBTYPE_JMAPSUBMIT &&
              (new->system_flags & (FLAG_FLAGGED | FLAG_ANSWERED))) {
         r = caldav_alarm_delete_record(mailbox->name, new->uid);
     }
@@ -4809,10 +4810,12 @@ EXPORTED unsigned mailbox_should_archive(struct mailbox *mailbox,
         return 1;
 
     /* Calendar and Addressbook are small files and need to be hot */
-    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK)
+    switch (mbtype_isa(mailbox->mbtype)) {
+    case MBTYPE_ADDRESSBOOK:
         return 0;
-    if (mailbox->mbtype & MBTYPE_CALENDAR)
+    case MBTYPE_CALENDAR:
         return 0;
+    }
 
     /* don't archive flagged messages */
     if (keepflagged && (record->system_flags & FLAG_FLAGGED))
@@ -5429,7 +5432,7 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
     const message_t *msg;
     int r = 0;
 
-    if (!(mailbox->mbtype & (MBTYPES_DAV)))
+    if (!mbtypes_dav(mailbox->mbtype))
         return 0;
 
     if (mboxname_isdeletedmailbox(mailbox->name, NULL))
@@ -5636,12 +5639,15 @@ static int mailbox_delete_webdav(struct mailbox *mailbox)
 
 static int mailbox_delete_dav(struct mailbox *mailbox)
 {
-    if (mailbox->mbtype & MBTYPE_ADDRESSBOOK)
+    switch (mbtype_isa(mailbox->mbtype)) {
+    case MBTYPE_ADDRESSBOOK:
         return mailbox_delete_carddav(mailbox);
-    if (mailbox->mbtype & MBTYPE_CALENDAR)
+    case MBTYPE_CALENDAR:
         return mailbox_delete_caldav(mailbox);
-    if (mailbox->mbtype & MBTYPE_COLLECTION)
+    case MBTYPE_COLLECTION:
         return mailbox_delete_webdav(mailbox);
+    }
+
     return 0;
 }
 #endif /* WITH_DAV */
