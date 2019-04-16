@@ -6815,7 +6815,7 @@ static void cmd_expunge(char *tag, char *sequence)
 static void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly)
 {
     int r = 0;
-    int mbtype = 0;
+    int mbtype = MBTYPE_EMAIL;
     int options = 0;
     const char *partition = NULL;
     const char *server = NULL;
@@ -6841,9 +6841,9 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     dlist_getatom(extargs, "SERVER", &server);
     dlist_getatom(extargs, "MAILBOXID", &uniqueid);
     if (dlist_getatom(extargs, "TYPE", &type)) {
-        if (!strcasecmp(type, "CALENDAR")) mbtype |= MBTYPE_CALENDAR;
-        else if (!strcasecmp(type, "COLLECTION")) mbtype |= MBTYPE_COLLECTION;
-        else if (!strcasecmp(type, "ADDRESSBOOK")) mbtype |= MBTYPE_ADDRESSBOOK;
+        if (!strcasecmp(type, "CALENDAR")) mbtype = MBTYPE_CALENDAR;
+        else if (!strcasecmp(type, "COLLECTION")) mbtype = MBTYPE_COLLECTION;
+        else if (!strcasecmp(type, "ADDRESSBOOK")) mbtype = MBTYPE_ADDRESSBOOK;
         else {
             r = IMAP_MAILBOX_BADTYPE;
             goto err;
@@ -11823,7 +11823,7 @@ static int xfer_delete(struct xfer_header *xfer)
         newentry->acl = xstrdupnull(item->mbentry->acl);
         newentry->server = xstrdupnull(item->mbentry->server);
         newentry->partition = xstrdupnull(item->mbentry->partition);
-        newentry->mbtype = MBTYPE_DELETED;
+        newentry->mbtype |= MBTYPE_DELETED;
         r = mboxlist_update(newentry, 1);
         mboxlist_entry_free(&newentry);
 
@@ -13040,7 +13040,7 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
     if (!imapd_userisadmin) {
         int mbtype = mbentry ? mbentry->mbtype : 0;
 
-        if (mbtype == MBTYPE_NETNEWS) return 0;
+        if (mbtype_isa(mbtype) == MBTYPE_NETNEWS) return 0;
         if ((mbtype & MBTYPE_INTERMEDIATE) &&
             !(rock->listargs->sel & LIST_SEL_INTERMEDIATES)) return 0;
         if (!(rock->listargs->sel & LIST_SEL_DAV)) {
@@ -13217,7 +13217,7 @@ static int list_cb(struct findall_data *data, void *rockp)
     /* do we need to add "missing" intermediates? */
     if ((rock->listargs->sel & LIST_SEL_INTERMEDIATES) &&
         ((rock->listargs->sel & LIST_SEL_DAV) ||
-         !(data->mbentry->mbtype & MBTYPES_DAV)) &&
+         !mbtypes_dav(data->mbentry->mbtype)) &&
         !mboxname_contains_parent(data->extname, rock->last_name)) {
 
         add_intermediates(data->extname, rock);

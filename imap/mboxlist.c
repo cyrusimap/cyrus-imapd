@@ -214,33 +214,50 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
 
     buf_reset(&buf);
 
+    /* mailbox types */
+    switch (mbtype_isa(mbtype)) {
+    case MBTYPE_EMAIL:
+        buf_putc(&buf, 'e');
+        break;
+    case MBTYPE_NETNEWS:
+        buf_putc(&buf, 'n');
+        break;
+    case MBTYPE_COLLECTION:
+        buf_putc(&buf, 'b');
+        break;
+    case MBTYPE_CALENDAR:
+        buf_putc(&buf, 'c');
+        break;
+    case MBTYPE_ADDRESSBOOK:
+        buf_putc(&buf, 'a');
+        break;
+    case MBTYPE_JMAPNOTIFY:
+        buf_putc(&buf, 'j');
+        break;
+    case MBTYPE_JMAPSUBMIT:
+        buf_putc(&buf, 's');
+        break;
+    case MBTYPE_JMAPPUSHSUB:
+        buf_putc(&buf, 'p');
+        break;
+    }
+
+    /* mailbox flags */
     if (mbtype & MBTYPE_DELETED)
         buf_putc(&buf, 'd');
     if (mbtype & MBTYPE_MOVING)
         buf_putc(&buf, 'm');
-    if (mbtype & MBTYPE_NETNEWS)
-        buf_putc(&buf, 'n');
     if (mbtype & MBTYPE_REMOTE)
         buf_putc(&buf, 'r');
     if (mbtype & MBTYPE_RESERVE)
         buf_putc(&buf, 'z');
-    if (mbtype & MBTYPE_CALENDAR)
-        buf_putc(&buf, 'c');
-    if (mbtype & MBTYPE_COLLECTION)
-        buf_putc(&buf, 'b');
-    if (mbtype & MBTYPE_ADDRESSBOOK)
-        buf_putc(&buf, 'a');
     if (mbtype & MBTYPE_INTERMEDIATE)
         buf_putc(&buf, 'i');
-    if (mbtype & MBTYPE_SUBMISSION)
-        buf_putc(&buf, 's');
-    if (mbtype & MBTYPE_PUSHSUBSCRIPTION)
-        buf_putc(&buf, 'p');
-    if (mbtype & MBTYPE_JMAPNOTIFICATION)
-        buf_putc(&buf, 'j');
+    if (mbtype & MBTYPE_LEGACY_DIRS)
+        buf_putc(&buf, 'l');
 
     /* make sure we didn't forget to set a character for every interesting bit */
-    if (mbtype) assert(buf_len(&buf));
+    assert(buf_len(&buf));
 
     return buf_cstring(&buf);
 }
@@ -275,9 +292,6 @@ static struct dlist *mboxlist_entry_dlist(const char *dbname,
 
     if (mbentry->acl)
         _write_acl(dl, mbentry->acl);
-
-    if (mbentry->legacy_dir)
-        dlist_setnum32(dl, "L", 1);
 
     return dl;
 }
@@ -381,39 +395,49 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
     if (!string) return 0; /* null just means default */
 
     for (; *string; string++) {
+        /* mailbox types */
         switch (*string) {
         case 'a':
-            mbtype |= MBTYPE_ADDRESSBOOK;
+            mbtype = MBTYPE_ADDRESSBOOK;
             break;
         case 'b':
-            mbtype |= MBTYPE_COLLECTION;
+            mbtype = MBTYPE_COLLECTION;
             break;
         case 'c':
-            mbtype |= MBTYPE_CALENDAR;
+            mbtype = MBTYPE_CALENDAR;
             break;
+        case 'e':
+            mbtype = MBTYPE_EMAIL;
+            break;
+        case 'j':
+            mbtype = MBTYPE_JMAPNOTIFY;
+            break;
+        case 'n':
+            mbtype = MBTYPE_NETNEWS;
+            break;
+        case 'p':
+            mbtype = MBTYPE_JMAPPUSHSUB;
+            break;
+        case 's':
+            mbtype = MBTYPE_JMAPSUBMIT;
+            break;
+
+            
+        /* mailbox flags */
         case 'd':
             mbtype |= MBTYPE_DELETED;
             break;
         case 'i':
             mbtype |= MBTYPE_INTERMEDIATE;
             break;
-        case 'j':
-            mbtype |= MBTYPE_JMAPNOTIFICATION;
+        case 'l':
+            mbtype |= MBTYPE_LEGACY_DIRS;
             break;
         case 'm':
             mbtype |= MBTYPE_MOVING;
             break;
-        case 'n':
-            mbtype |= MBTYPE_NETNEWS;
-            break;
         case 'r':
             mbtype |= MBTYPE_REMOTE;
-            break;
-        case 'p':
-            mbtype |= MBTYPE_PUSHSUBSCRIPTION;
-            break;
-        case 's':
-            mbtype |= MBTYPE_SUBMISSION;
             break;
         case 'z':
             mbtype |= MBTYPE_RESERVE;
@@ -487,9 +511,6 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
             }
             else if (!strcmp(key, "I")) {
                 rock->mbentry->uniqueid = xstrdupnull(d->data);
-            }
-            else if (!strcmp(key, "L")) {
-                rock->mbentry->legacy_dir = 1;
             }
             else if (!strcmp(key, "M")) {
                 rock->mbentry->mtime = atoi(d->data);
@@ -1481,7 +1502,8 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
                                                  mbtype, MBOXMODSEQ_ISFOLDER);
 
                 mbentry_t *newmbentry = mboxlist_entry_copy(mbentry);
-                newmbentry->mbtype = MBTYPE_DELETED;
+                newmbentry->mbtype &= ~MBTYPE_INTERMEDIATE;
+                newmbentry->mbtype |= MBTYPE_DELETED;
                 newmbentry->foldermodseq = modseq;
 
                 syslog(LOG_NOTICE,
@@ -1515,7 +1537,7 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
         newmbentry->uniqueid = xstrdupnull(makeuuid());
         newmbentry->createdmodseq = modseq;
         newmbentry->foldermodseq = modseq;
-        newmbentry->mbtype = MBTYPE_INTERMEDIATE;
+        newmbentry->mbtype |= MBTYPE_INTERMEDIATE;
         newmbentry->foldermodseq = modseq;
 
         syslog(LOG_NOTICE,
@@ -2199,7 +2221,7 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
         int haschildren = mboxlist_haschildren(name);
         mbentry_t *newmbentry = mboxlist_entry_create();
         newmbentry->name = xstrdupnull(name);
-        newmbentry->mbtype = haschildren ? MBTYPE_INTERMEDIATE : MBTYPE_DELETED;
+        newmbentry->mbtype |= haschildren ? MBTYPE_INTERMEDIATE : MBTYPE_DELETED;
         if (mailbox) {
             newmbentry->uniqueid = xstrdupnull(mailbox->uniqueid);
             newmbentry->uidvalidity = mailbox->i.uidvalidity;
@@ -2629,7 +2651,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
             /* store a DELETED marker */
             mbentry_t *oldmbentry = mboxlist_entry_create();
             oldmbentry->name = xstrdupnull(mbentry->name);
-            oldmbentry->mbtype = MBTYPE_DELETED;
+            oldmbentry->mbtype |= MBTYPE_DELETED;
             oldmbentry->uidvalidity = mbentry->uidvalidity;
             oldmbentry->uniqueid = xstrdupnull(mbentry->uniqueid);
             oldmbentry->createdmodseq = mbentry->createdmodseq;
@@ -5166,7 +5188,7 @@ static int _upgrade_cb(void *rock,
 
     buf_setmap(urock->namebuf, key, keylen);
     mbentry->name = mboxname_to_dbname(buf_cstring(urock->namebuf));
-    mbentry->legacy_dir = 1;
+    mbentry->mbtype |= MBTYPE_LEGACY_DIRS;
     r = mboxlist_update_entry(mbentry->name, mbentry, urock->tid);
 
     mboxlist_entry_free(&mbentry);

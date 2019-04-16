@@ -269,7 +269,7 @@ static json_t *jmap_restore_reply(struct jmap_restore *restore)
 struct restore_rock {
     jmap_req_t *req;
     struct jmap_restore *jrestore;
-    int mbtype;
+    uint32_t mbtype;
     modseq_t deletedmodseq;
     char *(*resource_name_cb)(message_t *, void *);
     int (*restore_cb)(message_t *, message_t *, jmap_req_t *, void *, int);
@@ -348,7 +348,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     syslog(log_level, "restore_collection_cb: processing '%s'  (type = 0x%03x)",
            mbentry->name, mbentry->mbtype);
 
-    if ((mbentry->mbtype & rrock->mbtype) != rrock->mbtype) {
+    if (mbtype_isa(mbentry->mbtype) != rrock->mbtype) {
         syslog(log_level, "skipping '%s': not type 0x%03x",
                mbentry->name, rrock->mbtype);
 
@@ -754,7 +754,7 @@ static int restore_addressbook_cb(const mbentry_t *mbentry, void *rock)
     struct mailbox *mailbox = NULL;
     int r;
 
-    if ((mbentry->mbtype & rrock->mbtype) != rrock->mbtype) return 0;
+    if (mbtype_isa(mbentry->mbtype) != rrock->mbtype) return 0;
 
     /* Open mailbox here since we need it later and it gets referenced counted */
     r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/1);
@@ -1193,7 +1193,7 @@ static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
     time_t timestamp = 0;
     int r = 0;
 
-    if ((mbentry->mbtype & rrock->mbtype) != rrock->mbtype) return 0;
+    if (mbtype_isa(mbentry->mbtype) != rrock->mbtype) return 0;
     if (!jmap_hasrights_mbentry(rrock->req, mbentry, JACL_ADDITEMS)) return 0;
 
     if (!strcmp(mbentry->name, crock->inboxname) ||
@@ -1430,7 +1430,7 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     syslog(log_level, "restore_message_list_cb: processing '%s'  (type = 0x%03x)",
            mbentry->name, mbentry->mbtype);
 
-    if (mbentry->mbtype != MBTYPE_EMAIL) {
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
         syslog(log_level, "skipping '%s': not type EMAIL", mbentry->name);
 
         return 0;

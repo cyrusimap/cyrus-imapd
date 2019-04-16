@@ -5996,7 +5996,8 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
     if ((rights & fctx->reqd_privs) != fctx->reqd_privs) goto done;
 
     /* We only match known types */
-    if (!(mbentry->mbtype & fctx->req_tgt->namespace->mboxtype)) goto done;
+    if (mbtype_isa(mbentry->mbtype) !=
+        fctx->req_tgt->namespace->mboxtype) goto done;
 
     p = strrchr(mboxname, '.');
     if (!p) goto done;
@@ -7103,7 +7104,7 @@ int meth_put(struct transaction_t *txn, void *params)
     }
 
     /* Make sure mailbox type is correct */
-    if (txn->req_tgt.mbentry->mbtype != txn->req_tgt.namespace->mboxtype)
+    if (mbtype_isa(txn->req_tgt.mbentry->mbtype) != txn->req_tgt.namespace->mboxtype)
         return HTTP_FORBIDDEN;
 
     /* Make sure Content-Range isn't specified */

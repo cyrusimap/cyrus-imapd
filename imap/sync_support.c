@@ -1644,7 +1644,7 @@ out:
 
     if (record) {
 #ifdef USE_CALALARMD
-        if (mailbox->mbtype & MBTYPE_CALENDAR) {
+        if (mbtype_isa(mailbox->mbtype) == MBTYPE_CALENDAR) {
             // NOTE: this is because we don't pass the annotations through
             // with the record as we create it, so we can't update the alarm
             // database properly.  Instead, we don't set anything when we append
