@@ -405,6 +405,7 @@ static int build_sieve_interp(void)
     sieve_register_environment(interp, (sieve_get_environment *) &timsieved_generic_cb);
     sieve_register_body(interp, (sieve_get_body *) &timsieved_generic_cb);
     sieve_register_include(interp, (sieve_get_include *) &timsieved_generic_cb);
+    sieve_register_logger(interp, (sieve_logger *) &timsieved_generic_cb);
 
     res = sieve_register_vacation(interp, &timsieved_vacation_cbs);
     if (res != SIEVE_OK) {

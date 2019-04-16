@@ -487,6 +487,11 @@ static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
+void sieve_log(void *sc __attribute__((unused)), void *mc __attribute__((unused)), const char *text)
+{
+    printf("sieve log: text=%s\n", text);
+}
+
 static int mysieve_error(int lineno, const char *msg,
                          void *i __attribute__((unused)),
                          void *s __attribute__((unused)))
@@ -723,6 +728,7 @@ int main(int argc, char *argv[])
     sieve_register_environment(i, getenvironment);
     sieve_register_body(i, getbody);
     sieve_register_include(i, getinclude);
+    sieve_register_logger(i, sieve_log);
 
     res = sieve_register_vacation(i, &vacation);
     if (res != SIEVE_OK) {

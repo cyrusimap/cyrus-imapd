@@ -209,6 +209,9 @@ struct Commandlist {
             char *name;
             strarray_t *values;
         } dh;
+        struct { /* it's a log action */
+            char *text;
+        } l;
     } u;
     struct Commandlist *next;
 };

@@ -108,6 +108,7 @@ static commandlist_t *build_addheader(sieve_script_t*, commandlist_t *c,
                                       char *name, char *value);
 static commandlist_t *build_deleteheader(sieve_script_t*, commandlist_t *c,
                                          char *name, strarray_t *values);
+static commandlist_t *build_log(sieve_script_t*, char *text);
 
 /* construct/canonicalize test commands */
 static test_t *build_anyof(sieve_script_t*, testlist_t *tl);
@@ -318,6 +319,9 @@ extern void sieverestart(FILE *f);
 /* draft-gondwana-sieve-mailboxid */
 %token MAILBOXID MAILBOXIDEXISTS
 
+/* x-cyrus-log */
+%token LOG
+
 
 %%
 
@@ -451,6 +455,7 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
 
         | DENOTIFY dtags         { $$ = build_denotify(sscript, $2); }
         | INCLUDE itags STRING   { $$ = build_include(sscript, $2, $3); }
+        | LOG STRING             { $$ = build_log(sscript, $2); }
         | RETURN                 { $$ = new_command(RETURN, sscript); }
         ;
 
@@ -2339,6 +2344,22 @@ static commandlist_t *build_include(sieve_script_t *sscript,
     if (c->u.inc.once == -1) c->u.inc.once = 0;
     if (c->u.inc.location == -1) c->u.inc.location = PERSONAL;
     if (c->u.inc.optional == -1) c->u.inc.optional = 0;
+
+    return c;
+}
+
+static commandlist_t *build_log(sieve_script_t *sscript, char *text)
+{
+    commandlist_t *c;
+
+    if (!supported(SIEVE_CAPA_LOG)) {
+          sieveerror_c(sscript, SIEVE_MISSING_REQUIRE, "x-cyrus-log");
+    }
+
+    verify_utf8(sscript, text);
+
+    c = new_command(LOG, sscript);
+    c->u.l.text = text;
 
     return c;
 }

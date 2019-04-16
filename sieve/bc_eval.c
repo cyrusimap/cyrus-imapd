@@ -2329,6 +2329,12 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             break;
         }
 
+        case B_LOG:
+        {
+            if (i->log) i->log(sc, m, cmd.u.l.text);
+            break;
+        }
+
         case B_ERROR:
             res = SIEVE_RUN_ERROR;
             *errmsg = cmd.u.str;

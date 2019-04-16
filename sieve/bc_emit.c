@@ -472,6 +472,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
         case B_SET:
         case B_ADDHEADER:
         case B_DELETEHEADER:
+        case B_LOG:
         case B_NULL:
         case B_STOP:
         case B_DISCARD:

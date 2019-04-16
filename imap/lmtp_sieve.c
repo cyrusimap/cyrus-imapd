@@ -1518,6 +1518,15 @@ static int sieve_execute_error_handler(const char *msg,
     return SIEVE_OK;
 }
 
+void sieve_log(void *sc, void *mc, const char *text)
+{
+    script_data_t *sd = (script_data_t *) sc;
+    message_data_t *md = ((deliver_data_t *) mc)->m;
+
+    syslog(LOG_INFO, "sieve log: userid=%s messageid=%s text=%s",
+           mbname_userid(sd->mbname), md->id ? md->id : "(null)", text);
+}
+
 sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 {
     sieve_interp_t *interp = NULL;
@@ -1564,6 +1573,8 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     sieve_register_environment(interp, &getenvironment);
     sieve_register_body(interp, &getbody);
     sieve_register_include(interp, &getinclude);
+
+    sieve_register_logger(interp, &sieve_log); 
 
     res = sieve_register_vacation(interp, &vacation);
     if (res != SIEVE_OK) {
