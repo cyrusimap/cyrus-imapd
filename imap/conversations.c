@@ -321,7 +321,7 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
         open->s.annotmboxname = xstrdup(CONVSPLITFOLDER);
 
     char *trashmboxname = mboxname_user_mbox(userid, "Trash");
-    open->s.trashfolder = folder_number(&open->s, trashmboxname, /*create*/1);
+    open->s.trashfolder = folder_number(&open->s, trashmboxname, /*create*/0);
     free(trashmboxname);
 
     /* create the status cache */
