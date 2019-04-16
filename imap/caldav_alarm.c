@@ -1268,13 +1268,13 @@ static void process_one_record(struct caldav_alarm_data *data, time_t runtime, i
         goto done;
     }
 
-    if (mailbox->mbtype == MBTYPE_CALENDAR) {
+    if (mbtype_isa(mailbox->mbtype) == MBTYPE_CALENDAR) {
         icaltimezone *floatingtz = get_floatingtz(mailbox->name, "");
         r = process_valarms(mailbox, &record, floatingtz, runtime, dryrun);
         if (floatingtz) icaltimezone_free(floatingtz, 1);
     }
 #ifdef WITH_JMAP
-    else if (mailbox->mbtype == MBTYPE_SUBMISSION) {
+    else if (mbtype_isa(mailbox->mbtype) == MBTYPE_JMAPSUBMIT) {
         if (record.internaldate > runtime || dryrun) {
             update_alarmdb(data->mboxname, data->imap_uid, record.internaldate);
             goto done;

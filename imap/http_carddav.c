@@ -887,7 +887,7 @@ static int list_addr_cb(const mbentry_t *mbentry, void *rock)
     if (!defaultlen) defaultlen = strlen(DEFAULT_ADDRBOOK);
 
     /* Make sure its a addrendar */
-    if (mbentry->mbtype != MBTYPE_ADDRESSBOOK) goto done;
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_ADDRESSBOOK) goto done;
 
     /* Make sure its readable */
     rights = httpd_myrights(httpd_authstate, mbentry);

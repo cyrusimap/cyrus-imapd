@@ -757,11 +757,8 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     json_t *list = (json_t *) rock->get->list, *obj;
 
     /* Don't list special-purpose mailboxes. */
-    if ((mbentry->mbtype & MBTYPE_DELETED) ||
-        (mbentry->mbtype & MBTYPE_MOVING) ||
-        (mbentry->mbtype & MBTYPE_REMOTE) ||  /* XXX ?*/
-        (mbentry->mbtype & MBTYPE_RESERVE) || /* XXX ?*/
-        (mbentry->mbtype & MBTYPES_NONIMAP)) {
+    if (mbtypes_unavailable(mbentry->mbtype) ||
+        mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
         return 0;
     }
 
@@ -1293,7 +1290,7 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
 {
     mboxquery_t *q = rock;
 
-    if (mbentry->mbtype & MBTYPES_NONIMAP)
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL)
         return 0;
 
     if ((mbentry->mbtype & MBTYPE_DELETED) && !q->include_tombstones)
@@ -3373,9 +3370,8 @@ struct mboxset_state {
 static int _mboxset_state_mboxlist_cb(const mbentry_t *mbentry, void *rock)
 {
     struct mboxset_state *state = rock;
-    // annoyingly, MBTYPE_EMAIL isn't a flag of its own, it's just the absence of other flags, so we can't
-    // match that one with '&'.
-    if (mbentry->mbtype == MBTYPE_EMAIL || (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
+
+    if (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) {
         hash_insert(mbentry->name, xstrdup(mbentry->uniqueid), state->id_by_imapname);
     }
     return 0;

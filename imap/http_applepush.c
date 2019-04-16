@@ -141,7 +141,7 @@ static int meth_get_applepush(struct transaction_t *txn,
     }
 
     /* mailbox must be calendar or addressbook */
-    mbtype = mbentry->mbtype;
+    mbtype = mbtype_isa(mbentry->mbtype);
     if (mbtype != MBTYPE_CALENDAR && mbtype != MBTYPE_ADDRESSBOOK)
         goto done;
 

@@ -4960,7 +4960,7 @@ EXPORTED int httpd_myrights(struct auth_state *authstate, const mbentry_t *mbent
     if (mbentry && mbentry->acl) {
         rights = cyrus_acl_myrights(authstate, mbentry->acl);
 
-        if (mbentry->mbtype == MBTYPE_CALENDAR &&
+        if (mbtype_isa(mbentry->mbtype) == MBTYPE_CALENDAR &&
             (rights & DACL_READ) == DACL_READ) {
             rights |= DACL_READFB;
         }

@@ -3556,7 +3556,7 @@ static int find_desc_store(annotate_state_t *state,
     }
 
     /* check for DAV annotations */
-    if (state->mailbox && (state->mailbox->mbtype & MBTYPES_DAV) &&
+    if (state->mailbox && mbtypes_dav(state->mailbox->mbtype) &&
         !strncmp(name, DAV_ANNOT_NS, strlen(DAV_ANNOT_NS))) {
         *descp = db_entry;
         return 0;
