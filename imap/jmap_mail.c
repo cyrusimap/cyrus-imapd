@@ -714,7 +714,7 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
     if (r) return r;
 
     // we only want regular mailboxes!
-    if (mbox->mbtype & MBTYPES_NONIMAP) goto done;
+    if (mbtype_isa(mbox->mbtype) != MBTYPE_EMAIL) goto done;
 
     r = msgrecord_find(mbox, rec->uid, &mr);
     if (r) goto done;
@@ -1089,7 +1089,7 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
                rec->mboxname, error_message(r));
         goto done;
     }
-    if (mbox->mbtype != MBTYPE_EMAIL) {
+    if (mbtype_isa(mbox->mbtype) != MBTYPE_EMAIL) {
         goto done;
     }
 
@@ -1236,7 +1236,7 @@ static int _email_is_expunged_cb(const conv_guidrec_t *rec, void *rock)
     r = jmap_openmbox(check->req, rec->mboxname, &mbox, 0);
     if (r) return r;
 
-    if (mbox->mbtype == MBTYPE_EMAIL) {
+    if (mbtype_isa(mbox->mbtype) == MBTYPE_EMAIL) {
         r = msgrecord_find(mbox, rec->uid, &mr);
         if (!r) {
             uint32_t internal_flags;
@@ -1821,7 +1821,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             strarray_t *folders = strarray_new();
             const char *mboxid = json_string_value(val);
             const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
-            if (mbentry && mbentry->mbtype == MBTYPE_EMAIL &&
+            if (mbentry && mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL &&
                     jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
                 strarray_append(folders, mbentry->name);
             }
@@ -1844,7 +1844,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             json_array_foreach(val, i, jmboxid) {
                 const char *mboxid = json_string_value(jmboxid);
                 const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
-                if (mbentry && mbentry->mbtype == MBTYPE_EMAIL &&
+                if (mbentry && mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL &&
                         jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
                     strarray_append(folders, mbentry->name);
                 }
@@ -3350,7 +3350,7 @@ static int guidsearch_run(jmap_req_t *req, struct emailsearch *search,
         mbentry_t *mbentry = NULL;
         if (mboxname_isnondeliverymailbox(mboxname, 0) ||
             mboxlist_lookup_allow_all(mboxname, &mbentry, NULL) ||
-            mbentry->mbtype != MBTYPE_EMAIL) {
+            mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
             bv_clear(&gsq->readable_folders, num);
         }
         mboxlist_entry_free(&mbentry);
@@ -4017,7 +4017,7 @@ static int _email_queryargs_parse(jmap_req_t *req,
         int is_valid = 0;
         if (!mboxlist_lookup(addrbookname, &mbentry, NULL)) {
             is_valid = jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP) &&
-                       mbentry->mbtype == MBTYPE_ADDRESSBOOK;
+                mbtype_isa(mbentry->mbtype) == MBTYPE_ADDRESSBOOK;
         }
         mboxlist_entry_free(&mbentry);
         free(addrbookname);
@@ -5689,7 +5689,7 @@ static int _email_get_keywords_cb(const conv_guidrec_t *rec, void *vrock)
     int r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
     if (r) return r;
 
-    if (mbox->mbtype != MBTYPE_EMAIL) goto done;
+    if (mbtype_isa(mbox->mbtype) != MBTYPE_EMAIL) goto done;
 
     r = msgrecord_find(mbox, rec->uid, &mr);
     if (r) goto done;
@@ -7235,7 +7235,7 @@ static int _warmup_mboxcache_cb(const conv_guidrec_t *rec, void* vrock)
     struct mailbox *mbox = NULL;
     int r = jmap_openmbox(rock->req, rec->mboxname, &mbox, /*rw*/0);
     if (!r) {
-        if (mbox->mbtype == MBTYPE_EMAIL) {
+        if (mbtype_isa(mbox->mbtype) == MBTYPE_EMAIL) {
             ptrarray_append(&rock->mboxes, mbox);
         }
         else jmap_closembox(rock->req, &mbox);
@@ -10127,7 +10127,7 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
         if (r) return r;
 
         // we only want regular mailboxes!
-        if (mbentry->mbtype & MBTYPES_NONIMAP) {
+        if (mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL) {
             mboxlist_entry_free(&mbentry);
             return 0;
         }
@@ -12602,7 +12602,7 @@ static int _email_copy_writeprops_cb(const conv_guidrec_t* rec, void* _rock)
 
     /* Overwrite message record */
     int r = jmap_openmbox(rock->req, rec->mboxname, &mbox, /*rw*/1);
-    if (r || mbox->mbtype != MBTYPE_EMAIL) {
+    if (r || mbtype_isa(mbox->mbtype) != MBTYPE_EMAIL) {
         goto done;
     }
     if (!r) r = msgrecord_find(mbox, rec->uid, &mr);

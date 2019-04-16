@@ -2207,7 +2207,7 @@ static int list_cal_cb(const mbentry_t *mbentry, void *rock)
     if (!outboxlen) outboxlen = strlen(SCHED_OUTBOX) - 1;
 
     /* Make sure its a calendar */
-    if (mbentry->mbtype != MBTYPE_CALENDAR) goto done;
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_CALENDAR) goto done;
 
     /* Make sure its readable */
     rights = httpd_myrights(httpd_authstate, mbentry);
@@ -5394,7 +5394,7 @@ static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
         xmlNewChild(node, NULL, BAD_CAST "collection", NULL);
 
         if (fctx->req_tgt->collection &&
-            fctx->mbentry->mbtype == MBTYPE_CALENDAR) {
+            mbtype_isa(fctx->mbentry->mbtype) == MBTYPE_CALENDAR) {
             ensure_ns(fctx->ns, NS_CALDAV,
                       resp ? resp->parent : node->parent, XML_NS_CALDAV, "C");
             if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {

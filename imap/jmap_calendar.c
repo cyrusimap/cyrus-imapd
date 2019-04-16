@@ -260,7 +260,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     int r = 0;
 
     /* Only calendars... */
-    if (!(mbentry->mbtype & MBTYPE_CALENDAR)) return 0;
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_CALENDAR) return 0;
 
     /* ...which are at least readable or visible... */
     if (!jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS))

@@ -1051,7 +1051,7 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
 
 #ifdef WITH_DAV
     /* add caldav items */
-    if ((mailbox->mbtype & (MBTYPES_DAV)) &&
+    if (mbtypes_dav(mailbox->mbtype) &&
         (mboxevent_expected_param(event->type, EVENT_DAV_FILENAME) ||
          mboxevent_expected_param(event->type, EVENT_DAV_UID))) {
         const char *resource = NULL;
@@ -1074,14 +1074,16 @@ EXPORTED void mboxevent_extract_record(struct mboxevent *event, struct mailbox *
         }
 
         if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
-            if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
+            unsigned mbtype = mbtype_isa(mailbox->mbtype);
+
+            if (mbtype == MBTYPE_ADDRESSBOOK) {
                 struct carddav_db *carddavdb = NULL;
                 struct carddav_data *cdata = NULL;
                 carddavdb = mailbox_open_carddav(mailbox);
                 carddav_lookup_resource(carddavdb, mailbox->name, resource, &cdata, 1);
                 FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->vcard_uid));
             }
-            else if (mailbox->mbtype & MBTYPE_CALENDAR) {
+            else if (mbtype == MBTYPE_CALENDAR) {
                 struct caldav_db *caldavdb = NULL;
                 struct caldav_data *cdata = NULL;
                 caldavdb = mailbox_open_caldav(mailbox);
@@ -1246,7 +1248,7 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
     r = msgrecord_get_mailbox(msgrec, &mailbox);
     if (r) return;
 
-    if ((mailbox->mbtype & (MBTYPES_DAV)) &&
+    if (mbtypes_dav(mailbox->mbtype) &&
         (mboxevent_expected_param(event->type, EVENT_DAV_FILENAME) ||
          mboxevent_expected_param(event->type, EVENT_DAV_UID))) {
         const char *resource = NULL;
@@ -1271,14 +1273,16 @@ EXPORTED void mboxevent_extract_msgrecord(struct mboxevent *event, msgrecord_t *
         }
 
         if (mboxevent_expected_param(event->type, EVENT_DAV_UID)) {
-            if (mailbox->mbtype & MBTYPE_ADDRESSBOOK) {
+            unsigned mbtype = mbtype_isa(mailbox->mbtype);
+
+            if (mbtype == MBTYPE_ADDRESSBOOK) {
                 struct carddav_db *carddavdb = NULL;
                 struct carddav_data *cdata = NULL;
                 carddavdb = mailbox_open_carddav(mailbox);
                 carddav_lookup_resource(carddavdb, mailbox->name, resource, &cdata, 1);
                 FILL_STRING_PARAM(event, EVENT_DAV_UID, xstrdup(cdata->vcard_uid));
             }
-            else if (mailbox->mbtype & MBTYPE_CALENDAR) {
+            else if (mbtype == MBTYPE_CALENDAR) {
                 struct caldav_db *caldavdb = NULL;
                 struct caldav_data *cdata = NULL;
                 caldavdb = mailbox_open_caldav(mailbox);
