@@ -56,9 +56,6 @@
 #include "strarray.h"
 #include "util.h"
 
-#define CONV_GUID_KEY_MBOX(rec, mailbox) \
-    (rec->version < 2 ? mailbox->name : mailbox->uniqueid)
-
 #define CONV_FOLDER_KEY_MBOX(state, mailbox) \
     (state->folders_byname ? mailbox->name : mailbox->uniqueid)
 
@@ -253,6 +250,9 @@ extern conv_folder_t *conversation_get_folder(conversation_t *conv,
 extern void conversation_normalise_subject(struct buf *);
 
 /* G record */
+#define conversations_guid_mbox_cmp(guidrec, mbox) \
+    strcmp(guidrec->mailbox,                       \
+           guidrec->version > CONV_GUIDREC_BYNAME_VERSION ? mbox->uniqueid : mbox->name)
 extern int conversations_guid_exists(struct conversations_state *state,
                                      const char *guidrep);
 extern int conversations_guid_foreach(struct conversations_state *state,

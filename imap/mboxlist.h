@@ -101,6 +101,11 @@
 
 #define HOSTNAME_SIZE 512
 
+#define mboxlist_lookup_by_guidrec(guidrec, mbentry, tid)       \
+    (guidrec->version > CONV_GUIDREC_BYNAME_VERSION ?           \
+     mboxlist_lookup_by_uniqueid(rec->mailbox, mbentry, tid) :  \
+     mboxlist_lookup(rec->mailbox, mbentry, tid))
+
 /* each mailbox has the following data */
 struct mboxlist_entry {
     char *name;
