@@ -104,7 +104,7 @@ EXPORTED unsigned client_capa;
 /* Forward declarations */
 static void index_refresh_locked(struct index_state *state);
 static void index_tellexists(struct index_state *state);
-static int index_lock(struct index_state *state);
+static int index_lock(struct index_state *state, int readonly);
 static void index_unlock(struct index_state *state);
 
 struct index_modified_flags {
@@ -393,7 +393,7 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
     struct mboxevent *mboxevent = NULL;
     modseq_t oldmodseq;
 
-    r = index_lock(state);
+    r = index_lock(state, /*readonly*/0);
     if (r) return r;
 
     /* XXX - check if not mailbox->i.deleted count and need_deleted */
@@ -875,7 +875,9 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
 
     if (!state) return 0;
 
-    r = index_lock(state);
+    /* we don't write any records in here, but we want to write the recentuid if
+     * there were new emails delivered... */
+    r = index_lock(state, /*readonly*/0);
 
     /* Check for deleted mailbox  */
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -1165,7 +1167,7 @@ EXPORTED int index_fetch(struct index_state *state,
     int r;
     struct mboxevent *mboxevent = NULL;
 
-    r = index_lock(state);
+    r = index_lock(state, /*readonly*/0);  // can't be readonly because of FETCH_SETSEEN
     if (r) return r;
 
     seq = _parse_sequence(state, sequence, usinguid);
@@ -1251,7 +1253,7 @@ EXPORTED int index_store(struct index_state *state, char *sequence,
         return IMAP_PERMISSION_DENIED;
     }
 
-    r = index_lock(state);
+    r = index_lock(state, /*readonly*/0);
     if (r) return r;
 
     mailbox = state->mailbox;
@@ -1443,7 +1445,7 @@ EXPORTED int index_run_annotator(struct index_state *state,
     if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT))
         return 0;
 
-    r = index_lock(state);
+    r = index_lock(state, /*readonly*/0);
     if (r) return r;
 
     r = append_setup_mbox(&as, state->mailbox,
@@ -1747,12 +1749,12 @@ out:
     return n;
 }
 
-static int index_lock(struct index_state *state)
+static int index_lock(struct index_state *state, int readonly)
 {
     int r;
 
     if (state->mailbox) {
-        if (state->examining) {
+        if (state->examining || readonly) {
             r = mailbox_lock_index(state->mailbox, LOCK_SHARED);
             if (r) return r;
         }
@@ -1762,7 +1764,7 @@ static int index_lock(struct index_state *state)
         }
     }
     else {
-        if (state->examining) {
+        if (state->examining || readonly) {
             r = mailbox_open_irl(state->mboxname, &state->mailbox);
             if (r) return r;
         }
@@ -1788,7 +1790,7 @@ static int index_lock(struct index_state *state)
 
 EXPORTED int index_status(struct index_state *state, struct statusdata *sdata)
 {
-    int r = index_lock(state);
+    int r = index_lock(state, /*readonly*/1);
     if (r) return r;
 
     status_fill_mailbox(state->mailbox, sdata);
@@ -1802,7 +1804,7 @@ EXPORTED int index_refresh(struct index_state *state)
 {
     int r;
 
-    r = index_lock(state);  /* calls index_refresh_locked */
+    r = index_lock(state, /*readonly*/1);  /* calls index_refresh_locked */
     if (r) return r;
     index_unlock(state);
     return 0;
@@ -1810,8 +1812,9 @@ EXPORTED int index_refresh(struct index_state *state)
 
 static void index_unlock(struct index_state *state)
 {
-    /* XXX - errors */
-    index_writeseen(state);
+    // only update seen if we've got a writelocked mailbox
+    if (mailbox_index_islocked(state->mailbox, 1))
+        index_writeseen(state);  // XXX: errors?
 
     /* grab the latest modseq */
     state->highestmodseq = state->mailbox->i.highestmodseq;
@@ -4479,7 +4482,7 @@ EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
     struct body *top = NULL, *body = NULL;
     size_t section_offset, section_size;
 
-    r = index_lock(state);
+    r = index_lock(state, /*readonly*/1); // XXX: do we need to stay locked for this entire function?
     if (r) return r;
 
     struct mailbox *mailbox = state->mailbox;
