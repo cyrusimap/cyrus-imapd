@@ -3978,9 +3978,7 @@ static int fetch_mailbox_cb(const conv_guidrec_t *rec, void *rock)
     }
 
     /* make sure we have appropriate rights */
-    r = (rec->version > CONV_GUIDREC_BYNAME_VERSION) ?
-        mboxlist_lookup_by_uniqueid(rec->mailbox, &mbentry, NULL) :
-        mboxlist_lookup(rec->mailbox, &mbentry, NULL);
+    r = mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
     if (r) goto done;
     myrights = cyrus_acl_myrights(fmb_rock->state->authstate, mbentry->acl);
     if ((myrights & needrights) != needrights)

@@ -1460,7 +1460,7 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
     xapian_builder_t *bb = rock;
 
     if (!(bb->opts & SEARCH_MULTIPLE)) {
-        if (strcmp(rec->mailbox, CONV_GUID_KEY_MBOX(rec, bb->mailbox)))
+        if (conversations_guid_mbox_cmp(rec, bb->mailbox))
             return 0;
     }
 
@@ -2451,7 +2451,7 @@ static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
     }
 
     /* Is this GUID record in the mailbox we are currently indexing? */
-    if (!strcmp(CONV_GUID_KEY_MBOX(rec, tr->super.mailbox), rec->mailbox)) {
+    if (!conversations_guid_mbox_cmp(rec, tr->super.mailbox)) {
         if (seqset_ismember(tr->indexed, rec->uid) ||
             seqset_ismember(tr->oldindexed, rec->uid)) {
             return CYRUSDB_DONE;
@@ -2470,9 +2470,7 @@ static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
     seq = seqset_init(0, SEQ_MERGE);
     int r = 0;
 
-    r = (rec->version > CONV_GUIDREC_BYNAME_VERSION) ?
-        mboxlist_lookup_by_uniqueid(rec->mailbox, &mb, NULL) :
-        mboxlist_lookup(rec->mailbox, &mb, NULL);
+    r = mboxlist_lookup_by_guidrec(rec, &mb, NULL);
     if (r) {
         syslog(LOG_ERR, "is_indexed_cb: mboxlist_lookup %s failed: %s",
                 rec->mailbox, error_message(r));
