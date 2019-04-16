@@ -295,7 +295,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
 
     signals_poll();
 
-    switch (mbentry->mbtype) {
+    switch (mbtype_isa(mbentry->mbtype)) {
 #ifdef WITH_DAV
     case MBTYPE_CALENDAR:
     case MBTYPE_COLLECTION:
@@ -304,7 +304,7 @@ static int _dav_reconstruct_mb(const mbentry_t *mbentry,
         break;
 #endif
 #ifdef WITH_JMAP
-    case MBTYPE_SUBMISSION:
+    case MBTYPE_JMAPSUBMIT:
         addproc = &mailbox_add_email_alarms;
         break;
 

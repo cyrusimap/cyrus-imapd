@@ -2199,7 +2199,7 @@ static int conversations_set_guid(struct conversations_state *state,
                               record->internaldate, body, base, add);
 
 #ifdef WITH_DAV
-    if (!r && (mailbox->mbtype == MBTYPE_ADDRESSBOOK) &&
+    if (!r && mbtype_isa(mailbox->mbtype) == MBTYPE_ADDRESSBOOK &&
         !strcmp(body->type, "TEXT") && !strcmp(body->subtype, "VCARD")) {
 
         struct vparse_card *vcard = record_to_vcard(mailbox, record);

@@ -331,11 +331,11 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
                                                     state->userid);
     }
 
-    if (state->mailbox->mbtype & MBTYPES_NONIMAP) {
+    if (mbtype_isa(state->mailbox->mbtype) != MBTYPE_EMAIL) {
         if (state->want_dav) {
             /* User logged in using imapmagicplus token "dav" */
         }
-        else if (state->mailbox->mbtype == state->want_mbtype) {
+        else if (mbtype_isa(state->mailbox->mbtype) == state->want_mbtype) {
             /* Caller explicitly asks for this NONIMAP type */
         }
         else {

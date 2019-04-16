@@ -1401,7 +1401,7 @@ static void database_log(const struct mbent *mb, struct txn **mytid)
         break;
 
     case SET_RESERVE:
-        mbentry->mbtype = MBTYPE_RESERVE;
+        mbentry->mbtype |= MBTYPE_RESERVE;
         mboxlist_insertremote(mbentry, mytid);
         break;
 
@@ -2382,7 +2382,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
                 } else {
                     mbentry_t *mbentry = mboxlist_entry_create();
                     mbentry->name = xstrdupnull(r->mailbox);
-                    mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
+                    mbentry->mbtype |= (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
                     mbentry->server = xstrdupnull(r->location);
 
                     c = strchr(mbentry->server, '!');
@@ -2426,7 +2426,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
             /* Remote without corresponding local, insert it */
             mbentry_t *mbentry = mboxlist_entry_create();
             mbentry->name = xstrdupnull(r->mailbox);
-            mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
+            mbentry->mbtype |= (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
             mbentry->server = xstrdupnull(r->location);
 
             c = strchr(mbentry->server, '!');
@@ -2461,7 +2461,7 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
         while (r) {
             mbentry_t *mbentry = mboxlist_entry_create();
             mbentry->name = xstrdupnull(r->mailbox);
-            mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
+            mbentry->mbtype |= (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
             mbentry->server = xstrdupnull(r->location);
 
             c = strchr(mbentry->server, '!');

@@ -925,7 +925,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
             r = annotate_state_writemask(astate, annot,
                                          txn->req_tgt.userid, &value);
 
-            if (shared->mbtype == MBTYPE_CALENDAR) {
+            if (mbtype_isa(shared->mbtype) == MBTYPE_CALENDAR) {
                 /* Sharee's copy of calendar SHOULD default to transparent */
                 annot =
                     DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
