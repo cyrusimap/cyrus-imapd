@@ -281,9 +281,12 @@ static void remove_listitem(struct mailboxlist *remitem)
 EXPORTED const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
 {
     static char fnamebuf[MAX_MAILBOX_PATH];
+    uint32_t legacy_dirs = (mailbox->mbtype & MBTYPE_LEGACY_DIRS);
     const char *src;
 
-    src = mboxname_metapath(mailbox->part, mailbox->name, mailbox->uniqueid, metafile, 0);
+    src = mboxname_metapath(mailbox->part, mailbox->name,
+                            legacy_dirs ? NULL : mailbox->uniqueid,
+                            metafile, 0);
     if (!src) return NULL;
 
     xstrncpy(fnamebuf, src, MAX_MAILBOX_PATH);
@@ -293,9 +296,12 @@ EXPORTED const char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
 EXPORTED const char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile)
 {
     static char fnamebuf[MAX_MAILBOX_PATH];
+    uint32_t legacy_dirs = (mailbox->mbtype & MBTYPE_LEGACY_DIRS);
     const char *src;
 
-    src = mboxname_metapath(mailbox->part, mailbox->name, mailbox->uniqueid, metafile, 1);
+    src = mboxname_metapath(mailbox->part, mailbox->name,
+                            legacy_dirs ? NULL : mailbox->uniqueid,
+                            metafile, 1);
     if (!src) return NULL;
 
     xstrncpy(fnamebuf, src, MAX_MAILBOX_PATH);
@@ -315,12 +321,18 @@ EXPORTED int mailbox_meta_rename(struct mailbox *mailbox, int metafile)
 
 static const char *mailbox_spool_fname(struct mailbox *mailbox, uint32_t uid)
 {
-    return mboxname_datapath(mailbox->part, mailbox->name, mailbox->uniqueid, uid);
+    uint32_t legacy_dirs = (mailbox->mbtype & MBTYPE_LEGACY_DIRS);
+    return mboxname_datapath(mailbox->part, mailbox->name,
+                             legacy_dirs ? NULL : mailbox->uniqueid,
+                             uid);
 }
 
 static const char *mailbox_archive_fname(struct mailbox *mailbox, uint32_t uid)
 {
-    return mboxname_archivepath(mailbox->part, mailbox->name, mailbox->uniqueid, uid);
+    uint32_t legacy_dirs = (mailbox->mbtype & MBTYPE_LEGACY_DIRS);
+    return mboxname_archivepath(mailbox->part, mailbox->name,
+                                legacy_dirs ? NULL : mailbox->uniqueid,
+                                uid);
 }
 
 EXPORTED const char *mailbox_record_fname(struct mailbox *mailbox,
@@ -340,9 +352,12 @@ EXPORTED const char *mailbox_record_fname(struct mailbox *mailbox,
 EXPORTED const char *mailbox_datapath(struct mailbox *mailbox, uint32_t uid)
 {
     static char localbuf[MAX_MAILBOX_PATH];
+    uint32_t legacy_dirs = (mailbox->mbtype & MBTYPE_LEGACY_DIRS);
     const char *src;
 
-    src = mboxname_datapath(mailbox->part, mailbox->name, mailbox->uniqueid, uid);
+    src = mboxname_datapath(mailbox->part, mailbox->name,
+                            legacy_dirs ? NULL : mailbox->uniqueid,
+                            uid);
     if (!src) return NULL;
 
     xstrncpy(localbuf, src, MAX_MAILBOX_PATH);
@@ -1234,7 +1249,9 @@ EXPORTED void mailbox_close(struct mailbox **mailboxptr)
         if (!r) {
             /* finish cleaning up */
             if (mailbox->i.options & OPT_MAILBOX_DELETED)
-                mailbox_delete_cleanup(mailbox, mailbox->part, mailbox->name, mailbox->uniqueid);
+                mailbox_delete_cleanup(mailbox, mailbox->part, mailbox->name,
+                                       (mailbox->mbtype & MBTYPE_LEGACY_DIRS) ?
+                                       NULL : mailbox->uniqueid);
             else if (mailbox->i.options & OPT_MAILBOX_NEEDS_REPACK)
 
                 mailbox_index_repack(mailbox, mailbox->i.minor_version);
@@ -5914,6 +5931,7 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
                                 const char *newname, const char *newuniqueid)
 {
     char oldbuf[MAX_MAILBOX_PATH], newbuf[MAX_MAILBOX_PATH];
+    uint32_t legacy_dirs = (mailbox->mbtype & MBTYPE_LEGACY_DIRS);
     struct meta_file *mf;
     const message_t *msg;
     int r = 0;
@@ -5929,7 +5947,9 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 
         xstrncpy(oldbuf, mailbox_meta_fname(mailbox, mf->metaflag),
                 MAX_MAILBOX_PATH);
-        xstrncpy(newbuf, mboxname_metapath(newpart, newname, newuniqueid, mf->metaflag, 0),
+        xstrncpy(newbuf, mboxname_metapath(newpart, newname,
+                                           legacy_dirs ? NULL : newuniqueid,
+                                           mf->metaflag, 0),
                 MAX_MAILBOX_PATH);
 
         unlink(newbuf); /* Make link() possible */
@@ -6164,7 +6184,9 @@ fail:
     /* first unlock so we don't need to write anything new down */
     mailbox_unlock_index(newmailbox, NULL);
     /* then remove all the files */
-    mailbox_delete_cleanup(NULL, newmailbox->part, newmailbox->name, newmailbox->uniqueid);
+    mailbox_delete_cleanup(NULL, newmailbox->part, newmailbox->name,
+                           (newmailbox->mbtype & MBTYPE_LEGACY_DIRS) ?
+                           NULL : newmailbox->uniqueid);
     /* and finally, abort */
     mailbox_abort(newmailbox);
     mailbox_close(&newmailbox);
