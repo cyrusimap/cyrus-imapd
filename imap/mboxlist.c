@@ -223,6 +223,8 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
         buf_putc(&buf, 'z');
     if (mbtype & MBTYPE_INTERMEDIATE)
         buf_putc(&buf, 'i');
+    if (mbtype & MBTYPE_LEGACY_DIRS)
+        buf_putc(&buf, 'l');
 
     /* make sure we didn't forget to set a character for every interesting bit */
     assert(buf_len(&buf));
