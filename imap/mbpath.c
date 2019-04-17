@@ -322,17 +322,17 @@ int main(int argc, char **argv)
             }
             else {
                 if (doall || doA) {
-                    const char *path = mboxname_archivepath(mbentry->partition, mbentry->name, mbentry->uniqueid, 0);
+                    const char *path = mbentry_archivepath(mbentry, 0);
                     if (doall) printf("Archive: ");
                     printf("%s\n", path);
                 }
                 if (doall || doD) {
-                    const char *path = mboxname_datapath(mbentry->partition, mbentry->name, mbentry->uniqueid, 0);
+                    const char *path = mbentry_datapath(mbentry, 0);
                     if (doall) printf("Data: ");
                     printf("%s\n", path);
                 }
                 if (doall || doM) {
-                    const char *path = mboxname_metapath(mbentry->partition, mbentry->name, mbentry->uniqueid, 0, 0);
+                    const char *path = mbentry_metapath(mbentry, 0, 0);
                     if (doall) printf("Meta: ");
                     printf("%s\n", path);
                 }
