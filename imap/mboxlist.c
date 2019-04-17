@@ -1514,7 +1514,7 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
 
         if (!partition) {
             mboxlist_entry_free(&mbentry);
-            mboxlist_findparent(mboxname, &mbentry);
+            mboxlist_findparent_allow_all(mboxname, &mbentry);
             partition = xstrdupnull(mbentry->partition);
         }
 
