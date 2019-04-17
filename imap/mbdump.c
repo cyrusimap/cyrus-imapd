@@ -1161,7 +1161,7 @@ EXPORTED int undump_mailbox(const char *mbname,
                 if (!parseuint32(file.s, &ptr, &uid)) {
                     /* is it really a data file? */
                     if (ptr && ptr[0] == '.' && ptr[1] == '\0')
-                        path = mboxname_datapath(mailbox->part, mailbox->name, mailbox->uniqueid, uid);
+                        path = mailbox_datapath(mailbox, uid);
                 }
             }
             if (!path) {

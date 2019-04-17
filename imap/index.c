@@ -1581,7 +1581,7 @@ EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
     int r = 0;
 
     if (warmup_flags & WARMUP_INDEX) {
-        fname = mboxname_metapath(mbentry->partition, mbentry->name, mbentry->uniqueid, META_INDEX, 0);
+        fname = mbentry_metapath(mbentry, META_INDEX, 0);
         r = warmup_file(fname, 0, 0);
         if (r) goto out;
     }
@@ -1593,7 +1593,7 @@ EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
         }
     }
     if (warmup_flags & WARMUP_ANNOTATIONS) {
-        fname = mboxname_metapath(mbentry->partition, mbentry->name, mbentry->uniqueid, META_ANNOTATIONS, 0);
+        fname = mbentry_metapath(mbentry, META_ANNOTATIONS, 0);
         r = warmup_file(fname, 0, 0);
         if (r) goto out;
     }
@@ -1608,7 +1608,7 @@ EXPORTED int index_warmup(struct mboxlist_entry *mbentry,
         }
     }
     while ((uid = seqset_getnext(uids))) {
-        fname = mboxname_datapath(mbentry->partition, mbentry->name, mbentry->uniqueid, uid);
+        fname = mbentry_datapath(mbentry, uid);
         r = warmup_file(fname, 0, 0);
         if (r) goto out;
     }

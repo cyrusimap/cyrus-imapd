@@ -138,6 +138,7 @@ mbentry_t *mboxlist_entry_create();
 
 char *mbentry_metapath(const struct mboxlist_entry *mbentry, int metatype, int isnew);
 char *mbentry_datapath(const struct mboxlist_entry *mbentry, uint32_t);
+char *mbentry_archivepath(const struct mboxlist_entry *mbentry, uint32_t);
 
 mbentry_t *mboxlist_entry_copy(const mbentry_t *src);
 
