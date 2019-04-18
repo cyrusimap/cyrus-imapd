@@ -5565,6 +5565,18 @@ static void mailbox_delete_files(const char *path)
     }
 }
 
+/* Callback for use by cmd_delete */
+static int chkchildren(const mbentry_t *mbentry,
+                       void *rock)
+{
+    const char *part = (const char *)rock;
+
+    if (!strcmpnull(part, mbentry->partition))
+        return CYRUSDB_DONE;
+
+    return 0;
+}
+
 #ifdef WITH_DAV
 EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
 {
@@ -5887,7 +5899,13 @@ HIDDEN int mailbox_delete_cleanup(struct mailbox *mailbox, const char *part, con
     }
 
     do {
-        /* remove the directories */
+        if (!uniqueid) {
+            /* paths by mboxname - Check if the mailbox has children */
+            r = mboxlist_mboxtree(nbuf, chkchildren, (void *)part, MBOXTREE_SKIP_ROOT);
+            if (r != 0) break; /* We short-circuit with CYRUSDB_DONE */
+        }
+
+        /* no children, remove the directories */
         for (i = 0; i < paths.count; i++) {
             char *path = paths.data[i]; /* need direct reference, because we're fiddling */
             r = rmdir(path);
