@@ -739,8 +739,8 @@ static void test_normalise(void)
      */
     TESTCASE("(and (le size 123) (match subject \"ETSY\"))",
              "(and (le size 123) (match subject \"ETSY\"))");
-    TESTCASE("(and (not (le size 123)) (match subject \"ETSY\"))",
-             "(and (match subject \"ETSY\") (not (le size 123)))");
+    TESTCASE("(and (match subject \"ETSY\") (not (le size 123)))",
+             "(and (not (le size 123)) (match subject \"ETSY\"))");
     TESTCASE("(and (le size 123) (not (match subject \"ETSY\")))",
              "(and (le size 123) (not (match subject \"ETSY\")))");
 
@@ -751,8 +751,8 @@ static void test_normalise(void)
      */
     TESTCASE("(or (le size 123) (match subject \"ETSY\"))",
              "(or (le size 123) (match subject \"ETSY\"))");
-    TESTCASE("(or (not (le size 123)) (match subject \"ETSY\"))",
-             "(or (match subject \"ETSY\") (not (le size 123)))");
+    TESTCASE("(or (match subject \"ETSY\") (not (le size 123)))",
+             "(or (not (le size 123)) (match subject \"ETSY\"))");
     TESTCASE("(or (le size 123) (not (match subject \"ETSY\")))",
              "(or (le size 123) (not (match subject \"ETSY\")))");
 
@@ -788,11 +788,11 @@ static void test_normalise(void)
                 ")"
                 " "
                 "(and "
-                    "(match subject \"TUMBLR\")"
-                    " "
                     "(not "
                         "(le size 456)"
                     ")"
+                    " "
+                    "(match subject \"TUMBLR\")"
                 ")"
              ")");
 
@@ -1153,14 +1153,14 @@ static void test_split_by_folder_and_index(void)
     TESTCASE("(not (match folder \"INBOX.Cosby.Sweater\"))",
              "(not (match folder \"INBOX.Cosby.Sweater\"))\n");
     TESTCASE("(and (match message-id \"ETSY\") (not (match folder \"INBOX.Cosby.Sweater\")))",
-             "(and (match message-id \"ETSY\") (not (match folder \"INBOX.Cosby.Sweater\")))\n");
+             "(and (not (match folder \"INBOX.Cosby.Sweater\")) (match message-id \"ETSY\"))\n");
 
     /* a conjuctive node which doesn't match folders
      * gets a NULL mboxname */
     TESTCASE("(and (match message-id \"ETSY\") (le size 123))",
              "(and (le size 123) (match message-id \"ETSY\"))\n");
     TESTCASE("(and (match message-id \"ETSY\") (not (le size 123)))",
-             "(and (match message-id \"ETSY\") (not (le size 123)))\n");
+             "(and (not (le size 123)) (match message-id \"ETSY\"))\n");
     TESTCASE("(and (le size 123) (not (match message-id \"ETSY\")))",
              "(and (le size 123) (not (match message-id \"ETSY\")))\n");
 
@@ -1180,7 +1180,7 @@ static void test_split_by_folder_and_index(void)
     TESTCASE("(or (match message-id \"ETSY\") (le size 123))",
              "(or (le size 123) (match message-id \"ETSY\"))\n");
     TESTCASE("(or (match message-id \"ETSY\") (not (le size 123)))",
-             "(or (match message-id \"ETSY\") (not (le size 123)))\n");
+             "(or (not (le size 123)) (match message-id \"ETSY\"))\n");
     TESTCASE("(or (le size 123) (not (match message-id \"ETSY\")))",
              "(or (le size 123) (not (match message-id \"ETSY\")))\n");
 

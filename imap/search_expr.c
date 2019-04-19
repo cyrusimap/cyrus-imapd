@@ -627,17 +627,40 @@ static void setnext(void *p, void *next)
     ((search_expr_t *)p)->next = next;
 }
 
+static int maxcost(const search_expr_t *e, hashu64_table *costcache)
+{
+    if (!e) return 0;
+
+    if (costcache) {
+        intptr_t cost = (intptr_t) hashu64_lookup((uint64_t) e, costcache);
+        assert(cost > INT_MIN && cost < INT_MAX);
+        if (cost) return cost > 0 ? cost : 0;
+    }
+
+    int cost = e->attr ? e->attr->cost : 0;
+    search_expr_t *child;
+    for (child = e->children ; child ; child = child->next) {
+        int childcost = maxcost(child, costcache);
+        if (childcost > cost) cost = childcost;
+    }
+
+    if (costcache) {
+        hashu64_insert((uint64_t) e, (void*)((intptr_t)(cost ? cost : -1)), costcache);
+    }
+    return cost;
+}
+
 static int compare(void *p1, void *p2, void *calldata)
 {
     const search_expr_t *e1 = p1;
     const search_expr_t *e2 = p2;
-    int r;
-
-    r = dnf_depth(e2) - dnf_depth(e1);
+    int r = 0;
 
     if (!r)
-        r = (e1->attr ? e1->attr->cost : 0)
-          - (e2->attr ? e2->attr->cost : 0);
+        r = maxcost(e1, calldata) - maxcost(e2, calldata);
+
+    if (!r)
+        r = dnf_depth(e2) - dnf_depth(e1);
 
     if (!r)
         r = strcasecmp(e1->attr ? e1->attr->name : "zzz",
@@ -668,14 +691,33 @@ static int compare(void *p1, void *p2, void *calldata)
     return r;
 }
 
-static void sort_children(search_expr_t *e)
+static void sort_children_internal(search_expr_t *e, hashu64_table *costcache)
 {
     search_expr_t *child;
 
     for (child = e->children ; child ; child = child->next)
-        sort_children(child);
+        sort_children_internal(child, costcache);
 
-    e->children = lsort(e->children, getnext, setnext, compare, NULL);
+    e->children = lsort(e->children, getnext, setnext, compare, costcache);
+}
+
+static void sort_children(search_expr_t *e)
+{
+    search_expr_t *child;
+    hashu64_table maxcostcache = HASHU64_TABLE_INITIALIZER;
+    construct_hashu64_table(&maxcostcache, 512, 0);
+    hashu64_table *costcache = &maxcostcache;
+
+    if (sizeof(uint64_t) < sizeof(search_expr_t*)) {
+        costcache = NULL; // woot?
+    }
+
+    for (child = e->children ; child ; child = child->next)
+        sort_children_internal(child, costcache);
+
+    e->children = lsort(e->children, getnext, setnext, compare, costcache);
+
+    free_hashu64_table(&maxcostcache, NULL);
 }
 
 /*
