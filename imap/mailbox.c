@@ -5951,7 +5951,6 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
                                 const char *newname, const char *newuniqueid)
 {
     char oldbuf[MAX_MAILBOX_PATH], newbuf[MAX_MAILBOX_PATH];
-    uint32_t legacy_dirs = (mailbox->mbtype & MBTYPE_LEGACY_DIRS);
     struct meta_file *mf;
     const message_t *msg;
     int r = 0;
@@ -5967,9 +5966,7 @@ EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 
         xstrncpy(oldbuf, mailbox_meta_fname(mailbox, mf->metaflag),
                 MAX_MAILBOX_PATH);
-        xstrncpy(newbuf, mboxname_metapath(newpart, newname,
-                                           legacy_dirs ? NULL : newuniqueid,
-                                           mf->metaflag, 0),
+        xstrncpy(newbuf, mboxname_metapath(newpart, newname, newuniqueid, mf->metaflag, 0),
                 MAX_MAILBOX_PATH);
 
         unlink(newbuf); /* Make link() possible */
@@ -6111,7 +6108,8 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     newquotaroot = xstrdupnull(newmailbox->quotaroot);
 
     r = mailbox_copy_files(oldmailbox, newpartition,
-                           newname, newmailbox->uniqueid);
+                           newname, newmailbox->mbtype & MBTYPE_LEGACY_DIRS ?
+                           NULL : newmailbox->uniqueid);
     if (r) goto fail;
 
     /* Re-open index file  */
