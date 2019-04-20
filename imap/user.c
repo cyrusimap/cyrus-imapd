@@ -154,6 +154,7 @@ EXPORTED const char *user_sieve_path(const char *inuser)
 
     mbname_t *mbname = mbname_from_userid(user);
     const char *localpart = mbname_localpart(mbname);
+    int legacy = 0;
 
     if (localpart) {
         /* user script */
@@ -164,6 +165,9 @@ EXPORTED const char *user_sieve_path(const char *inuser)
         free(inboxname);
 
         if (r) sieve_path[0] = '\0';
+        else if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
+            legacy = 1;
+        }
         else {
             mboxname_id_hash(sieve_path, sizeof(sieve_path),
                              config_getstring(IMAPOPT_SIEVEDIR),
@@ -173,6 +177,10 @@ EXPORTED const char *user_sieve_path(const char *inuser)
     }
     else {
         /* global script */
+        legacy = 1;
+    }
+
+    if (legacy) {
         const char *domain = mbname_domain(mbname);
         size_t len, size = sizeof(sieve_path);
 
@@ -184,7 +192,14 @@ EXPORTED const char *user_sieve_path(const char *inuser)
                             FNAME_DOMAINDIR, d, domain);
         }
 
-        strlcat(sieve_path, "/global", size);
+        if (localpart) {
+            const char *userid = config_virtdomains ? localpart : user;
+            char c = (char) dir_hash_c(userid, config_fulldirhash);
+            snprintf(sieve_path + len, size - len, "/%c/%s", c, userid);
+        }
+        else {
+            strlcat(sieve_path, "/global", size);
+        }
     }
 
     mbname_free(&mbname);

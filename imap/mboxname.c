@@ -2199,7 +2199,7 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
         int r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
         free(mboxname);
 
-        if (!r) {
+        if (!r && !(mbentry->mbtype & MBTYPE_LEGACY_DIRS)) {
             char path[MAX_MAILBOX_PATH+1];
 
             mboxname_id_hash(path, MAX_MAILBOX_PATH, NULL, mbentry->uniqueid);

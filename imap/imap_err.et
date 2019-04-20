@@ -209,6 +209,9 @@ ec IMAP_ANONYMOUS_NOT_PERMITTED,
 ec IMAP_UNSUPPORTED_QUOTA,
    "Unsupported quota resource"
 
+ec IMAP_USER_LEGACY_DIRS,
+   "User is using legacy mailbox directories.  Reconstruct user first."
+
 # Following used only for SASL operations
 
 ec IMAP_SASL_FAIL,
