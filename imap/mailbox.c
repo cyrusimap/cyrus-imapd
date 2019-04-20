@@ -5434,7 +5434,7 @@ EXPORTED int mailbox_create(const char *name,
         mbentry_t mbentry;
 
         memset(&mbentry, 0, sizeof(mbentry_t));
-        mbentry.mbtype = MBTYPE_INTERMEDIATE;
+        mbentry.mbtype = mbtype | MBTYPE_INTERMEDIATE;
         mbentry.name = mailbox->name;
         mbentry.uniqueid = mailbox->uniqueid;
         r = mboxlist_update(&mbentry, 1 /* localonly */);
