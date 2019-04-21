@@ -984,6 +984,7 @@ static void findaccounts_add(struct findaccounts_data *ctx)
     if (ctx->has_mail) {
         json_array_append_new(has_data_for, json_string(JMAP_URN_MAIL));
         json_array_append_new(has_data_for, json_string(JMAP_URN_SUBMISSION));
+        json_array_append_new(has_data_for, json_string(JMAP_URN_VACATION));
     }
     if (ctx->has_contacts)
         json_array_append_new(has_data_for, json_string(JMAP_URN_CONTACTS));

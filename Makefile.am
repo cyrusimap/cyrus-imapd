@@ -1267,6 +1267,8 @@ imap_httpd_SOURCES = \
 	master/masterconf.c \
 	master/service.c
 
+imap_httpd_LDADD = $(LD_SERVER_ADD)
+
 if JMAP
 imap_httpd_SOURCES += \
 	imap/http_jmap.c \
@@ -1285,6 +1287,8 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/jmap_util.c \
 	jmap/jmap_util.h
 
+imap_httpd_LDADD += $(LD_SIEVE_ADD)
+
 if CUNIT
 
 cunit_TESTS += cunit/jmap_util.testc
@@ -1292,8 +1296,6 @@ cunit_TESTS += cunit/jmap_util.testc
 endif # CUNIT
 
 endif # JMAP
-
-imap_httpd_LDADD = $(LD_SERVER_ADD)
 
 imap_pop3d_SOURCES = \
 	imap/mutex_fake.c \
