@@ -4339,6 +4339,74 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
         if (!copyrecord.createdmodseq)
             copyrecord.createdmodseq = 1;
 
+        /* virtual annotations */
+        if (mailbox->i.minor_version < 13 && repack->i.minor_version >= 13) {
+            /* extract CID */
+            struct buf annotval = BUF_INITIALIZER;
+            mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "thrid", "", &annotval);
+            if (annotval.len == 16) {
+                const char *p = buf_cstring(&annotval);
+                parsehex(p, &p, 16, &copyrecord.cid);
+            }
+            buf_reset(&annotval);
+            r = mailbox_annotation_write(mailbox, record->uid, IMAP_ANNOT_NS "thrid", "", &annotval);
+            buf_free(&annotval);
+            if (r) goto done;
+        }
+        if (mailbox->i.minor_version >= 13 && repack->i.minor_version < 13) {
+            struct buf annotval = BUF_INITIALIZER;
+            buf_printf(&annotval, "%llx", record->cid);
+            r = mailbox_annotation_write(mailbox, record->uid, IMAP_ANNOT_NS "thrid", "", &annotval);
+            buf_free(&annotval);
+            if (r) goto done;
+        }
+
+        if (mailbox->i.minor_version < 15 && repack->i.minor_version >= 15) {
+            /* extract CID */
+            struct buf annotval = BUF_INITIALIZER;
+            mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "savedate", "", &annotval);
+            if (annotval.len) {
+                const char *p = buf_cstring(&annotval);
+                bit64 newval;
+                parsenum(p, &p, 0, &newval);
+                copyrecord.savedate = newval;
+            }
+            buf_reset(&annotval);
+            r = mailbox_annotation_write(mailbox, record->uid, IMAP_ANNOT_NS "savedate", "", &annotval);
+            buf_free(&annotval);
+            if (r) goto done;
+        }
+        if (mailbox->i.minor_version >= 15 && repack->i.minor_version < 15) {
+            struct buf annotval = BUF_INITIALIZER;
+            buf_printf(&annotval, "%lu", record->savedate);
+            r = mailbox_annotation_write(mailbox, record->uid, IMAP_ANNOT_NS "savedate", "", &annotval);
+            buf_free(&annotval);
+            if (r) goto done;
+        }
+
+        if (mailbox->i.minor_version < 16 && repack->i.minor_version >= 16) {
+            /* extract CID */
+            struct buf annotval = BUF_INITIALIZER;
+            mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "createdmodseq", "", &annotval);
+            if (annotval.len) {
+                const char *p = buf_cstring(&annotval);
+                bit64 newval;
+                parsenum(p, &p, 0, &newval);
+                copyrecord.createdmodseq = newval;
+            }
+            buf_reset(&annotval);
+            r = mailbox_annotation_write(mailbox, record->uid, IMAP_ANNOT_NS "createdmodseq", "", &annotval);
+            buf_free(&annotval);
+            if (r) goto done;
+        }
+        if (mailbox->i.minor_version >= 16 && repack->i.minor_version < 16) {
+            struct buf annotval = BUF_INITIALIZER;
+            buf_printf(&annotval, "%llu", record->createdmodseq);
+            r = mailbox_annotation_write(mailbox, record->uid, IMAP_ANNOT_NS "createdmodseq", "", &annotval);
+            buf_free(&annotval);
+            if (r) goto done;
+        }
+
         /* read in the old cache record */
         r = mailbox_cacherecord(mailbox, &copyrecord);
         if (r) goto done;
