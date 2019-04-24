@@ -2030,7 +2030,7 @@ EXPORTED int mailbox_read_basecid(struct mailbox *mailbox, const struct index_re
 
     if (record->internal_flags & FLAG_INTERNAL_SPLITCONVERSATION) {
         struct buf annotval = BUF_INITIALIZER;
-        annotatemore_msg_lookup(mailbox->name, record->uid, IMAP_ANNOT_NS "basethrid", "", &annotval);
+        mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "basethrid", "", &annotval);
         if (annotval.len == 16) {
             const char *p = buf_cstring(&annotval);
             /* we have a new canonical CID */
