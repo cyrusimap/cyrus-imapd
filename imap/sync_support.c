@@ -1484,6 +1484,7 @@ void encode_annotations(struct dlist *parent,
  */
 int decode_annotations(/*const*/struct dlist *annots,
                        struct sync_annot_list **salp,
+                       struct mailbox *mailbox,
                        struct index_record *record)
 {
     struct dlist *aa;
@@ -1507,47 +1508,43 @@ int decode_annotations(/*const*/struct dlist *annots,
             return IMAP_PROTOCOL_BAD_PARAMETERS;
         if (!dlist_getbuf(aa, "VALUE", &value))
             return IMAP_PROTOCOL_BAD_PARAMETERS;
-        if (!strcmp(entry, IMAP_ANNOT_NS "thrid")) {
-            if (record) {
-                const char *p = buf_cstring(&value);
-                parsehex(p, &p, 16, &record->cid);
-                /* XXX - check on p? */
-            }
+        if (!strcmp(entry, IMAP_ANNOT_NS "thrid") &&
+            record && mailbox->i.minor_version >= 13) {
+            const char *p = buf_cstring(&value);
+            parsehex(p, &p, 16, &record->cid);
         }
-        else if (!strcmp(entry, IMAP_ANNOT_NS "savedate")) {
-            if (record) {
-                const char *p = buf_cstring(&value);
-                bit64 newval;
-                parsenum(p, &p, 0, &newval);
-                record->savedate = newval;
-            }
+        else if (!strcmp(entry, IMAP_ANNOT_NS "savedate") &&
+                 record && mailbox->i.minor_version >= 15) {
+            const char *p = buf_cstring(&value);
+            bit64 newval;
+            parsenum(p, &p, 0, &newval);
+            record->savedate = newval;
         }
-        else if (!strcmp(entry, IMAP_ANNOT_NS "createdmodseq")) {
-            if (record) {
-                const char *p = buf_cstring(&value);
-                bit64 newval;
-                parsenum(p, &p, 0, &newval);
-                record->createdmodseq = newval;
-            }
+        else if (!strcmp(entry, IMAP_ANNOT_NS "createdmodseq") &&
+                 record && mailbox->i.minor_version >= 16) {
+            const char *p = buf_cstring(&value);
+            bit64 newval;
+            parsenum(p, &p, 0, &newval);
+            record->createdmodseq = newval;
         }
-        else if (record && !strcmp(entry, IMAP_ANNOT_NS "basethrid")) {
-                /* this might double-apply the annotation, but oh well.  It does mean that
-                 * basethrid is paired in here when we do a comparison against new values
-                 * from the replica later! */
-                const char *p = buf_cstring(&value);
-                parsehex(p, &p, 16, &record->basecid);
-                /* XXX - check on p? */
+        else if (!strcmp(entry, IMAP_ANNOT_NS "basethrid") && record) {
+            /* this might double-apply the annotation, but oh well.  It does mean that
+             * basethrid is paired in here when we do a comparison against new values
+             * from the replica later! */
+            const char *p = buf_cstring(&value);
+            parsehex(p, &p, 16, &record->basecid);
+            /* XXX - check on p? */
 
-                /* "basethrid" is special, since it is written during mailbox
-                 * appends and rewrites, using whatever modseq the index_record
-                 * has at this moment. This might differ from the modseq we
-                 * just parsed here, causing master and replica annotations
-                 * to get out of sync.
-                 * The fix is to set the basecid field both on the index
-                 * record *and* adding the annotation to the annotation list.
-                 * That way the local modseq of basethrid always gets over-
-                 * written by whoever wins to be master of this annotation */
-                sync_annot_list_add(*salp, entry, userid, &value, modseq);
+            /* "basethrid" is special, since it is written during mailbox
+             * appends and rewrites, using whatever modseq the index_record
+             * has at this moment. This might differ from the modseq we
+             * just parsed here, causing master and replica annotations
+             * to get out of sync.
+             * The fix is to set the basecid field both on the index
+             * record *and* adding the annotation to the annotation list.
+             * That way the local modseq of basethrid always gets over-
+             * written by whoever wins to be master of this annotation */
+            sync_annot_list_add(*salp, entry, userid, &value, modseq);
         }
         else {
             sync_annot_list_add(*salp, entry, userid, &value, modseq);
@@ -1803,7 +1800,7 @@ int parse_upload(struct dlist *kr, struct mailbox *mailbox,
 
     /* the ANNOTATIONS list is optional too */
     if (salp && dlist_getlist(kr, "ANNOTATIONS", &fl))
-        r = decode_annotations(fl, salp, record);
+        r = decode_annotations(fl, salp, mailbox, record);
 
     return r;
 }
@@ -2867,7 +2864,7 @@ int sync_apply_mailbox(struct dlist *kin,
     /* take all mailbox (not message) annotations - aka metadata,
      * they're not versioned either */
     if (ka)
-        decode_annotations(ka, &mannots, NULL);
+        decode_annotations(ka, &mannots, mailbox, NULL);
 
     r = read_annotations(mailbox, NULL, &rannots, 0, 0);
     if (!r) r = apply_annotations(mailbox, NULL, rannots, mannots, 0);
@@ -3796,7 +3793,7 @@ int sync_restore_mailbox(struct dlist *kin,
         struct sync_annot_list *restore_annots = NULL;
         struct sync_annot_list *mailbox_annots = NULL;
 
-        r = decode_annotations(ka, &restore_annots, NULL);
+        r = decode_annotations(ka, &restore_annots, mailbox, NULL);
 
         if (!r) r = read_annotations(mailbox, NULL, &mailbox_annots, 0, 0);
 
@@ -4296,7 +4293,7 @@ int sync_response_parse(struct protstream *sync_in, const char *cmd,
             dlist_getnum64(kl, "RACLMODSEQ", &raclmodseq);
 
             if (dlist_getlist(kl, "ANNOTATIONS", &al))
-                decode_annotations(al, &annots, NULL);
+                decode_annotations(al, &annots, NULL, NULL);
 
 
             sync_folder_list_add(folder_list, uniqueid, mboxname,
@@ -5277,7 +5274,7 @@ static int mailbox_full_update(struct sync_folder *local,
     /* ugly variable reuse */
     dlist_getlist(kl, "ANNOTATIONS", &ka);
 
-    if (ka) decode_annotations(ka, &rannots, NULL);
+    if (ka) decode_annotations(ka, &rannots, mailbox, NULL);
     r = read_annotations(mailbox, NULL, &mannots, 0, 0);
     if (r) goto cleanup;
     r = apply_annotations(mailbox, NULL, mannots, rannots,
