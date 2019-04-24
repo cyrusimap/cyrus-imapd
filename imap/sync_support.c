@@ -1423,6 +1423,7 @@ int read_annotations(const struct mailbox *mailbox,
  * structure with the given @parent.
  */
 void encode_annotations(struct dlist *parent,
+                        struct mailbox *mailbox,
                         const struct index_record *record,
                         const struct sync_annot_list *sal)
 {
@@ -1443,7 +1444,7 @@ void encode_annotations(struct dlist *parent,
         }
     }
 
-    if (record && record->cid) {
+    if (record && record->cid && mailbox->i.minor_version >= 13) {
         if (!annots)
             annots = dlist_newlist(parent, "ANNOTATIONS");
         aa = dlist_newkvlist(annots, NULL);
@@ -1453,7 +1454,7 @@ void encode_annotations(struct dlist *parent,
         dlist_sethex64(aa, "VALUE", record->cid);
     }
 
-    if (record && record->savedate) {
+    if (record && record->savedate && mailbox->i.minor_version >= 15) {
         if (!annots)
             annots = dlist_newlist(parent, "ANNOTATIONS");
         aa = dlist_newkvlist(annots, NULL);
@@ -1463,7 +1464,7 @@ void encode_annotations(struct dlist *parent,
         dlist_setnum32(aa, "VALUE", record->savedate);
     }
 
-    if (record && record->createdmodseq) {
+    if (record && record->createdmodseq && mailbox->i.minor_version >= 16) {
         if (!annots)
             annots = dlist_newlist(parent, "ANNOTATIONS");
         aa = dlist_newkvlist(annots, NULL);
@@ -1472,7 +1473,6 @@ void encode_annotations(struct dlist *parent,
         dlist_setnum64(aa, "MODSEQ", 0);
         dlist_setnum64(aa, "VALUE", record->createdmodseq);
     }
-
 }
 
 /*
@@ -1990,7 +1990,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     r = read_annotations(mailbox, NULL, &annots, 0, 0);
     if (r) goto done;
 
-    encode_annotations(kl, NULL, annots);
+    encode_annotations(kl, mailbox, NULL, annots);
     sync_annot_list_free(&annots);
 
     if (printrecords) {
@@ -2053,7 +2053,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
                                 /*XXX ANNOTATE_TOMBSTONES*/0);
             if (r) goto done;
 
-            encode_annotations(il, record, annots);
+            encode_annotations(il, mailbox, record, annots);
             sync_annot_list_free(&annots);
         }
     }
