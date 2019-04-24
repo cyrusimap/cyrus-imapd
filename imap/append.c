@@ -1296,9 +1296,11 @@ HIDDEN int append_run_annotator(struct appendstate *as,
         if (r) goto out;
         r = msgrecord_annot_writeall(msgrec, system_annots);
         if (r) {
+            char *res = dumpentryatt(system_annots);
             syslog(LOG_ERR, "Setting system annotations from annotator "
-                            "callout failed (%s)",
-                            error_message(r));
+                            "callout failed (%s) for %s",
+                            error_message(r), res);
+            free(res);
             goto out;
         }
     }
