@@ -8395,15 +8395,6 @@ int dav_store_resource(struct transaction_t *txn,
                 txn->error.desc = "append_commit() failed\r\n";
             }
             else {
-                /* Read index record for new message (always the last one) */
-                struct index_record newrecord;
-                struct dav_data ddata;
-
-                ddata.alive = 1;
-                ddata.imap_uid = mailbox->i.last_uid;
-                dav_get_validators(mailbox, &ddata, httpd_userid, &newrecord,
-                                   &txn->resp_body.etag, &txn->resp_body.lastmod);
-
                 if (oldrecord) {
                     /* Now that we have the replacement message in place
                        expunge the old one. */
@@ -8424,6 +8415,17 @@ int dav_store_resource(struct transaction_t *txn,
                         txn->error.desc = error_message(r);
                         ret = HTTP_SERVER_ERROR;
                     }
+                }
+
+                if (!r) {
+                    /* Read index record for new message (always the last one) */
+                    struct index_record newrecord;
+                    struct dav_data ddata;
+
+                    ddata.alive = 1;
+                    ddata.imap_uid = mailbox->i.last_uid;
+                    dav_get_validators(mailbox, &ddata, httpd_userid, &newrecord,
+                                       &txn->resp_body.etag, &txn->resp_body.lastmod);
                 }
             }
         }
