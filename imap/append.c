@@ -1299,17 +1299,6 @@ HIDDEN int append_run_annotator(struct appendstate *as,
         goto out;
     }
 
-    if (user_annots) {
-        r = msgrecord_annot_set_auth(msgrec, as->isadmin, as->userid, as->auth_state);
-        if (r) goto out;
-        r = msgrecord_annot_writeall(msgrec, user_annots);
-        if (r) {
-            syslog(LOG_ERR, "Setting user annotations from annotator "
-                            "callout failed (%s)",
-                            error_message(r));
-            goto out;
-        }
-    }
     if (system_annots) {
         /* pretend to be admin to avoid ACL checks */
         r = msgrecord_annot_set_auth(msgrec, /*isadmin*/1, as->userid, as->auth_state);
