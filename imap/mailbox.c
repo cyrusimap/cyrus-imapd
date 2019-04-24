@@ -2914,7 +2914,7 @@ static uint32_t crc_annot(unsigned int uid, const char *entry,
     return res;
 }
 
-static uint32_t crc_virtannot(struct mailbox *mailbox __attribute__((unused)),
+static uint32_t crc_virtannot(struct mailbox *mailbox,
                               const struct index_record *record)
 {
     if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
@@ -2923,19 +2923,19 @@ static uint32_t crc_virtannot(struct mailbox *mailbox __attribute__((unused)),
     uint32_t crc = 0;
     struct buf buf = BUF_INITIALIZER;
 
-    if (record->cid) {
+    if (record->cid && mailbox->i.minor_version >= 13) {
         buf_printf(&buf, "%llx", record->cid);
         crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "thrid", NULL, &buf);
         buf_reset(&buf);
     }
 
-    if (record->savedate) {
+    if (record->savedate && mailbox->i.minor_version >= 15) {
         buf_printf(&buf, "%lu", record->savedate);
         crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "savedate", NULL, &buf);
         buf_reset(&buf);
     }
 
-    if (record->createdmodseq) {
+    if (record->createdmodseq && mailbox->i.minor_version >= 16) {
         buf_printf(&buf, "%llu", record->createdmodseq);
         crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "createdmodseq", NULL, &buf);
         buf_reset(&buf);
