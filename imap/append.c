@@ -1275,15 +1275,6 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     }
     if (r) goto out;
 
-    /* Reset internal flags */
-    uint32_t internal_flags;
-    r = msgrecord_get_internalflags(msgrec, &internal_flags);
-    if (!r) {
-        internal_flags &= (FLAGS_INTERNAL);
-        r = msgrecord_set_internalflags(msgrec, internal_flags);
-    }
-    if (r) goto out;
-
     /* Reset user flags */
     uint32_t user_flags[MAX_USER_FLAGS/32];
     memset(user_flags, 0, sizeof(user_flags));
