@@ -2917,25 +2917,31 @@ static uint32_t crc_annot(unsigned int uid, const char *entry,
 static uint32_t crc_virtannot(struct mailbox *mailbox __attribute__((unused)),
                               const struct index_record *record)
 {
-    uint32_t crc = 0;
-
     if (record->internal_flags & FLAG_INTERNAL_EXPUNGED)
         return 0;
 
+    uint32_t crc = 0;
+    struct buf buf = BUF_INITIALIZER;
+
     if (record->cid) {
-        struct buf buf = BUF_INITIALIZER;
         buf_printf(&buf, "%llx", record->cid);
         crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "thrid", NULL, &buf);
-        buf_free(&buf);
+        buf_reset(&buf);
     }
 
     if (record->savedate) {
-        struct buf buf = BUF_INITIALIZER;
-        buf_printf(&buf, "%llx", record->cid);
+        buf_printf(&buf, "%lu", record->savedate);
         crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "savedate", NULL, &buf);
-        buf_free(&buf);
+        buf_reset(&buf);
     }
 
+    if (record->createdmodseq) {
+        buf_printf(&buf, "%llu", record->createdmodseq);
+        crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "createdmodseq", NULL, &buf);
+        buf_reset(&buf);
+    }
+
+    buf_free(&buf);
     return crc;
 }
 
