@@ -141,6 +141,7 @@ struct mailbox_repack {
     struct mailbox *mailbox;
     struct mailbox newmailbox;
     struct seqset *seqset;
+    struct synccrcs crcs;
     char *userid;
     ptrarray_t caches;
 };
@@ -3994,6 +3995,7 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
 
     /* init */
     repack->mailbox = mailbox;
+    repack->crcs = mailbox->i.synccrcs;
     repack->newmailbox = *mailbox; // struct copy
     repack->newmailbox.index_fd = -1;
 
@@ -4203,12 +4205,12 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
         if (r) goto fail;
     }
 
-    if (repack->newmailbox.i.synccrcs.basic != repack->mailbox->i.synccrcs.basic ||
-        repack->newmailbox.i.synccrcs.annot != repack->mailbox->i.synccrcs.annot) {
+    if (repack->newmailbox.i.synccrcs.basic != repack->crcs.basic ||
+        repack->newmailbox.i.synccrcs.annot != repack->crcs.annot) {
         syslog(LOG_ERR, "IOERROR: CRC mismatch on repack commit: %s (%u %u) (%u %u)",
                repack->mailbox->name,
-               repack->mailbox->i.synccrcs.basic, repack->newmailbox.i.synccrcs.basic,
-               repack->mailbox->i.synccrcs.annot, repack->newmailbox.i.synccrcs.annot);
+               repack->crcs.basic, repack->newmailbox.i.synccrcs.basic,
+               repack->crcs.annot, repack->newmailbox.i.synccrcs.annot);
         r = IMAP_MAILBOX_CHECKSUM;
         goto fail;
     }
