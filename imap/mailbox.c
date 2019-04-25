@@ -4179,6 +4179,10 @@ static void mailbox_repack_abort(struct mailbox_repack **repackptr)
         map_free(&repack->newmailbox.index_base, &repack->newmailbox.index_len);
     }
 
+    if (repack->mailbox->annot_state) {
+        annotate_state_abort(&repack->mailbox->annot_state);
+    }
+
     free(repack->userid);
     free(repack);
     *repackptr = NULL;
@@ -4312,6 +4316,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
     struct mailbox_repack *repack = NULL;
     const message_t *msg;
     struct mailbox_iter *iter = NULL;
+    struct buf buf = BUF_INITIALIZER;
     int r = IMAP_IOERROR;
 
     syslog(LOG_INFO, "Repacking mailbox %s version %d", mailbox->name, version);
@@ -4379,75 +4384,72 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
             }
         }
 
-        if (!copyrecord.createdmodseq)
-            copyrecord.createdmodseq = 1;
-
         /* virtual annotations */
         if (mailbox->i.minor_version < 13 && repack->newmailbox.i.minor_version >= 13) {
             /* extract CID */
-            struct buf annotval = BUF_INITIALIZER;
-            mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "thrid", "", &annotval);
-            if (annotval.len == 16) {
-                const char *p = buf_cstring(&annotval);
+            buf_reset(&buf);
+            mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "thrid", "", &buf);
+            if (buf.len == 16) {
+                const char *p = buf_cstring(&buf);
                 parsehex(p, &p, 16, &copyrecord.cid);
             }
-            buf_reset(&annotval);
-            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "thrid", "", &annotval);
-            buf_free(&annotval);
+            buf_reset(&buf);
+            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "thrid", "", &buf);
             if (r) goto done;
         }
         if (mailbox->i.minor_version >= 13 && repack->newmailbox.i.minor_version < 13) {
-            struct buf annotval = BUF_INITIALIZER;
-            buf_printf(&annotval, "%llx", record->cid);
-            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "thrid", "", &annotval);
-            buf_free(&annotval);
-            if (r) goto done;
+            if (record->cid) {
+                buf_reset(&buf);
+                buf_printf(&buf, "%llx", record->cid);
+                r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "thrid", "", &buf);
+                if (r) goto done;
+            }
         }
 
         if (mailbox->i.minor_version < 15 && repack->newmailbox.i.minor_version >= 15) {
             /* extract CID */
-            struct buf annotval = BUF_INITIALIZER;
-            mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "savedate", "", &annotval);
-            if (annotval.len) {
-                const char *p = buf_cstring(&annotval);
+            buf_reset(&buf);
+            mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "savedate", "", &buf);
+            if (buf.len) {
+                const char *p = buf_cstring(&buf);
                 bit64 newval;
                 parsenum(p, &p, 0, &newval);
                 copyrecord.savedate = newval;
             }
-            buf_reset(&annotval);
-            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "savedate", "", &annotval);
-            buf_free(&annotval);
+            buf_reset(&buf);
+            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "savedate", "", &buf);
             if (r) goto done;
         }
         if (mailbox->i.minor_version >= 15 && repack->newmailbox.i.minor_version < 15) {
-            struct buf annotval = BUF_INITIALIZER;
-            buf_printf(&annotval, "%lu", record->savedate);
-            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "savedate", "", &annotval);
-            buf_free(&annotval);
-            if (r) goto done;
+            if (record->savedate) {
+                buf_reset(&buf);
+                buf_printf(&buf, "%lu", record->savedate);
+                r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "savedate", "", &buf);
+                if (r) goto done;
+            }
         }
 
         if (mailbox->i.minor_version < 16 && repack->newmailbox.i.minor_version >= 16) {
             /* extract CID */
-            struct buf annotval = BUF_INITIALIZER;
-            mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "createdmodseq", "", &annotval);
-            if (annotval.len) {
-                const char *p = buf_cstring(&annotval);
+            buf_reset(&buf);
+            mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "createdmodseq", "", &buf);
+            if (buf.len) {
+                const char *p = buf_cstring(&buf);
                 bit64 newval;
                 parsenum(p, &p, 0, &newval);
                 copyrecord.createdmodseq = newval;
             }
-            buf_reset(&annotval);
-            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "createdmodseq", "", &annotval);
-            buf_free(&annotval);
+            buf_reset(&buf);
+            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "createdmodseq", "", &buf);
             if (r) goto done;
         }
         if (mailbox->i.minor_version >= 16 && repack->newmailbox.i.minor_version < 16) {
-            struct buf annotval = BUF_INITIALIZER;
-            buf_printf(&annotval, "%llu", record->createdmodseq);
-            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "createdmodseq", "", &annotval);
-            buf_free(&annotval);
-            if (r) goto done;
+            if (record->createdmodseq) {
+                buf_reset(&buf);
+                buf_printf(&buf, "%llu", record->createdmodseq);
+                r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "createdmodseq", "", &buf);
+                if (r) goto done;
+            }
         }
 
         /* read in the old cache record */
@@ -4463,6 +4465,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
 
 done:
     mailbox_iter_done(&iter);
+    buf_free(&buf);
     if (r) mailbox_repack_abort(&repack);
     else r = mailbox_repack_commit(&repack);
     return r;

@@ -182,11 +182,11 @@
 
 #define CMD_DBUPGRADEv7                                         \
     "ALTER TABLE ical_objs ADD COLUMN createdmodseq INTEGER;"   \
-    "UPDATE ical_objs SET createdmodseq = 1;"                   \
+    "UPDATE ical_objs SET createdmodseq = 0;"                   \
     "ALTER TABLE vcard_objs ADD COLUMN createdmodseq INTEGER;"  \
-    "UPDATE vcard_objs SET createdmodseq = 1;"                  \
+    "UPDATE vcard_objs SET createdmodseq = 0;"                  \
     "ALTER TABLE dav_objs ADD COLUMN createdmodseq INTEGER;"    \
-    "UPDATE dav_objs SET createdmodseq = 1;"
+    "UPDATE dav_objs SET createdmodseq = 0;"
 
 #define CMD_DBUPGRADEv8                                         \
     "ALTER TABLE vcard_emails ADD COLUMN ispinned INTEGER NOT NULL DEFAULT 0;"
