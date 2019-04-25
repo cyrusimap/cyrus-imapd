@@ -4205,8 +4205,7 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
         if (r) goto fail;
     }
 
-    if (repack->newmailbox.i.synccrcs.basic != repack->crcs.basic ||
-        repack->newmailbox.i.synccrcs.annot != repack->crcs.annot) {
+    if (!mailbox_crceq(repack->newmailbox.i.synccrcs, repack->crcs)) {
         syslog(LOG_ERR, "IOERROR: CRC mismatch on repack commit: %s (%u %u) (%u %u)",
                repack->mailbox->name,
                repack->crcs.basic, repack->newmailbox.i.synccrcs.basic,
