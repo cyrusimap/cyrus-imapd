@@ -4193,6 +4193,7 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
         if (!r) {
             sd.lastuid = repack->i.last_uid;
             sd.seenuids = seqset_cstring(repack->seqset);
+            if (!sd.seenuids) sd.seenuids = xstrdup("");
             sd.lastread = time(NULL);
             sd.lastchange = repack->i.last_appenddate;
             r = seen_write(seendb, repack->mailbox->uniqueid, &sd);
