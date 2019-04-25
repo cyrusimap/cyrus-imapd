@@ -1088,27 +1088,33 @@ EXPORTED int mailbox_setversion(struct mailbox *mailbox, int version)
     if (version && mailbox->i.minor_version != version) {
         /* need to re-set the version! */
         struct mailboxlist *listitem = find_listitem(mailbox->name);
-        int r;
+
         assert(listitem);
+        assert(&listitem->m == mailbox);
 
-        /* release any existing locks */
+        /* we need an exclusive lock on the listitem because we're renaming
+         * index files, so release locks and then go full exclusive */
         mailbox_unlock_index(mailbox, NULL);
+        r = mailbox_mboxlock_reopen(listitem, LOCK_EXCLUSIVE);
 
-        r = mailbox_mboxlock_reopen(listitem, LOCK_NONBLOCKING);
         /* we need to re-open the index because we dropped the mboxname lock,
          * so the file may have changed */
         if (!r) r = mailbox_open_index(mailbox);
+
         /* lock_internal so DELETED doesn't cause it to appear to be
          * NONEXISTENT */
         if (!r) r = mailbox_lock_index_internal(mailbox, LOCK_EXCLUSIVE);
+
+        /* perform the actual repack! */
         if (!r) r = mailbox_index_repack(mailbox, version);
 
-        /* and let's just update the counts too */
+        /* NOTE: this leaves the mailbox in an unlocked state internally, so
+         * let's release all the acutal locks */
         mailbox_unlock_index(mailbox, NULL);
-        if (!r) r = mailbox_mboxlock_reopen(listitem, LOCK_EXCLUSIVE);
-        if (!r) r = mailbox_open_index(mailbox);
-        if (!r) r = mailbox_lock_index_internal(mailbox, LOCK_EXCLUSIVE);
-        if (!r) r = mailbox_index_recalc(mailbox);
+
+        /* we're also still holding an exclusive namelock in the listitem,
+         * but that's OK because the only caller will be calling mailbox_close
+         * immediately afterwards */
     }
 
     return r;
