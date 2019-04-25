@@ -44,7 +44,7 @@ use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.03;
-use Mail::JMAPTalk 0.12;
+use Mail::JMAPTalk 0.13;
 use Data::Dumper;
 use Storable 'dclone';
 use Cwd qw(abs_path);
@@ -78,6 +78,10 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
+    $self->{jmap}->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
 }
 
 sub test_calendar_get
@@ -920,10 +924,10 @@ sub normalize_event
     if (not exists $event->{prodId}) {
         $event->{prodId} = undef;
     }
-    if (not exists $event->{attachments}) {
-        $event->{attachments} = undef;
-    } elsif (defined $event->{attachments}) {
-        foreach my $att (values %{$event->{attachments}}) {
+    if (not exists $event->{links}) {
+        $event->{links} = undef;
+    } elsif (defined $event->{links}) {
+        foreach my $att (values %{$event->{links}}) {
             if (not exists $att->{cid}) {
                 $att->{cid} = undef;
             }
@@ -1685,7 +1689,6 @@ sub test_calendarevent_set_type
         "description"=> "",
         "freeBusyStatus"=> "busy",
         "privacy" => "secret",
-        "attachments"=> undef,
         "participants" => undef,
         "alerts"=> undef,
     };
@@ -1733,7 +1736,6 @@ sub test_calendarevent_set_simple
         "description"=> "",
         "freeBusyStatus"=> "busy",
         "privacy" => "secret",
-        "attachments"=> undef,
         "participants" => undef,
         "alerts"=> undef,
     };
@@ -1817,7 +1819,6 @@ sub test_calendarevent_set_relatedto
         "status" => "tentative",
         "description"=> "",
         "freeBusyStatus"=> "busy",
-        "attachments"=> undef,
         "participants" => undef,
         "alerts"=> undef,
     };
@@ -3020,7 +3021,6 @@ sub test_calendarevent_set_shared
         "description"=> "",
         "freeBusyStatus"=> "busy",
         "privacy" => "secret",
-        "attachments"=> undef,
         "participants" => undef,
         "alerts"=> undef,
     };
@@ -4447,7 +4447,6 @@ sub test_misc_timezone_expansion
         "description"=> "",
         "freeBusyStatus"=> "busy",
         "privacy" => "secret",
-        "attachments"=> undef,
         "participants" => undef,
         "alerts"=> undef,
         "recurrenceRule" => {
@@ -4486,7 +4485,6 @@ sub test_calendarevent_set_uid
         "description"=> "",
         "freeBusyStatus"=> "busy",
         "privacy" => "secret",
-        "attachments"=> undef,
         "participants" => undef,
         "alerts"=> undef,
     };
@@ -4566,7 +4564,6 @@ sub test_calendarevent_copy
         "description"=> "",
         "freeBusyStatus"=> "busy",
         "privacy" => "secret",
-        "attachments"=> undef,
         "participants" => undef,
         "alerts"=> undef,
     };
@@ -4701,7 +4698,6 @@ sub test_calendarevent_set_readonly
                         "description"=> "",
                         "freeBusyStatus"=> "busy",
                         "privacy" => "secret",
-                        "attachments"=> undef,
                         "participants" => undef,
                         "alerts"=> undef,
                     }

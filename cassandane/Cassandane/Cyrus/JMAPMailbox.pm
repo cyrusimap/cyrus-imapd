@@ -44,7 +44,7 @@ use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.03;
-use Mail::JMAPTalk 0.12;
+use Mail::JMAPTalk 0.13;
 use Data::Dumper;
 use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
@@ -73,6 +73,17 @@ sub new
         adminstore => 1,
         services => [ 'imap', 'http' ]
     }, @args);
+}
+
+sub set_up
+{
+    my ($self) = @_;
+    $self->SUPER::set_up();
+    $self->{jmap}->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+    ]);
 }
 
 sub getinbox
@@ -383,8 +394,14 @@ sub test_mailbox_get_nocalendars
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ];
+
     xlog "get existing mailboxes";
-    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]], $using);
     $self->assert_not_null($res);
     $self->assert_str_equals($res->[0][0], 'Mailbox/get');
     $self->assert_str_equals($res->[0][2], 'R1');
@@ -398,11 +415,11 @@ sub test_mailbox_get_nocalendars
                             sortOrder => 2,
                             isVisible => \1
              }}}, "R1"]
-    ]);
+    ], $using);
     $self->assert_not_null($res->[0][1]{created});
 
     xlog "get updated mailboxes";
-    $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
+    $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]], $using);
     $self->assert_not_null($res);
     $self->assert_num_equals(scalar @{$res->[0][1]{list}}, scalar @{$mboxes});
 }

@@ -44,7 +44,7 @@ use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.09;
 use Net::CardDAVTalk 0.03;
-use Mail::JMAPTalk 0.12;
+use Mail::JMAPTalk 0.13;
 use Data::Dumper;
 use Storable 'dclone';
 use MIME::Base64 qw(encode_base64);
@@ -74,7 +74,7 @@ sub new
     }, @args);
 }
 
-sub test_settings
+sub test_capabilities
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
@@ -83,119 +83,155 @@ sub test_settings
     my $imaptalk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 
-    # Create users and give cassandane access to their mailboxes
-    $self->{instance}->create_user("foo");
-    $admintalk->setacl("user.foo", "cassandane", "lr") or die;
-    $self->{instance}->create_user("bar");
-    $admintalk->setacl("user.bar", "cassandane", "lrswp") or die;
+    $self->{instance}->create_user("other");
+    $admintalk->create("user.other.box1") or die;
+    $admintalk->setacl("user.other.box1", "cassandane", "lrswp") or die;
 
-        my $service = $self->{instance}->get_service("http");
-        my $fooCalDAVTalk = Net::CalDAVTalk->new(
-                user => "foo",
-                password => 'pass',
-                host => $service->host(),
-                port => $service->port(),
-                scheme => 'http',
-                url => '/',
-                expandurl => 1,
-        );
-        my $CalendarId = $fooCalDAVTalk->NewCalendar({name => 'foo'});
-        $self->assert_not_null($CalendarId);
-        $admintalk->setacl("user.foo.#calendars.$CalendarId", "cassandane" => 'lr') or die;
-        $admintalk->setacl("user.foo.#addressbooks.Default", "cassandane" => '') or die;
+    # Missing capability in 'using'
+    my $res = $jmap->CallMethods([
+        ['Core/echo', { hello => 'world' }, "R1"]
+    ], []);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('unknownMethod', $res->[0][1]{type});
 
-    # Make sure that isReadOnly is false if ANY mailbox is read-writeable
-    $self->{instance}->create_user("baz");
-    $admintalk->create("user.baz.box1") or die;
-    $admintalk->create("user.baz.box2") or die;
-    $admintalk->setacl("user.baz.box1", "cassandane", "lrswp") or die;
-    $admintalk->setacl("user.baz.box2", "cassandane", "lr") or die;
-    # no access to qux
-    $self->{instance}->create_user("qux");
+    # Missing capability in account capabilities
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'other'
+        }, "R1"]
+    ], [
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+    $self->assert_str_equals('error', $res->[0][0]);
+    $self->assert_str_equals('accountNotSupportedByMethod', $res->[0][1]{type});
+}
 
-    my $Request;
-    my $Response;
+sub test_get_session
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
 
-    xlog "get settings";
-    $Request = {
+    my $jmap = $self->{jmap};
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "setup shared accounts";
+    $self->{instance}->create_user("account1");
+    $self->{instance}->create_user("account2");
+    $self->{instance}->create_user("account3");
+    $self->{instance}->create_user("account4");
+
+    # Account 1: read-only mail, calendars. No contacts.
+    my $httpService = $self->{instance}->get_service("http");
+    my $account1CalDAVTalk = Net::CalDAVTalk->new(
+        user => "account1",
+        password => 'pass',
+        host => $httpService->host(),
+        port => $httpService->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+    my $account1CalendarId = $account1CalDAVTalk->NewCalendar({name => 'calendar1'});
+    $admintalk->setacl("user.account1", "cassandane", "lr") or die;
+    $admintalk->setacl("user.account1.#calendars.Default", "cassandane" => 'lr') or die;
+    $admintalk->setacl("user.account1.#addressbooks.Default", "cassandane" => '') or die;
+    # Account 2: read/write mail
+    $admintalk->setacl("user.account2", "cassandane", "lrswp") or die;
+    # Account 3: no access
+
+    # GET session
+    my $RawRequest = {
         headers => {
             'Authorization' => $jmap->auth_header(),
         },
         content => '',
     };
-    $Response = $jmap->ua->get($jmap->uri(), $Request);
+    my $RawResponse = $jmap->ua->get($jmap->uri(), $RawRequest);
     if ($ENV{DEBUGJMAP}) {
-        warn "JMAP " . Dumper($Request, $Response);
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
     }
-    $self->assert_str_equals('200', $Response->{status});
+    $self->assert_str_equals('200', $RawResponse->{status});
+    my $session = eval { decode_json($RawResponse->{content}) };
+    $self->assert_not_null($session);
 
-    my $settings;
-    $settings = eval { decode_json($Response->{content}) } if $Response->{success};
+    # Validate session
+    $self->assert_not_null($session->{username});
+    $self->assert_not_null($session->{apiUrl});
+    $self->assert_not_null($session->{downloadUrl});
+    $self->assert_not_null($session->{uploadUrl});
+    $self->assert_not_null($session->{state});
 
-    $self->assert_not_null($settings->{username});
-    $self->assert_not_null($settings->{accounts});
-    $self->assert_not_null($settings->{apiUrl});
-    $self->assert_not_null($settings->{downloadUrl});
-    $self->assert_not_null($settings->{uploadUrl});
-    $self->assert_not_null($settings->{state});
-    $self->assert(exists $settings->{capabilities}->{"urn:ietf:params:jmap:core"});
-    $self->assert(exists $settings->{capabilities}->{"urn:ietf:params:jmap:mail"});
-    $self->assert(exists $settings->{capabilities}->{"http://cyrusimap.org/ns/quota"});
+    # Validate server capabilities
+    my $capabilities = $session->{capabilities};
+    $self->assert_not_null($capabilities);
+    my $coreCapability = $capabilities->{'urn:ietf:params:jmap:core'};
+    $self->assert_not_null($coreCapability);
+    $self->assert($coreCapability->{maxSizeUpload} > 0);
+    $self->assert($coreCapability->{maxConcurrentUpload} > 0);
+    $self->assert($coreCapability->{maxSizeRequest} > 0);
+    $self->assert($coreCapability->{maxConcurrentRequests} > 0);
+    $self->assert($coreCapability->{maxCallsInRequest} > 0);
+    $self->assert($coreCapability->{maxObjectsInGet} > 0);
+    $self->assert($coreCapability->{maxObjectsInSet} > 0);
+    $self->assert(exists $coreCapability->{collationAlgorithms});
+    $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:mail'});
+    $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:submission'});
+    $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
+    $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
 
-    my $cap = $settings->{capabilities}->{"urn:ietf:params:jmap:core"};
-    $self->assert($cap->{maxSizeUpload} > 0);
-    $self->assert($cap->{maxConcurrentUpload} > 0);
-    $self->assert($cap->{maxSizeRequest} > 0);
-    $self->assert($cap->{maxConcurrentRequests} > 0);
-    $self->assert($cap->{maxCallsInRequest} > 0);
-    $self->assert($cap->{maxObjectsInGet} > 0);
-    $self->assert($cap->{maxObjectsInSet} > 0);
+    # primaryAccounts
+    $self->assert_deep_equals({
+        'urn:ietf:params:jmap:mail' => 'cassandane',
+        'urn:ietf:params:jmap:submission' => 'cassandane',
+        'urn:ietf:params:jmap:vacationresponse' => 'cassandane',
+        'https://cyrusimap.org/ns/jmap/contacts' => 'cassandane',
+        'https://cyrusimap.org/ns/jmap/calendars' => 'cassandane',
+    }, $session->{primaryAccounts});
 
-    my $acc;
-    my @wantHasDataFor;
-    my @gotHasDataFor;
-        my $accounts =  $settings->{accounts};
-    $self->assert_num_equals(4, scalar keys %{$accounts});
+    $self->assert_num_equals(3, scalar keys %{$session->{accounts}});
+    $self->assert_not_null($session->{accounts}{cassandane});
 
-    $acc = $accounts->{cassandane};
-    $self->assert_str_equals("cassandane", $acc->{name});
-    $self->assert_equals(JSON::true, $acc->{isPrimary});
-    $self->assert_equals(JSON::false, $acc->{isReadOnly});
-    @wantHasDataFor = sort((
-        'urn:ietf:params:jmap:mail',
-        'urn:ietf:params:jmap:submission',
-        'urn:ietf:params:jmap:vacationresponse',
-        'urn:ietf:params:jmap:contacts',
-        'urn:ietf:params:jmap:calendars'
-    ));
-    @gotHasDataFor = sort @{$acc->{hasDataFor}};
-    $self->assert_deep_equals(\@wantHasDataFor, \@gotHasDataFor);
+    my $primaryAccount = $session->{accounts}{cassandane};
+    $self->assert_not_null($primaryAccount);
+    my $account1 = $session->{accounts}{account1};
+    $self->assert_not_null($account1);
+    my $account2 = $session->{accounts}{account2};
+    $self->assert_not_null($account2);
 
-    $acc = $accounts->{foo};
-    $self->assert_str_equals("foo", $acc->{name});
-    $self->assert_equals(JSON::false, $acc->{isPrimary});
-    $self->assert_equals(JSON::true, $acc->{isReadOnly});
-    @wantHasDataFor = sort(('urn:ietf:params:jmap:mail',
-                            'urn:ietf:params:jmap:submission',
-                            'urn:ietf:params:jmap:vacationresponse',
-                            'urn:ietf:params:jmap:calendars'));
-    @gotHasDataFor = sort @{$acc->{hasDataFor}};
-    $self->assert_deep_equals(\@wantHasDataFor, \@gotHasDataFor);
+    $self->assert_str_equals('cassandane', $primaryAccount->{name});
+    $self->assert_equals(JSON::false, $primaryAccount->{isReadOnly});
+    $self->assert_equals(JSON::true, $primaryAccount->{isPersonal});
+    my $accountCapabilities = $primaryAccount->{accountCapabilities};
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    $self->assert_not_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
+    $self->assert_not_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
 
-    $acc = $accounts->{bar};
-    $self->assert_str_equals("bar", $acc->{name});
-    $self->assert_equals(JSON::false, $acc->{isPrimary});
-    $self->assert_equals(JSON::false, $acc->{isReadOnly});
-    $self->assert_num_equals(3, scalar @{$acc->{hasDataFor}});
-    $self->assert_str_equals('urn:ietf:params:jmap:mail', $acc->{hasDataFor}[0]);
+    # Account 1: read-only mail, calendars. No contacts.
+    $self->assert_str_equals('account1', $account1->{name});
+    $self->assert_equals(JSON::true, $account1->{isReadOnly});
+    $self->assert_equals(JSON::false, $account1->{isPersonal});
+    $accountCapabilities = $account1->{accountCapabilities};
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
+    $self->assert_not_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
 
-    $acc = $accounts->{baz};
-    $self->assert_str_equals("baz", $acc->{name});
-    $self->assert_equals(JSON::false, $acc->{isPrimary});
-    $self->assert_equals(JSON::false, $acc->{isReadOnly});
-    $self->assert_num_equals(3, scalar @{$acc->{hasDataFor}});
-    $self->assert_str_equals('urn:ietf:params:jmap:mail', $acc->{hasDataFor}[0]);
-
+    # Account 2: read/write mail
+    $self->assert_str_equals('account2', $account2->{name});
+    $self->assert_equals(JSON::false, $account2->{isReadOnly});
+    $self->assert_equals(JSON::false, $account2->{isPersonal});
+    $accountCapabilities = $account2->{accountCapabilities};
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
+    $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
 }
 
 sub test_blob_download
@@ -418,6 +454,37 @@ sub test_sessionstate
     $JMAPResponse = $jmap->Request($JMAPRequest);
     $self->assert_str_not_equals($sessionState, $JMAPResponse->{sessionState});
     $sessionState = $JMAPResponse->{sessionState};
+}
+
+sub test_using_unknown_capability
+    :min_version_3_1 :needs_component_jmap
+{
+
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $RawRequest = {
+        headers => {
+            'Authorization' => $jmap->auth_header(),
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+        },
+        content => encode_json({
+            using => [
+                'urn:ietf:params:jmap:core',
+                'urn:foo' # Unknown capability
+            ],
+            methodCalls => [['Core/echo', { hello => JSON::true }, 'R1']],
+        }),
+    };
+    my $RawResponse = $jmap->ua->post($jmap->uri(), $RawRequest);
+    if ($ENV{DEBUGJMAP}) {
+        warn "JMAP " . Dumper($RawRequest, $RawResponse);
+    }
+    $self->assert_str_equals('400', $RawResponse->{status});
+
+    my $Response = eval { decode_json($RawResponse->{content}) };
+    $self->assert_str_equals('urn:ietf:params:jmap:error:unknownCapability', $Response->{type});
 }
 
 
