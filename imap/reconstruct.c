@@ -497,7 +497,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
 
     strncpy(outpath, mailbox_meta_fname(mailbox, META_HEADER), MAX_MAILBOX_NAME);
 
-    if (setversion) {
+    if (setversion && setversion != mailbox->i.minor_version) {
         /* need to re-set the version! */
         int r = mailbox_setversion(mailbox, setversion);
         if (r) {
