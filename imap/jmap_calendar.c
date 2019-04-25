@@ -85,15 +85,55 @@ static int jmap_calendarevent_set(struct jmap_req *req);
 static int jmap_calendarevent_copy(struct jmap_req *req);
 
 jmap_method_t jmap_calendar_methods[] = {
-    { "Calendar/get",             &jmap_calendar_get, JMAP_SHARED_CSTATE },
-    { "Calendar/changes",         &jmap_calendar_changes, JMAP_SHARED_CSTATE },
-    { "Calendar/set",             &jmap_calendar_set, /*flags*/0 },
-    { "CalendarEvent/get",        &jmap_calendarevent_get, JMAP_SHARED_CSTATE },
-    { "CalendarEvent/changes",    &jmap_calendarevent_changes, JMAP_SHARED_CSTATE },
-    { "CalendarEvent/query",      &jmap_calendarevent_query, JMAP_SHARED_CSTATE },
-    { "CalendarEvent/set",        &jmap_calendarevent_set, /*flags*/0 },
-    { "CalendarEvent/copy",       &jmap_calendarevent_copy, /*flags*/0 },
-    { NULL,                       NULL, 0}
+    {
+        "Calendar/get",
+        JMAP_CALENDARS_EXTENSION,
+        &jmap_calendar_get,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Calendar/changes",
+        JMAP_CALENDARS_EXTENSION,
+        &jmap_calendar_changes,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Calendar/set",
+        JMAP_CALENDARS_EXTENSION,
+        &jmap_calendar_set,
+        /*flags*/0
+    },
+    {
+        "CalendarEvent/get",
+        JMAP_CALENDARS_EXTENSION,
+        &jmap_calendarevent_get,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "CalendarEvent/changes",
+        JMAP_CALENDARS_EXTENSION,
+        &jmap_calendarevent_changes,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "CalendarEvent/query",
+        JMAP_CALENDARS_EXTENSION,
+        &jmap_calendarevent_query,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "CalendarEvent/set",
+        JMAP_CALENDARS_EXTENSION,
+        &jmap_calendarevent_set,
+        /*flags*/0
+    },
+    {
+        "CalendarEvent/copy",
+        JMAP_CALENDARS_EXTENSION,
+        &jmap_calendarevent_copy,
+        /*flags*/0
+    },
+    { NULL, NULL, NULL, 0}
 };
 
 HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
@@ -103,13 +143,13 @@ HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
         hash_insert(mp->name, mp, &settings->methods);
     }
 
-    strarray_push(&settings->can_use, JMAP_URN_CALENDARS);
+    json_object_set_new(settings->server_capabilities,
+            JMAP_CALENDARS_EXTENSION, json_object());
 }
 
-HIDDEN void jmap_calendar_capabilities(jmap_settings_t *settings)
+HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities)
 {
-    json_object_set_new(settings->capabilities,
-                        JMAP_URN_CALENDARS, json_object());
+    json_object_set_new(account_capabilities, JMAP_CALENDARS_EXTENSION, json_object());
 }
 
 /* Helper flags for CalendarEvent/set */
@@ -353,32 +393,120 @@ done:
 }
 
 static const jmap_property_t calendar_props[] = {
-    { "id",              JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "name",            0 },
-    { "color",           0 },
-    { "sortOrder",       0 },
-    { "isVisible",       0 },
-    { "isSubscribed",    0 },
-    { "mayReadFreeBusy", JMAP_PROP_SERVER_SET },
-    { "mayReadItems",    JMAP_PROP_SERVER_SET },
-    { "mayAddItems",     JMAP_PROP_SERVER_SET },
-    { "mayModifyItems",  JMAP_PROP_SERVER_SET },
-    { "mayRemoveItems",  JMAP_PROP_SERVER_SET },
-    { "mayRenameItems",  JMAP_PROP_SERVER_SET },
-    { "mayDeleteItems",  JMAP_PROP_SERVER_SET },
+    {
+        "id",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "name",
+        NULL,
+        0
+    },
+    {
+        "color",
+        NULL,
+        0
+    },
+    {
+        "sortOrder",
+        NULL,
+        0
+    },
+    {
+        "isVisible",
+        NULL,
+        0
+    },
+    {
+        "isSubscribed",
+        NULL,
+        0
+    },
+    {
+        "mayReadFreeBusy",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "mayReadItems",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "mayAddItems",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "mayModifyItems",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "mayRemoveItems",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "mayRename",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "mayDelete",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
 
     /* FM extensions (do ALL of these get through to Cyrus?) */
-    { "mayAdmin",        JMAP_PROP_SERVER_SET },
-    { "syncedFrom",      0 },
-    { "isEventsPublic",  0 },
-    { "isFreeBusyPublic",0 },
-    { "eventsUrl",       JMAP_PROP_SERVER_SET },
-    { "freeBusyUrl",     JMAP_PROP_SERVER_SET },
-    { "calDavUrl",       JMAP_PROP_SERVER_SET },
-    { "shareWith",       0 },
-    { "x-href",          0 },
+    {
+        "mayAdmin",
+        JMAP_CALENDARS_EXTENSION,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "syncedFrom",
+        JMAP_CALENDARS_EXTENSION,
+        0
+    },
+    {
+        "isEventsPublic",
+        JMAP_CALENDARS_EXTENSION,
+        0
+    },
+    {
+        "isFreeBusyPublic",
+        JMAP_CALENDARS_EXTENSION,
+        0
+    },
+    {
+        "eventsUrl",
+        JMAP_CALENDARS_EXTENSION,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "freeBusyUrl",
+        JMAP_CALENDARS_EXTENSION,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "calDavUrl",
+        JMAP_CALENDARS_EXTENSION,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "shareWith",
+        JMAP_CALENDARS_EXTENSION,
+        0
+    },
+    {
+        "x-href",
+        JMAP_CALENDARS_EXTENSION,
+        0
+    },
 
-    { NULL,              0 }
+    { NULL, NULL, 0 }
 };
 
 static int jmap_calendar_get(struct jmap_req *req)
@@ -396,7 +524,8 @@ static int jmap_calendar_get(struct jmap_req *req)
     } else if (r) return r;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, calendar_props, NULL, NULL, &get, 1, &err);
+    jmap_get_parse(req, &parser, calendar_props, /*allow_null_ids*/1,
+                   NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -537,7 +666,7 @@ static int jmap_calendar_changes(struct jmap_req *req)
     } else if (r) goto done;
 
     /* Parse request */
-    jmap_changes_parse(req->args, &parser, NULL, NULL, &changes, &err);
+    jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -749,7 +878,7 @@ static int jmap_calendar_set(struct jmap_req *req)
     int r = 0;
 
     /* Parse arguments */
-    jmap_set_parse(req->args, &parser, NULL, NULL, &set, &err);
+    jmap_set_parse(req, &parser, calendar_props, NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -1323,52 +1452,203 @@ done:
 }
 
 static const jmap_property_t event_props[] = {
-    { "id",            JMAP_PROP_IMMUTABLE },
-    { "calendarId",    0 },
-    { "participantId", 0 },
+    {
+        "id",
+        NULL,
+        JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "calendarId",
+        NULL,
+        0
+    },
+    {
+        "participantId",
+        NULL,
+        0
+    },
 
     /* JSCalendar common properties */
-    { "@type",         0 },
-    { "uid",           0 },
-    { "relatedTo",     0 },
-    { "prodId",        0 },
-    { "created",       0 },
-    { "updated",       0 },
-    { "sequence",      0 },
-    { "method",        0 },
-    { "title",         0 },
-    { "description",   0 },
-    { "descriptionContentType",   0 },
-    { "locations",     0 },
-    { "virtualLocations",     0 },
-    { "links",         0 },
-    { "locale",        0 },
-    { "keywords",      0 },
-    { "categories",    0 },
-    { "color",         0 },
-    { "recurrenceRule",      0 },
-    { "recurrenceOverrides",      0 },
-    { "excluded",      0 },
-    { "priority",      0 },
-    { "freeBusyStatus",      0 },
-    { "privacy",       0 },
-    { "replyTo",       0 },
-    { "participants",  0 },
-    { "useDefaultAlerts",  0 },
-    { "alerts",        0 },
-    { "localizations", 0 },
+    {
+        "@type",
+        NULL,
+        0
+    },
+    {
+        "uid",
+        NULL,
+        0
+    },
+    {
+        "relatedTo",
+        NULL,
+        0
+    },
+    {
+        "prodId",
+        NULL,
+        0
+    },
+    {
+        "created",
+        NULL,
+        0
+    },
+    {
+        "updated",
+        NULL,
+        0
+    },
+    {
+        "sequence",
+        NULL,
+        0
+    },
+    {
+        "method",
+        NULL,
+        0
+    },
+    {
+        "title",
+        NULL,
+        0
+    },
+    {
+        "description",
+        NULL,
+        0
+    },
+    {
+        "descriptionContentType",
+        NULL,
+        0
+    },
+    {
+        "locations",
+        NULL,
+        0
+    },
+    {
+        "virtualLocations",
+        NULL,
+        0
+    },
+    {
+        "links",
+        NULL,
+        0
+    },
+    {
+        "locale",
+        NULL,
+        0
+    },
+    {
+        "keywords",
+        NULL,
+        0
+    },
+    {
+        "categories",
+        NULL,
+        0
+    },
+    {
+        "color",
+        NULL,
+        0
+    },
+    {
+        "recurrenceRule",
+        NULL,
+        0
+    },
+    {
+        "recurrenceOverrides",
+        NULL,
+        0
+    },
+    {
+        "excluded",
+        NULL,
+        0
+    },
+    {
+        "priority",
+        NULL,
+        0
+    },
+    {
+        "freeBusyStatus",
+        NULL,
+        0
+    },
+    {
+        "privacy",
+        NULL,
+        0
+    },
+    {
+        "replyTo",
+        NULL,
+        0
+    },
+    {
+        "participants",
+        NULL,
+        0
+    },
+    {
+        "useDefaultAlerts",
+        NULL,
+        0
+    },
+    {
+        "alerts",
+        NULL,
+        0
+    },
+    {
+        "localizations",
+        NULL,
+        0
+    },
 
     /* JSEvent properties */
-    { "start",         0 },
-    { "timeZone",      0 },
-    { "duration",      0 },
-    { "isAllDay",      0 },
-    { "status",        0 },
+    {
+        "start",
+        NULL,
+        0
+    },
+    {
+        "timeZone",
+        NULL,
+        0
+    },
+    {
+        "duration",
+        NULL,
+        0
+    },
+    {
+        "isAllDay",
+        NULL,
+        0
+    },
+    {
+        "status",
+        NULL,
+        0
+    },
 
     /* FM specific */
-    { "x-href",        0 },
-
-    { NULL,            0 }
+    {
+        "x-href",
+        JMAP_CALENDARS_EXTENSION,
+        0
+    },
+    { NULL, NULL, 0 }
 };
 
 static int jmap_calendarevent_get(struct jmap_req *req)
@@ -1397,7 +1677,8 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     struct getcalendarevents_rock rock = { req, &get, NULL /*mbox*/, checkacl };
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, event_props, NULL, NULL, &get, 1, &err);
+    jmap_get_parse(req, &parser, event_props, /*allow_null_ids*/1,
+                   NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -2058,7 +2339,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     int r = 0;
 
     /* Parse arguments */
-    jmap_set_parse(req->args, &parser, NULL, NULL, &set, &err);
+    jmap_set_parse(req, &parser, event_props, NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -2135,6 +2416,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
                                     "type", "invalidProperties",
                                     "properties", invalid);
             json_object_set_new(set.not_created, key, err);
+            json_decref(create);
             continue;
         }
         json_decref(invalid);
@@ -2371,7 +2653,7 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
     }
 
     /* Parse request */
-    jmap_changes_parse(req->args, &parser, NULL, NULL, &changes, &err);
+    jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -2790,7 +3072,9 @@ done:
     return r;
 }
 
-static void validatefilter(json_t *filter, struct jmap_parser *parser,
+static void validatefilter(jmap_req_t *req __attribute__((unused)),
+                           struct jmap_parser *parser,
+                           json_t *filter,
                            json_t *unsupported __attribute__((unused)),
                            void *rock __attribute__((unused)))
 {
@@ -2839,7 +3123,8 @@ static void validatefilter(json_t *filter, struct jmap_parser *parser,
     }
 }
 
-static int validatecomparator(struct jmap_comparator *comp,
+static int validatecomparator(jmap_req_t *req __attribute__((unused)),
+                              struct jmap_comparator *comp,
                               void *rock __attribute__((unused)))
 {
     /* Reject any collation */
@@ -2861,10 +3146,9 @@ static int jmap_calendarevent_query(struct jmap_req *req)
 
     /* Parse request */
     json_t *err = NULL;
-    jmap_query_parse(req->args, &parser,
-                     validatefilter, req,
-                     validatecomparator, req,
-                     NULL, NULL,
+    jmap_query_parse(req, &parser, NULL, NULL,
+                     validatefilter, NULL,
+                     validatecomparator, NULL,
                      &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -3010,7 +3294,7 @@ static int jmap_calendarevent_copy(struct jmap_req *req)
     json_t *destroy_events = json_array();
 
     /* Parse request */
-    jmap_copy_parse(req->args, &parser, req, NULL, &copy, &err);
+    jmap_copy_parse(req, &parser, NULL, NULL, &copy, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

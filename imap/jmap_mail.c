@@ -104,6 +104,7 @@ static int jmap_email_copy(jmap_req_t *req);
 static int jmap_searchsnippet_get(jmap_req_t *req);
 static int jmap_thread_get(jmap_req_t *req);
 static int jmap_thread_changes(jmap_req_t *req);
+static int jmap_identity_get(jmap_req_t *req);
 
 /*
  * Possibly to be implemented:
@@ -112,18 +113,79 @@ static int jmap_thread_changes(jmap_req_t *req);
  */
 
 static jmap_method_t jmap_mail_methods[] = {
-    { "Email/query",                  &jmap_email_query, JMAP_SHARED_CSTATE },
-    { "Email/queryChanges",           &jmap_email_querychanges, JMAP_SHARED_CSTATE },
-    { "Email/get",                    &jmap_email_get, JMAP_SHARED_CSTATE },
-    { "Email/set",                    &jmap_email_set, /*flags*/0 },
-    { "Email/changes",                &jmap_email_changes, JMAP_SHARED_CSTATE },
-    { "Email/import",                 &jmap_email_import, /*flags*/0 },
-    { "Email/parse",                  &jmap_email_parse, JMAP_SHARED_CSTATE },
-    { "Email/copy",                   &jmap_email_copy, /*flags*/ 0 },
-    { "SearchSnippet/get",            &jmap_searchsnippet_get, JMAP_SHARED_CSTATE },
-    { "Thread/get",                   &jmap_thread_get, JMAP_SHARED_CSTATE },
-    { "Thread/changes",               &jmap_thread_changes, JMAP_SHARED_CSTATE },
-    { NULL,                           NULL, 0}
+    {
+        "Email/query",
+        JMAP_URN_MAIL,
+        &jmap_email_query,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Email/queryChanges",
+        JMAP_URN_MAIL,
+        &jmap_email_querychanges,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Email/get",
+        JMAP_URN_MAIL,
+        &jmap_email_get,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Email/set",
+        JMAP_URN_MAIL,
+        &jmap_email_set,
+        /*flags*/0
+    },
+    {
+        "Email/changes",
+        JMAP_URN_MAIL,
+        &jmap_email_changes,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Email/import",
+        JMAP_URN_MAIL,
+        &jmap_email_import,
+        /*flags*/0
+    },
+    {
+        "Email/parse",
+        JMAP_URN_MAIL,
+        &jmap_email_parse,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Email/copy",
+        JMAP_URN_MAIL,
+        &jmap_email_copy,
+        /*flags*/ 0
+    },
+    {
+        "SearchSnippet/get",
+        JMAP_URN_MAIL,
+        &jmap_searchsnippet_get,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Thread/get",
+        JMAP_URN_MAIL,
+        &jmap_thread_get,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Thread/changes",
+        JMAP_URN_MAIL,
+        &jmap_thread_changes,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Identity/get",
+        JMAP_URN_MAIL,
+        &jmap_identity_get,
+        JMAP_SHARED_CSTATE
+    },
+    { NULL, NULL, NULL, 0}
 };
 
 /* NULL terminated list of supported jmap_email_query sort fields */
@@ -139,14 +201,19 @@ HIDDEN void jmap_mail_init(jmap_settings_t *settings)
         hash_insert(mp->name, mp, &settings->methods);
     }
 
-    strarray_push(&settings->can_use, JMAP_URN_MAIL);
-    strarray_push(&settings->can_use, JMAP_SEARCH_EXTENSION);
+    json_object_set_new(settings->server_capabilities,
+            JMAP_URN_MAIL, json_object());
+    json_object_set_new(settings->server_capabilities,
+            JMAP_SEARCH_EXTENSION, json_object());
+    json_object_set_new(settings->server_capabilities,
+            JMAP_MAIL_EXTENSION, json_object());
 
     jmap_emailsubmission_init(settings);
     jmap_mailbox_init(settings);
+    jmap_vacation_init(settings);
 }
 
-HIDDEN void jmap_mail_capabilities(jmap_settings_t *settings)
+HIDDEN void jmap_mail_capabilities(json_t *account_capabilities)
 {
     json_t *sortopts = json_array();
     const char **sp;
@@ -170,14 +237,12 @@ HIDDEN void jmap_mail_capabilities(jmap_settings_t *settings)
             "maxSizeAttachmentsPerEmail", max_size_attachments_per_email,
             "emailsListSortOptions", sortopts);
 
-    json_object_set_new(settings->capabilities,
-                        JMAP_URN_MAIL, email_capabilities);
-
-    json_object_set_new(settings->capabilities,
-                        JMAP_SEARCH_EXTENSION, json_object());
-
-    jmap_emailsubmission_capabilities(settings);
-    jmap_mailbox_capabilities(settings);
+    json_object_set_new(account_capabilities, JMAP_URN_MAIL, email_capabilities);
+    json_object_set_new(account_capabilities, JMAP_SEARCH_EXTENSION, json_object());
+    json_object_set_new(account_capabilities, JMAP_MAIL_EXTENSION, json_object());
+    jmap_emailsubmission_capabilities(account_capabilities);
+    jmap_mailbox_capabilities(account_capabilities);
+    jmap_vacation_capabilities(account_capabilities);
 }
 
 #define JMAP_HAS_ATTACHMENT_FLAG "$HasAttachment"
@@ -2115,10 +2180,12 @@ struct msgfilter_rock {
     json_t *unsupported;
 };
 
-static void _email_parse_filter(json_t *filter, struct jmap_parser *parser,
-                                json_t *unsupported, void *rock)
+static void _email_parse_filter(jmap_req_t *req,
+                                struct jmap_parser *parser,
+                                json_t *filter,
+                                json_t *unsupported,
+                                void *rock __attribute__((unused)))
 {
-    jmap_req_t *req = rock;
     const char *field, *s = NULL;
     json_t *arg, *val;
 
@@ -2494,7 +2561,9 @@ static const char *msglist_sortfields[] = {
     NULL
 };
 
-static int _email_parse_comparator(struct jmap_comparator *comp, void *rock __attribute__((unused)))
+static int _email_parse_comparator(jmap_req_t *req __attribute__((unused)),
+                                   struct jmap_comparator *comp,
+                                   void *rock __attribute__((unused)))
 {
     /* Reject any collation */
     if (comp->collation) {
@@ -2719,7 +2788,7 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     }
 
     /* Set performance info */
-    if (req->do_perf) {
+    if (jmap_is_using(req, JMAP_PERFORMANCE_EXTENSION)) {
         json_object_set_new(req->perf_details, "isCached", json_boolean(is_cached));
         int i;
         json_t *jfilters = json_array();
@@ -2879,9 +2948,10 @@ done:
     free(cache_fname);
 }
 
-static int _email_queryargs_parse(const char *key,
-                                  json_t *arg,
+static int _email_queryargs_parse(jmap_req_t *req __attribute__((unused)),
                                   struct jmap_parser *parser __attribute__((unused)),
+                                  const char *key,
+                                  json_t *arg,
                                   void *rock)
 {
     int *collapse_threads = (int *) rock;
@@ -2905,10 +2975,10 @@ static int jmap_email_query(jmap_req_t *req)
 
     /* Parse request */
     json_t *err = NULL;
-    jmap_query_parse(req->args, &parser,
-                     _email_parse_filter, req,
-                     _email_parse_comparator, req,
+    jmap_query_parse(req, &parser,
                      _email_queryargs_parse, &collapse_threads,
+                     _email_parse_filter, NULL,
+                     _email_parse_comparator, NULL,
                      &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -3302,10 +3372,10 @@ static int jmap_email_querychanges(jmap_req_t *req)
 
     /* Parse arguments */
     json_t *err = NULL;
-    jmap_querychanges_parse(req->args, &parser,
-                            _email_parse_filter, req,
-                            _email_parse_comparator, req,
+    jmap_querychanges_parse(req, &parser,
                             _email_queryargs_parse, &collapse_threads,
+                            _email_parse_filter, NULL,
+                            _email_parse_comparator, NULL,
                             &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -3441,7 +3511,7 @@ static int jmap_email_changes(jmap_req_t *req)
 
     /* Parse request */
     json_t *err = NULL;
-    jmap_changes_parse(req->args, &parser, NULL, NULL, &changes, &err);
+    jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -3550,7 +3620,7 @@ static int jmap_thread_changes(jmap_req_t *req)
 
     /* Parse request */
     json_t *err = NULL;
-    jmap_changes_parse(req->args, &parser, NULL, NULL, &changes, &err);
+    jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -3802,8 +3872,8 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
             jfilter = arg;
             if (JNOTNULL(jfilter)) {
                 jmap_parser_push(&parser, "filter");
-                jmap_filter_parse(jfilter, &parser,
-                                  _email_parse_filter, unsupported_filter, req);
+                jmap_filter_parse(req, &parser, jfilter, unsupported_filter,
+                                  _email_parse_filter, NULL);
                 jmap_parser_pop(&parser);
             }
         }
@@ -3974,9 +4044,17 @@ static int _thread_get(jmap_req_t *req, json_t *ids,
 }
 
 static const jmap_property_t thread_props[] = {
-    { "id",       JMAP_PROP_IMMUTABLE },
-    { "emailIds", 0 },
-    { NULL,       0 }
+    {
+        "id",
+        NULL,
+        JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "emailIds",
+        NULL,
+        0
+    },
+    { NULL, NULL, 0 }
 };
 
 static int jmap_thread_get(jmap_req_t *req)
@@ -3986,7 +4064,8 @@ static int jmap_thread_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, thread_props, NULL, NULL, &get, 0, &err);
+    jmap_get_parse(req, &parser, thread_props, /*allow_null_ids*/0,
+                   NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -4053,7 +4132,6 @@ struct email_getargs {
     };
 
 /* Initialized in email_get_parse. *Not* thread-safe */
-static hash_table _email_get_default_props = HASH_TABLE_INITIALIZER;
 static hash_table _email_get_default_bodyprops = HASH_TABLE_INITIALIZER;
 static hash_table _email_parse_default_props = HASH_TABLE_INITIALIZER;
 
@@ -4305,16 +4383,6 @@ static void _email_init_default_props(hash_table *props)
         hash_insert("type",        (void*)1, props);
     }
     else {
-        if (props == &_email_get_default_props) {
-            hash_insert("blobId",     (void*)1, props);
-            hash_insert("id",         (void*)1, props);
-            hash_insert("keywords",   (void*)1, props);
-            hash_insert("mailboxIds", (void*)1, props);
-            hash_insert("receivedAt", (void*)1, props);
-            hash_insert("size",       (void*)1, props);
-            hash_insert("threadId",   (void*)1, props);
-        }
-
         hash_insert("attachments",   (void*)1, props);
         hash_insert("bcc",           (void*)1, props);
         hash_insert("bodyValues",    (void*)1, props);
@@ -4335,9 +4403,10 @@ static void _email_init_default_props(hash_table *props)
     }
 }
 
-static int _email_getargs_parse(const char *key,
-                                json_t *arg,
+static int _email_getargs_parse(jmap_req_t *req __attribute__((unused)),
                                 struct jmap_parser *parser,
+                                const char *key,
+                                json_t *arg,
                                 void *rock)
 {
     struct email_getargs *args = (struct email_getargs *) rock;
@@ -5713,46 +5782,179 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
 }
 
 static const jmap_property_t email_props[] = {
-    { "id",             JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "blobId",         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "threadId",       JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "mailboxIds",     0 },
-    { "keywords",       0 },
-    { "size",           JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "receivedAt",     JMAP_PROP_IMMUTABLE },
-
-    { "headers",        JMAP_PROP_IMMUTABLE },
-    { "header:*",       JMAP_PROP_IMMUTABLE },
-    { "messageId",      JMAP_PROP_IMMUTABLE },
-    { "inReplyTo",      JMAP_PROP_IMMUTABLE },
-    { "references",     JMAP_PROP_IMMUTABLE },
-    { "sender",         JMAP_PROP_IMMUTABLE },
-    { "from",           JMAP_PROP_IMMUTABLE },
-    { "to",             JMAP_PROP_IMMUTABLE },
-    { "cc",             JMAP_PROP_IMMUTABLE },
-    { "bcc",            JMAP_PROP_IMMUTABLE },
-    { "replyTo",        JMAP_PROP_IMMUTABLE },
-    { "subject",        JMAP_PROP_IMMUTABLE },
-    { "sentAt",         JMAP_PROP_IMMUTABLE },
-
-    { "bodyStructure",  JMAP_PROP_IMMUTABLE },
-    { "bodyValues",     JMAP_PROP_IMMUTABLE },
-    { "textBody",       JMAP_PROP_IMMUTABLE },
-    { "htmlBody",       JMAP_PROP_IMMUTABLE },
-    { "attachments",    JMAP_PROP_IMMUTABLE },
-    { "hasAttachment",  JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "preview",        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
+    {
+        "id",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "blobId",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    {
+        "threadId",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    {
+        "mailboxIds",
+        NULL,
+        0
+    },
+    {
+        "keywords",
+        NULL,
+        0
+    },
+    {
+        "size",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    {
+        "receivedAt",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "headers",
+        NULL,
+        JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
+    },
+    {
+        "header:*",
+        NULL,
+        JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
+    },
+    {
+        "messageId",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "inReplyTo",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "references",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "sender",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "from",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "to",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "cc",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "bcc",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "replyTo",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "subject",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "sentAt",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "bodyStructure",
+        NULL,
+        JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
+    },
+    {
+        "bodyValues",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "textBody",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "htmlBody",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "attachments",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "hasAttachment",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    {
+        "preview",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
 
     /* FM extensions (do ALL of these get through to Cyrus?) */
-    { "addedDates",     0 },
-    { "removedDates",   0 },
-    { "trustedSender",  JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "spamScore",      JMAP_PROP_IMMUTABLE },
-    { "calendarEvents", JMAP_PROP_IMMUTABLE },
-    { "isDeleted",      0 },
-    { "imageSize",      0 },
-
-    { NULL,             0 }
+    {
+        "addedDates",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "removedDates",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "trustedSender",
+        JMAP_MAIL_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    {
+        "spamScore",
+        JMAP_MAIL_EXTENSION,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "calendarEvents",
+        JMAP_MAIL_EXTENSION,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "isDeleted",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "imageSize",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    { NULL, NULL, 0 }
 };
 
 static int jmap_email_get(jmap_req_t *req)
@@ -5763,8 +5965,8 @@ static int jmap_email_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req,
-                   email_props, &_email_getargs_parse, &args, &get, 0, &err);
+    jmap_get_parse(req, &parser, email_props, /*allow_null_ids*/0,
+                   &_email_getargs_parse, &args, &get, &err);
     if (!err) {
         /* header:Xxx properties */
         json_t *jprops = json_object_get(req->args, "properties");
@@ -5785,19 +5987,6 @@ static int jmap_email_get(jmap_req_t *req)
 
     /* properties - already parsed in jmap_get_parse */
     args.props = get.props;
-
-    /* Set default properties, if not set by client */
-    if (args.props == NULL) {
-        args.props = &_email_get_default_props;
-
-        if (args.props->size == 0) {
-            _email_init_default_props(args.props);
-        }
-    }
-    else {
-        /* 'id' is ALWAYS returned, even if not explicitly requested */
-        hash_insert("id", (void*)1, args.props);
-    }
 
     /* Set default body properties, if not set by client */
     if (args.bodyprops == NULL) {
@@ -5868,7 +6057,7 @@ static int jmap_email_parse(jmap_req_t *req)
             }
         }
 
-        else if (!_email_getargs_parse(key, arg, &parser, &getargs)) {
+        else if (!_email_getargs_parse(req, &parser, key, arg, &getargs)) {
             jmap_parser_invalid(&parser, key);
         }
     }
@@ -9780,32 +9969,13 @@ static void _email_destroy_bulk(jmap_req_t *req,
     strarray_fini(&email_ids);
 }
 
-static int _email_setargs_parse(const char *key,
-                                json_t *arg,
-                                struct jmap_parser *parser __attribute__((unused)),
-                                void *rock)
-{
-    json_t **debug_bulkupdate = (json_t **) rock;
-    int r = 1;
-
-    if (!strcmp(key, "cyrusimap.org/debugBulkUpdate") && json_is_boolean(arg)) {
-        if (arg == json_true()) *debug_bulkupdate = arg;
-    }
-
-    else r = 0;
-
-    return r;
-}
-
 HIDDEN int jmap_email_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
 
-    json_t *debug_bulkupdate = NULL;
     json_t *err = NULL;
-    jmap_set_parse(req->args, &parser,
-                   &_email_setargs_parse, &debug_bulkupdate, &set, &err);
+    jmap_set_parse(req, &parser, email_props, NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -9844,6 +10014,10 @@ HIDDEN int jmap_email_set(jmap_req_t *req)
         jmap_add_id(req, creation_id, msg_id);
     }
 
+    json_t *debug_bulkupdate = NULL;
+    if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
+        debug_bulkupdate = json_object();
+    }
     _email_update_bulk(req, set.update, set.updated, set.not_updated, debug_bulkupdate);
 
     _email_destroy_bulk(req, set.destroy, set.destroyed, set.not_destroyed);
@@ -9855,8 +10029,8 @@ HIDDEN int jmap_email_set(jmap_req_t *req)
     json_decref(jstate);
 
     json_t *reply = jmap_set_reply(&set);
-    if (debug_bulkupdate) {
-        json_object_set_new(reply, "cyrusimap.org/bulkUpdate", debug_bulkupdate);
+    if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
+        json_object_set_new(reply, "debugBulkUpdate", debug_bulkupdate); // takes ownership
     }
     jmap_ok(req, reply);
 
@@ -10711,8 +10885,7 @@ static int jmap_email_copy(jmap_req_t *req)
     json_t *destroy_emails = json_array();
 
     /* Parse request */
-    jmap_copy_parse(req->args, &parser, req,
-                    &_email_copy_validate_props, &copy, &err);
+    jmap_copy_parse(req, &parser, NULL, NULL, &copy, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -10732,6 +10905,14 @@ static int jmap_email_copy(jmap_req_t *req)
     json_object_foreach(copy.create, creation_id, copy_email) {
         json_t *set_err = NULL;
         json_t *new_email = NULL;
+
+        /* Validate create */
+        _email_copy_validate_props(copy_email, &set_err);
+        if (set_err) {
+            json_object_set_new(copy.not_created, creation_id, set_err);
+            continue;
+        }
+
         /* Copy message */
         _email_copy(req, copy_email, copy.from_account_id,
                     seendb, &new_email, &set_err);
@@ -10765,5 +10946,176 @@ done:
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);
     seen_close(&seendb);
+    return 0;
+}
+
+/* Identity/get method */
+static const jmap_property_t identity_props[] = {
+    {
+        "id",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "name",
+        NULL,
+        0
+    },
+    {
+        "email",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "replyTo",
+        NULL,
+        0
+    },
+    {
+        "bcc",
+        NULL,
+        0
+    },
+    {
+        "textSignature",
+        NULL,
+        0
+    },
+    {
+        "htmlSignature",
+        NULL,
+        0
+    },
+    {
+        "mayDelete",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+
+    /* FM extensions (do ALL of these get through to Cyrus?) */
+    {
+        "displayName",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "addBccOnSMTP",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "saveSentToMailboxId",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "saveOnSMTP",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "useForAutoReply",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "isAutoConfigured",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "enableExternalSMTP",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "smtpServer",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "smtpPort",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "smtpSSL",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "smtpUser",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "smtpPassword",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "smtpRemoteService",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "popLinkId",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+
+    { NULL, NULL, 0 }
+};
+
+static int jmap_identity_get(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    json_t *err = NULL;
+
+    /* Parse request */
+    jmap_get_parse(req, &parser, identity_props, /*allow_null_ids*/1,
+                   NULL, NULL, &get, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Build response */
+    json_t *me = json_pack("{s:s}", "id", req->userid);
+    if (jmap_wantprop(get.props, "name")) {
+        json_object_set_new(me, "name", json_string(""));
+    }
+    if (jmap_wantprop(get.props, "email")) {
+        json_object_set_new(me, "email",
+                json_string(strchr(req->userid, '@') ? req->userid : ""));
+    }
+
+    if (jmap_wantprop(get.props, "mayDelete")) {
+        json_object_set_new(me, "mayDelete", json_false());
+    }
+    if (json_array_size(get.ids)) {
+        size_t i;
+        json_t *val;
+        json_array_foreach(get.ids, i, val) {
+            if (strcmp(json_string_value(val), req->userid)) {
+                json_array_append(get.not_found, val);
+            }
+            else {
+                json_array_append(get.list, me);
+            }
+        }
+    } else if (!JNOTNULL(get.ids)) {
+        json_array_append(get.list, me);
+    }
+    json_decref(me);
+
+    /* Reply */
+    get.state = xstrdup("0");
+    jmap_ok(req, jmap_get_reply(&get));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
     return 0;
 }

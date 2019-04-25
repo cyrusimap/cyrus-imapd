@@ -280,7 +280,7 @@ static int parse_json_body(struct transaction_t *txn, json_t **req)
 }
 
 static int validate_request(struct transaction_t *txn, json_t *req,
-                            jmap_settings_t *settings, int *do_perf)
+                            jmap_settings_t *settings)
 {
     json_t *using = json_object_get(req, "using");
     json_t *calls = json_object_get(req, "methodCalls");
@@ -339,16 +339,13 @@ static int validate_request(struct transaction_t *txn, json_t *req,
         if (!s) {
             return JMAP_NOT_REQUEST;
         }
-        if (!strcmp(s, XML_NS_CYRUS "performance")) {
-            *do_perf = 1;
-        }
         else if (!strcmp(s, "ietf:jmap")) {
             syslog(LOG_DEBUG, "old capability %s used", s);
         }
         else if (!strcmp(s, "ietf:jmapmail")) {
             syslog(LOG_DEBUG, "old capability %s used", s);
         }
-        else if (strarray_find(&settings->can_use, s, 0) == -1) {
+        else if (!json_object_get(settings->server_capabilities, s))  {
             return JMAP_UNKNOWN_CAPABILITY;
         }
     }
@@ -379,7 +376,7 @@ static void _make_created_ids(const char *creation_id, void *val, void *rock)
     json_object_set_new(jcreatedIds, creation_id, json_string(id));
 }
 
-static int json_error_response(struct transaction_t *txn,
+static int jmap_error_response(struct transaction_t *txn,
                                long code, json_t **res)
 {
     long http_code = HTTP_BAD_REQUEST;
@@ -434,7 +431,7 @@ static int json_error_response(struct transaction_t *txn,
         json_object_set_new(*res, "detail", json_string(txn->error.desc));
     }
 
-    return 0;
+    return http_code;
 }
 
 
@@ -513,15 +510,21 @@ static int _rights_for_mbentry(struct auth_state *authstate,
     return rights;
 }
 
-
-struct is_accessible_rock {
-    const char *userid;
-    struct auth_state *authstate;
+struct capabilities_rock {
+    const char *authuserid;
     hash_table *mboxrights;
+    struct auth_state *authstate;
+
+    int is_visible;
+    int has_mail;
+    int has_contacts;
+    int has_calendars;
 };
 
-static int _is_accessible(const mbentry_t *mbentry, void *vrock)
+static int capabilities_cb(const mbentry_t *mbentry, void *vrock)
 {
+    struct capabilities_rock *rock = vrock;
+
     if (!mbentry) return 0;
 
     if ((mbentry->mbtype & MBTYPE_DELETED) ||
@@ -531,10 +534,70 @@ static int _is_accessible(const mbentry_t *mbentry, void *vrock)
         return 0;
     }
 
-    struct is_accessible_rock *rock = vrock;
     int rights = _rights_for_mbentry(rock->authstate, mbentry, rock->mboxrights);
     if (!(rights & ACL_LOOKUP)) return 0;
-    return IMAP_OK_COMPLETED;
+    rock->is_visible = 1;
+
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    const strarray_t *boxes = mbname_boxes(mbname);
+    if (!rock->has_mail) {
+        rock->has_mail = mbentry->mbtype == MBTYPE_EMAIL;
+    }
+    if (!rock->has_contacts) {
+        rock->has_contacts = strarray_size(boxes) >= 1 &&
+            !strcmpsafe(config_getstring(IMAPOPT_ADDRESSBOOKPREFIX),
+                    strarray_nth(boxes, 0));
+    }
+    if (!rock->has_calendars) {
+        rock->has_calendars = strarray_size(boxes) >= 1 &&
+            !strcmpsafe(config_getstring(IMAPOPT_CALENDARPREFIX),
+                    strarray_nth(boxes, 0));
+    }
+    mbname_free(&mbname);
+
+    return 0;
+}
+
+static json_t *lookup_capabilities(const char *accountid,
+                                   const char *authuserid,
+                                   struct auth_state *authstate,
+                                   hash_table *mboxrights)
+{
+    json_t *capas = json_object();
+
+    if (!strcmp(authuserid, accountid)) {
+        /* Primary account has all capabilities */
+        jmap_core_capabilities(capas);
+        jmap_mail_capabilities(capas);
+        jmap_contact_capabilities(capas);
+        jmap_calendar_capabilities(capas);
+    }
+    else {
+        /* Lookup capabilities for shared account */
+        struct capabilities_rock rock = {
+            authuserid, mboxrights, httpd_authstate, 0, 0, 0, 0
+        };
+        mboxlist_usermboxtree(accountid, authstate, capabilities_cb,
+                              &rock, MBOXTREE_INTERMEDIATES);
+        if (rock.is_visible) {
+            jmap_core_capabilities(capas);
+            if (rock.has_mail) {
+                jmap_mail_capabilities(capas);
+            }
+            if (rock.has_contacts) {
+                jmap_contact_capabilities(capas);
+            }
+            if (rock.has_calendars) {
+                jmap_calendar_capabilities(capas);
+            }
+        }
+    }
+
+    if (!json_object_size(capas)) {
+        json_decref(capas);
+        capas = json_null();
+    }
+    return capas;
 }
 
 /* Perform an API request */
@@ -547,20 +610,20 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     char *account_inboxname = NULL;
     int return_created_ids = 0;
     hash_table *created_ids = NULL;
-    hash_table accounts = HASH_TABLE_INITIALIZER;
+    hash_table capabilities_by_accountid = HASH_TABLE_INITIALIZER;
     hash_table mboxrights = HASH_TABLE_INITIALIZER;
     strarray_t methods = STRARRAY_INITIALIZER;
     ptrarray_t method_calls = PTRARRAY_INITIALIZER;
     ptrarray_t processed_methods = PTRARRAY_INITIALIZER;
-    strarray_t capabilities = STRARRAY_INITIALIZER;
+    strarray_t using_capabilities = STRARRAY_INITIALIZER;
 
     ret = parse_json_body(txn, &jreq);
-    if (ret) return json_error_response(txn, ret, res);
+    if (ret) return jmap_error_response(txn, ret, res);
 
     /* Validate Request object */
-    if ((ret = validate_request(txn, jreq, settings, &do_perf))) {
+    if ((ret = validate_request(txn, jreq, settings))) {
         json_decref(jreq);
-        return json_error_response(txn, ret, res);
+        return jmap_error_response(txn, ret, res);
     }
 
     /* Start JSON response */
@@ -572,10 +635,8 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     }
 
     /* Set up request-internal state */
-    construct_hash_table(&accounts, 8, 0);
+    construct_hash_table(&capabilities_by_accountid, 8, 0);
     construct_hash_table(&mboxrights, 64, 0);
-    /* User-owned account is always accessible */
-    hash_insert(httpd_userid, (void*)1, &accounts);
 
     /* Set up creation ids */
     long max_created_ids = (settings->limits[MAX_CALLS_IN_REQUEST] + 1) *
@@ -612,7 +673,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
 
     json_t *jusing = json_object_get(jreq, "using");
     for (i = 0; i < json_array_size(jusing); i++) {
-        strarray_add(&capabilities, json_string_value(json_array_get(jusing, i)));
+        strarray_add(&using_capabilities, json_string_value(json_array_get(jusing, i)));
     }
     /* Push client method calls on call stack */
     json_t *jmethod_calls = json_object_get(jreq, "methodCalls");
@@ -622,6 +683,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     }
 
     /* Process call stack */
+    do_perf = strarray_find(&using_capabilities, JMAP_PERFORMANCE_EXTENSION, 0) >= 0;
     json_t *mc;
     while ((mc = ptrarray_pop(&method_calls))) {
         /* Send provisional response, if necessary */
@@ -633,49 +695,54 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         /* Process method */
         const jmap_method_t *mp;
         const char *mname = json_string_value(json_array_get(mc, 0));
-        json_t *args = json_array_get(mc, 1), *arg;
+        json_t *args = json_array_get(mc, 1);
         const char *tag = json_string_value(json_array_get(mc, 2));
-        json_t *err = NULL;
         int r = 0;
 
         strarray_append(&methods, mname);
         json_incref(args);
 
         /* Find the message processor */
-        if (!(mp = find_methodproc(mname, &settings->methods))) {
-            json_array_append(resp, json_pack("[s {s:s} s]",
+        mp = find_methodproc(mname, &settings->methods);
+        if (!mp || strarray_find(&using_capabilities, mp->capability, 0) < 0) {
+            json_array_append_new(resp, json_pack("[s {s:s} s]",
                         "error", "type", "unknownMethod", tag));
             json_decref(args);
             continue;
         }
 
-        /* Determine account */
+        /* Validate accountId argument */
         const char *accountid = httpd_userid;
-        arg = json_object_get(args, "accountId");
+        json_t *err = NULL;
+        json_t *arg = json_object_get(args, "accountId");
         if (arg && arg != json_null()) {
-            if ((accountid = json_string_value(arg)) == NULL) {
-                json_t *err = json_pack("{s:s, s:[s]}",
-                        "type", "invalidArguments", "arguments", "accountId");
-                json_array_append(resp, json_pack("[s,o,s]", "error", err, tag));
-                json_decref(args);
-                continue;
-            }
-            /* Check if any shared mailbox is accessible */
-            if (!hash_lookup(accountid, &accounts)) {
-                struct is_accessible_rock rock = {
-                    httpd_userid, httpd_authstate, &mboxrights
-                };
-                r = mboxlist_usermboxtree(accountid, httpd_authstate,
-                        _is_accessible, &rock, MBOXTREE_INTERMEDIATES);
-                if (r != IMAP_OK_COMPLETED) {
-                    json_t *err = json_pack("{s:s}", "type", "accountNotFound");
-                    json_array_append_new(resp,
-                                          json_pack("[s,o,s]", "error", err, tag));
-                    json_decref(args);
-                    continue;
-                }
-                hash_insert(accountid, (void*)1, &accounts);
-            }
+            accountid = json_string_value(arg);
+        }
+        if (!accountid) {
+            err = json_pack("{s:s, s:[s]}",
+                    "type", "invalidArguments", "arguments", "accountId");
+            json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
+            json_decref(args);
+            continue;
+        }
+
+        /* Validate supported capabilities for this account */
+        json_t *account_capas = hash_lookup(accountid, &capabilities_by_accountid);
+        if (!account_capas) {
+            account_capas = lookup_capabilities(accountid, httpd_userid,
+                                                httpd_authstate, &mboxrights);
+            hash_insert(accountid, account_capas, &capabilities_by_accountid);
+        }
+        if (json_is_null(account_capas)) {
+            err = json_pack("{s:s}", "type", "accountNotFound");
+        }
+        else if (!json_object_get(account_capas, mp->capability)) {
+            err = json_pack("{s:s}", "type", "accountNotSupportedByMethod");
+        }
+        if (err) {
+            json_array_append_new(resp, json_pack("[s,o,s]", "error", err, tag));
+            json_decref(args);
+            continue;
         }
 
         /* Pre-process result references */
@@ -713,7 +780,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         req.txn = txn;
         req.mboxrights = &mboxrights;
         req.method_calls = &method_calls;
-        req.capabilities = &capabilities;
+        req.using_capabilities = &using_capabilities;
 
         if (do_perf) {
             struct rusage usage;
@@ -722,7 +789,6 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
             req.user_start = timeval_get_double(&usage.ru_utime);
             req.sys_start = timeval_get_double(&usage.ru_stime);
             req.real_start = now_ms() / 1000.0;
-            req.do_perf = 1;
             req.perf_details = json_object();
         }
 
@@ -799,18 +865,123 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     }
     free_hash_table(created_ids, free);
     free(created_ids);
-    free_hash_table(&accounts, NULL);
+    if (hash_numrecords(&capabilities_by_accountid)) {
+        hash_iter *it = hash_table_iter(&capabilities_by_accountid);
+        while (hash_iter_next(it)) {
+            json_decref((json_t*)hash_iter_val(it));
+        }
+        hash_iter_free(&it);
+    }
+    free_hash_table(&capabilities_by_accountid, NULL);
     free_hash_table(&mboxrights, free);
     free(account_inboxname);
     json_decref(jreq);
     json_decref(resp);
     strarray_fini(&methods);
-    strarray_fini(&capabilities);
+    strarray_fini(&using_capabilities);
 
     return ret;
 }
 
-extern void jmap_add_subreq(jmap_req_t *req, const char *method,
+struct findaccounts_rock {
+    struct buf current_accountid;
+    int current_rights;
+    json_t *accounts;
+    const char *authuserid;
+};
+
+static void findaccounts_add(struct findaccounts_rock *rock)
+{
+    if (!buf_len(&rock->current_accountid))
+        return;
+
+    if (!(rock->current_rights & (ACL_LOOKUP|ACL_READ)))
+        return;
+
+    const char *accountid = buf_cstring(&rock->current_accountid);
+    int is_rw = rock->current_rights & ACL_READ_WRITE;
+    int is_primary = !strcmp(rock->authuserid, accountid);
+
+    json_t *account = json_object();
+    json_object_set_new(account, "name", json_string(accountid));
+    json_object_set_new(account, "isPrimary", json_boolean(is_primary));
+    json_object_set_new(account, "isPersonal", json_boolean(is_primary));
+    json_object_set_new(account, "isReadOnly", json_boolean(!is_rw));
+    json_object_set_new(rock->accounts, accountid, account);
+}
+
+static int findaccounts_cb(struct findall_data *data, void *vrock)
+{
+    if (!data || !data->mbentry) {
+        return 0;
+    }
+
+    struct findaccounts_rock *rock = vrock;
+    const mbentry_t *mbentry = data->mbentry;
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+
+    if (strcmp(buf_cstring(&rock->current_accountid), mbname_userid(mbname))) {
+        findaccounts_add(rock);
+        buf_setcstr(&rock->current_accountid, mbname_userid(mbname));
+        rock->current_rights = 0;
+    }
+    rock->current_rights |= httpd_myrights(httpd_authstate, data->mbentry);
+
+    mbname_free(&mbname);
+    return 0;
+}
+
+HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
+{
+    /* Find shared accounts */
+    strarray_t patterns = STRARRAY_INITIALIZER;
+    char *userpat = xstrdup("user.*");
+    userpat[4] = jmap_namespace.hier_sep;
+    strarray_append(&patterns, userpat);
+    struct findaccounts_rock rock = {
+        BUF_INITIALIZER, 0, accounts, httpd_userid
+    };
+    int r = mboxlist_findallmulti(&jmap_namespace, &patterns, 0, httpd_userid,
+                                  httpd_authstate, findaccounts_cb, &rock);
+    if (r) {
+        syslog(LOG_ERR, "Can't determine shared JMAP accounts for user %s: %s",
+                         httpd_userid, error_message(r));
+    }
+    findaccounts_add(&rock);
+
+    /* Add primary accout */
+    buf_setcstr(&rock.current_accountid, httpd_userid);
+    rock.current_rights = ACL_FULL;
+    findaccounts_add(&rock);
+
+    /* Determine account capabilities */
+    hash_table mboxrights = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&mboxrights, 64, 0);
+    json_t *jaccount;
+    const char *accountid;
+    json_object_foreach(accounts, accountid, jaccount) {
+        json_t *capas = lookup_capabilities(accountid, httpd_userid,
+                                            httpd_authstate, &mboxrights);
+        json_object_set_new(jaccount, "accountCapabilities", capas);
+    }
+    free_hash_table(&mboxrights, free);
+
+    json_t *jprimary = json_string(httpd_userid);
+    json_object_set(primary_accounts, JMAP_URN_MAIL, jprimary);
+    json_object_set(primary_accounts, JMAP_URN_SUBMISSION, jprimary);
+    json_object_set(primary_accounts, JMAP_URN_VACATION, jprimary);
+    json_object_set(primary_accounts, JMAP_CONTACTS_EXTENSION, jprimary);
+    json_object_set(primary_accounts, JMAP_CALENDARS_EXTENSION, jprimary);
+    json_decref(jprimary);
+
+    /* Clean up */
+    buf_free(&rock.current_accountid);
+    free(userpat);
+    strarray_fini(&patterns);
+}
+
+
+HIDDEN void jmap_add_subreq(jmap_req_t *req, const char *method,
                             json_t *args, const char *client_id)
 {
     if (!client_id) client_id = req->tag;
@@ -1248,19 +1419,17 @@ HIDDEN void jmap_myrights_delete(jmap_req_t *req, const char *mboxname)
 /* Add performance stats to method response */
 static void jmap_add_perf(jmap_req_t *req, json_t *res)
 {
-    if (req->do_perf) {
-        struct rusage usage;
+    struct rusage usage;
 
-        getrusage(RUSAGE_SELF, &usage);
+    getrusage(RUSAGE_SELF, &usage);
 
-        json_t *perf = json_pack("{s:f s:f s:f}",
+    json_t *perf = json_pack("{s:f s:f s:f}",
             "real", (now_ms() / 1000.0) - req->real_start,
             "user", timeval_get_double(&usage.ru_utime) - req->user_start,
             "sys", timeval_get_double(&usage.ru_stime) - req->sys_start);
-        json_object_set(perf, "details", req->perf_details); // incref
+    json_object_set(perf, "details", req->perf_details); // incref
 
-        json_object_set_new(res, "performance", perf);
-    }
+    json_object_set_new(res, "performance", perf);
 }
 
 HIDDEN void jmap_parser_fini(struct jmap_parser *parser)
@@ -1345,7 +1514,8 @@ HIDDEN void jmap_ok(jmap_req_t *req, json_t *res)
     json_array_append_new(item, json_string(req->tag));
     json_array_append_new(req->response, item);
 
-    jmap_add_perf(req, res);
+    if (jmap_is_using(req, JMAP_PERFORMANCE_EXTENSION))
+        jmap_add_perf(req, res);
 }
 
 HIDDEN void jmap_error(jmap_req_t *req, json_t *err)
@@ -1404,17 +1574,16 @@ HIDDEN const jmap_property_t *jmap_property_find(const char *name,
 
 /* Foo/get */
 
-HIDDEN void jmap_get_parse(json_t *jargs,
+HIDDEN void jmap_get_parse(jmap_req_t *req,
                            struct jmap_parser *parser,
-                           jmap_req_t *req,
                            const jmap_property_t valid_props[],
-                           int (*args_parse)(const char *, json_t *,
-                                             struct jmap_parser *, void *),
+                           int allow_null_ids,
+                           jmap_args_parse_cb args_parse,
                            void *args_rock,
                            struct jmap_get *get,
-                           int allow_null_ids,
                            json_t **err)
 {
+    json_t *jargs = req->args;
     const char *key;
     json_t *arg, *val;
     size_t i;
@@ -1479,14 +1648,22 @@ HIDDEN void jmap_get_parse(json_t *jargs,
                 get->props = xzmalloc(sizeof(hash_table));
                 construct_hash_table(get->props, json_array_size(arg) + 1, 0);
                 json_array_foreach(arg, i, val) {
-                    const char *s = json_string_value(val);
-                    if (!s || !jmap_property_find(s, valid_props)) {
-                        jmap_parser_push_index(parser, "properties", i, s);
+                    const char *name = json_string_value(val);
+                    const jmap_property_t *propdef = NULL;
+                    if (name) {
+                        propdef = jmap_property_find(name, valid_props);
+                        if (propdef && propdef->capability &&
+                            !jmap_is_using(req, propdef->capability)) {
+                            propdef = NULL;
+                        }
+                    }
+                    if (!propdef) {
+                        jmap_parser_push_index(parser, "properties", i, name);
                         jmap_parser_invalid(parser, NULL);
                         jmap_parser_pop(parser);
                         continue;
                     }
-                    hash_insert(s, (void*)1, get->props);
+                    hash_insert(name, (void*)1, get->props);
                 }
             }
             else if (JNOTNULL(arg)) {
@@ -1494,7 +1671,7 @@ HIDDEN void jmap_get_parse(json_t *jargs,
             }
         }
 
-        else if (!args_parse || !args_parse(key, arg, parser, args_rock)) {
+        else if (!args_parse || !args_parse(req, parser, key, arg, args_rock)) {
             jmap_parser_invalid(parser, key);
         }
     }
@@ -1509,6 +1686,37 @@ HIDDEN void jmap_get_parse(json_t *jargs,
         *err = json_pack("{s:s, s:s}", "type", "requestTooLarge",
                          "description", "ids must be specified");
         return;
+    }
+
+    if (*err) return;
+
+    if (get->props == NULL) {
+        /* Initialize default properties */
+        int nvalid = 0;
+        const jmap_property_t *prop;
+        for (prop = valid_props; prop && prop->name; prop++) {
+            nvalid++;
+        }
+        get->props = xzmalloc(sizeof(hash_table));
+        construct_hash_table(get->props, nvalid + 1, 0);
+        for (prop = valid_props; prop && prop->name; prop++) {
+            if (prop->flags & JMAP_PROP_SKIP_GET) {
+                continue;
+            }
+            if (!prop->capability || jmap_is_using(req, prop->capability)) {
+                hash_insert(prop->name, (void*)1, get->props);
+            }
+        }
+    }
+    else {
+        const jmap_property_t *prop;
+        for (prop = valid_props; prop && prop->name; prop++) {
+            if (prop->flags & JMAP_PROP_ALWAYS_GET) {
+                if (!hash_lookup(prop->name, get->props)) {
+                    hash_insert(prop->name, (void*)1, get->props);
+                }
+            }
+        }
     }
 
     /* Number of ids checked in validate_request() */ 
@@ -1536,12 +1744,51 @@ HIDDEN json_t *jmap_get_reply(struct jmap_get *get)
 
 /* Foo/set */
 
-HIDDEN void jmap_set_parse(json_t *jargs, struct jmap_parser *parser,
-                           int (*args_parse)(const char *, json_t *,
-                                             struct jmap_parser *, void *),
-                           void *args_rock,
+static void jmap_set_validate_props(jmap_req_t *req, json_t *jobj,
+                                    const jmap_property_t valid_props[],
+                                    json_t **err)
+{
+    json_t *invalid = json_array();
+    const char *path;
+    json_t *jval;
+
+    json_object_foreach(jobj, path, jval) {
+        /* Determine property name */
+        const char *pname = path;
+        char *tmp = NULL;
+        const char *slash = strchr(pname, '/');
+        if (slash) {
+            tmp = jmap_pointer_decode(pname, slash - path);
+            if (tmp) pname = tmp;
+        }
+        /* Validate against property spec */
+        const jmap_property_t *prop = jmap_property_find(pname, valid_props);
+        if (!prop) {
+            json_array_append_new(invalid, json_string(path));
+        }
+        else if (prop->capability && !jmap_is_using(req, prop->capability)) {
+            json_array_append_new(invalid, json_string(path));
+        }
+        /* XXX could check IMMUTABLE and SERVER_SET here, but we can't
+         * reject such properties if they match the current value */
+        if (tmp) free(tmp);
+    }
+    if (json_array_size(invalid)) {
+        *err = json_pack("{s:s s:o}",
+                "type", "invalidProperties",
+                "properties", invalid);
+    }
+    else {
+        json_decref(invalid);
+    }
+}
+
+HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
+                           const jmap_property_t valid_props[],
+                           jmap_args_parse_cb args_parse, void *args_rock,
                            struct jmap_set *set, json_t **err)
 {
+    json_t *jargs = req->args;
     memset(set, 0, sizeof(struct jmap_set));
     set->create = json_object();
     set->update = json_object();
@@ -1620,18 +1867,38 @@ HIDDEN void jmap_set_parse(json_t *jargs, struct jmap_parser *parser,
             }
         }
 
-        else if (!args_parse || !args_parse(key, arg, parser, args_rock)) {
+        else if (!args_parse || !args_parse(req, parser, key, arg, args_rock)) {
             jmap_parser_invalid(parser, key);
         }
     }
 
-    // TODO We could report the following set errors here:
-    // -invalidPatch
-    // - willDestroy
-
     if (json_array_size(parser->invalid)) {
         *err = json_pack("{s:s s:O}", "type", "invalidArguments",
                 "arguments", parser->invalid);
+    }
+
+    if (valid_props) {
+        json_t *jval;
+        /* Make sure no property is set without its capability */
+        json_object_foreach(json_object_get(jargs, "create"), key, jval) {
+            json_t *err = NULL;
+            jmap_set_validate_props(req, jval, valid_props, &err);
+            if (err) {
+                json_object_del(set->create, key);
+                json_object_set_new(set->not_created, key, err);
+            }
+        }
+        json_object_foreach(json_object_get(jargs, "update"), key, jval) {
+            json_t *err = NULL;
+            jmap_set_validate_props(req, jval, valid_props, &err);
+            if (err) {
+                json_object_del(set->update, key);
+                json_object_set_new(set->not_updated, key, err);
+            }
+        }
+        // TODO We could report the following set errors here:
+        // -invalidPatch
+        // - willDestroy
     }
 }
 
@@ -1675,14 +1942,14 @@ HIDDEN json_t *jmap_set_reply(struct jmap_set *set)
 
 /* Foo/changes */
 
-HIDDEN void jmap_changes_parse(json_t *jargs,
+HIDDEN void jmap_changes_parse(jmap_req_t *req,
                                struct jmap_parser *parser,
-                               int (*args_parse)(const char *, json_t *,
-                                                 struct jmap_parser *, void *),
+                               jmap_args_parse_cb args_parse,
                                void *args_rock,
                                struct jmap_changes *changes,
                                json_t **err)
 {
+    json_t *jargs = req->args;
     const char *key;
     json_t *arg;
 
@@ -1715,7 +1982,7 @@ HIDDEN void jmap_changes_parse(json_t *jargs,
             }
         }
 
-        else if (!args_parse || !args_parse(key, arg, parser, args_rock)) {
+        else if (!args_parse || !args_parse(req, parser, key, arg, args_rock)) {
             jmap_parser_invalid(parser, key);
         }
     }
@@ -1752,11 +2019,12 @@ HIDDEN json_t *jmap_changes_reply(struct jmap_changes *changes)
 
 /* Foo/copy */
 
-HIDDEN void jmap_copy_parse(json_t *jargs,
-                            struct jmap_parser *parser, jmap_req_t *req,
-                            void (*validate_props)(json_t *obj, json_t **err),
+HIDDEN void jmap_copy_parse(jmap_req_t *req, struct jmap_parser *parser,
+                            jmap_args_parse_cb args_parse, void *args_rock,
                             struct jmap_copy *copy, json_t **err)
 {
+    json_t *jargs = req->args;
+
     memset(copy, 0, sizeof(struct jmap_copy));
     copy->blob_copy = !strcmp(req->method, "Blob/copy");
     copy->create = copy->blob_copy ? json_array() : json_object();
@@ -1810,17 +2078,12 @@ HIDDEN void jmap_copy_parse(json_t *jargs,
                 if (!json_is_object(obj)) {
                     jmap_parser_invalid(parser, creation_id);
                 }
-                else {
-                    /* Validate properties */
-                    json_t *myerr = NULL;
-                    if (validate_props) validate_props(obj, &myerr);
-                    if (myerr) {
-                        json_object_set(copy->not_created, creation_id, myerr);
-                    }
-                    else {
-                        json_object_set(copy->create, creation_id, obj);
-                    }
+                else if (!json_is_string(json_object_get(obj, "id"))) {
+                    jmap_parser_push(parser, creation_id);
+                    jmap_parser_invalid(parser, "id");
+                    jmap_parser_pop(parser);
                 }
+                else json_object_set(copy->create, creation_id, obj);
             }
             jmap_parser_pop(parser);
         }
@@ -1831,7 +2094,9 @@ HIDDEN void jmap_copy_parse(json_t *jargs,
             copy->on_success_destroy_original = json_boolean_value(arg);
         }
 
-        else jmap_parser_invalid(parser, key);
+        else if (!args_parse || !args_parse(req, parser, key, arg, args_rock)) {
+            jmap_parser_invalid(parser, key);
+        }
     }
 
     if (json_array_size(parser->invalid)) {
@@ -1871,9 +2136,9 @@ HIDDEN json_t *jmap_copy_reply(struct jmap_copy *copy)
 
 /* Foo/query */
 
-HIDDEN void jmap_filter_parse(json_t *filter, struct jmap_parser *parser,
-                              jmap_filter_parse_cb parse_condition,
-                              json_t *unsupported, void *rock)
+HIDDEN void jmap_filter_parse(jmap_req_t *req, struct jmap_parser *parser,
+                              json_t *filter, json_t *unsupported,
+                              jmap_filter_parse_cb parse_condition, void *cond_rock)
 {
     json_t *arg, *val;
     const char *s;
@@ -1894,19 +2159,19 @@ HIDDEN void jmap_filter_parse(json_t *filter, struct jmap_parser *parser,
         }
         json_array_foreach(arg, i, val) {
             jmap_parser_push_index(parser, "conditions", i, NULL);
-            jmap_filter_parse(val, parser, parse_condition, unsupported, rock);
+            jmap_filter_parse(req, parser, val, unsupported, parse_condition, cond_rock);
             jmap_parser_pop(parser);
         }
     } else if (arg) {
         jmap_parser_invalid(parser, "operator");
     } else {
-        parse_condition(filter, parser, unsupported, rock);
+        parse_condition(req, parser, filter, unsupported, cond_rock);
     }
 }
 
-HIDDEN void jmap_parse_comparator(json_t *jsort, struct jmap_parser *parser,
-                                  jmap_comparator_parse_cb comp_cb,
-                                  json_t *unsupported, void *rock)
+HIDDEN void jmap_comparator_parse(jmap_req_t *req, struct jmap_parser *parser,
+                                  json_t *jsort, json_t *unsupported,
+                                  jmap_comparator_parse_cb comp_cb, void *comp_rock)
 {
     if (!json_is_object(jsort)) {
         jmap_parser_invalid(parser, NULL);
@@ -1940,7 +2205,7 @@ HIDDEN void jmap_parse_comparator(json_t *jsort, struct jmap_parser *parser,
     comp.collation = json_string_value(val);
 
 
-    if (comp.property && !comp_cb(&comp, rock)) {
+    if (comp.property && !comp_cb(req, &comp, comp_rock)) {
         struct buf buf = BUF_INITIALIZER;
         json_array_append_new(unsupported,
                 json_string(jmap_parser_path(parser, &buf)));
@@ -1948,14 +2213,13 @@ HIDDEN void jmap_parse_comparator(json_t *jsort, struct jmap_parser *parser,
     }
 }
 
-HIDDEN void jmap_query_parse(json_t *jargs, struct jmap_parser *parser,
+HIDDEN void jmap_query_parse(jmap_req_t *req, struct jmap_parser *parser,
+                             jmap_args_parse_cb args_parse, void *args_rock,
                              jmap_filter_parse_cb filter_cb, void *filter_rock,
-                             jmap_comparator_parse_cb comp_cb, void *sort_rock,
-                             int (*args_parse)(const char *, json_t *,
-                                               struct jmap_parser *, void *),
-                             void *args_rock,
+                             jmap_comparator_parse_cb comp_cb, void *comp_rock,
                              struct jmap_query *query, json_t **err)
 {
+    json_t *jargs = req->args;
     const char *key;
     json_t *arg, *val;
     size_t i;
@@ -1975,8 +2239,8 @@ HIDDEN void jmap_query_parse(json_t *jargs, struct jmap_parser *parser,
         else if (!strcmp(key, "filter")) {
             if (json_is_object(arg)) {
                 jmap_parser_push(parser, "filter");
-                jmap_filter_parse(arg, parser, filter_cb,
-                                  unsupported_filter, filter_rock);
+                jmap_filter_parse(req, parser, arg, unsupported_filter,
+                                  filter_cb, filter_rock);
                 jmap_parser_pop(parser);
                 query->filter = arg;
             }
@@ -1990,8 +2254,8 @@ HIDDEN void jmap_query_parse(json_t *jargs, struct jmap_parser *parser,
             if (json_is_array(arg)) {
                 json_array_foreach(arg, i, val) {
                     jmap_parser_push_index(parser, "sort", i, NULL);
-                    jmap_parse_comparator(val, parser,
-                                          comp_cb, unsupported_sort, sort_rock);
+                    jmap_comparator_parse(req, parser, val, unsupported_sort,
+                                          comp_cb, comp_rock);
                     jmap_parser_pop(parser);
                 }
                 if (json_array_size(arg)) {
@@ -2045,7 +2309,7 @@ HIDDEN void jmap_query_parse(json_t *jargs, struct jmap_parser *parser,
             }
         }
 
-        else if (!args_parse || !args_parse(key, arg, parser, args_rock)) {
+        else if (!args_parse || !args_parse(req, parser, key, arg, args_rock)) {
             jmap_parser_invalid(parser, key);
         }
     }
@@ -2103,19 +2367,15 @@ HIDDEN json_t *jmap_query_reply(struct jmap_query *query)
 
 /* Foo/queryChanges */
 
-HIDDEN void jmap_querychanges_parse(json_t *jargs,
+HIDDEN void jmap_querychanges_parse(jmap_req_t *req,
                                     struct jmap_parser *parser,
-                                    jmap_filter_parse_cb filter_cb,
-                                    void *filter_rock,
-                                    jmap_comparator_parse_cb comp_cb,
-                                    void *sort_rock,
-                                    int (*args_parse)(const char *, json_t *,
-                                                      struct jmap_parser *,
-                                                      void *),
-                                    void *args_rock,
+                                    jmap_args_parse_cb args_parse, void *args_rock,
+                                    jmap_filter_parse_cb filter_cb, void *filter_rock,
+                                    jmap_comparator_parse_cb comp_cb, void *comp_rock,
                                     struct jmap_querychanges *query,
                                     json_t **err)
 {
+    json_t *jargs = req->args;
     const char *key;
     json_t *arg, *val;
     size_t i;
@@ -2136,8 +2396,8 @@ HIDDEN void jmap_querychanges_parse(json_t *jargs,
         else if (!strcmp(key, "filter")) {
             if (json_is_object(arg)) {
                 jmap_parser_push(parser, "filter");
-                jmap_filter_parse(arg, parser, filter_cb,
-                                  unsupported_filter, filter_rock);
+                jmap_filter_parse(req, parser, arg, unsupported_filter,
+                                  filter_cb, filter_rock);
                 jmap_parser_pop(parser);
                 query->filter = arg;
             }
@@ -2151,8 +2411,8 @@ HIDDEN void jmap_querychanges_parse(json_t *jargs,
             if (json_is_array(arg)) {
                 json_array_foreach(arg, i, val) {
                     jmap_parser_push_index(parser, "sort", i, NULL);
-                    jmap_parse_comparator(val, parser, comp_cb,
-                                          unsupported_sort, sort_rock);
+                    jmap_comparator_parse(req, parser, val, unsupported_sort,
+                                          comp_cb, comp_rock);
                     jmap_parser_pop(parser);
                 }
                 if (json_array_size(arg)) {
@@ -2200,7 +2460,7 @@ HIDDEN void jmap_querychanges_parse(json_t *jargs,
             }
         }
 
-        else if (!args_parse || !args_parse(key, arg, parser, args_rock)) {
+        else if (!args_parse || !args_parse(req, parser, key, arg, args_rock)) {
             jmap_parser_invalid(parser, key);
         }
     }
@@ -2605,7 +2865,7 @@ HIDDEN void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith)
 
 HIDDEN int jmap_is_using(jmap_req_t *req, const char *capa)
 {
-    return strarray_find(req->capabilities, capa, 0) >= 0;
+    return strarray_find(req->using_capabilities, capa, 0) >= 0;
 }
 
 /*

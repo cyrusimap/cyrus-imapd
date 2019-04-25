@@ -88,7 +88,7 @@ static int meth_options_jmap(struct transaction_t *txn, void *params);
 static int meth_post(struct transaction_t *txn, void *params);
 
 /* JMAP Requests */
-static int jmap_settings(struct transaction_t *txn);
+static int jmap_get_session(struct transaction_t *txn);
 static int jmap_download(struct transaction_t *txn);
 static int jmap_upload(struct transaction_t *txn);
 
@@ -96,6 +96,9 @@ static int jmap_upload(struct transaction_t *txn);
 static int jmap_blob_get(jmap_req_t *req);
 static int jmap_blob_copy(jmap_req_t *req);
 static int jmap_core_echo(jmap_req_t *req);
+
+/* JMAP extension methods */
+static int jmap_quota_get(jmap_req_t *req);
 
 /* WebSocket handler */
 #define JMAP_WS_PROTOCOL   "jmap"
@@ -146,17 +149,38 @@ struct namespace_t namespace_jmap = {
  */
 
 static jmap_settings_t my_jmap_settings = {
-    HASH_TABLE_INITIALIZER, STRARRAY_INITIALIZER, NULL, { 0 }
+    HASH_TABLE_INITIALIZER, NULL, { 0 }
 };
 
 jmap_method_t jmap_core_methods[] = {
-    { "Blob/copy",    &jmap_blob_copy, 0/*flags*/ },
-    { "Blob/get",     &jmap_blob_get,  JMAP_SHARED_CSTATE },
-    { "Core/echo",    &jmap_core_echo, JMAP_SHARED_CSTATE },
-    { NULL,           NULL, 0/*flags*/ }
+    {
+        "Blob/copy",
+        JMAP_URN_CORE,
+        &jmap_blob_copy,
+        0/*flags*/
+    },
+    {
+        "Blob/get",
+        JMAP_URN_CORE,
+        &jmap_blob_get,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Core/echo",
+        JMAP_URN_CORE,
+        &jmap_core_echo,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Quota/get",
+        JMAP_QUOTA_EXTENSION,
+        &jmap_quota_get,
+        JMAP_SHARED_CSTATE
+    },
+    { NULL, NULL, NULL, 0}
 };
 
-static void jmap_core_init()
+HIDDEN void jmap_core_init(jmap_settings_t *settings)
 {
 #define _read_opt(val, optkey) \
     val = config_getint(optkey); \
@@ -165,63 +189,76 @@ static void jmap_core_init()
                 imapopts[optkey].optname); \
         val = 0; \
     }
-    _read_opt(my_jmap_settings.limits[MAX_SIZE_UPLOAD],
+    _read_opt(settings->limits[MAX_SIZE_UPLOAD],
               IMAPOPT_JMAP_MAX_SIZE_UPLOAD);
-    my_jmap_settings.limits[MAX_SIZE_UPLOAD] *= 1024;
-    _read_opt(my_jmap_settings.limits[MAX_CONCURRENT_UPLOAD],
+    settings->limits[MAX_SIZE_UPLOAD] *= 1024;
+    _read_opt(settings->limits[MAX_CONCURRENT_UPLOAD],
               IMAPOPT_JMAP_MAX_CONCURRENT_UPLOAD);
-    _read_opt(my_jmap_settings.limits[MAX_SIZE_REQUEST],
+    _read_opt(settings->limits[MAX_SIZE_REQUEST],
               IMAPOPT_JMAP_MAX_SIZE_REQUEST);
-    my_jmap_settings.limits[MAX_SIZE_REQUEST] *= 1024;
-    _read_opt(my_jmap_settings.limits[MAX_CONCURRENT_REQUESTS],
+    settings->limits[MAX_SIZE_REQUEST] *= 1024;
+    _read_opt(settings->limits[MAX_CONCURRENT_REQUESTS],
               IMAPOPT_JMAP_MAX_CONCURRENT_REQUESTS);
-    _read_opt(my_jmap_settings.limits[MAX_CALLS_IN_REQUEST],
+    _read_opt(settings->limits[MAX_CALLS_IN_REQUEST],
               IMAPOPT_JMAP_MAX_CALLS_IN_REQUEST);
-    _read_opt(my_jmap_settings.limits[MAX_OBJECTS_IN_GET],
+    _read_opt(settings->limits[MAX_OBJECTS_IN_GET],
               IMAPOPT_JMAP_MAX_OBJECTS_IN_GET);
-    _read_opt(my_jmap_settings.limits[MAX_OBJECTS_IN_SET],
+    _read_opt(settings->limits[MAX_OBJECTS_IN_SET],
               IMAPOPT_JMAP_MAX_OBJECTS_IN_SET);
 #undef _read_opt
 
-    strarray_push(&my_jmap_settings.can_use, JMAP_URN_CORE);
+    json_object_set_new(settings->server_capabilities,
+            JMAP_URN_CORE,
+            json_pack("{s:i s:i s:i s:i s:i s:i s:i s:o}",
+                "maxSizeUpload",
+                settings->limits[MAX_SIZE_UPLOAD],
+                "maxConcurrentUpload",
+                settings->limits[MAX_CONCURRENT_UPLOAD],
+                "maxSizeRequest",
+                settings->limits[MAX_SIZE_REQUEST],
+                "maxConcurrentRequests",
+                settings->limits[MAX_CONCURRENT_REQUESTS],
+                "maxCallsInRequest",
+                settings->limits[MAX_CALLS_IN_REQUEST],
+                "maxObjectsInGet",
+                settings->limits[MAX_OBJECTS_IN_GET],
+                "maxObjectsInSet",
+                settings->limits[MAX_OBJECTS_IN_SET],
+                "collationAlgorithms", json_array()));
  
-    construct_hash_table(&my_jmap_settings.methods, 128, 0);
+    if (ws_enabled()) {
+        json_object_set_new(settings->server_capabilities,
+                JMAP_URN_WEBSOCKET,
+                json_pack("{s:s}", "wsUrl", JMAP_BASE_URL JMAP_WS_COL));
+    }
+
+    json_object_set_new(settings->server_capabilities,
+            JMAP_QUOTA_EXTENSION, json_object());
+    json_object_set_new(settings->server_capabilities,
+            JMAP_PERFORMANCE_EXTENSION, json_object());
+    json_object_set_new(settings->server_capabilities,
+            JMAP_DEBUG_EXTENSION, json_object());
 
     jmap_method_t *mp;
     for (mp = jmap_core_methods; mp->name; mp++) {
         hash_insert(mp->name, mp, &my_jmap_settings.methods);
     }
+
 }
 
-static void jmap_core_capabilities()
+HIDDEN void jmap_core_capabilities(json_t *account_capabilities)
 {
-    my_jmap_settings.capabilities =
-        json_pack("{s:{s:i s:i s:i s:i s:i s:i s:i s:o}}",
-                  JMAP_URN_CORE,
-                  "maxSizeUpload",
-                  my_jmap_settings.limits[MAX_SIZE_UPLOAD],
-                  "maxConcurrentUpload",
-                  my_jmap_settings.limits[MAX_CONCURRENT_UPLOAD],
-                  "maxSizeRequest",
-                  my_jmap_settings.limits[MAX_SIZE_REQUEST],
-                  "maxConcurrentRequests",
-                  my_jmap_settings.limits[MAX_CONCURRENT_REQUESTS],
-                  "maxCallsInRequest",
-                  my_jmap_settings.limits[MAX_CALLS_IN_REQUEST],
-                  "maxObjectsInGet",
-                  my_jmap_settings.limits[MAX_OBJECTS_IN_GET],
-                  "maxObjectsInSet",
-                  my_jmap_settings.limits[MAX_OBJECTS_IN_SET],
-                  "collationAlgorithms", json_array()
-            );
+    json_object_set_new(account_capabilities,
+            JMAP_URN_CORE, json_object());
 
-    if (ws_enabled()) {
-        json_object_set_new(my_jmap_settings.capabilities, JMAP_URN_WEBSOCKET,
-                            json_pack("{s:s}", "wsUrl", JMAP_BASE_URL JMAP_WS_COL));
-    }
+    json_object_set_new(account_capabilities,
+            JMAP_QUOTA_EXTENSION, json_object());
 
-    json_object_set_new(my_jmap_settings.capabilities,
-                        XML_NS_CYRUS "performance", json_object());
+    json_object_set_new(account_capabilities,
+            JMAP_PERFORMANCE_EXTENSION, json_object());
+
+    json_object_set_new(account_capabilities,
+            JMAP_DEBUG_EXTENSION, json_object());
 }
 
 static void jmap_init(struct buf *serverinfo __attribute__((unused)))
@@ -235,8 +272,10 @@ static void jmap_init(struct buf *serverinfo __attribute__((unused)))
 
     initialize_JMAP_error_table();
 
-    jmap_core_init();
-    jmap_user_init(&my_jmap_settings);
+    construct_hash_table(&my_jmap_settings.methods, 128, 0);
+    my_jmap_settings.server_capabilities = json_object();
+
+    jmap_core_init(&my_jmap_settings);
     jmap_mail_init(&my_jmap_settings);
     jmap_contact_init(&my_jmap_settings);
     jmap_calendar_init(&my_jmap_settings);
@@ -259,9 +298,7 @@ static int jmap_need_auth(struct transaction_t *txn __attribute__((unused)))
 static void jmap_shutdown(void)
 {
     free_hash_table(&my_jmap_settings.methods, NULL);
-    strarray_fini(&my_jmap_settings.can_use);
-    if (my_jmap_settings.capabilities)
-        json_decref(my_jmap_settings.capabilities);
+    json_decref(my_jmap_settings.server_capabilities);
 }   
 
 
@@ -354,7 +391,7 @@ static int meth_get(struct transaction_t *txn,
     else if (r) return r;
 
     if (txn->req_tgt.flags == JMAP_ENDPOINT_API) {
-        return jmap_settings(txn);
+        return jmap_get_session(txn);
     }
     else if (txn->req_tgt.flags == JMAP_ENDPOINT_DOWNLOAD) {
         return jmap_download(txn);
@@ -422,9 +459,9 @@ static int meth_post(struct transaction_t *txn,
     /* Regular JMAP API request */
     ret = jmap_api(txn, &res, &my_jmap_settings);
 
-    if (!ret) {
+    if (res) {
         /* Output the JSON object */
-        ret = json_response(HTTP_OK, txn, res);
+        ret = json_response(ret ? ret : HTTP_OK, txn, res);
     }
 
     syslog(LOG_DEBUG, ">>>> jmap_post: Exit\n");
@@ -964,168 +1001,42 @@ done:
     return ret;
 }
 
-struct findaccounts_data {
-    json_t *accounts;
-    struct buf userid;
-    int rw;
-    int has_mail;
-    int has_contacts;
-    int has_calendars;
-};
-
-static void findaccounts_add(struct findaccounts_data *ctx)
+/* Handle a GET on the session endpoint */
+static int jmap_get_session(struct transaction_t *txn)
 {
-    if (!buf_len(&ctx->userid))
-        return;
+    json_t *jsession = json_object();
 
-    const char *userid = buf_cstring(&ctx->userid);
+    /* URLs */
+    json_object_set_new(jsession, "username", json_string(httpd_userid));
+    json_object_set_new(jsession, "apiUrl", json_string(JMAP_BASE_URL));
+    json_object_set_new(jsession, "downloadUrl",
+            json_string(JMAP_BASE_URL JMAP_DOWNLOAD_COL JMAP_DOWNLOAD_TPL));
+    json_object_set_new(jsession, "uploadUrl",
+            json_string(JMAP_BASE_URL JMAP_UPLOAD_COL JMAP_UPLOAD_TPL));
+    /* TODO eventSourceUrl */
 
-    json_t *has_data_for = json_array();
-    if (ctx->has_mail) {
-        json_array_append_new(has_data_for, json_string(JMAP_URN_MAIL));
-        json_array_append_new(has_data_for, json_string(JMAP_URN_SUBMISSION));
-        json_array_append_new(has_data_for, json_string(JMAP_URN_VACATION));
-    }
-    if (ctx->has_contacts)
-        json_array_append_new(has_data_for, json_string(JMAP_URN_CONTACTS));
-    if (ctx->has_calendars)
-        json_array_append_new(has_data_for, json_string(JMAP_URN_CALENDARS));
-
-    json_t *account = json_object();
-    json_object_set_new(account, "name", json_string(userid));
-    json_object_set_new(account, "isPrimary", json_false());
-    json_object_set_new(account, "isReadOnly", json_boolean(!ctx->rw));
-    json_object_set_new(account, "hasDataFor", has_data_for);
-
-    json_object_set_new(ctx->accounts, userid, account);
-}
-
-static int findaccounts_cb(struct findall_data *data, void *rock)
-{
-    if (!data || !data->mbentry)
-        return 0;
-
-    const mbentry_t *mbentry = data->mbentry;
-    mbname_t *mbname = mbname_from_intname(mbentry->name);
-    const char *userid = mbname_userid(mbname);
-    struct findaccounts_data *ctx = rock;
-    const strarray_t *boxes = mbname_boxes(mbname);
-
-    if (strcmp(buf_cstring(&ctx->userid), userid)) {
-        /* We haven't yet seen this account.
-           Add any previous account and reset state */
-        findaccounts_add(ctx);
-        buf_setcstr(&ctx->userid, userid);
-        ctx->rw = 0;
-        ctx->has_mail = 0;
-        ctx->has_contacts = 0;
-        ctx->has_calendars = 0;
-    }
-
-    if (!ctx->rw) {
-        ctx->rw = httpd_myrights(httpd_authstate, data->mbentry) & ACL_READ_WRITE;
-    }
-    if (!ctx->has_mail) {
-        ctx->has_mail = mbentry->mbtype == MBTYPE_EMAIL;
-    }
-    if (!ctx->has_contacts) {
-        /* Only count children of user.foo.#addressbooks */
-        const char *prefix = config_getstring(IMAPOPT_ADDRESSBOOKPREFIX);
-        ctx->has_contacts =
-            strarray_size(boxes) > 1 && !strcmpsafe(prefix, strarray_nth(boxes, 0));
-    }
-    if (!ctx->has_calendars) {
-        /* Only count children of user.foo.#calendars */
-        const char *prefix = config_getstring(IMAPOPT_CALENDARPREFIX);
-        ctx->has_calendars =
-            strarray_size(boxes) > 1 && !strcmpsafe(prefix, strarray_nth(boxes, 0));
-    }
-
-    mbname_free(&mbname);
-    return 0;
-}
-
-static json_t *user_settings(const char *userid)
-{
-    json_t *accounts = json_pack("{s:{s:s s:b s:b s:[s,s,s,s,s]}}",
-            userid, "name", userid,
-            "isPrimary", 1,
-            "isReadOnly", 0,
-            /* JMAP autoprovisions calendars and contacts,
-             * so these JMAP types always are available
-             * for the primary account */
-            "hasDataFor",
-            JMAP_URN_MAIL,
-            JMAP_URN_SUBMISSION,
-            JMAP_URN_VACATION,
-            JMAP_URN_CONTACTS,
-            JMAP_URN_CALENDARS);
-
-    /* Find all shared accounts */
-    strarray_t patterns = STRARRAY_INITIALIZER;
-    char *userpat = xstrdup("user.*");
-    userpat[4] = jmap_namespace.hier_sep;
-    strarray_append(&patterns, userpat);
-    struct findaccounts_data ctx = { accounts, BUF_INITIALIZER, 0, 0, 0, 0 };
-    int r = mboxlist_findallmulti(&jmap_namespace, &patterns, 0, userid,
-                                  httpd_authstate, findaccounts_cb, &ctx);
-    free(userpat);
-    strarray_fini(&patterns);
-    if (r) {
-        syslog(LOG_ERR, "Can't determine shared JMAP accounts for user %s: %s",
-                userid, error_message(r));
-    }
-    /* Finalise last seen account */
-    findaccounts_add(&ctx);
-    buf_free(&ctx.userid);
-
-    char *inboxname = mboxname_user_mbox(userid, NULL);
+    /* state */
+    char *inboxname = mboxname_user_mbox(httpd_userid, NULL);
     struct buf state = BUF_INITIALIZER;
     buf_printf(&state, MODSEQ_FMT, mboxname_readraclmodseq(inboxname));
+    json_object_set_new(jsession, "state", json_string(buf_cstring(&state)));
     free(inboxname);
-
-    json_t *jsettings = json_pack("{s:s s:o s:O s:s s:s s:s s:s}",
-            "username", userid,
-            "accounts", accounts,
-            "capabilities", my_jmap_settings.capabilities,
-            "apiUrl", JMAP_BASE_URL,
-            "downloadUrl", JMAP_BASE_URL JMAP_DOWNLOAD_COL JMAP_DOWNLOAD_TPL,
-            /* FIXME eventSourceUrl */
-            "uploadUrl", JMAP_BASE_URL JMAP_UPLOAD_COL JMAP_UPLOAD_TPL,
-            "state", buf_cstring(&state));
-
     buf_free(&state);
-    return jsettings;
-}
 
-/* Handle a GET on the settings endpoint */
-static int jmap_settings(struct transaction_t *txn)
-{
-    assert(httpd_userid);
-
-    if (!my_jmap_settings.capabilities) {
-        jmap_core_capabilities();
-        jmap_user_capabilities(&my_jmap_settings);
-        jmap_mail_capabilities(&my_jmap_settings);
-        jmap_contact_capabilities(&my_jmap_settings);
-        jmap_calendar_capabilities(&my_jmap_settings);
-    }
-
-    /* Create the response object */
-    json_t *res = user_settings(httpd_userid);
-    if (!res) {
-        syslog(LOG_ERR, "JMAP auth: cannot determine user settings for %s",
-                httpd_userid);
-        return HTTP_SERVER_ERROR;
-    }
+    /* capabilities */
+    json_object_set(jsession, "capabilities", my_jmap_settings.server_capabilities);
+    json_t *accounts = json_object();
+    json_t *primary_accounts = json_object();
+    jmap_accounts(accounts, primary_accounts);
+    json_object_set_new(jsession, "accounts", accounts);
+    json_object_set_new(jsession, "primaryAccounts", primary_accounts);
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE | CC_NOSTORE | CC_REVALIDATE;
 
     /* Write the JSON response */
-    return json_response(HTTP_OK, txn, res);
+    return json_response(HTTP_OK, txn, jsession);
 }
-
 
 /*
  * JMAP Core API Methods
@@ -1243,7 +1154,7 @@ static int jmap_blob_copy(jmap_req_t *req)
     struct mailbox *to_mbox = NULL;
 
     /* Parse request */
-    jmap_copy_parse(req->args, &parser, req, NULL, &copy, &err);
+    jmap_copy_parse(req, &parser, NULL, NULL, &copy, &err);
     if (err) {
         jmap_error(req, err);
         goto cleanup;
@@ -1321,10 +1232,22 @@ static int getblob_cb(const conv_guidrec_t* rec, void* vrock)
 }
 
 static const jmap_property_t blob_props[] = {
-    { "mailboxIds",      JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "threadIds",       JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "emailIds",        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { NULL,             0 }
+    {
+        "mailboxIds",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    {
+        "threadIds",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    {
+        "emailIds",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    { NULL, NULL, 0 }
 };
 
 static int jmap_blob_get(jmap_req_t *req)
@@ -1336,7 +1259,8 @@ static int jmap_blob_get(jmap_req_t *req)
     size_t i;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, blob_props, NULL, NULL, &get, 0, &err);
+    jmap_get_parse(req, &parser, blob_props, /*allow_null_ids*/0,
+                   NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -1548,4 +1472,85 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
     }
 
     return ret;
+}
+
+/* Quota/get method */
+static const jmap_property_t quota_props[] = {
+    {
+        "id",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    {
+        "used",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    {
+        "total",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    { NULL, NULL, 0 }
+};
+
+static int jmap_quota_get(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_get get;
+    json_t *err = NULL;
+    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
+
+    /* Parse request */
+    jmap_get_parse(req, &parser, quota_props, /*allow_null_ids*/1,
+                   NULL, NULL, &get, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    int want_mail_quota = !get.ids || json_is_null(get.ids);
+    size_t i;
+    json_t *jval;
+    json_array_foreach(get.ids, i, jval) {
+        if (strcmp("mail", json_string_value(jval))) {
+            json_array_append(get.not_found, jval);
+        }
+        else want_mail_quota = 1;
+    }
+
+    if (want_mail_quota) {
+        struct quota quota;
+        quota_init(&quota, inboxname);
+        int r = quota_read(&quota, NULL, 0);
+        if (!r) {
+            quota_t total = quota.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE];
+            quota_t used = quota.useds[QUOTA_STORAGE];
+            json_t *jquota = json_object();
+            json_object_set_new(jquota, "id", json_string("mail"));
+            json_object_set_new(jquota, "used", json_integer(used));
+            json_object_set_new(jquota, "total", json_integer(total));
+            json_array_append_new(get.list, jquota);
+        }
+        else {
+            syslog(LOG_ERR, "jmap_quota_get: can't read quota for %s: %s",
+                    inboxname, error_message(r));
+            json_array_append_new(get.not_found, json_string("mail"));
+        }
+        quota_free(&quota);
+    }
+
+
+    modseq_t quotamodseq = mboxname_readquotamodseq(inboxname);
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, MODSEQ_FMT, quotamodseq);
+    get.state = buf_release(&buf);
+
+    jmap_ok(req, jmap_get_reply(&get));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_get_fini(&get);
+    free(inboxname);
+    return 0;
 }

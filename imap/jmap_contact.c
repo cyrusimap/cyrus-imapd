@@ -93,15 +93,55 @@ static int _json_to_card(struct jmap_req *req,
                          json_t *invalid);
 
 jmap_method_t jmap_contact_methods[] = {
-    { "ContactGroup/get",        &jmap_contactgroup_get, JMAP_SHARED_CSTATE },
-    { "ContactGroup/changes",    &jmap_contactgroup_changes, JMAP_SHARED_CSTATE },
-    { "ContactGroup/set",        &jmap_contactgroup_set, /*flags*/0 },
-    { "Contact/get",             &jmap_contact_get, JMAP_SHARED_CSTATE },
-    { "Contact/changes",         &jmap_contact_changes, JMAP_SHARED_CSTATE },
-    { "Contact/query",           &jmap_contact_query, JMAP_SHARED_CSTATE },
-    { "Contact/set",             &jmap_contact_set, /*flags*/0 },
-    { "Contact/copy",            &jmap_contact_copy, /*flags*/0 },
-    { NULL,                      NULL, 0}
+    {
+        "ContactGroup/get",
+        JMAP_CONTACTS_EXTENSION,
+        &jmap_contactgroup_get,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "ContactGroup/changes",
+        JMAP_CONTACTS_EXTENSION,
+        &jmap_contactgroup_changes,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "ContactGroup/set",
+        JMAP_CONTACTS_EXTENSION,
+        &jmap_contactgroup_set,
+        /*flags*/0
+    },
+    {
+        "Contact/get",
+        JMAP_CONTACTS_EXTENSION,
+        &jmap_contact_get,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Contact/changes",
+        JMAP_CONTACTS_EXTENSION,
+        &jmap_contact_changes,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Contact/query",
+        JMAP_CONTACTS_EXTENSION,
+        &jmap_contact_query,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Contact/set",
+        JMAP_CONTACTS_EXTENSION,
+        &jmap_contact_set,
+        /*flags*/0
+    },
+    {
+        "Contact/copy",
+        JMAP_CONTACTS_EXTENSION,
+        &jmap_contact_copy,
+        /*flags*/0
+    },
+    { NULL, NULL, NULL, 0}
 };
 
 static char *_prodid = NULL;
@@ -113,7 +153,8 @@ HIDDEN void jmap_contact_init(jmap_settings_t *settings)
         hash_insert(mp->name, mp, &settings->methods);
     }
 
-    strarray_push(&settings->can_use, JMAP_URN_CONTACTS);
+    json_object_set_new(settings->server_capabilities,
+            JMAP_CONTACTS_EXTENSION, json_object());
 
     /* Initialize PRODID value
      *
@@ -129,10 +170,9 @@ HIDDEN void jmap_contact_init(jmap_settings_t *settings)
     _prodid = buf_release(&prodidbuf);
 }
 
-HIDDEN void jmap_contact_capabilities(jmap_settings_t *settings)
+HIDDEN void jmap_contact_capabilities(json_t *account_capabilities)
 {
-    json_object_set_new(settings->capabilities,
-                        JMAP_URN_CONTACTS, json_object());
+    json_object_set_new(account_capabilities, JMAP_CONTACTS_EXTENSION, json_object());
 }
 
 struct changes_rock {
@@ -414,48 +454,158 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
 }
 
 static const jmap_property_t contact_props[] = {
-    { "id",          JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "isFlagged",   0 },
-    { "avatar",      0 },
-    { "prefix",      0 },
-    { "firstName",   0 },
-    { "lastName",    0 },
-    { "suffix",      0 },
-    { "nickname",    0 },
-    { "birthday",    0 },
-    { "anniversary", 0 },
-    { "company",     0 },
-    { "department",  0 },
-    { "jobTitle",    0 },
-    { "emails",      0 },
-    { "phones",      0 },
-    { "online",      0 },
-    { "addresses",   0 },
-    { "notes",       0 },
+    {
+        "id",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "isFlagged",
+        NULL,
+        0
+    },
+    {
+        "avatar",
+        NULL,
+        0
+    },
+    {
+        "prefix",
+        NULL,
+        0
+    },
+    {
+        "firstName",
+        NULL,
+        0
+    },
+    {
+        "lastName",
+        NULL,
+        0
+    },
+    {
+        "suffix",
+        NULL,
+        0
+    },
+    {
+        "nickname",
+        NULL,
+        0
+    },
+    {
+        "birthday",
+        NULL,
+        0
+    },
+    {
+        "anniversary",
+        NULL,
+        0
+    },
+    {
+        "company",
+        NULL,
+        0
+    },
+    {
+        "department",
+        NULL,
+        0
+    },
+    {
+        "jobTitle",
+        NULL,
+        0
+    },
+    {
+        "emails",
+        NULL,
+        0
+    },
+    {
+        "phones",
+        NULL,
+        0
+    },
+    {
+        "online",
+        NULL,
+        0
+    },
+    {
+        "addresses",
+        NULL,
+        0
+    },
+    {
+        "notes",
+        NULL,
+        0
+    },
 
     /* FM extensions */
-    { "x-href",      JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE }, // AJAXUI only
-    { "x-hasPhoto",  JMAP_PROP_SERVER_SET }, // AJAXUI only
-    { "x-importance",0 },  // AJAXUI only
-    { "importance",  0 },  // JMAPUI only
+    {
+        "addressbookId",
+        JMAP_CONTACTS_EXTENSION,
+        0
+    },
+    {
+        "x-href",
+        JMAP_CONTACTS_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    }, // AJAXUI only
+    {
+        "x-hasPhoto",
+        JMAP_CONTACTS_EXTENSION,
+        JMAP_PROP_SERVER_SET
+    }, // AJAXUI only
+    {
+        "x-importance",
+        JMAP_CONTACTS_EXTENSION,
+        0
+    },  // AJAXUI only
+    {
+        "importance",
+        JMAP_CONTACTS_EXTENSION,
+        0
+    },  // JMAPUI only
 
-    { NULL,          0 }
+    { NULL, NULL, 0 }
 };
 
 static const jmap_property_t group_props[] = {
-    { "id",          JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "name",        0 },
-    { "contactIds",  0 },
+    {
+        "id",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "name",
+        NULL,
+        0
+    },
+    {
+        "contactIds",
+        NULL,
+        0
+    },
 
     // FM extensions */
-    { "otherAccountContactIds", 0}, // Both AJAXUI and JMAPUI
+    {
+        "otherAccountContactIds",
+        JMAP_CONTACTS_EXTENSION,
+        0
+    }, // Both AJAXUI and JMAPUI
 
-    { NULL,          0 }
+    { NULL, NULL, 0 }
 };
 
-static int _contact_getargs_parse(const char *key,
-                                  json_t *arg,
+static int _contact_getargs_parse(jmap_req_t *req __attribute__((unused)),
                                   struct jmap_parser *parser __attribute__((unused)),
+                                  const char *key,
+                                  json_t *arg,
                                   void *rock)
 {
     const char **addressbookId = (const char **) rock;
@@ -498,9 +648,10 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
     /* Parse request */
     char *mboxname = NULL;
     const char *addressbookId = NULL;
-    jmap_get_parse(req->args, &parser, req,
+    jmap_get_parse(req, &parser,
                    kind == CARDDAV_KIND_GROUP ? group_props : contact_props,
-                   &_contact_getargs_parse, &addressbookId, &get, 1, &err);
+                   /* allow_null_ids */ 1,
+                   &_contact_getargs_parse, &addressbookId, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -604,8 +755,8 @@ static int _contacts_changes(struct jmap_req *req, int kind)
     /* Parse request */
     char *mboxname = NULL;
     const char *addressbookId = NULL;
-    jmap_changes_parse(req->args, &parser,
-                       &_contact_getargs_parse, &addressbookId, &changes, &err);
+    jmap_changes_parse(req, &parser, &_contact_getargs_parse, &addressbookId,
+                       &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -733,7 +884,9 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
     }
 
     /* Parse arguments */
-    jmap_set_parse(req->args, &parser, NULL, NULL, &set, &err);
+    jmap_set_parse(req, &parser,
+                   kind == CARDDAV_KIND_GROUP ? group_props : contact_props,
+                   NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -1917,7 +2070,9 @@ static void *contact_filter_parse(json_t *arg)
     return f;
 }
 
-static void validatefilter(json_t *filter, struct jmap_parser *parser,
+static void validatefilter(jmap_req_t *req __attribute__((unused)),
+                           struct jmap_parser *parser,
+                           json_t *filter,
                            json_t *unsupported __attribute__((unused)),
                            void *rock __attribute__((unused)))
 {
@@ -1962,7 +2117,8 @@ static void validatefilter(json_t *filter, struct jmap_parser *parser,
     }
 }
 
-static int validatecomparator(struct jmap_comparator *comp,
+static int validatecomparator(jmap_req_t *req __attribute__((unused)),
+                              struct jmap_comparator *comp,
                               void *rock __attribute__((unused)))
 {
     /* Reject any collation */
@@ -2079,10 +2235,9 @@ static int jmap_contact_query(struct jmap_req *req)
 
     /* Parse request */
     json_t *err = NULL;
-    jmap_query_parse(req->args, &parser,
+    jmap_query_parse(req, &parser, NULL, NULL,
                      validatefilter, NULL,
                      validatecomparator, NULL,
-                     NULL, NULL,
                      &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -3218,7 +3373,7 @@ static int jmap_contact_copy(struct jmap_req *req)
     json_t *destroy_cards = json_array();
 
     /* Parse request */
-    jmap_copy_parse(req->args, &parser, req, NULL, &copy, &err);
+    jmap_copy_parse(req, &parser, NULL, NULL, &copy, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

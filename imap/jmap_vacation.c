@@ -1,4 +1,4 @@
-/* jmap_user.c -- Routines for handling JMAP user data
+/* jmap_user.c -- Routines for handling JMAP vacation responses
  *
  * Copyright (c) 1994-2019 Carnegie Mellon University.  All rights reserved.
  *
@@ -67,8 +67,6 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
-static int jmap_identity_get(jmap_req_t *req);
-static int jmap_quota_get(jmap_req_t *req);
 static int jmap_vacation_get(jmap_req_t *req);
 static int jmap_vacation_set(jmap_req_t *req);
 
@@ -78,197 +76,79 @@ static int jmap_vacation_set(jmap_req_t *req);
  * - Identity/set
  */
 
-jmap_method_t jmap_user_methods[] = {
-    { "Identity/get",         &jmap_identity_get, JMAP_SHARED_CSTATE },
-    { "Quota/get",            &jmap_quota_get, JMAP_SHARED_CSTATE },
-    { "VacationResponse/get", &jmap_vacation_get, JMAP_SHARED_CSTATE },
-    { "VacationResponse/set", &jmap_vacation_set, JMAP_SHARED_CSTATE },
-    { NULL,                   NULL, 0}
+jmap_method_t jmap_vacation_methods[] = {
+    {
+        "VacationResponse/get",
+        JMAP_URN_VACATION,
+        &jmap_vacation_get,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "VacationResponse/set",
+        JMAP_URN_VACATION,
+        &jmap_vacation_set,
+        JMAP_SHARED_CSTATE
+    },
+    { NULL, NULL, NULL, 0}
 };
 
 
-HIDDEN void jmap_user_init(jmap_settings_t *settings)
+HIDDEN void jmap_vacation_init(jmap_settings_t *settings)
 {
     jmap_method_t *mp;
-    for (mp = jmap_user_methods; mp->name; mp++) {
+    for (mp = jmap_vacation_methods; mp->name; mp++) {
         hash_insert(mp->name, mp, &settings->methods);
     }
 
-    strarray_push(&settings->can_use, JMAP_URN_VACATION);
-    strarray_push(&settings->can_use, JMAP_QUOTA_EXTENSION);
+    json_object_set_new(settings->server_capabilities,
+            JMAP_URN_VACATION, json_object());
 }
 
-HIDDEN void jmap_user_capabilities(jmap_settings_t *settings)
+HIDDEN void jmap_vacation_capabilities(json_t *account_capabilities)
 {
-    json_object_set_new(settings->capabilities,
-                        JMAP_URN_VACATION, json_object());
-    json_object_set_new(settings->capabilities,
-                        JMAP_QUOTA_EXTENSION, json_object());
+    json_object_set_new(account_capabilities,
+            JMAP_URN_VACATION, json_object());
 }
-
-
-/* Identity/get method */
-static const jmap_property_t identity_props[] = {
-    { "id",                  JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "name",                0 },
-    { "email",               JMAP_PROP_IMMUTABLE },
-    { "replyTo",             0 },
-    { "bcc",                 0 },
-    { "textSignature",       0 },
-    { "htmlSignature",       0 },
-    { "mayDelete",           JMAP_PROP_SERVER_SET },
-
-    /* FM extensions (do ALL of these get through to Cyrus?) */
-    { "displayName",         0 },
-    { "addBccOnSMTP",        0 },
-    { "saveSentToMailboxId", 0 },
-    { "saveOnSMTP",          0 },
-    { "useForAutoReply",     0 },
-    { "isAutoConfigured",    0 },
-    { "enableExternalSMTP",  0 },
-    { "smtpServer",          0 },
-    { "smtpPort",            0 },
-    { "smtpSSL",             0 },
-    { "smtpUser",            0 },
-    { "smtpPassword",        0 },
-    { "smtpRemoteService",   0 },
-    { "popLinkId",           0 },
-
-    { NULL,            0 }
-};
-
-static int jmap_identity_get(jmap_req_t *req)
-{
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
-    json_t *err = NULL;
-
-    /* Parse request */
-    jmap_get_parse(req->args, &parser, req, identity_props, NULL, NULL,
-                   &get, /*allow_null_ids*/1, &err);
-    if (err) {
-        jmap_error(req, err);
-        goto done;
-    }
-
-    /* Build response */
-    json_t *me = json_pack("{s:s s:s s:s s:b}",
-            "id", req->userid,
-            "name", "",
-            "email", req->userid,
-            "mayDelete", 0);
-    if (!strchr(req->userid, '@')) {
-        json_object_set_new(me, "email", json_string(""));
-    }
-    if (json_array_size(get.ids)) {
-        size_t i;
-        json_t *val;
-        json_array_foreach(get.ids, i, val) {
-            if (strcmp(json_string_value(val), req->userid)) {
-                json_array_append(get.not_found, val);
-            }
-            else {
-                json_array_append(get.list, me);
-            }
-        }
-    } else if (!JNOTNULL(get.ids)) {
-        json_array_append(get.list, me);
-    }
-    json_decref(me);
-
-    /* Reply */
-    get.state = xstrdup("0");
-    jmap_ok(req, jmap_get_reply(&get));
-
-done:
-    jmap_parser_fini(&parser);
-    jmap_get_fini(&get);
-    return 0;
-}
-
-
-/* Quota/get method */
-static const jmap_property_t quota_props[] = {
-    { "id",             JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "used",           JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "total",          JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-
-    { NULL,             0 }
-};
-
-static int jmap_quota_get(jmap_req_t *req)
-{
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
-    json_t *err = NULL;
-    char *inboxname = mboxname_user_mbox(req->accountid, NULL);
-
-    /* Parse request */
-    jmap_get_parse(req->args, &parser, req, quota_props, NULL, NULL,
-                   &get, /*allow_null_ids*/1, &err);
-    if (err) {
-        jmap_error(req, err);
-        goto done;
-    }
-
-    int want_mail_quota = !get.ids || json_is_null(get.ids);
-    size_t i;
-    json_t *jval;
-    json_array_foreach(get.ids, i, jval) {
-        if (strcmp("mail", json_string_value(jval))) {
-            json_array_append(get.not_found, jval);
-        }
-        else want_mail_quota = 1;
-    }
-
-    if (want_mail_quota) {
-        struct quota quota;
-        quota_init(&quota, inboxname);
-        int r = quota_read(&quota, NULL, 0);
-        if (!r) {
-            quota_t total = quota.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE];
-            quota_t used = quota.useds[QUOTA_STORAGE];
-            json_t *jquota = json_object();
-            json_object_set_new(jquota, "id", json_string("mail"));
-            json_object_set_new(jquota, "used", json_integer(used));
-            json_object_set_new(jquota, "total", json_integer(total));
-            json_array_append_new(get.list, jquota);
-        }
-        else {
-            syslog(LOG_ERR, "jmap_quota_get: can't read quota for %s: %s",
-                    inboxname, error_message(r));
-            json_array_append_new(get.not_found, json_string("mail"));
-        }
-        quota_free(&quota);
-    }
-
-
-    modseq_t quotamodseq = mboxname_readquotamodseq(inboxname);
-    struct buf buf = BUF_INITIALIZER;
-    buf_printf(&buf, MODSEQ_FMT, quotamodseq);
-    get.state = buf_release(&buf);
-
-    jmap_ok(req, jmap_get_reply(&get));
-
-done:
-    jmap_parser_fini(&parser);
-    jmap_get_fini(&get);
-    free(inboxname);
-    return 0;
-}
-
 
 /* VacationResponse/get method */
 static const jmap_property_t vacation_props[] = {
-    { "id",             JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "isEnabled",      0 },
-    { "fromDate",       0 },
-    { "toDate",         0 },
-    { "subject",        0 },
-    { "textBody",       0 },
-    { "htmlBody",       0 },
+    {
+        "id",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "isEnabled",
+        NULL,
+        0
+    },
+    {
+        "fromDate",
+        NULL,
+        0
+    },
+    {
+        "toDate",
+        NULL,
+        0
+    },
+    {
+        "subject",
+        NULL,
+        0
+    },
+    {
+        "textBody",
+        NULL,
+        0
+    },
+    {
+        "htmlBody",
+        NULL,
+        0
+    },
 
-    { NULL,             0 }
+    { NULL, NULL, 0 }
 };
 
 #define JMAP_VACATION_SCRIPT "jmap_vacation"
@@ -282,8 +162,8 @@ static int jmap_vacation_get(jmap_req_t *req)
     int fd;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, vacation_props, NULL, NULL,
-                   &get, /*allow_null_ids*/1, &err);
+    jmap_get_parse(req, &parser, vacation_props, /*allow_null_ids*/1,
+                   NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -337,7 +217,7 @@ static int jmap_vacation_set(struct jmap_req *req)
     int r = 0;
 
     /* Parse arguments */
-    jmap_set_parse(req->args, &parser, NULL, NULL, &set, &err);
+    jmap_set_parse(req, &parser, vacation_props, NULL, NULL, &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;

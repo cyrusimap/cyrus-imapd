@@ -1281,7 +1281,7 @@ imap_httpd_SOURCES += \
 	imap/jmap_mail.c \
 	imap/jmap_mail_submission.c \
 	imap/jmap_mailbox.c \
-	imap/jmap_user.c
+	imap/jmap_vacation.c
 
 imap_libcyrus_imap_la_SOURCES += \
 	imap/jmap_util.c \

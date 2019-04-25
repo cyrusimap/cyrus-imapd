@@ -96,12 +96,37 @@ static struct rolesort_data ROLESORT[] = {
 };
 
 static jmap_method_t jmap_mailbox_methods[] = {
-    { "Mailbox/get",          &jmap_mailbox_get, JMAP_SHARED_CSTATE },
-    { "Mailbox/set",          &jmap_mailbox_set, /*flags*/0 },
-    { "Mailbox/changes",      &jmap_mailbox_changes, JMAP_SHARED_CSTATE },
-    { "Mailbox/query",        &jmap_mailbox_query, JMAP_SHARED_CSTATE },
-    { "Mailbox/queryChanges", &jmap_mailbox_querychanges, JMAP_SHARED_CSTATE },
-    { NULL,                   NULL, 0}
+    {
+        "Mailbox/get",
+        JMAP_URN_MAIL,
+        &jmap_mailbox_get,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Mailbox/set",
+        JMAP_URN_MAIL,
+        &jmap_mailbox_set,
+        /*flags*/0
+    },
+    {
+        "Mailbox/changes",
+        JMAP_URN_MAIL,
+        &jmap_mailbox_changes,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Mailbox/query",
+        JMAP_URN_MAIL,
+        &jmap_mailbox_query,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Mailbox/queryChanges",
+        JMAP_URN_MAIL,
+        &jmap_mailbox_querychanges,
+        JMAP_SHARED_CSTATE
+    },
+    { NULL, NULL, NULL, 0}
 };
 
 HIDDEN void jmap_mailbox_init(jmap_settings_t *settings)
@@ -112,7 +137,7 @@ HIDDEN void jmap_mailbox_init(jmap_settings_t *settings)
     }
 }
 
-HIDDEN void jmap_mailbox_capabilities(jmap_settings_t *settings
+HIDDEN void jmap_mailbox_capabilities(json_t *account_capabilities
                                       __attribute__((unused)))
 {
 }
@@ -748,33 +773,124 @@ static void jmap_mailbox_get_notfound(const char *id, void *data __attribute__((
 }
 
 static const jmap_property_t mailbox_props[] = {
-    { "id",                 JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "name",               0 },
-    { "parentId",           0 },
-    { "role",               0 },
-    { "sortOrder",          0 },
-    { "totalEmails",        JMAP_PROP_SERVER_SET },
-    { "unreadEmails",       JMAP_PROP_SERVER_SET },
-    { "totalThreads",       JMAP_PROP_SERVER_SET },
-    { "unreadThreads",      JMAP_PROP_SERVER_SET },
-    { "myRights",           JMAP_PROP_SERVER_SET },
-    { "isSubscribed",       0 },
+    {
+        "id",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "name",
+        NULL,
+        0
+    },
+    {
+        "parentId",
+        NULL,
+        0
+    },
+    {
+        "role",
+        NULL,
+        0
+    },
+    {
+        "sortOrder",
+        NULL,
+        0
+    },
+    {
+        "totalEmails",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "unreadEmails",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "totalThreads",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "unreadThreads",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "myRights",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "isSubscribed",
+        NULL,
+        0
+    },
 
     /* FM extensions (do ALL of these get through to Cyrus?) */
-    { "isCollapsed",        0 },
-    { "hidden",             0 },
-    { "sort",               0 },
-    { "identityRef",        0 },
-    { "autoLearn",          0 },
-    { "learnAsSpam",        0 },
-    { "autoPurge",          0 },
-    { "purgeOlderThanDays", 0 },
-    { "onlyPurgeDeleted",   0 },
-    { "suppressDuplicates", 0 },
-    { "shareWith",          0 },
-    { "isSeenShared",       0 },
-
-    { NULL,                 0 }
+    {
+        "isCollapsed",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "hidden",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "sort",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "identityRef",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "autoLearn",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "learnAsSpam",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "autoPurge",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "purgeOlderThanDays",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "onlyPurgeDeleted",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "suppressDuplicates",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "shareWith",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    {
+        "isSeenShared",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
+    { NULL, NULL, 0 }
 };
 
 static int jmap_mailbox_get(jmap_req_t *req)
@@ -784,7 +900,8 @@ static int jmap_mailbox_get(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_get_parse(req->args, &parser, req, mailbox_props, NULL, NULL, &get, 1, &err);
+    jmap_get_parse(req, &parser, mailbox_props, /*allow_null_ids*/1,
+                   NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         jmap_parser_fini(&parser);
@@ -1408,7 +1525,8 @@ done:
     return r;
 }
 
-static int _mboxquery_parse_comparator(struct jmap_comparator *comp,
+static int _mboxquery_parse_comparator(jmap_req_t *req __attribute__((unused)),
+                                       struct jmap_comparator *comp,
                                        void *rock __attribute__((unused)))
 {
     /* Reject unsupported properties */
@@ -1424,7 +1542,9 @@ static int _mboxquery_parse_comparator(struct jmap_comparator *comp,
     return 1;
 }
 
-static void _mboxquery_parse_filter(json_t *filter, struct jmap_parser *parser,
+static void _mboxquery_parse_filter(jmap_req_t *req __attribute__((unused)),
+                                    struct jmap_parser *parser,
+                                    json_t *filter,
                                     json_t *unsupported __attribute__((unused)),
                                     void *rock __attribute__((unused)))
 {
@@ -1455,9 +1575,10 @@ static void _mboxquery_parse_filter(json_t *filter, struct jmap_parser *parser,
     }
 }
 
-static int _mboxquery_parse_args(const char *key,
-                                 json_t *arg,
+static int _mboxquery_parse_args(jmap_req_t *req __attribute__((unused)),
                                  struct jmap_parser *parser __attribute__((unused)),
+                                 const char *key,
+                                 json_t *arg,
                                  void *rock)
 {
     mboxquery_args_t *args = (mboxquery_args_t*) rock;
@@ -1481,10 +1602,10 @@ static int jmap_mailbox_query(jmap_req_t *req)
 
     /* Parse request */
     json_t *err = NULL;
-    jmap_query_parse(req->args, &parser,
+    jmap_query_parse(req, &parser,
+                     _mboxquery_parse_args, &args,
                      _mboxquery_parse_filter, NULL,
                      _mboxquery_parse_comparator, NULL,
-                     _mboxquery_parse_args, &args,
                      &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -1530,10 +1651,10 @@ static int jmap_mailbox_querychanges(jmap_req_t *req)
 
     /* Parse arguments */
     json_t *err = NULL;
-    jmap_querychanges_parse(req->args, &parser,
+    jmap_querychanges_parse(req, &parser,
+                            _mboxquery_parse_args, &args,
                             _mboxquery_parse_filter, NULL,
                             _mboxquery_parse_comparator, NULL,
-                            _mboxquery_parse_args, &args,
                             &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -3182,9 +3303,10 @@ static void _mboxset(jmap_req_t *req, struct mboxset *set)
     strarray_fini(&update_intermediaries);
 }
 
-static int _mboxset_args_parse(const char *key,
-                               json_t *arg,
+static int _mboxset_args_parse(jmap_req_t *req __attribute__((unused)),
                                struct jmap_parser *parser __attribute__((unused)),
+                               const char *key,
+                               json_t *arg,
                                void *rock)
 {
     struct mboxset *set = (struct mboxset *) rock;
@@ -3199,17 +3321,17 @@ static int _mboxset_args_parse(const char *key,
     return r;
 }
 
-static void _mboxset_parse(json_t *jargs,
-                                   struct jmap_parser *parser,
-                                   struct mboxset *set,
-                                   jmap_req_t *req,
-                                   json_t **err)
+static void _mboxset_parse(jmap_req_t *req,
+                           struct jmap_parser *parser,
+                           struct mboxset *set,
+                           json_t **err)
 {
     json_t *jarg;
     size_t i;
     memset(set, 0, sizeof(struct mboxset));
 
-    jmap_set_parse(jargs, parser, &_mboxset_args_parse, set, &set->super, err);
+    jmap_set_parse(req, parser, mailbox_props, &_mboxset_args_parse,
+                   set, &set->super, err);
     if (*err) return;
 
     /* create */
@@ -3302,7 +3424,7 @@ static int jmap_mailbox_set(jmap_req_t *req)
 
     /* Parse arguments */
     json_t *arg_err = NULL;
-    _mboxset_parse(req->args, &parser, &set, req, &arg_err);
+    _mboxset_parse(req, &parser, &set, &arg_err);
     if (arg_err) {
         jmap_error(req, arg_err);
         goto done;
@@ -3513,7 +3635,7 @@ static int jmap_mailbox_changes(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_changes_parse(req->args, &parser, NULL, NULL, &changes, &err);
+    jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
