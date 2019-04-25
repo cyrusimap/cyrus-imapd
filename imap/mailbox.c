@@ -6713,6 +6713,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
     int have_file;
     uint32_t last_seen_uid = 0;
     bit32 valid_user_flags[MAX_USER_FLAGS/32];
+    struct buf buf = BUF_INITIALIZER;
 
     if (make_changes && !(flags & RECONSTRUCT_QUIET)) {
         syslog(LOG_NOTICE, "reconstructing %s", name);
@@ -6841,6 +6842,42 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
                                                flags, have_file,
                                                &discovered);
         if (r) goto close;
+
+        if (mailbox->i.minor_version >= 13) {
+            buf_reset(&buf);
+            mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "thrid", "", &buf);
+            if (buf.len) {
+                syslog(LOG_NOTICE, "removing stale thrid for %u", record.uid);
+                printf("removing stale thrid for %u\n", record.uid);
+                buf_reset(&buf);
+                r = mailbox_annotation_write(mailbox, record.uid, IMAP_ANNOT_NS "thrid", "", &buf);
+                if (r) goto close;
+            }
+        }
+
+        if (mailbox->i.minor_version >= 15) {
+            buf_reset(&buf);
+            mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "savedate", "", &buf);
+            if (buf.len) {
+                syslog(LOG_NOTICE, "removing stale savedate for %u", record.uid);
+                printf("removing stale savedate for %u\n", record.uid);
+                buf_reset(&buf);
+                r = mailbox_annotation_write(mailbox, record.uid, IMAP_ANNOT_NS "savedate", "", &buf);
+                if (r) goto close;
+            }
+        }
+
+        if (mailbox->i.minor_version >= 16) {
+            buf_reset(&buf);
+            mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "createdmodseq", "", &buf);
+            if (buf.len) {
+                syslog(LOG_NOTICE, "removing stale createdmodseq for %u", record.uid);
+                printf("removing stale createdmodseq for %u\n", record.uid);
+                buf_reset(&buf);
+                r = mailbox_annotation_write(mailbox, record.uid, IMAP_ANNOT_NS "createdmodseq", "", &buf);
+                if (r) goto close;
+            }
+        }
     }
 
     /* add discovered messages before last_uid to the list in order */
@@ -6933,6 +6970,7 @@ close:
     free_found(&annots);
     free_found(&delannots);
     mailbox_close(&mailbox);
+    buf_free(&buf);
     return r;
 }
 
