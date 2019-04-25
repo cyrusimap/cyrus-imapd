@@ -498,13 +498,14 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     strncpy(outpath, mailbox_meta_fname(mailbox, META_HEADER), MAX_MAILBOX_NAME);
 
     if (setversion && setversion != mailbox->i.minor_version) {
+        int oldversion = mailbox->i.minor_version;
         /* need to re-set the version! */
         int r = mailbox_setversion(mailbox, setversion);
         if (r) {
             printf("FAILED TO REPACK %s with new version %s\n", extname, error_message(r));
         }
         else {
-            printf("Repacked %s to version %d\n", extname, setversion);
+            printf("Converted %s version %d to %d\n", extname, oldversion, setversion);
         }
     }
     mailbox_close(&mailbox);
