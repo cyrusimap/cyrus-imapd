@@ -7112,3 +7112,16 @@ EXPORTED void mailbox_set_wait_cb(void (*cb)(void *), void *rock)
     mailbox_wait_cb = cb;
     mailbox_wait_cb_rock = rock;
 }
+
+/* if either CRC is zero for a field, then we consider it to match.
+ * this lets us bootstrap the case where CRCs weren't being calculated,
+ * and also allows a client with incomplete local information to request
+ * a change be made on a sync_server without having to fetch all the
+ * data first just to calculate the CRC */
+EXPORTED int mailbox_crceq(struct synccrcs a, struct synccrcs b)
+{
+    if (a.basic && b.basic && a.basic != b.basic) return 0;
+    if (a.annot && b.annot && a.annot != b.annot) return 0;
+    return 1;
+}
+

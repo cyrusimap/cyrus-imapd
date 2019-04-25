@@ -695,4 +695,6 @@ extern void mailbox_set_wait_cb(mailbox_wait_cb_t *cb, void *rock);
 
 extern void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const char *flagstr);
 
+extern int mailbox_crceq(struct synccrcs a, struct synccrcs b);
+
 #endif /* INCLUDED_MAILBOX_H */

@@ -2604,18 +2604,6 @@ out:
     return r;
 }
 
-/* if either CRC is zero for a field, then we consider it to match.
- * this lets us bootstrap the case where CRCs weren't being calculated,
- * and also allows a client with incomplete local information to request
- * a change be made on a sync_server without having to fetch all the
- * data first just to calculate the CRC */
-static int crceq(struct synccrcs a, struct synccrcs b)
-{
-    if (a.basic && b.basic && a.basic != b.basic) return 0;
-    if (a.annot && b.annot && a.annot != b.annot) return 0;
-    return 1;
-}
-
 int sync_apply_mailbox(struct dlist *kin,
                        struct sync_reserve_list *reserve_list,
                        struct sync_state *sstate)
@@ -2920,9 +2908,9 @@ done:
     sync_annot_list_free(&rannots);
 
     /* check the CRC too */
-    if (!r && !crceq(synccrcs, mailbox_synccrcs(mailbox, 0))) {
+    if (!r && !mailbox_crceq(synccrcs, mailbox_synccrcs(mailbox, 0))) {
         /* try forcing a recalculation */
-        if (!crceq(synccrcs, mailbox_synccrcs(mailbox, 1)))
+        if (!mailbox_crceq(synccrcs, mailbox_synccrcs(mailbox, 1)))
             r = IMAP_SYNC_CHECKSUM;
     }
 
@@ -5382,8 +5370,8 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     }
 
     /* if we got here then we should force check the CRCs */
-    if (!crceq(remote->synccrcs, mailbox_synccrcs(mailbox, /*force*/0)))
-        if (!crceq(remote->synccrcs, mailbox_synccrcs(mailbox, /*force*/1)))
+    if (!mailbox_crceq(remote->synccrcs, mailbox_synccrcs(mailbox, /*force*/0)))
+        if (!mailbox_crceq(remote->synccrcs, mailbox_synccrcs(mailbox, /*force*/1)))
             return 0;
 
     /* otherwise it's unchanged! */
