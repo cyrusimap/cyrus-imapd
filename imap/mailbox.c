@@ -4075,7 +4075,6 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
     /* zero out some values */
     repack->newmailbox.i.num_records = 0;
     repack->newmailbox.i.quota_mailbox_used = 0;
-    repack->newmailbox.i.num_records = 0;
     /*
      * Note, we don't recalculate the mailbox' sync CRC on repack, because
      * the sync CRC may depend on annotation values which we don't want to
@@ -4178,10 +4177,17 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
 
     assert(repack);
 
-    repack->newmailbox.i.last_repack_time = time(0);
 
-    assert(repack->newmailbox.i.synccrcs.basic == repack->mailbox->i.synccrcs.basic);
-    assert(repack->newmailbox.i.synccrcs.annot == repack->mailbox->i.synccrcs.annot);
+    if (repack->newmailbox.i.synccrcs.basic != repack->mailbox->i.synccrcs.basic ||
+        repack->newmailbox.i.synccrcs.annot != repack->mailbox->i.synccrcs.annot) {
+        syslog(LOG_ERR, "IOERROR: CRC mismatch on repack commit: %s (%u %u) (%u %u)",
+               repack->mailbox->name,
+               repack->mailbox->i.synccrcs.basic, repack->newmailbox.i.synccrcs.basic,
+               repack->mailbox->i.synccrcs.annot, repack->newmailbox.i.synccrcs.annot);
+        goto fail;
+    }
+
+    repack->newmailbox.i.last_repack_time = time(0);
 
     if (repack->mailbox->i.minor_version >= 12 && repack->newmailbox.i.minor_version < 12
         && repack->seqset && repack->userid) {
