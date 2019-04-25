@@ -4072,21 +4072,9 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
             repack->seqset = seqset_init(mailbox->i.last_uid, SEQ_MERGE);
     }
 
-    /* zero out some values */
+    /* we'll count the records as they get added */
     repack->newmailbox.i.num_records = 0;
-    repack->newmailbox.i.quota_mailbox_used = 0;
-    /*
-     * Note, we don't recalculate the mailbox' sync CRC on repack, because
-     * the sync CRC may depend on annotation values which we don't want to
-     * go looking up at this time.  A call to mailbox_index_recalc() will
-     * however recalculate the sync CRC from scratch.
-     */
-    repack->newmailbox.i.answered = 0;
-    repack->newmailbox.i.deleted = 0;
-    repack->newmailbox.i.flagged = 0;
-    repack->newmailbox.i.unseen = 0;
-    repack->newmailbox.i.exists = 0;
-    repack->newmailbox.i.first_expunged = 0;
+    /* we're recreating caches, so there'll be nothing leaked */
     repack->newmailbox.i.leaked_cache_records = 0;
 
     /* prepare initial header buffer */
@@ -4119,9 +4107,6 @@ static int mailbox_repack_add(struct mailbox_repack *repack,
     record->cache_offset = 0;
     r = cache_append_record(cachefile, record);
     if (r) return r;
-
-    /* update counters */
-    header_update_counts(&repack->newmailbox.i, record, 1);
 
     /* write the index record out */
     mailbox_index_record_to_buf(record, repack->newmailbox.i.minor_version, buf);
