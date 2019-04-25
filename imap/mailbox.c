@@ -4179,9 +4179,7 @@ static void mailbox_repack_abort(struct mailbox_repack **repackptr)
         map_free(&repack->newmailbox.index_base, &repack->newmailbox.index_len);
     }
 
-    if (repack->mailbox->annot_state) {
-        annotate_state_abort(&repack->mailbox->annot_state);
-    }
+    mailbox_abort(repack->mailbox);
 
     free(repack->userid);
     free(repack);
