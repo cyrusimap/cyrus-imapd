@@ -4209,6 +4209,7 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
                repack->mailbox->name,
                repack->mailbox->i.synccrcs.basic, repack->newmailbox.i.synccrcs.basic,
                repack->mailbox->i.synccrcs.annot, repack->newmailbox.i.synccrcs.annot);
+        r = IMAP_MAILBOX_CHECKSUM;
         goto fail;
     }
 
@@ -4300,6 +4301,7 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
  fail:
     strarray_fini(&cachefiles);
     mailbox_repack_abort(repackptr);
+    if (!r) r = IMAP_IOERROR;
     return r;
 }
 
