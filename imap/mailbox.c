@@ -3975,6 +3975,17 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
     unsigned char *buf = ibuf.buf;
     int n;
 
+    /* if we're changing version at all, recalculate counts up-front */
+    if (version != mailbox->i.minor_version) {
+        /* NOTE: this maps in annot_state in mailbox, which will get copied
+         * into newmailbox below, which means all the annotate stuff later
+         * is going to be good!  The counters will be updated in the original
+         * mailbox index, but that's OK because we recalc everything at the
+         * end */
+        int r = mailbox_index_recalc(mailbox);
+        if (r) goto fail;
+    }
+
     /* init */
     repack->mailbox = mailbox;
     repack->newmailbox = *mailbox; // struct copy
@@ -4083,6 +4094,17 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
     n = retry_write(repack->newmailbox.index_fd, buf, repack->newmailbox.i.start_offset);
     if (n == -1) goto fail;
 
+    if (version != mailbox->i.minor_version) {
+        /* we're might be reading this file as we go, so let's
+         * start the job by mapping the new file into the newmailbox!
+         */
+        repack->newmailbox.index_size = 0;
+        repack->newmailbox.index_base = NULL;
+        repack->newmailbox.index_len = 0;
+        int r = mailbox_refresh_index_map(&repack->newmailbox);
+        if (r) goto fail;
+    }
+
     *repackptr = repack;
     return 0;
 
@@ -4144,6 +4166,11 @@ static void mailbox_repack_abort(struct mailbox_repack **repackptr)
     }
     ptrarray_fini(&repack->caches);
 
+    // drop the map if we've mapped in the newmailbox index separately
+    if (repack->newmailbox.index_base != repack->mailbox->index_base) {
+        map_free(&repack->newmailbox.index_base, &repack->newmailbox.index_len);
+    }
+
     free(repack->userid);
     free(repack);
     *repackptr = NULL;
@@ -4162,6 +4189,13 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
 
     assert(repack);
 
+    /* if we changed versions, we'll re-calculate counts on the new mailbox too */
+    if (repack->newmailbox.i.minor_version != repack->mailbox->i.minor_version) {
+        r = mailbox_refresh_index_map(&repack->newmailbox);
+        if (r) goto fail;
+        r = mailbox_index_recalc(&repack->newmailbox);
+        if (r) goto fail;
+    }
 
     if (repack->newmailbox.i.synccrcs.basic != repack->mailbox->i.synccrcs.basic ||
         repack->newmailbox.i.synccrcs.annot != repack->mailbox->i.synccrcs.annot) {
@@ -4245,6 +4279,11 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
     }
 
     strarray_fini(&cachefiles);
+
+    // drop the map if we've mapped in the newmailbox index separately
+    if (repack->newmailbox.index_base != repack->mailbox->index_base) {
+        map_free(&repack->newmailbox.index_base, &repack->newmailbox.index_len);
+    }
 
     seqset_free(repack->seqset);
     free(repack->userid);
