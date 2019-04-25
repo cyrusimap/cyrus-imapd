@@ -139,10 +139,9 @@ static struct mailboxlist *open_mailboxes = NULL;
 /* for repack */
 struct mailbox_repack {
     struct mailbox *mailbox;
-    struct index_header i;
+    struct mailbox newmailbox;
     struct seqset *seqset;
     char *userid;
-    int newindex_fd;
     ptrarray_t caches;
 };
 
@@ -618,7 +617,7 @@ static struct mappedfile *repack_cachefile(struct mailbox_repack *repack,
     else
         fname = mailbox_meta_newfname(repack->mailbox, META_CACHE);
 
-    return cache_getfile(&repack->caches, fname, /*readonly*/0, repack->i.generation_no);
+    return cache_getfile(&repack->caches, fname, /*readonly*/0, repack->newmailbox.i.generation_no);
 }
 
 /* return the offset for the start of the record! */
@@ -2983,7 +2982,7 @@ EXPORTED void mailbox_annot_changed(struct mailbox *mailbox,
     mailbox->i.quota_annot_used += newval->len;
 }
 
-static int calc_one_annot(const char *mailbox __attribute__((unused)),
+static int calc_one_annot(const char *mboxname __attribute__((unused)),
                           uint32_t uid,
                           const char *entry,
                           const char *userid,
@@ -3978,61 +3977,61 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
 
     /* init */
     repack->mailbox = mailbox;
-    repack->i = mailbox->i; /* struct copy */
-    repack->newindex_fd = -1;
+    repack->newmailbox = *mailbox; // struct copy
+    repack->newmailbox.index_fd = -1;
 
     /* new files */
     fname = mailbox_meta_newfname(mailbox, META_INDEX);
-    repack->newindex_fd = open(fname, O_RDWR|O_TRUNC|O_CREAT, 0666);
-    if (repack->newindex_fd == -1) {
+    repack->newmailbox.index_fd = open(fname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    if (repack->newmailbox.index_fd == -1) {
         syslog(LOG_ERR, "IOERROR: failed to create %s: %m", fname);
         goto fail;
     }
 
     /* update the generation number */
-    repack->i.generation_no++;
+    repack->newmailbox.i.generation_no++;
 
     /* track the version number */
-    repack->i.minor_version = version;
+    repack->newmailbox.i.minor_version = version;
     switch (version) {
     case 6:
-        repack->i.start_offset = 76;
-        repack->i.record_size = 60;
+        repack->newmailbox.i.start_offset = 76;
+        repack->newmailbox.i.record_size = 60;
         break;
     case 7:
-        repack->i.start_offset = 76;
-        repack->i.record_size = 72;
+        repack->newmailbox.i.start_offset = 76;
+        repack->newmailbox.i.record_size = 72;
         break;
     case 8:
-        repack->i.start_offset = 92;
-        repack->i.record_size = 80;
+        repack->newmailbox.i.start_offset = 92;
+        repack->newmailbox.i.record_size = 80;
         break;
     case 9:
-        repack->i.start_offset = 96;
-        repack->i.record_size = 80;
+        repack->newmailbox.i.start_offset = 96;
+        repack->newmailbox.i.record_size = 80;
         break;
     case 10:
-        repack->i.start_offset = 96;
-        repack->i.record_size = 88;
+        repack->newmailbox.i.start_offset = 96;
+        repack->newmailbox.i.record_size = 88;
         break;
     /* 11 was FastMail internal */
     case 12:
-        repack->i.start_offset = 128;
-        repack->i.record_size = 96;
+        repack->newmailbox.i.start_offset = 128;
+        repack->newmailbox.i.record_size = 96;
         break;
     case 13:
-        repack->i.start_offset = 128;
-        repack->i.record_size = 104;
+        repack->newmailbox.i.start_offset = 128;
+        repack->newmailbox.i.record_size = 104;
         break;
     case 14:
         /* version 15 just repurposed a field */
     case 15:
-        repack->i.start_offset = 160;
-        repack->i.record_size = 104;
+        repack->newmailbox.i.start_offset = 160;
+        repack->newmailbox.i.record_size = 104;
         break;
     case 16:
-        repack->i.start_offset = 160;
-        repack->i.record_size = 112;
+        repack->newmailbox.i.start_offset = 160;
+        repack->newmailbox.i.record_size = 112;
         break;
     default:
         fatal("index version not supported", EX_SOFTWARE);
@@ -4056,8 +4055,8 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
         }
 
         if (!r) {
-            repack->i.recentuid = sd.lastuid;
-            repack->i.recenttime = sd.lastchange;
+            repack->newmailbox.i.recentuid = sd.lastuid;
+            repack->newmailbox.i.recenttime = sd.lastchange;
             repack->seqset = seqset_parse(sd.seenuids, NULL, sd.lastuid);
             seen_freedata(&sd);
         }
@@ -4074,27 +4073,27 @@ static int mailbox_repack_setup(struct mailbox *mailbox, int version,
     }
 
     /* zero out some values */
-    repack->i.num_records = 0;
-    repack->i.quota_mailbox_used = 0;
-    repack->i.num_records = 0;
+    repack->newmailbox.i.num_records = 0;
+    repack->newmailbox.i.quota_mailbox_used = 0;
+    repack->newmailbox.i.num_records = 0;
     /*
      * Note, we don't recalculate the mailbox' sync CRC on repack, because
      * the sync CRC may depend on annotation values which we don't want to
      * go looking up at this time.  A call to mailbox_index_recalc() will
      * however recalculate the sync CRC from scratch.
      */
-    repack->i.answered = 0;
-    repack->i.deleted = 0;
-    repack->i.flagged = 0;
-    repack->i.unseen = 0;
-    repack->i.exists = 0;
-    repack->i.first_expunged = 0;
-    repack->i.leaked_cache_records = 0;
+    repack->newmailbox.i.answered = 0;
+    repack->newmailbox.i.deleted = 0;
+    repack->newmailbox.i.flagged = 0;
+    repack->newmailbox.i.unseen = 0;
+    repack->newmailbox.i.exists = 0;
+    repack->newmailbox.i.first_expunged = 0;
+    repack->newmailbox.i.leaked_cache_records = 0;
 
     /* prepare initial header buffer */
-    mailbox_index_header_to_buf(&repack->i, buf);
+    mailbox_index_header_to_buf(&repack->newmailbox.i, buf);
 
-    n = retry_write(repack->newindex_fd, buf, repack->i.start_offset);
+    n = retry_write(repack->newmailbox.index_fd, buf, repack->newmailbox.i.start_offset);
     if (n == -1) goto fail;
 
     *repackptr = repack;
@@ -4123,15 +4122,15 @@ static int mailbox_repack_add(struct mailbox_repack *repack,
     if (r) return r;
 
     /* update counters */
-    header_update_counts(&repack->i, record, 1);
+    header_update_counts(&repack->newmailbox.i, record, 1);
 
     /* write the index record out */
-    mailbox_index_record_to_buf(record, repack->i.minor_version, buf);
-    n = retry_write(repack->newindex_fd, buf, repack->i.record_size);
+    mailbox_index_record_to_buf(record, repack->newmailbox.i.minor_version, buf);
+    n = retry_write(repack->newmailbox.index_fd, buf, repack->newmailbox.i.record_size);
     if (n == -1)
         return IMAP_IOERROR;
 
-    repack->i.num_records++;
+    repack->newmailbox.i.num_records++;
 
     return 0;
 }
@@ -4146,7 +4145,7 @@ static void mailbox_repack_abort(struct mailbox_repack **repackptr)
     seqset_free(repack->seqset);
 
     /* close and remove index */
-    xclose(repack->newindex_fd);
+    xclose(repack->newmailbox.index_fd);
     unlink(mailbox_meta_newfname(repack->mailbox, META_INDEX));
 
     /* close and remove all new caches */
@@ -4179,23 +4178,23 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
 
     assert(repack);
 
-    repack->i.last_repack_time = time(0);
+    repack->newmailbox.i.last_repack_time = time(0);
 
-    assert(repack->i.synccrcs.basic == repack->mailbox->i.synccrcs.basic);
-    assert(repack->i.synccrcs.annot == repack->mailbox->i.synccrcs.annot);
+    assert(repack->newmailbox.i.synccrcs.basic == repack->mailbox->i.synccrcs.basic);
+    assert(repack->newmailbox.i.synccrcs.annot == repack->mailbox->i.synccrcs.annot);
 
-    if (repack->mailbox->i.minor_version >= 12 && repack->i.minor_version < 12
+    if (repack->mailbox->i.minor_version >= 12 && repack->newmailbox.i.minor_version < 12
         && repack->seqset && repack->userid) {
         struct seendata sd = SEENDATA_INITIALIZER;
         struct seen *seendb = NULL;
         int r = seen_open(repack->userid, SEEN_CREATE, &seendb);
         if (!r) r = seen_lockread(seendb, repack->mailbox->uniqueid, &sd);
         if (!r) {
-            sd.lastuid = repack->i.last_uid;
+            sd.lastuid = repack->newmailbox.i.last_uid;
             sd.seenuids = seqset_cstring(repack->seqset);
             if (!sd.seenuids) sd.seenuids = xstrdup("");
             sd.lastread = time(NULL);
-            sd.lastchange = repack->i.last_appenddate;
+            sd.lastchange = repack->newmailbox.i.last_appenddate;
             r = seen_write(seendb, repack->mailbox->uniqueid, &sd);
             /* XXX - syslog on errors? */
         }
@@ -4204,19 +4203,19 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
     }
 
     /* rewrite the header with updated details */
-    mailbox_index_header_to_buf(&repack->i, buf);
+    mailbox_index_header_to_buf(&repack->newmailbox.i, buf);
 
-    if (lseek(repack->newindex_fd, 0, SEEK_SET) < 0)
+    if (lseek(repack->newmailbox.index_fd, 0, SEEK_SET) < 0)
         goto fail;
 
-    if (retry_write(repack->newindex_fd, buf, repack->i.start_offset) < 0)
+    if (retry_write(repack->newmailbox.index_fd, buf, repack->newmailbox.i.start_offset) < 0)
         goto fail;
 
     /* ensure everything is committed to disk */
-    if (fsync(repack->newindex_fd) < 0)
+    if (fsync(repack->newmailbox.index_fd) < 0)
         goto fail;
 
-    xclose(repack->newindex_fd);
+    xclose(repack->newmailbox.index_fd);
 
     /* NOTE: cache files need committing before index is renamed */
     for (i = 0; i < repack->caches.count; i++) {
@@ -4286,9 +4285,13 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
         const struct index_record *record = msg_record(msg);
         struct index_record copyrecord = *record;
         int needs_cache_upgrade = 0;
+        annotate_state_t *astate = NULL;
+
+        r = mailbox_get_annotate_state(mailbox, record->uid, &astate);
+        if (r) goto done;
 
         /* version changes? */
-        if (mailbox->i.minor_version < 12 && repack->i.minor_version >= 12) {
+        if (mailbox->i.minor_version < 12 && repack->newmailbox.i.minor_version >= 12) {
             if (seqset_ismember(repack->seqset, copyrecord.uid))
                 copyrecord.system_flags |= FLAG_SEEN;
             else
@@ -4297,14 +4300,14 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
             needs_cache_upgrade = 1;
 
         }
-        if (mailbox->i.minor_version >= 12 && repack->i.minor_version < 12) {
+        if (mailbox->i.minor_version >= 12 && repack->newmailbox.i.minor_version < 12) {
             if (repack->seqset)
                 seqset_add(repack->seqset, copyrecord.uid, copyrecord.system_flags & FLAG_SEEN ? 1 : 0);
             copyrecord.system_flags &= ~FLAG_SEEN;
         }
 
         /* force cache upgrade across version 15 repack */
-        if (repack->i.minor_version >= 15 && record->cache_version < 9)
+        if (repack->newmailbox.i.minor_version >= 15 && record->cache_version < 9)
             needs_cache_upgrade = 1;
 
         /* better handle the cleanup just in case it's unlinked too */
@@ -4319,8 +4322,8 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
         /* we aren't keeping unlinked files, that's kind of the point */
         if (copyrecord.internal_flags & FLAG_INTERNAL_UNLINKED) {
             /* track the modseq for QRESYNC purposes */
-            if (copyrecord.modseq > repack->i.deletedmodseq)
-                repack->i.deletedmodseq = copyrecord.modseq;
+            if (copyrecord.modseq > repack->newmailbox.i.deletedmodseq)
+                repack->newmailbox.i.deletedmodseq = copyrecord.modseq;
             continue;
         }
 
@@ -4341,7 +4344,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
             copyrecord.createdmodseq = 1;
 
         /* virtual annotations */
-        if (mailbox->i.minor_version < 13 && repack->i.minor_version >= 13) {
+        if (mailbox->i.minor_version < 13 && repack->newmailbox.i.minor_version >= 13) {
             /* extract CID */
             struct buf annotval = BUF_INITIALIZER;
             mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "thrid", "", &annotval);
@@ -4350,19 +4353,19 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
                 parsehex(p, &p, 16, &copyrecord.cid);
             }
             buf_reset(&annotval);
-            r = mailbox_annotation_write(mailbox, record->uid, IMAP_ANNOT_NS "thrid", "", &annotval);
+            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "thrid", "", &annotval);
             buf_free(&annotval);
             if (r) goto done;
         }
-        if (mailbox->i.minor_version >= 13 && repack->i.minor_version < 13) {
+        if (mailbox->i.minor_version >= 13 && repack->newmailbox.i.minor_version < 13) {
             struct buf annotval = BUF_INITIALIZER;
             buf_printf(&annotval, "%llx", record->cid);
-            r = mailbox_annotation_write(mailbox, record->uid, IMAP_ANNOT_NS "thrid", "", &annotval);
+            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "thrid", "", &annotval);
             buf_free(&annotval);
             if (r) goto done;
         }
 
-        if (mailbox->i.minor_version < 15 && repack->i.minor_version >= 15) {
+        if (mailbox->i.minor_version < 15 && repack->newmailbox.i.minor_version >= 15) {
             /* extract CID */
             struct buf annotval = BUF_INITIALIZER;
             mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "savedate", "", &annotval);
@@ -4373,19 +4376,19 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
                 copyrecord.savedate = newval;
             }
             buf_reset(&annotval);
-            r = mailbox_annotation_write(mailbox, record->uid, IMAP_ANNOT_NS "savedate", "", &annotval);
+            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "savedate", "", &annotval);
             buf_free(&annotval);
             if (r) goto done;
         }
-        if (mailbox->i.minor_version >= 15 && repack->i.minor_version < 15) {
+        if (mailbox->i.minor_version >= 15 && repack->newmailbox.i.minor_version < 15) {
             struct buf annotval = BUF_INITIALIZER;
             buf_printf(&annotval, "%lu", record->savedate);
-            r = mailbox_annotation_write(mailbox, record->uid, IMAP_ANNOT_NS "savedate", "", &annotval);
+            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "savedate", "", &annotval);
             buf_free(&annotval);
             if (r) goto done;
         }
 
-        if (mailbox->i.minor_version < 16 && repack->i.minor_version >= 16) {
+        if (mailbox->i.minor_version < 16 && repack->newmailbox.i.minor_version >= 16) {
             /* extract CID */
             struct buf annotval = BUF_INITIALIZER;
             mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "createdmodseq", "", &annotval);
@@ -4396,14 +4399,14 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
                 copyrecord.createdmodseq = newval;
             }
             buf_reset(&annotval);
-            r = mailbox_annotation_write(mailbox, record->uid, IMAP_ANNOT_NS "createdmodseq", "", &annotval);
+            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "createdmodseq", "", &annotval);
             buf_free(&annotval);
             if (r) goto done;
         }
-        if (mailbox->i.minor_version >= 16 && repack->i.minor_version < 16) {
+        if (mailbox->i.minor_version >= 16 && repack->newmailbox.i.minor_version < 16) {
             struct buf annotval = BUF_INITIALIZER;
             buf_printf(&annotval, "%llu", record->createdmodseq);
-            r = mailbox_annotation_write(mailbox, record->uid, IMAP_ANNOT_NS "createdmodseq", "", &annotval);
+            r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "createdmodseq", "", &annotval);
             buf_free(&annotval);
             if (r) goto done;
         }
@@ -4417,7 +4420,7 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
     }
 
     /* we unlinked any "needs unlink" in the process */
-    repack->i.options &= ~(OPT_MAILBOX_NEEDS_REPACK|OPT_MAILBOX_NEEDS_UNLINK);
+    repack->newmailbox.i.options &= ~(OPT_MAILBOX_NEEDS_REPACK|OPT_MAILBOX_NEEDS_UNLINK);
 
 done:
     mailbox_iter_done(&iter);
