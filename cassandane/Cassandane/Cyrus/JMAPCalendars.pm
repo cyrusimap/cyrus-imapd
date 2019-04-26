@@ -1333,6 +1333,35 @@ sub test_calendarevent_get_organizer
     $self->assert_equals('mailto:organizer@local', $event->{replyTo}{imip});
 }
 
+sub test_calendarevent_organizer_noattendees
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    # It's allowed to have an ORGANIZER even if there are no ATTENDEEs.
+    # The expected behaviour is that there's just a single organizer in the
+    # participants
+
+    my ($id, $ical) = $self->icalfile('organizer_noattendees');
+
+    my $participants = {
+        'bf8360ce374961f497599431c4bacb50d4a67ca1' => {
+            name => 'Organizer',
+            email => 'organizer@local',
+            roles => {
+                'owner' => JSON::true,
+            },
+            sendTo => {
+                imip => 'mailto:organizer@local',
+            },
+        },
+    };
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_deep_equals($participants, $event->{participants});
+    $self->assert_equals('mailto:organizer@local', $event->{replyTo}{imip});
+}
+
 sub test_calendarevent_get_organizer_bogusuri
     :min_version_3_1 :needs_component_jmap
 {
