@@ -249,6 +249,10 @@ static int folder_number(struct conversations_state *state,
         else
             pos = strarray_append(state->folder_names, name);
 
+        /* track the Trash folder number as it's added */
+        if (!strcmp(name, state->trashmboxname))
+            state->trashfolder = pos;
+
         /* store must succeed */
         r = write_folders(state);
         if (r) abort();
@@ -322,7 +326,7 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
 
     char *trashmboxname = mboxname_user_mbox(userid, "Trash");
     open->s.trashfolder = folder_number(&open->s, trashmboxname, /*create*/0);
-    free(trashmboxname);
+    open->s.trashmboxname = trashmboxname;
 
     /* create the status cache */
     construct_hash_table(&open->s.folderstatus, open->s.folder_names->count/4+4, 0);
@@ -400,6 +404,7 @@ static void _conv_remove(struct conversations_state *state)
             *prevp = cur->next;
             free(cur->s.annotmboxname);
             free(cur->s.path);
+            free(cur->s.trashmboxname);
             if (cur->s.counted_flags)
                 strarray_free(cur->s.counted_flags);
             if (cur->s.folder_names)

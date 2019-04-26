@@ -80,6 +80,7 @@ struct conversations_state {
     strarray_t *folder_names;
     hash_table folderstatus;
     int trashfolder;
+    char *trashmboxname;
     int is_shared;
     char *path;
 };
