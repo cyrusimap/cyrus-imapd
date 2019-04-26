@@ -9770,7 +9770,7 @@ sub test_email_parse
     $self->assert_null($email->{id});
     $self->assert_null($email->{threadId});
     $self->assert_null($email->{mailboxIds});
-    $self->assert_null($email->{keywords});
+    $self->assert_deep_equals({}, $email->{keywords});
     $self->assert_deep_equals(['fake.1475639947.6507@local'], $email->{messageId});
     $self->assert_deep_equals([{name=>'Ava T. Nguyen', email=>'Ava.Nguyen@local'}], $email->{from});
     $self->assert_deep_equals([{name=>'Test User', email=>'test@local'}], $email->{to});

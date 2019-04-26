@@ -899,10 +899,14 @@ sub normalize_event
             if (not exists $p->{attendance}) {
                 $p->{attendance} = 'required';
             }
-            if ((not exists $p->{participationStatus})) {
-                if (exists $p->{expectReply} and $p->{expectReply} eq 'true') {
-                    $p->{participationStatus} = 'needs-action';
-                }
+            if (not exists $p->{participationStatus}) {
+                $p->{participationStatus} = 'needs-action';
+            }
+            if (not exists $p->{expectReply}) {
+                $p->{expectReply} = JSON::false;
+            }
+            if (not exists $p->{scheduleSequence}) {
+                $p->{scheduleSequence} = 0;
             }
         }
     }
@@ -911,6 +915,19 @@ sub normalize_event
     }
     if (not exists $event->{recurrenceRule}) {
         $event->{recurrenceRule} = undef;
+    } elsif (defined $event->{recurrenceRule}) {
+        if (not exists $event->{recurrenceRule}{interval}) {
+            $event->{recurrenceRule}{interval} = 1;
+        }
+        if (not exists $event->{recurrenceRule}{firstDayOfWeek}) {
+            $event->{recurrenceRule}{firstDayOfWeek} = 'mo';
+        }
+        if (not exists $event->{recurrenceRule}{rscale}) {
+            $event->{recurrenceRule}{rscale} = 'gregorian';
+        }
+        if (not exists $event->{recurrenceRule}{skip}) {
+            $event->{recurrenceRule}{skip} = 'omit';
+        }
     }
     if (not exists $event->{recurrenceOverrides}) {
         $event->{recurrenceOverrides} = undef;
@@ -1219,7 +1236,9 @@ sub test_calendarevent_get_participants
 
     my ($id, $ical) = $self->icalfile('participants');
 
-    my $participants = {
+    my $event = $self->putandget_vevent($id, $ical);
+
+    my $wantParticipants = {
         '375507f588e65ec6eb800757ab94ccd10ad58599' => {
             name => 'Monty Burns',
             email => 'smithers@example.com',
@@ -1231,7 +1250,9 @@ sub test_calendarevent_get_participants
             attendance => 'required',
             sendTo => {
                 imip => 'mailto:smithers@example.com',
-            }
+            },
+            expectReply => JSON::false,
+            scheduleSequence => 0,
         },
         '39b16b858076733c1d890cbcef73eca0e874064d' => {
             name => 'Homer Simpson',
@@ -1244,7 +1265,9 @@ sub test_calendarevent_get_participants
             locationId => 'loc1',
             sendTo => {
                 imip => 'mailto:homer@example.com',
-            }
+            },
+            expectReply => JSON::false,
+            scheduleSequence => 0,
         },
         'carl' => {
             name => 'Carl Carlson',
@@ -1260,7 +1283,9 @@ sub test_calendarevent_get_participants
             },
             sendTo => {
                 imip => 'mailto:carl@example.com',
-            }
+            },
+            expectReply => JSON::false,
+            attendance => 'required',
         },
         'a6ef900d284067bb327d7be1469fb44693a5ec13' => {
             name => 'Lenny Leonard',
@@ -1274,7 +1299,10 @@ sub test_calendarevent_get_participants
             },
             sendTo => {
                 imip => 'mailto:lenny@example.com',
-            }
+            },
+            expectReply => JSON::false,
+            scheduleSequence => 0,
+            attendance => 'required',
         },
         'd6db3540fe51335b7154f144456e9eac2778fc8f' => {
             name => 'Larry Burns',
@@ -1290,12 +1318,12 @@ sub test_calendarevent_get_participants
             scheduleUpdated => '2015-09-29T14:44:23Z',
             sendTo => {
                 imip => 'mailto:larry@example.com',
-            }
+            },
+            expectReply => JSON::false,
+            scheduleSequence => 0,
         },
     };
-
-    my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_deep_equals($participants, $event->{participants});
+    $self->assert_deep_equals($wantParticipants, $event->{participants});
 }
 
 sub test_calendarevent_get_organizer
@@ -1305,7 +1333,8 @@ sub test_calendarevent_get_organizer
 
     my ($id, $ical) = $self->icalfile('organizer');
 
-    my $participants = {
+    my $event = $self->putandget_vevent($id, $ical);
+    my $wantParticipants = {
         'bf8360ce374961f497599431c4bacb50d4a67ca1' => {
             name => 'Organizer',
             email => 'organizer@local',
@@ -1315,6 +1344,10 @@ sub test_calendarevent_get_organizer
             sendTo => {
                 imip => 'mailto:organizer@local',
             },
+            expectReply => JSON::false,
+            scheduleSequence => 0,
+            participationStatus => 'needs-action',
+            attendance => 'required',
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             name => '',
@@ -1325,11 +1358,13 @@ sub test_calendarevent_get_organizer
             sendTo => {
                 imip => 'mailto:attendee@local',
             },
+            expectReply => JSON::false,
+            scheduleSequence => 0,
+            participationStatus => 'needs-action',
+            attendance => 'required',
         },
     };
-
-    my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_deep_equals($participants, $event->{participants});
+    $self->assert_deep_equals($wantParticipants, $event->{participants});
     $self->assert_equals('mailto:organizer@local', $event->{replyTo}{imip});
 }
 
@@ -1344,7 +1379,9 @@ sub test_calendarevent_organizer_noattendees
 
     my ($id, $ical) = $self->icalfile('organizer_noattendees');
 
-    my $participants = {
+    my $event = $self->putandget_vevent($id, $ical);
+
+    my $wantParticipants = {
         'bf8360ce374961f497599431c4bacb50d4a67ca1' => {
             name => 'Organizer',
             email => 'organizer@local',
@@ -1354,11 +1391,13 @@ sub test_calendarevent_organizer_noattendees
             sendTo => {
                 imip => 'mailto:organizer@local',
             },
+            expectReply => JSON::false,
+            scheduleSequence => 0,
+            participationStatus => 'needs-action',
+            attendance => 'required',
         },
     };
-
-    my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_deep_equals($participants, $event->{participants});
+    $self->assert_deep_equals($wantParticipants, $event->{participants});
     $self->assert_equals('mailto:organizer@local', $event->{replyTo}{imip});
 }
 
@@ -1372,7 +1411,9 @@ sub test_calendarevent_get_organizer_bogusuri
 
     my ($id, $ical) = $self->icalfile('organizer_bogusuri');
 
-    my $participants = {
+    my $event = $self->putandget_vevent($id, $ical);
+
+    my $wantParticipants = {
         '55d3677ce6a79b250d0fc3b5eed5130807d93dd3' => {
             name => 'Organizer',
             email => undef,
@@ -1383,6 +1424,10 @@ sub test_calendarevent_get_organizer_bogusuri
             sendTo => {
                 other => '/foo-bar/principal/',
             },
+            expectReply => JSON::false,
+            scheduleSequence => 0,
+            participationStatus => 'needs-action',
+            attendance => 'required',
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             name => '',
@@ -1393,11 +1438,13 @@ sub test_calendarevent_get_organizer_bogusuri
             sendTo => {
                 imip => 'mailto:attendee@local',
             },
+            expectReply => JSON::false,
+            scheduleSequence => 0,
+            participationStatus => 'needs-action',
+            attendance => 'required',
         },
     };
-
-    my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_deep_equals($participants, $event->{participants});
+    $self->assert_deep_equals($wantParticipants, $event->{participants});
     $self->assert_null($event->{replyTo}{imip});
     $self->assert_str_equals('/foo-bar/principal/', $event->{replyTo}{other});
 }
@@ -1409,7 +1456,9 @@ sub test_calendarevent_get_organizermailto
 
     my ($id, $ical) = $self->icalfile('organizermailto');
 
-    my $participants = {
+    my $event = $self->putandget_vevent($id, $ical);
+
+    my $wantParticipants = {
         'bf8360ce374961f497599431c4bacb50d4a67ca1' => {
             name => 'Organizer',
             email => 'organizer@local',
@@ -1420,6 +1469,10 @@ sub test_calendarevent_get_organizermailto
             sendTo => {
                 imip => 'mailto:organizer@local',
             },
+            expectReply => JSON::false,
+            scheduleSequence => 0,
+            participationStatus => 'needs-action',
+            attendance => 'required',
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             name => 'Attendee',
@@ -1430,11 +1483,13 @@ sub test_calendarevent_get_organizermailto
             sendTo => {
                 imip => 'mailto:attendee@local',
             },
+            expectReply => JSON::false,
+            scheduleSequence => 0,
+            participationStatus => 'needs-action',
+            attendance => 'required',
         },
     };
-
-    my $event = $self->putandget_vevent($id, $ical);
-    $self->assert_deep_equals($participants, $event->{participants});
+    $self->assert_deep_equals($wantParticipants, $event->{participants});
 }
 
 sub test_calendarevent_get_recurrence
@@ -1791,7 +1846,7 @@ sub test_calendarevent_set_bymonth
                         "byMonth"=> [
                                 "4L"
                         ],
-                        "count"=> 3
+                        "count"=> 3,
                 },
                 "\@type"=> "jsevent",
                 "title"=> "",
@@ -2684,7 +2739,7 @@ sub test_calendarevent_set_participants_organame
                 },
                 sendTo => {
                     imip => 'mailto:foo@local',
-                }
+                },
             },
             'bar' => {
                 name => 'Bar',

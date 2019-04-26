@@ -1322,7 +1322,7 @@ sub test_contact_set
     $contact->{addresses} = [];
     $contact->{emails} = [];
     $contact->{notes} = '';
-    $contact->{avatar} = JSON::null;
+    $contact->{avatar} = undef;
 
     # Non-JMAP properties.
     $contact->{"importance"} = 0;
@@ -1570,7 +1570,8 @@ sub test_contact_set
             locality => "acme city",
             region => "",
             postcode => "1234",
-            country => "acme land"
+            country => "acme land",
+            label => undef,
         }];
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {
                             addresses => [{
@@ -1579,7 +1580,8 @@ sub test_contact_set
                                     locality => "acme city",
                                     region => "",
                                     postcode => "1234",
-                                    country => "acme land"
+                                    country => "acme land",
+                                    label => undef,
                                 }]
                         } }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
