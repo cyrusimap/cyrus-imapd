@@ -725,4 +725,41 @@ sub bogus_test_cross_user_copy
     $self->check_messages(\%bobexp, store => $bobstore);
 }
 
+#
+# Test APPEND of messages to IMAP
+#
+sub test_replication_trashseen
+    :min_version_3_1
+{
+    my ($self) = @_;
+    my %exp;
+
+    # check IMAP server has the XCONVERSATIONS capability
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+    $master_store->set_fetch_attributes('uid', 'cid');
+    $replica_store->set_fetch_attributes('uid', 'cid');
+
+    my $mtalk = $master_store->get_client();
+
+    $self->assert($mtalk->capability()->{xconversations});
+
+    xlog "generating message A";
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
+    xlog "checking message A on master";
+    $self->check_messages(\%exp, store => $master_store);
+
+    $mtalk->create("INBOX.Trash");
+    $mtalk->select("INBOX");
+    $mtalk->store('1', '+flags', '\\Seen');
+    $mtalk->move('1', 'INBOX.Trash');
+    $mtalk->select('INBOX.Trash');
+    $mtalk->store('1', '-flags', '\\Seen');
+
+    xlog "running replication";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+}
+
 1;
