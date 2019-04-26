@@ -250,7 +250,7 @@ static int folder_number(struct conversations_state *state,
             pos = strarray_append(state->folder_names, name);
 
         /* track the Trash folder number as it's added */
-        if (!strcmp(name, state->trashmboxname))
+        if (!strcmpsafe(name, state->trashmboxname))
             state->trashfolder = pos;
 
         /* store must succeed */
