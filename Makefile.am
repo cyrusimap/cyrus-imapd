@@ -1139,6 +1139,12 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/xapian_wrap.cpp
 imap_libcyrus_imap_la_LIBADD += $(XAPIAN_LIBS)
 imap_libcyrus_imap_la_CXXFLAGS += $(XAPIAN_CXXFLAGS)
+
+if HAVE_CLD2
+imap_libcyrus_imap_la_LIBADD += $(CLD2_LIBS)
+imap_libcyrus_imap_la_CXXFLAGS += $(CLD2_CFLAGS)
+endif
+
 endif
 
 imap_lmtpd_SOURCES = \
