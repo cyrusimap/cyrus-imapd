@@ -1299,9 +1299,6 @@ participants_from_ical(icalcomponent *comp)
         hash_insert(uri, id, &id_by_uri);
         free(uri);
     }
-    if (!hash_numrecords(&attendee_by_uri)) {
-        goto done;
-    }
 
 
     /* Map ATTENDEE to JSCalendar */
@@ -1331,7 +1328,6 @@ participants_from_ical(icalcomponent *comp)
         free(uri);
     }
 
-done:
     if (!json_object_size(participants)) {
         json_decref(participants);
         participants = json_null();
