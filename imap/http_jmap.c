@@ -977,7 +977,7 @@ static int jmap_upload(struct transaction_t *txn)
     json_object_set_new(resp, "expires", json_string(datestr));
 
     /* Remove CFWS and encodings from type */
-    char *normalisedtype = charset_decode_mimeheader(type, CHARSET_SNIPPET);
+    char *normalisedtype = charset_decode_mimeheader(type, CHARSET_KEEPCASE);
     json_object_set_new(resp, "type", json_string(normalisedtype));
     free(normalisedtype);
 

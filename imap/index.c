@@ -5610,7 +5610,7 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
     }
 
     if (snippet) {
-        str.charset_flags |= CHARSET_SNIPPET;
+        str.charset_flags |= CHARSET_KEEPCASE;
         format = MESSAGE_SNIPPET;
     }
 

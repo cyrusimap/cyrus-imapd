@@ -307,7 +307,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         charset_flags |= CHARSET_MIME_UTF8;
 
     /* Set snippet conversion flags. */
-    charset_snippet_flags = CHARSET_SNIPPET;
+    charset_snippet_flags = CHARSET_KEEPCASE;
     if (config_getenum(IMAPOPT_SEARCH_ENGINE) != IMAP_ENUM_SEARCH_ENGINE_XAPIAN) {
         /* All search engines other than Xapian require escaped HTML */
         charset_snippet_flags |= CHARSET_ESCAPEHTML;

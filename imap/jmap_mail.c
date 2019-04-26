@@ -389,7 +389,7 @@ static char *_decode_mimeheader(const char *raw)
         val = _decode_to_utf8("utf-8", raw, strlen(raw), NULL, &err);
     }
     if (!val) {
-        val = charset_decode_mimeheader(raw, CHARSET_SNIPPET);
+        val = charset_decode_mimeheader(raw, CHARSET_KEEPCASE);
     }
     return val;
 }
@@ -1277,7 +1277,7 @@ static char *_html_to_plain(const char *html) {
     buf_init_ro(&src, tmp, q - tmp);
     buf_setcstr(&dst, "");
     charset_extract(&_html_to_plain_cb, &dst,
-            &src, utf8, ENCODING_NONE, "HTML", CHARSET_SNIPPET);
+            &src, utf8, ENCODING_NONE, "HTML", CHARSET_KEEPCASE);
     buf_cstring(&dst);
 
     /* Trim text */
@@ -5146,7 +5146,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
             val = charset_parse_mimexvalue(fname, NULL);
         }
         if (fname && !val) {
-            val = charset_parse_mimeheader(fname, CHARSET_SNIPPET|CHARSET_MIME_UTF8);
+            val = charset_parse_mimeheader(fname, CHARSET_KEEPCASE|CHARSET_MIME_UTF8);
         }
         json_object_set_new(jbodypart, "name", val ?
                 json_string(val) : json_null());

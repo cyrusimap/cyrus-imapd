@@ -1160,7 +1160,7 @@ EXPORTED void message_parse_type(const char *hdr, char **typep, char **subtypep,
     /* Very old versions of macOS Mail.app encode the Content-Type header
      * in MIME words, if the attachment name contains non-ASCII characters */
     if (strlen(hdr) > 2 && hdr[0] == '=' && hdr[1] == '?') {
-        int flags = CHARSET_SNIPPET;
+        int flags = CHARSET_KEEPCASE;
         decbuf = charset_decode_mimeheader(hdr, flags);
         if (strcmpsafe(decbuf, hdr)) hdr = decbuf;
     }
