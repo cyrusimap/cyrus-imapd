@@ -47,6 +47,7 @@ use Net::CardDAVTalk 0.03;
 use Mail::JMAPTalk 0.13;
 use Data::Dumper;
 use Storable 'dclone';
+use File::Basename;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -1308,6 +1309,7 @@ sub test_contact_set
 
     # get expands default values, so do the same manually
     $contact->{id} = $id;
+    $contact->{uid} = $id;
     $contact->{isFlagged} = JSON::false;
     $contact->{prefix} = '';
     $contact->{suffix} = '';
@@ -1630,6 +1632,153 @@ sub test_contact_set
     xlog "get avatar $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+}
+
+sub test_contact_set_uid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # An empty UID generates a random uid.
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                "1" => {
+                    firstName => "first1",
+                    lastName => "last1",
+                }
+            }
+        }, "R1"],
+        ['Contact/get', { ids => ['#1'] }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[1][1]{list}[0]{uid});
+
+    # A sane UID maps to both the JMAP id and the DAV resource.
+    $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                "2" => {
+                    firstName => "first2",
+                    lastName => "last2",
+                    uid => '1234-56789-01234-56789',
+                }
+            }
+        }, "R1"],
+        ['Contact/get', { ids => ['#2'] }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[1][1]{list}[0]{uid});
+    my($filename, $dirs, $suffix) = fileparse($res->[1][1]{list}[0]{"x-href"}, ".vcf");
+    $self->assert_not_null($res->[1][1]{list}[0]->{id});
+    $self->assert_str_equals($res->[1][1]{list}[0]->{id}, $res->[1][1]{list}[0]->{uid});
+    $self->assert_str_equals($res->[1][1]{list}[0]->{id}, $filename);
+
+    # A non-pathsafe UID maps to uid but not the DAV resource.
+    $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                "3" => {
+                    firstName => "first3",
+                    lastName => "last3",
+                    uid => 'a/bogus/path#uid',
+                }
+            }
+        }, "R1"],
+        ['Contact/get', { ids => ['#3'] }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[1][1]{list}[0]{uid});
+    ($filename, $dirs, $suffix) = fileparse($res->[1][1]{list}[0]{"x-href"}, ".vcf");
+    $self->assert_not_null($res->[1][1]{list}[0]->{id});
+    $self->assert_str_equals($res->[1][1]{list}[0]->{id}, $res->[1][1]{list}[0]->{uid});
+    $self->assert_str_not_equals('path#uid', $filename);
+
+    # Can't change an UID
+    my $contactId = $res->[0][1]{created}{3}{id};
+    $self->assert_not_null($contactId);
+    $res = $jmap->CallMethods([
+        ['Contact/set', {
+            update => {
+                $contactId => {
+                    uid => '0000-1234-56789-01234-56789-000'
+                }
+            }
+        }, "R1"],
+    ]);
+    $self->assert_str_equals('uid', $res->[0][1]{notUpdated}{$contactId}{properties}[0]);
+
+}
+
+sub test_contactgroup_set_uid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # An empty UID generates a random uid.
+    my $res = $jmap->CallMethods([
+        ['ContactGroup/set', {
+            create => {
+                "1" => {
+                    name => "name1",
+                }
+            }
+        }, "R1"],
+        ['ContactGroup/get', { ids => ['#1'] }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[1][1]{list}[0]{uid});
+
+    # A sane UID maps to both the JMAP id and the DAV resource.
+    $res = $jmap->CallMethods([
+        ['ContactGroup/set', {
+            create => {
+                "2" => {
+                    name => "name2",
+                    uid => '1234-56789-01234-56789',
+                }
+            }
+        }, "R1"],
+        ['ContactGroup/get', { ids => ['#2'] }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[1][1]{list}[0]{uid});
+    my($filename, $dirs, $suffix) = fileparse($res->[1][1]{list}[0]{"x-href"}, ".vcf");
+    $self->assert_not_null($res->[1][1]{list}[0]->{id});
+    $self->assert_str_equals($res->[1][1]{list}[0]->{id}, $res->[1][1]{list}[0]->{uid});
+    $self->assert_str_equals($res->[1][1]{list}[0]->{id}, $filename);
+
+    # A non-pathsafe UID maps to uid but not the DAV resource.
+    $res = $jmap->CallMethods([
+        ['ContactGroup/set', {
+            create => {
+                "3" => {
+                    name => "name3",
+                    uid => 'a/bogus/path#uid',
+                }
+            }
+        }, "R1"],
+        ['ContactGroup/get', { ids => ['#3'] }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[1][1]{list}[0]{uid});
+    ($filename, $dirs, $suffix) = fileparse($res->[1][1]{list}[0]{"x-href"}, ".vcf");
+    $self->assert_not_null($res->[1][1]{list}[0]->{id});
+    $self->assert_str_equals($res->[1][1]{list}[0]->{id}, $res->[1][1]{list}[0]->{uid});
+    $self->assert_str_not_equals('path#uid', $filename);
+
+    # Can't change an UID
+    my $contactId = $res->[0][1]{created}{3}{id};
+    $self->assert_not_null($contactId);
+    $res = $jmap->CallMethods([
+        ['ContactGroup/set', {
+            update => {
+                $contactId => {
+                    uid => '0000-1234-56789-01234-56789-000'
+                }
+            }
+        }, "R1"],
+    ]);
+    $self->assert_str_equals('uid', $res->[0][1]{notUpdated}{$contactId}{properties}[0]);
+
 }
 
 sub test_contact_set_emaillabel
