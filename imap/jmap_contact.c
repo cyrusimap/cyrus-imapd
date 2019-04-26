@@ -404,6 +404,7 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
     json_t *obj = json_pack("{}");
 
     json_object_set_new(obj, "id", json_string(cdata->vcard_uid));
+    json_object_set_new(obj, "uid", json_string(cdata->vcard_uid));
 
     json_object_set_new(obj, "addressbookId",
                         json_string(strrchr(cdata->dav.mailbox, '.')+1));
@@ -458,6 +459,11 @@ static const jmap_property_t contact_props[] = {
         "id",
         NULL,
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "uid",
+        NULL,
+        JMAP_PROP_IMMUTABLE
     },
     {
         "isFlagged",
@@ -580,6 +586,11 @@ static const jmap_property_t group_props[] = {
         "id",
         NULL,
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "uid",
+        NULL,
+        JMAP_PROP_IMMUTABLE
     },
     {
         "name",
@@ -1047,30 +1058,45 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         json_t *invalid = json_pack("[]");
 
         if (kind == CARDDAV_KIND_GROUP) {
-            json_t *namep = json_object_get(arg, "name");
+            json_t *namep = NULL;
+            json_t *members = NULL;
+            json_t *others = NULL;
+            json_t *jval;
+            const char *key;
+
+            json_object_foreach(arg, key, jval) {
+                if (!strcmp(key, "name")) {
+                    if (json_is_string(jval))
+                        namep = jval;
+                    else json_array_append_new(invalid, json_string("name"));
+                }
+                else if (!strcmp(key, "contactIds")) {
+                    members = jval;
+                }
+                else if (!strcmp(key, "otehrAccountContactIds")) {
+                    others = jval;
+                }
+                else if (!strcmp(key, "id") || !strcmp(key, "uid")) {
+                    if (cdata && strcmpnull(cdata->vcard_uid, json_string_value(jval))) {
+                        json_array_append_new(invalid, json_string(key));
+                    }
+                }
+            }
+
             if (namep) {
                 const char *name = json_string_value(namep);
-                if (!name) {
-                    json_t *err = json_pack("{s:s}",
-                                            "type", "invalidArguments");
-                    json_object_set_new(set.not_updated, uid, err);
-                    goto finish;
+                if (name) {
+                    vparse_replace_entry(card, NULL, "FN", name);
+                    vparse_replace_entry(card, NULL, "N", name);
                 }
-
-                vparse_replace_entry(card, NULL, "FN", name);
-                vparse_replace_entry(card, NULL, "N", name);
             }
             else if (!vparse_get_entry(card, NULL, "N")) {
                 struct vparse_entry *entry = vparse_get_entry(card, NULL, "FN");
                 if (entry) vparse_replace_entry(card, NULL, "N", entry->v.value);
             }
-
-            json_t *members = json_object_get(arg, "contactIds");
             if (members) {
                 _add_group_entries(req, card, members, invalid);
             }
-
-            json_t *others = json_object_get(arg, "otherAccountContactIds");
             if (others) {
                 _add_othergroup_entries(req, card, others, invalid);
             }
@@ -1375,6 +1401,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     struct buf buf = BUF_INITIALIZER;
 
     json_object_set_new(obj, "id", json_string(cdata->vcard_uid));
+    json_object_set_new(obj, "uid", json_string(cdata->vcard_uid));
 
     json_object_set_new(obj, "addressbookId",
                         json_string(strrchr(cdata->dav.mailbox, '.')+1));
@@ -2836,6 +2863,12 @@ static int _json_to_card(struct jmap_req *req,
                 }
                 continue;
             }
+            if (!strcmp(key, "uid")) {
+                if (strcmpnull(cdata->vcard_uid, json_string_value(jval))) {
+                    json_array_append_new(invalid, json_string("uid"));
+                }
+                continue;
+            }
             else if (!strcmp(key, "x-href")) {
                 char *xhref = jmap_xhref(cdata->dav.mailbox, cdata->dav.resource);
                 if (strcmpnull(json_string_value(jval), xhref)) {
@@ -2853,7 +2886,12 @@ static int _json_to_card(struct jmap_req *req,
             }
         }
 
-        if (!strcmp(key, "isFlagged")) {
+        if (!strcmp(key, "uid")) {
+            if (!json_is_string(jval)) {
+                json_array_append_new(invalid, json_string("uid"));
+            }
+        }
+        else if (!strcmp(key, "isFlagged")) {
             has_noncontent = 1;
             if (json_is_true(jval)) {
                 strarray_add_case(flags, "\\Flagged");
@@ -3078,16 +3116,42 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     struct vparse_card *card = NULL;
     char *uid = NULL;
     int r = 0;
+    char *resourcename = NULL;
 
     *uidptr = NULL;
 
-    if ((uid = (char *) json_string_value(json_object_get(jcard, "id")))) {
+    if ((uid = (char *) json_string_value(json_object_get(jcard, "uid")))) {
         /* Use custom vCard UID from request object */
         uid = xstrdup(uid);
     }  else {
         /* Create a vCard UID */
         uid = xstrdup(makeuuid());
     }
+
+    /* Determine mailbox and resource name of card.
+     * We attempt to reuse the UID as DAV resource name; but
+     * only if it looks like a reasonable URL path segment. */
+    struct buf buf = BUF_INITIALIZER;
+    const char *p;
+    for (p = uid; *p; p++) {
+        if ((*p >= '0' && *p <= '9') ||
+            (*p >= 'a' && *p <= 'z') ||
+            (*p >= 'A' && *p <= 'Z') ||
+            (p > uid &&
+                (*p == '@' || *p == '.' ||
+                 *p == '_' || *p == '-'))) {
+            continue;
+        }
+        break;
+    }
+    if (*p == '\0' && p - uid >= 16 && p - uid <= 200) {
+        buf_setcstr(&buf, uid);
+    } else {
+        buf_setcstr(&buf, makeuuid());
+    }
+    buf_appendcstr(&buf, ".vcf");
+    resourcename = buf_newcstring(&buf);
+    buf_free(&buf);
 
     const char *addressbookId = "Default";
     json_t *abookid = json_object_get(jcard, "addressbookId");
@@ -3161,7 +3225,7 @@ static int _contact_set_create(jmap_req_t *req, unsigned kind,
     }
 
     syslog(LOG_NOTICE, logfmt, req->accountid, mboxname, uid, name);
-    r = carddav_store(*mailbox, card, NULL, 0, flags, annots,
+    r = carddav_store(*mailbox, card, resourcename, 0, flags, annots,
                       req->accountid, req->authstate, ignorequota);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
         syslog(LOG_ERR, "carddav_store failed for user %s: %s",
@@ -3175,6 +3239,7 @@ done:
     if (!*uidptr) free(uid);
     vparse_free_card(card);
     free(mboxname);
+    free(resourcename);
     strarray_free(flags);
     freeentryatts(annots);
 
