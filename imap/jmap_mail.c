@@ -4798,7 +4798,7 @@ static int _email_get_meta(jmap_req_t *req,
         if (jmap_wantprop(props, "mailboxIds"))
             json_object_set_new(email, "mailboxIds", json_null());
         if (jmap_wantprop(props, "keywords"))
-            json_object_set_new(email, "keywords", json_null());
+            json_object_set_new(email, "keywords", json_object());
         if (jmap_wantprop(props, "size")) {
             size_t size = msg->rfc822part->header_size + msg->rfc822part->content_size;
             json_object_set_new(email, "size", json_integer(size));

@@ -1507,7 +1507,7 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
                 }
             }
             json_object_set_new(item, "type", json_string(type));
-            if (label) json_object_set_new(item, "label", json_string(label));
+            json_object_set_new(item, "label", label ? json_string(label) : json_null());
 
             const char *pobox = strarray_safenth(a, 0);
             const char *extended = strarray_safenth(a, 1);

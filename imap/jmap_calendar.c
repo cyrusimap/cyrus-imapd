@@ -254,12 +254,13 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
         r = annotatemore_lookupmask(mbentry->name, color_annot,
                                     httpd_userid, &attrib);
-        if (!r && attrib.len)
+        if (buf_len(&attrib))
             json_object_set_new(obj, "color", json_string(buf_cstring(&attrib)));
         buf_free(&attrib);
     }
 
     if (jmap_wantprop(rock->get->props, "sortOrder")) {
+        long sort_order = 0;
         buf_reset(&attrib);
         static const char *order_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order";
@@ -269,7 +270,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
             char *ptr;
             long val = strtol(buf_cstring(&attrib), &ptr, 10);
             if (ptr && *ptr == '\0') {
-                json_object_set_new(obj, "sortOrder", json_integer(val));
+                sort_order = val;
             }
             else {
                 /* Ignore, but report non-numeric calendar-order values */
@@ -277,10 +278,12 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
                        buf_cstring(&attrib));
             }
         }
+        json_object_set_new(obj, "sortOrder", json_integer(sort_order));
         buf_free(&attrib);
     }
 
     if (jmap_wantprop(rock->get->props, "isVisible")) {
+        int is_visible = 1;
         buf_reset(&attrib);
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
@@ -289,30 +292,32 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         if (!r && attrib.len) {
             const char *val = buf_cstring(&attrib);
             if (!strncmp(val, "true", 4) || !strncmp(val, "1", 1)) {
-                json_object_set_new(obj, "isVisible", json_true());
+                is_visible = 1;
             } else if (!strncmp(val, "false", 5) || !strncmp(val, "0", 1)) {
-                json_object_set_new(obj, "isVisible", json_false());
+                is_visible = 0;
             } else {
                 /* Report invalid value and fall back to default. */
                 syslog(LOG_WARNING,
                        "isVisible: invalid annotation value: %s", val);
-                json_object_set_new(obj, "isVisible", json_string("true"));
+                is_visible = 1;
             }
         }
+        json_object_set_new(obj, "isVisible", json_boolean(is_visible));
         buf_free(&attrib);
     }
 
     if (jmap_wantprop(rock->get->props, "isSubscribed")) {
+        int is_subscribed = 1;
         if (mboxname_userownsmailbox(httpd_userid, mbentry->name)) {
             /* Users always subscribe their own calendars */
-            json_object_set_new(obj, "isSubscribed", json_true());
+            is_subscribed = 1;
         }
         else {
             /* Lookup mailbox subscriptions */
             if (mboxlist_checksub(mbentry->name, httpd_userid) == 0) {
                 /* It's listed in the mailbox subscription database,
                  * so it must be subscribed. */
-                json_object_set_new(obj, "isSubscribed", json_true());
+                is_subscribed = 1;
             }
             else {
                 /* Support legacy shared calendars: they are subscribed
@@ -324,17 +329,16 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
                 r = annotatemore_lookupmask(mbentry->name, invite_annot,
                                             httpd_userid, &attrib);
                 if (!strcmp(buf_cstring(&attrib), "invite-accepted")) {
-                    json_object_set_new(obj, "isSubscribed", json_true());
+                    is_subscribed = 1;
                 }
                 else if (buf_len(&attrib)) {
-                    json_object_set_new(obj, "isSubscribed", json_false());
+                    is_subscribed = 0;
                 }
-                else {
-                    json_object_set_new(obj, "isSubscribed", json_true());
-                }
+                else is_subscribed = 1;
                 buf_free(&attrib);
             }
         }
+        json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
 
     int writerights = DACL_WRITECONT|DACL_WRITEPROPS;
