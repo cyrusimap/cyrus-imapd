@@ -100,6 +100,7 @@ struct conversations_state {
     struct conv_quota quota;
     int trashfolder;
     char *trashmboxname;
+    char *trashmboxid;
     char *path;
     unsigned quota_loaded:1;
     unsigned quota_dirty:1;
