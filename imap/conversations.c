@@ -256,8 +256,22 @@ EXPORTED int conversation_folder_number(struct conversations_state *state,
             pos = strarray_append(state->folders, folder);
 
         /* track the Trash folder number as it's added */
-        if (!strcmpsafe(name, state->trashmboxname))
-            state->trashfolder = pos;
+        if (state->folders_byname) {
+            if (!strcmpsafe(folder, state->trashmboxname))
+                state->trashfolder = pos;
+        }
+        else {
+            if (!state->trashmboxid) {
+                mbentry_t *mbentry = NULL;
+
+                mboxlist_lookup(state->trashmboxname, &mbentry, NULL);
+                state->trashmboxid = mbentry ? xstrdup(mbentry->uniqueid) : NULL;
+                mboxlist_entry_free(&mbentry);
+            }
+
+            if (!strcmpsafe(folder, state->trashmboxid))
+                state->trashfolder = pos;
+        }
 
         /* store must succeed */
         r = write_folders(state);
@@ -367,8 +381,17 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
         open->s.annotmboxname = xstrdup(CONVSPLITFOLDER);
 
     char *trashmboxname = mboxname_user_mbox(userid, "Trash");
-    open->s.trashfolder = conversation_folder_number(&open->s, trashmboxname, /*create*/0);
     open->s.trashmboxname = trashmboxname;
+    if (open->s.folders_byname)
+        open->s.trashfolder = conversation_folder_number(&open->s, trashmboxname, /*create*/0);
+    else {
+        mbentry_t *mbentry = NULL;
+
+        mboxlist_lookup(trashmboxname, &mbentry, NULL);
+        open->s.trashmboxid = mbentry ? xstrdup(mbentry->uniqueid) : NULL;
+        mboxlist_entry_free(&mbentry);
+        open->s.trashfolder = folder_number(&open->s, open->s.trashmboxid, /*create*/0);
+    }
 
     /* create the status cache */
     construct_hash_table(&open->s.folderstatus, strarray_size(open->s.folders)/4+4, 0);
@@ -447,6 +470,7 @@ static void _conv_remove(struct conversations_state *state)
             free(cur->s.annotmboxname);
             free(cur->s.path);
             free(cur->s.trashmboxname);
+            free(cur->s.trashmboxid);
             if (cur->s.counted_flags)
                 strarray_free(cur->s.counted_flags);
             if (cur->s.folders)
