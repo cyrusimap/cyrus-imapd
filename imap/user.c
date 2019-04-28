@@ -95,8 +95,6 @@
 #include "caldav_alarm.h"
 #endif
 
-#define FNAME_SUBSSUFFIX "sub"
-
 #if 0
 static int user_deleteacl(char *name, int matchlen, int category, void* rock)
 {
@@ -532,7 +530,7 @@ EXPORTED char *user_hash_meta(const char *userid, const char *suffix)
     return result;
 }
 
-HIDDEN char *user_hash_subs(const char *userid)
+EXPORTED char *user_hash_subs(const char *userid)
 {
     return user_hash_meta(userid, FNAME_SUBSSUFFIX);
 }

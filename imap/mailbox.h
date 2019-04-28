@@ -107,7 +107,7 @@ enum meta_filename {
 #ifdef WITH_DAV
   META_DAV,
 #endif
-  META_ARCHIVECACHE
+  META_ARCHIVECACHE  /* MUST be last for relocate.c */
 };
 
 #define MAILBOX_FNAME_LEN 256

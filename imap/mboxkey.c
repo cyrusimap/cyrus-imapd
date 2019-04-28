@@ -68,8 +68,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-#define FNAME_MBOXKEYSUFFIX "mboxkey" /* per user mailbox key extension */
-
 enum {
     MBOXKEY_VERSION = 1,
     MBOXKEY_DEBUG = 0
@@ -98,7 +96,7 @@ static void abortcurrent(struct mboxkey *s)
     }
 }
 
-HIDDEN char *mboxkey_getpath(const char *userid)
+EXPORTED char *mboxkey_getpath(const char *userid)
 {
     mbname_t *mbname = mbname_from_userid(userid);
     char *fname = mboxname_conf_getpath(mbname, FNAME_MBOXKEYSUFFIX);

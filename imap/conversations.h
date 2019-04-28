@@ -56,6 +56,8 @@
 #include "strarray.h"
 #include "util.h"
 
+#define FNAME_CONVERSATIONS_SUFFIX "conversations"
+
 #define CONV_FOLDER_KEY_MBOX(state, mailbox) \
     (state->folders_byname ? mailbox->name : mailbox->uniqueid)
 
