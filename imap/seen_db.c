@@ -69,7 +69,6 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
 
-#define FNAME_SEENSUFFIX "seen" /* per user seen state extension */
 #define FNAME_SEEN "/cyrus.seen" /* for legacy seen state */
 
 enum {
@@ -85,7 +84,7 @@ struct seen {
 
 #define DB (config_seenstate_db)
 
-HIDDEN char *seen_getpath(const char *userid)
+EXPORTED char *seen_getpath(const char *userid)
 {
     mbname_t *mbname = mbname_from_userid(userid);
     char *fname = mboxname_conf_getpath(mbname, FNAME_SEENSUFFIX);

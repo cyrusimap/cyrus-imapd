@@ -201,6 +201,7 @@ sbin_PROGRAMS += \
 	imap/mbtool \
 	imap/quota \
 	imap/reconstruct \
+	imap/relocate_by_id \
 	imap/cvt_xlist_specialuse
 
 sbin_SCRIPTS += \
@@ -1385,6 +1386,9 @@ imap_quota_LDADD = $(LD_UTILITY_ADD)
 
 imap_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/reconstruct.c
 imap_reconstruct_LDADD = $(LD_UTILITY_ADD)
+
+imap_relocate_by_id_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/relocate_by_id.c
+imap_relocate_by_id_LDADD = $(LD_UTILITY_ADD)
 
 imap_dav_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/dav_reconstruct.c
 imap_dav_reconstruct_LDADD = $(LD_UTILITY_ADD)

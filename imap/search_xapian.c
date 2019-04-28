@@ -80,7 +80,6 @@
 #define INDEXEDDB_KEY_VERSION       2 /* version string for entry keys */
 #define INDEXEDDB_FNAME         "/cyrus.indexed.db"
 #define XAPIAN_DIRNAME          "/xapian"
-#define ACTIVEFILE_METANAME     "xapianactive"
 #define XAPIAN_NAME_LOCK_PREFIX "$XAPIAN$"
 
 // this seems to translate for 4Gb-ish  - units are 10 bytes?
@@ -221,7 +220,7 @@ static char *activefile_fname(const char *mboxname)
 {
     char *userid = mboxname_to_userid(mboxname);
     if (!userid) return NULL;
-    char *res = user_hash_meta(userid, ACTIVEFILE_METANAME);
+    char *res = user_hash_meta(userid, FNAME_XAPIANSUFFIX);
     free(userid);
     return res;
 }
