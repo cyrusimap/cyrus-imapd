@@ -93,7 +93,6 @@
 #define CONVERSATION_ID_STRMAX      (1+sizeof(conversation_id_t)*2)
 
 /* per user conversations db extension */
-#define FNAME_CONVERSATIONS_SUFFIX "conversations"
 #define FNKEY "$FOLDER_NAMES"
 #define FIKEY "$FOLDER_IDS"
 #define CFKEY "$COUNTED_FLAGS"

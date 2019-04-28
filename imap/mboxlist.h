@@ -394,6 +394,9 @@ int mboxlist_changesub(const char *name, const char *userid,
                        const struct auth_state *auth_state,
                        int add, int force, int notify);
 
+/* Add subscriptions to 'names' for 'userid'. */
+int mboxlist_addsubs(strarray_t *names, const char *userid);
+
 /* set or create quota root */
 int mboxlist_setquotas(const char *root,
                        quota_t newquotas[QUOTA_NUMRESOURCES],

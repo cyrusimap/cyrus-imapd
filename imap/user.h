@@ -46,6 +46,9 @@
 #include "auth.h"
 #include "mboxname.h"
 
+#define FNAME_SUBSSUFFIX     "sub"
+#define FNAME_COUNTERSSUFFIX "counters"
+
 /* path to user's sieve directory */
 const char *user_sieve_path(const char *user);
 
