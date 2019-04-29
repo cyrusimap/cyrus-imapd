@@ -153,11 +153,13 @@ int main(int argc, char **argv)
         int flags =
             MBOXTREE_TOMBSTONES | MBOXTREE_DELETED | MBOXTREE_INTERMEDIATES;
 
+        /* Make a list of all mailboxes in tree */
         if (dousers)
             mboxlist_usermboxtree(argv[i], NULL, find_p, mboxlist, flags);
         else
             mboxlist_mboxtree(argv[i], find_p, mboxlist, flags);
 
+        /* Process each mailbox in reverse order (children first) */
         r = 0;
         struct buf part_buf = BUF_INITIALIZER;
         while ((mbentry = ptrarray_pop(mboxlist))) {
@@ -254,6 +256,18 @@ int main(int argc, char **argv)
 
             if (!quiet) printf("\nRelocating: %s\n", extname);
 
+            struct mboxlock *namelock = NULL;
+            if (!nochanges) {
+                r = mboxname_lock(mbentry->name, &namelock, LOCK_EXCLUSIVE);
+                if (r) {
+                    fprintf(stderr,
+                            "Failed to create namelock for %s: %s\n",
+                            extname, error_message(r));
+                    mboxlist_entry_free(&mbentry);
+                    continue;
+                }
+            }
+
             /* Relocate our list of paths */
             for (j = 0; j < strarray_size(oldpaths); j++) {
                 r = relocate(strarray_nth(oldpaths, j),
@@ -266,11 +280,13 @@ int main(int argc, char **argv)
                     r = relocate(strarray_nth(newpaths, j),
                                  strarray_nth(oldpaths, j));
                 }
+                if (namelock) mboxname_release(&namelock);
             }
             else if (!nochanges) {
                 /* Rewrite mbentry */
                 mbentry->mbtype &= ~MBTYPE_LEGACY_DIRS;
                 r = mboxlist_update(mbentry, 1 /*localonly*/);
+                if (namelock) mboxname_release(&namelock);
 
                 if (r) {
                     fprintf(stderr,
