@@ -1706,19 +1706,6 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
     return n;
 }
 
-EXPORTED message_t *index_get_message(struct index_state *state, uint32_t msgno)
-{
-    struct index_map *im = &state->map[msgno-1];
-    struct index_record record;
-    uint32_t indexflags = 0;
-    if (im->isseen) indexflags |= MESSAGE_SEEN;
-    if (im->isrecent) indexflags |= MESSAGE_RECENT;
-    if (index_reload_record(state, msgno, &record))
-        return NULL;
-    return message_new_from_index(state->mailbox, &record,
-                                  msgno, indexflags);
-}
-
 EXPORTED uint32_t index_getuid(struct index_state *state, uint32_t msgno)
 {
     assert(msgno <= state->exists);
