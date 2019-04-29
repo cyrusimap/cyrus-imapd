@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <syslog.h>
+#include <unicode/ucnv.h>
 
 #include <fstream>
 #include <sstream>
