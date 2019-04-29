@@ -605,6 +605,16 @@ static const jmap_property_t group_props[] = {
 
     // FM extensions */
     {
+        "addressbookId",
+        JMAP_CONTACTS_EXTENSION,
+        0
+    },
+    {
+        "x-href",
+        JMAP_CONTACTS_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    }, // AJAXUI only
+    {
         "otherAccountContactIds",
         JMAP_CONTACTS_EXTENSION,
         0
