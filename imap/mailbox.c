@@ -4207,7 +4207,9 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
         if (r) goto fail;
     }
 
-    if (!mailbox_crceq(repack->newmailbox.i.synccrcs, repack->crcs)) {
+    if (repack->newmailbox.i.minor_version >= 10 &&
+            repack->mailbox->i.minor_version >= 10 &&
+            !mailbox_crceq(repack->newmailbox.i.synccrcs, repack->crcs)) {
         syslog(LOG_ERR, "IOERROR: CRC mismatch on repack commit: %s (%u %u) (%u %u)",
                repack->mailbox->name,
                repack->crcs.basic, repack->newmailbox.i.synccrcs.basic,
