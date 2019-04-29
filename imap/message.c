@@ -3682,6 +3682,15 @@ static void message_free(message_t *m)
     free(m);
 }
 
+EXPORTED void message_set_from_data(const char *base, size_t len, message_t *m)
+{
+    assert(m->refcount == 1);
+    memset(m, 0, sizeof(message_t));
+    buf_init_ro(&m->map, base, len);
+    m->have = m->given = M_MAP;
+    m->refcount = 1;
+}
+
 EXPORTED message_t *message_new_from_data(const char *base, size_t len)
 {
     message_t *m = message_new();
@@ -3709,6 +3718,19 @@ EXPORTED message_t *message_new_from_mailbox(struct mailbox *mailbox, unsigned i
     return m;
 }
 
+EXPORTED void message_set_from_record(struct mailbox *mailbox,
+                                      const struct index_record *record,
+                                      message_t *m)
+{
+    assert(m->refcount == 1);
+    memset(m, 0, sizeof(message_t));
+    assert(record->uid > 0);
+    m->mailbox = mailbox;
+    m->record = *record;
+    m->have = m->given = M_MAILBOX|M_RECORD|M_UID;
+    m->refcount = 1;
+}
+
 EXPORTED message_t *message_new_from_record(struct mailbox *mailbox,
                                             const struct index_record *record)
 {
@@ -3718,6 +3740,23 @@ EXPORTED message_t *message_new_from_record(struct mailbox *mailbox,
     m->record = *record;
     m->have = m->given = M_MAILBOX|M_RECORD|M_UID;
     return m;
+}
+
+EXPORTED void message_set_from_index(struct mailbox *mailbox,
+                                     const struct index_record *record,
+                                     uint32_t msgno,
+                                     uint32_t indexflags,
+                                     message_t *m)
+{
+    assert(m->refcount == 1);
+    memset(m, 0, sizeof(message_t));
+    assert(record->uid > 0);
+    m->mailbox = mailbox;
+    m->record = *record;
+    m->msgno = msgno;
+    m->indexflags = indexflags;
+    m->have = m->given = M_MAILBOX|M_RECORD|M_UID|M_INDEX;
+    m->refcount = 1;
 }
 
 EXPORTED message_t *message_new_from_index(struct mailbox *mailbox,
