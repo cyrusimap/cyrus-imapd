@@ -3106,7 +3106,37 @@ sub test_calendarevent_set_shared
         "freeBusyStatus"=> "busy",
         "privacy" => "secret",
         "participants" => undef,
-        "alerts"=> undef,
+        "alerts" => {
+            'foo' => {
+                relativeTo => "before-start",
+                offset => "PT5M",
+                action => "email"
+            }
+        }
+    };
+
+    my $event2 =  {
+        "calendarId" => $CalendarId1,
+        "uid" => "58ADE31-custom-UID",
+        "title"=> "foo2",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT5M",
+        "sequence"=> 42,
+        "timeZone"=> "Etc/UTC",
+        "isAllDay"=> JSON::false,
+        "locale" => "en",
+        "status" => "tentative",
+        "description"=> "",
+        "freeBusyStatus"=> "busy",
+        "privacy" => "secret",
+        "participants" => undef,
+        "alerts" => {
+            'foo' => {
+                relativeTo => "before-start",
+                offset => "PT5M",
+                action => "email"
+            }
+        }
     };
 
     xlog "create event (should fail)";
@@ -3134,6 +3164,25 @@ sub test_calendarevent_set_shared
     "R1"]]);
     my $ret = $res->[0][1]{list}[0];
     $self->assert_normalized_event_equals($event, $ret);
+
+    xlog "update event";
+    $res = $jmap->CallMethods([['CalendarEvent/set', {
+                    accountId => 'manifold',
+                    update => {
+                        $id => {
+                            "calendarId" => $CalendarId1,
+                            "title" => "foo2",
+                        },
+    }}, "R1"]]);
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog "get calendar event $id";
+    $res = $jmap->CallMethods([['CalendarEvent/get', {
+                    accountId => 'manifold',
+                    ids => [$id]},
+    "R1"]]);
+    $ret = $res->[0][1]{list}[0];
+    $self->assert_normalized_event_equals($event2, $ret);
 
     xlog "share $CalendarId1 read-only to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId1", "cassandane" => 'lr') or die;
