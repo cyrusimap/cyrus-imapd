@@ -268,6 +268,7 @@ EXPORTED void index_release(struct index_state *state)
 {
     if (!state) return;
 
+    message_unref(&state->m);
     if (state->mailbox) {
         mailbox_close(&state->mailbox);
         state->mailbox = NULL; /* should be done by close anyway */
@@ -2528,7 +2529,6 @@ EXPORTED int index_snippets(struct index_state *state,
         for (i = 0 ; i < snippetargs->uids.count ; i++) {
             uint32_t uid = snippetargs->uids.data[i];
             struct index_record record;
-            message_t *msg;
 
             /* It's OK to do a dirty read, because we only care about
              * the UID of the message */
@@ -2536,9 +2536,10 @@ EXPORTED int index_snippets(struct index_state *state,
             if (r == IMAP_MAILBOX_CHECKSUM) r = 0;
             if (r) continue;
 
-            msg = message_new_from_record(mailbox, &record);
-            index_getsearchtext(msg, NULL, rx, /*snippet*/1);
-            message_unref(&msg);
+            if (state->m) message_set_from_record(mailbox, &record, state->m);
+            else state->m = message_new_from_record(mailbox, &record);
+
+            index_getsearchtext(state->m, NULL, rx, /*snippet*/1);
         }
 
         r = rx->end_mailbox(rx, mailbox);
@@ -4903,7 +4904,6 @@ EXPORTED int index_search_evaluate(struct index_state *state,
                                    uint32_t msgno)
 {
     struct index_map *im = &state->map[msgno-1];
-    message_t *m;
     struct index_record record;
 
     int always = search_expr_always_same(e);
@@ -4916,11 +4916,11 @@ EXPORTED int index_search_evaluate(struct index_state *state,
 
     xstats_inc(SEARCH_EVALUATE);
 
-    m = message_new_from_index(state->mailbox, &record, msgno,
-                               (im->isrecent ? MESSAGE_RECENT : 0) |
-                               (im->isseen ? MESSAGE_SEEN : 0));
-    int match = search_expr_evaluate(m, e);
-    message_unref(&m);
+    int flags = (im->isrecent ? MESSAGE_RECENT : 0)
+              | (im->isseen ? MESSAGE_SEEN : 0);
+    if (state->m) message_set_from_index(state->mailbox, &record, msgno, flags, state->m);
+    else state->m = message_new_from_index(state->mailbox, &record, msgno, flags);
+    int match = search_expr_evaluate(state->m, e);
 
     return match;
 }

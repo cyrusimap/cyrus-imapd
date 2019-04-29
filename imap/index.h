@@ -136,6 +136,7 @@ struct index_state {
     uint32_t want_mbtype;
     int want_expunged;
     unsigned num_expunged;
+    message_t *m;
 };
 
 struct copyargs {
