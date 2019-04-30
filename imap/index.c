@@ -5107,6 +5107,12 @@ static int extract_attachment(const char *type, const char *subtype,
     CURL *curl = str->curl;
     int r = 0;
 
+    if (message_guid_isnull(content_guid)) {
+        syslog(LOG_DEBUG, "extract_attachment: ignoring null guid for %s/%s",
+                type ? type : "<null>", subtype ? subtype : "<null>");
+        return 0;
+    }
+
     if (!exturl) return 0;
 
     if (strncasecmp(exturl, "http", 4)) {
