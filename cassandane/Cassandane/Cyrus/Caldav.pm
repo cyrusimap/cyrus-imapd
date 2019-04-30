@@ -1422,6 +1422,118 @@ sub test_fastmailsharing
     $self->assert_str_equals($names, "Manifold Calendar/personal");
 }
 
+sub test_davsharing
+    :min_version_3_0 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.manifold");
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    my $service = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $invite = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<D:share-resource xmlns:D="DAV:">
+  <D:sharee>
+    <D:href>mailto:cassandane\@example.com</D:href>
+    <D:prop>
+      <D:displayname>Cassandane</D:displayname>
+    </D:prop>
+    <D:comment>Shared calendar</D:comment>
+    <D:share-access>
+      <D:read-write />
+    </D:share-access>
+  </D:sharee>
+</D:share-resource>
+EOF
+
+    my $reply = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<D:invite-reply xmlns:D="DAV:">
+  <D:invite-accepted />
+  <D:create-in>
+    <D:href>/dav/calendars/users/cassandane/</D:href>
+  </D:create-in>
+  <D:comment>Thanks for the share!</D:comment>
+</D:invite-reply>
+EOF
+
+    xlog "create calendar";
+    my $CalendarId = $mantalk->NewCalendar({name => 'Manifold Calendar'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "share to user";
+    $mantalk->Request('POST', $CalendarId, $invite,
+                      'Content-Type' => 'application/davsharing+xml');
+
+    xlog "fetch invite";
+    my ($adds) = $CalDAV->SyncEventLinks("/dav/notifications/user/cassandane");
+    $self->assert_equals(scalar %$adds, 1);
+    my $notification = (keys %$adds)[0];
+
+    xlog "accept invite";
+    $CalDAV->Request('POST', $notification, $reply,
+                     'Content-Type' => 'application/davsharing+xml');
+
+    xlog "get calendars as manifold";
+    my $ManCal = $mantalk->GetCalendars();
+    $self->assert_num_equals(2, scalar @$ManCal);
+    my $names = join "/", sort map { $_->{name} } @$ManCal;
+    $self->assert_str_equals($names, "Manifold Calendar/personal");
+
+    xlog "get calendars as cassandane";
+    my $CasCal = $CalDAV->GetCalendars();
+    $self->assert_num_equals(2, scalar @$CasCal);
+    $names = join "/", sort map { $_->{name} } @$CasCal;
+    $self->assert_str_equals($names, "Manifold Calendar/personal");
+
+    xlog "Update calendar name as cassandane";
+    my ($CasId) = map { $_->{id} } grep { $_->{name} eq 'Manifold Calendar' } @$CasCal;
+    $CalDAV->UpdateCalendar({id => $CasId, name => "Cassandane Name"});
+
+    xlog "changed as cassandane";
+    $CasCal = $CalDAV->GetCalendars();
+    $self->assert_num_equals(2, scalar @$CasCal);
+    $names = join "/", sort map { $_->{name} } @$CasCal;
+    $self->assert_str_equals($names, "Cassandane Name/personal");
+
+    xlog "unchanged as manifold";
+    $ManCal = $mantalk->GetCalendars();
+    $self->assert_num_equals(2, scalar @$ManCal);
+    $names = join "/", sort map { $_->{name} } @$ManCal;
+    $self->assert_str_equals($names, "Manifold Calendar/personal");
+
+    xlog "delete calendar as cassandane";
+    $CalDAV->DeleteCalendar($CasId);
+
+    xlog "changed as cassandane";
+    $CasCal = $CalDAV->GetCalendars();
+    $self->assert_num_equals(1, scalar @$CasCal);
+    $names = join "/", sort map { $_->{name} } @$CasCal;
+    $self->assert_str_equals($names, "personal");
+
+    xlog "unchanged as manifold";
+    $ManCal = $mantalk->GetCalendars();
+    $self->assert_num_equals(2, scalar @$ManCal);
+    $names = join "/", sort map { $_->{name} } @$ManCal;
+    $self->assert_str_equals($names, "Manifold Calendar/personal");
+}
+
 sub test_multiinvite_add_person_changes
     :needs_component_httpd
 {
