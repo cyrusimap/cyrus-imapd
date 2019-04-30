@@ -5192,7 +5192,12 @@ static int extract_attachment(const char *type, const char *subtype,
         syslog(LOG_DEBUG, "extract_attachment: PUT %s: got status %ld",
                            docurl, statuscode);
     }
+    if (statuscode >= 400 && statuscode <= 499) {
+      /* indexer can't extract this for some reason, never try again */
+      goto done;
+    }
     if (statuscode != 200 && statuscode != 201) {
+        /* any other status code is an error */
         r = IMAP_IOERROR;
         goto done;
     }
