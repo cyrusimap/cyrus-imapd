@@ -242,6 +242,9 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
 static int proppatch_timezone(xmlNodePtr prop, unsigned set,
                               struct proppatch_ctx *pctx,
                               struct propstat propstat[], void *rock);
+static int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
+                                 struct proppatch_ctx *pctx,
+                                 struct propstat propstat[], void *rock);
 static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
                                  struct propfind_ctx *fctx,
                                  xmlNodePtr prop, xmlNodePtr resp,
@@ -508,7 +511,7 @@ static const struct prop_entry caldav_props[] = {
     /* CalDAV Sharing (draft-pot-caldav-sharing) properties */
     { "calendar-user-address-set", NS_CALDAV,
       PROP_COLLECTION,
-      propfind_caluseraddr, proppatch_todb, NULL },
+      propfind_caluseraddr, proppatch_caluseraddr, NULL },
 
     /* Calendar Availability (RFC 7953) properties */
     { "calendar-availability", NS_CALDAV,
@@ -6126,14 +6129,81 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
         r = annotatemore_lookupmask(fctx->mbentry->name, annotname,
                                     fctx->req_tgt->userid, &fctx->buf);
         if (!r && fctx->buf.len) {
+            strarray_t *addr =
+                strarray_splitm(buf_release(&fctx->buf), ",", STRARRAY_TRIM);
+            int i;
+
             node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
                                 &propstat[PROPSTAT_OK], name, ns, NULL, 0);
-            xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+            for (i = 0; i < strarray_size(addr); i++) {
+                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(addr, i));
+            }
+            strarray_free(addr);
             ret = 0;
         }
     }
 
     return ret;
+}
+
+/* Callback to write CALDAV:calendar-user-address-set */
+static int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
+                               struct proppatch_ctx *pctx,
+                               struct propstat propstat[],
+                               void *rock __attribute__((unused)))
+{
+    /* Make sure this is on a collection and the user has admin rights */
+    if (pctx->txn->req_tgt.resource ||
+        !(cyrus_acl_myrights(httpd_authstate, pctx->mailbox->acl) & DACL_ADMIN)) {
+        xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+                     &propstat[PROPSTAT_FORBID],
+                     prop->name, prop->ns, NULL, 0);
+
+        *pctx->ret = HTTP_FORBIDDEN;
+    }
+    else {
+        char *value = NULL;
+
+        if (set) {
+            xmlNodePtr node = xmlFirstElementChild(prop);
+
+            /* Find the value */
+            if (!node) {
+                /* single text value */
+                value = (char *) xmlNodeGetContent(prop);
+            }
+            else {
+                /* href(s) */
+                strarray_t addr = STRARRAY_INITIALIZER;
+
+                for (; node; node = xmlNextElementSibling(node)) {
+                    /* Make sure its a value we understand */
+                    if (!xmlStrcmp(node->name, BAD_CAST "href")) {
+                        strarray_appendm(&addr, (char *) xmlNodeGetContent(node));
+                    }
+                    else {
+                        /* Unknown value */
+                        xml_add_prop(HTTP_CONFLICT, pctx->ns[NS_DAV],
+                                     &propstat[PROPSTAT_CONFLICT],
+                                     prop->name, prop->ns, NULL, 0);
+
+                        strarray_fini(&addr);
+                        *pctx->ret = HTTP_FORBIDDEN;
+
+                        return 0;
+                    }
+                }
+
+                value = strarray_join(&addr, ",");
+                strarray_fini(&addr);
+            }
+        }
+
+        proppatch_todb(prop, set, pctx, propstat, (void *) value);
+        free(value);
+    }
+
+    return 0;
 }
 
 /* Callback to fetch CALDAV:calendar-user-type */
