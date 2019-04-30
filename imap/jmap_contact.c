@@ -1083,7 +1083,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                 else if (!strcmp(key, "contactIds")) {
                     members = jval;
                 }
-                else if (!strcmp(key, "otehrAccountContactIds")) {
+                else if (!strcmp(key, "otherAccountContactIds")) {
                     others = jval;
                 }
                 else if (!strcmp(key, "id") || !strcmp(key, "uid")) {
