@@ -4,6 +4,9 @@
 #include <string.h>
 #include <sys/types.h>
 #include <syslog.h>
+#ifdef HAVE_ICU
+#include <unicode/ucnv.h>
+#endif
 
 #include <fstream>
 #include <sstream>
