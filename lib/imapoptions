@@ -1970,7 +1970,8 @@ If all partitions are over that limit, this feature is not used anymore.
 
    4. The extractor must return the plain text extract with either HTTP status
    200 (OK) or 201 (Created) and a Content-Type "text/plain" header.
-   If no text can be extracted, then the response body must be empty.
+   If no text can be extracted, then the extractor may return any return code
+   in the range 4xx, or 200 and an empty response body.
 
    Any other HTTP status code is treated as an error. For performance
    reasons, the Cyrus indexer attempts to keep-alive the TCP connection
