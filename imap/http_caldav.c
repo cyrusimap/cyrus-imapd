@@ -505,6 +505,11 @@ static const struct prop_entry caldav_props[] = {
       PROP_COLLECTION | PROP_PERUSER,
       propfind_fromdb, proppatch_caltransp, NULL },
 
+    /* CalDAV Sharing (draft-pot-caldav-sharing) properties */
+    { "calendar-user-address-set", NS_CALDAV,
+      PROP_COLLECTION,
+      propfind_caluseraddr, proppatch_todb, NULL },
+
     /* Calendar Availability (RFC 7953) properties */
     { "calendar-availability", NS_CALDAV,
       PROP_COLLECTION | PROP_PERUSER | PROP_PRESCREEN,
@@ -6067,52 +6072,68 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
                          struct propstat propstat[],
                          void *rock __attribute__((unused)))
 {
+    const char *annotname =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
     xmlNodePtr node;
-    struct strlist *domains;
+    int r, ret = HTTP_NOT_FOUND;
 
     if (!(namespace_calendar.enabled && fctx->req_tgt->userid))
         return HTTP_NOT_FOUND;
 
-    node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-                        name, ns, NULL, 0);
+    if (fctx->req_tgt->namespace->id == URL_NS_PRINCIPAL) {
+        char *mailboxname = caldav_mboxname(fctx->req_tgt->userid, NULL);
 
-    const char *annotname =
-        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-    char *mailboxname = caldav_mboxname(fctx->req_tgt->userid, NULL);
-    buf_reset(&fctx->buf);
-    int r = annotatemore_lookupmask(mailboxname, annotname,
+        node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+                            name, ns, NULL, 0);
+
+        buf_reset(&fctx->buf);
+        r = annotatemore_lookupmask(mailboxname, annotname,
                                     fctx->req_tgt->userid, &fctx->buf);
-    free(mailboxname);
-    if (!r && fctx->buf.len) {
-        xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
-        return 0;
-    }
+        free(mailboxname);
+        if (!r && fctx->buf.len) {
+            xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+        }
 
-    /* XXX  This needs to be done via an LDAP/DB lookup */
-    if (strchr(fctx->req_tgt->userid, '@')) {
+        /* XXX  This needs to be done via an LDAP/DB lookup */
+        else if (strchr(fctx->req_tgt->userid, '@')) {
+            buf_reset(&fctx->buf);
+            buf_printf(&fctx->buf, "mailto:%s", fctx->req_tgt->userid);
+            xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+        }
+
+        else if (httpd_extradomain) {
+            buf_reset(&fctx->buf);
+            buf_printf(&fctx->buf, "mailto:%s@%s",
+                       fctx->req_tgt->userid, httpd_extradomain);
+            xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+        }
+
+        else {
+            struct strlist *domains;
+            for (domains = cua_domains; domains; domains = domains->next) {
+                buf_reset(&fctx->buf);
+                buf_printf(&fctx->buf, "mailto:%s@%s",
+                           fctx->req_tgt->userid, domains->s);
+
+                xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+            }
+        }
+
+        ret = 0;
+    }
+    else {
         buf_reset(&fctx->buf);
-        buf_printf(&fctx->buf, "mailto:%s", fctx->req_tgt->userid);
-        xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
-        return 0;
+        r = annotatemore_lookupmask(fctx->mbentry->name, annotname,
+                                    fctx->req_tgt->userid, &fctx->buf);
+        if (!r && fctx->buf.len) {
+            node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+                                &propstat[PROPSTAT_OK], name, ns, NULL, 0);
+            xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+            ret = 0;
+        }
     }
 
-    if (httpd_extradomain) {
-        buf_reset(&fctx->buf);
-        buf_printf(&fctx->buf, "mailto:%s@%s",
-                   fctx->req_tgt->userid, httpd_extradomain);
-        xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
-        return 0;
-    }
-
-    for (domains = cua_domains; domains; domains = domains->next) {
-        buf_reset(&fctx->buf);
-        buf_printf(&fctx->buf, "mailto:%s@%s",
-                   fctx->req_tgt->userid, domains->s);
-
-        xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
-    }
-
-    return 0;
+    return ret;
 }
 
 /* Callback to fetch CALDAV:calendar-user-type */
