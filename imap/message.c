@@ -4360,15 +4360,15 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
                 *cachestrp += (cte >> 16) & 0xffff;
 
             if (cache_version >= 5)
-                *cachestrp = message_guid_import(&body->subpart->content_guid, *cachestrp);
+                *cachestrp = message_guid_import(&this->content_guid, *cachestrp);
 
             if (cache_version >= 8) {
-                body->subpart->decoded_content_size = CACHE_ITEM_BIT32(*cachestrp);
+                this->decoded_content_size = CACHE_ITEM_BIT32(*cachestrp);
                 *cachestrp += CACHE_ITEM_SIZE_SKIP;
             }
 
             if (cache_version >= 9) {
-                body->subpart->content_lines = CACHE_ITEM_BIT32(*cachestrp);
+                this->content_lines = CACHE_ITEM_BIT32(*cachestrp);
                 *cachestrp += CACHE_ITEM_SIZE_SKIP;
             }
         }
