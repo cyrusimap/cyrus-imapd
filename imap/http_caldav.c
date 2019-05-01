@@ -4369,7 +4369,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
             }
             get_schedule_addresses(txn, &schedule_addresses);
 
-            char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
+            char *userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
+                xstrdup(txn->req_tgt.userid) :
+                mboxname_to_userid(txn->req_tgt.mbentry->name);
             if (strarray_find_case(&schedule_addresses, organizer, 0) >= 0) {
                 /* Organizer scheduling object resource */
                 if (ret) {
