@@ -1563,13 +1563,19 @@ static void get_schedule_addresses(struct transaction_t *txn,
     else {
         /* find schedule address based on the destination calendar's user */
 
-        /* check calendar-user-address-set for target user */
+        /* check calendar-user-address-set for target user's mailbox */
         const char *annotname =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-        char *mailboxname = caldav_mboxname(txn->req_tgt.userid, NULL);
-        int r = annotatemore_lookupmask(mailboxname, annotname,
+        int r = annotatemore_lookupmask(txn->req_tgt.mbentry->name, annotname,
                                         txn->req_tgt.userid, &buf);
-        free(mailboxname);
+        if (r || buf.len <= 6) {
+            /* check calendar-user-address-set for target user's principal */
+            char *mailboxname = caldav_mboxname(txn->req_tgt.userid, NULL);
+            buf_reset(&buf);
+            r = annotatemore_lookupmask(mailboxname, annotname,
+                                        txn->req_tgt.userid, &buf);
+            free(mailboxname);
+        }
         if (!r && buf.len > 7 &&
             !strncasecmp(buf_cstring(&buf), "mailto:", 7)) {
             strarray_append(addresses, buf_cstring(&buf) + 7);
