@@ -2788,7 +2788,7 @@ void sched_request(const char *userid, const char *organizer,
     /* Check ACL of auth'd user on userid's Scheduling Outbox */
     char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
 
-    syslog(LOG_DEBUG, "sched_request(%s)", organizer);
+    syslog(LOG_DEBUG, "sched_request(%s as %s)", userid, organizer);
 
     r = mboxlist_lookup(outboxname, &mbentry, NULL);
     if (r) {
@@ -3180,7 +3180,7 @@ void sched_reply(const char *userid, const char *attendee,
 {
     int r;
 
-    syslog(LOG_DEBUG, "sched_reply(%s)", attendee);
+    syslog(LOG_DEBUG, "sched_reply(%s as %s)", userid, attendee);
 
     /* Check ACL of auth'd user on userid's Scheduling Outbox */
     char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
