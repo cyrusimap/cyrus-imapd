@@ -13624,7 +13624,7 @@ static int list_data_remote(struct backend *be, char *tag,
                     "messages", "recent", "uidnext", "uidvalidity",
                     "unseen", "uniqueid", "size", "highestmodseq",
                     "xconvexists", "xconvunseen", "xconvmodseq",
-                    "createdmodseq", NULL
+                    "createdmodseq", "sharedseen", NULL
                 };
 
                 c = '(';
