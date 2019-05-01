@@ -2815,6 +2815,7 @@ sub test_mailbox_changes_shared
     $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
+    $self->assert_null($res->[0][1]->{updatedProperties});
 
     xlog "create mailbox box1 via IMAP";
     $admintalk->create("user.foo.box1") or die;
@@ -2827,6 +2828,7 @@ sub test_mailbox_changes_shared
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{created}});
     $self->assert_deep_equals([], $res->[0][1]{updated});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]->{updatedProperties});
     $state = $res->[0][1]->{newState};
     my $box1 = $res->[0][1]->{created}[0];
 
@@ -2842,11 +2844,12 @@ sub test_mailbox_changes_shared
     $self->assert_deep_equals([], $res->[0][1]{updated});
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{destroyed}});
     $self->assert_str_equals($box1, $res->[0][1]->{destroyed}[0]);
+    $self->assert_null($res->[0][1]->{updatedProperties});
     $state = $res->[0][1]->{newState};
 
     xlog "create mailbox box2 via IMAP";
     $admintalk->create("user.foo.box2") or die;
-    $admintalk->setacl("user.foo.box2", "cassandane", "lrwkxd") or die;
+    $admintalk->setacl("user.foo.box2", "cassandane", "lrwkxinepd") or die;
 
     xlog "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
@@ -2855,9 +2858,40 @@ sub test_mailbox_changes_shared
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{created}});
     $self->assert_deep_equals([], $res->[0][1]{updated});
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]->{updatedProperties});
     $state = $res->[0][1]->{newState};
 
     my $box2 = $res->[0][1]->{created}[0];
+
+    xlog "Create a draft";
+    my $draft =  {
+        mailboxIds => { $box2 => JSON::true },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        to => [
+            { name => "Bugs Bunny", email => "bugs\@acme.local" },
+        ],
+        subject => "Memo",
+        textBody => [{partId=>'1'}],
+        bodyValues => { 1 => { value => "foo" }},
+        keywords => {
+            '$Draft' => JSON::true,
+        },
+    };
+    $res = $jmap->CallMethods([['Email/set', {
+        accountId => 'foo',
+        create => { "1" => $draft }
+    }, "R1"]]);
+    my $msgid = $res->[0][1]{created}{"1"}{id};
+
+    xlog "get mailbox updates";
+    $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
+    $self->assert_str_equals($state, $res->[0][1]->{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]->{newState});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([$box2], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $self->assert_not_null($res->[0][1]->{updatedProperties});
+    $state = $res->[0][1]->{newState};
 
     xlog "Remove lookup rights on box2";
     $admintalk->setacl("user.foo.box2", "cassandane", "") or die;
@@ -2870,7 +2904,9 @@ sub test_mailbox_changes_shared
     $self->assert_deep_equals([], $res->[0][1]{updated});
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{destroyed}});
     $self->assert_str_equals($box2, $res->[0][1]->{destroyed}[0]);
+    $self->assert_null($res->[0][1]->{updatedProperties});
     $state = $res->[0][1]->{newState};
+
 }
 
 sub test_mailbox_set_issue2377
