@@ -3613,7 +3613,11 @@ static int _mbox_changes(jmap_req_t *req,
         }
     }
 
-    if (!json_array_size(changes->created) && !json_array_size(changes->updated) && !json_array_size(changes->destroyed)) {
+    if ((json_array_size(changes->created) == 0 &&
+         json_array_size(changes->updated) == 0 &&
+         json_array_size(changes->destroyed) == 0) ||
+        (json_array_size(changes->created) > 0) ||
+        (json_array_size(changes->destroyed) > 0)) {
         *only_counts_changed = 0;
     }
 
