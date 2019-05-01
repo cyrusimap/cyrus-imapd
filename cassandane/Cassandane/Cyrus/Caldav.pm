@@ -705,6 +705,442 @@ EOF
   );
 }
 
+sub test_shared_invite_as_secretary
+    :VirtDomains :min_version_3_0 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.test");
+    $admintalk->setacl("user.test", "test" => "lrswipkxtecda");
+
+    my $service = $self->{instance}->get_service("http");
+    my $testtalk = Net::CalDAVTalk->new(
+        user => "test",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-user-address-set>
+        <D:href>mailto:test\@example.com</D:href>
+      </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+
+    $testtalk->Request('PROPPATCH', "/dav/calendars/user/test", $xml,
+                       'Content-Type' => 'text/xml');
+
+    xlog "create calendar";
+    my $CalendarId = $testtalk->NewCalendar({name => 'Team Calendar'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "set calendar-user-address-set for all sharees";
+    $testtalk->Request('PROPPATCH', "/dav/calendars/user/test/$CalendarId", $xml,
+                       'Content-Type' => 'text/xml');
+
+    xlog "share to user";
+    $admintalk->setacl("user.test.#calendars.$CalendarId",
+                       "cassandane" => 'lrswipcdn');
+
+    my $CalDAV = Net::CalDAVTalk->new(
+        user => "cassandane",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog "subscribe to shared calendar";
+    my $imapstore = $self->{instance}->get_service('imap')->create_store(
+                        username => "cassandane");
+    my $imaptalk = $imapstore->get_client();
+    $imaptalk->subscribe("user.test.#calendars.$CalendarId");
+
+    xlog "get calendars as cassandane";
+    my $CasCal = $CalDAV->GetCalendars();
+    my $sharedCalendarId = $CasCal->[1]{href};
+
+    $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-user-address-set>
+        <D:href>mailto:test\@example.com</D:href>
+      </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "$sharedCalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:friend\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:test\@example.com
+ORGANIZER;CN=Test User:MAILTO:friend\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  $self->assert_caldav_notified(
+   { recipient => "friend\@example.com", is_update => JSON::false, method => 'REPLY' },
+  );
+}
+
+sub test_shared_reply_as_secretary
+    :VirtDomains :min_version_3_0 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.test");
+    $admintalk->setacl("user.test", "test" => "lrswipkxtecda");
+
+    my $service = $self->{instance}->get_service("http");
+    my $testtalk = Net::CalDAVTalk->new(
+        user => "test",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-user-address-set>
+        <D:href>mailto:test\@example.com</D:href>
+      </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+
+    $testtalk->Request('PROPPATCH', "/dav/calendars/user/test", $xml,
+                       'Content-Type' => 'text/xml');
+
+    xlog "create calendar";
+    my $CalendarId = $testtalk->NewCalendar({name => 'Team Calendar'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "set calendar-user-address-set for all sharees";
+    $testtalk->Request('PROPPATCH', "/dav/calendars/user/test/$CalendarId", $xml,
+                       'Content-Type' => 'text/xml');
+
+    xlog "share to user";
+    $admintalk->setacl("user.test.#calendars.$CalendarId",
+                       "cassandane" => 'lrswipcdn');
+
+    my $CalDAV = Net::CalDAVTalk->new(
+        user => "cassandane",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog "subscribe to shared calendar";
+    my $imapstore = $self->{instance}->get_service('imap')->create_store(
+                        username => "cassandane");
+    my $imaptalk = $imapstore->get_client();
+    $imaptalk->subscribe("user.test.#calendars.$CalendarId");
+
+    xlog "get calendars as cassandane";
+    my $CasCal = $CalDAV->GetCalendars();
+    my $sharedCalendarId = $CasCal->[1]{href};
+
+    $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-user-address-set>
+        <D:href>mailto:test\@example.com</D:href>
+      </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "$sharedCalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:test\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+ORGANIZER:MAILTO:test\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+  $self->assert_caldav_notified(
+   { recipient => "friend\@example.com", is_update => JSON::false, method => 'REQUEST' },
+  );
+}
+
+sub test_shared_team_invite_sharee
+    :VirtDomains :min_version_3_0 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.test");
+    $admintalk->setacl("user.test", "test" => "lrswipkxtecda");
+
+    my $service = $self->{instance}->get_service("http");
+    my $testtalk = Net::CalDAVTalk->new(
+        user => "test",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-user-address-set>
+        <D:href>mailto:test\@example.com</D:href>
+      </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+
+    $testtalk->Request('PROPPATCH', "/dav/calendars/user/test", $xml,
+                       'Content-Type' => 'text/xml');
+
+    xlog "create calendar";
+    my $CalendarId = $testtalk->NewCalendar({name => 'Team Calendar'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "share to user";
+    $admintalk->setacl("user.test.#calendars.$CalendarId",
+                       "cassandane" => 'lrswipcdn');
+
+    my $CalDAV = Net::CalDAVTalk->new(
+        user => "cassandane",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog "subscribe to shared calendar";
+    my $imapstore = $self->{instance}->get_service('imap')->create_store(
+                        username => "cassandane");
+    my $imaptalk = $imapstore->get_client();
+    $imaptalk->subscribe("user.test.#calendars.$CalendarId");
+
+    xlog "get calendars as cassandane";
+    my $CasCal = $CalDAV->GetCalendars();
+    my $sharedCalendarId = $CasCal->[1]{href};
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "/dav/calendars/user/test/$CalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:An Event from cassandane
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:test\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+ORGANIZER;CN=Test User:MAILTO:test\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog "add event as sharer, inviting sharee";
+    $testtalk->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    $self->assert_caldav_notified(
+        { recipient => "cassandane\@example.com", is_update => JSON::false, method => 'REQUEST' },
+        { recipient => "friend\@example.com", is_update => JSON::false, method => 'REQUEST' },
+    );
+
+    xlog "update PARTSTAT as sharee";
+    $href = "$sharedCalendarId/$uuid.ics";
+    $card =~ s/PARTSTAT=NEEDS-ACTION/PARTSTAT=ACCEPTED/;
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    $self->assert_caldav_notified(
+        { recipient => "test\@example.com", is_update => JSON::false, method => 'REPLY' },
+    );
+}
+
+sub test_shared_team_invite_sharer
+    :VirtDomains :min_version_3_0 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.test");
+    $admintalk->setacl("user.test", "test" => "lrswipkxtecda");
+
+    my $service = $self->{instance}->get_service("http");
+    my $testtalk = Net::CalDAVTalk->new(
+        user => "test",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <C:calendar-user-address-set>
+        <D:href>mailto:test\@example.com</D:href>
+      </C:calendar-user-address-set>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+
+    $testtalk->Request('PROPPATCH', "/dav/calendars/user/test", $xml,
+                       'Content-Type' => 'text/xml');
+
+    xlog "create calendar";
+    my $CalendarId = $testtalk->NewCalendar({name => 'Team Calendar'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "share to user";
+    $admintalk->setacl("user.test.#calendars.$CalendarId",
+                       "cassandane" => 'lrswipcdn');
+
+    my $CalDAV = Net::CalDAVTalk->new(
+        user => "cassandane",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog "subscribe to shared calendar";
+    my $imapstore = $self->{instance}->get_service('imap')->create_store(
+                        username => "cassandane");
+    my $imaptalk = $imapstore->get_client();
+    $imaptalk->subscribe("user.test.#calendars.$CalendarId");
+
+    xlog "get calendars as cassandane";
+    my $CasCal = $CalDAV->GetCalendars();
+    my $sharedCalendarId = $CasCal->[1]{href};
+
+    my $uuid = "6de280c9-edff-4019-8ebd-cfebc73f8201";
+    my $href = "$sharedCalendarId/$uuid.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:$uuid
+DTEND;TZID=Australia/Melbourne:20160831T183000
+TRANSP:OPAQUE
+SUMMARY:An Event from cassandane
+DTSTART;TZID=Australia/Melbourne:20160831T153000
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED;RSVP=TRUE:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:friend\@example.com
+ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog "add event as sharee, inviting sharer";
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    $self->assert_caldav_notified(
+        { recipient => "test\@example.com", is_update => JSON::false, method => 'REQUEST' },
+        { recipient => "friend\@example.com", is_update => JSON::false, method => 'REQUEST' },
+    );
+
+    xlog "update PARTSTAT as sharer";
+    $href = "/dav/calendars/user/test/$CalendarId/$uuid.ics";
+    $card =~ s/PARTSTAT=NEEDS-ACTION/PARTSTAT=ACCEPTED/;
+
+    $testtalk->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    $self->assert_caldav_notified(
+        { recipient => "cassandane\@example.com", is_update => JSON::false, method => 'REPLY' },
+    );
+}
+
 sub test_invite_add_another
     :VirtDomains :min_version_3_0 :needs_component_httpd
 {
