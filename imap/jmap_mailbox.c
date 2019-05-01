@@ -648,13 +648,16 @@ static json_t *_mbox_get(jmap_req_t *req,
             json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
         }
         if (jmap_wantprop(props, "isSeenShared")) {
-            struct mailbox *mbox = NULL;
-
-            r = jmap_openmbox(req, mbentry->name, &mbox, 0);
-            if (r) goto done;
+            struct statusdata sdata = STATUSDATA_INIT;
+            int r = status_lookup_mbentry(mbentry, req->userid,
+                                          STATUS_MBOPTIONS, &sdata);
+            if (r) {
+                syslog(LOG_ERR, "getstatus(%s): %s",
+                        mbname_intname(mbname), error_message(r));
+                goto done;
+            }
             json_object_set_new(obj, "isSeenShared",
-                                json_boolean(mbox->i.options & OPT_IMAP_SHAREDSEEN));
-            jmap_closembox(req, &mbox);
+                                json_boolean(sdata.mboptions & OPT_IMAP_SHAREDSEEN));
         }
     }
     else {
