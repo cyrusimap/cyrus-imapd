@@ -4355,7 +4355,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
                 /* Load message containing the resource and parse iCal data */
                 oldical = caldav_record_to_ical(mailbox, cdata,
-                                            NULL, &schedule_address);
+                                                NULL, NULL);
                 if (!oldical) {
                     txn->error.desc = "Failed to read record";
                     ret = HTTP_SERVER_ERROR;
@@ -4363,10 +4363,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
             }
 
-            if (schedule_address) {
-                strarray_appendm(&schedule_addresses, schedule_address);
-                schedule_address = NULL;
-            }
             get_schedule_addresses(txn, &schedule_addresses);
 
             char *userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
