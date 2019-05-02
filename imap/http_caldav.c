@@ -242,9 +242,6 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
 static int proppatch_timezone(xmlNodePtr prop, unsigned set,
                               struct proppatch_ctx *pctx,
                               struct propstat propstat[], void *rock);
-static int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
-                                 struct proppatch_ctx *pctx,
-                                 struct propstat propstat[], void *rock);
 static int propfind_availability(const xmlChar *name, xmlNsPtr ns,
                                  struct propfind_ctx *fctx,
                                  xmlNodePtr prop, xmlNodePtr resp,
@@ -510,7 +507,7 @@ static const struct prop_entry caldav_props[] = {
 
     /* CalDAV Sharing (draft-pot-caldav-sharing) properties */
     { "calendar-user-address-set", NS_CALDAV,
-      PROP_COLLECTION,
+      PROP_COLLECTION | PROP_PERUSER,
       propfind_caluseraddr, proppatch_caluseraddr, NULL },
 
     /* Calendar Availability (RFC 7953) properties */
@@ -6151,11 +6148,34 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 }
 
 /* Callback to write CALDAV:calendar-user-address-set */
-static int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
-                               struct proppatch_ctx *pctx,
-                               struct propstat propstat[],
-                               void *rock __attribute__((unused)))
+int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
+                          struct proppatch_ctx *pctx,
+                          struct propstat propstat[],
+                          void *rock __attribute__((unused)))
 {
+    struct mailbox *mailbox = pctx->mailbox;
+    struct mailbox *calhomeset = NULL;
+
+    if (pctx->txn->req_tgt.namespace->id == URL_NS_PRINCIPAL) {
+        /* We have been storing CUAS on cal-home-set, NOT INBOX */
+        char *mboxname = caldav_mboxname(pctx->txn->req_tgt.userid, NULL);
+        int r = 0;
+
+        if (!mailbox || strcmp(mboxname, mailbox->name)) {
+            r = mailbox_open_iwl(mboxname, &calhomeset);
+            if (!r) pctx->mailbox = calhomeset;
+        }
+        free(mboxname);
+
+        if (r) {
+            xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
+                         &propstat[PROPSTAT_ERROR],
+                         prop->name, prop->ns, NULL, 0);
+            *pctx->ret = HTTP_SERVER_ERROR;
+            return 0;
+        }
+    }
+
     /* Make sure this is on a collection and the user has admin rights */
     if (pctx->txn->req_tgt.resource ||
         !(cyrus_acl_myrights(httpd_authstate, pctx->mailbox->acl) & DACL_ADMIN)) {
@@ -6205,6 +6225,11 @@ static int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
 
         proppatch_todb(prop, set, pctx, propstat, (void *) value);
         free(value);
+    }
+
+    if (calhomeset) {
+        mailbox_close(&calhomeset);
+        pctx->mailbox = mailbox;
     }
 
     return 0;
