@@ -257,11 +257,6 @@ static json_t *buildinfo()
 #else
     json_object_set_new(dependency, "chardet", json_false());
 #endif
-#ifdef HAVE_CURL
-    json_object_set_new(dependency, "curl", json_true());
-#else
-    json_object_set_new(dependency, "curl", json_false());
-#endif
 
     /* Enabled databases */
 #ifdef HAVE_MYSQL

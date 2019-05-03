@@ -59,19 +59,17 @@
 #include <libical/ical.h>
 #endif
 
-#ifdef HAVE_CURL
-#include <curl/curl.h>
-#endif
-
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
 #include "assert.h"
+#include "backend.h"
 #include "charset.h"
 #include "conversations.h"
 #include "dlist.h"
 #include "hash.h"
 #include "hashu64.h"
+#include "http_client.h"
 #include "global.h"
 #include "times.h"
 #include "imapd.h"
@@ -4932,9 +4930,6 @@ struct getsearchtext_rock
     int charset_flags;
     const strarray_t *partids;
     int snippet_iteration; /* 0..no snippet, 1..first run, 2..second run */
-#ifdef HAVE_CURL
-    CURL *curl;
-#endif /* HAVE_CURL */
 };
 
 static void stuff_part(search_text_receiver_t *receiver,
@@ -5071,31 +5066,30 @@ done:
 }
 #endif /* USE_HTTPD */
 
-#ifdef HAVE_CURL
-struct sendcurl_rock {
-    const struct buf *srcbuf;
-    size_t sent;
-};
 
-static size_t sendcurl_cb(void *dst, size_t size, size_t nmemb, void *rock)
+static int login(struct backend *s __attribute__((unused)),
+                 const char *userid __attribute__((unused)),
+                 sasl_callback_t *cb __attribute__((unused)),
+                 const char **status __attribute__((unused)),
+                 int noauth __attribute__((unused)))
 {
-    struct sendcurl_rock *state = rock;
-
-    if (state->sent >= buf_len(state->srcbuf)) return 0;
-
-    size_t n = buf_len(state->srcbuf) - state->sent;
-    if (n > size * nmemb) n = size * nmemb;
-    memcpy(dst, buf_base(state->srcbuf) + state->sent, n);
-    state->sent += n;
-
-    return n;
+    return 0;
 }
-static size_t recvcurl_cb(char *src, size_t size, size_t nmemb, void *rock)
+
+static int ping(struct backend *s __attribute__((unused)),
+                const char *userid __attribute__((unused)))
 {
-    struct buf *dstbuf = rock;
-    buf_appendmap(dstbuf, src, size * nmemb);
-    return size * nmemb;
+    return 0;
 }
+
+static int logout(struct backend *s __attribute__((unused)))
+{
+    return 0;
+}
+
+
+static struct protocol_t http =
+{ "http", "HTTP", TYPE_SPEC, { .spec = { &login, &ping, &logout } } };
 
 static int extract_attachment(const char *type, const char *subtype,
                               const struct param *type_params,
@@ -5104,7 +5098,15 @@ static int extract_attachment(const char *type, const char *subtype,
                               struct getsearchtext_rock *str)
 {
     const char *exturl = config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
-    CURL *curl = str->curl;
+    char scheme[6] = "", server[100] = "", path[256] = "";
+    unsigned port, https;
+    struct buf buf = BUF_INITIALIZER;
+    struct backend *be = NULL;
+    hdrcache_t hdrs = NULL;
+    struct body_t body = { 0, 0, 0, 0, 0, BUF_INITIALIZER };
+    const char *guidstr;
+    const char *errstr = NULL;
+    char *p;
     int r = 0;
 
     if (message_guid_isnull(content_guid)) {
@@ -5115,38 +5117,65 @@ static int extract_attachment(const char *type, const char *subtype,
 
     if (!exturl) return 0;
 
-    if (strncasecmp(exturl, "http", 4)) {
+    /* Parse URL (cheesy parser without having to use libxml2) */
+    if (sscanf(exturl, "%5[^:]://%99[^/]%255[^\n]", scheme, server, path) != 3 ||
+        strncmp(lcase(scheme), "http", 4) || (scheme[4] && scheme[4] != 's')) {
         syslog(LOG_ERR, "extract_attachment: unexpected non-HTTP URL %s", exturl);
         return IMAP_INTERNAL;
     }
 
-    char *docurl = strconcat(exturl, exturl[strlen(exturl)-1] != '/' ? "/" : "",
-                             message_guid_encode(content_guid), NULL);
+    /* Normalize URL parts */
+    https = (scheme[4] == 's');
+    if ((p = strrchr(server, ':'))) {
+        *p++ = '\0';
+        port = atoi(p);
+    }
+    else port = https ? 443 : 80;
+    if (*(p = path + strlen(path) - 1) == '/') *p = '\0';
 
-    /* Initialize CURL handle */
-    struct buf recvbuf = BUF_INITIALIZER;
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 120L);
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 60L);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, recvcurl_cb);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &recvbuf);
-    curl_easy_setopt(curl, CURLOPT_URL, docurl);
+    /* Build servername, port, and options */
+    buf_printf(&buf, "%s:%u%s/noauth",
+               server, port, https ? "/tls" : "");
 
-    /* GET docurl */
-    struct curl_slist *headers = curl_slist_append(NULL, "Accept: text/plain");
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    CURLcode curlres = curl_easy_perform(curl);
-    curl_slist_free_all(headers);
-    if (curlres != CURLE_OK) {
-        syslog(LOG_ERR, "extract_attachment: curl error: %s",
-                         curl_easy_strerror(curlres));
+    /* Connect to extractor service */
+    be = backend_connect(NULL, buf_cstring(&buf), &http, NULL, NULL, NULL, -1);
+    buf_reset(&buf);
+    if (!be) {
+        syslog(LOG_ERR, "extract_attachment: failed to connect to %s://%s:%u",
+               scheme, server, port);
         r = IMAP_IOERROR;
         goto done;
     }
-    long statuscode;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &statuscode);
-    syslog(LOG_DEBUG, "extract_attachment: GET %s: got status %ld",
-                       docurl, statuscode);
+
+    /* Fetch previously extracted text */
+    guidstr = message_guid_encode(content_guid);
+    prot_printf(be->out,
+                "GET %s/%s %s\r\n"
+                "Host: %s:%u\r\n"
+                "User-Agent: Cyrus/%s\r\n"
+                "Connection: Keep-Alive\r\n"
+                "Keep-Alive: timeout=%u\r\n"
+                "Accept: text/plain\r\n"
+                "\r\n",
+                path, guidstr, HTTP_VERSION,
+                server, port, CYRUS_VERSION, 600);
+    prot_flush(be->out);
+
+    /* Read GET response */
+    unsigned statuscode = 0;
+    do {
+        r = http_read_response(be, METH_GET, &statuscode, &hdrs, &body, &errstr);
+        if (r) {
+            syslog(LOG_ERR,
+                   "extract_attachment: failed to read response for GET %s/%s",
+                   path, guidstr);
+            r = IMAP_IOERROR;
+            goto done;
+        }
+    } while (statuscode < 200);
+
+    syslog(LOG_DEBUG, "extract_attachment: GET %s/%s: got status %u",
+           path, guidstr, statuscode);
 
     if (statuscode == 404) {
         /* Decode data */
@@ -5157,14 +5186,10 @@ static int extract_attachment(const char *type, const char *subtype,
                 r = IMAP_IOERROR;
                 goto done;
             }
+            data = &decbuf;
         }
-        const struct buf *sendbuf = encoding ? &decbuf : data;
 
-        /* PUT docurl */
-        struct sendcurl_rock sendstate = { sendbuf, 0 };
-        headers = curl_slist_append(NULL, "Accept: text/plain");
-        struct buf buf = BUF_INITIALIZER;
-        buf_printf(&buf, "Content-Type: %s/%s", type, subtype);
+        /* Build list of Content-Type parameters */
         const struct param *param = type_params;
         while (param && param->attribute) {
             buf_putc(&buf, ';');
@@ -5175,32 +5200,46 @@ static int extract_attachment(const char *type, const char *subtype,
             }
             param = param->next;
         }
-        headers = curl_slist_append(headers, buf_cstring(&buf));
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_READFUNCTION, sendcurl_cb);
-        curl_easy_setopt(curl, CURLOPT_READDATA, &sendstate);
-        curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, buf_len(sendbuf));
-        curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
 
-        buf_reset(&recvbuf);
-        curlres = curl_easy_perform(curl);
-
-        curl_slist_free_all(headers);
+        /* Send attachment to service for text extraction */
+        prot_printf(be->out,
+                    "PUT %s/%s %s\r\n"
+                    "Host: %s:%u\r\n"
+                    "User-Agent: Cyrus/%s\r\n"
+                    "Connection: Keep-Alive\r\n"
+                    "Keep-Alive: timeout=%u\r\n"
+                    "Accept: text/plain\r\n"
+                    "Content-Type: %s/%s%s\r\n"
+                    "Content-Length: %ld\r\n"
+                    "\r\n",
+                    path, guidstr, HTTP_VERSION,
+                    server, port, CYRUS_VERSION, 600,
+                    type, subtype, buf_cstring(&buf), buf_len(data));
+        prot_putbuf(be->out, (struct buf *) data);
+        prot_flush(be->out);
         buf_free(&decbuf);
-        buf_free(&buf);
-        if (curlres != CURLE_OK) {
-            syslog(LOG_ERR, "extract_attachment: curl error: %s",
-                             curl_easy_strerror(curlres));
-            r = IMAP_IOERROR;
-            goto done;
-        }
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &statuscode);
-        syslog(LOG_DEBUG, "extract_attachment: PUT %s: got status %ld",
-                           docurl, statuscode);
+
+        /* Read PUT response */
+        body.flags = 0;
+        do {
+            r = http_read_response(be, METH_PUT,
+                                   &statuscode, &hdrs, &body, &errstr);
+            if (r) {
+                syslog(LOG_ERR,
+                       "extract_attachment: failed to read response for PUT %s/%s",
+                       path, guidstr);
+                r = IMAP_IOERROR;
+                goto done;
+            }
+        } while (statuscode < 200);
+
+        syslog(LOG_DEBUG, "extract_attachment: PUT %s/%s: got status %u",
+               path, guidstr, statuscode);
     }
+
     if (statuscode >= 400 && statuscode <= 499) {
-      /* indexer can't extract this for some reason, never try again */
-      goto done;
+        /* indexer can't extract this for some reason, never try again */
+        goto done;
     }
     if (statuscode != 200 && statuscode != 201) {
         /* any other status code is an error */
@@ -5209,33 +5248,22 @@ static int extract_attachment(const char *type, const char *subtype,
     }
 
     /* Append extracted text */
-    if (buf_len(&recvbuf)) {
+    if (buf_len(&body.payload)) {
         str->receiver->begin_part(str->receiver, SEARCH_PART_ATTACHMENTBODY, content_guid);
-        str->receiver->append_text(str->receiver, &recvbuf);
+        str->receiver->append_text(str->receiver, &body.payload);
         str->receiver->end_part(str->receiver, SEARCH_PART_ATTACHMENTBODY);
     }
 
 done:
-    curl_easy_reset(curl);
-    buf_free(&recvbuf);
-    free(docurl);
+    if (be) {
+        backend_disconnect(be);
+        free(be);
+    }
+    spool_free_hdrcache(hdrs);
+    buf_free(&body.payload);
+    buf_free(&buf);
     return r;
 }
-#else
-static int extract_attachment(const char *type __attribute__((unused)),
-                              const char *subtype __attribute__((unused)),
-                              const struct param *type_params __attribute__((unused)),
-                              struct buf *data __attribute__((unused)),
-                              int encoding __attribute__((unused)),
-                              const struct message_guid *content_guid __attribute__((unused)),
-                              struct getsearchtext_rock *str __attribute__((unused)))
-{
-    const char *exturl = config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
-    if (!exturl) return 0;
-    syslog(LOG_ERR, "index: attachment indexing requires libcurl");
-    return IMAP_INTERNAL;
-}
-#endif /* HAVE_CURL */
 
 
 static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
@@ -5388,14 +5416,6 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
     str.charset_flags = charset_flags;
     str.partids = partids;
     str.snippet_iteration = 0;
-#ifdef HAVE_CURL
-    curl_global_init(CURL_GLOBAL_ALL); /* safe to call multiple times */
-    str.curl = curl_easy_init();
-    if (!str.curl) {
-        syslog(LOG_ERR, "index_getsearchtext: can't initialize curl");
-        return IMAP_INTERNAL;
-    }
-#endif /* HAVE_CURL */
 
     if (snippet) {
         str.charset_flags |= CHARSET_SNIPPET;
@@ -5495,9 +5515,6 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
 done:
     buf_free(&buf);
     strarray_fini(&types);
-#ifdef HAVE_CURL
-    curl_easy_cleanup(str.curl);
-#endif /* HAVE_CURL */
     return r;
 }
 

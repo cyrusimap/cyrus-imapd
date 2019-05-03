@@ -1433,22 +1433,6 @@ AC_SUBST([LIBCHARDET_CFLAGS])
 AM_CONDITIONAL([USE_LIBCHARDET], [test "x$with_chardet" = xyes])
 
 dnl
-dnl Check for curl library, needed for charset detection support
-dnl
-AC_ARG_WITH([curl],
-	[AS_HELP_STRING([--without-curl], [ignore presence of curl library and disable it])],
-    [],
-    [with_curl=yes])
-AS_IF([test "x$with_curl" = "xyes"],
-	[ PKG_CHECK_MODULES([CURL], [libcurl],
-		[ AC_DEFINE(HAVE_CURL, [], [Build with curl library support])
-		  with_curl=yes ],
-		with_curl=no)])
-AC_SUBST([CURL_LIBS])
-AC_SUBST([CURL_CFLAGS])
-AM_CONDITIONAL([HAVE_CURL], [test "x$with_curl" = xyes])
-
-dnl
 dnl Set pidfile location
 dnl
 AC_ARG_WITH(pidfile,
@@ -2405,7 +2389,6 @@ External dependencies:
    icu4c:              $with_icu4c
    shapelib:           $with_shapelib
    chardet:            $with_chardet
-   curl:               $with_curl
 
 Database support:
    mysql:              $with_mysql

@@ -617,12 +617,6 @@ AM_CPPFLAGS += $(JANSSON_CFLAGS)
 LD_SERVER_ADD += $(JANSSON_LIBS)
 endif
 
-if HAVE_CURL
-AM_LDFLAGS += $(CURL_LIBS)
-AM_CPPFLAGS += $(CURL_CFLAGS)
-LD_SERVER_ADD += $(CURL_LIBS)
-endif
-
 if CUNIT
 
 CUNIT_PROJECT = cunit/default.cunit
@@ -1004,6 +998,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/duplicate.h \
 	imap/global.c \
 	imap/global.h \
+	imap/http_client.c \
+	imap/http_client.h \
 	imap/idle.c \
 	imap/idle.h \
 	imap/idlemsg.c \
@@ -1063,6 +1059,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/sequence.c \
 	imap/sequence.h \
 	imap/setproctitle.c \
+	imap/spool.c \
+	imap/spool.h \
 	imap/statuscache.h \
 	imap/statuscache_db.c \
 	imap/sync_log.c \
@@ -1232,8 +1230,6 @@ imap_httpd_SOURCES = \
 	imap/http_carddav.c \
 	imap/http_carddav.h \
 	imap/http_cgi.c \
-	imap/http_client.c \
-	imap/http_client.h \
 	imap/http_dav.c \
 	imap/http_dav.h \
 	imap/http_dav_sharing.c \
