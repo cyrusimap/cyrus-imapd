@@ -8057,7 +8057,7 @@ EOF
     my $msg = $res->[0][1]->{created}{"1"};
     $self->assert_not_null($msg);
 
-    my $sentAt = '2016-12-07T11:11:11Z';
+    my $sentAt = '2016-12-07T22:11:11+11:00';
     $self->assert_str_equals("Email/get", $res->[1][0]);
     $self->assert_str_equals($msg->{id}, $res->[1][1]{list}[0]->{id});
     $self->assert_str_equals($receivedAt, $res->[1][1]{list}[0]->{receivedAt});
@@ -9780,7 +9780,7 @@ sub test_email_parse
     $self->assert_null($email->{sender});
     $self->assert_null($email->{replyTo});
     $self->assert_str_equals('bar', $email->{subject});
-    $self->assert_str_equals('2016-10-05T03:59:07Z', $email->{sentAt});
+    $self->assert_str_equals('2016-10-05T14:59:07+11:00', $email->{sentAt});
     $self->assert_not_null($email->{blobId});
     $self->assert_str_equals('text/plain', $email->{bodyStructure}{type});
     $self->assert_null($email->{bodyStructure}{subParts});
@@ -12709,5 +12709,47 @@ sub test_searchsnippet_get_attachment
     $partIds = $res->[0][1]{partIds};
     $self->assert_not_null($partIds);
 }
+
+sub test_email_set_date
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true
+                    },
+                    from => [{ email => q{foo@bar} }],
+                    to => [{ email => q{bar@foo} }],
+                    sentAt => '2019-05-02T03:15:00+07:00',
+                    subject => "test",
+                    bodyStructure => {
+                        partId => '1',
+                    },
+                    bodyValues => {
+                        "1" => {
+                            value => "A text body",
+                        },
+                    },
+                }
+            },
+        }, 'R1'],
+        ['Email/get', {
+            ids => ['#email1'],
+            properties => ['sentAt', 'header:Date'],
+        }, 'R2'],
+    ]);
+    my $email = $res->[1][1]{list}[0];
+    $self->assert_str_equals('2019-05-02T03:15:00+07:00', $email->{sentAt});
+    $self->assert_str_equals(' Thu, 02 May 2019 03:15:00 +0700', $email->{'header:Date'});
+}
+
 
 1;
