@@ -100,6 +100,8 @@ struct rfc5322dtbuf {
     int offset;
 };
 
+#define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
+
 static int monthdays(int year/*since 1900*/, int month/*0-based*/)
 {
     int leapday;
@@ -108,10 +110,31 @@ static int monthdays(int year/*since 1900*/, int month/*0-based*/)
         31, 31, 30, 31, 30, 31
     };
 
-#define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
     leapday = (month == 1 && isleap(year+1900));
     return mdays[month] + leapday;
+}
+
+static int dayofyear(int year/*since 1900*/, int month/*0-based*/, int day)
+{
+    static const int ydays[2][13] = {
+        {0, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334},
+        {0, 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335}
+    };
+    return ydays[isleap(year+1900)][month+1] + day;
+}
+
 #undef isleap
+
+static int dayofweek(int year/*since 1900*/, int month/*0-based*/, int day)
+{
+    /* Uses Zeller's congruence for the Gregorian calendar
+     * https://en.wikipedia.org/wiki/Zeller%27s_congruence
+     * h is the day of the week with Saturday = 0 */
+    int q = day; // day of month
+    int m = month <= 1 ? month + 13 : month + 1; // month, (3 = March, 4 = April, ..., 14 = February)
+    int Y = month <= 1 ? 1900 + year - 1 : 1900 + year; // year
+    int h = (q + ((13 * (m + 1)) / 5) + Y + (Y / 4) - (Y / 100) + (Y / 400)) % 7;
+    return (h + 6) % 7;
 }
 
 /* 'buf' must be at least 80 characters */
@@ -422,22 +445,38 @@ EXPORTED int day_from_rfc822(const char *s, time_t *tp)
     return parse_rfc822(s, tp, 1);
 }
 
+static int offsettime_normalize(struct offsettime *t)
+{
+    /* sanity check the date/time (including leap day & second) */
+    if (t->tm.tm_mon < 0 || t->tm.tm_mon > 11 ||
+        t->tm.tm_mday < 1 ||
+        t->tm.tm_mday > monthdays(t->tm.tm_year, t->tm.tm_mon) ||
+        t->tm.tm_hour > 23 || t->tm.tm_min > 59 || t->tm.tm_sec > 60) {
+        return 0;
+    }
+    /* Set day of week and year fields */
+    t->tm.tm_wday = dayofweek(t->tm.tm_year, t->tm.tm_mon, t->tm.tm_mday);
+    t->tm.tm_yday = dayofyear(t->tm.tm_year, t->tm.tm_mon, t->tm.tm_mday);
+    t->tm.tm_isdst = -1;
+    return 1;
+}
+
 /*
- * Parse an RFC 3339 = ISO 8601 format date-time string.
+ * Parse an RFC 3339 = ISO 8601 format date-time string,
+ * preserving the zone offset.
  * Returns: number of characters in @s consumed, or -1 on error.
  */
-EXPORTED int time_from_iso8601(const char *s, time_t *tp)
+EXPORTED int offsettime_from_iso8601(const char *s, struct offsettime *t)
 {
     const char *origs = s;
-    struct tm exp;
-    int n, tm_off;
+    int n;
 
     /* parse the ISO 8601 date/time */
     /* XXX should use strptime ? */
-    memset(&exp, 0, sizeof(struct tm));
+    memset(t, 0, sizeof(struct offsettime));
     n = sscanf(s, "%4d-%2d-%2dT%2d:%2d:%2d",
-               &exp.tm_year, &exp.tm_mon, &exp.tm_mday,
-               &exp.tm_hour, &exp.tm_min, &exp.tm_sec);
+               &t->tm.tm_year, &t->tm.tm_mon, &t->tm.tm_mday,
+               &t->tm.tm_hour, &t->tm.tm_min, &t->tm.tm_sec);
     if (n != 6)
         return -1;
 
@@ -449,42 +488,52 @@ EXPORTED int time_from_iso8601(const char *s, time_t *tp)
 
     /* handle offset */
     switch (*s++) {
-    case 'Z': tm_off = 0; break;
-    case '-': tm_off = -1; break;
-    case '+': tm_off = 1; break;
+    case 'Z': t->tm_off = 0; break;
+    case '-': t->tm_off = -1; break;
+    case '+': t->tm_off = 1; break;
     default: return -1;
     }
-    if (tm_off) {
+    if (t->tm_off) {
         int tm_houroff, tm_minoff;
 
         n = sscanf(s, "%2d:%2d", &tm_houroff, &tm_minoff);
         if (n != 2)
             return -1;
-        tm_off *= 60 * (60 * tm_houroff + tm_minoff);
+        t->tm_off *= 60 * (60 * tm_houroff + tm_minoff);
         s += 5;
     }
 
-    exp.tm_year -= 1900; /* normalize to years since 1900 */
-    exp.tm_mon--; /* normalize to months since January */
+    t->tm.tm_year -= 1900; /* normalize to years since 1900 */
+    t->tm.tm_mon--; /* normalize to months since January */
 
-    /* sanity check the date/time (including leap day & second) */
-    if (exp.tm_mon < 0 || exp.tm_mon > 11 ||
-        exp.tm_mday < 1 ||
-        exp.tm_mday > monthdays(exp.tm_year, exp.tm_mon) ||
-        exp.tm_hour > 23 || exp.tm_min > 59 || exp.tm_sec > 60) {
+    if (!offsettime_normalize(t))
         return -1;
-    }
+
+    return s - origs;
+}
+
+
+/*
+ * Parse an RFC 3339 = ISO 8601 format date-time string.
+ * Returns: number of characters in @s consumed, or -1 on error.
+ */
+EXPORTED int time_from_iso8601(const char *s, time_t *tp)
+{
+    struct offsettime ot;
+
+    int r = offsettime_from_iso8601(s, &ot);
+    if (r < 0) return r;
 
     /* normalize to GMT */
-    *tp = mkgmtime(&exp) - tm_off;
-    return s - origs;
+    *tp = mkgmtime(&ot.tm) - ot.tm_off;
+    return r;
 }
 
 static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
                                      enum timeval_precision tv_precision,
-                                     char *buf, size_t len, int withsep)
+                                     long gmtoff, char *buf, size_t len,
+                                     int withsep)
 {
-    long gmtoff = gmtoff_of(tm, t->tv_sec);
     int gmtnegative = 0;
     size_t rlen;
     const char *datefmt = withsep ? "%Y-%m-%dT%H:%M:%S" : "%Y%m%dT%H%M%S";
@@ -531,8 +580,15 @@ EXPORTED int time_to_iso8601(time_t t, char *buf, size_t len, int withsep)
 {
     struct tm *tm = (struct tm *) gmtime(&t);
     struct timeval tv = { t, 0 };
+    long gmtoff = gmtoff_of(tm, tv.tv_sec);
 
-    return breakdown_time_to_iso8601(&tv, tm, timeval_s, buf, len, withsep);
+    return breakdown_time_to_iso8601(&tv, tm, timeval_s, gmtoff, buf, len, withsep);
+}
+
+EXPORTED int offsettime_to_iso8601(struct offsettime *t, char *buf, size_t len, int withsep)
+{
+    struct timeval tv = { mktime(&t->tm), 0 };
+    return breakdown_time_to_iso8601(&tv, &t->tm, timeval_s, t->tm_off, buf, len, withsep);
 }
 
 /*
@@ -545,7 +601,8 @@ EXPORTED int timeval_to_iso8601(const struct timeval *tv, enum timeval_precision
                        char *buf, size_t len)
 {
     struct tm *tm = localtime(&(tv->tv_sec));
-    return breakdown_time_to_iso8601(tv, tm, tv_prec, buf, len, 1);
+    long gmtoff = gmtoff_of(tm, tv->tv_sec);
+    return breakdown_time_to_iso8601(tv, tm, tv_prec, gmtoff, buf, len, 1);
 }
 
 EXPORTED int time_to_rfc3339(time_t t, char *buf, size_t len)
@@ -1114,12 +1171,13 @@ static int compute_tzoffset(char *str, int len, int sign)
  */
 
 static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
-                                      int *tz_offset,
+                                      long *tz_offset,
                                       enum datetime_parse_mode mode)
 {
     long ch;
     int c, i, len;
     char *str_token = NULL;
+
 
     /* Skip leading WS, if any */
     skip_ws(buf, 0);
@@ -1133,9 +1191,18 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
         if (!get_next_token(buf, &str_token, &len))
             goto failed;
 
-        /* We might have a weekday token here, which we should skip*/
+        /* We might have a weekday token here */
         if (len != 3)
             goto failed;
+
+        /* Determine week day */
+        int i ;
+        for (i = 0; i < 7; i++) {
+            if (!strncasecmp(wday[i], str_token, len)) {
+                tm->tm_wday = i;
+                break;
+            }
+        }
 
         /* The weekday is followed by a ',', consume that. */
         if (get_current_char(buf) == ',')
@@ -1275,6 +1342,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
  done:
     /* dst */
     tm->tm_isdst = -1;
+    *tz_offset *= 60;
     return buf->offset;
 
  failed:
@@ -1302,7 +1370,7 @@ EXPORTED int time_from_rfc5322(const char *s, time_t *date,
     struct rfc5322dtbuf buf;
     struct tm tm;
     time_t tmp_time;
-    int tzone_offset = 0;
+    long tzone_offset = 0;
 
     if (!s)
         goto baddate;
@@ -1325,7 +1393,40 @@ EXPORTED int time_from_rfc5322(const char *s, time_t *date,
     if (tmp_time == -1)
         goto baddate;
 
-    *date = tmp_time - tzone_offset * 60;
+    *date = tmp_time - tzone_offset;
+
+    return buf.offset;
+
+ baddate:
+    return -1;
+}
+
+/*
+ * Parse a RFC 5322 timestamp into an offset time.
+ * Wrong week days are ignored.
+ *
+ * Returns: Number of characters consumed from @s on success,
+ *          or -1 on error.
+ */
+EXPORTED int offsettime_from_rfc5322(const char *s, struct offsettime *t,
+                                     enum datetime_parse_mode mode)
+{
+    struct rfc5322dtbuf buf;
+
+    if (!s)
+        goto baddate;
+
+    memset(t, 0, sizeof(struct offsettime));
+
+    buf.str = s;
+    buf.len = strlen(s);
+    buf.offset = 0;
+
+    if (tokenise_str_and_create_tm(&buf, &t->tm, &t->tm_off, mode) == -1)
+        goto baddate;
+
+    if (!offsettime_normalize(t))
+        goto baddate;
 
     return buf.offset;
 
@@ -1358,5 +1459,25 @@ EXPORTED int time_to_rfc5322(time_t date, char *buf, size_t len)
              wday[tm->tm_wday],
              tm->tm_mday, monthname[tm->tm_mon], tm->tm_year + 1900,
              tm->tm_hour, tm->tm_min, tm->tm_sec,
+             gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
+}
+
+EXPORTED int offsettime_to_rfc5322(struct offsettime *t, char *buf, size_t len)
+{
+    long gmtoff = t->tm_off;
+    int gmtnegative = 0;
+
+    if (gmtoff < 0) {
+        gmtoff = -gmtoff;
+        gmtnegative = 1;
+    }
+
+    gmtoff /= 60;
+
+    return snprintf(buf, len,
+             "%s, %02d %s %04d %02d:%02d:%02d %c%02lu%02lu",
+             wday[t->tm.tm_wday],
+             t->tm.tm_mday, monthname[t->tm.tm_mon], t->tm.tm_year + 1900,
+             t->tm.tm_hour, t->tm.tm_min, t->tm.tm_sec,
              gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
 }
