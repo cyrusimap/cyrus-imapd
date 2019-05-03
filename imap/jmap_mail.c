@@ -4699,10 +4699,10 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
         else if (!strcmp("sentAt", lcasename)) {
             jval = json_null();
             if (want_form == HEADER_FORM_DATE) {
-                time_t t;
-                if (time_from_rfc822(part->date, &t) != -1) {
-                    char datestr[RFC3339_DATETIME_MAX];
-                    time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
+                struct offsettime t;
+                if (offsettime_from_rfc5322(part->date, &t, DATETIME_FULL) != -1) {
+                    char datestr[30];
+                    offsettime_to_iso8601(&t, datestr, 30, 1);
                     jval = json_string(datestr);
                 }
             }
@@ -5016,10 +5016,10 @@ static int _email_get_headers(jmap_req_t *req __attribute__((unused)),
     /* sentAt */
     if (jmap_wantprop(props, "sentAt")) {
         json_t *jsent_at = json_null();
-        time_t t;
-        if (time_from_rfc822(part->date, &t) != -1) {
-            char datestr[RFC3339_DATETIME_MAX];
-            time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
+        struct offsettime t;
+        if (offsettime_from_rfc5322(part->date, &t, DATETIME_FULL) != -1) {
+            char datestr[30];
+            offsettime_to_iso8601(&t, datestr, 30, 1);
             jsent_at = json_string(datestr);
         }
         json_object_set_new(email, "sentAt", jsent_at);
@@ -6944,15 +6944,15 @@ static json_t *_header_from_date(json_t *jdate,
         return NULL;
     }
 
-    time_t t;
-    int n = time_from_iso8601(s, &t);
+    struct offsettime t;
+    int n = offsettime_from_iso8601(s, &t);
     if (n <= 0 || s[n] != '\0') {
         jmap_parser_invalid(parser, prop_name);
         return NULL;
     }
     char fmt[RFC5322_DATETIME_MAX+1];
     memset(fmt, 0, RFC5322_DATETIME_MAX+1);
-    time_to_rfc5322(t, fmt, RFC5322_DATETIME_MAX+1);
+    offsettime_to_rfc5322(&t, fmt, RFC5322_DATETIME_MAX+1);
 
     struct buf val = BUF_INITIALIZER;
     buf_setcstr(&val, fmt);
