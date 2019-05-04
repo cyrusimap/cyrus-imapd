@@ -739,7 +739,7 @@ sub test_shared_invite_as_secretary
 </D:propertyupdate>
 EOF
 
-    $testtalk->Request('PROPPATCH', "/dav/calendars/user/test", $xml,
+    $testtalk->Request('PROPPATCH', "/dav/principals/user/test", $xml,
                        'Content-Type' => 'text/xml');
 
     xlog "create calendar";
@@ -850,7 +850,7 @@ sub test_shared_reply_as_secretary
 </D:propertyupdate>
 EOF
 
-    $testtalk->Request('PROPPATCH', "/dav/calendars/user/test", $xml,
+    $testtalk->Request('PROPPATCH', "/dav/principals/user/test", $xml,
                        'Content-Type' => 'text/xml');
 
     xlog "create calendar";
@@ -961,7 +961,7 @@ sub test_shared_team_invite_sharee
 </D:propertyupdate>
 EOF
 
-    $testtalk->Request('PROPPATCH', "/dav/calendars/user/test", $xml,
+    $testtalk->Request('PROPPATCH', "/dav/principals/user/test", $xml,
                        'Content-Type' => 'text/xml');
 
     xlog "create calendar";
@@ -1068,7 +1068,7 @@ sub test_shared_team_invite_sharer
 </D:propertyupdate>
 EOF
 
-    $testtalk->Request('PROPPATCH', "/dav/calendars/user/test", $xml,
+    $testtalk->Request('PROPPATCH', "/dav/principals/user/test", $xml,
                        'Content-Type' => 'text/xml');
 
     xlog "create calendar";
