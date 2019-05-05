@@ -742,6 +742,8 @@ static void imapd_reset(void)
     disable_referrals = 0;
     supports_referrals = 0;
 
+    index_text_extractor_destroy();
+
     if (imapd_index) {
         if (config_getswitch(IMAPOPT_AUTOEXPUNGE) && index_hasrights(imapd_index, ACL_EXPUNGE))
             index_expunge(imapd_index, NULL, 1);
@@ -975,6 +977,8 @@ int service_main(int argc __attribute__((unused)),
     mboxname_init_namespace(&imapd_namespace, /*isadmin*/1);
     mboxevent_setnamespace(&imapd_namespace);
 
+    index_text_extractor_init(imapd_in);
+
     cmdloop();
 
     /* LOGOUT executed */
@@ -1074,6 +1078,8 @@ void shut_down(int code)
     }
     if (backend_cached) free(backend_cached);
     if (mupdate_h) mupdate_disconnect(&mupdate_h);
+
+    index_text_extractor_destroy();
 
     if (idling)
         idle_stop(index_mboxname(imapd_index));

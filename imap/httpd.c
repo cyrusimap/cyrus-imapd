@@ -522,6 +522,8 @@ static void httpd_reset(struct http_connection *conn)
     backend_cached = NULL;
     backend_current = NULL;
 
+    index_text_extractor_destroy();
+
     if (httpd_in) {
         prot_NONBLOCK(httpd_in);
         prot_fill(httpd_in);
@@ -859,6 +861,8 @@ int service_main(int argc __attribute__((unused)),
         }
     }
 
+    index_text_extractor_init(httpd_in);
+
     prometheus_increment(CYRUS_HTTP_CONNECTIONS_TOTAL);
     prometheus_increment(CYRUS_HTTP_ACTIVE_CONNECTIONS);
 
@@ -926,6 +930,8 @@ void shut_down(int code)
         i++;
     }
     if (backend_cached) free(backend_cached);
+
+    index_text_extractor_destroy();
 
     annotatemore_close();
 

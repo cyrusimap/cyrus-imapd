@@ -769,6 +769,8 @@ static void shut_down(int code)
 
     cyrus_done();
 
+    index_text_extractor_destroy();
+
     exit(code);
 }
 
@@ -949,6 +951,8 @@ int main(int argc, char **argv)
         signals_set_shutdown(&shut_down);
         signals_add_handlers(0);
     }
+
+    index_text_extractor_init(NULL);
 
     switch (mode) {
     case UNKNOWN:
