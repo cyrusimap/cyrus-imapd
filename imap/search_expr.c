@@ -1213,18 +1213,24 @@ static void split(search_expr_t *e,
 
 /* ====================================================================== */
 
-static int search_string_match(message_t *m, const union search_value *v,
+struct search_string_internal {
+    comp_pat *pat;
+    char *s;
+};
+
+static int search_string_match(message_t *m,
+                                const union search_value *v __attribute__((unused)),
                                 void *internalised,
                                 void *data1)
 {
     int r;
     struct buf buf = BUF_INITIALIZER;
     int (*getter)(message_t *, struct buf *) = (int(*)(message_t *, struct buf *))data1;
-    comp_pat *pat = (comp_pat *)internalised;
+    struct search_string_internal *internal = internalised;
 
     r = getter(m, &buf);
     if (!r && buf.len)
-        r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
+        r = charset_searchstring(internal->s, internal->pat, buf.s, buf.len, charset_flags);
     else
         r = 0;
     buf_free(&buf);
@@ -1251,11 +1257,19 @@ static void search_string_internalise(struct index_state *state __attribute__((u
                                       const union search_value *v, void **internalisedp)
 {
     if (*internalisedp) {
-        charset_freepat(*internalisedp);
+        struct search_string_internal *internal = *internalisedp;
+        charset_freepat(internal->pat);
+        free(internal->s);
+        free(internal);
         *internalisedp = NULL;
     }
     if (v) {
-        *internalisedp = charset_compilepat(v->s);
+        struct search_string_internal *internal = xzmalloc(sizeof(struct search_string_internal));
+        charset_t utf8 = charset_lookupname("utf8");
+        internal->s = charset_convert(v->s, utf8, charset_flags);
+        internal->pat = charset_compilepat(internal->s);
+        charset_free(&utf8);
+        *internalisedp = internal;
     }
 }
 
@@ -1348,14 +1362,14 @@ static int search_header_match(message_t *m, const union search_value *v,
     int r;
     struct buf buf = BUF_INITIALIZER;
     const char *field = (const char *)data1;
-    comp_pat *pat = (comp_pat *)internalised;
+    struct search_string_internal *internal = internalised;
 
     r = message_get_field(m, field,
                           MESSAGE_DECODED|MESSAGE_APPEND|MESSAGE_MULTIPLE,
                           &buf);
     if (!r) {
         if (*v->s) {
-            r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
+            r = charset_searchstring(internal->s, internal->pat, buf.s, buf.len, charset_flags);
         }
         else {
             /* RFC3501: If the string to search is zero-length, this matches
@@ -2173,14 +2187,16 @@ static int searchmsg_cb(int isbody, charset_t charset, int encoding,
     return 0;
 }
 
-static int search_text_match(message_t *m, const union search_value *v,
+static int search_text_match(message_t *m,
+                             const union search_value *v __attribute__((unused)),
                              void *internalised,
                              void *data1)
 {
     struct searchmsg_rock sr;
+    struct search_string_internal *internal = internalised;
 
-    sr.substr = v->s;
-    sr.pat = (comp_pat *)internalised;
+    sr.substr = internal->s;
+    sr.pat = internal->pat;
     sr.skipheader = (int)(unsigned long)data1;
     sr.result = 0;
     message_foreach_section(m, searchmsg_cb, &sr);

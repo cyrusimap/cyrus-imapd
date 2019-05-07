@@ -2534,6 +2534,11 @@ static int end_mailbox_update(search_text_receiver_t *rx,
     return r;
 }
 
+static int xapian_charset_flags(int flags)
+{
+    return flags | CHARSET_KEEPCASE;
+}
+
 static search_text_receiver_t *begin_update(int verbose)
 {
     xapian_update_receiver_t *tr;
@@ -2552,6 +2557,7 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.end_mailbox = end_mailbox_update;
     tr->super.super.flush = flush;
     tr->super.super.audit_mailbox = audit_mailbox;
+    tr->super.super.index_charset_flags = xapian_charset_flags;
 
     tr->super.verbose = verbose;
 
@@ -2730,6 +2736,7 @@ static search_text_receiver_t *begin_snippets(void *internalised,
     tr->super.super.end_message = end_message_snippets;
     tr->super.super.end_mailbox = end_mailbox_snippets;
     tr->super.super.flush = flush_snippets;
+    tr->super.super.index_charset_flags = xapian_charset_flags;
 
     tr->super.verbose = verbose;
     tr->root = (struct opnode *)internalised;

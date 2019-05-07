@@ -113,6 +113,7 @@ struct search_text_receiver {
                        struct mailbox *);
     int (*flush)(search_text_receiver_t *);
     int (*audit_mailbox)(search_text_receiver_t *, bitvector_t *unindexed);
+    int (*index_charset_flags)(int base_flags);
 };
 
 #define SEARCH_FLAG_CAN_BATCH   (1<<0)

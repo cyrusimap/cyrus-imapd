@@ -717,7 +717,7 @@ static void string_match(search_expr_t *parent, const char *val,
 
     e = search_expr_new(parent, op);
     e->attr = attr;
-    e->value.s = charset_convert(val, base->charset, charset_flags);
+    e->value.s = charset_convert(val, base->charset, charset_flags|CHARSET_KEEPCASE);
     if (!e->value.s) {
         e->op = SEOP_FALSE;
         e->attr = NULL;
@@ -1019,7 +1019,7 @@ static int get_search_criterion(struct protstream *pin,
 
             e = search_expr_new(parent, SEOP_MATCH);
             e->attr = search_attr_find_field(arg.s);
-            e->value.s = charset_convert(arg2.s, base->charset, charset_flags);
+            e->value.s = charset_convert(arg2.s, base->charset, charset_flags|CHARSET_KEEPCASE);
             if (!e->value.s) {
                 e->op = SEOP_FALSE;
                 e->attr = NULL;

@@ -81,6 +81,46 @@ static Xapian::Stopper *get_stopper()
 
 /* ====================================================================== */
 
+class CyrusSearchStemmer : public Xapian::StemImplementation
+{
+    charset_t utf8;
+    std::map<const std::string, std::string> cache;
+    Xapian::Stem stem;
+
+    public:
+    CyrusSearchStemmer() :
+        utf8(charset_lookupname("utf-8")), stem(Xapian::Stem("en")) { }
+
+    virtual ~CyrusSearchStemmer() { charset_free(&utf8); }
+
+    virtual std::string operator() (const std::string &word) {
+
+        // Is this word already in the cache?
+        std::map<const std::string, std::string>::iterator it = cache.find(word);
+        if (it != cache.end()) {
+            return it->second;
+        }
+
+        // Convert the word to search form
+        char *q = charset_convert(word.c_str(), utf8, charset_flags);
+        if (!q) {
+            return stem(word);
+        }
+
+        // Store the normalized word in the cache
+        std::string res = stem(Xapian::Unicode::tolower(q));
+        cache[word] = res;
+        free(q);
+        return res;
+    }
+
+    virtual std::string get_description () const {
+        return "Cyrus search form";
+    }
+};
+
+/* ====================================================================== */
+
 int xapian_compact_dbs(const char *dest, const char **sources)
 {
     int r = 0;
@@ -316,7 +356,7 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
         }
 
         dbw->term_generator = new Xapian::TermGenerator();
-        dbw->stemmer = new Xapian::Stem("en");
+        dbw->stemmer = new Xapian::Stem(new CyrusSearchStemmer());
         dbw->stopper = get_stopper();
         dbw->term_generator->set_stemmer(*dbw->stemmer);
         /* Always enable CJK word tokenization */
@@ -581,7 +621,7 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
             goto done;
         }
 
-        db->stemmer = new Xapian::Stem("en");
+        db->stemmer = new Xapian::Stem(new CyrusSearchStemmer());
         db->parser = new Xapian::QueryParser;
         db->stopper = get_stopper();
         db->parser->set_stemmer(*db->stemmer);
@@ -912,54 +952,13 @@ struct xapian_snipgen
     int partnum;
 };
 
-class CharsetStemmer : public Xapian::StemImplementation
-{
-    charset_t utf8;
-    std::map<const std::string, std::string> cache;
-    Xapian::Stem stem;
-
-    public:
-    CharsetStemmer(Xapian::Stem s) : utf8(charset_lookupname("utf-8")),
-                                     stem(s) { }
-
-    virtual ~CharsetStemmer() { charset_free(&utf8); }
-
-    virtual std::string operator() (const std::string &word) {
-        char *q;
-        std::string res;
-
-        // Is this word already in the cache?
-        std::map<const std::string, std::string>::iterator it = cache.find(word);
-        if (it != cache.end()) {
-            return it->second;
-        }
-
-        // Convert the word to search form
-        q = charset_convert(word.c_str(), utf8, charset_flags);
-        if (!q) {
-            return stem(word);
-        }
-
-        // Store the normalized word in the cache
-        res = stem(Xapian::Unicode::tolower(q));
-        cache[word] = res;
-        free(q);
-        return res;
-    }
-
-    virtual std::string get_description () const {
-        return "Cyrus search form";
-    }
-};
-
 xapian_snipgen_t *xapian_snipgen_new(const char *hi_start, const char *hi_end,
                                      const char *omit)
 {
     xapian_snipgen_t *snipgen = NULL;
-    CharsetStemmer *stem = new CharsetStemmer(Xapian::Stem("en"));
 
     snipgen = (xapian_snipgen_t *)xzmalloc(sizeof(xapian_snipgen_t));
-    snipgen->stemmer = new Xapian::Stem(stem);
+    snipgen->stemmer = new Xapian::Stem(new CyrusSearchStemmer());
     snipgen->db = new Xapian::WritableDatabase(std::string(), Xapian::DB_BACKEND_INMEMORY);
     snipgen->buf = buf_new();
     snipgen->hi_start = hi_start;

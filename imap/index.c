@@ -5609,6 +5609,11 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
         if (r) return r;
     }
 
+    /* Search receiver can override text conversion */
+    if (receiver->index_charset_flags) {
+        str.charset_flags = receiver->index_charset_flags(str.charset_flags);
+    }
+
     if (snippet) {
         str.charset_flags |= CHARSET_KEEPCASE;
         format = MESSAGE_SNIPPET;
