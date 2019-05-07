@@ -12580,7 +12580,6 @@ sub test_email_get_cid
 
 sub test_searchsnippet_get_attachment
     :min_version_3_0 :needs_search_xapian :SearchAttachmentExtractor
-    :needs_dependency_curl
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -12592,8 +12591,13 @@ sub test_searchsnippet_get_attachment
     my %seenPath;
     my $handler = sub {
         my ($conn, $req) = @_;
-        if ($seenPath{$req->uri->path}) {
+        if ($req->method eq 'HEAD') {
+            my $res = HTTP::Response->new(204);
+            $res->content("");
+            $conn->send_response($res);
+        } elsif ($seenPath{$req->uri->path}) {
             my $res = HTTP::Response->new(200);
+            $res->header("Keep-Alive" => "timeout=1");  # Force client timeout
             $res->content("dog cat bat");
             $conn->send_response($res);
         } else {
@@ -12670,6 +12674,9 @@ sub test_searchsnippet_get_attachment
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
     $snippet = $res->[0][1]->{list}[0];
     $self->assert_null($snippet->{preview});
+
+    # Sleep 1 sec to force Cyrus to timeout the client connection
+    sleep(1);
 
     # Test 3: pass no partids
     $res = $jmap->CallMethods([['SearchSnippet/get', {
