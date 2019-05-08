@@ -5629,6 +5629,8 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     }
 
     if (!r) {
+        if (mparams->mkcol.proc) r = mparams->mkcol.proc(mailbox);
+
         assert(!buf_len(&txn->buf));
         dav_get_synctoken(mailbox, &txn->buf, "");
         txn->resp_body.ctag = buf_cstring(&txn->buf);

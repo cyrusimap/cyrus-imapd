@@ -259,7 +259,7 @@ static struct meth_params notify_params = {
     { 0, &notify_put },
     NULL,                                       /* No special DELETE handling */
     &notify_get,
-    { 0, 0 },                                   /* No MKCOL handling */
+    { 0, 0, NULL },                             /* No MKCOL handling */
     NULL,                                       /* No PATCH handling */
     { 0, &notify_post, { 0, NULL, NULL } },     /* No generic POST handling */
     { 0, &notify_put },

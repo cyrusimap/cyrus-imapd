@@ -180,6 +180,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
                              struct index_record *record, void *data);
 static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct index_record *record, void *data, void **obj);
+static int caldav_mkcol(struct mailbox *mailbox);
 static int caldav_post(struct transaction_t *txn);
 static int caldav_patch(struct transaction_t *txn, void *obj);
 static int caldav_put(struct transaction_t *txn, void *obj,
@@ -581,7 +582,7 @@ static struct meth_params caldav_params = {
     { CALDAV_UID_CONFLICT, &caldav_copy },
     &caldav_delete_cal,
     &caldav_get,
-    { CALDAV_LOCATION_OK, MBTYPE_CALENDAR },
+    { CALDAV_LOCATION_OK, MBTYPE_CALENDAR, &caldav_mkcol },
     caldav_patch_docs,
     { POST_ADDMEMBER | POST_SHARE, &caldav_post,
       { NS_CALDAV, "calendar-data", &caldav_import } },
@@ -761,8 +762,8 @@ static void my_caldav_init(struct buf *serverinfo)
 }
 
 static int _create_mailbox(const char *userid, const char *mailboxname,
-                           int type, int useracl, int anyoneacl,
-                           const char *displayname)
+                           int type, unsigned long comp_types,
+                           int useracl, int anyoneacl, const char *displayname)
 {
     int r = 0;
     char rights[100];
@@ -782,11 +783,19 @@ static int _create_mailbox(const char *userid, const char *mailboxname,
 
         r = mailbox_get_annotate_state(mailbox, 0, &astate);
         if (!r) {
-            const char *annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+            const char *disp_annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+            const char *comp_annot =
+                DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
             struct buf value = BUF_INITIALIZER;
 
             buf_init_ro_cstr(&value, displayname);
-            r = annotate_state_writemask(astate, annot, userid, &value);
+            r = annotate_state_writemask(astate, disp_annot, userid, &value);
+            if (!r && comp_types) {
+                buf_reset(&value);
+                buf_printf(&value, "%lu", comp_types);
+                r = annotate_state_writemask(astate, comp_annot, userid, &value);
+            }
+            buf_free(&value);
         }
 
         mailbox_close(&mailbox);
@@ -805,6 +814,32 @@ static int _create_mailbox(const char *userid, const char *mailboxname,
     if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                   mailboxname, error_message(r));
     return r;
+}
+
+static unsigned long config_types_to_caldav_types(void)
+{
+    unsigned long config_types =
+            config_getbitfield(IMAPOPT_CALENDAR_COMPONENT_SET);
+    unsigned long types = 0;
+
+    if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VEVENT)
+        types |= CAL_COMP_VEVENT;
+    if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VTODO)
+        types |= CAL_COMP_VTODO;
+    if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VJOURNAL)
+        types |= CAL_COMP_VJOURNAL;
+    if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VFREEBUSY)
+        types |= CAL_COMP_VFREEBUSY;
+#ifdef HAVE_VAVAILABILITY
+    if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VAVAILABILITY)
+        types |= CAL_COMP_VAVAILABILITY;
+#endif
+#ifdef VPOLL
+    if (config_types & IMAP_ENUM_CALENDAR_COMPONENT_SET_VPOLL)
+        types |= CAL_COMP_VPOLL;
+#endif
+
+    return types;
 }
 
 int caldav_create_defaultcalendars(const char *userid)
@@ -833,7 +868,7 @@ int caldav_create_defaultcalendars(const char *userid)
         }
         mboxlist_entry_free(&mbentry);
 
-        if (!r) r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR,
+        if (!r) r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, 0,
                                     ACL_ALL | DACL_READFB, DACL_READFB, NULL);
     }
 
@@ -842,8 +877,10 @@ int caldav_create_defaultcalendars(const char *userid)
 
     if (config_getswitch(IMAPOPT_CALDAV_CREATE_DEFAULT)) {
         /* Default calendar */
+        unsigned long comp_types = config_types_to_caldav_types();
+
         mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
-        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR,
+        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, comp_types,
                             ACL_ALL | DACL_READFB, DACL_READFB, "personal");
         free(mailboxname);
         if (r) goto done;
@@ -853,14 +890,14 @@ int caldav_create_defaultcalendars(const char *userid)
         namespace_calendar.allow & ALLOW_CAL_SCHED) {
         /* Scheduling Inbox */
         mailboxname = caldav_mboxname(userid, SCHED_INBOX);
-        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR,
+        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, 0,
                             ACL_ALL | DACL_SCHED, DACL_SCHED, NULL);
         free(mailboxname);
         if (r) goto done;
 
         /* Scheduling Outbox */
         mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
-        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR,
+        r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, 0,
                             ACL_ALL | DACL_SCHED, 0, NULL);
         free(mailboxname);
         if (r) goto done;
@@ -870,7 +907,7 @@ int caldav_create_defaultcalendars(const char *userid)
         namespace_calendar.allow & ALLOW_CAL_ATTACH) {
         /* Managed Attachment Collection */
         mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
-        r = _create_mailbox(userid, mailboxname, MBTYPE_COLLECTION,
+        r = _create_mailbox(userid, mailboxname, MBTYPE_COLLECTION, 0,
                             ACL_ALL, ACL_READ, NULL);
         free(mailboxname);
         if (r) goto done;
@@ -2696,6 +2733,44 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
     return HTTP_NO_CONTENT;
 }
 
+
+/* Perform post-create MKCOL/MKCALENDAR processing */
+static int caldav_mkcol(struct mailbox *mailbox)
+{
+    const char *comp_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
+    struct buf attrib = BUF_INITIALIZER;
+    unsigned long types = 0;
+    int r;
+
+    /* Check if client specified CALDAV:supported-calendar-component-set */
+    r = annotatemore_lookupmask(mailbox->name, comp_annot,
+                                httpd_userid, &attrib);
+    if (r) return HTTP_SERVER_ERROR;
+
+    if (attrib.len) {
+        types = strtoul(buf_cstring(&attrib), NULL, 10);
+    }
+
+    if (!types) {
+        /* Client didn't specify, so use imap.conf option */
+        annotate_state_t *astate = NULL;
+
+        r = mailbox_get_annotate_state(mailbox, 0, &astate);
+        if (!r) {
+            types = config_types_to_caldav_types();
+            buf_reset(&attrib);
+            buf_printf(&attrib, "%lu", types);
+
+            r = annotate_state_writemask(astate, comp_annot,
+                                         httpd_userid, &attrib);
+        }
+    }
+
+    buf_free(&attrib);
+
+    return r;
+}
 
 /* Perform a GET/HEAD request on a CalDAV/M-Attach resource */
 static int meth_get_head_cal(struct transaction_t *txn, void *params)

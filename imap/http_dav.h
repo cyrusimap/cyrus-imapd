@@ -489,9 +489,13 @@ struct mime_type_t {
     void (*end_stream)(struct buf *);
 };
 
+/* meth_mkcol() parameters */
+typedef int (*mkcol_proc_t)(struct mailbox *mailbox);
+
 struct mkcol_params {
     unsigned location_precond;          /* precond code for bad location */
     uint32_t mbtype;                    /* mailbox type collection */
+    mkcol_proc_t proc;                  /* func to do post-create processing */
 };
 
 /*

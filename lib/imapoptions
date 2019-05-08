@@ -565,6 +565,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    addresses for which the server is responsible.  If not set (the
    default), the value of the "servername" option will be used. */
 
+{ "calendar_component_set", "VEVENT VTODO VJOURNAL VFREEBUSY VAVAILABILITY VPOLL", BITFIELD("VEVENT", "VTODO", "VJOURNAL", "VFREEBUSY", "VAVAILABILITY", "VPOLL") }
+/* Space-separated list of iCalendar component types that calendar
+   object resources may contain in a calendar collection.
+   This restriction is only set at calendar creation time and only
+   if the CalDAV client hasn't specified a restriction in the creation
+   request. */
+
 { "carddav_allowaddmember", 0, SWITCH }
 /* Enable support for POST add-member on the CardDAV server. */
 
