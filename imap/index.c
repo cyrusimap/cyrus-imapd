@@ -5276,7 +5276,7 @@ static int extract_attachment(const char *type, const char *subtype,
     size_t hostlen;
     int r = 0;
 
-    if (!ext) return IMAP_INTERNAL;
+    if (!ext) return 0;
 
     be = ext->be;
     ctx = (struct backend_ctx *) be->context;
@@ -5603,8 +5603,8 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
     str.charset_flags = charset_flags;
     str.partids = partids;
     str.snippet_iteration = 0;
-    str.ext = index_text_extractor;
     if (exturl) {
+        str.ext = index_text_extractor;
         r = extractor_connect(exturl, str.ext);
         if (r) return r;
     }
