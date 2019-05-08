@@ -49,6 +49,7 @@ use Data::Dumper;
 use Storable 'dclone';
 use Cwd qw(abs_path);
 use File::Basename;
+use XML::Spice;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -5097,6 +5098,105 @@ sub test_calendar_treat_as_mailbox
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_null($res->[0][1]{updated});
     $self->assert_not_null($res->[0][1]{notUpdated});
+}
+
+sub test_calendar_schedule_address_set
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create two calendars, one with an address set";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', { create => {
+                 "1" => {
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1,
+                 },
+                 "2" => {
+                            name => "bar",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1,
+                            scheduleAddressSet => ['mailto:foo@example.com', 'mailto:bar@example.com'],
+                 },
+                 "3" => {
+                            name => "baz",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1,
+                 },
+            }}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Calendar/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{created});
+    $self->assert_null($res->[0][1]{notCreated});
+
+    xlog "get calendars";
+    $res = $jmap->CallMethods([['Calendar/get', {}, "R1"]]);
+
+    my %byname = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+
+    $self->assert_deep_equals($byname{personal}{scheduleAddressSet}, ['mailto:cassandane@example.com']);
+    $self->assert_deep_equals($byname{foo}{scheduleAddressSet}, ['mailto:cassandane@example.com']);
+    $self->assert_deep_equals($byname{bar}{scheduleAddressSet}, ['mailto:foo@example.com', 'mailto:bar@example.com']);
+    $self->assert_deep_equals($byname{baz}{scheduleAddressSet}, ['mailto:cassandane@example.com']);
+
+    # explicitly update the values of two calendars, one to the explicit same value
+
+    $jmap->CallMethods([['Calendar/set', { update => {
+        $byname{foo}{id} => {
+            scheduleAddressSet => ['mailto:foo2@example.com'],
+        },
+        $byname{baz}{id} => {
+            scheduleAddressSet => ['mailto:cassandane@example.com'],
+        },
+    }}, "R1"]]);
+
+    # map to names and then check values
+
+    xlog "get calendars";
+    $res = $jmap->CallMethods([['Calendar/get', {}, "R1"]]);
+
+    %byname = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+
+    $self->assert_deep_equals($byname{personal}{scheduleAddressSet}, ['mailto:cassandane@example.com']);
+    $self->assert_deep_equals($byname{foo}{scheduleAddressSet}, ['mailto:foo2@example.com']);
+    $self->assert_deep_equals($byname{bar}{scheduleAddressSet}, ['mailto:foo@example.com', 'mailto:bar@example.com']);
+    $self->assert_deep_equals($byname{baz}{scheduleAddressSet}, ['mailto:cassandane@example.com']);
+
+    # use CalDAV to update the default address!
+    xlog "Use CalDAV to update the default address";
+    my $caldav = $self->{caldav};
+    $caldav->Request(
+      'PROPPATCH',
+      "",
+      x('D:propertyupdate', $caldav->NS(),
+        x('D:set',
+          x('D:prop',
+            x('C:calendar-user-address-set',
+              x('D:href', 'mailto:bar@example.com')
+            )
+          )
+        )
+      )
+    );
+
+    xlog "get calendars";
+    $res = $jmap->CallMethods([['Calendar/get', {}, "R1"]]);
+
+    %byname = map { $_->{name} => $_ } @{$res->[0][1]{list}};
+
+    $self->assert_deep_equals($byname{personal}{scheduleAddressSet}, ['mailto:bar@example.com']);
+    $self->assert_deep_equals($byname{foo}{scheduleAddressSet}, ['mailto:foo2@example.com']);
+    $self->assert_deep_equals($byname{bar}{scheduleAddressSet}, ['mailto:foo@example.com', 'mailto:bar@example.com']);
+    $self->assert_deep_equals($byname{baz}{scheduleAddressSet}, ['mailto:cassandane@example.com']);
 }
 
 1;
