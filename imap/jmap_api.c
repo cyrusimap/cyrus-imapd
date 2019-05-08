@@ -899,7 +899,7 @@ static void findaccounts_add(struct findaccounts_rock *rock)
         return;
 
     const char *accountid = buf_cstring(&rock->current_accountid);
-    int is_rw = rock->current_rights & ACL_READ_WRITE;
+    int is_rw = (rock->current_rights & ACL_READ_WRITE) == ACL_READ_WRITE;
     int is_primary = !strcmp(rock->authuserid, accountid);
 
     json_t *account = json_object();
