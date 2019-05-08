@@ -6170,7 +6170,12 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
                                     fctx->req_tgt->userid, &fctx->buf);
         free(mailboxname);
         if (!r && fctx->buf.len) {
-            xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+            strarray_t *items = strarray_split(buf_cstring(&fctx->buf), ",", STRARRAY_TRIM);
+            int i;
+            for (i = 0; i < strarray_size(items); i++) {
+                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, i));
+            }
+            strarray_free(items);
         }
 
         /* XXX  This needs to be done via an LDAP/DB lookup */
