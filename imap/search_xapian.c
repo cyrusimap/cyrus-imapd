@@ -957,6 +957,120 @@ static int copy_files(const char *fromdir, const char *todir)
 
 /* ====================================================================== */
 
+/* shared lock for xapian dbs */
+struct xapiandb_lock {
+    struct mappedfile *activefile;
+    struct mboxlock *namelock;
+    strarray_t *activedirs;
+    strarray_t *activetiers;
+    xapian_db_t *db;
+};
+
+static void xapiandb_lock_release(struct xapiandb_lock *lock)
+{
+    if (lock->db) xapian_db_close(lock->db);
+
+    /* now that the databases are closed, it's safe to unlock
+     * the active file */
+    if (lock->activefile) {
+        mappedfile_unlock(lock->activefile);
+        mappedfile_close(&lock->activefile);
+    }
+    if (lock->namelock) {
+        mboxname_release(&lock->namelock);
+    }
+
+    strarray_free(lock->activedirs);
+    strarray_free(lock->activetiers);
+
+    memset(lock, 0, sizeof(struct xapiandb_lock));
+}
+
+/*
+ * This function builds a lockfilename of the format:
+ *  $XAPIAN$<userid>
+ * example:
+ *  If the userid is `foo@bar.com` then the lockfilename is
+ *  $XAPIAN$foo@bar^com
+ *
+ * It replaces '.' in a string with a '^' into a struct buf
+ */
+static char *xapiandb_namelock_fname_from_userid(const char *userid)
+{
+    const char *p;
+    struct buf buf = BUF_INITIALIZER;
+
+    buf_setcstr(&buf, XAPIAN_NAME_LOCK_PREFIX);
+
+    for (p = userid; *p; p++) {
+        switch(*p) {
+            case '.':
+                buf_putc(&buf, '^');
+                break;
+            default:
+                buf_putc(&buf, *p);
+                break;
+        }
+    }
+
+    char *ret = buf_release(&buf);
+
+    buf_free(&buf);
+
+    return ret;
+}
+
+
+static int xapiandb_lock_open(struct mailbox *mailbox, struct xapiandb_lock *lock)
+{
+    strarray_t *active = NULL;
+    char *namelock_fname = NULL;
+    char *userid = NULL;
+    int r = 0;
+
+    assert(lock->namelock == NULL);
+    assert(lock->activefile == NULL);
+    assert(lock->activedirs == NULL);
+    assert(lock->activetiers == NULL);
+
+    /* Do nothing if there is no userid */
+    userid = mboxname_to_userid(mailbox->name);
+    if (!userid) goto out;
+
+    namelock_fname = xapiandb_namelock_fname_from_userid(userid);
+
+    /* Get a shared lock */
+    r = mboxname_lock(namelock_fname, &lock->namelock, LOCK_SHARED);
+    if (r) {
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+                namelock_fname);
+        goto out;
+    }
+
+    /* need to hold a read-only lock on the activefile file
+     * to ensure no databases are deleted out from under us */
+    active = activefile_open(mailbox->name, mailbox->part, &lock->activefile, AF_LOCK_READ);
+    if (!active) goto out;
+
+    /* only try to open directories with databases in them */
+    lock->activedirs = activefile_resolve(mailbox->name, mailbox->part, active,
+            /*dostat*/1, &lock->activetiers);
+    if (!lock->activedirs || !lock->activedirs->count) goto out;
+
+    /* if there are directories, open the databases */
+    r = xapian_db_open((const char **)lock->activedirs->data, &lock->db);
+    if (r) goto out;
+
+out:
+    if (r) xapiandb_lock_release(lock);
+    strarray_free(active);
+    free(namelock_fname);
+    free(userid);
+    return r;
+}
+
+/* ====================================================================== */
+
 struct opnode
 {
     int op;     /* SEARCH_OP_* or SEARCH_PART_* constant */
@@ -968,11 +1082,9 @@ struct opnode
 typedef struct xapian_builder xapian_builder_t;
 struct xapian_builder {
     search_builder_t super;
-    struct mappedfile *activefile;
-    struct mboxlock *xapiandb_namelock;
+    struct xapiandb_lock lock;
     struct seqset *indexed;
     struct mailbox *mailbox;
-    xapian_db_t *db;
     int opts;
     struct opnode *root;
     ptrarray_t stack;       /* points to opnode* */
@@ -1324,19 +1436,19 @@ static int split_query(xapian_builder_t *bb,
 
     if (qguid->children) {
         optimise_nodes(NULL, qguid);
-        xapian_query_t *xq = opnode_to_query(bb->db, qguid, bb->opts);
-        if (xq) xq = xapian_query_new_filter_doctype(bb->db, SEARCH_XAPIAN_DOCTYPE_MSG, xq);
+        xapian_query_t *xq = opnode_to_query(bb->lock.db, qguid, bb->opts);
+        if (xq) xq = xapian_query_new_filter_doctype(bb->lock.db, SEARCH_XAPIAN_DOCTYPE_MSG, xq);
         if (xq) ptrarray_append(clauses, xq);
     }
     if (qpart->children) {
         optimise_nodes(NULL, qpart);
-        xapian_query_t *xq = opnode_to_query(bb->db, qpart, bb->opts);
-        if (xq) xq = xapian_query_new_filter_doctype(bb->db, SEARCH_XAPIAN_DOCTYPE_PART, xq);
+        xapian_query_t *xq = opnode_to_query(bb->lock.db, qpart, bb->opts);
+        if (xq) xq = xapian_query_new_filter_doctype(bb->lock.db, SEARCH_XAPIAN_DOCTYPE_PART, xq);
         if (xq) ptrarray_append(clauses, xq);
     }
     if (qany->children) {
         optimise_nodes(NULL, qany);
-        xapian_query_t *xq = opnode_to_query(bb->db, qany, bb->opts);
+        xapian_query_t *xq = opnode_to_query(bb->lock.db, qany, bb->opts);
         if (xq) ptrarray_append(clauses, xq);
     }
 
@@ -1465,7 +1577,7 @@ static int run_query(xapian_builder_t *bb)
 
         struct xapian_run_rock xrock = { bb, matches, /*is_legacy*/0 };
         xapian_query_t *xq = ptrarray_nth(&clauses, i);
-        r = xapian_query_run(bb->db, xq, /*is_legacy*/0, xapian_run_cb, &xrock);
+        r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/0, xapian_run_cb, &xrock);
         if (r) goto out;
 
         /* First clause, use as initial result */
@@ -1572,10 +1684,10 @@ out:
 
 static int run_legacy_query(xapian_builder_t *bb)
 {
-    xapian_query_t *qq = opnode_to_query(bb->db, bb->root, bb->opts);
+    xapian_query_t *qq = opnode_to_query(bb->lock.db, bb->root, bb->opts);
     if (!qq) return 0;
     struct xapian_run_rock xrock = { bb, NULL, /*is_legacy*/1 };
-    int r = xapian_query_run(bb->db, qq, /*is_legacy*/1, xapian_run_cb, &xrock);
+    int r = xapian_query_run(bb->lock.db, qq, /*is_legacy*/1, xapian_run_cb, &xrock);
     if (qq) xapian_query_free(qq);
     return r;
 }
@@ -1585,7 +1697,7 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     xapian_builder_t *bb = (xapian_builder_t *)bx;
     int r = 0;
 
-    if (bb->db == NULL) {
+    if (bb->lock.db == NULL) {
         syslog(LOG_ERR, "search_xapian: can't find index for mailbox: %s",
                 bb->mailbox ?  bb->mailbox->name : "<unknown>");
         return IMAP_NOTFOUND;       /* there's no index for this user */
@@ -1600,11 +1712,11 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     optimise_nodes(NULL, bb->root);
 
     /* A database can contain current and legacy databases.*/
-    if (xapian_db_supports_current_version(bb->db)) {
+    if (xapian_db_supports_current_version(bb->lock.db)) {
         r = run_query(bb);
         if (r) goto out;
     }
-    if (xapian_db_supports_legacy_version(bb->db)) {
+    if (xapian_db_supports_legacy_version(bb->lock.db)) {
         r = run_legacy_query(bb);
         if (r) goto out;
     }
@@ -1684,53 +1796,12 @@ static void free_internalised(void *internalised)
     if (on) opnode_delete(on);
 }
 
-/*
- * This function builds a lockfilename of the format:
- *  $XAPIAN$<userid>
- * example:
- *  If the userid is `foo@bar.com` then the lockfilename is
- *  $XAPIAN$foo@bar^com
- *
- * It replaces '.' in a string with a '^' into a struct buf
- */
-static char *xapiandb_namelock_fname_from_userid(const char *userid)
-{
-    const char *p;
-    struct buf buf = BUF_INITIALIZER;
-
-    buf_setcstr(&buf, XAPIAN_NAME_LOCK_PREFIX);
-
-    for (p = userid; *p; p++) {
-        switch(*p) {
-        case '.':
-            buf_putc(&buf, '^');
-            break;
-        default:
-            buf_putc(&buf, *p);
-            break;
-        }
-    }
-
-    char *ret = buf_release(&buf);
-
-    buf_free(&buf);
-
-    return ret;
-}
-
 static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 {
     int r = check_config(NULL);
     if (r) return NULL;
 
-    xapian_builder_t *bb;
-    strarray_t *dirs = NULL;
-    strarray_t *tiers = NULL;
-    strarray_t *active = NULL;
-    char *namelock_fname = NULL;
-    char *userid = NULL;
-
-    bb = xzmalloc(sizeof(xapian_builder_t));
+    xapian_builder_t *bb = xzmalloc(sizeof(xapian_builder_t));
     bb->super.begin_boolean = begin_boolean;
     bb->super.end_boolean = end_boolean;
     bb->super.match = match;
@@ -1740,46 +1811,18 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->mailbox = mailbox;
     bb->opts = opts;
 
-    /* Do nothing if there is no userid */
-    userid = mboxname_to_userid(mailbox->name);
-    if (!userid) goto out;
-
-    namelock_fname = xapiandb_namelock_fname_from_userid(userid);
-
-    /* Get a shared lock */
-    r = mboxname_lock(namelock_fname, &bb->xapiandb_namelock, LOCK_SHARED);
-    if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
-               namelock_fname);
-        goto out;
-    }
-
-    /* need to hold a read-only lock on the activefile file until the search
-     * has completed to ensure no databases are deleted out from under us */
-    active = activefile_open(mailbox->name, mailbox->part, &bb->activefile, AF_LOCK_READ);
-    if (!active) goto out;
-
-    /* only try to open directories with databases in them */
-    dirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/1, &tiers);
-    if (!dirs || !dirs->count) goto out;
-
-    /* if there are directories, open the databases */
-    r = xapian_db_open((const char **)dirs->data, &bb->db);
+    r = xapiandb_lock_open(mailbox, &bb->lock);
     if (r) goto out;
+    if (!bb->lock.activedirs || !bb->lock.activedirs->count) goto out;
 
     /* read the list of all indexed messages to allow (optional) false positives
      * for unindexed messages */
     bb->indexed = seqset_init(0, SEQ_MERGE);
-    r = read_indexed(dirs, tiers, mailbox->name, mailbox->i.uidvalidity, bb->indexed,
-                    /*do_cache*/0, /*verbose*/0);
+    r = read_indexed(bb->lock.activedirs, bb->lock.activetiers, mailbox->name,
+                     mailbox->i.uidvalidity, bb->indexed, /*do_cache*/0, /*verbose*/0);
     if (r) goto out;
 
 out:
-    strarray_free(dirs);
-    strarray_free(tiers);
-    strarray_free(active);
-    free(namelock_fname);
-    free(userid);
     /* XXX - error return? */
     return &bb->super;
 }
@@ -1792,19 +1835,7 @@ static void end_search(search_builder_t *bx)
     ptrarray_fini(&bb->stack);
     if (bb->root) opnode_delete(bb->root);
 
-    if (bb->db) xapian_db_close(bb->db);
-
-    /* now that the databases are closed, it's safe to unlock
-     * the active file */
-    if (bb->activefile) {
-        mappedfile_unlock(bb->activefile);
-        mappedfile_close(&bb->activefile);
-    }
-
-    if (bb->xapiandb_namelock) {
-        mboxname_release(&bb->xapiandb_namelock);
-        bb->xapiandb_namelock = NULL;
-    }
+    xapiandb_lock_release(&bb->lock);
 
     free(bx);
 }
@@ -1855,6 +1886,7 @@ struct xapian_snippet_receiver
     struct opnode *root;
     search_snippet_cb_t proc;
     void *rock;
+    struct xapiandb_lock lock;
 };
 
 /* Maximum size of a query, determined empirically, is a little bit
@@ -2591,7 +2623,12 @@ static int begin_mailbox_snippets(search_text_receiver_t *rx,
 
     tr->super.mailbox = mailbox;
 
-    return 0;
+    int r = xapiandb_lock_open(mailbox, &tr->lock);
+    if (r) goto out;
+    if (!tr->lock.activedirs || !tr->lock.activedirs->count) goto out;
+
+out:
+    return r;
 }
 
 /* Find match terms for the given part and add them to the Xapian
@@ -2640,6 +2677,10 @@ static int flush_snippets(search_text_receiver_t *rx)
     int r = 0;
 
     if (!tr->root) {
+        goto out;
+    }
+
+    if (!tr->lock.activedirs || !tr->lock.activedirs->count) {
         goto out;
     }
 
@@ -2712,6 +2753,7 @@ static int end_mailbox_snippets(search_text_receiver_t *rx,
 {
     xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
 
+    xapiandb_lock_release(&tr->lock);
     tr->super.mailbox = NULL;
 
     return 0;
