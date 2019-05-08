@@ -1,4 +1,4 @@
-/* jmap_user.c -- Routines for handling JMAP vacation responses
+/* jmap_vacation.c -- Routines for handling JMAP vacation responses
  *
  * Copyright (c) 1994-2019 Carnegie Mellon University.  All rights reserved.
  *
@@ -52,29 +52,16 @@
 #include <assert.h>
 #include <errno.h>
 
-#include "global.h"
 #include "hash.h"
 #include "http_jmap.h"
 #include "json_support.h"
 #include "map.h"
-#include "quota.h"
 #include "sieve/sieve_interface.h"
 #include "user.h"
-#include "util.h"
 #include "xmalloc.h"
-
-/* generated headers are not necessarily in current directory */
-#include "imap/http_err.h"
-#include "imap/imap_err.h"
 
 static int jmap_vacation_get(jmap_req_t *req);
 static int jmap_vacation_set(jmap_req_t *req);
-
-/*
- * Possibly to be implemented:
- * - Identity/changes
- * - Identity/set
- */
 
 jmap_method_t jmap_vacation_methods[] = {
     {

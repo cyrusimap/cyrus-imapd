@@ -110,6 +110,8 @@ static int jmap_identity_get(jmap_req_t *req);
  * Possibly to be implemented:
  * - Email/removeAttachments
  * - Email/report
+ * - Identity/changes
+ * - Identity/set
  */
 
 static jmap_method_t jmap_mail_methods[] = {
