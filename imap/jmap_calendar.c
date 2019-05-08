@@ -388,6 +388,38 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
+    if (jmap_wantprop(rock->get->props, "scheduleAddressSet")) {
+        buf_reset(&attrib);
+        json_t *val = json_array();
+        static const char *annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+        r = annotatemore_lookupmask(mbentry->name, annot, httpd_userid, &attrib);
+        if (r || !attrib.len) {
+            // fetch from my own principal
+            char *prinmbox = mboxname_user_mbox(httpd_userid, "#calendars");
+            r = annotatemore_lookupmask(prinmbox, annot, httpd_userid, &attrib);
+            free(prinmbox);
+        }
+        if (!r && attrib.len) {
+            strarray_t *values = strarray_split(buf_cstring(&attrib), ",", STRARRAY_TRIM);
+            int i;
+            for (i = 0; i < strarray_size(values); i++) {
+                json_array_append_new(val, json_string(strarray_nth(values, i)));
+            }
+            strarray_free(values);
+        }
+        else if (strchr(rock->req->userid, '@')) {
+            json_array_append_new(val, json_string(rock->req->userid));
+        }
+        else {
+            char *value = strconcat("mailto:", rock->req->userid, "@", config_defdomain, NULL);
+            json_array_append_new(val, json_string(value));
+            free(value);
+        }
+        json_object_set_new(obj, "scheduleAddressSet", val);
+        buf_free(&attrib);
+    }
+
     json_array_append_new(rock->get->list, obj);
 
 done:
@@ -506,6 +538,11 @@ static const jmap_property_t calendar_props[] = {
     },
     {
         "x-href",
+        JMAP_CALENDARS_EXTENSION,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "scheduleAddressSet",
         JMAP_CALENDARS_EXTENSION,
         0
     },
@@ -717,6 +754,7 @@ static int setcalendars_update(jmap_req_t *req,
                                int isVisible,
                                int isSubscribed,
                                json_t *shareWith,
+                               json_t *scheduleAddressSet,
                                int overwrite_acl)
 {
     struct mailbox *mbox = NULL;
@@ -787,6 +825,28 @@ static int setcalendars_update(jmap_req_t *req,
         }
         buf_reset(&val);
     }
+    /* scheduleAddressSet */
+    if (!r && scheduleAddressSet) {
+        static const char *annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+        strarray_t *array = strarray_new();
+        size_t i;
+        json_t *jval;
+        json_array_foreach(scheduleAddressSet, i, jval) {
+            strarray_add(array, json_string_value(jval));
+        }
+        char *joined = strarray_join(array, ",");
+        buf_setcstr(&val, joined);
+        r = annotate_state_writemask(astate, annot, req->userid, &val);
+        if (r) {
+            syslog(LOG_ERR, "failed to write annotation %s: %s",
+                   annot, error_message(r));
+        }
+        free(joined);
+        strarray_free(array);
+        buf_reset(&val);
+    }
+
     /* isSubscribed */
     if (!r && isSubscribed >= 0) {
         /* Update subscription database */
@@ -935,6 +995,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         int isSubscribed = 1;
         int pe; /* parse error */
         short flag;
+        json_t *scheduleAddressSet = NULL;
 
         /* Mandatory properties. */
         pe = jmap_readprop(arg, "name", 1,  invalid, "s", &name);
@@ -962,6 +1023,8 @@ static int jmap_calendar_set(struct jmap_req *req)
 
         /* Optional properties. */
         jmap_readprop(arg, "shareWith", 0,  invalid, "o", &shareWith);
+
+        jmap_readprop(arg, "scheduleAddressSet", 0,  invalid, "o", &scheduleAddressSet);
 
         /* Optional properties. If present, these MUST be set to true. */
         flag = 1; jmap_readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
@@ -1041,7 +1104,7 @@ static int jmap_calendar_set(struct jmap_req *req)
             goto done;
         }
         r = setcalendars_update(req, mboxname, name, color, sortOrder,
-                                isVisible, isSubscribed, shareWith, 1);
+                                isVisible, isSubscribed, shareWith, scheduleAddressSet, 1);
         if (r) {
             free(uid);
             int rr = mboxlist_delete(mboxname);
@@ -1091,6 +1154,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         int isSubscribed = -1;
         int overwrite_acl = 1;
         int flag;
+        json_t *scheduleAddressSet = NULL;
         int pe = 0; /* parse error */
         pe = jmap_readprop(arg, "name", 0,  invalid, "s", &name);
         if (pe > 0 && strnlen(name, 256) == 256) {
@@ -1124,7 +1188,8 @@ static int jmap_calendar_set(struct jmap_req *req)
             json_array_append_new(invalid, json_string("shareWith"));
         }
 
-        
+        jmap_readprop(arg, "scheduleAddressSet", 0,  invalid, "o", &scheduleAddressSet);
+
         /* The mayFoo properties are immutable and MUST NOT set. */
         pe = jmap_readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
         if (pe > 0) {
@@ -1179,7 +1244,7 @@ static int jmap_calendar_set(struct jmap_req *req)
 
         /* Update the calendar */
         r = setcalendars_update(req, mboxname, name, color, sortOrder,
-                                isVisible, isSubscribed, shareWith, overwrite_acl);
+                                isVisible, isSubscribed, shareWith, scheduleAddressSet, overwrite_acl);
         free(mboxname);
         if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
             json_t *err = json_pack("{s:s}", "type", "notFound");
