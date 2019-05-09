@@ -1312,4 +1312,36 @@ sub test_xapian_index_partid
     $self->assert_num_equals(4, @$uids[1]);
 }
 
+sub test_detect_language
+    :min_version_3_0 :needs_search_xapian :needs_dependency_cld2
+{
+    my ($self) = @_;
+
+    $self->make_message("german",
+        mime_type => 'text/plain',
+        mime_charset => 'utf-8',
+        mime_encoding => 'quoted-printable',
+        body => ''
+        . "Der Ballon besa=C3=9F eine gewaltige Gr=C3=B6=C3=9Fe, er trug einen Korb, g=\r\n"
+        . "ro=C3=9F und ger=C3=A4umig und offenbar f=C3=BCr einen l=C3=A4ngeren Aufenthalt\r\n"
+        . "hergeric=htet. Die zwei M=C3=A4nner, welche sich darin befanden, schienen\r\n"
+        . "erfahrene Luftschiff=er zu sein, das sah man schon daraus, wie ruhig sie trotz\r\n"
+        . "der ungeheuren H=C3=B6he atmeten."
+    );
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    my $uids = $talk->search('fuzzy', 'body', 'atmet');
+    $self->assert_deep_equals([1], $uids);
+
+    my $r = $talk->select("INBOX") || die;
+    my $uidvalidity = $talk->get_response_code('uidvalidity');
+    $r = $talk->xsnippets( [ [ 'inbox', $uidvalidity, $uids ] ],
+       'utf-8', [ 'fuzzy', 'body', 'atmet' ]
+    ) || die;
+    $self->assert_num_not_equals(-1, index($r->{snippets}[0][3], ' Höhe <b>atmeten</b>.'));
+}
+
 1;
