@@ -364,7 +364,7 @@ static int ptload(const char *identifier, struct auth_state **state)
     r = cyrusdb_open(the_ptscache_db, fname, CYRUSDB_CREATE, &ptdb);
     if (r != 0) {
         syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(ret));
+               cyrusdb_strerror(r));
         free(tofree);
         *state = NULL;
         return -1;

@@ -1025,7 +1025,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &sessdb);
         if (r != 0) {
             syslog(LOG_ERR, "DBERROR: opening %s: %s",
-                   fname, cyrusdb_strerror(ret));
+                   fname, cyrusdb_strerror(r));
         }
         else
             sess_dbopen = 1;
