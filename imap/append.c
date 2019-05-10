@@ -1562,10 +1562,17 @@ static int append_addseen(struct mailbox *mailbox,
         return 0;
 
     r = seen_open(userid, SEEN_CREATE, &seendb);
-    if (r) goto done;
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: append_addseen failed to open DB for %s", userid);
+        goto done;
+    }
 
     r = seen_lockread(seendb, mailbox->uniqueid, &sd);
-    if (r) goto done;
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: append_addseen failed to read old value for %s/%s",
+               userid, mailbox->uniqueid);
+        goto done;
+    }
 
     /* parse the old sequence */
     oldseen = seqset_parse(sd.seenuids, NULL, mailbox->i.last_uid);
@@ -1579,6 +1586,10 @@ static int append_addseen(struct mailbox *mailbox,
     /* and write it out */
     sd.lastchange = time(NULL);
     r = seen_write(seendb, mailbox->uniqueid, &sd);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: append_addseen failed to write new value for %s/%s",
+               userid, mailbox->uniqueid);
+    }
     seen_freedata(&sd);
 
  done:
