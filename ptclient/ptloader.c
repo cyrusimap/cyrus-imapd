@@ -162,7 +162,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
     r = cyrusdb_open(config_ptscache_db, fname, CYRUSDB_CREATE, &ptsdb);
     if (r != 0) {
         syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(ret));
+               cyrusdb_strerror(r));
         fatal("can't read pts database", EX_TEMPFAIL);
     }
 
