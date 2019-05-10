@@ -7912,7 +7912,7 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
     /* Fetch blob contents and headers */
     const char *content = blob_buf.s;
     size_t content_size = blob_buf.len;
-    const char *src_encoding = body->encoding;
+    const char *src_encoding = NULL;
     if (part) {
         content += part->content_offset;
         content_size = part->content_size;
