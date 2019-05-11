@@ -183,6 +183,40 @@ struct getcalendars_rock {
     int skip_hidden;
 };
 
+static json_t *get_schedule_address_set(const char *userid,
+                                        const char *mboxname)
+{
+    struct buf attrib = BUF_INITIALIZER;
+    json_t *val = json_array();
+    static const char *annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
+    int r = annotatemore_lookupmask(mboxname, annot, httpd_userid, &attrib);
+    if (r || !attrib.len) {
+        // fetch from my own principal
+        char *prinmbox = mboxname_user_mbox(httpd_userid, "#calendars");
+        r = annotatemore_lookupmask(prinmbox, annot, httpd_userid, &attrib);
+        free(prinmbox);
+    }
+    if (!r && attrib.len) {
+        strarray_t *values = strarray_split(buf_cstring(&attrib), ",", STRARRAY_TRIM);
+        int i;
+        for (i = 0; i < strarray_size(values); i++) {
+            json_array_append_new(val, json_string(strarray_nth(values, i)));
+        }
+        strarray_free(values);
+    }
+    else if (strchr(userid, '@')) {
+        json_array_append_new(val, json_string(userid));
+    }
+    else {
+        char *value = strconcat("mailto:", userid, "@", config_defdomain, NULL);
+        json_array_append_new(val, json_string(value));
+        free(value);
+    }
+    buf_free(&attrib);
+    return val;
+}
+
 static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
 {
     struct getcalendars_rock *rock = vrock;
@@ -389,35 +423,8 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     if (jmap_wantprop(rock->get->props, "scheduleAddressSet")) {
-        buf_reset(&attrib);
-        json_t *val = json_array();
-        static const char *annot =
-            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-        r = annotatemore_lookupmask(mbentry->name, annot, httpd_userid, &attrib);
-        if (r || !attrib.len) {
-            // fetch from my own principal
-            char *prinmbox = mboxname_user_mbox(httpd_userid, "#calendars");
-            r = annotatemore_lookupmask(prinmbox, annot, httpd_userid, &attrib);
-            free(prinmbox);
-        }
-        if (!r && attrib.len) {
-            strarray_t *values = strarray_split(buf_cstring(&attrib), ",", STRARRAY_TRIM);
-            int i;
-            for (i = 0; i < strarray_size(values); i++) {
-                json_array_append_new(val, json_string(strarray_nth(values, i)));
-            }
-            strarray_free(values);
-        }
-        else if (strchr(rock->req->userid, '@')) {
-            json_array_append_new(val, json_string(rock->req->userid));
-        }
-        else {
-            char *value = strconcat("mailto:", rock->req->userid, "@", config_defdomain, NULL);
-            json_array_append_new(val, json_string(value));
-            free(value);
-        }
-        json_object_set_new(obj, "scheduleAddressSet", val);
-        buf_free(&attrib);
+        json_t *set = get_schedule_address_set(rock->req->userid, mbentry->name);
+        json_object_set_new(obj, "scheduleAddressSet", set);
     }
 
     json_array_append_new(rock->get->list, obj);
@@ -1115,13 +1122,20 @@ static int jmap_calendar_set(struct jmap_req *req)
             free(mboxname);
             goto done;
         }
-        free(mboxname);
 
         /* Report calendar as created. */
         record = json_pack("{s:s}", "id", uid);
+
+        /* Add additional properties */
+        if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
+            json_t *addrset = get_schedule_address_set(req->userid, mboxname);
+            if (addrset) json_object_set_new(record, "scheduleAddressSet", addrset);
+        }
+
         json_object_set_new(set.created, key, record);
         jmap_add_id(req, key, uid);
         free(uid);
+        free(mboxname);
     }
 
 
