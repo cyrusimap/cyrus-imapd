@@ -826,7 +826,7 @@ static int setcalendars_update(jmap_req_t *req,
         buf_reset(&val);
     }
     /* scheduleAddressSet */
-    if (!r && scheduleAddressSet) {
+    if (!r && json_is_array(scheduleAddressSet)) {
         static const char *annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
         strarray_t *array = strarray_new();
