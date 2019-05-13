@@ -2856,6 +2856,7 @@ static void header_update_counts(struct index_header *i,
 
 struct annot_calc_rock
 {
+    struct mailbox *mailbox;
     uint32_t annot;
     quota_t used;
 };
@@ -2920,6 +2921,24 @@ static uint32_t crc_annot(unsigned int uid, const char *entry,
     return res;
 }
 
+static int mailbox_is_virtannot(struct mailbox *mailbox, const char *entry)
+{
+    if (mailbox->i.minor_version < 13) return 0;
+    // thrid was introduced in v13
+    if (!strcmp(entry, IMAP_ANNOT_NS "thrid")) return 1;
+
+    if (mailbox->i.minor_version < 15) return 0;
+    // savedate was introduced in v15
+    if (!strcmp(entry, IMAP_ANNOT_NS "savedate")) return 1;
+
+    if (mailbox->i.minor_version < 16) return 0;
+    // createdmodseq was introduced in v15
+    if (!strcmp(entry, IMAP_ANNOT_NS "createdmodseq")) return 1;
+
+    return 0;
+}
+
+
 static uint32_t crc_virtannot(struct mailbox *mailbox,
                               const struct index_record *record)
 {
@@ -2966,10 +2985,12 @@ EXPORTED void mailbox_annot_changed(struct mailbox *mailbox,
         int r = mailbox_find_index_record(mailbox, uid, &record);
         if (r || record.internal_flags & FLAG_INTERNAL_EXPUNGED)
             return;
-        if (oldval->len)
-            mailbox->i.synccrcs.annot ^= crc_annot(uid, entry, userid, oldval);
-        if (newval->len)
-            mailbox->i.synccrcs.annot ^= crc_annot(uid, entry, userid, newval);
+        if (!mailbox_is_virtannot(mailbox, entry)) {
+            if (oldval->len)
+                mailbox->i.synccrcs.annot ^= crc_annot(uid, entry, userid, oldval);
+            if (newval->len)
+                mailbox->i.synccrcs.annot ^= crc_annot(uid, entry, userid, newval);
+        }
     }
 
     if (!silent) {
@@ -3000,7 +3021,7 @@ static int calc_one_annot(const char *mboxname __attribute__((unused)),
     struct annot_calc_rock *cr = (struct annot_calc_rock *)rock;
 
     /* update sync_crc - NOTE, only per-message annotations count */
-    if (uid)
+    if (uid && !mailbox_is_virtannot(cr->mailbox, entry))
         cr->annot ^= crc_annot(uid, entry, userid, value);
 
     /* always count the size */
@@ -3013,7 +3034,7 @@ static void mailbox_annot_update_counts(struct mailbox *mailbox,
                                         const struct index_record *record,
                                         int is_add)
 {
-    struct annot_calc_rock cr = { 0, 0 };
+    struct annot_calc_rock cr = { mailbox, 0, 0 };
 
     /* expunged records don't count */
     if (record && record->internal_flags & FLAG_INTERNAL_EXPUNGED) return;
@@ -3061,7 +3082,7 @@ EXPORTED struct synccrcs mailbox_synccrcs(struct mailbox *mailbox, int force)
         crcs.basic ^= crc_basic(mailbox, record);
         crcs.annot ^= crc_virtannot(mailbox, record);
 
-        struct annot_calc_rock cr = { 0, 0 };
+        struct annot_calc_rock cr = { mailbox, 0, 0 };
         annotatemore_findall(mailbox->name, record->uid, /* all entries*/"*",
                              /*modseq*/0, calc_one_annot, &cr, /*flags*/0);
 
