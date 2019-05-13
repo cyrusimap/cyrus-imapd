@@ -157,13 +157,37 @@ sub set_up
     $self->SUPER::set_up();
 }
 
+# XXX Cheating and just passing in all the using strings that cyrus
+# XXX recognises -- these were ripped from http_jmap.h, try to keep
+# XXX them up to date! :)
+my @default_using = qw(
+    urn:ietf:params:jmap:core
+    urn:ietf:params:jmap:mail
+    urn:ietf:params:jmap:submission
+    urn:ietf:params:jmap:vacationresponse
+    https://cyrusimap.org/ns/jmap/contacts
+    https://cyrusimap.org/ns/jmap/calendars
+    https://cyrusimap.org/ns/jmap/mail
+    https://cyrusimap.org/ns/jmap/performance
+    https://cyrusimap.org/ns/jmap/debug
+    https://cyrusimap.org/ns/jmap/quota
+    https://cyrusimap.org/ns/jmap/search
+);
+
+# XXX This is here as documentation -- these ones are supported by
+# XXX cyrus in some, but not all, configurations
+my @non_default_using = qw(
+    urn:ietf:params:jmap:websocket
+);
+
 sub _fmjmap_req
 {
     my ($self, $cmd, %args) = @_;
     my $jmap = $self->{jmap};
 
     my $rnum = "R" . $RNUM++;
-    my $res = $jmap->Request({methodCalls => [[$cmd, \%args, $rnum]], using => ["ietf:jmap"]});
+    my $res = $jmap->Request({methodCalls => [[$cmd, \%args, $rnum]],
+                              using => \@default_using });
     my $res1 = $res->{methodResponses}[0];
     $self->assert_not_null($res1);
     $self->assert_str_equals($rnum, $res1->[2]);
