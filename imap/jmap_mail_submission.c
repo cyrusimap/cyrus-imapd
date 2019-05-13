@@ -116,11 +116,12 @@ HIDDEN void jmap_emailsubmission_init(jmap_settings_t *settings)
 
 HIDDEN void jmap_emailsubmission_capabilities(json_t *account_capabilities)
 {
-    /* determine extensions from submission server */
-    json_t *submit_ext = json_object();
+    static json_t *submit_capabilities = NULL;
     smtpclient_t *smp = NULL;
 
-    if (!smtpclient_open(&smp)) {
+    if (!submit_capabilities && !smtpclient_open(&smp)) {
+        /* determine extensions from submission server */
+        json_t *submit_ext = json_object();
         const char *smtp_capa[] = { "FUTURERELEASE", "SIZE", "DSN",
                                     "DELIVERBY", "MT-PRIORITY", NULL };
         const char **capa;
@@ -146,13 +147,12 @@ HIDDEN void jmap_emailsubmission_capabilities(json_t *account_capabilities)
         }
         smtpclient_close(&smp);
         buf_free(&buf);
+        submit_capabilities = json_pack("{s:i s:o}",
+                                        "maxDelayedSend", 0,
+                                        "submissionExtensions", submit_ext);
     }
 
-    json_t *submit_capabilities = json_pack("{s:i s:o}",
-                                            "maxDelayedSend", 0,
-                                            "submissionExtensions", submit_ext);
-
-    json_object_set_new(account_capabilities, JMAP_URN_SUBMISSION, submit_capabilities);
+    json_object_set(account_capabilities, JMAP_URN_SUBMISSION, submit_capabilities);
 }
 
 static int _emailsubmission_address_parse(json_t *addr,
