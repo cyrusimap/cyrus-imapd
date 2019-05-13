@@ -103,22 +103,11 @@ static jmap_method_t jmap_emailsubmission_methods[] = {
     { NULL, NULL, NULL, 0}
 };
 
-HIDDEN void jmap_emailsubmission_init(jmap_settings_t *settings)
-{
-    jmap_method_t *mp;
-    for (mp = jmap_emailsubmission_methods; mp->name; mp++) {
-        hash_insert(mp->name, mp, &settings->methods);
-    }
-
-    json_object_set_new(settings->server_capabilities,
-            JMAP_URN_SUBMISSION, json_object());
-}
-
-HIDDEN void jmap_emailsubmission_capabilities(json_t *account_capabilities)
+static void jmap_emailsubmission_extensions(void)
 {
     /* determine extensions from submission server */
-    json_t *submit_ext = json_object();
     smtpclient_t *smp = NULL;
+    json_t *submit_ext = json_object();
 
     if (!smtpclient_open(&smp)) {
         const char *smtp_capa[] = { "FUTURERELEASE", "SIZE", "DSN",
@@ -148,9 +137,30 @@ HIDDEN void jmap_emailsubmission_capabilities(json_t *account_capabilities)
         buf_free(&buf);
     }
 
-    json_t *submit_capabilities = json_pack("{s:i s:o}",
+    return submit_ext;
+}
+
+static json_t *submit_extensions = NULL;
+
+HIDDEN void jmap_emailsubmission_init(jmap_settings_t *settings)
+{
+    jmap_method_t *mp;
+    for (mp = jmap_emailsubmission_methods; mp->name; mp++) {
+        hash_insert(mp->name, mp, &settings->methods);
+    }
+
+    json_object_set_new(settings->server_capabilities,
+            JMAP_URN_SUBMISSION, json_object());
+
+    submit_extensions = jmap_emailsubmission_extensions();
+}
+
+HIDDEN void jmap_emailsubmission_capabilities(json_t *account_capabilities)
+{
+    json_t *submit_capabilities = json_pack("{s:i s:O}",
                                             "maxDelayedSend", 0,
-                                            "submissionExtensions", submit_ext);
+                                            "submissionExtensions",
+                                            submit_extensions);
 
     json_object_set_new(account_capabilities, JMAP_URN_SUBMISSION, submit_capabilities);
 }
