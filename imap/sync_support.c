@@ -4943,6 +4943,8 @@ static int compare_one_record(struct mailbox *mailbox,
         goto diff;
     if (mp->savedate != rp->savedate)
         goto diff;
+    if (mp->createdmodseq != rp->createdmodseq)
+        goto diff;
     if (diff_annotations(mannots, rannots))
         goto diff;
     for (i = 0; i < MAX_USER_FLAGS/32; i++) {
