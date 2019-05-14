@@ -421,7 +421,7 @@ static void usage(void)
  */
 static int do_reconstruct_p(const mbentry_t *mbentry, void *rock)
 {
-    if ((mbentry->mbtype & MBTYPE_DELETED))
+    if ((mbentry->mbtype & MBTYPE_DELETED|MBTYPE_INTERMEDIATE))
         return 0;
 
     mboxlist_findone(&recon_namespace, mbentry->name, 1, 0, 0,
