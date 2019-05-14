@@ -1449,7 +1449,7 @@ void encode_annotations(struct dlist *parent,
             annots = dlist_newlist(parent, "ANNOTATIONS");
         aa = dlist_newkvlist(annots, NULL);
         dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "thrid");
-        dlist_setatom(aa, "USERID", NULL);
+        dlist_setatom(aa, "USERID", "");
         dlist_setnum64(aa, "MODSEQ", 0);
         dlist_sethex64(aa, "VALUE", record->cid);
     }
@@ -1459,7 +1459,7 @@ void encode_annotations(struct dlist *parent,
             annots = dlist_newlist(parent, "ANNOTATIONS");
         aa = dlist_newkvlist(annots, NULL);
         dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "savedate");
-        dlist_setatom(aa, "USERID", NULL);
+        dlist_setatom(aa, "USERID", "");
         dlist_setnum64(aa, "MODSEQ", 0);
         dlist_setnum32(aa, "VALUE", record->savedate);
     }
@@ -1469,7 +1469,7 @@ void encode_annotations(struct dlist *parent,
             annots = dlist_newlist(parent, "ANNOTATIONS");
         aa = dlist_newkvlist(annots, NULL);
         dlist_setatom(aa, "ENTRY", IMAP_ANNOT_NS "createdmodseq");
-        dlist_setatom(aa, "USERID", NULL);
+        dlist_setatom(aa, "USERID", "");
         dlist_setnum64(aa, "MODSEQ", 0);
         dlist_setnum64(aa, "VALUE", record->createdmodseq);
     }
