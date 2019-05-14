@@ -2532,6 +2532,7 @@ static int sync_mailbox_compare_update(struct mailbox *mailbox,
             copy.last_updated = mrecord.last_updated;
             copy.internaldate = mrecord.internaldate;
             copy.savedate = mrecord.savedate;
+            copy.createdmodseq = mrecord.createdmodseq;
             copy.system_flags = mrecord.system_flags;
             /* FLAG_INTERNAL_EXPUNGED is a syncable flag, but it's internal.
              * The `internal_flags` contain replica's internal_flags for
