@@ -1064,6 +1064,7 @@ static int sieve_fileinto(void *ac,
     deliver_data_t *mdata = (deliver_data_t *) mc;
     message_data_t *md = mdata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mdata->cur_rcpt);
+    struct imap4flags imap4flags = { fc->imapflags, sd->authstate };
     int ret = IMAP_MAILBOX_NONEXISTENT;
 
     const char *userid = mbname_userid(sd->mbname);
@@ -1093,7 +1094,7 @@ static int sieve_fileinto(void *ac,
     if (!intname) goto done;
 
     ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
-                          fc->imapflags, userid, sd->authstate, md->id,
+                          &imap4flags, userid, sd->authstate, md->id,
                           userid, mdata->notifyheader,
                           intname, md->date, quotaoverride, 0);
 
@@ -1117,7 +1118,7 @@ static int sieve_fileinto(void *ac,
             }
 
             ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
-                                  fc->imapflags, userid, sd->authstate, md->id,
+                                  &imap4flags, userid, sd->authstate, md->id,
                                   userid, mdata->notifyheader,
                                   intname, md->date, quotaoverride, 0);
         }
@@ -1147,6 +1148,7 @@ static int sieve_keep(void *ac,
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
     deliver_data_t *mydata = (deliver_data_t *) mc;
+    struct imap4flags imap4flags = { kc->imapflags, sd->authstate };
     int ret;
 
     if (sd->edited_header) {
@@ -1154,7 +1156,7 @@ static int sieve_keep(void *ac,
         if (!mydata) return SIEVE_FAIL;
     }
 
-    ret = deliver_local(mydata, kc->imapflags, sd->mbname);
+    ret = deliver_local(mydata, &imap4flags, sd->mbname);
 
     if (sd->edited_header) cleanup_special_delivery(mydata);
  
