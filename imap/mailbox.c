@@ -6867,6 +6867,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
         if (mailbox->i.minor_version >= 13) {
             buf_reset(&buf);
             mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "thrid", "", &buf);
+            if (!buf.len) mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "thrid", NULL, &buf);
             if (buf.len) {
                 syslog(LOG_NOTICE, "removing stale thrid for %u", record.uid);
                 printf("removing stale thrid for %u\n", record.uid);
@@ -6879,6 +6880,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
         if (mailbox->i.minor_version >= 15) {
             buf_reset(&buf);
             mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "savedate", "", &buf);
+            if (!buf.len) mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "savedate", NULL, &buf);
             if (buf.len) {
                 syslog(LOG_NOTICE, "removing stale savedate for %u", record.uid);
                 printf("removing stale savedate for %u\n", record.uid);
@@ -6891,6 +6893,7 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
         if (mailbox->i.minor_version >= 16) {
             buf_reset(&buf);
             mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "createdmodseq", "", &buf);
+            if (!buf.len) mailbox_annotation_lookup(mailbox, record.uid, IMAP_ANNOT_NS "createdmodseq", NULL, &buf);
             if (buf.len) {
                 syslog(LOG_NOTICE, "removing stale createdmodseq for %u", record.uid);
                 printf("removing stale createdmodseq for %u\n", record.uid);
