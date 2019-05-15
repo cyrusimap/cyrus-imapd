@@ -2913,6 +2913,7 @@ static uint32_t crc_annot(unsigned int uid, const char *entry,
     struct buf buf = BUF_INITIALIZER;
     uint32_t res = 0;
 
+    // ignore everything with a NULL userid, it's bogus!
     if (!userid) return 0;
 
     buf_printf(&buf, "%u %s %s ", uid, entry, userid);
@@ -2952,19 +2953,19 @@ static uint32_t crc_virtannot(struct mailbox *mailbox,
 
     if (record->cid && mailbox->i.minor_version >= 13) {
         buf_printf(&buf, "%llx", record->cid);
-        crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "thrid", NULL, &buf);
+        crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "thrid", "", &buf);
         buf_reset(&buf);
     }
 
     if (record->savedate && mailbox->i.minor_version >= 15) {
         buf_printf(&buf, "%lu", record->savedate);
-        crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "savedate", NULL, &buf);
+        crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "savedate", "", &buf);
         buf_reset(&buf);
     }
 
     if (record->createdmodseq && mailbox->i.minor_version >= 16) {
         buf_printf(&buf, "%llu", record->createdmodseq);
-        crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "createdmodseq", NULL, &buf);
+        crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "createdmodseq", "", &buf);
         buf_reset(&buf);
     }
 
@@ -3021,6 +3022,9 @@ static int calc_one_annot(const char *mboxname __attribute__((unused)),
                           void *rock)
 {
     struct annot_calc_rock *cr = (struct annot_calc_rock *)rock;
+
+    // annotations with a NULL userid are bogus, ignore them for all purposes
+    if (!userid) return 0;
 
     /* update sync_crc - NOTE, only per-message annotations count */
     if (uid && !mailbox_is_virtannot(cr->mailbox, entry))
