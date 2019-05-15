@@ -12741,7 +12741,7 @@ sub test_email_get_cid
 }
 
 sub test_searchsnippet_get_attachment
-    :min_version_3_1 :needs_search_xapian :SearchAttachmentExtractor
+    :min_version_3_1 :needs_component_jmap :needs_search_xapian :SearchAttachmentExtractor
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
