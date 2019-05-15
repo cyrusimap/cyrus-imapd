@@ -2154,6 +2154,7 @@ static int conversations_set_guid(struct conversations_state *state,
                               record->system_flags, record->internal_flags,
                               record->internaldate, body, base, add);
 
+#ifdef WITH_DAV
     if (!r && (mailbox->mbtype == MBTYPE_ADDRESSBOOK) &&
         !strcmp(body->type, "TEXT") && !strcmp(body->subtype, "VCARD")) {
 
@@ -2177,6 +2178,7 @@ static int conversations_set_guid(struct conversations_state *state,
             vparse_free_card(vcard);
         }
     }
+#endif /* WITH_DAV */
 
     message_free_body(body);
     free(body);
