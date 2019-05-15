@@ -228,8 +228,6 @@ BUILT_SOURCES += \
 	imap/http_carddav_js.h \
 	imap/http_err.c \
 	imap/http_err.h \
-	imap/jmap_err.c \
-	imap/jmap_err.h \
 	imap/tz_err.c \
 	imap/tz_err.h
 
@@ -1219,8 +1217,6 @@ nodist_imap_httpd_SOURCES = \
 	imap/http_carddav_js.h \
 	imap/http_err.c \
 	imap/http_err.h \
-	imap/jmap_err.c \
-	imap/jmap_err.h \
 	imap/tz_err.c \
 	imap/tz_err.h
 
@@ -1272,6 +1268,10 @@ imap_httpd_SOURCES = \
 imap_httpd_LDADD = $(LD_SERVER_ADD)
 
 if JMAP
+BUILT_SOURCES += \
+	imap/jmap_err.c \
+	imap/jmap_err.h
+
 imap_httpd_SOURCES += \
 	imap/http_jmap.c \
 	imap/http_jmap.h \
@@ -1284,6 +1284,10 @@ imap_httpd_SOURCES += \
 	imap/jmap_mail_submission.c \
 	imap/jmap_mailbox.c \
 	imap/jmap_vacation.c
+
+nodist_imap_httpd_SOURCES += \
+	imap/jmap_err.c \
+	imap/jmap_err.h
 
 imap_libcyrus_imap_la_SOURCES += \
 	imap/jmap_util.c \
