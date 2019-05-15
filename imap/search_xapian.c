@@ -966,6 +966,8 @@ struct xapiandb_lock {
     xapian_db_t *db;
 };
 
+#define XAPIANDB_LOCK_INITIALIZER { NULL, NULL, NULL, NULL, NULL }
+
 static void xapiandb_lock_release(struct xapiandb_lock *lock)
 {
     if (lock->db) xapian_db_close(lock->db);
@@ -1055,10 +1057,10 @@ static int xapiandb_lock_open(struct mailbox *mailbox, struct xapiandb_lock *loc
     /* only try to open directories with databases in them */
     lock->activedirs = activefile_resolve(mailbox->name, mailbox->part, active,
             /*dostat*/1, &lock->activetiers);
-    if (!lock->activedirs || !lock->activedirs->count) goto out;
 
-    /* if there are directories, open the databases */
-    r = xapian_db_open((const char **)lock->activedirs->data, &lock->db);
+    /* open the databases */
+    const char **paths = lock->activedirs ? (const char **) lock->activedirs->data : NULL;
+    r = xapian_db_open(paths, &lock->db);
     if (r) goto out;
 
 out:
@@ -3667,6 +3669,26 @@ out:
     return r;
 }
 
+static int list_lang_stats(const char *userid, ptrarray_t *lstats)
+{
+    struct mailbox *mailbox = NULL;
+    char *inboxname = mboxname_user_mbox(userid, NULL);
+    struct xapiandb_lock lock = XAPIANDB_LOCK_INITIALIZER;
+
+    int r = mailbox_open_irl(inboxname, &mailbox);
+    if (r) goto out;
+
+    r = xapiandb_lock_open(mailbox, &lock);
+    if (r) goto out;
+
+    r = xapian_list_lang_stats(lock.db, lstats);
+
+out:
+    xapiandb_lock_release(&lock);
+    mailbox_close(&mailbox);
+    free(inboxname);
+    return r;
+}
 
 const struct search_engine xapian_search_engine = {
     "Xapian",
@@ -3683,5 +3705,6 @@ const struct search_engine xapian_search_engine = {
     compact_dbs,
     delete_user,  /* XXX: fixme */
     check_config,
+    list_lang_stats
 };
 

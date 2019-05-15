@@ -3011,6 +3011,26 @@ static int jmap_email_query(jmap_req_t *req)
     if (jmap_is_using(req, JMAP_SEARCH_EXTENSION)) {
         json_object_set(res, "partIds", jemailpartids); // incref
     }
+    if (jmap_is_using(req, JMAP_DEBUG_EXTENSION)) {
+        /* List language stats */
+        const struct search_engine *engine = search_engine();
+        if (engine->list_lang_stats) {
+            ptrarray_t lstats = PTRARRAY_INITIALIZER;
+            int r = engine->list_lang_stats(req->accountid, &lstats);
+            if (!r) {
+                json_t *jstats = json_object();
+                struct search_lang_stats *lstat;
+                while ((lstat = ptrarray_pop(&lstats))) {
+                    json_t *jstat = json_pack("{s:f}", "weight", lstat->weight);
+                    json_object_set_new(jstats, lstat->iso_lang, jstat);
+                    free(lstat->iso_lang);
+                    free(lstat);
+                }
+                json_object_set_new(res, "languageStats", jstats);
+            }
+            ptrarray_fini(&lstats);
+        }
+    }
     jmap_ok(req, res);
 
 done:

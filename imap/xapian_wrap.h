@@ -46,6 +46,7 @@
 #include "message_guid.h"
 #include "util.h"
 #include "strarray.h"
+#include "ptrarray.h"
 
 typedef struct xapian_dbw xapian_dbw_t;
 typedef struct xapian_db xapian_db_t;
@@ -96,5 +97,8 @@ extern int xapian_filter(const char *dest, const char **sources,
 extern int xapian_db_has_doctype_index(const xapian_db_t *);
 extern int xapian_db_has_legacy_index(const xapian_db_t *);
 extern int xapian_dbw_has_doctype_index(const xapian_dbw_t *);
+
+/* Language indexing support */
+extern int xapian_list_lang_stats(xapian_db_t*, ptrarray_t*);
 
 #endif

@@ -116,6 +116,11 @@ struct search_text_receiver {
     int (*index_charset_flags)(int base_flags);
 };
 
+struct search_lang_stats {
+    char *iso_lang;
+    double weight; // of total indexed docs
+};
+
 #define SEARCH_FLAG_CAN_BATCH   (1<<0)
 struct search_engine {
     const char *name;
@@ -152,7 +157,11 @@ struct search_engine {
                    int flags);
     int (*deluser)(const char *userid);
     int (*check_config)(char **errstr);
+    int (*list_lang_stats)(const char *userid, ptrarray_t *counts);
 };
+
+/* Returns the configured search engine */
+extern const struct search_engine *search_engine();
 
 /*
  * Search for messages which could match the query built with the

@@ -14,6 +14,7 @@ extern "C" {
 #include <assert.h>
 #include "libconfig.h"
 #include "util.h"
+#include "search_engines.h"
 #include "search_part.h"
 #include "xmalloc.h"
 #include "xapian_wrap.h"
@@ -698,7 +699,7 @@ struct xapian_db
     std::vector<Xapian::Database> *shards; // all database shards
     Xapian::Stem *default_stemmer;
     const Xapian::Stopper* default_stopper;
-    std::set<std::string> *stem_languages;
+    std::map<std::string, double> *stem_language_weights;
     Xapian::QueryParser *parser;
     std::set<int> *db_versions;
 };
@@ -707,13 +708,12 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
 {
     xapian_db_t *db = (xapian_db_t *)xzmalloc(sizeof(xapian_db_t));
     const char *thispath = "(unknown)";
-    int r = 0;
-    std::map<std::string, double> stemmed_docs_count_by_language;
     double total_stemmed_docs_count = 0;
+    int r = 0;
 
     try {
         db->paths = new std::string();
-        while (*paths) {
+        while (paths && *paths) {
             thispath = *paths++;
             Xapian::Database database = Xapian::Database(thispath);
             int db_version = get_db_version(database);
@@ -741,13 +741,16 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
             if (!db->shards) db->shards = new std::vector<Xapian::Database>();
             db->shards->push_back(database);
 
-            // Determine document count per stemmed language. This currently
-            // is quite simplistic: we count each occurrence of a language,
-            // regardless of search part. An email with a German subject and
-            // a German text/ body will count twice. Since the DB stores the
-            // language count per search part, we can make this more clever,
-            // if necessary.
+            // Determine weight per stemmed language. This currently is quite
+            // simplistic: we count each occurrence of a language, regardless
+            // of search part. An email with a German subject and a German text
+            // body will count twice. Since we  store the language count per
+            // search part in the database, we can make weights more clever
+            // later, if necessary.
             if (db_version >= 4) {
+                if (!db->stem_language_weights)
+                    db->stem_language_weights = new std::map<std::string, double>();
+
                 std::string lang_count_prefix("lang.count.");
                 for (Xapian::TermIterator it = database.metadata_keys_begin(lang_count_prefix);
                         it != database.metadata_keys_end(lang_count_prefix); ++it) {
@@ -759,13 +762,11 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
                         iso_lang = iso_lang.substr(dotpos+1);
                     }
                     if (iso_lang.compare("en")) {
-                        // Consider this language for use in queries. We'll weed
-                        // out rarely used stemmer languages later.
-                        stemmed_docs_count_by_language[iso_lang] += count;
+                        // Add count. We'll normalize to [0,1] later.
+                        (*(db->stem_language_weights))[iso_lang] += count;
                     }
                 }
             } else total_stemmed_docs_count += database.get_doccount();
-
 
             db->paths->append(thispath);
             db->paths->append(" ");
@@ -782,15 +783,11 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
         db->parser->set_database(db->database ? *db->database : *db->legacydb);
         db->default_stemmer = new Xapian::Stem(new CyrusSearchStemmer());
         db->default_stopper = get_stopper("en");
-        db->stem_languages = new std::set<std::string>();
 
-        // Determine the languages to use for stemming query terms. We ignore
-        // languages, that only make up a small fraction of the overall corpus.
-        for (std::map<std::string, double>::iterator it = stemmed_docs_count_by_language.begin();
-                it != stemmed_docs_count_by_language.end(); ++it) {
-            if (it->second / total_stemmed_docs_count > 0.05) {
-                db->stem_languages->insert(it->first);
-            }
+        // Determine language weights
+        for (std::map<std::string, double>::iterator it = db->stem_language_weights->begin();
+                it != db->stem_language_weights->end(); ++it) {
+            it->second /= total_stemmed_docs_count;
         }
 
     }
@@ -818,7 +815,7 @@ void xapian_db_close(xapian_db_t *db)
         delete db->paths;
         delete db->db_versions;
         delete db->default_stemmer;
-        delete db->stem_languages;
+        delete db->stem_language_weights;
         delete db->shards;
         free(db);
     }
@@ -874,11 +871,14 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
         std::transform(lmatch.begin(), lmatch.end(), lmatch.begin(), ::tolower);
 
         // Stem query for each language detected in the index.
-        if (db->stem_languages) {
-            for (std::set<std::string>::iterator it = db->stem_languages->begin();
-                    it != db->stem_languages->end(); ++it) {
+        if (db->stem_language_weights) {
+            for (std::map<std::string, double>::iterator it = db->stem_language_weights->begin();
+                    it != db->stem_language_weights->end(); ++it) {
 
-                std::string iso_lang = *it;
+                // Ignore rarely used languages.
+                if (it->second < 0.05) continue;
+
+                const std::string& iso_lang = it->first;
                 try {
                     db->parser->set_stemmer(Xapian::Stem(iso_lang));
                     if (tg_stem_strategy == Xapian::TermGenerator::STEM_ALL) {
@@ -1103,6 +1103,31 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
 
     return cb(data, n, rock);
 }
+
+int xapian_list_lang_stats(xapian_db_t *db, ptrarray_t* lstats)
+{
+    struct search_lang_stats *stat = NULL;
+    double cummulated_weight = 0;
+
+    for (std::map<std::string, double>::iterator it = db->stem_language_weights->begin();
+            it != db->stem_language_weights->end(); ++it) {
+
+        stat = (struct search_lang_stats *) xzmalloc(sizeof(struct search_lang_stats));
+        stat->iso_lang = xstrdup(it->first.c_str());
+        stat->weight = it->second;
+        ptrarray_append(lstats, stat);
+        cummulated_weight += stat->weight;
+    }
+
+    stat = (struct search_lang_stats *) xzmalloc(sizeof(struct search_lang_stats));
+    stat->iso_lang = xstrdup("en");
+    stat->weight = 1.0 - cummulated_weight;
+    ptrarray_append(lstats, stat);
+
+    return 0;
+}
+
+/* ====================================================================== */
 
 struct xapian_snipgen
 {
