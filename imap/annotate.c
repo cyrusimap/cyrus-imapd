@@ -2737,6 +2737,14 @@ static int write_entry(struct mailbox *mailbox,
         if (!value->len || value->s == NULL) {
             flags |= ANNOTATE_FLAG_DELETED;
         }
+        else {
+            // this is only here to allow cleanup of invalid values in the past...
+            // the calling of this API with a NULL "userid" is bogus, because that's
+            // supposed to be reserved for the make_key of prefixes - but there has
+            // been API abuse in the past, so some of these are in the wild.  *sigh*.
+            // Don't allow new ones to be written
+            if (!userid) goto out;
+        }
         make_entry(&data, value, modseq, flags);
 
 #if DEBUG
