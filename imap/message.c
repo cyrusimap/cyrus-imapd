@@ -3682,6 +3682,7 @@ static void message_free(message_t *m)
 EXPORTED void message_set_from_data(const char *base, size_t len, message_t *m)
 {
     assert(m->refcount == 1);
+    message_yield(m, M_ALL);
     memset(m, 0, sizeof(message_t));
     buf_init_ro(&m->map, base, len);
     m->have = m->given = M_MAP;
@@ -3699,6 +3700,7 @@ EXPORTED message_t *message_new_from_data(const char *base, size_t len)
 EXPORTED void message_set_from_mailbox(struct mailbox *mailbox, unsigned int recno, message_t *m)
 {
     assert(m->refcount == 1);
+    message_yield(m, M_ALL);
     memset(m, 0, sizeof(message_t));
     m->mailbox = mailbox;
     m->record.recno = recno;
@@ -3720,6 +3722,7 @@ EXPORTED void message_set_from_record(struct mailbox *mailbox,
                                       message_t *m)
 {
     assert(m->refcount == 1);
+    message_yield(m, M_ALL);
     memset(m, 0, sizeof(message_t));
     assert(record->uid > 0);
     m->mailbox = mailbox;
@@ -3746,6 +3749,7 @@ EXPORTED void message_set_from_index(struct mailbox *mailbox,
                                      message_t *m)
 {
     assert(m->refcount == 1);
+    message_yield(m, M_ALL);
     memset(m, 0, sizeof(message_t));
     assert(record->uid > 0);
     m->mailbox = mailbox;
