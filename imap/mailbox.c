@@ -2913,7 +2913,9 @@ static uint32_t crc_annot(unsigned int uid, const char *entry,
     struct buf buf = BUF_INITIALIZER;
     uint32_t res = 0;
 
-    buf_printf(&buf, "%u %s %s ", uid, entry, userid ? userid : "");
+    if (!userid) return 0;
+
+    buf_printf(&buf, "%u %s %s ", uid, entry, userid);
     buf_append(&buf, value);
     res = crc32_buf(&buf);
     buf_free(&buf);
