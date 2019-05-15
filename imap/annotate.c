@@ -1026,6 +1026,9 @@ static int find_p(void *rock, const char *key, size_t keylen,
     if (r < 0)
         return 0;
 
+    if (!userid)
+        return 0;
+
     if (frock->uid &&
         frock->uid != ANNOTATE_ANY_UID &&
         frock->uid != uid)
