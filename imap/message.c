@@ -3676,9 +3676,6 @@ static void message_free(message_t *m)
 
     message_yield(m, M_ALL);
 
-    free(m->filename);
-    m->filename = NULL;
-
     free(m);
 }
 
@@ -3896,7 +3893,7 @@ static void message_yield(message_t *m, unsigned int yield)
 
     /* nothing to free for these - they're not constructed
      * or have no dynamically allocated memory */
-    yield &= ~(M_MAILBOX|M_RECORD|M_FILENAME|M_UID|M_CACHE);
+    yield &= ~(M_MAILBOX|M_RECORD|M_UID|M_CACHE);
 
     if ((yield & M_MAP)) {
         buf_free(&m->map);
@@ -3908,6 +3905,12 @@ static void message_yield(message_t *m, unsigned int yield)
         free(m->body);
         m->body = NULL;
         m->have &= ~M_BODY;
+    }
+
+    if ((yield & M_FILENAME)) {
+        free(m->filename);
+        m->filename = NULL;
+        m->have &= ~M_FILENAME;
     }
 
     /* Check we yielded everything we could */
