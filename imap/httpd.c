@@ -82,6 +82,7 @@
 #include "imapd.h"
 #include "proc.h"
 #include "version.h"
+#include "stristr.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "telemetry.h"
@@ -1188,7 +1189,7 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
 
         /* Check which response is required */
         if ((hdr = spool_getheader(txn->req_hdrs, "Upgrade")) &&
-            strstr(hdr[0], TLS_VERSION)) {
+            stristr(hdr[0], TLS_VERSION)) {
             /* Client (Murder proxy) supports RFC 2817 (TLS upgrade) */
 
             txn->flags.conn |= CONN_UPGRADE;
@@ -2054,16 +2055,16 @@ static int parse_connection(struct transaction_t *txn)
 
                     if (upgrade && upgrade[0]) {
                         if (!txn->conn->tls_ctx && tls_enabled() &&
-                            !strncmp(upgrade[0], TLS_VERSION,
-                                     strcspn(upgrade[0], " ,"))) {
+                            !strncasecmp(upgrade[0], TLS_VERSION,
+                                         strcspn(upgrade[0], " ,"))) {
                             /* Upgrade to TLS */
                             txn->flags.conn |= CONN_UPGRADE;
                             txn->flags.upgrade |= UPGRADE_TLS;
                         }
                         else if (http2_enabled() &&
-                                 !strncmp(upgrade[0],
-                                          NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
-                                          strcspn(upgrade[0], " ,"))) {
+                                 !strncasecmp(upgrade[0],
+                                              NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
+                                              strcspn(upgrade[0], " ,"))) {
                             /* Upgrade to HTTP/2 */
                             txn->flags.conn |= CONN_UPGRADE;
                             txn->flags.upgrade |= UPGRADE_HTTP2;
