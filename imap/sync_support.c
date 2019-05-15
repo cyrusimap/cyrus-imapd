@@ -5517,6 +5517,12 @@ int sync_update_mailbox(struct sync_folder *local,
 
     flags |= SYNC_FLAG_ISREPEAT;
 
+    if (r == IMAP_SYNC_CHECKSUM) {
+        syslog(LOG_NOTICE, "SYNC_NOTICE: CRC failure on sync %s, recalculating counts and trying again", local->name);
+        r = update_mailbox_once(local, remote, topart,
+                                reserve_list, sync_be, flags);
+    }
+
     if (r == IMAP_AGAIN) {
         local->ispartial = 0; /* don't batch the re-update, means sync to 2.4 will still work after fullsync */
         r = mailbox_full_update(local, reserve_list, sync_be, flags);
