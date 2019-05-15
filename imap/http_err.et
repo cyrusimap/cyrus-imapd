@@ -42,7 +42,7 @@
 
 error_table http
 
-# HTTP/1.1 Response Status Codes (from RFC 7231 unless otherwise noted)
+# HTTP Response Status Codes (from draft-ietf-httpbis-semantics unless otherwise noted)
 
 # Informational 1xx (Interim connection status or request progress)
 
@@ -52,12 +52,10 @@ ec HTTP_CONTINUE,
 ec HTTP_SWITCH_PROT,
    "101 Switching Protocols"
 
-# WebDAV (RFC 2518)
-ec HTTP_PROCESSING,
+ec HTTP_PROCESSING,             # RFC 2518 (WebDAV)
    "102 Processing"
 
-# Indicating Hints (RFC 8297)
-ec HTTP_EARLY_HINTS,
+ec HTTP_EARLY_HINTS,            # RFC 8297 (Indicating Hints)
    "103 Early Hints"
 
 
@@ -81,20 +79,16 @@ ec HTTP_NO_CONTENT,
 ec HTTP_RESET_CONTENT,
    "205 Reset Content"
 
-# Range Requests (RFC 7233)
 ec HTTP_PARTIAL,
    "206 Partial Content"
 
-# WebDAV (RFC 4918)
-ec HTTP_MULTI_STATUS,
+ec HTTP_MULTI_STATUS,           # RFC 4918 (WebDAV)
    "207 Multi-Status"
 
-# Binding Extensions to WebDAV (RFC 5842)
-ec HTTP_DUPLICATE,
+ec HTTP_DUPLICATE,              # RFC 5842 (Binding Extensions to WebDAV)
    "208 Already Reported"
 
-# Delta Encoding in HTTP (RFC 3229)
-ec HTTP_IM_USED,
+ec HTTP_IM_USED,                # RFC 3229 (Delta Encoding in HTTP)
    "226 IM Used"
 
 
@@ -112,17 +106,18 @@ ec HTTP_FOUND,
 ec HTTP_SEE_OTHER,
    "303 See Other"
 
-# Conditional Requests (RFC 7232)
 ec HTTP_NOT_MODIFIED,
    "304 Not Modified"
 
 ec HTTP_USE_PROXY,
    "305 Use Proxy"
 
+ec HTTP_306,                    # Formerly "Switch Proxy" (draft-cohen-http-...)
+   "306 (Unused)"
+
 ec HTTP_TEMP_REDIRECT,
    "307 Temporary Redirect"
 
-# Permanent Redirect (RFC 7538)
 ec HTTP_PERM_REDIRECT,
    "308 Permanent Redirect"
 
@@ -132,7 +127,6 @@ ec HTTP_PERM_REDIRECT,
 ec HTTP_BAD_REQUEST,
    "400 Bad Request"
 
-# Authentication (RFC 7235)
 ec HTTP_UNAUTHORIZED,
    "401 Unauthorized"
 
@@ -151,7 +145,6 @@ ec HTTP_NOT_ALLOWED,
 ec HTTP_NOT_ACCEPTABLE,
    "406 Not Acceptable"
 
-# Authentication (RFC 7235)
 ec HTTP_PROXY_AUTH,
    "407 Proxy Authentication Required"
 
@@ -167,7 +160,6 @@ ec HTTP_GONE,
 ec HTTP_LENGTH_REQUIRED,
    "411 Length Required"
 
-# Conditional Requests (RFC 7232)
 ec HTTP_PRECOND_FAILED,
    "412 Precondition Failed"
 
@@ -180,54 +172,46 @@ ec HTTP_URI_TOO_LONG,
 ec HTTP_BAD_MEDIATYPE,
    "415 Unsupported Media Type"
 
-# Client-Initiated Content Encoding (RFC 7694)
-ec HTTP_BAD_CE,
+ec HTTP_BAD_CE,                 # RFC 7694 (Client-Initiated Content Encoding)
    "415 Unsupported Media Type"
 
-# Range Requests (RFC 7233)
 ec HTTP_BAD_RANGE,
    "416 Range Not Satisfiable"
 
 ec HTTP_EXPECT_FAILED,
    "417 Expectation Failed"
 
-# HTTP/2 (RFC 7540)
-ec HTTP_MISDIRECTED,
+ec HTTP_418,                    # Formerly "I'm a teapot" (RFC 2324)
+   "418 (Unused)"
+
+ec HTTP_MISDIRECTED,            # RFC 7540 (HTTP/2)
    "421 Misdirected Request"
 
-# WebDAV (RFC 4918)
 ec HTTP_UNPROCESSABLE,
    "422 Unprocessable Entity"
 
-# WebDAV (RFC 4918)
-ec HTTP_LOCKED,
+ec HTTP_LOCKED,                 # RFC 4918 (WebDAV)
    "423 Locked"
 
-# WebDAV (RFC 4918)
-ec HTTP_FAILED_DEP,
+ec HTTP_FAILED_DEP,             # RFC 4918 (WebDAV)
    "424 Failed Dependency"
 
-# Using Early Data (RFC 8470)
-ec HTTP_TOO_EARLY,
+ec HTTP_TOO_EARLY,              # RFC 8470 (Using Early Data)
    "425 Too Early"
 
 ec HTTP_UPGRADE,
    "426 Upgrade Required"
 
-# Additional HTTP Status Codes (RFC 6585)
-ec HTTP_PRECOND_REQUIRED,
+ec HTTP_PRECOND_REQUIRED,       # RFC 6585 (Additional HTTP Status Codes)
    "428 Precondition Required"
 
-# Additional HTTP Status Codes (RFC 6585)
-ec HTTP_TOO_MANY_REQUESTS,
+ec HTTP_TOO_MANY_REQUESTS,      # RFC 6585 (Additional HTTP Status Codes)
    "429 Too Many Requests"
 
-# Additional HTTP Status Codes (RFC 6585)
-ec HTTP_HEADERS_TOO_LARGE,
+ec HTTP_HEADERS_TOO_LARGE,      # RFC 6585 (Additional HTTP Status Codes)
    "431 Request Header Fields Too Large"
 
-# Legally Restricted (RFC 7725)
-ec HTTP_CENSORED,
+ec HTTP_CENSORED,               # RFC 7725 (Report Legal Obstacles)
    "451 Unavailable For Legal Reasons"
 
 
@@ -245,9 +229,8 @@ ec HTTP_BAD_GATEWAY,
 ec HTTP_UNAVAILABLE,
    "503 Service Unavailable"
 
-# Used to differentiate between shutdown file vs other issues
-ec HTTP_SHUTDOWN,
-   "503 Service Unavailable"
+ec HTTP_SHUTDOWN,               # Used to differentiate between
+   "503 Service Unavailable"    # shutdown file vs other issues
 
 ec HTTP_GATEWAY_TIMEOUT,
    "504 Gateway Timeout"
@@ -255,16 +238,16 @@ ec HTTP_GATEWAY_TIMEOUT,
 ec HTTP_BAD_VERSION,
    "505 HTTP Version Not Supported"
 
-# WebDAV (RFC 4918)
-ec HTTP_NO_STORAGE,
+ec HTTP_VARIANT_NEGOTIATES,     # RFC 2295 (Transparent Content Negotiation)
+   "506 Variant Also Negotiates"
+
+ec HTTP_NO_STORAGE,             # RFC 4918 (WebDAV)
    "507 Insufficient Storage"
 
-# Binding Extensions to WebDAV (RFC 5842)
-ec HTTP_LOOP,
+ec HTTP_LOOP,                   # RFC 5842 (Binding Extensions to WebDAV)
    "508 Loop Detected"
 
-# Additional HTTP Status Codes (RFC 6585)
-ec HTTP_NETWORK_AUTH,
+ec HTTP_NETWORK_AUTH,           # RFC 6585 (Additional HTTP Status Codes)
    "511 Network Authentication Required"
 
 
