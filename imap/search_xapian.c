@@ -3023,8 +3023,7 @@ static int reindex_mb(void *rock,
 
     /* open the DB */
     tr = (xapian_update_receiver_t *)begin_update(verbose);
-    tr->mode = (filter->flags & SEARCH_COMPACT_XAPINDEXED) ? XAPIAN_DBW_XAPINDEXED
-                                                           : XAPIAN_DBW_CONVINDEXED;
+    tr->mode = XAPIAN_DBW_XAPINDEXED; // always use XAPINDEXED for reindex, so we reindex the same emails
     r = xapian_dbw_open((const char **)filter->destpaths->data, &tr->dbw, tr->mode);
     if (r) goto done;
     tr->super.mailbox = mailbox;
