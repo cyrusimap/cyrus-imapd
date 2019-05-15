@@ -4,12 +4,11 @@
 #include <string.h>
 #include <sys/types.h>
 #include <syslog.h>
-#ifdef HAVE_ICU
-#include <unicode/ucnv.h>
-#endif
 
 #include <fstream>
 #include <sstream>
+#include <algorithm>
+#include <memory>
 
 extern "C" {
 #include <assert.h>
@@ -26,7 +25,16 @@ extern "C" {
 #include "imap/imap_err.h"
 };
 
+#ifdef HAVE_ICU
+#include <unicode/unistr.h>
+#include <unicode/locid.h>
+#endif
+
 #include <xapian.h>
+
+#ifdef HAVE_CLD2
+#include <cld2/compact_lang_det.h>
+#endif
 
 // from global.h
 extern int charset_flags;
@@ -35,48 +43,63 @@ extern int charset_flags;
 
 /* ====================================================================== */
 
-static const char *make_cyrusid(struct buf *buf, const struct message_guid *guid, char doctype)
+static void make_cyrusid(struct buf *dst, const struct message_guid *guid, char doctype)
 {
-    buf_reset(buf);
-    buf_putc(buf, '*');
-    buf_putc(buf, doctype);
-    buf_putc(buf, '*');
-    buf_appendcstr(buf, message_guid_encode(guid));
-    return buf_cstring(buf);
+    buf_reset(dst);
+    buf_putc(dst, '*');
+    buf_putc(dst, doctype);
+    buf_putc(dst, '*');
+    buf_appendcstr(dst, message_guid_encode(guid));
 }
 
 /* ====================================================================== */
 
-static Xapian::Stopper *get_stopper()
+// Process-scoped, thread-unsafe cache of stoppers by ISO 639-1 code.
+static std::map<std::string, std::unique_ptr<Xapian::Stopper>> stoppers;
+
+static const Xapian::Stopper* get_stopper(const std::string& iso)
 {
-    Xapian::Stopper *stopper = NULL;
+#ifndef HAVE_ICU
+    syslog(LOG_ERR, "xapian: can't determine stopper language without libicu");
+    return NULL;
+#endif
 
-    const char *swpath = config_getstring(IMAPOPT_SEARCH_STOPWORD_PATH);
-    if (swpath) {
-        // Set path to stopword file
-        struct buf buf = BUF_INITIALIZER;
-        buf_setcstr(&buf, swpath);
-        // XXX doesn't play nice with WIN32 paths
-        buf_appendcstr(&buf, "/english.txt");
-
-        // Open the stopword file
-        errno = 0;
-        std::ifstream inFile (buf_cstring(&buf));
-        if (inFile.fail()) {
-            syslog(LOG_ERR, "Xapian: could not open stopword file %s: %s",
-                   buf_cstring(&buf), errno ? strerror(errno) : "unknown error");
-            exit(1);
-        }
-
-        // Create the Xapian stopper
-        stopper = new Xapian::SimpleStopper(
-                std::istream_iterator<std::string>(inFile),
-                std::istream_iterator<std::string>());
-
-        // Clean up
-        buf_free(&buf);
+    // Lookup cached entry.
+    std::map<std::string, std::unique_ptr<Xapian::Stopper>>::iterator it;
+    it = stoppers.find(iso);
+    if (it != stoppers.end()) {
+        return it->second.get();
     }
-    return stopper;
+
+    // Lookup language name by ISO code.
+    std::string lang_name;
+    icu::Locale loc(iso.c_str());
+    if (loc.isBogus()) return NULL;
+    icu::UnicodeString ulang_name;
+    loc.getDisplayLanguage(icu::Locale("en"), ulang_name);
+    ulang_name.toLower();
+    ulang_name.toUTF8String(lang_name);
+
+    // Read stopper file and add to cache.
+    const char *swpath = config_getstring(IMAPOPT_SEARCH_STOPWORD_PATH);
+    if (!swpath) return NULL;
+
+    // Open stopword file
+    // XXX doesn't play nice with WIN32 paths
+    std::string fname(std::string(swpath) + "/" + lang_name + ".txt");
+    errno = 0;
+    std::ifstream inFile (fname);
+    if (inFile.fail()) {
+        syslog(LOG_INFO, "Xapian: could not open stopword file %s: %s",
+                fname.c_str(), errno ? strerror(errno) : "unknown error");
+        return NULL;
+    }
+
+    // Create and store the Xapian stopper
+    stoppers[iso].reset(new Xapian::SimpleStopper(
+                std::istream_iterator<std::string>(inFile),
+                std::istream_iterator<std::string>()));
+    return stoppers[iso].get();
 }
 
 /* ====================================================================== */
@@ -115,7 +138,7 @@ class CyrusSearchStemmer : public Xapian::StemImplementation
     }
 
     virtual std::string get_description () const {
-        return "Cyrus search form";
+        return "Cyrus";
     }
 };
 
@@ -261,15 +284,23 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
     }
 }
 
+/*
+ * A brief history of Xapian db versions:
+ * Version 0: uses STEM_ALL for all terms, term prefixes don't start with 'X'
+ * Version 1: term prefixes start with 'X'
+ * Version 2: uses STEM_SOME for some terms
+ * Version 3: removes all use of STEM_ALL
+ * Version 4: introduces doctype indexing and language detection
+ */
 #define XAPIAN_DB_CURRENT_VERSION 4
 #define XAPIAN_DB_MIN_SUPPORTED_VERSION 3
 
-static int get_db_version(Xapian::Database *database)
+static int get_db_version(Xapian::Database& database)
 {
-    std::string val = database->get_metadata("cyrus.db_version");
+    std::string val = database.get_metadata("cyrus.db_version");
     if (val.empty()) {
         // Up to version 3 this was named stem version.
-        val = database->get_metadata("cyrus.stem-version");
+        val = database.get_metadata("cyrus.stem-version");
         if (val.empty()) {
             // Absence of the key indicates version 0
             return 0;
@@ -302,7 +333,7 @@ void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *torein
         const char *thispath = strarray_nth(sources, i);
         try {
             Xapian::Database database = Xapian::Database(thispath);
-            int db_version = get_db_version(&database);
+            int db_version = get_db_version(database);
             if (db_version < XAPIAN_DB_MIN_SUPPORTED_VERSION ||
                 (always_upgrade && (db_version != XAPIAN_DB_CURRENT_VERSION))) {
                 strarray_add(toreindex, thispath);
@@ -312,6 +343,41 @@ void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *torein
             strarray_add(toreindex, thispath);
         }
     }
+}
+
+/* ====================================================================== */
+
+static std::string make_lang_prefix(std::string iso_lang, const char *prefix)
+{
+    return std::string("XI") + iso_lang + ":" + prefix;
+}
+
+static std::string make_lang_cyrusid_key(int num_part, const char *cyrusid)
+{
+    const char *partname = search_part_as_string(num_part);
+    std::string key("lang.doc");
+    if (partname) {
+        std::string lstr(partname);
+        std::transform(lstr.begin(), lstr.end(), lstr.begin(), ::tolower);
+        key += "." + lstr;
+    }
+    key += "." + std::string(cyrusid);
+    return key;
+}
+
+static std::string make_lang_count_key(int num_part, const char *iso_lang)
+{
+    const char *partname = search_part_as_string(num_part);
+    std::string key("lang.count");
+    if (partname) {
+        std::string lstr(partname);
+        std::transform(lstr.begin(), lstr.end(), lstr.begin(), ::tolower);
+        key += "." + lstr;
+    }
+    if (iso_lang) {
+        key += "." + std::string(iso_lang);
+    }
+    return key;
 }
 
 /* ====================================================================== */
@@ -326,6 +392,8 @@ struct xapian_dbw
     ptrarray_t otherdbs;
     int db_version;
     char *cyrusid;
+    Xapian::Stem *default_stemmer;
+    const Xapian::Stopper* default_stopper;
 };
 
 int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
@@ -341,9 +409,9 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
         thispath = path;
         try {
             dbw->database = new Xapian::WritableDatabase(path, Xapian::DB_OPEN);
-            dbw->db_version = get_db_version(dbw->database);
+            dbw->db_version = get_db_version(*dbw->database);
             if (dbw->db_version < 0) {
-                syslog(LOG_ERR, "xapian_wrapper: Invalid database version %d in %s",
+                syslog(LOG_ERR, "xapian_dbw_open: Invalid database version %d in %s",
                         dbw->db_version, path);
                 r = IMAP_IOERROR;
             }
@@ -356,9 +424,6 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
         }
 
         dbw->term_generator = new Xapian::TermGenerator();
-        dbw->stemmer = new Xapian::Stem(new CyrusSearchStemmer());
-        dbw->stopper = get_stopper();
-        dbw->term_generator->set_stemmer(*dbw->stemmer);
         /* Always enable CJK word tokenization */
 #ifdef USE_XAPIAN_CJK_WORDS
         dbw->term_generator->set_flags(Xapian::TermGenerator::FLAG_CJK_WORDS,
@@ -368,6 +433,8 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
                 ~Xapian::TermGenerator::FLAG_CJK_NGRAM);
 #endif
         dbw->term_generator->set_stopper(dbw->stopper);
+        dbw->default_stemmer = new Xapian::Stem(new CyrusSearchStemmer());
+        dbw->default_stopper = get_stopper("en");
     }
     catch (const Xapian::DatabaseLockError &err) {
         /* somebody else is already indexing this user.  They may be doing a different
@@ -414,6 +481,7 @@ void xapian_dbw_close(xapian_dbw_t *dbw)
         delete dbw->stemmer;
         delete dbw->stopper;
         delete dbw->document;
+        delete dbw->default_stemmer;
         for (int i = 0; i < dbw->otherdbs.count; i++) {
             Xapian::Database *database = (Xapian::Database *)ptrarray_nth(&dbw->otherdbs, i);
             delete database;
@@ -428,9 +496,9 @@ void xapian_dbw_close(xapian_dbw_t *dbw)
     }
 }
 
-int xapian_dbw_is_legacy(const xapian_dbw_t *dbw)
+int xapian_dbw_has_doctype_index(const xapian_dbw_t *dbw)
 {
-    return dbw->db_version < XAPIAN_DB_CURRENT_VERSION;
+    return dbw->db_version > 3;
 }
 
 int xapian_dbw_begin_txn(xapian_dbw_t *dbw)
@@ -516,7 +584,60 @@ int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
     try {
         Xapian::TermGenerator::stem_strategy stem_strategy = get_stem_strategy(dbw->db_version, num_part);
         dbw->term_generator->set_stemming_strategy(stem_strategy);
-        dbw->term_generator->index_text(Xapian::Utf8Iterator(part->s, part->len), 1, prefix);
+
+        // Index text.
+        if (stem_strategy != Xapian::TermGenerator::STEM_NONE) {
+            if (dbw->db_version >= 4) {
+                std::string iso_lang("en"); // Default stemmer language ISO code.
+#ifdef HAVE_CLD2
+                // Determine text language.
+                bool reliable = false;
+                CLD2::Language lang = CLD2::DetectLanguage(part->s, part->len, 1, &reliable);
+                if (reliable && lang != CLD2::UNKNOWN_LANGUAGE) {
+                    // English stemmer is the default, no need to stem twice.
+                    if (strcasecmp(CLD2::LanguageCode(lang), "en")) {
+                        try {
+                            iso_lang = std::string(CLD2::LanguageCode(lang));
+                            // Index with detected language stemmer.
+                            dbw->term_generator->set_stemmer(Xapian::Stem(iso_lang));
+                            dbw->term_generator->set_stopper(get_stopper(iso_lang));
+                            dbw->term_generator->index_text(Xapian::Utf8Iterator(part->s, part->len), 1,
+                                    make_lang_prefix(iso_lang, prefix));
+                            // Keep track of stemmer language by document id and part.
+                            std::string key = make_lang_cyrusid_key(num_part, dbw->cyrusid);
+                            dbw->database->set_metadata(key, iso_lang);
+                        } catch (const Xapian::InvalidArgumentError &err) {
+                            syslog(LOG_INFO, "Xapian: no stemmer for language %s",
+                                    iso_lang.c_str());
+                        }
+                    }
+                }
+#endif
+                // Keep track of stemmer language counts by search part.
+                // We only count stemmer language once per document and part,
+                // either the detected language or the default (English).
+                // We still index them using both stemmers.
+                std::string key = make_lang_count_key(num_part, iso_lang.c_str());
+                std::string val = dbw->database->get_metadata(key);
+                unsigned count = 0;
+                if (val.size() > 0) {
+                    count = std::stoi(val);
+                }
+                count++;
+                dbw->database->set_metadata(key, std::to_string(count));
+            }
+            // Index with default stemmer.
+            dbw->term_generator->set_stemmer(*dbw->default_stemmer);
+            dbw->term_generator->set_stopper(dbw->default_stopper);
+            dbw->term_generator->index_text(Xapian::Utf8Iterator(part->s, part->len), 1, prefix);
+        } else {
+            // Index with no stemming.
+            dbw->term_generator->set_stemmer(Xapian::Stem());
+            dbw->term_generator->set_stopper(NULL);
+            dbw->term_generator->index_text(Xapian::Utf8Iterator(part->s, part->len), 1, prefix);
+        }
+
+        // Finalize index.
         dbw->term_generator->increase_termpos();
     }
     catch (const Xapian::Error &err) {
@@ -549,7 +670,8 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw)
 int xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid, char doctype)
 {
     struct buf buf = BUF_INITIALIZER;
-    std::string key = "cyrusid." + std::string(make_cyrusid(&buf, guid, doctype));
+    make_cyrusid(&buf, guid, doctype);
+    std::string key = "cyrusid." + std::string(buf_cstring(&buf));
     buf_free(&buf);
 
     /* indexed in the current DB? */
@@ -571,11 +693,13 @@ int xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid, ch
 struct xapian_db
 {
     std::string *paths;
-    Xapian::Database *database; // version > 3: supports indexing by doctype
-    Xapian::Database *legacydb; // implicitly indexes by doctype 'G'
-    Xapian::Stem *stemmer;
+    Xapian::Database *database; // version > 3 databases
+    Xapian::Database *legacydb; // version <= 3 dbs. Only G doctypes.
+    std::vector<Xapian::Database> *shards; // all database shards
+    Xapian::Stem *default_stemmer;
+    const Xapian::Stopper* default_stopper;
+    std::set<std::string> *stem_languages;
     Xapian::QueryParser *parser;
-    Xapian::Stopper *stopper;
     std::set<int> *db_versions;
 };
 
@@ -584,15 +708,17 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
     xapian_db_t *db = (xapian_db_t *)xzmalloc(sizeof(xapian_db_t));
     const char *thispath = "(unknown)";
     int r = 0;
+    std::map<std::string, double> stemmed_docs_count_by_language;
+    double total_stemmed_docs_count = 0;
 
     try {
         db->paths = new std::string();
         while (*paths) {
             thispath = *paths++;
             Xapian::Database database = Xapian::Database(thispath);
-            int db_version = get_db_version(&database);
+            int db_version = get_db_version(database);
             if (db_version < 0) {
-                syslog(LOG_ERR, "xapian_wrapper: Invalid db version %d in %s",
+                syslog(LOG_ERR, "xapian_db_open: Invalid db version %d in %s",
                         db_version, thispath);
                 r = IMAP_INTERNAL;
                 goto done;
@@ -600,9 +726,8 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
             if (!db->db_versions)
                 db->db_versions = new std::set<int>();
             db->db_versions->insert(db_version);
-            /* XXX This code smell is on purpose. We should throw away
-             * legacy dbs before adding new features which require us
-             * to juggle any more legacy db versions. */
+
+            // Databases before version 4 do not support doctypes.
             if (db_version >= 4) {
                 if (!db->database) db->database = new Xapian::Database();
                 db->database->add_database(database);
@@ -611,6 +736,37 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
                 if (!db->legacydb) db->legacydb = new Xapian::Database();
                 db->legacydb->add_database(database);
             }
+
+            // Xapian database has no API to access shards.
+            if (!db->shards) db->shards = new std::vector<Xapian::Database>();
+            db->shards->push_back(database);
+
+            // Determine document count per stemmed language. This currently
+            // is quite simplistic: we count each occurrence of a language,
+            // regardless of search part. An email with a German subject and
+            // a German text/ body will count twice. Since the DB stores the
+            // language count per search part, we can make this more clever,
+            // if necessary.
+            if (db_version >= 4) {
+                std::string lang_count_prefix("lang.count.");
+                for (Xapian::TermIterator it = database.metadata_keys_begin(lang_count_prefix);
+                        it != database.metadata_keys_end(lang_count_prefix); ++it) {
+                    double count = (double) std::stol(database.get_metadata(*it));
+                    total_stemmed_docs_count += count;
+                    std::string iso_lang = (*it).substr(lang_count_prefix.length());
+                    size_t dotpos = iso_lang.find('.');
+                    if (dotpos != std::string::npos) {
+                        iso_lang = iso_lang.substr(dotpos+1);
+                    }
+                    if (iso_lang.compare("en")) {
+                        // Consider this language for use in queries. We'll weed
+                        // out rarely used stemmer languages later.
+                        stemmed_docs_count_by_language[iso_lang] += count;
+                    }
+                }
+            } else total_stemmed_docs_count += database.get_doccount();
+
+
             db->paths->append(thispath);
             db->paths->append(" ");
             thispath = "(unknown)";
@@ -621,13 +777,22 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
             goto done;
         }
 
-        db->stemmer = new Xapian::Stem(new CyrusSearchStemmer());
         db->parser = new Xapian::QueryParser;
-        db->stopper = get_stopper();
-        db->parser->set_stemmer(*db->stemmer);
         db->parser->set_default_op(Xapian::Query::OP_AND);
         db->parser->set_database(db->database ? *db->database : *db->legacydb);
-        db->parser->set_stopper(db->stopper);
+        db->default_stemmer = new Xapian::Stem(new CyrusSearchStemmer());
+        db->default_stopper = get_stopper("en");
+        db->stem_languages = new std::set<std::string>();
+
+        // Determine the languages to use for stemming query terms. We ignore
+        // languages, that only make up a small fraction of the overall corpus.
+        for (std::map<std::string, double>::iterator it = stemmed_docs_count_by_language.begin();
+                it != stemmed_docs_count_by_language.end(); ++it) {
+            if (it->second / total_stemmed_docs_count > 0.05) {
+                db->stem_languages->insert(it->first);
+            }
+        }
+
     }
     catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception db_open: %s: %s",
@@ -649,11 +814,12 @@ void xapian_db_close(xapian_db_t *db)
     try {
         delete db->database;
         delete db->legacydb;
-        delete db->stemmer;
         delete db->parser;
-        delete db->stopper;
         delete db->paths;
         delete db->db_versions;
+        delete db->default_stemmer;
+        delete db->stem_languages;
+        delete db->shards;
         free(db);
     }
     catch (const Xapian::Error &err) {
@@ -663,145 +829,144 @@ void xapian_db_close(xapian_db_t *db)
     }
 }
 
-int xapian_db_supports_current_version(const xapian_db_t *db)
+int xapian_db_has_doctype_index(const xapian_db_t *db)
 {
-    return db->database != 0;
+    return db->database != NULL;
 }
 
-int xapian_db_supports_legacy_version(const xapian_db_t *db)
+int xapian_db_has_legacy_index(const xapian_db_t *db)
 {
-    return db->legacydb != 0;
+    return db->legacydb != NULL;
 }
 
-static xapian_query_t *
-xapian_query_new_match_internal(const xapian_db_t *db, int db_version,
-                                int num_part, const char *str)
+static Xapian::Query *make_compound(std::vector<Xapian::Query*> v, enum Xapian::Query::op op)
 {
-    try {
-        // We don't use FLAG_BOOLEAN because Cyrus is doing boolean for us
-        // TODO: FLAG_AUTO_SYNONYMS
-        int has_highbit = 0;
-        const unsigned char *p;
-        const char *prefix = get_term_prefix(db_version, num_part);
-
-        if (!prefix) {
-            // Imitating the legacy prefix handling code, this is not an error
-            return NULL;
-        }
-
-        for (p = (const unsigned char *)str; *p; p++)
-            if (*p > 205) has_highbit = 1;
-
-        if (has_highbit) {
-            // anything from greek (codepage from 0380) isn't english parsable
-            // so don't try stemming it!
-            db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
-            std::string sstr = std::string("") + str;
-            Xapian::Query query = db->parser->parse_query(
-                                    sstr,
-#ifdef USE_XAPIAN_CJK_WORDS
-                                    Xapian::QueryParser::FLAG_CJK_WORDS,
-#else
-                                    Xapian::QueryParser::FLAG_CJK_NGRAM,
-#endif
-                                    std::string(prefix));
-            return (xapian_query_t *)new Xapian::Query(query);
-        }
-
-        // Determine the stem strategy for this prefix and message part
-        Xapian::TermGenerator::stem_strategy tg_stem_strategy =
-            get_stem_strategy(db_version, num_part);
-        Xapian::QueryParser::stem_strategy stem_strategy;
-        switch (tg_stem_strategy) {
-            case Xapian::TermGenerator::STEM_NONE:
-                stem_strategy = Xapian::QueryParser::STEM_NONE;
-                break;
-            case Xapian::TermGenerator::STEM_ALL:
-                stem_strategy = Xapian::QueryParser::STEM_ALL;
-                break;
-            default:
-                stem_strategy = Xapian::QueryParser::STEM_SOME;
-        }
-        db->parser->set_stemming_strategy(stem_strategy);
-
-        // Prepare the search term
-        std::string search;
-        switch (stem_strategy) {
-            case Xapian::QueryParser::STEM_ALL:
-                // quote the query for phrase management. This is for
-                // backward compatibility, but shouldn't hurt anyways.
-                search = std::string("\"") + str + "\"";
-                break;
-            case Xapian::QueryParser::STEM_SOME:
-                // Cyrus canonical search form is all upper case, but STEM_SOME
-                // doesn't work for terms starting with upper case. Best guess
-                // is to lower case and risk stemming proper nouns
-                search = Xapian::Unicode::tolower(str);
-                break;
-            default:
-                search = std::string(str);
-        }
-
-        // Finally, run the query
-        Xapian::Query query = db->parser->parse_query(
-                search,
-                (Xapian::QueryParser::FLAG_PHRASE |
-                 Xapian::QueryParser::FLAG_LOVEHATE |
-                 Xapian::QueryParser::FLAG_WILDCARD),
-                std::string(prefix));
-        return (xapian_query_t *)new Xapian::Query(query);
-    }
-    catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception match_internal: %s: %s",
-                    err.get_context().c_str(), err.get_description().c_str());
-        return 0;
-    }
-}
-
-xapian_query_t *
-xapian_query_new_match(const xapian_db_t *db, int num_part,const char *str)
-{
-    std::set<int> *versions = db->db_versions;
-
-    // at least one database must be open
-    assert(versions);
-    assert(versions->size());
-
-    if (versions->size() == 1) {
-        // All database are using the same stemming scheme. Great!
-        int version = *(versions->begin());
-
-        if (!get_term_prefix(version, num_part))
-            return NULL;
-
-        return (xapian_query_t *)
-            xapian_query_new_match_internal(db, version, num_part, str);
-    }
-
-    // At least two prefix schemes are used in the open databases. Since db
-    // fans out to n databases, let's OR queries for each stem version
-    std::vector<Xapian::Query*> v;
-    // No 'auto' before C++0x... :(
-    for (std::set<int>::iterator it = versions->begin(); it != versions->end(); ++it) {
-        if (get_term_prefix(*it, num_part)) {
-            v.push_back((Xapian::Query *)
-                    xapian_query_new_match_internal(db, *it, num_part, str));
-        }
-    }
-    if (v.empty()) {
-        return NULL;
-    }
-
     Xapian::Query *compound =
-        new Xapian::Query(Xapian::Query::OP_OR, v.begin(), v.end());
+        new Xapian::Query(op, v.begin(), v.end());
 
     // 'compound' owns a refcount on each child.  We need to
     // drop the one we got when we allocated the children
-    for (std::vector<Xapian::Query*>::iterator it = v.begin(); it != v.end(); ++it) {
+    for (std::vector<Xapian::Query*>::iterator it = v.begin();
+            it != v.end(); ++it) {
         delete *(it);
     }
 
-    return (xapian_query_t *)compound;
+    return compound;
+}
+
+static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
+                                            const char *match,
+                                            const char *prefix,
+                                            Xapian::TermGenerator::stem_strategy tg_stem_strategy)
+{
+    unsigned flags = Xapian::QueryParser::FLAG_PHRASE |
+                     Xapian::QueryParser::FLAG_LOVEHATE |
+                     Xapian::QueryParser::FLAG_WILDCARD;
+
+	if (tg_stem_strategy != Xapian::TermGenerator::STEM_NONE) {
+        std::vector<Xapian::Query*> queries;
+
+        // STEM_SOME doesn't work for terms starting with upper case,
+        // which will break for languages such as German. We also can't use
+        // STEM_ALL_Z, as this would force-stem phrase queries. Best guess
+        // is to lower case the query and risk stemming proper nouns.
+        std::string lmatch(match);
+        std::transform(lmatch.begin(), lmatch.end(), lmatch.begin(), ::tolower);
+
+        // Stem query for each language detected in the index.
+        if (db->stem_languages) {
+            for (std::set<std::string>::iterator it = db->stem_languages->begin();
+                    it != db->stem_languages->end(); ++it) {
+
+                std::string iso_lang = *it;
+                try {
+                    db->parser->set_stemmer(Xapian::Stem(iso_lang));
+                    if (tg_stem_strategy == Xapian::TermGenerator::STEM_ALL) {
+                        db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_ALL);
+                    }
+                    else {
+                        db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_SOME);
+                    }
+                    db->parser->set_stopper(get_stopper(iso_lang));
+                    std::string lang_prefix = make_lang_prefix(iso_lang, prefix);
+                    Xapian::Query query = db->parser->parse_query(lmatch, flags, lang_prefix);
+                    queries.push_back(new Xapian::Query(query));
+                } catch (const Xapian::InvalidArgumentError &err) {
+                    syslog(LOG_INFO, "Xapian: no stemmer for language %s", iso_lang.c_str());
+                }
+            }
+        }
+
+        // Query with default stemmer.
+        db->parser->set_stemmer(*db->default_stemmer);
+        db->parser->set_stopper(db->default_stopper);
+        db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_SOME);
+        Xapian::Query query = db->parser->parse_query(lmatch, flags, std::string(prefix));
+        queries.push_back(new Xapian::Query(query));
+
+        return make_compound(queries, Xapian::Query::OP_OR);
+    }
+    else {
+        // Query without any stemmer.
+        db->parser->set_stemmer(Xapian::Stem());
+        db->parser->set_stopper(NULL);
+        db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
+        Xapian::Query query = db->parser->parse_query(
+                std::string(match), flags, std::string(prefix));
+        return new Xapian::Query(query);
+    }
+
+}
+
+xapian_query_t *
+xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
+{
+    if (db->shards->empty()) {
+        // no database to query
+        return NULL;
+    }
+    const char *prefix = get_term_prefix(XAPIAN_DB_CURRENT_VERSION, partnum);
+    if (!prefix) {
+        // Legacy prefix handling code, this is not an error
+        return NULL;
+    }
+
+    try {
+        int min_version = *db->db_versions->begin();
+        if (min_version == 0) {
+            syslog(LOG_ERR, "Xapian: prefix version 0 is deprecated. Reindex your dbs.");
+        }
+        if (min_version < 3) {
+            syslog(LOG_ERR, "Xapian: stem versions < 3 are deprecated. Reindex your dbs.");
+        }
+
+        // Don't stem queries for Thaana codepage (0780) or higher.
+        int has_highbit = 0;
+        for (const unsigned char *p = (const unsigned char *)str; *p && !has_highbit; p++) {
+            if (*p > 221) has_highbit = 1;
+        }
+        if (has_highbit) {
+            Xapian::Query query = db->parser->parse_query(
+                    std::string(str),
+#ifdef USE_XAPIAN_CJK_WORDS
+                    Xapian::QueryParser::FLAG_CJK_WORDS,
+#else
+                    Xapian::QueryParser::FLAG_CJK_NGRAM,
+#endif
+                    std::string(prefix));
+            return (xapian_query_t *) new Xapian::Query(query);
+        }
+
+        // Regular codepage. Stem by language.
+        Xapian::TermGenerator::stem_strategy stem_strategy =
+            get_stem_strategy(XAPIAN_DB_CURRENT_VERSION, partnum);
+        return (xapian_query_t *) make_stem_match_query(db, str, prefix, stem_strategy);
+
+    } catch (const Xapian::Error &err) {
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception match_internal: %s: %s",
+                err.get_context().c_str(), err.get_description().c_str());
+        return 0;
+    }
 }
 
 
@@ -941,46 +1106,51 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
 
 struct xapian_snipgen
 {
-    Xapian::Stem *stemmer;
-    Xapian::Database *db;
+    Xapian::Stem *default_stemmer;
+    xapian_db_t *db;
+    Xapian::Database *memdb;
     std::vector<std::string> *loose_terms;
     std::vector<std::string> *queries;
+    char *cyrusid;
     struct buf *buf;
     const char *hi_start;
     const char *hi_end;
     const char *omit;
-    int partnum;
+    size_t max_len;
 };
 
-xapian_snipgen_t *xapian_snipgen_new(const char *hi_start, const char *hi_end,
+xapian_snipgen_t *xapian_snipgen_new(xapian_db_t *db,
+                                     const char *hi_start,
+                                     const char *hi_end,
                                      const char *omit)
 {
     xapian_snipgen_t *snipgen = NULL;
 
     snipgen = (xapian_snipgen_t *)xzmalloc(sizeof(xapian_snipgen_t));
-    snipgen->stemmer = new Xapian::Stem(new CyrusSearchStemmer());
-    snipgen->db = new Xapian::WritableDatabase(std::string(), Xapian::DB_BACKEND_INMEMORY);
+    snipgen->default_stemmer = new Xapian::Stem(new CyrusSearchStemmer());
+    snipgen->db = db;
+    snipgen->memdb = new Xapian::WritableDatabase(std::string(), Xapian::DB_BACKEND_INMEMORY);
     snipgen->buf = buf_new();
     snipgen->hi_start = hi_start;
     snipgen->hi_end = hi_end;
     snipgen->omit = omit;
-    snipgen->partnum = -1;
+    snipgen->max_len = (size_t) config_getint(IMAPOPT_SEARCH_SNIPPET_LENGTH);
 
     return snipgen;
 }
 
 void xapian_snipgen_free(xapian_snipgen_t *snipgen)
 {
-    snipgen->db->close();
-    delete snipgen->stemmer;
+    delete snipgen->default_stemmer;
     delete snipgen->loose_terms;
     delete snipgen->queries;
-    delete snipgen->db;
+    delete snipgen->memdb;
+    free(snipgen->cyrusid);
     buf_destroy(snipgen->buf);
     free(snipgen);
 }
 
-Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen)
+static Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen, Xapian::Stem *stemmer)
 {
     std::vector<std::string> terms;
     Xapian::TermGenerator term_generator;
@@ -988,7 +1158,7 @@ Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen)
 
     if (snipgen->loose_terms) {
         /* Add loose query terms */
-        term_generator.set_stemmer(*snipgen->stemmer);
+        term_generator.set_stemmer(*stemmer);
 #ifdef USE_XAPIAN_CJK_WORDS
         term_generator.set_flags(Xapian::TermGenerator::FLAG_CJK_WORDS,
                 ~Xapian::TermGenerator::FLAG_CJK_WORDS);
@@ -1026,7 +1196,7 @@ Xapian::Query xapian_snipgen_build_query(xapian_snipgen_t *snipgen)
                          Xapian::QueryParser::FLAG_CJK_NGRAM;
 #endif
         Xapian::QueryParser queryparser;
-        queryparser.set_stemmer(*snipgen->stemmer);
+        queryparser.set_stemmer(*stemmer);
         for(size_t i = 0; i < snipgen->queries->size(); ++i) {
             std::string phrase = snipgen->queries->at(i);
             v.push_back(queryparser.parse_query(phrase, flags));
@@ -1060,49 +1230,34 @@ int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match)
 }
 
 int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen,
-                             unsigned int context_length __attribute__((unused)))
+                             const struct message_guid *guid, char doctype)
 {
+    struct buf buf = BUF_INITIALIZER;
+    make_cyrusid(&buf, guid, doctype);
+    snipgen->cyrusid = buf_release(&buf);
+    buf_free(&buf);
+
     buf_reset(snipgen->buf);
     return 0;
 }
 
-int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part,
-		            int partnum)
-{
-    if (buf_len(snipgen->buf)) {
-        // XXX hackish: the original snippet generator passed down
-        // boundaries using termpos++. But now it's all text, so encode
-        // part gaps using the 'omit' signifier
-        buf_appendcstr(snipgen->buf, snipgen->omit);
-    }
-    buf_append(snipgen->buf, part);
-    snipgen->partnum = partnum;
-    return 0;
-}
-
-int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
+int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
+                                const struct buf *part,
+                                Xapian::Stem* stemmer)
 {
     int r = 0;
-
-    if (!snipgen->loose_terms && !snipgen->queries) {
-        buf_reset(snipgen->buf);
-        buf_reset(buf);
-        buf_cstring(buf);
-        return 0;
-    }
-
     try {
         std::string snippet;
-        std::string text = std::string(buf_base(snipgen->buf), buf_len(snipgen->buf));
-        Xapian::Enquire enquire(*snipgen->db);
-        enquire.set_query(xapian_snipgen_build_query(snipgen));
+        std::string text = std::string(buf_base(part), buf_len(part));
+        Xapian::Enquire enquire(*snipgen->memdb);
+        enquire.set_query(xapian_snipgen_build_query(snipgen, stemmer));
 
         unsigned flags = Xapian::MSet::SNIPPET_EXHAUSTIVE |
-                         Xapian::MSet::SNIPPET_EMPTY_WITHOUT_MATCH;
+            Xapian::MSet::SNIPPET_EMPTY_WITHOUT_MATCH;
 
         snippet = enquire.get_mset(0, 0).snippet(text,
-                config_getint(IMAPOPT_SEARCH_SNIPPET_LENGTH),
-                *snipgen->stemmer,
+                snipgen->max_len - buf_len(snipgen->buf),
+                *stemmer,
                 flags,
                 snipgen->hi_start,
                 snipgen->hi_end,
@@ -1110,26 +1265,83 @@ int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
 #ifdef USE_XAPIAN_CYRUS_EXTENSIONS
                 , Xapian::TermGenerator::FLAG_CJK_WORDS
 #endif
-        );
+                );
 
-        buf_setcstr(buf, snippet.c_str());
-        buf_cstring(buf);
-
-        delete snipgen->loose_terms;
-        snipgen->loose_terms = NULL;
-
-        delete snipgen->queries;
-        snipgen->queries = NULL;
-
+        if (snippet.size()) {
+            if (buf_len(snipgen->buf)) {
+                buf_appendoverlap(snipgen->buf, snipgen->omit);
+            }
+            buf_appendcstr(snipgen->buf, snippet.c_str());
+        }
     } catch (const Xapian::Error &err) {
-        syslog(LOG_ERR, "IOERROR: Xapian: caught exception end_doc: %s: %s",
+        syslog(LOG_ERR, "IOERROR: Xapian: caught exception doc_part: %s: %s",
                 err.get_context().c_str(), err.get_description().c_str());
         r = IMAP_IOERROR;
     }
-
-    buf_reset(snipgen->buf);
-    snipgen->partnum = -1;
     return r;
+}
+
+int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part,
+		                    int partnum)
+{
+    // Ignore empty queries.
+    if (!snipgen->loose_terms && !snipgen->queries) return 0;
+
+    // Don't exceed allowed snippet length.
+    if (buf_len(snipgen->buf) >= snipgen->max_len) return 0;
+
+    // Lookup stemmer language for this document part, if any.
+    Xapian::Stem *stemmer = NULL;
+    if (snipgen->db->database && snipgen->cyrusid) {
+        std::string key = make_lang_cyrusid_key(partnum, snipgen->cyrusid);
+        for (std::vector<Xapian::Database>::iterator dbit = snipgen->db->shards->begin();
+                dbit != snipgen->db->shards->end(); ++dbit) {
+            std::string iso_lang = (*dbit).get_metadata(key);
+            if (iso_lang.size()) {
+                try {
+                    stemmer = new Xapian::Stem(iso_lang);
+                } catch (const Xapian::InvalidArgumentError &err) {
+                    syslog(LOG_INFO, "Xapian: no stemmer for language %s", iso_lang.c_str());
+                }
+                break;
+            }
+        }
+    }
+    if (!stemmer) stemmer = snipgen->default_stemmer;
+
+    size_t prev_size = buf_len(snipgen->buf);
+    int r = xapian_snipgen_make_snippet(snipgen, part, stemmer);
+    if (stemmer != snipgen->default_stemmer) {
+        delete stemmer;
+        if (!r && prev_size == buf_len(snipgen->buf)) {
+            /* Using a custom stemmer did not generate a snippet.
+             * This could be because the query matched using the
+             * default stemmer, so try generating a snippet with
+             * that stemmer instead.*/
+            r = xapian_snipgen_make_snippet(snipgen, part, snipgen->default_stemmer);
+        }
+    }
+
+    return r;
+}
+
+int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *buf)
+{
+    buf_reset(buf);
+    buf_copy(buf, snipgen->buf);
+    buf_cstring(buf);
+    buf_reset(snipgen->buf);
+
+    delete snipgen->loose_terms;
+    snipgen->loose_terms = NULL;
+
+    delete snipgen->queries;
+    snipgen->queries = NULL;
+
+    free(snipgen->cyrusid);
+    snipgen->cyrusid = NULL;
+
+    return 0;
 }
 
 /* cb returns true if document should be copied, false if not */

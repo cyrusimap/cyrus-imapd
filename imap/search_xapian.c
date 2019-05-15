@@ -1711,12 +1711,14 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
 
     optimise_nodes(NULL, bb->root);
 
-    /* A database can contain current and legacy databases.*/
-    if (xapian_db_supports_current_version(bb->lock.db)) {
+    /* A database can contain sub-databases of multiple versions */
+    if (xapian_db_has_doctype_index(bb->lock.db)) {
+        // version 4 supports doctype indexing
         r = run_query(bb);
         if (r) goto out;
     }
-    if (xapian_db_supports_legacy_version(bb->lock.db)) {
+    if (xapian_db_has_legacy_index(bb->lock.db)) {
+        // legacy dbs index MIME parts in the G doctype
         r = run_legacy_query(bb);
         if (r) goto out;
     }
@@ -1887,6 +1889,7 @@ struct xapian_snippet_receiver
     search_snippet_cb_t proc;
     void *rock;
     struct xapiandb_lock lock;
+    const search_snippet_markup_t *markup;
 };
 
 /* Maximum size of a query, determined empirically, is a little bit
@@ -2114,7 +2117,7 @@ static int begin_message(search_text_receiver_t *rx, message_t *msg)
 }
 
 static void begin_part(search_text_receiver_t *rx, int part,
-                       const struct message_guid *content_guid __attribute__((unused)))
+                       const struct message_guid *content_guid)
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
 
@@ -2137,6 +2140,7 @@ static void append_text(search_text_receiver_t *rx,
                                 tr->mailbox->name, tr->uid);
             len = MAX_PARTS_SIZE - tr->parts_total;
         }
+
         if (len) {
             tr->parts_total += len;
 
@@ -2220,7 +2224,7 @@ static int end_message_update(search_text_receiver_t *rx)
 
     ptrarray_sort(&tr->super.segs, compare_segs);
 
-    if (xapian_dbw_is_legacy(tr->dbw)) {
+    if (!xapian_dbw_has_doctype_index(tr->dbw)) {
         r = xapian_dbw_begin_doc(tr->dbw, &tr->super.guid, SEARCH_XAPIAN_DOCTYPE_MSG);
         if (r) goto out;
 
@@ -2627,6 +2631,9 @@ static int begin_mailbox_snippets(search_text_receiver_t *rx,
     if (r) goto out;
     if (!tr->lock.activedirs || !tr->lock.activedirs->count) goto out;
 
+    tr->snipgen = xapian_snipgen_new(tr->lock.db, tr->markup->hi_start,
+                                     tr->markup->hi_end, tr->markup->omit);
+
 out:
     return r;
 }
@@ -2670,7 +2677,6 @@ static int flush_snippets(search_text_receiver_t *rx)
 {
     xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
     struct buf snippets = BUF_INITIALIZER;
-    unsigned int context_length;
     int i;
     struct segment *seg;
     int last_part = -1;
@@ -2695,37 +2701,27 @@ static int flush_snippets(search_text_receiver_t *rx)
 
     for (i = 0 ; i < tr->super.segs.count ; i++) {
         seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
-        if (!last_guid || message_guid_cmp(last_guid, &seg->guid)) {
-            last_guid = &seg->guid;
-        }
 
-        if (seg->part != last_part) {
+        if (!last_guid || message_guid_cmp(last_guid, &seg->guid) || seg->part != last_part) {
+            /* In contrast to the update code, we start and end a document
+             * for each search part of the same message. This is due to
+             * the way the snippet callbacks are implemented. */
+            r = xapian_snipgen_end_doc(tr->snipgen, &snippets);
 
-            if (last_part != -1) {
-                r = xapian_snipgen_end_doc(tr->snipgen, &snippets);
-                if (!r && snippets.len)
-                    r = tr->proc(tr->super.mailbox, tr->super.uid, last_part, snippets.s, tr->rock);
-                if (r) break;
-            }
+            if (!r && snippets.len)
+                r = tr->proc(tr->super.mailbox, tr->super.uid, last_part, snippets.s, tr->rock);
+            if (r) goto out;
 
-            /* TODO: UINT_MAX doesn't behave as expected, which is probably
-             * a bug, but really any value larger than a reasonable Subject
-             * length will do */
-            if (seg->part == SEARCH_PART_HEADERS ||
-                seg->part == SEARCH_PART_BODY ||
-                seg->part == SEARCH_PART_ATTACHMENTBODY) {
-                context_length = 5;
-            }
-            else context_length = 1000000;
-            r = xapian_snipgen_begin_doc(tr->snipgen, context_length);
+            r = xapian_snipgen_begin_doc(tr->snipgen, &seg->guid, seg->doctype);
             if (r) break;
-
             generate_snippet_terms(tr->snipgen, seg->part, tr->root);
+
+            last_guid = &seg->guid;
+            last_part = -1;
         }
 
         r = xapian_snipgen_doc_part(tr->snipgen, &seg->text, seg->part);
         last_part = seg->part;
-
         if (r) break;
     }
 
@@ -2782,9 +2778,9 @@ static search_text_receiver_t *begin_snippets(void *internalised,
 
     tr->super.verbose = verbose;
     tr->root = (struct opnode *)internalised;
-    tr->snipgen = xapian_snipgen_new(m->hi_start, m->hi_end, m->omit);
     tr->proc = proc;
     tr->rock = rock;
+    tr->markup = m;
 
     return &tr->super.super;
 }

@@ -81,10 +81,10 @@ extern void xapian_query_free(xapian_query_t *);
 extern int xapian_query_run(const xapian_db_t *, const xapian_query_t *query, int is_legacy,
                             int (*cb)(void *base, size_t n, void *rock), void *rock);
 /* snippets interface */
-extern xapian_snipgen_t *xapian_snipgen_new(const char *hi_start, const char *hi_end, const char *omit);
+extern xapian_snipgen_t *xapian_snipgen_new(xapian_db_t *db, const char *hi_start, const char *hi_end, const char *omit);
 extern void xapian_snipgen_free(xapian_snipgen_t *);
 extern int xapian_snipgen_add_match(xapian_snipgen_t *snipgen, const char *match);
-extern int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen, unsigned context_length);
+extern int xapian_snipgen_begin_doc(xapian_snipgen_t *snipgen, const struct message_guid *guid, char doctype);
 extern int xapian_snipgen_doc_part(xapian_snipgen_t *snipgen, const struct buf *part, int partnum);
 extern int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *);
 
@@ -93,8 +93,8 @@ extern int xapian_filter(const char *dest, const char **sources,
                          int (*cb)(const char *cyrusid, void *rock),
                          void *rock);
 /* XXX legacy DB support */
-extern int xapian_db_supports_legacy_version(const xapian_db_t *);
-extern int xapian_db_supports_current_version(const xapian_db_t *);
-extern int xapian_dbw_is_legacy(const xapian_dbw_t *);
+extern int xapian_db_has_doctype_index(const xapian_db_t *);
+extern int xapian_db_has_legacy_index(const xapian_db_t *);
+extern int xapian_dbw_has_doctype_index(const xapian_dbw_t *);
 
 #endif
