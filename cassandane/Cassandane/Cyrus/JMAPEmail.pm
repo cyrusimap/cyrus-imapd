@@ -12920,5 +12920,69 @@ sub test_email_set_date
     $self->assert_str_equals(' Thu, 02 May 2019 03:15:00 +0700', $email->{'header:Date'});
 }
 
+sub test_email_query_language_stats
+    :min_version_3_1 :needs_component_jmap :needs_dependency_cld2
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $body = ""
+    . "--boundary\r\n"
+    . "Content-Type: text/plain;charset=utf-8\r\n"
+    . "Content-Transfer-Encoding: quoted-printable\r\n"
+    . "\r\n"
+    . "Hoch oben in den L=C3=BCften =C3=BCber den reichgesegneten Landschaften des\r\n"
+    . "s=C3=BCdlichen Frankreichs schwebte eine gewaltige dunkle Kugel.\r\n"
+    . "\r\n"
+    . "Ein Luftballon war es, der, in der Nacht aufgefahren, eine lange\r\n"
+    . "Dauerfahrt antreten wollte.\r\n"
+    . "\r\n"
+    . "--boundary\r\n"
+    . "Content-Type: text/plain;charset=utf-8\r\n"
+    . "Content-Transfer-Encoding: quoted-printable\r\n"
+    . "\r\n"
+    . "The Bellman, who was almost morbidly sensitive about appearances, used\r\n"
+    . "to have the bowsprit unshipped once or twice a week to be revarnished,\r\n"
+    . "and it more than once happened, when the time came for replacing it,\r\n"
+    . "that no one on board could remember which end of the ship it belonged to.\r\n"
+    . "\r\n"
+    . "--boundary\r\n"
+    . "Content-Type: text/plain;charset=utf-8\r\n"
+    . "Content-Transfer-Encoding: quoted-printable\r\n"
+    . "\r\n"
+    . "Verri=C3=A8res est abrit=C3=A9e du c=C3=B4t=C3=A9 du nord par une haute mon=\r\n"
+    . "tagne, c'est une\r\n"
+    . "des branches du Jura. Les cimes bris=C3=A9es du Verra se couvrent de neige\r\n"
+    . "d=C3=A8s les premiers froids d'octobre. Un torrent, qui se pr=C3=A9cipite d=\r\n"
+    . "e la\r\n"
+    . "montagne, traverse Verri=C3=A8res avant de se jeter dans le Doubs et donne =\r\n"
+    . "le\r\n"
+    . "mouvement =C3=A0 un grand nombre de scies =C3=A0 bois; c'est une industrie =\r\n"
+    . "--boundary--\r\n";
+
+    $self->make_message("A multi-language email",
+        mime_type => "multipart/mixed",
+        mime_boundary => "boundary",
+        body => $body
+    );
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, 'R1' ]
+    ], $using);
+    $self->assert_not_null($res->[0][1]{languageStats}{de}{weight});
+    $self->assert_not_null($res->[0][1]{languageStats}{fr}{weight});
+    $self->assert_not_null($res->[0][1]{languageStats}{en}{weight});
+}
 
 1;
