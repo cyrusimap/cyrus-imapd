@@ -222,6 +222,7 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
 }
 
 #define XAPIAN_DB_CURRENT_VERSION 4
+#define XAPIAN_DB_MIN_SUPPORTED_VERSION 3
 
 static int get_db_version(Xapian::Database *database)
 {
@@ -252,7 +253,7 @@ static void set_db_version(Xapian::WritableDatabase *database, int version)
 
 /* For all db paths in sources that are not using the latest database
  * version or not readable, report their paths in toreindex */
-void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *toreindex)
+void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *toreindex, int always_upgrade)
 {
     int i;
 
@@ -262,7 +263,8 @@ void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *torein
         try {
             Xapian::Database database = Xapian::Database(thispath);
             int db_version = get_db_version(&database);
-            if (db_version != XAPIAN_DB_CURRENT_VERSION) {
+            if (db_version < XAPIAN_DB_MIN_SUPPORTED_VERSION ||
+                (always_upgrade && (db_version != XAPIAN_DB_CURRENT_VERSION))) {
                 strarray_add(toreindex, thispath);
             }
         }

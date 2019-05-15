@@ -3356,7 +3356,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
             strarray_cat(toreindex, srcdirs);
         }
         else {
-            xapian_check_if_needs_reindex(srcdirs, toreindex);
+            xapian_check_if_needs_reindex(srcdirs, toreindex, flags & SEARCH_COMPACT_ONLYUPGRADE);
             for (i = 0; i < srcdirs->count; i++) {
                 const char *thisdir = strarray_nth(srcdirs, i);
                 if (strarray_find(toreindex, thisdir, 0) < 0)

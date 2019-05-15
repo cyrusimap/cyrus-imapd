@@ -54,7 +54,7 @@ typedef struct xapian_snipgen xapian_snipgen_t;
 
 /* compaction interface */
 extern int xapian_compact_dbs(const char *dest, const char **sources);
-extern void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *toreindex);
+extern void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *toreindex, int always_upgrade);
 
 /* write-side interface */
 #define XAPIAN_DBW_CONVINDEXED 0
