@@ -1512,7 +1512,6 @@ static int load_annot_cb(const char *mailbox __attribute__((unused)),
                          void *rock)
 {
     struct entryattlist **eal = (struct entryattlist **)rock;
-    if (!userid) userid = "";
     const char *attrib = (userid[0] ? "value.priv" : "value.shared");
     setentryatt(eal, entry, attrib, value);
     return 0;
@@ -3022,9 +3021,6 @@ static int calc_one_annot(const char *mboxname __attribute__((unused)),
                           void *rock)
 {
     struct annot_calc_rock *cr = (struct annot_calc_rock *)rock;
-
-    // annotations with a NULL userid are bogus, ignore them for all purposes
-    if (!userid) return 0;
 
     /* update sync_crc - NOTE, only per-message annotations count */
     if (uid && !mailbox_is_virtannot(cr->mailbox, entry))

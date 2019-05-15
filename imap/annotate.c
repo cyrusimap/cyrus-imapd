@@ -1403,8 +1403,6 @@ static void output_entryatt(annotate_state_t *state, const char *entry,
     char key[MAX_MAILBOX_PATH+1]; /* XXX MAX_MAILBOX_NAME + entry + userid */
     struct buf buf = BUF_INITIALIZER;
 
-    if (!userid) userid = "";
-
     /* We don't put any funny interpretations on NULL values for
      * some of these anymore, now that the dirty hacks are gone. */
     assert(state);
@@ -1834,8 +1832,6 @@ static int rw_cb(const char *mailbox __attribute__((unused)),
                  void *rock)
 {
     annotate_state_t *state = (annotate_state_t *)rock;
-
-    if (!userid) userid = "";
 
     if (!userid[0] || !strcmp(userid, state->userid)) {
         output_entryatt(state, entry, userid, value);
