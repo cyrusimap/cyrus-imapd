@@ -6686,6 +6686,7 @@ struct email {
     struct headers headers; /* parsed headers */
     json_t *jemail;               /* original Email JSON object */
     struct emailpart *body;      /* top-level MIME part */
+    time_t internaldate;    /* RFC 3501 internaldate aka receivedAt */
     int has_attachment;           /* set the HasAttachment flag */
 };
 
@@ -7822,6 +7823,14 @@ static void _parse_email(json_t *jemail,
     else if (JNOTNULL(prop)) {
         jmap_parser_invalid(parser, "sentAt");
     }
+    /* receivedAt */
+    prop = json_object_get(jemail, "receivedAt");
+    if (json_is_string(prop) && jmap_is_valid_utcdate(json_string_value(prop))) {
+        time_from_iso8601(json_string_value(prop), &email->internaldate);
+    }
+    else if (JNOTNULL(prop)) {
+        jmap_parser_invalid(parser, "receivedAt");
+    }
     /* from */
     prop = json_object_get(jemail, "from");
     seen_header = _headers_have(&email->headers, "From");
@@ -8214,7 +8223,7 @@ static void _email_create(jmap_req_t *req,
 
     /* Parse Email object into internal representation */
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct email email = { HEADERS_INITIALIZER, NULL, NULL, 0 };
+    struct email email = { HEADERS_INITIALIZER, NULL, NULL, time(NULL), 0 };
     _parse_email(jemail, &parser, &email);
 
     /* Validate mailboxIds */
@@ -8285,7 +8294,7 @@ static void _email_create(jmap_req_t *req,
 
     /* Append MIME-encoded Email to mailboxes and write keywords */
 
-    _email_append(req, jmailboxids, &keywords, time(NULL),
+    _email_append(req, jmailboxids, &keywords, email.internaldate,
                   config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT) ?
                   email.has_attachment : 0, _email_to_mime, &email,
                   &detail, set_err);
