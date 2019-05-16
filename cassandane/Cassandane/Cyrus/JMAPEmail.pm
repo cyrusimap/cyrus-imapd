@@ -12984,5 +12984,44 @@ sub test_email_query_language_stats
     $self->assert_not_null($res->[0][1]{languageStats}{fr}{weight});
     $self->assert_not_null($res->[0][1]{languageStats}{en}{weight});
 }
+sub test_email_set_received_at
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $res = $jmap->CallMethods([
+        ['Email/set', {
+            create => {
+                email1 => {
+                    mailboxIds => {
+                        '$inbox' => JSON::true
+                    },
+                    from => [{ email => q{foo@bar} }],
+                    to => [{ email => q{bar@foo} }],
+                    receivedAt => '2019-05-02T03:15:00Z',
+                    subject => "test",
+                    bodyStructure => {
+                        partId => '1',
+                    },
+                    bodyValues => {
+                        "1" => {
+                            value => "A text body",
+                        },
+                    },
+                }
+            },
+        }, 'R1'],
+        ['Email/get', {
+            ids => ['#email1'],
+            properties => ['receivedAt'],
+        }, 'R2'],
+    ]);
+    my $email = $res->[1][1]{list}[0];
+    $self->assert_str_equals('2019-05-02T03:15:00Z', $email->{receivedAt});
+}
 
 1;
