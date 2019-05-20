@@ -294,7 +294,7 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
  * Version 4: introduces doctype indexing and language detection
  */
 #define XAPIAN_DB_CURRENT_VERSION 4
-#define XAPIAN_DB_MIN_SUPPORTED_VERSION 3
+#define XAPIAN_DB_MIN_SUPPORTED_VERSION 2
 
 static int get_db_version(Xapian::Database& database)
 {
