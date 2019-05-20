@@ -209,8 +209,8 @@ Options
 
 .. option:: -t srctier...
 
-    In compact mode, the source tier(s) for the compacted indices.
-    At least one source tier must be specified in compact mode.
+    In compact mode, the comma-separated source tier(s) for the compacted
+    indices.  At least one source tier must be specified in compact mode.
     Xapian only.
     |v3-new-feature|
 
