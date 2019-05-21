@@ -92,6 +92,10 @@ static int _json_to_card(struct jmap_req *req,
                          struct entryattlist **annotsp,
                          json_t *invalid);
 
+static json_t *jmap_contact_from_vcard(struct vparse_card *card,
+                                       struct mailbox *mailbox,
+                                       struct index_record *record);
+
 #define JMAPCACHE_CONTACTVERSION 1
 
 jmap_method_t jmap_contact_methods[] = {
@@ -1023,6 +1027,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         uint32_t olduid;
         char *resource = NULL;
         int do_move = 0;
+        json_t *jupdated = NULL;
 
         /* is it a valid contact? */
         if (r || !cdata || !cdata->dav.imap_uid || cdata->kind != kind) {
@@ -1102,6 +1107,28 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         struct vparse_card *card = vcard->objects;
         vparse_replace_entry(card, NULL, "VERSION", "3.0");
         vparse_replace_entry(card, NULL, "PRODID", _prodid);
+
+        /* Apply patch to current object */
+        json_t *jcurrent = NULL;
+        if (kind == CARDDAV_KIND_GROUP) {
+            jcurrent = jmap_group_from_vcard(card);
+        }
+        else {
+            jcurrent = jmap_contact_from_vcard(card, mailbox, &record);
+        }
+        if (!jcurrent) {
+            syslog(LOG_ERR, "can't read vcard %u:%s for update",
+                   cdata->dav.imap_uid, mailbox->name);
+            r = 0;
+            json_t *err = json_pack("{s:s s:s}",
+                    "type", "serverError", "description", "invalid current value");
+            json_object_set_new(set.not_updated, uid, err);
+            goto finish;
+        }
+        jupdated = jmap_patchobject_apply(jcurrent, arg);
+        json_decref(jcurrent);
+        json_object_del(jupdated, "addressbookId");
+        arg = jupdated;
 
         json_t *invalid = json_pack("[]");
 
@@ -1224,6 +1251,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         jmap_closembox(req, &newmailbox);
         vparse_free_card(vcard);
         free(resource);
+        json_decref(jupdated);
 
         if (r) goto done;
 
