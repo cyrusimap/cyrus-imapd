@@ -913,7 +913,7 @@ static int _add_othergroup_entries(struct jmap_req *req,
             const char *item = json_string_value(json_array_get(arg, i));
             const char *uid = _resolve_contactid(req, item);
             if (!item || !uid) {
-                buf_printf(&buf, "otherContactIds[%s]", key);
+                buf_printf(&buf, "otherAccountContactIds[%s]", key);
                 json_array_append_new(invalid, json_string(buf_cstring(&buf)));
                 buf_reset(&buf);
                 continue;
