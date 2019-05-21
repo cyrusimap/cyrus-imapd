@@ -64,6 +64,8 @@ struct carddav_data {
     const char *fullname;
     const char *name;
     const char *nickname;
+    int jmapversion;
+    const char *jmapdata;
     strarray_t *emails;
     strarray_t *member_uids;
 };
@@ -135,6 +137,9 @@ int carddav_get_updates(struct carddav_db *carddavdb,
 /* process each entry for 'mailbox' in 'carddavdb' with cb() */
 int carddav_foreach(struct carddav_db *carddavdb, const char *mailbox,
                     carddav_cb_t *cb, void *rock);
+
+int carddav_write_jmapcache(struct carddav_db *carddavdb, int rowid,
+                            int version, const char *data);
 
 /* write an entry to 'carddavdb' */
 int carddav_write(struct carddav_db *carddavdb, struct carddav_data *cdata);

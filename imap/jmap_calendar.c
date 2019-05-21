@@ -84,6 +84,8 @@ static int jmap_calendarevent_query(struct jmap_req *req);
 static int jmap_calendarevent_set(struct jmap_req *req);
 static int jmap_calendarevent_copy(struct jmap_req *req);
 
+#define JMAPCACHE_CALVERSION 1
+
 jmap_method_t jmap_calendar_methods[] = {
     {
         "Calendar/get",
@@ -1442,6 +1444,7 @@ static int utcdate_to_icaltime(const char *src,
 }
 
 struct getcalendarevents_rock {
+    struct caldav_db *db;
     struct jmap_req *req;
     struct jmap_get *get;
     struct mailbox *mailbox;
@@ -1468,6 +1471,12 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ))
         return 0;
 
+    if (cdata->jmapversion == JMAPCACHE_CALVERSION) {
+        json_error_t jerr;
+        jsevent = json_loads(cdata->jmapdata, 0, &jerr);
+        if (jsevent) goto gotevent;
+    }
+
     /* Open calendar mailbox. */
     if (!rock->mailbox || strcmp(rock->mailbox->name, cdata->dav.mailbox)) {
         mailbox_close(&rock->mailbox);
@@ -1485,7 +1494,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     }
 
     /* Convert to JMAP */
-    jsevent = jmapical_tojmap(ical, rock->get->props);
+    jsevent = jmapical_tojmap(ical, NULL);
     if (!jsevent) {
         syslog(LOG_ERR, "jmapical_tojson: can't convert %u:%s",
                 cdata->dav.imap_uid, rock->mailbox->name);
@@ -1494,6 +1503,14 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     }
     icalcomponent_free(ical);
     ical = NULL;
+
+    char *eventrep = json_dumps(jsevent, 0);
+    r = caldav_write_jmapcache(rock->db, cdata->dav.rowid, httpd_userid,
+                               JMAPCACHE_CALVERSION, eventrep);
+    free(eventrep);
+
+gotevent:
+    jsevent = jmap_filterprops(jsevent, rock->get->props);
 
     /* Add participant id */
     if (jmap_wantprop(rock->get->props, "participantId")) {
@@ -1524,6 +1541,8 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
                             json_string(strrchr(cdata->dav.mailbox, '.')+1));
     }
     json_object_set_new(jsevent, "id", json_string(cdata->ical_uid));
+    json_object_set_new(jsevent, "uid", json_string(cdata->ical_uid));
+    json_object_set_new(jsevent, "@type", json_string("jsevent"));
 
     /* Add JMAP event to response */
     json_array_append_new(rock->get->list, jsevent);
@@ -1748,17 +1767,6 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         return 0;
     } else if (r) return r;
 
-    struct caldav_db *db = caldav_open_userid(req->accountid);
-    if (!db) {
-        syslog(LOG_ERR,
-               "caldav_open_mailbox failed for user %s", req->accountid);
-        return IMAP_INTERNAL;
-    }
-
-    /* Build callback data */
-    int checkacl = strcmp(req->accountid, req->userid);
-    struct getcalendarevents_rock rock = { req, &get, NULL /*mbox*/, checkacl };
-
     /* Parse request */
     jmap_get_parse(req, &parser, event_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
@@ -1767,6 +1775,26 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         goto done;
     }
 
+    struct caldav_db *db = caldav_open_userid(req->accountid);
+    if (!db) {
+        syslog(LOG_ERR,
+               "caldav_open_mailbox failed for user %s", req->accountid);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    r = caldav_begin(db);
+    if (r) {
+        syslog(LOG_ERR,
+               "caldav_begin failed for user %s", req->accountid);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    /* Build callback data */
+    int checkacl = strcmp(req->accountid, req->userid);
+    struct getcalendarevents_rock rock = { db, req, &get, NULL /*mbox*/, checkacl };
+
     /* Does the client request specific events? */
     if (JNOTNULL(get.ids)) {
         size_t i;
@@ -1774,14 +1802,22 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         json_array_foreach(get.ids, i, jval) {
             const char *id = json_string_value(jval);
             size_t nfound = json_array_size(get.list);
-            r = caldav_get_events(db, NULL, id, &getcalendarevents_cb, &rock);
+            r = caldav_get_events(db, httpd_userid, NULL, id, &getcalendarevents_cb, &rock);
             if (r || nfound == json_array_size(get.list)) {
                 json_array_append(get.not_found, jval);
             }
         }
     } else {
-        r = caldav_get_events(db, NULL, NULL, &getcalendarevents_cb, &rock);
+        r = caldav_get_events(db, httpd_userid, NULL, NULL, &getcalendarevents_cb, &rock);
         if (r) goto done;
+    }
+
+    r = caldav_commit(db);
+    if (r) {
+        syslog(LOG_ERR,
+               "caldav_commit failed for user %s", req->accountid);
+        r = IMAP_INTERNAL;
+        goto done;
     }
 
     /* Build response */

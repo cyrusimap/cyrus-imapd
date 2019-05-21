@@ -75,6 +75,7 @@ struct caldav_db {
     struct buf dtstart;
     struct buf dtend;
     struct buf sched_tag;
+    struct buf jmapdata;
 };
 
 
@@ -196,6 +197,7 @@ EXPORTED int caldav_close(struct caldav_db *caldavdb)
     buf_free(&caldavdb->dtstart);
     buf_free(&caldavdb->dtend);
     buf_free(&caldavdb->sched_tag);
+    buf_free(&caldavdb->jmapdata);
 
     r = sqldb_close(&caldavdb->db);
 
@@ -262,8 +264,18 @@ static unsigned _comp_flags_to_num(struct comp_flags *flags)
     "SELECT rowid, creationdate, mailbox, resource, imap_uid,"          \
     "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
     "  comp_type, ical_uid, organizer, dtstart, dtend,"                 \
-    "  comp_flags, sched_tag, alive, modseq, createdmodseq"             \
+    "  comp_flags, sched_tag, alive, modseq, createdmodseq,"            \
+    "  NULL, NULL"                                                      \
     " FROM ical_objs"                                                   \
+
+#define CMD_READFIELDS_JMAP                                             \
+    "SELECT ical_objs.rowid, creationdate, mailbox, resource, imap_uid,"\
+    "  lock_token, lock_owner, lock_ownerid, lock_expire,"              \
+    "  comp_type, ical_uid, organizer, dtstart, dtend,"                 \
+    "  comp_flags, sched_tag, alive, modseq, createdmodseq,"            \
+    "  jmapversion, jmapdata"                                           \
+    " FROM ical_objs LEFT JOIN ical_jmapcache"                          \
+    " ON (ical_objs.rowid = ical_jmapcache.rowid AND ical_jmapcache.userid = :asuserid)"
 
 static int read_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -286,6 +298,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     cdata->dav.lock_expire = sqlite3_column_int(stmt, 8);
     cdata->comp_type = sqlite3_column_int(stmt, 9);
     _num_to_comp_flags(&cdata->comp_flags, sqlite3_column_int(stmt, 14));
+    cdata->jmapversion = sqlite3_column_int(stmt, 19);
 
     if (rrock->cb) {
         /* We can use the column data directly for the callback */
@@ -299,6 +312,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
         cdata->dtstart = (const char *) sqlite3_column_text(stmt, 12);
         cdata->dtend = (const char *) sqlite3_column_text(stmt, 13);
         cdata->sched_tag = (const char *) sqlite3_column_text(stmt, 15);
+        cdata->jmapdata = (const char *) sqlite3_column_text(stmt, 20);
         r = rrock->cb(rrock->rock, cdata);
     }
     else {
@@ -335,6 +349,9 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
         cdata->sched_tag =
             column_text_to_buf((const char *) sqlite3_column_text(stmt, 15),
                                &db->sched_tag);
+        cdata->jmapdata =
+            column_text_to_buf((const char *) sqlite3_column_text(stmt, 20),
+                               &db->jmapdata);
     }
 
     return r;
@@ -524,6 +541,8 @@ EXPORTED int caldav_foreach_timerange(struct caldav_db *caldavdb,
     "  sched_tag    = :sched_tag"       \
     " WHERE rowid = :rowid;"
 
+#define CMD_DELETE_JMAPCACHE "DELETE FROM ical_jmapcache WHERE rowid = :rowid"
+
 EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
 {
     unsigned comp_flags = _comp_flags_to_num(&cdata->comp_flags);
@@ -550,7 +569,9 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
         { NULL,            SQLITE_NULL,    { .s = NULL                    } } };
 
     if (cdata->dav.rowid) {
-        int r = sqldb_exec(caldavdb->db, CMD_UPDATE, bval, NULL, NULL);
+        int r = sqldb_exec(caldavdb->db, CMD_DELETE_JMAPCACHE, bval, NULL, NULL);
+        if (r) return r;
+        r = sqldb_exec(caldavdb->db, CMD_UPDATE, bval, NULL, NULL);
         if (r) return r;
     }
     else {
@@ -755,19 +776,20 @@ EXPORTED char *caldav_mboxname(const char *userid, const char *name)
     return res;
 }
 
-EXPORTED int caldav_get_events(struct caldav_db *caldavdb,
+EXPORTED int caldav_get_events(struct caldav_db *caldavdb, const char *asuserid,
                                const char *mailbox, const char *ical_uid,
                                caldav_cb_t *cb, void *rock)
 {
     struct sqldb_bindval bval[] = {
         { ":mailbox",  SQLITE_TEXT, { .s = mailbox } },
         { ":ical_uid", SQLITE_TEXT, { .s = ical_uid } },
+        { ":asuserid", SQLITE_TEXT, { .s = asuserid } },
         { NULL,        SQLITE_NULL, { .s = NULL    } } };
     struct caldav_data cdata;
     struct read_rock rrock = { caldavdb, &cdata, 0, cb, rock };
     struct buf sqlbuf = BUF_INITIALIZER;
 
-    buf_setcstr(&sqlbuf, CMD_READFIELDS);
+    buf_setcstr(&sqlbuf, CMD_READFIELDS_JMAP);
     buf_appendcstr(&sqlbuf, " WHERE alive = 1");
     if (mailbox)
         buf_appendcstr(&sqlbuf, " AND mailbox = :mailbox");
@@ -785,6 +807,30 @@ EXPORTED int caldav_get_events(struct caldav_db *caldavdb,
         /* XXX - free memory */
     }
 
-
     return r;
 }
+
+#define CMD_DELETE_JMAPCACHE_USER "DELETE FROM ical_jmapcache WHERE rowid = :rowid AND userid = :userid"
+#define CMD_INSERT_JMAPCACHE_USER                                           \
+    "INSERT INTO ical_jmapcache ( rowid, userid, jmapversion, jmapdata )"   \
+    " VALUES ( :rowid, :userid, :jmapversion, :jmapdata );"
+
+EXPORTED int caldav_write_jmapcache(struct caldav_db *caldavdb, int rowid, const char *userid, int version, const char *data)
+{
+    struct sqldb_bindval bval[] = {
+        { ":rowid",        SQLITE_INTEGER, { .i = rowid  } },
+        { ":userid",       SQLITE_TEXT,    { .s = userid } },
+        { ":jmapversion",  SQLITE_INTEGER, { .i = version } },
+        { ":jmapdata",     SQLITE_TEXT,    { .s = data   } },
+        { NULL,            SQLITE_NULL,    { .s = NULL   } } };
+    int r;
+
+    /* clean up existing records if any */
+    r = sqldb_exec(caldavdb->db, CMD_DELETE_JMAPCACHE_USER, bval, NULL, NULL);
+    if (r) return r;
+
+    /* insert the cache record */
+    return sqldb_exec(caldavdb->db, CMD_INSERT_JMAPCACHE_USER, bval, NULL, NULL);
+}
+
+

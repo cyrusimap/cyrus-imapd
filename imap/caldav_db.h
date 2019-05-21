@@ -101,6 +101,8 @@ struct caldav_data {
     const char *dtend;
     struct comp_flags comp_flags;
     const char *sched_tag;
+    int jmapversion;
+    const char *jmapdata;
 };
 
 typedef int caldav_cb_t(void *rock, struct caldav_data *cdata);
@@ -171,9 +173,13 @@ int caldav_abort(struct caldav_db *caldavdb);
 
 char *caldav_mboxname(const char *userid, const char *name);
 
-int caldav_get_events(struct caldav_db *caldavdb,
+int caldav_get_events(struct caldav_db *caldavdb, const char *asuserid,
                       const char *mailbox, const char *ical_uid,
                       caldav_cb_t *cb, void *rock);
+
+int caldav_write_jmapcache(struct caldav_db *caldavdb, int rowid,
+                           const char *userid, int version, const char *data);
+
 
 /* Process each entry for 'caldavdb' with a modseq higher than oldmodseq,
  * in ascending order of modseq.
