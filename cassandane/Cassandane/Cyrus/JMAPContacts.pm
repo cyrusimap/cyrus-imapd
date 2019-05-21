@@ -1328,7 +1328,6 @@ sub test_contact_set
 
     # Non-JMAP properties.
     $contact->{"importance"} = 0;
-    $contact->{"x-importance"} = 0;
     $contact->{"x-hasPhoto"} = JSON::false;
     $contact->{"addressbookId"} = 'Default';
 
@@ -1918,9 +1917,9 @@ sub test_contact_set_importance_later
     $self->assert_str_equals('Contact/get', $fetch->[0][0]);
     $self->assert_str_equals('R2', $fetch->[0][2]);
     $self->assert_str_equals('first', $fetch->[0][1]{list}[0]{firstName});
-    $self->assert_num_equals(0.0, $fetch->[0][1]{list}[0]{"x-importance"});
+    $self->assert_num_equals(0.0, $fetch->[0][1]{list}[0]{"importance"});
 
-    $res = $jmap->CallMethods([['Contact/set', {update => {$id => {"x-importance" => -0.1}}}, "R3"]]);
+    $res = $jmap->CallMethods([['Contact/set', {update => {$id => {"importance" => -0.1}}}, "R3"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
     $self->assert_str_equals('R3', $res->[0][2]);
@@ -1931,7 +1930,7 @@ sub test_contact_set_importance_later
     $self->assert_str_equals('Contact/get', $fetch->[0][0]);
     $self->assert_str_equals('R4', $fetch->[0][2]);
     $self->assert_str_equals('first', $fetch->[0][1]{list}[0]{firstName});
-    $self->assert_num_equals(-0.1, $fetch->[0][1]{list}[0]{"x-importance"});
+    $self->assert_num_equals(-0.1, $fetch->[0][1]{list}[0]{"importance"});
 }
 
 sub test_contact_set_importance_shared
@@ -1977,7 +1976,7 @@ sub test_contact_set_importance_shared
     xlog "update importance";
     $res = $jmap->CallMethods([['Contact/set', {
                     accountId => 'manifold',
-                    update => {$id => {"x-importance" => -0.1}}
+                    update => {$id => {"importance" => -0.1}}
     }, "R2"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
@@ -1993,7 +1992,7 @@ sub test_contact_set_importance_upfront
     my $jmap = $self->{jmap};
 
     xlog "create with importance in initial create";
-    my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
+    my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last", "importance" => -5.2}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
@@ -2004,7 +2003,7 @@ sub test_contact_set_importance_upfront
     $self->assert_str_equals('Contact/get', $fetch->[0][0]);
     $self->assert_str_equals('R2', $fetch->[0][2]);
     $self->assert_str_equals('first', $fetch->[0][1]{list}[0]{firstName});
-    $self->assert_num_equals(-5.2, $fetch->[0][1]{list}[0]{"x-importance"});
+    $self->assert_num_equals(-5.2, $fetch->[0][1]{list}[0]{"importance"});
 
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {"firstName" => "second"}}}, "R3"]]);
     $self->assert_not_null($res);
@@ -2017,7 +2016,7 @@ sub test_contact_set_importance_upfront
     $self->assert_str_equals('Contact/get', $fetch->[0][0]);
     $self->assert_str_equals('R4', $fetch->[0][2]);
     $self->assert_str_equals('second', $fetch->[0][1]{list}[0]{firstName});
-    $self->assert_num_equals(-5.2, $fetch->[0][1]{list}[0]{"x-importance"});
+    $self->assert_num_equals(-5.2, $fetch->[0][1]{list}[0]{"importance"});
 }
 
 sub test_contact_set_importance_multiedit
@@ -2028,7 +2027,7 @@ sub test_contact_set_importance_multiedit
     my $jmap = $self->{jmap};
 
     xlog "create with no importance";
-    my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
+    my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last", "importance" => -5.2}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
@@ -2039,9 +2038,9 @@ sub test_contact_set_importance_multiedit
     $self->assert_str_equals('Contact/get', $fetch->[0][0]);
     $self->assert_str_equals('R2', $fetch->[0][2]);
     $self->assert_str_equals('first', $fetch->[0][1]{list}[0]{firstName});
-    $self->assert_num_equals(-5.2, $fetch->[0][1]{list}[0]{"x-importance"});
+    $self->assert_num_equals(-5.2, $fetch->[0][1]{list}[0]{"importance"});
 
-    $res = $jmap->CallMethods([['Contact/set', {update => {$id => {"firstName" => "second", "x-importance" => -0.2}}}, "R3"]]);
+    $res = $jmap->CallMethods([['Contact/set', {update => {$id => {"firstName" => "second", "importance" => -0.2}}}, "R3"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
     $self->assert_str_equals('R3', $res->[0][2]);
@@ -2052,7 +2051,7 @@ sub test_contact_set_importance_multiedit
     $self->assert_str_equals('Contact/get', $fetch->[0][0]);
     $self->assert_str_equals('R4', $fetch->[0][2]);
     $self->assert_str_equals('second', $fetch->[0][1]{list}[0]{firstName});
-    $self->assert_num_equals(-0.2, $fetch->[0][1]{list}[0]{"x-importance"});
+    $self->assert_num_equals(-0.2, $fetch->[0][1]{list}[0]{"importance"});
 }
 
 sub test_contact_set_importance_zero_multi
@@ -2063,7 +2062,7 @@ sub test_contact_set_importance_zero_multi
     my $jmap = $self->{jmap};
 
     xlog "create with no importance";
-    my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
+    my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last", "importance" => -5.2}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
@@ -2074,9 +2073,9 @@ sub test_contact_set_importance_zero_multi
     $self->assert_str_equals('Contact/get', $fetch->[0][0]);
     $self->assert_str_equals('R2', $fetch->[0][2]);
     $self->assert_str_equals('first', $fetch->[0][1]{list}[0]{firstName});
-    $self->assert_num_equals(-5.2, $fetch->[0][1]{list}[0]{"x-importance"});
+    $self->assert_num_equals(-5.2, $fetch->[0][1]{list}[0]{"importance"});
 
-    $res = $jmap->CallMethods([['Contact/set', {update => {$id => {"firstName" => "second", "x-importance" => 0}}}, "R3"]]);
+    $res = $jmap->CallMethods([['Contact/set', {update => {$id => {"firstName" => "second", "importance" => 0}}}, "R3"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
     $self->assert_str_equals('R3', $res->[0][2]);
@@ -2087,7 +2086,7 @@ sub test_contact_set_importance_zero_multi
     $self->assert_str_equals('Contact/get', $fetch->[0][0]);
     $self->assert_str_equals('R4', $fetch->[0][2]);
     $self->assert_str_equals('second', $fetch->[0][1]{list}[0]{firstName});
-    $self->assert_num_equals(0, $fetch->[0][1]{list}[0]{"x-importance"});
+    $self->assert_num_equals(0, $fetch->[0][1]{list}[0]{"importance"});
 }
 
 sub test_contact_set_importance_zero_byself
@@ -2098,7 +2097,7 @@ sub test_contact_set_importance_zero_byself
     my $jmap = $self->{jmap};
 
     xlog "create with no importance";
-    my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last", "x-importance" => -5.2}}}, "R1"]]);
+    my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last", "importance" => -5.2}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
@@ -2109,9 +2108,9 @@ sub test_contact_set_importance_zero_byself
     $self->assert_str_equals('Contact/get', $fetch->[0][0]);
     $self->assert_str_equals('R2', $fetch->[0][2]);
     $self->assert_str_equals('first', $fetch->[0][1]{list}[0]{firstName});
-    $self->assert_num_equals(-5.2, $fetch->[0][1]{list}[0]{"x-importance"});
+    $self->assert_num_equals(-5.2, $fetch->[0][1]{list}[0]{"importance"});
 
-    $res = $jmap->CallMethods([['Contact/set', {update => {$id => {"x-importance" => 0}}}, "R3"]]);
+    $res = $jmap->CallMethods([['Contact/set', {update => {$id => {"importance" => 0}}}, "R3"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
     $self->assert_str_equals('R3', $res->[0][2]);
@@ -2122,7 +2121,7 @@ sub test_contact_set_importance_zero_byself
     $self->assert_str_equals('Contact/get', $fetch->[0][0]);
     $self->assert_str_equals('R4', $fetch->[0][2]);
     $self->assert_str_equals('first', $fetch->[0][1]{list}[0]{firstName});
-    $self->assert_num_equals(0, $fetch->[0][1]{list}[0]{"x-importance"});
+    $self->assert_num_equals(0, $fetch->[0][1]{list}[0]{"importance"});
 }
 
 sub test_misc_creationids
