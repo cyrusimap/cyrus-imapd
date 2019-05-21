@@ -670,6 +670,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
     json_t *err = NULL;
+    struct carddav_db *db = NULL;
     int r = 0;
 
     r = carddav_create_defaultaddressbook(req->accountid);
@@ -678,6 +679,9 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
         jmap_error(req, json_pack("{s:s}", "type", "accountNoAddressbooks"));
         return 0;
     } else if (r) return r;
+
+    /* Build callback data */
+    struct cards_rock rock = { NULL, req, &get, NULL /*mailbox*/, 0 /*rows */ };
 
     /* Parse request */
     char *mboxname = NULL;
@@ -691,7 +695,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
         goto done;
     }
 
-    struct carddav_db *db = carddav_open_userid(req->accountid);
+    rock.db = db = carddav_open_userid(req->accountid);
     if (!db) {
         syslog(LOG_ERR,
                "carddav_open_mailbox failed for user %s", req->accountid);
@@ -706,9 +710,6 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
         r = IMAP_INTERNAL;
         goto done;
     }
-
-    /* Build callback data */
-    struct cards_rock rock = { db, req, &get, NULL /*mailbox*/, 0 /*rows */ };
 
     mboxname = addressbookId ?
         carddav_mboxname(req->accountid, addressbookId) : NULL;

@@ -1757,6 +1757,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
+    struct caldav_db *db = NULL;
     json_t *err = NULL;
     int r = 0;
 
@@ -1767,6 +1768,10 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         return 0;
     } else if (r) return r;
 
+    /* Build callback data */
+    int checkacl = strcmp(req->accountid, req->userid);
+    struct getcalendarevents_rock rock = { NULL, req, &get, NULL /*mbox*/, checkacl };
+
     /* Parse request */
     jmap_get_parse(req, &parser, event_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
@@ -1775,7 +1780,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         goto done;
     }
 
-    struct caldav_db *db = caldav_open_userid(req->accountid);
+    rock.db = db = caldav_open_userid(req->accountid);
     if (!db) {
         syslog(LOG_ERR,
                "caldav_open_mailbox failed for user %s", req->accountid);
@@ -1790,10 +1795,6 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         r = IMAP_INTERNAL;
         goto done;
     }
-
-    /* Build callback data */
-    int checkacl = strcmp(req->accountid, req->userid);
-    struct getcalendarevents_rock rock = { db, req, &get, NULL /*mbox*/, checkacl };
 
     /* Does the client request specific events? */
     if (JNOTNULL(get.ids)) {
