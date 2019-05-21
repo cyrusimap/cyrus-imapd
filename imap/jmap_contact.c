@@ -592,11 +592,6 @@ static const jmap_property_t contact_props[] = {
         JMAP_PROP_SERVER_SET
     }, // AJAXUI only
     {
-        "x-importance",
-        JMAP_CONTACTS_EXTENSION,
-        0
-    },  // AJAXUI only
-    {
         "importance",
         JMAP_CONTACTS_EXTENSION,
         0
@@ -1771,7 +1766,6 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
     if (buf.len) val = strtod(buf_cstring(&buf), NULL);
 
     // need to keep the x- version while AJAXUI is around
-    json_object_set_new(obj, "x-importance", json_real(val));
     json_object_set_new(obj, "importance", json_real(val));
 
     /* XXX - other fields */
@@ -2915,8 +2909,7 @@ static int _json_to_card(struct jmap_req *req,
                 json_array_append_new(invalid, json_string("isFlagged"));
             }
         }
-        // need to support x-importance while AJAXUI is around
-        else if (!strcmp(key, "x-importance") || !strcmp(key, "importance")) {
+        else if (!strcmp(key, "importance")) {
             has_noncontent = 1;
             double dval = json_number_value(jval);
             const char *ns = DAV_ANNOT_NS "<" XML_NS_CYRUS ">importance";
@@ -3102,8 +3095,7 @@ static int required_set_rights(json_t *props)
             !strcmp(name, "addressbookId")) {
             /* immutable */
         }
-        else if (!strcmp(name, "importance") ||
-                 !strcmp(name, "x-importance")) {
+        else if (!strcmp(name, "importance")) {
             /* writing shared meta-data (per RFC 5257) */
             needrights |= DACL_PROPRSRC;
         }
