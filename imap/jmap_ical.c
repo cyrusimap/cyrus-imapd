@@ -2222,11 +2222,10 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     if (wantprops) {
-        return jmap_filterprops(event, wantprops);
+        jmap_filterprops(event, wantprops);
     }
-    else {
-        return event;
-    }
+
+    return event;
 }
 
 json_t*

@@ -1510,7 +1510,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     free(eventrep);
 
 gotevent:
-    jsevent = jmap_filterprops(jsevent, rock->get->props);
+    jmap_filterprops(jsevent, rock->get->props);
 
     /* Add participant id */
     if (jmap_wantprop(rock->get->props, "participantId")) {

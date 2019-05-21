@@ -1821,7 +1821,7 @@ static int getcontacts_cb(void *rock, struct carddav_data *cdata)
     vparse_free_card(vcard);
 
 gotvalue:
-    obj = jmap_filterprops(obj, crock->get->props);
+    jmap_filterprops(obj, crock->get->props);
 
     if (jmap_wantprop(crock->get->props, "x-href")) {
         char *xhref = jmap_xhref(cdata->dav.mailbox, cdata->dav.resource);
