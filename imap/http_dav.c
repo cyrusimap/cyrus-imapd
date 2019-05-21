@@ -7451,7 +7451,7 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                                       &updates_cb, &rock);
     if (r) {
         /* Tell client we truncated the responses */
-        *(fctx->req_tgt->resource) = '\0';
+        if (fctx->req_tgt->resource) *(fctx->req_tgt->resource) = '\0';
         xml_add_response(fctx, HTTP_NO_STORAGE, DAV_OVER_LIMIT, NULL, NULL);
     }
     else {
