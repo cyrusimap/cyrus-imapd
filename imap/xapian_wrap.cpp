@@ -145,22 +145,125 @@ class CyrusSearchStemmer : public Xapian::StemImplementation
 
 /* ====================================================================== */
 
+/*
+ * A brief history of Xapian db versions:
+ * Version 0: uses STEM_ALL for all terms, term prefixes don't start with 'X'
+ * Version 1: term prefixes start with 'X'
+ * Version 2: uses STEM_SOME for some terms
+ * Version 3: removes all use of STEM_ALL
+ * Version 4: introduces doctype indexing
+ * Version 5: introduces language-specific stemming
+ */
+#define XAPIAN_DB_CURRENT_VERSION 5
+#define XAPIAN_DB_MIN_SUPPORTED_VERSION 2
+
+static int get_db_version(Xapian::Database& database)
+{
+    std::string val = database.get_metadata("cyrus.db_version");
+    if (val.empty()) {
+        // Up to version 3 this was named stem version.
+        val = database.get_metadata("cyrus.stem-version");
+        if (val.empty()) {
+            // Absence of the key indicates version 0
+            return 0;
+        }
+    }
+    char *err = NULL;
+    long version = strtol(val.c_str(), &err, 10);
+    if ((err && *err) || version < 0 || version > INT_MAX) {
+        // That's just bogus data
+        return -1;
+    }
+    return version;
+}
+
+static void set_db_version(Xapian::WritableDatabase & database, int version)
+{
+    database.set_metadata("cyrus.db_version", std::to_string(version));
+}
+
+/* ====================================================================== */
+
+#define XAPIAN_LANG_COUNT_KEYPREFIX "lang.count"
+#define XAPIAN_LANG_DOC_KEYPREFIX "lang.doc"
+
+static std::string make_lang_prefix(std::string iso_lang, const char *prefix)
+{
+    return std::string("XI") + iso_lang + ":" + prefix;
+}
+
+static std::string make_lang_cyrusid_key(int num_part, const char *cyrusid)
+{
+    const char *partname = search_part_as_string(num_part);
+    std::string key(XAPIAN_LANG_DOC_KEYPREFIX);
+    if (partname) {
+        std::string lstr(partname);
+        std::transform(lstr.begin(), lstr.end(), lstr.begin(), ::tolower);
+        key += "." + lstr;
+    }
+    key += "." + std::string(cyrusid);
+    return key;
+}
+
+static std::string make_lang_count_key(int num_part, const char *iso_lang)
+{
+    const char *partname = NULL;
+    if (num_part != SEARCH_PART_NONE && num_part != SEARCH_PART_ANY)
+        partname = search_part_as_string(num_part);
+    std::string key(XAPIAN_LANG_COUNT_KEYPREFIX);
+    if (partname) {
+        std::string lstr(partname);
+        std::transform(lstr.begin(), lstr.end(), lstr.begin(), ::tolower);
+        key += "." + lstr;
+    }
+    if (iso_lang) {
+        key += "." + std::string(iso_lang);
+    }
+    return key;
+}
+
+
+/* ====================================================================== */
+
 int xapian_compact_dbs(const char *dest, const char **sources)
 {
     int r = 0;
     Xapian::Database db;
     const char *thispath = "(unknown path)";
+    std::map<std::string, unsigned> lang_counts;
 
     try {
         while (*sources) {
             thispath = *sources;
             Xapian::Database subdb(*sources++);
             db.add_database(subdb);
+            // Aggregate language counts across databases.
+            unsigned db_version = get_db_version(subdb);
+            if (db_version >= 5) {
+                for (Xapian::TermIterator it = subdb.metadata_keys_begin(XAPIAN_LANG_COUNT_KEYPREFIX);
+                        it != subdb.metadata_keys_end(XAPIAN_LANG_COUNT_KEYPREFIX); ++it) {
+                    lang_counts[*it] += std::stol(subdb.get_metadata(*it));
+                }
+            }
+            else lang_counts[XAPIAN_LANG_COUNT_KEYPREFIX ".en"] += subdb.get_doccount();
         }
         thispath = "(unknown path)";
 
         /* FULLER because we never write to compression targets again */
         db.compact(dest, Xapian::Compactor::FULLER | Xapian::DBCOMPACT_MULTIPASS);
+
+        Xapian::WritableDatabase dbw(dest);
+        set_db_version(dbw, XAPIAN_DB_CURRENT_VERSION);
+
+        // Replace all language counts with aggregated counts.
+        for (Xapian::TermIterator it = dbw.metadata_keys_begin(XAPIAN_LANG_COUNT_KEYPREFIX);
+                it != dbw.metadata_keys_end(XAPIAN_LANG_COUNT_KEYPREFIX); ++it) {
+            dbw.set_metadata(*it, "");
+        }
+        for (std::map<std::string, unsigned>::iterator it = lang_counts.begin();
+                it != lang_counts.end(); ++it) {
+            dbw.set_metadata(it->first, std::to_string(it->second));
+        }
     }
     catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception compact_dbs: %s: %s (%s)",
@@ -285,44 +388,6 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
     }
 }
 
-/*
- * A brief history of Xapian db versions:
- * Version 0: uses STEM_ALL for all terms, term prefixes don't start with 'X'
- * Version 1: term prefixes start with 'X'
- * Version 2: uses STEM_SOME for some terms
- * Version 3: removes all use of STEM_ALL
- * Version 4: introduces doctype indexing and language detection
- */
-#define XAPIAN_DB_CURRENT_VERSION 4
-#define XAPIAN_DB_MIN_SUPPORTED_VERSION 2
-
-static int get_db_version(Xapian::Database& database)
-{
-    std::string val = database.get_metadata("cyrus.db_version");
-    if (val.empty()) {
-        // Up to version 3 this was named stem version.
-        val = database.get_metadata("cyrus.stem-version");
-        if (val.empty()) {
-            // Absence of the key indicates version 0
-            return 0;
-        }
-    }
-    char *err = NULL;
-    long version = strtol(val.c_str(), &err, 10);
-    if ((err && *err) || version < 0 || version > INT_MAX) {
-        // That's just bogus data
-        return -1;
-    }
-    return version;
-}
-
-static void set_db_version(Xapian::WritableDatabase *database, int version)
-{
-    std::ostringstream convert;
-    convert << version;
-    database->set_metadata("cyrus.db_version", convert.str());
-}
-
 /* For all db paths in sources that are not using the latest database
  * version or not readable, report their paths in toreindex */
 void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *toreindex, int always_upgrade)
@@ -344,41 +409,6 @@ void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *torein
             strarray_add(toreindex, thispath);
         }
     }
-}
-
-/* ====================================================================== */
-
-static std::string make_lang_prefix(std::string iso_lang, const char *prefix)
-{
-    return std::string("XI") + iso_lang + ":" + prefix;
-}
-
-static std::string make_lang_cyrusid_key(int num_part, const char *cyrusid)
-{
-    const char *partname = search_part_as_string(num_part);
-    std::string key("lang.doc");
-    if (partname) {
-        std::string lstr(partname);
-        std::transform(lstr.begin(), lstr.end(), lstr.begin(), ::tolower);
-        key += "." + lstr;
-    }
-    key += "." + std::string(cyrusid);
-    return key;
-}
-
-static std::string make_lang_count_key(int num_part, const char *iso_lang)
-{
-    const char *partname = search_part_as_string(num_part);
-    std::string key("lang.count");
-    if (partname) {
-        std::string lstr(partname);
-        std::transform(lstr.begin(), lstr.end(), lstr.begin(), ::tolower);
-        key += "." + lstr;
-    }
-    if (iso_lang) {
-        key += "." + std::string(iso_lang);
-    }
-    return key;
 }
 
 /* ====================================================================== */
@@ -421,7 +451,7 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
              * the xapianactive file items to be locked. */
             dbw->database = new Xapian::WritableDatabase(path, Xapian::DB_CREATE|Xapian::DB_BACKEND_GLASS);
             dbw->db_version = XAPIAN_DB_CURRENT_VERSION;
-            set_db_version(dbw->database, dbw->db_version);
+            set_db_version(*dbw->database, dbw->db_version);
         }
 
         dbw->term_generator = new Xapian::TermGenerator();
@@ -751,12 +781,14 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
                 if (!db->stem_language_weights)
                     db->stem_language_weights = new std::map<std::string, double>();
 
-                std::string lang_count_prefix("lang.count.");
+                std::string lang_count_prefix(XAPIAN_LANG_COUNT_KEYPREFIX ".");
                 for (Xapian::TermIterator it = database.metadata_keys_begin(lang_count_prefix);
                         it != database.metadata_keys_end(lang_count_prefix); ++it) {
                     double count = (double) std::stol(database.get_metadata(*it));
                     total_stemmed_docs_count += count;
                     std::string iso_lang = (*it).substr(lang_count_prefix.length());
+                    // A lang count prefix optionally includes a part name, so
+                    // both "lang.count.en" and "lang.count.body.en" are valid.
                     size_t dotpos = iso_lang.find('.');
                     if (dotpos != std::string::npos) {
                         iso_lang = iso_lang.substr(dotpos+1);
