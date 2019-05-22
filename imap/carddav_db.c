@@ -796,7 +796,7 @@ EXPORTED int carddav_delmbox(struct carddav_db *carddavdb, const char *mailbox)
 
 #define CMD_INSERT_JMAPCACHE                                                \
     "INSERT INTO vcard_jmapcache ( rowid, jmapversion, jmapdata )"          \
-    " VALUES ( :rowid, :jmapversion, jmapdata );"
+    " VALUES ( :rowid, :jmapversion, :jmapdata );"
 
 EXPORTED int carddav_write_jmapcache(struct carddav_db *carddavdb, int rowid, int version, const char *data)
 {
