@@ -8982,18 +8982,22 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
 static void _email_bulkupdate_checklimits(struct email_bulkupdate *bulk)
 {
     /* Validate mailbox counts per email */
-    hash_table mboxcounts = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&mboxcounts, hash_numrecords(&bulk->uidrecs_by_email_id)+1, 0);
+    hash_table mbox_ids_by_email_id = HASH_TABLE_INITIALIZER;
+    construct_hash_table(&mbox_ids_by_email_id, hash_numrecords(&bulk->uidrecs_by_email_id)+1, 0);
 
-    /* Count current mailboxes per email */
+    /* Collect current mailboxes per email */
     hash_iter *iter = hash_table_iter(&bulk->uidrecs_by_email_id);
     while (hash_iter_next(iter)) {
         ptrarray_t *uidrecs = hash_iter_val(iter);
         int i;
         for (i = 0; i < ptrarray_size(uidrecs); i++) {
             struct email_uidrec *uidrec = ptrarray_nth(uidrecs, i);
-            uintptr_t count = (uintptr_t) hash_lookup(uidrec->email_id, &mboxcounts);
-            hash_insert(uidrec->email_id, (void*) ++count, &mboxcounts);
+            strarray_t *mbox_ids = hash_lookup(uidrec->email_id, &mbox_ids_by_email_id);
+            if (!mbox_ids) {
+                mbox_ids = strarray_new();
+                hash_insert(uidrec->email_id, mbox_ids, &mbox_ids_by_email_id);
+            }
+            strarray_add(mbox_ids, uidrec->mboxrec->mbox_id);
         }
     }
     hash_iter_free(&iter);
@@ -9007,31 +9011,41 @@ static void _email_bulkupdate_checklimits(struct email_bulkupdate *bulk)
             int j;
             for (j = 0; j < ptrarray_size(uidrecs); j++) {
                 struct email_uidrec *uidrec = ptrarray_nth(uidrecs, j);
-                uintptr_t count = (uintptr_t) hash_lookup(uidrec->email_id, &mboxcounts);
-                hash_insert(uidrec->email_id, (void*) ++count, &mboxcounts);
+                strarray_t *mbox_ids = hash_lookup(uidrec->email_id, &mbox_ids_by_email_id);
+                if (!mbox_ids) {
+                    mbox_ids = strarray_new();
+                    hash_insert(uidrec->email_id, mbox_ids, &mbox_ids_by_email_id);
+                }
+                strarray_add(mbox_ids, plan->mbox_id);
             }
         }
         for (i = 0; i < ptrarray_size(&plan->delete); i++) {
             struct email_uidrec *uidrec = ptrarray_nth(&plan->delete, i);
-            uintptr_t count = (uintptr_t) hash_lookup(uidrec->email_id, &mboxcounts);
-            hash_insert(uidrec->email_id, (void*)(count > 0 ? --count : 0), &mboxcounts);
+            strarray_t *mbox_ids = hash_lookup(uidrec->email_id, &mbox_ids_by_email_id);
+            if (!mbox_ids) {
+                mbox_ids = strarray_new();
+                hash_insert(uidrec->email_id, mbox_ids, &mbox_ids_by_email_id);
+            }
+            strarray_remove_all(mbox_ids, plan->mbox_id);
         }
     }
     hash_iter_free(&iter);
     /* Validate mailbox counts */
-    iter = hash_table_iter(&mboxcounts);
+    iter = hash_table_iter(&mbox_ids_by_email_id);
     while (hash_iter_next(iter)) {
         const char *email_id = hash_iter_key(iter);
-        uintptr_t count = (uintptr_t) hash_iter_val(iter);
-        if (count > JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL) {
+        strarray_t *mbox_ids = hash_iter_val(iter);
+        if (!mbox_ids) continue;
+        if (strarray_size(mbox_ids) > JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL) {
             if (json_object_get(bulk->set_errors, email_id) == NULL) {
                 json_object_set_new(bulk->set_errors, email_id,
                         json_pack("{s:s}", "type", "tooManyMailboxes"));
             }
         }
+        strarray_free(mbox_ids);
     }
     hash_iter_free(&iter);
-    free_hash_table(&mboxcounts, NULL);
+    free_hash_table(&mbox_ids_by_email_id, NULL);
 
     /* Validate keyword counts. This assumes keyword patches already
      * have been replaced with the complete set of patched keywords. */
