@@ -13024,4 +13024,59 @@ sub test_email_set_received_at
     $self->assert_str_equals('2019-05-02T03:15:00Z', $email->{receivedAt});
 }
 
+sub test_email_set_email_duplicates_mailbox_counts
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+
+    # This is the opposite of a tooManyMailboxes error. It makes
+    # sure that duplicate emails within a mailbox do not count
+    # as multiple mailbox instances.
+
+    my $accountCapabilities = $self->get_account_capabilities();
+    my $maxMailboxesPerEmail = $accountCapabilities->{'urn:ietf:params:jmap:mail'}{maxMailboxesPerEmail};
+
+    $self->assert($maxMailboxesPerEmail > 0);
+
+    $imap->create('INBOX.M1') || die;
+    $imap->create('INBOX.M2') || die;
+
+    open(my $F, 'data/mime/simple.eml');
+    for (1..$maxMailboxesPerEmail) {
+        $imap->append('INBOX.M1', $F) || die $@;
+    }
+    $imap->append('INBOX.M2', $F) || die $@;
+    close($F);
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => {
+                resultOf => 'R1',
+                name => 'Email/query',
+                path => '/ids'
+            },
+            properties => ['mailboxIds']
+        }, 'R2'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(2, scalar keys %{$res->[1][1]{list}[0]{mailboxIds}});
+
+    my $emailId = $res->[0][1]{ids}[0];
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailId => {
+                    keywords => {
+                        foo => JSON::true
+                    }
+                },
+            }
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$emailId});
+}
+
 1;
