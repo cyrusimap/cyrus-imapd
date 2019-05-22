@@ -3577,6 +3577,7 @@ out:
     strarray_free(active);
     strarray_free(srcdirs);
     strarray_free(newdirs);
+    strarray_free(newtiers);
     strarray_free(toreindex);
     strarray_free(tochange);
     strarray_free(tocompact);
