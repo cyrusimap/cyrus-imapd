@@ -145,11 +145,11 @@ EXPORTED void bv_andeq(bitvector_t *a, const bitvector_t *b)
     bv_ensure(a, b->length);
     if (!a->length)
         return;
-    n = vlen(b->length+1);
-    for (i = 0 ; i <= n ; i++)
+    n = vlen(b->length);
+    for (i = 0; i < n; i++)
         a->bits[i] &= b->bits[i];
     n = vlen(a->length);
-    for ( ; i <= n ; i++)
+    for ( ; i < n ; i++)
         a->bits[i] = 0;
     a->length = MAX(a->length, b->length);
 }
@@ -160,8 +160,8 @@ EXPORTED void bv_oreq(bitvector_t *a, const bitvector_t *b)
     unsigned int i;
 
     bv_ensure(a, b->length);
-    n = vlen(b->length+1);
-    for (i = 0 ; i <= n ; i++)
+    n = vlen(b->length);
+    for (i = 0 ; i < n ; i++)
         a->bits[i] |= b->bits[i];
     a->length = MAX(a->length, b->length);
 }
