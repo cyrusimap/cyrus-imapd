@@ -1647,6 +1647,7 @@ static int run_query(xapian_builder_t *bb)
     /* Return results */
     if (result) {
         hash_iter *iter = hash_table_iter(result);
+        r = 0;
         while (hash_iter_next(iter)) {
             const char *mboxname = hash_iter_key(iter);
             struct xapian_match *match = hash_iter_val(iter);
@@ -1658,10 +1659,11 @@ static int run_query(xapian_builder_t *bb)
                     partids = hashu64_lookup(uid, &match->partids_by_uid);
                 }
                 r = bb->proc(mboxname, /*uidvalidity*/0, uid, partids, bb->rock);
-                if (r) goto out;
+                if (r) break;
             }
         }
         hash_iter_free(&iter);
+        if (r) goto out;
     }
 
 out:
