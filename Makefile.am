@@ -1283,7 +1283,9 @@ imap_httpd_SOURCES += \
 	imap/jmap_mail.c \
 	imap/jmap_mail_submission.c \
 	imap/jmap_mailbox.c \
-	imap/jmap_vacation.c
+	imap/jmap_vacation.c \
+	imap/sync_support.c \
+        imap/sync_support.h
 
 nodist_imap_httpd_SOURCES += \
 	imap/jmap_err.c \
