@@ -965,11 +965,9 @@ xapian_query_new_match(const xapian_db_t *db, int partnum, const char *str)
 
     try {
         int min_version = *db->db_versions->begin();
-        if (min_version == 0) {
-            syslog(LOG_ERR, "Xapian: prefix version 0 is deprecated. Reindex your dbs.");
-        }
-        if (min_version < 3) {
-            syslog(LOG_ERR, "Xapian: stem versions < 3 are deprecated. Reindex your dbs.");
+        if (min_version < XAPIAN_DB_MIN_SUPPORTED_VERSION) {
+            syslog(LOG_ERR, "Xapian: db versions < %d are deprecated. Reindex your dbs.",
+                    XAPIAN_DB_MIN_SUPPORTED_VERSION);
         }
 
         // Don't stem queries for Thaana codepage (0780) or higher.
