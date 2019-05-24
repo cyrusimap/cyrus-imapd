@@ -4986,5 +4986,69 @@ sub test_calendarevent_get_floatingtzid
     $self->assert_str_equals("PT1H45M", $event->{duration});
 }
 
+sub test_rscale_in_jmap_hidden_in_caldav
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $calid = "Default";
+    my $event =  {
+        "calendarId" => $calid,
+        "title"=> "foo",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/London",
+        "locations" => {
+            "loc1" => {
+                "timeZone" => "Europe/Berlin",
+                "rel" => "end",
+            },
+        },
+        "isAllDay"=> JSON::false,
+        "description"=> "",
+        "freeBusyStatus"=> "busy",
+        "prodId" => "foo",
+        "recurrenceRule" => {
+            "frequency" => "monthly",
+            count => 12,
+        },
+    };
+
+    my $ret = $self->createandget_event($event);
+    $self->assert_normalized_event_equals($event, $ret);
+    my $eventId = $ret->{id};
+
+    # Overide one event, this causes rscale to get added
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    "recurrenceOverrides/2015-12-07T09:00:00" => {
+                         exclude => JSON::true,
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+             ids => [$eventId],
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $ret = $res->[1][1]{list}[0];
+    $self->assert_not_null($ret);
+
+    # Make sure we have no rscale through caldav, most clients can't
+    # handle it
+    my $events = $caldav->GetEvents("$calid");
+    $self->assert_deep_equals(
+        $events->[0]->{recurrenceRule},
+        {
+            count => 12,
+            frequency => 'monthly',
+        },
+    );
+}
 
 1;
