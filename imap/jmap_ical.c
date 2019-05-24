@@ -3661,6 +3661,7 @@ recurrence_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrul
     if (json_is_string(jprop)) {
         char *rscale = xstrdup(json_string_value(jprop));
         ucase(rscale);
+        /* Only include RSCALE/SKIP when required to not break legacy clients */
         if (strcmp(rscale, "GREGORIAN") || (skip && strcmp(skip, "OMIT"))) {
             buf_printf(&buf, ";RSCALE=%s", rscale);
             if (skip) buf_printf(&buf, ";SKIP=%s", skip);
