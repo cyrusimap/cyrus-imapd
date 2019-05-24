@@ -1562,6 +1562,21 @@ done:
     return r;
 }
 
+static void xapian_matchhash_free(hash_table **matchhashptr)
+{
+    hash_table *matchhash = *matchhashptr;
+    hash_iter *iter = hash_table_iter(matchhash);
+    while (hash_iter_next(iter)) {
+        struct xapian_match *match = hash_iter_val(iter);
+        xapian_match_fini(match);
+        free(match);
+    }
+    hash_iter_free(&iter);
+    free_hash_table(matchhash, NULL);
+    free(matchhash);
+    *matchhashptr = NULL;
+}
+
 static int run_query(xapian_builder_t *bb)
 {
     int i, r = 0;
@@ -1580,7 +1595,10 @@ static int run_query(xapian_builder_t *bb)
         struct xapian_run_rock xrock = { bb, matches, /*is_legacy*/0 };
         xapian_query_t *xq = ptrarray_nth(&clauses, i);
         r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/0, xapian_run_cb, &xrock);
-        if (r) goto out;
+        if (r) {
+            xapian_matchhash_free(&matches);
+            goto out;
+        }
 
         /* First clause, use as initial result */
         if (result == NULL) {
@@ -1668,15 +1686,7 @@ static int run_query(xapian_builder_t *bb)
 
 out:
     if (result) {
-        hash_iter *iter = hash_table_iter(result);
-        while (hash_iter_next(iter)) {
-            struct xapian_match *match = hash_iter_val(iter);
-            xapian_match_fini(match);
-            free(match);
-        }
-        hash_iter_free(&iter);
-        free_hash_table(result, NULL);
-        free(result);
+        xapian_matchhash_free(&result);
     }
     if (ptrarray_size(&clauses)) {
         xapian_query_t *xq;
