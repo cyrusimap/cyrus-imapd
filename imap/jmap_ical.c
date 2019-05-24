@@ -3647,28 +3647,29 @@ recurrence_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrul
     }
 
     /* skip */
-    const char *skip = NULL;
+    char *skip = NULL;
     jprop = json_object_get(rrule, "skip");
     if (json_is_string(jprop)) {
-        skip = json_string_value(jprop);
-        if (strlen(skip)) {
-            buf_printf(&buf, ";SKIP=%s", skip);
-        }
+        skip = xstrdup(json_string_value(jprop));
+        ucase(skip);
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "skip");
     }
 
     /* rscale */
-    const char *rscale = NULL;
     jprop = json_object_get(rrule, "rscale");
     if (json_is_string(jprop)) {
-        rscale = json_string_value(jprop);
-        if (strlen(rscale)) {
+        char *rscale = xstrdup(json_string_value(jprop));
+        ucase(rscale);
+        if (strcmp(rscale, "GREGORIAN") || (skip && strcmp(skip, "OMIT"))) {
             buf_printf(&buf, ";RSCALE=%s", rscale);
+            if (skip) buf_printf(&buf, ";SKIP=%s", skip);
         }
+        free(rscale);
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "rscale");
     }
+    free(skip);
 
     /* firstDayOfWeek */
     jprop = json_object_get(rrule, "firstDayOfWeek");
