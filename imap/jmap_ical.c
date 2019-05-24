@@ -3366,7 +3366,7 @@ description_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *jse
         jmap_parser_invalid(parser, "descriptionContentType");
     }
 
-    if (desc) icalcomponent_set_description(comp, desc);
+    if (desc && strlen(desc)) icalcomponent_set_description(comp, desc);
 }
 
 /* Create or update the VALARMs in the VEVENT component comp as defined by the
@@ -4400,7 +4400,8 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     /* title */
     jprop = json_object_get(event, "title");
     if (json_is_string(jprop)) {
-        icalcomponent_set_summary(comp, json_string_value(jprop));
+        const char *summary = json_string_value(jprop);
+        if (strlen(summary)) icalcomponent_set_summary(comp, summary);
     }
     else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "title");
