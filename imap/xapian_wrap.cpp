@@ -289,6 +289,9 @@ static const char *get_term_prefix(int db_version, int partnum)
      * The prefix "XE" is reserved for the document type and
      * MUST not be used for any search part.
      *
+     * The prefix "XI" is reserved for language stemming
+     * (also see make_lang_prefix).
+     *
      */
     static const char * const term_prefixes[SEARCH_NUM_PARTS] = {
         NULL,
