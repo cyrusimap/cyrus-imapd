@@ -5039,6 +5039,19 @@ sub test_rscale_in_jmap_hidden_in_caldav
     $ret = $res->[1][1]{list}[0];
     $self->assert_not_null($ret);
 
+    # rscale should now be in jmap
+    $self->assert_deep_equals(
+        $ret->{recurrenceRule},
+        {
+            count          => 12,
+            firstDayOfWeek => 'mo',
+            frequency      => 'monthly',
+            interval       => 1,
+            rscale         => 'gregorian',
+            skip           => 'omit'
+        }
+    );
+
     # Make sure we have no rscale through caldav, most clients can't
     # handle it
     my $events = $caldav->GetEvents("$calid");
