@@ -7926,7 +7926,7 @@ sub test_email_get_8bit_headers
     });
 
     foreach (@testCases) {
-        open(my $F, $_->{file});
+        open(my $F, $_->{file}) || die $!;
         $imap->append('INBOX', $F) || die $@;
         close($F);
 
@@ -7962,7 +7962,7 @@ sub test_attach_base64_email
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    open(my $F, 'data/mime/base64-body.eml');
+    open(my $F, 'data/mime/base64-body.eml') || die $!;
     $imap->append('INBOX', $F) || die $@;
     close($F);
 
@@ -13043,7 +13043,7 @@ sub test_email_set_email_duplicates_mailbox_counts
     $imap->create('INBOX.M1') || die;
     $imap->create('INBOX.M2') || die;
 
-    open(my $F, 'data/mime/simple.eml');
+    open(my $F, 'data/mime/simple.eml') || die $!;
     for (1..$maxMailboxesPerEmail) {
         $imap->append('INBOX.M1', $F) || die $@;
     }
