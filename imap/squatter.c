@@ -120,7 +120,6 @@ static int usage(const char *name)
             "  -a          index [source] using /squat annotations\n"
             "  -r          index [source] recursively\n"
             "  -f file     index from synclog file\n"
-            "  -I file     index mbox/uids in file\n"
             "  -R          start rolling indexer\n"
             "  -z tier     compact to tier\n"
             "\n"
@@ -796,7 +795,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:N:RUXPZT:S:Fde:f:mn:riavAz:t:ouh")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:N:RUXPZT:S:Fde:f:mn:riavAz:t:ouh")) != EOF) {
         switch (opt) {
         case 'A':
             if (mode != UNKNOWN) usage(argv[0]);
