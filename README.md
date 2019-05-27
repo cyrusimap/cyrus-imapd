@@ -85,7 +85,7 @@ from source (see next section).
 The latest development code is on the branch called 'master',
 and the latest code destined for the stable release is on
 the branch 'cyrus-imapd-$major.$minor'.  So the current
-stable release is called cyrus-imapd-2.5
+stable release is called cyrus-imapd-3.0
 
 Unlike releases, the git repository doesn't have a pre-built
 ./configure script.  You need to generate it with autoreconf:
@@ -97,7 +97,7 @@ Unlike releases, the git repository doesn't have a pre-built
 
 If you need to build a local copy of the docs current to the version of the code, these need to be built: see doc/README.docs
 
-Read through doc/html/imap/developer.html for more detailed instructions on building and contributing. The latest version is online at http://www.cyrusimap.org/imap/developer.html
+Read through doc/html/imap/developer.html for more detailed instructions on building and contributing. The latest version is online at https://www.cyrusimap.org/imap/developer.html
 
 How to install Cyrus libraries from git source
 ==============================================
@@ -155,7 +155,7 @@ Check https://github.com/cyrusimap/cyrus-imapd/issues/ for any
 outstanding bugs. Old bugs can be found at 
 https://bugzilla.cyrusimap.org/ 
 
-Our guide at http://www.cyrusimap.org/feedback-bugs.html has all the 
+Our guide at https://www.cyrusimap.org/support.html has all the
 information about how to contact us and how best to get your change accepted.
 
 Licensing Information
@@ -169,7 +169,7 @@ Contact us
 Whether you have a success story to share, or a bug to file, or a 
 request for help or a feature to add or some documentation to contribute 
 or you'd just like to say hi, we want to hear from you! See 
-http://www.cyrusimap.org/feedback.html for various ways you can get hold 
+https://www.cyrusimap.org/support.html for various ways you can get hold
 of us. 
 
 
