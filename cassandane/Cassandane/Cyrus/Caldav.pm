@@ -706,7 +706,7 @@ EOF
 }
 
 sub test_shared_invite_as_secretary
-    :VirtDomains :min_version_3_0 :needs_component_httpd
+    :VirtDomains :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -817,7 +817,7 @@ EOF
 }
 
 sub test_shared_reply_as_secretary
-    :VirtDomains :min_version_3_0 :needs_component_httpd
+    :VirtDomains :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -928,7 +928,7 @@ EOF
 }
 
 sub test_shared_team_invite_sharee
-    :VirtDomains :min_version_3_0 :needs_component_httpd
+    :VirtDomains :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -1035,7 +1035,7 @@ EOF
 }
 
 sub test_shared_team_invite_sharer
-    :VirtDomains :min_version_3_0 :needs_component_httpd
+    :VirtDomains :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
 

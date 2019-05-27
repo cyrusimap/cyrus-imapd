@@ -4987,6 +4987,7 @@ sub test_calendarevent_get_floatingtzid
 }
 
 sub test_rscale_in_jmap_hidden_in_caldav
+    :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
 
