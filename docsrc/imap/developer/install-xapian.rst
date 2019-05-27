@@ -69,3 +69,5 @@ You also need (at least one) search tier. Add this to :cyrusman:`imapd.conf(5)`.
 If you want to do more complex search tiers and repacking, you'll want to read:
 
 http://lists.tartarus.org/pipermail/xapian-discuss/2014-October/009112.html
+
+At run-time, when compacting databases, `/bin/rm` and `/usr/bin/rsync` must be present.

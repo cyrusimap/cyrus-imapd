@@ -51,7 +51,7 @@ startup:
 
 cyrus.conf:
 
-START {
+DAEMON {
   # run a rolling squatter
   squatter cmd="squatter -R"
 }
