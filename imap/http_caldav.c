@@ -4049,6 +4049,7 @@ static int personalize_resource(struct transaction_t *txn,
     icalcomponent *oldical = NULL;
     unsigned num_changes = 0;
     struct auth_state *authstate = auth_newstate(userid);
+    char *resource = xstrdupnull(cdata->dav.resource);
 
     *store_me = ical;
 
@@ -4097,7 +4098,7 @@ static int personalize_resource(struct transaction_t *txn,
         /* Create UID for owner VPATCH */
         assert(!buf_len(&txn->buf));
         buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox->name),
-                   strhash(cdata->dav.resource), strhash(owner));
+                   strhash(resource), strhash(owner));
 
         *userdata =
             icalcomponent_vanew(ICAL_VPATCH_COMPONENT,
@@ -4144,7 +4145,7 @@ static int personalize_resource(struct transaction_t *txn,
         /* Create UID for sharee VPATCH */
         assert(!buf_len(&txn->buf));
         buf_printf(&txn->buf, "%x-%x-%x", strhash(mailbox->name),
-                   strhash(cdata->dav.resource), strhash(userid));
+                   strhash(resource), strhash(userid));
 
         *userdata =
             icalcomponent_vanew(ICAL_VPATCH_COMPONENT,
@@ -4180,6 +4181,7 @@ static int personalize_resource(struct transaction_t *txn,
   done:
     if (oldical && (*store_me != oldical)) icalcomponent_free(oldical);
     mbname_free(&mbname);
+    free(resource);
 
     return ret;
 }
