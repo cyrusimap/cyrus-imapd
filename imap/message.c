@@ -4841,9 +4841,6 @@ static void extract_one(struct buf *buf,
         buf_insertcstr(raw, 0, name);
     }
 
-    if (!(flags & MESSAGE_APPEND))
-        buf_reset(buf);
-
     switch (flags & _MESSAGE_FORMAT_MASK) {
     case MESSAGE_RAW:
         /* Logically, we're appending to the resulting buffer.
@@ -4916,6 +4913,9 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
         buf_setmap(buf, m->map.s + m->record.header_size, m->record.size - m->record.header_size);
         return 0;
     }
+
+    if (!(flags & MESSAGE_APPEND))
+        buf_reset(buf);
 
     /* the 5 standalone cache fields */
     if (!strcasecmp(hdr, "from")) {
