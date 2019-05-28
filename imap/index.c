@@ -57,6 +57,7 @@
 #ifdef USE_HTTPD
 /* For iCalendar indexing */
 #include <libical/ical.h>
+#include "vcard_support.h"
 #endif
 
 #include "acl.h"
@@ -5074,6 +5075,96 @@ done:
     buf_free(&buf);
     return r;
 }
+
+static void _add_vcard_singlval(struct vparse_card *card, const char *key, struct buf *buf)
+{
+    struct vparse_entry *entry;
+    for (entry = card->properties; entry; entry = entry->next) {
+        if (strcasecmp(entry->name, key)) continue;
+        const char *val = entry->v.value;
+        if (val && val[0]) {
+            if (buf_len(buf)) buf_putc(buf, ' ');
+            buf_appendcstr(buf, val);
+        }
+    }
+}
+
+static void _add_vcard_multival(struct vparse_card *card, const char *key, struct buf *buf)
+{
+    struct vparse_entry *entry;
+    for (entry = card->properties; entry; entry = entry->next) {
+        if (strcasecmp(entry->name, key)) continue;
+        const strarray_t *sa = entry->v.values;
+        int i;
+        for (i = 0; i < strarray_size(sa); i++) {
+            const char *val = strarray_nth(sa, i);
+            if (val && val[0]) {
+                if (buf_len(buf)) buf_putc(buf, ' ');
+                buf_appendcstr(buf, val);
+            }
+        }
+    }
+}
+
+static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
+                            const struct message_guid *content_guid,
+                            struct getsearchtext_rock *str)
+{
+    struct vparse_card *vcard = NULL;
+    int r = 0;
+    struct buf buf = BUF_INITIALIZER;
+
+    /* Parse the message into a vcard object */
+    const struct buf *vcardbuf = NULL;
+    if (encoding || strcasecmp(charset_name(charset), "utf-8")) {
+        char *tmp = charset_to_utf8(buf_cstring(raw), buf_len(raw), charset, encoding);
+        if (!tmp) return 0; /* could be a bogus header - ignore */
+        buf_initm(&buf, tmp, strlen(tmp));
+        vcardbuf = &buf;
+    }
+    else {
+        vcardbuf = raw;
+    }
+
+    vcard = vcard_parse_string(buf_cstring(vcardbuf), /*repair*/1);
+    if (!vcard || !vcard->objects) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    buf_reset(&buf);
+
+    // these are all the things that we think might be interesting
+    _add_vcard_singlval(vcard->objects, "fn", &buf);
+    _add_vcard_singlval(vcard->objects, "email", &buf);
+    _add_vcard_singlval(vcard->objects, "tel", &buf);
+    _add_vcard_singlval(vcard->objects, "url", &buf);
+    _add_vcard_singlval(vcard->objects, "impp", &buf);
+    _add_vcard_singlval(vcard->objects, "x-social-profile", &buf);
+    _add_vcard_singlval(vcard->objects, "x-fm-online-other", &buf);
+    _add_vcard_singlval(vcard->objects, "nickname", &buf);
+    _add_vcard_singlval(vcard->objects, "note", &buf);
+
+    _add_vcard_multival(vcard->objects, "n", &buf);
+    _add_vcard_multival(vcard->objects, "org", &buf);
+    _add_vcard_multival(vcard->objects, "adr", &buf);
+
+    if (buf.len) {
+        charset_t utf8 = charset_lookupname("utf-8");
+        str->receiver->begin_part(str->receiver, SEARCH_PART_BODY, content_guid);
+        charset_extract(extract_cb, str, &buf, utf8, 0, "vcard",
+                        str->charset_flags);
+        str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
+        charset_free(&utf8);
+        buf_reset(&buf);
+    }
+
+done:
+    if (vcard) vparse_free_card(vcard);
+    buf_free(&buf);
+    return r;
+}
+
 #endif /* USE_HTTPD */
 
 
@@ -5535,6 +5626,11 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
         if (!strcmp(subtype, "CALENDAR")) {
 #ifdef USE_HTTPD
             extract_icalbuf(data, charset, encoding, content_guid, str);
+#endif /* USE_HTTPD */
+        }
+        else if (!strcmp(subtype, "VCARD")) {
+#ifdef USE_HTTPD
+            extract_vcardbuf(data, charset, encoding, content_guid, str);
 #endif /* USE_HTTPD */
         }
         else {
