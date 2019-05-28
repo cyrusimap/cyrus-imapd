@@ -1109,28 +1109,6 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         vparse_replace_entry(card, NULL, "VERSION", "3.0");
         vparse_replace_entry(card, NULL, "PRODID", _prodid);
 
-        /* Apply patch to current object */
-        json_t *jcurrent = NULL;
-        if (kind == CARDDAV_KIND_GROUP) {
-            jcurrent = jmap_group_from_vcard(card);
-        }
-        else {
-            jcurrent = jmap_contact_from_vcard(card, mailbox, &record);
-        }
-        if (!jcurrent) {
-            syslog(LOG_ERR, "can't read vcard %u:%s for update",
-                   cdata->dav.imap_uid, mailbox->name);
-            r = 0;
-            json_t *err = json_pack("{s:s s:s}",
-                    "type", "serverError", "description", "invalid current value");
-            json_object_set_new(set.not_updated, uid, err);
-            goto finish;
-        }
-        jupdated = jmap_patchobject_apply(jcurrent, arg);
-        json_decref(jcurrent);
-        json_object_del(jupdated, "addressbookId");
-        arg = jupdated;
-
         json_t *invalid = json_pack("[]");
 
         if (kind == CARDDAV_KIND_GROUP) {
@@ -1151,6 +1129,27 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                 }
                 else if (!strcmp(key, "otherAccountContactIds")) {
                     others = jval;
+                }
+                else if (!strncmp(key, "otherAccountContactIds/", 23)) {
+                    /* Read and apply patch to current card */
+                    json_t *jcurrent = jmap_group_from_vcard(card);
+                    if (!jcurrent) {
+                        syslog(LOG_ERR, "can't read vcard %u:%s for update",
+                                cdata->dav.imap_uid, mailbox->name);
+                        r = 0;
+                        json_t *err = json_pack("{s:s s:s}",
+                                "type", "serverError", "description", "invalid current card");
+                        json_object_set_new(set.not_updated, uid, err);
+                        goto finish;
+                    }
+                    jupdated = jmap_patchobject_apply(jcurrent, arg);
+                    json_decref(jcurrent);
+                    if (JNOTNULL(jupdated)) {
+                        json_object_del(jupdated, "addressbookId");
+                        /* Now read the updated property value */
+                        others = json_incref(json_object_get(jupdated, "otherAccountContactIds"));
+                        json_decref(jupdated);
+                    }
                 }
                 else if (!strcmp(key, "id") || !strcmp(key, "uid")) {
                     if (cdata && strcmpnull(cdata->vcard_uid, json_string_value(jval))) {
