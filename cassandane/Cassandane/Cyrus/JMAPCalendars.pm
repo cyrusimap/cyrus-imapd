@@ -5065,4 +5065,38 @@ sub test_rscale_in_jmap_hidden_in_caldav
     );
 }
 
+sub test_calendar_treat_as_mailbox
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create calendar";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', { create => { "1" => {
+                            name => "foo",
+                            color => "coral",
+                            sortOrder => 2,
+                            isVisible => \1
+             }}}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Calendar/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{created});
+
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog "rename as mailbox $id";
+    $res = $jmap->CallMethods([['Mailbox/set', { update => { $id => { name => "foobar" } } }, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_null($res->[0][1]{updated});
+    $self->assert_not_null($res->[0][1]{notUpdated});
+}
+
 1;
