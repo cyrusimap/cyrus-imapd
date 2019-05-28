@@ -96,7 +96,6 @@ extern int xapian_filter(const char *dest, const char **sources,
 /* XXX legacy DB support */
 extern int xapian_db_has_doctype_index(const xapian_db_t *);
 extern int xapian_db_has_legacy_index(const xapian_db_t *);
-extern int xapian_dbw_has_doctype_index(const xapian_dbw_t *);
 
 /* Language indexing support */
 extern int xapian_list_lang_stats(xapian_db_t*, ptrarray_t*);

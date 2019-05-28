@@ -2238,25 +2238,6 @@ static int end_message_update(search_text_receiver_t *rx)
 
     ptrarray_sort(&tr->super.segs, compare_segs);
 
-    if (!xapian_dbw_has_doctype_index(tr->dbw)) {
-        r = xapian_dbw_begin_doc(tr->dbw, &tr->super.guid, SEARCH_XAPIAN_DOCTYPE_MSG);
-        if (r) goto out;
-
-        for (i = 0 ; i < tr->super.segs.count ; i++) {
-            seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
-            r = xapian_dbw_doc_part(tr->dbw, &seg->text, seg->part);
-            if (r) goto out;
-        }
-
-        if (!tr->uncommitted) {
-            r = xapian_dbw_begin_txn(tr->dbw);
-            if (r) goto out;
-        }
-        ++tr->uncommitted;
-        r = xapian_dbw_end_doc(tr->dbw);
-        goto out;
-    }
-
     // XXX filter out already indexed parts?
 
     const struct message_guid *last_guid = NULL;
