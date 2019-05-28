@@ -4944,6 +4944,9 @@ static void stuff_part(search_text_receiver_t *receiver,
                        const struct message_guid *content_guid,
                        const struct buf *buf)
 {
+    // don't try to index a zero length part
+    if (!buf_len(buf)) return;
+
     if (part == SEARCH_PART_HEADERS &&
         !config_getswitch(IMAPOPT_SEARCH_INDEX_HEADERS))
         return;
