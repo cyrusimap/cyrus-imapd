@@ -4822,29 +4822,29 @@ EXPORTED int message_get_fname(message_t *m, const char **fnamep)
 
 static void extract_one(struct buf *buf,
                         const char *name,
-                        int format,
+                        int flags,
                         int has_name,
                         int isutf8,
                         struct buf *raw)
 {
     char *p = NULL;
 
-    if (has_name && !(format & MESSAGE_FIELDNAME)) {
+    if (has_name && !(flags & MESSAGE_FIELDNAME)) {
         /* remove the fieldname and colon */
         int pos = buf_findchar(raw, 0, ':');
         assert(pos > 0);
         buf_remove(raw, 0, pos+1);
     }
-    else if (!has_name && (format & MESSAGE_FIELDNAME)) {
+    else if (!has_name && (flags & MESSAGE_FIELDNAME)) {
         /* insert a fieldname and colon */
         buf_insertcstr(raw, 0, ":");
         buf_insertcstr(raw, 0, name);
     }
 
-    if (!(format & MESSAGE_APPEND))
+    if (!(flags & MESSAGE_APPEND))
         buf_reset(buf);
 
-    switch (format & _MESSAGE_FORMAT_MASK) {
+    switch (flags & _MESSAGE_FORMAT_MASK) {
     case MESSAGE_RAW:
         /* Logically, we're appending to the resulting buffer.
          * However if the buf is empty we can save a memory copy
@@ -4888,7 +4888,7 @@ static void extract_one(struct buf *buf,
         break;
     }
 
-    if (format & MESSAGE_TRIM)
+    if (flags & MESSAGE_TRIM)
         buf_trim(buf);
 
     free(p);
