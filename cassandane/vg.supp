@@ -155,4 +155,13 @@
    fun:global_sasl_init
    fun:main
 }
+{
+   sasl_checkleak
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   ...
+   fun:getgrouplist
+   ...
+}
 
