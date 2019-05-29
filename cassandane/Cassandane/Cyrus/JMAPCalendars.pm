@@ -5090,8 +5090,16 @@ sub test_calendar_treat_as_mailbox
 
     my $id = $res->[0][1]{created}{"1"}{id};
 
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'urn:ietf:params:jmap:mail',
+    ];
+
     xlog "rename as mailbox $id";
-    $res = $jmap->CallMethods([['Mailbox/set', { update => { $id => { name => "foobar" } } }, "R1"]]);
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', { update => { $id => { name => "foobar" } } }, "R1"]
+    ], $using);
     $self->assert_not_null($res);
     $self->assert_str_equals('Mailbox/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
