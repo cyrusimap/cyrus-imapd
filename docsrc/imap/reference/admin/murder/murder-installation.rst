@@ -439,3 +439,10 @@ Troubleshooting
 **Databases are never created on the frontends/slaves**
     Check to ensure that the mupdate slave process is started, (is
     prefork=1)
+
+**mupdate crashes with SIGSERV when using STARTTLS**
+    The OpenSSL code in Cyrus Imap is for single-threaded applications and
+    mupdate is a multi-threaded application.  Do not encrypt the communication
+    with mupdate.  See also the discussion “SIGSEGV in cyrus-imapd 3.0.7 mupdate”
+    on `cyrus-devel from July 2018 <https://lists.andrew.cmu.edu/pipermail/cyrus-devel/2018-July/>`_
+    and https://github.com/cyrusimap/cyrus-imapd/issues/2774 .
