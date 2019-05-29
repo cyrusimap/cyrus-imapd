@@ -122,6 +122,7 @@ struct conv_folder {
 
 struct conv_guidrec {
     const char      *mboxname;
+    uint32_t        foldernum;
     uint32_t        uid;
     const char      *part;
     conversation_id_t cid;

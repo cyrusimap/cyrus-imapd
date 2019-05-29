@@ -1896,6 +1896,7 @@ static int _guid_one(const char *item,
     /* mboxname */
     int r = parseuint32(item, &err, &res);
     if (r || err != p) return IMAP_INTERNAL;
+    rec.foldernum = res;
     rec.mboxname = strarray_safenth(frock->state->folder_names, res);
     if (!rec.mboxname) return IMAP_INTERNAL;
 
