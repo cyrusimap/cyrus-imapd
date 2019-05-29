@@ -1306,7 +1306,7 @@ sub test_xapian_index_partid
 }
 
 sub test_detect_language
-    :min_version_3_0 :needs_search_xapian :needs_dependency_cld2
+    :min_version_3_0 :needs_search_xapian :needs_dependency_cld2 :SearchDetectLanguage
 {
     my ($self) = @_;
 
