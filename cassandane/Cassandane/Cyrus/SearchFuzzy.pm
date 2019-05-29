@@ -339,14 +339,7 @@ sub test_stopwords
     $r = $talk->search(
         "charset", "utf-8", "fuzzy", ["text", { Quote => $term }],
     ) || die;
-
-    my $expected_matches;
-    if ($self->{instance}->{config}->get('search_stopword_path')) {
-        $expected_matches = 0;
-    } else {
-        $expected_matches = 2;
-    }
-    $self->assert_num_equals($expected_matches, scalar @$r);
+    $self->assert_num_equals(2, scalar @$r);
 
     # Search for stopword plus significant term
     $term = "the soup";
