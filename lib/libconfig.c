@@ -225,10 +225,13 @@ EXPORTED const char *config_archivepartitiondir(const char *partition)
 {
     char buf[80];
 
+    if (!config_getswitch(IMAPOPT_ARCHIVE_ENABLED))
+        return NULL;
+
     if(strlcpy(buf, "archivepartition-", sizeof(buf)) >= sizeof(buf))
-        return 0;
+        return NULL;
     if(strlcat(buf, partition, sizeof(buf)) >= sizeof(buf))
-        return 0;
+        return NULL;
 
     const char *dir = config_getoverflowstring(buf, NULL);
     if (!dir)

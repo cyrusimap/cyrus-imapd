@@ -14460,10 +14460,12 @@ static void cmd_syncrestart(const char *tag, struct sync_reserve_list **reserve_
                  config_partitiondir(p->name), (unsigned long)getpid());
         rmdir(buf);
 
-        /* and the archive partition too */
-        snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
-                 config_archivepartitiondir(p->name), (unsigned long)getpid());
-        rmdir(buf);
+        if (config_getswitch(IMAPOPT_ARCHIVE_ENABLED)) {
+            /* and the archive partition too */
+            snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
+                    config_archivepartitiondir(p->name), (unsigned long)getpid());
+            rmdir(buf);
+        }
     }
     partition_list_free(pl);
 
