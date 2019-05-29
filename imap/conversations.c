@@ -266,6 +266,20 @@ EXPORTED uint32_t conversations_num_folders(struct conversations_state *state)
     return strarray_size(state->folder_names);
 }
 
+EXPORTED size_t conversations_estimate_emailcount(struct conversations_state *state)
+{
+    int i;
+    size_t count = 0;
+    conv_status_t status;
+    for (i = 0; i < strarray_size(state->folder_names); i++) {
+        const char *mboxname = strarray_nth(state->folder_names, i);
+        int r = conversation_getstatus(state, mboxname, &status);
+        if (r) continue;
+        count += status.emailexists;
+    }
+    return count;
+}
+
 EXPORTED int conversations_open_path(const char *fname, const char *userid, int shared,
                                      struct conversations_state **statep)
 {
@@ -2045,20 +2059,28 @@ EXPORTED int conversations_iterate_searchset(struct conversations_state *state,
     // magic number to switch from index mode to scan mode
     size_t limit = config_getint(IMAPOPT_SEARCH_QUERYSCAN);
     if (limit && n > limit) {
-        syslog(LOG_DEBUG, "conversation_iterate_searchset: %s using scan mode for %d records",
-               state->path, (int)n);
-        struct guid_foreach_rock rock;
-        rock.state = state;
-        rock.cb = cb;
-        rock.cbrock = cbrock;
-        rock.filterdata = data;
-        rock.filterpos = 0;
-        rock.filternum = n;
-        return cyrusdb_foreach(state->db, "G", 1, _guid_filter_p, _guid_cb, &rock, &state->txn);
+        size_t estimate = conversations_estimate_emailcount(state);
+        if (estimate > n*20) { // 5% matches is enough to to iterate!
+            syslog(LOG_DEBUG, "conversation_iterate_searchset: %s falling back to index for %d/%d records",
+                   state->path, (int)n, (int)estimate);
+        }
+        else {
+            syslog(LOG_DEBUG, "conversation_iterate_searchset: %s using scan mode for %d/%d records",
+                   state->path, (int)n, (int)estimate);
+            struct guid_foreach_rock rock;
+            rock.state = state;
+            rock.cb = cb;
+            rock.cbrock = cbrock;
+            rock.filterdata = data;
+            rock.filterpos = 0;
+            rock.filternum = n;
+            return cyrusdb_foreach(state->db, "G", 1, _guid_filter_p, _guid_cb, &rock, &state->txn);
+        }
     }
-
-    syslog(LOG_DEBUG, "conversation_iterate_searchset: %s using indexed mode for %d records",
-           state->path, (int)n);
+    else {
+        syslog(LOG_DEBUG, "conversation_iterate_searchset: %s using indexed mode for %d records",
+               state->path, (int)n);
+    }
     char guid[41];
     guid[40] = '\0';
     size_t i;
