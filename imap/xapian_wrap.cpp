@@ -1144,8 +1144,8 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
                 continue;
             }
             char *entry = (char *) data + (21*n);
-            entry[0] = cstr[1];
-            hex_to_bin(cstr+3, 40, (uint8_t *)entry + 1);
+            hex_to_bin(cstr+3, 40, (uint8_t *)entry);
+            entry[20] = cstr[1];
             n++;
         }
     }
@@ -1156,7 +1156,7 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
         return IMAP_IOERROR;
     }
 
-    // XXX why sort guids? shouldn't xapian return unique doc ids?
+    // sort the response by GUID for more efficient later handling
     if (n) qsort(data, n, 21, bincmp21);
 
     return cb(data, n, rock);

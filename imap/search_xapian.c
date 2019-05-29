@@ -1553,7 +1553,7 @@ static int xapian_run_cb(void *data, size_t n, void *rock)
     size_t i;
     for (i = 0; i < n; i++) {
         char *entry = data + (i*21);
-        bin_to_lchex(entry + 1, 20, guid);
+        bin_to_lchex(entry, 20, guid);
         r = conversations_guid_foreach(cstate, guid, xapian_run_guid_cb, xrock);
         if (r) goto done;
     }
