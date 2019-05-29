@@ -12921,7 +12921,7 @@ sub test_email_set_date
 }
 
 sub test_email_query_language_stats
-    :min_version_3_1 :needs_component_jmap :needs_dependency_cld2
+    :min_version_3_1 :needs_component_jmap :needs_dependency_cld2 :SearchDetectLanguage
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
