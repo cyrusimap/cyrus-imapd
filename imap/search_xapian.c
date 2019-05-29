@@ -1538,9 +1538,7 @@ static int xapian_run_cb(void *data, size_t n, void *rock)
     int r = cmd_cancelled(/*insearch*/1);
     if (r) goto done;
 
-    struct conversations_state *cstate;
-
-    cstate = mailbox_get_cstate(bb->mailbox);
+    struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
     if (!cstate) {
         syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
                 bb->mailbox->name);
@@ -1548,15 +1546,7 @@ static int xapian_run_cb(void *data, size_t n, void *rock)
         goto done;
     }
 
-    char guid[41];
-    guid[40] = '\0';
-    size_t i;
-    for (i = 0; i < n; i++) {
-        char *entry = data + (i*21);
-        bin_to_lchex(entry, 20, guid);
-        r = conversations_guid_foreach(cstate, guid, xapian_run_guid_cb, xrock);
-        if (r) goto done;
-    }
+    r = conversations_iterate_searchset(cstate, data, n, xapian_run_guid_cb, xrock);
 
 done:
     free(data);

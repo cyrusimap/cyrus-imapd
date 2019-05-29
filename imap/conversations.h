@@ -226,6 +226,10 @@ extern int conversations_guid_foreach(struct conversations_state *state,
                                       const char *guidrep,
                                       int(*cb)(const conv_guidrec_t*,void*),
                                       void *rock);
+extern int conversations_iterate_searchset(struct conversations_state *state,
+                                           void *data, size_t n,
+                                           int(*cb)(const conv_guidrec_t*,void*),
+                                           void *rock);
 extern conversation_id_t conversations_guid_cid_lookup(struct conversations_state *state,
                                                        const char *guidrep);
 

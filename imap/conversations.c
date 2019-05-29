@@ -2010,6 +2010,23 @@ EXPORTED int conversations_guid_foreach(struct conversations_state *state,
     return r;
 }
 
+EXPORTED int conversations_iterate_searchset(struct conversations_state *state,
+                                             void *data, size_t n,
+                                             int(*cb)(const conv_guidrec_t*,void*),
+                                             void *cbrock)
+{
+    char guid[41];
+    guid[40] = '\0';
+    size_t i;
+    for (i = 0; i < n; i++) {
+        char *entry = data + (i*21);
+        bin_to_lchex(entry, 20, guid);
+        int r = conversations_guid_foreach(state, guid, cb, cbrock);
+        if (r) return r;
+    }
+    return 0;
+}
+
 static int _getcid(const conv_guidrec_t *rec, void *rock)
 {
     conversation_id_t *cidp = (conversation_id_t *)rock;
