@@ -115,7 +115,7 @@ needs to be customized to your specific hostnames.
     * Many clients find calendars automatically if you provide the correct server, username and password.
     * Otherwise, use the direct URL: ``https://<servername>/dav/calendars/user/<userid>/<calendar>/``
 * Freebusy
-    * ``https://<servername>/freebusy/user/<userid>`` - considers all caldav collections of the user
+    * ``https://<servername>/freebusy/user/<userid>`` - considers all CalDAV collections of the user
     * ``https://<servername>/freebusy/user/<userid>/<collection-name>`` - considers a single CalDAV collection
     * Query parameters can be added to the URL per Section 4 of
       `Freebusy Read URL <http://www.calconnect.org/pubdocs/CD0903%20Freebusy%20Read%20URL.pdf>`_.

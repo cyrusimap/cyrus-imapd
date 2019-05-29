@@ -20,4 +20,4 @@ Cyrus the Great (c. 585-529 BC) founded the ancient Persian Empire, and then nee
 	"Nothing mortal travels so fast as these Persian messengers. The entire plan is a Persian invention; and this is the method of it. Along the whole line of road there are men stationed with horses, in number equal to the number of days which the journey takes, allowing a man and horse to each day; and these men will not be hindered from accomplishing at their best speed the distance which they have to go, either by snow, or rain, or heat, or by the darkness of night. The first rider delivers his despatch to the second and the second passes it to the third; and so it is borne from hand to hand along the whole line..."
 	
 .. _Cyrus Project Goals: https://asg.andrew.cmu.edu/cyrus/1994-goals.html
-.. _Cyrus Technology Overview: https://asg.andrew.cmu.edu/cyrus/1994-techoverview.html  
+.. _Cyrus Technology Overview: https://asg.andrew.cmu.edu/cyrus/1994-techoverview.html
