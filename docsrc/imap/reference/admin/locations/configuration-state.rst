@@ -188,7 +188,7 @@ are:
 
     * :ref:`imap-concepts-deployment-db-seen`
     * :ref:`imap-concepts-deployment-db-sub`
-    * :ref:`imap-concepts-deployment-db-xapianactive`
+    * :ref:`imap-concepts-deployment-db-search`
     * :ref:`imap-concepts-deployment-db-mboxkey`
     * :ref:`imap-concepts-deployment-db-userdav`
 

@@ -46,7 +46,7 @@ One per user:
 * `Mailbox Keys (<userid>.mboxkey)`_
 * `Seen State (<userid>.seen)`_
 * `Subscriptions (<userid>.sub)`_
-* `Search Indexes (cyrus.squat, <userid>.xapianactive)`_
+* `Search Indexes (cyrus.squat, <userid>.xapianactive, cyrus.indexed.db)`_
 
 .. _imap-concepts-deployment-db-mailboxes:
 
@@ -59,7 +59,7 @@ This database contains the master list of all mailboxes on the system. The datab
 
     Data: <Type Number>SP<Partition>SP<ACL (space-separated userid/rights pairs)>
 
-File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, `sql`_, `twoskip`_, or `lmdb`_.
+File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, `sql`_, or `lmdb`_.
 
 .. _imap-concepts-deployment-db-annotations:
 
@@ -188,7 +188,12 @@ in the past three months, mapping to the conversation IDs in which this message
 ID has been seen, and the timestamp when it was last seen.
 
 It also has a records for each conversation ID with details about which folders
-have that converations ID in them, and counts of messages and flags.
+have that conversations ID in them, and counts of messages and flags.
+
+For each message on the hard disk, even the expunged ones, this database contains a
+G record.  This is a mapping from GUID to folder number (offset into the $FOLDER_NAMES
+key) and UID and optionally IMAP part number as the key - mapping to values which
+contain some keywords and modseq from the original record as well.
 
 Finally there are records for each folder with the counts of conversations in
 that folder.
@@ -213,13 +218,36 @@ File format not selectable.
 
 .. _imap-concepts-deployment-db-search:
 
-Search Indexes (cyrus.squat, <userid>.xapianactive)
----------------------------------------------------
+Search Indexes (cyrus.squat, <userid>.xapianactive, cyrus.indexed.db)
+---------------------------------------------------------------------
 
-This is either cyrus.squat in each folder, or if you're using xapian a single
-<userid>.xapianactive file listing active databases by tier name and number.
+This is either cyrus.squat in each folder, or if you're using Xapian a single
+<userid>.xapianactive file listing active databases with tier name and number.
 
-File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `lmdb`_.
+cyrus.indexed.db is used by the Sphinx and Xapian search engines.  Its file type
+can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `lmdb`_ and is determined
+by `search_indexed_db` in :cyrusman:`imapd.conf(5)`.
+
+The xapianactive file contains a space separated list of tiers and databases within
+the tier, in the form `defaulttier:number tier2:number tier2:anothernumber tier3:number`.
+Each tier can contain zero or more databases and each database can be compacted or not.
+It is in the responsibility to the administrator to ensure, that compacted
+databases are only read, meaning that they are not the default databases, where
+new incoming emails are indexed.  The first element in the `<userid>.xapianactive` file
+is the active tier/database, to which new entries are added by **squatter** in rolling or index
+mode.  To remove an element from the `<userid>.xapianactive` file, use it as input
+to **squatter** when compacting.  E.g. if `<userid>.xapianactive` contains `A B C`,
+to remove `B` by putting its content into `C` and by compacting both `B` and `C`, is achieved by calling
+``squatter -t B,C -z C``.  The latter call will remove all databases of tiers `B` and `C` and create
+a single database in tier `C`.  It is possible to compact individual databases from a tier, leaving the
+other databases unchanged, by adding the numbers of the databases as input to **squatter**, e.g.
+`squatter -t B:4 B:7 -z C` would leave `B:5` in tier B and any databases in `C`, if present, adding
+a new database to `C`.  Likewise, to insert an entry, use it as destination to *-z*.
+
+If a new tier is created in :cyrusman:`imapd.conf(5)`, e.g. on `tmpfs`, that is declared as
+(new) default tier, it will not be considered, until it appears in the `<userid>.xapianactive`
+files.  To include it there you can run `squatter -t A -o -z A` for an existing tier `A`.
+>>>>>>> 3adff17ec... squatter.rst: clarifications
 
 .. _imap-concepts-deployment-db-zoneinfo:
 
@@ -264,13 +292,6 @@ This database is a per-user database and contains the list of mailboxes to which
     Data: None
 
 File type can be: `flat`_ (default), `skiplist`_, `twoskip`_, or `lmdb`_.
-
-.. _imap-concepts-deployment-db-xapianactive:
-
-Search Index DB List (<userid>.xapianactive)
---------------------------------------------
-
-TODO
 
 
 .. _imap-concepts-deployment-db-mboxkey:

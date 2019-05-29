@@ -8,7 +8,7 @@
 **squatter**
 ============
 
-Create SQUAT and Xapian indexes for mailboxes
+Create SQUAT, Sphinx and Xapian indexes for mailboxes
 
 Synopsis
 ========
@@ -87,13 +87,20 @@ In the sixth synopsis, **squatter** reads *file* containing *mailbox*
 
 In the seventh synopsis, **squatter** will compact indices from
 *srctier(s)* to *desttier*, optionally reindexing (**-X**) or filtering
-expunged records (**-F**) in the process.  `/usr/bin/rsync` and `/bin/rm`
-are needed.  The optional **-T** flag may be used to specify a directory
-to use for temporary files.  The **-o** flag may be used to direct that a
-single index be copied, rather than compacted, from *srctier* to *desttier*.
-The **-u** flag may be used to restrict operation to the specified user(s).
+expunged records (**-F**) in the process.  The optional **-T** flag may be
+used to specify a directory to use for temporary files.  These files are
+eventually copied with `/usr/bin/rsync -a` and then removed by `/bin/rm`.
+`rsync` can increase the load average of the system, especially when the
+temporary directory is on `tmpfs`.  To throttle `rsync` it is possible to
+modify the call in `imap/search_xapian.c` and pass `-\\-bwlimit=<number>` as further
+parameter.  The **-o** flag may be used to direct that a single index be
+copied, rather than compacted, from *srctier* to *desttier*.  The **-u** flag
+may be used to restrict operation to the specified user(s).
 
-For all modes, the **-S** option may be specified, causing squatter to
+It is not possible to directly create a compacted database.  First one has to index
+a mailbox and on the next step to compact it.
+
+For all modes, the **-S** option may be specified, causing **squatter** to
 pause *seconds* seconds after each mailbox, to smooth loads.
 
 .. Note::
