@@ -28,7 +28,4 @@ the binary distribution.
   and if upgrading look at doc/install-upgrade.html as well.
 
 * To obtain updates to this software, visit the web page
-            http://www.cyrusimap.org/
-  or ftp directly from
-            ftp://ftp.cyrusimap.org/cyrus-imapd/
-
+            https://www.cyrusimap.org/
