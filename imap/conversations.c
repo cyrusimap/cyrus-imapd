@@ -1868,6 +1868,9 @@ struct guid_foreach_rock {
     struct conversations_state *state;
     int(*cb)(const conv_guidrec_t *, void *);
     void *cbrock;
+    void *filterdata;
+    int filternum;
+    int filterpos;
 };
 
 static int _guid_one(const char *item,
@@ -1920,6 +1923,30 @@ static int _guid_one(const char *item,
     r = frock->cb(&rec, frock->cbrock);
     free(freeme);
     return r;
+}
+
+static int _guid_filter_p(void *rock,
+                          const char *key,
+                          size_t keylen,
+                          const char *data __attribute__((unused)),
+                          size_t datalen __attribute__((unused)))
+{
+    if (keylen < 41) return 0; // bogus record??
+
+    struct guid_foreach_rock *frock = (struct guid_foreach_rock *)rock;
+
+    uint8_t val[20];
+    hex_to_bin(key+1, 40, val);
+
+    for (; frock->filterpos < frock->filternum; frock->filterpos++) {
+        int cmp = memcmp(frock->filterdata + (21 * frock->filterpos), val, 20);
+        if (cmp > 0) break; // definitely not a match
+        if (cmp == 0) return 1; // match.
+        /* We don't also increment for a match because multiple rows
+         * could have the same GUID */
+    }
+
+    return 0;  // no match
 }
 
 static int _guid_cb(void *rock,
@@ -2015,6 +2042,23 @@ EXPORTED int conversations_iterate_searchset(struct conversations_state *state,
                                              int(*cb)(const conv_guidrec_t*,void*),
                                              void *cbrock)
 {
+    // magic number to switch from index mode to scan mode
+    size_t limit = config_getint(IMAPOPT_SEARCH_QUERYSCAN);
+    if (limit && n > limit) {
+        syslog(LOG_DEBUG, "conversation_iterate_searchset: %s using scan mode for %d records",
+               state->path, (int)n);
+        struct guid_foreach_rock rock;
+        rock.state = state;
+        rock.cb = cb;
+        rock.cbrock = cbrock;
+        rock.filterdata = data;
+        rock.filterpos = 0;
+        rock.filternum = n;
+        return cyrusdb_foreach(state->db, "G", 1, _guid_filter_p, _guid_cb, &rock, &state->txn);
+    }
+
+    syslog(LOG_DEBUG, "conversation_iterate_searchset: %s using indexed mode for %d records",
+           state->path, (int)n);
     char guid[41];
     guid[40] = '\0';
     size_t i;

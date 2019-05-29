@@ -2023,6 +2023,11 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The maximum number of seconds to run a search for before aborting.  Default
    of no value means search "forever" until other timeouts. */
 
+{ "search_queryscan", 5000, INT }
+/* The minimum number of records require to do a direct scan of all G keys
+ * rather than indexed lookups.  A value of 0 means always do indexed lookups.
+ */
+
 { "search_skipdiacrit", 1, SWITCH }
 /* When searching, should diacriticals be stripped from the search
    terms.  The default is "true", a search for "hav" will match
