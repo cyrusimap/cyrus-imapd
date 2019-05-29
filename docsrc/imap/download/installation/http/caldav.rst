@@ -178,7 +178,8 @@ The tables below show how the access controls are used by the CalDAV module.
         <td>CYRUS:admin</td>
         <td>DAV:read-acl
           <br>DAV:write-acl
-            <br>DAV:unlock</td>
+	  <br>DAV:share
+          <br>DAV:unlock</td>
         <td>ACL
           <br>PROPFIND <small>(DAV:acl property ONLY)</small>
           <br>UNLOCK <small>(ANY lock)</small></td>
