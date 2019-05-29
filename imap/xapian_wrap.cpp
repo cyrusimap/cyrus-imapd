@@ -91,7 +91,7 @@ static const Xapian::Stopper* get_stopper(const std::string& iso)
     errno = 0;
     std::ifstream inFile (fname);
     if (inFile.fail()) {
-        syslog(LOG_INFO, "Xapian: could not open stopword file %s: %s",
+        syslog(LOG_DEBUG, "Xapian: could not open stopword file %s: %s",
                 fname.c_str(), errno ? strerror(errno) : "unknown error");
         return NULL;
     }
@@ -655,7 +655,7 @@ int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
                             std::string key = make_lang_cyrusid_key(num_part, dbw->cyrusid);
                             dbw->database->set_metadata(key, iso_lang);
                         } catch (const Xapian::InvalidArgumentError &err) {
-                            syslog(LOG_INFO, "Xapian: no stemmer for language %s",
+                            syslog(LOG_DEBUG, "Xapian: no stemmer for language %s",
                                     iso_lang.c_str());
                         }
                     }
