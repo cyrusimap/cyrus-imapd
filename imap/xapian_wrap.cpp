@@ -637,25 +637,27 @@ int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
         if (stem_strategy != Xapian::TermGenerator::STEM_NONE) {
             std::string iso_lang("en"); // Default stemmer language ISO code.
 #ifdef HAVE_CLD2
-            // Determine text language.
-            bool reliable = false;
-            CLD2::Language lang = CLD2::DetectLanguage(part->s, part->len, 1, &reliable);
-            if (reliable && lang != CLD2::UNKNOWN_LANGUAGE) {
-                // English stemmer is the default, no need to stem twice.
-                if (strcasecmp(CLD2::LanguageCode(lang), "en")) {
-                    try {
-                        iso_lang = std::string(CLD2::LanguageCode(lang));
-                        // Index with detected language stemmer.
-                        dbw->term_generator->set_stemmer(Xapian::Stem(iso_lang));
-                        dbw->term_generator->set_stopper(get_stopper(iso_lang));
-                        dbw->term_generator->index_text(Xapian::Utf8Iterator(part->s, part->len), 1,
-                                make_lang_prefix(iso_lang, prefix));
-                        // Keep track of stemmer language by document id and part.
-                        std::string key = make_lang_cyrusid_key(num_part, dbw->cyrusid);
-                        dbw->database->set_metadata(key, iso_lang);
-                    } catch (const Xapian::InvalidArgumentError &err) {
-                        syslog(LOG_INFO, "Xapian: no stemmer for language %s",
-                                iso_lang.c_str());
+            if (config_getswitch(IMAPOPT_SEARCH_DETECT_LANGUAGE)) {
+                // Determine text language.
+                bool reliable = false;
+                CLD2::Language lang = CLD2::DetectLanguage(part->s, part->len, 1, &reliable);
+                if (reliable && lang != CLD2::UNKNOWN_LANGUAGE) {
+                    // English stemmer is the default, no need to stem twice.
+                    if (strcasecmp(CLD2::LanguageCode(lang), "en")) {
+                        try {
+                            iso_lang = std::string(CLD2::LanguageCode(lang));
+                            // Index with detected language stemmer.
+                            dbw->term_generator->set_stemmer(Xapian::Stem(iso_lang));
+                            dbw->term_generator->set_stopper(get_stopper(iso_lang));
+                            dbw->term_generator->index_text(Xapian::Utf8Iterator(part->s, part->len), 1,
+                                    make_lang_prefix(iso_lang, prefix));
+                            // Keep track of stemmer language by document id and part.
+                            std::string key = make_lang_cyrusid_key(num_part, dbw->cyrusid);
+                            dbw->database->set_metadata(key, iso_lang);
+                        } catch (const Xapian::InvalidArgumentError &err) {
+                            syslog(LOG_INFO, "Xapian: no stemmer for language %s",
+                                    iso_lang.c_str());
+                        }
                     }
                 }
             }
@@ -918,7 +920,7 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
         std::transform(lmatch.begin(), lmatch.end(), lmatch.begin(), ::tolower);
 
         // Stem query for each language detected in the index.
-        if (db->stem_language_weights) {
+        if (db->stem_language_weights && config_getswitch(IMAPOPT_SEARCH_DETECT_LANGUAGE)) {
             for (std::map<std::string, double>::iterator it = db->stem_language_weights->begin();
                     it != db->stem_language_weights->end(); ++it) {
 
