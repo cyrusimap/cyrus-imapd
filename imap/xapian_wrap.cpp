@@ -928,13 +928,18 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
                 const std::string& iso_lang = it->first;
                 try {
                     db->parser->set_stemmer(Xapian::Stem(iso_lang));
-                    if (tg_stem_strategy == Xapian::TermGenerator::STEM_ALL) {
+                    const Xapian::Stopper *stopper = get_stopper(iso_lang);
+                    db->parser->set_stopper(stopper);
+                    if (!stopper || (*stopper)(lmatch)) {
+                        // Don't stem stopwords.
+                        db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
+                    }
+                    else if (tg_stem_strategy == Xapian::TermGenerator::STEM_ALL) {
                         db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_ALL);
                     }
                     else {
                         db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_SOME);
                     }
-                    db->parser->set_stopper(get_stopper(iso_lang));
                     std::string lang_prefix = make_lang_prefix(iso_lang, prefix);
                     Xapian::Query query = db->parser->parse_query(lmatch, flags, lang_prefix);
                     queries.push_back(new Xapian::Query(query));
@@ -947,7 +952,13 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
         // Query with default stemmer.
         db->parser->set_stemmer(*db->default_stemmer);
         db->parser->set_stopper(db->default_stopper);
-        db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_SOME);
+        if (!db->default_stopper || (*db->default_stopper)(lmatch)) {
+            // Don't stem stopwords.
+            db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
+        }
+        else {
+            db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_SOME);
+        }
         Xapian::Query query = db->parser->parse_query(lmatch, flags, std::string(prefix));
         queries.push_back(new Xapian::Query(query));
 

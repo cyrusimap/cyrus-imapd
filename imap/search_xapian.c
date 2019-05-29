@@ -1448,9 +1448,10 @@ static int split_query(xapian_builder_t *bb,
         if (xq) xq = xapian_query_new_filter_doctype(bb->lock.db, SEARCH_XAPIAN_DOCTYPE_PART, xq);
         if (xq) ptrarray_append(clauses, xq);
     }
-    if (qany->children) {
-        optimise_nodes(NULL, qany);
-        xapian_query_t *xq = opnode_to_query(bb->lock.db, qany, bb->opts);
+
+    for (child = qany->children; child; child = child->next) {
+        optimise_nodes(NULL, child);
+        xapian_query_t *xq = opnode_to_query(bb->lock.db, child, bb->opts);
         if (xq) ptrarray_append(clauses, xq);
     }
 
