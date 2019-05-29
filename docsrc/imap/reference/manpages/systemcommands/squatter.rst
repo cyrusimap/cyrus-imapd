@@ -8,7 +8,7 @@
 **squatter**
 ============
 
-Create SQUAT indexes for mailboxes
+Create SQUAT and Xapian indexes for mailboxes
 
 Synopsis
 ========
@@ -19,13 +19,13 @@ Synopsis
     **squatter** [ **-C** *config-file* ] [**mode**] [**options**] [**source**]
 
     i.e.:
-    **squatter** [ **-C** *config-file* ] [**-v**]
-    **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S** *seconds*] [ **-r** ]  *mailbox*...
-    **squatter** [ **-C** *config-file* ] [ **-a** ] [ **-i** ] [**-N** *name*] [**-S** *seconds*] [ **-r** ]  **-u** *user*...
-    **squatter** [ **-C** *config-file* ] **-R** [ **-n** *channel* ] [ **-d** ]
-    **squatter** [ **-C** *config-file* ] **-f** *synclogfile*
-    **squatter** [ **-C** *config-file* ] **-I** *file*
-    **squatter** [ **-C** *config-file* ] **-t** *srctier*... **-z** *desttier* [ **-F** ] [ **-T** *dir* ] [ **-X** ] [ **-o** ]
+    **squatter** [ **-C** *config-file* ] [ **-v** ] [ **-a** ] [ **-S** *seconds* ]
+    **squatter** [ **-C** *config-file* ] [ **-v** ] [ **-a** ] [ **-i** ] [ **-N** *name* ] [ **-S** *seconds* ] [ **-r** ]  *mailbox*...
+    **squatter** [ **-C** *config-file* ] [ **-v** ] [ **-a** ] [ **-i** ] [ **-N** *name* ] [ **-S** *seconds* ] [ **-r** ]  **-u** *user*...
+    **squatter** [ **-C** *config-file* ] [ **-v** ] [ **-a** ] **-R** [ **-n** *channel* ] [ **-d** ] [ **-S** *seconds* ]
+    **squatter** [ **-C** *config-file* ] [ **-v** ] [ **-a** ] **-f** *synclogfile* [ **-S** *seconds* ]
+    **squatter** [ **-C** *config-file* ] [ **-v** ] **-I** *file*
+    **squatter** [ **-C** *config-file* ] [ **-v** ] **-t** *srctier(s)*... **-z** *desttier* [ **-F** ] [ **-T** *dir* ] [ **-X** ] [ **-o** ]  [ **-S** *seconds* ] [ **-u** *user*... ]
 
 
 
@@ -47,21 +47,25 @@ The index is a unified index of all of the header and body text
 of each message in a given mailbox.  This index is used to significantly
 reduce IMAP SEARCH times on a mailbox.
 
+**mode** is one of indexer, indexfrom (-I), search, rolling, synclog or compact.
+
 By default, **squatter** creates an index of ALL messages in the
 mailbox, not just those since the last time that it was run.  The
 **-i** option is used to select incremental updates.  Any messages
 appended to the mailbox after **squatter** is run, will NOT be included
 in the index.  To include new messages in the index, **squatter** must
-be run again.
+be run again, or on a regular basis via crontab, an entry in the EVENTS
+section of :cyrusman:`cyrus.conf(5)` or use *rolling* mode (**-R**).
 
 In the first synopsis, **squatter** indexes all mailboxes.
 
 In the second synopsis, **squatter** indexes the specified mailbox(es).
+The mailboxes are space-separated.
 
 In the third synopsis, **squatter** indexes the specified user(s)
 mailbox(es).
 
-For any of those three source modes (default=all, mailbox, user) one
+For the latter two index modes (mailbox, user) one
 may optionally specify **-r** to recurse from the specified start, or
 **-a** to limit action only to mailboxes which have the shared
 */vendor/cmu/cyrus-imapd/squat* annotation set to "true".
@@ -83,10 +87,11 @@ In the sixth synopsis, **squatter** reads *file* containing *mailbox*
 
 In the seventh synopsis, **squatter** will compact indices from
 *srctier(s)* to *desttier*, optionally reindexing (**-X**) or filtering
-expunged records (**-F**) in the process.  The optional **-T** flag may
-be used to specify a directory to use for temporary files.  The **-o**
-flag may be used to direct that a single index be copied, rather than
-compressed, from *srctier* to *desttier*.
+expunged records (**-F**) in the process.  `/usr/bin/rsync` and `/bin/rm`
+are needed.  The optional **-T** flag may be used to specify a directory
+to use for temporary files.  The **-o** flag may be used to direct that a
+single index be copied, rather than compacted, from *srctier* to *desttier*.
+The **-u** flag may be used to restrict operation to the specified user(s).
 
 For all modes, the **-S** option may be specified, causing squatter to
 pause *seconds* seconds after each mailbox, to smooth loads.
@@ -201,34 +206,42 @@ Options
     some very fast filesystem, like an SSD or tmpfs.  This option may
     not work with all search engines, but it's only effect is to speed
     up initial indexing.
+    Xapian only.
     |v3-new-feature|
 
 .. option:: -t srctier...
 
-    In compact mode, the source tier(s) for the compacted indices.
-    At least one source tier must be specified in compact mode.
+    In compact mode, the comma separated source tier(s) for the compacted
+    indices.  At least one source tier must be specified in compact mode.
+    Xapian only.
     |v3-new-feature|
 
 .. option:: -u
 
     Extra options refer to usernames (e.g. foo@bar.com) rather than
-    mailbox names.
+    mailbox names.  Usernames are space-separated.
     |v3-new-feature|
 
 .. option:: -v
 
-    Increase the verbosity of progress/status messages.
+    Increase the verbosity of progress/status messages.  Sometimes additional messages
+    are emitted on the terminal with this option and the messages are unconditionally sent
+    to syslog.  Sometimes messages are sent to syslog, only if -v is provided.  In rolling and
+    synclog modes, -vv sends even more messages to syslog.
 
 .. option:: -X
 
     Reindex all the messages before compacting.  This mode reads all
     the lists of messages indexed by the listed tiers, and re-indexes
     them into a temporary database before compacting that into place.
+    Xapian only.
+    |v3-new-feature|
 
 .. option:: -z desttier
 
     In compact mode, the destination tier for the compacted indices.
     This must be specified in compact mode.
+    Xapian only.
     |v3-new-feature|
 
 Examples
@@ -302,13 +315,13 @@ rolling **squatter** operation:
 History
 =======
 
-Support for additional search enginges was added in version 3.0.
+Support for additional search engines was added in version 3.0.
 
 The following command-line switches were added in version 3.0:
 
     .. parsed-literal::
 
-        **-R -u -d -O -F -A**
+        **-F -R -X -d -f -o -u**
 
 The following command-line settings were added in version 3.0:
 
