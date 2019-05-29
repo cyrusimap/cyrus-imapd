@@ -1126,7 +1126,8 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
         Xapian::Enquire enquire(*database);
         enquire.set_query(*query);
         Xapian::MSet matches = enquire.get_mset(0, database->get_doccount());
-        data = xzmalloc(matches.size() * 21);
+        size_t size = matches.size();
+        if (size) data = xzmalloc(size * 21);
         for (Xapian::MSetIterator i = matches.begin() ; i != matches.end() ; ++i) {
             Xapian::Document d = i.get_document();
             std::string cyrusid = d.get_value(SLOT_CYRUSID);
@@ -1143,6 +1144,7 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
                                 cstr, d.get_docid(), db->paths->c_str());
                 continue;
             }
+            if (n >= size) throw Xapian::DatabaseError("Too many records in MSet");
             char *entry = (char *) data + (21*n);
             hex_to_bin(cstr+3, 40, (uint8_t *)entry);
             entry[20] = cstr[1];
@@ -1156,8 +1158,10 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
         return IMAP_IOERROR;
     }
 
+    if (!n) return 0;
+
     // sort the response by GUID for more efficient later handling
-    if (n) qsort(data, n, 21, bincmp21);
+    qsort(data, n, 21, bincmp21);
 
     return cb(data, n, rock);
 }
