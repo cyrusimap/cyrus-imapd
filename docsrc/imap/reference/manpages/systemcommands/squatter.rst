@@ -84,14 +84,16 @@ is sometimes useful for cleaning up after problems with rolling mode.
 In the sixth synopsis, **squatter** will compact indices from
 *srctier(s)* to *desttier*, optionally reindexing (**-X**) or filtering
 expunged records (**-F**) in the process.  The optional **-T** flag may be
-used to specify a directory to use for temporary files.  The **-o** flag may
-be used to direct that a single index be copied, rather than compacted, from
-*srctier* to *desttier*.  The **-U** flag may be used to only compact if
-re-indexing.  The **-u** flag may be used to restrict operation to the
-specified user(s).
+used to specify a directory to use for temporary files.  These files are
+eventually copied with `rsync -a` and then removed by `rm`.
+`rsync` can increase the load average of the system, especially when the
+temporary directory is on `tmpfs`.  To throttle `rsync` it is possible to
+modify the call in `imap/search_xapian.c` and pass `-\\-bwlimit=<number>` as further
+parameter.  The **-o** flag may be used to direct that a single index be
+copied, rather than compacted, from *srctier* to *desttier*.  The **-u** flag
+may be used to restrict operation to the specified user(s).
 
-
-For all modes, the **-S** option may be specified, causing squatter to
+For all modes, the **-S** option may be specified, causing **squatter** to
 pause *seconds* seconds after each mailbox, to smooth loads.
 
 When using the Xapian engine the **-Z** option may be specified, for
