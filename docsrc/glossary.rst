@@ -139,7 +139,7 @@ Glossary
         unique.
 
         As such, it SHOULD be composed of at least three (3) name space segments
-        divided by a dot (.) character -- exluding the implicit top-level dot
+        divided by a dot (.) character -- excluding the implicit top-level dot
         (.), even if a domain (system environment) is comprised of a single
         system.
 

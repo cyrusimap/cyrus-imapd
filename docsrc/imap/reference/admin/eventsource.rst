@@ -18,7 +18,7 @@ Compile options
 
 You can control what kind of events Cyrus generates during the ``configure`` step of compilation.
 
-**--enable_event_notification**: Set this to "yes" to have Cyrus generate mailbox related events. This is enabled by default.
+``--enable_event_notification``: Set this to "yes" to have Cyrus generate mailbox related events. This is enabled by default.
 
 ``--enable-apple-push-service``: Set this to "yes" to enable support for the Apple Push service. This is *disabled* by default as Apple does not provide licenses for Push support to developers at this stage.
 

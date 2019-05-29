@@ -34,7 +34,7 @@ Options
 
 .. option:: -v  name
 
-    View script with the given name. The script if retrieved sucessfully
+    View script with the given name. The script if retrieved successfully
     is output to standard output.
 
 .. option:: -l
@@ -51,7 +51,7 @@ Options
 .. option:: -i  file
 
     Install a file onto the server. If a script with the same name
-    already exists on the server it is overwritten. Upon sucessfully
+    already exists on the server it is overwritten. Upon successfully
     putting the script on the server the script is set active. If
     *file* has the extension .script it is chopped when put on the
     server since sieve names may not contain a '.'.

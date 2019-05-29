@@ -345,7 +345,7 @@ Operations on the Mailbox List
     results in any attempts to CREATE the mailbox on another backend
     failing. The latter one makes the mailbox unreachable and
     un-createable. Though, this is safer than potentially having the
-    mailbox appaear in two places when the failed backend comes back
+    mailbox appear in two places when the failed backend comes back
     up.
 
 ``[RENAME]``

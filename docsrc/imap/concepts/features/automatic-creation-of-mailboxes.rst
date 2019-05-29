@@ -127,7 +127,7 @@ all options.
 Limitations to the Automatic Creation of Mailboxes
 ==================================================
 
-#.  A user may in fact be able to succesfully login to IMAP with both a
+#.  A user may in fact be able to successfully login to IMAP with both a
     full primary recipient email address such as
     ``john.doe@example.org``, as well as a secondary recipient email
     address such as ``jdoe@example.org``.

@@ -11,7 +11,7 @@ The Cyrus Project was started at CMU in 1994 to attempt to meet these goals. The
 
 The first year that all of CMU's incoming freshmen were placed on the Cyrus server was 1998 (class of 2002). In December of 2001, bboard access (which had been being mirrored from AMS to Cyrus), was cut over to Cyrus completely. AMS was finally phased out in May of 2002.
 
-As development on the project progressed, it became clear that scalability was a concern, in addition some additional reliablilty was desired beyond that which would be provided from a single machine configuration. To meet these goals, the :ref:`Cyrus Murder <murder>` was developed, and after several revisions was deployed to CMU in the summer of 2002.
+As development on the project progressed, it became clear that scalability was a concern, in addition some additional reliability was desired beyond that which would be provided from a single machine configuration. To meet these goals, the :ref:`Cyrus Murder <murder>` was developed, and after several revisions was deployed to CMU in the summer of 2002.
 
 Project Cyrus was named in honor of the founder of the first modern, "packet-switching"-based mail system, the forerunner of every major communication system we have today.
 
@@ -20,4 +20,4 @@ Cyrus the Great (c. 585-529 BC) founded the ancient Persian Empire, and then nee
 	"Nothing mortal travels so fast as these Persian messengers. The entire plan is a Persian invention; and this is the method of it. Along the whole line of road there are men stationed with horses, in number equal to the number of days which the journey takes, allowing a man and horse to each day; and these men will not be hindered from accomplishing at their best speed the distance which they have to go, either by snow, or rain, or heat, or by the darkness of night. The first rider delivers his despatch to the second and the second passes it to the third; and so it is borne from hand to hand along the whole line..."
 	
 .. _Cyrus Project Goals: https://asg.andrew.cmu.edu/cyrus/1994-goals.html
-.. _Cyrus Technology Overview: https://asg.andrew.cmu.edu/cyrus/1994-techoverview.html  
+.. _Cyrus Technology Overview: https://asg.andrew.cmu.edu/cyrus/1994-techoverview.html

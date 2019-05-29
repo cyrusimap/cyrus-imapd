@@ -64,7 +64,7 @@ precise, all flags other than ``\Seen`` are global.
 ACL "Macros"
 ============
 
-Cyrus adminitration supports short-hand macros you may use:
+Cyrus administration supports short-hand macros you may use:
 
 none
 ----

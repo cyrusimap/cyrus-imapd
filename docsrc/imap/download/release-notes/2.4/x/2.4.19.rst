@@ -2,32 +2,32 @@
 Cyrus IMAP 2.4.19 Release Notes
 ===============================
 
-*   Complete backport of the new (2.5 and later) IMAP IDLE implementation
-    (thanks Thomas Jarosh).  This fixes a bunch of bugs and race conditions
-    that were inherent to the older implementation
-*   New option "imapidletimeout" overrides "timeout" specifically for
-    connections in IDLE state
-*   OpenSSL 1.1.0 is now supported
-*   Fixed: imap ENABLED doesn't print * ENABLED when nothing new enabled
-*   Fixed: mailbox lock management over rename (thanks Thomas Jarosh)
-*   Fixed: added overflow protection to urlfetch range checks
-*   Fixed: lmtpd can now deliver when mupdate server isn't available (thanks
-    Michael Menge)
-*   Fixed task 227: service processes no longer divide by zero when invoked with
-    -T 0 argument (thanks Ian Batten and Jens Erat)
-*   Fixed task 229: ctl_cyrusdb now uses database paths from imapd.conf (thanks
-    Simon Matter)
-*   Fixed bug #3862: mailbox database changes now rolled back on mupdate
-    failure during rename (thanks Michael Menge)
-*   Fixed: XFER to 2.5 and later no longer downgrades index to oldest
-    version
-*   Fixed: nonsensical "TEXT.MIME" section now handled as "HEADER"
-*   Fixed: added missing 'auditlog: ' prefix to backend connections
-    (thanks Wolfgang Breyha)
-*   Fixed: IMAP SEARCH crash on some platforms
-*   Fixed: memory leaks in IMAP SEARCH and IMAP APPEND
-*   Fixed :issue:`1967`: EXISTS count reported earlier if fetching past size
-    of previous message set
+* Complete backport of the new (2.5 and later) IMAP IDLE implementation
+  (thanks Thomas Jarosh).  This fixes a bunch of bugs and race conditions that
+  were inherent to the older implementation
+* New option "imapidletimeout" overrides "timeout" specifically for
+  connections in IDLE state
+* OpenSSL 1.1.0 is now supported
+* Fixed: imap ENABLED doesn't print * ENABLED when nothing new enabled
+* Fixed: mailbox lock management over rename (thanks Thomas Jarosh)
+* Fixed: added overflow protection to urlfetch range checks
+* Fixed: lmtpd can now deliver when mupdate server isn't available (thanks
+  Michael Menge)
+* Fixed T227: service processes no longer divide by zero when invoked with
+  `-T 0` argument (thanks Ian Batten and Jens Erat)
+* Fixed T229: ctl_cyrusdb now uses database paths from imapd.conf (thanks
+  Simon Matter)
+* Fixed bug #3862: mailbox database changes now rolled back on mupdate
+  failure during rename (thanks Michael Menge)
+* Fixed: XFER to 2.5 and later no longer downgrades index to oldest
+  version
+* Fixed: nonsensical "TEXT.MIME" section now handled as "HEADER"
+* Fixed: added missing 'auditlog: ' prefix to backend connections
+  (thanks Wolfgang Breyha)
+* Fixed: IMAP SEARCH crash on some platforms
+* Fixed: memory leaks in IMAP SEARCH and IMAP APPEND
+* Fixed :issue:`1967`: EXISTS count reported earlier if fetching past size
+  of previous message set
 
 
 :ref:`imap-release-notes-2.4`

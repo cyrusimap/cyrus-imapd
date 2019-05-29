@@ -529,7 +529,7 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     .. NOTE::
 
-        SSLv3 is considered inscure as it is vulnerable to POODLE.
+        SSLv3 is considered insecure as it is vulnerable to POODLE.
 
         Support for SSLv3 is being deprecated and removed.
 
@@ -718,10 +718,6 @@ RFC Wishlist
 :rfc:`5183`
 
     Sieve Email Filtering: Environment Extension
-
-:rfc:`5229`
-
-    Sieve Email Filtering: Variables Extension
 
 :rfc:`5235`
 

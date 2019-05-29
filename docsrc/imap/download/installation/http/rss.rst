@@ -36,7 +36,7 @@ The rss_feeds option uses the
 `wildmat <https://tools.ietf.org/html/rfc3977#section-4>`_ format to specify
 which mailboxes/folders will be made available via RSS. This list is further
 limited to only those mailboxes and folders that the authenticated user has
-peermissions to see.
+permissions to see.
 
 The rss_feeds option uses the
 :ref:`internal namespace <mailbox-namespaces>`, which uses "." as a hierarchy
