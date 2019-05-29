@@ -1344,4 +1344,19 @@ sub test_detect_language
     $self->assert_num_not_equals(-1, index($r->{snippets}[0][3], ' Höhe <b>atmeten</b>.'));
 }
 
+sub test_subject_and_body_match
+    :min_version_3_0 :needs_search_xapian :needs_dependency_cld2
+{
+    my ($self) = @_;
+
+    $self->make_message('fwd subject', body => 'a schenectady body');
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+
+    my $uids = $talk->search('fuzzy', 'text', 'fwd', 'text', 'schenectady');
+    $self->assert_deep_equals([1], $uids);
+}
+
 1;
