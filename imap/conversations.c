@@ -216,7 +216,7 @@ static int write_folders(struct conversations_state *state)
     int r;
     int i;
 
-    for (i = 0; i < state->folder_names->count; i++) {
+    for (i = 0; i < strarray_size(state->folder_names); i++) {
         const char *fname = strarray_nth(state->folder_names, i);
         dlist_setatom(dl, NULL, fname);
     }
@@ -259,6 +259,11 @@ static int folder_number(struct conversations_state *state,
     }
 
     return pos;
+}
+
+EXPORTED uint32_t conversations_num_folders(struct conversations_state *state)
+{
+    return strarray_size(state->folder_names);
 }
 
 EXPORTED int conversations_open_path(const char *fname, const char *userid, int shared,
@@ -329,7 +334,7 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     open->s.trashmboxname = trashmboxname;
 
     /* create the status cache */
-    construct_hash_table(&open->s.folderstatus, open->s.folder_names->count/4+4, 0);
+    construct_hash_table(&open->s.folderstatus, strarray_size(open->s.folder_names)/4+4, 0);
 
     *statep = &open->s;
 
