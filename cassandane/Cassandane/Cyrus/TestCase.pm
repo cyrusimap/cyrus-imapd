@@ -259,8 +259,10 @@ magic(SearchAttachmentExtractor => sub {
     shift->config_set('search_attachment_extractor_url' =>
         "http://localhost:$port/extractor");
 });
-magic(SearchDetectLanguage => sub {
-    shift->config_set('search_detect_language' => 'yes');
+magic(SearchLanguage => sub {
+    my $self = shift;
+    $self->config_set('search_index_language' => 'yes');
+    $self->config_set('search_query_language' => 'yes');
 });
 
 # Run any magic handlers indicated by the test name or attributes
