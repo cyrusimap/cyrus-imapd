@@ -116,6 +116,13 @@ EXPORTED const char *search_part_as_string(int part)
     return (part < 0 || part >= SEARCH_NUM_PARTS ? NULL : names[part]);
 }
 
+EXPORTED int search_part_is_body(int part)
+{
+    return part == SEARCH_PART_BODY ||
+           part == SEARCH_PART_LOCATION ||
+           part == SEARCH_PART_ATTACHMENTBODY;
+}
+
 
 EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox, int opts)
 {

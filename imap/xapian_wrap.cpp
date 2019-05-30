@@ -441,6 +441,7 @@ struct xapian_dbw
     Xapian::Stem *stemmer;
     Xapian::TermGenerator *term_generator;
     Xapian::Document *document;
+    char doctype;
     Xapian::Stopper *stopper;
     ptrarray_t otherdbs;
     char *cyrusid;
@@ -600,6 +601,7 @@ int xapian_dbw_begin_doc(xapian_dbw_t *dbw, const struct message_guid *guid, cha
             dbw->document = 0;
         }
         dbw->document = new Xapian::Document();
+        dbw->doctype = doctype;
         /* Set document id and type */
         struct buf buf = BUF_INITIALIZER;
         make_cyrusid(&buf, guid, doctype);
@@ -666,14 +668,17 @@ int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
             // We only count stemmer language once per document and part,
             // either the detected language or the default (English).
             // We still index them using both stemmers.
-            std::string key = make_lang_count_key(num_part, iso_lang.c_str());
-            std::string val = dbw->database->get_metadata(key);
-            unsigned count = 0;
-            if (val.size() > 0) {
-                count = std::stoi(val);
+            if ((dbw->doctype == 'G' && !search_part_is_body(num_part)) ||
+                (dbw->doctype != 'G' &&  search_part_is_body(num_part))) {
+                std::string key = make_lang_count_key(num_part, iso_lang.c_str());
+                std::string val = dbw->database->get_metadata(key);
+                unsigned count = 0;
+                if (val.size() > 0) {
+                    count = std::stoi(val);
+                }
+                count++;
+                dbw->database->set_metadata(key, std::to_string(count));
             }
-            count++;
-            dbw->database->set_metadata(key, std::to_string(count));
 
             // Index with default stemmer.
             dbw->term_generator->set_stemmer(*dbw->default_stemmer);
@@ -705,6 +710,7 @@ int xapian_dbw_end_doc(xapian_dbw_t *dbw)
         dbw->database->set_metadata("cyrusid." + std::string(dbw->cyrusid), "1");
         delete dbw->document;
         dbw->document = 0;
+        dbw->doctype = 0;
         if (dbw->cyrusid) free(dbw->cyrusid);
         dbw->cyrusid = NULL;
     }

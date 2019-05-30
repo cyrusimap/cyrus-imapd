@@ -64,4 +64,6 @@
 /* Implemented in search_engines.c */
 extern const char *search_part_as_string(int part);
 
+extern int search_part_is_body(int part);
+
 #endif
