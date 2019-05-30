@@ -151,8 +151,8 @@ class CyrusSearchStemmer : public Xapian::StemImplementation
  * Version 1: term prefixes start with 'X'
  * Version 2: uses STEM_SOME for some terms
  * Version 3: removes all use of STEM_ALL
- * Version 4: introduces doctype indexing
- * Version 5: introduces language-specific stemming
+ * Version 4: indexes headers and bodies in separate documents
+ * Version 5: indexes headers and bodies together and stems by language
  */
 #define XAPIAN_DB_CURRENT_VERSION 5
 #define XAPIAN_DB_MIN_SUPPORTED_VERSION 2
@@ -748,8 +748,8 @@ int xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *guid, ch
 struct xapian_db
 {
     std::string *paths;
-    Xapian::Database *database; // version > 3 databases
-    Xapian::Database *legacydb; // version <= 3 dbs. Only G doctypes.
+    Xapian::Database *database; // all but version 4 databases
+    Xapian::Database *legacydbv4; // version 4 databases
     std::vector<Xapian::Database> *shards; // all database shards
     Xapian::Stem *default_stemmer;
     const Xapian::Stopper* default_stopper;
@@ -779,15 +779,15 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
             if (!db->db_versions)
                 db->db_versions = new std::set<int>();
             db->db_versions->insert(db_versions.begin(), db_versions.end());
-            // Databases since version 4 support indexing by doctype.
-            if (db_versions.lower_bound(4) != db_versions.end()) {
+            // Databases with version 4 split indexing by doctype.
+            if (db_versions.find(4) != db_versions.end()) {
+                if (!db->legacydbv4) db->legacydbv4 = new Xapian::Database();
+                db->legacydbv4->add_database(subdb);
+            }
+            // Databases with any but version 4 are regular dbs.
+            if (db_versions.size() > 1 || db_versions.find(4) == db_versions.end()) {
                 if (!db->database) db->database = new Xapian::Database();
                 db->database->add_database(subdb);
-            }
-            // Legacy databases don't index by document type.
-            if (db_versions.upper_bound(4) != db_versions.begin()) {
-                if (!db->legacydb) db->legacydb = new Xapian::Database();
-                db->legacydb->add_database(subdb);
             }
 
             // Xapian database has no API to access shards.
@@ -828,14 +828,14 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
             thispath = "(unknown)";
         }
 
-        if (!db->database && !db->legacydb) {
+        if (!db->database && !db->legacydbv4) {
             r = IMAP_NOTFOUND;
             goto done;
         }
 
         db->parser = new Xapian::QueryParser;
         db->parser->set_default_op(Xapian::Query::OP_AND);
-        db->parser->set_database(db->database ? *db->database : *db->legacydb);
+        db->parser->set_database(db->database ? *db->database : *db->legacydbv4);
         db->default_stemmer = new Xapian::Stem(new CyrusSearchStemmer());
         db->default_stopper = get_stopper("en");
 
@@ -865,7 +865,7 @@ void xapian_db_close(xapian_db_t *db)
 {
     try {
         delete db->database;
-        delete db->legacydb;
+        delete db->legacydbv4;
         delete db->parser;
         delete db->paths;
         delete db->db_versions;
@@ -881,14 +881,14 @@ void xapian_db_close(xapian_db_t *db)
     }
 }
 
-int xapian_db_has_doctype_index(const xapian_db_t *db)
+int xapian_db_has_otherthan_v4_index(const xapian_db_t *db)
 {
     return db->database != NULL;
 }
 
-int xapian_db_has_legacy_index(const xapian_db_t *db)
+int xapian_db_has_legacy_v4_index(const xapian_db_t *db)
 {
-    return db->legacydb != NULL;
+    return db->legacydbv4 != NULL;
 }
 
 static Xapian::Query *make_compound(std::vector<Xapian::Query*> v, enum Xapian::Query::op op)
@@ -939,7 +939,7 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
                     const Xapian::Stopper *stopper = get_stopper(iso_lang);
                     db->parser->set_stopper(stopper);
                     if (!stopper || (*stopper)(lmatch)) {
-                        // Don't stem stopwords.
+                        // Don't stem stopwords
                         db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
                     }
                     else if (tg_stem_strategy == Xapian::TermGenerator::STEM_ALL) {
@@ -1081,13 +1081,13 @@ xapian_query_t *xapian_query_new_not(const xapian_db_t *db __attribute__((unused
     }
 }
 
-xapian_query_t *xapian_query_new_filter_doctype(const xapian_db_t *db __attribute__((unused)),
-                                                char doctype, xapian_query_t *child)
+xapian_query_t *xapian_query_new_has_doctype(const xapian_db_t *db __attribute__((unused)),
+                                             char doctype, xapian_query_t *child)
 {
     try {
         Xapian::Query *qq = new Xapian::Query(
                                         Xapian::Query::OP_FILTER,
-                                        *(Xapian::Query *)child,
+                                        child ? *(Xapian::Query *)child : Xapian::Query::MatchAll,
                                         std::string("XE") + doctype);
         // 'compound' owns a refcount on each child.  We need to
         // drop the one we got when we allocated the children
@@ -1125,10 +1125,10 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
     void *data = NULL;
     size_t n = 0;
 
-    if ((is_legacy && !db->legacydb) || (!is_legacy && !db->database)) return 0;
+    if ((is_legacy && !db->legacydbv4) || (!is_legacy && !db->database)) return 0;
 
     try {
-        Xapian::Database *database = is_legacy ? db->legacydb : db->database;
+        Xapian::Database *database = is_legacy ? db->legacydbv4 : db->database;
         Xapian::Enquire enquire(*database);
         enquire.set_query(*query);
         Xapian::MSet matches = enquire.get_mset(0, database->get_doccount());

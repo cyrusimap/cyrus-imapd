@@ -62,6 +62,7 @@ typedef struct search_builder search_builder_t;
 struct search_builder {
 /* These values are carefully chosen a) not to clash with the
  * SEARCH_PART_* constants, and b) to reflect operator precedence */
+/* Values > 1024 are reserved for search engine implementations */
 #define SEARCH_OP_AND       101
 #define SEARCH_OP_OR        102
 #define SEARCH_OP_NOT       103

@@ -1073,9 +1073,11 @@ out:
 
 /* ====================================================================== */
 
+#define XAPIAN_SEARCH_OP_DOCTYPE 1025
+
 struct opnode
 {
-    int op;     /* SEARCH_OP_* or SEARCH_PART_* constant */
+    int op;     /* SEARCH_OP_* or SEARCH_PART_* or XAPIAN_SEARCH_OP_* */
     char *arg;
     struct opnode *next;
     struct opnode *children;
@@ -1175,6 +1177,8 @@ static const char *opnode_serialise(struct buf *buf, const struct opnode *on)
         buf_appendcstr(buf, "OR");
     else if (on->op == SEARCH_OP_NOT)
         buf_appendcstr(buf, "NOT");
+    else if (on->op == XAPIAN_SEARCH_OP_DOCTYPE)
+        buf_appendcstr(buf, "DOCTYPE");
     else
         buf_appendcstr(buf, "UNKNOWN");
 
@@ -1271,6 +1275,10 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on,
                                        (xapian_query_t **)childqueries.data,
                                        childqueries.count);
         break;
+    case XAPIAN_SEARCH_OP_DOCTYPE:
+        assert(on->arg != NULL && on->arg[1] == '\0');
+        qq = xapian_query_new_has_doctype(db, on->arg[0], NULL);
+        break;
     default:
         assert(on->arg != NULL);
         assert(on->children == NULL);
@@ -1304,8 +1312,10 @@ static int is_dnfclause(const struct opnode *on)
             else if (child->op == SEARCH_OP_NOT) {
                 const struct opnode *gchild;
                 for (gchild = child->children; gchild; gchild = gchild->next) {
-                    if (gchild->op >= SEARCH_NUM_PARTS)
+                    if (gchild->op >= SEARCH_NUM_PARTS &&
+                        gchild->op < XAPIAN_SEARCH_OP_DOCTYPE) {
                         return 0;
+                    }
                 }
                 continue;
             }
@@ -1317,10 +1327,11 @@ static int is_dnfclause(const struct opnode *on)
     return 0;
 }
 
-static int split_query(xapian_builder_t *bb,
-                       const struct opnode *expr,
-                       ptrarray_t *clauses)
+static int normalise_query(const struct opnode *expr, struct opnode **normalised)
 {
+    /* Normalise DNF clause expr to an AND clause, with each child
+     * expression being a part MATCH or single-valued NOT. */
+
     if (!is_dnfclause(expr)) {
         // XXX convert to DNF?
         struct buf buf = BUF_INITIALIZER;
@@ -1331,9 +1342,6 @@ static int split_query(xapian_builder_t *bb,
     }
 
     struct opnode *root = opnode_deep_copy(expr);
-
-    /* Normalise expression to an AND clause, with each child
-     * expression being a part MATCH or single-valued NOT. */
 
     if (root->op == SEARCH_OP_NOT) {
         /* Convert NOT(x,y) to AND(NOT(x),NOT(y)) */
@@ -1354,8 +1362,6 @@ static int split_query(xapian_builder_t *bb,
         opnode_append_child(newroot, root);
         root = newroot;
     }
-
-    assert(root->op == SEARCH_OP_AND);
 
     struct opnode *child = root->children;
     while (child) {
@@ -1381,6 +1387,20 @@ static int split_query(xapian_builder_t *bb,
         child = next;
     }
 
+    *normalised = root;
+    return 0;
+}
+
+static int split_legacyv4_query(xapian_builder_t *bb,
+                                const struct opnode *expr,
+                                ptrarray_t *clauses)
+{
+    struct opnode *root = NULL;
+    int r = normalise_query(expr, &root);
+    if (r) return r;
+
+    assert(root->op == SEARCH_OP_AND);
+
     /* Split clause into subclauses for top-level guid
      * search, body part search and any part. */
 
@@ -1388,7 +1408,7 @@ static int split_query(xapian_builder_t *bb,
     struct opnode *qpart = opnode_new(SEARCH_OP_AND, NULL);
     struct opnode *qany = opnode_new(SEARCH_OP_AND, NULL);
 
-    child = root->children;
+    struct opnode *child = root->children;
     while (child) {
         struct opnode *next = child->next;
         opnode_detach_child(root, child);
@@ -1439,13 +1459,13 @@ static int split_query(xapian_builder_t *bb,
     if (qguid->children) {
         optimise_nodes(NULL, qguid);
         xapian_query_t *xq = opnode_to_query(bb->lock.db, qguid, bb->opts);
-        if (xq) xq = xapian_query_new_filter_doctype(bb->lock.db, SEARCH_XAPIAN_DOCTYPE_MSG, xq);
+        if (xq) xq = xapian_query_new_has_doctype(bb->lock.db, SEARCH_XAPIAN_DOCTYPE_MSG, xq);
         if (xq) ptrarray_append(clauses, xq);
     }
     if (qpart->children) {
         optimise_nodes(NULL, qpart);
         xapian_query_t *xq = opnode_to_query(bb->lock.db, qpart, bb->opts);
-        if (xq) xq = xapian_query_new_filter_doctype(bb->lock.db, SEARCH_XAPIAN_DOCTYPE_PART, xq);
+        if (xq) xq = xapian_query_new_has_doctype(bb->lock.db, SEARCH_XAPIAN_DOCTYPE_PART, xq);
         if (xq) ptrarray_append(clauses, xq);
     }
 
@@ -1488,7 +1508,6 @@ static void xapian_match_reset(struct xapian_match *match)
 struct xapian_run_rock {
     xapian_builder_t *bb;
     struct xapian_match *matches;
-    int is_legacy;
 };
 
 static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
@@ -1500,11 +1519,6 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
     if (!(bb->opts & SEARCH_MULTIPLE)) {
         if (strcmp(rec->mboxname, bb->mailbox->name))
             return 0;
-    }
-
-    if (xrock->is_legacy) {
-        if (rec->part) return 0;
-        return bb->proc(rec->mboxname, /*uidvalidity*/0, rec->uid, NULL, bb->rock);
     }
 
     struct xapian_match *match = matches + rec->foldernum;
@@ -1545,7 +1559,7 @@ done:
     return r;
 }
 
-static int run_query(xapian_builder_t *bb)
+static int run_legacy_v4_query(xapian_builder_t *bb)
 {
     int i, r = 0;
     struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
@@ -1559,16 +1573,16 @@ static int run_query(xapian_builder_t *bb)
     ptrarray_t clauses = PTRARRAY_INITIALIZER;
 
     /* Split into sub queries for each document type */
-    r = split_query(bb, bb->root, &clauses);
+    r = split_legacyv4_query(bb, bb->root, &clauses);
     if (r) goto out;
 
     /* Run clauses and intersect results */
     for (i = 0; i < ptrarray_size(&clauses); i++) {
         struct xapian_match *matches = xzmalloc(sizeof(struct xapian_match) * num_folders);
 
-        struct xapian_run_rock xrock = { bb, matches, /*is_legacy*/0 };
+        struct xapian_run_rock xrock = { bb, matches };
         xapian_query_t *xq = ptrarray_nth(&clauses, i);
-        r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/0, xapian_run_cb, &xrock);
+        r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/1, xapian_run_cb, &xrock);
         if (r) {
             uint32_t j;
             for (j = 0; j < num_folders; j++) {
@@ -1669,13 +1683,81 @@ out:
     return r;
 }
 
-static int run_legacy_query(xapian_builder_t *bb)
+static int run_query(xapian_builder_t *bb)
 {
-    xapian_query_t *qq = opnode_to_query(bb->lock.db, bb->root, bb->opts);
-    if (!qq) return 0;
-    struct xapian_run_rock xrock = { bb, NULL, /*is_legacy*/1 };
-    int r = xapian_query_run(bb->lock.db, qq, /*is_legacy*/1, xapian_run_cb, &xrock);
-    if (qq) xapian_query_free(qq);
+    struct opnode *norm = NULL;
+    int r = normalise_query(bb->root, &norm);
+    if (r) return r;
+
+    assert(norm->op == SEARCH_OP_AND);
+
+    /* Exclude P doctypes from matches for headers or ANY */
+    struct opnode *root = opnode_new(SEARCH_OP_AND, NULL);
+    while (norm->children) {
+        struct opnode *child = norm->children;
+        opnode_detach_child(norm, child);
+        if (child->op != SEARCH_OP_NOT) {
+            opnode_append_child(root, child);
+            continue;
+        }
+        struct opnode *expr = child->children;
+        if (expr->op >= SEARCH_NUM_PARTS) {
+            opnode_append_child(root, child);
+            continue;
+        }
+        if (!search_part_is_body(expr->op) || expr->op == SEARCH_PART_ANY) {
+            /* Transform NOT(MATCH) to AND(NOT(MATCH),NOT(DOCTYPE==P)) */
+            struct opnode *notdp = opnode_new(SEARCH_OP_NOT, NULL);
+            opnode_append_child(notdp, opnode_new(XAPIAN_SEARCH_OP_DOCTYPE, "P"));
+            struct opnode *node = opnode_new(SEARCH_OP_AND, NULL);
+            opnode_append_child(node, child);
+            opnode_append_child(node, notdp);
+            opnode_append_child(root, node);
+        }
+    }
+    opnode_delete(norm);
+
+    xapian_query_t *xq = opnode_to_query(bb->lock.db, root, bb->opts);
+    if (!xq) goto done;
+
+    struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
+    if (!cstate) {
+        syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
+                bb->mailbox->name);
+        r = IMAP_NOTFOUND;
+        goto done;
+    }
+    uint32_t num_folders = conversations_num_folders(cstate);
+    struct xapian_match *result = xzmalloc(sizeof(struct xapian_match) * num_folders);
+    struct xapian_run_rock xrock = { bb, result };
+    r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/0, xapian_run_cb, &xrock);
+
+    if (result) {
+        r = 0;
+        uint32_t j;
+        for (j = 0; j < num_folders; j++) {
+            struct xapian_match *match = result + j;
+            if (bv_count(&match->uids)) {
+                const char *mboxname = conversations_folder_name(cstate, j);
+                int uid;
+                for (uid = bv_next_set(&match->uids, 0); uid != -1;
+                        uid = bv_next_set(&match->uids, uid+1)) {
+                    strarray_t *partids = NULL;
+                    if (match->partids_by_uid.size) {
+                        partids = hashu64_lookup(uid, &match->partids_by_uid);
+                    }
+                    r = bb->proc(mboxname, /*uidvalidity*/0, uid, partids, bb->rock);
+                    if (r) break;
+                }
+            }
+            xapian_match_reset(match);
+        }
+    }
+
+    free(result);
+    xapian_query_free(xq);
+done:
+    opnode_delete(root);
     return r;
 }
 
@@ -1699,14 +1781,14 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     optimise_nodes(NULL, bb->root);
 
     /* A database can contain sub-databases of multiple versions */
-    if (xapian_db_has_doctype_index(bb->lock.db)) {
-        // version 4 supports doctype indexing
+    if (xapian_db_has_otherthan_v4_index(bb->lock.db)) {
+        // all but version 4 databases index header and body together
         r = run_query(bb);
         if (r) goto out;
     }
-    if (xapian_db_has_legacy_index(bb->lock.db)) {
-        // legacy dbs index MIME parts in the G doctype
-        r = run_legacy_query(bb);
+    if (xapian_db_has_legacy_v4_index(bb->lock.db)) {
+        // legacy version 4 databases index headers and body separately
+        r = run_legacy_v4_query(bb);
         if (r) goto out;
     }
 
@@ -2620,13 +2702,13 @@ static void generate_snippet_terms(xapian_snipgen_t *snipgen,
             xapian_snipgen_add_match(snipgen, on->arg);
         }
         break;
-
     default:
         /* other SEARCH_PART_* constants */
-        assert(on->op >= 0 && on->op < SEARCH_NUM_PARTS);
-        assert(on->children == NULL);
-        if (part == on->op) {
-            xapian_snipgen_add_match(snipgen, on->arg);
+        if (on->op >= 0 && on->op < SEARCH_NUM_PARTS) {
+            assert(on->children == NULL);
+            if (part == on->op) {
+                xapian_snipgen_add_match(snipgen, on->arg);
+            }
         }
         break;
     }

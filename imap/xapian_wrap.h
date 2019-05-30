@@ -77,7 +77,7 @@ extern void xapian_db_close(xapian_db_t *);
 extern xapian_query_t *xapian_query_new_match(const xapian_db_t *, int num_part, const char *term);
 extern xapian_query_t *xapian_query_new_compound(const xapian_db_t *, int is_or, xapian_query_t **children, int n);
 extern xapian_query_t *xapian_query_new_not(const xapian_db_t *, xapian_query_t *);
-extern xapian_query_t *xapian_query_new_filter_doctype(const xapian_db_t *, char doctype, xapian_query_t *);
+extern xapian_query_t *xapian_query_new_has_doctype(const xapian_db_t *, char doctype, xapian_query_t *);
 extern void xapian_query_free(xapian_query_t *);
 extern int xapian_query_run(const xapian_db_t *, const xapian_query_t *query, int is_legacy,
                             int (*cb)(void *base, size_t n, void *rock), void *rock);
@@ -93,9 +93,9 @@ extern int xapian_snipgen_end_doc(xapian_snipgen_t *snipgen, struct buf *);
 extern int xapian_filter(const char *dest, const char **sources,
                          int (*cb)(const char *cyrusid, void *rock),
                          void *rock);
-/* XXX legacy DB support */
-extern int xapian_db_has_doctype_index(const xapian_db_t *);
-extern int xapian_db_has_legacy_index(const xapian_db_t *);
+/* XXX legacy version 4 DB support */
+extern int xapian_db_has_legacy_v4_index(const xapian_db_t *);
+extern int xapian_db_has_otherthan_v4_index(const xapian_db_t *);
 
 /* Language indexing support */
 extern int xapian_list_lang_stats(xapian_db_t*, ptrarray_t*);
