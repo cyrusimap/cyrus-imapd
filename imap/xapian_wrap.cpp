@@ -1454,8 +1454,14 @@ int xapian_filter(const char *dest, const char **sources,
             /* copy all matching documents to the new DB */
             for (Xapian::ValueIterator it = srcdb.valuestream_begin(SLOT_CYRUSID);
                                        it != srcdb.valuestream_end(SLOT_CYRUSID); it++) {
-                if (cb((*it).c_str(), rock)) {
-                    destdb.add_document(srcdb.get_document(it.get_docid()));
+                const char *cyrusid = (*it).c_str();
+                if (cb(cyrusid, rock)) {
+                    /* is it already indexed? */
+                    std::string key = "cyrusid." + std::string(cyrusid);
+                    if (destdb.get_metadata(key).empty()) {
+                        destdb.add_document(srcdb.get_document(it.get_docid()));
+                        descdb.set_metadata(key, "1");
+                    }
                 }
             }
         }

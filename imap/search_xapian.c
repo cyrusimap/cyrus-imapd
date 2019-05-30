@@ -2889,20 +2889,19 @@ static int mbdata_exists_cb(const char *cyrusid, void *rock)
 {
     struct mbfilter *filter = (struct mbfilter *)rock;
 
-    /* we can't get here without GUID keys */
-    assert(!strncmp(cyrusid, "*G*", 3));
+    if (strncmp(cyrusid, "*G*", 3) && strncmp(cyrusid, "*P*", 3)) return 0;
 
-    return bloom_check(&filter->bloom, cyrusid+3, strlen(cyrusid+3));
+    return bloom_check(&filter->bloom, cyrusid+3, 40);
 }
 
 static int bloomadd_cb(void *rock,
-                       const char *key, size_t keylen,
+                       const char *key,
+                       size_t keylen __attribute__((unused)),
                        const char *data __attribute__((unused)),
                        size_t datalen __attribute__((unused)))
 {
     struct bloom *bloom = (struct bloom *)rock;
-    if (keylen > 41 && !memchr(key+41, '[', keylen-41))
-        bloom_add(bloom, key+1, 40);
+    bloom_add(bloom, key+1, 40);
     return 0;
 }
 
