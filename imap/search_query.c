@@ -622,8 +622,8 @@ static int add_unchecked_uid(const char *mboxname, uint32_t uidvalidity,
             if (!folder->partids.size) {
                 if (!construct_hashu64_table(&folder->partids, 4096, 0))
                     return IMAP_INTERNAL;
-                hashu64_insert(uid, strarray_dup(partids), &folder->partids);
             }
+            hashu64_insert(uid, strarray_dup(partids), &folder->partids);
         }
     }
     return 0;
