@@ -13130,4 +13130,70 @@ sub test_searchsnippet_get_regression
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
 }
 
+sub test_search_sharedpart
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $body = "--047d7b33dd729737fe04d3bde348\r\n";
+    $body .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    $body .= "\r\n";
+    $body .= "This is the lady plain text part.";
+    $body .= "\r\n";
+    $body .= "--047d7b33dd729737fe04d3bde348\r\n";
+    $body .= "Content-Type: text/html;charset=\"UTF-8\"\r\n";
+    $body .= "\r\n";
+    $body .= "<html><body><p>This is the lady html part.</p></body></html>";
+    $body .= "\r\n";
+    $body .= "--047d7b33dd729737fe04d3bde348--\r\n";
+
+    $self->make_message("lady subject",
+        mime_type => "multipart/alternative",
+        mime_boundary => "047d7b33dd729737fe04d3bde348",
+        body => $body
+    ) || die;
+
+    $body = "--h8h89737fe04d3bde348\r\n";
+    $body .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    $body .= "\r\n";
+    $body .= "This is the foobar plain text part.";
+    $body .= "\r\n";
+    $body .= "--h8h89737fe04d3bde348\r\n";
+    $body .= "Content-Type: text/html;charset=\"UTF-8\"\r\n";
+    $body .= "\r\n";
+    $body .= "<html><body><p>This is the lady html part.</p></body></html>";
+    $body .= "\r\n";
+    $body .= "--h8h89737fe04d3bde348--\r\n";
+
+    $self->make_message("foobar subject",
+        mime_type => "multipart/alternative",
+        mime_boundary => "h8h89737fe04d3bde348",
+        body => $body
+    ) || die;
+
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $using = [
+        'https://cyrusimap.org/ns/jmap/performance',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/search',
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { filter => {text => "foobar"}}, "R1"],
+    ], $using);
+    my $emailIds = $res->[0][1]{ids};
+    my $partIds = $res->[0][1]{partIds};
+
+    $self->assert_num_equals(1, scalar @$emailIds);
+}
+
+
 1;
