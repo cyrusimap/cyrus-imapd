@@ -639,7 +639,7 @@ int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
         if (stem_strategy != Xapian::TermGenerator::STEM_NONE) {
             std::string iso_lang("en"); // Default stemmer language ISO code.
 #ifdef HAVE_CLD2
-            if (config_getswitch(IMAPOPT_SEARCH_DETECT_LANGUAGE)) {
+            if (config_getswitch(IMAPOPT_SEARCH_INDEX_LANGUAGE)) {
                 // Determine text language.
                 bool reliable = false;
                 CLD2::Language lang = CLD2::DetectLanguage(part->s, part->len, 1, &reliable);
@@ -926,7 +926,7 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
         std::transform(lmatch.begin(), lmatch.end(), lmatch.begin(), ::tolower);
 
         // Stem query for each language detected in the index.
-        if (db->stem_language_weights && config_getswitch(IMAPOPT_SEARCH_DETECT_LANGUAGE)) {
+        if (db->stem_language_weights && config_getswitch(IMAPOPT_SEARCH_QUERY_LANGUAGE)) {
             for (std::map<std::string, double>::iterator it = db->stem_language_weights->begin();
                     it != db->stem_language_weights->end(); ++it) {
 

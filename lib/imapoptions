@@ -1984,14 +1984,21 @@ If all partitions are over that limit, this feature is not used anymore.
    reasons, the Cyrus indexer attempts to keep-alive the TCP connection
    to the extractor. */
 
-{ "search_detect_language", 0, SWITCH }
+{ "search_index_language", 0, SWITCH }
 /*
-  If enabled, then message bodies and subjects are indexed and searched
-  by their detected language, if the cld2 dependency is built into Cyrus.
+  If enabled, then message bodies and subjects are indexed by their
+  detected language, if the cld2 dependency is built into Cyrus.
   Regardless of this flag, bodies and subjects are always indexed and
   searched using the default stemmer.
  */
 
+{ "search_query_language", 0, SWITCH }
+/*
+  If enabled, then message bodies and subjects searched by their language
+  that got detected during indexing, if any.
+  Regardless of this flag, bodies and subjects are always searched using
+  the default stemmer.
+ */
 
 { "search_normalisation_max", 1000, INT }
 /* A resource bound for the combinatorial explosion of search expression
