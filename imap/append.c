@@ -295,9 +295,10 @@ EXPORTED int append_commit(struct appendstate *as)
 EXPORTED int append_abort(struct appendstate *as)
 {
     if (as->s == APPEND_DONE) return 0;
+    int r = mailbox_abort(as->mailbox);
     append_free(as);
 
-    return 0;
+    return r;
 }
 
 /*
