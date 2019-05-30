@@ -3176,6 +3176,39 @@ done:
     return r;
 }
 
+static void cleanup_xapiandirs(const char *mboxname, const char *partition, strarray_t *active, int verbose)
+{
+    int i;
+    strarray_t found = STRARRAY_INITIALIZER;
+    strarray_t bogus = STRARRAY_INITIALIZER;
+
+    inspect_filesystem(mboxname, partition, &found, &bogus);
+
+    for (i = 0; i < strarray_size(active); i++) {
+        const char *item = strarray_nth(active, i);
+        strarray_remove_all(&found, item);
+    }
+
+    for (i = 0; i < strarray_size(&found); i++) {
+        const char *item = strarray_nth(&found, i);
+        char *path = activefile_path(mboxname, partition, item, /*dostat*/0);
+        if (verbose)
+            printf("Removing unreferenced item %s (%s)\n", item, path);
+        remove_dir(path);
+        free(path);
+    }
+
+    for (i = 0; i < strarray_size(&bogus); i++) {
+        const char *path = strarray_nth(&bogus, i);
+        if (verbose)
+            printf("Removing bogus path %s\n", path);
+        remove_dir(path);
+    }
+
+    strarray_fini(&found);
+    strarray_fini(&bogus);
+}
+
 static int compact_dbs(const char *userid, const char *tempdir,
                        const strarray_t *srctiers, const char *desttier,
                        int flags)
@@ -3497,6 +3530,13 @@ static int compact_dbs(const char *userid, const char *tempdir,
     /* release the lock */
     mappedfile_unlock(activefile);
 
+    /* And finally remove all directories on disk of the source dbs */
+    for (i = 0; i < srcdirs->count; i++)
+        remove_dir(strarray_nth(srcdirs, i));
+
+    /* remove any other files that are still lying around! */
+    cleanup_xapiandirs(mboxname, mbentry->partition, active, verbose);
+
     /* Release the exclusive named lock */
     if (xapiandb_namelock) {
         mboxname_release(&xapiandb_namelock);
@@ -3507,26 +3547,6 @@ static int compact_dbs(const char *userid, const char *tempdir,
         char *alist = strarray_join(active, ",");
         printf("finished compact of %s (active %s)\n", mboxname, alist);
         free(alist);
-    }
-
-    /* Get a shared name lock */
-    r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_SHARED);
-    if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
-               namelock_fname);
-        goto out;
-    }
-
-    /* And finally remove all directories on disk of the source dbs */
-    for (i = 0; i < srcdirs->count; i++)
-        remove_dir(strarray_nth(srcdirs, i));
-
-    /* XXX - readdir and remove other directories as well */
-
-    /* Release the shared named lock */
-    if (xapiandb_namelock) {
-        mboxname_release(&xapiandb_namelock);
-        xapiandb_namelock = NULL;
     }
 
 out:
