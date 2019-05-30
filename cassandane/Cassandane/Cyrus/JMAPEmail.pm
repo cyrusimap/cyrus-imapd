@@ -13192,7 +13192,28 @@ sub test_search_sharedpart
     my $emailIds = $res->[0][1]{ids};
     my $partIds = $res->[0][1]{partIds};
 
+    my $fooId = $emailIds->[0];
+
     $self->assert_num_equals(1, scalar @$emailIds);
+    $self->assert_num_equals(1, scalar keys %$partIds);
+    $self->assert_num_equals(1, scalar @{$partIds->{$fooId}});
+    $self->assert_str_equals("1", $partIds->{$fooId}[0]);
+
+    $res = $jmap->CallMethods([
+        ['Email/query', { filter => {text => "lady"}}, "R1"],
+    ], $using);
+    $emailIds = $res->[0][1]{ids};
+    $partIds = $res->[0][1]{partIds};
+
+    my ($ladyId) = grep { $_ ne $fooId } @$emailIds;
+
+    $self->assert_num_equals(2, scalar @$emailIds);
+    $self->assert_num_equals(2, scalar keys %$partIds);
+    $self->assert_num_equals(1, scalar @{$partIds->{$fooId}});
+    $self->assert_num_equals(2, scalar @{$partIds->{$ladyId}});
+    $self->assert_not_null(grep { $_ eq "2" } @{$partIds->{$fooId}});
+    $self->assert_not_null(grep { $_ eq "1" } @{$partIds->{$ladyId}});
+    $self->assert_not_null(grep { $_ eq "2" } @{$partIds->{$ladyId}});
 }
 
 
