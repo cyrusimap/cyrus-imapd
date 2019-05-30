@@ -1099,6 +1099,7 @@ out:
     freeentryatts(system_annots);
     if (r) {
         append_abort(as);
+        if (msgrec) msgrecord_unref(&msgrec);
         return r;
     }
 
