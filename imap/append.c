@@ -1074,8 +1074,10 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 
     /* Apply the annotations */
     if (user_annots || system_annots) {
+        /* pretend to be admin to avoid ACL checks when writing annotations here, since there calling user
+         * didn't control them */
         if (user_annots) {
-           r = msgrecord_annot_set_auth(msgrec, as->isadmin, as->userid, as->auth_state);
+           r = msgrecord_annot_set_auth(msgrec, /*isadmin*/1, as->userid, as->auth_state);
            if (!r) r = msgrecord_annot_writeall(msgrec, user_annots);
         }
         if (r) {
@@ -1083,7 +1085,6 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
             goto out;
         }
         if (system_annots) {
-            /* pretend to be admin to avoid ACL checks */
            r = msgrecord_annot_set_auth(msgrec, /*isadmin*/1, as->userid, as->auth_state);
            if (!r) r = msgrecord_annot_writeall(msgrec, system_annots);
         }
