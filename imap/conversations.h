@@ -202,6 +202,8 @@ extern struct conversations_state *conversations_get_user(const char *username);
 extern struct conversations_state *conversations_get_mbox(const char *mboxname);
 
 extern uint32_t conversations_num_folders(struct conversations_state *state);
+extern const char* conversations_folder_name(struct conversations_state *state,
+                                             uint32_t foldernum);
 
 /* either of these close */
 extern int conversations_abort(struct conversations_state **state);

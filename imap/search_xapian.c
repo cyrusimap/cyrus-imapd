@@ -1476,7 +1476,7 @@ static void xapian_match_free_partids(uint64_t key __attribute__((unused)),
     strarray_free((strarray_t*)data);
 }
 
-static void xapian_match_fini(struct xapian_match *match)
+static void xapian_match_reset(struct xapian_match *match)
 {
     bv_fini(&match->uids);
     if (match->partids_by_uid.size) {
@@ -1487,7 +1487,7 @@ static void xapian_match_fini(struct xapian_match *match)
 
 struct xapian_run_rock {
     xapian_builder_t *bb;
-    hash_table *matches;
+    struct xapian_match *matches;
     int is_legacy;
 };
 
@@ -1495,7 +1495,7 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
 {
     struct xapian_run_rock *xrock = rock;
     xapian_builder_t *bb = xrock->bb;
-    hash_table *matches = xrock->matches;
+    struct xapian_match *matches = xrock->matches;
 
     if (!(bb->opts & SEARCH_MULTIPLE)) {
         if (strcmp(rec->mboxname, bb->mailbox->name))
@@ -1507,13 +1507,7 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
         return bb->proc(rec->mboxname, /*uidvalidity*/0, rec->uid, NULL, bb->rock);
     }
 
-    struct xapian_match *match = hash_lookup(rec->mboxname, matches);
-    if (!match) {
-        match = xzmalloc(sizeof(struct xapian_match));
-        bv_init(&match->uids);
-        hash_insert(rec->mboxname, match, matches);
-    }
-
+    struct xapian_match *match = matches + rec->foldernum;
     bv_set(&match->uids, rec->uid);
     if (rec->part) {
         if (!match->partids_by_uid.size) {
@@ -1540,8 +1534,6 @@ static int xapian_run_cb(void *data, size_t n, void *rock)
 
     struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
     if (!cstate) {
-        syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-                bb->mailbox->name);
         r = IMAP_NOTFOUND;
         goto done;
     }
@@ -1553,25 +1545,17 @@ done:
     return r;
 }
 
-static void xapian_matchhash_free(hash_table **matchhashptr)
-{
-    hash_table *matchhash = *matchhashptr;
-    hash_iter *iter = hash_table_iter(matchhash);
-    while (hash_iter_next(iter)) {
-        struct xapian_match *match = hash_iter_val(iter);
-        xapian_match_fini(match);
-        free(match);
-    }
-    hash_iter_free(&iter);
-    free_hash_table(matchhash, NULL);
-    free(matchhash);
-    *matchhashptr = NULL;
-}
-
 static int run_query(xapian_builder_t *bb)
 {
     int i, r = 0;
-    hash_table *result = NULL;
+    struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
+    if (!cstate) {
+        syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
+                bb->mailbox->name);
+        return IMAP_NOTFOUND;
+    }
+    uint32_t num_folders = conversations_num_folders(cstate);
+    struct xapian_match *result = NULL;
     ptrarray_t clauses = PTRARRAY_INITIALIZER;
 
     /* Split into sub queries for each document type */
@@ -1580,14 +1564,17 @@ static int run_query(xapian_builder_t *bb)
 
     /* Run clauses and intersect results */
     for (i = 0; i < ptrarray_size(&clauses); i++) {
-        hash_table *matches = xzmalloc(sizeof(hash_table));
-        construct_hash_table(matches, 1024, 0); // XXX avoid magic size
+        struct xapian_match *matches = xzmalloc(sizeof(struct xapian_match) * num_folders);
 
         struct xapian_run_rock xrock = { bb, matches, /*is_legacy*/0 };
         xapian_query_t *xq = ptrarray_nth(&clauses, i);
         r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/0, xapian_run_cb, &xrock);
         if (r) {
-            xapian_matchhash_free(&matches);
+            uint32_t j;
+            for (j = 0; j < num_folders; j++) {
+                xapian_match_reset(matches + j);
+            }
+            free(matches);
             goto out;
         }
 
@@ -1598,25 +1585,18 @@ static int run_query(xapian_builder_t *bb)
         }
 
         /* Intersect mailbox names */
-        strarray_t *keys = hash_keys(result);
-        int j;
-        for (j = 0; j < strarray_size(keys); j++) {
-            const char *mboxname = strarray_nth(keys, j);
-            if (!hash_lookup(mboxname, matches)) {
-                struct xapian_match *match = hash_del(mboxname, result);
-                xapian_match_fini(match);
-                free(match);
+        uint32_t j;
+        for (j = 0; j < num_folders; j++) {
+            if (!bv_count(&matches[j].uids)) {
+                xapian_match_reset(result + j);
             }
         }
-        strarray_free(keys);
 
         /* Intersect UIDs */
-        hash_iter *iter = hash_table_iter(matches);
-        while (hash_iter_next(iter)) {
-            const char *mboxname = hash_iter_key(iter);
-            struct xapian_match *clause_match = hash_iter_val(iter);
-            struct xapian_match *result_match = hash_lookup(mboxname, result);
-            if (result_match) {
+        for (j = 0; j < num_folders; j++) {
+            struct xapian_match *result_match = result + j;
+            struct xapian_match *clause_match = matches + j;
+            if (bv_count(&result_match->uids)) {
                 bv_andeq(&result_match->uids, &clause_match->uids);
                 if (result_match->partids_by_uid.size && clause_match->partids_by_uid.size) {
                     /* Intersect partids */
@@ -1645,39 +1625,41 @@ static int run_query(xapian_builder_t *bb)
                     }
                 }
             }
-            xapian_match_fini(clause_match);
-            free(clause_match);
+            xapian_match_reset(clause_match);
         }
-        hash_iter_free(&iter);
-        free_hash_table(matches, NULL);
         free(matches);
     }
 
     /* Return results */
     if (result) {
-        hash_iter *iter = hash_table_iter(result);
         r = 0;
-        while (hash_iter_next(iter)) {
-            const char *mboxname = hash_iter_key(iter);
-            struct xapian_match *match = hash_iter_val(iter);
-            int uid;
-            for (uid = bv_next_set(&match->uids, 0); uid != -1;
-                 uid = bv_next_set(&match->uids, uid+1)) {
-                strarray_t *partids = NULL;
-                if (match->partids_by_uid.size) {
-                    partids = hashu64_lookup(uid, &match->partids_by_uid);
+        uint32_t j;
+        for (j = 0; j < num_folders; j++) {
+            struct xapian_match *match = result + j;
+            if (bv_count(&match->uids)) {
+                const char *mboxname = conversations_folder_name(cstate, j);
+                int uid;
+                for (uid = bv_next_set(&match->uids, 0); uid != -1;
+                        uid = bv_next_set(&match->uids, uid+1)) {
+                    strarray_t *partids = NULL;
+                    if (match->partids_by_uid.size) {
+                        partids = hashu64_lookup(uid, &match->partids_by_uid);
+                    }
+                    r = bb->proc(mboxname, /*uidvalidity*/0, uid, partids, bb->rock);
+                    if (r) break;
                 }
-                r = bb->proc(mboxname, /*uidvalidity*/0, uid, partids, bb->rock);
-                if (r) break;
             }
         }
-        hash_iter_free(&iter);
         if (r) goto out;
     }
 
 out:
     if (result) {
-        xapian_matchhash_free(&result);
+        uint32_t j;
+        for (j = 0; j < num_folders; j++) {
+            xapian_match_reset(result + j);
+        }
+        free(result);
     }
     if (ptrarray_size(&clauses)) {
         xapian_query_t *xq;

@@ -266,6 +266,12 @@ EXPORTED uint32_t conversations_num_folders(struct conversations_state *state)
     return strarray_size(state->folder_names);
 }
 
+EXPORTED const char* conversations_folder_name(struct conversations_state *state,
+                                               uint32_t foldernum)
+{
+    return strarray_safenth(state->folder_names, foldernum);
+}
+
 EXPORTED size_t conversations_estimate_emailcount(struct conversations_state *state)
 {
     int i;
