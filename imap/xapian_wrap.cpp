@@ -1438,6 +1438,8 @@ int xapian_filter(const char *dest, const char **sources,
 {
     int r = 0;
     const char *thispath = "(unknown path)";
+    std::set<int> db_versions;
+    std::map<std::string, unsigned> lang_counts; // XXX: this never cleans up counts!
 
     try {
         /* create a destination database */
@@ -1448,8 +1450,21 @@ int xapian_filter(const char *dest, const char **sources,
          * destdb in turn for better locality of reference, and so better cache
          * use. -- Olly on the mailing list */
         while (*sources) {
-            thispath = *sources;
-            Xapian::Database srcdb = Xapian::Database(*sources++);
+            thispath = *sources++;
+            Xapian::Database srcdb = Xapian::Database(thispath);
+
+            // Aggregate db versions.
+            std::set<int> srcdb_versions = get_db_versions(srcdb);
+            db_versions.insert(srcdb_versions.begin(), srcdb_versions.end());
+
+            // Aggregate language counts across databases.
+            if (db_versions.lower_bound(5) != db_versions.end()) {
+                for (Xapian::TermIterator it = srcdb.metadata_keys_begin(XAPIAN_LANG_COUNT_KEYPREFIX);
+                        it != srcdb.metadata_keys_end(XAPIAN_LANG_COUNT_KEYPREFIX); ++it) {
+                    lang_counts[*it] += std::stol(srcdb.get_metadata(*it));
+                }
+            }
+            else lang_counts[XAPIAN_LANG_COUNT_KEYPREFIX ".en"] += srcdb.get_doccount();
 
             /* copy all matching documents to the new DB */
             for (Xapian::ValueIterator it = srcdb.valuestream_begin(SLOT_CYRUSID);
@@ -1460,13 +1475,22 @@ int xapian_filter(const char *dest, const char **sources,
                     std::string key = "cyrusid." + std::string(cyrusid);
                     if (destdb.get_metadata(key).empty()) {
                         destdb.add_document(srcdb.get_document(it.get_docid()));
-                        descdb.set_metadata(key, "1");
+                        destdb.set_metadata(key, "1");
                     }
                 }
             }
         }
 
         thispath = "(unknown path)";
+
+        // set the versions to match the source databases
+        set_db_versions(destdb, db_versions);
+
+        // and set the language counts (sadly, they'll all be too high)
+        for (std::map<std::string, unsigned>::iterator it = lang_counts.begin();
+                it != lang_counts.end(); ++it) {
+            destdb.set_metadata(it->first, std::to_string(it->second));
+        }
 
         /* commit all changes explicitly */
         destdb.commit();
