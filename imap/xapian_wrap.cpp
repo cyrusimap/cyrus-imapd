@@ -938,7 +938,7 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
                     db->parser->set_stemmer(Xapian::Stem(iso_lang));
                     const Xapian::Stopper *stopper = get_stopper(iso_lang);
                     db->parser->set_stopper(stopper);
-                    if (!stopper || (*stopper)(lmatch)) {
+                    if (stopper && (*stopper)(lmatch)) {
                         // Don't stem stopwords
                         db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
                     }
@@ -960,7 +960,7 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
         // Query with default stemmer.
         db->parser->set_stemmer(*db->default_stemmer);
         db->parser->set_stopper(db->default_stopper);
-        if (!db->default_stopper || (*db->default_stopper)(lmatch)) {
+        if (db->default_stopper && (*db->default_stopper)(lmatch)) {
             // Don't stem stopwords.
             db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
         }
