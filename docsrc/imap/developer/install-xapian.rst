@@ -71,3 +71,5 @@ If you want to do more complex search tiers and repacking, you'll want to read:
 http://lists.tartarus.org/pipermail/xapian-discuss/2014-October/009112.html
 
 At run-time, when compacting databases, `/bin/rm` and `/usr/bin/rsync` must be present.
+
+Xapian indexes message parts up to 8MB.  Larger parts are truncated.  To change the limit, edit `#define MAX_PARTS_SIZE` in `imap/search_xapian.c`.
