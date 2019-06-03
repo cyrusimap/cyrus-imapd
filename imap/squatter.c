@@ -110,7 +110,7 @@ static const char *name_starts_from = NULL;
 
 static void shut_down(int code) __attribute__((noreturn));
 
-static int usage(const char *name)
+__attribute__((noreturn)) static int usage(const char *name)
 {
     fprintf(stderr,
             "usage: %s [mode] [options] [source]\n"

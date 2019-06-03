@@ -421,7 +421,7 @@ EXPORTED int add_message_guid (struct mailbox *mailbox, const struct index_recor
         else
             sqldb_close(&db);
     }
-    return (rc == SQLITE_OK) ;
+    return rc == SQLITE_OK;
 }
 
 
