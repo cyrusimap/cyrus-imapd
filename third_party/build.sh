@@ -104,6 +104,7 @@ if [ ! $ITEM ] || [ $ITEM == xapian ] ; then
 (
   cd xapian
   git clean -f -x -d
+  git checkout -B build  # needed so sub-checkouts can find their references
   ./bootstrap
   ./configure --enable-silent-rules --prefix=$PREFIX
   cd xapian-core
