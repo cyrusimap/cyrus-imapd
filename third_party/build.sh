@@ -46,6 +46,7 @@ if [ ! $ITEM ] || [ $ITEM == icu ] ; then
   cd icu4c
   git clean -f -x -d
   cd source
+  mkdir -p data/out/tmp
   ./configure --enable-silent-rules --with-data-packaging=archive --prefix=$PREFIX
   make $MAKEOPTS
   sudo make install
