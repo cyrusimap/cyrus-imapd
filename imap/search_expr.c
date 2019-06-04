@@ -104,13 +104,13 @@ static search_expr_t *detachp(search_expr_t **prevp)
     return child;
 }
 
-static search_expr_t *detach(search_expr_t *parent, search_expr_t *child)
+EXPORTED void search_expr_detach(search_expr_t *parent, search_expr_t *child)
 {
     search_expr_t **prevp;
 
     for (prevp = &parent->children ; *prevp && *prevp != child; prevp = &(*prevp)->next)
         ;
-    return detachp(prevp);
+    detachp(prevp);
 }
 
 /*
@@ -192,8 +192,11 @@ EXPORTED void search_expr_append(search_expr_t *parent, search_expr_t *e)
 EXPORTED void search_expr_free(search_expr_t *e)
 {
     if (!e) return;
-    while (e->children)
-        search_expr_free(detach(e, e->children));
+    while (e->children) {
+        search_expr_t *child = e->children;
+        search_expr_detach(e, child);
+        search_expr_free(child);
+    }
     if (e->attr) {
         if (e->attr->internalise) e->attr->internalise(NULL, NULL, &e->internalised);
         if (e->attr->free) e->attr->free(&e->value);

@@ -128,6 +128,7 @@ enum {
 extern search_expr_t *search_expr_new(search_expr_t *parent,
                                       enum search_op);
 extern void search_expr_append(search_expr_t *parent, search_expr_t *child);
+extern void search_expr_detach(search_expr_t *parent, search_expr_t *child);
 extern void search_expr_free(search_expr_t *);
 extern search_expr_t *search_expr_duplicate(const search_expr_t *e);
 extern int search_expr_apply(search_expr_t *e,

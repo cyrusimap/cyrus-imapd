@@ -1327,19 +1327,36 @@ static int is_dnfclause(const struct opnode *on)
     return 0;
 }
 
-static int normalise_query(const struct opnode *expr, struct opnode **normalised)
+static int is_orclause(const struct opnode *on)
+{
+    if (on->op != SEARCH_OP_OR) {
+        return 0;
+    }
+
+    const struct opnode *child;
+    for (child = on->children; child; child = child->next) {
+        if (child->op < SEARCH_NUM_PARTS ||
+                child->op >= XAPIAN_SEARCH_OP_DOCTYPE) {
+            // A MATCH or our own extensions are OK.
+            continue;
+        }
+        else if (child->op != SEARCH_OP_OR) {
+            // Not an OR operator.
+            return 0;
+        }
+        else if (!is_orclause(child)) {
+            // Not a pure OR subclause.
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static int normalise_dnfclause(const struct opnode *expr, struct opnode **normalised)
 {
     /* Normalise DNF clause expr to an AND clause, with each child
      * expression being a part MATCH or single-valued NOT. */
-
-    if (!is_dnfclause(expr)) {
-        // XXX convert to DNF?
-        struct buf buf = BUF_INITIALIZER;
-        opnode_serialise(&buf, expr);
-        syslog(LOG_ERR, "search_xapian: expected DNF clause, got %s", buf_cstring(&buf));
-        buf_free(&buf);
-        return IMAP_INTERNAL;
-    }
 
     struct opnode *root = opnode_deep_copy(expr);
 
@@ -1396,7 +1413,7 @@ static int split_legacyv4_query(xapian_builder_t *bb,
                                 ptrarray_t *clauses)
 {
     struct opnode *root = NULL;
-    int r = normalise_query(expr, &root);
+    int r = normalise_dnfclause(expr, &root);
     if (r) return r;
 
     assert(root->op == SEARCH_OP_AND);
@@ -1572,9 +1589,23 @@ static int run_legacy_v4_query(xapian_builder_t *bb)
     struct xapian_match *result = NULL;
     ptrarray_t clauses = PTRARRAY_INITIALIZER;
 
-    /* Split into sub queries for each document type */
-    r = split_legacyv4_query(bb, bb->root, &clauses);
-    if (r) goto out;
+    if (is_dnfclause(bb->root)) {
+        /* Split into sub queries for each document type */
+        r = split_legacyv4_query(bb, bb->root, &clauses);
+        if (r) goto out;
+    }
+    else if (is_orclause(bb->root)) {
+        ptrarray_append(&clauses, bb->root);
+    }
+    else {
+        struct buf buf = BUF_INITIALIZER;
+        opnode_serialise(&buf, bb->root);
+        syslog(LOG_ERR, "search_xapian: expected DNF or OR clause, got %s",
+                         buf_cstring(&buf));
+        buf_free(&buf);
+        r = IMAP_INTERNAL;
+        goto out;
+    }
 
     /* Run clauses and intersect results */
     for (i = 0; i < ptrarray_size(&clauses); i++) {
@@ -1685,47 +1716,64 @@ out:
 
 static int run_query(xapian_builder_t *bb)
 {
-    struct opnode *norm = NULL;
-    int r = normalise_query(bb->root, &norm);
-    if (r) return r;
+    struct opnode *root = NULL;
+    int r = 0;
 
-    assert(norm->op == SEARCH_OP_AND);
+    if (is_dnfclause(bb->root)) {
+        struct opnode *norm = NULL;
+        r = normalise_dnfclause(bb->root, &norm);
+        if (r) return r;
 
-    /* Exclude P doctypes from matches for headers or ANY */
-    struct opnode *root = opnode_new(SEARCH_OP_AND, NULL);
-    while (norm->children) {
-        struct opnode *child = norm->children;
-        opnode_detach_child(norm, child);
-        if (child->op != SEARCH_OP_NOT) {
-            opnode_append_child(root, child);
-            continue;
+        assert(norm->op == SEARCH_OP_AND);
+
+        /* Exclude P doctypes from matches for headers or ANY */
+        root = opnode_new(SEARCH_OP_AND, NULL);
+        while (norm->children) {
+            struct opnode *child = norm->children;
+            opnode_detach_child(norm, child);
+            if (child->op != SEARCH_OP_NOT) {
+                opnode_append_child(root, child);
+                continue;
+            }
+            struct opnode *expr = child->children;
+            if (expr->op >= SEARCH_NUM_PARTS) {
+                opnode_append_child(root, child);
+                continue;
+            }
+            if (!search_part_is_body(expr->op) || expr->op == SEARCH_PART_ANY) {
+                /* Transform NOT(MATCH) to AND(NOT(MATCH),NOT(DOCTYPE==P)) */
+                struct opnode *notdp = opnode_new(SEARCH_OP_NOT, NULL);
+                opnode_append_child(notdp, opnode_new(XAPIAN_SEARCH_OP_DOCTYPE, "P"));
+                struct opnode *node = opnode_new(SEARCH_OP_AND, NULL);
+                opnode_append_child(node, child);
+                opnode_append_child(node, notdp);
+                opnode_append_child(root, node);
+            }
         }
-        struct opnode *expr = child->children;
-        if (expr->op >= SEARCH_NUM_PARTS) {
-            opnode_append_child(root, child);
-            continue;
-        }
-        if (!search_part_is_body(expr->op) || expr->op == SEARCH_PART_ANY) {
-            /* Transform NOT(MATCH) to AND(NOT(MATCH),NOT(DOCTYPE==P)) */
-            struct opnode *notdp = opnode_new(SEARCH_OP_NOT, NULL);
-            opnode_append_child(notdp, opnode_new(XAPIAN_SEARCH_OP_DOCTYPE, "P"));
-            struct opnode *node = opnode_new(SEARCH_OP_AND, NULL);
-            opnode_append_child(node, child);
-            opnode_append_child(node, notdp);
-            opnode_append_child(root, node);
-        }
+        opnode_delete(norm);
     }
-    opnode_delete(norm);
+    else if (is_orclause(bb->root)) {
+        root = bb->root;
+    }
+    else {
+        struct buf buf = BUF_INITIALIZER;
+        opnode_serialise(&buf, bb->root);
+        syslog(LOG_ERR, "search_xapian: expected DNF or OR clause, got %s",
+                         buf_cstring(&buf));
+        buf_free(&buf);
+        r = IMAP_INTERNAL;
+        goto out;
+    }
 
     xapian_query_t *xq = opnode_to_query(bb->lock.db, root, bb->opts);
-    if (!xq) goto done;
+    if (!xq) goto out;
 
     struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
     if (!cstate) {
         syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
                 bb->mailbox->name);
         r = IMAP_NOTFOUND;
-        goto done;
+        goto out;
     }
     uint32_t num_folders = conversations_num_folders(cstate);
     struct xapian_match *result = xzmalloc(sizeof(struct xapian_match) * num_folders);
@@ -1756,8 +1804,8 @@ static int run_query(xapian_builder_t *bb)
 
     free(result);
     xapian_query_free(xq);
-done:
-    opnode_delete(root);
+out:
+    if (root != bb->root) opnode_delete(root);
     return r;
 }
 
