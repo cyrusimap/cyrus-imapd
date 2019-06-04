@@ -271,7 +271,7 @@ static void _emailsubmission_create(jmap_req_t *req,
             }
         }
         else {
-            jmap_parser_invalid(&parser, "mailFrom");
+            jmap_parser_invalid(&parser, "rcptTo");
         }
         jmap_parser_pop(&parser);
     } else {
