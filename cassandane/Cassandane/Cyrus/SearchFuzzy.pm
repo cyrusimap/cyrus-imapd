@@ -1353,4 +1353,24 @@ sub test_subject_and_body_match
     $self->assert_deep_equals([1], $uids);
 }
 
+sub test_not_match
+    :min_version_3_0 :needs_search_xapian :needs_dependency_cld2
+{
+    my ($self) = @_;
+    my $imap = $self->{store}->get_client();
+    my $store = $self->{store};
+
+    $imap->create("INBOX.A") or die;
+    $store->set_folder("INBOX.A");
+    $self->make_message('fwd subject', body => 'a schenectady body');
+    $self->make_message('chad subject', body => 'a futz body');
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $talk = $self->{store}->get_client();
+    $talk->select("INBOX.A");
+    my $uids = $talk->search('fuzzy', 'not', 'text', 'schenectady');
+    $self->assert_deep_equals([2], $uids);
+}
+
 1;
