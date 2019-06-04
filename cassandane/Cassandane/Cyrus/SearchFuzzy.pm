@@ -334,18 +334,19 @@ sub test_stopwords
     my $r;
 
     # Search for stopword only
-    $term = "the";
-    xlog "SEARCH for FUZZY body \"$term\"";
     $r = $talk->search(
-        "charset", "utf-8", "fuzzy", ["text", { Quote => $term }],
+        "charset", "utf-8", "fuzzy", "text", "the",
     ) || die;
     $self->assert_num_equals(2, scalar @$r);
 
     # Search for stopword plus significant term
-    $term = "the soup";
-    xlog "SEARCH for FUZZY body \"$term\"";
     $r = $talk->search(
-        "charset", "utf-8", "fuzzy", ["text", { Quote => $term }],
+        "charset", "utf-8", "fuzzy", "text", "the soup",
+    ) || die;
+    $self->assert_num_equals(1, scalar @$r);
+
+    $r = $talk->search(
+        "charset", "utf-8", "fuzzy", "text", "the", "fuzzy", "text", "soup",
     ) || die;
     $self->assert_num_equals(1, scalar @$r);
 }
