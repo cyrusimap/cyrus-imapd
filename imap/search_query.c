@@ -686,15 +686,15 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
         }
         if (!child) {
             excluded = search_expr_new(NULL, SEOP_OR);
-            search_expr_t *dup = search_expr_duplicate(sub->indexed);
-            child = dup->children;
+            search_expr_t *dupl = search_expr_duplicate(sub->indexed);
+            child = dupl->children;
             while (child) {
                 search_expr_t *expr = child->children;
                 search_expr_detach(child, expr);
                 search_expr_append(excluded, expr);
                 child = child->next;
             }
-            search_expr_free(dup);
+            search_expr_free(dupl);
         }
     }
     else if (sub->indexed->op == SEOP_NOT) {
