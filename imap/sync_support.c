@@ -1974,7 +1974,8 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
                 dlist_setnum64(kl, "XCONVMODSEQ", xconvmodseq);
         }
         modseq_t raclmodseq = mboxname_readraclmodseq(mailbox->name);
-        dlist_setnum64(kl, "RACLMODSEQ", raclmodseq);
+        if (raclmodseq)
+            dlist_setnum64(kl, "RACLMODSEQ", raclmodseq);
     }
     dlist_setnum32(kl, "UIDVALIDITY", mailbox->i.uidvalidity);
     dlist_setatom(kl, "PARTITION", topart);
