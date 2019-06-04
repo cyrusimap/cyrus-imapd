@@ -2608,6 +2608,9 @@ EXPORTED modseq_t mboxname_readraclmodseq(const char *mboxname)
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
         return 0;
 
+    if (!mboxname_isusermailbox(mboxname, /*isinbox*/1))
+        return 0;  // raclmodseq is only defined on user inboxes
+
     if (mboxname_read_counters(mboxname, &counters))
         return 0;
 
