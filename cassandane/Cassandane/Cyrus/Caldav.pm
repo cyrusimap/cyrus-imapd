@@ -3929,4 +3929,55 @@ EOF
   );
 }
 
+sub test_put_date_with_tzid
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    my $href = "$CalendarId/datewith.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Australia/Melbourne
+BEGIN:STANDARD
+TZOFFSETFROM:+1100
+RRULE:FREQ=YEARLY;BYMONTH=4;BYDAY=1SU
+DTSTART:20080406T030000
+TZNAME:AEST
+TZOFFSETTO:+1000
+END:STANDARD
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+1000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=1SU
+DTSTART:20081005T020000
+TZNAME:AEDT
+TZOFFSETTO:+1100
+END:DAYLIGHT
+END:VTIMEZONE
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+UID:datewith
+DTSTART;TZID=Australia/Melbourne;VALUE=DATE:20160901
+DTEND;TZID=Australia/Melbourne;VALUE=DATE:20160902
+RRULE:FREQ=WEEKLY;COUNT=3
+EXDATE;TZID=Australia/Melbourne;VALUE=DATE:20160908
+TRANSP:OPAQUE
+SUMMARY:An Event
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+}
+
 1;
