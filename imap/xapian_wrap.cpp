@@ -839,12 +839,13 @@ int xapian_db_open(const char **paths, xapian_db_t **dbp)
         db->default_stemmer = new Xapian::Stem(new CyrusSearchStemmer());
         db->default_stopper = get_stopper("en");
 
-        // Determine language weights
-        for (std::map<std::string, double>::iterator it = db->stem_language_weights->begin();
-                it != db->stem_language_weights->end(); ++it) {
-            it->second /= total_stemmed_docs_count;
+        if (db->stem_language_weights) {
+            // Determine language weights
+            for (std::map<std::string, double>::iterator it = db->stem_language_weights->begin();
+                    it != db->stem_language_weights->end(); ++it) {
+                it->second /= total_stemmed_docs_count;
+            }
         }
-
     }
     catch (const Xapian::Error &err) {
         syslog(LOG_ERR, "IOERROR: Xapian: caught exception db_open: %s: %s",
@@ -1177,14 +1178,16 @@ int xapian_list_lang_stats(xapian_db_t *db, ptrarray_t* lstats)
     struct search_lang_stats *stat = NULL;
     double cummulated_weight = 0;
 
-    for (std::map<std::string, double>::iterator it = db->stem_language_weights->begin();
-            it != db->stem_language_weights->end(); ++it) {
+    if (db->stem_language_weights) {
+        for (std::map<std::string, double>::iterator it = db->stem_language_weights->begin();
+                it != db->stem_language_weights->end(); ++it) {
 
-        stat = (struct search_lang_stats *) xzmalloc(sizeof(struct search_lang_stats));
-        stat->iso_lang = xstrdup(it->first.c_str());
-        stat->weight = it->second;
-        ptrarray_append(lstats, stat);
-        cummulated_weight += stat->weight;
+            stat = (struct search_lang_stats *) xzmalloc(sizeof(struct search_lang_stats));
+            stat->iso_lang = xstrdup(it->first.c_str());
+            stat->weight = it->second;
+            ptrarray_append(lstats, stat);
+            cummulated_weight += stat->weight;
+        }
     }
 
     stat = (struct search_lang_stats *) xzmalloc(sizeof(struct search_lang_stats));
