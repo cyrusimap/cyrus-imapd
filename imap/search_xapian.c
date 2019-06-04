@@ -1840,17 +1840,6 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
         if (r) goto out;
     }
 
-    /* add in the unindexed uids as false positives */
-    if ((bb->opts & SEARCH_UNINDEXED)) {
-        uint32_t uid;
-        for (uid = seqset_firstnonmember(bb->indexed);
-             uid <= bb->mailbox->i.last_uid ; uid++) {
-            r = proc(bb->mailbox->name, bb->mailbox->i.uidvalidity,
-                     uid, NULL, rock);
-            if (r) goto out;
-        }
-    }
-
 out:
     return r;
 }

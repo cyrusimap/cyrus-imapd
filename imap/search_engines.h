@@ -130,9 +130,7 @@ struct search_engine {
 #define SEARCH_VERBOSE(v)       ((v)&_SEARCH_VERBOSE_MASK)
 #define SEARCH_MULTIPLE         (1<<3)  /* return results from
                                          * multiple folders */
-#define SEARCH_UNINDEXED        (1<<4)  /* return unindexed messages
-                                         * as hits (doesn't work
-                                         * with MULTIPLE) */
+// DEPRECATED: #define SEARCH_UNINDEXED   (1<<4)
 #define SEARCH_COMPACT_COPYONE  (1<<5)  /* if only one source, just copy */
 #define SEARCH_COMPACT_FILTER   (1<<6)  /* filter resulting DB for
                                          * expunged records */
