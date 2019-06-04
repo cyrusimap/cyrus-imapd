@@ -3359,7 +3359,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
     r = check_config(NULL);
     if (r) goto out;
 
-    if (xapian_rootdir(desttier, mbentry->partition)) {
+    if (!xapian_rootdir(desttier, mbentry->partition)) {
         if (verbose)
             printf("INVALID: unknown tier %s\n", desttier);
         goto out;
