@@ -1881,7 +1881,8 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         annotation_get_fromdb,
         annotation_set_todb,
         NULL
-    },{
+    },
+    {
         /* RFC5257 defines /comment with both .shared & .priv */
         "/comment",
         ATTRIB_TYPE_STRING,
@@ -1891,7 +1892,52 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         annotation_get_fromdb,
         annotation_set_todb,
         NULL
-    },{ NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL }
+    },
+    {
+        /* we use 'basethrid' to support split threads */
+        IMAP_ANNOT_NS "basethrid",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+        0,
+        annotation_get_fromdb,
+        annotation_set_todb,
+        NULL
+    },
+    {
+        /* prior to version 12, there was no storage for thrid, so it became an annotation */
+        IMAP_ANNOT_NS "thrid",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+        0,
+        annotation_get_fromdb,
+        annotation_set_todb,
+        NULL
+    },
+    {
+        /* prior to version 15, there was no storage for savedate, so it became an annotation */
+        IMAP_ANNOT_NS "savedate",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+        0,
+        annotation_get_fromdb,
+        annotation_set_todb,
+        NULL
+    },
+    {
+        /* prior to version 15, there was no storage for createdmodseq, so it became an annotation */
+        IMAP_ANNOT_NS "createdmodseq",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+        0,
+        annotation_get_fromdb,
+        annotation_set_todb,
+        NULL
+    },
+    { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL }
 };
 
 static const annotate_entrydesc_t message_db_entry =
