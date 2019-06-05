@@ -1595,7 +1595,8 @@ static int run_legacy_v4_query(xapian_builder_t *bb)
         if (r) goto out;
     }
     else if (is_orclause(bb->root)) {
-        ptrarray_append(&clauses, bb->root);
+        xapian_query_t *xq = opnode_to_query(bb->lock.db, bb->root, bb->opts);
+        ptrarray_append(&clauses, xq);
     }
     else {
         struct buf buf = BUF_INITIALIZER;
