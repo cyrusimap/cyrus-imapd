@@ -122,6 +122,7 @@ __attribute__((noreturn)) static int usage(const char *name)
             "  -f file     index from synclog file\n"
             "  -R          start rolling indexer\n"
             "  -z tier     compact to tier\n"
+            "  -l          list paths\n"
             "\n"
             "Index mode options:\n"
             "  -i          index incrementally\n"
@@ -480,6 +481,45 @@ static int print_search_hit(const char *mboxname, uint32_t uidvalidity,
     return 0;
 }
 
+static int do_list(const strarray_t *mboxnames)
+{
+    char *prev_userid = NULL;
+    strarray_t files = STRARRAY_INITIALIZER;
+    int i;
+    int r = 0;
+
+    for (i = 0; i < strarray_size(mboxnames); i++) {
+        const char *mboxname = strarray_nth(mboxnames, i);
+        char *userid = mboxname_to_userid(mboxname);
+        if (!userid) continue;
+
+        if (!strcmpsafe(prev_userid, userid)) {
+            free(userid);
+            continue;
+        }
+
+        r = search_list_files(userid, &files);
+        if (r) break;
+
+        int j;
+        for (j = 0; j < strarray_size(&files); j++) {
+            printf("%s\n", strarray_nth(&files, j));
+        }
+
+        strarray_truncate(&files, 0);
+
+        free(prev_userid);
+        prev_userid = userid;
+
+        if (sleepmicroseconds)
+            usleep(sleepmicroseconds);
+    }
+
+    strarray_fini(&files);
+    free(prev_userid);
+    return r;
+}
+
 static int compact_mbox(const char *userid, const strarray_t *srctiers,
                         const char *desttier, int flags)
 {
@@ -791,11 +831,11 @@ int main(int argc, char **argv)
     const char *desttier = NULL;
     char *errstr = NULL;
     enum { UNKNOWN, INDEXER, SEARCH, ROLLING, SYNCLOG,
-           COMPACT, AUDIT } mode = UNKNOWN;
+           COMPACT, AUDIT, LIST } mode = UNKNOWN;
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:N:RUXPZT:S:Fde:f:mn:riavAz:t:ouh")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:N:RUXPZT:S:Fde:f:mn:riavAz:t:ouhl")) != EOF) {
         switch (opt) {
         case 'A':
             if (mode != UNKNOWN) usage(argv[0]);
@@ -834,6 +874,11 @@ int main(int argc, char **argv)
             mode = ROLLING;
             incremental_mode = 1; /* always incremental if rolling */
             batch_mode = 1;
+            break;
+
+        case 'l':               /* list paths */
+            if (mode != UNKNOWN) usage(argv[0]);
+            mode = LIST;
             break;
 
         case 'S':               /* sleep time in seconds */
@@ -987,6 +1032,11 @@ int main(int argc, char **argv)
         if (recursive_flag && optind == argc) usage(argv[0]);
         expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
         r = do_audit(&mboxnames);
+        break;
+    case LIST:
+        if (recursive_flag && optind == argc) usage(argv[0]);
+        expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
+        r = do_list(&mboxnames);
         break;
     }
 
