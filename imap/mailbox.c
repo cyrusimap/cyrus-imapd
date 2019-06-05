@@ -3221,6 +3221,7 @@ static int mailbox_update_carddav(struct mailbox *mailbox,
         cdata->dav.modseq = new->modseq;
         cdata->dav.alive = (new->internal_flags & FLAG_INTERNAL_EXPUNGED) ? 0 : 1;
         r = carddav_writecard(carddavdb, cdata, vcard->objects, ispinned);
+        vparse_free_card(vcard);
     }
     else {
         /* Load message containing the resource and parse vcard data */
