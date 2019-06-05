@@ -1147,8 +1147,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                     if (JNOTNULL(jupdated)) {
                         json_object_del(jupdated, "addressbookId");
                         /* Now read the updated property value */
-                        others = json_incref(json_object_get(jupdated, "otherAccountContactIds"));
-                        json_decref(jupdated);
+                        others = json_object_get(jupdated, "otherAccountContactIds");
                     }
                 }
                 else if (!strcmp(key, "id") || !strcmp(key, "uid")) {
