@@ -1891,6 +1891,7 @@ struct guid_foreach_rock {
     void *filterdata;
     int filternum;
     int filterpos;
+    struct buf partbuf;
 };
 
 static int _guid_one(const char *item,
@@ -1931,17 +1932,16 @@ static int _guid_one(const char *item,
 
     /* part */
     rec.part = NULL;
-    char *freeme = NULL;
     if (*p) {
         const char *end = strchr(p+1, ']');
         if (*p != '[' || !end || p+1 == end) {
             return IMAP_INTERNAL;
         }
-        rec.part = freeme = xstrndup(p+1, end-p-1);
+        buf_setmap(&frock->partbuf, p+1, end-p-1);
+        rec.part = buf_cstring(&frock->partbuf);
     }
 
     r = frock->cb(&rec, frock->cbrock);
-    free(freeme);
     return r;
 }
 
@@ -2040,21 +2040,32 @@ static int _guid_cb(void *rock,
     return r;
 }
 
+static int _guid_foreach_helper(struct conversations_state *state,
+                                const char *prefix,
+                                int(*cb)(const conv_guidrec_t *, void *),
+                                void *cbrock,
+                                void *data,
+                                size_t num)
+{
+    struct guid_foreach_rock rock = { state, cb, cbrock, data, num, 0, BUF_INITIALIZER };
+
+    foreach_p *filter = data ? _guid_filter_p : NULL;
+
+    char *key = strconcat("G", prefix, (char *)NULL);
+    int r = cyrusdb_foreach(state->db, key, strlen(key), filter, _guid_cb, &rock, &state->txn);
+    free(key);
+
+    buf_free(&rock.partbuf);
+
+    return r;
+}
+
 EXPORTED int conversations_guid_foreach(struct conversations_state *state,
                                         const char *guidrep,
                                         int(*cb)(const conv_guidrec_t *, void *),
                                         void *cbrock)
 {
-    struct guid_foreach_rock rock;
-    rock.state = state;
-    rock.cb = cb;
-    rock.cbrock = cbrock;
-
-    char *key = strconcat("G", guidrep, (char *)NULL);
-    int r = cyrusdb_foreach(state->db, key, strlen(key), NULL, _guid_cb, &rock, &state->txn);
-    free(key);
-
-    return r;
+    return _guid_foreach_helper(state, guidrep, cb, cbrock, NULL, 0);
 }
 
 EXPORTED int conversations_iterate_searchset(struct conversations_state *state,
@@ -2073,14 +2084,7 @@ EXPORTED int conversations_iterate_searchset(struct conversations_state *state,
         else {
             syslog(LOG_DEBUG, "conversation_iterate_searchset: %s using scan mode for %d/%d records",
                    state->path, (int)n, (int)estimate);
-            struct guid_foreach_rock rock;
-            rock.state = state;
-            rock.cb = cb;
-            rock.cbrock = cbrock;
-            rock.filterdata = data;
-            rock.filterpos = 0;
-            rock.filternum = n;
-            return cyrusdb_foreach(state->db, "G", 1, _guid_filter_p, _guid_cb, &rock, &state->txn);
+            return _guid_foreach_helper(state, "", cb, cbrock, data, n);
         }
     }
     else {
