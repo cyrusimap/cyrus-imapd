@@ -8375,6 +8375,9 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
     struct email_mboxrecs_make_rock *rock = _rock;
     ptrarray_t *mboxrecs = rock->mboxrecs;
 
+    /* don't process emails that have this email attached! */
+    if (rec->part) return 0;
+
     if (!jmap_hasrights_byname(rock->req, rec->mboxname, ACL_READ|ACL_LOOKUP)) return 0;
 
     /* Check if there's already a mboxrec for this mailbox. */
