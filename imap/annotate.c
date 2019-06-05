@@ -1927,7 +1927,7 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         NULL
     },
     {
-        /* prior to version 15, there was no storage for createdmodseq, so it became an annotation */
+        /* prior to version 16, there was no storage for createdmodseq, so it became an annotation */
         IMAP_ANNOT_NS "createdmodseq",
         ATTRIB_TYPE_STRING,
         BACKEND_ONLY,
