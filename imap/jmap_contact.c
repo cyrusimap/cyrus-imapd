@@ -992,7 +992,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                     err = json_pack("{s:s}", "type", "forbidden");
                     break;
                 case IMAP_QUOTA_EXCEEDED:
-                    err = json_pack("{s:s}", "type", "maxQuotaReached");
+                    err = json_pack("{s:s}", "type", "overQuota");
                     break;
                 default:
                     err = jmap_server_error(r);
@@ -1227,7 +1227,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                     err = json_pack("{s:s}", "type", "forbidden");
                     break;
                 case IMAP_QUOTA_EXCEEDED:
-                    err = json_pack("{s:s}", "type", "maxQuotaReached");
+                    err = json_pack("{s:s}", "type", "overQuota");
                     break;
                 default:
                     err = jmap_server_error(r);

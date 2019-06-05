@@ -2521,7 +2521,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
                     err = json_pack("{s:s}", "type", "forbidden");
                     break;
                 case IMAP_QUOTA_EXCEEDED:
-                    err = json_pack("{s:s}", "type", "maxQuotaReached");
+                    err = json_pack("{s:s}", "type", "overQuota");
                     break;
                 default:
                     err = jmap_server_error(r);
@@ -2596,7 +2596,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
                     err = json_pack("{s:s}", "type", "forbidden");
                     break;
                 case IMAP_QUOTA_EXCEEDED:
-                    err = json_pack("{s:s}", "type", "maxQuotaReached");
+                    err = json_pack("{s:s}", "type", "overQuota");
                     break;
                 default:
                     err = jmap_server_error(r);
