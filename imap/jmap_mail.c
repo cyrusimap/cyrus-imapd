@@ -3557,6 +3557,8 @@ done:
 
 static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_t **err)
 {
+    conversation_t conv = CONVERSATION_INIT;
+
     /* Run search */
     json_t *filter = json_pack("{s:o}", "sinceEmailState",
                                jmap_fmtstate(changes->since_modseq));
@@ -3584,7 +3586,6 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     struct hashset *seen_threads = hashset_new(8);
 
     char thread_id[JMAP_THREADID_SIZE];
-    conversation_t conv = CONVERSATION_INIT;
 
     for (i = 0 ; i < msgdata->count; i++) {
         MsgData *md = ptrarray_nth(msgdata, i);
