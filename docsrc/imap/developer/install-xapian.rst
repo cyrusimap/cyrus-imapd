@@ -37,6 +37,14 @@ command line.
 
 Then follow on with the Cyrus :ref:`compilation instructions <compiling>`, adding ``--enable-xapian`` to the flags to ``./configure``.
 
+Additional dependencies required for Cyrus with Xapian support
+==============================================================
+
+When building Cyrus with Xapian support enabled, the following additional
+packages are required:
+
+* `rsync <https://rsync.samba.org>`_ (used when compacting databases)
+
 .. _configuring-xapian:
 
 Configuring Xapian
@@ -69,5 +77,3 @@ You also need (at least one) search tier. Add this to :cyrusman:`imapd.conf(5)`.
 If you want to do more complex search tiers and repacking, you'll want to read:
 
 http://lists.tartarus.org/pipermail/xapian-discuss/2014-October/009112.html
-
-At run-time, when compacting databases, `/bin/rm` and `/usr/bin/rsync` must be present.

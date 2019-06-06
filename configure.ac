@@ -557,6 +557,20 @@ AC_ARG_ENABLE(xapian,
         [AS_HELP_STRING([--enable-xapian], [enable Xapian support])],,
         [enable_xapian=no])
 if test "x$enable_xapian" != xno ; then
+    AC_ARG_VAR(RM_BIN, [Location of rm])
+    AC_PATH_PROG(RM_BIN, [rm], [])
+    AS_IF([test -z "$RM_BIN"],[
+        AC_MSG_ERROR([Can't find the 'rm' binary])
+    ])
+    AC_DEFINE_UNQUOTED([RM_BIN], ["$RM_BIN"], [Path to 'rm' binary])
+
+    AC_ARG_VAR(RSYNC_BIN, [Location of rsync])
+    AC_PATH_PROG(RSYNC_BIN, [rsync], [])
+    AS_IF([test -z "$RSYNC_BIN"],[
+        AC_MSG_ERROR([Can't find the 'rsync' binary])
+    ])
+    AC_DEFINE_UNQUOTED([RSYNC_BIN], ["$RSYNC_BIN"], [Path to 'rsync' binary])
+
     AC_ARG_VAR(XAPIAN_CONFIG, [Location of xapian-config])
     AC_PATH_PROG(XAPIAN_CONFIG, xapian-config, [])
     if test -z "$XAPIAN_CONFIG"; then

@@ -87,11 +87,11 @@ In the sixth synopsis, **squatter** reads *file* containing *mailbox*
 
 In the seventh synopsis, **squatter** will compact indices from
 *srctier(s)* to *desttier*, optionally reindexing (**-X**) or filtering
-expunged records (**-F**) in the process.  `/usr/bin/rsync` and `/bin/rm`
-are needed.  The optional **-T** flag may be used to specify a directory
-to use for temporary files.  The **-o** flag may be used to direct that a
-single index be copied, rather than compacted, from *srctier* to *desttier*.
-The **-u** flag may be used to restrict operation to the specified user(s).
+expunged records (**-F**) in the process.  The optional **-T** flag may
+be used to specify a directory to use for temporary files.  The **-o**
+flag may be used to direct that a single index be copied, rather than
+compacted, from *srctier* to *desttier*.  The **-u** flag may be used
+to restrict operation to the specified user(s).
 
 For all modes, the **-S** option may be specified, causing squatter to
 pause *seconds* seconds after each mailbox, to smooth loads.
