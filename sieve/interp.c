@@ -182,8 +182,11 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOXID)
             buf_appendcstr(&buf, " mailboxid");
 
+#if 0  // Don't advertise this to ManageSieve clients -
+       // We probably don't want end users adding this action themselves
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_LOG)
             buf_appendcstr(&buf, " x-cyrus-log");
+#endif
     }
 
     return i->extensions;
