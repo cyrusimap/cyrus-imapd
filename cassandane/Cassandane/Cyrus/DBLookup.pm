@@ -126,7 +126,7 @@ EOF
 }
 
 sub test_email2details
-    :needs_component_httpd
+    :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
 
