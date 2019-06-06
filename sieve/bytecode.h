@@ -132,8 +132,9 @@ typedef union
  * version 0x14 scripts implemented Environment (RFC5183)
  * version 0x15 scripts implemented Redirect-DeliverBy, Redirect-DSN (RFC6009)
  * version 0x16 scripts implemented draft-gondwana-sieve-mailboxid-01
+ * version 0x17 scripts implemented x-cyrus-log
  */
-#define BYTECODE_VERSION 0x16
+#define BYTECODE_VERSION 0x17
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -206,6 +207,8 @@ enum bytecode {
     B_REDIRECT,         /* require copy, list, redirect-dsn */
 
     B_FILEINTO,         /* require mailbox, imap4flags, copy, specialuse, mailboxid */
+
+    B_LOG,              /* require x-cyrus-log */
 };
 
 enum bytecode_comps {

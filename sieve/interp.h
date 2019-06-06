@@ -66,6 +66,8 @@ struct sieve_interp {
     sieve_get_specialuseexists *getspecialuseexists;
     sieve_get_metadata *getmetadata;
 
+    sieve_logger *log;
+
     sieve_list_validator *isvalidlist;
     sieve_list_comparator *listcompare;
 
@@ -199,6 +201,9 @@ enum sieve_capa_flag {
 
     /* Mailboxid - draft-gondwana-sieve-mailboxid */
     SIEVE_CAPA_MAILBOXID    = 1LL<<46,
+
+    /* Log - x-cyrus-log */
+    SIEVE_CAPA_LOG          = 1LL<<47
 };
 
 #define SIEVE_CAPA_ALL (SIEVE_CAPA_BASE           \
@@ -248,6 +253,7 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_SPECIAL_USE  \
                         | SIEVE_CAPA_FCC          \
                         | SIEVE_CAPA_MAILBOXID    \
+                        | SIEVE_CAPA_LOG          \
                         )
 
 #define SIEVE_CAPA_IHAVE_INCOMPAT (SIEVE_CAPA_ENCODED_CHAR | SIEVE_CAPA_VARIABLES)

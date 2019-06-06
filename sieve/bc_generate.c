@@ -1126,6 +1126,16 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 if (codep == -1) return -1;
                 break;
 
+            case LOG:
+                /* LOG
+                   STRING text
+                */
+                retval->data[codep++].u.op = B_LOG;
+                if (!atleast(retval, codep+1)) return -1;
+                retval->data[codep].type = BT_STR;
+                retval->data[codep++].u.str = c->u.l.text;
+                break;
+
             case IF:
             {
                 int jumpVal;
