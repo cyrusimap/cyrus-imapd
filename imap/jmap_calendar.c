@@ -1504,6 +1504,22 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     icalcomponent_free(ical);
     ical = NULL;
 
+    /* Add participant id */
+    const char *participant_id = NULL;
+    if (schedule_address) {
+        const char *key;
+        json_t *participant;
+        json_object_foreach(json_object_get(jsevent, "participants"), key, participant) {
+            const char *email = json_string_value(json_object_get(participant, "email"));
+            if (email && !strcmp(email, schedule_address)) {
+                participant_id = key;
+                break;
+            }
+        }
+    }
+    json_object_set_new(jsevent, "participantId", participant_id ?
+            json_string(participant_id) : json_null());
+
     char *eventrep = json_dumps(jsevent, 0);
     r = caldav_write_jmapcache(rock->db, cdata->dav.rowid, httpd_userid,
                                JMAPCACHE_CALVERSION, eventrep);
@@ -1511,24 +1527,6 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
 
 gotevent:
     jmap_filterprops(jsevent, rock->get->props);
-
-    /* Add participant id */
-    if (jmap_wantprop(rock->get->props, "participantId")) {
-        const char *participant_id = NULL;
-        if (schedule_address) {
-            const char *key;
-            json_t *participant;
-            json_object_foreach(json_object_get(jsevent, "participants"), key, participant) {
-                const char *email = json_string_value(json_object_get(participant, "email"));
-                if (email && !strcmp(email, schedule_address)) {
-                    participant_id = key;
-                    break;
-                }
-            }
-        }
-        json_object_set_new(jsevent, "participantId", participant_id ?
-                json_string(participant_id) : json_null());
-    }
 
     /* Add JMAP-only fields. */
     if (jmap_wantprop(rock->get->props, "x-href")) {
