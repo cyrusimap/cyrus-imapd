@@ -2860,8 +2860,11 @@ sub test_calendarevent_set_participantid
     $event->{participantId} = 'you';
 
     $self->assert_normalized_event_equals($ret, $event);
-}
 
+    # check that we can fetch again a second time and still have the same data
+    my $res = $jmap->CallMethods([['CalendarEvent/get', { ids => [ $event->{id} ] }, 'R1']]);
+    $self->assert_normalized_event_equals($res->[0][1]{list}[0], $event);
+}
 
 sub test_calendarevent_set_isallday
     :min_version_3_1 :needs_component_jmap
