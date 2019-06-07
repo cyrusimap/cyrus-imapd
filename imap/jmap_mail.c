@@ -2730,7 +2730,7 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     query->query_state = _email_make_querystate(current_modseq, 0);
 
     /* Open cache */
-    cache_fname = emailsearch_getcachepath(req->accountid);
+    cache_fname = emailsearch_getcachepath();
     if (cache_fname) {
         int flags = CYRUSDB_CREATE|CYRUSDB_CONVERT;
         int r = cyrusdb_open(EMAILSEARCH_DB, cache_fname, flags, &cache_db);
