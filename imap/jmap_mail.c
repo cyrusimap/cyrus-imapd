@@ -10138,6 +10138,8 @@ static void _email_import(jmap_req_t *req,
 {
     const char *blob_id = json_string_value(json_object_get(jemail_import, "blobId"));
     json_t *jmailbox_ids = json_object_get(jemail_import, "mailboxIds");
+    char *mboxname = NULL;
+    struct _email_import_rock content = { BUF_INITIALIZER };
 
     /* Gather keywords */
     strarray_t keywords = STRARRAY_INITIALIZER;
@@ -10171,8 +10173,6 @@ static void _email_import(jmap_req_t *req,
     /* Start import */
     struct email_append_detail detail;
     memset(&detail, 0, sizeof(struct email_append_detail));
-    char *mboxname = NULL;
-    struct _email_import_rock content = { BUF_INITIALIZER };
 
     /* Lookup blob */
     struct mailbox *mbox = NULL;
