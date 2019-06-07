@@ -2470,7 +2470,7 @@ static char *_emailsearch_hash(struct emailsearch *search)
 #define FNAME_EMAILSEARCH_DB "/jmap_emailsearch.db"
 #define EMAILSEARCH_DB "twoskip"
 
-static char *emailsearch_getcachepath()
+static char *emailsearch_getcachepath(void)
 {
     return xstrdupnull(config_getstring(IMAPOPT_JMAP_EMAILSEARCH_DB_PATH));
 }
