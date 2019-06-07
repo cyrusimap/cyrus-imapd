@@ -156,7 +156,7 @@ Options that apply only to the **list** sub-command.
 
 .. option:: -t [hours]
 
-    List stale backups only, that is, backups that have recieved no updates
+    List stale backups only, that is, backups that have received no updates
     in *hours*.  If *hours* is unspecified, it defaults to 24.
 
 .. _ctl-backups-lock-options:

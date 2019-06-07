@@ -67,7 +67,7 @@ if (! -d "$OUTPUT_DIR/RulesPerl") {
 &ReadOlsonFile ("northamerica");
 &ReadOlsonFile ("southamerica");
 
-# These are backwards-compatability and weird stuff.
+# These are backwards-compatibility and weird stuff.
 #&ReadOlsonFile ("backward");
 #&ReadOlsonFile ("etcetera");
 #&ReadOlsonFile ("leapseconds");

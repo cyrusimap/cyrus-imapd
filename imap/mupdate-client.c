@@ -534,7 +534,7 @@ EXPORTED int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
 
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->conn->in); \
                                  if ((ch) != '\n') { syslog(LOG_ERR, \
-                             "extra arguments recieved, aborting connection");\
+                             "extra arguments received, aborting connection");\
                                  r = MUPDATE_PROTOCOL_ERROR;\
                                  goto done; }} while(0)
 
