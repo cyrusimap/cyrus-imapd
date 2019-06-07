@@ -2379,6 +2379,17 @@ out:
     return r;
 }
 
+static int _starts_with_tier(const strarray_t *active, const char *tier)
+{
+    if (!active) return 0;
+    if (!active->count) return 0;
+    const char *candidate = strarray_nth(active, 0);
+    struct activeitem *item = activeitem_parse(candidate);
+    int res = !strcmp(item->tier, tier);
+    activeitem_free(item);
+    return res;
+}
+
 static int begin_mailbox_update(search_text_receiver_t *rx,
                                 struct mailbox *mailbox,
                                 int flags)
@@ -2433,10 +2444,21 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      *  and will be going away in the future, but it's not too hard to design
      *  to avoid it happening at least."
      */
+    const char *deftier = config_getstring(IMAPOPT_DEFAULTSEARCHTIER);
     active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, AF_LOCK_WRITE);
-    if (!active || !active->count) {
-        goto out;
+    if (!active) active = strarray_new();
+
+    // make sure we're indexing to the default tier
+    while (!_starts_with_tier(active, deftier)) {
+        char *newstart = activefile_nextname(active, config_getstring(IMAPOPT_DEFAULTSEARCHTIER));
+        syslog(LOG_NOTICE, "create new search tier %s for %s", newstart, mailbox->name);
+        strarray_unshiftm(active, newstart);
+        r = activefile_write(tr->activefile, active);
+        mappedfile_close(&tr->activefile);
+        active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, AF_LOCK_WRITE);
     }
+
+    assert(active->count);
 
     tr->mode = (flags & (SEARCH_UPDATE_XAPINDEXED|SEARCH_UPDATE_AUDIT)) ?
         XAPIAN_DBW_XAPINDEXED : XAPIAN_DBW_CONVINDEXED;
@@ -2445,9 +2467,8 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      * to be opening them */
     int dostat = tr->mode == XAPIAN_DBW_XAPINDEXED ? 2 : 0;
     tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, dostat, &tr->activetiers);
-    if (!tr->activedirs || !tr->activedirs->count) {
-        goto out;
-    }
+    // this should never be able to fail here, because the first item will always exist!
+    assert(tr->activedirs && tr->activedirs->count);
 
     /* create the directory if needed */
     r = check_directory(strarray_nth(tr->activedirs, 0), tr->super.verbose, /*create*/1);
