@@ -4249,6 +4249,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
     /* Validate the iCal data */
     if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
+        txn->error.desc = "Resource is not an iCalendar object";
         txn->error.precond = CALDAV_VALID_DATA;
         ret = HTTP_FORBIDDEN;
         goto done;
@@ -4273,6 +4274,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     kind = icalcomponent_isa(comp);
     uid = icalcomponent_get_uid(comp);
     if (!uid) {
+        txn->error.desc = "Missing UID property";
         txn->error.precond = CALDAV_VALID_OBJECT;
         ret = HTTP_FORBIDDEN;
         goto done;
@@ -4286,8 +4288,9 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         dtstart = icalcomponent_get_dtstart(comp);
 
         if (icaltime_is_date(dtend) != icaltime_is_date(dtstart) ||
-            !icaltime_get_timezone(dtend) != !icaltime_get_timezone(dtstart) ||
+//            !icaltime_get_timezone(dtend) != !icaltime_get_timezone(dtstart) ||
             icaltime_compare(dtend, dtstart) < 0) {
+            txn->error.desc = "DTEND occurs before DTSTART";
             txn->error.precond = CALDAV_VALID_DATA;
             ret = HTTP_FORBIDDEN;
             goto done;
@@ -4299,6 +4302,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         const char *nextuid = icalcomponent_get_uid(nextcomp);
 
         if (!nextuid || strcmp(uid, nextuid)) {
+            txn->error.desc = "Mismatched UIDs";
             txn->error.precond = CALDAV_VALID_OBJECT;
             ret = HTTP_FORBIDDEN;
             goto done;
@@ -4321,7 +4325,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         if (!icaltime_is_null_time(dtend)) {
             dtstart = icalcomponent_get_dtstart(nextcomp);
 
-            if (icaltime_as_timet(dtend) - icaltime_as_timet(dtstart) < 0) {
+            if (icaltime_compare(dtend, dtstart) < 0) {
+                txn->error.desc = "DTEND occurs before DTSTART";
                 txn->error.precond = CALDAV_VALID_OBJECT;
                 ret = HTTP_FORBIDDEN;
                 goto done;
