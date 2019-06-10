@@ -1782,7 +1782,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                     sec = t - time(NULL);
                 }
 
-                if (abs(sec) > 999999999 /* RFC 2852 */) {
+                if (abs((int)sec) > 999999999 /* RFC 2852 */) {
                     res = SIEVE_RUN_ERROR;
                     *errmsg = "Redirect bytime value too large";
                     break;
