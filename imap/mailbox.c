@@ -147,16 +147,16 @@ struct mailbox_repack {
 };
 
 static struct MsgFlagMap msgflagmap[] = {
-    {"AN", FLAG_ANSWERED},
-    {"FL", FLAG_FLAGGED},
-    {"DE", FLAG_DELETED},
-    {"DR", FLAG_DRAFT},
-    {"SE", FLAG_SEEN},
-    {"SP", FLAG_INTERNAL_SPLITCONVERSATION},
-    {"NC", FLAG_INTERNAL_NEEDS_CLEANUP},
-    {"AR", FLAG_INTERNAL_ARCHIVED},
-    {"UN", FLAG_INTERNAL_UNLINKED},
-    {"EX", FLAG_INTERNAL_EXPUNGED}
+    {"AN", (int)FLAG_ANSWERED},
+    {"FL", (int)FLAG_FLAGGED},
+    {"DE", (int)FLAG_DELETED},
+    {"DR", (int)FLAG_DRAFT},
+    {"SE", (int)FLAG_SEEN},
+    {"SP", (int)FLAG_INTERNAL_SPLITCONVERSATION},
+    {"NC", (int)FLAG_INTERNAL_NEEDS_CLEANUP},
+    {"AR", (int)FLAG_INTERNAL_ARCHIVED},
+    {"UN", (int)FLAG_INTERNAL_UNLINKED},
+    {"EX", (int)FLAG_INTERNAL_EXPUNGED}
     /* ZZ -> invalid file found on disk */
 };
 /* The length of the msgflagmap list * 2 +
