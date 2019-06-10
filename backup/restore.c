@@ -197,7 +197,7 @@ int main(int argc, char **argv)
     struct buf tagbuf = BUF_INITIALIZER;
     struct backend *backend = NULL;
     struct dlist *upload = NULL;
-    int opt, r;
+    int opt, r = 0;
 
     while ((opt = getopt(argc, argv, ":A:C:DF:LM:P:UXaf:m:nru:vw:xz")) != EOF) {
         switch (opt) {
