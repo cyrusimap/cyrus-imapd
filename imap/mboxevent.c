@@ -884,7 +884,7 @@ EXPORTED void mboxevent_set_acl(struct mboxevent *event, const char *identifier,
     if (rights == 0x0) {
         // Pretend it is filled, but do it with null or mboxevent_free
         // will trip.
-        FILL_STRING_PARAM(event, EVENT_ACL_RIGHTS, '\0');
+        FILL_STRING_PARAM(event, EVENT_ACL_RIGHTS, NULL);
     } else {
         FILL_STRING_PARAM(event, EVENT_ACL_RIGHTS, xstrdup(rights));
     }
