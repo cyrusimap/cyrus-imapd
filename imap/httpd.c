@@ -3000,8 +3000,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 }
 
 
+#ifdef DECLARE_OPTIMIZE
 EXPORTED inline void keepalive_response(struct transaction_t *txn)
     __attribute__((always_inline, optimize("-O3")));
+#endif
 EXPORTED void keepalive_response(struct transaction_t *txn)
 {
     if (gotsigalrm) {

@@ -984,8 +984,10 @@ EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
 
 /* buffer handling functions */
 
+#ifdef DECLARE_OPTIMIZE
 static inline size_t roundup(size_t size)
     __attribute__((pure, always_inline, optimize("-O3")));
+#endif
 static inline size_t roundup(size_t size)
 {
     if (size < 32)
@@ -1109,15 +1111,19 @@ EXPORTED int buf_getline(struct buf *buf, FILE *fp)
     return (!(buf->len == 0 && c == EOF));
 }
 
+#ifdef DECLARE_OPTIMIZE
 EXPORTED inline size_t buf_len(const struct buf *buf)
     __attribute__((always_inline, optimize("-O3")));
+#endif
 EXPORTED inline size_t buf_len(const struct buf *buf)
 {
     return buf->len;
 }
 
+#ifdef DECLARE_OPTIMIZE
 EXPORTED inline const char *buf_base(const struct buf *buf)
     __attribute__((always_inline, optimize("-O3")));
+#endif
 EXPORTED inline const char *buf_base(const struct buf *buf)
 {
     return buf->s;
