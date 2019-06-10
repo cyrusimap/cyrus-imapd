@@ -827,8 +827,9 @@ static void do_verify(void)
 
         if (!(dirp = opendir(found.data[i].path))) continue;
         while ((dirent = readdir(dirp))) {
+            const char *fname = FNAME_HEADER;
             if (dirent->d_name[0] == '.') continue;
-            else if (!strcmp(dirent->d_name, FNAME_HEADER+1)) {
+            else if (!strcmp(dirent->d_name, fname+1)) {
                 /* XXX - check that it can be opened */
                 found.data[i].type |= MBOX;
             }
