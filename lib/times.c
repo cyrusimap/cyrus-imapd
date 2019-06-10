@@ -975,17 +975,6 @@ static inline int get_current_char(struct rfc5322dtbuf *buf)
         return EOB;
 }
 
-static inline int get_previous_char(struct rfc5322dtbuf *buf)
-{
-    int offset = buf->offset;
-
-    offset--;
-    if (offset >= 0)
-        return buf->str[offset];
-    else
-        return EOB;
-}
-
 /*
   TODO: Support comments as per RFC.
 */
@@ -1062,19 +1051,6 @@ static inline int to_int(char *str, int len)
     }
 
     return num;
-}
-
-static inline int to_upper_str_in_place(char **str, int len)
-{
-    int i;
-
-    for (i = 0; i < len; i++) {
-        int c = str[0][i];
-        if (rfc5322_usascii_charset[c + 1] & LAlpha)
-            str[0][i] = str[0][i] - 32;
-    }
-
-    return 1;
 }
 
 static inline int to_upper(char ch)
