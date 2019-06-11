@@ -527,7 +527,7 @@ static void add_sub(strarray_t *subs, mbentry_t *mbentry, uint32_t attributes)
 
 static int is_extended_resp(const char *cmd, struct listargs *listargs)
 {
-    if (!(listargs->ret &&
+    if (!(listargs->ret &
           (LIST_RET_STATUS | LIST_RET_MYRIGHTS | LIST_RET_METADATA))) {
         /* backend won't be sending extended response data */
         return 0;
