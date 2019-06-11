@@ -647,7 +647,7 @@ static json_t *_mbox_get(jmap_req_t *req,
             int sortOrder = _mbox_get_sortorder(mbname);
             json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
         }
-        if (jmap_wantprop(props, "isSeenShared")) {
+        if (jmap_wantprop(props, "isSeenShared") || jmap_wantprop(props, "storageUsed")) {
             struct statusdata sdata = STATUSDATA_INIT;
             int r = status_lookup_mbentry(mbentry, req->userid,
                                           STATUS_MBOPTIONS, &sdata);
@@ -656,8 +656,16 @@ static json_t *_mbox_get(jmap_req_t *req,
                         mbname_intname(mbname), error_message(r));
                 goto done;
             }
-            json_object_set_new(obj, "isSeenShared",
-                                json_boolean(sdata.mboptions & OPT_IMAP_SHAREDSEEN));
+            if (jmap_wantprop(props, "isSeenShared")) {
+                json_object_set_new(obj, "isSeenShared",
+                                    json_boolean(sdata.mboptions & OPT_IMAP_SHAREDSEEN));
+            }
+            if (jmap_wantprop(props, "storageUsed")) {
+                json_object_set_new(obj, "storageUsed", json_integer(sdata.size));
+            }
+        }
+        if (jmap_wantprop(props, "storageUsed")) {
+            json_object_set_new(obj, "storageUsed", json_integer(0));
         }
     }
     else {
@@ -678,6 +686,9 @@ static json_t *_mbox_get(jmap_req_t *req,
         }
         if (jmap_wantprop(props, "isSeenShared")) {
             json_object_set_new(obj, "isSeenShared", json_false());
+        }
+        if (jmap_wantprop(props, "storageUsed")) {
+            json_object_set_new(obj, "storageUsed", json_integer(0));
         }
     }
 
@@ -892,6 +903,11 @@ static const jmap_property_t mailbox_props[] = {
         "isSeenShared",
         JMAP_MAIL_EXTENSION,
         0
+    },
+    {
+        "storageUsed",
+        JMAP_MAIL_EXTENSION,
+        JMAP_PROP_SERVER_SET
     },
     { NULL, NULL, 0 }
 };
