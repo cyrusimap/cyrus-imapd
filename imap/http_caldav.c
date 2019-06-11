@@ -1757,13 +1757,13 @@ static void add_timezone(icalparameter *param, void *data)
         if (tzrock->old) {
             /* Fetch tz from old object and add to new */
             icaltimezone *tz = icalcomponent_get_timezone(tzrock->old, tzid);
-            if (tz) vtz = icalcomponent_new_clone(icaltimezone_get_component(tz));
+            if (tz) vtz = icalcomponent_clone(icaltimezone_get_component(tz));
         }
         else {
             /* Fetch tz from builtin repository */
             icaltimezone *tz = icaltimezone_get_builtin_timezone(tzid);
 
-            if (tz) vtz = icalcomponent_new_clone(icaltimezone_get_component(tz));
+            if (tz) vtz = icalcomponent_clone(icaltimezone_get_component(tz));
         }
 
         if (vtz) icalcomponent_add_component(tzrock->new, vtz);
@@ -3145,7 +3145,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
                 struct icaldatetimeperiodtype dtp;
                 icalproperty *nextp;
 
-                master = icalcomponent_new_clone(master);
+                master = icalcomponent_clone(master);
 
                 /* Get DTSTART and Remove unwanted recurrence properties */
                 for (prop = icalcomponent_get_first_property(master,
@@ -3183,7 +3183,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
                     icaltime_set_timezone(&dtstart, tz);
 
-                    comp = icalcomponent_new_clone(master);
+                    comp = icalcomponent_clone(master);
                     icalcomponent_add_component(ical, comp);
                     icalcomponent_set_dtstart(comp, dtstart);
 
@@ -3229,7 +3229,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
         if (aprop) {
             /* Add new/updated ATTACH property */
-            icalcomponent_add_property(comp, icalproperty_new_clone(aprop));
+            icalcomponent_add_property(comp, icalproperty_clone(aprop));
         }
     }
 
@@ -3441,7 +3441,7 @@ static void import_resource(const char *uid, void *data, void *rock)
 
     for (i = 0; i < ptrarray_size(irock->props); i++) {
         icalproperty *newprop =
-            icalproperty_new_clone(ptrarray_nth(irock->props, i));
+            icalproperty_clone(ptrarray_nth(irock->props, i));
 
         icalcomponent_add_property(newical, newprop);
     }
@@ -5528,7 +5528,7 @@ static int expand_cb(icalcomponent *comp,
 
     if (!recurid) {
         /* Clone the master component */
-        comp = icalcomponent_new_clone(comp);
+        comp = icalcomponent_clone(comp);
         if (icaltime_compare(start, dtstart)) {
             /* Not the first instance - set RECURRENCE-ID */
             icalcomponent_set_recurrenceid(comp, start);
@@ -5556,7 +5556,7 @@ static icalcomponent *expand_caldata(icalcomponent **ical,
     icalproperty *prop =
         icalcomponent_get_first_property(*ical, ICAL_CALSCALE_PROPERTY);
     if (prop)
-        icalcomponent_add_property(expanded_ical, icalproperty_new_clone(prop));
+        icalcomponent_add_property(expanded_ical, icalproperty_clone(prop));
 
     icalcomponent_myforeach(*ical, range, NULL, expand_cb, expanded_ical);
     icalcomponent_free(*ical);

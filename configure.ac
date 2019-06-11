@@ -1632,6 +1632,10 @@ dnl
                 AC_DEFINE(HAVE_RECUR_ITERATOR_START,[],
                         [Do we have support for setting start point of recurrences?]))
 
+        AC_CHECK_LIB(ical, icalcomponent_clone,
+                AC_DEFINE(HAVE_NEW_CLONE_API,[],
+                        [Do we have support for new clone API?]))
+
         PKG_CHECK_VAR(CYRUS_TIMEZONES_ZONEINFO_DIR, cyrus-timezones, zoneinfo_dir, [
                  AC_SUBST(CYRUS_TIMEZONES_ZONEINFO_DIR)
                  with_cyrus_timezones=yes

@@ -1310,7 +1310,7 @@ static void apply_patch_property(struct path_segment_t *path_seg,
                  param;
                  param = icalproperty_get_next_parameter(pp_prop,
                                                          ICAL_ANY_PARAMETER)) {
-                icalproperty_set_parameter(prop, icalparameter_new_clone(param));
+                icalproperty_set_parameter(prop, icalparameter_clone(param));
             }
         }
     }
@@ -1328,7 +1328,7 @@ static void create_override(icalcomponent *master, struct icaltime_span *span,
 
     now = icaltime_current_time_with_zone(icaltimezone_get_utc_timezone());
 
-    new = icalcomponent_new_clone(master);
+    new = icalcomponent_clone(master);
 
     for (prop = icalcomponent_get_first_property(new, ICAL_ANY_PROPERTY);
          prop; prop = next) {
@@ -1413,7 +1413,7 @@ static void apply_property_updates(struct patch_data_t *patch,
         union match_criteria_t byparam;
 
         memset(&byparam, 0, sizeof(union match_criteria_t));
-        newprop = icalproperty_new_clone(newprop);
+        newprop = icalproperty_clone(newprop);
 
         actionp = icalproperty_get_first_parameter(newprop,
                                                    ICAL_PATCHACTION_PARAMETER);
@@ -1489,7 +1489,7 @@ static void apply_component_updates(struct patch_data_t *patch,
         const char *uid = icalcomponent_get_uid(newcomp);
         icaltimetype rid = icalcomponent_get_recurrenceid(newcomp);
 
-        newcomp = icalcomponent_new_clone(newcomp);
+        newcomp = icalcomponent_clone(newcomp);
 
         /* Delete components matching those being updated */
         for (comp = icalcomponent_get_first_component(parent, kind);
@@ -1667,7 +1667,7 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
         }
 
         /* This function is destructive of PATCH components, make a clone */
-        patch = icalcomponent_new_clone(patch);
+        patch = icalcomponent_clone(patch);
 
         prop = icalcomponent_get_first_property(patch,
                                                 ICAL_PATCHTARGET_PROPERTY);
