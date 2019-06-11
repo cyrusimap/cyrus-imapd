@@ -122,7 +122,8 @@ if [ ! $ITEM ] || [ $ITEM == wslay ] ; then
   automake
   autoconf
   ./configure --enable-silent-rules --prefix=$PREFIX
-  sudo make install-exec $MAKEOPTS
+  make
+  sudo make install
 )
 fi
 
