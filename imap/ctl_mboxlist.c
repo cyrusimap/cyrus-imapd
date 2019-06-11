@@ -343,7 +343,7 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
         r = mupdate_activate(d->h, mbentry->name, realpart, mbentry->acl);
 
         if (r == MUPDATE_NOCONN) {
-            fprintf(stderr, "permanant failure storing '%s'\n", mbentry->name);
+            fprintf(stderr, "permanent failure storing '%s'\n", mbentry->name);
             r = IMAP_IOERROR;
         } else if (r == MUPDATE_FAIL) {
             fprintf(stderr,

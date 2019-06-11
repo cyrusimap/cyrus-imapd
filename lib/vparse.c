@@ -63,7 +63,7 @@ static int _parse_param_quoted(struct vparse_state *state, int multiparam)
             INC(1);
             return 0;
 
-        /* normal backslash quoting - NOTE, not strictly RFC complient,
+        /* normal backslash quoting - NOTE, not strictly RFC compliant,
          * but I figure anyone who generates one PROBABLY meant to escape
          * the next character because it's so common, and LABEL definitely
          * allows \n, so we have to handle that anyway */

@@ -169,7 +169,7 @@ main                            (int             argc,
   convert_olson_file ("northamerica", zones_hash);
   convert_olson_file ("southamerica", zones_hash);
 
-  /* These are backwards-compatability and weird stuff. */
+  /* These are backwards-compatibility and weird stuff. */
   convert_olson_file ("backward", zones_hash);
   convert_olson_file ("etcetera", zones_hash);
 #if 0

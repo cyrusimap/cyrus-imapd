@@ -26,7 +26,7 @@
 
 #
 # This outputs an iCalendar file containing one event in each timezone,
-# as well as all the VTIMEZONEs. We use it for testing compatability with
+# as well as all the VTIMEZONEs. We use it for testing compatibility with
 # other iCalendar apps like Outlook, by trying to import it there.
 #
 # Currently we have 377 timezones (with tzdata2001d).

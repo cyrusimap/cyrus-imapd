@@ -28,7 +28,7 @@ that user.
 **fud** |default-conf-text|
 
 **fud** will automatically proxy any and all FUD requests to the
-appropriate backend server if it is runing on a Cyrus Murder frontend
+appropriate backend server if it is running on a Cyrus Murder frontend
 machine.
 
 To set up the FUD daemon, add this to your cyrus.conf:
@@ -118,7 +118,7 @@ Also not really a bug, **fud** requires that the anonymous user has the
 0 is not a standard IMAP ACL bit.
 
 **fud** is an experimental interface meant to provide information to
-build a finger-like service around.  Eventually it should be superceded
+build a finger-like service around.  Eventually it should be superseded
 by a more standards-based protocol.
 
 

@@ -1327,7 +1327,7 @@ output_zone_components                  (FILE           *fp,
     if (VzicPureOutput) {
       output_component_start (start_buffer, vzictime, TRUE, only_one_change);
     } else {
-    /* For Outlook compatability we don't output the RDATE and use the same
+    /* For Outlook compatibility we don't output the RDATE and use the same
        TZOFFSET for TZOFFSETFROM and TZOFFSETTO. */
       vzictime->year         = RDATE_YEAR;
       vzictime->month        = 0;
@@ -1546,7 +1546,7 @@ check_for_rdates                (FILE           *fp,
           is_daylight_start ? "DAYLIGHT" : "");
 #endif
 
-  /* We want to go backwards through the array now, for Outlook compatability.
+  /* We want to go backwards through the array now, for Outlook compatibility.
      (It only looks at the first DTSTART/RDATE.) */
   for (i = idx + 1; i < changes->len; i++) {
     vzictime = &g_array_index (changes, VzicTime, i);
@@ -2078,15 +2078,15 @@ output_rrule                            (char           *rrule_buffer,
        at the moment anyway, so that isn't a big loss). */
     if (!VzicPureOutput) {
       if (day_number < 8) {
-        printf ("WARNING: %s: Outputting BYDAY=1SU instead of BYMONTHDAY=1-7 for Outlook compatability\n", CurrentZoneName);
+        printf ("WARNING: %s: Outputting BYDAY=1SU instead of BYMONTHDAY=1-7 for Outlook compatibility\n", CurrentZoneName);
         sprintf (buffer, "RRULE:FREQ=YEARLY;BYMONTH=%i;BYDAY=1SU",
                  month + 1);
       } else if (day_number < 15) {
-        printf ("WARNING: %s: Outputting BYDAY=2SU instead of BYMONTHDAY=8-14 for Outlook compatability\n", CurrentZoneName);
+        printf ("WARNING: %s: Outputting BYDAY=2SU instead of BYMONTHDAY=8-14 for Outlook compatibility\n", CurrentZoneName);
         sprintf (buffer, "RRULE:FREQ=YEARLY;BYMONTH=%i;BYDAY=2SU",
                  month + 1);
       } else if (day_number < 22) {
-        printf ("WARNING: %s: Outputting BYDAY=3SU instead of BYMONTHDAY=15-21 for Outlook compatability\n", CurrentZoneName);
+        printf ("WARNING: %s: Outputting BYDAY=3SU instead of BYMONTHDAY=15-21 for Outlook compatibility\n", CurrentZoneName);
         sprintf (buffer, "RRULE:FREQ=YEARLY;BYMONTH=%i;BYDAY=3SU",
                  month + 1);
       } else {
@@ -2111,7 +2111,7 @@ output_rrule                            (char           *rrule_buffer,
         exit (1);
       } else {
         /* We do 6 days at the end of this month, and 1 at the start of the
-           next. We can't do this if we want Outlook compatability, as it
+           next. We can't do this if we want Outlook compatibility, as it
            needs BYMONTHDAY, which Outlook doesn't support. */
 /*
         sprintf (buffer,
@@ -2174,14 +2174,14 @@ output_rrule                            (char           *rrule_buffer,
 #endif
 
       if (!VzicPureOutput) {
-        printf ("WARNING: %s: Modifying RRULE (last weekday) for Outlook compatability\n", CurrentZoneName);
+        printf ("WARNING: %s: Modifying RRULE (last weekday) for Outlook compatibility\n", CurrentZoneName);
         sprintf (buffer,
                  "RRULE:FREQ=YEARLY;BYMONTH=%i;BYDAY=-1%s",
                  month + 1, WeekDays[day_weekday]);
         printf ("  Outputting: %s\n", buffer);
       } else {
         /* We do 6 days at the end of this month, and 1 at the start of the
-           next. We can't do this if we want Outlook compatability, as it needs
+           next. We can't do this if we want Outlook compatibility, as it needs
            BYMONTHDAY, which Outlook doesn't support. */
 /*
         day_number = DaysInMonth[month];
@@ -2276,7 +2276,7 @@ output_rrule_2                          (char           *buffer,
              month + 1, WeekDays[day_weekday]);
 
   } else {
-    /* Can't convert to a correct RRULE. If we want Outlook compatability we
+    /* Can't convert to a correct RRULE. If we want Outlook compatibility we
        have to use a slightly incorrect RRULE, so the time change will be 1
        week out every 7 or so years. Alternatively we could possibly move the
        change by an hour or so so we would always be 1 or 2 hours out, but

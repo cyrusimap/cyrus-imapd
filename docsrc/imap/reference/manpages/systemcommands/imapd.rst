@@ -39,7 +39,7 @@ first line contained in the file to clients upon connect as an ALERT
 message which IMAP-compliant clients are required to display.
 
 This option serves to annoy users mostly.  Unfortunately clients tend to
-connect far more frequently than is apparent, generating a seperate
+connect far more frequently than is apparent, generating a separate
 server ALERT for each connection.  Many clients do not display these
 properly, if they do anything with them at all.
 

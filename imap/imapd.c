@@ -143,7 +143,7 @@ static int apns_enabled = 0;
 static const int ultraparanoid = 1; /* should we kick after every operation? */
 unsigned int proxy_cmdcnt;
 
-static int referral_kick = 0; /* kick after next command recieved, for
+static int referral_kick = 0; /* kick after next command received, for
                                  referrals that are likely to change the
                                  mailbox list */
 
