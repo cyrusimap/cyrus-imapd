@@ -749,7 +749,7 @@ static int get_search_criterion(struct protstream *pin,
     int c;
     int keep_charset = 0;
     time_t start, end, now = time(0);
-    uint32_t u;
+    int32_t i32;
     int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
 
     if (base->state & GETSEARCH_CHARSET_FIRST) {
@@ -977,11 +977,11 @@ static int get_search_criterion(struct protstream *pin,
     case 'l':
         if (!strcmp(criteria.s, "larger")) {            /* RFC 3501 */
             if (c != ' ') goto missingarg;
-            c = getint32(pin, (int32_t *)&u);
+            c = getint32(pin, &i32);
             if (c == EOF) goto badnumber;
             e = search_expr_new(parent, SEOP_GT);
             e->attr = search_attr_find("size");
-            e->value.u = u;
+            e->value.u = i32;
         }
         else goto badcri;
         break;
@@ -1036,11 +1036,11 @@ static int get_search_criterion(struct protstream *pin,
         }
         else if (!strcmp(criteria.s, "older")) {    /* RFC 5032 */
             if (c != ' ') goto missingarg;
-            c = getint32(pin, (int32_t *)&u);
+            c = getint32(pin, &i32);
             if (c == EOF) goto badinterval;
             e = search_expr_new(parent, SEOP_LE);
             e->attr = search_attr_find("internaldate");
-            e->value.t = now - u;
+            e->value.t = now - i32;
         }
         else if (!strcmp(criteria.s, "on")) {   /* RFC 3501 */
             if (c != ' ') goto missingarg;
@@ -1100,11 +1100,11 @@ static int get_search_criterion(struct protstream *pin,
         }
         else if (!strcmp(criteria.s, "smaller")) {  /* RFC 3501 */
             if (c != ' ') goto missingarg;
-            c = getint32(pin, (int32_t *)&u);
+            c = getint32(pin, &i32);
             if (c == EOF) goto badnumber;
             e = search_expr_new(parent, SEOP_LT);
             e->attr = search_attr_find("size");
-            e->value.u = u;
+            e->value.u = i32;
         }
         else if (!strcmp(criteria.s, "spamabove")) {  /* nonstandard */
             if (c != ' ') goto missingarg;
@@ -1212,11 +1212,11 @@ static int get_search_criterion(struct protstream *pin,
     case 'y':
         if (!strcmp(criteria.s, "younger")) {           /* RFC 5032 */
             if (c != ' ') goto missingarg;
-            c = getint32(pin, (int32_t *)&u);
+            c = getint32(pin, &i32);
             if (c == EOF) goto badinterval;
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("internaldate");
-            e->value.t = now - u;
+            e->value.t = now - i32;
         }
         else goto badcri;
         break;
