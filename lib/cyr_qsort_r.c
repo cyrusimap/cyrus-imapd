@@ -1,6 +1,19 @@
 #include "cyr_qsort_r.h"
 
-#ifdef __clang__
+#ifdef HAVE_FUNCTION_NESTING
+
+EXPORTED void cyr_qsort_r(void *base, size_t nmemb, size_t size,
+                          int (*compar)(const void *, const void *, void *),
+                          void *thunk)
+{
+    int compar_func(const void *a, const void *b)
+    {
+        return compar(a, b, thunk);
+    }
+    qsort(base, nmemb, size, compar_func);
+}
+
+#else
 
 // NOTE: this is kinda ugly, but it's OK if you're not multithreaded
 
@@ -20,19 +33,6 @@ EXPORTED void cyr_qsort_r(void *base, size_t nmemb, size_t size,
     qsort(base, nmemb, size, qsort_r_compar_func);
     qsort_r_thunk = NULL;
     qsort_r_compar = NULL;
-}
-
-#else
-
-EXPORTED void cyr_qsort_r(void *base, size_t nmemb, size_t size,
-                          int (*compar)(const void *, const void *, void *),
-                          void *thunk)
-{
-    int compar_func(const void *a, const void *b)
-    {
-        return compar(a, b, thunk);
-    }
-    qsort(base, nmemb, size, compar_func);
 }
 
 #endif

@@ -2100,6 +2100,39 @@ if test "x$use_sqlite" = xyes; then
 fi
 AM_CONDITIONAL([USE_SQLITE], [test "x$use_sqlite" = xyes])
 
+dnl compiler feature checking
+AC_MSG_CHECKING(for function nesting)
+AC_CACHE_VAL(cyrus_cv_function_nesting, AC_TRY_COMPILE([
+#include <stdlib.h>
+void func(void *data, size_t nmemb, size_t size,
+          int (*compar)(const void *, const void *, void *),
+          void *thunk)
+{
+    int compar_func(const void *a, const void *b)
+    {
+        return compar(a, b, thunk);
+    }
+    qsort(data, nmemb, size, compar_func);
+}
+int cval(const void *a, const void *b, void *prev)
+{
+  char **ref = (char **)prev;
+  char *ac = (char *)a;
+  char *bc = (char *)b;
+  if (*ac < *bc) return -1;
+  if (*ac == *bc) return 0;
+  *ref = bc;
+  return 1;
+}
+],[
+    char *dest;
+    func("abc", 3, 1, cval, &dest);
+],cyrus_cv_function_nesting=yes, cyrus_cv_function_nesting=no))
+AC_MSG_RESULT($cyrus_cv_function_nesting)
+if test "$cyrus_cv_function_nesting" = "yes"; then
+  AC_DEFINE(HAVE_FUNCTION_NESTING,[],[Do we have function nesting support?])
+fi
+
 
 dnl CRC32 optimisations
 
