@@ -460,8 +460,8 @@ static int autorespond(void *ac, void *ic __attribute__((unused)),
     return SIEVE_FAIL;
 }
 
-static int send_response(void *ac, void *ic, void *sc __attribute__((unused)),
-                         void *mc, const char **errmsg __attribute__((unused)))
+static int send_response(void *ac, void *ic, void *sc,
+                         void *mc, const char **errmsg)
 {
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -469,6 +469,12 @@ static int send_response(void *ac, void *ic, void *sc __attribute__((unused)),
 
     printf("echo '%s' | mail -s '%s' '%s' for message '%s' (from: %s)\n",
            src->msg, src->subj, src->addr, m->name, src->fromaddr);
+
+    if (src->fcc.mailbox) {
+        message_data_t vmc = { .name = "vacation-autoresponse" };
+
+        (void) fileinto(&src->fcc, ic, sc, &vmc, errmsg);
+    }
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
