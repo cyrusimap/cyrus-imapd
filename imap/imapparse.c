@@ -729,11 +729,11 @@ static void date_range(search_expr_t *parent, const char *aname,
 
     e = search_expr_new(parent, SEOP_LT);
     e->attr = attr;
-    e->value.u = end;
+    e->value.t = end;
 
     e = search_expr_new(parent, SEOP_GE);
     e->attr = attr;
-    e->value.u = start;
+    e->value.t = start;
 }
 
 /*
@@ -823,7 +823,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c == EOF) goto baddate;
             e = search_expr_new(parent, SEOP_LT);
             e->attr = search_attr_find("internaldate");
-            e->value.u = start;
+            e->value.t = start;
         }
         else if (!strcmp(criteria.s, "bcc")) {      /* RFC 3501 */
             if (c != ' ') goto missingarg;
@@ -1040,7 +1040,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c == EOF) goto badinterval;
             e = search_expr_new(parent, SEOP_LE);
             e->attr = search_attr_find("internaldate");
-            e->value.u = now - u;
+            e->value.t = now - u;
         }
         else if (!strcmp(criteria.s, "on")) {   /* RFC 3501 */
             if (c != ' ') goto missingarg;
@@ -1074,7 +1074,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c == EOF) goto baddate;
             e = search_expr_new(parent, SEOP_LT);
             e->attr = search_attr_find("sentdate");
-            e->value.u = start;
+            e->value.t = start;
         }
         else if (!strcmp(criteria.s, "senton")) {       /* RFC 3501 */
             if (c != ' ') goto missingarg;
@@ -1088,7 +1088,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c == EOF) goto baddate;
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("sentdate");
-            e->value.u = start;
+            e->value.t = start;
         }
         else if (!strcmp(criteria.s, "since")) {    /* RFC 3501 */
             if (c != ' ') goto missingarg;
@@ -1096,7 +1096,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c == EOF) goto baddate;
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("internaldate");
-            e->value.u = start;
+            e->value.t = start;
         }
         else if (!strcmp(criteria.s, "smaller")) {  /* RFC 3501 */
             if (c != ' ') goto missingarg;
@@ -1216,7 +1216,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c == EOF) goto badinterval;
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("internaldate");
-            e->value.u = now - u;
+            e->value.t = now - u;
         }
         else goto badcri;
         break;
