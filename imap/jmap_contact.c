@@ -375,7 +375,8 @@ struct cards_rock {
     int rows;
 };
 
-static json_t *jmap_group_from_vcard(struct vparse_card *vcard)
+static json_t *jmap_group_from_vcard(const char *accountid,
+                                     struct vparse_card *vcard)
 {
     struct vparse_entry *ventry = NULL;
     json_t *obj = json_pack("{}");
@@ -403,6 +404,12 @@ static json_t *jmap_group_from_vcard(struct vparse_card *vcard)
             if (strncmp(propval, "urn:uuid:", 9)) continue;
             struct vparse_param *param = vparse_get_param(ventry, "userid");
             if (!param) continue;
+
+            if (!strcmp(accountid, param->value)) {
+                json_array_append_new(contactids, json_string(propval+9));
+                continue;
+            }
+
             json_t *object = json_object_get(otherids, param->value);
             if (!object) {
                 object = json_array();
@@ -454,7 +461,7 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
         return IMAP_INTERNAL;
     }
 
-    obj = jmap_group_from_vcard(vcard->objects);
+    obj = jmap_group_from_vcard(req->accountid, vcard->objects);
 
     vparse_free_card(vcard);
 
@@ -1132,7 +1139,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                 }
                 else if (!strncmp(key, "otherAccountContactIds/", 23)) {
                     /* Read and apply patch to current card */
-                    json_t *jcurrent = jmap_group_from_vcard(card);
+                    json_t *jcurrent = jmap_group_from_vcard(req->accountid, card);
                     if (!jcurrent) {
                         syslog(LOG_ERR, "can't read vcard %u:%s for update",
                                 cdata->dav.imap_uid, mailbox->name);
