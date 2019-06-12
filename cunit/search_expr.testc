@@ -324,16 +324,16 @@ static void test_get_search_program(void)
     /* YOUNGER <nz-number> in seconds ago */
     /* Inexplicably, the RFC defines that *both*  YOUNGER and OLDER
      * include the specified second */
-    //time_push_fixed(DATE1_MID_TIME);
-    //TESTCASE("older 0\r\n",
-             //"(and (le internaldate "DATE1_MID"))");
-    //TESTCASE("older 43200\r\n",
-             //"(and (le internaldate "DATE1_BEGIN"))");
-    //TESTCASE("younger 0\r\n",
-             //"(and (ge internaldate "DATE1_MID"))");
-    //TESTCASE("younger 43200\r\n",
-             //"(and (ge internaldate "DATE1_BEGIN"))");
-    //time_pop();
+    time_push_fixed(DATE1_MID_TIME);
+    TESTCASE("older 0\r\n",
+             "(and (le internaldate "DATE1_MID"))");
+    TESTCASE("older 43200\r\n",
+             "(and (le internaldate "DATE1_BEGIN"))");
+    TESTCASE("younger 0\r\n",
+             "(and (ge internaldate "DATE1_MID"))");
+    TESTCASE("younger 43200\r\n",
+             "(and (ge internaldate "DATE1_BEGIN"))");
+    time_pop();
 
     /*
      * Search criteria from RFC 5257
