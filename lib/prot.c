@@ -1755,7 +1755,7 @@ EXPORTED struct protstream *protgroup_getelement(struct protgroup *group,
     return group->group[element];
 }
 
-#ifdef DECLARE_OPTIMIZE
+#ifdef HAVE_DECLARE_OPTIMIZE
 EXPORTED inline int prot_getc(struct protstream *s)
     __attribute__((always_inline,optimize("-O3")));
 #endif
@@ -1799,7 +1799,7 @@ EXPORTED size_t prot_lookahead(struct protstream *s,
     return 0;
 }
 
-#ifdef DECLARE_OPTIMIZE
+#ifdef HAVE_DECLARE_OPTIMIZE
 EXPORTED inline int prot_ungetc(int c, struct protstream *s)
     __attribute__((always_inline,optimize("-O3")));
 #endif

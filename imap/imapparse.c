@@ -83,7 +83,7 @@ EXPORTED int getword(struct protstream *in, struct buf *buf)
  * Parse an xstring
  * (astring, nstring or string based on type)
  */
-#ifdef DECLARE_OPTIMIZE
+#ifdef HAVE_DECLARE_OPTIMIZE
 EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
                         struct buf *buf, enum getxstring_flags flags)
     __attribute__((optimize("-O3")));

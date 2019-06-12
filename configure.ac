@@ -2133,6 +2133,20 @@ if test "$cyrus_cv_function_nesting" = "yes"; then
   AC_DEFINE(HAVE_FUNCTION_NESTING,[],[Do we have function nesting support?])
 fi
 
+AC_MSG_CHECKING(for optimisation support)
+AC_CACHE_VAL(cyrus_cv_declare_optimize, AC_TRY_COMPILE([
+#include <stdlib.h>
+static inline int numcmp(int n1, int n2)
+    __attribute__((pure, always_inline, optimize("-O3")));
+static int numcmp(int n1, int n2) { return n1 - n2; }
+],[
+    if (numcmp(1, 2)) exit(1);
+],cyrus_cv_declare_optimize=yes, cyrus_cv_declare_optimize=no))
+AC_MSG_RESULT($cyrus_cv_declare_optimize)
+if test "$cyrus_cv_declare_optimize" = "yes"; then
+  AC_DEFINE(HAVE_DECLARE_OPTIMIZE,[],[Do we have support for optimize __attribute__?])
+fi
+
 
 dnl CRC32 optimisations
 
