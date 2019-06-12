@@ -615,7 +615,7 @@ static const uint32_t crc32_lookup[16][256] =
 /* swap endianness */
 static uint32_t swap(uint32_t x)
 {
-#if defined(__GNUC__) || defined(__clang__)
+#if defined(__builtin_bswap32)
     return __builtin_bswap32(x);
 #else
     return (x >> 24) |
