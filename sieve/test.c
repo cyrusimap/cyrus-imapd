@@ -580,7 +580,7 @@ int main(int argc, char *argv[])
         char *err = NULL;
 
         if (fread(magic, BYTECODE_MAGIC_LEN, 1, f) <= 0 ||
-            memcmp(magic, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN != 0)) {
+            memcmp(magic, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN) != 0) {
             /* Not Sieve bytecode - try to parse as text */
 
             if (sieve_script_parse_only(f, &err, &s) != SIEVE_OK) {
