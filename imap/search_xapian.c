@@ -2347,30 +2347,32 @@ static int end_message_update(search_text_receiver_t *rx)
     if (r) goto out;
     ++tr->uncommitted;
 
-    // index body parts with content guid
-    const struct message_guid *last_guid = NULL;
-    for (i = 0 ; i < tr->super.segs.count ; i++) {
-        seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
-        if (seg->doctype == SEARCH_XAPIAN_DOCTYPE_MSG) continue;
+    if (config_getswitch(IMAPOPT_SEARCH_INDEX_PARTS)) {
+        // index body parts with content guid
+        const struct message_guid *last_guid = NULL;
+        for (i = 0 ; i < tr->super.segs.count ; i++) {
+            seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
+            if (seg->doctype == SEARCH_XAPIAN_DOCTYPE_MSG) continue;
 
-        if (!last_guid || message_guid_cmp(last_guid, &seg->guid)) {
-            if (last_guid) {
-                r = xapian_dbw_end_doc(tr->dbw);
+            if (!last_guid || message_guid_cmp(last_guid, &seg->guid)) {
+                if (last_guid) {
+                    r = xapian_dbw_end_doc(tr->dbw);
+                    if (r) goto out;
+                    ++tr->uncommitted;
+                }
+
+                last_guid = &seg->guid;
+                r = xapian_dbw_begin_doc(tr->dbw, &seg->guid, seg->doctype);
                 if (r) goto out;
-                ++tr->uncommitted;
             }
-
-            last_guid = &seg->guid;
-            r = xapian_dbw_begin_doc(tr->dbw, &seg->guid, seg->doctype);
+            r = xapian_dbw_doc_part(tr->dbw, &seg->text, seg->part);
             if (r) goto out;
         }
-        r = xapian_dbw_doc_part(tr->dbw, &seg->text, seg->part);
-        if (r) goto out;
-    }
-    if (last_guid) {
-        r = xapian_dbw_end_doc(tr->dbw);
-        if (r) goto out;
-        ++tr->uncommitted;
+        if (last_guid) {
+            r = xapian_dbw_end_doc(tr->dbw);
+            if (r) goto out;
+            ++tr->uncommitted;
+        }
     }
 
 out:
