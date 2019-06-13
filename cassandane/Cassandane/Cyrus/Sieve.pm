@@ -751,6 +751,7 @@ sub test_rfc5490_mailboxexists_variables
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mailbox", "variables"];
 set "testfolder" "$testfolder";
+set "testfolder" "\${testfolder}";  # test setting variable value from itself
 if mailboxexists "\${testfolder}"  {
     fileinto "$hitfolder";
 }
