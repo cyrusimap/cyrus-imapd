@@ -5513,9 +5513,6 @@ int sync_update_mailbox(struct sync_folder *local,
     int r = update_mailbox_once(local, remote, topart,
                                 reserve_list, sync_be, flags);
 
-    /* never retry - other end should always sync cleanly */
-    if (flags & SYNC_FLAG_NO_COPYBACK) return r;
-
     flags |= SYNC_FLAG_ISREPEAT;
 
     if (r == IMAP_SYNC_CHECKSUM) {
@@ -5523,6 +5520,9 @@ int sync_update_mailbox(struct sync_folder *local,
         r = update_mailbox_once(local, remote, topart,
                                 reserve_list, sync_be, flags);
     }
+
+    /* never retry - other end should always sync cleanly */
+    if (flags & SYNC_FLAG_NO_COPYBACK) return r;
 
     if (r == IMAP_AGAIN) {
         local->ispartial = 0; /* don't batch the re-update, means sync to 2.4 will still work after fullsync */
