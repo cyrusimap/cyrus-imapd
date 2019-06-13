@@ -2176,8 +2176,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 variable->name = xstrdup(name);
             }
 
-            strarray_fini(variable->var);
             value = parse_string(value, variables);
+            strarray_fini(variable->var);
             strarray_appendm(variable->var,
                              variables_modify_string(value, modifiers));
 #if VERBOSE
