@@ -655,12 +655,12 @@ EXPORTED int time_to_rfc3501(time_t date, char *buf, size_t len)
  *
  *  "dd-mmm-yyyy HH:MM:SS zzzzz"
  *  " d-mmm-yyyy HH:MM:SS zzzzz"
- *  "dd-mmm-yy HH:MM:SS-z"
- *  " d-mmm-yy HH:MM:SS-z"
- *  "dd-mmm-yy HH:MM:SS-zz"
- *  " d-mmm-yy HH:MM:SS-zz"
- *  "dd-mmm-yy HH:MM:SS-zzz"
- *  " d-mmm-yy HH:MM:SS-zzz"
+ *  "dd-mmm-yy HH:MM:SS z"
+ *  " d-mmm-yy HH:MM:SS z"
+ *  "dd-mmm-yy HH:MM:SS zz"
+ *  " d-mmm-yy HH:MM:SS zz"
+ *  "dd-mmm-yy HH:MM:SS zzz"
+ *  " d-mmm-yy HH:MM:SS zzz"
  *
  * where:
  *  dd  is the day-of-month between 1 and 31 inclusive.
@@ -843,7 +843,7 @@ EXPORTED int time_from_rfc3501(const char *s, time_t *date)
 
     /* Time zone */
     if (old_format) {
-        if (c != '-')
+        if (c != ' ')
             goto baddate;
         c = *s++;
 
@@ -1306,8 +1306,10 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
 
     /* timezone */
     skip_ws(buf, 0);
-    c = get_current_char(buf); /* the '+' or '-' in the timezone */
-    get_next_char(buf);        /* consume '+' or '-' */
+    c = get_current_char(buf);
+    if (c == '+' || c == '-') {    /* the '+' or '-' in the timezone */
+        get_next_char(buf);        /* consume '+' or '-' */
+    }
 
     if (!get_next_token(buf, &str_token, &len)) {
         *tz_offset = 0;

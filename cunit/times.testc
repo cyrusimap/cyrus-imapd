@@ -103,72 +103,72 @@ test_military_timezones(void)
     time_t zulu = 813727192;
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-Z", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 Z", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * lowercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS-z" */
+     * lowercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-z", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 z", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +0100, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +0100, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-A", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 A", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-1*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +0200, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +0200, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-B", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 B", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-2*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +0900, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +0900, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-I", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 I", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-9*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * erroneous uppercase 1-char timezone, "dd-mmm-yy HH:MM:SS-z" */
+     * erroneous uppercase 1-char timezone, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-J", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 J", &t);
     CU_ASSERT_EQUAL(r, -1);
     CU_ASSERT_EQUAL(t, UNINIT_TIMET);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +1000, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +1000, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-K", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 K", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-10*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * 1-char timezone = +1200, "dd-mmm-yy HH:MM:SS-z" */
+     * 1-char timezone = +1200, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-M", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 M", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-12*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = -0100, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = -0100, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-N", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 N", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu+1*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * 1-char timezone = -1200, "dd-mmm-yy HH:MM:SS-z" */
+     * 1-char timezone = -1200, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc3501("15-Oct-95 03:19:52-Y", &t);
+    r = time_from_rfc3501("15-Oct-95 03:19:52 Y", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu+12*3600);
 }
@@ -538,6 +538,11 @@ test_rfc5322(void)
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, 1290741722);
 
+    t = UNINIT_TIMET;
+    r = time_from_rfc5322("THU, 25 NOV 2010 22:22:02 EST", &t, DATETIME_FULL); /* NYC */
+    CU_ASSERT_EQUAL(r, 29);
+    CU_ASSERT_EQUAL(t, 1290741722);
+
 
     /* Time with period as separator */
     t = UNINIT_TIMET;
@@ -596,72 +601,72 @@ test_military_timezones_using_rfc5322(void)
     time_t zulu = 813727192;
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-Z", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 Z", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * lowercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS-z" */
+     * lowercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-z", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 z", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +0100, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +0100, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-A", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 A", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-1*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +0200, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +0200, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-B", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 B", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-2*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +0900, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +0900, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-I", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 I", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-9*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * erroneous uppercase 1-char timezone, "dd-mmm-yy HH:MM:SS-z" */
+     * erroneous uppercase 1-char timezone, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-J", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 J", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, 813727192);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = +1000, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = +1000, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-K", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 K", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-10*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * 1-char timezone = +1200, "dd-mmm-yy HH:MM:SS-z" */
+     * 1-char timezone = +1200, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-M", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 M", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-12*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * uppercase 1-char timezone = -0100, "dd-mmm-yy HH:MM:SS-z" */
+     * uppercase 1-char timezone = -0100, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-N", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 N", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu+1*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
-     * 1-char timezone = -1200, "dd-mmm-yy HH:MM:SS-z" */
+     * 1-char timezone = -1200, "dd-mmm-yy HH:MM:SS z" */
     t = UNINIT_TIMET;
-    r = time_from_rfc5322("15-Oct-95 03:19:52-Y", &t, DATETIME_FULL);
+    r = time_from_rfc5322("15-Oct-95 03:19:52 Y", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu+12*3600);
 }
