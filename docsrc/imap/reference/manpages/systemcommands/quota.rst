@@ -64,6 +64,11 @@ Options
     Fix any inconsistencies in the quota subsystem before generating a
     report.
 
+.. option:: -n
+
+    Check for any inconsistencies in the quota subsystem but don't actually
+    fix them.  Use with **-f** and **-q** to only see what's incorrect.
+
 .. option:: -q
 
     Operate quietly. If **-f** is specified, then don't print the quota

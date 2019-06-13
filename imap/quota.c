@@ -116,6 +116,7 @@ static int (*compar)(const char *s1, const char *s2);
 static struct quotaentry *quotaroots;
 static int quota_num = 0, quota_alloc = 0;
 static int quota_todo = 0;
+static int flag_reportonly = 0;
 
 static int test_sync_mode = 0;
 
@@ -151,6 +152,10 @@ int main(int argc,char **argv)
 
         case 'u':
             isuser = 1;
+            break;
+
+        case 'n':
+            flag_reportonly = 1;
             break;
 
         case 'J':
@@ -563,7 +568,8 @@ int fixquota_finish(int thisquota)
     if (!quotaroots[thisquota].refcount) {
         quotaroots[thisquota].deleted = 1;
         fprintf(stderr, "%s: removed\n", root);
-        r = quota_deleteroot(root, 0);
+        if (!flag_reportonly)
+            r = quota_deleteroot(root, 0);
         if (r) {
             errmsg("failed deleting quotaroot '%s'", root, r);
         }
@@ -586,7 +592,8 @@ int fixquota_finish(int thisquota)
                 quota_names[res],
                 localq.useds[res],
                 localq.scanuseds[res]);
-            localq.useds[res] = localq.scanuseds[res];
+            if (!flag_reportonly)
+                localq.useds[res] = localq.scanuseds[res];
         }
     }
 
