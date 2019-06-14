@@ -3231,9 +3231,10 @@ static int reindex_mb(void *rock,
             if (r) goto done;
             message_unref(&msg);
         }
-
-        /* and flush the data */
-        r = flush(&tr->super.super);
+        if (tr->uncommitted) {
+            r = xapian_dbw_commit_txn(tr->dbw);
+            if (r) goto done;
+        }
     }
 
 done:
