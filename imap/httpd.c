@@ -304,7 +304,7 @@ HIDDEN void *zstd_init()
 }
 
 static int zstd_compress(struct transaction_t *txn,
-                           unsigned flags, const char *buf, unsigned len)
+                         unsigned flags, const char *buf, unsigned len)
 {
     /* Only flush for static content or on last (zero-length) chunk */
     ZSTD_EndDirective mode = (flags & COMPRESS_END) ? ZSTD_e_end : ZSTD_e_flush;
@@ -1666,16 +1666,20 @@ static void postauth_check_hdrs(struct transaction_t *txn)
         for (e = enc; e && e->token; e++) {
             if (e->qual > 0.0 && e->qual >= qual) {
                 unsigned ce = CE_IDENTITY;
+                encode_proc_t proc = NULL;
 
                 if (txn->zstd && !strcasecmp(e->token, "zstd")) {
                     ce = CE_ZSTD;
+                    proc = &zstd_compress;
                 }
                 else if (txn->brotli && !strcasecmp(e->token, "br")) {
                     ce = CE_BR;
+                    proc = &brotli_compress;
                 }
                 else if (txn->zstrm && (!strcasecmp(e->token, "gzip") ||
                                         !strcasecmp(e->token, "x-gzip"))) {
                     ce = CE_GZIP;
+                    proc = &zlib_compress;
                 }
                 else {
                     /* Unknown/unsupported */
@@ -1683,8 +1687,9 @@ static void postauth_check_hdrs(struct transaction_t *txn)
                 }
 
                 /* Favor Zstandard over Brotli over GZIP if q values are equal */
-                if (e->qual > qual || txn->resp_body.enc < ce) {
-                    txn->resp_body.enc = ce;
+                if (e->qual > qual || txn->resp_body.enc.type < ce) {
+                    txn->resp_body.enc.type = ce;
+                    txn->resp_body.enc.proc = proc;
                     qual = e->qual;
                 }
             }
@@ -2758,7 +2763,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     }
     if (resp_body->etag) {
         simple_hdr(txn, "ETag", "%s\"%s\"",
-                      resp_body->enc ? "W/" : "", resp_body->etag);
+                      resp_body->enc.proc ? "W/" : "", resp_body->etag);
         if (txn->flags.cors) Access_Control_Expose("ETag");
     }
     if (resp_body->lastmod) {
@@ -2790,9 +2795,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                        resp_body->dispo.attach ? "attachment" : "inline",
                        resp_body->dispo.fname);
         }
-        if (txn->resp_body.enc) {
+        if (txn->resp_body.enc.proc) {
             /* Construct Content-Encoding header */
-            comma_list_hdr(txn, "Content-Encoding", ce, txn->resp_body.enc);
+            comma_list_hdr(txn, "Content-Encoding", ce, txn->resp_body.enc.type);
         }
         if (resp_body->lang) {
             simple_hdr(txn, "Content-Language", resp_body->lang);
@@ -3056,9 +3061,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         comma_list_body(logbuf, te, txn->flags.te, NULL);
         sep = "; ";
     }
-    if (txn->resp_body.enc) {
+    if (txn->resp_body.enc.proc) {
         buf_printf(logbuf, "%scnt-encoding=", sep);
-        comma_list_body(logbuf, ce, txn->resp_body.enc, NULL);
+        comma_list_body(logbuf, ce, txn->resp_body.enc.type, NULL);
         sep = "; ";
     }
     if (txn->location) {
@@ -3229,30 +3234,21 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 
         if (len < GZIP_MIN_LEN) {
             /* Don't compress small static content */
-            txn->resp_body.enc = CE_IDENTITY;
+            txn->resp_body.enc.type = CE_IDENTITY;
+            txn->resp_body.enc.proc = NULL;
             txn->flags.te = TE_NONE;
         }
     }
 
     /* Compress data */
-    if (txn->resp_body.enc || txn->flags.te & ~TE_CHUNKED) {
+    if (txn->resp_body.enc.proc || txn->flags.te & ~TE_CHUNKED) {
         unsigned flags = 0;
 
         if (code) flags |= COMPRESS_START;
         if (last_chunk) flags |= COMPRESS_END;
 
-        if (txn->resp_body.enc == CE_BR) {
-            if (brotli_compress(txn, flags, buf, len) < 0) {
-                fatal("Brotli: Error while compressing data", EX_SOFTWARE);
-            }
-        }
-        else if (txn->resp_body.enc == CE_ZSTD) {
-            if (zstd_compress(txn, flags, buf, len) < 0) {
-                fatal("Zstandard: Error while compressing data", EX_SOFTWARE);
-            }
-        }
-        else if (zlib_compress(txn, flags, buf, len) < 0) {
-            fatal("zlib: Error while compressing data", EX_SOFTWARE);
+        if (txn->resp_body.enc.proc(txn, flags, buf, len) < 0) {
+            fatal("Error while compressing data", EX_SOFTWARE);
         }
 
         buf = txn->zbuf.s;
@@ -4555,7 +4551,8 @@ static int meth_get(struct transaction_t *txn,
                     resp_body->type = mtype->type;
                     if (!mtype->compressible) {
                         /* Never compress non-compressible resources */
-                        txn->resp_body.enc = CE_IDENTITY;
+                        txn->resp_body.enc.type = CE_IDENTITY;
+                        txn->resp_body.enc.proc = NULL;
                         txn->flags.te = TE_NONE;
                         txn->flags.vary &= ~VARY_AE;
                     }
