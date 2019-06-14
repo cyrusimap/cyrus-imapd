@@ -371,6 +371,7 @@ struct transaction_t {
 
     void *zstrm;                        /* Zlib compression context */
     void *brotli;                       /* Brotli compression context */
+    void *zstd;                         /* Zstandard compression context */
 };
 
 /* HTTP version flags */
@@ -403,10 +404,11 @@ enum {
 
 /* Content-Encoding flags (coding of representation) */
 enum {
-    CE_IDENTITY =       0,      /* no encoding       */
-    CE_DEFLATE =        (1<<0), /* ZLIB   - RFC 1950 */
-    CE_GZIP =           (1<<1), /* GZIP   - RFC 1952 */
-    CE_BR =             (1<<2)  /* Brotli - RFC 7932 */
+    CE_IDENTITY =       0,      /* no encoding          */
+    CE_DEFLATE  =       (1<<0), /* ZLIB      - RFC 1950 */
+    CE_GZIP     =       (1<<1), /* GZIP      - RFC 1952 */
+    CE_BR       =       (1<<2), /* Brotli    - RFC 7932 */
+    CE_ZSTD     =       (1<<3)  /* Zstandard - RFC 8478 */
 };
 
 /* Cache-Control directive flags */

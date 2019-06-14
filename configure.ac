@@ -1677,6 +1677,14 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 ],
                 AC_MSG_NOTICE([httpd will not have support for Brotli compression.  Consider installing libbrotli]))
 
+
+        PKG_CHECK_MODULES([ZSTD], [libzstd >= 1.4.0], [
+                AC_DEFINE(HAVE_ZSTD,[],
+                        [Build Zstandard compression support into httpd?])
+                with_zstd=yes
+                ],
+                AC_MSG_NOTICE([httpd will not have support for Zstandard compression.  Consider installing libzstd]))
+
         dnl httpd needs libmath in a few places
         dnl XXX really should check for this properly but AC_SEARCH_LIBS/AC_CHECK_LIB
         dnl XXX break under -Werror(!)
@@ -1690,8 +1698,8 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 ],
                 AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
 
-        HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${SHAPELIB_CFLAGS} ${CYRUS_TIMEZONES_CFLAGS}"
-        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
+        HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS} ${CYRUS_TIMEZONES_CFLAGS}"
+        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
@@ -2470,6 +2478,7 @@ External dependencies:
    nghttp2:            $with_nghttp2
    wslay:              $with_wslay
    brotli:             $with_brotli
+   zstd:               $with_zstd
    xml2:               $with_xml2
    ical:               $with_ical
    icu4c:              $with_icu4c

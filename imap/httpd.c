@@ -286,6 +286,75 @@ static void brotli_done(void *brotli __attribute__((unused))) {}
 #endif /* HAVE_BROTLI */
 
 
+#ifdef HAVE_ZSTD
+#include <zstd.h>
+#include <zstd_errors.h>
+
+HIDDEN void *zstd_init()
+{
+    ZSTD_CCtx *cctx = ZSTD_createCCtx();
+
+    if (cctx) {
+        ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel,
+                               ZSTD_CLEVEL_DEFAULT);
+        ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 1);
+    }
+
+    return cctx;
+}
+
+static int zstd_compress(struct transaction_t *txn,
+                           unsigned flags, const char *buf, unsigned len)
+{
+    /* Only flush for static content or on last (zero-length) chunk */
+    ZSTD_EndDirective mode = (flags & COMPRESS_END) ? ZSTD_e_end : ZSTD_e_flush;
+    ZSTD_inBuffer input = { buf, len, 0 };
+    ZSTD_CCtx *cctx = txn->zstd;
+    size_t remaining;
+
+    if (flags & COMPRESS_START) ZSTD_CCtx_reset(cctx, ZSTD_reset_session_only);
+
+    buf_ensure(&txn->zbuf, ZSTD_compressBound(len));
+    buf_reset(&txn->zbuf);
+
+    ZSTD_outBuffer output = { txn->zbuf.s, txn->zbuf.alloc, 0 };
+    do {
+        remaining = ZSTD_compressStream2(cctx, &output, &input, mode);
+
+        if (ZSTD_isError(remaining)) {
+            syslog(LOG_ERR, "Zstandard: %s",
+                   ZSTD_getErrorString(ZSTD_getErrorCode(remaining)));
+            return -1;
+        }
+    } while (remaining || (input.pos != input.size));
+
+    buf_truncate(&txn->zbuf, output.pos);
+
+    return 0;
+}
+
+static void zstd_done(ZSTD_CCtx *cctx)
+{
+    if (cctx) ZSTD_freeCCtx(cctx);
+}
+
+#else /* !HAVE_ZSTD */
+
+HIDDEN void *zstd_init() { return NULL; }
+
+static int zstd_compress(struct transaction_t *txn __attribute__((unused)),
+                           unsigned flags __attribute__((unused)),
+                           const char *buf __attribute__((unused)),
+                           unsigned len __attribute__((unused)))
+{
+    fatal("Zstandard Compression requested, but not available", EX_SOFTWARE);
+}
+
+static void zstd_done(void *brotli __attribute__((unused))) {}
+
+#endif /* HAVE_ZSTD */
+
+
 static const char tls_message[] =
     HTML_DOCTYPE
     "<html>\n<head>\n<title>TLS Required</title>\n</head>\n" \
@@ -707,6 +776,9 @@ int service_init(int argc __attribute__((unused)),
     major   = version & 0xfff;
 
     buf_printf(&serverinfo, " Brotli/%u.%u.%u", major, minor, fix);
+#endif
+#ifdef HAVE_ZSTD
+    buf_printf(&serverinfo, " Zstd/%s", ZSTD_versionString());
 #endif
 
     /* Initialize libical */
@@ -1586,23 +1658,33 @@ static void postauth_check_hdrs(struct transaction_t *txn)
         }
         if (enc) free(enc);
     }
-    else if ((txn->zstrm || txn->brotli) &&
+    else if ((txn->zstrm || txn->brotli || txn->zstd) &&
              (hdr = spool_getheader(txn->req_hdrs, "Accept-Encoding"))) {
         struct accept *e, *enc = parse_accept(hdr);
         float qual = 0.0;
 
         for (e = enc; e && e->token; e++) {
-            if (e->qual > 0.0) {
-                /* Favor Brotli over GZIP if q values are equal */
-                if (txn->brotli &&
-                    (e->qual >= qual) && !strcasecmp(e->token, "br")) {
-                    txn->resp_body.enc = CE_BR;
-                    qual = e->qual;
+            if (e->qual > 0.0 && e->qual >= qual) {
+                unsigned ce = CE_IDENTITY;
+
+                if (txn->zstd && !strcasecmp(e->token, "zstd")) {
+                    ce = CE_ZSTD;
                 }
-                else if (txn->zstrm &&
-                         (e->qual > qual) && (!strcasecmp(e->token, "gzip") ||
-                                              !strcasecmp(e->token, "x-gzip"))) {
-                    txn->resp_body.enc = CE_GZIP;
+                else if (txn->brotli && !strcasecmp(e->token, "br")) {
+                    ce = CE_BR;
+                }
+                else if (txn->zstrm && (!strcasecmp(e->token, "gzip") ||
+                                        !strcasecmp(e->token, "x-gzip"))) {
+                    ce = CE_GZIP;
+                }
+                else {
+                    /* Unknown/unsupported */
+                    continue;
+                }
+
+                /* Favor Zstandard over Brotli over GZIP if q values are equal */
+                if (e->qual > qual || txn->resp_body.enc < ce) {
+                    txn->resp_body.enc = ce;
                     qual = e->qual;
                 }
             }
@@ -1816,6 +1898,7 @@ EXPORTED void transaction_free(struct transaction_t *txn)
     http2_end_stream(txn->strm_ctx);
 
     zlib_done(txn->zstrm);
+    zstd_done(txn->zstd);
     brotli_done(txn->brotli);
 
     buf_free(&txn->req_body.payload);
@@ -1838,6 +1921,7 @@ static void cmdloop(struct http_connection *conn)
 
     if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
         txn.zstrm = zlib_init();
+        txn.zstd = zstd_init();
         txn.brotli = brotli_init();
     }
 
@@ -2423,7 +2507,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     const char *upgrd_tokens[] =
         { TLS_VERSION, NGHTTP2_CLEARTEXT_PROTO_VERSION_ID, WS_TOKEN, NULL };
     const char *te[] = { "deflate", "gzip", "chunked", NULL };
-    const char *ce[] = { "deflate", "gzip", "br", NULL };
+    const char *ce[] = { "deflate", "gzip", "br", "zstd", NULL };
 
     /* Stop method processing alarm */
     alarm(0);
@@ -3160,6 +3244,11 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
         if (txn->resp_body.enc == CE_BR) {
             if (brotli_compress(txn, flags, buf, len) < 0) {
                 fatal("Brotli: Error while compressing data", EX_SOFTWARE);
+            }
+        }
+        else if (txn->resp_body.enc == CE_ZSTD) {
+            if (zstd_compress(txn, flags, buf, len) < 0) {
+                fatal("Zstandard: Error while compressing data", EX_SOFTWARE);
             }
         }
         else if (zlib_compress(txn, flags, buf, len) < 0) {
