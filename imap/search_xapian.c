@@ -3366,6 +3366,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
     struct buf mytempdir = BUF_INITIALIZER;
     char *namelock_fname = NULL;
     int verbose = SEARCH_VERBOSE(flags);
+    int created_something = 0;
     int r = 0;
     int i;
 
@@ -3517,7 +3518,9 @@ static int compact_dbs(const char *userid, const char *tempdir,
         }
         cyrus_mkdir(tempdestdir, 0755);
         remove_dir(tempdestdir);
-        r = copy_files(srcdirs->data[0], tempdestdir);
+        r = copy_files(strarray_nth(srcdirs, 0), tempdestdir);
+        if (r) goto out;
+        created_something = 1;
     }
     else if (srcdirs->count) {
         if (verbose) {
@@ -3549,63 +3552,75 @@ static int compact_dbs(const char *userid, const char *tempdir,
             }
         }
 
-        if (toreindex->count) {
-            tempreindexdir = strconcat(buf_cstring(&mytempdir), ".REINDEX", (char *)NULL);
-            // add this directory to the repack target as the first entry point
-            strarray_unshift(newdirs, tempreindexdir);
-            r = search_reindex(userid, toreindex, newdirs, newtiers, flags);
-            if (r) {
-                printf("ERROR: failed to reindex to %s", buf_cstring(&mytempdir));
-                goto out;
-            }
-            // remove tempreindexdir from newdirs again, it's going to be compacted instead
-            free(strarray_shift(newdirs));
-
-            // add it to the to-compact list if there's something there to reindex
-            if (!xapstat(tempreindexdir))
-                strarray_unshift(tocompact, tempreindexdir);
-        }
-        else if ((flags & SEARCH_COMPACT_ONLYUPGRADE)) {
+        if (!toreindex->count && (flags & SEARCH_COMPACT_ONLYUPGRADE)) {
             /* nothing to reindex, so bail now.  Since we don't set 'r', we will just
              * abort with no change other than a new tmp location which compresses down
              * soon enough */
             goto out;
         }
 
-        // nothing left to compress
-        if (!tocompact->count)
-            goto out;
-
-        // and now we're ready to compact to the real tempdir
-        strarray_unshift(newdirs, buf_cstring(&mytempdir));
-
-        if (flags & SEARCH_COMPACT_FILTER) {
-            r = search_filter(userid, tocompact, newdirs, newtiers, flags);
+        // first, we'll reindex anything that needs reindexing to a temporary directory
+        if (toreindex->count) {
+            tempreindexdir = strconcat(buf_cstring(&mytempdir), ".REINDEX", (char *)NULL);
+            // add this directory to the repack target as the first entry point
+            strarray_unshift(newdirs, tempreindexdir);
+            r = search_reindex(userid, toreindex, newdirs, newtiers, flags);
             if (r) {
-                printf("ERROR: failed to filter to %s", buf_cstring(&mytempdir));
+                printf("ERROR: failed to reindex to %s", tempreindexdir);
+                remove_dir(tempreindexdir);
                 goto out;
             }
-        }
-        else {
-            r = search_compress(userid, tocompact, newdirs, newtiers, flags);
-            if (r) {
-                printf("ERROR: failed to compact to %s", buf_cstring(&mytempdir));
-                goto out;
-            }
+            // remove tempreindexdir from newdirs again, it's going to be compacted instead
+            free(strarray_shift(newdirs));
+
+            // and then add the temporary directory to the to-compact list if anything was indexed into it
+            if (!xapstat(tempreindexdir))
+                strarray_unshift(tocompact, tempreindexdir);
         }
 
-        /* move the tmpfs files to a temporary name in our target directory */
-        if (tempdir) {
-            if (verbose) {
-                printf("copying from tempdir to destination\n");
+        // then we'll compact together all the source databases
+        if (tocompact->count) {
+            // and now we're ready to compact to the real tempdir
+            strarray_unshift(newdirs, buf_cstring(&mytempdir));
+
+            if (flags & SEARCH_COMPACT_FILTER) {
+                r = search_filter(userid, tocompact, newdirs, newtiers, flags);
+                if (r) {
+                    printf("ERROR: failed to filter to %s", buf_cstring(&mytempdir));
+                    goto out;
+                }
             }
-            cyrus_mkdir(tempdestdir, 0755);
-            remove_dir(tempdestdir);
-            r = copy_files(buf_cstring(&mytempdir), tempdestdir);
-            if (r) {
-                printf("Failed to rsync from %s to %s", buf_cstring(&mytempdir), tempdestdir);
-                goto out;
+            else {
+                r = search_compress(userid, tocompact, newdirs, newtiers, flags);
+                if (r) {
+                    printf("ERROR: failed to compact to %s", buf_cstring(&mytempdir));
+                    goto out;
+                }
             }
+
+            if (!xapstat(buf_cstring(&mytempdir))) {
+                /* move the tmpfs files to a temporary name in our target directory */
+                if (tempdir) {
+                    if (verbose) {
+                        printf("copying from tempdir to destination\n");
+                    }
+                    cyrus_mkdir(tempdestdir, 0755);
+                    remove_dir(tempdestdir);
+                    r = copy_files(buf_cstring(&mytempdir), tempdestdir);
+                    remove_dir(buf_cstring(&mytempdir));
+                    if (r) {
+                        printf("Failed to rsync from %s to %s", buf_cstring(&mytempdir), tempdestdir);
+                        goto out;
+                    }
+                }
+                created_something = 1;
+            }
+        }
+
+        if (tempreindexdir) {
+            remove_dir(tempreindexdir);
+            free(tempreindexdir);
+            tempreindexdir = NULL;
         }
     }
 
@@ -3637,11 +3652,8 @@ static int compact_dbs(const char *userid, const char *tempdir,
         strarray_free(newactive);
     }
 
-    if (srcdirs->count) {
-        /* create a new target name one greater than the highest in the
-         * activefile file for our target directory.  Rename our DB to
-         * that path, then rewrite activefile removing all the source
-         * items */
+    if (created_something) {
+        /* rename the destination data into place */
         if (verbose) {
             printf("renaming tempdir into place\n");
         }
@@ -3690,14 +3702,6 @@ static int compact_dbs(const char *userid, const char *tempdir,
     }
 
 out:
-    // cleanup all our work locations
-    if (tempdestdir)
-        remove_dir(tempdestdir);
-    if (tempreindexdir)
-        remove_dir(tempreindexdir);
-    if (mytempdir.len)
-        remove_dir(buf_cstring(&mytempdir));
-
     strarray_free(orig);
     strarray_free(active);
     strarray_free(srcdirs);
