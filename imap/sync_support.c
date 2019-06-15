@@ -1926,7 +1926,7 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
                                const char *topart,
                                struct sync_msgid_list *part_list,
                                struct dlist *kl, struct dlist *kupload,
-                               int printrecords, int fullannots)
+                               int printrecords, int fullannots, int sendsince)
 {
     struct sync_annot_list *annots = NULL;
     struct mailbox_iter *iter = NULL;
@@ -1993,6 +1993,12 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
 
     encode_annotations(kl, mailbox, NULL, annots);
     sync_annot_list_free(&annots);
+
+    if (sendsince && remote && remote->highestmodseq) {
+        dlist_setnum64(kl, "SINCE_MODSEQ", remote->highestmodseq);
+        dlist_setnum32(kl, "SINCE_CRC", remote->synccrcs.basic);
+        dlist_setnum32(kl, "SINCE_CRC_ANNOT", remote->synccrcs.annot);
+    }
 
     if (printrecords) {
         const message_t *msg;
@@ -3037,7 +3043,7 @@ static int sync_mailbox_byname(const char *name, void *rock)
         sync_name_list_add(qrl, mailbox->quotaroot);
 
     r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 0,
-                            /*XXX fullannots*/1);
+                            /*XXX fullannots*/1, 0);
 
 
     if (!r) sync_send_response(kl, mrock->pout);
@@ -3065,7 +3071,7 @@ int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate)
     if (r) goto out;
 
     r = sync_prepare_dlists(mailbox, NULL, NULL, NULL, NULL, kl, NULL, 1,
-                            /*XXX fullannots*/1);
+                            /*XXX fullannots*/1, 0);
     if (r) goto out;
 
     sync_send_response(kl, sstate->pout);
@@ -5478,7 +5484,7 @@ static int update_mailbox_once(struct sync_folder *local,
     if (!topart) topart = mailbox->part;
     part_list = sync_reserve_partlist(reserve_list, topart);
     r = sync_prepare_dlists(mailbox, local, remote, topart, part_list, kl,
-                            kupload, 1, /*XXX flags & SYNC_FLAG_FULLANNOTS*/1);
+                            kupload, 1, /*XXX flags & SYNC_FLAG_FULLANNOTS*/1, !(flags & SYNC_FLAG_ISREPEAT));
     if (r) goto done;
 
     /* keep the mailbox locked for shorter time! Unlock the index now
