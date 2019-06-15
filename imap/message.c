@@ -3783,13 +3783,6 @@ EXPORTED message_t *message_new_from_filename(const char *filename)
     return m;
 }
 
-EXPORTED message_t *message_ref(message_t *m)
-{
-    m->refcount++;
-    assert(m->refcount >= 1);
-    return m;
-}
-
 EXPORTED void message_unref(message_t **mp)
 {
     message_t *m;

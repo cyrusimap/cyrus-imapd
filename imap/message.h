@@ -287,7 +287,6 @@ extern void message_set_from_record(struct mailbox *,
 
 extern int message_get_indexversion(message_t *m, uint32_t *versionp);
 
-extern message_t *message_ref(message_t *m);
 extern void message_unref(message_t **m);
 
 extern int message_get_field(message_t *m, const char *name,
