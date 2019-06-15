@@ -2130,6 +2130,9 @@ int sync_parse_response(const char *cmd, struct protstream *in,
         else if (!strncmp(errmsg.s, "IMAP_SYNC_CHECKSUM ",
                           strlen("IMAP_SYNC_CHECKSUM ")))
             return IMAP_SYNC_CHECKSUM;
+        else if (!strncmp(errmsg.s, "IMAP_SYNC_CHANGED ",
+                          strlen("IMAP_SYNC_CHANGED ")))
+            return IMAP_SYNC_CHANGED;
         else if (!strncmp(errmsg.s, "IMAP_SYNC_BADSIEVE ",
                           strlen("IMAP_SYNC_BADSIEVE ")))
             return IMAP_SYNC_BADSIEVE;
@@ -2636,6 +2639,10 @@ int sync_apply_mailbox(struct dlist *kin,
     modseq_t raclmodseq = 0;
     modseq_t createdmodseq = 0;
 
+    /* previous state markers */
+    modseq_t since_modseq = 0;
+    struct synccrcs since_crcs = { 0, 0 };
+
     struct mailbox *mailbox = NULL;
     struct dlist *kr;
     struct dlist *ka = NULL;
@@ -2706,9 +2713,22 @@ int sync_apply_mailbox(struct dlist *kin,
     dlist_getnum32(kin, "SYNC_CRC", &synccrcs.basic);
     dlist_getnum32(kin, "SYNC_CRC_ANNOT", &synccrcs.annot);
 
+    /* Get the previous state for this delta */
+    dlist_getnum64(kin, "SINCE_MODSEQ", &since_modseq);
+    dlist_getnum32(kin, "SINCE_CRC", &since_crcs.basic);
+    dlist_getnum32(kin, "SINCE_CRC_ANNOT", &since_crcs.annot);
+
     options = sync_parse_options(options_str);
 
     r = mailbox_open_iwl(mboxname, &mailbox);
+
+    // immediate bail if we have an old state to compare
+    if (!r && since_modseq &&
+         (since_modseq != mailbox->i.highestmodseq ||
+          !mailbox_crceq(since_crcs, mailbox_synccrcs(mailbox, 0))))
+        r = IMAP_SYNC_CHANGED;
+
+    // otherwise check version and whether we need to create
     if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         r = mboxlist_createsync(mboxname, mbtype, partition,
@@ -3871,6 +3891,9 @@ static const char *sync_response(int r)
         break;
     case IMAP_SYNC_CHECKSUM:
         resp = "NO IMAP_SYNC_CHECKSUM Checksum Failure";
+        break;
+    case IMAP_SYNC_CHANGED:
+        resp = "NO IMAP_SYNC_CHANGED Changed since last sync";
         break;
     case IMAP_SYNC_BADSIEVE:
         resp = "NO IMAP_SYNC_BADSIEVE Sieve script compilation failure";
