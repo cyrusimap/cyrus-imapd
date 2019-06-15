@@ -4683,24 +4683,12 @@ EXPORTED int message_get_uid(message_t *m, uint32_t *uidp)
     return 0;
 }
 
-EXPORTED uint32_t msg_uid(const message_t *m)
-{
-    assert(!message_need(m, M_RECORD))
-    return m->record.uid;
-}
-
 EXPORTED int message_get_cid(message_t *m, conversation_id_t *cidp)
 {
     int r = message_need(m, M_RECORD);
     if (r) return r;
     *cidp = m->record.cid;
     return 0;
-}
-
-EXPORTED conversation_id_t msg_cid(const message_t *m)
-{
-    assert(!message_need(m, M_RECORD))
-    return m->record.cid;
 }
 
 EXPORTED int message_get_modseq(message_t *m, modseq_t *modseqp)
@@ -4711,24 +4699,12 @@ EXPORTED int message_get_modseq(message_t *m, modseq_t *modseqp)
     return 0;
 }
 
-EXPORTED modseq_t msg_modseq(const message_t *m)
-{
-    assert(!message_need(m, M_RECORD))
-    return m->record.modseq;
-}
-
 EXPORTED int message_get_msgno(message_t *m, uint32_t *msgnop)
 {
     int r = message_need(m, M_INDEX);
     if (r) return r;
     *msgnop = m->msgno;
     return 0;
-}
-
-EXPORTED int msg_msgno(const message_t *m)
-{
-    assert(!message_need(m, M_INDEX))
-    return m->msgno;
 }
 
 EXPORTED int message_get_guid(message_t *m, const struct message_guid **guidp)
