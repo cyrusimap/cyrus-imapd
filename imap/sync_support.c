@@ -2995,10 +2995,7 @@ static int sync_mailbox_byname(const char *name, void *rock)
     annotate_state_t *astate = NULL;
     int r;
 
-    /* XXX - we don't write anything, but there's no interface
-     * to safely get read-only access to the annotation and
-     * other "side" databases here */
-    r = mailbox_open_iwl(name, &mailbox);
+    r = mailbox_open_irl(name, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
     /* doesn't exist?  Probably not finished creating or removing yet */
     if (r == IMAP_MAILBOX_NONEXISTENT ||
@@ -3043,10 +3040,7 @@ int sync_get_fullmailbox(struct dlist *kin, struct sync_state *sstate)
     struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
     int r;
 
-    /* XXX again - this is a read-only request, but we
-     * don't have a good way to express that, so we use
-     * write locks anyway */
-    r = mailbox_open_iwl(kin->sval, &mailbox);
+    r = mailbox_open_irl(kin->sval, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r) goto out;
 
@@ -3978,11 +3972,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
     /* Find messages we want to upload that are available on server */
     for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
-        /* XXX - now this kinda sucks - we use a write lock here
-         * purely for conversations modseq - but we never actually
-         * USE the value... the whole "add to master folders" actually
-         * looks a bit pointless... */
-        r = mailbox_open_iwl(mbox->name, &mailbox);
+        r = mailbox_open_irl(mbox->name, &mailbox);
         if (!r) r = sync_mailbox_version_check(&mailbox);
 
         /* Quietly skip over folders which have been deleted since we
