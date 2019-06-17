@@ -146,10 +146,10 @@ EXPORTED int gzuc_member_start_from(struct gzuncat *gz, off_t offset)
 
     memset(gz->in_buf, 0, gz->in_buf_size);
 
-    int r = lseek(gz->fd, offset, SEEK_SET);
-    if (r < 0) return Z_ERRNO;
+    off_t p = lseek(gz->fd, offset, SEEK_SET);
+    if (p < 0) return Z_ERRNO;
 
-    r = _inflate_init(&gz->strm, gz->in_buf);
+    int r = _inflate_init(&gz->strm, gz->in_buf);
     if (r) return r;
 
     // anything else to initialise?
@@ -329,11 +329,11 @@ EXPORTED int gzuc_seekto(struct gzuncat *gz, size_t pos)
     if (pos == gz->bytes_read) return 0;
 
     if (pos < gz->bytes_read) {
-        int r = lseek(gz->fd, gz->current_offset, SEEK_SET);
-        if (r < 0) return r;
+        off_t p = lseek(gz->fd, gz->current_offset, SEEK_SET);
+        if (p < 0) return -1;
 
         inflateEnd(&gz->strm);
-        r = _inflate_init(&gz->strm, gz->in_buf);
+        int r = _inflate_init(&gz->strm, gz->in_buf);
         if (r) return r;
 
         gz->bytes_read = 0;
