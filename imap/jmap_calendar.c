@@ -2593,6 +2593,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
                 case IMAP_PERMISSION_DENIED:
                     err = json_pack("{s:s}", "type", "forbidden");
                     break;
+                case HTTP_NO_STORAGE:
                 case IMAP_QUOTA_EXCEEDED:
                     err = json_pack("{s:s}", "type", "overQuota");
                     break;
