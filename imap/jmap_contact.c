@@ -1197,16 +1197,13 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                                             req->accountid, req->authstate);
                     if (!r) r = annotate_state_store(state, annots);
                     if (!r) r = mailbox_rewrite_index_record(mailbox, &record);
-                    json_decref(invalid);
+                    if (!r) json_object_set_new(set.updated, uid, json_null());
                     goto finish;
                 }
             }
         }
 
-        if (r || json_array_size(invalid)) {
-            r = 0;
-        }
-        else {
+        if (!r && !json_array_size(invalid)) {
             syslog(LOG_NOTICE, "jmap: update %s %s/%s",
                    kind == CARDDAV_KIND_GROUP ? "group" : "contact",
                    req->accountid, resource);
@@ -1218,7 +1215,14 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                                    /*isreplace*/!newmailbox, req->accountid);
         }
 
-        if (r) {
+        if (json_array_size(invalid)) {
+            json_t *err = json_pack("{s:s s:O}",
+                                    "type", "invalidProperties",
+                                    "properties", invalid);
+            json_object_set_new(set.not_updated, uid, err);
+            goto finish;
+        }
+        else if (r) {
             json_t *err = NULL;
             switch (r) {
                 case HTTP_FORBIDDEN:
@@ -1232,17 +1236,9 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                     err = jmap_server_error(r);
             }
             json_object_set_new(set.not_updated, uid, err);
-            r = 0;
             goto finish;
         }
-        if (json_array_size(invalid)) {
-            json_t *err = json_pack("{s:s s:o}",
-                                    "type", "invalidProperties",
-                                    "properties", invalid);
-            json_object_set_new(set.not_updated, uid, err);
-            goto finish;
-        }
-        json_decref(invalid);
+        else json_object_set_new(set.updated, uid, json_null());
 
       finish:
         strarray_free(flags);
@@ -1251,10 +1247,8 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
         vparse_free_card(vcard);
         free(resource);
         json_decref(jupdated);
-
-        if (r) goto done;
-
-        json_object_set_new(set.updated, uid, json_null());
+        json_decref(invalid);
+        r = 0;
     }
 
 
