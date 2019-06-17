@@ -3980,4 +3980,50 @@ EOF
   $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 }
 
+sub test_replication_delete
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    my $href = "$CalendarId/event1.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+DTEND:20160831T183000Z
+TRANSP:OPAQUE
+SUMMARY:An Event
+UID:event1
+DTSTART:20160831T153000Z
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+  $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+  my $response = $CalDAV->Request('GET', $href);
+  my $value = $response->{content};
+  $self->assert_matches(qr/An Event/, $value);
+
+  $self->run_replication();
+  $self->check_replication('cassandane');
+
+  $CalDAV->DeleteCalendar($CalendarId);
+
+  $self->run_replication();
+  $self->check_replication('cassandane');
+}
+
 1;
