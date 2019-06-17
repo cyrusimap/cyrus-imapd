@@ -273,10 +273,10 @@ EXPORTED ssize_t gzuc_read(struct gzuncat *gz, void *buf, size_t count)
             // object, then we've read too much (we're starting to see the next section of the file)
             // so we need to seek back to the right spot and update next_offset
             if (gz->strm.avail_in) {
-                r = lseek(gz->fd, 0 - (off_t) gz->strm.avail_in, SEEK_CUR);
-                if (r < 0) {
+                off_t p = lseek(gz->fd, 0 - (off_t) gz->strm.avail_in, SEEK_CUR);
+                if (p < 0) {
                     syslog(LOG_ERR, "IOERROR: %s: lseek %d: %m", __func__, gz->fd);
-                    return r;
+                    return -1;
                 }
                 gz->strm.avail_in = 0;
                 gz->strm.next_in = gz->in_buf;
