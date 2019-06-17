@@ -304,4 +304,112 @@ sub test_ajaxui_jmapcontacts_contactgroup_set
     # now let's create a contact and put it in the event...
 }
 
+sub _set_quotaroot
+{
+    my ($self, $quotaroot) = @_;
+    $self->{quotaroot} = $quotaroot;
+}
+
+sub _set_quotalimits
+{
+    my ($self, %resources) = @_;
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $quotaroot = delete $resources{quotaroot} || $self->{quotaroot};
+    my @quotalist;
+    foreach my $resource (keys %resources)
+    {
+        my $limit = $resources{$resource}
+            or die "No limit specified for $resource";
+        push(@quotalist, uc($resource), $limit);
+    }
+    $self->{limits}->{$quotaroot} = { @quotalist };
+    $admintalk->setquota($quotaroot, \@quotalist);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+}
+
+sub test_issue_LP52545479
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                calendar1 => {
+                    name => 'calendar1',
+                    color => 'coral',
+                    sortOrder => 1,
+                    isVisible => JSON::true,
+                }
+            },
+        }, 'R1'],
+    ], \@default_using);
+    my $calendarId = $res->[0][1]{created}{calendar1}{id};
+    $self->assert_not_null($calendarId);
+
+    $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                contact1 => {
+                    firstName => "firstName",
+                    lastName => "lastName",
+                    notes => "x" x 1024
+                }
+            }
+        }, 'R1'],
+        ['CalendarEvent/set', {
+            create => {
+                event1 => {
+                    calendarId => $calendarId,
+                    uid => '58ADE31-custom-UID',
+                    title => 'event1',
+                    start => '2015-11-07T09:00:00',
+                    duration => 'PT5M',
+                    sequence => 42,
+                    timeZone => 'Etc/UTC',
+                    isAllDay => JSON::false,
+                    locale => 'en',
+                    description => 'x' x 1024,
+                    freeBusyStatus => 'busy',
+                    privacy => 'secret',
+                    participants => undef,
+                    alerts => undef,
+                }
+            },
+        }, 'R2'],
+    ], \@default_using);
+    my $contactId1 = $res->[0][1]{created}{contact1}{id};
+    $self->assert_not_null($contactId1);
+    my $eventId1 = $res->[1][1]{created}{event1}{id};
+    $self->assert_not_null($eventId1);
+
+    $self->_set_quotaroot('user.cassandane');
+    $self->_set_quotalimits(storage => 1, 'x-annotation-storage' => 1); # that's 1024 bytes
+
+    $res = $jmap->CallMethods([
+        ['Contact/set', {
+              update => {
+                  $contactId1 => {
+                      lastName => "updatedLastName",
+                  }
+              }
+        }, 'R1'],
+        ['CalendarEvent/set', {
+              update => {
+                  $eventId1 => {
+                      description => "y" x 2048,
+                  }
+              }
+        }, 'R2'],
+    ], \@default_using);
+    $self->assert_str_equals('overQuota', $res->[0][1]{notUpdated}{$contactId1}{type});
+    $self->assert(not exists $res->[0][1]{updated}{$contactId1});
+    $self->assert_str_equals('overQuota', $res->[1][1]{notUpdated}{$eventId1}{type});
+    $self->assert(not exists $res->[1][1]{updated}{$eventId1});
+}
+
+
 1;
