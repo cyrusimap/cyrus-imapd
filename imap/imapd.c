@@ -7397,7 +7397,7 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
     r = mboxlist_renamemailbox(mbentry, text->newmailboxname,
                                text->partition, uidvalidity,
                                1, imapd_userid, imapd_authstate, NULL, 0, 0,
-                               text->rename_user, 0, 0);
+                               text->rename_user, 0, 0, 0);
 
     if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
         mboxlist_changesub(mbentry->name, imapd_userid, imapd_authstate,
@@ -7729,7 +7729,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         r = mboxlist_renamemailbox(mbentry, newmailboxname, location,
                                    0 /* uidvalidity */, imapd_userisadmin,
                                    imapd_userid, imapd_authstate, mboxevent,
-                                   0, 0, rename_user, 0, 0);
+                                   0, 0, rename_user, 0, 0, 0);
 
         /* it's OK to not exist if there are subfolders */
         if (r == IMAP_MAILBOX_NONEXISTENT && subcount && !rename_user &&

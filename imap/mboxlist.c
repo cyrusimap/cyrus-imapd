@@ -1644,7 +1644,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                localonly /* local_only */,
                                force, 1,
                                keep_intermediaries,
-                               0 /* move_subscription */);
+                               0 /* move_subscription */, 0 /* silent */);
 
     if (!r && !keep_intermediaries) {
         /* in theory this should take the modseq from the renamed mailbox, but we don't
@@ -1899,7 +1899,7 @@ static int dorename(const mbentry_t *mbentry, void *rock)
                                /*mboxevent*/NULL,
                                text->local_only, /*forceuser*/1, text->ignorequota,
                                text->keep_intermediaries,
-                               text->move_subscription);
+                               text->move_subscription, /*silent*/0);
 
     return r;
 }
@@ -1946,7 +1946,7 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
                                auth_state,
                                mboxevent,
                                local_only, forceuser, ignorequota,
-                               keep_intermediaries, move_subscription);
+                               keep_intermediaries, move_subscription, /*silent*/0);
     mboxlist_entry_free(&mbentry);
 
     // special-case only children exist
@@ -1971,7 +1971,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
                                     struct mboxevent *mboxevent,
                                     int local_only, int forceuser,
                                     int ignorequota, int keep_intermediaries,
-                                    int move_subscription)
+                                    int move_subscription, int silent)
 {
     int r;
     const char *oldname = mbentry->name;
@@ -2124,7 +2124,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
     /* Rename the actual mailbox */
     r = mailbox_rename_copy(oldmailbox, newname, newpartition, uidvalidity,
                             isusermbox ? userid : NULL, ignorequota,
-                            &newmailbox);
+                            silent, &newmailbox);
 
     if (r) goto done;
 

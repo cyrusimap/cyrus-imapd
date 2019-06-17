@@ -623,6 +623,7 @@ extern int mailbox_rename_copy(struct mailbox *oldmailbox,
                                const char *newname, const char *newpart,
                                unsigned uidvalidity,
                                const char *userid, int ignorequota,
+                               int silent,
                                struct mailbox **newmailboxptr);
 extern int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox);
 

@@ -5561,6 +5561,7 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
                         const char *newpartition,
                         unsigned uidvalidity,
                         const char *userid, int ignorequota,
+                        int silent,
                         struct mailbox **newmailboxptr)
 {
     int r;
@@ -5643,8 +5644,8 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     /* re-set the UIDVALIDITY, it will have been the old one in the index header */
     mailbox_index_dirty(newmailbox);
     newmailbox->i.uidvalidity = uidvalidity;
-    /* and bump the modseq too */
-    mailbox_modseq_dirty(newmailbox);
+    /* unless on a replica, bump the modseq too */
+    if (!silent) mailbox_modseq_dirty(newmailbox);
 
     /* NOTE: in the case of renaming a user to another user, we
      * don't rename the conversations DB - instead we re-create
