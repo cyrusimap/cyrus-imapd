@@ -1778,8 +1778,8 @@ static int mycheckpoint(struct dbengine *db)
         }
         for (i = 0; !r && i < lvl; i++) {
             /* update pointers */
-            r = lseek(db->fd, updateoffsets[i], SEEK_SET);
-            if (r < 0) {
+            off_t p = lseek(db->fd, updateoffsets[i], SEEK_SET);
+            if (p < 0) {
                 r = CYRUSDB_IOERROR;
                 break;
             } else {
@@ -1806,8 +1806,8 @@ static int mycheckpoint(struct dbengine *db)
     for (i = 0; !r && i < db->maxlevel; i++) {
         uint32_t netnewoffset = htonl(0);
 
-        r = lseek(db->fd, updateoffsets[i], SEEK_SET);
-        if (r < 0) {
+        off_t p = lseek(db->fd, updateoffsets[i], SEEK_SET);
+        if (p < 0) {
             r = CYRUSDB_IOERROR;
             break;
         } else {
@@ -2109,8 +2109,8 @@ static int recovery(struct dbengine *db, int flags)
 
         /* update previous pointers, record these for updating */
         for (i = 0; !r && i < LEVEL_safe(db, ptr); i++) {
-            r = lseek(db->fd, updateoffsets[i], SEEK_SET);
-            if (r < 0) {
+            off_t p = lseek(db->fd, updateoffsets[i], SEEK_SET);
+            if (p < 0) {
                 syslog(LOG_ERR, "DBERROR: lseek %s: %m", db->fname);
                 r = CYRUSDB_IOERROR;
                 break;
@@ -2162,8 +2162,8 @@ static int recovery(struct dbengine *db, int flags)
         for (i = 0; !r && i < db->maxlevel; i++) {
             int zerooffset = 0;
 
-            r = lseek(db->fd, updateoffsets[i], SEEK_SET);
-            if (r < 0) {
+            off_t p = lseek(db->fd, updateoffsets[i], SEEK_SET);
+            if (p < 0) {
                 syslog(LOG_ERR, "DBERROR: lseek %s: %m", db->fname);
                 r = CYRUSDB_IOERROR;
                 break;

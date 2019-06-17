@@ -6164,8 +6164,8 @@ static int mailbox_wipe_index_record(struct mailbox *mailbox,
     offset = mailbox->i.start_offset +
              (record->recno-1) * mailbox->i.record_size;
 
-    n = lseek(mailbox->index_fd, offset, SEEK_SET);
-    if (n == -1) {
+    off_t p = lseek(mailbox->index_fd, offset, SEEK_SET);
+    if (p == -1) {
         syslog(LOG_ERR, "IOERROR: seeking index record %u for %s: %m",
                record->recno, mailbox->name);
         return IMAP_IOERROR;
