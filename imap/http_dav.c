@@ -8379,7 +8379,7 @@ int dav_store_resource(struct transaction_t *txn,
                           0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
                mailbox->name, error_message(r));
-        ret = HTTP_SERVER_ERROR;
+        ret = r == IMAP_QUOTA_EXCEEDED ? HTTP_NO_STORAGE : HTTP_SERVER_ERROR;
         txn->error.desc = "append_setup() failed\r\n";
     }
     else {
