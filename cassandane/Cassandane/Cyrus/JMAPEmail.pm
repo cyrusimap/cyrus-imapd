@@ -12837,7 +12837,7 @@ sub test_email_get_cid
 }
 
 sub test_searchsnippet_get_attachment
-    :min_version_3_1 :needs_component_jmap :needs_search_xapian :SearchAttachmentExtractor
+    :min_version_3_1 :needs_component_jmap :needs_search_xapian :SearchAttachmentExtractor :SearchIndexParts
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13017,7 +13017,7 @@ sub test_email_set_date
 }
 
 sub test_email_query_language_stats
-    :min_version_3_1 :needs_component_jmap :needs_dependency_cld2 :SearchLanguage
+    :min_version_3_1 :needs_component_jmap :needs_dependency_cld2 :SearchLanguage :SearchIndexParts
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13227,7 +13227,7 @@ sub test_searchsnippet_get_regression
 }
 
 sub test_search_sharedpart
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :SearchIndexParts
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
