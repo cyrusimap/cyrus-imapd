@@ -5478,6 +5478,11 @@ static int update_mailbox_once(struct sync_folder *local,
         if (r) goto done;
     }
 
+    /* bump the raclmodseq if it's higher on the replica */
+    if (remote && remote->raclmodseq) {
+        mboxname_setraclmodseq(mailbox->name, remote->raclmodseq);
+    }
+
     /* nothing changed - nothing to send */
     if (is_unchanged(mailbox, remote))
         goto done;
