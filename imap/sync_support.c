@@ -5464,12 +5464,16 @@ static int update_mailbox_once(struct sync_folder *local,
             r = IMAP_AGAIN;
             goto done;
         }
-        /* need a full sync to fix uidvalidity issues so we get a
-         * writelocked mailbox */
-        if (mailbox->i.uidvalidity < remote->uidvalidity) {
-            r = IMAP_AGAIN;
-            goto done;
-        }
+    }
+
+    /* if local UIDVALIDITY is lower, copy from remote, otherwise
+     * remote will copy ours when we sync */
+    if (remote && mailbox->i.uidvalidity < remote->uidvalidity) {
+        syslog(LOG_NOTICE, "SYNCNOTICE: uidvalidity higher on replica %s"
+               ", updating %u => %u",
+               mailbox->name, mailbox->i.uidvalidity, remote->uidvalidity);
+        mailbox_index_dirty(mailbox);
+        mailbox->i.uidvalidity = mboxname_setuidvalidity(mailbox->name, remote->uidvalidity);
     }
 
     /* make sure CRC is updated if we're retrying */
