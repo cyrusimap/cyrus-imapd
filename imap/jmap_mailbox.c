@@ -664,9 +664,6 @@ static json_t *_mbox_get(jmap_req_t *req,
                 json_object_set_new(obj, "storageUsed", json_integer(sdata.size));
             }
         }
-        if (jmap_wantprop(props, "storageUsed")) {
-            json_object_set_new(obj, "storageUsed", json_integer(0));
-        }
     }
     else {
         if (jmap_wantprop(props, "totalEmails")) {
