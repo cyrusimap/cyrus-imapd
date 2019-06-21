@@ -2138,11 +2138,14 @@ HIDDEN json_t *jmap_copy_reply(struct jmap_copy *copy)
 
 HIDDEN void jmap_filter_parse(jmap_req_t *req, struct jmap_parser *parser,
                               json_t *filter, json_t *unsupported,
-                              jmap_filter_parse_cb parse_condition, void *cond_rock)
+                              jmap_filter_parse_cb parse_condition, void *cond_rock,
+                              json_t **err)
 {
     json_t *arg, *val;
     const char *s;
     size_t i;
+
+    if (err && *err) return;
 
     if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
         jmap_parser_invalid(parser, NULL);
@@ -2159,19 +2162,20 @@ HIDDEN void jmap_filter_parse(jmap_req_t *req, struct jmap_parser *parser,
         }
         json_array_foreach(arg, i, val) {
             jmap_parser_push_index(parser, "conditions", i, NULL);
-            jmap_filter_parse(req, parser, val, unsupported, parse_condition, cond_rock);
+            jmap_filter_parse(req, parser, val, unsupported, parse_condition, cond_rock, err);
             jmap_parser_pop(parser);
         }
     } else if (arg) {
         jmap_parser_invalid(parser, "operator");
     } else {
-        parse_condition(req, parser, filter, unsupported, cond_rock);
+        parse_condition(req, parser, filter, unsupported, cond_rock, err);
     }
 }
 
 HIDDEN void jmap_comparator_parse(jmap_req_t *req, struct jmap_parser *parser,
                                   json_t *jsort, json_t *unsupported,
-                                  jmap_comparator_parse_cb comp_cb, void *comp_rock)
+                                  jmap_comparator_parse_cb comp_cb, void *comp_rock,
+                                  json_t **err)
 {
     if (!json_is_object(jsort)) {
         jmap_parser_invalid(parser, NULL);
@@ -2205,7 +2209,7 @@ HIDDEN void jmap_comparator_parse(jmap_req_t *req, struct jmap_parser *parser,
     comp.collation = json_string_value(val);
 
 
-    if (comp.property && !comp_cb(req, &comp, comp_rock)) {
+    if (comp.property && !comp_cb(req, &comp, comp_rock, err)) {
         struct buf buf = BUF_INITIALIZER;
         json_array_append_new(unsupported,
                 json_string(jmap_parser_path(parser, &buf)));
@@ -2240,9 +2244,12 @@ HIDDEN void jmap_query_parse(jmap_req_t *req, struct jmap_parser *parser,
             if (json_is_object(arg)) {
                 jmap_parser_push(parser, "filter");
                 jmap_filter_parse(req, parser, arg, unsupported_filter,
-                                  filter_cb, filter_rock);
+                                  filter_cb, filter_rock, err);
                 jmap_parser_pop(parser);
                 query->filter = arg;
+                if (err && *err) {
+                    goto done;
+                }
             }
             else if (JNOTNULL(arg)) {
                 jmap_parser_invalid(parser, "filter");
@@ -2255,8 +2262,11 @@ HIDDEN void jmap_query_parse(jmap_req_t *req, struct jmap_parser *parser,
                 json_array_foreach(arg, i, val) {
                     jmap_parser_push_index(parser, "sort", i, NULL);
                     jmap_comparator_parse(req, parser, val, unsupported_sort,
-                                          comp_cb, comp_rock);
+                                          comp_cb, comp_rock, err);
                     jmap_parser_pop(parser);
+                    if (err && *err) {
+                        goto done;
+                    }
                 }
                 if (json_array_size(arg)) {
                     query->sort = arg;
@@ -2327,6 +2337,7 @@ HIDDEN void jmap_query_parse(jmap_req_t *req, struct jmap_parser *parser,
                          "sort", unsupported_sort);
     }
 
+done:
     json_decref(unsupported_filter);
     json_decref(unsupported_sort);
 }
@@ -2397,9 +2408,12 @@ HIDDEN void jmap_querychanges_parse(jmap_req_t *req,
             if (json_is_object(arg)) {
                 jmap_parser_push(parser, "filter");
                 jmap_filter_parse(req, parser, arg, unsupported_filter,
-                                  filter_cb, filter_rock);
+                                  filter_cb, filter_rock, err);
                 jmap_parser_pop(parser);
                 query->filter = arg;
+                if (err && *err) {
+                    goto done;
+                }
             }
             else if (JNOTNULL(arg)) {
                 jmap_parser_invalid(parser, "filter");
@@ -2412,7 +2426,7 @@ HIDDEN void jmap_querychanges_parse(jmap_req_t *req,
                 json_array_foreach(arg, i, val) {
                     jmap_parser_push_index(parser, "sort", i, NULL);
                     jmap_comparator_parse(req, parser, val, unsupported_sort,
-                                          comp_cb, comp_rock);
+                                          comp_cb, comp_rock, err);
                     jmap_parser_pop(parser);
                 }
                 if (json_array_size(arg)) {
@@ -2482,6 +2496,7 @@ HIDDEN void jmap_querychanges_parse(jmap_req_t *req,
                          "sort", unsupported_sort);
     }
 
+done:
     json_decref(unsupported_filter);
     json_decref(unsupported_sort);
 }

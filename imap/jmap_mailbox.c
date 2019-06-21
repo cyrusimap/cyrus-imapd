@@ -1543,7 +1543,8 @@ done:
 
 static int _mboxquery_parse_comparator(jmap_req_t *req __attribute__((unused)),
                                        struct jmap_comparator *comp,
-                                       void *rock __attribute__((unused)))
+                                       void *rock __attribute__((unused)),
+                                       json_t **err __attribute__((unused)))
 {
     /* Reject unsupported properties */
     if (strcmp(comp->property, "sortOrder") &&
@@ -1562,7 +1563,8 @@ static void _mboxquery_parse_filter(jmap_req_t *req __attribute__((unused)),
                                     struct jmap_parser *parser,
                                     json_t *filter,
                                     json_t *unsupported __attribute__((unused)),
-                                    void *rock __attribute__((unused)))
+                                    void *rock __attribute__((unused)),
+                                    json_t **err __attribute__((unused)))
 {
     json_t *val;
     const char *field;

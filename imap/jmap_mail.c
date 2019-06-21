@@ -62,6 +62,7 @@
 #include "annotate.h"
 #include "append.h"
 #include "bsearch.h"
+#include "carddav_db.h"
 #include "hashset.h"
 #include "http_dav.h"
 #include "http_jmap.h"
@@ -1804,6 +1805,25 @@ static int _email_threadkeyword_is_valid(const char *keyword)
     return is_supported;
 }
 
+static void _email_search_contactgroup(search_expr_t *parent,
+                                       const char *groupid,
+                                       const char *attrname,
+                                       hash_table *contactgroups,
+                                       strarray_t *perf_filters)
+{
+    if (!contactgroups || !contactgroups->size) return;
+
+    strarray_t *members = hash_lookup(groupid, contactgroups);
+    if (members && strarray_size(members)) {
+        search_expr_t *e = search_expr_new(parent, SEOP_OR);
+        int j;
+        for (j = 0; j < strarray_size(members); j++) {
+            _email_search_string(e, strarray_nth(members, j),
+                    attrname, perf_filters);
+        }
+    }
+}
+
 /* ====================================================================== */
 
 static void _emailsearch_folders_internalise(struct index_state *state,
@@ -1925,6 +1945,7 @@ static const search_attr_t _emailsearch_folders_otherthan_attr = {
 
 static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
                                              search_expr_t *parent,
+                                             hash_table *contactgroups,
                                              strarray_t *perf_filters)
 {
     search_expr_t *this, *e;
@@ -1952,7 +1973,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         e = op == SEOP_NOT ? search_expr_new(this, SEOP_OR) : this;
 
         json_array_foreach(json_object_get(filter, "conditions"), i, val) {
-            _email_buildsearchexpr(req, val, e, perf_filters);
+            _email_buildsearchexpr(req, val, e, contactgroups, perf_filters);
         }
     } else {
         this = search_expr_new(parent, SEOP_AND);
@@ -1985,6 +2006,18 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         }
         if ((s = json_string_value(json_object_get(filter, "from")))) {
             _email_search_string(this, s, "from", perf_filters);
+        }
+        if ((s = json_string_value(json_object_get(filter, "fromContactGroupId")))) {
+            _email_search_contactgroup(this, s, "from", contactgroups, perf_filters);
+        }
+        if ((s = json_string_value(json_object_get(filter, "toContactGroupId")))) {
+            _email_search_contactgroup(this, s, "to", contactgroups, perf_filters);
+        }
+        if ((s = json_string_value(json_object_get(filter, "ccContactGroupId")))) {
+            _email_search_contactgroup(this, s, "cc", contactgroups, perf_filters);
+        }
+        if ((s = json_string_value(json_object_get(filter, "bccContactGroupId")))) {
+            _email_search_contactgroup(this, s, "bcc", contactgroups, perf_filters);
         }
         if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
             e = val == json_false() ? search_expr_new(this, SEOP_NOT) : this;
@@ -2116,10 +2149,11 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
 }
 
 static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
+                                         hash_table *contactgroups,
                                          strarray_t *perf_filters)
 {
     search_expr_t *root = _email_buildsearchexpr(req, filter, /*parent*/NULL,
-                                                 perf_filters);
+                                                 contactgroups, perf_filters);
 
     /* The search API internally optimises for IMAP folder queries
      * and we'd like to benefit from this also for JMAP. To do so,
@@ -2177,19 +2211,39 @@ HIDDEN int jmap_is_valid_utcdate(const char *s)
     return s && *s == '\0';
 }
 
-struct msgfilter_rock {
+struct msgfilterrock {
     jmap_req_t *req;
     json_t *unsupported;
 };
+
+struct email_filterrock {
+    struct carddav_db *carddavdb;
+    char *addrbook;
+    hash_table contactgroups; /* maps groupid to emails (strarray) */
+};
+
+#define EMAIL_FILTERROCK_INITIALIZER { NULL, NULL, HASH_TABLE_INITIALIZER }
+
+static void _email_filterrock_fini(struct email_filterrock *rock)
+{
+    if (rock->carddavdb) {
+        carddav_commit(rock->carddavdb);
+        carddav_close(rock->carddavdb);
+    }
+    free(rock->addrbook);
+    free_hash_table(&rock->contactgroups, (void(*)(void*))strarray_free);
+}
 
 static void _email_parse_filter(jmap_req_t *req,
                                 struct jmap_parser *parser,
                                 json_t *filter,
                                 json_t *unsupported,
-                                void *rock __attribute__((unused)))
+                                void *vrock,
+                                json_t **err)
 {
     const char *field, *s = NULL;
     json_t *arg, *val;
+    struct email_filterrock *rock = vrock;
 
     json_object_foreach(filter, field, arg) {
         if (!strcmp(field, "inMailbox")) {
@@ -2305,6 +2359,52 @@ static void _email_parse_filter(jmap_req_t *req,
                 default:
                     jmap_parser_invalid(parser, field);
                 }
+            }
+        }
+        else if (jmap_is_using(req, JMAP_MAIL_EXTENSION) &&
+                 (!strcmp(field, "fromContactGroupId") ||
+                  !strcmp(field, "toContactGroupId") ||
+                  !strcmp(field, "ccContactGroupId") ||
+                  !strcmp(field, "bccContactGroupId"))) {
+            const char *groupid = json_string_value(arg);
+            if (groupid) {
+                if (!rock->contactgroups.size) {
+                    /* Initialize groups lookup table */
+                    construct_hash_table(&rock->contactgroups, 32, 0);
+                }
+                if (!hash_lookup(groupid, &rock->contactgroups)) {
+                    if (!rock->carddavdb) {
+                        /* Open CardDAV db first time we need it */
+                        rock->carddavdb = carddav_open_userid(req->accountid);
+                        if (!rock->carddavdb) {
+                            syslog(LOG_ERR, "jmap: carddav_open_userid(%s) failed", req->accountid);
+                            *err = jmap_server_error(CYRUSDB_INTERNAL);
+                            return;
+                        }
+                        int r = carddav_begin(rock->carddavdb);
+                        if (r) {
+                            syslog(LOG_ERR, "jmap: carddav_begin failed: %s", error_message(r));
+                            *err = jmap_server_error(r);
+                            return;
+                        }
+                    }
+                    if (!rock->addrbook) {
+                        /* Determine addrbook to lookup contact groups */
+                        json_t *jaddrbookid = json_object_get(req->args, "addressbookId");
+                        rock->addrbook = carddav_mboxname(req->accountid,
+                                json_is_string(jaddrbookid) ?
+                                json_string_value(jaddrbookid) : "Default");
+                    }
+                    /* Lookup group member email addresses */
+                    strarray_t *members = carddav_getgroup(rock->carddavdb, rock->addrbook, groupid);
+                    if (!members || !strarray_size(members)) {
+                        jmap_parser_invalid(parser, field);
+                    }
+                    else hash_insert(groupid, members, &rock->contactgroups);
+                }
+            }
+            else {
+                jmap_parser_invalid(parser, field);
             }
         }
         else {
@@ -2489,6 +2589,7 @@ static int _jmap_checkfolder(const char *mboxname, void *rock)
 static struct emailsearch* _emailsearch_new(jmap_req_t *req,
                                             json_t *filter,
                                             json_t *sort,
+                                            hash_table *contactgroups,
                                             int want_expunged,
                                             int ignore_timer)
 {
@@ -2498,7 +2599,7 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
     /* Build search args */
     search->args = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
             &jmap_namespace, req->accountid, req->authstate, 0);
-    search->args->root = _email_buildsearch(req, filter, &search->perf_filters);
+    search->args->root = _email_buildsearch(req, filter, contactgroups, &search->perf_filters);
 
     /* Build index state */
     search->init.userid = req->accountid;
@@ -2565,7 +2666,8 @@ static const char *msglist_sortfields[] = {
 
 static int _email_parse_comparator(jmap_req_t *req __attribute__((unused)),
                                    struct jmap_comparator *comp,
-                                   void *rock __attribute__((unused)))
+                                   void *rock __attribute__((unused)),
+                                   json_t **err __attribute__((unused)))
 {
     /* Reject any collation */
     if (comp->collation) {
@@ -2583,16 +2685,35 @@ static int _email_parse_comparator(jmap_req_t *req __attribute__((unused)),
     return 0;
 }
 
-static char *_email_make_querystate(modseq_t modseq, uint32_t uid)
+static char *_email_make_querystate(modseq_t modseq, uint32_t uid, modseq_t addrbook_modseq)
 {
     struct buf buf = BUF_INITIALIZER;
     buf_printf(&buf, MODSEQ_FMT ":%u", modseq, uid);
+    if (addrbook_modseq) {
+        buf_printf(&buf, ",addrbook:" MODSEQ_FMT, addrbook_modseq);
+    }
     return buf_release(&buf);
 }
 
-static int _email_read_querystate(const char *s, modseq_t *modseq, uint32_t *uid)
+static int _email_read_querystate(const char *s, modseq_t *modseq, uint32_t *uid,
+                                  modseq_t *addrbook_modseq)
 {
-    return sscanf(s, MODSEQ_FMT ":%u", modseq, uid) == 2;
+    char sentinel = 0;
+
+    /* Parse mailbox modseq and uid */
+    int n = sscanf(s, MODSEQ_FMT ":%u%c", modseq, uid, &sentinel);
+    if (n <= 2) return n == 2;
+    else if (sentinel != ',') return 0;
+
+    /* Parse addrbook modseq */
+    s = strchr(s, ',') + 1;
+    if (strncmp(s, "addrbook:", 9)) return 0;
+    s += 9;
+    n = sscanf(s, MODSEQ_FMT "%c", addrbook_modseq, &sentinel);
+    if (n != 1) return 0;
+
+    /* Parsed successfully */
+    return 1;
 }
 
 struct cached_emailquery {
@@ -2711,6 +2832,7 @@ done:
 
 static void _email_query(jmap_req_t *req, struct jmap_query *query,
                          int collapse_threads,
+                         hash_table *contactgroups,
                          json_t **jemailpartids, json_t **err)
 {
     char *cache_fname = NULL;
@@ -2719,7 +2841,8 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     modseq_t current_modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
     int is_cached = 0;
 
-    struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort, 0, 0);
+    struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort,
+                                                  contactgroups, 0, 0);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
         goto done;
@@ -2727,7 +2850,10 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
 
     /* can calculate changes for mutable sort, but not mutable search */
     query->can_calculate_changes = search->is_mutable > 1 ? 0 : 1;
-    query->query_state = _email_make_querystate(current_modseq, 0);
+
+    /* make query state */
+    query->query_state = _email_make_querystate(current_modseq, 0,
+            contactgroups->size ?  jmap_highestmodseq(req, MBTYPE_ADDRESSBOOK) : 0);
 
     /* Open cache */
     cache_fname = emailsearch_getcachepath();
@@ -2950,7 +3076,7 @@ done:
     free(cache_fname);
 }
 
-static int _email_queryargs_parse(jmap_req_t *req __attribute__((unused)),
+static int _email_queryargs_parse(jmap_req_t *req,
                                   struct jmap_parser *parser __attribute__((unused)),
                                   const char *key,
                                   json_t *arg,
@@ -2962,7 +3088,21 @@ static int _email_queryargs_parse(jmap_req_t *req __attribute__((unused)),
     if (!strcmp(key, "collapseThreads") && json_is_boolean(arg)) {
         *collapse_threads = json_boolean_value(arg);
     }
+    else if (!strcmp(key, "addressbookId") && json_is_string(arg) &&
+             jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
 
+        /* Lookup addrbook */
+        char *addrbookname = carddav_mboxname(req->accountid, json_string_value(arg));
+        mbentry_t *mbentry = NULL;
+        int is_valid = 0;
+        if (!mboxlist_lookup(addrbookname, &mbentry, NULL)) {
+            is_valid = jmap_hasrights(req, mbentry, ACL_LOOKUP) &&
+                       mbentry->mbtype == MBTYPE_ADDRESSBOOK;
+        }
+        mboxlist_entry_free(&mbentry);
+        free(addrbookname);
+        return is_valid;
+    }
     else r = 0;
 
     return r;
@@ -2974,12 +3114,14 @@ static int jmap_email_query(jmap_req_t *req)
     struct jmap_query query;
     int collapse_threads = 0;
     json_t *jemailpartids = NULL;
+    struct email_filterrock filterrock = EMAIL_FILTERROCK_INITIALIZER;
+    int r = 0;
 
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req, &parser,
                      _email_queryargs_parse, &collapse_threads,
-                     _email_parse_filter, NULL,
+                     _email_parse_filter, &filterrock,
                      _email_parse_comparator, NULL,
                      &query, &err);
     if (err) {
@@ -2990,16 +3132,20 @@ static int jmap_email_query(jmap_req_t *req)
         /* we currently don't support negative positions */
         jmap_parser_invalid(&parser, "position");
     }
-
     if (json_array_size(parser.invalid)) {
         err = json_pack("{s:s}", "type", "invalidArguments");
         json_object_set(err, "arguments", parser.invalid);
         jmap_error(req, err);
         goto done;
     }
+    else if (r) {
+        jmap_error(req, jmap_server_error(r));
+        goto done;
+    }
 
     /* Run query */
-    _email_query(req, &query, collapse_threads, &jemailpartids, &err);
+    _email_query(req, &query, collapse_threads, &filterrock.contactgroups,
+                 &jemailpartids, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -3034,6 +3180,7 @@ static int jmap_email_query(jmap_req_t *req)
     jmap_ok(req, res);
 
 done:
+    _email_filterrock_fini(&filterrock);
     json_decref(jemailpartids);
     jmap_query_fini(&query);
     jmap_parser_fini(&parser);
@@ -3042,18 +3189,27 @@ done:
 
 static void _email_querychanges_collapsed(jmap_req_t *req,
                                           struct jmap_querychanges *query,
+                                          struct email_filterrock *filterrock,
                                           json_t **err)
 {
     modseq_t since_modseq;
     uint32_t since_uid;
     uint32_t num_changes = 0;
+    modseq_t addrbook_modseq = 0;
 
-    if (!_email_read_querystate(query->since_querystate, &since_modseq, &since_uid)) {
+    if (!_email_read_querystate(query->since_querystate,
+                                &since_modseq, &since_uid,
+                                &addrbook_modseq)) {
+        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
+        return;
+    }
+    if (addrbook_modseq && addrbook_modseq != jmap_highestmodseq(req, MBTYPE_ADDRESSBOOK)) {
         *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
         return;
     }
 
     struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort,
+                                                  &filterrock->contactgroups,
                                                   /*want_expunged*/1, /*ignore_timer*/0);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
@@ -3233,7 +3389,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     free_hashu64_table(&touched_cids, NULL);
 
     modseq_t modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
-    query->new_querystate = _email_make_querystate(modseq, 0);
+    query->new_querystate = _email_make_querystate(modseq, 0, addrbook_modseq);
 
 done:
     _emailsearch_free(search);
@@ -3241,18 +3397,27 @@ done:
 
 static void _email_querychanges_uncollapsed(jmap_req_t *req,
                                             struct jmap_querychanges *query,
+                                            struct email_filterrock *filterrock,
                                             json_t **err)
 {
     modseq_t since_modseq;
     uint32_t since_uid;
     uint32_t num_changes = 0;
+    modseq_t addrbook_modseq = 0;
 
-    if (!_email_read_querystate(query->since_querystate, &since_modseq, &since_uid)) {
+    if (!_email_read_querystate(query->since_querystate,
+                                &since_modseq, &since_uid,
+                                &addrbook_modseq)) {
+        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
+        return;
+    }
+    if (addrbook_modseq && addrbook_modseq != jmap_highestmodseq(req, MBTYPE_ADDRESSBOOK)) {
         *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
         return;
     }
 
     struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort,
+                                                  &filterrock->contactgroups,
                                                   /*want_expunged*/1, /*ignore_timer*/0);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
@@ -3380,7 +3545,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     free_hash_table(&touched_ids, NULL);
 
     modseq_t modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
-    query->new_querystate = _email_make_querystate(modseq, 0);
+    query->new_querystate = _email_make_querystate(modseq, 0, addrbook_modseq);
 
 done:
     _emailsearch_free(search);
@@ -3390,13 +3555,14 @@ static int jmap_email_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_querychanges query;
+    struct email_filterrock filterrock = EMAIL_FILTERROCK_INITIALIZER;
     int collapse_threads = 0;
 
     /* Parse arguments */
     json_t *err = NULL;
     jmap_querychanges_parse(req, &parser,
                             _email_queryargs_parse, &collapse_threads,
-                            _email_parse_filter, NULL,
+                            _email_parse_filter, &filterrock,
                             _email_parse_comparator, NULL,
                             &query, &err);
     if (err) {
@@ -3413,9 +3579,9 @@ static int jmap_email_querychanges(jmap_req_t *req)
 
     /* Query changes */
     if (collapse_threads)
-        _email_querychanges_collapsed(req, &query, &err);
+        _email_querychanges_collapsed(req, &query, &filterrock, &err);
     else
-        _email_querychanges_uncollapsed(req, &query, &err);
+        _email_querychanges_uncollapsed(req, &query, &filterrock, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -3427,6 +3593,7 @@ static int jmap_email_querychanges(jmap_req_t *req)
     jmap_ok(req, res);
 
 done:
+    _email_filterrock_fini(&filterrock);
     jmap_querychanges_fini(&query);
     jmap_parser_fini(&parser);
     return 0;
@@ -3440,6 +3607,7 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
 
     struct emailsearch *search = _emailsearch_new(req, filter, sort,
+                                                  /*contactgroups*/NULL,
                                                   /*want_expunged*/1,
                                                   /*ignore_timer*/1);
     if (!search) {
@@ -3564,6 +3732,7 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
                                jmap_fmtstate(changes->since_modseq));
     json_t *sort = json_pack("[{s:s}]", "property", "emailState");
     struct emailsearch *search = _emailsearch_new(req, filter, sort,
+                                                  /*contactgroups*/NULL,
                                                   /*want_expunged*/1,
                                                   /*ignore_timer*/1);
     if (!search) {
@@ -3713,7 +3882,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
     strarray_t perf_filters = STRARRAY_INITIALIZER;
     searchargs = new_searchargs(NULL/*tag*/, GETSEARCH_CHARSET_FIRST,
                                 &jmap_namespace, req->userid, req->authstate, 0);
-    searchargs->root = _email_buildsearch(req, filter, &perf_filters);
+    searchargs->root = _email_buildsearch(req, filter, /*contactgroups*/NULL, &perf_filters);
     strarray_fini(&perf_filters);
 
     /* Build the search query */
@@ -3885,6 +4054,7 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     json_t *snippets, *notfound;
     struct buf buf = BUF_INITIALIZER;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    json_t *err = NULL;
 
     /* Parse and validate arguments. */
     json_t *unsupported_filter = json_pack("[]");
@@ -3900,8 +4070,9 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
             if (JNOTNULL(jfilter)) {
                 jmap_parser_push(&parser, "filter");
                 jmap_filter_parse(req, &parser, jfilter, unsupported_filter,
-                                  _email_parse_filter, NULL);
+                                  _email_parse_filter, NULL, &err);
                 jmap_parser_pop(&parser);
+                if (err) break;
             }
         }
 
@@ -3953,13 +4124,17 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     }
 
     /* Bail out for argument errors */
-    if (json_array_size(parser.invalid)) {
+    if (err) {
+        jmap_error(req, err);
+        json_decref(unsupported_filter);
+        goto done;
+    }
+    else if (json_array_size(parser.invalid)) {
         jmap_error(req, json_pack("{s:s, s:O}", "type", "invalidArguments",
                     "arguments", parser.invalid));
         json_decref(unsupported_filter);
         goto done;
     }
-
     /* Report unsupported filters */
     if (json_array_size(unsupported_filter)) {
         jmap_error(req, json_pack("{s:s, s:o}", "type", "unsupportedFilter",

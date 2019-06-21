@@ -806,7 +806,8 @@ static void _emailsubmission_filter_parse(jmap_req_t *req __attribute__((unused)
                                           struct jmap_parser *parser,
                                           json_t *filter,
                                           json_t *unsupported __attribute__((unused)),
-                                          void *rock __attribute__((unused)))
+                                          void *rock __attribute__((unused)),
+                                          json_t **err __attribute__((unused)))
 {
     const char *field;
     json_t *arg;
@@ -842,7 +843,8 @@ static void _emailsubmission_filter_parse(jmap_req_t *req __attribute__((unused)
 
 static int _emailsubmission_comparator_parse(jmap_req_t *req __attribute__((unused)),
                                              struct jmap_comparator *comp,
-                                             void *rock __attribute__((unused)))
+                                             void *rock __attribute__((unused)),
+                                             json_t **err __attribute__((unused)))
 {
     if (comp->collation) {
         return 0;

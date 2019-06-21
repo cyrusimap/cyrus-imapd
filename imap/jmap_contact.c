@@ -2122,7 +2122,8 @@ static void validatefilter(jmap_req_t *req __attribute__((unused)),
                            struct jmap_parser *parser,
                            json_t *filter,
                            json_t *unsupported __attribute__((unused)),
-                           void *rock __attribute__((unused)))
+                           void *rock __attribute__((unused)),
+                           json_t **err __attribute__((unused)))
 {
     const char *field;
     json_t *arg;
@@ -2167,7 +2168,8 @@ static void validatefilter(jmap_req_t *req __attribute__((unused)),
 
 static int validatecomparator(jmap_req_t *req __attribute__((unused)),
                               struct jmap_comparator *comp,
-                              void *rock __attribute__((unused)))
+                              void *rock __attribute__((unused)),
+                              json_t **err __attribute__((unused)))
 {
     /* Reject any collation */
     if (comp->collation) {

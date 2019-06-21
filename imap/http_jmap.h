@@ -396,11 +396,12 @@ struct jmap_query {
 
 typedef void jmap_filter_parse_cb(jmap_req_t *req, struct jmap_parser *parser,
                                   json_t *filter, json_t *unsupported,
-                                  void *rock);
+                                  void *rock, json_t **err);
 
 extern void jmap_filter_parse(jmap_req_t *req, struct jmap_parser *parser,
                               json_t *filter, json_t *unsupported,
-                              jmap_filter_parse_cb parse_condition, void *cond_rock);
+                              jmap_filter_parse_cb parse_condition, void *cond_rock,
+                              json_t **err /* fatal, non-parsing error */);
 
 struct jmap_comparator {
     const char *property;
@@ -409,11 +410,12 @@ struct jmap_comparator {
 };
 
 typedef int jmap_comparator_parse_cb(jmap_req_t *req, struct jmap_comparator *comp,
-                                     void *rock);
+                                     void *rock, json_t **err);
 
 extern void jmap_comparator_parse(jmap_req_t *req, struct jmap_parser *parser,
                                   json_t *jsort, json_t *unsupported,
-                                  jmap_comparator_parse_cb comp_cb, void *comp_rock);
+                                  jmap_comparator_parse_cb comp_cb, void *comp_rock,
+                                  json_t **err);
 
 extern void jmap_query_parse(jmap_req_t *req, struct jmap_parser *parser,
                              jmap_args_parse_cb args_parse, void *args_rock,
