@@ -1203,7 +1203,7 @@ done:
     return r;
 }
 
-static const char *notifyheaders[] = { "From", "Subject", "To", 0 };
+static const char *notifyheaders[] = { "from", "subject", "to", 0 };
 /* returns a malloc'd string that should be sent to users for successful
    delivery of 'm'. */
 char *generate_notify(message_data_t *m)

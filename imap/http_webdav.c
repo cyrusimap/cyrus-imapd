@@ -676,7 +676,7 @@ static int webdav_put(struct transaction_t *txn, void *obj,
     }
 
     /* Get filename of attachment */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Disposition"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "content-disposition"))) {
         char *dparam;
         tok_t tok;
 

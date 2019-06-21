@@ -280,7 +280,7 @@ static int extractor_httpreq(struct extractor_ctx *ext,
         // Reconnect if the connection expired
         else if (r == HTTP_TIMEOUT &&
                 (res_hdrs &&
-                 (hdr = spool_getheader(res_hdrs, "Connection")) &&
+                 (hdr = spool_getheader(res_hdrs, "connection")) &&
                  !strcasecmpsafe(hdr[0], "close") &&
                  time(NULL) < be->in->timeout_mark)) {
             xsyslog(LOG_DEBUG,
@@ -308,7 +308,7 @@ static int extractor_httpreq(struct extractor_ctx *ext,
                 /* Abide by server's timeout, if any */
                 const char *p;
                 if (res_hdrs &&
-                        (hdr = spool_getheader(res_hdrs, "Keep-Alive")) &&
+                        (hdr = spool_getheader(res_hdrs, "keep-alive")) &&
                         (p = strstr(hdr[0], "timeout="))) {
                     int timeout = atoi(p+8);
                     if (be->timeout) be->timeout->mark = time(NULL) + timeout;

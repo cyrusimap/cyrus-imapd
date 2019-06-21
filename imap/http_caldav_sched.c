@@ -3000,7 +3000,7 @@ void caldav_get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
 {
     /* allow override of schedule-address per-message (FM specific) */
     const char **hdr = req_hdrs ?
-        spool_getheader(req_hdrs, "Schedule-Address") : NULL;
+        spool_getheader(req_hdrs, "schedule-address") : NULL;
 
     if (hdr) {
         if (!strncasecmp(hdr[0], "mailto:", 7))

@@ -25,6 +25,7 @@
 #define HRECEIVED1  "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); " FIRST_RX
 #define HRECEIVED2  "from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); " SECOND_RX
 #define HRECEIVED3  "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); " THIRD_RX
+#define SPOOL_GETHEADER(cache, header) lcasedheader = xstrduplcase(header); val = spool_getheader(cache, lcasedheader); free(lcasedheader);
 
 static int set_up(void)
 {
@@ -52,31 +53,32 @@ static void test_simple(void)
 {
     hdrcache_t cache;
     const char **val;
+    char *lcasedheader;
 
     cache = spool_new_hdrcache();
     CU_ASSERT_PTR_NOT_NULL(cache);
 
-    val = spool_getheader(cache, "Nonesuch");
+    SPOOL_GETHEADER(cache, "Nonesuch");
     CU_ASSERT_PTR_NULL(val);
-    val = spool_getheader(cache, "From");
+    SPOOL_GETHEADER(cache, "From");
     CU_ASSERT_PTR_NULL(val);
-    val = spool_getheader(cache, "fRoM");
+    SPOOL_GETHEADER(cache, "fRoM");
     CU_ASSERT_PTR_NULL(val);
-    val = spool_getheader(cache, "from");
+    SPOOL_GETHEADER(cache, "from");
     CU_ASSERT_PTR_NULL(val);
 
     spool_cache_header(xstrdup("From"), xstrdup(HFROM), cache);
-    val = spool_getheader(cache, "Nonesuch");
+    SPOOL_GETHEADER(cache, "Nonesuch");
     CU_ASSERT_PTR_NULL(val);
-    val = spool_getheader(cache, "From");
+    SPOOL_GETHEADER(cache, "From");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
-    val = spool_getheader(cache, "fRoM");
+    SPOOL_GETHEADER(cache, "fRoM");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
-    val = spool_getheader(cache, "from");
+    SPOOL_GETHEADER(cache, "from");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
@@ -89,37 +91,37 @@ static void test_simple(void)
     spool_cache_header(xstrdup("Received"), xstrdup(HRECEIVED2), cache);
     spool_cache_header(xstrdup("Received"), xstrdup(HRECEIVED3), cache);
 
-    val = spool_getheader(cache, "Nonesuch");
+    SPOOL_GETHEADER(cache, "Nonesuch");
     CU_ASSERT_PTR_NULL(val);
-    val = spool_getheader(cache, "From");
+    SPOOL_GETHEADER(cache, "From");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
-    val = spool_getheader(cache, "fRoM");
+    SPOOL_GETHEADER(cache, "fRoM");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
-    val = spool_getheader(cache, "from");
+    SPOOL_GETHEADER(cache, "from");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "To");
+    SPOOL_GETHEADER(cache, "To");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HTO);
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "Subject");
+    SPOOL_GETHEADER(cache, "Subject");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HSUBJECT);
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "message-id");
+    SPOOL_GETHEADER(cache, "message-id");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HMESSAGEID);
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "received");
+    SPOOL_GETHEADER(cache, "received");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HRECEIVED1);
     CU_ASSERT_STRING_EQUAL(val[1], HRECEIVED2);
@@ -145,6 +147,7 @@ static void test_fill(void)
 
     hdrcache_t cache;
     const char **val;
+    char *lcasedheader;
     int fd;
     char tempfile[32];
     int r;
@@ -173,37 +176,37 @@ static void test_fill(void)
     r = spool_fill_hdrcache(pin, fout, cache, NULL);
     CU_ASSERT_EQUAL(r, 0);
 
-    val = spool_getheader(cache, "Nonesuch");
+    SPOOL_GETHEADER(cache, "Nonesuch");
     CU_ASSERT_PTR_NULL(val);
-    val = spool_getheader(cache, "From");
+    SPOOL_GETHEADER(cache, "From");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
-    val = spool_getheader(cache, "fRoM");
+    SPOOL_GETHEADER(cache, "fRoM");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
-    val = spool_getheader(cache, "from");
+    SPOOL_GETHEADER(cache, "from");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "To");
+    SPOOL_GETHEADER(cache, "To");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HTO);
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "Subject");
+    SPOOL_GETHEADER(cache, "Subject");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HSUBJECT);
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "message-id");
+    SPOOL_GETHEADER(cache, "message-id");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HMESSAGEID);
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "received");
+    SPOOL_GETHEADER(cache, "received");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HRECEIVED1);
     CU_ASSERT_STRING_EQUAL(val[1], HRECEIVED2);
@@ -231,6 +234,7 @@ static void test_folded_headers(void)
     int r;
     struct protstream *pin;
     FILE *fout;
+    char *lcasedheader;
 
     /* Setup @pin to point to the start of a file open for (at least)
      * reading containing the message. */
@@ -254,22 +258,22 @@ static void test_folded_headers(void)
     r = spool_fill_hdrcache(pin, fout, cache, NULL);
     CU_ASSERT_EQUAL(r, 0);
 
-    val = spool_getheader(cache, "Nonesuch");
+    SPOOL_GETHEADER(cache, "Nonesuch");
     CU_ASSERT_PTR_NULL(val);
-    val = spool_getheader(cache, "From");
+    SPOOL_GETHEADER(cache, "From");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
-    val = spool_getheader(cache, "fRoM");
+    SPOOL_GETHEADER(cache, "fRoM");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
-    val = spool_getheader(cache, "from");
+    SPOOL_GETHEADER(cache, "from");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "message-id");
+    SPOOL_GETHEADER(cache, "message-id");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HMESSAGEID);
     CU_ASSERT_PTR_NULL(val[1]);
@@ -304,6 +308,7 @@ static void test_empty_headers(void)
     int r;
     struct protstream *pin;
     FILE *fout;
+    char *lcasedheader;
 
     /* Setup @pin to point to the start of a file open for (at least)
      * reading containing the message. */
@@ -327,67 +332,67 @@ static void test_empty_headers(void)
     r = spool_fill_hdrcache(pin, fout, cache, NULL);
     CU_ASSERT_EQUAL(r, 0);
 
-    val = spool_getheader(cache, "Nonesuch");
+    SPOOL_GETHEADER(cache, "Nonesuch");
     CU_ASSERT_PTR_NULL(val);
-    val = spool_getheader(cache, "From");
+    SPOOL_GETHEADER(cache, "From");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
-    val = spool_getheader(cache, "fRoM");
+    SPOOL_GETHEADER(cache, "fRoM");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
-    val = spool_getheader(cache, "from");
+    SPOOL_GETHEADER(cache, "from");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "message-id");
+    SPOOL_GETHEADER(cache, "message-id");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HMESSAGEID);
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "empty1");
+    SPOOL_GETHEADER(cache, "empty1");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], "");
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "empty2");
+    SPOOL_GETHEADER(cache, "empty2");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], "");
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "empty3");
+    SPOOL_GETHEADER(cache, "empty3");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], "");
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "empty4");
+    SPOOL_GETHEADER(cache, "empty4");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], "");
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "empty5");
+    SPOOL_GETHEADER(cache, "empty5");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], "");
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "empty6");
+    SPOOL_GETHEADER(cache, "empty6");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], "");
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "empty7");
+    SPOOL_GETHEADER(cache, "empty7");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], "");
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "empty8");
+    SPOOL_GETHEADER(cache, "empty8");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], "");
     CU_ASSERT_PTR_NULL(val[1]);
 
-    val = spool_getheader(cache, "empty9");
+    SPOOL_GETHEADER(cache, "empty9");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], "");
     CU_ASSERT_PTR_NULL(val[1]);
@@ -458,6 +463,7 @@ static void test_bz3386(void)
     char body[128];
     char body2[128];    /* use a different buffer Just In Case */
     const char **val;
+    char *lcasedheader;
 
     cache = spool_new_hdrcache();
     CU_ASSERT_PTR_NOT_NULL(cache);
@@ -473,7 +479,7 @@ static void test_bz3386(void)
     for (i = 0 ; i < N ; i++) {
         snprintf(name, sizeof(name), "X-Foo-%d-%c", i, 'A'+(i%26));
         snprintf(body2, sizeof(body2), "value %d %c", i, 'A'+(i%26));
-        val = spool_getheader(cache, name);
+        SPOOL_GETHEADER(cache, name);
         CU_ASSERT_PTR_NOT_NULL(val);
         CU_ASSERT_STRING_EQUAL(val[0], body2);
         CU_ASSERT_PTR_NULL(val[1]);
@@ -492,22 +498,23 @@ static void test_replace(void)
 #define FOOBAR4     "Foo and Drug Administration"
     hdrcache_t cache;
     const char **val;
+    char *lcasedheader;
 
     cache = spool_new_hdrcache();
     CU_ASSERT_PTR_NOT_NULL(cache);
 
-    val = spool_getheader(cache, "From");
+    SPOOL_GETHEADER(cache, "From");
     CU_ASSERT_PTR_NULL(val);
 
     /* replace a single line */
     spool_cache_header(xstrdup("From"), xstrdup(HFROM), cache);
-    val = spool_getheader(cache, "From");
+    SPOOL_GETHEADER(cache, "From");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
 
     spool_replace_header(xstrdup("From"), xstrdup(HFROM2), cache);
-    val = spool_getheader(cache, "From");
+    SPOOL_GETHEADER(cache, "From");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM2);
     CU_ASSERT_PTR_NULL(val[1]);
@@ -516,7 +523,7 @@ static void test_replace(void)
     spool_cache_header(xstrdup("X-FooBar"), xstrdup(FOOBAR1), cache);
     spool_cache_header(xstrdup("X-FooBar"), xstrdup(FOOBAR2), cache);
     spool_cache_header(xstrdup("X-FooBar"), xstrdup(FOOBAR3), cache);
-    val = spool_getheader(cache, "X-FooBar");
+    SPOOL_GETHEADER(cache, "X-FooBar");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], FOOBAR1);
     CU_ASSERT_STRING_EQUAL(val[1], FOOBAR2);
@@ -524,7 +531,7 @@ static void test_replace(void)
     CU_ASSERT_PTR_NULL(val[3]);
 
     spool_replace_header(xstrdup("X-FooBar"), xstrdup(FOOBAR4), cache);
-    val = spool_getheader(cache, "X-FooBar");
+    SPOOL_GETHEADER(cache, "X-FooBar");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], FOOBAR4);
     CU_ASSERT_PTR_NULL(val[1]);

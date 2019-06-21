@@ -207,10 +207,10 @@ static int meth_get(struct transaction_t *txn,
 
     /* Construct environment for script */
     buf_setcstr(&txn->buf, "GATEWAY_INTERFACE=CGI/1.1");
-    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Length"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "content-length"))) {
         buf_printf(&txn->buf, "\tCONTENT_LENGTH=%s", hdr[0]);
     }
-    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "content-type"))) {
         buf_printf(&txn->buf, "\tCONTENT_TYPE=%s", hdr[0]);
     }
     buf_printf(&txn->buf, "\tPATH_INFO=%s", extra ? extra : "");
@@ -282,7 +282,7 @@ static int meth_get(struct transaction_t *txn,
 
         if (!ret) {
             /* Check for and read response body */
-            hdr = spool_getheader(resp_hdrs, "Content-Type");
+            hdr = spool_getheader(resp_hdrs, "content-type");
             if (hdr) {
                 txn->resp_body.type = hdr[0];
 
@@ -304,11 +304,11 @@ static int meth_get(struct transaction_t *txn,
     if (ret) goto done;
 
     /* Check for a status code */
-    hdr = spool_getheader(resp_hdrs, "Status");
+    hdr = spool_getheader(resp_hdrs, "status");
     if (hdr) code = http_status_to_code(atoi(hdr[0]));
 
     /* Check the type of the CGI response */
-    hdr = spool_getheader(resp_hdrs, "Location");
+    hdr = spool_getheader(resp_hdrs, "location");
     if (hdr) {
         /* Redirect */
         if (hdr[0][0] == '/') {

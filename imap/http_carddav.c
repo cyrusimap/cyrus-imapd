@@ -1401,7 +1401,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     int error_count = 0;
 
     /* Sanity check Content-Type */
-    const char **hdr = spool_getheader(txn->req_hdrs, "Content-Type");
+    const char **hdr = spool_getheader(txn->req_hdrs, "content-type");
     if (hdr && hdr[0]) {
         const char *profile = NULL;
         struct param *param;
@@ -1789,7 +1789,7 @@ static int carddav_put(struct transaction_t *txn, void *obj,
     const char *want_ver = NULL;
 
     /* Sanity check Content-Type */
-    const char **hdr = spool_getheader(txn->req_hdrs, "Content-Type");
+    const char **hdr = spool_getheader(txn->req_hdrs, "content-type");
     if (hdr && hdr[0]) {
         const char *profile = NULL;
         struct param *param;

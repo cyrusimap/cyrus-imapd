@@ -501,7 +501,7 @@ static int meth_post(struct transaction_t *txn,
     txn->req_body.flags |= BODY_DECODE;
 
     /* Check Content-Type */
-    const char **hdr = spool_getheader(txn->req_hdrs, "Content-Type");
+    const char **hdr = spool_getheader(txn->req_hdrs, "content-type");
     if (!hdr ||
         !is_mediatype("application/json", hdr[0])) {
         txn->error.desc = "This method requires a JSON request body";
@@ -732,7 +732,7 @@ static int jmap_download(struct transaction_t *txn)
     }
 
     const char **hdr;
-    if (!accept_mime && (hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
+    if (!accept_mime && (hdr = spool_getheader(txn->req_hdrs, "accept"))) {
         accept_mime = parse_accept_header(hdr);
     }
 
@@ -1084,7 +1084,7 @@ static int jmap_upload(struct transaction_t *txn)
         goto done;
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
+    if ((hdr = spool_getheader(hdrcache, "content-type"))) {
         // Strip any parameters from Content-Type header
         char *maintype = NULL, *subtype = NULL;
         struct param *param = NULL;
@@ -1118,11 +1118,11 @@ static int jmap_upload(struct transaction_t *txn)
     }
 
     /* Create RFC 5322 header for resource */
-    if ((hdr = spool_getheader(hdrcache, "User-Agent"))) {
+    if ((hdr = spool_getheader(hdrcache, "user-agent"))) {
         fprintf(f, "User-Agent: %s\r\n", hdr[0]);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "From"))) {
+    if ((hdr = spool_getheader(hdrcache, "from"))) {
         fprintf(f, "From: %s\r\n", hdr[0]);
     }
     else {
@@ -1144,11 +1144,11 @@ static int jmap_upload(struct transaction_t *txn)
         buf_reset(&txn->buf);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Subject"))) {
+    if ((hdr = spool_getheader(hdrcache, "subject"))) {
         fprintf(f, "Subject: %s\r\n", hdr[0]);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Date"))) {
+    if ((hdr = spool_getheader(hdrcache, "date"))) {
         fprintf(f, "Date: %s\r\n", hdr[0]);
     }
     else {
@@ -1157,7 +1157,7 @@ static int jmap_upload(struct transaction_t *txn)
         fprintf(f, "Date: %s\r\n", datestr);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Message-ID"))) {
+    if ((hdr = spool_getheader(hdrcache, "message-id"))) {
         fprintf(f, "Message-ID: %s\r\n", hdr[0]);
     }
 
@@ -1629,7 +1629,7 @@ static int jmap_eventsource(struct transaction_t *txn)
 
     const char **hdr;
     if (txn->req_hdrs &&
-        (hdr = spool_getheader(txn->req_hdrs, "Last-Event-Id"))) {
+        (hdr = spool_getheader(txn->req_hdrs, "last-event-id"))) {
         lastmodseq = atomodseq_t(*hdr);
     }
 

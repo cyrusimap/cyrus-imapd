@@ -417,14 +417,14 @@ static int meth_post_isched(struct transaction_t *txn,
     txn->flags.cc |= CC_NOCACHE;
 
     /* Check iSchedule-Version */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "iSchedule-Version")) ||
+    if (!(hdr = spool_getheader(txn->req_hdrs, "ischedule-version")) ||
         strcmp(hdr[0], "1.0")) {
         txn->error.precond = ISCHED_UNSUPP_VERSION;
         return HTTP_BAD_REQUEST;
     }
 
     /* Check Content-Type */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "content-type"))) {
         for (mime = isched_mime_types; mime->content_type; mime++) {
             if (is_mediatype(mime->content_type, hdr[0])) break;
         }
@@ -435,7 +435,7 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     /* Check Originator */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Originator"))) {
+    if (!(hdr = spool_getheader(txn->req_hdrs, "originator"))) {
         txn->error.precond = ISCHED_ORIG_MISSING;
         return HTTP_BAD_REQUEST;
     }
@@ -446,7 +446,7 @@ static int meth_post_isched(struct transaction_t *txn,
     }
 
     /* Check Recipients */
-    if (!(recipients = spool_getheader(txn->req_hdrs, "Recipient"))) {
+    if (!(recipients = spool_getheader(txn->req_hdrs, "recipient"))) {
         txn->error.precond = ISCHED_RECIP_MISSING;
         return HTTP_BAD_REQUEST;
     }
@@ -471,7 +471,7 @@ static int meth_post_isched(struct transaction_t *txn,
         /* Allow frontends to HTTP auth to backends and use iSchedule */
         authd = 1;
     }
-    else if (!spool_getheader(txn->req_hdrs, "DKIM-Signature")) {
+    else if (!spool_getheader(txn->req_hdrs, "dkim-signature")) {
         if (!config_getswitch(IMAPOPT_ISCHEDULE_DKIM_REQUIRED)) authd = 1;
         else txn->error.desc = "No signature";
     }
@@ -808,7 +808,7 @@ int isched_send(struct caldav_sched_param *sparam, const char *recipient,
         case 302:
         case 307:
         case 308:  /* Redirection */
-            uri = spool_getheader(txn.req_hdrs, "Location")[0];
+            uri = spool_getheader(txn.req_hdrs, "location")[0];
             if (txn.req_body.flags & BODY_CLOSE) {
                 proxy_downserver(be);
                 be = proxy_findserver(buf_cstring(&txn.buf), &http_protocol,

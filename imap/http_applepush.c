@@ -186,7 +186,7 @@ done:
 static int meth_post_applepush(struct transaction_t *txn, void *params)
 {
     /* Check Content-Type */
-    const char **hdr = spool_getheader(txn->req_hdrs, "Content-Type");
+    const char **hdr = spool_getheader(txn->req_hdrs, "content-type");
 
     if (hdr && is_mediatype("application/x-www-form-urlencoded", hdr[0])) {
         /* Read body */

@@ -1240,7 +1240,7 @@ static int action_get(struct transaction_t *txn)
              mime->content_type && !is_mediatype(mime->content_type, param->s);
              mime++);
     }
-    else if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+    else if ((hdr = spool_getheader(txn->req_hdrs, "accept")))
         mime = get_accept_type(hdr, tz_mime_types);
     else mime = tz_mime_types;
 

@@ -133,11 +133,11 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
     }
 
     /* Create RFC 5322 header for resource */
-    if ((hdr = spool_getheader(hdrcache, "User-Agent"))) {
+    if ((hdr = spool_getheader(hdrcache, "user-agent"))) {
         fprintf(f, "User-Agent: %s\r\n", hdr[0]);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "From"))) {
+    if ((hdr = spool_getheader(hdrcache, "from"))) {
         fprintf(f, "From: %s\r\n", hdr[0]);
     }
     else {
@@ -159,11 +159,11 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
         buf_reset(&txn->buf);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Subject"))) {
+    if ((hdr = spool_getheader(hdrcache, "subject"))) {
         fprintf(f, "Subject: %s\r\n", hdr[0]);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Date"))) {
+    if ((hdr = spool_getheader(hdrcache, "date"))) {
         fprintf(f, "Date: %s\r\n", hdr[0]);
     }
     else {
@@ -172,15 +172,15 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
         fprintf(f, "Date: %s\r\n", datestr);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Message-ID"))) {
+    if ((hdr = spool_getheader(hdrcache, "message-id"))) {
         fprintf(f, "Message-ID: %s\r\n", hdr[0]);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "X-Schedule-User-Address"))) {
+    if ((hdr = spool_getheader(hdrcache, "x-schedule-user-address"))) {
         fprintf(f, "X-Schedule-User-Address: %s\r\n", hdr[0]);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
+    if ((hdr = spool_getheader(hdrcache, "content-type"))) {
         fprintf(f, "Content-Type: %s\r\n", hdr[0]);
     }
     else fputs("Content-Type: application/octet-stream\r\n", f);
@@ -194,11 +194,11 @@ EXPORTED int dav_store_resource(struct transaction_t *txn,
     }
     fprintf(f, "Content-Transfer-Encoding: %s\r\n", cte);
 
-    if ((hdr = spool_getheader(hdrcache, "Content-Disposition"))) {
+    if ((hdr = spool_getheader(hdrcache, "content-disposition"))) {
         fprintf(f, "Content-Disposition: %s\r\n", hdr[0]);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Content-Description"))) {
+    if ((hdr = spool_getheader(hdrcache, "content-description"))) {
         fprintf(f, "Content-Description: %s\r\n", hdr[0]);
     }
 

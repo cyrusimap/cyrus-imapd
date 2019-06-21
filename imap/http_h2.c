@@ -839,7 +839,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
         struct buf *buf = &txn->buf;
         unsigned outlen;
 
-        const char **hdr = spool_getheader(txn->req_hdrs, "HTTP2-Settings");
+        const char **hdr = spool_getheader(txn->req_hdrs, "http2-settings");
         if (!hdr || hdr[1]) return 0;
 
         /* base64url decode the settings.

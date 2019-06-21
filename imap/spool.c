@@ -454,18 +454,12 @@ EXPORTED int spool_fill_hdrcache(struct protstream *fin, FILE *fout,
 
 EXPORTED const char **spool_getheader(hdrcache_t cache, const char *phead)
 {
-    char *head;
     ptrarray_t *contents;
 
     assert(cache && phead);
 
-    head = xstrdup(phead);
-    lcase(head);
-
     /* check the cache */
-    contents = (ptrarray_t *) hash_lookup(head, &cache->cache);
-
-    free(head);
+    contents = (ptrarray_t *) hash_lookup(phead, &cache->cache);
 
     if (contents && ptrarray_size(contents)) {
         strarray_t *array = strarray_new();

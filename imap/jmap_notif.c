@@ -448,13 +448,13 @@ HIDDEN int jmap_create_caldaveventnotif(struct transaction_t *txn,
     const char **hdr;
     char *from = NULL;
 
-    if ((hdr = spool_getheader(txn->req_hdrs, "Schedule-Sender-Address"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "schedule-sender-address"))) {
         byemail = *hdr;
         if (!strncasecmp(byemail, "mailto:", 7)) {
             byemail += 7;
         }
         from = strconcat("<", byemail, ">", NULL);
-        if ((hdr = spool_getheader(txn->req_hdrs, "Schedule-Sender-name"))) {
+        if ((hdr = spool_getheader(txn->req_hdrs, "schedule-sender-name"))) {
             char *val = charset_decode_mimeheader(*hdr, CHARSET_KEEPCASE);
             if (val) buf_initmcstr(&byname, val);
         }

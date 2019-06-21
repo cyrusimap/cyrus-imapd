@@ -137,20 +137,16 @@ static int getenvelope(void *mc, const char *field, const char ***contents)
 static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
-
-    *body = NULL;
+    char *lcasedhead = xstrduplcase(phead);
 
     if (!m->cache_full) {
         fill_cache(m);
     }
 
-    *body = spool_getheader(m->cache, phead);
+    *body = spool_getheader(m->cache, lcasedhead);
+    free(lcasedhead);
 
-    if (*body) {
-        return SIEVE_OK;
-    } else {
-        return SIEVE_FAIL;
-    }
+    return *body ? SIEVE_OK : SIEVE_FAIL;
 }
 
 static void getheaders_cb(const char *name, const char *value,

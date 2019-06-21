@@ -61,6 +61,7 @@ void spool_remove_header(char *name, hdrcache_t cache);
 void spool_remove_header_instance(char *name, int n, hdrcache_t cache);
 int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
                         const char **skipheaders);
+/* phead must be lower-cased */
 const char **spool_getheader(hdrcache_t cache, const char *phead);
 void spool_free_hdrcache(hdrcache_t cache);
 void spool_enum_hdrcache(hdrcache_t cache,

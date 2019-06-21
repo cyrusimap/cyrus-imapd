@@ -488,7 +488,7 @@ static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
 
     if (!record || !record->uid) return HTTP_NO_CONTENT;
 
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")) &&
+    if ((hdr = spool_getheader(txn->req_hdrs, "accept")) &&
         is_mediatype(DAVSHARING_CONTENT_TYPE, hdr[0])) {
         return HTTP_CONTINUE;
     }

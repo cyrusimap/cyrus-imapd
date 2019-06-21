@@ -1123,7 +1123,7 @@ EXPORTED int dav_check_precond(struct transaction_t *txn,
 
     /* Per RFC 4918, If is similar to If-Match, but with lock-token submission.
        Per RFC 7232, LOCK errors supercede preconditions */
-    if ((hdr = spool_getheader(hdrcache, "If"))) {
+    if ((hdr = spool_getheader(hdrcache, "if"))) {
         /* State tokens (sync-token, lock-token) and Etags */
         if (!eval_if(hdr[0], params, txn->req_tgt.namespace,
                      mailbox, txn->req_tgt.resource,
@@ -1146,7 +1146,7 @@ EXPORTED int dav_premethod(struct transaction_t *txn)
 {
     if (buf_len(&server_info_link)) {
         /* Check for Server-Info-Token header */
-        const char **hdr = spool_getheader(txn->req_hdrs, "Server-Info-Token");
+        const char **hdr = spool_getheader(txn->req_hdrs, "server-info-token");
 
         if ((hdr && strcmp(hdr[0], buf_cstring(&server_info_token))) ||
             (!hdr && txn->meth == METH_OPTIONS)) {
@@ -1194,7 +1194,7 @@ EXPORTED unsigned get_preferences(struct transaction_t *txn)
     }
 
     /* Check for Prefer header(s) */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Prefer"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "prefer"))) {
         int i;
         for (i = 0; hdr[i]; i++) {
             tok_t tok;
@@ -1220,14 +1220,14 @@ EXPORTED unsigned get_preferences(struct transaction_t *txn)
 
     /* Check for Brief header */
     if ((mask & PREFER_MIN) &&
-        (hdr = spool_getheader(txn->req_hdrs, "Brief")) &&
+        (hdr = spool_getheader(txn->req_hdrs, "brief")) &&
         !strcasecmp(hdr[0], "t")) {
         prefs |= PREFER_MIN;
     }
 
     /* Check for X-MobileMe-DAV-Options header */
     if ((mask & PREFER_REP) &&
-        (hdr = spool_getheader(txn->req_hdrs, "X-MobileMe-DAV-Options")) &&
+        (hdr = spool_getheader(txn->req_hdrs, "x-mobileme-dav-options")) &&
         !strcasecmp(hdr[0], "return-changed-data")) {
         prefs |= PREFER_REP;
     }
@@ -3127,6 +3127,7 @@ int propfind_fromhdr(const xmlChar *name, xmlNsPtr ns,
         struct protstream *stream;
         hdrcache_t hdrs = NULL;
         const char **hdr;
+        char *lcasedhdrname = xstrduplcase(hdrname);
 
         size = cacheitem_size(fctx->record, CACHE_HEADERS);
         stream = prot_readmap(cacheitem_base(fctx->record,
@@ -3135,12 +3136,13 @@ int propfind_fromhdr(const xmlChar *name, xmlNsPtr ns,
         spool_fill_hdrcache(stream, NULL, hdrs, NULL);
         prot_free(stream);
 
-        if ((hdr = spool_getheader(hdrs, (const char *) hdrname))) {
+        if ((hdr = spool_getheader(hdrs, (const char *) lcasedhdrname))) {
             xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                          name, ns, BAD_CAST hdr[0], 0);
             r = 0;
         }
 
+        free(lcasedhdrname);
         spool_free_hdrcache(hdrs);
     }
 
@@ -3805,7 +3807,7 @@ int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root,
     if (!buf_len(&txn->req_body.payload)) return 0;
 
     /* Check Content-Type */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
+    if (!(hdr = spool_getheader(txn->req_hdrs, "content-type")) ||
         (!is_mediatype("text/xml", hdr[0]) &&
          !is_mediatype("application/xml", hdr[0]) &&
          !(spec_type && is_mediatype(spec_type, hdr[0])))) {
@@ -4550,7 +4552,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
     /* Check for mandatory Destination header */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
+    if (!(hdr = spool_getheader(txn->req_hdrs, "destination"))) {
         txn->error.desc = "Missing Destination header";
         return HTTP_BAD_REQUEST;
     }
@@ -4594,7 +4596,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
                          xstrdup(dest_tgt.path), txn->req_hdrs);
 
     /* Check for optional Overwrite header */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
+    if ((hdr = spool_getheader(txn->req_hdrs, "overwrite")) &&
         !strcmp(hdr[0], "F")) {
         overwrite = 0;
     }
@@ -5299,7 +5301,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
     if (gparams->mime_types) {
         /* Check requested MIME type:
            1st entry in gparams->mime_types array MUST be default MIME type */
-        if ((hdr = spool_getheader(txn->req_hdrs, "Accept")))
+        if ((hdr = spool_getheader(txn->req_hdrs, "accept")))
             mime = get_accept_type(hdr, gparams->mime_types);
         else mime = gparams->mime_types;
         if (!mime) return HTTP_NOT_ACCEPTABLE;
@@ -6201,7 +6203,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
 
     /* Check Depth */
-    hdr = spool_getheader(txn->req_hdrs, "Depth");
+    hdr = spool_getheader(txn->req_hdrs, "depth");
     if (!hdr || !strcmp(hdr[0], "infinity")) {
         depth = 3;
 
@@ -6685,7 +6687,7 @@ static int dav_post_import(struct transaction_t *txn,
 
     /* Check Content-Type */
     mime = pparams->mime_types;
-    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "content-type"))) {
         for (; mime->content_type; mime++) {
             if (is_mediatype(mime->content_type, hdr[0])) break;
         }
@@ -6860,7 +6862,7 @@ int meth_post(struct transaction_t *txn, void *params)
 
     if (!action) {
         /* Check Content-Type */
-        const char **hdr = spool_getheader(txn->req_hdrs, "Content-Type");
+        const char **hdr = spool_getheader(txn->req_hdrs, "content-type");
 
         if ((pparams->post.allowed & POST_SHARE) && hdr &&
             (is_mediatype(hdr[0], DAVSHARING_CONTENT_TYPE) ||
@@ -6935,7 +6937,7 @@ int meth_patch(struct transaction_t *txn, void *params)
     if (!(txn->req_tgt.allow & ALLOW_PATCH)) return HTTP_NOT_ALLOWED;
 
     /* Check Content-Type */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "content-type"))) {
         for (patch_doc = pparams->patch_docs; patch_doc->format; patch_doc++) {
             if (is_mediatype(patch_doc->format, hdr[0])) break;
         }
@@ -7077,7 +7079,7 @@ int meth_patch(struct transaction_t *txn, void *params)
         struct mime_type_t *mime = pparams->mime_types;
         struct buf *data;
 
-        if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
+        if ((hdr = spool_getheader(txn->req_hdrs, "accept"))) {
             mime = get_accept_type(hdr, pparams->mime_types);
             if (!mime) goto done;
         }
@@ -7188,12 +7190,12 @@ int meth_put(struct transaction_t *txn, void *params)
     assert(txn->req_tgt.resource);
 
     /* Make sure Content-Range isn't specified */
-    if (spool_getheader(txn->req_hdrs, "Content-Range"))
+    if (spool_getheader(txn->req_hdrs, "content-range"))
         return HTTP_BAD_REQUEST;
 
     /* Check Content-Type */
     mime = pparams->mime_types;
-    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "content-type"))) {
         for (; mime->content_type; mime++) {
             if (is_mediatype(mime->content_type, hdr[0])) break;
         }
@@ -7356,7 +7358,7 @@ int meth_put(struct transaction_t *txn, void *params)
         const char **hdr;
         struct buf *data;
 
-        if ((hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
+        if ((hdr = spool_getheader(txn->req_hdrs, "accept"))) {
             mime = get_accept_type(hdr, pparams->mime_types);
             if (!mime) goto done;
         }
@@ -8211,7 +8213,7 @@ int meth_report(struct transaction_t *txn, void *params)
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
 
     /* Check Depth */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "depth"))) {
         if (!strcmp(hdr[0], "infinity")) {
             depth = 2;
         }
@@ -8446,7 +8448,7 @@ int meth_unlock(struct transaction_t *txn, void *params)
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
     /* Check for mandatory Lock-Token header */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Lock-Token"))) {
+    if (!(hdr = spool_getheader(txn->req_hdrs, "lock-token"))) {
         txn->error.desc = "Missing Lock-Token header";
         return HTTP_BAD_REQUEST;
     }
@@ -8692,7 +8694,7 @@ static int get_server_info(struct transaction_t *txn)
 
     if (!httpd_userid) return HTTP_UNAUTHORIZED;
 
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")) &&
+    if ((hdr = spool_getheader(txn->req_hdrs, "accept")) &&
         strcmp(hdr[0], "application/server-info+xml"))
         return HTTP_NOT_ACCEPTABLE;
 

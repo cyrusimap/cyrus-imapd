@@ -140,7 +140,7 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
     const char *mailbox = "Default";
     mbentry_t *mbentry = NULL;
 
-    mailboxhdrs = spool_getheader(txn->req_hdrs, "Mailbox");
+    mailboxhdrs = spool_getheader(txn->req_hdrs, "mailbox");
     if (mailboxhdrs) {
         mailbox = mailboxhdrs[0];
     }
@@ -196,7 +196,7 @@ static int get_email2details(struct transaction_t *txn __attribute__((unused)),
     mbentry_t *mbentry = NULL;
     int ispinned = 0;
 
-    mailboxhdrs = spool_getheader(txn->req_hdrs, "Mailbox");
+    mailboxhdrs = spool_getheader(txn->req_hdrs, "mailbox");
     if (mailboxhdrs) {
         mailbox = mailboxhdrs[0];
     }
@@ -255,12 +255,12 @@ static int get_uid2groups(struct transaction_t *txn,
     const char *mailbox = "Default";
     mbentry_t *mbentry = NULL;
 
-    otheruserhdrs = spool_getheader(txn->req_hdrs, "OtherUser");
+    otheruserhdrs = spool_getheader(txn->req_hdrs, "otheruser");
     if (otheruserhdrs) {
         otheruser = otheruserhdrs[0];
     }
 
-    mailboxhdrs = spool_getheader(txn->req_hdrs, "Mailbox");
+    mailboxhdrs = spool_getheader(txn->req_hdrs, "mailbox");
     if (mailboxhdrs) {
         mailbox = mailboxhdrs[0];
     }
@@ -307,8 +307,8 @@ static int meth_get_db(struct transaction_t *txn,
     const char **userhdrs;
     const char **keyhdrs;
 
-    userhdrs = spool_getheader(txn->req_hdrs, "User");
-    keyhdrs = spool_getheader(txn->req_hdrs, "Key");
+    userhdrs = spool_getheader(txn->req_hdrs, "user");
+    keyhdrs = spool_getheader(txn->req_hdrs, "key");
 
     if (!userhdrs) return HTTP_BAD_REQUEST;
     if (!keyhdrs) return HTTP_BAD_REQUEST;
