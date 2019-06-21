@@ -2502,7 +2502,7 @@ dynarray_t *parse_accept(const char **hdr)
             if (type)
                 accept.token = lcase(strconcat(type, "/", subtype, NULL));
             else
-                accept.token = lcase(xstrdup(token));
+                accept.token = xstrduplcase(token);
 
             for (param = params; param; param = param->next) {
                 if (!strcasecmp(param->attribute, "q")) {

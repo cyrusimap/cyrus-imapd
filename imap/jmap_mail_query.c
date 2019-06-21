@@ -1498,7 +1498,7 @@ HIDDEN struct jmap_headermatch *jmap_headermatch_new(const char *header,
     else {
         hm->op = HEADERMATCH_CONTAINS;
     }
-    hm->header = lcase(xstrdup(header));
+    hm->header = xstrduplcase(header);
     buf_setcstr(val, value);
     headermatch_normalize(hm, val);
     hm->len = buf_len(val);

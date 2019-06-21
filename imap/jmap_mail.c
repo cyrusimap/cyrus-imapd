@@ -467,7 +467,7 @@ static void _headers_shift_new(struct headers *headers, json_t *header)
 
 static json_t* _headers_get(struct headers *headers, const char *name)
 {
-    char *lcasename = lcase(xstrdup(name));
+    char *lcasename = xstrduplcase(name);
     json_t *jheader = json_object_get(headers->all, lcasename);
     free(lcasename);
     return jheader;
@@ -714,7 +714,7 @@ static struct header_prop *_header_parseprop(const char *s)
             /* fallthrough */
         case 1:
             f0 = strarray_nth(fields, 0);
-            lcasename = lcase(xstrdup(f0));
+            lcasename = xstrduplcase(f0);
             name = xstrdup(f0);
             break;
         default:
@@ -7739,7 +7739,7 @@ static json_t *_email_get_bodypart(jmap_req_t *req,
     if (jmap_wantprop(bodyprops, "disposition")) {
         json_t *jdisp = json_null();
         if (part->disposition) {
-            char *disp = lcase(xstrdup(part->disposition));
+            char *disp = xstrduplcase(part->disposition);
             jdisp = json_string(disp);
             free(disp);
         }

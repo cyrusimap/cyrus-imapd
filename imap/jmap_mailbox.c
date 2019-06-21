@@ -301,8 +301,7 @@ static char *_mbox_get_role(jmap_req_t *req, const mbname_t *mbname)
              * return the first specialuse flag. */
             const char *use = strarray_nth(uses, 0);
             if (use[0] == '\\') {
-                role = xstrdup(use+1);
-                lcase(role);
+                role = xstrduplcase(use+1);
             }
         }
         strarray_free(uses);

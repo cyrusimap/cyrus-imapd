@@ -4519,8 +4519,7 @@ static void init_annotation_definitions(void)
         /* we implement case-insensitivity by lcase-and-compare, so make
          * sure the source is lcase'd!
          */
-        ae->freeme = xstrdup(p);
-        lcase(ae->freeme);
+        ae->freeme = xstrduplcase(p);
         ae->name = ae->freeme;
 
         if (!(p = get_token(&state, ".-_/"))) goto bad;
