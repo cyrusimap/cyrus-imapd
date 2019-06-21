@@ -13460,5 +13460,316 @@ sub test_email_query_not_match
     $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
 }
 
+sub test_email_query_fromcontactgroupid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/contacts',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                contact1 => {
+                    emails => [{
+                        type => 'personal',
+                        value => 'contact1@local',
+                    }]
+                },
+                contact2 => {
+                    emails => [{
+                        type => 'personal',
+                        value => 'contact2@local',
+                    }]
+                },
+            }
+        }, 'R1'],
+        ['ContactGroup/set', {
+            create => {
+                contactGroup1 => {
+                    name => 'contactGroup1',
+                    contactIds => ['#contact1', '#contact2'],
+                }
+            }
+        }, 'R2'],
+    ], $using);
+    my $contactId1 = $res->[0][1]{created}{contact1}{id};
+    $self->assert_not_null($contactId1);
+    my $contactId2 = $res->[0][1]{created}{contact2}{id};
+    $self->assert_not_null($contactId2);
+    my $contactGroupId1 = $res->[1][1]{created}{contactGroup1}{id};
+    $self->assert_not_null($contactGroupId1);
+
+    $self->make_message("msg1", from => Cassandane::Address->new(
+        localpart => 'contact1', domain => 'local'
+    )) or die;
+    $self->make_message("msg2", from => Cassandane::Address->new(
+        localpart => 'contact2', domain => 'local'
+    )) or die;
+    $self->make_message("msg3", from => Cassandane::Address->new(
+        localpart => 'neither', domain => 'local'
+    )) or die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{ property => "subject" }],
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
+    my $emailId1 = $res->[0][1]{ids}[0];
+    my $emailId2 = $res->[0][1]{ids}[1];
+    my $emailId3 = $res->[0][1]{ids}[2];
+
+    # Filter by contact group.
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                fromContactGroupId => $contactGroupId1
+            },
+            sort => [
+                { property => "subject" }
+            ],
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($emailId2, $res->[0][1]{ids}[1]);
+
+    # Negate filter by contact group.
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                operator => 'NOT',
+                conditions => [{
+                    fromContactGroupId => $contactGroupId1
+                }]
+            },
+            sort => [
+                { property => "subject" }
+            ],
+            addressbookId => 'Default',
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($emailId3, $res->[0][1]{ids}[0]);
+
+    # Reject unknown contact groups.
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                fromContactGroupId => 'doesnotexist',
+            },
+            sort => [
+                { property => "subject" }
+            ],
+        }, 'R1']
+    ], $using);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+
+    # Reject unknown addressbooks.
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                fromContactGroupId => $contactGroupId1,
+            },
+            sort => [
+                { property => "subject" }
+            ],
+            addressbookId => 'doesnotexist',
+        }, 'R1']
+    ], $using);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+
+    # Support also to, cc, bcc
+    $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                contact3 => {
+                    emails => [{
+                        type => 'personal',
+                        value => 'contact3@local',
+                    }]
+                },
+            }
+        }, 'R1'],
+        ['ContactGroup/set', {
+            update => {
+                $contactGroupId1 => {
+                    contactIds => ['#contact3'],
+                }
+            }
+        }, 'R1'],
+    ], $using);
+    $self->assert_not_null($res->[0][1]{created}{contact3});
+    $self->make_message("msg4", to => Cassandane::Address->new(
+        localpart => 'contact3', domain => 'local'
+    )) or die;
+    $self->make_message("msg5", cc => Cassandane::Address->new(
+        localpart => 'contact3', domain => 'local'
+    )) or die;
+    $self->make_message("msg6", bcc => Cassandane::Address->new(
+        localpart => 'contact3', domain => 'local'
+    )) or die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{ property => "subject" }],
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(6, scalar @{$res->[0][1]{ids}});
+    my $emailId4 = $res->[0][1]{ids}[3];
+    my $emailId5 = $res->[0][1]{ids}[4];
+    my $emailId6 = $res->[0][1]{ids}[5];
+
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                toContactGroupId => $contactGroupId1
+            },
+        }, 'R1'],
+        ['Email/query', {
+            filter => {
+                ccContactGroupId => $contactGroupId1
+            },
+        }, 'R2'],
+        ['Email/query', {
+            filter => {
+                bccContactGroupId => $contactGroupId1
+            },
+        }, 'R3']
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($emailId4, $res->[0][1]{ids}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{ids}});
+    $self->assert_str_equals($emailId5, $res->[1][1]{ids}[0]);
+    $self->assert_num_equals(1, scalar @{$res->[2][1]{ids}});
+    $self->assert_str_equals($emailId6, $res->[2][1]{ids}[0]);
+}
+
+sub test_email_querychanges_fromcontactgroupid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/contacts',
+    ];
+
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                contact1 => {
+                    emails => [{
+                        type => 'personal',
+                        value => 'contact1@local',
+                    }]
+                },
+            }
+        }, 'R1'],
+        ['ContactGroup/set', {
+            create => {
+                contactGroup1 => {
+                    name => 'contactGroup1',
+                    contactIds => ['#contact1'],
+                }
+            }
+        }, 'R2'],
+    ], $using);
+    my $contactId1 = $res->[0][1]{created}{contact1}{id};
+    $self->assert_not_null($contactId1);
+    my $contactGroupId1 = $res->[1][1]{created}{contactGroup1}{id};
+    $self->assert_not_null($contactGroupId1);
+
+    # Make emails.
+    $self->make_message("msg1", from => Cassandane::Address->new(
+        localpart => 'contact1', domain => 'local'
+    )) or die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            sort => [{ property => "subject" }],
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    my $emailId1 = $res->[0][1]{ids}[0];
+
+    # Query changes.
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                fromContactGroupId => $contactGroupId1
+            },
+            sort => [
+                { property => "subject" }
+            ],
+        }, 'R1']
+    ], $using);
+    $self->assert_equals(JSON::true, $res->[0][1]{canCalculateChanges});
+    my $queryState = $res->[0][1]{queryState};
+    $self->assert_not_null($queryState);
+
+    # Add new matching email.
+    $self->make_message("msg2", from => Cassandane::Address->new(
+        localpart => 'contact1', domain => 'local'
+    )) or die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+    $res = $jmap->CallMethods([
+        ['Email/queryChanges', {
+            filter => {
+                fromContactGroupId => $contactGroupId1
+            },
+            sort => [
+                { property => "subject" }
+            ],
+            sinceQueryState => $queryState,
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{added}});
+
+    # Invalidate query state for ContactGroup state changes.
+    $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                contact2 => {
+                    emails => [{
+                        type => 'personal',
+                        value => 'contact2@local',
+                    }]
+                },
+            }
+        }, 'R1'],
+        ['ContactGroup/set', {
+            update => {
+                $contactGroupId1 => {
+                    contactIds => [$contactId1, '#contact2'],
+                }
+            }
+        }, 'R2'],
+        ['Email/queryChanges', {
+            filter => {
+                fromContactGroupId => $contactGroupId1
+            },
+            sort => [
+                { property => "subject" }
+            ],
+            sinceQueryState => $queryState,
+        }, 'R3']
+    ], $using);
+    my $contactId2 = $res->[0][1]{created}{contact2}{id};
+    $self->assert_not_null($contactId2);
+    $self->assert(exists $res->[1][1]{updated}{$contactGroupId1});
+    $self->assert_str_equals('cannotCalculateChanges', $res->[2][1]{type});
+}
 
 1;
