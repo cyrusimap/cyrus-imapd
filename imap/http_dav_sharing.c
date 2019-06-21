@@ -711,6 +711,7 @@ HIDDEN int dav_send_notification(xmlDocPtr doc,
     struct mailbox *mailbox = NULL;
     struct webdav_db *webdavdb = NULL;
     struct transaction_t txn;
+    mbentry_t mbentry;
     int r;
 
     /* XXX  Need to find location of user.
@@ -741,6 +742,12 @@ HIDDEN int dav_send_notification(xmlDocPtr doc,
 
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
+
+    /* Create minimal mbentry for request target from mailbox */
+    memset(&mbentry, 0, sizeof(mbentry_t));
+    mbentry.name = mailbox->name;
+    mbentry.uniqueid = mailbox->uniqueid;
+    txn.req_tgt.mbentry = &mbentry;
 
     /* Create header cache */
     if (!(txn.req_hdrs = spool_new_hdrcache())) {
