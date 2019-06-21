@@ -844,23 +844,23 @@ static int dav_store_notification(struct transaction_t *txn,
 
     const char *type;
     if (dlist_getatom(dl, "T", &type)) {
-        spool_replace_header(xstrdup("Subject"),
+        spool_replace_header("subject",
                              xstrdup((char *) type), txn->req_hdrs);
 
         struct buf buf = BUF_INITIALIZER;
         dlist_printbuf(dl, 1, &buf);
         dlist_free(&dl);
-        spool_replace_header(xstrdup("Content-Description"),
+        spool_replace_header("content-description",
                 buf_release(&buf), txn->req_hdrs);
     }
 
     buf_reset(&txn->buf);
     buf_printf(&txn->buf, "<%s-%ld@%s>", resource, time(0), config_servername);
-    spool_replace_header(xstrdup("Message-ID"),
+    spool_replace_header("message-id",
                          buf_release(&txn->buf), txn->req_hdrs);
 
     buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
-    spool_replace_header(xstrdup("Content-Disposition"),
+    spool_replace_header("content-disposition",
                          buf_release(&txn->buf), txn->req_hdrs);
 
     /* Dump XML response tree into a text buffer */

@@ -79,7 +79,7 @@ typedef int sieve_get_headersection(void *message_context,
 typedef int sieve_add_header(void *message_context,
                              const char *header, const char *contents, int index);
 typedef int sieve_delete_header(void *message_context,
-                                const char *header, int index);
+                                const char *header /* is lower-cased */, int index);
 typedef int sieve_get_fname(void *message_context, const char **fname);
 typedef int sieve_get_envelope(void *message_context,
                                const char *field,

@@ -515,7 +515,7 @@ static void test_replace(void)
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
 
-    spool_replace_header(xstrdup("From"), xstrdup(HFROM2), cache);
+    spool_replace_header("from", xstrdup(HFROM2), cache);
     SPOOL_GETHEADER(cache, "From");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM2);
@@ -532,7 +532,7 @@ static void test_replace(void)
     CU_ASSERT_STRING_EQUAL(val[2], FOOBAR3);
     CU_ASSERT_PTR_NULL(val[3]);
 
-    spool_replace_header(xstrdup("X-FooBar"), xstrdup(FOOBAR4), cache);
+    spool_replace_header("x-foobar", xstrdup(FOOBAR4), cache);
     SPOOL_GETHEADER(cache, "X-FooBar");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], FOOBAR4);

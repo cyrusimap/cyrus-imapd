@@ -1461,14 +1461,14 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
         }
         else if (!strcmpsafe(type, "WebSocketPushEnable")) {
             /* Log request */
-            spool_replace_header(xstrdup(":jmap"),
+            spool_replace_header(":jmap",
                                  xstrdup("WebSocketPushEnable"), txn->req_hdrs);
             ws_push_enable(txn, req);
             ret = HTTP_NO_CONTENT;
         }
         else if (!strcmpsafe(type, "WebSocketPushDisable")) {
             /* Log request */
-            spool_replace_header(xstrdup(":jmap"),
+            spool_replace_header(":jmap",
                                  xstrdup("WebSocketPushDisable"), txn->req_hdrs);
             jmap_push_done(txn);
             ret = HTTP_NO_CONTENT;

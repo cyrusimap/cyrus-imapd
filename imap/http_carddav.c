@@ -686,7 +686,7 @@ static int carddav_store_resource(struct transaction_t *txn,
 
     /* Create and cache RFC 5322 header fields for resource */
     mimehdr = charset_encode_mimeheader(fullname, 0, 0);
-    spool_replace_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
+    spool_replace_header("subject", mimehdr, txn->req_hdrs);
 
     /* Use SHA1(uid)@servername as Message-ID */
     struct message_guid uuid;
@@ -694,12 +694,12 @@ static int carddav_store_resource(struct transaction_t *txn,
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "<%s@%s>",
                message_guid_encode(&uuid), config_servername);
-    spool_replace_header(xstrdup("Message-ID"),
+    spool_replace_header("message-id",
                          buf_release(&txn->buf), txn->req_hdrs);
 
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "text/vcard; version=%s; charset=utf-8", version);
-    spool_replace_header(xstrdup("Content-Type"),
+    spool_replace_header("content-type",
                          buf_release(&txn->buf), txn->req_hdrs);
 
     buf_setcstr(&txn->buf, "attachment");
@@ -707,10 +707,10 @@ static int carddav_store_resource(struct transaction_t *txn,
                               CHARSET_PARAM_XENCODE | CHARSET_PARAM_NEWLINE,
                               "filename",
                               resource);
-    spool_replace_header(xstrdup("Content-Disposition"),
+    spool_replace_header("content-disposition",
                          buf_release(&txn->buf), txn->req_hdrs);
 
-    spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
+    spool_remove_header("content-description", txn->req_hdrs);
 
     /* Store the resource */
     r = dav_store_resource(txn, buf_cstring(buf), 0,
@@ -809,7 +809,7 @@ static int carddav_store_resource(struct transaction_t *txn,
 
     /* Create and cache RFC 5322 header fields for resource */
     mimehdr = charset_encode_mimeheader(fullname, 0, 0);
-    spool_replace_header(xstrdup("Subject"), mimehdr, txn->req_hdrs);
+    spool_replace_header("subject", mimehdr, txn->req_hdrs);
 
     /* Use SHA1(uid)@servername as Message-ID */
     struct message_guid uuid;
@@ -817,12 +817,12 @@ static int carddav_store_resource(struct transaction_t *txn,
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "<%s@%s>",
                message_guid_encode(&uuid), config_servername);
-    spool_replace_header(xstrdup("Message-ID"),
+    spool_replace_header("message-id",
                          buf_release(&txn->buf), txn->req_hdrs);
 
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "text/vcard; version=%s; charset=utf-8", version);
-    spool_replace_header(xstrdup("Content-Type"),
+    spool_replace_header("content-type",
                          buf_release(&txn->buf), txn->req_hdrs);
 
     buf_setcstr(&txn->buf, "attachment");
@@ -830,10 +830,10 @@ static int carddav_store_resource(struct transaction_t *txn,
                               CHARSET_PARAM_XENCODE | CHARSET_PARAM_NEWLINE,
                               "filename",
                               resource);
-    spool_replace_header(xstrdup("Content-Disposition"),
+    spool_replace_header("content-disposition",
                          buf_release(&txn->buf), txn->req_hdrs);
 
-    spool_remove_header(xstrdup("Content-Description"), txn->req_hdrs);
+    spool_remove_header("content-description", txn->req_hdrs);
 
     /* Store the resource */
     int r = dav_store_resource(txn, buf_cstring(buf), 0,

@@ -172,8 +172,8 @@ static int deleteheader(void *mc, const char *head, int index)
 
     if (head == NULL) return SIEVE_FAIL;
 
-    if (!index) spool_remove_header(xstrdup(head), m->hdrcache);
-    else spool_remove_header_instance(xstrdup(head), index, m->hdrcache);
+    if (!index) spool_remove_header(head, m->hdrcache);
+    else spool_remove_header_instance(head, index, m->hdrcache);
 
     return SIEVE_OK;
 }

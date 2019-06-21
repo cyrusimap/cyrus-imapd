@@ -4592,7 +4592,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
 
     /* Replace cached Destination header with just the absolute path */
-    spool_replace_header(xstrdup("Destination"),
+    spool_replace_header("destination",
                          xstrdup(dest_tgt.path), txn->req_hdrs);
 
     /* Check for optional Overwrite header */

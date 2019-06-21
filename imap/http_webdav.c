@@ -697,19 +697,19 @@ static int webdav_put(struct transaction_t *txn, void *obj,
 
     /* Create and cache RFC 5322 header fields for resource */
     if (filename) {
-        spool_replace_header(xstrdup("Subject"),
+        spool_replace_header("subject",
                              xstrdup(filename), txn->req_hdrs);
-        spool_replace_header(xstrdup("Content-Description"),
+        spool_replace_header("content-description",
                              xstrdup(filename), txn->req_hdrs);
     }
 
     assert(!buf_len(&txn->buf));
     buf_printf(&txn->buf, "<%s@%s>", resource, config_servername);
-    spool_replace_header(xstrdup("Message-ID"),
+    spool_replace_header("message-id",
                          buf_release(&txn->buf), txn->req_hdrs);
 
     buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
-    spool_replace_header(xstrdup("Content-Disposition"),
+    spool_replace_header("content-disposition",
                          buf_release(&txn->buf), txn->req_hdrs);
 
     /* Store the resource */

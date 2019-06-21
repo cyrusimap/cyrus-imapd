@@ -137,7 +137,7 @@ static int begin_headers_cb(nghttp2_session *session,
 
     /* Tell syslog our stream-id */
     buf_printf(&txn->buf, "%d", strm->id);
-    spool_replace_header(xstrdup(":stream-id"),
+    spool_replace_header(":stream-id",
                          buf_release(&txn->buf), txn->req_hdrs);
 
     nghttp2_session_set_stream_user_data(session, frame->hd.stream_id, txn);
@@ -880,7 +880,7 @@ HIDDEN int http2_start_session(struct transaction_t *txn,
 
         /* Tell syslog our stream-id */
         buf_printf(buf, "%d", strm->id);
-        spool_replace_header(xstrdup(":stream-id"),
+        spool_replace_header(":stream-id",
                              buf_release(&txn->buf), txn->req_hdrs);
     }
 

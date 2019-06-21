@@ -862,7 +862,7 @@ HIDDEN int jmap_api(struct transaction_t *txn,
 
   done:
     /* tell syslog which methods were called */
-    spool_replace_header(xstrdup(":jmap"),
+    spool_replace_header(":jmap",
                          strarray_join(&methods, ","), txn->req_hdrs);
 
     {

@@ -2420,6 +2420,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             comparator_t *comp = NULL;
             void *comprock = NULL;
             int npat = strarray_size(cmd.u.dh.values);
+            char *lcname;
 
             /* find comparator function */
             comp = lookup_comp(i, comparator, match, relation, &comprock);
@@ -2431,15 +2432,17 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             if (requires & BFE_VARIABLES) {
                 name = parse_string(name, variables);
             }
-            if (!strcasecmp("Received", name) ||
-                !strcasecmp("Auto-Submitted", name)) {
+            lcname = xstrduplcase(name);
+            if (!strcmp("received", lcname) ||
+                !strcmp("auto-submitted", lcname)) {
                 /* MUST NOT delete -- ignore */
-                name = NULL;
+                free(lcname);
+                lcname = NULL;
             }
 
             if (!npat) {
-                if (name) {
-                    i->deleteheader(m, name, index);
+                if (lcname) {
+                    i->deleteheader(m, lcname, index);
                     i->edited_headers = 1;
                 }
             }
@@ -2455,7 +2458,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                                           comparator, requires, variables);
 
                 /* get the header values */
-                if (name && i->getheader(m, name, &vals) == SIEVE_OK) {
+                if (lcname && i->getheader(m, lcname, &vals) == SIEVE_OK) {
                     for (nval = 0; vals[nval]; nval++) {
                         if (match == B_COUNT) continue;  /* count only */
 
@@ -2514,13 +2517,14 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
                    (so indexing is consistent) */
                 for (v = nval - 1; v >= first_val; v--) {
                     if (delete_mask & (1<<v)) {
-                        i->deleteheader(m, name, v+1 /* 1-based */);
+                        i->deleteheader(m, lcname, v+1 /* 1-based */);
                         i->edited_headers = 1;
                     }
                 }
 
                 free_needles(needles);
             }
+            free(lcname);
             free(strarray_takevf(cmd.u.dh.values));
             break;
         }

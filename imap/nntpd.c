@@ -2968,7 +2968,7 @@ static void add_header(const char *destname, const char **dest,
 
         if (dest) {
             /* replace the existing cached header */
-            spool_replace_header(xstrdup(destname), newdest, hdrcache);
+            spool_replace_header(destname, newdest, hdrcache);
         }
         else {
             /* add the new header to the cache */
@@ -3027,7 +3027,7 @@ static int savemsg(message_data_t *m, FILE *f)
     if ((body = spool_getheader(m->hdrcache, "path")) != NULL) {
         /* prepend to the cached path */
         m->path = strconcat(config_servername, "!", body[0], (char *)NULL);
-        spool_replace_header(xstrdup("Path"), xstrdup(m->path), m->hdrcache);
+        spool_replace_header("path", xstrdup(m->path), m->hdrcache);
     } else {
         /* no path, create one */
         m->path = strconcat(config_servername, "!",
