@@ -4004,7 +4004,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     }
 
     /* Replace cached Destination header with just the absolute path */
-    spool_replace_header(xstrdup("Destination"),
+    spool_replace_header("destination",
                          xstrdup(dest_tgt.path), txn->req_hdrs);
 
     /* Check for optional Overwrite header */
@@ -9492,7 +9492,7 @@ static int notify_put(struct transaction_t *txn, void *obj,
         struct dlist *dl, *al;
         xmlAttrPtr attr;
 
-        spool_replace_header(xstrdup("Subject"),
+        spool_replace_header("subject",
                              xstrdup((char *) type->name), txn->req_hdrs);
 
         /* Create a dlist representing type, namespace, and attribute(s) */
@@ -9541,17 +9541,17 @@ static int notify_put(struct transaction_t *txn, void *obj,
 
         dlist_printbuf(dl, 1, &buf);
         dlist_free(&dl);
-        spool_replace_header(xstrdup("Content-Description"),
+        spool_replace_header("content-description",
                              buf_release(&buf), txn->req_hdrs);
     }
 
     buf_reset(&txn->buf);
     buf_printf(&txn->buf, "<%s-%ld@%s>", resource, time(0), config_servername);
-    spool_replace_header(xstrdup("Message-ID"),
+    spool_replace_header("message-id",
                          buf_release(&txn->buf), txn->req_hdrs);
 
     buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
-    spool_replace_header(xstrdup("Content-Disposition"),
+    spool_replace_header("content-disposition",
                          buf_release(&txn->buf), txn->req_hdrs);
 
     /* Dump XML response tree into a text buffer */
