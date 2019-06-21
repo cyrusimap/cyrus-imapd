@@ -321,7 +321,7 @@ static int http2_header_cb(nghttp2_session *session,
 
     if (!txn) return 0;
 
-    my_name = xstrndup((const char *) name, namelen);
+    my_name = lcase(xstrndup((const char *) name, namelen));
     my_value = xstrndup((const char *) value, valuelen);
 
     syslog(LOG_DEBUG, "http2_header_cb(%s: %s)", my_name, my_value);
@@ -345,6 +345,7 @@ static int http2_header_cb(nghttp2_session *session,
     }
 
     spool_cache_header(my_name, my_value, txn->req_hdrs);
+    free (my_name);
 
     return 0;
 }
@@ -1553,7 +1554,7 @@ static int examine_request(struct transaction_t *txn)
         case VER_2:
             /* HTTP/2 - create a Host header from :authority */
             hdr = spool_getheader(txn->req_hdrs, ":authority");
-            spool_cache_header(xstrdup("Host"), xstrdup(hdr[0]), txn->req_hdrs);
+            spool_cache_header("host", xstrdup(hdr[0]), txn->req_hdrs);
             break;
 
         case VER_1_0:
@@ -1565,7 +1566,7 @@ static int examine_request(struct transaction_t *txn)
             }
             else buf_setcstr(&txn->buf, config_servername);
 
-            spool_cache_header(xstrdup("Host"),
+            spool_cache_header("host",
                                xstrdup(buf_cstring(&txn->buf)), txn->req_hdrs);
             buf_reset(&txn->buf);
             break;

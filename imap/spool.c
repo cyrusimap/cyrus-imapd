@@ -247,23 +247,20 @@ static int parseheader(struct protstream *fin, FILE *fout,
     /* Note: xstrdup()ing the string ensures we return
      * a minimal length string with no allocation slack
      * at the end */
-    if (headname != NULL) *headname = xstrdup(name.s);
+    if (headname != NULL) *headname = xstrduplcase(name.s);
     if (contents != NULL) *contents = xstrdup(body.s);
 
     return 0;
 }
 
-EXPORTED void spool_cache_header(char *name, char *body, hdrcache_t cache)
+EXPORTED void spool_cache_header(const char *name, char *body, hdrcache_t cache)
 {
     strarray_t *contents;
-
-    lcase(name);
 
     contents = (strarray_t *)hash_lookup(name, cache);
     if (!contents)
         contents = hash_insert(name, strarray_new(), cache);
     strarray_appendm(contents, body);
-    free(name);
 }
 
 EXPORTED void spool_replace_header(char *name, char *body, hdrcache_t cache)

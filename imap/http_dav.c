@@ -5592,7 +5592,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
         }
 
         /* Add propfind type to our header cache */
-        spool_cache_header(xstrdup(":type"), xstrdup((const char *) cur->name),
+        spool_cache_header(":type", xstrdup((const char *) cur->name),
                            txn->req_hdrs);
 
         /* Make sure its a known element */
@@ -6097,7 +6097,7 @@ static int send_notification(struct transaction_t *top_txn, xmlDocPtr doc,
         goto done;
     }
 
-    spool_cache_header(xstrdup("Content-Type"),
+    spool_cache_header("content-type",
                        xstrdup(DAVNOTIFICATION_CONTENT_TYPE), txn.req_hdrs);
 
     r = notify_put(&txn, doc, mailbox, resource, webdavdb, 0);
@@ -7932,7 +7932,7 @@ int meth_report(struct transaction_t *txn, void *params)
     if (ret) goto done;
 
     /* Add report type to our header cache */
-    spool_cache_header(xstrdup(":type"), xstrdup((const char *) inroot->name),
+    spool_cache_header(":type", xstrdup((const char *) inroot->name),
                        txn->req_hdrs);
 
     /* Check the report type against our supported list */
