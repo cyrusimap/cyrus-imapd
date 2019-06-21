@@ -6284,7 +6284,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
         }
 
         /* Add propfind type to our header cache */
-        spool_cache_header(xstrdup(":type"), xstrdup((const char *) cur->name),
+        spool_cache_header(":type", xstrdup((const char *) cur->name),
                            txn->req_hdrs);
 
         /* Make sure it is a known element */
@@ -7631,7 +7631,7 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
             if (!xmlStrcmp(node->name, BAD_CAST "sync-token") &&
                 (str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
                 /* Add sync-token to our header cache */
-                spool_cache_header(xstrdup(":token"),
+                spool_cache_header(":token",
                                    xstrdup((const char *) str), txn->req_hdrs);
 
                 /* Parse sync-token */
@@ -8232,7 +8232,7 @@ int meth_report(struct transaction_t *txn, void *params)
     if (ret) goto done;
 
     /* Add report type to our header cache */
-    spool_cache_header(xstrdup(":type"), xstrdup((const char *) inroot->name),
+    spool_cache_header(":type", xstrdup((const char *) inroot->name),
                        txn->req_hdrs);
 
     /* Check the report type against our supported list */

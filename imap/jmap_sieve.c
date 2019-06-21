@@ -1702,18 +1702,20 @@ static int addheader(void *mc, const char *head, const char *body, int index)
     if (!m->cache_full) fill_cache(m);
 
     json_t *args = json_object();
+    char *lcasedhead = xstrduplcase(head);
 
     if (index < 0) {
-        spool_append_header(xstrdup(head), xstrdup(body), m->cache);
+        spool_append_header(lcasedhead, xstrdup(body), m->cache);
 
         json_object_set_new(args, "last", json_true());
     }
     else {
-        spool_prepend_header(xstrdup(head), xstrdup(body), m->cache);
+        spool_prepend_header(lcasedhead, xstrdup(body), m->cache);
     }
 
     json_array_append_new(m->actions,
                           json_pack("[s o [s s]]", "addheader", args, head, body));
+    free(lcasedhead);
 
     return SIEVE_OK;
 }

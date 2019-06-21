@@ -303,36 +303,33 @@ static int parseheader(struct protstream *fin, FILE *fout,
     /* Note: xstrdup()ing the string ensures we return
      * a minimal length string with no allocation slack
      * at the end */
-    if (headname != NULL) *headname = xstrdup(name.s);
+    if (headname != NULL) *headname = xstrduplcase(name.s);
     if (contents != NULL) *contents = xstrdup(body.s);
     if (rawvalue != NULL) *rawvalue = xstrdup(raw.s);
 
     return 0;
 }
 
-static struct header_t *__spool_cache_header(char *name, char *body, char *raw,
+static struct header_t *__spool_cache_header(const char *name, char *body, char *raw,
                                              hash_table *table)
 {
     ptrarray_t *contents;
     struct header_t *hdr = xzmalloc(sizeof(struct header_t));
 
-    hdr->name = name;
+    hdr->name = xstrdup(name);
     hdr->body = body;
     hdr->raw = raw;
 
     /* add header to hash table */
-    char *lcname = lcase(xstrdup(name));
-    contents = (ptrarray_t *) hash_lookup(lcname, table);
+    contents = (ptrarray_t *) hash_lookup(name, table);
 
-    if (!contents) contents = hash_insert(lcname, ptrarray_new(), table);
+    if (!contents) contents = hash_insert(hdr->name, ptrarray_new(), table);
     ptrarray_append(contents, hdr);
-
-    free(lcname);
 
     return hdr;
 }
 
-EXPORTED void spool_prepend_header_raw(char *name, char *body, char *raw, hdrcache_t cache)
+EXPORTED void spool_prepend_header_raw(const char *name, char *body, char *raw, hdrcache_t cache)
 {
     struct header_t *hdr = __spool_cache_header(name, body, raw, &cache->cache);
 
@@ -346,12 +343,12 @@ EXPORTED void spool_prepend_header_raw(char *name, char *body, char *raw, hdrcac
 }
 
 
-EXPORTED void spool_prepend_header(char *name, char *body, hdrcache_t cache)
+EXPORTED void spool_prepend_header(const char *name, char *body, hdrcache_t cache)
 {
     spool_prepend_header_raw(name, body, NULL, cache);
 }
 
-EXPORTED void spool_append_header_raw(char *name, char *body, char *raw, hdrcache_t cache)
+EXPORTED void spool_append_header_raw(const char *name, char *body, char *raw, hdrcache_t cache)
 {
     struct header_t *hdr = __spool_cache_header(name, body, raw, &cache->cache);
 
@@ -364,7 +361,7 @@ EXPORTED void spool_append_header_raw(char *name, char *body, char *raw, hdrcach
     cache->tail = hdr;
 }
 
-EXPORTED void spool_append_header(char *name, char *body, hdrcache_t cache)
+EXPORTED void spool_append_header(const char *name, char *body, hdrcache_t cache)
 {
     spool_append_header_raw(name, body, NULL, cache);
 }
@@ -447,6 +444,7 @@ EXPORTED int spool_fill_hdrcache(struct protstream *fin, FILE *fout,
 
         /* put it in the hash table */
         spool_append_header_raw(name, body, raw, cache);
+        free(name);
     }
 
     return r;

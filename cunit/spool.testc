@@ -67,7 +67,7 @@ static void test_simple(void)
     SPOOL_GETHEADER(cache, "from");
     CU_ASSERT_PTR_NULL(val);
 
-    spool_cache_header(xstrdup("From"), xstrdup(HFROM), cache);
+    spool_cache_header("from", xstrdup(HFROM), cache);
     SPOOL_GETHEADER(cache, "Nonesuch");
     CU_ASSERT_PTR_NULL(val);
     SPOOL_GETHEADER(cache, "From");
@@ -83,13 +83,13 @@ static void test_simple(void)
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
     CU_ASSERT_PTR_NULL(val[1]);
 
-    spool_cache_header(xstrdup("To"), xstrdup(HTO), cache);
-    spool_cache_header(xstrdup("Date"), xstrdup(HDATE), cache);
-    spool_cache_header(xstrdup("Subject"), xstrdup(HSUBJECT), cache);
-    spool_cache_header(xstrdup("Message-ID"), xstrdup(HMESSAGEID), cache);
-    spool_cache_header(xstrdup("Received"), xstrdup(HRECEIVED1), cache);
-    spool_cache_header(xstrdup("Received"), xstrdup(HRECEIVED2), cache);
-    spool_cache_header(xstrdup("Received"), xstrdup(HRECEIVED3), cache);
+    spool_cache_header("to", xstrdup(HTO), cache);
+    spool_cache_header("date", xstrdup(HDATE), cache);
+    spool_cache_header("subject", xstrdup(HSUBJECT), cache);
+    spool_cache_header("message-id", xstrdup(HMESSAGEID), cache);
+    spool_cache_header("received", xstrdup(HRECEIVED1), cache);
+    spool_cache_header("received", xstrdup(HRECEIVED2), cache);
+    spool_cache_header("received", xstrdup(HRECEIVED3), cache);
 
     SPOOL_GETHEADER(cache, "Nonesuch");
     CU_ASSERT_PTR_NULL(val);
@@ -471,7 +471,9 @@ static void test_bz3386(void)
     for (i = 0 ; i < N ; i++) {
         snprintf(name, sizeof(name), "X-Foo-%d-%c", i, 'A'+(i%26));
         snprintf(body, sizeof(body), "value %d %c", i, 'A'+(i%26));
-        spool_cache_header(xstrdup(name), xstrdup(body), cache);
+        char *temp = xstrduplcase(name);
+        spool_cache_header(temp, xstrdup(body), cache);
+        free (temp);
     }
 
     strcpy(body, "Old Buffer");
@@ -507,7 +509,7 @@ static void test_replace(void)
     CU_ASSERT_PTR_NULL(val);
 
     /* replace a single line */
-    spool_cache_header(xstrdup("From"), xstrdup(HFROM), cache);
+    spool_cache_header("from", xstrdup(HFROM), cache);
     SPOOL_GETHEADER(cache, "From");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], HFROM);
@@ -520,9 +522,9 @@ static void test_replace(void)
     CU_ASSERT_PTR_NULL(val[1]);
 
     /* replace multiple lines with one */
-    spool_cache_header(xstrdup("X-FooBar"), xstrdup(FOOBAR1), cache);
-    spool_cache_header(xstrdup("X-FooBar"), xstrdup(FOOBAR2), cache);
-    spool_cache_header(xstrdup("X-FooBar"), xstrdup(FOOBAR3), cache);
+    spool_cache_header("x-foobar", xstrdup(FOOBAR1), cache);
+    spool_cache_header("x-foobar", xstrdup(FOOBAR2), cache);
+    spool_cache_header("x-foobar", xstrdup(FOOBAR3), cache);
     SPOOL_GETHEADER(cache, "X-FooBar");
     CU_ASSERT_PTR_NOT_NULL(val);
     CU_ASSERT_STRING_EQUAL(val[0], FOOBAR1);

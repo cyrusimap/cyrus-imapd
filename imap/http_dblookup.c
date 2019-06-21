@@ -316,7 +316,7 @@ static int meth_get_db(struct transaction_t *txn,
     if (userhdrs[1]) return HTTP_NOT_ALLOWED;
     if (keyhdrs[1]) return HTTP_NOT_ALLOWED;
 
-    spool_cache_header(xstrdup(":dblookup"),
+    spool_cache_header(":dblookup",
                       strconcat(userhdrs[0], "/", keyhdrs[0], (char *)NULL),
                       txn->req_hdrs);
 

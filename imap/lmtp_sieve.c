@@ -154,10 +154,13 @@ static int addheader(void *mc, const char *head, const char *body, int index)
 
     if (head == NULL || body == NULL) return SIEVE_FAIL;
 
+    char *lcasedhead = xstrduplcase(head);
     if (index < 0)
-        spool_append_header(xstrdup(head), xstrdup(body), m->hdrcache);
+        spool_append_header(lcasedhead, xstrdup(body), m->hdrcache);
     else
-        spool_prepend_header(xstrdup(head), xstrdup(body), m->hdrcache);
+        spool_prepend_header(lcasedhead, xstrdup(body), m->hdrcache);
+
+    free(lcasedhead);
 
     return SIEVE_OK;
 }

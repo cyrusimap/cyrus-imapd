@@ -200,7 +200,7 @@ static int rewrite_calevent_privacy(const char *userid, void *vrock)
 
     rock->txn.userid = userid;
     rock->txn.req_hdrs = spool_new_hdrcache();
-    spool_append_header(xstrdup("Schedule-Reply"), xstrdup("F"),
+    spool_append_header("schedule-reply", xstrdup("F"),
             rock->txn.req_hdrs);
 
     caldavdb = caldav_open_userid(userid);

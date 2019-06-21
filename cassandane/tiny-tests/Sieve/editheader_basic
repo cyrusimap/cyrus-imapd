@@ -44,8 +44,8 @@ EOF
 
     $msg1 = $res->{1}->{rfc822};
 
-    $self->assert_matches(qr/^X-Cassandane-Test: prepend1\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: append1\r\nX-Cassandane-Test: append3\r\nX-Cassandane-Test: append5\r\n\r\n/, $msg1);
+    $self->assert_matches(qr/^x-cassandane-test: prepend1\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: append1\r\nx-cassandane-test: append3\r\nx-cassandane-test: append5\r\n\r\n/, $msg1);
 
     $imaptalk->select($target);
     $res = $imaptalk->fetch(1, 'rfc822');

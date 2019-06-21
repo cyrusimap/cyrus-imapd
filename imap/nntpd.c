@@ -2972,7 +2972,7 @@ static void add_header(const char *destname, const char **dest,
         }
         else {
             /* add the new header to the cache */
-            spool_cache_header(xstrdup(destname), newdest, hdrcache);
+            spool_cache_header(destname, newdest, hdrcache);
         }
     } else if (dest) {
         /* no source header, use original dest header */
@@ -3033,7 +3033,7 @@ static int savemsg(message_data_t *m, FILE *f)
         m->path = strconcat(config_servername, "!",
                             nntp_userid ? nntp_userid : "anonymous",
                             (char *)NULL);
-        spool_cache_header(xstrdup("Path"), xstrdup(m->path), m->hdrcache);
+        spool_cache_header("path", xstrdup(m->path), m->hdrcache);
     }
     fprintf(f, "Path: %s\r\n", m->path);
 
@@ -3048,7 +3048,7 @@ static int savemsg(message_data_t *m, FILE *f)
         sprintf(m->id, "<cmu-nntpd-%d-%d-%d@%s>", p, (int) now,
                 post_count++, config_servername);
         fprintf(f, "Message-ID: %s\r\n", m->id);
-        spool_cache_header(xstrdup("Message-ID"), xstrdup(m->id), m->hdrcache);
+        spool_cache_header("message-id", xstrdup(m->id), m->hdrcache);
     }
 
     /* get date */
@@ -3059,7 +3059,7 @@ static int savemsg(message_data_t *m, FILE *f)
         time_to_rfc5322(now, datestr, sizeof(datestr));
         m->date = xstrdup(datestr);
         fprintf(f, "Date: %s\r\n", datestr);
-        spool_cache_header(xstrdup("Date"), xstrdup(datestr), m->hdrcache);
+        spool_cache_header("date", xstrdup(datestr), m->hdrcache);
     }
     else {
         m->date = xstrdup(body[0]);
@@ -3101,7 +3101,7 @@ static int savemsg(message_data_t *m, FILE *f)
                     (newsaddheaders & IMAP_ENUM_NEWSADDHEADERS_TO)) {
                     to = groups;
                 }
-                add_header("To", body, to, newspostuser, m->hdrcache, f);
+                add_header("to", body, to, newspostuser, m->hdrcache, f);
 
                 /* add Reply-To: header to spooled message file,
                    optionally adding "post" email addr based on newsgroup */
@@ -3120,7 +3120,7 @@ static int savemsg(message_data_t *m, FILE *f)
                         else replyto = spool_getheader(m->hdrcache, "from");
                     }
                 }
-                add_header("Reply-To", body, replyto, newspostuser,
+                add_header("reply-to", body, replyto, newspostuser,
                            m->hdrcache, f);
             }
         } else {

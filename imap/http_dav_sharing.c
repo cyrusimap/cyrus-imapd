@@ -931,7 +931,7 @@ static int dav_send_notification(xmlDocPtr doc, struct dlist *extradata,
         goto done;
     }
 
-    spool_cache_header(xstrdup("Content-Type"),
+    spool_cache_header("content-type",
                        xstrdup(DAVNOTIFICATION_CONTENT_TYPE), txn.req_hdrs);
 
     r = dav_store_notification(&txn, doc, extradata,

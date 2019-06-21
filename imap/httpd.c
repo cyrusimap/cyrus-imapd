@@ -1534,7 +1534,7 @@ static int preauth_check_hdrs(struct transaction_t *txn)
         }
 
         /* Create an :authority pseudo header from Host */
-        spool_cache_header(xstrdup(":authority"),
+        spool_cache_header(":authority",
                            xstrdup(hdr[0]), txn->req_hdrs);
     }
     else {
@@ -1555,7 +1555,7 @@ static int preauth_check_hdrs(struct transaction_t *txn)
             }
             else buf_setcstr(&txn->buf, config_servername);
 
-            spool_cache_header(xstrdup(":authority"),
+            spool_cache_header(":authority",
                                buf_release(&txn->buf), txn->req_hdrs);
             break;
 

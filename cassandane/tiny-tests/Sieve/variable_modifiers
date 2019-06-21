@@ -56,19 +56,19 @@ EOF
 
     $msg1 = $res->{1}->{rfc822};
 
-    $self->assert_matches(qr/X-Cassandane-Test: len = "18"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: lower = "jumbled\?letters=\.\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: upper = "JUMBLED\?LETTERS=\.\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: lowerfirst = "juMBlEd\?lETteRS=\.\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: lowerfirst\+upper = "jUMBLED\?LETTERS=\.\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: upperfirst = "JuMBlEd\?lETteRS=\.\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: upperfirst\+lower = "Jumbled\?letters=\.\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: wild = "juMBlEd\\\?lETteRS=\.\\\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: regex = "juMBlEd\\\?lETteRS=\\\.\\\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: url = "juMBlEd%3FlETteRS%3D\.%2A"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: wild\+upper = "JUMBLED\\\?LETTERS=\.\\\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: regex\+upper = "JUMBLED\\\?LETTERS=\\\.\\\*"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: url\+upper = "JUMBLED%3FLETTERS%3D\.%2A"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: regex\+url\+upperfirst\+lower = "Jumbled%5C%3Fletters%3D%5C.%5C%2A"\r\n/, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Test: regex\+url\+upper\+len = "33"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: len = "18"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: lower = "jumbled\?letters=\.\*"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: upper = "JUMBLED\?LETTERS=\.\*"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: lowerfirst = "juMBlEd\?lETteRS=\.\*"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: lowerfirst\+upper = "jUMBLED\?LETTERS=\.\*"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: upperfirst = "JuMBlEd\?lETteRS=\.\*"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: upperfirst\+lower = "Jumbled\?letters=\.\*"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: wild = "juMBlEd\\\?lETteRS=\.\\\*"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: regex = "juMBlEd\\\?lETteRS=\\\.\\\*"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: url = "juMBlEd%3FlETteRS%3D\.%2A"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: wild\+upper = "JUMBLED\\\?LETTERS=\.\\\*"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: regex\+upper = "JUMBLED\\\?LETTERS=\\\.\\\*"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: url\+upper = "JUMBLED%3FLETTERS%3D\.%2A"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: regex\+url\+upperfirst\+lower = "Jumbled%5C%3Fletters%3D%5C.%5C%2A"\r\n/, $msg1);
+    $self->assert_matches(qr/x-cassandane-test: regex\+url\+upper\+len = "33"\r\n/, $msg1);
 }

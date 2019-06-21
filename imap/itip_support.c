@@ -1126,10 +1126,10 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     if (!sched_sender_address)
         sched_sender_address = xstrdupnull(sender);
     if (sched_sender_address)
-        spool_append_header(xstrdup("Schedule-Sender-Address"),
+        spool_append_header("schedule-sender-address",
                 sched_sender_address, txn.req_hdrs);
     if (mailfrom && mailfrom->name)
-        spool_append_header(xstrdup("Schedule-Sender-Name"),
+        spool_append_header("schedule-sender-name",
                 xstrdup(mailfrom->name), txn.req_hdrs);
 
     /* Check ACL of sender on recipient's Scheduling Inbox */

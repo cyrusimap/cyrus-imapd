@@ -58,14 +58,14 @@ EOF
 
     $msg1 = $res->{1}->{rfc822};
 
-    $self->assert_matches(qr/^X-Cassandane-Test: =\?UTF-8\?Q\?prepend1=0A=0A\?=\r\nX-Hello: =\?UTF-8\?Q\?World=E2=88=97\?=\r\nReturn-Path: /, $msg1);
-    $self->assert_matches(qr/X-Cassandane-Unique: .*\r\nX-Cassandane-Test: append1\r\nX-Cassandane-Test: append3\r\nX-Cassandane-Test: append5\r\n\r\n/, $msg1);
+    $self->assert_matches(qr/^x-cassandane-test: =\?UTF-8\?Q\?prepend1=0A=0A\?=\r\nx-hello: =\?UTF-8\?Q\?World=E2=88=97\?=\r\nreturn-path: /, $msg1);
+    $self->assert_matches(qr/X-Cassandane-Unique: .*\r\nx-cassandane-test: append1\r\nx-cassandane-test: append3\r\nx-cassandane-test: append5\r\n\r\n/, $msg1);
 
     $imaptalk->select($target);
     $res = $imaptalk->fetch(1, 'rfc822');
 
     $msg1 = $res->{1}->{rfc822};
 
-    $self->assert_matches(qr/^X-Hello: =\?UTF-8\?Q\?World=E2=88=97\?=\r\nReturn-Path: /, $msg1);
+    $self->assert_matches(qr/^x-hello: =\?UTF-8\?Q\?World=E2=88=97\?=\r\nreturn-path: /, $msg1);
     $self->assert_matches(qr/X-Cassandane-Unique: .*\r\n\r\n/, $msg1);
 }

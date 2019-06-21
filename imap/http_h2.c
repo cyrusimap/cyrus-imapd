@@ -191,6 +191,7 @@ static int header_cb(nghttp2_session *session,
     }
 
     spool_cache_header(my_name, my_value, txn->req_hdrs);
+    free(my_name);
 
     return 0;
 }
