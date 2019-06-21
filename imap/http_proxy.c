@@ -87,7 +87,7 @@ HIDDEN struct protocol_t http_protocol =
 
 EXPORTED const char *digest_recv_success(hdrcache_t hdrs)
 {
-    const char **hdr = spool_getheader(hdrs, "Authentication-Info");
+    const char **hdr = spool_getheader(hdrs, "authentication-info");
 
     return (hdr ? hdr[0]: NULL);
 }
@@ -300,7 +300,7 @@ static int login(struct backend *s, const char *userid,
             if (!serverin) {
                 int i = 0;
 
-                hdr = spool_getheader(hdrs, "WWW-Authenticate");
+                hdr = spool_getheader(hdrs, "www-authenticate");
 
                 if (!scheme) {
                     unsigned avail_auth_schemes = 0;
@@ -517,7 +517,7 @@ EXPORTED void http_proto_host(hdrcache_t req_hdrs, const char **proto, const cha
     const char **fwd;
 
     if (config_mupdate_server && config_getstring(IMAPOPT_PROXYSERVERS) &&
-        (fwd = spool_getheader(req_hdrs, "Forwarded"))) {
+        (fwd = spool_getheader(req_hdrs, "forwarded"))) {
         /* Proxied request - parse last Forwarded header for proto and host */
         /* XXX  This is destructive of the header but we don't care
          * and more importantly, we need the tokens available after tok_fini()
@@ -537,7 +537,7 @@ EXPORTED void http_proto_host(hdrcache_t req_hdrs, const char **proto, const cha
     else {
         /* Use our protocol and host */
         if (proto) *proto = https ? "https" : "http";
-        if (host) *host = *spool_getheader(req_hdrs, "Host");
+        if (host) *host = *spool_getheader(req_hdrs, "host");
     }
 }
 
@@ -545,8 +545,8 @@ EXPORTED void http_proto_host(hdrcache_t req_hdrs, const char **proto, const cha
 static void write_forwarding_hdrs(struct transaction_t *txn, hdrcache_t hdrs,
                                   const char *version, const char *proto)
 {
-    const char **via = spool_getheader(hdrs, "Via");
-    const char **fwd = spool_getheader(hdrs, "Forwarded");
+    const char **via = spool_getheader(hdrs, "via");
+    const char **fwd = spool_getheader(hdrs, "forwarded");
 
     /* Add any existing Via headers */
     for (; via && *via; via++) simple_hdr(txn, "Via", *via);
@@ -561,7 +561,7 @@ static void write_forwarding_hdrs(struct transaction_t *txn, hdrcache_t hdrs,
 
     /* Create our own Forwarded header */
     if (proto) {
-        const char **host = spool_getheader(hdrs, "Host");
+        const char **host = spool_getheader(hdrs, "host");
         size_t len;
 
         assert(!buf_len(&txn->buf));
@@ -676,18 +676,18 @@ static void send_response(struct transaction_t *txn, long code,
         /* Empty body -- use  payload headers from response, if any */
         const char **hdr;
 
-        if ((hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
+        if ((hdr = spool_getheader(hdrs, "transfer-encoding"))) {
             txn->flags.te = TE_CHUNKED;
 
             if (txn->flags.ver == VER_1_1) {
                 simple_hdr(txn, "Transfer-Encoding", hdr[0]);
             }
-            if ((hdr = spool_getheader(hdrs, "Trailer"))) {
+            if ((hdr = spool_getheader(hdrs, "trailer"))) {
                 txn->flags.trailer = TRAILER_PROXY;
                 simple_hdr(txn, "Trailer", hdr[0]);
             }
         }
-        else if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
+        else if ((hdr = spool_getheader(hdrs, "content-length"))) {
             if (txn->flags.ver == VER_2) {
                 /* Prevent end of stream */
                 txn->flags.te = TE_CHUNKED;
@@ -876,13 +876,13 @@ EXPORTED int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     write_forwarding_hdrs(&be_txn, txn->req_hdrs, txn->req_line.ver,
                           https ? "https" : "http");
     spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, &be_txn);
-    if ((hdr = spool_getheader(txn->req_hdrs, "TE"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "te"))) {
         for (; *hdr; hdr++) prot_printf(be->out, "TE: %s\r\n", *hdr);
     }
     if (http_methods[txn->meth].flags & METH_NOBODY)
         prot_puts(be->out, "Content-Length: 0\r\n");
-    else if (spool_getheader(txn->req_hdrs, "Transfer-Encoding") ||
-        spool_getheader(txn->req_hdrs, "Content-Length")) {
+    else if (spool_getheader(txn->req_hdrs, "transfer-encoding") ||
+        spool_getheader(txn->req_hdrs, "content-length")) {
         prot_puts(be->out, "Expect: 100-continue\r\n");
         prot_puts(be->out, "Transfer-Encoding: chunked\r\n");
     }
@@ -1007,10 +1007,10 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
                                  "User-Agent: %s\r\n",
                     txn->req_tgt.path, HTTP_VERSION,
                     src_be->hostname, buf_cstring(&serverinfo));
-        write_hdr(src_be->out, "If", txn->req_hdrs);
-        write_hdr(src_be->out, "If-Match", txn->req_hdrs);
-        write_hdr(src_be->out, "If-Unmodified-Since", txn->req_hdrs);
-        write_hdr(src_be->out, "If-Schedule-Tag-Match", txn->req_hdrs);
+        write_hdr(src_be->out, "if", txn->req_hdrs);
+        write_hdr(src_be->out, "if-match", txn->req_hdrs);
+        write_hdr(src_be->out, "if-unmodified-since", txn->req_hdrs);
+        write_hdr(src_be->out, "if-schedule-tag-match", txn->req_hdrs);
 
         assert(!buf_len(&txn->buf));
         buf_printf_markup(&txn->buf, 0,
@@ -1044,7 +1044,7 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
         } while (code < 200);
 
         /* Get lock token */
-        if ((hdr = spool_getheader(resp_hdrs, "Lock-Token")))
+        if ((hdr = spool_getheader(resp_hdrs, "lock-token")))
             lock = xstrdup(*hdr);
 
         switch (code) {
@@ -1083,10 +1083,10 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
                 txn->req_tgt.path, HTTP_VERSION,
                 src_be->hostname, buf_cstring(&serverinfo));
     if (txn->meth != METH_MOVE) {
-        write_hdr(src_be->out, "If", txn->req_hdrs);
-        write_hdr(src_be->out, "If-Match", txn->req_hdrs);
-        write_hdr(src_be->out, "If-Unmodified-Since", txn->req_hdrs);
-        write_hdr(src_be->out, "If-Schedule-Tag-Match", txn->req_hdrs);
+        write_hdr(src_be->out, "if", txn->req_hdrs);
+        write_hdr(src_be->out, "if-match", txn->req_hdrs);
+        write_hdr(src_be->out, "if-unmodified-since", txn->req_hdrs);
+        write_hdr(src_be->out, "if-schedule-tag-match", txn->req_hdrs);
     }
     prot_puts(src_be->out, "\r\n");
     prot_flush(src_be->out);
@@ -1124,20 +1124,20 @@ EXPORTED int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
                               "Host: %s\r\n"
                               "User-Agent: %s\r\n"
                               "Expect: 100-continue\r\n",
-                *spool_getheader(txn->req_hdrs, "Destination"), HTTP_VERSION,
+                *spool_getheader(txn->req_hdrs, "destination"), HTTP_VERSION,
                 dest_be->hostname, buf_cstring(&serverinfo));
-    hdr = spool_getheader(txn->req_hdrs, "Overwrite");
+    hdr = spool_getheader(txn->req_hdrs, "overwrite");
     if (hdr && !strcmp(*hdr, "F"))
         prot_puts(dest_be->out, "If-None-Match: *\r\n");
-    write_hdr(dest_be->out, "TE", txn->req_hdrs);
-    write_hdr(dest_be->out, "Prefer", txn->req_hdrs);
-    write_hdr(dest_be->out, "Accept", txn->req_hdrs);
-    write_hdr(dest_be->out, "Accept-Charset", txn->req_hdrs);
-    write_hdr(dest_be->out, "Accept-Encoding", txn->req_hdrs);
-    write_hdr(dest_be->out, "Accept-Language", txn->req_hdrs);
-    write_hdr(dest_be->out, "Content-Type", resp_hdrs);
-    write_hdr(dest_be->out, "Content-Encoding", resp_hdrs);
-    write_hdr(dest_be->out, "Content-Language", resp_hdrs);
+    write_hdr(dest_be->out, "te", txn->req_hdrs);
+    write_hdr(dest_be->out, "prefer", txn->req_hdrs);
+    write_hdr(dest_be->out, "accept", txn->req_hdrs);
+    write_hdr(dest_be->out, "accept-charset", txn->req_hdrs);
+    write_hdr(dest_be->out, "accept-encoding", txn->req_hdrs);
+    write_hdr(dest_be->out, "accept-language", txn->req_hdrs);
+    write_hdr(dest_be->out, "content-type", resp_hdrs);
+    write_hdr(dest_be->out, "content-encoding", resp_hdrs);
+    write_hdr(dest_be->out, "content-language", resp_hdrs);
     prot_printf(dest_be->out, "Content-Length: %u\r\n\r\n",
                 (unsigned)buf_len(&resp_body.payload));
     prot_flush(dest_be->out);

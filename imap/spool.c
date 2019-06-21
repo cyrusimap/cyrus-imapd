@@ -319,18 +319,12 @@ EXPORTED int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t 
 
 EXPORTED const char **spool_getheader(hdrcache_t cache, const char *phead)
 {
-    char *head;
     strarray_t *contents;
 
     assert(cache && phead);
 
-    head = xstrdup(phead);
-    lcase(head);
-
     /* check the cache */
-    contents = (strarray_t *)hash_lookup(head, cache);
-
-    free(head);
+    contents = (strarray_t *) hash_lookup(phead, cache);
 
     return contents ? (const char **)contents->data : NULL;
 }

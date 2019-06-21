@@ -110,7 +110,7 @@ EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
     body->max = max_msgsize;
 
     /* Check for Transfer-Encoding */
-    if ((hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
+    if ((hdr = spool_getheader(hdrs, "transfer-encoding"))) {
         if (http2) {
             *errstr = "Transfer-Encoding not allowed in HTTP/2";
             return HTTP_BAD_REQUEST;
@@ -169,7 +169,7 @@ EXPORTED int http_parse_framing(int http2, hdrcache_t hdrs,
     }
 
     /* Check for Content-Length */
-    else if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
+    else if ((hdr = spool_getheader(hdrs, "content-length"))) {
         if (hdr[1]) {
             *errstr = "Multiple Content-Length header fields";
             return HTTP_BAD_REQUEST;
@@ -390,13 +390,13 @@ EXPORTED int http_read_body(struct protstream *pin, struct protstream *pout,
         if (body->flags & BODY_DECODE) {
             const char **hdr;
 
-            if (!(hdr = spool_getheader(hdrs, "Content-Encoding"))) {
+            if (!(hdr = spool_getheader(hdrs, "content-encoding"))) {
                 /* nothing to see here */
             }
 
 #ifdef HAVE_ZLIB
             else if (!strcasecmp(hdr[0], "deflate")) {
-                const char **ua = spool_getheader(hdrs, "User-Agent");
+                const char **ua = spool_getheader(hdrs, "user-agent");
 
                 /* Try to detect Microsoft's broken deflate */
                 if (ua && strstr(ua[0], "; MSIE "))
@@ -462,7 +462,7 @@ EXPORTED int http_read_response(struct backend *be, unsigned meth,
 
     /* Check connection persistence */
     if (!strncmp(statbuf, "HTTP/1.0 ", 9)) body->flags |= BODY_CLOSE;
-    for (conn = spool_getheader(*hdrs, "Connection"); conn && *conn; conn++) {
+    for (conn = spool_getheader(*hdrs, "connection"); conn && *conn; conn++) {
         tok_t tok =
             TOK_INITIALIZER(*conn, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT);
         char *token;
