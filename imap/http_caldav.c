@@ -90,7 +90,6 @@
 #include "times.h"
 #include "spool.h"
 #include "strhash.h"
-#include "stristr.h"
 #include "tok.h"
 #include "util.h"
 #include "version.h"

@@ -74,7 +74,6 @@
 #include "smtpclient.h"
 #include "spool.h"
 #include "strhash.h"
-#include "stristr.h"
 #include "times.h"
 #include "util.h"
 #include "vcard_support.h"
