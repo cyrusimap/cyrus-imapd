@@ -7720,7 +7720,8 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
 
         /* Create new FREEBUSY property with FBTYPE and add to component */
         busy = icalproperty_new_freebusy(fb->per);
-        icalproperty_add_parameter(busy, icalparameter_new_fbtype(fb->type));
+        if (fb->type != ICAL_FBTYPE_BUSY)
+            icalproperty_add_parameter(busy, icalparameter_new_fbtype(fb->type));
         icalcomponent_add_property(fbcomp, busy);
     }
 
