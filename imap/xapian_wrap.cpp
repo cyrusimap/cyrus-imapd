@@ -1354,13 +1354,10 @@ int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
         snippet = enquire.get_mset(0, 0).snippet(text,
                 snipgen->max_len - buf_len(snipgen->buf),
                 *stemmer,
-                flags,
+                flags | Xapian::MSet::SNIPPET_CJK_WORDS,
                 snipgen->hi_start,
                 snipgen->hi_end,
                 snipgen->omit
-#ifdef USE_XAPIAN_CYRUS_EXTENSIONS
-                , Xapian::TermGenerator::FLAG_CJK_WORDS
-#endif
                 );
 
         if (snippet.size()) {
