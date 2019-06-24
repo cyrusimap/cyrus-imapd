@@ -1683,7 +1683,7 @@ static void postauth_check_hdrs(struct transaction_t *txn)
                 }
                 else {
                     /* Unknown/unsupported */
-                    continue;
+                    e->qual = 0.0;
                 }
 
                 /* Favor Zstandard over Brotli over GZIP if q values are equal */
