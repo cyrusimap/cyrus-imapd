@@ -4049,6 +4049,7 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     json_t *snippets, *notfound;
     struct buf buf = BUF_INITIALIZER;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct email_filterrock filterrock = EMAIL_FILTERROCK_INITIALIZER;
     json_t *err = NULL;
 
     /* Parse and validate arguments. */
@@ -4065,7 +4066,7 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
             if (JNOTNULL(jfilter)) {
                 jmap_parser_push(&parser, "filter");
                 jmap_filter_parse(req, &parser, jfilter, unsupported_filter,
-                                  _email_parse_filter, NULL, &err);
+                                  _email_parse_filter, &filterrock, &err);
                 jmap_parser_pop(&parser);
                 if (err) break;
             }
@@ -4164,6 +4165,7 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     jmap_ok(req, res);
 
 done:
+    _email_filterrock_fini(&filterrock);
     jmap_parser_fini(&parser);
     buf_free(&buf);
     return r;
