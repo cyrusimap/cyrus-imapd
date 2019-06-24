@@ -2211,11 +2211,6 @@ HIDDEN int jmap_is_valid_utcdate(const char *s)
     return s && *s == '\0';
 }
 
-struct msgfilterrock {
-    jmap_req_t *req;
-    json_t *unsupported;
-};
-
 struct email_filterrock {
     struct carddav_db *carddavdb;
     char *addrbook;
