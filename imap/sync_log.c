@@ -477,8 +477,7 @@ EXPORTED int sync_log_reader_begin(sync_log_reader_t *slr)
                "Reprocessing sync log file %s", slr->work_file);
     }
     else if (!slr->log_file) {
-        syslog(LOG_ERR, "Failed to stat %s: %m",
-               slr->log_file);
+        syslog(LOG_ERR, "No sync log filename");
         return IMAP_IOERROR;
     }
     else {
