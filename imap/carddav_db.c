@@ -700,7 +700,8 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb,
         group += 7;
     }
 
-    const char *mailbox = (carddavdb->db->version >= DB_MBOXID_VERSION) ?
+    const char *mailbox = !mbentry ? NULL :
+        (carddavdb->db->version >= DB_MBOXID_VERSION) ?
         mbentry->uniqueid : mbentry->name;
     struct sqldb_bindval bval[] = {
         { ":mailbox",      SQLITE_TEXT,    { .s = mailbox } },
