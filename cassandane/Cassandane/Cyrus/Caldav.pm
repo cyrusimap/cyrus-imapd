@@ -4026,4 +4026,55 @@ EOF
   $self->check_replication('cassandane');
 }
 
+sub test_calendar_setcolor
+    :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'mycalendar'});
+    $self->assert_not_null($CalendarId);
+
+    my $proppatchXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:A="http://apple.com/ns/ical/">
+  <D:set>
+    <D:prop>
+      <A:calendar-color>#2952A3</A:calendar-color>
+    </D:prop>
+  </D:set>
+</D:propertyupdate>
+EOF
+
+    my $propfindXml = <<EOF;
+<?xml version="1.0" encoding="UTF-8"?>
+<D:propfind xmlns:D="DAV:" xmlns:A="http://apple.com/ns/ical/">
+  <D:prop>
+    <A:calendar-color/>
+  </D:prop>
+</D:propfind>
+EOF
+
+    # Assert that color isn't set.
+    my $response = $CalDAV->Request('PROPFIND', "/dav/calendars/user/cassandane/". $CalendarId,
+                                 $propfindXml, 'Content-Type' => 'text/xml');
+    my $propstat = $response->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0];
+    $self->assert_str_equals('HTTP/1.1 404 Not Found', $propstat->{'{DAV:}status'}{content});
+    $self->assert(exists $propstat->{'{DAV:}prop'}{'{http://apple.com/ns/ical/}calendar-color'});
+
+    # Set color.
+    $response = $CalDAV->Request('PROPPATCH', "/dav/calendars/user/cassandane/". $CalendarId,
+                                    $proppatchXml, 'Content-Type' => 'text/xml');
+
+    # Assert color ist set.
+    $response = $CalDAV->Request('PROPFIND', "/dav/calendars/user/cassandane/". $CalendarId,
+                                 $propfindXml, 'Content-Type' => 'text/xml');
+    $propstat = $response->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0];
+    $self->assert_str_equals('HTTP/1.1 200 OK', $propstat->{'{DAV:}status'}{content});
+    $self->assert_str_equals('#2952A3', $propstat->{'{DAV:}prop'}{'{http://apple.com/ns/ical/}calendar-color'}{content});
+
+}
+
+
 1;
