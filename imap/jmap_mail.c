@@ -2383,12 +2383,10 @@ static void _email_parse_filter(jmap_req_t *req,
                             return;
                         }
                     }
-                    if (!rock->addrbook) {
+                    if (!rock->addrbook && json_object_get(req->args, "addressbookId")) {
                         /* Determine addrbook to lookup contact groups */
-                        json_t *jaddrbookid = json_object_get(req->args, "addressbookId");
                         rock->addrbook = carddav_mboxname(req->accountid,
-                                json_is_string(jaddrbookid) ?
-                                json_string_value(jaddrbookid) : "Default");
+                                json_string_value(json_object_get(req->args, "addressbookId")));
                     }
                     /* Lookup group member email addresses */
                     strarray_t *members = carddav_getgroup(rock->carddavdb, rock->addrbook, groupid);
