@@ -1349,17 +1349,19 @@ int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
         enquire.set_query(xapian_snipgen_build_query(snipgen, stemmer));
 
         unsigned flags = Xapian::MSet::SNIPPET_EXHAUSTIVE |
-            Xapian::MSet::SNIPPET_EMPTY_WITHOUT_MATCH;
+                         Xapian::MSet::SNIPPET_EMPTY_WITHOUT_MATCH|
+#ifdef USE_XAPIAN_CJK_WORDS
+                         Xapian::MSet::SNIPPET_CJK_WORDS;
+#else
+                         Xapian::MSet::SNIPPET_CJK_NGRAM;
+#endif
 
         snippet = enquire.get_mset(0, 0).snippet(text,
                 snipgen->max_len - buf_len(snipgen->buf),
-                *stemmer,
-                flags | Xapian::MSet::SNIPPET_CJK_WORDS,
+                *stemmer, flags,
                 snipgen->hi_start,
                 snipgen->hi_end,
-                snipgen->omit
-                );
-
+                snipgen->omit);
         if (snippet.size()) {
             if (buf_len(snipgen->buf)) {
                 buf_appendoverlap(snipgen->buf, snipgen->omit);

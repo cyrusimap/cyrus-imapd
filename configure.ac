@@ -537,7 +537,7 @@ dnl
 dnl Search engines - Xapian
 dnl
 
-xapian_flavor=none
+xapian_cjk_tokens=none
 AC_ARG_ENABLE(xapian,
         [AS_HELP_STRING([--enable-xapian], [enable Xapian support])],,
         [enable_xapian=no])
@@ -604,20 +604,20 @@ if test "x$enable_xapian" != xno ; then
         ORIG_CXXFLAGS=$CXXFLAGS
         LDFLAGS="$LDFLAGS $XAPIAN_LIBS"
         CXXFLAGS="$CXXFLAGS $XAPIAN_CXXFLAGS"
-        AC_MSG_CHECKING([for Xapian cyruslibs extensions])
+        AC_MSG_CHECKING([for Xapian cjk word tokenization])
         AC_LINK_IFELSE(
             [AC_LANG_PROGRAM(
                 [[#include <xapian.h>]],
-                [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS; (void) cjk_flags; ]])],
-            [xapian_cyrusexts="yes"],
-            [xapian_cyrusexts="no"])
-        AC_MSG_RESULT($xapian_cyrusexts)
-        if test $xapian_cyrusexts = yes; then
-            AC_DEFINE([USE_XAPIAN_CYRUS_EXTENSIONS], [], [Use Xapian cyruslibs extensions?])
-            xapian_flavor=cyruslibs
+                [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS | Xapian::MSet::SNIPPET_CJK_WORDS; (void) cjk_flags; ]])],
+            [xapian_cjkwords="yes"],
+            [xapian_cjkwords="no"])
+        AC_MSG_RESULT($xapian_cjkwords)
+        if test $xapian_cjkwords = yes; then
+            AC_DEFINE([USE_XAPIAN_CJK_WORDS], [], [Use Xapian CJK word tokenizer, rather than n-grams?])
+            xapian_cjk_tokens=words
         else
-            AC_MSG_NOTICE([Your Xapian does not support the Cyrus extensions for Xapian. Consider installing cyruslibs Xapian])
-            xapian_flavor=vanilla
+            AC_MSG_NOTICE([Your Xapian does not support CJK word tokenization. Consider installing a recent Xapian >= 1.4.11])
+            xapian_cjk_tokens=ngrams
         fi
         LDFLAGS=$ORIG_LDFLAGS
         CXXFLAGS=$ORIG_CXXFLAGS
@@ -628,7 +628,7 @@ if test "x$enable_xapian" != xno ; then
     AC_SUBST(XAPIAN_VERSION)
 fi
 AM_CONDITIONAL([USE_XAPIAN], [test "${enable_xapian}" != "no"])
-AC_DEFINE_UNQUOTED([XAPIAN_FLAVOR], ["$xapian_flavor"], [Which Xapian are we running on?])
+AC_DEFINE_UNQUOTED([XAPIAN_CJK_TOKENS], ["$xapian_cjk_tokens"], [Which Xapian CJK tokenzation are we using?])
 
 
 AM_CONDITIONAL([SQUATTER],
@@ -2495,7 +2495,7 @@ Database support:
 Search engine:
    squat:              $enable_squat
    xapian:             $enable_xapian
-   xapian_flavor:      $xapian_flavor
+   xapian_cjk_tokens:  $xapian_cjk_tokens
 
 Hardware support:
    SSE4.2:             $cyrus_cv_sse42

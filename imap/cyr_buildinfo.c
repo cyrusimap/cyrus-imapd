@@ -291,7 +291,7 @@ static json_t *buildinfo()
 #else
     json_object_set_new(search, "xapian", json_false());
 #endif
-    json_object_set_new(search, "xapian_flavor", json_string(XAPIAN_FLAVOR));
+    json_object_set_new(search, "xapian_cjk_tokens", json_string(XAPIAN_CJK_TOKENS));
 
     /* Supported hardware features */
 #ifdef HAVE_SSE42
