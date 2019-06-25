@@ -57,21 +57,18 @@ extern "C" char *icu_getIDForWindowsID(const char *id)
 {
 #ifdef HAVE_ICU
     UErrorCode status = U_ZERO_ERROR;
-    UConverter *utf8cnv = NULL;
-    icu::UnicodeString uWinID, uID;
-    std::string str;
-    const char *tzid;
 
-    utf8cnv = ucnv_open("utf-8", &status);
+    UConverter *utf8cnv = ucnv_open("utf-8", &status);
     if (U_FAILURE(status)) return NULL;
-    uWinID = icu::UnicodeString(id, -1, utf8cnv, status);
+    icu::UnicodeString uWinID {id, -1, utf8cnv, status};
     ucnv_close(utf8cnv);
 
+    icu::UnicodeString uID;
     icu::TimeZone::getIDForWindowsID(uWinID, NULL, uID, status);
-    uID.toUTF8String(str);
-    tzid = str.c_str();
 
-    if (tzid && *tzid) return xstrdup(tzid);
+    std::string str;
+    uID.toUTF8String(str);
+    if (!str.empty()) return xstrdup(str.c_str());
 #endif
 
     if (!strcasecmp(id, "Mid-Atlantic Standard Time")) {
