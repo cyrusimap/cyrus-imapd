@@ -1349,11 +1349,9 @@ int xapian_snipgen_make_snippet(xapian_snipgen_t *snipgen,
         enquire.set_query(xapian_snipgen_build_query(snipgen, stemmer));
 
         unsigned flags = Xapian::MSet::SNIPPET_EXHAUSTIVE |
-                         Xapian::MSet::SNIPPET_EMPTY_WITHOUT_MATCH|
+                         Xapian::MSet::SNIPPET_EMPTY_WITHOUT_MATCH;
 #ifdef USE_XAPIAN_CJK_WORDS
-                         Xapian::MSet::SNIPPET_CJK_WORDS;
-#else
-                         Xapian::MSet::SNIPPET_CJK_NGRAM;
+        flags |= Xapian::MSet::SNIPPET_CJK_WORDS;
 #endif
 
         snippet = enquire.get_mset(0, 0).snippet(text,
