@@ -903,7 +903,8 @@ static int make_key(const char *mboxname,
     keylen += strlen(entry);
     /* if we don't have a userid, we're doing a foreach() */
     if (userid) {
-        if (mboxname && mboxname_userownsmailbox(userid, mboxname)) {
+        if (userid[0] && mboxname &&
+            mboxname_userownsmailbox(userid, mboxname)) {
             /* replace userid of owner with a fixed token */
             userid = OWNER_USERID_TOKEN;
         }
