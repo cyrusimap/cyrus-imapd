@@ -540,14 +540,15 @@ EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const c
 #define CMD_GETGROUP_EXISTS \
     "SELECT rowid " \
     " FROM vcard_objs" \
-    " WHERE mailbox = :mailbox AND kind = :kind AND vcard_uid = :group AND alive = 1;"
+    " WHERE kind = :kind AND vcard_uid = :group AND alive = 1" \
+    " AND (:mailbox IS NULL OR mailbox = :mailbox);"
 
 #define CMD_GETGROUP_MEMBERS \
     "SELECT E.email FROM vcard_emails E" \
     " JOIN vcard_objs CO JOIN vcard_groups G JOIN vcard_objs GO" \
     " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
-    " AND E.pos = 0 AND GO.mailbox = :mailbox AND GO.vcard_uid = :group" \
-    " AND GO.alive = 1 AND CO.alive = 1;"
+    " AND E.pos = 0 AND GO.vcard_uid = :group AND GO.alive = 1 AND CO.alive = 1" \
+    " AND (:mailbox IS NULL OR GO.mailbox = :mailbox);"
 
 static int groupexists_cb(sqlite3_stmt *stmt, void *rock)
 {

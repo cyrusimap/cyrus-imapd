@@ -113,7 +113,8 @@ strarray_t *carddav_getemail2details(struct carddav_db *carddavdb, const char *k
 strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *key,
                                   const char *mboxname, const char *otheruser);
 
-/* checks if a group exists (by id).
+/* checks if a group exists (by id), optionally filtered by addressbook mailbox.
+ * Looks up groups across addressbooks if mailbox is NULL.
    returns emails of its members (if any) */
 strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *mailbox, const char *group);
 
