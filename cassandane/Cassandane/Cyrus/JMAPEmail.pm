@@ -13466,6 +13466,10 @@ sub test_email_query_fromcontactgroupid
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.cassandane.#addressbooks.Addrbook1", ['TYPE', 'ADDRESSBOOK']) or die;
+    $admintalk->create("user.cassandane.#addressbooks.Addrbook2", ['TYPE', 'ADDRESSBOOK']) or die;
+
     my $using = [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
@@ -13480,7 +13484,7 @@ sub test_email_query_fromcontactgroupid
                     emails => [{
                         type => 'personal',
                         value => 'contact1@local',
-                    }]
+                    }],
                 },
                 contact2 => {
                     emails => [{
@@ -13495,6 +13499,12 @@ sub test_email_query_fromcontactgroupid
                 contactGroup1 => {
                     name => 'contactGroup1',
                     contactIds => ['#contact1', '#contact2'],
+                    addressbookId => 'Addrbook1',
+                },
+                contactGroup2 => {
+                    name => 'contactGroup2',
+                    contactIds => ['#contact1'],
+                    addressbookId => 'Addrbook2',
                 }
             }
         }, 'R2'],
@@ -13505,6 +13515,8 @@ sub test_email_query_fromcontactgroupid
     $self->assert_not_null($contactId2);
     my $contactGroupId1 = $res->[1][1]{created}{contactGroup1}{id};
     $self->assert_not_null($contactGroupId1);
+    my $contactGroupId2 = $res->[1][1]{created}{contactGroup2}{id};
+    $self->assert_not_null($contactGroupId2);
 
     $self->make_message("msg1", from => Cassandane::Address->new(
         localpart => 'contact1', domain => 'local'
@@ -13542,6 +13554,22 @@ sub test_email_query_fromcontactgroupid
     $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
     $self->assert_str_equals($emailId2, $res->[0][1]{ids}[1]);
 
+    # Filter by contact group and addressbook.
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                fromContactGroupId => $contactGroupId2
+            },
+            sort => [
+                { property => "subject" }
+            ],
+            addressbookId => 'Addrbook2'
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
+
+
     # Negate filter by contact group.
     $res = $jmap->CallMethods([
         ['Email/query', {
@@ -13554,7 +13582,6 @@ sub test_email_query_fromcontactgroupid
             sort => [
                 { property => "subject" }
             ],
-            addressbookId => 'Default',
         }, 'R1']
     ], $using);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
@@ -13569,6 +13596,20 @@ sub test_email_query_fromcontactgroupid
             sort => [
                 { property => "subject" }
             ],
+        }, 'R1']
+    ], $using);
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
+
+    # Reject contact groups in wrong addressbook.
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                fromContactGroupId => $contactGroupId1
+            },
+            sort => [
+                { property => "subject" }
+            ],
+            addressbookId => 'Addrbook2',
         }, 'R1']
     ], $using);
     $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
