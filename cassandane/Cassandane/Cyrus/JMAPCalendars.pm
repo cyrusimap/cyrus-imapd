@@ -2866,6 +2866,51 @@ sub test_calendarevent_set_participantid
     $self->assert_normalized_event_equals($res->[0][1]{list}[0], $event);
 }
 
+sub test_calendarevent_set_participants_justorga
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    my $event =  {
+        "calendarId" => $calid,
+        "title"=> "title",
+        "description"=> "description",
+        "start"=> "2015-11-07T09:00:00",
+        "duration"=> "PT1H",
+        "timeZone" => "Europe/London",
+        "isAllDay"=> JSON::false,
+        "freeBusyStatus"=> "busy",
+        "status" => "confirmed",
+        "replyTo" => {
+            "imip" => "mailto:foo\@local",
+        },
+        participantId => 'foo',
+        "participants" => {
+            'foo' => {
+                name => 'Foo',
+                roles => {
+                    'owner' => JSON::true,
+                },
+                "sendTo" => {
+                    "imip" => "mailto:foo\@local",
+                },
+                email => 'foo@local',
+                attendance => 'required',
+                participationStatus => 'needs-action',
+                scheduleSequence => 0,
+                expectReply => JSON::false,
+            },
+        },
+    };
+
+    my $ret = $self->createandget_event($event);
+    delete $event->{method};
+    $self->assert_normalized_event_equals($ret, $event);
+}
+
 sub test_calendarevent_set_isallday
     :min_version_3_1 :needs_component_jmap
 {
