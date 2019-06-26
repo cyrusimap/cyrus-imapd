@@ -261,7 +261,7 @@ EXPORTED int conversation_folder_number(struct conversations_state *state,
                 state->trashfolder = pos;
         }
         else {
-            if (!state->trashmboxid) {
+            if (!state->trashmboxid && state->trashmboxname) {
                 mbentry_t *mbentry = NULL;
 
                 mboxlist_lookup(state->trashmboxname, &mbentry, NULL);
@@ -399,7 +399,7 @@ EXPORTED int conversations_open_path(const char *fname, const char *userid, int 
     else {
         mbentry_t *mbentry = NULL;
 
-        mboxlist_lookup(trashmboxname, &mbentry, NULL);
+        if (trashmboxname) mboxlist_lookup(trashmboxname, &mbentry, NULL);
         open->s.trashmboxid = mbentry ? xstrdup(mbentry->uniqueid) : NULL;
         mboxlist_entry_free(&mbentry);
         open->s.trashfolder = folder_number(&open->s, open->s.trashmboxid, /*create*/0);
