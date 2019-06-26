@@ -4283,9 +4283,6 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     icalproperty *prop = NULL;
     int is_exc = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY) != NULL;
 
-    /* Do not preserve any current contents */
-    json_incref(event);
-
     json_t *jprop = json_object_get(event, "excluded");
     if (jprop && jprop != json_false()) {
         jmap_parser_invalid(parser, "excluded");
@@ -4604,14 +4601,6 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     } else if (jprop) {
         jmap_parser_invalid(parser, "recurrenceOverrides");
     }
-
-    /* Bail out for property errors */
-    if (json_array_size(parser->invalid)) {
-        json_decref(event);
-        return;
-    }
-
-    json_decref(event);
 }
 
 icalcomponent*
