@@ -4218,37 +4218,42 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
             dtprop_to_ical(comp, start, 0, ICAL_RDATE_PROPERTY);
         } else {
             /* Add VEVENT exception */
-            json_t *ex, *val;
-            const char *key;
-            int ignore = 0;
+            json_t *myoverride = json_copy(override); // shallow copy
 
             /* JMAP spec: "A pointer MUST NOT start with one of the following
              * prefixes; any patch with a such a key MUST be ignored" */
+            const char *key;
+            json_t *val;
             json_object_foreach(override, key, val) {
-                if (!strcmp(key, "uid") ||
+                if (!strcmp(key, "@type") ||
+                    !strcmp(key, "uid") ||
                     !strcmp(key, "relatedTo") ||
                     !strcmp(key, "prodId") ||
-                    // be laxer than outdated spec v16: !strcmp(key, "isAllDay") ||
+                    !strcmp(key, "method") ||
                     !strcmp(key, "recurrenceRule") ||
                     !strcmp(key, "recurrenceOverrides") ||
                     !strcmp(key, "replyTo") ||
                     !strcmp(key, "participantId")) {
 
-                    ignore = 1;
+                    json_object_del(myoverride, key);
                 }
             }
-            if (ignore)
+            if (!json_object_size(myoverride)) {
+                json_decref(myoverride);
                 continue;
+            }
 
             /* If the override doesn't have a custom start date, use
              * the LocalDate in the recurrenceOverrides object key */
-            if (!json_object_get(override, "start")) {
-                json_object_set_new(override, "start", json_string(id));
+            if (!json_object_get(myoverride, "start")) {
+                json_object_set_new(myoverride, "start", json_string(id));
             }
 
             /* Create overridden event from patch and master event */
-            if (!(ex = jmap_patchobject_apply(master, override))) {
+            json_t *ex;
+            if (!(ex = jmap_patchobject_apply(master, myoverride))) {
                 jmap_parser_invalid(parser, id);
+                json_decref(myoverride);
                 continue;
             }
 
@@ -4265,6 +4270,7 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
             /* Add the exception */
             icalcomponent_add_component(ical, excomp);
             json_decref(ex);
+            json_decref(myoverride);
         }
     }
     jmap_parser_pop(parser);
