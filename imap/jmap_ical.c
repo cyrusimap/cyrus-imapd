@@ -4204,14 +4204,14 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
         }
 
         json_t *excluded = json_object_get(override, "excluded");
-        if (excluded) {
-            if (json_object_size(override) == 1 && excluded == json_true()) {
+        if (excluded == json_true()) {
+            if (json_object_size(override) == 1) {
                 /* Add EXDATE */
                 dtprop_to_ical(comp, start, 0, ICAL_EXDATE_PROPERTY);
             }
             else {
+                /* excluded overrides MUST NOT define any other property */
                 jmap_parser_invalid(parser, id);
-                continue;
             }
         } else if (!json_object_size(override)) {
             /* Add RDATE */
@@ -4303,6 +4303,12 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
 
     /* start, duration, timeZone */
     startend_to_ical(comp, parser, event);
+
+    /* excluded - validate, but ignore */
+    jprop = json_object_get(event, "excluded");
+    if (jprop && !json_is_boolean(jprop)) {
+        jmap_parser_invalid(parser, "excluded");
+    }
 
     /* relatedTo */
     jprop = json_object_get(event, "relatedTo");
