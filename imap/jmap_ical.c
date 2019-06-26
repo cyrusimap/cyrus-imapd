@@ -1556,23 +1556,20 @@ alerts_from_ical(icalcomponent *comp)
         }
         json_object_set_new(alert, "action", json_string(action));
 
-        /* relativeTo */
-        const char *relative_to = "before-start";
-        if (duration.is_neg) {
-            relative_to = related == ICAL_RELATED_START ?
-                "before-start" : "before-end";
-        } else {
-            relative_to = related == ICAL_RELATED_START ?
-                "after-start" : "after-end";
-        }
-        json_object_set_new(alert, "relativeTo", json_string(relative_to));
+        /* trigger */
+        json_t *jtrigger = json_object();
+        json_object_set_new(jtrigger, "type", json_string("offset"));
 
-        /* offset*/
-        duration.is_neg = 0;
+        /* trigger.relativeTo */
+        const char *relative_to = related == ICAL_RELATED_START ?  "start" : "end";
+        json_object_set_new(jtrigger, "relativeTo", json_string(relative_to));
+
+        /* trigger.offset*/
         char *offset = icaldurationtype_as_ical_string_r(duration);
-        json_object_set_new(alert, "offset", json_string(offset));
-        json_object_set_new(alerts, id, alert);
+        json_object_set_new(jtrigger, "offset", json_string(offset));
         free(offset);
+
+        json_object_set_new(alert, "trigger", jtrigger);
 
         /* acknowledged */
         if ((prop = icalcomponent_get_acknowledged_property(alarm))) {
@@ -1599,6 +1596,7 @@ alerts_from_ical(icalcomponent *comp)
             }
         }
 
+        json_object_set_new(alerts, id, alert);
         free(id);
     }
 
@@ -3399,58 +3397,67 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
             jmap_parser_invalid(parser, id);
             continue;
         }
+        jmap_parser_push(parser, id);
 
         alarm = icalcomponent_new_valarm();
         icalcomponent_set_uid(alarm, id);
 
-        /* offset */
+        /* trigger */
         struct icaltriggertype trigger = {
             icaltime_null_time(), icaldurationtype_null_duration()
         };
-        json_t *jprop = json_object_get(alert, "offset");
-        if (json_is_string(jprop)) {
-            const char *val = json_string_value(jprop);
-            trigger.duration = icaldurationtype_from_string(val);
-            if (icaldurationtype_is_bad_duration(trigger.duration)) {
-                jmap_parser_invalid(parser, "offset");
-            }
-        } else {
-            jmap_parser_invalid(parser, "offset");
-        }
+        json_t *jtrigger = json_object_get(alert, "trigger");
+        if (json_is_object(jtrigger)) {
+            const char *triggertype = json_string_value(json_object_get(jtrigger, "type"));
+            if (!strcmpsafe(triggertype, "offset")) {
+                jmap_parser_push(parser, "trigger");
 
-        /* relativeTo */
-        icalparameter_related rel = ICAL_RELATED_START;
-        trigger.duration.is_neg = 1;
-        jprop = json_object_get(alert, "relativeTo");
-        if (json_is_string(jprop)) {
-            const char *val = json_string_value(jprop);
-            if (!strcmp(val, "before-start")) {
-                rel = ICAL_RELATED_START;
-            } else if (!strcmp(val, "after-start")) {
-                rel = ICAL_RELATED_START;
-                trigger.duration.is_neg = 0;
-            } else if (!strcmp(val, "before-end")) {
-                rel = ICAL_RELATED_END;
-            } else if (!strcmp(val, "after-end")) {
-                rel = ICAL_RELATED_END;
-                trigger.duration.is_neg = 0;
-            } else {
-                jmap_parser_invalid(parser, "relativeTo");
-            }
-        } else if (JNOTNULL(jprop)) {
-            jmap_parser_invalid(parser, "relativeTo");
-        }
+                /* offset */
+                json_t *joffset = json_object_get(jtrigger, "offset");
+                if (json_is_string(joffset)) {
+                    const char *val = json_string_value(joffset);
+                    trigger.duration = icaldurationtype_from_string(val);
+                    if (icaldurationtype_is_bad_duration(trigger.duration)) {
+                        jmap_parser_invalid(parser, "offset");
+                    }
+                } else {
+                    jmap_parser_invalid(parser, "offset");
+                }
 
-        /* Add TRIGGER */
-        prop = icalproperty_new_trigger(trigger);
-        param = icalparameter_new_related(rel);
-        icalproperty_add_parameter(prop, param);
-        icalcomponent_add_property(alarm, prop);
+                /* relativeTo */
+                icalparameter_related rel = ICAL_RELATED_START;
+                json_t *jrelativeTo = json_object_get(jtrigger, "relativeTo");
+                if (json_is_string(jrelativeTo)) {
+                    const char *val = json_string_value(jrelativeTo);
+                    if (!strcmp(val, "start")) {
+                        rel = ICAL_RELATED_START;
+                    } else if (!strcmp(val, "end")) {
+                        rel = ICAL_RELATED_END;
+                    } else {
+                        jmap_parser_invalid(parser, "relativeTo");
+                    }
+                } else if (JNOTNULL(jrelativeTo)) {
+                    jmap_parser_invalid(parser, "relativeTo");
+                }
+
+                jmap_parser_pop(parser);
+
+                /* Add TRIGGER */
+                prop = icalproperty_new_trigger(trigger);
+                param = icalparameter_new_related(rel);
+                icalproperty_add_parameter(prop, param);
+                icalcomponent_add_property(alarm, prop);
+            }
+            else {
+                /* XXX should preserve unknown triggers */
+            }
+        }
+        else jmap_parser_invalid(parser, "trigger");
 
         /* snoozed */
-        jprop = json_object_get(alert, "snoozed");
-        if (json_is_string(jprop)) {
-            const char *val = json_string_value(jprop);
+        json_t *jsnoozed = json_object_get(alert, "snoozed");
+        if (json_is_string(jsnoozed)) {
+            const char *val = json_string_value(jsnoozed);
             struct icaltriggertype snooze_trigger = {
                 icaltime_null_time(), icaldurationtype_null_duration()
             };
@@ -3472,14 +3479,14 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
             } else {
                 jmap_parser_invalid(parser, "snoozed");
             }
-        } else if (JNOTNULL(jprop)) {
+        } else if (JNOTNULL(jsnoozed)) {
             jmap_parser_invalid(parser, "snoozed");
         }
 
         /* acknowledged */
-        jprop = json_object_get(alert, "acknowledged");
-        if (json_is_string(jprop)) {
-            const char *val = json_string_value(jprop);
+        json_t *jacknowledged = json_object_get(alert, "acknowledged");
+        if (json_is_string(jacknowledged)) {
+            const char *val = json_string_value(jacknowledged);
             icaltimetype t;
             if (utcdate_to_icaltime(val, &t)) {
                 prop = icalproperty_new_acknowledged(t);
@@ -3487,16 +3494,15 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
             } else {
                 jmap_parser_invalid(parser, "acknowledged");
             }
-        } else if (JNOTNULL(jprop)) {
+        } else if (JNOTNULL(jacknowledged)) {
             jmap_parser_invalid(parser, "acknowledged");
         }
 
-
         /* action */
         icalproperty_action action = ICAL_ACTION_DISPLAY;
-        jprop = json_object_get(alert, "action");
-        if (json_is_string(jprop)) {
-            const char *val = json_string_value(jprop);
+        json_t *jaction = json_object_get(alert, "action");
+        if (json_is_string(jaction)) {
+            const char *val = json_string_value(jaction);
             if (!strcmp(val, "email")) {
                 action = ICAL_ACTION_EMAIL;
             } else if (!strcmp(val, "display")) {
@@ -3504,7 +3510,7 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
             } else {
                 jmap_parser_invalid(parser, "action");
             }
-        } else if (JNOTNULL(jprop)) {
+        } else if (JNOTNULL(jaction)) {
             jmap_parser_invalid(parser, "action");
         }
         prop = icalproperty_new_action(action);
@@ -3541,6 +3547,7 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
         icalcomponent_add_property(alarm, icalproperty_new_description(description));
 
         icalcomponent_add_component(comp, alarm);
+        jmap_parser_pop(parser);
     }
     jmap_parser_pop(parser);
 
