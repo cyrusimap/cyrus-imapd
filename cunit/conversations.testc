@@ -389,6 +389,9 @@ static void test_folder_rename(void)
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL_FATAL(state);
 
+    /* XXX  Hack so we don't have to rewrite this test to use mailboxes.db */
+    state->folders_byname = 1;
+
     /* setup the records we expect */
     r = conversations_add_msgid(state, C_MSGID1, C_CID);
     CU_ASSERT_EQUAL(r, 0);
@@ -489,6 +492,9 @@ static void test_folders(void)
 
     r = conversations_open_path(DBNAME3, NULL, 0/*shared*/, &state);
     CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    /* XXX  Hack so we don't have to rewrite this test to use mailboxes.db */
+    state->folders_byname = 1;
 
     imapopts[IMAPOPT_CONVERSATIONS_COUNTED_FLAGS].val.s = NULL;
 
@@ -830,6 +836,9 @@ static void test_folder_ordering(void)
 
     r = conversations_open_path(DBNAME, NULL, 0/*shared*/, &state);
     CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    /* XXX  Hack so we don't have to rewrite this test to use mailboxes.db */
+    state->folders_byname = 1;
 
     /* Database is empty, so get should succeed and report no results */
     conv = NULL;
@@ -1175,6 +1184,9 @@ static void test_dump(void)
     /* generate some data in the database */
     r = conversations_open_path(DBNAME, NULL, 0/*shared*/, &state);
     CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    /* XXX  Hack so we don't have to rewrite this test to use mailboxes.db */
+    state->folders_byname = 1;
 
     for (i = 0 ; i < N_MSGID_TO_CID ; i++) {
         gen_msgid_cid(i, msgid, sizeof(msgid), &cid);
