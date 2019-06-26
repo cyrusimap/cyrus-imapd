@@ -106,38 +106,30 @@ static const Xapian::Stopper* get_stopper(const std::string& iso)
 
 class CyrusSearchStemmer : public Xapian::StemImplementation
 {
-    charset_t utf8;
+    charset_t utf8 {charset_lookupname("utf-8")};
     std::map<const std::string, std::string> cache;
-    Xapian::Stem stem;
+    Xapian::Stem stem {"en"};
 
     public:
-    CyrusSearchStemmer() :
-        utf8(charset_lookupname("utf-8")), stem("en") { }
-
     virtual ~CyrusSearchStemmer() { charset_free(&utf8); }
 
-    virtual std::string operator() (const std::string &word) {
-
+    virtual std::string operator() (const std::string &word) override {
         // Is this word already in the cache?
-        std::map<const std::string, std::string>::iterator it = cache.find(word);
-        if (it != cache.end()) {
-            return it->second;
-        }
+        try {
+            return cache.at(word);
+        } catch (const std::out_of_range&) {}
 
         // Convert the word to search form
-        char *q = charset_convert(word.c_str(), utf8, charset_flags);
+        std::unique_ptr<char, decltype(std::free)*> q {charset_convert(word.c_str(), utf8, charset_flags), std::free};
         if (!q) {
             return stem(word);
         }
 
         // Store the normalized word in the cache
-        std::string res = stem(Xapian::Unicode::tolower(q));
-        cache[word] = res;
-        free(q);
-        return res;
+        return cache[word] = stem(Xapian::Unicode::tolower(q.get()));
     }
 
-    virtual std::string get_description () const {
+    virtual std::string get_description () const override {
         return "Cyrus";
     }
 };
@@ -173,7 +165,7 @@ static std::set<int> get_db_versions(Xapian::Database &database)
     // Up to version 3 this was named stem version.
     val = database.get_metadata("cyrus.stem-version");
     if (!val.empty()) {
-        versions.insert(std::atoi(val.c_str()));
+        versions.insert(std::stoi(val));
     }
 
     return versions;
@@ -409,13 +401,11 @@ static Xapian::TermGenerator::stem_strategy get_stem_strategy(int db_version, in
  * version or not readable, report their paths in toreindex */
 void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t *toreindex, int always_upgrade)
 {
-    int i;
-
     // Check the version of all dbs in sources
-    for (i = 0; i < sources->count; i++) {
+    for (int i = 0; i < sources->count; i++) {
         const char *thispath = strarray_nth(sources, i);
         try {
-            Xapian::Database database = Xapian::Database(thispath);
+            Xapian::Database database {thispath};
             std::set<int> db_versions = get_db_versions(database);
             for (std::set<int>::iterator it = db_versions.begin();
                     it != db_versions.end(); ++it) {
@@ -520,7 +510,7 @@ int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode)
 
     *dbwp = dbw;
 
-    return r;
+    return 0;
 }
 
 void xapian_dbw_close(xapian_dbw_t *dbw)
@@ -670,12 +660,7 @@ int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
                 (dbw->doctype != 'G' &&  search_part_is_body(num_part))) {
                 std::string key = make_lang_count_key(num_part, iso_lang);
                 std::string val = dbw->database->get_metadata(key);
-                unsigned count = 0;
-                if (val.size() > 0) {
-                    count = std::stoi(val);
-                }
-                count++;
-                dbw->database->set_metadata(key, std::to_string(count));
+                dbw->database->set_metadata(key, val.empty() ? "1" : std::to_string(std::stoi(val) + 1));
             }
 
             // Index with default stemmer.
@@ -948,8 +933,7 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
                         db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_SOME);
                     }
                     std::string lang_prefix = make_lang_prefix(iso_lang, prefix);
-                    Xapian::Query query = db->parser->parse_query(lmatch, flags, lang_prefix);
-                    queries.push_back(new Xapian::Query(query));
+                    queries.push_back(new Xapian::Query{db->parser->parse_query(lmatch, flags, lang_prefix)});
                 } catch (const Xapian::InvalidArgumentError &err) {
                     syslog(LOG_INFO, "Xapian: no stemmer for language %s", iso_lang.c_str());
                 }
@@ -966,8 +950,7 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
         else {
             db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_SOME);
         }
-        Xapian::Query query = db->parser->parse_query(lmatch, flags, std::string(prefix));
-        queries.push_back(new Xapian::Query(query));
+        queries.push_back(new Xapian::Query{db->parser->parse_query(lmatch, flags, std::string(prefix))});
 
         return make_compound(queries, Xapian::Query::OP_OR);
     }
@@ -976,9 +959,8 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
         db->parser->set_stemmer(Xapian::Stem());
         db->parser->set_stopper(NULL);
         db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_NONE);
-        Xapian::Query query = db->parser->parse_query(
-                std::string(match), flags, std::string(prefix));
-        return new Xapian::Query(query);
+        return new Xapian::Query {db->parser->parse_query(
+                std::string(match), flags, std::string(prefix))};
     }
 
 }
@@ -1441,7 +1423,7 @@ int xapian_filter(const char *dest, const char **sources,
 
     try {
         /* create a destination database */
-        Xapian::WritableDatabase destdb = Xapian::WritableDatabase(dest, Xapian::DB_CREATE|Xapian::DB_BACKEND_GLASS);
+        Xapian::WritableDatabase destdb {dest, Xapian::DB_CREATE|Xapian::DB_BACKEND_GLASS};
 
         /* With multiple databases as above, the docids are interleaved, so it
          * might be worth trying to open each source and copy its documents to
@@ -1449,7 +1431,7 @@ int xapian_filter(const char *dest, const char **sources,
          * use. -- Olly on the mailing list */
         while (*sources) {
             thispath = *sources++;
-            Xapian::Database srcdb = Xapian::Database(thispath);
+            Xapian::Database srcdb {thispath};
 
             // Aggregate db versions.
             std::set<int> srcdb_versions = get_db_versions(srcdb);
