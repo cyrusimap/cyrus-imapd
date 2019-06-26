@@ -1691,7 +1691,7 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links)
     /* rel */
     const char *rel = get_icalxparam_value(prop, JMAPICAL_XPARAM_REL);
     if (!rel) rel = "unknown";
-    json_object_set_new(loc, "rel", json_string(rel));
+    json_object_set_new(loc, "relativeTo", json_string(rel));
 
     /* description */
     const char *desc = get_icalxparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
@@ -1770,7 +1770,7 @@ locations_from_ical(icalcomponent *comp, json_t *links)
     if (tzidstart && tzidend && strcmp(tzidstart, tzidend)) {
         prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
         id = xjmapid_from_ical(prop);
-        loc = json_pack("{s:s s:s}", "timeZone", tzidend, "rel", "end");
+        loc = json_pack("{s:s s:s}", "timeZone", tzidend, "relativeTo", "end");
         json_object_set_new(locations, id, loc);
         free(id);
     }
@@ -2424,7 +2424,7 @@ static icalproperty *dtprop_to_ical(icalcomponent *comp,
 
 static int location_is_endtimezone(json_t *loc)
 {
-    const char *rel = json_string_value(json_object_get(loc, "rel"));
+    const char *rel = json_string_value(json_object_get(loc, "relativeTo"));
     if (!rel) return 0;
     return json_object_get(loc, "timeZone") && !strcmp(rel, "end");
 }
@@ -3943,7 +3943,7 @@ validate_location(json_t *loc, struct jmap_parser *parser, json_t *links)
 
     /* At least one property other than rel MUST be set */
     if (json_object_size(loc) == 0 ||
-        (json_object_size(loc) == 1 && json_object_get(loc, "rel"))) {
+        (json_object_size(loc) == 1 && json_object_get(loc, "relativeTo"))) {
         jmap_parser_invalid(parser, NULL);
         return 0;
     }
@@ -3956,9 +3956,9 @@ validate_location(json_t *loc, struct jmap_parser *parser, json_t *links)
     if (JNOTNULL(jprop) && !json_is_string(jprop))
         jmap_parser_invalid(parser, "description");
 
-    jprop = json_object_get(loc, "rel");
+    jprop = json_object_get(loc, "relativeTo");
     if (JNOTNULL(jprop) && !json_is_string(jprop))
-        jmap_parser_invalid(parser, "rel");
+        jmap_parser_invalid(parser, "relativeTo");
 
     jprop = json_object_get(loc, "coordinates");
     if (JNOTNULL(jprop) && !json_is_string(jprop))
@@ -3998,7 +3998,7 @@ static void
 location_to_ical(icalcomponent *comp, const char *id, json_t *loc)
 {
     const char *name = json_string_value(json_object_get(loc, "name"));
-    const char *rel = json_string_value(json_object_get(loc, "rel"));
+    const char *rel = json_string_value(json_object_get(loc, "relativeTo"));
 
     /* Gracefully handle bogus values */
     if (rel && !strcmp(rel, "unknown")) rel = NULL;
