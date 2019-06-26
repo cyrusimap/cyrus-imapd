@@ -65,12 +65,10 @@
 #include "times.h"
 #include "xmalloc.h"
 
-#include "map.h"
 #include "mboxevent.h"
 #include "mboxname.h"
 #include "msgrecord.h"
 #include "notify.h"
-#include "global.h"
 
 #define MESSAGE_EVENTS (EVENT_MESSAGE_APPEND|EVENT_MESSAGE_EXPIRE|\
                         EVENT_MESSAGE_EXPUNGE|EVENT_MESSAGE_NEW|\
