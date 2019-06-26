@@ -4611,17 +4611,6 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
         return;
     }
 
-    /* Check JMAP specification conditions on the generated iCalendar file, so 
-     * this also doubles as a sanity check. Note that we *could* report a
-     * property here as invalid, which had only been set by the client in a
-     * previous request. */
-
-    /* Either both organizer and attendees are null, or neither are. */
-    if ((icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY) == NULL) !=
-        (icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY) == NULL)) {
-        jmap_parser_invalid(parser, "replyTo");
-        jmap_parser_invalid(parser, "participants");
-    }
     json_decref(event);
 }
 
