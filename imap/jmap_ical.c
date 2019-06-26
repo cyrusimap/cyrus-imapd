@@ -1686,7 +1686,7 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links)
 
     /* name */
     const char *name = icalvalue_get_text(icalproperty_get_value(prop));
-    json_object_set_new(loc, "name", json_string(name ? name : ""));
+    if (name) json_object_set_new(loc, "name", json_string(name));
 
     /* rel */
     const char *rel = get_icalxparam_value(prop, JMAPICAL_XPARAM_REL);
@@ -4019,7 +4019,7 @@ location_to_ical(icalcomponent *comp, const char *id, json_t *loc)
 
     /* name, rel */
     icalvalue *val = icalvalue_new_from_string(ICAL_TEXT_VALUE, name);
-    icalproperty_set_value(prop, val);
+    icalproperty_set_value(prop, val); // XXX doesn't support empty string
     if (rel) set_icalxparam(prop, JMAPICAL_XPARAM_REL, rel, 0);
 
     /* description, timeZone, coordinates */
