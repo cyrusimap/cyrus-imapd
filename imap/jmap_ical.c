@@ -848,6 +848,9 @@ overrides_from_ical(icalcomponent *comp, json_t *event, const char *tzid_start)
         if (json_is_null(json_object_get(diff, "start"))) {
             json_object_del(diff, "start");
         }
+        if (json_is_null(json_object_get(diff, "showWithoutTime"))) {
+            json_object_del(diff, "showWithoutTime");
+        }
 
         /* Set override at recurrence id */
         json_object_set_new(exceptions, recurid, diff);
@@ -1932,18 +1935,10 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     /* Initialize time fields */
     struct icaltimetype dtstart = icalcomponent_get_dtstart(comp);
     struct icaldurationtype dur = duration_from_ical(comp);
-    int is_allday = 0;
 
     /* Handle bogus mix of floating and time zoned types */
     const char *tzid_start = tzid_from_ical(comp, ICAL_DTSTART_PROPERTY);
     if (!tzid_start) tzid_start = tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
-
-    /* Initialize isAllDay */
-    if (icaltime_is_date(icalcomponent_get_dtstart(comp))) {
-        is_allday = 1;
-        tzid_start = NULL;
-    }
-    else is_allday = 0;
 
     /* start */
     if (jmap_wantprop(props, "start")) {
@@ -1965,9 +1960,17 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
         free(s);
     }
 
-    /* isAllDay */
-    if (jmap_wantprop(props, "isAllDay")) {
-        json_object_set_new(event, "isAllDay", json_boolean(is_allday));
+    /* showWithoutTime */
+    if (jmap_wantprop(props, "showWithoutTime")) {
+        int show_without_time = 0;
+        const char *strval = get_icalxprop_value(comp, "SHOW-WITHOUT-TIME");
+        if (strval) {
+            show_without_time = !strcasecmp(strval, "TRUE");
+        }
+        else {
+            show_without_time = icaltime_is_date(icalcomponent_get_dtstart(comp));
+        }
+        json_object_set_new(event, "showWithoutTime", json_boolean(show_without_time));
     }
 
     /* uid */
@@ -2414,14 +2417,7 @@ static int location_is_endtimezone(json_t *loc)
 static void
 startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
 {
-    /* isAllDay */
-    int is_allday = 0;
-    json_t *jprop = json_object_get(event, "isAllDay");
-    if (json_is_boolean(jprop)) {
-        is_allday = json_boolean_value(jprop);
-    } else if (JNOTNULL(jprop)) {
-        jmap_parser_invalid(parser, "isAllDay");
-    }
+    json_t *jprop;
 
     /* timeZone */
     icaltimezone *tzstart = NULL;
@@ -2429,7 +2425,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     if (json_is_string(jprop)) {
         const char *val = json_string_value(jprop);
         tzstart = tz_from_tzid(val);
-        if (!tzstart || is_allday) {
+        if (!tzstart) {
             jmap_parser_invalid(parser, "timeZone");
         }
     } else if (JNOTNULL(jprop)) {
@@ -2480,20 +2476,12 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "duration");
     }
-    if (is_allday) {
-        if (!icaldurationtype_is_bad_duration(dur) && (dur.hours || dur.minutes || dur.seconds)) {
-            jmap_parser_invalid(parser, "duration");
-        }
-    }
 
     /* Read start */
     struct datetime start = JMAP_DATETIME_INITIALIZER;
     jprop = json_object_get(event, "start");
     if (json_is_string(jprop)) {
         if (parse_localdate(json_string_value(jprop), &start) < 0) {
-            jmap_parser_invalid(parser, "start");
-        }
-        else if (is_allday && !datetime_has_zero_time(&start)) {
             jmap_parser_invalid(parser, "start");
         }
     } else {
@@ -2510,7 +2498,42 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     remove_icalprop(comp, ICAL_DURATION_PROPERTY);
 
     /* Add DTSTART */
-    struct icaltimetype dtstart = is_allday ?
+    int is_date = 0;
+    if (!tzstart && !tzend && datetime_has_zero_time(&start) &&
+        dur.hours == 0 && dur.minutes == 0 && dur.seconds == 0) {
+        /* Determine if to store DTSTART as DATE type */
+        is_date = 1;
+        /* Check recurrence frequency */
+        json_t *jrrule = json_object_get(event, "recurrenceRule");
+        if (json_is_object(jrrule)) {
+            const char *freq = json_string_value(json_object_get(jrrule, "frequency"));
+            if (!strcmpsafe(freq, "hourly") ||
+                !strcmpsafe(freq, "minutely") ||
+                !strcmpsafe(freq, "secondly")) {
+                is_date = 0;
+            }
+            else {
+                /* Check that all overrides have zero time */
+                json_t *joverrides = json_object_get(event, "recurrenceOverrides");
+                const char *recuridval;
+                json_t *jval;
+                json_object_foreach(joverrides, recuridval, jval) {
+                    struct datetime recurid = JMAP_DATETIME_INITIALIZER;
+                    if ((parse_localdate(recuridval, &recurid) >= 0) &&
+                            !datetime_has_zero_time(&recurid)) {
+                        is_date = 0;
+                        break;
+                    }
+                }
+            }
+        }
+        if (json_object_get(event, "showWithoutTime") == json_false()) {
+            /* Explicitly set to false. Keep start as floating time. */
+            is_date = 0;
+        }
+    }
+
+    struct icaltimetype dtstart = is_date ?
         datetime_to_icaldate(&start) :
         datetime_to_icaltime(&start, tzstart);
     dtprop_to_ical(comp, dtstart, 1, ICAL_DTSTART_PROPERTY);
@@ -2527,6 +2550,23 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
         /* Add DURATION */
         icalcomponent_set_duration(comp, dur);
     }
+
+    json_t *jshowWithoutTime = json_object_get(event, "showWithoutTime");
+    if (json_is_boolean(jshowWithoutTime)) {
+        int show_without_time = json_boolean_value(jshowWithoutTime);
+        /* Only set in iCalendar if it isn't implied by DTSTART value type */
+        if ((is_date == 0) != (show_without_time == 0)) {
+            icalproperty *prop = icalproperty_new(ICAL_X_PROPERTY);
+            icalproperty_set_x_name(prop, "SHOW-WITHOUT-TIME");
+            icalvalue *icalval = icalvalue_new_boolean(show_without_time);
+            icalproperty_set_value(prop, icalval);
+            icalcomponent_add_property(comp, prop);
+        }
+    }
+    else if (JNOTNULL(jshowWithoutTime)) {
+        jmap_parser_invalid(parser, "showWithoutTime");
+    }
+
 }
 
 static void
@@ -3801,10 +3841,10 @@ recurrence_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrul
     if (json_is_string(jprop)) {
         struct datetime until = JMAP_DATETIME_INITIALIZER;
         if (parse_localdate(json_string_value(jprop), &until) >= 0) {
-            int is_allday = icalcomponent_get_dtstart(comp).is_date;
+            int is_date = icalcomponent_get_dtstart(comp).is_date;
             icaltimezone *tzstart = tz_from_tzid(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
             icaltimetype untilutc;
-            if (is_allday) {
+            if (is_date) {
                 untilutc = datetime_to_icaldate(&until);
             }
             else {
