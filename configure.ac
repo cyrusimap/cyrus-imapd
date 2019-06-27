@@ -1586,11 +1586,6 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 ],
                 AC_MSG_NOTICE([httpd will not have support for Brotli compression.  Consider installing libbrotli]))
 
-        dnl httpd needs libmath in a few places
-        dnl XXX really should check for this properly but AC_SEARCH_LIBS/AC_CHECK_LIB
-        dnl XXX break under -Werror(!)
-        LIB_MATH="-lm"
-
         PKG_CHECK_MODULES([SHAPELIB], [shapelib >= 1.3.0],[
                 AC_DEFINE(HAVE_SHAPELIB,[],
                         [Build geographic support into tzdist?])
@@ -1600,7 +1595,7 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
 
         HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${BROTLI_CFLAGS} ${SHAPELIB_CFLAGS}"
-        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${BROTLI_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
+        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${BROTLI_LIBS} ${SHAPELIB_LIBS}"
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)

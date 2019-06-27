@@ -1379,7 +1379,7 @@ lib_libcyrus_la_SOURCES += lib/nonblock_fcntl.c
 else
 lib_libcyrus_la_SOURCES += lib/nonblock_ioctl.c
 endif
-lib_libcyrus_la_LIBADD = libcrc32.la ${LIB_SASL} $(SSL_LIBS) $(GCOV_LIBS)
+lib_libcyrus_la_LIBADD = libcrc32.la ${LIB_SASL} $(SSL_LIBS) $(GCOV_LIBS) -lm
 if USE_CYRUSDB_LMDB
 lib_libcyrus_la_LIBADD += -llmdb
 endif
