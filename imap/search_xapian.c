@@ -2641,15 +2641,19 @@ static int is_indexed_cb(const conv_guidrec_t *rec, void *rock)
 
     const char *mboxuniqueid;
     mbentry_t *mbentry = NULL;
-    if (rec->version < 2) {
-        r = mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
+    if (rec->version > CONV_GUIDREC_BYNAME_VERSION) {
+        mboxuniqueid = rec->mailbox;
+    }
+    else {
+        r = mboxlist_lookup(rec->mailbox, &mbentry, NULL);
         if (r) {
             syslog(LOG_ERR, "is_indexed_cb: mboxlist_lookup %s failed: %s",
                     rec->mailbox, error_message(r));
             goto out;
         }
+        mboxuniqueid = mbentry->uniqueid;
     }
-    else mboxuniqueid = rec->mailbox;
+
     r = read_indexed(tr->activedirs, tr->activetiers, mboxuniqueid,
                      seq, /*do_cache*/1, tr->super.verbose);
     if (mbentry) mboxlist_entry_free(&mbentry);
