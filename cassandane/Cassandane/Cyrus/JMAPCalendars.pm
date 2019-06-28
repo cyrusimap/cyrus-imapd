@@ -1018,20 +1018,8 @@ sub normalize_event
         $event->{locations} = undef;
     } elsif (defined $event->{locations}) {
         foreach my $loc (values %{$event->{locations}}) {
-            if (not exists $loc->{description}) {
-                $loc->{description} = undef;
-            }
-            if (not exists $loc->{relativeTo}) {
-                $loc->{relativeTo} = "unknown";
-            }
-            if (not exists $loc->{timeZone}) {
-                $loc->{timeZone} = undef;
-            }
-            if (not exists $loc->{coordinates}) {
-                $loc->{coordinates} = undef;
-            }
-            if (not exists $loc->{linkIds}) {
-                $loc->{linkIds} = undef;
+            if (not exists $loc->{name}) {
+                $loc->{name} = '';
             }
         }
     }
