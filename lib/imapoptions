@@ -2310,6 +2310,12 @@ product version in the capabilities
    extending that list in the future or adding your own
    if needed. */
 
+{ "specialuse_protect", "\\Archive \\Drafts \\Important \\Junk \\Sent \\Trash", STRING }
+/* Whitespace separated list of special-use attributes
+   to protect the mailboxes for.  If set, don't allow
+   mailboxes with these special use attributes to be deleted
+   or renamed to have a different parent. Default is the built-in list*/
+
 { "specialusealways", 1, SWITCH }
 /* If enabled, this option causes LIST and LSUB output to always include
    the XLIST "special-use" flags */
