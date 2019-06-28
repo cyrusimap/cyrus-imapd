@@ -61,13 +61,13 @@ sub set_up
     my ($self) = @_;
     $self->SUPER::set_up();
 
-    # This will be "vanilla" if using a standard/distro xapian, "cyruslibs"
-    # if using our fork of xapian, or "none" if the Cyrus being tested isn't
-    # new enough to know the difference.
-    $self->{xapian_flavor} =
-        $self->{instance}->{buildinfo}->get('search', 'xapian_flavor') || "none";
+    # This will be "words" if Xapian has a CJK word-tokeniser, "ngrams"
+    # if it doesn't, or "none" if it cannot tokenise CJK at all.
+    $self->{xapian_cjk_tokens} =
+        $self->{instance}->{buildinfo}->get('search', 'xapian_cjk_tokens')
+        || "none";
 
-    xlog "Xapian flavor '$self->{xapian_flavor}' detected.\n";
+    xlog "Xapian CJK tokeniser '$self->{xapian_cjk_tokens}' detected.\n";
 
     use experimental 'smartmatch';
     my $skipdiacrit = $self->{instance}->{config}->get('search_skipdiacrit');
@@ -535,6 +535,7 @@ sub test_snippets_termcover
 
 sub test_cjk_words
     :min_version_3_0 :needs_search_xapian
+    :needs_search_xapian_cjk_tokens(words)
 {
     my ($self) = @_;
 
