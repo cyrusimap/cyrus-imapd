@@ -109,6 +109,9 @@ int strarray_find(const strarray_t *sa, const char *match,
 int strarray_find_case(const strarray_t *sa, const char *match,
                        int starting);
 
+int strarray_intersect(const strarray_t *sa, const strarray_t *b);
+int strarray_intersect_case(const strarray_t *sa, const strarray_t *b);
+
 int strarray_size(const strarray_t *sa);
 
 int strarray_cmp(const strarray_t *a, const strarray_t *b);
