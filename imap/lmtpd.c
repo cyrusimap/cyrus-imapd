@@ -466,11 +466,10 @@ static int delivery_enabled_for_mailbox(const char *mailboxname)
     struct buf attrib = BUF_INITIALIZER;
     char *userid = NULL;
     strarray_t *specialuse = NULL;
-    int i = 0;
     int r = 0;
 
     if (!mboxname_isusermailbox(mailboxname, 0)) return 0;
-    
+
     /* test if the mailbox has a special-use attribute in the exclude list */
     if (strarray_size(excluded_specialuse) > 0) {
         userid = mboxname_to_userid(mailboxname);
@@ -483,13 +482,8 @@ static int delivery_enabled_for_mailbox(const char *mailboxname)
 
         specialuse = strarray_split(buf_cstring(&attrib), NULL, 0);
 
-        for (i = 0; i < strarray_size(specialuse) ; i++) {
-            const char *attribute = strarray_nth(specialuse, i);
-            if (strarray_find(excluded_specialuse, attribute, 0) >= 0) {
-                r = IMAP_MAILBOX_SPECIALUSE;
-                goto done;
-            }
-        }
+        if (strarray_intersect_case(specialuse, excluded_specialuse))
+            r = IMAP_MAILBOX_SPECIALUSE;
     }
 
 done:
