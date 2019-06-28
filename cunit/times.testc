@@ -330,6 +330,13 @@ test_parse_iso8601(void)
     CU_ASSERT_EQUAL(r, 20);
     struct tm *tm = gmtime(&t);
     CU_ASSERT_EQUAL(tm->tm_year, 69);
+
+    static const char DATETIME_NEG2[] = "1965-01-02T03:04:05Z";
+    t = UNINIT_TIMET;
+    r = time_from_iso8601(DATETIME_NEG2, &t);
+    CU_ASSERT_EQUAL(r, 20);
+    tm = gmtime(&t);
+    CU_ASSERT_EQUAL(tm->tm_year, 65);
 }
 
 static void

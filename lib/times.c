@@ -539,7 +539,7 @@ static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
     const char *datefmt = withsep ? "%Y-%m-%dT%H:%M:%S" : "%Y%m%dT%H%M%S";
 
     /*assert(date > 0); - it turns out these can happen, annoyingly enough */
-    assert(tm->tm_year >= 69);
+    /*assert(tm->tm_year >= 69);*/
 
     if (gmtoff < 0) {
         gmtoff = -gmtoff;
