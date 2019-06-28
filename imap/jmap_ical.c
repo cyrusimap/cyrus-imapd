@@ -1670,24 +1670,23 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links)
 
     /* name */
     const char *name = icalvalue_get_text(icalproperty_get_value(prop));
-    if (name) json_object_set_new(loc, "name", json_string(name));
+    json_object_set_new(loc, "name", json_string(name ? name : ""));
 
     /* rel */
     const char *rel = get_icalxparam_value(prop, JMAPICAL_XPARAM_REL);
-    if (!rel) rel = "unknown";
-    json_object_set_new(loc, "relativeTo", json_string(rel));
+    if (rel) json_object_set_new(loc, "relativeTo", json_string(rel));
 
     /* description */
     const char *desc = get_icalxparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
-    json_object_set_new(loc, "description", desc ? json_string(desc) : json_null());
+    if (desc) json_object_set_new(loc, "description", json_string(desc));
 
     /* timeZone */
     const char *tzid = get_icalxparam_value(prop, JMAPICAL_XPARAM_TZID);
-    json_object_set_new(loc, "timeZone", tzid ? json_string(tzid) : json_null());
+    if (tzid) json_object_set_new(loc, "timeZone", json_string(tzid));
 
     /* coordinates */
     const char *coord = get_icalxparam_value(prop, JMAPICAL_XPARAM_GEO);
-    json_object_set_new(loc, "coordinates", coord ? json_string(coord) : json_null());
+    if (coord) json_object_set_new(loc, "coordinates", json_string(coord));
 
     /* linkIds (including altrep) */
     json_t *linkids = json_object();
@@ -1713,9 +1712,9 @@ static json_t* location_from_ical(icalproperty *prop, json_t *links)
     }
     if (!json_object_size(linkids)) {
         json_decref(linkids);
-        linkids = json_null();
+        linkids = NULL;
     }
-    json_object_set_new(loc, "linkIds", linkids);
+    else json_object_set_new(loc, "linkIds", linkids);
 
     return loc;
 }
