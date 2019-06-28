@@ -473,6 +473,9 @@ EXPORTED int quota_update_useds(const char *quotaroot,
         int res;
         int cmp = 1;
         if (q.scanmbox) {
+            /* XXX this will crash if mboxname was null...
+             * https://github.com/cyrusimap/cyrus-imapd/issues/2808
+             */
             cmp = cyrusdb_compar(qdb, mboxname, strlen(mboxname),
                                  q.scanmbox, strlen(q.scanmbox));
         }
