@@ -1545,6 +1545,20 @@ gotevent:
         json_object_set_new(jsevent, "calendarId",
                             json_string(strrchr(cdata->dav.mailbox, '.')+1));
     }
+    if (jmap_wantprop(rock->get->props, "blobId")) {
+        msgrecord_t *mr = NULL;
+        if (!msgrecord_find(rock->mailbox, cdata->dav.imap_uid, &mr)) {
+            struct body *body = NULL;
+            if (!msgrecord_extract_bodystructure(mr, &body)) {
+                char blob_id[JMAP_BLOBID_SIZE];
+                jmap_set_blobid(&body->content_guid, blob_id);
+                json_object_set_new(jsevent, "blobId", json_string(blob_id));
+                message_free_body(body);
+                free(body);
+            }
+            msgrecord_unref(&mr);
+        }
+    }
     json_object_set_new(jsevent, "id", json_string(cdata->ical_uid));
     json_object_set_new(jsevent, "uid", json_string(cdata->ical_uid));
     json_object_set_new(jsevent, "@type", json_string("jsevent"));
@@ -1754,6 +1768,11 @@ static const jmap_property_t event_props[] = {
         "x-href",
         JMAP_CALENDARS_EXTENSION,
         0
+    },
+    {
+        "blobId",
+        JMAP_CALENDARS_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_SKIP_GET
     },
     { NULL, NULL, 0 }
 };
