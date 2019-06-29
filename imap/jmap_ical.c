@@ -363,13 +363,13 @@ static void format_datetime(const struct datetime *dt, struct buf *dst)
     buf_cstring(dst);
 }
 
-static void format_localdate(const struct datetime *dt, struct buf *dst)
+static void format_localdatetime(const struct datetime *dt, struct buf *dst)
 {
     format_datetime(dt, dst);
     buf_cstring(dst);
 }
 
-static void format_utcdate(const struct datetime *dt, struct buf *dst)
+static void format_utcdatetime(const struct datetime *dt, struct buf *dst)
 {
     format_datetime(dt, dst);
     buf_putc(dst, 'Z');
@@ -420,13 +420,13 @@ static const char *parse_datetime(const char *val, struct datetime *dt)
     return p;
 }
 
-static int parse_localdate(const char *val, struct datetime *dt)
+static int parse_localdatetime(const char *val, struct datetime *dt)
 {
     const char *p = parse_datetime(val, dt);
     return (!p || p[0] != '\0') ? -1 : 0;
 }
 
-static int parse_utcdate(const char *val, struct datetime *dt)
+static int parse_utcdatetime(const char *val, struct datetime *dt)
 {
     const char *p = parse_datetime(val, dt);
     return (!p || p[0] != 'Z' || p[1] != '\0') ? -1 : 0;
@@ -912,7 +912,7 @@ recurrence_from_ical(icalcomponent *comp)
         struct datetime until = JMAP_DATETIME_INITIALIZER;
         datetime_from_icaltime(dtuntil, &until);
         struct buf buf = BUF_INITIALIZER;
-        format_localdate(&until, &buf);
+        format_localdatetime(&until, &buf);
         json_object_set_new(recur, "until", json_string(buf_cstring(&buf)));
         buf_free(&buf);
     }
@@ -959,7 +959,7 @@ override_rdate_from_ical(icalproperty *prop)
     if (!icaltime_is_null_time(rdate.time) ||
         !icaltime_is_null_time(rdate.period.start)) {
         subseconds_from_icalprop(prop, &rdatedt.nano);
-        format_localdate(&rdatedt, &buf);
+        format_localdatetime(&rdatedt, &buf);
         json_object_set_new(override, buf_cstring(&buf), o);
         buf_reset(&buf);
     }
@@ -995,7 +995,7 @@ override_exdate_from_ical(icalproperty *prop, const char *tzid_start)
         datetime_from_icaltime(exdate, &exdatedt);
         subseconds_from_icalprop(prop, &exdatedt.nano);
         struct buf buf = BUF_INITIALIZER;
-        format_localdate(&exdatedt, &buf);
+        format_localdatetime(&exdatedt, &buf);
         json_object_set_new(override, buf_cstring(&buf), json_pack("{s:b}", "excluded", 1));
         buf_free(&buf);
     }
@@ -1091,7 +1091,7 @@ overrides_from_ical(icalcomponent *comp, json_t *event, const char *tzid_start)
             if (prop) subseconds_from_icalprop(prop, &exrecurdt.nano);
         }
         struct buf buf = BUF_INITIALIZER;
-        format_localdate(&exrecurdt, &buf);
+        format_localdatetime(&exrecurdt, &buf);
         char *recurid = buf_release(&buf);
 
         /* start */
@@ -1481,7 +1481,7 @@ static json_t *participant_from_ical(icalproperty *prop,
                 icaltstamp.zone == icaltimezone_get_utc_timezone()) {
             struct datetime tstamp = JMAP_DATETIME_INITIALIZER;
             datetime_from_icaltime(icaltstamp, &tstamp); // XXX subseconds
-            format_utcdate(&tstamp, &buf);
+            format_utcdatetime(&tstamp, &buf);
             json_object_set_new(p, "scheduleUpdated", json_string(buf_cstring(&buf)));
             buf_reset(&buf);
         }
@@ -1841,7 +1841,7 @@ alerts_from_ical(icalcomponent *comp)
         if ((prop = icalcomponent_get_acknowledged_property(alarm))) {
 			struct datetime tstamp = JMAP_DATETIME_INITIALIZER;
 			parse_datetime_from_icalprop(prop, &tstamp);
-			format_utcdate(&tstamp, &buf);
+			format_utcdatetime(&tstamp, &buf);
 			json_t *jval = json_string(buf_cstring(&buf));
 			buf_reset(&buf);
 			json_object_set_new(alert, "acknowledged", jval);
@@ -1858,7 +1858,7 @@ alerts_from_ical(icalcomponent *comp)
             if (!icaltime_is_null_time(t) && icaltime_is_valid_time(t)) {
                 struct datetime tstamp = JMAP_DATETIME_INITIALIZER;
                 parse_datetime_from_icalprop(prop, &tstamp);
-                format_utcdate(&tstamp, &buf);
+                format_utcdatetime(&tstamp, &buf);
                 json_t *jval = json_string(buf_cstring(&buf));
                 buf_reset(&buf);
                 json_object_set_new(alert, "snoozed", jval);
@@ -2242,7 +2242,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
         if ((prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))) {
             parse_datetime_from_icalprop(prop, &start);
         }
-        format_localdate(&start, &buf);
+        format_localdatetime(&start, &buf);
         json_object_set_new(event, "start", json_string(buf_cstring(&buf)));
         buf_reset(&buf);
     }
@@ -2301,7 +2301,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
         struct datetime created = JMAP_DATETIME_INITIALIZER;
         if ((prop = icalcomponent_get_first_property(comp, ICAL_CREATED_PROPERTY))) {
             parse_datetime_from_icalprop(prop, &created);
-            format_utcdate(&created, &buf);
+            format_utcdatetime(&created, &buf);
             json_t *jval = json_string(buf_cstring(&buf));
             buf_reset(&buf);
             json_object_set_new(event, "created", jval);
@@ -2313,7 +2313,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
         struct datetime updated = JMAP_DATETIME_INITIALIZER;
         if ((prop = icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY))) {
             parse_datetime_from_icalprop(prop, &updated);
-            format_utcdate(&updated, &buf);
+            format_utcdatetime(&updated, &buf);
             json_t* jval = json_string(buf_cstring(&buf));
             buf_reset(&buf);
             json_object_set_new(event, "updated", jval);
@@ -2724,7 +2724,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     struct datetime start = JMAP_DATETIME_INITIALIZER;
     jprop = json_object_get(event, "start");
     if (json_is_string(jprop)) {
-        if (parse_localdate(json_string_value(jprop), &start) < 0) {
+        if (parse_localdatetime(json_string_value(jprop), &start) < 0) {
             jmap_parser_invalid(parser, "start");
         }
     } else {
@@ -2761,7 +2761,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
                 json_t *jval;
                 json_object_foreach(joverrides, recuridval, jval) {
                     struct datetime recurid = JMAP_DATETIME_INITIALIZER;
-                    if ((parse_localdate(recuridval, &recurid) >= 0) &&
+                    if ((parse_localdatetime(recuridval, &recurid) >= 0) &&
                             !datetime_has_zero_time(&recurid)) {
                         is_date = 0;
                         break;
@@ -3282,7 +3282,7 @@ participant_to_ical(icalcomponent *comp,
     json_t *scheduleUpdated = json_object_get(jpart, "scheduleUpdated");
     if (json_is_string(scheduleUpdated)) {
         struct datetime tstamp = JMAP_DATETIME_INITIALIZER;
-        if (parse_utcdate(json_string_value(scheduleUpdated), &tstamp) >= 0) {
+        if (parse_utcdatetime(json_string_value(scheduleUpdated), &tstamp) >= 0) {
             icaltimetype icaltstamp = datetime_to_icaltime(&tstamp, utc);
             char *tmp = icaltime_as_ical_string_r(icaltstamp);
             set_icalxparam(prop, JMAPICAL_XPARAM_DTSTAMP, tmp, 0);
@@ -3735,7 +3735,7 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
         json_t *jsnoozed = json_object_get(alert, "snoozed");
         if (json_is_string(jsnoozed)) {
             struct datetime snoozedtime = JMAP_DATETIME_INITIALIZER;
-            if (parse_utcdate(json_string_value(jsnoozed), &snoozedtime) >= 0) {
+            if (parse_utcdatetime(json_string_value(jsnoozed), &snoozedtime) >= 0) {
 
                 icalcomponent *snooze = icalcomponent_new_valarm();
 
@@ -3767,7 +3767,7 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
         json_t *jacknowledged = json_object_get(alert, "acknowledged");
         if (json_is_string(jacknowledged)) {
             struct datetime acktime = JMAP_DATETIME_INITIALIZER;
-            if (parse_utcdate(json_string_value(jacknowledged), &acktime) >= 0) {
+            if (parse_utcdatetime(json_string_value(jacknowledged), &acktime) >= 0) {
                 prop = icalproperty_new_acknowledged(datetime_to_icaltime(&acktime, utc));
                 if (acktime.nano) subseconds_to_icalprop(prop, acktime.nano);
                 icalcomponent_add_property(alarm, prop);
@@ -4089,7 +4089,7 @@ recurrence_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrul
     jprop = json_object_get(rrule, "until");
     if (json_is_string(jprop)) {
         struct datetime until = JMAP_DATETIME_INITIALIZER;
-        if (parse_localdate(json_string_value(jprop), &until) >= 0) {
+        if (parse_localdatetime(json_string_value(jprop), &until) >= 0) {
             int is_date = icalcomponent_get_dtstart(comp).is_date;
             icaltimezone *tzstart = tz_from_tzid(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
             icaltimetype untilutc;
@@ -4479,7 +4479,7 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
     json_object_foreach(overrides, recuridval, joverride) {
         struct datetime recurid = JMAP_DATETIME_INITIALIZER;
 
-        if (parse_localdate(recuridval, &recurid) < 0) {
+        if (parse_localdatetime(recuridval, &recurid) < 0) {
             jmap_parser_invalid(parser, recuridval);
             continue;
         }
@@ -4663,7 +4663,7 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     jprop = json_object_get(event, "created");
     if (json_is_string(jprop)) {
         struct datetime tstamp = JMAP_DATETIME_INITIALIZER;
-        if (parse_utcdate(json_string_value(jprop), &tstamp) >= 0) {
+        if (parse_utcdatetime(json_string_value(jprop), &tstamp) >= 0) {
             icaltimetype dt = datetime_to_icaltime(&tstamp, utc);
             insert_icaltimeprop(comp, dt, tstamp.nano, 1, ICAL_CREATED_PROPERTY);
         }
@@ -4678,7 +4678,7 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     jprop = json_object_get(event, "updated");
     if (json_is_string(jprop)) {
         struct datetime tstamp = JMAP_DATETIME_INITIALIZER;
-        if (parse_utcdate(json_string_value(jprop), &tstamp) >= 0) {
+        if (parse_utcdatetime(json_string_value(jprop), &tstamp) >= 0) {
             icaltimetype dt = datetime_to_icaltime(&tstamp, utc);
             insert_icaltimeprop(comp, dt, tstamp.nano, 1, ICAL_DTSTAMP_PROPERTY);
         }
