@@ -2016,6 +2016,141 @@ sub test_calendarevent_set_simple
     $self->assert_num_equals(42, $event->{sequence});
 }
 
+sub test_calendarevent_set_subseconds
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+    my $event =  {
+        calendarId => $calid,
+        uid => "58ADE31-custom-UID",
+        title => "subseconds",
+        start => "2011-12-04T04:05:06.78",
+        created => "2019-06-29T11:58:12.412Z",
+        updated => "2019-06-29T11:58:12.412Z",
+        duration=> "PT5M3.45S",
+        timeZone=> "Europe/Vienna",
+        recurrenceRule => {
+            frequency => "daily",
+            until => '2011-12-10T04:05:06.78',
+        },
+        "replyTo" => {
+            "imip" => 'mailto:foo@local',
+        },
+        "participants" => {
+            'foo' => {
+                name => 'Foo',
+                email => 'foo@local',
+                roles => {
+                    owner => JSON::true,
+                    attendee => JSON::true,
+                },
+                sendTo => {
+                    imip => 'mailto:foo@local',
+                },
+                scheduleSequence => 1,
+                scheduleUpdated => '2018-07-06T05:03:02.123Z',
+            },
+        },
+        alerts => {
+            alert1 => {
+                trigger => {
+                    type => 'offset',
+                    relativeTo => "start",
+                    offset => "-PT5M0.7S",
+                },
+                acknowledged => "2015-11-07T08:57:00.523Z",
+                snoozed => "2015-11-07T10:05:00.7Z",
+                action => "display",
+            },
+        },
+        recurrenceOverrides => {
+            '2011-12-05T04:05:06.78' => {
+                title => "overridden event"
+            },
+            '2011-12-06T04:05:06.78' => {
+                excluded => JSON::true
+            },
+            '2011-12-07T11:00:00.99' => {},
+            '2011-12-08T04:05:06.78' => {
+                title => "overridden event with DTEND",
+                duration => 'PT1H2.345S',
+                locations => {
+                    endLocation => {
+                        name => 'end location in another timezone',
+                        relativeTo => 'end',
+                        timeZone => 'Europe/London',
+                    }
+                },
+            },
+        },
+    };
+
+    my $ret = $self->createandget_event($event);
+
+    # Known regresion: recurrenceRule.until
+    $self->assert_str_equals('2011-12-10T04:05:06',
+        $ret->{recurrenceRule}{until});
+    $ret->{recurrenceRule}{until} = '2011-12-10T04:05:06.78';
+
+    # Known regression: participant.scheduleUpdated
+    $self->assert_str_equals('2018-07-06T05:03:02Z',
+        $ret->{participants}{foo}{scheduleUpdated});
+    $ret->{participants}{foo}{scheduleUpdated} = '2018-07-06T05:03:02.123Z';
+
+    $self->assert_str_equals($event->{created}, $ret->{created});
+    $self->assert_str_equals($event->{updated}, $ret->{updated});
+    $self->assert_normalized_event_equals($event, $ret);
+}
+
+sub test_calendarevent_get_alerts_utctrigger_subseconds
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my ($id, $ical) = $self->icalfile('alerts_utctrigger_subseconds');
+
+    my $alerts = {
+        '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-1' => {
+            trigger => {
+                type => 'offset',
+                relativeTo => "start",
+                offset => "-PT4M59.014S",
+            },
+            action => "display",
+        },
+        '0CF835D0-CFEB-44AE-904A-C36AB63B73BB-2' => {
+            trigger => {
+                type => 'offset',
+                relativeTo => "start",
+                offset => "PT5M0.122S",
+            },
+            action => "display",
+        },
+        '0CF835D0-CFEB-44AE-904A-C46AB64B73BB-3' => {
+            trigger => {
+                type => 'offset',
+                relativeTo => "end",
+                offset => "-PT4M59.889S",
+            },
+            action => "display",
+        },
+        '0CF855D0-CFEB-44AE-904A-C56AB65B75BB-4' => {
+            trigger => {
+                type => 'offset',
+                relativeTo => "end",
+                offset => "PT4M59.247S",
+            },
+            action => "display",
+        },
+    };
+
+    my $event = $self->putandget_vevent($id, $ical);
+    $self->assert_deep_equals($alerts, $event->{alerts});
+}
+
 sub test_calendarevent_set_bymonth
     :min_version_3_1 :needs_component_jmap
 {
