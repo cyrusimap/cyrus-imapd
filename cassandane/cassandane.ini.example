@@ -147,8 +147,9 @@
 # module.  If the basedir is set, we can test the built in API tests against
 # cyrus's CalDAV support for event+json
 [caldavtalk]
-# The base directory of a copy of Net::CalDAVTalk from CPAN.  If empty,
-# the cpan tests won't be run
+# The base directory of a clone of Net::CalDAVTalk from git (i.e. the
+# directory to find the 'testdata' directory in).  If empty, the built-in
+# API tests won't be run
 ##basedir =
 
 # This section describes how Cassandane interacts with the ImapTest
