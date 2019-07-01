@@ -2619,8 +2619,6 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
                                   isadmin, forceuser);
     if (r) goto done;
 
-    mailbox_modseq_dirty(oldmailbox);
-
     if (isusermbox || (oldmailbox->mbtype & MBTYPE_LEGACY_DIRS)) {
         r = mboxlist_create_partition(newname, partition, &newpartition);
         if (r) goto done;
