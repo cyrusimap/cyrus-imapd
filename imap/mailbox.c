@@ -6041,7 +6041,6 @@ HIDDEN int mailbox_rename_nocopy(struct mailbox *oldmailbox,
         else {
             /* we can just rename within the same user */
             r = conversations_rename_folder(oldcstate, oldmailbox->name, newname);
-            syslog(LOG_INFO, "XXXXX  convb rename: %d", r);
         }
     }
 
