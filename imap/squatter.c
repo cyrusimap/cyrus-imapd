@@ -531,7 +531,6 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
 {
     char *prev_userid = NULL;
     int i;
-    int r = 0;
 
     for (i = 0; i < strarray_size(mboxnames); i++) {
         const char *mboxname = strarray_nth(mboxnames, i);
@@ -543,8 +542,13 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
             continue;
         }
 
-        r = compact_mbox(userid, srctiers, desttier, flags);
-        if (r) break;
+        int retry;
+        for (retry = 1; retry <= 3; retry++) {
+            int r = compact_mbox(userid, srctiers, desttier, flags);
+            if (!r) break;
+            syslog(LOG_ERR, "IOERROR: failed to compact %s (%d): %s",
+                   userid, retry, error_message(r));
+        }
 
         free(prev_userid);
         prev_userid = userid;
@@ -554,7 +558,7 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
     }
 
     free(prev_userid);
-    return r;
+    return 0;
 }
 
 static int do_search(const char *query, int single, const strarray_t *mboxnames)
