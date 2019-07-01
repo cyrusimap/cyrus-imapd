@@ -3,27 +3,17 @@ SOFTWARE DEPENDENCIES
 Cassandane needs the following software to work:
 
  * Mail::IMAPTalk
-    this is a fully featured IMAP client package, available on CPAN
-    and also a more recent version on github at
+    This is a fully featured IMAP client package, available on CPAN.
 
-    https://github.com/robmueller/mail-imaptalk
-
-    There is a Ubuntu package for this, libmail-imaptalk-perl,
-    but it's based on the old CPAN version so we use one
-    built from git.
+    There is an Ubuntu package for this, libmail-imaptalk-perl.
 
  * Mail::JMAPTalk
  * Net::DAVTalk
  * Net::CalDAVTalk
  * Net::CardDAVTalk
 
-    These are all packages built by FastMail and available in git for now
-    while we nail down the APIs, sorry.  You'll have to pull them from:
-
-    https://github.com/brong/Mail-JMAPTalk
-    https://github.com/brong/Net-DAVTalk
-    https://github.com/brong/Net-CalDAVTalk
-    https://github.com/brong/Net-CardDAVTalk
+    Similar idea to Mail::IMAPTalk, but for JMAP/DAV/CalDAV/CardDAV
+    respectively.  These are all available on CPAN.
 
  * Encode::IMAPUTF7
     Needed by Mail::IMAPTalk
