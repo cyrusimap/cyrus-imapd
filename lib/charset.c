@@ -44,6 +44,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "unicode/ucnv.h"
+
 #include "assert.h"
 #include "charset.h"
 #include "xmalloc.h"
