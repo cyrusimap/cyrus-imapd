@@ -117,6 +117,13 @@ Cassandane needs the following software to work:
     Base module for implementing LDAP Server functionality in perl
     Available on CPAN, Debian package libnet-ldap-server-perl
 
+ * AnyEvent
+ * Convert::Base64
+ * DateTime::Format::ISO8601
+ * String::CRC32
+ * XML::DOM
+    These are available from CPAN
+
 Debian/Ubuntu copypasta:
   sudo apt-get -y install liburi-perl libdigest-sha-perl \
        libdatetime-perl libbsd-resource-perl libtest-unit-perl \
