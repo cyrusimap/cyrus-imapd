@@ -1852,7 +1852,7 @@ static int setcalendarevents_schedule(jmap_req_t *req,
 
     if (!*schedaddrp) {
         const char **hdr =
-            spool_getheader(req->txn->req_hdrs, "Schedule-Address");
+            spool_getheader(req->txn->req_hdrs, "schedule-address");
         if (hdr) *schedaddrp = xstrdup(hdr[0]);
     }
 

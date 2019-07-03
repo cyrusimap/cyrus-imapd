@@ -425,7 +425,7 @@ static void parse_extensions(struct transaction_t *txn)
 {
     struct ws_context *ctx = (struct ws_context *) txn->ws_ctx;
     const char **ext_hdr =
-        spool_getheader(txn->req_hdrs, "Sec-WebSocket-Extensions");
+        spool_getheader(txn->req_hdrs, "sec-websocket-extensions");
     int i;
 
     /* Look for interesting extensions.  Unknown == ignore */
@@ -531,7 +531,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
     };
 
     /* Check for supported WebSocket version */
-    hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Version");
+    hdr = spool_getheader(txn->req_hdrs, "sec-websocket-version");
     if (!hdr) {
         txn->error.desc = "Missing WebSocket version";
         return HTTP_BAD_REQUEST;
@@ -549,7 +549,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
         /* Check for supported WebSocket subprotocol */
         int i, found = 0;
 
-        hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Protocol");
+        hdr = spool_getheader(txn->req_hdrs, "sec-websocket-protocol");
         if (!hdr) {
             txn->error.desc = "Missing WebSocket protocol";
             return HTTP_BAD_REQUEST;
@@ -577,7 +577,7 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
         unsigned char sha1buf[SHA1_DIGEST_LENGTH];
 
         /* Check for WebSocket client key */
-        hdr = spool_getheader(txn->req_hdrs, "Sec-WebSocket-Key");
+        hdr = spool_getheader(txn->req_hdrs, "sec-websocket-key");
         if (!hdr) {
             txn->error.desc = "Missing WebSocket client key";
             return HTTP_BAD_REQUEST;
@@ -628,11 +628,11 @@ HIDDEN int ws_start_channel(struct transaction_t *txn, const char *protocol,
     /* Add client data */
     buf_printf(&ctx->log, "%s", txn->conn->clienthost);
     if (httpd_userid) buf_printf(&ctx->log, " as \"%s\"", httpd_userid);
-    if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "user-agent"))) {
         buf_printf(&ctx->log, " with \"%s\"", hdr[0]);
-        if ((hdr = spool_getheader(txn->req_hdrs, "X-Client")))
+        if ((hdr = spool_getheader(txn->req_hdrs, "x-client")))
             buf_printf(&ctx->log, " by \"%s\"", hdr[0]);
-        else if ((hdr = spool_getheader(txn->req_hdrs, "X-Requested-With")))
+        else if ((hdr = spool_getheader(txn->req_hdrs, "x-requested-with")))
             buf_printf(&ctx->log, " by \"%s\"", hdr[0]);
     }
 

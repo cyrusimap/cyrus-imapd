@@ -277,7 +277,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
     /* Note: xstrdup()ing the string ensures we return
      * a minimal length string with no allocation slack
      * at the end */
-    if (headname != NULL) *headname = xstrdup(name.s);
+    if (headname != NULL) *headname = xstrduplcase(name.s);
     if (contents != NULL) *contents = xstrdup(body.s);
     if (rawvalue != NULL) *rawvalue = xstrdup(raw.s);
 
@@ -295,13 +295,10 @@ static struct header_t *__spool_cache_header(char *name, char *body, char *raw,
     hdr->raw = raw;
 
     /* add header to hash table */
-    char *lcname = lcase(xstrdup(name));
-    contents = (ptrarray_t *) hash_lookup(lcname, table);
+    contents = (ptrarray_t *) hash_lookup(name, table);
 
-    if (!contents) contents = hash_insert(lcname, ptrarray_new(), table);
+    if (!contents) contents = hash_insert(name, ptrarray_new(), table);
     ptrarray_append(contents, hdr);
-
-    free(lcname);
 
     return hdr;
 }
@@ -345,7 +342,7 @@ EXPORTED void spool_append_header(char *name, char *body, hdrcache_t cache)
 
 EXPORTED void spool_replace_header(char *name, char *body, hdrcache_t cache)
 {
-    spool_remove_header(xstrdup(name), cache);
+    spool_remove_header(name, cache);
     spool_append_header(name, body, cache);
 }
 
@@ -353,7 +350,7 @@ static void __spool_remove_header(char *name, int first, int last,
                                   hdrcache_t cache)
 {
     ptrarray_t *contents =
-        (ptrarray_t *) hash_lookup(lcase(name), &cache->cache);
+        (ptrarray_t *) hash_lookup(name, &cache->cache);
 
     if (contents) {
         int idx;
@@ -383,8 +380,6 @@ static void __spool_remove_header(char *name, int first, int last,
             free(hdr);
         }
     }
-
-    free(name);
 }
 
 EXPORTED void spool_remove_header(char *name, hdrcache_t cache)
@@ -433,13 +428,8 @@ EXPORTED const char **spool_getheader(hdrcache_t cache, const char *phead)
 
     assert(cache && phead);
 
-    head = xstrdup(phead);
-    lcase(head);
-
     /* check the cache */
-    contents = (ptrarray_t *) hash_lookup(head, &cache->cache);
-
-    free(head);
+    contents = (ptrarray_t *) hash_lookup(phead, &cache->cache);
 
     if (contents && ptrarray_size(contents)) {
         strarray_t *array = strarray_new();

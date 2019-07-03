@@ -130,6 +130,7 @@ static int getenvelope(void *mc, const char *field, const char ***contents)
 static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
+    char *lcasedhead = xstrduplcase(phead);
 
     *body = NULL;
 
@@ -137,7 +138,8 @@ static int getheader(void *v, const char *phead, const char ***body)
         fill_cache(m);
     }
 
-    *body = spool_getheader(m->cache, phead);
+    *body = spool_getheader(m->cache, lcasedhead);
+    free(lcasedhead);
 
     if (*body) {
         return SIEVE_OK;
@@ -157,11 +159,11 @@ static int addheader(void *sc, void *mc,
 
     if (index < 0) {
         printf("appending header '%s: %s'\n", head, body);
-        spool_append_header(xstrdup(head), xstrdup(body), m->cache);
+        spool_append_header(xstrduplcase(head), xstrdup(body), m->cache);
     }
     else {
         printf("prepending header '%s: %s'\n", head, body);
-        spool_prepend_header(xstrdup(head), xstrdup(body), m->cache);
+        spool_prepend_header(xstrduplcase(head), xstrdup(body), m->cache);
     }
 
     sd->edited_header = 1;
@@ -174,18 +176,20 @@ static int deleteheader(void *sc, void *mc, const char *head, int index)
 {
     script_data_t *sd = (script_data_t *)sc;
     message_data_t *m = (message_data_t *) mc;
+    char *lcasedhead = xstrduplcase(head);
 
     if (head == NULL) return SIEVE_FAIL;
 
     if (!index) {
         printf("removing all headers '%s'\n", head);
-        spool_remove_header(xstrdup(head), m->cache);
+        spool_remove_header(lcasedhead, m->cache);
     }
     else {
         printf("removing header '%s[%d]'\n", head, index);
-        spool_remove_header_instance(xstrdup(head), index, m->cache);
+        spool_remove_header_instance(lcasedhead, index, m->cache);
     }
 
+    free(lcasedhead);
     sd->edited_header = 1;
 
     return SIEVE_OK;

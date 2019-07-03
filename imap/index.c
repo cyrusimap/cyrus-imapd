@@ -5418,7 +5418,7 @@ static int extract_attachment(const char *type, const char *subtype,
     if (!ctx->timeout) {
         const char **hdr, *p;
 
-        if ((hdr = spool_getheader(hdrs, "Keep-Alive")) &&
+        if ((hdr = spool_getheader(hdrs, "keep-alive")) &&
             (p = strstr(hdr[0], "timeout="))) {
             ctx->timeout = atoi(p+8);
 syslog(LOG_INFO, "XXXXXXXXXXX extract timeout: %d", ctx->timeout);

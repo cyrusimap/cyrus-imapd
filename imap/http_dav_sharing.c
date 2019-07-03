@@ -472,7 +472,7 @@ static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
 
     if (!record || !record->uid) return HTTP_NO_CONTENT;
 
-    if ((hdr = spool_getheader(txn->req_hdrs, "Accept")) &&
+    if ((hdr = spool_getheader(txn->req_hdrs, "accept")) &&
         is_mediatype(DAVSHARING_CONTENT_TYPE, hdr[0])) {
         return HTTP_CONTINUE;
     }
@@ -727,7 +727,7 @@ HIDDEN int dav_send_notification(xmlDocPtr doc,
         goto done;
     }
 
-    spool_cache_header(xstrdup("Content-Type"),
+    spool_cache_header(xstrdup("content-type"),
                        xstrdup(DAVNOTIFICATION_CONTENT_TYPE), txn.req_hdrs);
 
     r = notify_put(&txn, doc, mailbox, resource, webdavdb, 0);
@@ -1051,7 +1051,7 @@ static int notify_put(struct transaction_t *txn, void *obj,
         struct dlist *dl, *al;
         xmlAttrPtr attr;
 
-        spool_replace_header(xstrdup("Subject"),
+        spool_replace_header(xstrdup("subject"),
                              xstrdup((char *) type->name), txn->req_hdrs);
 
         /* Create a dlist representing type, namespace, and attribute(s) */
@@ -1120,17 +1120,17 @@ static int notify_put(struct transaction_t *txn, void *obj,
 
         dlist_printbuf(dl, 1, &buf);
         dlist_free(&dl);
-        spool_replace_header(xstrdup("Content-Description"),
+        spool_replace_header(xstrdup("content-description"),
                              buf_release(&buf), txn->req_hdrs);
     }
 
     buf_reset(&txn->buf);
     buf_printf(&txn->buf, "<%s-%ld@%s>", resource, time(0), config_servername);
-    spool_replace_header(xstrdup("Message-ID"),
+    spool_replace_header(xstrdup("message-id"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
     buf_printf(&txn->buf, "attachment;\r\n\tfilename=\"%s\"", resource);
-    spool_replace_header(xstrdup("Content-Disposition"),
+    spool_replace_header(xstrdup("content-disposition"),
                          buf_release(&txn->buf), txn->req_hdrs);
 
     /* Dump XML response tree into a text buffer */

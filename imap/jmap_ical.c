@@ -528,7 +528,7 @@ recurrence_from_ical(icalcomponent *comp)
     recur = json_pack("{}");
 
     /* frequency */
-    s = lcase(xstrdup(icalrecur_freq_to_string(rrule.freq)));
+    s = xstrduplcase(icalrecur_freq_to_string(rrule.freq));
     json_object_set_new(recur, "frequency", json_string(s));
     free(s);
 
@@ -537,8 +537,7 @@ recurrence_from_ical(icalcomponent *comp)
 #ifdef HAVE_RSCALE
     /* rscale */
     if (rrule.rscale) {
-        s = xstrdup(rrule.rscale);
-        s = lcase(s);
+        s = xstrduplcase(rrule.rscale);
         json_object_set_new(recur, "rscale", json_string(s));
         free(s);
     } else json_object_set_new(recur, "rscale", json_string("gregorian"));
@@ -561,8 +560,7 @@ recurrence_from_ical(icalcomponent *comp)
 #endif
 
     /* firstDayOfWeek */
-    s = xstrdup(icalrecur_weekday_to_string(rrule.week_start));
-    s = lcase(s);
+    s = xstrduplcase(icalrecur_weekday_to_string(rrule.week_start));
     json_object_set_new(recur, "firstDayOfWeek", json_string(s));
     free(s);
 
@@ -580,8 +578,7 @@ recurrence_from_ical(icalcomponent *comp)
         jday = json_pack("{}");
         weekday = icalrecurrencetype_day_day_of_week(rrule.by_day[i]);
 
-        s = xstrdup(icalrecur_weekday_to_string(weekday));
-        s = lcase(s);
+        s = xstrduplcase(icalrecur_weekday_to_string(weekday));
         json_object_set_new(jday, "day", json_string(s));
         free(s);
 
@@ -1657,7 +1654,7 @@ relatedto_from_ical(icalcomponent *comp)
 
             const char *reltype = icalparameter_get_xvalue(param);
             if (reltype && *reltype) {
-                char *s = lcase(xstrdup(reltype));
+                char *s = xstrduplcase(reltype);
                 json_object_set_new(relation, s, json_true());
                 free(s);
             }

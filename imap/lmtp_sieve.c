@@ -119,7 +119,9 @@ static int getheader(void *v, const char *phead, const char ***body)
     message_data_t *m = ((deliver_data_t *) v)->m;
 
     if (phead==NULL) return SIEVE_FAIL;
-    *body = msg_getheader(m, phead);
+    char *lcasedheader = xstrdup(phead);
+    *body = msg_getheader(m, lcasedheader);
+    free (lcasedheader);
 
     if (*body) {
         return SIEVE_OK;
@@ -138,9 +140,9 @@ static int addheader(void *sc, void *mc,
     if (head == NULL || body == NULL) return SIEVE_FAIL;
 
     if (index < 0)
-        spool_append_header(xstrdup(head), xstrdup(body), m->hdrcache);
+        spool_append_header(xstrduplcase(head), xstrdup(body), m->hdrcache);
     else
-        spool_prepend_header(xstrdup(head), xstrdup(body), m->hdrcache);
+        spool_prepend_header(xstrduplcase(head), xstrdup(body), m->hdrcache);
 
     sd->edited_header = 1;
 
@@ -154,10 +156,12 @@ static int deleteheader(void *sc, void *mc, const char *head, int index)
     message_data_t *m = ((deliver_data_t *) mc)->m;
 
     if (head == NULL) return SIEVE_FAIL;
+    char *lcasedhead = xstrduplcase(head);
 
-    if (!index) spool_remove_header(xstrdup(head), m->hdrcache);
-    else spool_remove_header_instance(xstrdup(head), index, m->hdrcache);
+    if (!index) spool_remove_header(lcasedhead, m->hdrcache);
+    else spool_remove_header_instance(lcasedhead, index, m->hdrcache);
 
+    free(lcasedhead);
     sd->edited_header = 1;
 
     return SIEVE_OK;

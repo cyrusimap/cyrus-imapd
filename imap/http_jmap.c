@@ -617,7 +617,7 @@ static int jmap_download(struct transaction_t *txn)
     }
 
     const char **hdr;
-    if (!accept_mime && (hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
+    if (!accept_mime && (hdr = spool_getheader(txn->req_hdrs, "accept"))) {
         accept_mime = parse_accept_header(hdr);
     }
     if (!accept_mime) accept_mime = xstrdup("application/octet-stream");
@@ -853,11 +853,11 @@ static int jmap_upload(struct transaction_t *txn)
     }
 
     /* Create RFC 5322 header for resource */
-    if ((hdr = spool_getheader(hdrcache, "User-Agent"))) {
+    if ((hdr = spool_getheader(hdrcache, "user-agent"))) {
         fprintf(f, "User-Agent: %s\r\n", hdr[0]);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "From"))) {
+    if ((hdr = spool_getheader(hdrcache, "from"))) {
         fprintf(f, "From: %s\r\n", hdr[0]);
     }
     else {
@@ -879,11 +879,11 @@ static int jmap_upload(struct transaction_t *txn)
         buf_reset(&txn->buf);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Subject"))) {
+    if ((hdr = spool_getheader(hdrcache, "subject"))) {
         fprintf(f, "Subject: %s\r\n", hdr[0]);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Date"))) {
+    if ((hdr = spool_getheader(hdrcache, "date"))) {
         fprintf(f, "Date: %s\r\n", hdr[0]);
     }
     else {
@@ -892,12 +892,12 @@ static int jmap_upload(struct transaction_t *txn)
         fprintf(f, "Date: %s\r\n", datestr);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Message-ID"))) {
+    if ((hdr = spool_getheader(hdrcache, "message-id"))) {
         fprintf(f, "Message-ID: %s\r\n", hdr[0]);
     }
 
     const char *type = "application/octet-stream";
-    if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
+    if ((hdr = spool_getheader(hdrcache, "content-type"))) {
         type = hdr[0];
     }
     fprintf(f, "Content-Type: %s\r\n", type);
@@ -914,11 +914,11 @@ static int jmap_upload(struct transaction_t *txn)
             break; // no CTE == 7bit
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Content-Disposition"))) {
+    if ((hdr = spool_getheader(hdrcache, "content-disposition"))) {
         fprintf(f, "Content-Disposition: %s\r\n", hdr[0]);
     }
 
-    if ((hdr = spool_getheader(hdrcache, "Content-Description"))) {
+    if ((hdr = spool_getheader(hdrcache, "content-description"))) {
         fprintf(f, "Content-Description: %s\r\n", hdr[0]);
     }
 
@@ -1432,7 +1432,7 @@ static int jmap_ws(struct buf *inbuf, struct buf *outbuf,
         }
 
         /* Set Content-Type of request payload */
-        spool_cache_header(xstrdup("Content-Type"),
+        spool_cache_header(xstrdup("content-type"),
                            xstrdup("application/json"), txn->req_hdrs);
     }
     else if (!inbuf) {

@@ -252,7 +252,7 @@ static int parse_json_body(struct transaction_t *txn, json_t **req)
     int ret;
 
     /* Check Content-Type */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
+    if (!(hdr = spool_getheader(txn->req_hdrs, "content-type")) ||
         !is_mediatype("application/json", hdr[0])) {
         txn->error.desc = "This method requires a JSON request body";
         return HTTP_BAD_MEDIATYPE;
