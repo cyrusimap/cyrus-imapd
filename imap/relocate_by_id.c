@@ -82,13 +82,20 @@ static struct namespace reloc_namespace;
 static const char *progname = NULL;
 
 /* forward declarations */
-//static int findall_p(struct findall_data *data, void *rock);
 static int find_p(const mbentry_t *mbentry, void *rock);
+static void get_searchparts(const char *key, const char *val, void *rock);
 static int relocate(const char *old, const char *new);
 static void usage(void);
 
 static int quiet = 0;
 static int nochanges = 0;
+
+struct search_rock {
+    const char *userid;
+    const char *userpath;
+    strarray_t *oldpaths;
+    strarray_t *newpaths;
+};
 
 int main(int argc, char **argv)
 {
@@ -248,7 +255,10 @@ int main(int argc, char **argv)
                     strarray_append(newpaths, buf_cstring(&buf));
                 }
 
-                /* Add xapian tier paths or recreate indices? */
+                /* Add xapian tier paths */
+                struct search_rock rock =
+                    { argv[i], userpath, oldpaths, newpaths };
+                config_foreachoverflowstring(get_searchparts, &rock);
             }
 
             char *extname =
@@ -358,7 +368,7 @@ static void usage(void)
     fprintf(stderr, "A tool to relocate mailbox trees by their ids.\n");
     fprintf(stderr, "\n");
 
-    fprintf(stderr, "-C <config-file>   use <config-file> instead of config from imapd.conf");
+    fprintf(stderr, "-C <config-file>   use <config-file> instead of config from imapd.conf\n");
     fprintf(stderr, "-q                 run quietly\n");
     fprintf(stderr, "-n                 do not make changes\n");
     fprintf(stderr, "-u                 give usernames instead of mailbox prefixes\n");
@@ -379,11 +389,6 @@ static int find_p(const mbentry_t *mbentry, void *rock)
 
     return 0;
 }
-
-//static int findall_p(struct findall_data *data, void *rock)
-//{
-//    return find_p(data->mbentry, rock);
-//}
 
 static int relocate(const char *old, const char *new)
 {
@@ -415,4 +420,29 @@ static int relocate(const char *old, const char *new)
     }
 
     return r;
+}
+
+/*
+ * config_foreachoverflowstring() callback function to find searchpartition-
+ * options and add user directorys to be relocated
+ */
+static void get_searchparts(const char *key, const char *val, void *rock)
+{
+    struct search_rock *srock = (struct search_rock *) rock;
+    char *basedir;
+
+    if (!strstr(key, "searchpartition-")) return;
+
+    basedir = user_hash_xapian(srock->userid, val);
+    if (basedir) {
+        struct buf buf;
+
+        buf_initm(&buf, basedir, strlen(basedir));
+        buf_appendcstr(&buf, XAPIAN_DIRNAME);
+        strarray_appendm(srock->oldpaths, buf_release(&buf));
+
+        buf_setcstr(&buf, val);
+        buf_printf(&buf, FNAME_USERDIR "%s" XAPIAN_DIRNAME, srock->userpath);
+        strarray_appendm(srock->newpaths, buf_release(&buf));
+    }
 }
