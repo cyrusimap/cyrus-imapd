@@ -229,7 +229,9 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
     if (ws_enabled()) {
         json_object_set_new(settings->server_capabilities,
                 JMAP_URN_WEBSOCKET,
-                json_pack("{s:s}", "wsUrl", JMAP_BASE_URL JMAP_WS_COL));
+                json_pack("{s:s s:b}",
+                          "webSocketUrl", JMAP_BASE_URL JMAP_WS_COL,
+                          "supportsWebSocketPush", 0));
     }
 
     json_object_set_new(settings->server_capabilities,
