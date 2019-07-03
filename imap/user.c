@@ -535,6 +535,59 @@ EXPORTED char *user_hash_subs(const char *userid)
     return user_hash_meta(userid, FNAME_SUBSSUFFIX);
 }
 
+EXPORTED char *user_hash_xapian(const char *userid, const char *root)
+{
+    char *inboxname = mboxname_user_mbox(userid, NULL);
+    mbentry_t *mbentry = NULL;
+    mbname_t *mbname = NULL;
+    char *basedir = NULL;
+    int r;
+
+    r = mboxlist_lookup(inboxname, &mbentry, NULL);
+    if (r) goto out;
+
+    mbname = mbname_from_intname(mbentry->name);
+    if (!mbname_userid(mbname)) goto out;
+
+    if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
+        const char *domain = mbname_domain(mbname);
+        const char *localpart = mbname_localpart(mbname);
+        char c[2], d[2];
+
+        if (domain)
+            basedir = strconcat(root,
+                                FNAME_DOMAINDIR,
+                                dir_hash_b(domain, config_fulldirhash, d),
+                                "/", domain,
+                                "/", dir_hash_b(localpart, config_fulldirhash, c),
+                                FNAME_USERDIR,
+                                localpart,
+                                (char *)NULL);
+        else
+            basedir = strconcat(root,
+                                "/", dir_hash_b(localpart, config_fulldirhash, c),
+                                FNAME_USERDIR,
+                                localpart,
+                                (char *)NULL);
+    }
+    else {
+        char path[MAX_MAILBOX_PATH+1];
+        mboxname_id_hash(path, MAX_MAILBOX_PATH, "", mbentry->uniqueid);
+
+        basedir = strconcat(root,
+                            FNAME_USERDIR,
+                            path,
+                            (char *)NULL);
+    }
+
+ out:
+    mboxlist_entry_free(&mbentry);
+    mbname_free(&mbname);
+    free(inboxname);
+
+    return basedir;
+}
+
 static const char *_namelock_name_from_userid(const char *userid)
 {
     const char *p;
