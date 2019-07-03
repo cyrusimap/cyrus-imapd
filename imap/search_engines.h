@@ -54,6 +54,7 @@
 #include "search_sort.h"
 
 #define FNAME_XAPIANSUFFIX   "xapianactive"
+#define XAPIAN_DIRNAME       "/xapian"
 
 extern int xapian_basedir(const char *tier, const char *mboxname,
                           const char *part, const char *root, char **basedir);

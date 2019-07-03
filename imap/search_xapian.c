@@ -72,6 +72,7 @@
 #include "cyr_lock.h"
 #include "xapian_wrap.h"
 #include "command.h"
+#include "user.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -79,7 +80,6 @@
 #define INDEXEDDB_VERSION           2 /* version string for entry value */
 #define INDEXEDDB_KEY_VERSION       2 /* version string for entry keys */
 #define INDEXEDDB_FNAME         "/cyrus.indexed.db"
-#define XAPIAN_DIRNAME          "/xapian"
 #define XAPIAN_NAME_LOCK_PREFIX "$XAPIAN$"
 
 // this seems to translate for 4Gb-ish  - units are 10 bytes?
@@ -2105,7 +2105,7 @@ EXPORTED int xapian_basedir(const char *tier,
 {
     char *basedir = NULL;
     mbname_t *mbname = NULL;
-    int r;
+    int r = 0;
 
     if (!root)
         root = xapian_rootdir(tier, partition);
@@ -2120,46 +2120,8 @@ EXPORTED int xapian_basedir(const char *tier,
         goto out;
     }
 
-    char *inboxname = mboxname_user_mbox(mbname_userid(mbname), NULL);
-    mbentry_t *mbentry = NULL;
-
-    r = mboxlist_lookup(inboxname, &mbentry, NULL);
-    free(inboxname);
-    if (r) goto out;
-
-    if (mbentry->mbtype & MBTYPE_LEGACY_DIRS) {
-        const char *domain = mbname_domain(mbname);
-        const char *localpart = mbname_localpart(mbname);
-        char c[2], d[2];
-
-        if (domain)
-            basedir = strconcat(root,
-                                FNAME_DOMAINDIR,
-                                dir_hash_b(domain, config_fulldirhash, d),
-                                "/", domain,
-                                "/", dir_hash_b(localpart, config_fulldirhash, c),
-                                FNAME_USERDIR,
-                                localpart,
-                                (char *)NULL);
-        else
-            basedir = strconcat(root,
-                                "/", dir_hash_b(localpart, config_fulldirhash, c),
-                                FNAME_USERDIR,
-                                localpart,
-                                (char *)NULL);
-        
-        r = 0;
-    }
-    else {
-        char path[MAX_MAILBOX_PATH+1];
-        mboxname_id_hash(path, MAX_MAILBOX_PATH, "", mbentry->uniqueid);
-
-        basedir = strconcat(root,
-                            FNAME_USERDIR,
-                            path,
-                            (char *)NULL);
-    }
-    mboxlist_entry_free(&mbentry);
+    basedir = user_hash_xapian(mbname_userid(mbname), root);
+    if (!basedir) r = IMAP_MAILBOX_NONEXISTENT;
 
 out:
     if (!r && basedirp)
