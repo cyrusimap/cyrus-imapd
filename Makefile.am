@@ -312,7 +312,7 @@ endif # PERL
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
 noinst_LTLIBRARIES += sieve/libcyrus_sieve_lex.la
 lib_LTLIBRARIES += sieve/libcyrus_sieve.la
-check_PROGRAMS += sieve/test
+check_PROGRAMS += sieve/test sieve/test_mailbox
 sbin_PROGRAMS += sieve/sievec sieve/sieved
 
 if SERVER
@@ -1763,6 +1763,9 @@ sieve_sieved_LDADD = $(LD_SIEVE_ADD)
 
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
 sieve_test_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
+
+sieve_test_mailbox_SOURCES = sieve/test_mailbox.c imap/mutex_fake.c
+sieve_test_mailbox_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 timsieved_timsieved_SOURCES = \
 	imap/mutex_fake.c \
