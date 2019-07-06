@@ -1559,6 +1559,10 @@ static void apply_patch_component(struct path_segment_t *path_seg,
                 }
                 else continue;  /* RECURRENCE-ID doesn't match */
             }
+            else {
+                /* RECURRENCE-ID matches - done after processing this comp */
+                nextcomp = NULL;
+            }
         }
 
         if (path_seg->child) {
