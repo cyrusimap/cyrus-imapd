@@ -232,6 +232,7 @@ BUILT_SOURCES += \
 	imap/tz_err.h
 
 libexec_PROGRAMS += imap/httpd
+check_PROGRAMS += imap/ical_apply_patch
 sbin_PROGRAMS += \
 	imap/ctl_zoneinfo \
 	imap/dav_reconstruct
@@ -1338,6 +1339,9 @@ imap_reconstruct_LDADD = $(LD_UTILITY_ADD)
 
 imap_dav_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/dav_reconstruct.c
 imap_dav_reconstruct_LDADD = $(LD_UTILITY_ADD)
+
+imap_ical_apply_patch_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/ical_apply_patch.c
+imap_ical_apply_patch_LDADD = $(LD_UTILITY_ADD)
 
 imap_search_test_SOURCES = imap/search_test.c imap/mutex_fake.c
 imap_search_test_LDADD = $(LD_UTILITY_ADD)
