@@ -3806,6 +3806,24 @@ sub test_email_query
     $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
     $self->assert_str_equals($bar, $res->[0][1]->{ids}[1]);
 
+    xlog "sort by ascending sentAt";
+    $res = $jmap->CallMethods([['Email/query', {
+                    accountId => $account,
+                    sort => [{ property => "sentAt" }],
+                }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($bar, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($foo, $res->[0][1]->{ids}[1]);
+
+    xlog "sort by descending sentAt";
+    $res = $jmap->CallMethods([['Email/query', {
+                    accountId => $account,
+                    sort => [{ property => "sentAt", isAscending => JSON::false }],
+                }, "R1"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($foo, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($bar, $res->[0][1]->{ids}[1]);
+
     xlog "sort by ascending size";
     $res = $jmap->CallMethods([['Email/query', {
                     accountId => $account,
