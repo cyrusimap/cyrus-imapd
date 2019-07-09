@@ -2435,6 +2435,9 @@ static struct sortcrit *_email_buildsort(json_t *sort)
         if (!strcmp(prop, "receivedAt")) {
             sortcrit[i].key = SORT_ARRIVAL;
         }
+        if (!strcmp(prop, "sentAt")) {
+            sortcrit[i].key = SORT_DATE;
+        }
         if (!strcmp(prop, "from")) {
             sortcrit[i].key = SORT_DISPLAYFROM;
         }
@@ -2642,6 +2645,7 @@ static int _emailsearch_run(struct emailsearch *search, const ptrarray_t **msgda
 
 static const char *msglist_sortfields[] = {
     "receivedAt",
+    "sentAt",
     "from",
     "id",
     "emailstate",
