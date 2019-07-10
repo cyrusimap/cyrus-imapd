@@ -58,8 +58,6 @@
 
 #define CHARSET_UNKNOWN_CHARSET (NULL)
 
-#include "unicode/ucnv.h"
-
 #include "util.h"
 
 typedef int comp_pat;
