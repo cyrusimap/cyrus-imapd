@@ -13929,7 +13929,7 @@ static void cmd_urlfetch(char *tag)
         }
         if (r) goto err;
 
-        if (!strcmp(index_mboxname(imapd_index), intname)) {
+        if (!strcmpnull(index_mboxname(imapd_index), intname)) {
             state = imapd_index;
         }
         else {
