@@ -13960,10 +13960,10 @@ static void cmd_urlfetch(char *tag)
                                imapd_out, NULL);
         }
 
+    err:
         if (doclose)
             index_close(&state);
 
-    err:
         free(url.freeme);
 
         if (r) prot_printf(imapd_out, " NIL");
