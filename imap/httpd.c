@@ -682,8 +682,6 @@ int service_init(int argc __attribute__((unused)),
 
     LIBXML_TEST_VERSION
 
-    initialize_http_error_table();
-
     if (geteuid() == 0) fatal("must run as the Cyrus user", EX_USAGE);
     setproctitle_init(argc, argv, envp);
 

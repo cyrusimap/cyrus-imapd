@@ -131,10 +131,15 @@ bin_PROGRAMS = imtest/imtest
 
 if SERVER
 BUILT_SOURCES += \
+	imap/http_err.c \
+	imap/http_err.h \
 	imap/imap_err.c \
+	imap/imap_err.h \
 	imap/lmtp_err.c \
+	imap/lmtp_err.h \
 	imap/lmtpstats.c \
 	imap/mupdate_err.c \
+	imap/mupdate_err.h \
 	imap/pushstats.c \
 	imap/promdata.c \
 	imap/promdata.h \
@@ -223,8 +228,6 @@ AM_LDFLAGS += $(HTTP_LIBS)
 BUILT_SOURCES += \
 	imap/http_caldav_js.h \
 	imap/http_carddav_js.h \
-	imap/http_err.c \
-	imap/http_err.h \
 	imap/tz_err.c \
 	imap/tz_err.h
 
@@ -935,8 +938,12 @@ imap_ipurge_SOURCES = imap/cli_fatal.c imap/ipurge.c imap/mutex_fake.c
 imap_ipurge_LDADD = $(LD_UTILITY_ADD)
 
 nodist_imap_libcyrus_imap_la_SOURCES = \
+	imap/http_err.c \
+	imap/http_err.h \
 	imap/imap_err.c \
+	imap/imap_err.h \
 	imap/mupdate_err.c \
+	imap/mupdate_err.h \
 	imap/promdata.c \
 	imap/promdata.h
 
@@ -1182,8 +1189,6 @@ imap_nntpd_LDADD = $(LD_SERVER_ADD)
 nodist_imap_httpd_SOURCES = \
 	imap/http_caldav_js.h \
 	imap/http_carddav_js.h \
-	imap/http_err.c \
-	imap/http_err.h \
 	imap/tz_err.c \
 	imap/tz_err.h
 

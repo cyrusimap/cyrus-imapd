@@ -81,6 +81,7 @@
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
 #include "imap/imap_err.h"
 #include "imap/mupdate_err.h"
 
@@ -202,6 +203,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         syslog_opts |= LOG_PERROR;
 #endif
 
+    initialize_http_error_table();
     initialize_imap_error_table();
     initialize_mupd_error_table();
 
