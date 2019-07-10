@@ -723,6 +723,11 @@ static void dump2(bytecode_input_t *d, int bc_len)
             break;
 
 
+        case B_LOG:
+            printf("LOG TEXT(%s)", cmd.u.l.text);
+            break;
+
+
         case B_RETURN:
             printf("RETURN");
             break;

@@ -51,15 +51,13 @@
 #define CHARSET_SKIPSPACE (1<<1)
 #define CHARSET_MERGESPACE (1<<2)
 #define CHARSET_SKIPHTML (1<<3)
-#define CHARSET_SNIPPET (1<<4)
+#define CHARSET_KEEPCASE (1<<4)
 #define CHARSET_UNFOLD_SKIPWS (1<<5)
 #define CHARSET_MIME_UTF8 (1<<6)
 #define CHARSET_ESCAPEHTML (1<<8)
 #define CHARSET_KEEPHTML (1<<9)
 
 #define CHARSET_UNKNOWN_CHARSET (NULL)
-
-#include "unicode/ucnv.h"
 
 #include "util.h"
 

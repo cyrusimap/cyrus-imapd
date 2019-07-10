@@ -436,6 +436,9 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>mailboxidexists       return MAILBOXIDEXISTS;
 <INITIAL>:mailboxid            return MAILBOXID;
 
+    /* x-cyrus-log */
+<INITIAL>log                   return LOG;
+
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */
 <INITIAL>[ \t\n\r] ;          /* ignore whitespace */

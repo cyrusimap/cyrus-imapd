@@ -173,6 +173,7 @@ static void statuscache_read_index(const char *mboxname, struct statusdata *sdat
     if (p < dend) sdata->uidnext = strtoul(p, &p, 10);
     if (p < dend) sdata->uidvalidity = strtoul(p, &p, 10);
     if (p < dend) sdata->size = strtoul(p, &p, 10);
+    if (p < dend) sdata->mboptions = strtoul(p, &p, 10);
     if (p < dend) sdata->createdmodseq = strtoull(p, &p, 10);
     if (p < dend) sdata->highestmodseq = strtoull(p, &p, 10);
 
@@ -291,10 +292,10 @@ static int statuscache_store(const char *mboxname,
 
 
     buf_printf(&databuf,
-                       "I %u (%u %u %u %u " MODSEQ_FMT " " MODSEQ_FMT ")",
+                       "I %u (%u %u %u %u %u " MODSEQ_FMT " " MODSEQ_FMT ")",
                        STATUSCACHE_VERSION,
                        sdata->messages, sdata->uidnext,
-                       sdata->uidvalidity, sdata->size,
+                       sdata->uidvalidity, sdata->size, sdata->mboptions,
                        sdata->createdmodseq, sdata->highestmodseq);
 
     r = cyrusdb_store(statuscachedb, keybuf.s, keybuf.len, databuf.s, databuf.len, tidptr);
@@ -397,6 +398,7 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
     sdata->messages = mailbox->i.exists;
     sdata->uidnext = mailbox->i.last_uid+1;
     sdata->size = mailbox->i.quota_mailbox_used;
+    sdata->mboptions = mailbox->i.options;
     sdata->createdmodseq = mailbox->i.createdmodseq;
     sdata->highestmodseq = mailbox->i.highestmodseq;
 

@@ -943,13 +943,13 @@ out:
 /* XXX - replace with cyrus_mkdir and cyrus_copyfile */
 static void remove_dir(const char *dir)
 {
-    run_command("/bin/rm", "-rf", dir, (char *)NULL);
+    run_command(RM_BIN, "-rf", dir, (char *)NULL);
 }
 
 static int copy_files(const char *fromdir, const char *todir)
 {
     char *fromdir2 = strconcat(fromdir, "/", (char *)NULL);
-    int r = run_command("/usr/bin/rsync", "-a", fromdir2, todir, (char *)NULL);
+    int r = run_command(RSYNC_BIN, "-a", fromdir2, todir, (char *)NULL);
 
     free(fromdir2);
     return r;
@@ -957,9 +957,127 @@ static int copy_files(const char *fromdir, const char *todir)
 
 /* ====================================================================== */
 
+/* shared lock for xapian dbs */
+struct xapiandb_lock {
+    struct mappedfile *activefile;
+    struct mboxlock *namelock;
+    strarray_t *activedirs;
+    strarray_t *activetiers;
+    xapian_db_t *db;
+};
+
+#define XAPIANDB_LOCK_INITIALIZER { NULL, NULL, NULL, NULL, NULL }
+
+static void xapiandb_lock_release(struct xapiandb_lock *lock)
+{
+    if (lock->db) xapian_db_close(lock->db);
+
+    /* now that the databases are closed, it's safe to unlock
+     * the active file */
+    if (lock->activefile) {
+        mappedfile_unlock(lock->activefile);
+        mappedfile_close(&lock->activefile);
+    }
+    if (lock->namelock) {
+        mboxname_release(&lock->namelock);
+    }
+
+    strarray_free(lock->activedirs);
+    strarray_free(lock->activetiers);
+
+    memset(lock, 0, sizeof(struct xapiandb_lock));
+}
+
+/*
+ * This function builds a lockfilename of the format:
+ *  $XAPIAN$<userid>
+ * example:
+ *  If the userid is `foo@bar.com` then the lockfilename is
+ *  $XAPIAN$foo@bar^com
+ *
+ * It replaces '.' in a string with a '^' into a struct buf
+ */
+static char *xapiandb_namelock_fname_from_userid(const char *userid)
+{
+    const char *p;
+    struct buf buf = BUF_INITIALIZER;
+
+    buf_setcstr(&buf, XAPIAN_NAME_LOCK_PREFIX);
+
+    for (p = userid; *p; p++) {
+        switch(*p) {
+            case '.':
+                buf_putc(&buf, '^');
+                break;
+            default:
+                buf_putc(&buf, *p);
+                break;
+        }
+    }
+
+    char *ret = buf_release(&buf);
+
+    buf_free(&buf);
+
+    return ret;
+}
+
+
+static int xapiandb_lock_open(struct mailbox *mailbox, struct xapiandb_lock *lock)
+{
+    strarray_t *active = NULL;
+    char *namelock_fname = NULL;
+    char *userid = NULL;
+    int r = 0;
+
+    assert(lock->namelock == NULL);
+    assert(lock->activefile == NULL);
+    assert(lock->activedirs == NULL);
+    assert(lock->activetiers == NULL);
+
+    /* Do nothing if there is no userid */
+    userid = mboxname_to_userid(mailbox->name);
+    if (!userid) goto out;
+
+    namelock_fname = xapiandb_namelock_fname_from_userid(userid);
+
+    /* Get a shared lock */
+    r = mboxname_lock(namelock_fname, &lock->namelock, LOCK_SHARED);
+    if (r) {
+        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
+                namelock_fname);
+        goto out;
+    }
+
+    /* need to hold a read-only lock on the activefile file
+     * to ensure no databases are deleted out from under us */
+    active = activefile_open(mailbox->name, mailbox->part, &lock->activefile, AF_LOCK_READ);
+    if (!active) goto out;
+
+    /* only try to open directories with databases in them */
+    lock->activedirs = activefile_resolve(mailbox->name, mailbox->part, active,
+            /*dostat*/1, &lock->activetiers);
+
+    /* open the databases */
+    const char **paths = lock->activedirs ? (const char **) lock->activedirs->data : NULL;
+    r = xapian_db_open(paths, &lock->db);
+    if (r) goto out;
+
+out:
+    if (r) xapiandb_lock_release(lock);
+    strarray_free(active);
+    free(namelock_fname);
+    free(userid);
+    return r;
+}
+
+/* ====================================================================== */
+
+#define XAPIAN_SEARCH_OP_DOCTYPE 1025
+
 struct opnode
 {
-    int op;     /* SEARCH_OP_* or SEARCH_PART_* constant */
+    int op;     /* SEARCH_OP_* or SEARCH_PART_* or XAPIAN_SEARCH_OP_* */
     char *arg;
     struct opnode *next;
     struct opnode *children;
@@ -968,11 +1086,9 @@ struct opnode
 typedef struct xapian_builder xapian_builder_t;
 struct xapian_builder {
     search_builder_t super;
-    struct mappedfile *activefile;
-    struct mboxlock *xapiandb_namelock;
+    struct xapiandb_lock lock;
     struct seqset *indexed;
     struct mailbox *mailbox;
-    xapian_db_t *db;
     int opts;
     struct opnode *root;
     ptrarray_t stack;       /* points to opnode* */
@@ -1061,6 +1177,8 @@ static const char *opnode_serialise(struct buf *buf, const struct opnode *on)
         buf_appendcstr(buf, "OR");
     else if (on->op == SEARCH_OP_NOT)
         buf_appendcstr(buf, "NOT");
+    else if (on->op == XAPIAN_SEARCH_OP_DOCTYPE)
+        buf_appendcstr(buf, "DOCTYPE");
     else
         buf_appendcstr(buf, "UNKNOWN");
 
@@ -1157,6 +1275,10 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on,
                                        (xapian_query_t **)childqueries.data,
                                        childqueries.count);
         break;
+    case XAPIAN_SEARCH_OP_DOCTYPE:
+        assert(on->arg != NULL && on->arg[1] == '\0');
+        qq = xapian_query_new_has_doctype(db, on->arg[0], NULL);
+        break;
     default:
         assert(on->arg != NULL);
         assert(on->children == NULL);
@@ -1190,8 +1312,10 @@ static int is_dnfclause(const struct opnode *on)
             else if (child->op == SEARCH_OP_NOT) {
                 const struct opnode *gchild;
                 for (gchild = child->children; gchild; gchild = gchild->next) {
-                    if (gchild->op >= SEARCH_NUM_PARTS)
+                    if (gchild->op >= SEARCH_NUM_PARTS &&
+                        gchild->op < XAPIAN_SEARCH_OP_DOCTYPE) {
                         return 0;
+                    }
                 }
                 continue;
             }
@@ -1203,23 +1327,38 @@ static int is_dnfclause(const struct opnode *on)
     return 0;
 }
 
-static int split_query(xapian_builder_t *bb,
-                       const struct opnode *expr,
-                       ptrarray_t *clauses)
+static int is_orclause(const struct opnode *on)
 {
-    if (!is_dnfclause(expr)) {
-        // XXX convert to DNF?
-        struct buf buf = BUF_INITIALIZER;
-        opnode_serialise(&buf, expr);
-        syslog(LOG_ERR, "search_xapian: expected DNF clause, got %s", buf_cstring(&buf));
-        buf_free(&buf);
-        return IMAP_INTERNAL;
+    if (on->op != SEARCH_OP_OR) {
+        return 0;
     }
 
-    struct opnode *root = opnode_deep_copy(expr);
+    const struct opnode *child;
+    for (child = on->children; child; child = child->next) {
+        if (child->op < SEARCH_NUM_PARTS ||
+                child->op >= XAPIAN_SEARCH_OP_DOCTYPE) {
+            // A MATCH or our own extensions are OK.
+            continue;
+        }
+        else if (child->op != SEARCH_OP_OR) {
+            // Not an OR operator.
+            return 0;
+        }
+        else if (!is_orclause(child)) {
+            // Not a pure OR subclause.
+            return 0;
+        }
+    }
 
-    /* Normalise expression to an AND clause, with each child
+    return 1;
+}
+
+static int normalise_dnfclause(const struct opnode *expr, struct opnode **normalised)
+{
+    /* Normalise DNF clause expr to an AND clause, with each child
      * expression being a part MATCH or single-valued NOT. */
+
+    struct opnode *root = opnode_deep_copy(expr);
 
     if (root->op == SEARCH_OP_NOT) {
         /* Convert NOT(x,y) to AND(NOT(x),NOT(y)) */
@@ -1240,8 +1379,6 @@ static int split_query(xapian_builder_t *bb,
         opnode_append_child(newroot, root);
         root = newroot;
     }
-
-    assert(root->op == SEARCH_OP_AND);
 
     struct opnode *child = root->children;
     while (child) {
@@ -1267,6 +1404,20 @@ static int split_query(xapian_builder_t *bb,
         child = next;
     }
 
+    *normalised = root;
+    return 0;
+}
+
+static int split_legacyv4_query(xapian_builder_t *bb,
+                                const struct opnode *expr,
+                                ptrarray_t *clauses)
+{
+    struct opnode *root = NULL;
+    int r = normalise_dnfclause(expr, &root);
+    if (r) return r;
+
+    assert(root->op == SEARCH_OP_AND);
+
     /* Split clause into subclauses for top-level guid
      * search, body part search and any part. */
 
@@ -1274,7 +1425,7 @@ static int split_query(xapian_builder_t *bb,
     struct opnode *qpart = opnode_new(SEARCH_OP_AND, NULL);
     struct opnode *qany = opnode_new(SEARCH_OP_AND, NULL);
 
-    child = root->children;
+    struct opnode *child = root->children;
     while (child) {
         struct opnode *next = child->next;
         opnode_detach_child(root, child);
@@ -1324,19 +1475,20 @@ static int split_query(xapian_builder_t *bb,
 
     if (qguid->children) {
         optimise_nodes(NULL, qguid);
-        xapian_query_t *xq = opnode_to_query(bb->db, qguid, bb->opts);
-        if (xq) xq = xapian_query_new_filter_doctype(bb->db, SEARCH_XAPIAN_DOCTYPE_MSG, xq);
+        xapian_query_t *xq = opnode_to_query(bb->lock.db, qguid, bb->opts);
+        if (xq) xq = xapian_query_new_has_doctype(bb->lock.db, SEARCH_XAPIAN_DOCTYPE_MSG, xq);
         if (xq) ptrarray_append(clauses, xq);
     }
     if (qpart->children) {
         optimise_nodes(NULL, qpart);
-        xapian_query_t *xq = opnode_to_query(bb->db, qpart, bb->opts);
-        if (xq) xq = xapian_query_new_filter_doctype(bb->db, SEARCH_XAPIAN_DOCTYPE_PART, xq);
+        xapian_query_t *xq = opnode_to_query(bb->lock.db, qpart, bb->opts);
+        if (xq) xq = xapian_query_new_has_doctype(bb->lock.db, SEARCH_XAPIAN_DOCTYPE_PART, xq);
         if (xq) ptrarray_append(clauses, xq);
     }
-    if (qany->children) {
-        optimise_nodes(NULL, qany);
-        xapian_query_t *xq = opnode_to_query(bb->db, qany, bb->opts);
+
+    for (child = qany->children; child; child = child->next) {
+        optimise_nodes(NULL, child);
+        xapian_query_t *xq = opnode_to_query(bb->lock.db, child, bb->opts);
         if (xq) ptrarray_append(clauses, xq);
     }
 
@@ -1361,7 +1513,7 @@ static void xapian_match_free_partids(uint64_t key __attribute__((unused)),
     strarray_free((strarray_t*)data);
 }
 
-static void xapian_match_fini(struct xapian_match *match)
+static void xapian_match_reset(struct xapian_match *match)
 {
     bv_fini(&match->uids);
     if (match->partids_by_uid.size) {
@@ -1372,33 +1524,21 @@ static void xapian_match_fini(struct xapian_match *match)
 
 struct xapian_run_rock {
     xapian_builder_t *bb;
-    hash_table *matches;
-    int is_legacy;
+    struct xapian_match *matches;
 };
 
 static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
 {
     struct xapian_run_rock *xrock = rock;
     xapian_builder_t *bb = xrock->bb;
-    hash_table *matches = xrock->matches;
+    struct xapian_match *matches = xrock->matches;
 
     if (!(bb->opts & SEARCH_MULTIPLE)) {
         if (strcmp(rec->mboxname, bb->mailbox->name))
             return 0;
     }
 
-    if (xrock->is_legacy) {
-        if (rec->part) return 0;
-        return bb->proc(rec->mboxname, /*uidvalidity*/0, rec->uid, NULL, bb->rock);
-    }
-
-    struct xapian_match *match = hash_lookup(rec->mboxname, matches);
-    if (!match) {
-        match = xzmalloc(sizeof(struct xapian_match));
-        bv_init(&match->uids);
-        hash_insert(rec->mboxname, match, matches);
-    }
-
+    struct xapian_match *match = matches + rec->foldernum;
     bv_set(&match->uids, rec->uid);
     if (rec->part) {
         if (!match->partids_by_uid.size) {
@@ -1423,50 +1563,66 @@ static int xapian_run_cb(void *data, size_t n, void *rock)
     int r = cmd_cancelled(/*insearch*/1);
     if (r) goto done;
 
-    struct conversations_state *cstate;
-
-    cstate = mailbox_get_cstate(bb->mailbox);
+    struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
     if (!cstate) {
-        syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
-                bb->mailbox->name);
         r = IMAP_NOTFOUND;
         goto done;
     }
 
-    char guid[41];
-    guid[40] = '\0';
-    size_t i;
-    for (i = 0; i < n; i++) {
-        char *entry = data + (i*21);
-        bin_to_lchex(entry + 1, 20, guid);
-        r = conversations_guid_foreach(cstate, guid, xapian_run_guid_cb, xrock);
-        if (r) goto done;
-    }
+    r = conversations_iterate_searchset(cstate, data, n, xapian_run_guid_cb, xrock);
 
 done:
     free(data);
     return r;
 }
 
-static int run_query(xapian_builder_t *bb)
+static int run_legacy_v4_query(xapian_builder_t *bb)
 {
     int i, r = 0;
-    hash_table *result = NULL;
+    struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
+    if (!cstate) {
+        syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
+                bb->mailbox->name);
+        return IMAP_NOTFOUND;
+    }
+    uint32_t num_folders = conversations_num_folders(cstate);
+    struct xapian_match *result = NULL;
     ptrarray_t clauses = PTRARRAY_INITIALIZER;
 
-    /* Split into sub queries for each document type */
-    r = split_query(bb, bb->root, &clauses);
-    if (r) goto out;
+    if (is_dnfclause(bb->root)) {
+        /* Split into sub queries for each document type */
+        r = split_legacyv4_query(bb, bb->root, &clauses);
+        if (r) goto out;
+    }
+    else if (is_orclause(bb->root)) {
+        xapian_query_t *xq = opnode_to_query(bb->lock.db, bb->root, bb->opts);
+        ptrarray_append(&clauses, xq);
+    }
+    else {
+        struct buf buf = BUF_INITIALIZER;
+        opnode_serialise(&buf, bb->root);
+        syslog(LOG_ERR, "search_xapian: expected DNF or OR clause, got %s",
+                         buf_cstring(&buf));
+        buf_free(&buf);
+        r = IMAP_INTERNAL;
+        goto out;
+    }
 
     /* Run clauses and intersect results */
     for (i = 0; i < ptrarray_size(&clauses); i++) {
-        hash_table *matches = xzmalloc(sizeof(hash_table));
-        construct_hash_table(matches, 1024, 0); // XXX avoid magic size
+        struct xapian_match *matches = xzmalloc(sizeof(struct xapian_match) * num_folders);
 
-        struct xapian_run_rock xrock = { bb, matches, /*is_legacy*/0 };
+        struct xapian_run_rock xrock = { bb, matches };
         xapian_query_t *xq = ptrarray_nth(&clauses, i);
-        r = xapian_query_run(bb->db, xq, /*is_legacy*/0, xapian_run_cb, &xrock);
-        if (r) goto out;
+        r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/1, xapian_run_cb, &xrock);
+        if (r) {
+            uint32_t j;
+            for (j = 0; j < num_folders; j++) {
+                xapian_match_reset(matches + j);
+            }
+            free(matches);
+            goto out;
+        }
 
         /* First clause, use as initial result */
         if (result == NULL) {
@@ -1475,25 +1631,18 @@ static int run_query(xapian_builder_t *bb)
         }
 
         /* Intersect mailbox names */
-        strarray_t *keys = hash_keys(result);
-        int j;
-        for (j = 0; j < strarray_size(keys); j++) {
-            const char *mboxname = strarray_nth(keys, j);
-            if (!hash_lookup(mboxname, matches)) {
-                struct xapian_match *match = hash_del(mboxname, result);
-                xapian_match_fini(match);
-                free(match);
+        uint32_t j;
+        for (j = 0; j < num_folders; j++) {
+            if (!bv_count(&matches[j].uids)) {
+                xapian_match_reset(result + j);
             }
         }
-        strarray_free(keys);
 
         /* Intersect UIDs */
-        hash_iter *iter = hash_table_iter(matches);
-        while (hash_iter_next(iter)) {
-            const char *mboxname = hash_iter_key(iter);
-            struct xapian_match *clause_match = hash_iter_val(iter);
-            struct xapian_match *result_match = hash_lookup(mboxname, result);
-            if (result_match) {
+        for (j = 0; j < num_folders; j++) {
+            struct xapian_match *result_match = result + j;
+            struct xapian_match *clause_match = matches + j;
+            if (bv_count(&result_match->uids)) {
                 bv_andeq(&result_match->uids, &clause_match->uids);
                 if (result_match->partids_by_uid.size && clause_match->partids_by_uid.size) {
                     /* Intersect partids */
@@ -1522,44 +1671,40 @@ static int run_query(xapian_builder_t *bb)
                     }
                 }
             }
-            xapian_match_fini(clause_match);
-            free(clause_match);
+            xapian_match_reset(clause_match);
         }
-        hash_iter_free(&iter);
-        free_hash_table(matches, NULL);
         free(matches);
     }
 
     /* Return results */
     if (result) {
-        hash_iter *iter = hash_table_iter(result);
-        while (hash_iter_next(iter)) {
-            const char *mboxname = hash_iter_key(iter);
-            struct xapian_match *match = hash_iter_val(iter);
-            int uid;
-            for (uid = bv_next_set(&match->uids, 0); uid != -1;
-                 uid = bv_next_set(&match->uids, uid+1)) {
-                strarray_t *partids = NULL;
-                if (match->partids_by_uid.size) {
-                    partids = hashu64_lookup(uid, &match->partids_by_uid);
+        r = 0;
+        uint32_t j;
+        for (j = 0; j < num_folders; j++) {
+            struct xapian_match *match = result + j;
+            if (bv_count(&match->uids)) {
+                const char *mboxname = conversations_folder_name(cstate, j);
+                int uid;
+                for (uid = bv_next_set(&match->uids, 0); uid != -1;
+                        uid = bv_next_set(&match->uids, uid+1)) {
+                    strarray_t *partids = NULL;
+                    if (match->partids_by_uid.size) {
+                        partids = hashu64_lookup(uid, &match->partids_by_uid);
+                    }
+                    r = bb->proc(mboxname, /*uidvalidity*/0, uid, partids, bb->rock);
+                    if (r) break;
                 }
-                r = bb->proc(mboxname, /*uidvalidity*/0, uid, partids, bb->rock);
-                if (r) goto out;
             }
         }
-        hash_iter_free(&iter);
+        if (r) goto out;
     }
 
 out:
     if (result) {
-        hash_iter *iter = hash_table_iter(result);
-        while (hash_iter_next(iter)) {
-            struct xapian_match *match = hash_iter_val(iter);
-            xapian_match_fini(match);
-            free(match);
+        uint32_t j;
+        for (j = 0; j < num_folders; j++) {
+            xapian_match_reset(result + j);
         }
-        hash_iter_free(&iter);
-        free_hash_table(result, NULL);
         free(result);
     }
     if (ptrarray_size(&clauses)) {
@@ -1570,13 +1715,98 @@ out:
     return r;
 }
 
-static int run_legacy_query(xapian_builder_t *bb)
+static int run_query(xapian_builder_t *bb)
 {
-    xapian_query_t *qq = opnode_to_query(bb->db, bb->root, bb->opts);
-    if (!qq) return 0;
-    struct xapian_run_rock xrock = { bb, NULL, /*is_legacy*/1 };
-    int r = xapian_query_run(bb->db, qq, /*is_legacy*/1, xapian_run_cb, &xrock);
-    if (qq) xapian_query_free(qq);
+    struct opnode *root = NULL;
+    int r = 0;
+
+    if (is_dnfclause(bb->root)) {
+        struct opnode *norm = NULL;
+        r = normalise_dnfclause(bb->root, &norm);
+        if (r) return r;
+
+        assert(norm->op == SEARCH_OP_AND);
+
+        /* Exclude P doctypes from matches for headers or ANY */
+        root = opnode_new(SEARCH_OP_AND, NULL);
+        while (norm->children) {
+            struct opnode *child = norm->children;
+            opnode_detach_child(norm, child);
+            if (child->op != SEARCH_OP_NOT) {
+                opnode_append_child(root, child);
+                continue;
+            }
+            struct opnode *expr = child->children;
+            if (expr->op >= SEARCH_NUM_PARTS) {
+                opnode_append_child(root, child);
+                continue;
+            }
+            if (!search_part_is_body(expr->op) || expr->op == SEARCH_PART_ANY) {
+                /* Transform NOT(MATCH) to AND(NOT(MATCH),NOT(DOCTYPE==P)) */
+                struct opnode *notdp = opnode_new(SEARCH_OP_NOT, NULL);
+                opnode_append_child(notdp, opnode_new(XAPIAN_SEARCH_OP_DOCTYPE, "P"));
+                struct opnode *node = opnode_new(SEARCH_OP_AND, NULL);
+                opnode_append_child(node, child);
+                opnode_append_child(node, notdp);
+                opnode_append_child(root, node);
+            }
+        }
+        opnode_delete(norm);
+    }
+    else if (is_orclause(bb->root)) {
+        root = bb->root;
+    }
+    else {
+        struct buf buf = BUF_INITIALIZER;
+        opnode_serialise(&buf, bb->root);
+        syslog(LOG_ERR, "search_xapian: expected DNF or OR clause, got %s",
+                         buf_cstring(&buf));
+        buf_free(&buf);
+        r = IMAP_INTERNAL;
+        goto out;
+    }
+
+    xapian_query_t *xq = opnode_to_query(bb->lock.db, root, bb->opts);
+    if (!xq) goto out;
+
+    struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
+    if (!cstate) {
+        syslog(LOG_INFO, "search_xapian: can't open conversations for %s",
+                bb->mailbox->name);
+        r = IMAP_NOTFOUND;
+        goto out;
+    }
+    uint32_t num_folders = conversations_num_folders(cstate);
+    struct xapian_match *result = xzmalloc(sizeof(struct xapian_match) * num_folders);
+    struct xapian_run_rock xrock = { bb, result };
+    r = xapian_query_run(bb->lock.db, xq, /*is_legacy*/0, xapian_run_cb, &xrock);
+
+    if (result) {
+        r = 0;
+        uint32_t j;
+        for (j = 0; j < num_folders; j++) {
+            struct xapian_match *match = result + j;
+            if (bv_count(&match->uids)) {
+                const char *mboxname = conversations_folder_name(cstate, j);
+                int uid;
+                for (uid = bv_next_set(&match->uids, 0); uid != -1;
+                        uid = bv_next_set(&match->uids, uid+1)) {
+                    strarray_t *partids = NULL;
+                    if (match->partids_by_uid.size) {
+                        partids = hashu64_lookup(uid, &match->partids_by_uid);
+                    }
+                    r = bb->proc(mboxname, /*uidvalidity*/0, uid, partids, bb->rock);
+                    if (r) break;
+                }
+            }
+            xapian_match_reset(match);
+        }
+    }
+
+    free(result);
+    xapian_query_free(xq);
+out:
+    if (root != bb->root) opnode_delete(root);
     return r;
 }
 
@@ -1585,7 +1815,7 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     xapian_builder_t *bb = (xapian_builder_t *)bx;
     int r = 0;
 
-    if (bb->db == NULL) {
+    if (bb->lock.db == NULL) {
         syslog(LOG_ERR, "search_xapian: can't find index for mailbox: %s",
                 bb->mailbox ?  bb->mailbox->name : "<unknown>");
         return IMAP_NOTFOUND;       /* there's no index for this user */
@@ -1599,25 +1829,16 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
 
     optimise_nodes(NULL, bb->root);
 
-    /* A database can contain current and legacy databases.*/
-    if (xapian_db_supports_current_version(bb->db)) {
+    /* A database can contain sub-databases of multiple versions */
+    if (xapian_db_has_otherthan_v4_index(bb->lock.db)) {
+        // all but version 4 databases index header and body together
         r = run_query(bb);
         if (r) goto out;
     }
-    if (xapian_db_supports_legacy_version(bb->db)) {
-        r = run_legacy_query(bb);
+    if (xapian_db_has_legacy_v4_index(bb->lock.db)) {
+        // legacy version 4 databases index headers and body separately
+        r = run_legacy_v4_query(bb);
         if (r) goto out;
-    }
-
-    /* add in the unindexed uids as false positives */
-    if ((bb->opts & SEARCH_UNINDEXED)) {
-        uint32_t uid;
-        for (uid = seqset_firstnonmember(bb->indexed);
-             uid <= bb->mailbox->i.last_uid ; uid++) {
-            r = proc(bb->mailbox->name, bb->mailbox->i.uidvalidity,
-                     uid, NULL, rock);
-            if (r) goto out;
-        }
     }
 
 out:
@@ -1684,53 +1905,12 @@ static void free_internalised(void *internalised)
     if (on) opnode_delete(on);
 }
 
-/*
- * This function builds a lockfilename of the format:
- *  $XAPIAN$<userid>
- * example:
- *  If the userid is `foo@bar.com` then the lockfilename is
- *  $XAPIAN$foo@bar^com
- *
- * It replaces '.' in a string with a '^' into a struct buf
- */
-static char *xapiandb_namelock_fname_from_userid(const char *userid)
-{
-    const char *p;
-    struct buf buf = BUF_INITIALIZER;
-
-    buf_setcstr(&buf, XAPIAN_NAME_LOCK_PREFIX);
-
-    for (p = userid; *p; p++) {
-        switch(*p) {
-        case '.':
-            buf_putc(&buf, '^');
-            break;
-        default:
-            buf_putc(&buf, *p);
-            break;
-        }
-    }
-
-    char *ret = buf_release(&buf);
-
-    buf_free(&buf);
-
-    return ret;
-}
-
 static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
 {
     int r = check_config(NULL);
     if (r) return NULL;
 
-    xapian_builder_t *bb;
-    strarray_t *dirs = NULL;
-    strarray_t *tiers = NULL;
-    strarray_t *active = NULL;
-    char *namelock_fname = NULL;
-    char *userid = NULL;
-
-    bb = xzmalloc(sizeof(xapian_builder_t));
+    xapian_builder_t *bb = xzmalloc(sizeof(xapian_builder_t));
     bb->super.begin_boolean = begin_boolean;
     bb->super.end_boolean = end_boolean;
     bb->super.match = match;
@@ -1740,46 +1920,18 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->mailbox = mailbox;
     bb->opts = opts;
 
-    /* Do nothing if there is no userid */
-    userid = mboxname_to_userid(mailbox->name);
-    if (!userid) goto out;
-
-    namelock_fname = xapiandb_namelock_fname_from_userid(userid);
-
-    /* Get a shared lock */
-    r = mboxname_lock(namelock_fname, &bb->xapiandb_namelock, LOCK_SHARED);
-    if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
-               namelock_fname);
-        goto out;
-    }
-
-    /* need to hold a read-only lock on the activefile file until the search
-     * has completed to ensure no databases are deleted out from under us */
-    active = activefile_open(mailbox->name, mailbox->part, &bb->activefile, AF_LOCK_READ);
-    if (!active) goto out;
-
-    /* only try to open directories with databases in them */
-    dirs = activefile_resolve(mailbox->name, mailbox->part, active, /*dostat*/1, &tiers);
-    if (!dirs || !dirs->count) goto out;
-
-    /* if there are directories, open the databases */
-    r = xapian_db_open((const char **)dirs->data, &bb->db);
+    r = xapiandb_lock_open(mailbox, &bb->lock);
     if (r) goto out;
+    if (!bb->lock.activedirs || !bb->lock.activedirs->count) goto out;
 
     /* read the list of all indexed messages to allow (optional) false positives
      * for unindexed messages */
     bb->indexed = seqset_init(0, SEQ_MERGE);
-    r = read_indexed(dirs, tiers, mailbox->name, mailbox->i.uidvalidity, bb->indexed,
-                    /*do_cache*/0, /*verbose*/0);
+    r = read_indexed(bb->lock.activedirs, bb->lock.activetiers, mailbox->name,
+                     mailbox->i.uidvalidity, bb->indexed, /*do_cache*/0, /*verbose*/0);
     if (r) goto out;
 
 out:
-    strarray_free(dirs);
-    strarray_free(tiers);
-    strarray_free(active);
-    free(namelock_fname);
-    free(userid);
     /* XXX - error return? */
     return &bb->super;
 }
@@ -1792,19 +1944,7 @@ static void end_search(search_builder_t *bx)
     ptrarray_fini(&bb->stack);
     if (bb->root) opnode_delete(bb->root);
 
-    if (bb->db) xapian_db_close(bb->db);
-
-    /* now that the databases are closed, it's safe to unlock
-     * the active file */
-    if (bb->activefile) {
-        mappedfile_unlock(bb->activefile);
-        mappedfile_close(&bb->activefile);
-    }
-
-    if (bb->xapiandb_namelock) {
-        mboxname_release(&bb->xapiandb_namelock);
-        bb->xapiandb_namelock = NULL;
-    }
+    xapiandb_lock_release(&bb->lock);
 
     free(bx);
 }
@@ -1855,6 +1995,8 @@ struct xapian_snippet_receiver
     struct opnode *root;
     search_snippet_cb_t proc;
     void *rock;
+    struct xapiandb_lock lock;
+    const search_snippet_markup_t *markup;
 };
 
 /* Maximum size of a query, determined empirically, is a little bit
@@ -2082,7 +2224,7 @@ static int begin_message(search_text_receiver_t *rx, message_t *msg)
 }
 
 static void begin_part(search_text_receiver_t *rx, int part,
-                       const struct message_guid *content_guid __attribute__((unused)))
+                       const struct message_guid *content_guid)
 {
     xapian_receiver_t *tr = (xapian_receiver_t *)rx;
 
@@ -2105,6 +2247,7 @@ static void append_text(search_text_receiver_t *rx,
                                 tr->mailbox->name, tr->uid);
             len = MAX_PARTS_SIZE - tr->parts_total;
         }
+
         if (len) {
             tr->parts_total += len;
 
@@ -2188,80 +2331,65 @@ static int end_message_update(search_text_receiver_t *rx)
 
     ptrarray_sort(&tr->super.segs, compare_segs);
 
-    if (xapian_dbw_is_legacy(tr->dbw)) {
-        r = xapian_dbw_begin_doc(tr->dbw, &tr->super.guid, SEARCH_XAPIAN_DOCTYPE_MSG);
+    // index headers and body parts with message guid
+    if (!tr->uncommitted) {
+        r = xapian_dbw_begin_txn(tr->dbw);
         if (r) goto out;
-
-        for (i = 0 ; i < tr->super.segs.count ; i++) {
-            seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
-            r = xapian_dbw_doc_part(tr->dbw, &seg->text, seg->part);
-            if (r) goto out;
-        }
-
-        if (!tr->uncommitted) {
-            r = xapian_dbw_begin_txn(tr->dbw);
-            if (r) goto out;
-        }
-        ++tr->uncommitted;
-        r = xapian_dbw_end_doc(tr->dbw);
-        goto out;
     }
-
-    // XXX filter out already indexed parts?
-
-    const struct message_guid *last_guid = NULL;
-
+    r = xapian_dbw_begin_doc(tr->dbw, &tr->super.guid, SEARCH_XAPIAN_DOCTYPE_MSG);
+    if (r) goto out;
     for (i = 0 ; i < tr->super.segs.count ; i++) {
         seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
-
-        /* Skip indexed parts, if not forced to re-index */
-        if ((seg->doctype == SEARCH_XAPIAN_DOCTYPE_PART) &&
-            !(tr->reindex_parts) &&
-            xapian_dbw_is_indexed(tr->dbw, &seg->guid, seg->doctype)) {
-            for (i = i + 1; i < tr->super.segs.count; i++) {
-                struct segment *next_seg = ptrarray_nth(&tr->super.segs, i);
-                if (message_guid_cmp(&seg->guid, &next_seg->guid)) {
-                    i--;
-                    break;
-                }
-            }
-            continue;
-        }
-
-        if (!last_guid || message_guid_cmp(last_guid, &seg->guid)) {
-            if (last_guid) {
-                if (!tr->uncommitted) {
-                    r = xapian_dbw_begin_txn(tr->dbw);
-                    if (r) goto out;
-                }
-                r = xapian_dbw_end_doc(tr->dbw);
-                if (r) goto out;
-                ++tr->uncommitted;
-            }
-
-            last_guid = &seg->guid;
-            r = xapian_dbw_begin_doc(tr->dbw, &seg->guid, seg->doctype);
-            if (r) goto out;
-        }
-
-        /* Index this segment */
         r = xapian_dbw_doc_part(tr->dbw, &seg->text, seg->part);
         if (r) goto out;
     }
-    if (last_guid) {
-        if (!tr->uncommitted) {
-            r = xapian_dbw_begin_txn(tr->dbw);
+    r = xapian_dbw_end_doc(tr->dbw);
+    if (r) goto out;
+    ++tr->uncommitted;
+
+    if (config_getswitch(IMAPOPT_SEARCH_INDEX_PARTS)) {
+        // index body parts with content guid
+        const struct message_guid *last_guid = NULL;
+        for (i = 0 ; i < tr->super.segs.count ; i++) {
+            seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
+            if (seg->doctype == SEARCH_XAPIAN_DOCTYPE_MSG) continue;
+
+            if (!last_guid || message_guid_cmp(last_guid, &seg->guid)) {
+                if (last_guid) {
+                    r = xapian_dbw_end_doc(tr->dbw);
+                    if (r) goto out;
+                    ++tr->uncommitted;
+                }
+
+                last_guid = &seg->guid;
+                r = xapian_dbw_begin_doc(tr->dbw, &seg->guid, seg->doctype);
+                if (r) goto out;
+            }
+            r = xapian_dbw_doc_part(tr->dbw, &seg->text, seg->part);
             if (r) goto out;
         }
-        r = xapian_dbw_end_doc(tr->dbw);
-        if (r) goto out;
-        ++tr->uncommitted;
+        if (last_guid) {
+            r = xapian_dbw_end_doc(tr->dbw);
+            if (r) goto out;
+            ++tr->uncommitted;
+        }
     }
 
 out:
     tr->super.uid = 0;
     message_guid_set_null(&tr->super.guid);
     return r;
+}
+
+static int _starts_with_tier(const strarray_t *active, const char *tier)
+{
+    if (!active) return 0;
+    if (!active->count) return 0;
+    const char *candidate = strarray_nth(active, 0);
+    struct activeitem *item = activeitem_parse(candidate);
+    int res = !strcmp(item->tier, tier);
+    activeitem_free(item);
+    return res;
 }
 
 static int begin_mailbox_update(search_text_receiver_t *rx,
@@ -2318,10 +2446,21 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      *  and will be going away in the future, but it's not too hard to design
      *  to avoid it happening at least."
      */
+    const char *deftier = config_getstring(IMAPOPT_DEFAULTSEARCHTIER);
     active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, AF_LOCK_WRITE);
-    if (!active || !active->count) {
-        goto out;
+    if (!active) active = strarray_new();
+
+    // make sure we're indexing to the default tier
+    while (!_starts_with_tier(active, deftier)) {
+        char *newstart = activefile_nextname(active, config_getstring(IMAPOPT_DEFAULTSEARCHTIER));
+        syslog(LOG_NOTICE, "create new search tier %s for %s", newstart, mailbox->name);
+        strarray_unshiftm(active, newstart);
+        r = activefile_write(tr->activefile, active);
+        mappedfile_close(&tr->activefile);
+        active = activefile_open(mailbox->name, mailbox->part, &tr->activefile, AF_LOCK_WRITE);
     }
+
+    assert(active->count);
 
     tr->mode = (flags & (SEARCH_UPDATE_XAPINDEXED|SEARCH_UPDATE_AUDIT)) ?
         XAPIAN_DBW_XAPINDEXED : XAPIAN_DBW_CONVINDEXED;
@@ -2330,9 +2469,8 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
      * to be opening them */
     int dostat = tr->mode == XAPIAN_DBW_XAPINDEXED ? 2 : 0;
     tr->activedirs = activefile_resolve(mailbox->name, mailbox->part, active, dostat, &tr->activetiers);
-    if (!tr->activedirs || !tr->activedirs->count) {
-        goto out;
-    }
+    // this should never be able to fail here, because the first item will always exist!
+    assert(tr->activedirs && tr->activedirs->count);
 
     /* create the directory if needed */
     r = check_directory(strarray_nth(tr->activedirs, 0), tr->super.verbose, /*create*/1);
@@ -2534,6 +2672,11 @@ static int end_mailbox_update(search_text_receiver_t *rx,
     return r;
 }
 
+static int xapian_charset_flags(int flags)
+{
+    return flags | CHARSET_KEEPCASE;
+}
+
 static search_text_receiver_t *begin_update(int verbose)
 {
     xapian_update_receiver_t *tr;
@@ -2552,6 +2695,7 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.end_mailbox = end_mailbox_update;
     tr->super.super.flush = flush;
     tr->super.super.audit_mailbox = audit_mailbox;
+    tr->super.super.index_charset_flags = xapian_charset_flags;
 
     tr->super.verbose = verbose;
 
@@ -2585,7 +2729,15 @@ static int begin_mailbox_snippets(search_text_receiver_t *rx,
 
     tr->super.mailbox = mailbox;
 
-    return 0;
+    int r = xapiandb_lock_open(mailbox, &tr->lock);
+    if (r) goto out;
+    if (!tr->lock.activedirs || !tr->lock.activedirs->count) goto out;
+
+    tr->snipgen = xapian_snipgen_new(tr->lock.db, tr->markup->hi_start,
+                                     tr->markup->hi_end, tr->markup->omit);
+
+out:
+    return r;
 }
 
 /* Find match terms for the given part and add them to the Xapian
@@ -2611,13 +2763,13 @@ static void generate_snippet_terms(xapian_snipgen_t *snipgen,
             xapian_snipgen_add_match(snipgen, on->arg);
         }
         break;
-
     default:
         /* other SEARCH_PART_* constants */
-        assert(on->op >= 0 && on->op < SEARCH_NUM_PARTS);
-        assert(on->children == NULL);
-        if (part == on->op) {
-            xapian_snipgen_add_match(snipgen, on->arg);
+        if (on->op >= 0 && on->op < SEARCH_NUM_PARTS) {
+            assert(on->children == NULL);
+            if (part == on->op) {
+                xapian_snipgen_add_match(snipgen, on->arg);
+            }
         }
         break;
     }
@@ -2627,13 +2779,16 @@ static int flush_snippets(search_text_receiver_t *rx)
 {
     xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
     struct buf snippets = BUF_INITIALIZER;
-    unsigned int context_length;
     int i;
     struct segment *seg;
     int last_part = -1;
     int r = 0;
 
     if (!tr->root) {
+        goto out;
+    }
+
+    if (!tr->lock.activedirs || !tr->lock.activedirs->count) {
         goto out;
     }
 
@@ -2648,37 +2803,27 @@ static int flush_snippets(search_text_receiver_t *rx)
 
     for (i = 0 ; i < tr->super.segs.count ; i++) {
         seg = (struct segment *)ptrarray_nth(&tr->super.segs, i);
-        if (!last_guid || message_guid_cmp(last_guid, &seg->guid)) {
-            last_guid = &seg->guid;
-        }
 
-        if (seg->part != last_part) {
+        if (!last_guid || message_guid_cmp(last_guid, &seg->guid) || seg->part != last_part) {
+            /* In contrast to the update code, we start and end a document
+             * for each search part of the same message. This is due to
+             * the way the snippet callbacks are implemented. */
+            r = xapian_snipgen_end_doc(tr->snipgen, &snippets);
 
-            if (last_part != -1) {
-                r = xapian_snipgen_end_doc(tr->snipgen, &snippets);
-                if (!r && snippets.len)
-                    r = tr->proc(tr->super.mailbox, tr->super.uid, last_part, snippets.s, tr->rock);
-                if (r) break;
-            }
+            if (!r && snippets.len)
+                r = tr->proc(tr->super.mailbox, tr->super.uid, last_part, snippets.s, tr->rock);
+            if (r) goto out;
 
-            /* TODO: UINT_MAX doesn't behave as expected, which is probably
-             * a bug, but really any value larger than a reasonable Subject
-             * length will do */
-            if (seg->part == SEARCH_PART_HEADERS ||
-                seg->part == SEARCH_PART_BODY ||
-                seg->part == SEARCH_PART_ATTACHMENTBODY) {
-                context_length = 5;
-            }
-            else context_length = 1000000;
-            r = xapian_snipgen_begin_doc(tr->snipgen, context_length);
+            r = xapian_snipgen_begin_doc(tr->snipgen, &seg->guid, seg->doctype);
             if (r) break;
-
             generate_snippet_terms(tr->snipgen, seg->part, tr->root);
+
+            last_guid = &seg->guid;
+            last_part = -1;
         }
 
         r = xapian_snipgen_doc_part(tr->snipgen, &seg->text, seg->part);
         last_part = seg->part;
-
         if (r) break;
     }
 
@@ -2706,6 +2851,7 @@ static int end_mailbox_snippets(search_text_receiver_t *rx,
 {
     xapian_snippet_receiver_t *tr = (xapian_snippet_receiver_t *)rx;
 
+    xapiandb_lock_release(&tr->lock);
     tr->super.mailbox = NULL;
 
     return 0;
@@ -2730,12 +2876,13 @@ static search_text_receiver_t *begin_snippets(void *internalised,
     tr->super.super.end_message = end_message_snippets;
     tr->super.super.end_mailbox = end_mailbox_snippets;
     tr->super.super.flush = flush_snippets;
+    tr->super.super.index_charset_flags = xapian_charset_flags;
 
     tr->super.verbose = verbose;
     tr->root = (struct opnode *)internalised;
-    tr->snipgen = xapian_snipgen_new(m->hi_start, m->hi_end, m->omit);
     tr->proc = proc;
     tr->rock = rock;
+    tr->markup = m;
 
     return &tr->super.super;
 }
@@ -2876,27 +3023,26 @@ static int mbdata_exists_cb(const char *cyrusid, void *rock)
 {
     struct mbfilter *filter = (struct mbfilter *)rock;
 
-    /* we can't get here without GUID keys */
-    assert(!strncmp(cyrusid, "*G*", 3));
+    if (strncmp(cyrusid, "*G*", 3) && strncmp(cyrusid, "*P*", 3)) return 0;
 
-    return bloom_check(&filter->bloom, cyrusid+3, strlen(cyrusid+3));
+    return bloom_check(&filter->bloom, cyrusid+3, 40);
 }
 
 static int bloomadd_cb(void *rock,
-                       const char *key, size_t keylen,
+                       const char *key,
+                       size_t keylen __attribute__((unused)),
                        const char *data __attribute__((unused)),
                        size_t datalen __attribute__((unused)))
 {
     struct bloom *bloom = (struct bloom *)rock;
-    if (keylen > 41 && !memchr(key+41, '[', keylen-41))
-        bloom_add(bloom, key+1, 40);
+    bloom_add(bloom, key+1, 40);
     return 0;
 }
 
 static int create_filter(const strarray_t *srcpaths, const strarray_t *destpaths,
                          const strarray_t *desttiers,
                          const char *userid, int flags, struct mbfilter *filter,
-                         int bloom, int newindexdb)
+                         int bloom)
 {
     struct buf buf = BUF_INITIALIZER;
     int r = 0;
@@ -2913,8 +3059,6 @@ static int create_filter(const strarray_t *srcpaths, const strarray_t *destpaths
 
     buf_reset(&buf);
     buf_printf(&buf, "%s%s", strarray_nth(destpaths, 0), INDEXEDDB_FNAME);
-    if (newindexdb)
-        buf_appendcstr(&buf, ".NEW");
 
     r = cyrusdb_open(config_getstring(IMAPOPT_SEARCH_INDEXED_DB),
                      buf_cstring(&buf), CYRUSDB_CREATE, &filter->indexeddb);
@@ -2972,7 +3116,7 @@ static int search_filter(const char *userid, const strarray_t *srcpaths,
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpaths, desttiers, userid, flags, &filter, 1, 0);
+    r = create_filter(srcpaths, destpaths, desttiers, userid, flags, &filter, 1);
     if (r) goto done;
 
     if (verbose)
@@ -3023,8 +3167,7 @@ static int reindex_mb(void *rock,
 
     /* open the DB */
     tr = (xapian_update_receiver_t *)begin_update(verbose);
-    tr->mode = (filter->flags & SEARCH_COMPACT_XAPINDEXED) ? XAPIAN_DBW_XAPINDEXED
-                                                           : XAPIAN_DBW_CONVINDEXED;
+    tr->mode = XAPIAN_DBW_XAPINDEXED; // always use XAPINDEXED for reindex, so we reindex the same emails
     r = xapian_dbw_open((const char **)filter->destpaths->data, &tr->dbw, tr->mode);
     if (r) goto done;
     tr->super.mailbox = mailbox;
@@ -3115,7 +3258,7 @@ static int search_reindex(const char *userid, const strarray_t *srcpaths,
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpaths, desttiers, userid, flags, &filter, 0, 1);
+    r = create_filter(srcpaths, destpaths, desttiers, userid, flags, &filter, 0);
     if (r) goto done;
 
     if (verbose)
@@ -3144,7 +3287,7 @@ static int search_compress(const char *userid, const strarray_t *srcpaths,
     int verbose = SEARCH_VERBOSE(flags);
     int r;
 
-    r = create_filter(srcpaths, destpaths, desttiers, userid, flags, &filter, 0, 0);
+    r = create_filter(srcpaths, destpaths, desttiers, userid, flags, &filter, 0);
     if (r) goto done;
 
     if (verbose)
@@ -3163,6 +3306,39 @@ done:
     free_mbfilter(&filter);
     buf_free(&buf);
     return r;
+}
+
+static void cleanup_xapiandirs(const char *mboxname, const char *partition, strarray_t *active, int verbose)
+{
+    int i;
+    strarray_t found = STRARRAY_INITIALIZER;
+    strarray_t bogus = STRARRAY_INITIALIZER;
+
+    inspect_filesystem(mboxname, partition, &found, &bogus);
+
+    for (i = 0; i < strarray_size(active); i++) {
+        const char *item = strarray_nth(active, i);
+        strarray_remove_all(&found, item);
+    }
+
+    for (i = 0; i < strarray_size(&found); i++) {
+        const char *item = strarray_nth(&found, i);
+        char *path = activefile_path(mboxname, partition, item, /*dostat*/0);
+        if (verbose)
+            printf("Removing unreferenced item %s (%s)\n", item, path);
+        remove_dir(path);
+        free(path);
+    }
+
+    for (i = 0; i < strarray_size(&bogus); i++) {
+        const char *path = strarray_nth(&bogus, i);
+        if (verbose)
+            printf("Removing bogus path %s\n", path);
+        remove_dir(path);
+    }
+
+    strarray_fini(&found);
+    strarray_fini(&bogus);
 }
 
 static int compact_dbs(const char *userid, const char *tempdir,
@@ -3188,6 +3364,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
     struct buf mytempdir = BUF_INITIALIZER;
     char *namelock_fname = NULL;
     int verbose = SEARCH_VERBOSE(flags);
+    int created_something = 0;
     int r = 0;
     int i;
 
@@ -3204,6 +3381,12 @@ static int compact_dbs(const char *userid, const char *tempdir,
 
     r = check_config(NULL);
     if (r) goto out;
+
+    if (!xapian_rootdir(desttier, mbentry->partition)) {
+        if (verbose)
+            printf("INVALID: unknown tier %s\n", desttier);
+        goto out;
+    }
 
     /* Generated the namelock filename */
     namelock_fname = xapiandb_namelock_fname_from_userid(userid);
@@ -3333,7 +3516,9 @@ static int compact_dbs(const char *userid, const char *tempdir,
         }
         cyrus_mkdir(tempdestdir, 0755);
         remove_dir(tempdestdir);
-        r = copy_files(srcdirs->data[0], tempdestdir);
+        r = copy_files(strarray_nth(srcdirs, 0), tempdestdir);
+        if (r) goto out;
+        created_something = 1;
     }
     else if (srcdirs->count) {
         if (verbose) {
@@ -3357,7 +3542,7 @@ static int compact_dbs(const char *userid, const char *tempdir,
             strarray_cat(toreindex, srcdirs);
         }
         else {
-            xapian_check_if_needs_reindex(srcdirs, toreindex);
+            xapian_check_if_needs_reindex(srcdirs, toreindex, flags & SEARCH_COMPACT_ONLYUPGRADE);
             for (i = 0; i < srcdirs->count; i++) {
                 const char *thisdir = strarray_nth(srcdirs, i);
                 if (strarray_find(toreindex, thisdir, 0) < 0)
@@ -3365,63 +3550,75 @@ static int compact_dbs(const char *userid, const char *tempdir,
             }
         }
 
-        if (toreindex->count) {
-            tempreindexdir = strconcat(buf_cstring(&mytempdir), ".REINDEX", (char *)NULL);
-            // add this directory to the repack target as the first entry point
-            strarray_unshift(newdirs, tempreindexdir);
-            r = search_reindex(userid, toreindex, newdirs, newtiers, flags);
-            if (r) {
-                printf("ERROR: failed to reindex to %s", buf_cstring(&mytempdir));
-                goto out;
-            }
-            // remove tempreindexdir from newdirs again, it's going to be compacted instead
-            free(strarray_shift(newdirs));
-
-            // add it to the to-compact list if there's something there to reindex
-            if (!xapstat(tempreindexdir))
-                strarray_unshift(tocompact, tempreindexdir);
-        }
-        else if ((flags & SEARCH_COMPACT_ONLYUPGRADE)) {
+        if (!toreindex->count && (flags & SEARCH_COMPACT_ONLYUPGRADE)) {
             /* nothing to reindex, so bail now.  Since we don't set 'r', we will just
              * abort with no change other than a new tmp location which compresses down
              * soon enough */
             goto out;
         }
 
-        // nothing left to compress
-        if (!tocompact->count)
-            goto out;
-
-        // and now we're ready to compact to the real tempdir
-        strarray_unshift(newdirs, buf_cstring(&mytempdir));
-
-        if (flags & SEARCH_COMPACT_FILTER) {
-            r = search_filter(userid, tocompact, newdirs, newtiers, flags);
+        // first, we'll reindex anything that needs reindexing to a temporary directory
+        if (toreindex->count) {
+            tempreindexdir = strconcat(buf_cstring(&mytempdir), ".REINDEX", (char *)NULL);
+            // add this directory to the repack target as the first entry point
+            strarray_unshift(newdirs, tempreindexdir);
+            r = search_reindex(userid, toreindex, newdirs, newtiers, flags);
             if (r) {
-                printf("ERROR: failed to filter to %s", buf_cstring(&mytempdir));
+                printf("ERROR: failed to reindex to %s", tempreindexdir);
+                remove_dir(tempreindexdir);
                 goto out;
             }
-        }
-        else {
-            r = search_compress(userid, tocompact, newdirs, newtiers, flags);
-            if (r) {
-                printf("ERROR: failed to compact to %s", buf_cstring(&mytempdir));
-                goto out;
-            }
+            // remove tempreindexdir from newdirs again, it's going to be compacted instead
+            free(strarray_shift(newdirs));
+
+            // and then add the temporary directory to the to-compact list if anything was indexed into it
+            if (!xapstat(tempreindexdir))
+                strarray_unshift(tocompact, tempreindexdir);
         }
 
-        /* move the tmpfs files to a temporary name in our target directory */
-        if (tempdir) {
-            if (verbose) {
-                printf("copying from tempdir to destination\n");
+        // then we'll compact together all the source databases
+        if (tocompact->count) {
+            // and now we're ready to compact to the real tempdir
+            strarray_unshift(newdirs, buf_cstring(&mytempdir));
+
+            if (flags & SEARCH_COMPACT_FILTER) {
+                r = search_filter(userid, tocompact, newdirs, newtiers, flags);
+                if (r) {
+                    printf("ERROR: failed to filter to %s", buf_cstring(&mytempdir));
+                    goto out;
+                }
             }
-            cyrus_mkdir(tempdestdir, 0755);
-            remove_dir(tempdestdir);
-            r = copy_files(buf_cstring(&mytempdir), tempdestdir);
-            if (r) {
-                printf("Failed to rsync from %s to %s", buf_cstring(&mytempdir), tempdestdir);
-                goto out;
+            else {
+                r = search_compress(userid, tocompact, newdirs, newtiers, flags);
+                if (r) {
+                    printf("ERROR: failed to compact to %s", buf_cstring(&mytempdir));
+                    goto out;
+                }
             }
+
+            if (!xapstat(buf_cstring(&mytempdir))) {
+                /* move the tmpfs files to a temporary name in our target directory */
+                if (tempdir) {
+                    if (verbose) {
+                        printf("copying from tempdir to destination\n");
+                    }
+                    cyrus_mkdir(tempdestdir, 0755);
+                    remove_dir(tempdestdir);
+                    r = copy_files(buf_cstring(&mytempdir), tempdestdir);
+                    remove_dir(buf_cstring(&mytempdir));
+                    if (r) {
+                        printf("Failed to rsync from %s to %s", buf_cstring(&mytempdir), tempdestdir);
+                        goto out;
+                    }
+                }
+                created_something = 1;
+            }
+        }
+
+        if (tempreindexdir) {
+            remove_dir(tempreindexdir);
+            free(tempreindexdir);
+            tempreindexdir = NULL;
         }
     }
 
@@ -3453,11 +3650,8 @@ static int compact_dbs(const char *userid, const char *tempdir,
         strarray_free(newactive);
     }
 
-    if (srcdirs->count) {
-        /* create a new target name one greater than the highest in the
-         * activefile file for our target directory.  Rename our DB to
-         * that path, then rewrite activefile removing all the source
-         * items */
+    if (created_something) {
+        /* rename the destination data into place */
         if (verbose) {
             printf("renaming tempdir into place\n");
         }
@@ -3486,6 +3680,13 @@ static int compact_dbs(const char *userid, const char *tempdir,
     /* release the lock */
     mappedfile_unlock(activefile);
 
+    /* And finally remove all directories on disk of the source dbs */
+    for (i = 0; i < srcdirs->count; i++)
+        remove_dir(strarray_nth(srcdirs, i));
+
+    /* remove any other files that are still lying around! */
+    cleanup_xapiandirs(mboxname, mbentry->partition, active, verbose);
+
     /* Release the exclusive named lock */
     if (xapiandb_namelock) {
         mboxname_release(&xapiandb_namelock);
@@ -3498,39 +3699,12 @@ static int compact_dbs(const char *userid, const char *tempdir,
         free(alist);
     }
 
-    /* Get a shared name lock */
-    r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_SHARED);
-    if (r) {
-        syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
-               namelock_fname);
-        goto out;
-    }
-
-    /* And finally remove all directories on disk of the source dbs */
-    for (i = 0; i < srcdirs->count; i++)
-        remove_dir(strarray_nth(srcdirs, i));
-
-    /* XXX - readdir and remove other directories as well */
-
-    /* Release the shared named lock */
-    if (xapiandb_namelock) {
-        mboxname_release(&xapiandb_namelock);
-        xapiandb_namelock = NULL;
-    }
-
 out:
-    // cleanup all our work locations
-    if (tempdestdir)
-        remove_dir(tempdestdir);
-    if (tempreindexdir)
-        remove_dir(tempreindexdir);
-    if (mytempdir.len)
-        remove_dir(buf_cstring(&mytempdir));
-
     strarray_free(orig);
     strarray_free(active);
     strarray_free(srcdirs);
     strarray_free(newdirs);
+    strarray_free(newtiers);
     strarray_free(toreindex);
     strarray_free(tochange);
     strarray_free(tocompact);
@@ -3623,6 +3797,26 @@ out:
     return r;
 }
 
+static int list_lang_stats(const char *userid, ptrarray_t *lstats)
+{
+    struct mailbox *mailbox = NULL;
+    char *inboxname = mboxname_user_mbox(userid, NULL);
+    struct xapiandb_lock lock = XAPIANDB_LOCK_INITIALIZER;
+
+    int r = mailbox_open_irl(inboxname, &mailbox);
+    if (r) goto out;
+
+    r = xapiandb_lock_open(mailbox, &lock);
+    if (r) goto out;
+
+    r = xapian_list_lang_stats(lock.db, lstats);
+
+out:
+    xapiandb_lock_release(&lock);
+    mailbox_close(&mailbox);
+    free(inboxname);
+    return r;
+}
 
 const struct search_engine xapian_search_engine = {
     "Xapian",
@@ -3639,5 +3833,6 @@ const struct search_engine xapian_search_engine = {
     compact_dbs,
     delete_user,  /* XXX: fixme */
     check_config,
+    list_lang_stats
 };
 

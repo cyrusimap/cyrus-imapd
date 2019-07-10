@@ -104,13 +104,13 @@ static search_expr_t *detachp(search_expr_t **prevp)
     return child;
 }
 
-static search_expr_t *detach(search_expr_t *parent, search_expr_t *child)
+EXPORTED void search_expr_detach(search_expr_t *parent, search_expr_t *child)
 {
     search_expr_t **prevp;
 
     for (prevp = &parent->children ; *prevp && *prevp != child; prevp = &(*prevp)->next)
         ;
-    return detachp(prevp);
+    detachp(prevp);
 }
 
 /*
@@ -192,8 +192,11 @@ EXPORTED void search_expr_append(search_expr_t *parent, search_expr_t *e)
 EXPORTED void search_expr_free(search_expr_t *e)
 {
     if (!e) return;
-    while (e->children)
-        search_expr_free(detach(e, e->children));
+    while (e->children) {
+        search_expr_t *child = e->children;
+        search_expr_detach(e, child);
+        search_expr_free(child);
+    }
     if (e->attr) {
         if (e->attr->internalise) e->attr->internalise(NULL, NULL, &e->internalised);
         if (e->attr->free) e->attr->free(&e->value);
@@ -627,17 +630,40 @@ static void setnext(void *p, void *next)
     ((search_expr_t *)p)->next = next;
 }
 
+static int maxcost(const search_expr_t *e, hashu64_table *costcache)
+{
+    if (!e) return 0;
+
+    if (costcache) {
+        intptr_t cost = (intptr_t) hashu64_lookup((uint64_t) e, costcache);
+        assert(cost > INT_MIN && cost < INT_MAX);
+        if (cost) return cost > 0 ? cost : 0;
+    }
+
+    int cost = e->attr ? e->attr->cost : 0;
+    search_expr_t *child;
+    for (child = e->children ; child ; child = child->next) {
+        int childcost = maxcost(child, costcache);
+        if (childcost > cost) cost = childcost;
+    }
+
+    if (costcache) {
+        hashu64_insert((uint64_t) e, (void*)((intptr_t)(cost ? cost : -1)), costcache);
+    }
+    return cost;
+}
+
 static int compare(void *p1, void *p2, void *calldata)
 {
     const search_expr_t *e1 = p1;
     const search_expr_t *e2 = p2;
-    int r;
-
-    r = dnf_depth(e2) - dnf_depth(e1);
+    int r = 0;
 
     if (!r)
-        r = (e1->attr ? e1->attr->cost : 0)
-          - (e2->attr ? e2->attr->cost : 0);
+        r = maxcost(e1, calldata) - maxcost(e2, calldata);
+
+    if (!r)
+        r = dnf_depth(e2) - dnf_depth(e1);
 
     if (!r)
         r = strcasecmp(e1->attr ? e1->attr->name : "zzz",
@@ -668,14 +694,33 @@ static int compare(void *p1, void *p2, void *calldata)
     return r;
 }
 
-static void sort_children(search_expr_t *e)
+static void sort_children_internal(search_expr_t *e, hashu64_table *costcache)
 {
     search_expr_t *child;
 
     for (child = e->children ; child ; child = child->next)
-        sort_children(child);
+        sort_children_internal(child, costcache);
 
-    e->children = lsort(e->children, getnext, setnext, compare, NULL);
+    e->children = lsort(e->children, getnext, setnext, compare, costcache);
+}
+
+static void sort_children(search_expr_t *e)
+{
+    search_expr_t *child;
+    hashu64_table maxcostcache = HASHU64_TABLE_INITIALIZER;
+    construct_hashu64_table(&maxcostcache, 512, 0);
+    hashu64_table *costcache = &maxcostcache;
+
+    if (sizeof(uint64_t) < sizeof(search_expr_t*)) {
+        costcache = NULL; // woot?
+    }
+
+    for (child = e->children ; child ; child = child->next)
+        sort_children_internal(child, costcache);
+
+    e->children = lsort(e->children, getnext, setnext, compare, costcache);
+
+    free_hashu64_table(&maxcostcache, NULL);
 }
 
 /*
@@ -1171,18 +1216,24 @@ static void split(search_expr_t *e,
 
 /* ====================================================================== */
 
-static int search_string_match(message_t *m, const union search_value *v,
+struct search_string_internal {
+    comp_pat *pat;
+    char *s;
+};
+
+static int search_string_match(message_t *m,
+                                const union search_value *v __attribute__((unused)),
                                 void *internalised,
                                 void *data1)
 {
     int r;
     struct buf buf = BUF_INITIALIZER;
     int (*getter)(message_t *, struct buf *) = (int(*)(message_t *, struct buf *))data1;
-    comp_pat *pat = (comp_pat *)internalised;
+    struct search_string_internal *internal = internalised;
 
     r = getter(m, &buf);
     if (!r && buf.len)
-        r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
+        r = charset_searchstring(internal->s, internal->pat, buf.s, buf.len, charset_flags);
     else
         r = 0;
     buf_free(&buf);
@@ -1209,11 +1260,19 @@ static void search_string_internalise(struct index_state *state __attribute__((u
                                       const union search_value *v, void **internalisedp)
 {
     if (*internalisedp) {
-        charset_freepat(*internalisedp);
+        struct search_string_internal *internal = *internalisedp;
+        charset_freepat(internal->pat);
+        free(internal->s);
+        free(internal);
         *internalisedp = NULL;
     }
     if (v) {
-        *internalisedp = charset_compilepat(v->s);
+        struct search_string_internal *internal = xzmalloc(sizeof(struct search_string_internal));
+        charset_t utf8 = charset_lookupname("utf8");
+        internal->s = charset_convert(v->s, utf8, charset_flags);
+        internal->pat = charset_compilepat(internal->s);
+        charset_free(&utf8);
+        *internalisedp = internal;
     }
 }
 
@@ -1306,14 +1365,14 @@ static int search_header_match(message_t *m, const union search_value *v,
     int r;
     struct buf buf = BUF_INITIALIZER;
     const char *field = (const char *)data1;
-    comp_pat *pat = (comp_pat *)internalised;
+    struct search_string_internal *internal = internalised;
 
     r = message_get_field(m, field,
                           MESSAGE_DECODED|MESSAGE_APPEND|MESSAGE_MULTIPLE,
                           &buf);
     if (!r) {
         if (*v->s) {
-            r = charset_searchstring(v->s, pat, buf.s, buf.len, charset_flags);
+            r = charset_searchstring(internal->s, internal->pat, buf.s, buf.len, charset_flags);
         }
         else {
             /* RFC3501: If the string to search is zero-length, this matches
@@ -2131,14 +2190,16 @@ static int searchmsg_cb(int isbody, charset_t charset, int encoding,
     return 0;
 }
 
-static int search_text_match(message_t *m, const union search_value *v,
+static int search_text_match(message_t *m,
+                             const union search_value *v __attribute__((unused)),
                              void *internalised,
                              void *data1)
 {
     struct searchmsg_rock sr;
+    struct search_string_internal *internal = internalised;
 
-    sr.substr = v->s;
-    sr.pat = (comp_pat *)internalised;
+    sr.substr = internal->s;
+    sr.pat = internal->pat;
     sr.skipheader = (int)(unsigned long)data1;
     sr.result = 0;
     message_foreach_section(m, searchmsg_cb, &sr);

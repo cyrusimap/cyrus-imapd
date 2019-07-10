@@ -1782,7 +1782,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                     sec = t - time(NULL);
                 }
 
-                if (abs(sec) > 999999999 /* RFC 2852 */) {
+                if (abs((int)sec) > 999999999 /* RFC 2852 */) {
                     res = SIEVE_RUN_ERROR;
                     *errmsg = "Redirect bytime value too large";
                     break;
@@ -2176,8 +2176,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 variable->name = xstrdup(name);
             }
 
-            strarray_fini(variable->var);
             value = parse_string(value, variables);
+            strarray_fini(variable->var);
             strarray_appendm(variable->var,
                              variables_modify_string(value, modifiers));
 #if VERBOSE
@@ -2326,6 +2326,12 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
                 }
             }
             free(strarray_takevf(cmd.u.dh.values));
+            break;
+        }
+
+        case B_LOG:
+        {
+            if (i->log) i->log(sc, m, cmd.u.l.text);
             break;
         }
 

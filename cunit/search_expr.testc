@@ -83,7 +83,7 @@ static void test_get_search_program(void)
 
     /* BCC <string> */
     TESTCASE("bcc \"shoreditch\"\r\n",
-             "(and (match bcc \"SHOREDITCH\"))");
+             "(and (match bcc \"shoreditch\"))");
 
     /* BEFORE <date> */
     TESTCASE("before "DATE1_RFC3501"\r\n",
@@ -91,11 +91,11 @@ static void test_get_search_program(void)
 
     /* BODY <string> */
     TESTCASE("body \"williamsburg\"\r\n",
-             "(and (match body \"WILLIAMSBURG\"))");
+             "(and (match body \"williamsburg\"))");
 
     /* CC <string> */
     TESTCASE("cc \"brooklyn\"\r\n",
-             "(and (match cc \"BROOKLYN\"))");
+             "(and (match cc \"brooklyn\"))");
 
     /* DELETED */
     TESTCASE("deleted\r\n",
@@ -111,11 +111,11 @@ static void test_get_search_program(void)
 
     /* FROM <string> */
     TESTCASE("from \"dreamcatcher\"\r\n",
-             "(and (match from \"DREAMCATCHER\"))");
+             "(and (match from \"dreamcatcher\"))");
 
     /* HEADER <field-name> <string> */
     TESTCASE("header \"Cosby\" \"Sweater\"\r\n",
-             "(and (match header:cosby \"SWEATER\"))");
+             "(and (match header:cosby \"Sweater\"))");
 
     /* KEYWORD <flag> */
     TESTCASE("keyword $Mustache\r\n",
@@ -139,7 +139,7 @@ static void test_get_search_program(void)
 
     /* NOT <search-key> */
     TESTCASE("not subject \"tumblr\"\r\n",
-             "(and (not (match subject \"TUMBLR\")))");
+             "(and (not (match subject \"tumblr\")))");
 
     /* OLD */
     /* inexplicably, the RFC specifies OLD != NOT NEW */
@@ -160,9 +160,9 @@ static void test_get_search_program(void)
     TESTCASE("or subject \"black\" subject \"white\"\r\n",
              "(and "
                 "(or "
-                    "(match subject \"BLACK\")"
+                    "(match subject \"black\")"
                     " "
-                    "(match subject \"WHITE\")"
+                    "(match subject \"white\")"
                 ")"
              ")");
 
@@ -205,15 +205,15 @@ static void test_get_search_program(void)
 
     /* SUBJECT <string> */
     TESTCASE("subject \"selvage\"\r\n",
-             "(and (match subject \"SELVAGE\"))");
+             "(and (match subject \"selvage\"))");
 
     /* TEXT <string> */
     TESTCASE("text \"letterpress\"\r\n",
-             "(and (match text \"LETTERPRESS\"))");
+             "(and (match text \"letterpress\"))");
 
     /* TO <string> */
     TESTCASE("to \"readymade\"\r\n",
-             "(and (match to \"READYMADE\"))");
+             "(and (match to \"readymade\"))");
 
     /* UID <sequence set> */
     TESTCASE("uid 1\r\n",
@@ -255,18 +255,18 @@ static void test_get_search_program(void)
     TESTCASE("(subject \"bicycle\" to \"rights\")\r\n",
              "(and "
                 "(and "
-                    "(match subject \"BICYCLE\")"
+                    "(match subject \"bicycle\")"
                     " "
-                    "(match to \"RIGHTS\")"
+                    "(match to \"rights\")"
                 ")"
              ")");
     TESTCASE("not (subject \"bicycle\" to \"rights\")\r\n",
              "(and "
                 "(not "
                     "(and "
-                        "(match subject \"BICYCLE\")"
+                        "(match subject \"bicycle\")"
                         " "
-                        "(match to \"RIGHTS\")"
+                        "(match to \"rights\")"
                     ")"
                 ")"
              ")");
@@ -274,12 +274,12 @@ static void test_get_search_program(void)
              "(and "
                 "(or "
                     "(and "
-                        "(match subject \"BICYCLE\")"
+                        "(match subject \"bicycle\")"
                         " "
-                        "(match to \"RIGHTS\")"
+                        "(match to \"rights\")"
                     ")"
                     " "
-                    "(match from \"QUINOA\")"
+                    "(match from \"quinoa\")"
                 ")"
              ")");
 
@@ -324,16 +324,16 @@ static void test_get_search_program(void)
     /* YOUNGER <nz-number> in seconds ago */
     /* Inexplicably, the RFC defines that *both*  YOUNGER and OLDER
      * include the specified second */
-    //time_push_fixed(DATE1_MID_TIME);
-    //TESTCASE("older 0\r\n",
-             //"(and (le internaldate "DATE1_MID"))");
-    //TESTCASE("older 43200\r\n",
-             //"(and (le internaldate "DATE1_BEGIN"))");
-    //TESTCASE("younger 0\r\n",
-             //"(and (ge internaldate "DATE1_MID"))");
-    //TESTCASE("younger 43200\r\n",
-             //"(and (ge internaldate "DATE1_BEGIN"))");
-    //time_pop();
+    time_push_fixed(DATE1_MID_TIME);
+    TESTCASE("older 0\r\n",
+             "(and (le internaldate "DATE1_MID"))");
+    TESTCASE("older 43200\r\n",
+             "(and (le internaldate "DATE1_BEGIN"))");
+    TESTCASE("younger 0\r\n",
+             "(and (ge internaldate "DATE1_MID"))");
+    TESTCASE("younger 43200\r\n",
+             "(and (ge internaldate "DATE1_BEGIN"))");
+    time_pop();
 
     /*
      * Search criteria from RFC 5257
@@ -357,17 +357,17 @@ static void test_get_search_program(void)
 
     /* XLISTID <string> */
     TESTCASE("xlistid \"semiotics\"\r\n",
-             "(and (match listid \"SEMIOTICS\"))");
+             "(and (match listid \"semiotics\"))");
 
     /* XCONTENTTYPE <string> */
     TESTCASE("xcontenttype text\r\n",
-             "(and (match contenttype \"TEXT\"))");
+             "(and (match contenttype \"text\"))");
     TESTCASE("xcontenttype \"text\"\r\n",
-             "(and (match contenttype \"TEXT\"))");
+             "(and (match contenttype \"text\"))");
     TESTCASE("xcontenttype \"plain\"\r\n",
-             "(and (match contenttype \"PLAIN\"))");
+             "(and (match contenttype \"plain\"))");
     TESTCASE("xcontenttype \"text_plain\"\r\n",
-             "(and (match contenttype \"TEXT_PLAIN\"))");
+             "(and (match contenttype \"text_plain\"))");
 
 /* TODO: test that conv* are rejected if conversations:off */
     /* CONVFLAG <flag> */
@@ -740,7 +740,7 @@ static void test_normalise(void)
     TESTCASE("(and (le size 123) (match subject \"ETSY\"))",
              "(and (le size 123) (match subject \"ETSY\"))");
     TESTCASE("(and (not (le size 123)) (match subject \"ETSY\"))",
-             "(and (match subject \"ETSY\") (not (le size 123)))");
+             "(and (not (le size 123)) (match subject \"ETSY\"))");
     TESTCASE("(and (le size 123) (not (match subject \"ETSY\")))",
              "(and (le size 123) (not (match subject \"ETSY\")))");
 
@@ -752,7 +752,7 @@ static void test_normalise(void)
     TESTCASE("(or (le size 123) (match subject \"ETSY\"))",
              "(or (le size 123) (match subject \"ETSY\"))");
     TESTCASE("(or (not (le size 123)) (match subject \"ETSY\"))",
-             "(or (match subject \"ETSY\") (not (le size 123)))");
+             "(or (not (le size 123)) (match subject \"ETSY\"))");
     TESTCASE("(or (le size 123) (not (match subject \"ETSY\")))",
              "(or (le size 123) (not (match subject \"ETSY\")))");
 
@@ -788,11 +788,11 @@ static void test_normalise(void)
                 ")"
                 " "
                 "(and "
-                    "(match subject \"TUMBLR\")"
-                    " "
                     "(not "
                         "(le size 456)"
                     ")"
+                    " "
+                    "(match subject \"TUMBLR\")"
                 ")"
              ")");
 
@@ -1153,14 +1153,14 @@ static void test_split_by_folder_and_index(void)
     TESTCASE("(not (match folder \"INBOX.Cosby.Sweater\"))",
              "(not (match folder \"INBOX.Cosby.Sweater\"))\n");
     TESTCASE("(and (match message-id \"ETSY\") (not (match folder \"INBOX.Cosby.Sweater\")))",
-             "(and (match message-id \"ETSY\") (not (match folder \"INBOX.Cosby.Sweater\")))\n");
+             "(and (not (match folder \"INBOX.Cosby.Sweater\")) (match message-id \"ETSY\"))\n");
 
     /* a conjuctive node which doesn't match folders
      * gets a NULL mboxname */
     TESTCASE("(and (match message-id \"ETSY\") (le size 123))",
              "(and (le size 123) (match message-id \"ETSY\"))\n");
     TESTCASE("(and (match message-id \"ETSY\") (not (le size 123)))",
-             "(and (match message-id \"ETSY\") (not (le size 123)))\n");
+             "(and (not (le size 123)) (match message-id \"ETSY\"))\n");
     TESTCASE("(and (le size 123) (not (match message-id \"ETSY\")))",
              "(and (le size 123) (not (match message-id \"ETSY\")))\n");
 
@@ -1180,7 +1180,7 @@ static void test_split_by_folder_and_index(void)
     TESTCASE("(or (match message-id \"ETSY\") (le size 123))",
              "(or (le size 123) (match message-id \"ETSY\"))\n");
     TESTCASE("(or (match message-id \"ETSY\") (not (le size 123)))",
-             "(or (match message-id \"ETSY\") (not (le size 123)))\n");
+             "(or (not (le size 123)) (match message-id \"ETSY\"))\n");
     TESTCASE("(or (le size 123) (not (match message-id \"ETSY\")))",
              "(or (le size 123) (not (match message-id \"ETSY\")))\n");
 

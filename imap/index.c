@@ -57,21 +57,20 @@
 #ifdef USE_HTTPD
 /* For iCalendar indexing */
 #include <libical/ical.h>
-#endif
-
-#ifdef HAVE_CURL
-#include <curl/curl.h>
+#include "vcard_support.h"
 #endif
 
 #include "acl.h"
 #include "annotate.h"
 #include "append.h"
 #include "assert.h"
+#include "backend.h"
 #include "charset.h"
 #include "conversations.h"
 #include "dlist.h"
 #include "hash.h"
 #include "hashu64.h"
+#include "http_client.h"
 #include "global.h"
 #include "times.h"
 #include "imapd.h"
@@ -268,6 +267,7 @@ EXPORTED void index_release(struct index_state *state)
 {
     if (!state) return;
 
+    message_unref(&state->m);
     if (state->mailbox) {
         mailbox_close(&state->mailbox);
         state->mailbox = NULL; /* should be done by close anyway */
@@ -1706,19 +1706,6 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
     return n;
 }
 
-EXPORTED message_t *index_get_message(struct index_state *state, uint32_t msgno)
-{
-    struct index_map *im = &state->map[msgno-1];
-    struct index_record record;
-    uint32_t indexflags = 0;
-    if (im->isseen) indexflags |= MESSAGE_SEEN;
-    if (im->isrecent) indexflags |= MESSAGE_RECENT;
-    if (index_reload_record(state, msgno, &record))
-        return NULL;
-    return message_new_from_index(state->mailbox, &record,
-                                  msgno, indexflags);
-}
-
 EXPORTED uint32_t index_getuid(struct index_state *state, uint32_t msgno)
 {
     assert(msgno <= state->exists);
@@ -2541,7 +2528,6 @@ EXPORTED int index_snippets(struct index_state *state,
         for (i = 0 ; i < snippetargs->uids.count ; i++) {
             uint32_t uid = snippetargs->uids.data[i];
             struct index_record record;
-            message_t *msg;
 
             /* It's OK to do a dirty read, because we only care about
              * the UID of the message */
@@ -2549,9 +2535,10 @@ EXPORTED int index_snippets(struct index_state *state,
             if (r == IMAP_MAILBOX_CHECKSUM) r = 0;
             if (r) continue;
 
-            msg = message_new_from_record(mailbox, &record);
-            index_getsearchtext(msg, NULL, rx, /*snippet*/1);
-            message_unref(&msg);
+            if (state->m) message_set_from_record(mailbox, &record, state->m);
+            else state->m = message_new_from_record(mailbox, &record);
+
+            index_getsearchtext(state->m, NULL, rx, /*snippet*/1);
         }
 
         r = rx->end_mailbox(rx, mailbox);
@@ -4916,7 +4903,6 @@ EXPORTED int index_search_evaluate(struct index_state *state,
                                    uint32_t msgno)
 {
     struct index_map *im = &state->map[msgno-1];
-    message_t *m;
     struct index_record record;
 
     int always = search_expr_always_same(e);
@@ -4929,14 +4915,20 @@ EXPORTED int index_search_evaluate(struct index_state *state,
 
     xstats_inc(SEARCH_EVALUATE);
 
-    m = message_new_from_index(state->mailbox, &record, msgno,
-                               (im->isrecent ? MESSAGE_RECENT : 0) |
-                               (im->isseen ? MESSAGE_SEEN : 0));
-    int match = search_expr_evaluate(m, e);
-    message_unref(&m);
+    int flags = (im->isrecent ? MESSAGE_RECENT : 0)
+              | (im->isseen ? MESSAGE_SEEN : 0);
+    if (state->m) message_set_from_index(state->mailbox, &record, msgno, flags, state->m);
+    else state->m = message_new_from_index(state->mailbox, &record, msgno, flags);
+    int match = search_expr_evaluate(state->m, e);
 
     return match;
 }
+
+struct extractor_ctx {
+    struct backend *be;
+    struct protstream *clientin;
+    unsigned failed;
+};
 
 struct getsearchtext_rock
 {
@@ -4945,9 +4937,7 @@ struct getsearchtext_rock
     int charset_flags;
     const strarray_t *partids;
     int snippet_iteration; /* 0..no snippet, 1..first run, 2..second run */
-#ifdef HAVE_CURL
-    CURL *curl;
-#endif /* HAVE_CURL */
+    struct extractor_ctx *ext;
 };
 
 static void stuff_part(search_text_receiver_t *receiver,
@@ -4955,6 +4945,9 @@ static void stuff_part(search_text_receiver_t *receiver,
                        const struct message_guid *content_guid,
                        const struct buf *buf)
 {
+    // don't try to index a zero length part
+    if (!buf_len(buf)) return;
+
     if (part == SEARCH_PART_HEADERS &&
         !config_getswitch(IMAPOPT_SEARCH_INDEX_HEADERS))
         return;
@@ -5082,33 +5075,284 @@ done:
     buf_free(&buf);
     return r;
 }
+
+static void _add_vcard_singlval(struct vparse_card *card, const char *key, struct buf *buf)
+{
+    struct vparse_entry *entry;
+    for (entry = card->properties; entry; entry = entry->next) {
+        if (strcasecmp(entry->name, key)) continue;
+        const char *val = entry->v.value;
+        if (val && val[0]) {
+            if (buf_len(buf)) buf_putc(buf, ' ');
+            buf_appendcstr(buf, val);
+        }
+    }
+}
+
+static void _add_vcard_multival(struct vparse_card *card, const char *key, struct buf *buf)
+{
+    struct vparse_entry *entry;
+    for (entry = card->properties; entry; entry = entry->next) {
+        if (strcasecmp(entry->name, key)) continue;
+        const strarray_t *sa = entry->v.values;
+        int i;
+        for (i = 0; i < strarray_size(sa); i++) {
+            const char *val = strarray_nth(sa, i);
+            if (val && val[0]) {
+                if (buf_len(buf)) buf_putc(buf, ' ');
+                buf_appendcstr(buf, val);
+            }
+        }
+    }
+}
+
+static int extract_vcardbuf(struct buf *raw, charset_t charset, int encoding,
+                            const struct message_guid *content_guid,
+                            struct getsearchtext_rock *str)
+{
+    struct vparse_card *vcard = NULL;
+    int r = 0;
+    struct buf buf = BUF_INITIALIZER;
+
+    /* Parse the message into a vcard object */
+    const struct buf *vcardbuf = NULL;
+    if (encoding || strcasecmp(charset_name(charset), "utf-8")) {
+        char *tmp = charset_to_utf8(buf_cstring(raw), buf_len(raw), charset, encoding);
+        if (!tmp) return 0; /* could be a bogus header - ignore */
+        buf_initm(&buf, tmp, strlen(tmp));
+        vcardbuf = &buf;
+    }
+    else {
+        vcardbuf = raw;
+    }
+
+    vcard = vcard_parse_string(buf_cstring(vcardbuf), /*repair*/1);
+    if (!vcard || !vcard->objects) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+
+    buf_reset(&buf);
+
+    // these are all the things that we think might be interesting
+    _add_vcard_singlval(vcard->objects, "fn", &buf);
+    _add_vcard_singlval(vcard->objects, "email", &buf);
+    _add_vcard_singlval(vcard->objects, "tel", &buf);
+    _add_vcard_singlval(vcard->objects, "url", &buf);
+    _add_vcard_singlval(vcard->objects, "impp", &buf);
+    _add_vcard_singlval(vcard->objects, "x-social-profile", &buf);
+    _add_vcard_singlval(vcard->objects, "x-fm-online-other", &buf);
+    _add_vcard_singlval(vcard->objects, "nickname", &buf);
+    _add_vcard_singlval(vcard->objects, "note", &buf);
+
+    _add_vcard_multival(vcard->objects, "n", &buf);
+    _add_vcard_multival(vcard->objects, "org", &buf);
+    _add_vcard_multival(vcard->objects, "adr", &buf);
+
+    if (buf.len) {
+        charset_t utf8 = charset_lookupname("utf-8");
+        str->receiver->begin_part(str->receiver, SEARCH_PART_BODY, content_guid);
+        charset_extract(extract_cb, str, &buf, utf8, 0, "vcard",
+                        str->charset_flags);
+        str->receiver->end_part(str->receiver, SEARCH_PART_BODY);
+        charset_free(&utf8);
+        buf_reset(&buf);
+    }
+
+done:
+    if (vcard) vparse_free_card(vcard);
+    buf_free(&buf);
+    return r;
+}
+
 #endif /* USE_HTTPD */
 
-#ifdef HAVE_CURL
-struct sendcurl_rock {
-    const struct buf *srcbuf;
-    size_t sent;
+
+#define IDLE_TIMEOUT (5 * 60)  /* 5 min */
+
+struct backend_ctx {
+    char *path;
+    int timeout;
 };
 
-static size_t sendcurl_cb(void *dst, size_t size, size_t nmemb, void *rock)
+static int login(struct backend *s __attribute__((unused)),
+                 const char *userid __attribute__((unused)),
+                 sasl_callback_t *cb __attribute__((unused)),
+                 const char **status __attribute__((unused)),
+                 int noauth __attribute__((unused)))
 {
-    struct sendcurl_rock *state = rock;
-
-    if (state->sent >= buf_len(state->srcbuf)) return 0;
-
-    size_t n = buf_len(state->srcbuf) - state->sent;
-    if (n > size * nmemb) n = size * nmemb;
-    memcpy(dst, buf_base(state->srcbuf) + state->sent, n);
-    state->sent += n;
-
-    return n;
+    return 0;
 }
-static size_t recvcurl_cb(char *src, size_t size, size_t nmemb, void *rock)
+
+static int ping(struct backend *s,
+                const char *userid __attribute__((unused)))
 {
-    struct buf *dstbuf = rock;
-    buf_appendmap(dstbuf, src, size * nmemb);
-    return size * nmemb;
+    struct backend_ctx *ctx = (struct backend_ctx *) s->context;
+    size_t hostlen = strcspn(s->hostname, "/");
+    hdrcache_t resp_hdrs = NULL;
+    struct body_t resp_body;
+    unsigned statuscode = 0;
+    const char *errstr;
+
+    prot_printf(s->out,
+                "HEAD %s %s\r\n"
+                "Host: %.*s\r\n"
+                "User-Agent: Cyrus/%s\r\n"
+                "Connection: Keep-Alive\r\n"
+                "Keep-Alive: timeout=%u\r\n"
+                "Accept: text/plain\r\n"
+                "\r\n",
+                ctx->path, HTTP_VERSION,
+                (int) hostlen, s->hostname, CYRUS_VERSION, ctx->timeout);
+    prot_flush(s->out);
+
+    /* Read response(s) from backend until final response or error */
+    do {
+        resp_body.flags = BODY_DISCARD;
+        if (http_read_response(s, METH_HEAD, &statuscode,
+                               &resp_hdrs, &resp_body, &errstr)) {
+            break;
+        }
+    } while (statuscode < 200);
+
+    syslog(LOG_DEBUG, "extractor_ping: HEAD %s: got status %u",
+           ctx->path, statuscode);
+
+    if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
+
+    return (!statuscode);
 }
+
+static int logout(struct backend *s __attribute__((unused)))
+{
+    return 0;
+}
+
+static void extractor_disconnect(struct backend *be)
+{
+    syslog(LOG_DEBUG, "extractor_disconnect(%p)", be);
+
+    if (!be || (be->sock == -1)) {
+        /* already disconnected */
+        return;
+    }
+
+    /* need to logout of server */
+    backend_disconnect(be);
+
+    /* remove the timeout */
+    if (be->timeout) prot_removewaitevent(be->clientin, be->timeout);
+    be->timeout = NULL;
+    be->clientin = NULL;
+}
+
+static struct prot_waitevent *
+extractor_timeout(struct protstream *s __attribute__((unused)),
+                  struct prot_waitevent *ev __attribute__((unused)),
+                  void *rock)
+{
+    struct backend *be = (struct backend *) rock;
+
+    syslog(LOG_DEBUG, "extractor_timeout(%p)", be);
+
+    /* too long since we last used the extractor - disconnect */
+    extractor_disconnect(be);
+
+    return NULL;
+}
+
+static struct protocol_t http =
+{ "http", "HTTP", TYPE_SPEC, { .spec = { &login, &ping, &logout } } };
+
+static int extractor_connect(const char *exturl, struct extractor_ctx *ext)
+{
+    struct backend *be;
+    struct backend_ctx *ctx = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    const char *hostname;
+    char path[256];
+    time_t now = time(NULL);
+    int r = 0;
+
+    syslog(LOG_DEBUG, "extractor_connect(%s)", exturl);
+
+    if (!ext || ext->failed > 1) return IMAP_INTERNAL;
+
+    be = ext->be;
+    if (be) {
+        ctx = be->context;
+        hostname = be->hostname;
+    }
+    else {
+        char scheme[6], server[100], *p;
+        unsigned https, port;
+
+        /* Parse URL (cheesy parser without having to use libxml2) */
+        int n = sscanf(exturl, "%5[^:]://%99[^/]%255[^\n]",
+                       scheme, server, path);
+        if (n != 3 ||
+            strncmp(lcase(scheme), "http", 4) || (scheme[4] && scheme[4] != 's')) {
+            syslog(LOG_ERR,
+                   "extract_attachment: unexpected non-HTTP URL %s", exturl);
+            return IMAP_INTERNAL;
+        }
+
+        /* Normalize URL parts */
+        https = (scheme[4] == 's');
+        if (*(p = path + strlen(path) - 1) == '/') *p = '\0';
+        if ((p = strrchr(server, ':'))) {
+            *p++ = '\0';
+            port = atoi(p);
+        }
+        else port = https ? 443 : 80;
+
+        /* Build servername, port, and options */
+        buf_printf(&buf, "%s:%u%s/noauth", server, port, https ? "/tls" : "");
+        hostname = buf_cstring(&buf);
+    }
+
+    if (be && (be->sock != -1)) {
+        syslog(LOG_DEBUG, "extractor_connect: ping existing connection");
+
+        /* ping the extractor */
+        if (ping(be, NULL)) extractor_disconnect(be);
+    }
+
+    if (!be || (be->sock == -1)) {
+        /* Connect to extractor service */
+        syslog(LOG_DEBUG, "extractor_connect: %sconnect to %s",
+               be ? "re" : "", hostname);
+
+        be = ext->be = backend_connect(be, hostname,
+                                       &http, NULL, NULL, NULL, -1);
+
+        if (!be) {
+            syslog(LOG_ERR, "extract_connect: failed to connect to %s",
+                   hostname);
+            ext->failed++;
+            r = IMAP_IOERROR;
+        }
+        else if (!ctx) {
+            ctx = be->context = xzmalloc(sizeof(struct backend_ctx));
+            ctx->path = xstrdup(path);
+
+            if (ext->clientin) {
+                /* add a default timeout */
+                be->clientin = ext->clientin;
+                be->timeout = prot_addwaitevent(ext->clientin,
+                                                now + IDLE_TIMEOUT,
+                                                extractor_timeout, be);
+            }
+        }
+    }
+
+    if (be->timeout && ctx->timeout) be->timeout->mark = now + ctx->timeout;
+
+    buf_free(&buf);
+
+    return r;
+}
+
 
 static int extract_attachment(const char *type, const char *subtype,
                               const struct param *type_params,
@@ -5116,44 +5360,73 @@ static int extract_attachment(const char *type, const char *subtype,
                               const struct message_guid *content_guid,
                               struct getsearchtext_rock *str)
 {
-    const char *exturl = config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
-    CURL *curl = str->curl;
+    struct extractor_ctx *ext = str->ext;
+    struct backend *be;
+    struct backend_ctx *ctx;
+    struct buf buf = BUF_INITIALIZER;
+    hdrcache_t hdrs = NULL;
+    struct body_t body = { 0, 0, 0, 0, 0, BUF_INITIALIZER };
+    const char *guidstr, *errstr = NULL;
+    size_t hostlen;
     int r = 0;
 
-    if (!exturl) return 0;
+    if (!ext) return 0;
 
-    if (strncasecmp(exturl, "http", 4)) {
-        syslog(LOG_ERR, "extract_attachment: unexpected non-HTTP URL %s", exturl);
-        return IMAP_INTERNAL;
+    be = ext->be;
+    ctx = (struct backend_ctx *) be->context;
+    hostlen = strcspn(be->hostname, "/");
+
+    if (message_guid_isnull(content_guid)) {
+        syslog(LOG_DEBUG, "extract_attachment: ignoring null guid for %s/%s",
+                type ? type : "<null>", subtype ? subtype : "<null>");
+        return 0;
     }
 
-    char *docurl = strconcat(exturl, exturl[strlen(exturl)-1] != '/' ? "/" : "",
-                             message_guid_encode(content_guid), NULL);
+    /* Fetch previously extracted text */
+    unsigned statuscode = 0;
+    guidstr = message_guid_encode(content_guid);
+    prot_printf(be->out,
+                "GET %s/%s %s\r\n"
+                "Host: %.*s\r\n"
+                "User-Agent: Cyrus/%s\r\n"
+                "Connection: Keep-Alive\r\n"
+                "Keep-Alive: timeout=%u\r\n"
+                "Accept: text/plain\r\n"
+                "\r\n",
+                ctx->path, guidstr, HTTP_VERSION,
+                (int) hostlen, be->hostname, CYRUS_VERSION,
+                ctx->timeout ? ctx->timeout : IDLE_TIMEOUT);
+    prot_flush(be->out);
 
-    /* Initialize CURL handle */
-    struct buf recvbuf = BUF_INITIALIZER;
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 120L);
-    curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 60L);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, recvcurl_cb);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &recvbuf);
-    curl_easy_setopt(curl, CURLOPT_URL, docurl);
+    /* Read GET response */
+    do {
+        r = http_read_response(be, METH_GET,
+                               &statuscode, &hdrs, &body, &errstr);
+        if (r) {
+            syslog(LOG_ERR,
+                   "extract_attachment: failed to read response for GET %s/%s",
+                   ctx->path, guidstr);
+            r = IMAP_IOERROR;
+            goto done;
+        }
+    } while (statuscode < 200);
 
-    /* GET docurl */
-    struct curl_slist *headers = curl_slist_append(NULL, "Accept: text/plain");
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    CURLcode curlres = curl_easy_perform(curl);
-    curl_slist_free_all(headers);
-    if (curlres != CURLE_OK) {
-        syslog(LOG_ERR, "extract_attachment: curl error: %s",
-                         curl_easy_strerror(curlres));
-        r = IMAP_IOERROR;
-        goto done;
+    syslog(LOG_DEBUG, "extract_attachment: GET %s/%s: got status %u",
+           ctx->path, guidstr, statuscode);
+
+    /* Abide by server's timeout, if any */
+    if (!ctx->timeout) {
+        const char **hdr, *p;
+
+        if ((hdr = spool_getheader(hdrs, "Keep-Alive")) &&
+            (p = strstr(hdr[0], "timeout="))) {
+            ctx->timeout = atoi(p+8);
+syslog(LOG_INFO, "XXXXXXXXXXX extract timeout: %d", ctx->timeout);
+        }
+        else ctx->timeout = IDLE_TIMEOUT;
+
+        if (be->timeout) be->timeout->mark = time(NULL) + ctx->timeout;
     }
-    long statuscode;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &statuscode);
-    syslog(LOG_DEBUG, "extract_attachment: GET %s: got status %ld",
-                       docurl, statuscode);
 
     if (statuscode == 404) {
         /* Decode data */
@@ -5164,14 +5437,10 @@ static int extract_attachment(const char *type, const char *subtype,
                 r = IMAP_IOERROR;
                 goto done;
             }
+            data = &decbuf;
         }
-        const struct buf *sendbuf = encoding ? &decbuf : data;
 
-        /* PUT docurl */
-        struct sendcurl_rock sendstate = { sendbuf, 0 };
-        headers = curl_slist_append(NULL, "Accept: text/plain");
-        struct buf buf = BUF_INITIALIZER;
-        buf_printf(&buf, "Content-Type: %s/%s", type, subtype);
+        /* Build list of Content-Type parameters */
         const struct param *param = type_params;
         while (param && param->attribute) {
             buf_putc(&buf, ';');
@@ -5182,62 +5451,97 @@ static int extract_attachment(const char *type, const char *subtype,
             }
             param = param->next;
         }
-        headers = curl_slist_append(headers, buf_cstring(&buf));
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_READFUNCTION, sendcurl_cb);
-        curl_easy_setopt(curl, CURLOPT_READDATA, &sendstate);
-        curl_easy_setopt(curl, CURLOPT_INFILESIZE_LARGE, buf_len(sendbuf));
-        curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
 
-        buf_reset(&recvbuf);
-        curlres = curl_easy_perform(curl);
-
-        curl_slist_free_all(headers);
+        /* Send attachment to service for text extraction */
+        prot_printf(be->out,
+                    "PUT %s/%s %s\r\n"
+                    "Host: %.*s\r\n"
+                    "User-Agent: Cyrus/%s\r\n"
+                    "Connection: Keep-Alive\r\n"
+                    "Keep-Alive: timeout=%u\r\n"
+                    "Accept: text/plain\r\n"
+                    "Content-Type: %s/%s%s\r\n"
+                    "Content-Length: %ld\r\n"
+                    "\r\n",
+                    ctx->path, guidstr, HTTP_VERSION,
+                    (int) hostlen, be->hostname, CYRUS_VERSION, ctx->timeout,
+                    type, subtype, buf_cstring(&buf), buf_len(data));
+        prot_putbuf(be->out, (struct buf *) data);
+        prot_flush(be->out);
         buf_free(&decbuf);
-        buf_free(&buf);
-        if (curlres != CURLE_OK) {
-            syslog(LOG_ERR, "extract_attachment: curl error: %s",
-                             curl_easy_strerror(curlres));
-            r = IMAP_IOERROR;
-            goto done;
-        }
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &statuscode);
-        syslog(LOG_DEBUG, "extract_attachment: PUT %s: got status %ld",
-                           docurl, statuscode);
+
+        /* Read PUT response */
+        body.flags = 0;
+        do {
+            r = http_read_response(be, METH_PUT,
+                                   &statuscode, &hdrs, &body, &errstr);
+            if (r) {
+                syslog(LOG_ERR,
+                       "extract_attachment: failed to read response for PUT %s/%s",
+                       ctx->path, guidstr);
+                r = IMAP_IOERROR;
+                goto done;
+            }
+        } while (statuscode < 200);
+
+        syslog(LOG_DEBUG, "extract_attachment: PUT %s/%s: got status %u",
+               ctx->path, guidstr, statuscode);
+    }
+
+    if (statuscode >= 400 && statuscode <= 499) {
+        /* indexer can't extract this for some reason, never try again */
+        goto done;
     }
     if (statuscode != 200 && statuscode != 201) {
+        /* any other status code is an error */
         r = IMAP_IOERROR;
         goto done;
     }
 
     /* Append extracted text */
-    if (buf_len(&recvbuf)) {
+    if (buf_len(&body.payload)) {
         str->receiver->begin_part(str->receiver, SEARCH_PART_ATTACHMENTBODY, content_guid);
-        str->receiver->append_text(str->receiver, &recvbuf);
+        str->receiver->append_text(str->receiver, &body.payload);
         str->receiver->end_part(str->receiver, SEARCH_PART_ATTACHMENTBODY);
     }
 
 done:
-    curl_easy_reset(curl);
-    buf_free(&recvbuf);
-    free(docurl);
+    spool_free_hdrcache(hdrs);
+    buf_free(&body.payload);
+    buf_free(&buf);
     return r;
 }
-#else
-static int extract_attachment(const char *type __attribute__((unused)),
-                              const char *subtype __attribute__((unused)),
-                              const struct param *type_params __attribute__((unused)),
-                              struct buf *data __attribute__((unused)),
-                              int encoding __attribute__((unused)),
-                              const struct message_guid *content_guid __attribute__((unused)),
-                              struct getsearchtext_rock *str __attribute__((unused)))
+
+static struct extractor_ctx *index_text_extractor = NULL;
+
+EXPORTED void index_text_extractor_init(struct protstream *clientin)
 {
-    const char *exturl = config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
-    if (!exturl) return 0;
-    syslog(LOG_ERR, "index: attachment indexing requires libcurl");
-    return IMAP_INTERNAL;
+    syslog(LOG_DEBUG, "extractor_init(%p)", clientin);
+
+    index_text_extractor = xzmalloc(sizeof(struct extractor_ctx));
+    index_text_extractor->clientin = clientin;
 }
-#endif /* HAVE_CURL */
+
+EXPORTED void index_text_extractor_destroy(void)
+{
+    struct extractor_ctx *ext = index_text_extractor;
+
+    syslog(LOG_DEBUG, "extractor_destroy(%p)", ext);
+
+    if (!ext) return;
+
+    if (ext->be) {
+        struct backend *be = ext->be;
+
+        extractor_disconnect(be);
+        free(((struct backend_ctx *) be->context)->path);
+        free(be->context);
+        free(be);
+    }
+    free(ext);
+
+    index_text_extractor = NULL;
+}
 
 
 static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
@@ -5324,6 +5628,11 @@ static int getsearchtext_cb(int isbody, charset_t charset, int encoding,
             extract_icalbuf(data, charset, encoding, content_guid, str);
 #endif /* USE_HTTPD */
         }
+        else if (!strcmp(subtype, "VCARD")) {
+#ifdef USE_HTTPD
+            extract_vcardbuf(data, charset, encoding, content_guid, str);
+#endif /* USE_HTTPD */
+        }
         else {
             /* body-like */
             str->receiver->begin_part(str->receiver, SEARCH_PART_BODY, content_guid);
@@ -5367,6 +5676,8 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
                                  search_text_receiver_t *receiver,
                                  int snippet)
 {
+    const char *exturl =
+        config_getstring(IMAPOPT_SEARCH_ATTACHMENT_EXTRACTOR_URL);
     struct getsearchtext_rock str;
     struct buf buf = BUF_INITIALIZER;
     int format = MESSAGE_SEARCH;
@@ -5385,22 +5696,25 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
     r = receiver->begin_message(receiver, msg);
     if (r) return r;
 
+    memset(&str, 0, sizeof(struct getsearchtext_rock));
     str.receiver = receiver;
     str.indexed_headers = 0;
     str.charset_flags = charset_flags;
     str.partids = partids;
     str.snippet_iteration = 0;
-#ifdef HAVE_CURL
-    curl_global_init(CURL_GLOBAL_ALL); /* safe to call multiple times */
-    str.curl = curl_easy_init();
-    if (!str.curl) {
-        syslog(LOG_ERR, "index_getsearchtext: can't initialize curl");
-        return IMAP_INTERNAL;
+    if (exturl) {
+        str.ext = index_text_extractor;
+        r = extractor_connect(exturl, str.ext);
+        if (r) return r;
     }
-#endif /* HAVE_CURL */
+
+    /* Search receiver can override text conversion */
+    if (receiver->index_charset_flags) {
+        str.charset_flags = receiver->index_charset_flags(str.charset_flags);
+    }
 
     if (snippet) {
-        str.charset_flags |= CHARSET_SNIPPET;
+        str.charset_flags |= CHARSET_KEEPCASE;
         format = MESSAGE_SNIPPET;
     }
 
@@ -5497,9 +5811,7 @@ EXPORTED int index_getsearchtext(message_t *msg, const strarray_t *partids,
 done:
     buf_free(&buf);
     strarray_fini(&types);
-#ifdef HAVE_CURL
-    curl_easy_cleanup(str.curl);
-#endif /* HAVE_CURL */
+
     return r;
 }
 
@@ -6012,8 +6324,10 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
 /*
  * Function for comparing two integers.
  */
+#ifdef HAVE_DECLARE_OPTIMIZE
 static inline int numcmp(modseq_t n1, modseq_t n2)
     __attribute__((pure, always_inline, optimize("-O3")));
+#endif
 static int numcmp(modseq_t n1, modseq_t n2)
 {
     if (n1 < n2) return -1;
@@ -6182,8 +6496,10 @@ static int index_sort_compare_generic_qsort(const void *v1, const void *v2)
     return index_sort_compare(md1, md2, the_sortcrit);
 }
 
+#ifdef HAVE_DECLARE_OPTIMIZE
 static inline int index_sort_compare_uid(const void *v1, const void *v2)
     __attribute__((pure, always_inline, optimize("-O3")));
+#endif
 static int index_sort_compare_uid(const void *v1, const void *v2)
 {
     MsgData *md1 = *(MsgData **)v1;
@@ -6196,8 +6512,10 @@ static int index_sort_compare_uid(const void *v1, const void *v2)
     return message_guid_cmp(&md1->guid, &md2->guid);
 }
 
+#ifdef HAVE_DECLARE_OPTIMIZE
 static inline int index_sort_compare_reverse_uid(const void *v1, const void *v2)
     __attribute__((pure, always_inline, optimize("-O3")));
+#endif
 static int index_sort_compare_reverse_uid(const void *v1, const void *v2)
 {
     MsgData *md1 = *(MsgData **)v1;
@@ -6210,8 +6528,10 @@ static int index_sort_compare_reverse_uid(const void *v1, const void *v2)
     return message_guid_cmp(&md1->guid, &md2->guid);
 }
 
+#ifdef HAVE_DECLARE_OPTIMIZE
 static inline int index_sort_compare_modseq(const void *v1, const void *v2)
     __attribute__((pure, always_inline, optimize("-O3")));
+#endif
 static int index_sort_compare_modseq(const void *v1, const void *v2)
 {
     MsgData *md1 = *(MsgData **)v1;
@@ -6227,8 +6547,10 @@ static int index_sort_compare_modseq(const void *v1, const void *v2)
     return message_guid_cmp(&md1->guid, &md2->guid);
 }
 
+#ifdef HAVE_DECLARE_OPTIMIZE
 static inline int index_sort_compare_arrival(const void *v1, const void *v2)
     __attribute__((pure, always_inline, optimize("-O3")));
+#endif
 static int index_sort_compare_arrival(const void *v1, const void *v2)
 {
     MsgData *md1 = *(MsgData **)v1;
@@ -6244,8 +6566,10 @@ static int index_sort_compare_arrival(const void *v1, const void *v2)
     return message_guid_cmp(&md1->guid, &md2->guid);
 }
 
+#ifdef HAVE_DECLARE_OPTIMIZE
 static inline int index_sort_compare_reverse_arrival(const void *v1, const void *v2)
     __attribute__((pure, always_inline, optimize("-O3")));
+#endif
 static int index_sort_compare_reverse_arrival(const void *v1, const void *v2)
 {
     MsgData *md1 = *(MsgData **)v1;
@@ -6261,8 +6585,10 @@ static int index_sort_compare_reverse_arrival(const void *v1, const void *v2)
     return message_guid_cmp(&md1->guid, &md2->guid);
 }
 
+#ifdef HAVE_DECLARE_OPTIMIZE
 static inline int index_sort_compare_reverse_flagged(const void *v1, const void *v2)
     __attribute__((pure, always_inline, optimize("-O3")));
+#endif
 static int index_sort_compare_reverse_flagged(const void *v1, const void *v2)
 {
     MsgData *md1 = *(MsgData **)v1;

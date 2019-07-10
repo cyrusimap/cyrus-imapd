@@ -110,7 +110,7 @@ static const char *name_starts_from = NULL;
 
 static void shut_down(int code) __attribute__((noreturn));
 
-static int usage(const char *name)
+__attribute__((noreturn)) static int usage(const char *name)
 {
     fprintf(stderr,
             "usage: %s [mode] [options] [source]\n"
@@ -120,9 +120,9 @@ static int usage(const char *name)
             "  -a          index [source] using /squat annotations\n"
             "  -r          index [source] recursively\n"
             "  -f file     index from synclog file\n"
-            "  -I file     index mbox/uids in file\n"
             "  -R          start rolling indexer\n"
             "  -z tier     compact to tier\n"
+            "  -l          list paths\n"
             "\n"
             "Index mode options:\n"
             "  -i          index incrementally\n"
@@ -481,16 +481,10 @@ static int print_search_hit(const char *mboxname, uint32_t uidvalidity,
     return 0;
 }
 
-static int compact_mbox(const char *userid, const strarray_t *srctiers,
-                        const char *desttier, int flags)
-{
-    return search_compact(userid, temp_root_dir, srctiers, desttier, flags);
-}
-
-static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
-                      const char *desttier, int flags)
+static int do_list(const strarray_t *mboxnames)
 {
     char *prev_userid = NULL;
+    strarray_t files = STRARRAY_INITIALIZER;
     int i;
     int r = 0;
 
@@ -504,8 +498,57 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
             continue;
         }
 
-        r = compact_mbox(userid, srctiers, desttier, flags);
+        r = search_list_files(userid, &files);
         if (r) break;
+
+        int j;
+        for (j = 0; j < strarray_size(&files); j++) {
+            printf("%s\n", strarray_nth(&files, j));
+        }
+
+        strarray_truncate(&files, 0);
+
+        free(prev_userid);
+        prev_userid = userid;
+
+        if (sleepmicroseconds)
+            usleep(sleepmicroseconds);
+    }
+
+    strarray_fini(&files);
+    free(prev_userid);
+    return r;
+}
+
+static int compact_mbox(const char *userid, const strarray_t *srctiers,
+                        const char *desttier, int flags)
+{
+    return search_compact(userid, temp_root_dir, srctiers, desttier, flags);
+}
+
+static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
+                      const char *desttier, int flags)
+{
+    char *prev_userid = NULL;
+    int i;
+
+    for (i = 0; i < strarray_size(mboxnames); i++) {
+        const char *mboxname = strarray_nth(mboxnames, i);
+        char *userid = mboxname_to_userid(mboxname);
+        if (!userid) continue;
+
+        if (!strcmpsafe(prev_userid, userid)) {
+            free(userid);
+            continue;
+        }
+
+        int retry;
+        for (retry = 1; retry <= 3; retry++) {
+            int r = compact_mbox(userid, srctiers, desttier, flags);
+            if (!r) break;
+            syslog(LOG_ERR, "IOERROR: failed to compact %s (%d): %s",
+                   userid, retry, error_message(r));
+        }
 
         free(prev_userid);
         prev_userid = userid;
@@ -515,7 +558,7 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *srctiers,
     }
 
     free(prev_userid);
-    return r;
+    return 0;
 }
 
 static int do_search(const char *query, int single, const strarray_t *mboxnames)
@@ -769,6 +812,8 @@ static void shut_down(int code)
 
     cyrus_done();
 
+    index_text_extractor_destroy();
+
     exit(code);
 }
 
@@ -790,11 +835,11 @@ int main(int argc, char **argv)
     const char *desttier = NULL;
     char *errstr = NULL;
     enum { UNKNOWN, INDEXER, SEARCH, ROLLING, SYNCLOG,
-           COMPACT, AUDIT } mode = UNKNOWN;
+           COMPACT, AUDIT, LIST } mode = UNKNOWN;
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:I:N:RUXPZT:S:Fde:f:mn:riavAz:t:ouh")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:N:RUXPZT:S:Fde:f:mn:riavAz:t:ouhl")) != EOF) {
         switch (opt) {
         case 'A':
             if (mode != UNKNOWN) usage(argv[0]);
@@ -833,6 +878,11 @@ int main(int argc, char **argv)
             mode = ROLLING;
             incremental_mode = 1; /* always incremental if rolling */
             batch_mode = 1;
+            break;
+
+        case 'l':               /* list paths */
+            if (mode != UNKNOWN) usage(argv[0]);
+            mode = LIST;
             break;
 
         case 'S':               /* sleep time in seconds */
@@ -950,6 +1000,8 @@ int main(int argc, char **argv)
         signals_add_handlers(0);
     }
 
+    index_text_extractor_init(NULL);
+
     switch (mode) {
     case UNKNOWN:
         break;
@@ -984,6 +1036,11 @@ int main(int argc, char **argv)
         if (recursive_flag && optind == argc) usage(argv[0]);
         expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
         r = do_audit(&mboxnames);
+        break;
+    case LIST:
+        if (recursive_flag && optind == argc) usage(argv[0]);
+        expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
+        r = do_list(&mboxnames);
         break;
     }
 

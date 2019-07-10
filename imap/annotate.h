@@ -129,6 +129,7 @@ void clearentryatt(struct entryattlist **l, const char *entry,
 void dupentryatt(struct entryattlist **l,
                  const struct entryattlist *);
 size_t sizeentryatts(const struct entryattlist *);
+char *dumpentryatt(const struct entryattlist *l);
 void freeentryatts(struct entryattlist *l);
 
 /* initialize database structures */

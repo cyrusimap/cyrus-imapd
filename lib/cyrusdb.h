@@ -62,8 +62,6 @@ enum cyrusdb_ret {
     CYRUSDB_READONLY = -9
 };
 
-#define cyrusdb_strerror(c) ("cyrusdb error")
-
 enum cyrusdb_initflags {
     CYRUSDB_RECOVER = 0x01
 };
@@ -315,5 +313,7 @@ int cyrusdb_generic_sync(void);
 int cyrusdb_generic_archive(const strarray_t *fnames, const char *dirname);
 int cyrusdb_generic_noarchive(const strarray_t *fnames, const char *dirname);
 int cyrusdb_generic_unlink(const char *fname, int flags);
+
+extern const char *cyrusdb_strerror(int r);
 
 #endif /* INCLUDED_CYRUSDB_H */

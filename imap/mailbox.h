@@ -133,12 +133,13 @@ struct statusdata {
     const char *mailboxid;
     uint32_t unseen;
     uint32_t size;
-    modseq_t highestmodseq;
+    uint32_t mboptions;
     modseq_t createdmodseq;
+    modseq_t highestmodseq;
     conv_status_t xconv;
 };
 
-#define STATUSDATA_INIT { NULL, 0, 0, 0, 0, 0, NULL, 0, 0, 0, 0, CONV_STATUS_INIT }
+#define STATUSDATA_INIT { NULL, 0, 0, 0, 0, 0, NULL, 0, 0, 0, 0, 0, CONV_STATUS_INIT }
 
 struct index_record {
     uint32_t uid;
@@ -622,6 +623,7 @@ extern int mailbox_rename_copy(struct mailbox *oldmailbox,
                                const char *newname, const char *newpart,
                                unsigned uidvalidity,
                                const char *userid, int ignorequota,
+                               int silent,
                                struct mailbox **newmailboxptr);
 extern int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox);
 
@@ -694,5 +696,7 @@ typedef void mailbox_wait_cb_t(void *rock);
 extern void mailbox_set_wait_cb(mailbox_wait_cb_t *cb, void *rock);
 
 extern void mailbox_cleanup_uid(struct mailbox *mailbox, uint32_t uid, const char *flagstr);
+
+extern int mailbox_crceq(struct synccrcs a, struct synccrcs b);
 
 #endif /* INCLUDED_MAILBOX_H */

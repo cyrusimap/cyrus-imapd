@@ -532,9 +532,7 @@ recurrence_from_ical(icalcomponent *comp)
     json_object_set_new(recur, "frequency", json_string(s));
     free(s);
 
-    if (rrule.interval > 1) {
-        json_object_set_new(recur, "interval", json_pack("i", rrule.interval));
-    }
+    json_object_set_new(recur, "interval", json_pack("i", rrule.interval));
 
 #ifdef HAVE_RSCALE
     /* rscale */
@@ -543,30 +541,29 @@ recurrence_from_ical(icalcomponent *comp)
         s = lcase(s);
         json_object_set_new(recur, "rscale", json_string(s));
         free(s);
-    }
+    } else json_object_set_new(recur, "rscale", json_string("gregorian"));
 
     /* skip */
+    const char *skip = NULL;
     switch (rrule.skip) {
         case ICAL_SKIP_BACKWARD:
-            s = "backward";
+            skip = "backward";
             break;
         case ICAL_SKIP_FORWARD:
-            s = "forward";
+            skip = "forward";
             break;
         case ICAL_SKIP_OMIT:
             /* fall through */
         default:
-            s = NULL;
+            skip = "omit";
     }
-    if (s) json_object_set_new(recur, "skip", json_string(s));
+    json_object_set_new(recur, "skip", json_string(skip));
 #endif
 
     /* firstDayOfWeek */
     s = xstrdup(icalrecur_weekday_to_string(rrule.week_start));
     s = lcase(s);
-    if (strcmp(s, "mo")) {
-        json_object_set_new(recur, "firstDayOfWeek", json_string(s));
-    }
+    json_object_set_new(recur, "firstDayOfWeek", json_string(s));
     free(s);
 
     /* byDay */
@@ -1046,9 +1043,8 @@ static json_t *participant_from_ical(icalproperty *prop,
                 attendance = "required";
         }
     }
-    if (attendance) {
-        json_object_set_new(p, "attendance", json_string(attendance));
-    }
+    if (!attendance) attendance = "required";
+    json_object_set_new(p, "attendance", json_string(attendance));
 
     /* roles */
     json_t *roles = json_object();
@@ -1130,17 +1126,18 @@ static json_t *participant_from_ical(icalproperty *prop,
                 partstat = "none";
         }
     }
-    if (partstat && strcmp(partstat,  "none")) {
-        json_object_set_new(p, "participationStatus", json_string(partstat));
-    }
+    if (!partstat || !strcmp(partstat,  "none"))
+        partstat = "needs-action";
+    json_object_set_new(p, "participationStatus", json_string(partstat));
 
     /* expectReply */
+    int expect_reply = 0;
     param = icalproperty_get_first_parameter(prop, ICAL_RSVP_PARAMETER);
     if (param) {
         icalparameter_rsvp val = icalparameter_get_rsvp(param);
-        json_object_set_new(p, "expectReply",
-                json_boolean(val == ICAL_RSVP_TRUE));
+        expect_reply = val == ICAL_RSVP_TRUE;
     }
+    json_object_set_new(p, "expectReply", json_boolean(expect_reply));
 
     /* delegatedTo */
     json_t *delegatedTo = json_object();
@@ -1217,13 +1214,15 @@ static json_t *participant_from_ical(icalproperty *prop,
     } 
 
     /* scheduleSequence */
+    long schedule_sequence = 0;
     const char *xval = get_icalxparam_value(prop, JMAPICAL_XPARAM_SEQUENCE);
     if (xval) {
         bit64 res;
         if (parsenum(xval, &xval, strlen(xval), &res) == 0) {
-            json_object_set_new(p, "scheduleSequence", json_integer(res));
+            schedule_sequence = res;
         }
     }
+    json_object_set_new(p, "scheduleSequence", json_integer(schedule_sequence));
 
     /* scheduleUpdated */
     if ((xval = get_icalxparam_value(prop, JMAPICAL_XPARAM_DTSTAMP))) {
@@ -1270,6 +1269,12 @@ participant_from_icalorganizer(icalproperty *orga)
         json_object_set_new(jorga, "email", json_null());
     }
 
+    /* Set default values */
+    json_object_set_new(jorga, "attendance", json_string("required"));
+    json_object_set_new(jorga, "participationStatus", json_string("needs-action"));
+    json_object_set_new(jorga, "scheduleSequence", json_integer(0));
+    json_object_set_new(jorga, "expectReply", json_false());
+
     return jorga;
 }
 
@@ -1298,9 +1303,6 @@ participants_from_ical(icalcomponent *comp)
         if (!id) id = sha1key(uri);
         hash_insert(uri, id, &id_by_uri);
         free(uri);
-    }
-    if (!hash_numrecords(&attendee_by_uri)) {
-        goto done;
     }
 
 
@@ -1331,7 +1333,6 @@ participants_from_ical(icalcomponent *comp)
         free(uri);
     }
 
-done:
     if (!json_object_size(participants)) {
         json_decref(participants);
         participants = json_null();
@@ -1862,10 +1863,11 @@ virtuallocations_from_ical(icalcomponent *comp)
         const char *uri = icalproperty_get_value_as_string(prop);
         if (uri) json_object_set_new(loc, "uri", json_string(uri));
 
-        const char *name = NULL;
+        const char *name = "";
         icalparameter *param = icalproperty_get_first_parameter(prop, ICAL_LABEL_PARAMETER);
         if (param) name = icalparameter_get_label(param);
-        if (name) json_object_set_new(loc, "name", json_string(name));
+        if (!name) name = "";
+        json_object_set_new(loc, "name", json_string(name));
 
         const char *desc = get_icalxparam_value(prop, JMAPICAL_XPARAM_DESCRIPTION);
         if (desc) json_object_set_new(loc, "description", json_string(desc));
@@ -2045,11 +2047,10 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
 
     /* priority */
     if (jmap_wantprop(props, "priority")) {
+        int priority = 0;
         prop = icalcomponent_get_first_property(comp, ICAL_PRIORITY_PROPERTY);
-        if (prop) {
-            json_object_set_new(event, "priority",
-                    json_integer(icalproperty_get_priority(prop)));
-        }
+        if (prop) priority = icalproperty_get_priority(prop);
+        json_object_set_new(event, "priority", json_integer(priority));
     }
 
     /* title */
@@ -2110,9 +2111,6 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     /* links */
     if (jmap_wantprop(props, "links")) {
         json_object_set_new(event, "links", links_from_ical(comp));
-        if (!jmap_wantprop(props, "links")) {
-            json_object_del(event, "links");
-        }
     }
 
     /* locale */
@@ -2146,7 +2144,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
 
     /* status */
     if (jmap_wantprop(props, "status")) {
-        const char *status;
+        const char *status = "confirmed";
         switch (icalcomponent_get_status(comp)) {
             case ICAL_STATUS_TENTATIVE:
                 status = "tentative";
@@ -2158,9 +2156,9 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
                 status = "cancelled";
                 break;
             default:
-                status = NULL;
+                status = "confirmed";
         }
-        if (status) json_object_set_new(event, "status", json_string(status));
+        json_object_set_new(event, "status", json_string(status));
     }
 
     /* freeBusyStatus */
@@ -2208,17 +2206,13 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     /* useDefaultAlerts */
     if (jmap_wantprop(props, "useDefaultAlerts")) {
         const char *v = get_icalxprop_value(comp, JMAPICAL_XPROP_USEDEFALERTS);
-        if (v && !strcasecmp(v, "true")) {
-            json_object_set_new(event, "useDefaultAlerts", json_true());
-        }
+        json_object_set_new(event, "useDefaultAlerts",
+                json_boolean(v && !strcasecmp(v, "true")));
     }
 
     /* alerts */
     if (jmap_wantprop(props, "alerts")) {
         json_object_set_new(event, "alerts", alerts_from_ical(comp));
-        if (!jmap_wantprop(props, "alerts")) {
-            json_object_del(event, "alerts");
-        }
     }
 
     /* recurrenceOverrides - must be last to generate patches */
@@ -2228,11 +2222,10 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     if (wantprops) {
-        return jmap_filterprops(event, wantprops);
+        jmap_filterprops(event, wantprops);
     }
-    else {
-        return event;
-    }
+
+    return event;
 }
 
 json_t*
@@ -3373,7 +3366,7 @@ description_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *jse
         jmap_parser_invalid(parser, "descriptionContentType");
     }
 
-    if (desc) icalcomponent_set_description(comp, desc);
+    if (desc && strlen(desc)) icalcomponent_set_description(comp, desc);
 }
 
 /* Create or update the VALARMs in the VEVENT component comp as defined by the
@@ -3654,28 +3647,30 @@ recurrence_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrul
     }
 
     /* skip */
-    const char *skip = NULL;
+    char *skip = NULL;
     jprop = json_object_get(rrule, "skip");
     if (json_is_string(jprop)) {
-        skip = json_string_value(jprop);
-        if (strlen(skip)) {
-            buf_printf(&buf, ";SKIP=%s", skip);
-        }
+        skip = xstrdup(json_string_value(jprop));
+        ucase(skip);
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "skip");
     }
 
     /* rscale */
-    const char *rscale = NULL;
     jprop = json_object_get(rrule, "rscale");
     if (json_is_string(jprop)) {
-        rscale = json_string_value(jprop);
-        if (strlen(rscale)) {
+        char *rscale = xstrdup(json_string_value(jprop));
+        ucase(rscale);
+        /* Only include RSCALE/SKIP when required to not break legacy clients */
+        if (strcmp(rscale, "GREGORIAN") || (skip && strcmp(skip, "OMIT"))) {
             buf_printf(&buf, ";RSCALE=%s", rscale);
+            if (skip) buf_printf(&buf, ";SKIP=%s", skip);
         }
+        free(rscale);
     } else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "rscale");
     }
+    free(skip);
 
     /* firstDayOfWeek */
     jprop = json_object_get(rrule, "firstDayOfWeek");
@@ -4288,9 +4283,6 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     icalproperty *prop = NULL;
     int is_exc = icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY) != NULL;
 
-    /* Do not preserve any current contents */
-    json_incref(event);
-
     json_t *jprop = json_object_get(event, "excluded");
     if (jprop && jprop != json_false()) {
         jmap_parser_invalid(parser, "excluded");
@@ -4405,7 +4397,8 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     /* title */
     jprop = json_object_get(event, "title");
     if (json_is_string(jprop)) {
-        icalcomponent_set_summary(comp, json_string_value(jprop));
+        const char *summary = json_string_value(jprop);
+        if (strlen(summary)) icalcomponent_set_summary(comp, summary);
     }
     else if (JNOTNULL(jprop)) {
         jmap_parser_invalid(parser, "title");
@@ -4608,25 +4601,6 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     } else if (jprop) {
         jmap_parser_invalid(parser, "recurrenceOverrides");
     }
-
-    /* Bail out for property errors */
-    if (json_array_size(parser->invalid)) {
-        json_decref(event);
-        return;
-    }
-
-    /* Check JMAP specification conditions on the generated iCalendar file, so 
-     * this also doubles as a sanity check. Note that we *could* report a
-     * property here as invalid, which had only been set by the client in a
-     * previous request. */
-
-    /* Either both organizer and attendees are null, or neither are. */
-    if ((icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY) == NULL) !=
-        (icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY) == NULL)) {
-        jmap_parser_invalid(parser, "replyTo");
-        jmap_parser_invalid(parser, "participants");
-    }
-    json_decref(event);
 }
 
 icalcomponent*

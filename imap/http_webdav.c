@@ -247,7 +247,7 @@ struct meth_params webdav_params = {
     { 0, &webdav_put },                         /* Allow duplicate UIDs */
     NULL,                                       /* No special DELETE handling */
     &webdav_get,
-    { 0, MBTYPE_COLLECTION },                   /* Allow any location */
+    { 0, MBTYPE_COLLECTION, NULL },             /* Allow any location */
     NULL,                                       /* No PATCH handling */
     { POST_ADDMEMBER, NULL, { 0, NULL, NULL } },/* No special POST handling */
     { 0, &webdav_put },                         /* Allow any MIME type */

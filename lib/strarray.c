@@ -434,6 +434,24 @@ EXPORTED int strarray_find_case(const strarray_t *sa, const char *match, int sta
     return strarray_findg(sa, match, starting, strcasecmpsafe);
 }
 
+EXPORTED int strarray_intersect(const strarray_t *sa, const strarray_t *sb)
+{
+    int i;
+    for (i = 0; i < sa->count; i++)
+        if (strarray_find(sb, strarray_nth(sa, i), 0) >= 0)
+            return 1;
+    return 0;
+}
+
+EXPORTED int strarray_intersect_case(const strarray_t *sa, const strarray_t *sb)
+{
+    int i;
+    for (i = 0; i < sa->count; i++)
+        if (strarray_find_case(sb, strarray_nth(sa, i), 0) >= 0)
+            return 1;
+    return 0;
+}
+
 EXPORTED int strarray_size(const strarray_t *sa)
 {
     return sa->count;

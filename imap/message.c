@@ -1160,7 +1160,7 @@ EXPORTED void message_parse_type(const char *hdr, char **typep, char **subtypep,
     /* Very old versions of macOS Mail.app encode the Content-Type header
      * in MIME words, if the attachment name contains non-ASCII characters */
     if (strlen(hdr) > 2 && hdr[0] == '=' && hdr[1] == '?') {
-        int flags = CHARSET_SNIPPET;
+        int flags = CHARSET_KEEPCASE;
         decbuf = charset_decode_mimeheader(hdr, flags);
         if (strcmpsafe(decbuf, hdr)) hdr = decbuf;
     }
@@ -3676,10 +3676,17 @@ static void message_free(message_t *m)
 
     message_yield(m, M_ALL);
 
-    free(m->filename);
-    m->filename = NULL;
-
     free(m);
+}
+
+EXPORTED void message_set_from_data(const char *base, size_t len, message_t *m)
+{
+    assert(m->refcount == 1);
+    message_yield(m, M_ALL);
+    memset(m, 0, sizeof(message_t));
+    buf_init_ro(&m->map, base, len);
+    m->have = m->given = M_MAP;
+    m->refcount = 1;
 }
 
 EXPORTED message_t *message_new_from_data(const char *base, size_t len)
@@ -3693,6 +3700,7 @@ EXPORTED message_t *message_new_from_data(const char *base, size_t len)
 EXPORTED void message_set_from_mailbox(struct mailbox *mailbox, unsigned int recno, message_t *m)
 {
     assert(m->refcount == 1);
+    message_yield(m, M_ALL);
     memset(m, 0, sizeof(message_t));
     m->mailbox = mailbox;
     m->record.recno = recno;
@@ -3709,6 +3717,20 @@ EXPORTED message_t *message_new_from_mailbox(struct mailbox *mailbox, unsigned i
     return m;
 }
 
+EXPORTED void message_set_from_record(struct mailbox *mailbox,
+                                      const struct index_record *record,
+                                      message_t *m)
+{
+    assert(m->refcount == 1);
+    message_yield(m, M_ALL);
+    memset(m, 0, sizeof(message_t));
+    assert(record->uid > 0);
+    m->mailbox = mailbox;
+    m->record = *record;
+    m->have = m->given = M_MAILBOX|M_RECORD|M_UID;
+    m->refcount = 1;
+}
+
 EXPORTED message_t *message_new_from_record(struct mailbox *mailbox,
                                             const struct index_record *record)
 {
@@ -3718,6 +3740,24 @@ EXPORTED message_t *message_new_from_record(struct mailbox *mailbox,
     m->record = *record;
     m->have = m->given = M_MAILBOX|M_RECORD|M_UID;
     return m;
+}
+
+EXPORTED void message_set_from_index(struct mailbox *mailbox,
+                                     const struct index_record *record,
+                                     uint32_t msgno,
+                                     uint32_t indexflags,
+                                     message_t *m)
+{
+    assert(m->refcount == 1);
+    message_yield(m, M_ALL);
+    memset(m, 0, sizeof(message_t));
+    assert(record->uid > 0);
+    m->mailbox = mailbox;
+    m->record = *record;
+    m->msgno = msgno;
+    m->indexflags = indexflags;
+    m->have = m->given = M_MAILBOX|M_RECORD|M_UID|M_INDEX;
+    m->refcount = 1;
 }
 
 EXPORTED message_t *message_new_from_index(struct mailbox *mailbox,
@@ -3857,7 +3897,7 @@ static void message_yield(message_t *m, unsigned int yield)
 
     /* nothing to free for these - they're not constructed
      * or have no dynamically allocated memory */
-    yield &= ~(M_MAILBOX|M_RECORD|M_FILENAME|M_UID|M_CACHE);
+    yield &= ~(M_MAILBOX|M_RECORD|M_UID|M_CACHE);
 
     if ((yield & M_MAP)) {
         buf_free(&m->map);
@@ -3869,6 +3909,12 @@ static void message_yield(message_t *m, unsigned int yield)
         free(m->body);
         m->body = NULL;
         m->have &= ~M_BODY;
+    }
+
+    if ((yield & M_FILENAME)) {
+        free(m->filename);
+        m->filename = NULL;
+        m->have &= ~M_FILENAME;
     }
 
     /* Check we yielded everything we could */
@@ -4321,15 +4367,15 @@ static int parse_bodystructure_sections(const char **cachestrp, const char *cach
                 *cachestrp += (cte >> 16) & 0xffff;
 
             if (cache_version >= 5)
-                *cachestrp = message_guid_import(&body->subpart->content_guid, *cachestrp);
+                *cachestrp = message_guid_import(&this->content_guid, *cachestrp);
 
             if (cache_version >= 8) {
-                body->subpart->decoded_content_size = CACHE_ITEM_BIT32(*cachestrp);
+                this->decoded_content_size = CACHE_ITEM_BIT32(*cachestrp);
                 *cachestrp += CACHE_ITEM_SIZE_SKIP;
             }
 
             if (cache_version >= 9) {
-                body->subpart->content_lines = CACHE_ITEM_BIT32(*cachestrp);
+                this->content_lines = CACHE_ITEM_BIT32(*cachestrp);
                 *cachestrp += CACHE_ITEM_SIZE_SKIP;
             }
         }
@@ -4776,29 +4822,26 @@ EXPORTED int message_get_fname(message_t *m, const char **fnamep)
 
 static void extract_one(struct buf *buf,
                         const char *name,
-                        int format,
+                        int flags,
                         int has_name,
                         int isutf8,
                         struct buf *raw)
 {
     char *p = NULL;
 
-    if (has_name && !(format & MESSAGE_FIELDNAME)) {
+    if (has_name && !(flags & MESSAGE_FIELDNAME)) {
         /* remove the fieldname and colon */
         int pos = buf_findchar(raw, 0, ':');
         assert(pos > 0);
         buf_remove(raw, 0, pos+1);
     }
-    else if (!has_name && (format & MESSAGE_FIELDNAME)) {
+    else if (!has_name && (flags & MESSAGE_FIELDNAME)) {
         /* insert a fieldname and colon */
         buf_insertcstr(raw, 0, ":");
         buf_insertcstr(raw, 0, name);
     }
 
-    if (!(format & MESSAGE_APPEND))
-        buf_reset(buf);
-
-    switch (format & _MESSAGE_FORMAT_MASK) {
+    switch (flags & _MESSAGE_FORMAT_MASK) {
     case MESSAGE_RAW:
         /* Logically, we're appending to the resulting buffer.
          * However if the buf is empty we can save a memory copy
@@ -4842,7 +4885,7 @@ static void extract_one(struct buf *buf,
         break;
     }
 
-    if (format & MESSAGE_TRIM)
+    if (flags & MESSAGE_TRIM)
         buf_trim(buf);
 
     free(p);
@@ -4870,6 +4913,9 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
         buf_setmap(buf, m->map.s + m->record.header_size, m->record.size - m->record.header_size);
         return 0;
     }
+
+    if (!(flags & MESSAGE_APPEND))
+        buf_reset(buf);
 
     /* the 5 standalone cache fields */
     if (!strcasecmp(hdr, "from")) {

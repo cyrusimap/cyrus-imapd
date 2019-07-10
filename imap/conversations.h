@@ -80,6 +80,7 @@ struct conversations_state {
     strarray_t *folder_names;
     hash_table folderstatus;
     int trashfolder;
+    char *trashmboxname;
     int is_shared;
     char *path;
 };
@@ -121,6 +122,7 @@ struct conv_folder {
 
 struct conv_guidrec {
     const char      *mboxname;
+    uint32_t        foldernum;
     uint32_t        uid;
     const char      *part;
     conversation_id_t cid;
@@ -199,6 +201,10 @@ extern struct conversations_state *conversations_get_path(const char *path);
 extern struct conversations_state *conversations_get_user(const char *username);
 extern struct conversations_state *conversations_get_mbox(const char *mboxname);
 
+extern uint32_t conversations_num_folders(struct conversations_state *state);
+extern const char* conversations_folder_name(struct conversations_state *state,
+                                             uint32_t foldernum);
+
 /* either of these close */
 extern int conversations_abort(struct conversations_state **state);
 extern int conversations_commit(struct conversations_state **state);
@@ -222,6 +228,10 @@ extern int conversations_guid_foreach(struct conversations_state *state,
                                       const char *guidrep,
                                       int(*cb)(const conv_guidrec_t*,void*),
                                       void *rock);
+extern int conversations_iterate_searchset(struct conversations_state *state,
+                                           void *data, size_t n,
+                                           int(*cb)(const conv_guidrec_t*,void*),
+                                           void *rock);
 extern conversation_id_t conversations_guid_cid_lookup(struct conversations_state *state,
                                                        const char *guidrep);
 

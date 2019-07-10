@@ -224,10 +224,12 @@ BUILT_SOURCES += \
 	imap/http_caldav_js.h \
 	imap/http_carddav_js.h \
 	imap/http_err.c \
-	imap/jmap_err.c \
-	imap/tz_err.c
+	imap/http_err.h \
+	imap/tz_err.c \
+	imap/tz_err.h
 
 libexec_PROGRAMS += imap/httpd
+check_PROGRAMS += imap/ical_apply_patch
 sbin_PROGRAMS += \
 	imap/ctl_zoneinfo \
 	imap/dav_reconstruct
@@ -284,7 +286,7 @@ endif # PERL
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
 noinst_LTLIBRARIES += sieve/libcyrus_sieve_lex.la
 lib_LTLIBRARIES += sieve/libcyrus_sieve.la
-check_PROGRAMS += sieve/test
+check_PROGRAMS += sieve/test sieve/test_mailbox
 sbin_PROGRAMS += sieve/sievec sieve/sieved
 
 if SERVER
@@ -585,12 +587,6 @@ if USE_JANSSON
 AM_LDFLAGS += $(JANSSON_LIBS)
 AM_CPPFLAGS += $(JANSSON_CFLAGS)
 LD_SERVER_ADD += $(JANSSON_LIBS)
-endif
-
-if HAVE_CURL
-AM_LDFLAGS += $(CURL_LIBS)
-AM_CPPFLAGS += $(CURL_CFLAGS)
-LD_SERVER_ADD += $(CURL_LIBS)
 endif
 
 if CUNIT
@@ -971,6 +967,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/duplicate.h \
 	imap/global.c \
 	imap/global.h \
+	imap/http_client.c \
+	imap/http_client.h \
 	imap/idle.c \
 	imap/idle.h \
 	imap/idlemsg.c \
@@ -1029,6 +1027,8 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/sequence.c \
 	imap/sequence.h \
 	imap/setproctitle.c \
+	imap/spool.c \
+	imap/spool.h \
 	imap/statuscache.h \
 	imap/statuscache_db.c \
 	imap/sync_log.c \
@@ -1107,6 +1107,12 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/xapian_wrap.cpp
 imap_libcyrus_imap_la_LIBADD += $(XAPIAN_LIBS)
 imap_libcyrus_imap_la_CXXFLAGS += $(XAPIAN_CXXFLAGS)
+
+if HAVE_CLD2
+imap_libcyrus_imap_la_LIBADD += $(CLD2_LIBS)
+imap_libcyrus_imap_la_CXXFLAGS += $(CLD2_CFLAGS)
+endif
+
 endif
 
 imap_lmtpd_SOURCES = \
@@ -1177,8 +1183,9 @@ nodist_imap_httpd_SOURCES = \
 	imap/http_caldav_js.h \
 	imap/http_carddav_js.h \
 	imap/http_err.c \
-	imap/jmap_err.c \
-	imap/tz_err.c
+	imap/http_err.h \
+	imap/tz_err.c \
+	imap/tz_err.h
 
 imap_httpd_SOURCES = \
 	imap/css3_color.c \
@@ -1194,8 +1201,6 @@ imap_httpd_SOURCES = \
 	imap/http_carddav.h \
 	imap/http_carddav_js.h \
 	imap/http_cgi.c \
-	imap/http_client.c \
-	imap/http_client.h \
 	imap/http_dav.c \
 	imap/http_dav.h \
 	imap/http_dav_sharing.c \
@@ -1229,7 +1234,13 @@ imap_httpd_SOURCES = \
 	master/masterconf.c \
 	master/service.c
 
+imap_httpd_LDADD = $(LD_SERVER_ADD)
+
 if JMAP
+BUILT_SOURCES += \
+	imap/jmap_err.c \
+	imap/jmap_err.h
+
 imap_httpd_SOURCES += \
 	imap/http_jmap.c \
 	imap/http_jmap.h \
@@ -1241,11 +1252,19 @@ imap_httpd_SOURCES += \
 	imap/jmap_mail.c \
 	imap/jmap_mail_submission.c \
 	imap/jmap_mailbox.c \
-	imap/jmap_user.c
+	imap/jmap_vacation.c \
+	imap/sync_support.c \
+        imap/sync_support.h
+
+nodist_imap_httpd_SOURCES += \
+	imap/jmap_err.c \
+	imap/jmap_err.h
 
 imap_libcyrus_imap_la_SOURCES += \
 	imap/jmap_util.c \
-	jmap/jmap_util.h
+	imap/jmap_util.h
+
+imap_httpd_LDADD += $(LD_SIEVE_ADD)
 
 if CUNIT
 
@@ -1254,8 +1273,6 @@ cunit_TESTS += cunit/jmap_util.testc
 endif # CUNIT
 
 endif # JMAP
-
-imap_httpd_LDADD = $(LD_SERVER_ADD)
 
 imap_pop3d_SOURCES = \
 	imap/mutex_fake.c \
@@ -1290,6 +1307,9 @@ imap_reconstruct_LDADD = $(LD_UTILITY_ADD)
 
 imap_dav_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/dav_reconstruct.c
 imap_dav_reconstruct_LDADD = $(LD_UTILITY_ADD)
+
+imap_ical_apply_patch_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/ical_apply_patch.c
+imap_ical_apply_patch_LDADD = $(LD_UTILITY_ADD)
 
 imap_search_test_SOURCES = imap/search_test.c imap/mutex_fake.c
 imap_search_test_LDADD = $(LD_UTILITY_ADD)
@@ -1716,6 +1736,9 @@ sieve_sieved_LDADD = $(LD_SIEVE_ADD)
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
 sieve_test_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
+sieve_test_mailbox_SOURCES = sieve/test_mailbox.c imap/mutex_fake.c
+sieve_test_mailbox_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
+
 timsieved_timsieved_SOURCES = \
 	imap/mutex_fake.c \
 	imap/proxy.c \
@@ -1963,6 +1986,7 @@ install-binsymlinks:
 SUFFIXES = .fig.png
 
 .fig.png:
+	mkdir -p $(@D)
 	fig2dev -L png $< $@
 
 valgrind:

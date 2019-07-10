@@ -152,9 +152,25 @@
     " UNIQUE( mailbox, resource ) );"                                   \
     "CREATE INDEX IF NOT EXISTS idx_res_uid ON dav_objs ( res_uid );"
 
+#define CMD_CREATE_CALCACHE                                             \
+    "CREATE TABLE IF NOT EXISTS ical_jmapcache ("                       \
+    " rowid INTEGER NOT NULL,"                                          \
+    " userid TEXT NOT NULL,"                                            \
+    " jmapversion INTEGER NOT NULL,"                                    \
+    " jmapdata TEXT NOT NULL,"                                          \
+    " PRIMARY KEY (rowid, userid)"                                      \
+    " FOREIGN KEY (rowid) REFERENCES ical_objs (rowid) ON DELETE CASCADE );"
+
+#define CMD_CREATE_CARDCACHE                                            \
+    "CREATE TABLE IF NOT EXISTS vcard_jmapcache ("                      \
+    " rowid INTEGER NOT NULL PRIMARY KEY,"                              \
+    " jmapversion INTEGER NOT NULL,"                                    \
+    " jmapdata TEXT NOT NULL,"                                          \
+    " FOREIGN KEY (rowid) REFERENCES vcard_objs (rowid) ON DELETE CASCADE );"
+
 
 #define CMD_CREATE CMD_CREATE_CAL CMD_CREATE_CARD CMD_CREATE_EM CMD_CREATE_GR \
-                   CMD_CREATE_OBJS
+                   CMD_CREATE_OBJS CMD_CREATE_CALCACHE CMD_CREATE_CARDCACHE
 
 /* leaves these unused columns around, but that's life.  A dav_reconstruct
  * will fix them */
@@ -182,14 +198,16 @@
 
 #define CMD_DBUPGRADEv7                                         \
     "ALTER TABLE ical_objs ADD COLUMN createdmodseq INTEGER;"   \
-    "UPDATE ical_objs SET createdmodseq = 1;"                   \
+    "UPDATE ical_objs SET createdmodseq = 0;"                   \
     "ALTER TABLE vcard_objs ADD COLUMN createdmodseq INTEGER;"  \
-    "UPDATE vcard_objs SET createdmodseq = 1;"                  \
+    "UPDATE vcard_objs SET createdmodseq = 0;"                  \
     "ALTER TABLE dav_objs ADD COLUMN createdmodseq INTEGER;"    \
-    "UPDATE dav_objs SET createdmodseq = 1;"
+    "UPDATE dav_objs SET createdmodseq = 0;"
 
 #define CMD_DBUPGRADEv8                                         \
     "ALTER TABLE vcard_emails ADD COLUMN ispinned INTEGER NOT NULL DEFAULT 0;"
+
+#define CMD_DBUPGRADEv9 CMD_CREATE_CALCACHE CMD_CREATE_CARDCACHE
 
 
 struct sqldb_upgrade davdb_upgrade[] = {
@@ -200,10 +218,11 @@ struct sqldb_upgrade davdb_upgrade[] = {
   { 6, CMD_DBUPGRADEv6, NULL },
   { 7, CMD_DBUPGRADEv7, NULL },
   { 8, CMD_DBUPGRADEv8, NULL },
+  { 9, CMD_DBUPGRADEv9, NULL },
   { 0, NULL, NULL }
 };
 
-#define DB_VERSION 8
+#define DB_VERSION 9
 
 static int in_reconstruct = 0;
 

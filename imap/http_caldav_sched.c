@@ -1147,7 +1147,7 @@ static void deliver_merge_vpoll_reply(icalcomponent *ical, icalcomponent *reply)
     }
 
     /* XXX  Actually need to compare POLL-ITEM-IDs */
-    icalcomponent_add_component(ical, icalcomponent_new_clone(new_ballot));
+    icalcomponent_add_component(ical, icalcomponent_clone(new_ballot));
 }
 
 
@@ -1209,7 +1209,7 @@ static int deliver_merge_pollstatus(icalcomponent *ical, icalcomponent *request)
          vvoter =
              icalcomponent_get_next_component(newpoll, ICAL_VVOTER_COMPONENT)) {
 
-        icalcomponent_add_component(oldpoll, icalcomponent_new_clone(vvoter));
+        icalcomponent_add_component(oldpoll, icalcomponent_clone(vvoter));
     }
 
     return deliver_inbox;
@@ -1243,7 +1243,7 @@ static void sched_pollstatus(const char *organizer,
 
     /* Copy over any CALSCALE property */
     prop = icalcomponent_get_first_property(ical, ICAL_CALSCALE_PROPERTY);
-    if (prop) icalcomponent_add_property(itip, icalproperty_new_clone(prop));
+    if (prop) icalcomponent_add_property(itip, icalproperty_clone(prop));
 
     /* Process each VPOLL in resource */
     for (comp = icalcomponent_get_first_component(ical, ICAL_VPOLL_COMPONENT);
@@ -1254,10 +1254,10 @@ static void sched_pollstatus(const char *organizer,
         struct strlist *voters = NULL;
 
         /* Make a working copy of the iTIP */
-        stat = icalcomponent_new_clone(itip);
+        stat = icalcomponent_clone(itip);
 
         /* Make a working copy of the VPOLL and add to pollstatus */
-        poll = icalcomponent_new_clone(comp);
+        poll = icalcomponent_clone(comp);
         icalcomponent_add_component(stat, poll);
 
         /* Process each sub-component of VPOLL */
@@ -1375,7 +1375,7 @@ static icalcomponent *master_to_recurrence(icalcomponent *master, icalproperty *
     icalproperty *endprop = NULL;
     icalproperty *startprop = NULL;
 
-    icalcomponent *comp = icalcomponent_new_clone(master);
+    icalcomponent *comp = icalcomponent_clone(master);
 
     for (prop = icalcomponent_get_first_property(comp, ICAL_ANY_PROPERTY);
          prop; prop = next) {
@@ -1405,7 +1405,7 @@ static icalcomponent *master_to_recurrence(icalcomponent *master, icalproperty *
     }
 
     /* Add RECURRENCE-ID */
-    icalcomponent_add_property(comp, icalproperty_new_clone(recurid));
+    icalcomponent_add_property(comp, icalproperty_clone(recurid));
 
     /* calculate a new dtend based on recurid */
     struct icaltimetype start = _get_datetime(master, startprop);
@@ -1484,7 +1484,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,
             prop =
                 icalcomponent_get_first_property(itip, ICAL_DTSTART_PROPERTY);
             if (prop)
-                icalcomponent_add_property(comp, icalproperty_new_clone(prop));
+                icalcomponent_add_property(comp, icalproperty_clone(prop));
 
             prop =
                 icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY);
@@ -1495,7 +1495,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,
             prop =
                 icalcomponent_get_first_property(itip, ICAL_DTEND_PROPERTY);
             if (prop)
-                icalcomponent_add_property(comp, icalproperty_new_clone(prop));
+                icalcomponent_add_property(comp, icalproperty_clone(prop));
 
             prop =
                 icalcomponent_get_first_property(comp, ICAL_SEQUENCE_PROPERTY);
@@ -1506,7 +1506,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,
             prop =
                 icalcomponent_get_first_property(itip, ICAL_SEQUENCE_PROPERTY);
             if (prop)
-                icalcomponent_add_property(comp, icalproperty_new_clone(prop));
+                icalcomponent_add_property(comp, icalproperty_clone(prop));
 
             icalcomponent_add_component(ical, comp);
         }
@@ -1533,7 +1533,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,
         if (!prop) {
             /* Attendee added themselves to this recurrence */
             assert(icalproperty_isa(prop) != ICAL_VOTER_PROPERTY);
-            prop = icalproperty_new_clone(att);
+            prop = icalproperty_clone(att);
             icalcomponent_add_property(comp, prop);
         }
 
@@ -1608,7 +1608,7 @@ static int deliver_merge_request(const char *attendee,
         }
 
         /* Add new/modified component from iTIP request */
-        icalcomponent_add_component(ical, icalcomponent_new_clone(itip));
+        icalcomponent_add_component(ical, icalcomponent_clone(itip));
     }
 
     free_hash_table(&comp_table, NULL);
@@ -1633,7 +1633,7 @@ static int deliver_merge_request(const char *attendee,
     itip = icalcomponent_get_first_real_component(request);
     if (kind == ICAL_NO_COMPONENT) kind = icalcomponent_isa(itip);
     for (; itip; itip = icalcomponent_get_next_component(request, kind)) {
-        icalcomponent *new_comp = icalcomponent_new_clone(itip);
+        icalcomponent *new_comp = icalcomponent_clone(itip);
 
         /* Lookup this comp in the hash table */
         prop =
@@ -1659,20 +1659,20 @@ static int deliver_merge_request(const char *attendee,
                 icalcomponent_get_first_property(comp, ICAL_COMPLETED_PROPERTY);
             if (prop) {
                 icalcomponent_add_property(new_comp,
-                                           icalproperty_new_clone(prop));
+                                           icalproperty_clone(prop));
             }
             prop =
                 icalcomponent_get_first_property(comp,
                                                  ICAL_PERCENTCOMPLETE_PROPERTY);
             if (prop) {
                 icalcomponent_add_property(new_comp,
-                                           icalproperty_new_clone(prop));
+                                           icalproperty_clone(prop));
             }
             prop =
                 icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
             if (prop) {
                 icalcomponent_add_property(new_comp,
-                                           icalproperty_new_clone(prop));
+                                           icalproperty_clone(prop));
             }
 
             /* Copy over any ORGANIZER;SCHEDULE-STATUS */
@@ -1681,7 +1681,7 @@ static int deliver_merge_request(const char *attendee,
                 icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
             param = icalproperty_get_schedulestatus_parameter(prop);
             if (param) {
-                param = icalparameter_new_clone(param);
+                param = icalparameter_clone(param);
                 prop =
                     icalcomponent_get_first_property(new_comp,
                                                      ICAL_ORGANIZER_PROPERTY);
@@ -1838,19 +1838,19 @@ static void sched_deliver_local(const char *sender, const char *recipient,
         /* Copy over VERSION property */
         prop = icalcomponent_get_first_property(sched_data->itip,
                                                 ICAL_VERSION_PROPERTY);
-        icalcomponent_add_property(ical, icalproperty_new_clone(prop));
+        icalcomponent_add_property(ical, icalproperty_clone(prop));
 
         /* Copy over PRODID property */
         prop = icalcomponent_get_first_property(sched_data->itip,
                                                 ICAL_PRODID_PROPERTY);
-        icalcomponent_add_property(ical, icalproperty_new_clone(prop));
+        icalcomponent_add_property(ical, icalproperty_clone(prop));
 
         /* Copy over any CALSCALE property */
         prop = icalcomponent_get_first_property(sched_data->itip,
                                                 ICAL_CALSCALE_PROPERTY);
         if (prop) {
             icalcomponent_add_property(ical,
-                                       icalproperty_new_clone(prop));
+                                       icalproperty_clone(prop));
         }
     }
 
@@ -2368,7 +2368,7 @@ icalcomponent *make_itip(icalproperty_method method, icalcomponent *ical)
     icalproperty *prop =
         icalcomponent_get_first_property(ical, ICAL_CALSCALE_PROPERTY);
     if (prop) {
-        icalcomponent_add_property(req, icalproperty_new_clone(prop));
+        icalcomponent_add_property(req, icalproperty_clone(prop));
     }
 
     /* Copy over any VTIMEZONE components */
@@ -2376,7 +2376,7 @@ icalcomponent *make_itip(icalproperty_method method, icalcomponent *ical)
     for (comp = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
          comp;
          comp = icalcomponent_get_next_component(ical, ICAL_VTIMEZONE_COMPONENT)) {
-         icalcomponent_add_component(req, icalcomponent_new_clone(comp));
+         icalcomponent_add_component(req, icalcomponent_clone(comp));
     }
 
     return req;
@@ -2396,11 +2396,11 @@ static void schedule_set_exdate(icalcomponent *master, icalcomponent *this)
     /* Copy any parameters from RECURRENCE-ID to EXDATE */
     param = icalproperty_get_first_parameter(recurid, ICAL_TZID_PARAMETER);
     if (param) {
-        icalproperty_add_parameter(exdate, icalparameter_new_clone(param));
+        icalproperty_add_parameter(exdate, icalparameter_clone(param));
     }
     param = icalproperty_get_first_parameter(recurid, ICAL_VALUE_PARAMETER);
     if (param) {
-        icalproperty_add_parameter(exdate, icalparameter_new_clone(param));
+        icalproperty_add_parameter(exdate, icalparameter_clone(param));
     }
 
     /* XXX  Need to handle RANGE parameter */
@@ -2472,7 +2472,7 @@ static int icalcomponent_is_historical(icalcomponent *comp, icaltimetype cutoff)
         /* span is entire span of the master */
         icalcomponent *ical = icalcomponent_new_vcalendar();
 
-        icalcomponent_add_component(ical, icalcomponent_new_clone(comp));
+        icalcomponent_add_component(ical, icalcomponent_clone(comp));
         span = icalrecurrenceset_get_utc_timespan(ical, kind, NULL, NULL, NULL);
         icalcomponent_free(ical);
     }
@@ -2488,7 +2488,7 @@ static void schedule_full_cancel(const char *sender, const char *attendee,
        and add exdates to the master for all without this attendee */
     icalcomponent *itip = make_itip(ICAL_METHOD_CANCEL, oldical);
 
-    icalcomponent *mastercopy = icalcomponent_new_clone(mastercomp);
+    icalcomponent *mastercopy = icalcomponent_clone(mastercomp);
     clean_component(mastercopy);
     icalcomponent_add_component(itip, mastercopy);
 
@@ -2513,7 +2513,7 @@ static void schedule_full_cancel(const char *sender, const char *attendee,
             find_attended_component(newical, recurid, attendee);
         if (newcomp) continue; /* will be scheduled separately */
 
-        icalcomponent *copy = icalcomponent_new_clone(comp);
+        icalcomponent *copy = icalcomponent_clone(comp);
         clean_component(copy);
         icalcomponent_add_component(itip, copy);
 
@@ -2560,7 +2560,7 @@ static void schedule_sub_cancels(const char *sender, const char *attendee,
         if (find_attended_component(newical, recurid, attendee))
             continue;
 
-        icalcomponent *copy = icalcomponent_new_clone(comp);
+        icalcomponent *copy = icalcomponent_clone(comp);
         clean_component(copy);
         icalcomponent_add_component(itip, copy);
 
@@ -2635,7 +2635,7 @@ static void schedule_sub_updates(const char *sender, const char *attendee,
             }
         }
 
-        icalcomponent *copy = icalcomponent_new_clone(comp);
+        icalcomponent *copy = icalcomponent_clone(comp);
         clean_component(copy);
 
         if (find_attendee(oldcomp, attendee))
@@ -2669,7 +2669,7 @@ static void schedule_full_update(const char *sender, const char *attendee,
     /* create an itip for the complete event */
     icalcomponent *itip = make_itip(ICAL_METHOD_REQUEST, newical);
 
-    icalcomponent *mastercopy = icalcomponent_new_clone(mastercomp);
+    icalcomponent *mastercopy = icalcomponent_clone(mastercomp);
     clean_component(mastercopy);
     icalcomponent_add_component(itip, mastercopy);
 
@@ -2727,7 +2727,7 @@ static void schedule_full_update(const char *sender, const char *attendee,
             continue;
         }
 
-        icalcomponent *copy = icalcomponent_new_clone(comp);
+        icalcomponent *copy = icalcomponent_clone(comp);
 
         /* we don't care if it's changed, just using this for the
          * side effect changes to RSVP */
@@ -2788,7 +2788,7 @@ void sched_request(const char *userid, const char *organizer,
     /* Check ACL of auth'd user on userid's Scheduling Outbox */
     char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
 
-    syslog(LOG_DEBUG, "sched_request(%s)", organizer);
+    syslog(LOG_DEBUG, "sched_request(%s as %s)", userid, organizer);
 
     r = mboxlist_lookup(outboxname, &mbentry, NULL);
     if (r) {
@@ -2991,7 +2991,7 @@ static void schedule_sub_declines(const char *attendee,
         if (newcomp) continue;
 
         /* we need to send an update for this recurrence */
-        icalcomponent *copy = icalcomponent_new_clone(comp);
+        icalcomponent *copy = icalcomponent_clone(comp);
         trim_attendees(copy, attendee);
         if (kind == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(copy);
         clean_component(copy);
@@ -3050,7 +3050,7 @@ static void schedule_sub_replies(const char *attendee,
         reply->organizer = organizer;
 
         /* we need to send an update for this recurrence */
-        icalcomponent *copy = icalcomponent_new_clone(comp);
+        icalcomponent *copy = icalcomponent_clone(comp);
         trim_attendees(copy, attendee);
         if (kind == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(copy);
         clean_component(copy);
@@ -3087,7 +3087,7 @@ static void schedule_full_decline(const char *attendee,
         get_forcesend(icalcomponent_get_first_property(mastercomp,
                                                        ICAL_ORGANIZER_PROPERTY));
 
-    icalcomponent *mastercopy = icalcomponent_new_clone(mastercomp);
+    icalcomponent *mastercopy = icalcomponent_clone(mastercomp);
     trim_attendees(mastercopy, attendee);
     if (icalcomponent_isa(mastercomp) == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(mastercopy);
     clean_component(mastercopy);
@@ -3159,7 +3159,7 @@ static void schedule_full_reply(const char *attendee,
         if (!reply->itip) reply->itip = make_itip(ICAL_METHOD_REPLY, newical);
 
         /* add the master */
-        icalcomponent *mastercopy = icalcomponent_new_clone(mastercomp);
+        icalcomponent *mastercopy = icalcomponent_clone(mastercomp);
         trim_attendees(mastercopy, attendee);
         if (kind == ICAL_VPOLL_COMPONENT) sched_vpoll_reply(mastercopy);
         clean_component(mastercopy);
@@ -3180,7 +3180,7 @@ void sched_reply(const char *userid, const char *attendee,
 {
     int r;
 
-    syslog(LOG_DEBUG, "sched_reply(%s)", attendee);
+    syslog(LOG_DEBUG, "sched_reply(%s as %s)", userid, attendee);
 
     /* Check ACL of auth'd user on userid's Scheduling Outbox */
     char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);

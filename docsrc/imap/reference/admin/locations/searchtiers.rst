@@ -18,7 +18,7 @@ setting:
         :start-after: startblob defaultsearchtier
         :end-before: endblob defaultsearchtier
 
-Search Tier Partition location
+Search Tier Partition Location
 ------------------------------
 
 Each search tier to be used requires a partition location be specified

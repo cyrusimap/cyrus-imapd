@@ -82,6 +82,7 @@
 #include "imapd.h"
 #include "proc.h"
 #include "version.h"
+#include "stristr.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "telemetry.h"
@@ -283,6 +284,75 @@ static int brotli_compress(struct transaction_t *txn __attribute__((unused)),
 static void brotli_done(void *brotli __attribute__((unused))) {}
 
 #endif /* HAVE_BROTLI */
+
+
+#ifdef HAVE_ZSTD
+#include <zstd.h>
+#include <zstd_errors.h>
+
+HIDDEN void *zstd_init()
+{
+    ZSTD_CCtx *cctx = ZSTD_createCCtx();
+
+    if (cctx) {
+        ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel,
+                               ZSTD_CLEVEL_DEFAULT);
+        ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 1);
+    }
+
+    return cctx;
+}
+
+static int zstd_compress(struct transaction_t *txn,
+                         unsigned flags, const char *buf, unsigned len)
+{
+    /* Only flush for static content or on last (zero-length) chunk */
+    ZSTD_EndDirective mode = (flags & COMPRESS_END) ? ZSTD_e_end : ZSTD_e_flush;
+    ZSTD_inBuffer input = { buf, len, 0 };
+    ZSTD_CCtx *cctx = txn->zstd;
+    size_t remaining;
+
+    if (flags & COMPRESS_START) ZSTD_CCtx_reset(cctx, ZSTD_reset_session_only);
+
+    buf_ensure(&txn->zbuf, ZSTD_compressBound(len));
+    buf_reset(&txn->zbuf);
+
+    ZSTD_outBuffer output = { txn->zbuf.s, txn->zbuf.alloc, 0 };
+    do {
+        remaining = ZSTD_compressStream2(cctx, &output, &input, mode);
+
+        if (ZSTD_isError(remaining)) {
+            syslog(LOG_ERR, "Zstandard: %s",
+                   ZSTD_getErrorString(ZSTD_getErrorCode(remaining)));
+            return -1;
+        }
+    } while (remaining || (input.pos != input.size));
+
+    buf_truncate(&txn->zbuf, output.pos);
+
+    return 0;
+}
+
+static void zstd_done(ZSTD_CCtx *cctx)
+{
+    if (cctx) ZSTD_freeCCtx(cctx);
+}
+
+#else /* !HAVE_ZSTD */
+
+HIDDEN void *zstd_init() { return NULL; }
+
+static int zstd_compress(struct transaction_t *txn __attribute__((unused)),
+                           unsigned flags __attribute__((unused)),
+                           const char *buf __attribute__((unused)),
+                           unsigned len __attribute__((unused)))
+{
+    fatal("Zstandard Compression requested, but not available", EX_SOFTWARE);
+}
+
+static void zstd_done(void *brotli __attribute__((unused))) {}
+
+#endif /* HAVE_ZSTD */
 
 
 static const char tls_message[] =
@@ -522,6 +592,8 @@ static void httpd_reset(struct http_connection *conn)
     backend_cached = NULL;
     backend_current = NULL;
 
+    index_text_extractor_destroy();
+
     if (httpd_in) {
         prot_NONBLOCK(httpd_in);
         prot_fill(httpd_in);
@@ -705,6 +777,9 @@ int service_init(int argc __attribute__((unused)),
 
     buf_printf(&serverinfo, " Brotli/%u.%u.%u", major, minor, fix);
 #endif
+#ifdef HAVE_ZSTD
+    buf_printf(&serverinfo, " Zstd/%s", ZSTD_versionString());
+#endif
 
     /* Initialize libical */
     ical_support_init();
@@ -859,6 +934,8 @@ int service_main(int argc __attribute__((unused)),
         }
     }
 
+    index_text_extractor_init(httpd_in);
+
     prometheus_increment(CYRUS_HTTP_CONNECTIONS_TOTAL);
     prometheus_increment(CYRUS_HTTP_ACTIVE_CONNECTIONS);
 
@@ -926,6 +1003,8 @@ void shut_down(int code)
         i++;
     }
     if (backend_cached) free(backend_cached);
+
+    index_text_extractor_destroy();
 
     annotatemore_close();
 
@@ -1182,7 +1261,7 @@ static int client_need_auth(struct transaction_t *txn, int sasl_result)
 
         /* Check which response is required */
         if ((hdr = spool_getheader(txn->req_hdrs, "Upgrade")) &&
-            strstr(hdr[0], TLS_VERSION)) {
+            stristr(hdr[0], TLS_VERSION)) {
             /* Client (Murder proxy) supports RFC 2817 (TLS upgrade) */
 
             txn->flags.conn |= CONN_UPGRADE;
@@ -1579,23 +1658,38 @@ static void postauth_check_hdrs(struct transaction_t *txn)
         }
         if (enc) free(enc);
     }
-    else if ((txn->zstrm || txn->brotli) &&
+    else if ((txn->zstrm || txn->brotli || txn->zstd) &&
              (hdr = spool_getheader(txn->req_hdrs, "Accept-Encoding"))) {
         struct accept *e, *enc = parse_accept(hdr);
         float qual = 0.0;
 
         for (e = enc; e && e->token; e++) {
-            if (e->qual > 0.0) {
-                /* Favor Brotli over GZIP if q values are equal */
-                if (txn->brotli &&
-                    (e->qual >= qual) && !strcasecmp(e->token, "br")) {
-                    txn->resp_body.enc = CE_BR;
-                    qual = e->qual;
+            if (e->qual > 0.0 && e->qual >= qual) {
+                unsigned ce = CE_IDENTITY;
+                encode_proc_t proc = NULL;
+
+                if (txn->zstd && !strcasecmp(e->token, "zstd")) {
+                    ce = CE_ZSTD;
+                    proc = &zstd_compress;
                 }
-                else if (txn->zstrm &&
-                         (e->qual > qual) && (!strcasecmp(e->token, "gzip") ||
-                                              !strcasecmp(e->token, "x-gzip"))) {
-                    txn->resp_body.enc = CE_GZIP;
+                else if (txn->brotli && !strcasecmp(e->token, "br")) {
+                    ce = CE_BR;
+                    proc = &brotli_compress;
+                }
+                else if (txn->zstrm && (!strcasecmp(e->token, "gzip") ||
+                                        !strcasecmp(e->token, "x-gzip"))) {
+                    ce = CE_GZIP;
+                    proc = &zlib_compress;
+                }
+                else {
+                    /* Unknown/unsupported */
+                    e->qual = 0.0;
+                }
+
+                /* Favor Zstandard over Brotli over GZIP if q values are equal */
+                if (e->qual > qual || txn->resp_body.enc.type < ce) {
+                    txn->resp_body.enc.type = ce;
+                    txn->resp_body.enc.proc = proc;
                     qual = e->qual;
                 }
             }
@@ -1809,6 +1903,7 @@ EXPORTED void transaction_free(struct transaction_t *txn)
     http2_end_stream(txn->strm_ctx);
 
     zlib_done(txn->zstrm);
+    zstd_done(txn->zstd);
     brotli_done(txn->brotli);
 
     buf_free(&txn->req_body.payload);
@@ -1831,6 +1926,7 @@ static void cmdloop(struct http_connection *conn)
 
     if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS)) {
         txn.zstrm = zlib_init();
+        txn.zstd = zstd_init();
         txn.brotli = brotli_init();
     }
 
@@ -2048,16 +2144,16 @@ static int parse_connection(struct transaction_t *txn)
 
                     if (upgrade && upgrade[0]) {
                         if (!txn->conn->tls_ctx && tls_enabled() &&
-                            !strncmp(upgrade[0], TLS_VERSION,
-                                     strcspn(upgrade[0], " ,"))) {
+                            !strncasecmp(upgrade[0], TLS_VERSION,
+                                         strcspn(upgrade[0], " ,"))) {
                             /* Upgrade to TLS */
                             txn->flags.conn |= CONN_UPGRADE;
                             txn->flags.upgrade |= UPGRADE_TLS;
                         }
                         else if (http2_enabled() &&
-                                 !strncmp(upgrade[0],
-                                          NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
-                                          strcspn(upgrade[0], " ,"))) {
+                                 !strncasecmp(upgrade[0],
+                                              NGHTTP2_CLEARTEXT_PROTO_VERSION_ID,
+                                              strcspn(upgrade[0], " ,"))) {
                             /* Upgrade to HTTP/2 */
                             txn->flags.conn |= CONN_UPGRADE;
                             txn->flags.upgrade |= UPGRADE_HTTP2;
@@ -2416,7 +2512,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     const char *upgrd_tokens[] =
         { TLS_VERSION, NGHTTP2_CLEARTEXT_PROTO_VERSION_ID, WS_TOKEN, NULL };
     const char *te[] = { "deflate", "gzip", "chunked", NULL };
-    const char *ce[] = { "deflate", "gzip", "br", NULL };
+    const char *ce[] = { "deflate", "gzip", "br", "zstd", NULL };
 
     /* Stop method processing alarm */
     alarm(0);
@@ -2667,7 +2763,7 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     }
     if (resp_body->etag) {
         simple_hdr(txn, "ETag", "%s\"%s\"",
-                      resp_body->enc ? "W/" : "", resp_body->etag);
+                      resp_body->enc.proc ? "W/" : "", resp_body->etag);
         if (txn->flags.cors) Access_Control_Expose("ETag");
     }
     if (resp_body->lastmod) {
@@ -2699,9 +2795,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
                        resp_body->dispo.attach ? "attachment" : "inline",
                        resp_body->dispo.fname);
         }
-        if (txn->resp_body.enc) {
+        if (txn->resp_body.enc.proc) {
             /* Construct Content-Encoding header */
-            comma_list_hdr(txn, "Content-Encoding", ce, txn->resp_body.enc);
+            comma_list_hdr(txn, "Content-Encoding", ce, txn->resp_body.enc.type);
         }
         if (resp_body->lang) {
             simple_hdr(txn, "Content-Language", resp_body->lang);
@@ -2965,9 +3061,9 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
         comma_list_body(logbuf, te, txn->flags.te, NULL);
         sep = "; ";
     }
-    if (txn->resp_body.enc) {
+    if (txn->resp_body.enc.proc) {
         buf_printf(logbuf, "%scnt-encoding=", sep);
-        comma_list_body(logbuf, ce, txn->resp_body.enc, NULL);
+        comma_list_body(logbuf, ce, txn->resp_body.enc.type, NULL);
         sep = "; ";
     }
     if (txn->location) {
@@ -2993,8 +3089,10 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
 }
 
 
+#ifdef HAVE_DECLARE_OPTIMIZE
 EXPORTED inline void keepalive_response(struct transaction_t *txn)
     __attribute__((always_inline, optimize("-O3")));
+#endif
 EXPORTED void keepalive_response(struct transaction_t *txn)
 {
     if (gotsigalrm) {
@@ -3136,25 +3234,21 @@ EXPORTED void write_body(long code, struct transaction_t *txn,
 
         if (len < GZIP_MIN_LEN) {
             /* Don't compress small static content */
-            txn->resp_body.enc = CE_IDENTITY;
+            txn->resp_body.enc.type = CE_IDENTITY;
+            txn->resp_body.enc.proc = NULL;
             txn->flags.te = TE_NONE;
         }
     }
 
     /* Compress data */
-    if (txn->resp_body.enc || txn->flags.te & ~TE_CHUNKED) {
+    if (txn->resp_body.enc.proc || txn->flags.te & ~TE_CHUNKED) {
         unsigned flags = 0;
 
         if (code) flags |= COMPRESS_START;
         if (last_chunk) flags |= COMPRESS_END;
 
-        if (txn->resp_body.enc == CE_BR) {
-            if (brotli_compress(txn, flags, buf, len) < 0) {
-                fatal("Brotli: Error while compressing data", EX_SOFTWARE);
-            }
-        }
-        else if (zlib_compress(txn, flags, buf, len) < 0) {
-            fatal("zlib: Error while compressing data", EX_SOFTWARE);
+        if (txn->resp_body.enc.proc(txn, flags, buf, len) < 0) {
+            fatal("Error while compressing data", EX_SOFTWARE);
         }
 
         buf = txn->zbuf.s;
@@ -4457,7 +4551,8 @@ static int meth_get(struct transaction_t *txn,
                     resp_body->type = mtype->type;
                     if (!mtype->compressible) {
                         /* Never compress non-compressible resources */
-                        txn->resp_body.enc = CE_IDENTITY;
+                        txn->resp_body.enc.type = CE_IDENTITY;
+                        txn->resp_body.enc.proc = NULL;
                         txn->flags.te = TE_NONE;
                         txn->flags.vary &= ~VARY_AE;
                     }

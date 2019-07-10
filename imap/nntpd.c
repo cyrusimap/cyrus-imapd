@@ -3430,7 +3430,7 @@ static int mvgroup(message_data_t *msg)
     if (r) return r;
 
     r = mboxlist_renamemailbox(mbentry, newmailboxname, NULL, 0,
-                               newsmaster, newsmaster_authstate, 0, 0, 0, 0);
+                               newsmaster, newsmaster_authstate, 0, 0, 0, 0, 0);
     mboxlist_entry_free(&mbentry);
 
     /* XXX check body of message for useful MIME parts */

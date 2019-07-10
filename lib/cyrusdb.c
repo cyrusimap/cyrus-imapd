@@ -674,3 +674,60 @@ HIDDEN int cyrusdb_generic_unlink(const char *fname, int flags __attribute__((un
     return 0;
 }
 
+EXPORTED const char *cyrusdb_strerror(int r)
+{
+    const char *err = "unknown error";
+
+    switch (r) {
+    case CYRUSDB_OK:
+        err = "not an error";
+        break;
+
+    case CYRUSDB_DONE:
+        err = "done";
+        break;
+
+    case CYRUSDB_IOERROR:
+        err = "IO error";
+        break;
+
+    case CYRUSDB_AGAIN:
+        err = "again";
+        break;
+
+    case CYRUSDB_EXISTS:
+        err = "item exists";
+        break;
+
+    case CYRUSDB_INTERNAL:
+        err = "internal error";
+        break;
+
+    case CYRUSDB_NOTFOUND:
+        err = "item not found";
+        break;
+
+    case CYRUSDB_LOCKED:
+        err = "locked";
+        break;
+
+    case CYRUSDB_NOTIMPLEMENTED:
+        err = "action not implemented";
+        break;
+
+    case CYRUSDB_FULL:
+        err = "no space available";
+        break;
+
+    case CYRUSDB_READONLY:
+        err = "database is readonly";
+        break;
+
+    default:
+        err = "not a cyrusdb error";
+        break;
+    }
+
+    return err;
+}
+

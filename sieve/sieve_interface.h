@@ -84,6 +84,8 @@ typedef int sieve_get_environment(void *script_context,
                                   const char *keyname, char **res);
 typedef int sieve_get_include(void *script_context, const char *script,
                               int isglobal, char *fpath, size_t size);
+typedef void sieve_logger(void *script_context, void *message_context,
+                          const char *text);
 typedef int sieve_list_validator(void *interp_context, const char *list);
 typedef int sieve_list_comparator(const char *text, size_t tlen,
                                   const char *list, strarray_t *match_vars,
@@ -190,6 +192,7 @@ void sieve_register_imapflags(sieve_interp_t *interp, const strarray_t *mark);
 void sieve_register_notify(sieve_interp_t *interp,
                            sieve_callback *f, const strarray_t *methods);
 void sieve_register_include(sieve_interp_t *interp, sieve_get_include *f);
+void sieve_register_logger(sieve_interp_t *interp, sieve_logger *f);
 
 /* add the callbacks for messages. again, undefined if used after
    sieve_script_parse */

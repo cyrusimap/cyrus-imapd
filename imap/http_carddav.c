@@ -336,7 +336,7 @@ static struct meth_params carddav_params = {
     { CARDDAV_UID_CONFLICT, &carddav_copy },
     NULL,                                       /* No special DELETE handling */
     &carddav_get,
-    { CARDDAV_LOCATION_OK, MBTYPE_ADDRESSBOOK },
+    { CARDDAV_LOCATION_OK, MBTYPE_ADDRESSBOOK, NULL },
     NULL,                                       /* No PATCH handling */
     { POST_ADDMEMBER | POST_SHARE, NULL,        /* No special POST handling */
       { NS_CARDDAV, "addressbook-data", &carddav_import } },

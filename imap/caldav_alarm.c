@@ -773,7 +773,7 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
     vpatch = vpatch_from_peruserdata(value);
 
     /* Apply VPATCH to a clone of the iCalendar resource */
-    myical = icalcomponent_new_clone(prock->ical);
+    myical = icalcomponent_clone(prock->ical);
     icalcomponent_apply_vpatch(myical, vpatch, NULL, NULL);
     icalcomponent_free(vpatch);
 

@@ -60,12 +60,15 @@
 #define JMAP_URN_MAIL       "urn:ietf:params:jmap:mail"
 #define JMAP_URN_SUBMISSION "urn:ietf:params:jmap:submission"
 #define JMAP_URN_VACATION   "urn:ietf:params:jmap:vacationresponse"
-#define JMAP_URN_CONTACTS   "urn:ietf:params:jmap:contacts"
-#define JMAP_URN_CALENDARS  "urn:ietf:params:jmap:calendars"
 #define JMAP_URN_WEBSOCKET  "urn:ietf:params:jmap:websocket"
 
-#define JMAP_QUOTA_EXTENSION   "http://cyrusimap.org/ns/quota"
-#define JMAP_SEARCH_EXTENSION   "http://cyrusimap.org/ns/search"
+#define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
+#define JMAP_CALENDARS_EXTENSION     "https://cyrusimap.org/ns/jmap/calendars"
+#define JMAP_MAIL_EXTENSION          "https://cyrusimap.org/ns/jmap/mail"
+#define JMAP_PERFORMANCE_EXTENSION   "https://cyrusimap.org/ns/jmap/performance"
+#define JMAP_DEBUG_EXTENSION         "https://cyrusimap.org/ns/jmap/debug"
+#define JMAP_QUOTA_EXTENSION         "https://cyrusimap.org/ns/jmap/quota"
+#define JMAP_SEARCH_EXTENSION        "https://cyrusimap.org/ns/jmap/search"
 
 extern struct namespace jmap_namespace;
 
@@ -81,16 +84,6 @@ enum {
     JMAP_NUM_LIMITS  /* MUST be last */
 };
 
-typedef struct {
-    hash_table methods;
-    strarray_t can_use;
-    json_t *capabilities;
-    long limits[JMAP_NUM_LIMITS];
-} jmap_settings_t;
-
-extern int jmap_api(struct transaction_t *txn, json_t **res,
-                    jmap_settings_t *settings);
-
 typedef struct jmap_req {
     const char           *method;
     const char           *userid;
@@ -103,7 +96,6 @@ typedef struct jmap_req {
     struct transaction_t *txn;
     struct mboxname_counters counters;
 
-    int do_perf;
     double real_start;
     double user_start;
     double sys_start;
@@ -121,13 +113,29 @@ typedef struct jmap_req {
      * an error. */
     int force_openmbox_rw;
 
-    /* Owned by JMAP HTTP handler */
+    /* Internal state */
     ptrarray_t *mboxes;
     hash_table *mboxrights;
     hash_table *created_ids;
     ptrarray_t *method_calls;
-    const strarray_t *capabilities;
+    const strarray_t *using_capabilities;
 } jmap_req_t;
+
+typedef struct {
+    hash_table methods;
+    json_t *server_capabilities;
+    long limits[JMAP_NUM_LIMITS];
+} jmap_settings_t;
+
+typedef struct {
+    const char *name;
+    const char *capability;
+    int (*proc)(struct jmap_req *req);
+    int flags;
+} jmap_method_t;
+
+extern int jmap_api(struct transaction_t *txn, json_t **res,
+                    jmap_settings_t *settings);
 
 extern int jmap_initreq(jmap_req_t *req);
 extern void jmap_finireq(jmap_req_t *req);
@@ -136,22 +144,20 @@ extern int jmap_is_using(jmap_req_t *req, const char *capa);
 
 #define JMAP_SHARED_CSTATE 1 << 0
 
-typedef struct {
-    const char *name;
-    int (*proc)(struct jmap_req *req);
-    int flags;
-} jmap_method_t;
-
 /* Protocol implementations */
-extern void jmap_user_init(jmap_settings_t *settings);
+extern void jmap_core_init(jmap_settings_t *settings);
 extern void jmap_mail_init(jmap_settings_t *settings);
 extern void jmap_contact_init(jmap_settings_t *settings);
 extern void jmap_calendar_init(jmap_settings_t *settings);
+extern void jmap_vacation_init(jmap_settings_t *settings);
 
-extern void jmap_user_capabilities(jmap_settings_t *settings);
-extern void jmap_mail_capabilities(jmap_settings_t *settings);
-extern void jmap_contact_capabilities(jmap_settings_t *settings);
-extern void jmap_calendar_capabilities(jmap_settings_t *settings);
+extern void jmap_core_capabilities(json_t *account_capabilities);
+extern void jmap_mail_capabilities(json_t *account_capabilities);
+extern void jmap_contact_capabilities(json_t *account_capabilities);
+extern void jmap_calendar_capabilities(json_t *account_capabilities);
+extern void jmap_vacation_capabilities(json_t *account_capabilities);
+
+extern void jmap_accounts(json_t *accounts, json_t *primary_accounts);
 
 /* Request-scoped mailbox cache */
 extern int  jmap_openmbox(jmap_req_t *req, const char *name,
@@ -253,12 +259,15 @@ extern int jmap_parse_strings(json_t *arg,
 
 typedef struct jmap_property {
     const char *name;
+    const char *capability;
     unsigned flags;
 } jmap_property_t;
 
 enum {
     JMAP_PROP_SERVER_SET = (1<<0),
-    JMAP_PROP_IMMUTABLE  = (1<<1)
+    JMAP_PROP_IMMUTABLE  = (1<<1),
+    JMAP_PROP_SKIP_GET   = (1<<2), // skip in Foo/get if not requested by client
+    JMAP_PROP_ALWAYS_GET = (1<<3)  // always include in Foo/get
 };
 
 extern const jmap_property_t *jmap_property_find(const char *name,
@@ -279,12 +288,16 @@ struct jmap_get {
     json_t *not_found;
 };
 
-extern void jmap_get_parse(json_t *jargs, struct jmap_parser *parser,
-                           jmap_req_t *req, const jmap_property_t valid_props[],
-                           int (*args_parse)(const char *, json_t *,
-                                             struct jmap_parser *, void *),
-                           void *args_rock, struct jmap_get *get,
-                           int allow_null_ids, json_t **err);
+typedef int jmap_args_parse_cb(jmap_req_t *, struct jmap_parser *,
+                               const char *arg, json_t *val, void *);
+
+extern void jmap_get_parse(jmap_req_t *req, struct jmap_parser *parser,
+                           const jmap_property_t valid_props[],
+                           int allow_null_ids,
+                           jmap_args_parse_cb args_parse, void *args_rock,
+                           struct jmap_get *get,
+                           json_t **err);
+
 extern void jmap_get_fini(struct jmap_get *get);
 extern json_t *jmap_get_reply(struct jmap_get *get);
 
@@ -309,10 +322,9 @@ struct jmap_set {
     json_t *not_destroyed;
 };
 
-extern void jmap_set_parse(json_t *jargs, struct jmap_parser *parser,
-                           int (*args_parse)(const char *, json_t *,
-                                             struct jmap_parser *, void *),
-                           void *args_rock,
+extern void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
+                           const jmap_property_t valid_props[],
+                           jmap_args_parse_cb args_parse, void *args_rock,
                            struct jmap_set *set, json_t **err);
 extern void jmap_set_fini(struct jmap_set *set);
 extern json_t *jmap_set_reply(struct jmap_set *set);
@@ -333,10 +345,8 @@ struct jmap_changes {
     json_t *destroyed;
 };
 
-extern void jmap_changes_parse(json_t *jargs, struct jmap_parser *parser,
-                               int (*args_parse)(const char *, json_t *,
-                                                 struct jmap_parser *, void *),
-                               void *args_rock,
+extern void jmap_changes_parse(jmap_req_t *req, struct jmap_parser *parser,
+                               jmap_args_parse_cb args_parse, void *args_rock,
                                struct jmap_changes *changes, json_t **err);
 extern void jmap_changes_fini(struct jmap_changes *changes);
 extern json_t *jmap_changes_reply(struct jmap_changes *changes);
@@ -356,9 +366,8 @@ struct jmap_copy {
     json_t *not_created;
 };
 
-extern void jmap_copy_parse(json_t *jargs,
-                            struct jmap_parser *parser, jmap_req_t *req,
-                            void (*validate_object)(json_t *obj, json_t **err),
+extern void jmap_copy_parse(jmap_req_t *req, struct jmap_parser *parser,
+                            jmap_args_parse_cb args_parse, void *args_rock,
                             struct jmap_copy *copy, json_t **err);
 extern void jmap_copy_fini(struct jmap_copy *copy);
 extern json_t *jmap_copy_reply(struct jmap_copy *copy);
@@ -385,12 +394,14 @@ struct jmap_query {
     json_t *ids;
 };
 
-typedef void jmap_filter_parse_cb(json_t *filter, struct jmap_parser *parser,
-                                  json_t *unsupported, void *rock);
+typedef void jmap_filter_parse_cb(jmap_req_t *req, struct jmap_parser *parser,
+                                  json_t *filter, json_t *unsupported,
+                                  void *rock, json_t **err);
 
-extern void jmap_filter_parse(json_t *filter, struct jmap_parser *parser,
-                              jmap_filter_parse_cb parse_condition,
-                              json_t *unsupported, void *rock);
+extern void jmap_filter_parse(jmap_req_t *req, struct jmap_parser *parser,
+                              json_t *filter, json_t *unsupported,
+                              jmap_filter_parse_cb parse_condition, void *cond_rock,
+                              json_t **err /* fatal, non-parsing error */);
 
 struct jmap_comparator {
     const char *property;
@@ -398,18 +409,18 @@ struct jmap_comparator {
     const char *collation;
 };
 
-typedef int jmap_comparator_parse_cb(struct jmap_comparator *comp, void *rock);
+typedef int jmap_comparator_parse_cb(jmap_req_t *req, struct jmap_comparator *comp,
+                                     void *rock, json_t **err);
 
-extern void jmap_parse_comparator(json_t *jsort, struct jmap_parser *parser,
-                                  jmap_comparator_parse_cb comp_cb,
-                                  json_t *unsupported, void *rock);
+extern void jmap_comparator_parse(jmap_req_t *req, struct jmap_parser *parser,
+                                  json_t *jsort, json_t *unsupported,
+                                  jmap_comparator_parse_cb comp_cb, void *comp_rock,
+                                  json_t **err);
 
-extern void jmap_query_parse(json_t *jargs, struct jmap_parser *parser,
+extern void jmap_query_parse(jmap_req_t *req, struct jmap_parser *parser,
+                             jmap_args_parse_cb args_parse, void *args_rock,
                              jmap_filter_parse_cb filter_cb, void *filter_rock,
-                             jmap_comparator_parse_cb comp_cb, void *sort_rock,
-                             int (*args_parse)(const char *, json_t *,
-                                               struct jmap_parser *, void *),
-                             void *args_rock,
+                             jmap_comparator_parse_cb comp_cb, void *comp_rock,
                              struct jmap_query *query, json_t **err);
 
 extern void jmap_query_fini(struct jmap_query *query);
@@ -435,16 +446,11 @@ struct jmap_querychanges {
     json_t *added;
 };
 
-extern void jmap_querychanges_parse(json_t *jargs,
+extern void jmap_querychanges_parse(jmap_req_t *req,
                                     struct jmap_parser *parser,
-                                    jmap_filter_parse_cb filter_cb,
-                                    void *filter_rock,
-                                    jmap_comparator_parse_cb comp_cb,
-                                    void *sort_rock,
-                                    int (*args_parse)(const char *, json_t *,
-                                                      struct jmap_parser *,
-                                                      void *),
-                                    void *args_rock,
+                                    jmap_args_parse_cb args_parse, void *args_rock,
+                                    jmap_filter_parse_cb filter_cb, void *filter_rock,
+                                    jmap_comparator_parse_cb comp_cb, void *sort_rock,
                                     struct jmap_querychanges *query,
                                     json_t **err);
 

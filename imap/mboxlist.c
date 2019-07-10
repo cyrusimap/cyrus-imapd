@@ -583,7 +583,7 @@ static int _find_specialuse(const mbentry_t *mbentry, void *rock)
     annotatemore_lookup(mbentry->name, "/specialuse", d->userid, &attrib);
 
     if (attrib.len) {
-        strarray_t *uses = strarray_split(buf_cstring(&attrib), " ", 0);
+        strarray_t *uses = strarray_split(buf_cstring(&attrib), NULL, 0);
         if (strarray_find_case(uses, d->use, 0) >= 0)
             d->mboxname = xstrdup(mbentry->name);
         strarray_free(uses);
@@ -1587,11 +1587,20 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     }
 
     if (!isadmin && mbname_userid(mbname)) {
-        struct buf attrib = BUF_INITIALIZER;
-        annotatemore_lookup(mbname_intname(mbname), "/specialuse", mbname_userid(mbname), &attrib);
-        if (attrib.len)
-            r = IMAP_MAILBOX_SPECIALUSE;
-        buf_free(&attrib);
+        const char *protect = config_getstring(IMAPOPT_SPECIALUSE_PROTECT);
+        if (protect) {
+            struct buf attrib = BUF_INITIALIZER;
+            annotatemore_lookup(mbname_intname(mbname), "/specialuse", mbname_userid(mbname), &attrib);
+            if (attrib.len) {
+                strarray_t *check = strarray_split(protect, NULL, STRARRAY_TRIM);
+                strarray_t *uses = strarray_split(buf_cstring(&attrib), NULL, 0);
+                if (strarray_intersect_case(uses, check))
+                    r = IMAP_MAILBOX_SPECIALUSE;
+                strarray_free(uses);
+                strarray_free(check);
+            }
+            buf_free(&attrib);
+        }
         if (r) goto done;
     }
 
@@ -1644,7 +1653,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
                                localonly /* local_only */,
                                force, 1,
                                keep_intermediaries,
-                               0 /* move_subscription */);
+                               0 /* move_subscription */, 0 /* silent */);
 
     if (!r && !keep_intermediaries) {
         /* in theory this should take the modseq from the renamed mailbox, but we don't
@@ -1710,11 +1719,20 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     }
 
     if (!isadmin && mbname_userid(mbname)) {
-        struct buf attrib = BUF_INITIALIZER;
-        annotatemore_lookup(mbname_intname(mbname), "/specialuse", mbname_userid(mbname), &attrib);
-        if (attrib.len)
-            r = IMAP_MAILBOX_SPECIALUSE;
-        buf_free(&attrib);
+        const char *protect = config_getstring(IMAPOPT_SPECIALUSE_PROTECT);
+        if (protect) {
+            struct buf attrib = BUF_INITIALIZER;
+            annotatemore_lookup(mbname_intname(mbname), "/specialuse", mbname_userid(mbname), &attrib);
+            if (attrib.len) {
+                strarray_t *check = strarray_split(protect, NULL, STRARRAY_TRIM);
+                strarray_t *uses = strarray_split(buf_cstring(&attrib), NULL, 0);
+                if (strarray_intersect_case(uses, check))
+                    r = IMAP_MAILBOX_SPECIALUSE;
+                strarray_free(uses);
+                strarray_free(check);
+            }
+            buf_free(&attrib);
+        }
         if (r) goto done;
     }
 
@@ -1825,24 +1843,35 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
 
 static int _rename_check_specialuse(const char *oldname, const char *newname)
 {
+    const char *protect = config_getstring(IMAPOPT_SPECIALUSE_PROTECT);
+    if (!protect) return 0;
+
     mbname_t *old = mbname_from_intname(oldname);
     mbname_t *new = mbname_from_intname(newname);
     struct buf attrib = BUF_INITIALIZER;
     int r = 0;
     if (mbname_userid(old))
         annotatemore_lookup(oldname, "/specialuse", mbname_userid(old), &attrib);
+
     /* we have specialuse? */
     if (attrib.len) {
-        /* then target must be a single-depth mailbox too */
-        if (strarray_size(mbname_boxes(new)) != 1)
-            r = IMAP_MAILBOX_SPECIALUSE;
-        /* and have a userid as well */
-        if (!mbname_userid(new))
-            r = IMAP_MAILBOX_SPECIALUSE;
-        /* and not be deleted */
-        if (mbname_isdeleted(new))
-            r = IMAP_MAILBOX_SPECIALUSE;
+        strarray_t *check = strarray_split(protect, NULL, STRARRAY_TRIM);
+        strarray_t *uses = strarray_split(buf_cstring(&attrib), NULL, 0);
+        if (strarray_intersect_case(uses, check)) {
+            /* then target must be a single-depth mailbox too */
+            if (strarray_size(mbname_boxes(new)) != 1)
+                r = IMAP_MAILBOX_SPECIALUSE;
+            /* and have a userid as well */
+            if (!mbname_userid(new))
+                r = IMAP_MAILBOX_SPECIALUSE;
+            /* and not be deleted */
+            if (mbname_isdeleted(new))
+                r = IMAP_MAILBOX_SPECIALUSE;
+        }
+        strarray_free(uses);
+        strarray_free(check);
     }
+
     mbname_free(&new);
     mbname_free(&old);
     buf_free(&attrib);
@@ -1899,7 +1928,7 @@ static int dorename(const mbentry_t *mbentry, void *rock)
                                /*mboxevent*/NULL,
                                text->local_only, /*forceuser*/1, text->ignorequota,
                                text->keep_intermediaries,
-                               text->move_subscription);
+                               text->move_subscription, /*silent*/0);
 
     return r;
 }
@@ -1946,7 +1975,7 @@ EXPORTED int mboxlist_renametree(const char *oldname, const char *newname,
                                auth_state,
                                mboxevent,
                                local_only, forceuser, ignorequota,
-                               keep_intermediaries, move_subscription);
+                               keep_intermediaries, move_subscription, /*silent*/0);
     mboxlist_entry_free(&mbentry);
 
     // special-case only children exist
@@ -1971,7 +2000,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
                                     struct mboxevent *mboxevent,
                                     int local_only, int forceuser,
                                     int ignorequota, int keep_intermediaries,
-                                    int move_subscription)
+                                    int move_subscription, int silent)
 {
     int r;
     const char *oldname = mbentry->name;
@@ -2124,7 +2153,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
     /* Rename the actual mailbox */
     r = mailbox_rename_copy(oldmailbox, newname, newpartition, uidvalidity,
                             isusermbox ? userid : NULL, ignorequota,
-                            &newmailbox);
+                            silent, &newmailbox);
 
     if (r) goto done;
 

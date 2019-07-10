@@ -53,6 +53,12 @@
  * change to timeval_us in times.c to print microsecond. */
 enum timeval_precision { timeval_s, timeval_ms, timeval_us };
 
+/* Date-time value with offset time */
+struct offsettime {
+    struct tm tm;
+    long tm_off;  /* offset in seconds */
+};
+
 /*
  * RFC822 datetime format
  */
@@ -71,6 +77,8 @@ int time_from_iso8601(const char *s, time_t *);
 int time_to_iso8601(time_t t, char *buf, size_t len, int withsep);
 int timeval_to_iso8601(const struct timeval *t, enum timeval_precision tv_prec,
                        char *buf, size_t len);
+int offsettime_from_iso8601(const char *s, struct offsettime *);
+int offsettime_to_iso8601(struct offsettime *t, char *buf, size_t len, int withsep);
 
 /*
  * RFC3501 datetime format
@@ -93,7 +101,9 @@ enum datetime_parse_mode {
     DATETIME_FULL,
 };
 #define RFC5322_DATETIME_MAX 32 /* 32 because we support 5 digit year format */
-int time_to_rfc5322(time_t date, char *buf, size_t len);
 int time_from_rfc5322(const char *s, time_t *date, enum datetime_parse_mode mode);
+int time_to_rfc5322(time_t date, char *buf, size_t len);
+int offsettime_from_rfc5322(const char *s, struct offsettime *t, enum datetime_parse_mode mode);
+int offsettime_to_rfc5322(struct offsettime *t, char *buf, size_t len);
 
 #endif /* __CYRUS__TIME_H__ */

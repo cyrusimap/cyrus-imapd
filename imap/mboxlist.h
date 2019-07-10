@@ -205,7 +205,8 @@ int mboxlist_renamemailbox(const mbentry_t *mbentry, const char *newname,
                            const struct auth_state *auth_state,
                            struct mboxevent *mboxevent,
                            int local_only, int forceuser, int ignorequota,
-                           int keep_intermediaries, int move_subscription);
+                           int keep_intermediaries, int move_subscription,
+                           int silent);
 
 /* change ACL */
 int mboxlist_setacl(const struct namespace *namespace, const char *name,

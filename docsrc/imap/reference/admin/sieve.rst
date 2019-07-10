@@ -179,7 +179,7 @@ Sieve has a lot of `extensions <http://www.iana.org/assignments/sieve-extensions
 * Ihave Extension :rfc:`5463`
 * Delivering to Special-Use Mailboxes `Draft special-use RFC <http://tools.ietf.org/html/draft-bosch-sieve-special-use-01>`_
 * IMAP flag Extension `Draft imap flags RFC <http://tools.ietf.org/html/draft-ietf-sieve-imapflags-05>`_
-* Body Extension `Draft body extension RFC <http://tools.ietf.org/html/draft-ietf-sieve-body-02>`_
+* Body Extension :rfc:`5173`
 
 Note that the final RFCs of these last sieve extensions have significant changes that are not currently supported.
 

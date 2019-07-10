@@ -1,0 +1,48 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.0.10 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 3.0 series.
+
+    Refer to the Cyrus IMAP 3.0.0 Release Notes for important information
+    about the 3.0 series, including upgrading instructions.
+
+Download via HTTPS:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.10/cyrus-imapd-3.0.10.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.10/cyrus-imapd-3.0.10.tar.gz.sig
+
+
+.. _relnotes-3.0.10-changes:
+
+Changes Since 3.0.9
+===================
+
+Release changes
+---------------
+
+We're trialing using the Github Releases feature.  If you have trouble downloading
+this release, please report this to the mailing lists.  Thanks!
+
+Security fixes
+--------------
+
+* Fixed CVE-2019-11356: buffer overrun in httpd
+
+Bug fixes
+---------
+
+* Fixed :issue:`2621`: Now builds correctly with ClamAV 0.101 (thanks Philippe
+  Kueck)
+* Fixed :issue:`2678`: imap/conversations.h can now be included in C++ sources
+  (thanks Дилян Палаузов)
+* Fixed :issue:`2679`: libcyrus_imap.pc is now installed by ``make install``
+  (thanks Дилян Палаузов)
+* Fixed :issue:`2712`: Cyrus::IMAP::Admin::rename() no longer produces warning
+  when called without optional partition parameter
+* Fixed :issue:`2729`: conversation subject normalisation now treats
+  non-breaking space characters the same as other whitespace

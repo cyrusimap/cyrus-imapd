@@ -2841,7 +2841,7 @@ EXPORTED void icalcomponent_add_required_timezones(icalcomponent *ical)
 
         /* Clone tz to overwrite its TZID property. */
         icalcomponent *tzcomp =
-            icalcomponent_new_clone(icaltimezone_get_component(tz));
+            icalcomponent_clone(icaltimezone_get_component(tz));
         icalproperty *tzprop =
             icalcomponent_get_first_property(tzcomp, ICAL_TZID_PROPERTY);
         icalproperty_set_tzid(tzprop, icaltimezone_get_location(tz));

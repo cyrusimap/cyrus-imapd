@@ -77,7 +77,7 @@ static void test_parse_trivial(void)
 
     /* check cacheheaders */
     CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
-    CU_ASSERT(strstr(body.cacheheaders.s, "Norman") != NULL);
+    CU_ASSERT(strstr(buf_cstring(&body.cacheheaders), "Norman") != NULL);
 
     message_free_body(&body);
 }
@@ -182,7 +182,7 @@ static void test_parse_simple(void)
 
     /* check cacheheaders */
     CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
-    CU_ASSERT(strstr(body.cacheheaders.s, "Norman") != NULL);
+    CU_ASSERT(strstr(buf_cstring(&body.cacheheaders), "Norman") != NULL);
 
     message_free_body(&body);
 }
@@ -368,7 +368,7 @@ static void test_mime_trivial(void)
 
     /* check cacheheaders */
     CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
-    CU_ASSERT(strstr(body.cacheheaders.s, "Norman") != NULL);
+    CU_ASSERT(strstr(buf_cstring(&body.cacheheaders), "Norman") != NULL);
     CU_ASSERT_PTR_NULL(body.subpart[0].cacheheaders.s);
 
     message_free_body(&body);
@@ -507,7 +507,7 @@ HTML_PART "\r\n"
 
     /* check cacheheaders */
     CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
-    CU_ASSERT(strstr(body.cacheheaders.s, "Norman") != NULL);
+    CU_ASSERT(strstr(buf_cstring(&body.cacheheaders), "Norman") != NULL);
     CU_ASSERT_PTR_NULL(body.subpart[0].cacheheaders.s);
     CU_ASSERT_PTR_NULL(body.subpart[1].cacheheaders.s);
     CU_ASSERT_PTR_NULL(body.subpart[2].cacheheaders.s);
@@ -814,7 +814,7 @@ HTML_PART "\r\n"
 
     /* check cacheheaders */
     CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
-    CU_ASSERT(strstr(body.cacheheaders.s, "Norman") != NULL);
+    CU_ASSERT(strstr(buf_cstring(&body.cacheheaders), "Norman") != NULL);
     CU_ASSERT_PTR_NULL(body.subpart[0].cacheheaders.s);
     CU_ASSERT_PTR_NULL(body.subpart[1].cacheheaders.s);
     CU_ASSERT_PTR_NULL(body.subpart[2].cacheheaders.s);
@@ -1190,19 +1190,19 @@ static void test_cache_appleheaders(void)
 
     /* check cacheheaders */
     CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "X-Universally-Unique-Identifier"));
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "fake-uuid"));
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "X-Uniform-Type-Identifier"));
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "fake-uti"));
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "X-Apple-Base-Url"));
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "fake-baseurl"));
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "X-Apple-Mail-Remote-Attachments"));
-    CU_ASSERT_PTR_NOT_NULL(strstr(body.cacheheaders.s, "fake-remoteattach"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "X-Universally-Unique-Identifier"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "fake-uuid"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "X-Uniform-Type-Identifier"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "fake-uti"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "X-Apple-Base-Url"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "fake-baseurl"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "X-Apple-Mail-Remote-Attachments"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(buf_cstring(&body.cacheheaders), "fake-remoteattach"));
 
     /* make sure we're not caching every x- header, just the ones we like */
     CU_ASSERT_EQUAL(mailbox_cached_header("X-Dont-Cache-This"), BIT32_MAX);
-    CU_ASSERT_PTR_NULL(strstr(body.cacheheaders.s, "X-Dont-Cache-This"));
-    CU_ASSERT_PTR_NULL(strstr(body.cacheheaders.s, "dont-cache-this"));
+    CU_ASSERT_PTR_NULL(strstr(buf_cstring(&body.cacheheaders), "X-Dont-Cache-This"));
+    CU_ASSERT_PTR_NULL(strstr(buf_cstring(&body.cacheheaders), "dont-cache-this"));
 
     message_free_body(&body);
 }

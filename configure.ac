@@ -537,11 +537,25 @@ dnl
 dnl Search engines - Xapian
 dnl
 
-xapian_flavor=none
+xapian_cjk_tokens=none
 AC_ARG_ENABLE(xapian,
         [AS_HELP_STRING([--enable-xapian], [enable Xapian support])],,
         [enable_xapian=no])
 if test "x$enable_xapian" != xno ; then
+    AC_ARG_VAR(RM_BIN, [Location of rm])
+    AC_PATH_PROG(RM_BIN, [rm], [])
+    AS_IF([test -z "$RM_BIN"],[
+        AC_MSG_ERROR([Can't find the 'rm' binary])
+    ])
+    AC_DEFINE_UNQUOTED([RM_BIN], ["$RM_BIN"], [Path to 'rm' binary])
+
+    AC_ARG_VAR(RSYNC_BIN, [Location of rsync])
+    AC_PATH_PROG(RSYNC_BIN, [rsync], [])
+    AS_IF([test -z "$RSYNC_BIN"],[
+        AC_MSG_ERROR([Can't find the 'rsync' binary])
+    ])
+    AC_DEFINE_UNQUOTED([RSYNC_BIN], ["$RSYNC_BIN"], [Path to 'rsync' binary])
+
     AC_ARG_VAR(XAPIAN_CONFIG, [Location of xapian-config])
     AC_PATH_PROG(XAPIAN_CONFIG, xapian-config, [])
     if test -z "$XAPIAN_CONFIG"; then
@@ -590,20 +604,20 @@ if test "x$enable_xapian" != xno ; then
         ORIG_CXXFLAGS=$CXXFLAGS
         LDFLAGS="$LDFLAGS $XAPIAN_LIBS"
         CXXFLAGS="$CXXFLAGS $XAPIAN_CXXFLAGS"
-        AC_MSG_CHECKING([for Xapian cyruslibs extensions])
+        AC_MSG_CHECKING([for Xapian cjk word tokenization])
         AC_LINK_IFELSE(
             [AC_LANG_PROGRAM(
                 [[#include <xapian.h>]],
-                [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS; (void) cjk_flags; ]])],
-            [xapian_cyrusexts="yes"],
-            [xapian_cyrusexts="no"])
-        AC_MSG_RESULT($xapian_cyrusexts)
-        if test $xapian_cyrusexts = yes; then
-            AC_DEFINE([USE_XAPIAN_CYRUS_EXTENSIONS], [], [Use Xapian cyruslibs extensions?])
-            xapian_flavor=cyruslibs
+                [[unsigned cjk_flags = Xapian::TermGenerator::FLAG_CJK_WORDS | Xapian::QueryParser::FLAG_CJK_WORDS | Xapian::MSet::SNIPPET_CJK_WORDS; (void) cjk_flags; ]])],
+            [xapian_cjkwords="yes"],
+            [xapian_cjkwords="no"])
+        AC_MSG_RESULT($xapian_cjkwords)
+        if test $xapian_cjkwords = yes; then
+            AC_DEFINE([USE_XAPIAN_CJK_WORDS], [], [Use Xapian CJK word tokenizer, rather than n-grams?])
+            xapian_cjk_tokens=words
         else
-            AC_MSG_NOTICE([Your Xapian does not support the Cyrus extensions for Xapian. Consider installing cyruslibs Xapian])
-            xapian_flavor=vanilla
+            AC_MSG_NOTICE([Your Xapian does not support CJK word tokenization. Consider installing a recent Xapian >= 1.4.11])
+            xapian_cjk_tokens=ngrams
         fi
         LDFLAGS=$ORIG_LDFLAGS
         CXXFLAGS=$ORIG_CXXFLAGS
@@ -614,7 +628,7 @@ if test "x$enable_xapian" != xno ; then
     AC_SUBST(XAPIAN_VERSION)
 fi
 AM_CONDITIONAL([USE_XAPIAN], [test "${enable_xapian}" != "no"])
-AC_DEFINE_UNQUOTED([XAPIAN_FLAVOR], ["$xapian_flavor"], [Which Xapian are we running on?])
+AC_DEFINE_UNQUOTED([XAPIAN_CJK_TOKENS], ["$xapian_cjk_tokens"], [Which Xapian CJK tokenzation are we using?])
 
 
 AM_CONDITIONAL([SQUATTER],
@@ -1433,20 +1447,20 @@ AC_SUBST([LIBCHARDET_CFLAGS])
 AM_CONDITIONAL([USE_LIBCHARDET], [test "x$with_chardet" = xyes])
 
 dnl
-dnl Check for curl library, needed for charset detection support
+dnl Check for cld2 library
 dnl
-AC_ARG_WITH([curl],
-	[AS_HELP_STRING([--without-curl], [ignore presence of curl library and disable it])],
+AC_ARG_WITH([cld2],
+	[AS_HELP_STRING([--without-cld2], [ignore presence of cld2 library and disable it])],
     [],
-    [with_curl=yes])
-AS_IF([test "x$with_curl" = "xyes"],
-	[ PKG_CHECK_MODULES([CURL], [libcurl],
-		[ AC_DEFINE(HAVE_CURL, [], [Build with curl library support])
-		  with_curl=yes ],
-		with_curl=no)])
-AC_SUBST([CURL_LIBS])
-AC_SUBST([CURL_CFLAGS])
-AM_CONDITIONAL([HAVE_CURL], [test "x$with_curl" = xyes])
+    [with_cld2=yes])
+AS_IF([test "x$with_cld2" = "xyes"],
+	[ PKG_CHECK_MODULES([CLD2], [cld2],
+		[ AC_DEFINE(HAVE_CLD2, [], [Build with cld2 library support])
+		  with_cld2=yes ],
+          with_cld2=no)])
+AC_SUBST([CLD2_LIBS])
+AC_SUBST([CLD2_CFLAGS])
+AM_CONDITIONAL([HAVE_CLD2], [test "x$with_cld2" = xyes])
 
 dnl
 dnl Set pidfile location
@@ -1618,6 +1632,10 @@ dnl
                 AC_DEFINE(HAVE_RECUR_ITERATOR_START,[],
                         [Do we have support for setting start point of recurrences?]))
 
+        AC_CHECK_LIB(ical, icalcomponent_clone,
+                AC_DEFINE(HAVE_NEW_CLONE_API,[],
+                        [Do we have support for new clone API?]))
+
         PKG_CHECK_VAR(CYRUS_TIMEZONES_ZONEINFO_DIR, cyrus-timezones, zoneinfo_dir, [
                  AC_SUBST(CYRUS_TIMEZONES_ZONEINFO_DIR)
                  with_cyrus_timezones=yes
@@ -1659,6 +1677,14 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 ],
                 AC_MSG_NOTICE([httpd will not have support for Brotli compression.  Consider installing libbrotli]))
 
+
+        PKG_CHECK_MODULES([ZSTD], [libzstd >= 1.4.0], [
+                AC_DEFINE(HAVE_ZSTD,[],
+                        [Build Zstandard compression support into httpd?])
+                with_zstd=yes
+                ],
+                AC_MSG_NOTICE([httpd will not have support for Zstandard compression.  Consider installing libzstd]))
+
         dnl httpd needs libmath in a few places
         dnl XXX really should check for this properly but AC_SEARCH_LIBS/AC_CHECK_LIB
         dnl XXX break under -Werror(!)
@@ -1672,8 +1698,8 @@ dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedu
                 ],
                 AC_MSG_NOTICE([tzdist will not have geolocation support.  Consider installing shapelib]))
 
-        HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${SHAPELIB_CFLAGS} ${CYRUS_TIMEZONES_CFLAGS}"
-        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
+        HTTP_CPPFLAGS="${XML2_CFLAGS} ${SQLITE3_CFLAGS} ${ICAL_CFLAGS} ${GLIB_CFLAGS} ${JANSSON_CFLAGS} ${NGHTTP2_CFLAGS} ${WSLAY_CFLAGS} ${BROTLI_CFLAGS} ${ZSTD_CFLAGS} ${SHAPELIB_CFLAGS} ${CYRUS_TIMEZONES_CFLAGS}"
+        HTTP_LIBS="${XML2_LIBS} ${SQLITE3_LIBS} ${ICAL_LIBS} ${GLIB_LIBS} ${JANSSON_LIBS} ${NGHTTP2_LIBS} ${WSLAY_LIBS} ${BROTLI_LIBS} ${ZSTD_LIBS} ${SHAPELIB_LIBS} ${LIB_MATH}"
 fi
 AC_SUBST(HTTP_CPPFLAGS)
 AC_SUBST(HTTP_LIBS)
@@ -2008,12 +2034,17 @@ AC_ARG_ENABLE(unit-tests,
 
 dnl Unit tests need the CUnit library, so check if we
 dnl have both the header and the library.
-if test "$enable_unit_tests" = "yes" ; then
+if test "x$enable_unit_tests" != xno ; then
     AC_CHECK_LIB(cunit,CU_initialize_registry,found_lib=yes,found_lib=no)
     AC_CHECK_HEADER([CUnit/CUnit.h],found_hdr=yes,found_hdr=no)
     if test "$found_lib$found_hdr" != "yesyes" ; then
+        if test "x$enable_unit_tests" = xyes; then
+            AC_MSG_ERROR([Unit tests explicitly requested, but CUnit library is not installed])
+        fi
         AC_MSG_NOTICE([Disabling unit tests because the required CUnit library is not installed])
         enable_unit_tests=no
+    else
+        enable_unit_tests=yes
     fi
     AC_CHECK_HEADER([CUnit/Basic.h],
         AC_CHECK_TYPE([CU_SetUpFunc],AC_DEFINE(HAVE_CU_SETUPFUNC,[],[Do we have CU_SetUpFunc?]),,
@@ -2076,6 +2107,53 @@ if test "x$use_sqlite" = xyes; then
   fi
 fi
 AM_CONDITIONAL([USE_SQLITE], [test "x$use_sqlite" = xyes])
+
+dnl compiler feature checking
+AC_MSG_CHECKING(for function nesting)
+AC_CACHE_VAL(cyrus_cv_function_nesting, AC_TRY_COMPILE([
+#include <stdlib.h>
+void func(void *data, size_t nmemb, size_t size,
+          int (*compar)(const void *, const void *, void *),
+          void *thunk)
+{
+    int compar_func(const void *a, const void *b)
+    {
+        return compar(a, b, thunk);
+    }
+    qsort(data, nmemb, size, compar_func);
+}
+int cval(const void *a, const void *b, void *prev)
+{
+  char **ref = (char **)prev;
+  char *ac = (char *)a;
+  char *bc = (char *)b;
+  if (*ac < *bc) return -1;
+  if (*ac == *bc) return 0;
+  *ref = bc;
+  return 1;
+}
+],[
+    char *dest;
+    func("abc", 3, 1, cval, &dest);
+],cyrus_cv_function_nesting=yes, cyrus_cv_function_nesting=no))
+AC_MSG_RESULT($cyrus_cv_function_nesting)
+if test "$cyrus_cv_function_nesting" = "yes"; then
+  AC_DEFINE(HAVE_FUNCTION_NESTING,[],[Do we have function nesting support?])
+fi
+
+AC_MSG_CHECKING(for optimisation support)
+AC_CACHE_VAL(cyrus_cv_declare_optimize, AC_TRY_COMPILE([
+#include <stdlib.h>
+static inline int numcmp(int n1, int n2)
+    __attribute__((pure, always_inline, optimize("-O3")));
+static int numcmp(int n1, int n2) { return n1 - n2; }
+],[
+    if (numcmp(1, 2)) exit(1);
+],cyrus_cv_declare_optimize=yes, cyrus_cv_declare_optimize=no))
+AC_MSG_RESULT($cyrus_cv_declare_optimize)
+if test "$cyrus_cv_declare_optimize" = "yes"; then
+  AC_DEFINE(HAVE_DECLARE_OPTIMIZE,[],[Do we have support for optimize __attribute__?])
+fi
 
 
 dnl CRC32 optimisations
@@ -2400,12 +2478,13 @@ External dependencies:
    nghttp2:            $with_nghttp2
    wslay:              $with_wslay
    brotli:             $with_brotli
+   zstd:               $with_zstd
    xml2:               $with_xml2
    ical:               $with_ical
    icu4c:              $with_icu4c
    shapelib:           $with_shapelib
    chardet:            $with_chardet
-   curl:               $with_curl
+   cld2:               $with_cld2
 
 Database support:
    mysql:              $with_mysql
@@ -2416,7 +2495,7 @@ Database support:
 Search engine:
    squat:              $enable_squat
    xapian:             $enable_xapian
-   xapian_flavor:      $xapian_flavor
+   xapian_cjk_tokens:  $xapian_cjk_tokens
 
 Hardware support:
    SSE4.2:             $cyrus_cv_sse42
@@ -2438,4 +2517,5 @@ Build info:
    cxxflags:           $CXXFLAGS
    libs:               $LIBS
    ldflags:            $LDFLAGS
+   unit tests (cunit): $enable_unit_tests
 "

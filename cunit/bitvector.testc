@@ -513,4 +513,44 @@ static void test_count(void)
 #undef TESTCASE
 }
 
+static void test_andeq_valgrind(void)
+{
+    bitvector_t a = BV_INITIALIZER;
+    bitvector_t b = BV_INITIALIZER;
+
+    bv_set(&a, 5);
+    bv_set(&b, 65535);
+
+    bv_set(&a, 257);
+    bv_set(&b, 257);
+
+    bv_andeq(&a, &b);
+    CU_ASSERT_EQUAL(257, bv_next_set(&a, 0));
+    CU_ASSERT_EQUAL(-1, bv_next_set(&a, 257+1));
+
+    bv_fini(&a);
+    bv_fini(&b);
+}
+
+static void test_oreq_valgrind(void)
+{
+    bitvector_t a = BV_INITIALIZER;
+    bitvector_t b = BV_INITIALIZER;
+
+    bv_set(&a, 5);
+    bv_set(&b, 65535);
+
+    bv_set(&a, 257);
+    bv_set(&b, 257);
+
+    bv_oreq(&a, &b);
+    CU_ASSERT_EQUAL(5, bv_next_set(&a, 0));
+    CU_ASSERT_EQUAL(257, bv_next_set(&a, 5+1));
+    CU_ASSERT_EQUAL(65535, bv_next_set(&a, 257+1));
+    CU_ASSERT_EQUAL(-1, bv_next_set(&a, 65535+1));
+
+    bv_fini(&a);
+    bv_fini(&b);
+}
+
 /* vim: set ft=c: */

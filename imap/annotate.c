@@ -412,6 +412,32 @@ EXPORTED void setentryatt(struct entryattlist **l, const char *entry,
     }
 }
 
+EXPORTED char *dumpentryatt(const struct entryattlist *l)
+{
+    struct buf buf = BUF_INITIALIZER;
+
+    const struct entryattlist *ee;
+    buf_printf(&buf, "(");
+    const char *sp = "";
+    const struct attvaluelist *av;
+    for (ee = l ; ee ; ee = ee->next) {
+        buf_printf(&buf, "%s%s (", sp, ee->entry);
+        const char *insp = "";
+        for (av = ee->attvalues ; av ; av = av->next) {
+            buf_printf(&buf, "%s%s %s", insp, av->attrib, buf_cstring(&av->value));
+            insp = " ";
+        }
+        buf_printf(&buf, ")");
+        sp = " ";
+    }
+    buf_printf(&buf, ")");
+
+    char *res = buf_release(&buf);
+    buf_free(&buf);
+
+    return res;
+}
+
 EXPORTED void clearentryatt(struct entryattlist **l, const char *entry,
                    const char *attrib)
 {
@@ -1000,6 +1026,9 @@ static int find_p(void *rock, const char *key, size_t keylen,
     if (r < 0)
         return 0;
 
+    if (!userid)
+        return 0;
+
     if (frock->uid &&
         frock->uid != ANNOTATE_ANY_UID &&
         frock->uid != uid)
@@ -1373,8 +1402,6 @@ static void output_entryatt(annotate_state_t *state, const char *entry,
     const char *mboxname;
     char key[MAX_MAILBOX_PATH+1]; /* XXX MAX_MAILBOX_NAME + entry + userid */
     struct buf buf = BUF_INITIALIZER;
-
-    if (!userid) userid = "";
 
     /* We don't put any funny interpretations on NULL values for
      * some of these anymore, now that the dirty hacks are gone. */
@@ -1806,8 +1833,6 @@ static int rw_cb(const char *mailbox __attribute__((unused)),
 {
     annotate_state_t *state = (annotate_state_t *)rock;
 
-    if (!userid) userid = "";
-
     if (!userid[0] || !strcmp(userid, state->userid)) {
         output_entryatt(state, entry, userid, value);
     }
@@ -1856,7 +1881,8 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         annotation_get_fromdb,
         annotation_set_todb,
         NULL
-    },{
+    },
+    {
         /* RFC5257 defines /comment with both .shared & .priv */
         "/comment",
         ATTRIB_TYPE_STRING,
@@ -1866,7 +1892,52 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         annotation_get_fromdb,
         annotation_set_todb,
         NULL
-    },{ NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL }
+    },
+    {
+        /* we use 'basethrid' to support split threads */
+        IMAP_ANNOT_NS "basethrid",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+        0,
+        annotation_get_fromdb,
+        annotation_set_todb,
+        NULL
+    },
+    {
+        /* prior to version 12, there was no storage for thrid, so it became an annotation */
+        IMAP_ANNOT_NS "thrid",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+        0,
+        annotation_get_fromdb,
+        annotation_set_todb,
+        NULL
+    },
+    {
+        /* prior to version 15, there was no storage for savedate, so it became an annotation */
+        IMAP_ANNOT_NS "savedate",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+        0,
+        annotation_get_fromdb,
+        annotation_set_todb,
+        NULL
+    },
+    {
+        /* prior to version 16, there was no storage for createdmodseq, so it became an annotation */
+        IMAP_ANNOT_NS "createdmodseq",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+        0,
+        annotation_get_fromdb,
+        annotation_set_todb,
+        NULL
+    },
+    { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL }
 };
 
 static const annotate_entrydesc_t message_db_entry =
@@ -2710,6 +2781,14 @@ static int write_entry(struct mailbox *mailbox,
         unsigned char flags = 0;
         if (!value->len || value->s == NULL) {
             flags |= ANNOTATE_FLAG_DELETED;
+        }
+        else {
+            // this is only here to allow cleanup of invalid values in the past...
+            // the calling of this API with a NULL "userid" is bogus, because that's
+            // supposed to be reserved for the make_key of prefixes - but there has
+            // been API abuse in the past, so some of these are in the wild.  *sigh*.
+            // Don't allow new ones to be written
+            if (!userid) goto out;
         }
         make_entry(&data, value, modseq, flags);
 

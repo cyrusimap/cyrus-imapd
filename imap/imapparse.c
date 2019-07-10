@@ -83,9 +83,11 @@ EXPORTED int getword(struct protstream *in, struct buf *buf)
  * Parse an xstring
  * (astring, nstring or string based on type)
  */
+#ifdef HAVE_DECLARE_OPTIMIZE
 EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
                         struct buf *buf, enum getxstring_flags flags)
     __attribute__((optimize("-O3")));
+#endif
 EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
                         struct buf *buf, enum getxstring_flags flags)
 {
@@ -717,7 +719,7 @@ static void string_match(search_expr_t *parent, const char *val,
 
     e = search_expr_new(parent, op);
     e->attr = attr;
-    e->value.s = charset_convert(val, base->charset, charset_flags);
+    e->value.s = charset_convert(val, base->charset, charset_flags|CHARSET_KEEPCASE);
     if (!e->value.s) {
         e->op = SEOP_FALSE;
         e->attr = NULL;
@@ -785,11 +787,11 @@ static void date_range(search_expr_t *parent, const char *aname,
 
     e = search_expr_new(parent, SEOP_LT);
     e->attr = attr;
-    e->value.u = end;
+    e->value.t = end;
 
     e = search_expr_new(parent, SEOP_GE);
     e->attr = attr;
-    e->value.u = start;
+    e->value.t = start;
 }
 
 /*
@@ -879,7 +881,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c == EOF) goto baddate;
             e = search_expr_new(parent, SEOP_LT);
             e->attr = search_attr_find("internaldate");
-            e->value.u = start;
+            e->value.t = start;
         }
         else if (!strcmp(criteria.s, "bcc")) {      /* RFC 3501 */
             if (c != ' ') goto missingarg;
@@ -1019,7 +1021,7 @@ static int get_search_criterion(struct protstream *pin,
 
             e = search_expr_new(parent, SEOP_MATCH);
             e->attr = search_attr_find_field(arg.s);
-            e->value.s = charset_convert(arg2.s, base->charset, charset_flags);
+            e->value.s = charset_convert(arg2.s, base->charset, charset_flags|CHARSET_KEEPCASE);
             if (!e->value.s) {
                 e->op = SEOP_FALSE;
                 e->attr = NULL;
@@ -1114,9 +1116,9 @@ static int get_search_criterion(struct protstream *pin,
             e = search_expr_new(parent, SEOP_LE);
             e->attr = search_attr_find("internaldate");
 #if SIZEOF_TIME_T >= 8
-            e->value.u = now - uu;
+            e->value.t = now - uu;
 #else
-            e->value.u = now - u;
+            e->value.t = now - u;
 #endif
         }
         else if (!strcmp(criteria.s, "on")) {   /* RFC 3501 */
@@ -1184,7 +1186,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c == EOF) goto baddate;
             e = search_expr_new(parent, SEOP_LT);
             e->attr = search_attr_find("sentdate");
-            e->value.u = start;
+            e->value.t = start;
         }
         else if (!strcmp(criteria.s, "senton")) {       /* RFC 3501 */
             if (c != ' ') goto missingarg;
@@ -1198,7 +1200,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c == EOF) goto baddate;
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("sentdate");
-            e->value.u = start;
+            e->value.t = start;
         }
         else if (!strcmp(criteria.s, "since")) {    /* RFC 3501 */
             if (c != ' ') goto missingarg;
@@ -1206,7 +1208,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c == EOF) goto baddate;
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("internaldate");
-            e->value.u = start;
+            e->value.t = start;
         }
         else if (!strcmp(criteria.s, "smaller")) {  /* RFC 3501 */
             if (c != ' ') goto missingarg;
@@ -1340,9 +1342,9 @@ static int get_search_criterion(struct protstream *pin,
             e = search_expr_new(parent, SEOP_GE);
             e->attr = search_attr_find("internaldate");
 #if SIZEOF_TIME_T >= 8
-            e->value.u = now - uu;
+            e->value.t = now - uu;
 #else
-            e->value.u = now - u;
+            e->value.t = now - u;
 #endif
         }
         else goto badcri;

@@ -311,8 +311,12 @@ static void match(search_builder_t *bx, int part, const char *str)
     top = opstack_push(bb, /*doesn't matter*/0);
     bb->part_types = doctypes_by_part[part];
 
-    r = squat_search_execute(bb->index, str, strlen(str),
+    charset_t utf8 = charset_lookupname("utf-8");
+    char *mystr = charset_convert(str, utf8, charset_flags);
+    r = squat_search_execute(bb->index, mystr, strlen(mystr),
                              fill_with_hits, bb);
+    free(mystr);
+    charset_free(&utf8);
     if (r != SQUAT_OK) {
         if (squat_get_last_error() == SQUAT_ERR_SEARCH_STRING_TOO_SHORT)
             goto out; /* The rest of the search is still viable */
@@ -966,6 +970,11 @@ out:
     return r;
 }
 
+static int squat_charset_flags(int flags)
+{
+    return flags & ~CHARSET_KEEPCASE;
+}
+
 static search_text_receiver_t *begin_update(int verbose)
 {
     SquatReceiverData *d;
@@ -980,6 +989,7 @@ static search_text_receiver_t *begin_update(int verbose)
     d->super.end_part = end_part;
     d->super.end_message = end_message;
     d->super.end_mailbox = end_mailbox;
+    d->super.index_charset_flags = squat_charset_flags;
 
     d->fd = -1;
     d->verbose = verbose;
@@ -1018,5 +1028,6 @@ const struct search_engine squat_search_engine = {
     /* compact */NULL,
     /* deluser */NULL,
     /* check_config */NULL,
+    /* list_lang_stats */NULL
 };
 

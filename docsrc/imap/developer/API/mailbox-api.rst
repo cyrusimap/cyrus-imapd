@@ -145,6 +145,7 @@ with that name.
     int mailbox_rename_copy(struct mailbox *oldmailbox,
                             const char *newname, const char *newpart,
                             const char *userid, int ignorequota,
+                            int silent,
                             struct mailbox **newmailboxptr);
 
 Very similar to mailbox\_create - the new mailbox is created with an

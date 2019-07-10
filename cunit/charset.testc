@@ -396,13 +396,13 @@ static void test_decode_mimeheader(void)
     CU_ASSERT_STRING_EQUAL(s, HTML_4b);
     free(s);
 
-    flags = CHARSET_SNIPPET;
+    flags = CHARSET_KEEPCASE;
     s = charset_decode_mimeheader(HTML_4, flags);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, HTML_4c);
     free(s);
 
-    flags = CHARSET_SNIPPET|CHARSET_ESCAPEHTML;
+    flags = CHARSET_KEEPCASE|CHARSET_ESCAPEHTML;
     s = charset_decode_mimeheader(HTML_4, flags);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, HTML_4d);
@@ -489,7 +489,7 @@ static void test_mimeheader_badcharset(void)
 
 static void test_mimeheader_mergeqwords(void)
 {
-    int flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE | CHARSET_SNIPPET;
+    int flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE | CHARSET_KEEPCASE;
 
     static const char SPLIT_Q[] = "=?utf-8?q?=E2=82?= =?utf-8?q?=AC?=";
     static const char SPLIT_B[] = "=?utf-8?b?wg==?= =?utf-8?b?oUhvbGEsc2XD?= =?utf-8?b?sW9yIQ==?=";
@@ -1073,19 +1073,19 @@ static void test_extract(void)
     TESTCASE("A&nonesuch;B", "us-ascii", ENCODING_NONE, "HTML", "A"UTF8_REPLACEMENT"B");
 
     /* HTML: Strip HTML from snippet and don't canonify */
-    flags = CHARSET_SNIPPET;
+    flags = CHARSET_KEEPCASE;
     TESTCASE("<b>Photo</b> <em>booth</em>", "us-ascii", ENCODING_NONE, "HTML", "Photo booth");
 
     /* HTML: Strip HTML from snippet, there is nothing to escape */
-    flags = CHARSET_SNIPPET|CHARSET_ESCAPEHTML;
+    flags = CHARSET_KEEPCASE|CHARSET_ESCAPEHTML;
     TESTCASE("<b>Photo</b>", "us-ascii", ENCODING_NONE, "HTML", "Photo");
 
     /* PLAIN: Generate snippet, don't escape HTML by default */
-    flags = CHARSET_SNIPPET;
+    flags = CHARSET_KEEPCASE;
     TESTCASE("<b>Photo</b>", "us-ascii", ENCODING_NONE, "PLAIN", "<b>Photo</b>");
 
     /* PLAIN: Generate snippet with escaped HTML */
-    flags = CHARSET_SNIPPET|CHARSET_ESCAPEHTML;
+    flags = CHARSET_KEEPCASE|CHARSET_ESCAPEHTML;
     TESTCASE("<b>Photo</b>", "us-ascii", ENCODING_NONE, "PLAIN", "&lt;b&gt;Photo&lt;/b&gt;");
 }
 #undef TESTCASE

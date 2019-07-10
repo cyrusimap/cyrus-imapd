@@ -68,6 +68,7 @@
 #include "sieve/sieve.h"
 #include "imap/mailbox.h"
 #include "imap/message.h"
+#include "imap/spool.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
@@ -84,7 +85,7 @@ typedef struct {
     struct message_content content;
 
     int cache_full;
-    struct hash_table cache;
+    hdrcache_t cache;
     strarray_t *env_from;
     strarray_t *env_to;
 } message_data_t;
@@ -93,136 +94,16 @@ typedef struct {
     const char *host;
     const char *remotehost;
     const char *remoteip;
+    int edited_header;
 } script_data_t;
-
-/* take a list of headers, pull the first one out and return it in
-   name and contents.
-
-   returns 0 on success, negative on failure */
-typedef enum {
-    HDR_NAME_START,
-    HDR_NAME,
-    COLON,
-    HDR_CONTENT_START,
-    HDR_CONTENT
-} state;
-
-static int parseheader(FILE *f, char **headname, char **contents)
-{
-    int c;
-    static struct buf name = BUF_INITIALIZER;
-    static struct buf body = BUF_INITIALIZER;
-    state s = HDR_NAME_START;
-
-    buf_reset(&name);
-    buf_reset(&body);
-
-    /* there are two ways out of this loop, both via gotos:
-       either we successfully read a character (got_header)
-       or we hit an error (ph_error) */
-    while ((c = getc(f))) {     /* examine each character */
-        switch (s) {
-        case HDR_NAME_START:
-            if (c == '\r' || c == '\n') {
-                /* no header here! */
-                goto ph_error;
-            }
-            if (!isalpha(c))
-                goto ph_error;
-            buf_putc(&name, TOLOWER(c));
-            s = HDR_NAME;
-            break;
-
-        case HDR_NAME:
-            if (c == ' ' || c == '\t' || c == ':') {
-                buf_cstring(&name);
-                s = (c == ':' ? HDR_CONTENT_START : COLON);
-                break;
-            }
-            if (iscntrl(c)) {
-                goto ph_error;
-            }
-            buf_putc(&name, TOLOWER(c));
-            break;
-
-        case COLON:
-            if (c == ':') {
-                s = HDR_CONTENT_START;
-            } else if (c != ' ' && c != '\t') {
-                goto ph_error;
-            }
-            break;
-
-        case HDR_CONTENT_START:
-            if (c == ' ' || c == '\t') /* eat the whitespace */
-                break;
-            buf_reset(&body);
-            s = HDR_CONTENT;
-            /* falls through! */
-        case HDR_CONTENT:
-            if (c == '\r' || c == '\n') {
-                int peek = getc(f);
-
-                /* we should peek ahead to see if it's folded whitespace */
-                if (c == '\r' && peek == '\n') {
-                    c = getc(f);
-                } else {
-                    c = peek; /* single newline separator */
-                }
-                if (c != ' ' && c != '\t') {
-                    /* this is the end of the header */
-                    buf_cstring(&body);
-                    ungetc(c, f);
-                    goto got_header;
-                }
-                /* http://www.faqs.org/rfcs/rfc2822.html
-                 *
-                 * > Unfolding is accomplished by simply removing any CRLF
-                 * > that is immediately followed by WSP
-                 *
-                 * So keep the actual WSP character
-                 */
-            }
-            /* just an ordinary character */
-            buf_putc(&body, c);
-            break;
-        }
-    }
-
-    /* if we fall off the end of the loop, we hit some sort of error
-       condition */
-
- ph_error:
-    if (headname != NULL) *headname = NULL;
-    if (contents != NULL) *contents = NULL;
-    return -1;
-
- got_header:
-    if (headname != NULL) *headname = xstrdup(name.s);
-    if (contents != NULL) *contents = xstrdup(body.s);
-
-    return 0;
-}
 
 static void fill_cache(message_data_t *m)
 {
-    rewind(m->data);
+    struct protstream *pin = prot_new(fileno(m->data), 0);
 
-    /* let's fill that header cache */
-    for (;;) {
-        char *name, *body;
-        strarray_t *contents;
-
-        if (parseheader(m->data, &name, &body) < 0) {
-            break;
-        }
-        /* put it in the hash table */
-        contents = (strarray_t *)hash_lookup(name, &m->cache);
-        if (!contents)
-            contents = hash_insert(name, strarray_new(), &m->cache);
-        strarray_appendm(contents, body);
-        free(name);
-    }
+    prot_rewind(pin);
+    spool_fill_hdrcache(pin, NULL, m->cache, NULL);
+    prot_free(pin);
 
     m->cache_full = 1;
 }
@@ -249,8 +130,6 @@ static int getenvelope(void *mc, const char *field, const char ***contents)
 static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
-    strarray_t *contents;
-    char *head;
 
     *body = NULL;
 
@@ -258,22 +137,58 @@ static int getheader(void *v, const char *phead, const char ***body)
         fill_cache(m);
     }
 
-    /* copy header parameter so we can mangle it */
-    head = xstrdup(phead);
-    lcase(head);
-
-    /* check the cache */
-    contents = (strarray_t *)hash_lookup(head, &m->cache);
-    if (contents)
-        *body = (const char **) contents->data;
-
-    free(head);
+    *body = spool_getheader(m->cache, phead);
 
     if (*body) {
         return SIEVE_OK;
     } else {
         return SIEVE_FAIL;
     }
+}
+
+/* adds the header "head" with body "body" to msg */
+static int addheader(void *sc, void *mc,
+                     const char *head, const char *body, int index)
+{
+    script_data_t *sd = (script_data_t *)sc;
+    message_data_t *m = (message_data_t *) mc;
+
+    if (head == NULL || body == NULL) return SIEVE_FAIL;
+
+    if (index < 0) {
+        printf("appending header '%s: %s'\n", head, body);
+        spool_append_header(xstrdup(head), xstrdup(body), m->cache);
+    }
+    else {
+        printf("prepending header '%s: %s'\n", head, body);
+        spool_prepend_header(xstrdup(head), xstrdup(body), m->cache);
+    }
+
+    sd->edited_header = 1;
+
+    return SIEVE_OK;
+}
+
+/* deletes (instance "index" of) the header "head" from msg */
+static int deleteheader(void *sc, void *mc, const char *head, int index)
+{
+    script_data_t *sd = (script_data_t *)sc;
+    message_data_t *m = (message_data_t *) mc;
+
+    if (head == NULL) return SIEVE_FAIL;
+
+    if (!index) {
+        printf("removing all headers '%s'\n", head);
+        spool_remove_header(xstrdup(head), m->cache);
+    }
+    else {
+        printf("removing header '%s[%d]'\n", head, index);
+        spool_remove_header_instance(xstrdup(head), index, m->cache);
+    }
+
+    sd->edited_header = 1;
+
+    return SIEVE_OK;
 }
 
 static int getenvironment(void *sc, const char *keyname, char **res)
@@ -334,14 +249,14 @@ static message_data_t *new_msg(FILE *msg, int size, const char *name)
     m->data = msg;
     m->size = size;
     m->name = xstrdup(name);
-    construct_hash_table(&m->cache, 1000, 0);
+    m->cache = spool_new_hdrcache();
 
     return m;
 }
 
 static void free_msg(message_data_t *m)
 {
-    free_hash_table(&m->cache, (void(*)(void*))strarray_free);
+    spool_free_hdrcache(m->cache);
     free(m->name);
     free(m);
 }
@@ -487,6 +402,11 @@ static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
+void sieve_log(void *sc __attribute__((unused)), void *mc __attribute__((unused)), const char *text)
+{
+    printf("sieve log: text=%s\n", text);
+}
+
 static int mysieve_error(int lineno, const char *msg,
                          void *i __attribute__((unused)),
                          void *s __attribute__((unused)))
@@ -540,8 +460,8 @@ static int autorespond(void *ac, void *ic __attribute__((unused)),
     return SIEVE_FAIL;
 }
 
-static int send_response(void *ac, void *ic, void *sc __attribute__((unused)),
-                         void *mc, const char **errmsg __attribute__((unused)))
+static int send_response(void *ac, void *ic, void *sc,
+                         void *mc, const char **errmsg)
 {
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -549,6 +469,12 @@ static int send_response(void *ac, void *ic, void *sc __attribute__((unused)),
 
     printf("echo '%s' | mail -s '%s' '%s' for message '%s' (from: %s)\n",
            src->msg, src->subj, src->addr, m->name, src->fromaddr);
+
+    if (src->fcc.mailbox) {
+        message_data_t vmc = { .name = "vacation-autoresponse" };
+
+        (void) fileinto(&src->fcc, ic, sc, &vmc, errmsg);
+    }
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
@@ -589,7 +515,7 @@ int main(int argc, char *argv[])
     static strarray_t e_from = STRARRAY_INITIALIZER;
     static strarray_t e_to = STRARRAY_INITIALIZER;
     char *alt_config = NULL;
-    script_data_t sd = { NULL, "", NULL };
+    script_data_t sd = { NULL, "", NULL, 0 };
     FILE *f;
 
     /* prevent crashes if -e or -t aren't specified */
@@ -660,7 +586,7 @@ int main(int argc, char *argv[])
         char *err = NULL;
 
         if (fread(magic, BYTECODE_MAGIC_LEN, 1, f) <= 0 ||
-            memcmp(magic, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN != 0)) {
+            memcmp(magic, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN) != 0) {
             /* Not Sieve bytecode - try to parse as text */
 
             if (sieve_script_parse_only(f, &err, &s) != SIEVE_OK) {
@@ -719,10 +645,13 @@ int main(int argc, char *argv[])
     sieve_register_keep(i, keep);
     sieve_register_size(i, getsize);
     sieve_register_header(i, getheader);
+    sieve_register_addheader(i, addheader);
+    sieve_register_deleteheader(i, deleteheader);
     sieve_register_envelope(i, getenvelope);
     sieve_register_environment(i, getenvironment);
     sieve_register_body(i, getbody);
     sieve_register_include(i, getinclude);
+    sieve_register_logger(i, sieve_log);
 
     res = sieve_register_vacation(i, &vacation);
     if (res != SIEVE_OK) {

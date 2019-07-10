@@ -294,10 +294,18 @@ EXPORTED int append_commit(struct appendstate *as)
 /* may return non-zero, indicating an internal error of some sort. */
 EXPORTED int append_abort(struct appendstate *as)
 {
+    int i;
     if (as->s == APPEND_DONE) return 0;
+
+    // nuke any files that we've created
+    for (i = 0; i < as->nummsg; i++) {
+        mailbox_cleanup_uid(as->mailbox, as->baseuid + i, "ZZ");
+    }
+
+    int r = mailbox_abort(as->mailbox);
     append_free(as);
 
-    return 0;
+    return r;
 }
 
 /*
@@ -1066,8 +1074,10 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 
     /* Apply the annotations */
     if (user_annots || system_annots) {
+        /* pretend to be admin to avoid ACL checks when writing annotations here, since there calling user
+         * didn't control them */
         if (user_annots) {
-           r = msgrecord_annot_set_auth(msgrec, as->isadmin, as->userid, as->auth_state);
+           r = msgrecord_annot_set_auth(msgrec, /*isadmin*/1, as->userid, as->auth_state);
            if (!r) r = msgrecord_annot_writeall(msgrec, user_annots);
         }
         if (r) {
@@ -1075,7 +1085,6 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
             goto out;
         }
         if (system_annots) {
-            /* pretend to be admin to avoid ACL checks */
            r = msgrecord_annot_set_auth(msgrec, /*isadmin*/1, as->userid, as->auth_state);
            if (!r) r = msgrecord_annot_writeall(msgrec, system_annots);
         }
@@ -1091,6 +1100,7 @@ out:
     freeentryatts(system_annots);
     if (r) {
         append_abort(as);
+        if (msgrec) msgrecord_unref(&msgrec);
         return r;
     }
 
@@ -1275,15 +1285,6 @@ HIDDEN int append_run_annotator(struct appendstate *as,
     }
     if (r) goto out;
 
-    /* Reset internal flags */
-    uint32_t internal_flags;
-    r = msgrecord_get_internalflags(msgrec, &internal_flags);
-    if (!r) {
-        internal_flags &= (FLAGS_INTERNAL);
-        r = msgrecord_set_internalflags(msgrec, internal_flags);
-    }
-    if (r) goto out;
-
     /* Reset user flags */
     uint32_t user_flags[MAX_USER_FLAGS/32];
     memset(user_flags, 0, sizeof(user_flags));
@@ -1299,26 +1300,17 @@ HIDDEN int append_run_annotator(struct appendstate *as,
         goto out;
     }
 
-    if (user_annots) {
-        r = msgrecord_annot_set_auth(msgrec, as->isadmin, as->userid, as->auth_state);
-        if (r) goto out;
-        r = msgrecord_annot_writeall(msgrec, user_annots);
-        if (r) {
-            syslog(LOG_ERR, "Setting user annotations from annotator "
-                            "callout failed (%s)",
-                            error_message(r));
-            goto out;
-        }
-    }
     if (system_annots) {
         /* pretend to be admin to avoid ACL checks */
         r = msgrecord_annot_set_auth(msgrec, /*isadmin*/1, as->userid, as->auth_state);
         if (r) goto out;
         r = msgrecord_annot_writeall(msgrec, system_annots);
         if (r) {
+            char *res = dumpentryatt(system_annots);
             syslog(LOG_ERR, "Setting system annotations from annotator "
-                            "callout failed (%s)",
-                            error_message(r));
+                            "callout failed (%s) for %s",
+                            error_message(r), res);
+            free(res);
             goto out;
         }
     }
@@ -1580,10 +1572,17 @@ static int append_addseen(struct mailbox *mailbox,
         return 0;
 
     r = seen_open(userid, SEEN_CREATE, &seendb);
-    if (r) goto done;
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: append_addseen failed to open DB for %s", userid);
+        goto done;
+    }
 
     r = seen_lockread(seendb, mailbox->uniqueid, &sd);
-    if (r) goto done;
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: append_addseen failed to read old value for %s/%s",
+               userid, mailbox->uniqueid);
+        goto done;
+    }
 
     /* parse the old sequence */
     oldseen = seqset_parse(sd.seenuids, NULL, mailbox->i.last_uid);
@@ -1597,6 +1596,10 @@ static int append_addseen(struct mailbox *mailbox,
     /* and write it out */
     sd.lastchange = time(NULL);
     r = seen_write(seendb, mailbox->uniqueid, &sd);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: append_addseen failed to write new value for %s/%s",
+               userid, mailbox->uniqueid);
+    }
     seen_freedata(&sd);
 
  done:

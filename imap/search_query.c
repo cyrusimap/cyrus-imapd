@@ -84,8 +84,7 @@ EXPORTED search_query_t *search_query_new(struct index_state *state,
     return query;
 }
 
-static void folder_free_partids(uint64_t key __attribute__((unused)), void *data,
-                                void *rock __attribute__((unused)))
+static void folder_free_partids(void *data)
 {
     strarray_free((strarray_t*)data);
 }
@@ -96,9 +95,8 @@ static void folder_free(void *data)
 
     free(folder->mboxname);
     bv_fini(&folder->uids);
-    bv_fini(&folder->unchecked_uids);
-    hashu64_enumerate(&folder->partids, folder_free_partids, NULL);
-    free_hashu64_table(&folder->partids, NULL);
+    bv_fini(&folder->found_uids);
+    free_hashu64_table(&folder->partids, folder_free_partids);
     free(folder);
 }
 
@@ -304,7 +302,7 @@ static search_folder_t *query_get_valid_folder(search_query_t *query,
             * remember the uidvalidity for later */
             if (folder->uidvalidity) {
                 bv_clearall(&folder->uids);
-                bv_clearall(&folder->unchecked_uids);
+                bv_clearall(&folder->found_uids);
             }
             folder->uidvalidity = uidvalidity;
         }
@@ -458,16 +456,17 @@ static void query_load_msgdata(search_query_t *query,
 struct subquery_rock {
     search_query_t *query;
     search_subquery_t *sub;
+    int is_excluded;
 };
 
 /*
  * After an indexed subquery is run, we have accumulated a number of
- * unchecked UID hits in folders.  Here we check those UIDs for a) not
+ * found UID hits in folders.  Here we check those UIDs for a) not
  * being deleted since indexing and b) matching any unindexed scan
  * expression.  We also take advantage of having an open index_state to
  * load some MsgData objects and save them to query->merged_msgdata.
  */
-static void subquery_post_indexed(const char *key, void *data, void *rock)
+static void subquery_post_enginesearch(const char *key, void *data, void *rock)
 {
     const char *mboxname = key;
     search_folder_t *folder = data;
@@ -481,7 +480,7 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
     int r = 0;
 
     if (query->error) return;
-    if (!folder->unchecked_dirty) return;
+    if (!folder->found_dirty) return;
 
     if (sub->expr && query->verbose) {
         char *s = search_expr_serialise(sub->expr);
@@ -522,9 +521,11 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
             if (r) goto out;
         }
 
-        /* we only want to look at unchecked UIDs */
-        if (!bv_isset(&folder->unchecked_uids, im->uid))
+        /* we only want to look at found UIDs */
+        if ((!qr->is_excluded && !bv_isset(&folder->found_uids, im->uid)) ||
+             (qr->is_excluded && bv_isset(&folder->found_uids, im->uid))) {
             continue;
+        }
 
         /* moot if already in the uids set */
         if (bv_isset(&folder->uids, im->uid))
@@ -554,7 +555,7 @@ static void subquery_post_indexed(const char *key, void *data, void *rock)
     if (query->sortcrit && nmsgs)
         query_load_msgdata(query, folder, state, msgno_list, nmsgs);
 
-    folder->unchecked_dirty = 0;
+    folder->found_dirty = 0;
     r = 0;
 
 out:
@@ -563,12 +564,26 @@ out:
     if (r) query->error = r;
 }
 
-static void subquery_clear_unchecked(const char *key __attribute__((unused)),
+static int subquery_post_excluded(const mbentry_t *mbentry, void *rock)
+{
+    struct subquery_rock *qr = rock;
+    search_folder_t *folder;
+
+    folder = query_get_valid_folder(qr->query, mbentry->name, 0);
+    if (folder) {
+        folder->found_dirty = 1;
+        subquery_post_enginesearch(mbentry->name, folder, rock);
+    }
+
+    return 0;
+}
+
+static void subquery_clear_found(const char *key __attribute__((unused)),
                                      void *data,
                                      void *rock __attribute__((unused)))
 {
     search_folder_t *folder = data;
-    bv_clearall(&folder->unchecked_uids);
+    bv_clearall(&folder->found_uids);
 }
 
 EXPORTED void search_build_query(search_builder_t *bx, search_expr_t *e)
@@ -609,21 +624,28 @@ EXPORTED void search_build_query(search_builder_t *bx, search_expr_t *e)
     }
 }
 
-static int add_unchecked_uid(const char *mboxname, uint32_t uidvalidity,
+static int add_found_uid(const char *mboxname, uint32_t uidvalidity,
                              uint32_t uid, const strarray_t *partids,
                              void *rock)
 {
-    search_query_t *query = rock;
-    search_folder_t *folder = query_get_valid_folder(query, mboxname, uidvalidity);
+    struct subquery_rock *qr = rock;
+    search_folder_t *folder = query_get_valid_folder(qr->query, mboxname, uidvalidity);
     if (folder) {
-        bv_set(&folder->unchecked_uids, uid);
-        folder->unchecked_dirty = 1;
-        if (partids) {
+        bv_set(&folder->found_uids, uid);
+        folder->found_dirty = 1;
+        if (partids && !qr->is_excluded) {
             if (!folder->partids.size) {
                 if (!construct_hashu64_table(&folder->partids, 4096, 0))
                     return IMAP_INTERNAL;
-                hashu64_insert(uid, strarray_dup(partids), &folder->partids);
             }
+            strarray_t *have_partids = hashu64_lookup(uid, &folder->partids);
+            if (have_partids) {
+                int i;
+                for (i = 0; i < strarray_size(partids); i++) {
+                    strarray_add(have_partids, strarray_nth(partids, i));
+                }
+            }
+            else hashu64_insert(uid, strarray_dup(partids), &folder->partids);
         }
     }
     return 0;
@@ -635,6 +657,7 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
 //     const char *mboxname = key;
     search_subquery_t *sub = data;
     search_query_t *query = rock;
+    search_expr_t *excluded = NULL;
     search_builder_t *bx;
     struct subquery_rock qr;
     int r;
@@ -651,22 +674,67 @@ static void subquery_run_indexed(const char *key __attribute__((unused)),
     if (query->multiple) opts |= SEARCH_MULTIPLE;
     if (query->attachments_in_any) opts |= SEARCH_ATTACHMENTS_IN_ANY;
 
+    /* If the subquery is NOT(x) or AND(NOT(x)..(NOT(y))) then
+     * it's likely that we will get lots of results to look up
+     * in conversations.db. We mitigate that by running the
+     * inverse query on the index, and check any uids that do
+     * _not_ match the query result. */
+    if (sub->indexed->op == SEOP_AND) {
+        search_expr_t *child = sub->indexed->children;
+        while (child && child->op == SEOP_NOT) {
+            child = child->next;
+        }
+        if (!child) {
+            excluded = search_expr_new(NULL, SEOP_OR);
+            search_expr_t *dupl = search_expr_duplicate(sub->indexed);
+            child = dupl->children;
+            while (child) {
+                search_expr_t *expr = child->children;
+                search_expr_detach(child, expr);
+                search_expr_append(excluded, expr);
+                child = child->next;
+            }
+            search_expr_free(dupl);
+        }
+    }
+    else if (sub->indexed->op == SEOP_NOT) {
+        excluded = search_expr_duplicate(sub->indexed->children);
+    }
+
     bx = search_begin_search(query->state->mailbox, opts);
     if (!bx) {
         r = IMAP_INTERNAL;
         goto out;
     }
-    search_build_query(bx, sub->indexed);
-    r = bx->run(bx, add_unchecked_uid, query);
-    search_end_search(bx);
-    if (r) goto out;
 
     qr.query = query;
     qr.sub = sub;
-    hash_enumerate(&query->folders_by_name, subquery_post_indexed, &qr);
-    hash_enumerate(&query->folders_by_name, subquery_clear_unchecked, NULL);
+    qr.is_excluded = excluded != NULL;
+    search_build_query(bx, excluded ? excluded : sub->indexed);
+    r = bx->run(bx, add_found_uid, &qr);
+
+    search_end_search(bx);
+    if (r) goto out;
+
+    if (excluded) {
+        if (query->multiple) {
+            char *userid = mboxname_to_userid(index_mboxname(query->state));
+            r = mboxlist_usermboxtree(userid, NULL, subquery_post_excluded,
+                    &qr, /*flags*/0);
+            free(userid);
+        }
+        else {
+            mbentry_t *mbentry = NULL;
+            r = mboxlist_lookup(index_mboxname(query->state), &mbentry, NULL);
+            if (!r) r = subquery_post_excluded(mbentry, &qr);
+            mboxlist_entry_free(&mbentry);
+        }
+    }
+    else hash_enumerate(&query->folders_by_name, subquery_post_enginesearch, &qr);
+    hash_enumerate(&query->folders_by_name, subquery_clear_found, NULL);
 
 out:
+    search_expr_free(excluded);
     if (r) query->error = r;
 }
 

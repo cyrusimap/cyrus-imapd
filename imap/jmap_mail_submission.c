@@ -70,12 +70,37 @@ static int jmap_emailsubmission_query(jmap_req_t *req);
 static int jmap_emailsubmission_querychanges(jmap_req_t *req);
 
 static jmap_method_t jmap_emailsubmission_methods[] = {
-    { "EmailSubmission/get",          &jmap_emailsubmission_get, JMAP_SHARED_CSTATE },
-    { "EmailSubmission/set",          &jmap_emailsubmission_set, /*flags*/0 },
-    { "EmailSubmission/changes",      &jmap_emailsubmission_changes, JMAP_SHARED_CSTATE },
-    { "EmailSubmission/query",        &jmap_emailsubmission_query, JMAP_SHARED_CSTATE },
-    { "EmailSubmission/queryChanges", &jmap_emailsubmission_querychanges, JMAP_SHARED_CSTATE },
-    { NULL,                           NULL, 0}
+    {
+        "EmailSubmission/get",
+        JMAP_URN_SUBMISSION,
+        &jmap_emailsubmission_get,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "EmailSubmission/set",
+        JMAP_URN_SUBMISSION,
+        &jmap_emailsubmission_set,
+       /*flags*/0
+    },
+    {
+        "EmailSubmission/changes",
+        JMAP_URN_SUBMISSION,
+        &jmap_emailsubmission_changes,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "EmailSubmission/query",
+        JMAP_URN_SUBMISSION,
+        &jmap_emailsubmission_query,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "EmailSubmission/queryChanges",
+        JMAP_URN_SUBMISSION,
+        &jmap_emailsubmission_querychanges,
+        JMAP_SHARED_CSTATE
+    },
+    { NULL, NULL, NULL, 0}
 };
 
 HIDDEN void jmap_emailsubmission_init(jmap_settings_t *settings)
@@ -85,16 +110,18 @@ HIDDEN void jmap_emailsubmission_init(jmap_settings_t *settings)
         hash_insert(mp->name, mp, &settings->methods);
     }
 
-    strarray_push(&settings->can_use, JMAP_URN_SUBMISSION);
+    json_object_set_new(settings->server_capabilities,
+            JMAP_URN_SUBMISSION, json_object());
 }
 
-HIDDEN void jmap_emailsubmission_capabilities(jmap_settings_t *settings)
+HIDDEN void jmap_emailsubmission_capabilities(json_t *account_capabilities)
 {
-    /* determine extensions from submission server */
-    json_t *submit_ext = json_object();
+    static json_t *submit_capabilities = NULL;
     smtpclient_t *smp = NULL;
 
-    if (!smtpclient_open(&smp)) {
+    if (!submit_capabilities && !smtpclient_open(&smp)) {
+        /* determine extensions from submission server */
+        json_t *submit_ext = json_object();
         const char *smtp_capa[] = { "FUTURERELEASE", "SIZE", "DSN",
                                     "DELIVERBY", "MT-PRIORITY", NULL };
         const char **capa;
@@ -120,14 +147,12 @@ HIDDEN void jmap_emailsubmission_capabilities(jmap_settings_t *settings)
         }
         smtpclient_close(&smp);
         buf_free(&buf);
+        submit_capabilities = json_pack("{s:i s:o}",
+                                        "maxDelayedSend", 0,
+                                        "submissionExtensions", submit_ext);
     }
 
-    json_t *submit_capabilities = json_pack("{s:i s:o}",
-                                            "maxDelayedSend", 0,
-                                            "submissionExtensions", submit_ext);
-
-    json_object_set_new(settings->capabilities,
-                        JMAP_URN_SUBMISSION, submit_capabilities);
+    json_object_set(account_capabilities, JMAP_URN_SUBMISSION, submit_capabilities);
 }
 
 static int _emailsubmission_address_parse(json_t *addr,
@@ -246,7 +271,7 @@ static void _emailsubmission_create(jmap_req_t *req,
             }
         }
         else {
-            jmap_parser_invalid(&parser, "mailFrom");
+            jmap_parser_invalid(&parser, "rcptTo");
         }
         jmap_parser_pop(&parser);
     } else {
@@ -518,17 +543,57 @@ done:
 }
 
 static const jmap_property_t submission_props[] = {
-    { "id",             JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "identityId",     JMAP_PROP_IMMUTABLE },
-    { "emailId",        JMAP_PROP_IMMUTABLE },
-    { "threadId",       JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "envelope",       JMAP_PROP_IMMUTABLE },
-    { "sendAt",         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE },
-    { "undoStatus",     JMAP_PROP_SERVER_SET },
-    { "deliveryStatus", JMAP_PROP_SERVER_SET },
-    { "dsnBlobIds",     JMAP_PROP_SERVER_SET },
-    { "mdnBlobIds",     JMAP_PROP_SERVER_SET },
-    { NULL,             0 }
+    {
+        "id",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+    },
+    {
+        "identityId",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "emailId",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "threadId",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    {
+        "envelope",
+        NULL,
+        JMAP_PROP_IMMUTABLE
+    },
+    {
+        "sendAt",
+        NULL,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
+    },
+    {
+        "undoStatus",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "deliveryStatus",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "dsnBlobIds",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "mdnBlobIds",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    { NULL, NULL, 0 }
 };
 
 static int jmap_emailsubmission_get(jmap_req_t *req)
@@ -537,8 +602,8 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
     struct jmap_get get;
     json_t *err = NULL;
 
-    jmap_get_parse(req->args, &parser, req,
-                   submission_props, NULL, NULL, &get, 1, &err);
+    jmap_get_parse(req, &parser, submission_props, /*allow_null_ids*/1,
+                   NULL, NULL, &get, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -567,9 +632,10 @@ struct submission_set_args {
     json_t *onSuccessDestroy;
 };
 
-static int _submission_setargs_parse(const char *key,
-                                     json_t *arg,
+static int _submission_setargs_parse(jmap_req_t *req __attribute__((unused)),
                                      struct jmap_parser *parser,
+                                     const char *key,
+                                     json_t *arg,
                                      void *rock)
 {
     struct submission_set_args *set = (struct submission_set_args *) rock;
@@ -609,8 +675,9 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     json_t *err = NULL;
 
     /* Parse request */
-    jmap_set_parse(req->args, &parser,
-                   &_submission_setargs_parse, &sub_args, &set, &err);
+    jmap_set_parse(req, &parser, submission_props,
+                   &_submission_setargs_parse, &sub_args,
+                   &set, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -721,7 +788,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     struct jmap_changes changes;
 
     json_t *err = NULL;
-    jmap_changes_parse(req->args, &parser, NULL, NULL, &changes, &err);
+    jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
     if (err) {
         jmap_error(req, err);
         return 0;
@@ -735,10 +802,12 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     return 0;
 }
 
-static void _emailsubmission_parse_filter(json_t *filter,
+static void _emailsubmission_filter_parse(jmap_req_t *req __attribute__((unused)),
                                           struct jmap_parser *parser,
+                                          json_t *filter,
                                           json_t *unsupported __attribute__((unused)),
-                                          void *rock __attribute__((unused)))
+                                          void *rock __attribute__((unused)),
+                                          json_t **err __attribute__((unused)))
 {
     const char *field;
     json_t *arg;
@@ -772,8 +841,10 @@ static void _emailsubmission_parse_filter(json_t *filter,
 }
 
 
-static int _emailsubmission_parse_comparator(struct jmap_comparator *comp,
-                                             void *rock __attribute__((unused)))
+static int _emailsubmission_comparator_parse(jmap_req_t *req __attribute__((unused)),
+                                             struct jmap_comparator *comp,
+                                             void *rock __attribute__((unused)),
+                                             json_t **err __attribute__((unused)))
 {
     if (comp->collation) {
         return 0;
@@ -793,10 +864,9 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
 
     /* Parse request */
     json_t *err = NULL;
-    jmap_query_parse(req->args, &parser,
-                     _emailsubmission_parse_filter, NULL,
-                     _emailsubmission_parse_comparator, NULL,
-                     NULL, NULL,
+    jmap_query_parse(req, &parser, NULL, NULL,
+                     _emailsubmission_filter_parse, NULL,
+                     _emailsubmission_comparator_parse, NULL,
                      &query, &err);
     if (err) {
         jmap_error(req, err);
@@ -825,10 +895,9 @@ static int jmap_emailsubmission_querychanges(jmap_req_t *req)
 
     /* Parse arguments */
     json_t *err = NULL;
-    jmap_querychanges_parse(req->args, &parser,
-                            _emailsubmission_parse_filter, NULL,
-                            _emailsubmission_parse_comparator, NULL,
-                            NULL, NULL,
+    jmap_querychanges_parse(req, &parser, NULL, NULL,
+                            _emailsubmission_filter_parse, NULL,
+                            _emailsubmission_comparator_parse, NULL,
                             &query, &err);
     if (err) {
         jmap_error(req, err);

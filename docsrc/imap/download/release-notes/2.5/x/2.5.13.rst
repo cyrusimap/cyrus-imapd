@@ -1,0 +1,39 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 2.5.13 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the `stable 2.5 series <http://www.cyrusimap.org/stable>`_.
+
+    Refer to the Cyrus IMAP 2.5.0 Release Notes for important information
+    about the 2.5 series, including upgrading instructions.
+
+Download via HTTPS:
+
+    * https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-2.5.13/cyrus-imapd-2.5.13.tar.gz
+    * https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-2.5.13/cyrus-imapd-2.5.13.tar.gz.sig
+
+.. _relnotes-2.5.13-changes:
+
+Changes Since 2.5.12
+====================
+
+Release changes
+---------------
+
+We’re trialing using the Github Releases feature. If you have trouble
+downloading this release, please report this to the mailing lists. Thanks!
+
+Security fixes
+--------------
+
+* Fixed CVE-2019-11356: buffer overrun in httpd
+
+Bug fixes
+---------
+
+* Fixed: ptloader, ptexpire and ptdump now honour the ``ptscache_db_path``
+  setting

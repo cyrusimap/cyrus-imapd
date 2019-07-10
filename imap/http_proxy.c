@@ -768,7 +768,8 @@ static int pipe_resp_body(struct protstream *pin, struct transaction_t *txn,
     char buf[PROT_BUFSIZE];
     const char **errstr = &txn->error.desc;
 
-    txn->resp_body.enc = CE_IDENTITY;
+    txn->resp_body.enc.type = CE_IDENTITY;
+    txn->resp_body.enc.proc = NULL;
     txn->flags.te = TE_NONE;
 
     if (resp_body->framing == FRAMING_UNKNOWN) {

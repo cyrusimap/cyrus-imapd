@@ -276,6 +276,9 @@ struct patch_doc_t {
     int (*proc)();                      /* Function to parse and apply doc */
 };
 
+typedef int (*encode_proc_t)(struct transaction_t *txn,
+                             unsigned flags, const char *buf, unsigned len);
+
 
 /* Meta-data for response body (payload & representation headers) */
 struct resp_body_t {
@@ -285,7 +288,10 @@ struct resp_body_t {
         const char *fname;
         unsigned attach : 1;
     } dispo;                            /* Content-Dispo    */
-    unsigned char enc;                  /* Content-Encoding */
+    struct {
+        unsigned char type;
+        encode_proc_t proc;
+    } enc;                              /* Content-Encoding */
     const char *lang;                   /* Content-Language */
     const char *loc;                    /* Content-Location */
     const u_char *md5;                  /* Content-MD5      */
@@ -371,6 +377,7 @@ struct transaction_t {
 
     void *zstrm;                        /* Zlib compression context */
     void *brotli;                       /* Brotli compression context */
+    void *zstd;                         /* Zstandard compression context */
 };
 
 /* HTTP version flags */
@@ -403,10 +410,11 @@ enum {
 
 /* Content-Encoding flags (coding of representation) */
 enum {
-    CE_IDENTITY =       0,      /* no encoding       */
-    CE_DEFLATE =        (1<<0), /* ZLIB   - RFC 1950 */
-    CE_GZIP =           (1<<1), /* GZIP   - RFC 1952 */
-    CE_BR =             (1<<2)  /* Brotli - RFC 7932 */
+    CE_IDENTITY =       0,      /* no encoding          */
+    CE_DEFLATE  =       (1<<0), /* ZLIB      - RFC 1950 */
+    CE_GZIP     =       (1<<1), /* GZIP      - RFC 1952 */
+    CE_BR       =       (1<<2), /* Brotli    - RFC 7932 */
+    CE_ZSTD     =       (1<<3)  /* Zstandard - RFC 8478 */
 };
 
 /* Cache-Control directive flags */

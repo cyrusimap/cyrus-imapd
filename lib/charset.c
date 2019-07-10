@@ -44,6 +44,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "unicode/ucnv.h"
+
 #include "assert.h"
 #include "charset.h"
 #include "xmalloc.h"
@@ -1745,7 +1747,7 @@ static struct convert_rock *canon_init(int flags, struct convert_rock *next)
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct canon_state *s = xzmalloc(sizeof(struct canon_state));
     s->flags = flags;
-    if ((flags & CHARSET_SNIPPET))
+    if ((flags & CHARSET_KEEPCASE))
         rock->f = uni2html;
     else
         rock->f = uni2searchform;
@@ -3258,7 +3260,7 @@ EXPORTED char *charset_extract_plain(const char *html) {
     buf_init_ro(&src, tmp, q - tmp);
     buf_setcstr(&dst, "");
     charset_extract(&extract_plain_cb, &dst,
-            &src, utf8, ENCODING_NONE, "HTML", CHARSET_SNIPPET);
+            &src, utf8, ENCODING_NONE, "HTML", CHARSET_KEEPCASE);
     buf_cstring(&dst);
 
     /* Trim text */

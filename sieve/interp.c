@@ -181,6 +181,12 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
 
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOXID)
             buf_appendcstr(&buf, " mailboxid");
+
+#if 0  // Don't advertise this to ManageSieve clients -
+       // We probably don't want end users adding this action themselves
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_LOG)
+            buf_appendcstr(&buf, " x-cyrus-log");
+#endif
     }
 
     return i->extensions;
@@ -304,6 +310,11 @@ EXPORTED void sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope
 EXPORTED void sieve_register_include(sieve_interp_t *interp, sieve_get_include *f)
 {
     interp->getinclude = f;
+}
+
+EXPORTED void sieve_register_logger(sieve_interp_t *interp, sieve_logger *f)
+{
+    interp->log = f;
 }
 
 EXPORTED void sieve_register_environment(sieve_interp_t *interp,
@@ -491,6 +502,9 @@ static const struct sieve_capa_t {
     /* Mailboxid - draft-gondwana-sieve-mailboxid */
     { "mailboxid", SIEVE_CAPA_MAILBOXID },
 
+    /* log - x-cyrus-log */
+    { "x-cyrus-log", SIEVE_CAPA_LOG },
+
     { NULL, 0 }
 };
     
@@ -666,6 +680,10 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
     case SIEVE_CAPA_MAILBOXID:
         if (!(interp->getmailboxidexists &&
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOXID))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_LOG:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_LOG)) capa = 0;
         break;
 
     default:

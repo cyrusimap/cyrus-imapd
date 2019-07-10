@@ -742,6 +742,8 @@ static void imapd_reset(void)
     disable_referrals = 0;
     supports_referrals = 0;
 
+    index_text_extractor_destroy();
+
     if (imapd_index) {
         if (config_getswitch(IMAPOPT_AUTOEXPUNGE) && index_hasrights(imapd_index, ACL_EXPUNGE))
             index_expunge(imapd_index, NULL, 1);
@@ -975,6 +977,8 @@ int service_main(int argc __attribute__((unused)),
     mboxname_init_namespace(&imapd_namespace, /*isadmin*/1);
     mboxevent_setnamespace(&imapd_namespace);
 
+    index_text_extractor_init(imapd_in);
+
     cmdloop();
 
     /* LOGOUT executed */
@@ -1074,6 +1078,8 @@ void shut_down(int code)
     }
     if (backend_cached) free(backend_cached);
     if (mupdate_h) mupdate_disconnect(&mupdate_h);
+
+    index_text_extractor_destroy();
 
     if (idling)
         idle_stop(index_mboxname(imapd_index));
@@ -7391,7 +7397,7 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
     r = mboxlist_renamemailbox(mbentry, text->newmailboxname,
                                text->partition, uidvalidity,
                                1, imapd_userid, imapd_authstate, NULL, 0, 0,
-                               text->rename_user, 0, 0);
+                               text->rename_user, 0, 0, 0);
 
     if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
         mboxlist_changesub(mbentry->name, imapd_userid, imapd_authstate,
@@ -7723,7 +7729,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         r = mboxlist_renamemailbox(mbentry, newmailboxname, location,
                                    0 /* uidvalidity */, imapd_userisadmin,
                                    imapd_userid, imapd_authstate, mboxevent,
-                                   0, 0, rename_user, 0, 0);
+                                   0, 0, rename_user, 0, 0, 0);
 
         /* it's OK to not exist if there are subfolders */
         if (r == IMAP_MAILBOX_NONEXISTENT && subcount && !rename_user &&
@@ -13624,7 +13630,7 @@ static int list_data_remote(struct backend *be, char *tag,
                     "messages", "recent", "uidnext", "uidvalidity",
                     "unseen", "uniqueid", "size", "highestmodseq",
                     "xconvexists", "xconvunseen", "xconvmodseq",
-                    "createdmodseq", NULL
+                    "createdmodseq", "sharedseen", NULL
                 };
 
                 c = '(';
@@ -13923,7 +13929,7 @@ static void cmd_urlfetch(char *tag)
         }
         if (r) goto err;
 
-        if (!strcmp(index_mboxname(imapd_index), intname)) {
+        if (!strcmpnull(index_mboxname(imapd_index), intname)) {
             state = imapd_index;
         }
         else {
@@ -13954,10 +13960,10 @@ static void cmd_urlfetch(char *tag)
                                imapd_out, NULL);
         }
 
+    err:
         if (doclose)
             index_close(&state);
 
-    err:
         free(url.freeme);
 
         if (r) prot_printf(imapd_out, " NIL");
@@ -14454,10 +14460,12 @@ static void cmd_syncrestart(const char *tag, struct sync_reserve_list **reserve_
                  config_partitiondir(p->name), (unsigned long)getpid());
         rmdir(buf);
 
-        /* and the archive partition too */
-        snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
-                 config_archivepartitiondir(p->name), (unsigned long)getpid());
-        rmdir(buf);
+        if (config_getswitch(IMAPOPT_ARCHIVE_ENABLED)) {
+            /* and the archive partition too */
+            snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
+                    config_archivepartitiondir(p->name), (unsigned long)getpid());
+            rmdir(buf);
+        }
     }
     partition_list_free(pl);
 

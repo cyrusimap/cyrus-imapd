@@ -489,9 +489,13 @@ struct mime_type_t {
     void (*end_stream)(struct buf *);
 };
 
+/* meth_mkcol() parameters */
+typedef int (*mkcol_proc_t)(struct mailbox *mailbox);
+
 struct mkcol_params {
     unsigned location_precond;          /* precond code for bad location */
     uint32_t mbtype;                    /* mailbox type collection */
+    mkcol_proc_t proc;                  /* func to do post-create processing */
 };
 
 /*
@@ -876,6 +880,9 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
                          struct propfind_ctx *fctx,
                          xmlNodePtr prop, xmlNodePtr resp,
                          struct propstat propstat[], void *rock);
+int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
+                          struct proppatch_ctx *pctx,
+                          struct propstat propstat[], void *rock);
 int propfind_calusertype(const xmlChar *name, xmlNsPtr ns,
                          struct propfind_ctx *fctx,
                          xmlNodePtr prop, xmlNodePtr resp,

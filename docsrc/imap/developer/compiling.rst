@@ -76,7 +76,11 @@ Developers only
     `perl-devel`_, perl-dev, perl-devel, "no", "Perl development headers to allow building binary perl libraries. Needs version 5+.
 
     Configure option: ``--with-perl``"
+    `perl(Pod::POM::View::Restructured)`_,,,, "Perl library to generate man pages.  This has to be available to the system-wide perl interpreter, found by ``which``:  ``./configure --with-perl`` is not honoured."
+    `python(GitPython)`_,,,, "Python library needed for building the documentation"
+    `python(Sphinx)`_,,,, "Python library needed for building the documentation"
     `valgrind`_, valgrind, valgrind, "no", "Performance and memory testing."
+    `xxd`_,,,, "For rebuilding the _js.h files, for CalDAV and CardDAV support."
 
 SASL Authentication
 ###################
@@ -129,6 +133,7 @@ Other
     :widths: 20,15,15,5,45
 
      SSL certificates, ssl-cert-dev, mod_ssl, "no", "Used if you're installing SSL certificates"
+    `ClamAV`_,,,, Used by **cyr_virusscan**.
     `net-snmp`_, libsnmp-dev, net-snmp-devel, "no", "version 4.2 or higher"
     `openldap`_, libldap2-dev, openldap-devel, "no", "Development headers to enable **ptloader** to interface with LDAP
     directly, for canonification of login usernames to mailbox names,
@@ -137,29 +142,44 @@ Other
 
     Configure option: ``--with-ldap``"
     `tcp_wrappers`_, tcp_wrappers, xx, "no"
-    `transfig`_, transfig, xx, "no"
+    `transfig`_, transfig, xx, "no", "also known as fig2dev"
+    `pcre`_,,,, "PCRE 1 (or 8) - for regular expression matching"
+    `perl(Term::ReadLine)`_,,,, "Perl library needed by cyradm"
+    `libsrs2`_,,,, "Sender Rewriting Scheme for lmtp, used on Sieve redirect "
     `zlib`_, zlib1g-dev, zlib-devel, "no", "Compression support for httpd"
+    `libbrotli`_,,,, "Brotli compression support for httpd"
+    `wslay`_,,,, "WebSockets support in httpd"
     `nghttp2`_, libnghttp2-dev, libnghttp2-devel, "no", "HTTP/2 support for httpd"
 
+.. _ClamAV: https://www.clamav.net/
 .. _CUnit: http://cunit.sourceforge.net/
 .. _Cyrus SASL Plain: :ref:`Cyrus SASL <cyrussasl:sasl-index>`
-.. _Cyrus SASL MD5: :ref:`Cyrus SASL <cyrussasl:sasl-index`
-.. _sasl binaries: :ref:`Cyrus SASL <cyrussasl:sasl-index`
+.. _Cyrus SASL MD5: :ref:`Cyrus SASL <cyrussasl:sasl-index>`
+.. _sasl binaries: :ref:`Cyrus SASL <cyrussasl:sasl-index>`
 .. _Kerberos: http://web.mit.edu/kerberos/www/
-.. _libical: http://freeassociation.sourceforge.net/
+.. _libbrotli: https://github.com/google/brotli
+.. _libical: https://github.com/libical/libical/
 .. _libxml: http://xmlsoft.org/
 .. _mysql: http://www.mysql.com
 .. _mariadb: http://mariadb.org
 .. _net-snmp:  http://net-snmp.sourceforge.net/
+.. _nghttp2: https://nghttp2.org/
 .. _openldap: http://www.openldap.org/
+.. _pcre: http://www.pcre.org/
+.. _perl(Term::ReadLine): https://metacpan.org/pod/Term::ReadLine
 .. _perl(ExtUtils::MakeMaker): http://search.cpan.org/dist/ExtUtils-MakeMaker/
+.. _perl(Pod::POM::View::Restructured): https://metacpan.org/pod/Pod::POM::View::Restructured
 .. _perl-devel: http://www.perl.org/
 .. _postgresql: http://www.postgresql.org/
+.. _python(GitPython): https://github.com/gitpython-developers/GitPython
+.. _python(Sphinx): https://www.sphinx-doc.org/
+.. _libsrs2: https://www.libsrs2.org/
 .. _tcp_wrappers: ftp://ftp.porcupine.org/pub/security/index.html
 .. _transfig: http://www.xfig.org/
 .. _valgrind: http://www.valgrind.org/
+.. _wslay: https://tatsuhiro-t.github.io/wslay/
 .. _zlib: http://zlib.net/
-.. _nghttp2: https://nghttp2.org/
+.. _xxd: https://github.com/ConorOG/xxd/
 
 
 Install tools for building

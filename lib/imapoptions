@@ -565,6 +565,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    addresses for which the server is responsible.  If not set (the
    default), the value of the "servername" option will be used. */
 
+{ "calendar_component_set", "VEVENT VTODO VJOURNAL VFREEBUSY VAVAILABILITY VPOLL", BITFIELD("VEVENT", "VTODO", "VJOURNAL", "VFREEBUSY", "VAVAILABILITY", "VPOLL") }
+/* Space-separated list of iCalendar component types that calendar
+   object resources may contain in a calendar collection.
+   This restriction is only set at calendar creation time and only
+   if the CalDAV client hasn't specified a restriction in the creation
+   request. */
+
 { "carddav_allowaddmember", 0, SWITCH }
 /* Enable support for POST add-member on the CardDAV server. */
 
@@ -1970,11 +1977,34 @@ If all partitions are over that limit, this feature is not used anymore.
 
    4. The extractor must return the plain text extract with either HTTP status
    200 (OK) or 201 (Created) and a Content-Type "text/plain" header.
-   If no text can be extracted, then the response body must be empty.
+   If no text can be extracted, then the extractor may return any return code
+   in the range 4xx, or 200 and an empty response body.
 
    Any other HTTP status code is treated as an error. For performance
    reasons, the Cyrus indexer attempts to keep-alive the TCP connection
    to the extractor. */
+
+{ "search_index_language", 0, SWITCH }
+/*
+  If enabled, then message bodies and subjects are indexed by their
+  detected language, if the cld2 dependency is built into Cyrus.
+  Regardless of this flag, bodies and subjects are always indexed and
+  searched using the default stemmer.
+ */
+
+{ "search_index_parts", 0, SWITCH }
+/*
+  If enabled, then message parts are each indexed separately into Xapian
+  so that matches can be done by part.
+ */
+
+{ "search_query_language", 0, SWITCH }
+/*
+  If enabled, then message bodies and subjects searched by their language
+  that got detected during indexing, if any.
+  Regardless of this flag, bodies and subjects are always searched using
+  the default stemmer.
+ */
 
 { "search_normalisation_max", 1000, INT }
 /* A resource bound for the combinatorial explosion of search expression
@@ -2006,6 +2036,11 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The maximum number of seconds to run a search for before aborting.  Default
    of no value means search "forever" until other timeouts. */
 
+{ "search_queryscan", 5000, INT }
+/* The minimum number of records require to do a direct scan of all G keys
+ * rather than indexed lookups.  A value of 0 means always do indexed lookups.
+ */
+
 { "search_skipdiacrit", 1, SWITCH }
 /* When searching, should diacriticals be stripped from the search
    terms.  The default is "true", a search for "hav" will match
@@ -2034,7 +2069,7 @@ If all partitions are over that limit, this feature is not used anymore.
 { "search_stopword_path", NULL, STRING }
 /* The absolute base path to the search stopword lists. If not specified,
    no stopwords will be taken into account during search indexing. Currently,
-   the only supported and default stop word file is english.list. */
+   the only supported and default stop word file is english.txt. */
 
 # Commented out - there's no such thing as "searchpartition-name",
 # but we need this for the man page
@@ -2140,7 +2175,7 @@ product version in the capabilities
 /* Maximum expiration time (in seconds) for duplicate message tracking
    records. */
 
-{ "sieve_extensions", "fileinto reject vacation vacation-seconds imapflags notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "imapflags", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid") }
+{ "sieve_extensions", "fileinto reject vacation vacation-seconds imapflags notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid x-cyrus-log", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "imapflags", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid", "x-cyrus-log") }
 /* Space-separated list of Sieve extensions allowed to be used in
    sieve scripts, enforced at submission by timsieved(8).  Any
    previously installed script will be unaffected by this option and
@@ -2274,6 +2309,12 @@ product version in the capabilities
    what special-use attributes can be set. This allows
    extending that list in the future or adding your own
    if needed. */
+
+{ "specialuse_protect", "\\Archive \\Drafts \\Important \\Junk \\Sent \\Trash", STRING }
+/* Whitespace separated list of special-use attributes
+   to protect the mailboxes for.  If set, don't allow
+   mailboxes with these special use attributes to be deleted
+   or renamed to have a different parent. Default is the built-in list*/
 
 { "specialusealways", 1, SWITCH }
 /* If enabled, this option causes LIST and LSUB output to always include

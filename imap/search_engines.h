@@ -62,6 +62,7 @@ typedef struct search_builder search_builder_t;
 struct search_builder {
 /* These values are carefully chosen a) not to clash with the
  * SEARCH_PART_* constants, and b) to reflect operator precedence */
+/* Values > 1024 are reserved for search engine implementations */
 #define SEARCH_OP_AND       101
 #define SEARCH_OP_OR        102
 #define SEARCH_OP_NOT       103
@@ -113,6 +114,12 @@ struct search_text_receiver {
                        struct mailbox *);
     int (*flush)(search_text_receiver_t *);
     int (*audit_mailbox)(search_text_receiver_t *, bitvector_t *unindexed);
+    int (*index_charset_flags)(int base_flags);
+};
+
+struct search_lang_stats {
+    char *iso_lang;
+    double weight; // of total indexed docs
 };
 
 #define SEARCH_FLAG_CAN_BATCH   (1<<0)
@@ -123,9 +130,7 @@ struct search_engine {
 #define SEARCH_VERBOSE(v)       ((v)&_SEARCH_VERBOSE_MASK)
 #define SEARCH_MULTIPLE         (1<<3)  /* return results from
                                          * multiple folders */
-#define SEARCH_UNINDEXED        (1<<4)  /* return unindexed messages
-                                         * as hits (doesn't work
-                                         * with MULTIPLE) */
+// DEPRECATED: #define SEARCH_UNINDEXED   (1<<4)
 #define SEARCH_COMPACT_COPYONE  (1<<5)  /* if only one source, just copy */
 #define SEARCH_COMPACT_FILTER   (1<<6)  /* filter resulting DB for
                                          * expunged records */
@@ -151,7 +156,11 @@ struct search_engine {
                    int flags);
     int (*deluser)(const char *userid);
     int (*check_config)(char **errstr);
+    int (*list_lang_stats)(const char *userid, ptrarray_t *counts);
 };
+
+/* Returns the configured search engine */
+extern const struct search_engine *search_engine();
 
 /*
  * Search for messages which could match the query built with the

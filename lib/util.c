@@ -984,8 +984,10 @@ EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
 
 /* buffer handling functions */
 
+#ifdef HAVE_DECLARE_OPTIMIZE
 static inline size_t roundup(size_t size)
     __attribute__((pure, always_inline, optimize("-O3")));
+#endif
 static inline size_t roundup(size_t size)
 {
     if (size < 32)
@@ -1109,15 +1111,19 @@ EXPORTED int buf_getline(struct buf *buf, FILE *fp)
     return (!(buf->len == 0 && c == EOF));
 }
 
+#ifdef HAVE_DECLARE_OPTIMIZE
 EXPORTED inline size_t buf_len(const struct buf *buf)
     __attribute__((always_inline, optimize("-O3")));
+#endif
 EXPORTED inline size_t buf_len(const struct buf *buf)
 {
     return buf->len;
 }
 
+#ifdef HAVE_DECLARE_OPTIMIZE
 EXPORTED inline const char *buf_base(const struct buf *buf)
     __attribute__((always_inline, optimize("-O3")));
+#endif
 EXPORTED inline const char *buf_base(const struct buf *buf)
 {
     return buf->s;
@@ -1174,6 +1180,26 @@ EXPORTED void buf_append(struct buf *dst, const struct buf *src)
 EXPORTED void buf_appendcstr(struct buf *buf, const char *str)
 {
     buf_appendmap(buf, str, strlen(str));
+}
+
+EXPORTED void buf_appendoverlap(struct buf *buf, const char *str)
+{
+    const char *t = buf_cstring(buf);
+    size_t matchlen = strlen(str);
+    if (matchlen < buf_len(buf)) {
+        t += buf_len(buf) - matchlen;
+    } else {
+        matchlen = buf_len(buf);
+    }
+
+    while (*t && matchlen && strncasecmp(t, str, matchlen)) {
+        t++; matchlen--;
+    }
+
+    if (*t && matchlen) {
+        buf_truncate(buf, buf_len(buf) - matchlen);
+    }
+    buf_appendcstr(buf, str);
 }
 
 EXPORTED void buf_appendbit32(struct buf *buf, bit32 num)

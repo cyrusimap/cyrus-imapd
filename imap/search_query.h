@@ -65,8 +65,8 @@ struct search_folder {
     uint64_t last_modseq; /* of returned messages, not the folder */
     int id;
     bitvector_t uids;
-    bitvector_t unchecked_uids;
-    int unchecked_dirty;
+    bitvector_t found_uids;
+    int found_dirty;
     hashu64_table partids; /* maps uid to starray_t* of part ids */
 };
 

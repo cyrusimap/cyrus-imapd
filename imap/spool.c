@@ -74,7 +74,7 @@ struct hdrcache_t {
     ptrarray_t getheader_cache;  /* header bodies returned by spool_getheader()   */
 };
 
-hdrcache_t spool_new_hdrcache(void)
+EXPORTED hdrcache_t spool_new_hdrcache(void)
 {
     hdrcache_t cache = xzmalloc(sizeof(struct hdrcache_t));
 

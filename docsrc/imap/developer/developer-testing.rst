@@ -37,7 +37,7 @@ Install and configure Cassandane
             libdata-uuid-perl libjson-xs-perl libdata-ical-perl libjson-perl \
             libdatetime-format-ical-perl libtext-levenshteinxs-perl \
             libmime-types-perl libdatetime-format-iso8601-perl libcal-dav-perl \
-            libclone-perl libstring-crc32-perl
+            libclone-perl libstring-crc32-perl libnet-ldap-server-perl
 
    The quickest option for the rest is installing via CPAN, but you could build
    packages using dh-make-perl if that is preferred.

@@ -271,9 +271,19 @@ extern message_t *message_new_from_index(struct mailbox *,
                                          uint32_t msgno,
                                          uint32_t indexflags);
 extern message_t *message_new_from_filename(const char *filename);
+extern void message_set_from_data(const char *base, size_t len,
+                                  message_t *m);
 extern void message_set_from_mailbox(struct mailbox *mailbox,
                                      unsigned int recno,
                                      message_t *m);
+extern void message_set_from_index(struct mailbox *,
+                                   const struct index_record *,
+                                   uint32_t msgno,
+                                   uint32_t indexflags,
+                                   message_t *m);
+extern void message_set_from_record(struct mailbox *,
+                                    const struct index_record *,
+                                    message_t *m);
 
 extern int message_get_indexversion(message_t *m, uint32_t *versionp);
 
@@ -282,7 +292,6 @@ extern void message_unref(message_t **m);
 
 extern int message_get_field(message_t *m, const char *name,
                              int format, struct buf *buf);
-extern int message_get_header(message_t *m, int format, struct buf *buf);
 extern int message_get_cachebody(message_t *m, const struct body **bodyp);
 extern int message_get_body(message_t *m, struct buf *buf);
 extern int message_get_type(message_t *m, const char **strp);

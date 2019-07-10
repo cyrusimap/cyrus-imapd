@@ -94,6 +94,7 @@ imap/http_carddav_js.h
 imap/http_err.c
 imap/http_err.h
 imap/httpd
+imap/ical_apply_patch
 imap/idled
 imap/imap_err.c
 imap/imap_err.h
@@ -199,10 +200,8 @@ sieve/sieve_err.h
 sieve/sievec
 sieve/sieved
 sieve/test
+sieve/test_mailbox
 sieve/tests/
 stamp-h1
 timsieved/timsieved
-vzic/test-output/
-vzic/vzic_test
-vzic/cyr_vzic
 ylwrap

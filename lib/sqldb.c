@@ -168,6 +168,18 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
         return NULL;
     }
 
+    /* https://sqlite.org/pragma.html#pragma_temp_store
+     * When temp_store is MEMORY (2) temporary tables and indices are
+     * kept in as if they were pure in-memory databases memory.
+     */
+    rc = sqlite3_exec(open->db, "PRAGMA temp_store = 2;", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) {
+        syslog(LOG_ERR, "DBERROR: sqldb_open(%s) enable foreign_keys: %s",
+               open->fname, sqlite3_errmsg(open->db));
+        _free_open(open);
+        return NULL;
+    }
+
     rc = sqlite3_exec(open->db, "PRAGMA user_version;", _version_cb, &open->version, NULL);
     if (rc != SQLITE_OK) {
         syslog(LOG_ERR, "sqldb_open(%s) get user_version: %s",

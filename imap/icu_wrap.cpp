@@ -48,6 +48,7 @@ extern "C" {
 
 
 #ifdef HAVE_ICU
+#include <unicode/ucnv.h>
 #include <unicode/unistr.h>
 #include <unicode/timezone.h>
 #endif
@@ -56,17 +57,18 @@ extern "C" char *icu_getIDForWindowsID(const char *id)
 {
 #ifdef HAVE_ICU
     UErrorCode status = U_ZERO_ERROR;
-    icu::UnicodeString uWinID, uID;
-    std::string str;
-    const char *tzid;
 
-    uWinID = icu::UnicodeString(id, -1, NULL, status);
+    UConverter *utf8cnv = ucnv_open("utf-8", &status);
+    if (U_FAILURE(status)) return NULL;
+    icu::UnicodeString uWinID {id, -1, utf8cnv, status};
+    ucnv_close(utf8cnv);
+
+    icu::UnicodeString uID;
     icu::TimeZone::getIDForWindowsID(uWinID, NULL, uID, status);
+
+    std::string str;
     uID.toUTF8String(str);
-
-    tzid = str.c_str();
-
-    if (tzid && *tzid) return xstrdup(tzid);
+    if (!str.empty()) return xstrdup(str.c_str());
 #endif
 
     if (!strcasecmp(id, "Mid-Atlantic Standard Time")) {

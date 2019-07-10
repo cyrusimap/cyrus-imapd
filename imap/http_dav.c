@@ -259,7 +259,7 @@ static const struct prop_entry principal_props[] = {
       propfind_calurl, NULL, SCHED_OUTBOX },
     { "calendar-user-address-set", NS_CALDAV,
       PROP_COLLECTION,
-      propfind_caluseraddr, NULL, NULL },
+      propfind_caluseraddr, proppatch_caluseraddr, NULL },
     { "calendar-user-type", NS_CALDAV,
       PROP_COLLECTION,
       propfind_calusertype, NULL, NULL },
@@ -294,7 +294,7 @@ struct namespace_t namespace_principal = {
     URL_NS_PRINCIPAL, 0, "principal", "/dav/principals", NULL,
     http_allow_noauth_get, /*authschemes*/0,
     /*mbtype */ 0,
-    ALLOW_READ | ALLOW_DAV,
+    ALLOW_READ | ALLOW_DAV | ALLOW_PROPPATCH,
     &my_dav_init, NULL, NULL, &my_dav_shutdown, &dav_premethod,
     /*bearer*/NULL,
     {
@@ -313,7 +313,7 @@ struct namespace_t namespace_principal = {
         { NULL,                 NULL },                 /* PATCH        */
         { NULL,                 NULL },                 /* POST         */
         { &meth_propfind,       &princ_params },        /* PROPFIND     */
-        { NULL,                 NULL },                 /* PROPPATCH    */
+        { &meth_proppatch,      &princ_params },        /* PROPPATCH    */
         { NULL,                 NULL },                 /* PUT          */
         { &meth_report,         &princ_params },        /* REPORT       */
         { &meth_trace,          NULL },                 /* TRACE        */
@@ -526,7 +526,7 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 
         /* Skip past userid (and any extra '/') */
         for (p += len; p[1] == '/'; p++);
-        if (!*p || !*++p) return 0;
+        if (!*p || !*++p) goto mailbox;
     }
     else if (!strncmp(p, SERVER_INFO, len)) {
         p += len;
@@ -540,6 +540,35 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
     if (*p) {
 //      *resultstr = "Too many segments in request target path";
         return HTTP_NOT_FOUND;
+    }
+
+  mailbox:
+    /* Create mailbox name from the parsed path */
+
+    if (tgt->userid) {
+        /* Locate the mailbox */
+        char *mboxname = mboxname_user_mbox(tgt->userid, NULL);
+        int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
+
+        if (r) {
+            *resultstr = error_message(r);
+            syslog(LOG_ERR, "mlookup(%s) failed: %s", mboxname, *resultstr);
+        }
+        free(mboxname);
+
+        switch (r) {
+        case 0:
+            break;
+
+        case IMAP_PERMISSION_DENIED:
+            return HTTP_FORBIDDEN;
+
+        case IMAP_MAILBOX_NONEXISTENT:
+            return HTTP_NOT_FOUND;
+
+        default:
+            return HTTP_SERVER_ERROR;
+        }
     }
 
     return 0;
@@ -3579,7 +3608,7 @@ static int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
                         xmlSetNs(newprop, NULL);
                         *pctx->ret = HTTP_FORBIDDEN;
                     }
-                    else {
+                    else if (pctx->txn->req_tgt.namespace->id != URL_NS_PRINCIPAL) {
                         /* Write "dead" property */
                         proppatch_todb(prop, set, pctx, propstat, NULL);
                     }
@@ -4073,7 +4102,7 @@ static int move_collection(const mbentry_t *mbentry, void *rock)
         r = mboxlist_renamemailbox(mbentry, buf_cstring(&mrock->newname),
                                    NULL /* partition */, 0 /* uidvalidity */,
                                    1 /* admin */, httpd_userid, httpd_authstate,
-                                   NULL, 0, 0, 1 /* ignorequota */, 0, 0);
+                                   NULL, 0, 0, 1 /* ignorequota */, 0, 0, 0);
     }
 
     if (r) {
@@ -4292,7 +4321,7 @@ static int dav_move_collection(struct transaction_t *txn,
     r = mboxlist_renamemailbox(txn->req_tgt.mbentry, newmailboxname,
                                NULL /* partition */, 0 /* uidvalidity */,
                                httpd_userisadmin, httpd_userid, httpd_authstate,
-                               mboxevent, 0, 0, 1 /* ignorequota */, 0, 0);
+                               mboxevent, 0, 0, 1 /* ignorequota */, 0, 0, 0);
 
     if (!r) mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
@@ -5600,6 +5629,8 @@ int meth_mkcol(struct transaction_t *txn, void *params)
     }
 
     if (!r) {
+        if (mparams->mkcol.proc) r = mparams->mkcol.proc(mailbox);
+
         assert(!buf_len(&txn->buf));
         dav_get_synctoken(mailbox, &txn->buf, "");
         txn->resp_body.ctag = buf_cstring(&txn->buf);
@@ -7420,7 +7451,7 @@ int report_sync_col(struct transaction_t *txn, struct meth_params *rparams,
                                       &updates_cb, &rock);
     if (r) {
         /* Tell client we truncated the responses */
-        *(fctx->req_tgt->resource) = '\0';
+        if (fctx->req_tgt->resource) *(fctx->req_tgt->resource) = '\0';
         xml_add_response(fctx, HTTP_NO_STORAGE, DAV_OVER_LIMIT, NULL, NULL);
     }
     else {
@@ -8348,7 +8379,13 @@ int dav_store_resource(struct transaction_t *txn,
                           0, qdiffs, 0, 0, EVENT_MESSAGE_NEW|EVENT_CALENDAR))) {
         syslog(LOG_ERR, "append_setup(%s) failed: %s",
                mailbox->name, error_message(r));
-        ret = HTTP_SERVER_ERROR;
+        if (r == IMAP_QUOTA_EXCEEDED) {
+            /* DAV:quota-not-exceeded */
+            txn->error.precond = DAV_OVER_QUOTA;
+            ret = HTTP_NO_STORAGE;
+        } else {
+            ret = HTTP_SERVER_ERROR;
+        }
         txn->error.desc = "append_setup() failed\r\n";
     }
     else {
@@ -8395,15 +8432,6 @@ int dav_store_resource(struct transaction_t *txn,
                 txn->error.desc = "append_commit() failed\r\n";
             }
             else {
-                /* Read index record for new message (always the last one) */
-                struct index_record newrecord;
-                struct dav_data ddata;
-
-                ddata.alive = 1;
-                ddata.imap_uid = mailbox->i.last_uid;
-                dav_get_validators(mailbox, &ddata, httpd_userid, &newrecord,
-                                   &txn->resp_body.etag, &txn->resp_body.lastmod);
-
                 if (oldrecord) {
                     /* Now that we have the replacement message in place
                        expunge the old one. */
@@ -8424,6 +8452,17 @@ int dav_store_resource(struct transaction_t *txn,
                         txn->error.desc = error_message(r);
                         ret = HTTP_SERVER_ERROR;
                     }
+                }
+
+                if (!r) {
+                    /* Read index record for new message (always the last one) */
+                    struct index_record newrecord;
+                    struct dav_data ddata;
+
+                    ddata.alive = 1;
+                    ddata.imap_uid = mailbox->i.last_uid;
+                    dav_get_validators(mailbox, &ddata, httpd_userid, &newrecord,
+                                       &txn->resp_body.etag, &txn->resp_body.lastmod);
                 }
             }
         }
