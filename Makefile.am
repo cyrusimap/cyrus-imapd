@@ -67,7 +67,6 @@ endif # HAVE_LDAP
 AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
 
 BUILT_SOURCES = \
-	imap/imap_err.c \
 	lib/imapopts.c \
 	lib/imapopts.h
 
@@ -115,15 +114,12 @@ SUBDIRS = .
 DIST_SUBDIRS = . perl/annotator perl/imap perl/sieve/managesieve
 dist_sysconf_DATA =
 lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
-EXTRA_PROGRAMS =
 check_PROGRAMS =
 libexec_PROGRAMS =
 sbin_PROGRAMS =
 noinst_HEADERS =
 noinst_LTLIBRARIES =
 noinst_PROGRAMS =
-EXTRA_DIST = \
-	VERSION
 
 if COM_ERR
 COMPILE_ET_DEP = com_err/et/compile_et
@@ -135,10 +131,10 @@ bin_PROGRAMS = imtest/imtest
 
 if SERVER
 BUILT_SOURCES += \
-	imap/mupdate_err.c \
-	imap/nntp_err.c \
+	imap/imap_err.c \
 	imap/lmtp_err.c \
 	imap/lmtpstats.c \
+	imap/mupdate_err.c \
 	imap/pushstats.c \
 	imap/promdata.c \
 	imap/promdata.h \
@@ -201,6 +197,7 @@ endif
 if NNTPD
 libexec_PROGRAMS += imap/nntpd
 sbin_PROGRAMS += imap/fetchnews
+BUILT_SOURCES += imap/nntp_err.c
 endif # NNTPD
 
 libexec_PROGRAMS += imap/fud
@@ -261,30 +258,6 @@ if SIEVE
 check_PROGRAMS += notifyd/notifytest
 libexec_PROGRAMS += notifyd/notifyd
 endif # SIEVE
-
-else # SERVER
-EXTRA_DIST += \
-    imap/mupdate_err.c \
-    imap/nntp_err.c \
-    imap/lmtp_err.c \
-    imap/lmtpstats.c \
-    imap/pushstats.c \
-    imap/promdata.c \
-    imap/promdata.h \
-    imap/rfc822_header.c \
-    imap/rfc822_header.h \
-    imap/mailbox_header_cache.h
-
-if !HTTPD
-EXTRA_DIST += \
-	imap/http_err.c \
-	imap/http_err.h \
-	imap/jmap_err.c \
-	imap/jmap_err.h \
-	imap/tz_err.c \
-	imap/tz_err.h
-endif # HTTPD
-
 endif # SERVER
 
 if CMULOCAL
@@ -322,9 +295,10 @@ endif # SERVER
 
 endif # SIEVE
 
-EXTRA_DIST += \
+EXTRA_DIST = \
 	COPYING \
 	README.md \
+	VERSION \
 	com_err/et/et_c.awk \
 	com_err/et/et_h.awk \
 	com_err/et/test1.et \
@@ -362,22 +336,21 @@ EXTRA_DIST += \
 	cunit/cunit-to-junit.pl \
 	cunit/key.pem \
 	cunit/vg.supp \
+	doc/ \
 	doc/legacy/murder.png \
 	doc/legacy/netnews.png \
-	doc \
-	docsrc \
-	imap/http_caldav_js.h \
+	docsrc/ \
 	imap/http_caldav.js \
-	imap/http_carddav_js.h \
 	imap/http_carddav.js \
 	imap/http_err.et \
 	imap/imap_err.et \
 	imap/jmap_err.et \
 	imap/lmtp_err.et \
+	imap/mailbox_header_cache.gperf \
 	imap/mupdate_err.et \
 	imap/nntp_err.et \
+	imap/promdata.p \
 	imap/rfc822_header.st \
-	imap/mailbox_header_cache.gperf \
 	imap/tz_err.et \
 	lib/charset/aliases.txt \
 	lib/charset/UnicodeData.txt \
@@ -915,12 +888,12 @@ imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) $(CLAMAV_LIBS)
 
 imap_deliver_SOURCES = \
 	imap/deliver.c \
-	imap/lmtp_err.c \
 	imap/lmtpengine.c \
-	imap/lmtpstats.c \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/spool.c
+
+nodist_imap_deliver_SOURCES = imap/lmtp_err.c imap/lmtpstats.c
 
 imap_deliver_LDADD = $(LD_UTILITY_ADD)
 
@@ -942,13 +915,13 @@ imap_imapd_SOURCES = \
 	imap/imapd.c \
 	imap/imapd.h \
 	imap/mutex_fake.c \
-	imap/pushstats.c \
-	imap/pushstats.h \
 	imap/proxy.c \
 	imap/proxy.h \
 	imap/sync_support.c \
 	imap/sync_support.h \
 	master/service.c
+
+nodist_imap_imapd_SOURCES = imap/pushstats.c
 
 if AUTOCREATE
 imap_imapd_SOURCES += \
@@ -964,11 +937,8 @@ imap_ipurge_LDADD = $(LD_UTILITY_ADD)
 nodist_imap_libcyrus_imap_la_SOURCES = \
 	imap/imap_err.c \
 	imap/mupdate_err.c \
-	imap/mupdate_err.h \
 	imap/promdata.c \
 	imap/promdata.h
-
-dist_imap_libcyrus_imap_la_SOURCES =
 
 imap_libcyrus_imap_la_LIBADD = \
     $(COM_ERR_LIBS) \
@@ -1035,7 +1005,6 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/partlist.h \
 	imap/proc.c \
 	imap/proc.h \
-	imap/promdata.p \
 	imap/prometheus.c \
 	imap/prometheus.h \
 	imap/protocol.h \
@@ -1149,16 +1118,14 @@ endif
 imap_lmtpd_SOURCES = \
 	imap/lmtpd.c \
 	imap/lmtpd.h \
-	imap/lmtp_err.c \
-	imap/lmtp_err.h \
 	imap/lmtpengine.c \
 	imap/lmtpengine.h \
-	imap/lmtpstats.c \
-	imap/lmtpstats.h \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/spool.c \
 	master/service.c
+
+nodist_imap_lmtpd_SOURCES = imap/lmtp_err.c imap/lmtpstats.c
 
 if AUTOCREATE
 imap_lmtpd_SOURCES += \
@@ -1199,9 +1166,8 @@ imap_mupdate_SOURCES = \
 imap_mupdate_LDADD = $(LD_SERVER_ADD) -lpthread
 imap_mupdate_CFLAGS =  $(AM_CFLAGS) -pthread
 
-nodist_imap_nntpd_SOURCES = \
-	imap/nntp_err.c \
-	imap/nntp_err.h
+nodist_imap_nntpd_SOURCES = imap/nntp_err.c
+
 imap_nntpd_SOURCES = \
 	imap/mutex_fake.c \
 	imap/nntpd.c \
@@ -1228,10 +1194,12 @@ imap_httpd_SOURCES = \
 	imap/http_applepush.c \
 	imap/http_caldav.c \
 	imap/http_caldav.h \
+	imap/http_caldav_js.h \
 	imap/http_caldav_sched.c \
 	imap/http_caldav_sched.h \
 	imap/http_carddav.c \
 	imap/http_carddav.h \
+	imap/http_carddav_js.h \
 	imap/http_cgi.c \
 	imap/http_dav.c \
 	imap/http_dav.h \
