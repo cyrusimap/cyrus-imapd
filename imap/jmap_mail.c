@@ -927,8 +927,24 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
     r = msgrecord_get_internalflags(mr, &internal_flags);
     if (r) goto done;
 
-    if (!r && !(system_flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-        json_object_set_new(mboxs, mbox->uniqueid, json_string(mbox->name));
+    if (!r) {
+        char datestr[RFC3339_DATETIME_MAX];
+        time_t t;
+        int exists = 1;
+
+        if (system_flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED) {
+            exists = 0;
+            r = msgrecord_get_lastupdated(mr, &t);
+        }
+        else {
+            r = msgrecord_get_savedate(mr, &t);
+        }
+
+        if (r) goto done;
+        time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
+        json_object_set_new(mboxs, mbox->uniqueid,
+                            json_pack("{s:s}",
+                                      exists ? "added" : "removed", datestr));
     }
 
 
@@ -5041,17 +5057,33 @@ static int _email_get_meta(jmap_req_t *req,
     }
 
     /* mailboxIds */
-    if (jmap_wantprop(props, "mailboxIds")) {
-        json_t *mboxids = json_object();
+    if (jmap_wantprop(props, "mailboxIds") ||
+        jmap_wantprop(props, "addedDates") || jmap_wantprop(props, "removedDates")) {
+        json_t *mboxids =
+            jmap_wantprop(props, "mailboxIds") ? json_object() : NULL;
+        json_t *added =
+            jmap_wantprop(props, "addedDates") ? json_object() : NULL;
+        json_t *removed =
+            jmap_wantprop(props, "removedDates") ? json_object() : NULL;
         json_t *mailboxes = _email_mailboxes(req, email_id);
 
         json_t *val;
         const char *mboxid;
         json_object_foreach(mailboxes, mboxid, val) {
-            json_object_set_new(mboxids, mboxid, json_true());
+            json_t *exists = json_object_get(val, "added");
+
+            if (exists) {
+                if (mboxids) json_object_set_new(mboxids, mboxid, json_true());
+                if (added) json_object_set(added, mboxid, exists);
+            }
+            else if (removed) {
+                json_object_set(added, mboxid, json_object_get(val, "removed"));
+            }
         }
         json_decref(mailboxes);
-        json_object_set_new(email, "mailboxIds", mboxids);
+        if (mboxids) json_object_set_new(email, "mailboxIds", mboxids);
+        if (removed) json_object_set_new(email, "removedDates", removed);
+        if (added) json_object_set_new(email, "addedDates", added);
     }
 
     /* keywords */

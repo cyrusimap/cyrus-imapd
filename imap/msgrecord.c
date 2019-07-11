@@ -295,6 +295,26 @@ EXPORTED int msgrecord_get_internaldate(msgrecord_t *mr, time_t *t)
     return 0;
 }
 
+EXPORTED int msgrecord_get_savedate(msgrecord_t *mr, time_t *t)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    *t = mr->record.savedate;
+    return 0;
+}
+
+EXPORTED int msgrecord_get_lastupdated(msgrecord_t *mr, time_t *t)
+{
+    if (!mr->isappend) {
+        int r = msgrecord_need(mr, M_RECORD);
+        if (r) return r;
+    }
+    *t = mr->record.last_updated;
+    return 0;
+}
+
 EXPORTED int msgrecord_get_cid(msgrecord_t *mr, bit64 *cid)
 {
     if (!mr->isappend) {

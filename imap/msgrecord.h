@@ -72,6 +72,8 @@ extern int msgrecord_get_messageid(msgrecord_t *mr, struct buf *buf);
 extern int msgrecord_get_modseq(msgrecord_t *mr, modseq_t *modseq);
 extern int msgrecord_get_createdmodseq(msgrecord_t *mr, modseq_t *modseq);
 extern int msgrecord_get_internaldate(msgrecord_t *mr, time_t *t);
+extern int msgrecord_get_savedate(msgrecord_t *mr, time_t *t);
+extern int msgrecord_get_lastupdated(msgrecord_t *mr, time_t *t);
 extern int msgrecord_get_message(msgrecord_t *mr, message_t **msg);
 extern int msgrecord_get_size(msgrecord_t *mr, uint32_t *size);
 extern int msgrecord_get_header_size(msgrecord_t *mr, uint32_t *header_size);
