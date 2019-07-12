@@ -5077,7 +5077,7 @@ static int _email_get_meta(jmap_req_t *req,
                 if (added) json_object_set(added, mboxid, exists);
             }
             else if (removed) {
-                json_object_set(added, mboxid, json_object_get(val, "removed"));
+                json_object_set(removed, mboxid, json_object_get(val, "removed"));
             }
         }
         json_decref(mailboxes);
