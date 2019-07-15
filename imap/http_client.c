@@ -482,6 +482,23 @@ EXPORTED int http_read_response(struct backend *be, unsigned meth,
 }
 
 
+/* Convert a HTTP status to one of our error codes */
+EXPORTED long http_status_to_code(unsigned code)
+{
+    int i, len, n_msgs = et_http_error_table.n_msgs;
+    const char * const *msgs = et_http_error_table.msgs;
+    char buf[100];
+
+    len = snprintf(buf, sizeof(buf), "%u ", code);
+
+    for (i = 0; i < n_msgs; i++) {
+        if (!strncmp(msgs[i], buf, len)) return et_http_error_table.base + i;
+    }
+
+    return HTTP_SERVER_ERROR;
+}
+
+
 EXPORTED int http_parse_auth_params(const char *params,
                                     const char **realm, unsigned int *realm_len,
                                     const char **sid, unsigned int *sid_len,
