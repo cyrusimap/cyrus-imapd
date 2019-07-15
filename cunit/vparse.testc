@@ -1,3 +1,5 @@
+#include <config.h>
+
 #include "cunit/cyrunit.h"
 #include "xmalloc.h"
 #include "vparse.h"
@@ -314,6 +316,7 @@ static void test_crlf(void)
 #undef TESTCASE
 }
 
+#ifdef USE_HTTPD
 #include "imap/vcard_support.h"
 
 static void test_multiparam_type(void)
@@ -351,3 +354,6 @@ static void test_multiparam_type(void)
     vparse_free_card(vcard);
     buf_free(buf);
 }
+#else
+static void test_multiparam_type(void) { }
+#endif /* USE_HTTPD */
