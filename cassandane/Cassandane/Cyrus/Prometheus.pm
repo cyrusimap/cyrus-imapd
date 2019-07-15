@@ -125,7 +125,7 @@ sub parse_report
 }
 
 sub test_aaasetup
-    :min_version_3_1
+    :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -134,7 +134,7 @@ sub test_aaasetup
 }
 
 sub test_reportfile_exists
-    :min_version_3_1
+    :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -155,7 +155,7 @@ sub test_reportfile_exists
 }
 
 sub test_httpreport
-    :min_version_3_1
+    :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
 
@@ -177,7 +177,7 @@ sub test_httpreport
 }
 
 sub test_disabled
-    :min_version_3_1 :NoStartInstances
+    :min_version_3_1 :needs_component_httpd :NoStartInstances
 {
     my ($self) = @_;
 
@@ -198,7 +198,7 @@ sub test_disabled
 
 # tests for pathological quotaroot/partition subdivisions
 sub disabled_test_quota_commitments
-    :min_version_3_1 :Partition2
+    :min_version_3_1 :needs_component_httpd :Partition2
 {
     my ($self) = @_;
 
@@ -249,7 +249,7 @@ sub disabled_test_quota_commitments
 }
 
 sub disabled_test_shared_mailbox_namespaces
-    :min_version_3_1
+    :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
 
