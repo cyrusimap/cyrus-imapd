@@ -464,6 +464,87 @@ sub test_calendar_set_shared
     $self->assert_str_equals($res->[0][1]{destroyed}[0], $CalendarId);
 }
 
+sub test_calendar_set_sharewith
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $service = $self->{instance}->get_service("http");
+
+    xlog "create shared account";
+    $admintalk->create("user.master");
+
+    my $mastalk = Net::CalDAVTalk->new(
+        user => "master",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    $admintalk->setacl("user.master", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.master", manifold => 'lrswipkxtecdn');
+
+    xlog "create calendar";
+    my $CalendarId = $mastalk->NewCalendar({name => 'Shared Calendar'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "share to user with permission to share";
+    $admintalk->setacl("user.master.#calendars.$CalendarId", "cassandane" => 'lrswipkxtecdan9') or die;
+    
+    xlog "create third account";
+    $admintalk->create("user.manifold");
+
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    # Call CalDAV once to create manifold's calendar home #calendars
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog "sharee gives third user access to shared calendar";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    accountId => 'master',
+                    update => { "$CalendarId" => {
+                            "shareWith/manifold" => {
+                                mayReadFreeBusy => JSON::true,
+                                mayRead => JSON::true,
+                                mayWrite => JSON::false,
+                                mayAdmin => JSON::false
+                            }
+             }}}, "R1"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Calendar/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog "fetch invite";
+    my ($adds) = $mantalk->SyncEventLinks("/dav/notifications/user/manifold");
+    $self->assert_equals(scalar %$adds, 1);
+
+    xlog "check ACL";
+    my $acl = $admintalk->getacl("user.master.#calendars.$CalendarId");
+    $self->assert_str_equals('cassandane', $acl->[4]);
+    $self->assert_str_equals('lrswipkxtecdan9', $acl->[5]);
+    $self->assert_str_equals('manifold', $acl->[6]);
+    $self->assert_str_equals('lr9', $acl->[7]);
+}
+
 sub test_calendar_set_issubscribed
     :min_version_3_1 :needs_component_jmap
 {
