@@ -1106,6 +1106,7 @@ static int notify_put(struct transaction_t *txn, void *obj,
                     tgt.namespace = http_namespaces[i];
                     pparams =
                         (struct meth_params *) tgt.namespace->methods[METH_PUT].params;
+                    tgt.flags = TGT_DAV_SHARED;  // prevent old-style sharing redirect
                     pparams->parse_path(path, &tgt, &errstr);
                     xmlFree(value);
                     free(tgt.userid);

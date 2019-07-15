@@ -2818,10 +2818,13 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                             /*haszzzz*/0, mbname, mbname_userid(mbname));
 
         /* Create a request target for this collection */
-        pparams->parse_path(buf_cstring(&irock.resource), &irock.tgt, &errstr);
+        irock.tgt.flags = TGT_DAV_SHARED;  // prevent old-style sharing redirect
+        r = pparams->parse_path(buf_cstring(&irock.resource), &irock.tgt, &errstr);
 
-        /* Process each user */
-        hash_enumerate(&user_access, send_dav_invite, &irock);
+        if (!r) {
+            /* Process each user */
+            hash_enumerate(&user_access, send_dav_invite, &irock);
+        }
 
         /* Cleanup */
         if (irock.notify) xmlFreeDoc(irock.notify->doc);
