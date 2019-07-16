@@ -1209,7 +1209,7 @@ sub assert_user_sub_exists
     my ($self, $instance, $user) = @_;
 
     my $conf_user_dir = $instance->get_conf_user_dir($user);
-    my $subs = "$conf_user_dir/$user.sub";
+    my $subs = "$conf_user_dir$user.sub";
 
     xlog "Looking for subscriptions file $subs";
 
@@ -1221,7 +1221,7 @@ sub assert_user_sub_not_exists
     my ($self, $instance, $user) = @_;
 
     my $conf_user_dir = $instance->get_conf_user_dir($user);
-    my $subs = "$conf_user_dir/$user.sub";
+    my $subs = "$conf_user_dir$user.sub";
 
     xlog "Looking for subscriptions file $subs";
 
@@ -1296,7 +1296,7 @@ sub test_subscriptions
     $self->assert_user_sub_exists($self->{replica}, $user);
 
     # verify replica store can see subs
-    my $replicasvc = $self->{instance}->get_service('imap');
+    my $replicasvc = $self->{replica}->get_service('imap');
     my $replicastore = $replicasvc->create_store(username => $user);
     my $replicatalk = $replicastore->get_client();
 
@@ -1393,7 +1393,7 @@ sub test_subscriptions_unixhs
     $self->assert_user_sub_exists($self->{replica}, $user);
 
     # verify replica store can see subs
-    my $replicasvc = $self->{instance}->get_service('imap');
+    my $replicasvc = $self->{replica}->get_service('imap');
     my $replicastore = $replicasvc->create_store(username => $user);
     my $replicatalk = $replicastore->get_client();
 
