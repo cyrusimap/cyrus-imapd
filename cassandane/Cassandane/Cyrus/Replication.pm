@@ -704,6 +704,288 @@ EOF
     $self->assert_sieve_noactive($self->{replica}, $user, $scriptname);
 }
 
+sub test_sieve_replication_unixhs
+    :needs_component_sieve :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my $user = 'some.body';
+    my $scriptname = 'test1';
+    my $scriptcontent = <<'EOF';
+require ["reject","fileinto"];
+if address :is :all "From" "autoreject@example.org"
+{
+        reject "testing";
+}
+EOF
+    $self->{instance}->create_user($user);
+
+    # first, verify that sieve script does not exist on master or replica
+    $self->assert_sieve_not_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{instance}, $user);
+
+    $self->assert_sieve_not_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{replica}, $user);
+
+    # then, install sieve script on master
+    $self->{instance}->install_sieve_script($scriptcontent,
+                                            name=>$scriptname,
+                                            username=>$user);
+
+    # then, verify that sieve script exists on master but not on replica
+    $self->assert_sieve_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_active($self->{instance}, $user, $scriptname);
+
+    $self->assert_sieve_not_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{replica}, $user);
+
+    # then, run replication,
+    $self->run_replication(user=>$user);
+    $self->check_replication($user);
+
+    # then, verify that sieve script exists on both master and replica
+    $self->assert_sieve_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_active($self->{instance}, $user, $scriptname);
+
+    $self->assert_sieve_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_active($self->{replica}, $user, $scriptname);
+}
+
+sub test_sieve_replication_exists_unixhs
+    :needs_component_sieve :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my $user = 'some.body';
+    my $scriptname = 'test1';
+    my $scriptcontent = <<'EOF';
+require ["reject","fileinto"];
+if address :is :all "From" "autoreject@example.org"
+{
+        reject "testing";
+}
+EOF
+    $self->{instance}->create_user($user);
+
+    # first, verify that sieve script does not exist on master or replica
+    $self->assert_sieve_not_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{instance}, $user);
+
+    $self->assert_sieve_not_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{replica}, $user);
+
+    # then, install sieve script on both master and replica
+    $self->{instance}->install_sieve_script($scriptcontent,
+                                            name=>$scriptname,
+                                            username=>$user);
+    $self->{replica}->install_sieve_script($scriptcontent,
+                                           name=>$scriptname,
+                                           username=>$user);
+
+    # then, verify that sieve script exists on both
+    $self->assert_sieve_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_active($self->{instance}, $user, $scriptname);
+
+    $self->assert_sieve_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_active($self->{replica}, $user, $scriptname);
+
+    # then, run replication,
+    $self->run_replication(user=>$user);
+    $self->check_replication($user);
+
+    # then, verify that sieve script still exists on both master and replica
+    $self->assert_sieve_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_active($self->{instance}, $user, $scriptname);
+
+    $self->assert_sieve_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_active($self->{replica}, $user, $scriptname);
+}
+
+sub test_sieve_replication_different_unixhs
+    :needs_component_sieve :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my $user = 'some.body';
+    my $script1name = 'test1';
+    my $script1content = <<'EOF';
+require ["reject","fileinto"];
+if address :is :all "From" "autoreject@example.org"
+{
+        reject "testing";
+}
+EOF
+
+    my $script2name = 'test2';
+    my $script2content = <<'EOF';
+require ["reject","fileinto"];
+if address :is :all "From" "autoreject@example.org"
+{
+        reject "more testing";
+}
+EOF
+    $self->{instance}->create_user($user);
+
+    # first, verify that neither script exists on master or replica
+    $self->assert_sieve_not_exists($self->{instance}, $user, $script1name);
+    $self->assert_sieve_not_exists($self->{instance}, $user, $script2name);
+    $self->assert_sieve_noactive($self->{instance}, $user);
+
+    $self->assert_sieve_not_exists($self->{replica}, $user, $script1name);
+    $self->assert_sieve_not_exists($self->{replica}, $user, $script2name);
+    $self->assert_sieve_noactive($self->{replica}, $user);
+
+    # then, install different sieve script on master and replica
+    $self->{instance}->install_sieve_script($script1content,
+                                            name=>$script1name,
+                                            username=>$user);
+    $self->{replica}->install_sieve_script($script2content,
+                                           name=>$script2name,
+                                           username=>$user);
+
+    # then, verify that each sieve script exists on one only
+    $self->assert_sieve_exists($self->{instance}, $user, $script1name);
+    $self->assert_sieve_active($self->{instance}, $user, $script1name);
+    $self->assert_sieve_not_exists($self->{instance}, $user, $script2name);
+
+    $self->assert_sieve_exists($self->{replica}, $user, $script2name);
+    $self->assert_sieve_active($self->{replica}, $user, $script2name);
+    $self->assert_sieve_not_exists($self->{replica}, $user, $script1name);
+
+    # then, run replication,
+    # the one that exists on master only will be replicated
+    # the one that exists on replica only will be deleted
+    $self->run_replication(user=>$user);
+    $self->check_replication($user);
+
+    # then, verify that scripts are in expected state
+    $self->assert_sieve_exists($self->{instance}, $user, $script1name);
+    $self->assert_sieve_active($self->{instance}, $user, $script1name);
+    $self->assert_sieve_not_exists($self->{instance}, $user, $script2name);
+
+    $self->assert_sieve_exists($self->{replica}, $user, $script1name);
+    $self->assert_sieve_active($self->{replica}, $user, $script1name);
+    $self->assert_sieve_not_exists($self->{replica}, $user, $script2name);
+}
+
+sub test_sieve_replication_stale_unixhs
+    :needs_component_sieve :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my $user = 'some.body';
+    my $scriptname = 'test1';
+    my $scriptoldcontent = <<'EOF';
+require ["reject","fileinto"];
+if address :is :all "From" "autoreject@example.org"
+{
+        reject "testing";
+}
+EOF
+
+    my $scriptnewcontent = <<'EOF';
+require ["reject","fileinto"];
+if address :is :all "From" "autoreject@example.org"
+{
+        reject "more testing";
+}
+EOF
+    $self->{instance}->create_user($user);
+
+    # first, verify that script does not exist on master or replica
+    $self->assert_sieve_not_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{instance}, $user);
+
+    $self->assert_sieve_not_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{replica}, $user);
+
+    # then, install "old" script on replica...
+    $self->{replica}->install_sieve_script($scriptoldcontent,
+                                           name=>$scriptname,
+                                           username=>$user);
+
+    # ... and "new" script on master, a little later
+    sleep 2;
+    $self->{instance}->install_sieve_script($scriptnewcontent,
+                                            name=>$scriptname,
+                                            username=>$user);
+
+    # then, verify that different sieve script content exists at each end
+    $self->assert_sieve_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_active($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_matches($self->{instance}, $user, $scriptname,
+                                $scriptnewcontent);
+
+    $self->assert_sieve_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_active($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_matches($self->{replica}, $user, $scriptname,
+                                $scriptoldcontent);
+
+    # then, run replication,
+    # the one that exists on replica is different to and older than the one
+    # on master, so it will be replaced with the one from master
+    $self->run_replication(user=>$user);
+    $self->check_replication($user);
+
+    # then, verify that scripts are in expected state
+    $self->assert_sieve_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_active($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_matches($self->{instance}, $user, $scriptname,
+                                $scriptnewcontent);
+
+    $self->assert_sieve_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_active($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_matches($self->{replica}, $user, $scriptname,
+                                $scriptnewcontent);
+}
+
+sub test_sieve_replication_delete_unactivate_unixhs
+    :needs_component_sieve :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my $user = 'some.body';
+    my $scriptname = 'test1';
+    my $scriptcontent = <<'EOF';
+require ["reject","fileinto"];
+if address :is :all "From" "autoreject@example.org"
+{
+        reject "testing";
+}
+EOF
+    $self->{instance}->create_user($user);
+
+    # first, verify that sieve script does not exist on master or replica
+    $self->assert_sieve_not_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{instance}, $user);
+
+    $self->assert_sieve_not_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{replica}, $user);
+
+    # then, install sieve script on replica only
+    $self->{replica}->install_sieve_script($scriptcontent,
+                                           name=>$scriptname,
+                                           username=>$user);
+
+    # then, verify that sieve script exists on replica only
+    $self->assert_sieve_not_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{instance}, $user, $scriptname);
+
+    $self->assert_sieve_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_active($self->{replica}, $user, $scriptname);
+
+    # then, run replication,
+    $self->run_replication(user=>$user);
+    $self->check_replication($user);
+
+    # then, verify that sieve script no longer exists on either
+    $self->assert_sieve_not_exists($self->{instance}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{instance}, $user, $scriptname);
+
+    $self->assert_sieve_not_exists($self->{replica}, $user, $scriptname);
+    $self->assert_sieve_noactive($self->{replica}, $user, $scriptname);
+}
+
 sub slurp_file
 {
     my ($filename) = @_;
