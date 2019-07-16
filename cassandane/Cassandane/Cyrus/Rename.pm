@@ -523,9 +523,15 @@ sub test_rename_user
 }
 
 sub test_rename_deepuser
-    :AllowMoves
+    :AllowMoves :Replication :NoStartInstances
 {
     my ($self) = @_;
+
+    $self->{instance}->{config}->set('sync_log' => 1);
+    $self->_start_instances();
+
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
     my $admintalk = $self->{adminstore}->get_client();
 
     xlog "Test user rename";
@@ -534,11 +540,22 @@ sub test_rename_deepuser
     $admintalk->create("user.cassandane.bar") || die;
     $admintalk->create("user.cassandane.bar.sub") || die;
 
+    # replicate and check initial state
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    $self->check_replication('cassandane');
+    unlink($synclogfname);
+
+    # n.b. run_replication dropped all our store connections...
+    $admintalk = $self->{adminstore}->get_client();
     my $res = $admintalk->rename('user.cassandane', 'user.newuser');
     $self->assert(not $admintalk->get_last_error());
 
     $res = $admintalk->select("user.newuser.bar.sub");
     $self->assert(not $admintalk->get_last_error());
+
+    # replicate and check the renames
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    $self->check_replication('newuser');
 }
 
 sub test_rename_paths
