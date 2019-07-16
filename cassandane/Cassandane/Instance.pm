@@ -2026,6 +2026,15 @@ sub get_sieve_script_dir
     return $sieved;
 }
 
+sub get_conf_user_dir
+{
+    my ($self, $user) = @_;
+
+    my $uhash = substr($user, 0, 1);
+
+    return "$self->{basedir}/conf/user/$uhash/";
+}
+
 sub install_sieve_script
 {
     my ($self, $script, %params) = @_;

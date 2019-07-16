@@ -1204,4 +1204,221 @@ sub test_replication_with_modified_seen_flag
     $self->assert(not grep { $_ eq "\\Seen"} @$flags);
 }
 
+sub assert_user_sub_exists
+{
+    my ($self, $instance, $user) = @_;
+
+    my $conf_user_dir = $instance->get_conf_user_dir($user);
+    my $subs = "$conf_user_dir/$user.sub";
+
+    xlog "Looking for subscriptions file $subs";
+
+    $self->assert(( -f $subs ));
+}
+
+sub assert_user_sub_not_exists
+{
+    my ($self, $instance, $user) = @_;
+
+    my $conf_user_dir = $instance->get_conf_user_dir($user);
+    my $subs = "$conf_user_dir/$user.sub";
+
+    xlog "Looking for subscriptions file $subs";
+
+    $self->assert(( ! -f $subs ));
+}
+
+sub test_subscriptions
+{
+    my ($self) = @_;
+
+    my $user = 'brandnew';
+    $self->{instance}->create_user($user);
+
+    # verify that subs file does not exist on master
+    # verify that subs file does not exist on replica
+    $self->assert_user_sub_not_exists($self->{instance}, $user);
+    $self->assert_user_sub_not_exists($self->{replica}, $user);
+
+    # set up and verify some subscriptions on master
+    my $mastersvc = $self->{instance}->get_service('imap');
+    my $masterstore = $mastersvc->create_store(username => $user);
+    my $mastertalk = $masterstore->get_client();
+
+    $mastertalk->create("INBOX.Test") || die;
+    $mastertalk->create("INBOX.Test.Sub") || die;
+    $mastertalk->create("INBOX.Test Foo") || die;
+    $mastertalk->create("INBOX.Test Bar") || die;
+    $mastertalk->subscribe("INBOX") || die;
+    $mastertalk->subscribe("INBOX.Test") || die;
+    $mastertalk->subscribe("INBOX.Test.Sub") || die;
+    $mastertalk->subscribe("INBOX.Test Foo") || die;
+    $mastertalk->delete("INBOX.Test.Sub") || die;
+
+    my $subdata = $mastertalk->lsub("", "*");
+    $self->assert_deep_equals($subdata, [
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX'
+          ],
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX.Test'
+          ],
+          [
+            [],
+            '.',
+            'INBOX.Test Foo'
+          ],
+    ]);
+
+    # drop the conf dir lock, so the subs get written out
+    $mastertalk->logout();
+
+    # verify that subs file exists on master
+    # verify that subs file does not exist on replica
+    $self->assert_user_sub_exists($self->{instance}, $user);
+    $self->assert_user_sub_not_exists($self->{replica}, $user);
+
+    # run replication
+    $self->run_replication(user => $user);
+    $self->check_replication($user);
+
+    # verify that subs file exists on master
+    # verify that subs file exists on replica
+    $self->assert_user_sub_exists($self->{instance}, $user);
+    $self->assert_user_sub_exists($self->{replica}, $user);
+
+    # verify replica store can see subs
+    my $replicasvc = $self->{instance}->get_service('imap');
+    my $replicastore = $replicasvc->create_store(username => $user);
+    my $replicatalk = $replicastore->get_client();
+
+    $subdata = $replicatalk->lsub("", "*");
+    $self->assert_deep_equals($subdata, [
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX'
+          ],
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX.Test'
+          ],
+          [
+            [],
+            '.',
+            'INBOX.Test Foo'
+          ],
+    ]);
+}
+
+sub test_subscriptions_unixhs
+    :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my $user = 'brand.new';
+    $self->{instance}->create_user($user);
+
+    # verify that subs file does not exist on master
+    # verify that subs file does not exist on replica
+    $self->assert_user_sub_not_exists($self->{instance}, $user);
+    $self->assert_user_sub_not_exists($self->{replica}, $user);
+
+    # set up and verify some subscriptions on master
+    my $mastersvc = $self->{instance}->get_service('imap');
+    my $masterstore = $mastersvc->create_store(username => $user);
+    my $mastertalk = $masterstore->get_client();
+
+    $mastertalk->create("INBOX/Test") || die;
+    $mastertalk->create("INBOX/Test/Sub") || die;
+    $mastertalk->create("INBOX/Test Foo") || die;
+    $mastertalk->create("INBOX/Test Bar") || die;
+    $mastertalk->subscribe("INBOX") || die;
+    $mastertalk->subscribe("INBOX/Test") || die;
+    $mastertalk->subscribe("INBOX/Test/Sub") || die;
+    $mastertalk->subscribe("INBOX/Test Foo") || die;
+    $mastertalk->delete("INBOX/Test/Sub") || die;
+
+    my $subdata = $mastertalk->lsub("", "*");
+    $self->assert_deep_equals($subdata, [
+          [
+            [
+              '\\HasChildren'
+            ],
+            '/',
+            'INBOX'
+          ],
+          [
+            [
+              '\\HasChildren'
+            ],
+            '/',
+            'INBOX/Test'
+          ],
+          [
+            [],
+            '/',
+            'INBOX/Test Foo'
+          ],
+    ]);
+
+    # drop the conf dir lock, so the subs get written out
+    $mastertalk->logout();
+
+    # verify that subs file exists on master
+    # verify that subs file does not exist on replica
+    $self->assert_user_sub_exists($self->{instance}, $user);
+    $self->assert_user_sub_not_exists($self->{replica}, $user);
+
+    # run replication
+    $self->run_replication(user => $user);
+    $self->check_replication($user);
+
+    # verify that subs file exists on master
+    # verify that subs file exists on replica
+    $self->assert_user_sub_exists($self->{instance}, $user);
+    $self->assert_user_sub_exists($self->{replica}, $user);
+
+    # verify replica store can see subs
+    my $replicasvc = $self->{instance}->get_service('imap');
+    my $replicastore = $replicasvc->create_store(username => $user);
+    my $replicatalk = $replicastore->get_client();
+
+    $subdata = $replicatalk->lsub("", "*");
+    $self->assert_deep_equals($subdata, [
+          [
+            [
+              '\\HasChildren'
+            ],
+            '/',
+            'INBOX'
+          ],
+          [
+            [
+              '\\HasChildren'
+            ],
+            '/',
+            'INBOX/Test'
+          ],
+          [
+            [],
+            '/',
+            'INBOX/Test Foo'
+          ],
+    ]);
+}
+
 1;
