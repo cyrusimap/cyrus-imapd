@@ -600,4 +600,40 @@ sub test_rename_paths
     -d "$basedir/meta/user/cassandane/rename-src" && die;
 }
 
+sub test_rename_deepuser_unixhs
+    :AllowMoves :Replication :NoStartInstances :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    $self->{instance}->{config}->set('sync_log' => 1);
+    $self->_start_instances();
+
+    my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "Test user rename";
+
+    $admintalk->create("user/cassandane/foo") || die;
+    $admintalk->create("user/cassandane/bar") || die;
+    $admintalk->create("user/cassandane/bar/sub") || die;
+
+    # replicate and check initial state
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    $self->check_replication('cassandane');
+    unlink($synclogfname);
+
+    # n.b. run_replication dropped all our store connections...
+    $admintalk = $self->{adminstore}->get_client();
+    my $res = $admintalk->rename('user/cassandane', 'user/new.user');
+    $self->assert(not $admintalk->get_last_error());
+
+    $res = $admintalk->select("user/new.user/bar/sub");
+    $self->assert(not $admintalk->get_last_error());
+
+    # replicate and check the renames
+    $self->run_replication(rolling => 1, inputfile => $synclogfname);
+    $self->check_replication('new.user');
+}
+
 1;
