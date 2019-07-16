@@ -124,6 +124,7 @@ sub disconnect
     # We don't care if the LOGOUT fails.  Really.
     eval
     {
+        local $SIG{__DIE__};
         $self->{client}->logout()
             if defined $self->{client};
     };
