@@ -998,9 +998,17 @@ sub run_replication
 sub check_replication {
     my ($self, $user) = @_;
 
+    # get store connections as the user
+
+    my $mastersvc = $self->{instance}->get_service('imap');
+    my $masterstore = $mastersvc->create_store(username => $user);
+
+    my $replicasvc = $self->{replica}->get_service('imap');
+    my $replicastore = $replicasvc->create_store(username => $user);
+
     my $CR = Cyrus::CheckReplication->new(
-        IMAPs1 => $self->{master_store}->get_client(),
-        IMAPs2 => $self->{replica_store}->get_client(),
+        IMAPs1 => $masterstore->get_client(),
+        IMAPs2 => $replicastore->get_client(),
         CyrusName => $user,
         SleepTime => 0,
         Repeats => 1,
