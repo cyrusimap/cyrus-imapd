@@ -2593,6 +2593,7 @@ struct acl_change {
 struct invite_rock {
     xmlNodePtr notify;
     xmlNsPtr ns[NUM_NAMESPACE];
+    const char *mboxname;
     struct buf resource;
     struct request_target_t tgt;
     const struct prop_entry *live_props;
@@ -2608,16 +2609,24 @@ static void send_dav_invite(const char *userid, void *val, void *rock)
     long new = change->new & (ACL_READ|ACL_LOOKUP|WRITERIGHTS);
 
     if (old != new) {
-        int access, r;
+        int access, r = 0;
 
         if (!new) access = SHARE_NONE;
         else if (new & WRITERIGHTS) access = SHARE_READWRITE;
         else access = SHARE_READONLY;
 
-        /* Notify sharee */
-        r = dav_create_invite(&irock->notify, irock->ns, &irock->tgt,
-                              irock->live_props, userid, access,
-                              BAD_CAST "Shared via JMAP");
+        if (!old || !new) {
+            /* Change subscription */
+            r = mboxlist_changesub(irock->mboxname, userid, httpd_authstate,
+                                   access != SHARE_NONE, 0, /*notify*/1);
+        }
+
+        if (!r) {
+            /* Notify sharee */
+            r = dav_create_invite(&irock->notify, irock->ns, &irock->tgt,
+                                  irock->live_props, userid, access,
+                                  BAD_CAST "Shared via JMAP");
+        }
         if (!r) {
             /* Create a resource name for the notifications -
                We use a consistent naming scheme so that multiple
@@ -2823,6 +2832,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
 
         if (!r) {
             /* Process each user */
+            irock.mboxname = mbox->name;
             hash_enumerate(&user_access, send_dav_invite, &irock);
         }
 
