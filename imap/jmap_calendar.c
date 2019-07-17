@@ -343,36 +343,14 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     }
 
     if (jmap_wantprop(rock->get->props, "isSubscribed")) {
-        int is_subscribed = 1;
+        int is_subscribed;
         if (mboxname_userownsmailbox(httpd_userid, mbentry->name)) {
             /* Users always subscribe their own calendars */
             is_subscribed = 1;
         }
         else {
             /* Lookup mailbox subscriptions */
-            if (mboxlist_checksub(mbentry->name, httpd_userid) == 0) {
-                /* It's listed in the mailbox subscription database,
-                 * so it must be subscribed. */
-                is_subscribed = 1;
-            }
-            else {
-                /* Support legacy shared calendars: they are subscribed
-                 * by default, if the user did not explicitly set the
-                 * invite-status DAV property */
-                buf_reset(&attrib);
-                static const char *invite_annot =
-                    DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
-                r = annotatemore_lookupmask(mbentry->name, invite_annot,
-                                            httpd_userid, &attrib);
-                if (!strcmp(buf_cstring(&attrib), "invite-accepted")) {
-                    is_subscribed = 1;
-                }
-                else if (buf_len(&attrib)) {
-                    is_subscribed = 0;
-                }
-                else is_subscribed = 1;
-                buf_free(&attrib);
-            }
+            is_subscribed = mboxlist_checksub(mbentry->name, httpd_userid) == 0;
         }
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
