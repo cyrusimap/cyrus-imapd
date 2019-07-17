@@ -1347,7 +1347,7 @@ HIDDEN char *jmap_xhref(const char *mboxname, const char *resource)
 {
     /* XXX - look up root path from namespace? */
     struct buf buf = BUF_INITIALIZER;
-    char *userid = mboxname_to_userid(mboxname);
+    char *owner = mboxname_to_userid(mboxname);
 
     const char *prefix = NULL;
     if (mboxname_isaddressbookmailbox(mboxname, 0)) {
@@ -1357,17 +1357,28 @@ HIDDEN char *jmap_xhref(const char *mboxname, const char *resource)
         prefix = namespace_calendar.prefix;
     }
 
-    if (strchr(userid, '@') || !httpd_extradomain) {
-        buf_printf(&buf, "%s/%s/%s/%s", prefix, USER_COLLECTION_PREFIX,
-                   userid, strrchr(mboxname, '.')+1);
+    /* Path to home-set */
+    buf_printf(&buf, "%s/%s/%s", prefix, USER_COLLECTION_PREFIX, httpd_userid);
+    if (!strchr(httpd_userid, '@') && httpd_extradomain) {
+        buf_printf(&buf, "@%s", httpd_extradomain);
     }
-    else {
-        buf_printf(&buf, "%s/%s/%s@%s/%s", prefix, USER_COLLECTION_PREFIX,
-                   userid, httpd_extradomain, strrchr(mboxname, '.')+1);
+    buf_putc(&buf, '/');
+
+    if (strcmp(owner, httpd_userid)) {
+        /* Encode shared collection as: <owner> "." <mboxname> */
+        buf_appendcstr(&buf, owner);
+        if (!strchr(owner, '@') && httpd_extradomain) {
+            buf_printf(&buf, "@%s", httpd_extradomain);
+        }
+        buf_putc(&buf, SHARED_COLLECTION_DELIM);
     }
+
+    /* Collection */
+    buf_printf(&buf, "%s", strrchr(mboxname, '.')+1);
+
     if (resource)
         buf_printf(&buf, "/%s", resource);
-    free(userid);
+    free(owner);
     return buf_release(&buf);
 }
 
