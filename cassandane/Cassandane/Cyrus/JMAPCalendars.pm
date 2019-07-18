@@ -623,7 +623,7 @@ sub test_calendar_set_issubscribed_shared
             properties => ['isSubscribed']
         }, 'R!'],
     ]);
-    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{isSubscribed});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]{isSubscribed});
     my $id = $res->[0][1]{list}[0]{id};
 
     # Toggle isSubscribed on read-only shared calendar
@@ -632,7 +632,7 @@ sub test_calendar_set_issubscribed_shared
             accountId => 'other',
             update => {
                 $id => {
-                    isSubscribed => JSON::false,
+                    isSubscribed => JSON::true,
                 }
             }
         }, "R1"],
@@ -643,7 +643,7 @@ sub test_calendar_set_issubscribed_shared
         }, 'R2'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$id});
-    $self->assert_equals(JSON::false, $res->[1][1]{list}[0]{isSubscribed});
+    $self->assert_equals(JSON::true, $res->[1][1]{list}[0]{isSubscribed});
 }
 
 
