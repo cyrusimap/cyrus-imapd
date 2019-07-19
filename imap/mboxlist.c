@@ -1540,13 +1540,6 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     return r;
 }
 
-static int addmbox_to_list(const mbentry_t *mbentry, void *rock)
-{
-    strarray_t *list = (strarray_t *)rock;
-    strarray_append(list, mbentry->name);
-    return 0;
-}
-
 /*
  * Delayed Delete a mailbox: translate delete into rename
  */
@@ -1562,7 +1555,6 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
 {
     mbentry_t *mbentry = NULL;
     strarray_t existing = STRARRAY_INITIALIZER;
-    int i;
     char newname[MAX_MAILBOX_BUFFER];
     int r = 0;
     long myrights;
