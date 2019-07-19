@@ -1372,20 +1372,6 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
         }
     }
 
-    /* check if there are already too many! */
-    mboxname_todeleted(name, newname, 0);
-    r = mboxlist_mboxtree(newname, addmbox_to_list, &existing, MBOXTREE_SKIP_ROOT);
-    if (r) goto done;
-
-    /* keep the last 19, so the new one is the 20th */
-    for (i = 0; i < (int)existing.count - 19; i++) {
-        const char *subname = strarray_nth(&existing, i);
-        syslog(LOG_NOTICE, "too many subfolders for %s, deleting %s (%d / %d)",
-               newname, subname, i+1, (int)existing.count);
-        r = mboxlist_deletemailbox(subname, 1, userid, auth_state, NULL, 0, 1, 1);
-        if (r) goto done;
-    }
-
     /* get the deleted name */
     mboxname_todeleted(name, newname, 1);
 
