@@ -1862,6 +1862,7 @@ static int verify_regexlist(sieve_script_t *sscript,
             (void) regerror(ret, &reg,
                             (char *) buf_base(&sscript->sieveerr),
                             errbuf_size);
+            buf_truncate(&sscript->sieveerr, errbuf_size);
             yyerror(sscript, buf_cstring(&sscript->sieveerr));
         }
 
