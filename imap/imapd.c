@@ -6824,6 +6824,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     int mbtype = 0;
     const char *partition = NULL;
     const char *server = NULL;
+    const char *uniqueid = NULL;
     struct buf specialuse = BUF_INITIALIZER;
     struct dlist *use;
     struct mailbox *mailbox = NULL;
@@ -6836,13 +6837,11 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
     mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
 
-    dlist_getatom(extargs, "PARTITION", &partition);
-    dlist_getatom(extargs, "SERVER", &server);
-
     const char *type = NULL;
 
     dlist_getatom(extargs, "PARTITION", &partition);
     dlist_getatom(extargs, "SERVER", &server);
+    dlist_getatom(extargs, "MAILBOXID", &uniqueid);
     if (dlist_getatom(extargs, "TYPE", &type)) {
         if (!strcasecmp(type, "CALENDAR")) mbtype |= MBTYPE_CALENDAR;
         else if (!strcasecmp(type, "COLLECTION")) mbtype |= MBTYPE_COLLECTION;
@@ -7001,12 +7000,27 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
                     prot_printastring(s_conn->out, name);
 
                     // special use needs extended support, so pass through extargs
-                    if (specialuse.len) {
-                        prot_printf(s_conn->out, " (USE (%s)", buf_cstring(&specialuse));
+                    if (specialuse.len || uniqueid) {
+                        prot_printf(s_conn->out, " (");
+                        int printsp = 0;
+                        if (specialuse.len) {
+                            if (printsp) prot_putc(' ', s_conn->out);
+                            printsp = 1;
+                            prot_printf(s_conn->out, "USE (%s)", buf_cstring(&specialuse));
+                        }
 
                         if (partition) {
-                            prot_printf(s_conn->out, " PARTITION ");
+                            if (printsp) prot_putc(' ', s_conn->out);
+                            printsp = 1;
+                            prot_printf(s_conn->out, "PARTITION ");
                             prot_printastring(s_conn->out, partition);
+                        }
+
+                        if (uniqueid) {
+                            if (printsp) prot_putc(' ', s_conn->out);
+                            printsp = 1;
+                            prot_printf(s_conn->out, "MAILBOXID ");
+                            prot_printastring(s_conn->out, uniqueid);
                         }
 
                         prot_putc(')', s_conn->out);
@@ -7066,18 +7080,19 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     }
 
 localcreate:
-    r = mboxlist_createmailbox(
-            mbname_intname(mbname),                             // const char name
+    r = mboxlist_createmailbox_unq(
+            mbname_intname(mbname),                             // const char *name
             mbtype,                                             // int mbtype
-            partition,                                          // const char partition
+            partition,                                          // const char *partition
             imapd_userisadmin || imapd_userisproxyadmin,        // int isadmin
-            imapd_userid,                                       // const char userid
-            imapd_authstate,                                    // struct auth_state auth_state
+            imapd_userid,                                       // const char *userid
+            imapd_authstate,                                    // struct auth_state *auth_state
             localonly,                                          // int localonly
             localonly,                                          // int forceuser
             0,                                                  // int dbonly
             1,                                                  // int notify
-            &mailbox                                            // struct mailbox mailboxptr
+            uniqueid,                                           // const char *uniqueid
+            &mailbox                                            // struct mailbox **mailboxptr
         );
 
 #ifdef USE_AUTOCREATE
