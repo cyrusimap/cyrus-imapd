@@ -1364,12 +1364,25 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
                            int localonly, int forceuser, int dbonly,
                            int notify, struct mailbox **mailboxptr)
 {
+    return mboxlist_createmailbox_unq(name, mbtype, partition, isadmin,
+                                      userid, auth_state, localonly,
+                                      forceuser, dbonly, notify, NULL,
+                                      mailboxptr);
+}
+
+EXPORTED int mboxlist_createmailbox_unq(const char *name, int mbtype,
+                           const char *partition,
+                           int isadmin, const char *userid,
+                           const struct auth_state *auth_state,
+                           int localonly, int forceuser, int dbonly,
+                           int notify, const char *uniqueid,
+                           struct mailbox **mailboxptr)
+{
     int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
                   | OPT_POP3_NEW_UIDL;
     int r;
     struct mailbox *mailbox = NULL;
     uint32_t uidvalidity = 0;
-    char *uniqueid = NULL;
     modseq_t createdmodseq = 0;
 
     init_internal();
@@ -1385,7 +1398,7 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
         }
         else if (oldmbentry->mbtype == MBTYPE_INTERMEDIATE) {
             /* then use the existing mailbox ID and createdmodseq */
-            uniqueid = xstrdupnull(oldmbentry->uniqueid);
+            if (!uniqueid) uniqueid = oldmbentry->uniqueid;
             createdmodseq = oldmbentry->createdmodseq;
         }
     }
@@ -1396,7 +1409,6 @@ EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
                                     options, uidvalidity, createdmodseq, 0, NULL,
                                     uniqueid, localonly,
                                     forceuser, dbonly, 0, &mailbox);
-    free(uniqueid);
 
     if (notify && !r) {
         /* send a MailboxCreate event notification */
