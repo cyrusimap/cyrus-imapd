@@ -953,7 +953,7 @@ int service_init(int argc __attribute__((unused)),
     buf_printf(&serverinfo, " Brotli/%u.%u.%u",
                (version >> 24) & 0xfff, (version >> 12) & 0xfff, version & 0xfff);
 #endif
-    buf_printf(&serverinfo, " LibXML%s", LIBXML_DOTTED_VERSION);
+    buf_printf(&serverinfo, " LibXML/%s", LIBXML_DOTTED_VERSION);
 
     /* Do any namespace specific initialization */
     config_httpmodules = config_getbitfield(IMAPOPT_HTTPMODULES);
