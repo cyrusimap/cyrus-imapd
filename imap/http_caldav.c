@@ -7617,6 +7617,14 @@ icalcomponent *busytime_query_local(struct transaction_t *txn,
             add_vavailability(vavail,
                               icalparser_parse_string(buf_cstring(&attrib)));
         }
+        else {
+            prop_annot = DAV_ANNOT_NS "<" XML_NS_CS ">calendar-availability";
+            if (!annotatemore_lookupmask(mboxname, prop_annot,
+                                         httpd_userid, &attrib) && attrib.len) {
+                add_vavailability(vavail,
+                                  icalparser_parse_string(buf_cstring(&attrib)));
+            }
+        }
         free(mboxname);
         free(userid);
     }
