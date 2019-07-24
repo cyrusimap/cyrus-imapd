@@ -197,7 +197,7 @@ sub test_disabled
 }
 
 # tests for pathological quotaroot/partition subdivisions
-sub disabled_test_quota_commitments
+sub test_quota_commitments
     :min_version_3_1 :needs_component_httpd :Partition2
 {
     my ($self) = @_;
@@ -248,7 +248,7 @@ sub disabled_test_quota_commitments
     $self->assert_equals(10000, $report->{'cyrus_usage_quota_commitment'}->{'partition="p2",resource="STORAGE"'}->{value});
 }
 
-sub disabled_test_shared_mailbox_namespaces
+sub test_shared_mailbox_namespaces
     :min_version_3_1 :needs_component_httpd
 {
     my ($self) = @_;
