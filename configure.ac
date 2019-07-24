@@ -1530,6 +1530,7 @@ with_ical=no
 with_icu4c=no
 with_shapelib=no
 with_brotli=no
+with_zstd=no
 if test "$enable_http" != no; then
 dnl
 dnl make sure all the modules we need are present
