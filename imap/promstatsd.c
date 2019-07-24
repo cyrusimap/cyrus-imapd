@@ -339,14 +339,12 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
     }
 
     if (mbname_isdeleted(data->mbname)) {
-        syslog(LOG_DEBUG, "counting deleted: %s", mbname_intname(data->mbname));
         pdata->n_deleted ++;
         pdata->timestamp = now_ms();
     }
     else if (mbname_category(data->mbname, mboxname_get_adminnamespace(), NULL)
              == MBNAME_SHARED) {
         const char *namespace = strarray_nth(mbname_boxes(data->mbname), 0);
-        syslog(LOG_DEBUG, "counting shared (namespace = %s)", namespace);
         int64_t *n_shared = hash_lookup(namespace, &pdata->shared);
         if (!n_shared) {
             n_shared = malloc(sizeof *n_shared);
@@ -359,13 +357,11 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
     }
     else if (mbname_userid(data->mbname) &&
         !strarray_size(mbname_boxes(data->mbname))) {
-        syslog(LOG_DEBUG, "counting user: %s", mbname_intname(data->mbname));
         pdata->n_users ++;
         pdata->n_mailboxes ++; /* an inbox is also a mailbox */
         pdata->timestamp = now_ms();
     }
     else {
-        syslog(LOG_DEBUG, "counting mailbox: %s", mbname_intname(data->mbname));
         pdata->n_mailboxes ++;
         pdata->timestamp = now_ms();
     }
@@ -418,8 +414,6 @@ static int quota_cb(struct findall_data *data, void *rock)
         struct quota *q = cbrock->quota;
         double dv = q->limits[res] < 0 ? INFINITY : q->limits[res];
 
-        syslog(LOG_DEBUG, "found quota commitment: quotaroot=%s res=%s partition=%s limit=%.0f",
-                          q->root, quota_names[res], partition, dv);
         pdata->quota_commitment[res] += dv;
     }
     pdata->timestamp = now_ms();
@@ -438,7 +432,6 @@ static int count_quota_commitments(struct quota *quota, void *rock)
     strarray_t *patterns = strarray_new();
     int r;
 
-    syslog(LOG_DEBUG, "counting quota commitments for quotaroot=%s", quota->root);
     strarray_append(patterns, quota->root);
     snprintf(tmp, sizeof(tmp), "%s.*", quota->root);
     strarray_append(patterns, tmp);
