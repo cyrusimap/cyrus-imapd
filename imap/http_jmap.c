@@ -672,7 +672,7 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
     const char *uploadname;
     int r;
 
-    /* Create notification mailbox name from the parsed path */
+    /* Create upload mailbox name from the parsed path */
     mbname = mbname_from_userid(accountid);
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_JMAPUPLOADFOLDER));
 
@@ -728,7 +728,7 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
 static int create_upload_collection(const char *accountid,
                                     struct mailbox **mailbox)
 {
-    /* notifications collection */
+    /* upload collection */
     mbentry_t *mbentry = NULL;
     int r = lookup_upload_collection(accountid, &mbentry);
 
