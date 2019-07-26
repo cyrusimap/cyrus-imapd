@@ -496,16 +496,33 @@ sub test_calendar_set_sharewith
 
     xlog "share to user with permission to share";
     $admintalk->setacl("user.master.#calendars.$CalendarId", "cassandane" => 'lrswipkxtecdan9') or die;
-    
+
     xlog "create third account";
     $admintalk->create("user.manifold");
 
     $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
     $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
 
+    xlog "and a forth";
+    $admintalk->create("user.paraphrase");
+
+    $admintalk->setacl("user.paraphrase", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.paraphrase", paraphrase => 'lrswipkxtecdn');
+
     # Call CalDAV once to create manifold's calendar home #calendars
     my $mantalk = Net::CalDAVTalk->new(
         user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    # Call CalDAV once to create paraphrase's calendar home #calendars
+    my $partalk = Net::CalDAVTalk->new(
+        user => "paraphrase",
         password => 'pass',
         host => $service->host(),
         port => $service->port(),
@@ -524,7 +541,13 @@ sub test_calendar_set_sharewith
                                 mayRead => JSON::true,
                                 mayWrite => JSON::false,
                                 mayAdmin => JSON::false
-                            }
+                            },
+                            "shareWith/paraphrase" => {
+                                mayReadFreeBusy => JSON::true,
+                                mayRead => JSON::true,
+                                mayWrite => JSON::true,
+                                mayAdmin => JSON::false
+                            },
              }}}, "R1"]
     ]);
     $self->assert_not_null($res);
@@ -533,16 +556,24 @@ sub test_calendar_set_sharewith
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{updated});
 
-    xlog "fetch invite";
+    xlog "fetch invites";
     my ($adds) = $mantalk->SyncEventLinks("/dav/notifications/user/manifold");
+    $self->assert_equals(scalar %$adds, 1);
+    ($adds) = $partalk->SyncEventLinks("/dav/notifications/user/paraphrase");
     $self->assert_equals(scalar %$adds, 1);
 
     xlog "check ACL";
     my $acl = $admintalk->getacl("user.master.#calendars.$CalendarId");
-    $self->assert_str_equals('cassandane', $acl->[4]);
-    $self->assert_str_equals('lrswipkxtecdan9', $acl->[5]);
-    $self->assert_str_equals('manifold', $acl->[6]);
-    $self->assert_str_equals('lr9', $acl->[7]);
+    my %map = @$acl;
+    $self->assert_str_equals('lrswipkxtecdan9', $map{cassandane});
+    $self->assert_str_equals('lr9', $map{manifold});
+    $self->assert_str_equals('lrswitedn9', $map{paraphrase});
+
+    xlog "check Outbox ACL";
+    $acl = $admintalk->getacl("user.master.#calendars.Outbox");
+    %map = @$acl;
+    $self->assert_null($map{manifort});  # we don't create Outbox ACLs for read-only
+    $self->assert_str_equals('78', $map{paraphrase});
 }
 
 sub test_calendar_set_issubscribed
