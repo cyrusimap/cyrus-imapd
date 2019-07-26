@@ -133,6 +133,7 @@ static int smtpclient_read(smtpclient_t *sm, smtp_readcb_t *cb, void *rock);
 
 static int smtpclient_writebuf(smtpclient_t *sm, struct buf *buf, int flush);
 static int smtpclient_ehlo(smtpclient_t *sm);
+static int smtpclient_rset(smtpclient_t *sm);
 static int smtpclient_quit(smtpclient_t *sm);
 static int smtpclient_from(smtpclient_t *sm, smtp_addr_t *addr);
 static int smtpclient_rcpt_to(smtpclient_t *sm, ptrarray_t *rcpt);
@@ -340,6 +341,23 @@ static int smtpclient_ehlo(smtpclient_t *sm)
 
     /* Say EHLO */
     buf_setcstr(&sm->buf, "EHLO localhost\r\n");
+    r = smtpclient_writebuf(sm, &sm->buf, 1);
+    if (r) goto done;
+    buf_reset(&sm->buf);
+
+    /* Process response */
+    r = smtpclient_read(sm, ehlo_cb, NULL);
+
+done:
+    return r;
+}
+
+static int smtpclient_rset(smtpclient_t *sm)
+{
+    int r = 0;
+
+    /* Say RSET */
+    buf_setcstr(&sm->buf, "RSET\r\n");
     r = smtpclient_writebuf(sm, &sm->buf, 1);
     if (r) goto done;
     buf_reset(&sm->buf);
@@ -592,8 +610,15 @@ EXPORTED int smtpclient_sendprot(smtpclient_t *sm, smtp_envelope_t *env, struct 
     r = smtpclient_rcpt_to(sm, &env->rcpts);
     if (r) goto done;
 
-    r = smtpclient_data(sm, data);
-    if (r) goto done;
+    if (data) {
+        r = smtpclient_data(sm, data);
+        if (r) goto done;
+    }
+    else {
+        /* simply pre-flighting the envelope */
+        r = smtpclient_rset(sm);
+        if (r) goto done;
+    }
 
 done:
     return r;
