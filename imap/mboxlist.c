@@ -317,9 +317,6 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
 
     for (; *string; string++) {
         switch (*string) {
-        case 'i':
-            mbtype |= MBTYPE_INTERMEDIATE;
-            break;
         case 'a':
             mbtype |= MBTYPE_ADDRESSBOOK;
             break;
@@ -331,6 +328,9 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
             break;
         case 'd':
             mbtype |= MBTYPE_DELETED;
+            break;
+        case 'i':
+            mbtype |= MBTYPE_INTERMEDIATE;
             break;
         case 'm':
             mbtype |= MBTYPE_MOVING;
