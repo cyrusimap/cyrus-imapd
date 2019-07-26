@@ -57,21 +57,24 @@
 #define MAX_PARTITION_LEN 64
 
 /* flags for types of mailboxes */
-#define MBTYPE_EMAIL 0 /* default mbtype is zero */
-#define MBTYPE_REMOTE (1<<0) /* Not on this server (part is remote host) */
-#define MBTYPE_RESERVE (1<<1) /* Reserved [mupdate/imapd] /
-                               Rename Target [imapd] (part is normal, but
-                               you are not allowed to create this mailbox,
-                               even though it doesn't actually exist */
-#define MBTYPE_NETNEWS (1<<2) /* Netnews Mailbox - NO LONGER USED */
-#define MBTYPE_MOVING (1<<3) /* Mailbox in mid-transfer (part is remotehost!localpart) */
-#define MBTYPE_DELETED (1<<4) /* Mailbox has been deleted, but not yet cleaned up */
-#define MBTYPE_CALENDAR (1<<5) /* CalDAV Calendar Mailbox */
-#define MBTYPE_ADDRESSBOOK (1<<6) /* CardDAV Addressbook Mailbox */
-#define MBTYPE_COLLECTION (1<<7) /* WebDAV Collection Mailbox */
-#define MBTYPE_INTERMEDIATE (1<<8) /* Place holder for non-existent ancestor mailboxes */
+#define MBTYPE_EMAIL            0  /* default mbtype is zero */
+#define MBTYPE_REMOTE       (1<<0) /* Not on this server (part is remote host) */
+#define MBTYPE_RESERVE      (1<<1) /* Reserved [mupdate/imapd] /
+                                      Rename Target [imapd] (part is normal, but
+                                      you are not allowed to create this mailbox,
+                                      even though it doesn't actually exist) */
+#define MBTYPE_NETNEWS      (1<<2) /* Netnews Mailbox - NO LONGER USED */
+#define MBTYPE_MOVING       (1<<3) /* Mailbox in mid-transfer
+                                      (part is remotehost!localpart) */
+#define MBTYPE_DELETED      (1<<4) /* Mailbox has been deleted,
+                                      but not yet cleaned up */
+#define MBTYPE_CALENDAR     (1<<5) /* CalDAV Calendar Mailbox */
+#define MBTYPE_ADDRESSBOOK  (1<<6) /* CardDAV Addressbook Mailbox */
+#define MBTYPE_COLLECTION   (1<<7) /* WebDAV Collection Mailbox */
+#define MBTYPE_INTERMEDIATE (1<<8) /* Place holder
+                                      for non-existent ancestor mailboxes */
 
-#define MBTYPES_DAV (MBTYPE_CALENDAR|MBTYPE_ADDRESSBOOK|MBTYPE_COLLECTION)
+#define MBTYPES_DAV     (MBTYPE_CALENDAR|MBTYPE_ADDRESSBOOK|MBTYPE_COLLECTION)
 #define MBTYPES_NONIMAP (MBTYPE_NETNEWS|MBTYPES_DAV)
 
 /* master name of the mailboxes file */
