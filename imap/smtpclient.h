@@ -43,6 +43,9 @@
 #ifndef INCLUDED_SMTPCLIENT_H
 #define INCLUDED_SMTPCLIENT_H
 
+#include "prot.h"
+#include "util.h"
+
 /* A parameter for SMTP envelope address, identified by key.
  * The value val may be NULL. */
 typedef struct {
