@@ -73,9 +73,10 @@
 #define MBTYPE_COLLECTION   (1<<7) /* WebDAV Collection Mailbox */
 #define MBTYPE_INTERMEDIATE (1<<8) /* Place holder
                                       for non-existent ancestor mailboxes */
+#define MBTYPE_SUBMISSION   (1<<9) /* JMAP Mail Submission Mailbox */
 
 #define MBTYPES_DAV     (MBTYPE_CALENDAR|MBTYPE_ADDRESSBOOK|MBTYPE_COLLECTION)
-#define MBTYPES_NONIMAP (MBTYPE_NETNEWS|MBTYPES_DAV)
+#define MBTYPES_NONIMAP (MBTYPE_NETNEWS|MBTYPES_DAV|MBTYPE_SUBMISSION)
 
 /* master name of the mailboxes file */
 #define FNAME_MBOXLIST "/mailboxes.db"
@@ -168,6 +169,16 @@ int mboxlist_createmailbox_unq(const char *name, int mbtype,
                            int localonly, int forceuser, int dbonly,
                            int notify, const char *uniqueid,
                            struct mailbox **mailboxptr);
+
+/* create mailbox with options and uniqueid */
+int mboxlist_createmailbox_opts(const char *name, int mbtype,
+                                const char *partition,
+                                int isadmin, const char *userid,
+                                const struct auth_state *auth_state,
+                                int options, int localonly,
+                                int forceuser, int dbonly,
+                                int notify, const char *uniqueid,
+                                struct mailbox **mailboxptr);
 
 /* create mailbox from sync */
 int mboxlist_createsync(const char *name, int mbtype, const char *partition,

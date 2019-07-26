@@ -208,6 +208,8 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
         buf_putc(&buf, 'a');
     if (mbtype & MBTYPE_INTERMEDIATE)
         buf_putc(&buf, 'i');
+    if (mbtype & MBTYPE_SUBMISSION)
+        buf_putc(&buf, 's');
 
     return buf_cstring(&buf);
 }
@@ -340,6 +342,9 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
             break;
         case 'r':
             mbtype |= MBTYPE_REMOTE;
+            break;
+        case 's':
+            mbtype |= MBTYPE_SUBMISSION;
             break;
         case 'z':
             mbtype |= MBTYPE_RESERVE;
@@ -1380,6 +1385,21 @@ EXPORTED int mboxlist_createmailbox_unq(const char *name, int mbtype,
 {
     int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
                   | OPT_POP3_NEW_UIDL;
+
+    return mboxlist_createmailbox_opts(name, mbtype, partition, isadmin, userid,
+                                       auth_state, options, localonly, forceuser,
+                                       dbonly, notify, uniqueid, mailboxptr);
+}
+
+EXPORTED int mboxlist_createmailbox_opts(const char *name, int mbtype,
+                                         const char *partition,
+                                         int isadmin, const char *userid,
+                                         const struct auth_state *auth_state,
+                                         int options, int localonly,
+                                         int forceuser, int dbonly,
+                                         int notify, const char *uniqueid,
+                                         struct mailbox **mailboxptr)
+{
     int r;
     struct mailbox *mailbox = NULL;
     uint32_t uidvalidity = 0;

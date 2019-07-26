@@ -249,6 +249,9 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
         if (mailbox->i.options & OPT_IMAP_DUPDELIVER) {
             printf(" IMAP_DUPDELIVER");
         }
+        if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
+            printf(" IMAP_HAS_ALARMS");
+        }
     }
     printf("\n");
     printf("  Last POP3 Login: (%ld) %s", mailbox->i.pop3_last_login,

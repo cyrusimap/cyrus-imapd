@@ -296,6 +296,8 @@ char *sync_encode_options(int options)
         buf[i++] = 'S';
     if (options & OPT_IMAP_DUPDELIVER)
         buf[i++] = 'D';
+    if (options & OPT_IMAP_HAS_ALARMS)
+        buf[i++] = 'A';
     buf[i] = '\0';
 
     return buf;
@@ -318,6 +320,9 @@ int sync_parse_options(const char *options)
             break;
         case 'D':
             res |= OPT_IMAP_DUPDELIVER;
+            break;
+        case 'A':
+            res |= OPT_IMAP_HAS_ALARMS;
             break;
         }
         p++;

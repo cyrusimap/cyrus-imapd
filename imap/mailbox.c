@@ -3544,6 +3544,48 @@ static int mailbox_abort_dav(struct mailbox *mailbox)
 
 #endif // WITH_DAV
 
+static int mailbox_update_email_alarms(struct mailbox *mailbox,
+                                       const struct index_record *old,
+                                       struct index_record *new)
+{
+    int r = 0;
+
+    if (!(mailbox->i.options & OPT_IMAP_HAS_ALARMS))
+        return 0;
+
+    /* never have alarms on deleted mailboxes */
+    if (mboxname_isdeletedmailbox(mailbox->name, NULL))
+        return 0;
+
+    /* conditions in which there's nothing to do */
+    if (!new) return 0;
+
+    /* phantom record - never really existed at all */
+    if (!old && (new->internal_flags & FLAG_INTERNAL_UNLINKED))
+        return 0;
+
+    if (new->internal_flags & FLAG_INTERNAL_UNLINKED) {
+        /* remove associated alarms */
+        r = caldav_alarm_delete_record(mailbox->name, new->uid);
+    }
+    else if (old && (old->uid == new->uid)) {
+        if (new->internal_flags & FLAG_INTERNAL_EXPUNGED) {
+            /* remove associated alarms */
+            r = caldav_alarm_delete_record(mailbox->name, new->uid);
+        }
+        else {
+            /* make sure record is up to date */
+            r = caldav_alarm_touch_record(mailbox, new);
+        }
+    }
+    else {
+        /* add new alarms */
+        r = caldav_alarm_add_record(mailbox, new, NULL);
+    }
+
+    return r;
+}
+
 EXPORTED struct conversations_state *mailbox_get_cstate(struct mailbox *mailbox)
 {
     if (!mailbox_has_conversations(mailbox))
@@ -3625,6 +3667,9 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
     r = mailbox_update_dav(mailbox, old, new);
     if (r) return r;
 #endif
+
+    r = mailbox_update_email_alarms(mailbox, old, new);
+    if (r) return r;
 
     r = mailbox_update_conversations(mailbox, old, new);
     if (r) return r;

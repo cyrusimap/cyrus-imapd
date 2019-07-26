@@ -54,6 +54,7 @@
 #include "httpd.h"
 #include "http_dav.h"
 #include "ical_support.h"
+#include "jmap_support.h"
 #include "libconfig.h"
 #include "mboxevent.h"
 #include "mboxlist.h"
@@ -538,6 +539,8 @@ static int has_alarms(icalcomponent *ical, struct mailbox *mailbox, uint32_t uid
     syslog(LOG_DEBUG, "checking for alarms in mailbox %s uid %u",
            mailbox->name, uid);
 
+    if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) return 1;
+
     if (ical) {
         /* Check iCalendar resource for VALARMs */
         icalcomponent *comp = icalcomponent_get_first_real_component(ical);
@@ -793,11 +796,169 @@ static int process_peruser_alarms_cb(const char *mailbox, uint32_t uid,
     return 0;
 }
 
+static void process_valarms(struct mailbox *mailbox,
+                            struct index_record *record,
+                            icaltimezone *floatingtz, time_t runtime)
+{
+    icalcomponent *ical = ical = record_to_ical(mailbox, record, NULL);
+
+    if (!ical) {
+        syslog(LOG_ERR, "error parsing ical string mailbox %s uid %u",
+               mailbox->name, record->uid);
+        caldav_alarm_delete_record(mailbox->name, record->uid);
+        return;
+    }
+
+    /* check for bogus lastalarm data on record
+       which actually shouldn't have it */
+    if (!has_alarms(ical, mailbox, record->uid)) {
+        syslog(LOG_NOTICE, "removing bogus lastalarm check "
+               "for mailbox %s uid %u which has no alarms",
+               mailbox->name, record->uid);
+        caldav_alarm_delete_record(mailbox->name, record->uid);
+        goto done_item;
+    }
+
+    struct lastalarm_data data;
+    if (read_lastalarm(mailbox, record, &data))
+        data.lastrun = record->internaldate;
+
+    /* Process VALARMs in iCalendar resource */
+    char *userid = mboxname_to_userid(mailbox->name);
+
+    syslog(LOG_DEBUG, "processing alarms in resource");
+
+    data.nextcheck = process_alarms(mailbox->name, record->uid, userid,
+                                    floatingtz, ical, data.lastrun, runtime);
+    free(userid);
+
+    /* Process VALARMs in per-user-cal-data */
+    struct process_alarms_rock prock =
+        { mailbox->i.options, ical, &data, runtime };
+
+    syslog(LOG_DEBUG, "processing per-user alarms");
+
+    mailbox_get_annotate_state(mailbox, record->uid, NULL);
+    annotatemore_findall(mailbox->name, record->uid, PER_USER_CAL_DATA,
+                         /* modseq */ 0, &process_peruser_alarms_cb,
+                         &prock, /* flags */ 0);
+
+    data.lastrun = runtime;
+    write_lastalarm(mailbox, record, &data);
+
+    update_alarmdb(mailbox->name, record->uid, data.nextcheck);
+
+done_item:
+    if (ical) icalcomponent_free(ical);
+}
+
+static void process_futurerelease(struct mailbox *mailbox,
+                                    struct index_record *record)
+{
+    struct buf buf = BUF_INITIALIZER;
+    json_t *submission = NULL, *identity, *envelope;
+    int r = 0;
+
+    syslog(LOG_DEBUG, "processing future delivery");
+
+    if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) ||
+        (record->system_flags & FLAG_DELETED))
+        goto done;
+
+    /* Load message */
+    message_t *m = message_new_from_record(mailbox, record);
+    const char *fname;
+    r = message_get_fname(m, &fname);
+    if (r) {
+        syslog(LOG_ERR, "process_futurerelease: can't get fname for %s:%u",
+               mailbox->name, record->uid);
+        goto done;
+    }
+
+    int msgfd = open(fname, 0);
+    if (msgfd == -1) {
+        syslog(LOG_ERR, "process_futurerelease: can't open %s: %m", fname);
+        goto done;
+    }
+
+    struct stat sbuf;
+    if (fstat(msgfd, &sbuf) == -1) {
+        syslog(LOG_ERR, "process_futurerelease: can't fstat %s: %m", fname);
+        close(msgfd);
+        goto done;
+    }
+
+    buf_init_mmap(&buf, 1, msgfd, fname, sbuf.st_size, mailbox->name);
+    close(msgfd);
+    if (!buf_len(&buf)) {
+        syslog(LOG_ERR, "process_futurerelease: can't mmap %s: %m", fname);
+        goto done;
+    }
+
+    /* Parse the submission object from the first header field */
+    json_error_t jerr;
+    size_t hdrlen = strlen(JMAP_SUBMISSION_HDR) + 1; /* +1 for ':' */
+    submission = json_loadb(buf_base(&buf) + hdrlen, buf_len(&buf) - hdrlen,
+                            JSON_DISABLE_EOF_CHECK, &jerr);
+    if (!submission) {
+        syslog(LOG_ERR,
+               "process_futurerelease: failed to parse submission obj");
+        goto done;
+    }
+    envelope = json_object_get(submission, "envelope");
+    identity = json_object_get(submission, "identityId");
+
+    /* Trim submission header field */
+    const char *p = strstr(buf_base(&buf), "}\r\n") + 3; /* +3 for '}\r\n' */
+    buf_remove(&buf, 0, p - buf_base(&buf));
+
+    /* Open the SMTP connection */
+    smtpclient_t *sm = NULL;
+    r = smtpclient_open(&sm);
+    if (r) {
+        syslog(LOG_ERR, "smtpclient_open failed: %s", error_message(r));
+        goto done;
+    }
+    smtpclient_set_auth(sm, json_string_value(identity));
+
+    /* Prepare envelope */
+    smtp_envelope_t smtpenv = SMTP_ENVELOPE_INITIALIZER;
+    jmap_emailsubmission_envelope_to_smtp(&smtpenv, envelope);
+
+    /* Send message */
+    r = smtpclient_send(sm, &smtpenv, &buf);
+    if (r) {
+        syslog(LOG_ERR, "smtpclient_send failed: %s", error_message(r));
+        goto done;
+    }
+    smtp_envelope_fini(&smtpenv);
+    smtpclient_close(&sm);
+
+    /* Expunge the resource */
+    record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
+    r = mailbox_rewrite_index_record(mailbox, record);
+    if (r) {
+        syslog(LOG_ERR, "expunging record (%s:%u) failed: %s",
+               mailbox->name, record->uid, error_message(r));
+    }
+
+  done:
+    if (r) {
+        /* XXX  Error handling: retry, DSN, both, neither? */
+        caldav_alarm_delete_record(mailbox->name, record->uid);
+    }
+
+    if (submission) json_decref(submission);
+    if (m) message_unref(&m);
+    buf_free(&buf);
+
+    return;
+}
+
 static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
                                icaltimezone *floatingtz, time_t runtime)
 {
     int rc;
-    icalcomponent *ical = NULL;
 
     syslog(LOG_DEBUG, "processing alarms for mailbox %s uid %u",
            mailbox->name, imap_uid);
@@ -810,73 +971,34 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
                mailbox->name, imap_uid);
         /* no record, no worries */
         caldav_alarm_delete_record(mailbox->name, imap_uid);
-        goto done_item;
+        return;
     }
     if (rc) {
         syslog(LOG_ERR, "error reading mailbox %s uid %u (%s)",
                mailbox->name, imap_uid, error_message(rc));
         /* XXX no index record? item deleted or transient error? */
         caldav_alarm_delete_record(mailbox->name, imap_uid);
-        goto done_item;
+        return;
     }
     if (record.internal_flags & FLAG_INTERNAL_EXPUNGED) {
         syslog(LOG_ERR, "already expunged mailbox %s uid %u",
                mailbox->name, imap_uid);
         /* no longer exists?  nothing to do */
         caldav_alarm_delete_record(mailbox->name, imap_uid);
-        goto done_item;
+        return;
     }
 
-    ical = record_to_ical(mailbox, &record, NULL);
-
-    if (!ical) {
-        syslog(LOG_ERR, "error parsing ical string mailbox %s uid %u",
-               mailbox->name, imap_uid);
-        caldav_alarm_delete_record(mailbox->name, imap_uid);
-        goto done_item;
+    if (mailbox->mbtype == MBTYPE_CALENDAR) {
+        process_valarms(mailbox, &record, floatingtz, runtime);
     }
-
-    /* check for bogus lastalarm data on record
-       which actually shouldn't have it */
-    if (!has_alarms(ical, mailbox, imap_uid)) {
-        syslog(LOG_NOTICE, "removing bogus lastalarm check "
-               "for mailbox %s uid %u which has no alarms",
-               mailbox->name, imap_uid);
-        caldav_alarm_delete_record(mailbox->name, imap_uid);
-        goto done_item;
+#ifdef WITH_JMAP
+    else if (mailbox->mbtype == MBTYPE_SUBMISSION) {
+        process_futurerelease(mailbox, &record);
     }
-
-    struct lastalarm_data data;
-    if (read_lastalarm(mailbox, &record, &data))
-        data.lastrun = record.internaldate;
-
-    /* Process VALARMs in iCalendar resource */
-    char *userid = mboxname_to_userid(mailbox->name);
-
-    syslog(LOG_DEBUG, "processing alarms in resource");
-
-    data.nextcheck = process_alarms(mailbox->name, record.uid, userid,
-                                    floatingtz, ical, data.lastrun, runtime);
-    free(userid);
-
-    /* Process VALARMs in per-user-cal-data */
-    struct process_alarms_rock prock =
-        { mailbox->i.options, ical, &data, runtime };
-
-    syslog(LOG_DEBUG, "processing per-user alarms");
-
-    mailbox_get_annotate_state(mailbox, record.uid, NULL);
-    annotatemore_findall(mailbox->name, record.uid, PER_USER_CAL_DATA,
-                         /* modseq */ 0, &process_peruser_alarms_cb,
-                         &prock, /* flags */ 0);
-
-    data.lastrun = runtime;
-    write_lastalarm(mailbox, &record, &data);
-
-    update_alarmdb(mailbox->name, record.uid, data.nextcheck);
-
-done_item:
-    if (ical) icalcomponent_free(ical);
+    else if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
+        /* XXX  Check special-use flag on mailbox */
+    }
+#endif
 }
 
 static void process_records(ptrarray_t *list, time_t runtime)
@@ -908,7 +1030,8 @@ static void process_records(ptrarray_t *list, time_t runtime)
                 /* transient open error, don't delete this alarm */
                 continue;
             }
-            floatingtz = get_floatingtz(mailbox->name, "");
+            if (mailbox->mbtype == MBTYPE_CALENDAR)
+                floatingtz = get_floatingtz(mailbox->name, "");
         }
         process_one_record(mailbox, data->imap_uid, floatingtz, runtime);
     }
