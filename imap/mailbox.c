@@ -6513,7 +6513,7 @@ EXPORTED const message_t *mailbox_iter_step(struct mailbox_iter *iter)
         const struct index_record *record = msg_record(iter->msg);
         if (!record->uid) continue; /* can happen on damaged mailboxes */
         if ((record->system_flags & iter->skipflags)) continue;
-        if (record->modseq <= iter->changedsince) continue;
+        if (iter->changedsince && record->modseq <= iter->changedsince) continue;
         return iter->msg;
     }
 
