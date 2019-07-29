@@ -899,8 +899,10 @@ static void process_futurerelease(struct mailbox *mailbox,
     /* Parse the submission object from the first header field */
     json_error_t jerr;
     size_t hdrlen = strlen(JMAP_SUBMISSION_HDR) + 1; /* +1 for ':' */
-    submission = json_loadb(buf_base(&buf) + hdrlen, buf_len(&buf) - hdrlen,
-                            JSON_DISABLE_EOF_CHECK, &jerr);
+    if (!strncasecmp(buf_base(&buf), JMAP_SUBMISSION_HDR ":", hdrlen)) {
+        submission = json_loadb(buf_base(&buf) + hdrlen, buf_len(&buf) - hdrlen,
+                                JSON_DISABLE_EOF_CHECK, &jerr);
+    }
     if (!submission) {
         syslog(LOG_ERR,
                "process_futurerelease: failed to parse submission obj");
@@ -911,6 +913,10 @@ static void process_futurerelease(struct mailbox *mailbox,
 
     /* Trim submission header field */
     const char *p = strstr(buf_base(&buf), "}\r\n") + 3; /* +3 for '}\r\n' */
+    while (isblank(*p)) {
+        /* Folded header -- keep looking for the end */
+        p = strstr(p, "}\r\n") + 3; /* +3 for '}\r\n' */
+    }
     buf_remove(&buf, 0, p - buf_base(&buf));
 
     /* Open the SMTP connection */
