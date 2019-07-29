@@ -862,10 +862,6 @@ static void process_futurerelease(struct mailbox *mailbox,
     syslog(LOG_DEBUG, "processing future release for mailbox %s uid %u",
            mailbox->name, record->uid);
 
-    if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) ||
-        (record->system_flags & FLAG_DELETED))
-        goto done;
-
     /* Load message */
     message_t *m = message_new_from_record(mailbox, record);
     const char *fname;
