@@ -852,6 +852,7 @@ done_item:
     if (ical) icalcomponent_free(ical);
 }
 
+#ifdef WITH_JMAP
 static void process_futurerelease(struct mailbox *mailbox,
                                     struct index_record *record)
 {
@@ -957,6 +958,7 @@ static void process_futurerelease(struct mailbox *mailbox,
 
     return;
 }
+#endif /* WITH_JMAP */
 
 static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
                                icaltimezone *floatingtz, time_t runtime)
@@ -1002,6 +1004,13 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
         /* XXX  Check special-use flag on mailbox */
     }
 #endif
+    else {
+        /* XXX  Should never get here */
+        syslog(LOG_ERR, "Unknown/unsupported alarm triggered for"
+               " mailbox %s of type %d with options 0x%02x",
+               mailbox->name, mailbox->mbtype, mailbox->i.options);
+        caldav_alarm_delete_record(mailbox->name, imap_uid);
+    }
 }
 
 static void process_records(ptrarray_t *list, time_t runtime)
