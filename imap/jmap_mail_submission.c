@@ -348,9 +348,7 @@ static int stage_futurerelease(jmap_req_t *req,
     struct appendstate as;
     strarray_t flags = STRARRAY_INITIALIZER;
     struct body *body = NULL;
-    struct buf buf = BUF_INITIALIZER;
     FILE *f = NULL;
-    SHA_CTX ctx;
     int r;
 
     r = create_submission_collection(req->accountid, &mailbox);
@@ -369,18 +367,13 @@ static int stage_futurerelease(jmap_req_t *req,
 
     /* Add JMAP submission object as first header */
     char *json = json_dumps(emailsubmission, JSON_COMPACT);
-    buf_printf(&buf, "%s: %s\r\n", JMAP_SUBMISSION_HDR, json);
+    r = fprintf(f, "%s: %s\r\n", JMAP_SUBMISSION_HDR, json);
     free(json);
 
-    if (!fwrite(buf_base(&buf), buf_len(&buf), 1, f)) {
+    if (r < (int) (strlen(JMAP_SUBMISSION_HDR) + strlen(json) + 4)) {
         r = IMAP_IOERROR;
         goto done;
     }
-
-    /* Begin generating a GUID from the composed content */
-    memset(&ctx, 0, sizeof(SHA_CTX));
-    SHA1_Init(&ctx);
-    SHA1_Update(&ctx, buf_base(&buf), buf_len(&buf));
 
     /* Add submitted message */
     if (!fwrite(buf_base(msg), buf_len(msg), 1, f) || fflush(f)) {
@@ -388,12 +381,6 @@ static int stage_futurerelease(jmap_req_t *req,
         goto done;
     }
     fclose(f);
-
-    /* Finalize the GUID */
-    struct message_guid guid;
-    SHA1_Update(&ctx, buf_base(msg), buf_len(msg));
-    SHA1_Final(guid.value, &ctx);
-    guid.status = GUID_NONNULL;
 
     /* Prepare to append the message to the mailbox */
     r = append_setup_mbox(&as, mailbox, httpd_userid, httpd_authstate,
@@ -421,9 +408,14 @@ static int stage_futurerelease(jmap_req_t *req,
         goto done;
     }
 
-    char email_id[JMAP_EMAILID_SIZE];
-    jmap_set_emailid(&guid, email_id);
-    *new_submission = json_pack("{s:s}", "id", email_id);
+    /* Read index record for new message (always the last one) */
+    struct index_record record;
+    mailbox_find_index_record(mailbox, mailbox->i.last_uid, &record);
+
+    /* Create id from message GUID, using 'S' prefix */
+    char sub_id[JMAP_BLOBID_SIZE];
+    sprintf(sub_id, "S%s", message_guid_encode(&record.guid));
+    *new_submission = json_pack("{s:s}", "id", sub_id);
 
   done:
     if (body) {
