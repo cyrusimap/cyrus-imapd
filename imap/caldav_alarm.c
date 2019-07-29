@@ -859,7 +859,8 @@ static void process_futurerelease(struct mailbox *mailbox,
     json_t *submission = NULL, *identity, *envelope;
     int r = 0;
 
-    syslog(LOG_DEBUG, "processing future delivery");
+    syslog(LOG_DEBUG, "processing future release for mailbox %s uid %u",
+           mailbox->name, record->uid);
 
     if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) ||
         (record->system_flags & FLAG_DELETED))
