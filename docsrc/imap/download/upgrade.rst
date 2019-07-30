@@ -276,6 +276,15 @@ until you're able to finish your 3.0 installation.
 8. Reconstruct databases and cache
 ----------------------------------
 
+.. warning::
+
+    Versions of 3.0 prior to 3.0.11 contained a bug (:issue:`2389`) that
+    could lead to loss of seen state/flags during `reconstruct` for some
+    messages that already existed prior to Cyrus 2.3.  The :ref:`3.0.11
+    release notes <relnotes-3.0.11-changes>` contain the specifics.
+
+    Consider upgrading to 3.0.11 rather than an earlier release.
+
 The following steps can each take a long time, so we recommend
 running them one at a time (to reduce locking contention and high I/O load).
 
