@@ -319,6 +319,7 @@ extern int message_get_spamscore(message_t *m, uint32_t *scorep);
 extern int message_get_savedate(message_t *m, time_t *);
 extern int message_get_sentdate(message_t *m, time_t *);
 extern int message_get_modseq(message_t *m, modseq_t *modseqp);
+extern int message_get_internalflags(message_t *m, uint32_t *flagsp);
 extern int message_get_systemflags(message_t *m, uint32_t *);
 extern int message_get_userflags(message_t *m, uint32_t *flagsp);
 extern int message_get_indexflags(message_t *m, uint32_t *);

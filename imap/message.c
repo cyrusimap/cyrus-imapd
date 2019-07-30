@@ -4763,6 +4763,14 @@ EXPORTED int message_get_systemflags(message_t *m, uint32_t *flagsp)
     return 0;
 }
 
+EXPORTED int message_get_internalflags(message_t *m, uint32_t *flagsp)
+{
+    int r = message_need(m, M_RECORD);
+    if (r) return r;
+    *flagsp = m->record.internal_flags;
+    return 0;
+}
+
 EXPORTED int message_get_indexflags(message_t *m, uint32_t *flagsp)
 {
     int r = message_need(m, M_INDEX);
