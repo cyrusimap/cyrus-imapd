@@ -61,6 +61,7 @@
 #include "parseaddr.h"
 #include "proxy.h"
 #include "smtpclient.h"
+#include "sync_support.h"
 #include "times.h"
 #include "util.h"
 
@@ -788,6 +789,109 @@ done:
     buf_free(&buf);
 }
 
+static int getsubmission(struct jmap_get *get,
+                         const char *id, message_t *msg)
+{
+    struct buf buf = BUF_INITIALIZER;
+    json_t *sub = NULL;
+
+    int r = message_get_field(msg, JMAP_SUBMISSION_HDR,
+                              MESSAGE_DECODED|MESSAGE_TRIM, &buf);
+    if (!r && buf.len) {
+        json_error_t jerr;
+        sub = json_loadb(buf_base(&buf), buf_len(&buf),
+                         JSON_DISABLE_EOF_CHECK, &jerr);
+    }
+    buf_free(&buf);
+
+    if (sub) {
+        /* id */
+        json_object_set_new(sub, "id", json_string(id));
+
+        /* identityId */
+        if (!jmap_wantprop(get->props, "identityId")) {
+            json_object_del(sub, "identityId");
+        }
+
+        /* emailId */
+        if (!jmap_wantprop(get->props, "emailId")) {
+            json_object_del(sub, "emailId");
+        }
+
+        /* threadId */
+        if (!jmap_wantprop(get->props, "threadId")) {
+            json_object_del(sub, "threadId");
+        }
+
+        /* envelope */
+        if (!jmap_wantprop(get->props, "envelope")) {
+            json_object_del(sub, "envelope");
+        }
+
+        /* senddAt */
+        if (jmap_wantprop(get->props, "sendAt")) {
+            char datestr[RFC3339_DATETIME_MAX];
+            time_t t;
+
+            r = message_get_internaldate(msg, &t);
+            if (r) goto done;
+
+            time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
+            json_object_set_new(sub, "sendAt", json_string(datestr));
+        }
+
+        /* undoStatus */
+        if (jmap_wantprop(get->props, "undoStatus")) {
+            uint32_t internal, system;
+            const char *status = "pending";
+
+            r = message_get_internalflags(msg, &internal);
+            if (r) goto done;
+
+            if (internal & FLAG_INTERNAL_EXPUNGED) {
+                r = message_get_systemflags(msg, &system);
+                if (r) goto done;
+
+                status = (system & FLAG_DELETED) ? "canceled" : "final";
+            }
+
+            json_object_set_new(sub, "undoStatus", json_string(status));
+        }
+
+        /* deliveryStatus */
+        if (jmap_wantprop(get->props, "deliveryStatus")) {
+            json_object_set_new(sub, "deliveryStatus", json_null());
+        }
+
+        /* dsnBlobIds */
+        if (jmap_wantprop(get->props, "dsnBlobIds")) {
+            json_object_set_new(sub, "dsnBlobIds", json_array());
+        }
+
+        /* mdnBlobIds */
+        if (jmap_wantprop(get->props, "mdnBlobIds")) {
+            json_object_set_new(sub, "mdnBlobIds", json_array());
+        }
+    }
+
+  done:
+    if (!r && sub) {
+        json_array_append_new(get->list, sub);
+    }
+    else {
+        json_array_append_new(get->not_found, json_string(id));
+
+        if (sub) json_decref(sub);
+
+        if (r) {
+            syslog(LOG_ERR,
+                   "jmap: EmailSubmission/get(%s): %s", id, error_message(r));
+        }
+    }
+
+    return r;
+}
+
 static const jmap_property_t submission_props[] = {
     {
         "id",
@@ -847,6 +951,8 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
     json_t *err = NULL;
+    struct mailbox *mbox = NULL;
+    struct sync_msgid_list *ids =  NULL;
 
     jmap_get_parse(req, &parser, submission_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
@@ -855,11 +961,73 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
         goto done;
     }
 
-    size_t i;
-    json_t *val;
-    json_array_foreach(get.ids, i, val) {
-        json_array_append(get.not_found, val);
+    mbentry_t *mbentry = NULL;
+    int r = lookup_submission_collection(req->accountid, &mbentry);
+    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    mboxlist_entry_free(&mbentry);
+    if (r) goto done;
+
+    /* Does the client request specific events? */
+    if (JNOTNULL(get.ids)) {
+        size_t i;
+        json_t *val;
+
+        /* Create a hash of message ids */
+        json_array_foreach(get.ids, i, val) {
+            const char *id = json_string_value(val);
+            struct message_guid guid;
+
+            if (*id != 'S' || strlen(id) != JMAP_BLOBID_SIZE-1 ||
+                !message_guid_decode(&guid, id+1)) {
+                /* Not a valid id */
+                json_array_append_new(get.not_found, json_string(id));
+                continue;
+            }
+
+            if (!ids) ids = sync_msgid_list_create(json_array_size(get.ids)+1);
+        
+            sync_msgid_insert(ids, &guid);
+        }
     }
+
+    struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, 0);
+    const message_t *msg;
+    char id[JMAP_BLOBID_SIZE];
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct message_guid *guid;
+
+        r = message_get_guid((message_t *) msg, &guid);
+        if (r) continue;
+
+        if (ids) {
+            if (!sync_msgid_lookup(ids, guid)) continue;
+
+            /* Remove from the hash as we process them */
+            sync_msgid_remove(ids, guid);
+        }
+
+        /* Create id from message GUID, using 'S' prefix */
+        sprintf(id, "S%s", message_guid_encode(guid));
+        r = getsubmission(&get, id, (message_t *) msg);
+    }
+
+    if (ids) {
+        /* Leftover ids are ones that we didn't find */
+        struct sync_msgid *msgid;
+
+        for (msgid = ids->head; msgid; msgid = msgid->next) {
+            if (!message_guid_isnull(&msgid->guid)) {
+                /* Create id from message GUID, using 'S' prefix */
+                sprintf(id, "S%s", message_guid_encode(&msgid->guid));
+                json_array_append_new(get.not_found, json_string(id));
+            }
+        }
+
+        sync_msgid_list_free(&ids);
+    }
+
+    mailbox_iter_done(&iter);
+    jmap_closembox(req, &mbox);
 
     json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
     get.state = xstrdup(json_string_value(jstate));
