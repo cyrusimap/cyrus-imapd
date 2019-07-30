@@ -42,7 +42,7 @@ Specifically, mailboxes that either:
 * previously had an index version less than 8, but were upgraded to a newer
   index version by some earlier Cyrus IMAP 2.3.x versions (unknown which)
 
-may contain message records with an unitialised modseq of 0.
+may contain message records with an uninitialised modseq of 0.
 
 Some later versions of 2.3.x (unknown which) would rewrite modseqs of 0 to 1
 while upgrading indexes.  If one of these versions was used to upgrade the
