@@ -372,10 +372,11 @@ static int stage_futurerelease(jmap_req_t *req,
 
     /* Add JMAP submission object as first header */
     char *json = json_dumps(emailsubmission, JSON_COMPACT);
+    size_t json_len = strlen(json);
     r = fprintf(f, "%s: %s\r\n", JMAP_SUBMISSION_HDR, json);
     free(json);
 
-    if (r < (int) (strlen(JMAP_SUBMISSION_HDR) + strlen(json) + 4)) {
+    if (r < (int) (strlen(JMAP_SUBMISSION_HDR) + json_len + 4)) {
         r = IMAP_IOERROR;
         goto done;
     }
@@ -994,6 +995,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
             }
 
             r = getsubmission(&get, id, msg);
+            message_unref(&msg);
         }
     }
     else {
