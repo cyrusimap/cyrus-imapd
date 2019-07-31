@@ -73,6 +73,7 @@ sub rset {
     my ($Self) = @_;
     $Self->mylog("SMTP: RSET");
     $Self->send_client_resp(250, "ok");
+    return 0;
 }
 
 sub quit {
