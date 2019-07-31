@@ -363,7 +363,7 @@ static int smtpclient_rset(smtpclient_t *sm)
     buf_reset(&sm->buf);
 
     /* Process response */
-    r = smtpclient_read(sm, ehlo_cb, NULL);
+    r = smtpclient_read(sm, expect_code_cb, "2");
 
 done:
     return r;
