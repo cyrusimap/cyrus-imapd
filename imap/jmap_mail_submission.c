@@ -50,6 +50,8 @@
 #include <string.h>
 #include <syslog.h>
 #include <assert.h>
+#include <limits.h>
+#include <errno.h>
 
 #include "acl.h"
 #include "append.h"
@@ -68,6 +70,8 @@
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
+
+#define JMAP_SUBID_SIZE 12
 
 static int jmap_emailsubmission_get(jmap_req_t *req);
 static int jmap_emailsubmission_set(jmap_req_t *req);
@@ -409,13 +413,9 @@ static int stage_futurerelease(jmap_req_t *req,
         goto done;
     }
 
-    /* Read index record for new message (always the last one) */
-    struct index_record record;
-    mailbox_find_index_record(mailbox, mailbox->i.last_uid, &record);
-
-    /* Create id from message GUID, using 'S' prefix */
-    char sub_id[JMAP_BLOBID_SIZE];
-    sprintf(sub_id, "S%s", message_guid_encode(&record.guid));
+    /* Create id from message UID, using 'S' prefix */
+    char sub_id[JMAP_SUBID_SIZE];
+    sprintf(sub_id, "S%u", mailbox->i.last_uid);
     *new_submission = json_pack("{s:s}", "id", sub_id);
 
   done:
@@ -952,7 +952,6 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
     struct jmap_get get;
     json_t *err = NULL;
     struct mailbox *mbox = NULL;
-    struct sync_msgid_list *ids =  NULL;
 
     jmap_get_parse(req, &parser, submission_props, /*allow_null_ids*/1,
                    NULL, NULL, &get, &err);
@@ -972,61 +971,48 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
         size_t i;
         json_t *val;
 
-        /* Create a hash of message ids */
         json_array_foreach(get.ids, i, val) {
             const char *id = json_string_value(val);
-            struct message_guid guid;
+            message_t *msg = NULL;
 
-            if (*id != 'S' || strlen(id) != JMAP_BLOBID_SIZE-1 ||
-                !message_guid_decode(&guid, id+1)) {
+            /* Lookup message by IMAP UID */
+            if (id[0] == 'S' && id[1] != '-' && strlen(id) < JMAP_SUBID_SIZE) {
+                char *endptr = NULL;
+                uint32_t uid = strtoul(id+1, &endptr, 10);
+
+                if (!(*endptr || errno == ERANGE || uid > UINT_MAX)) {
+                    struct index_record record;
+                    int r = mailbox_find_index_record(mbox, uid, &record);
+
+                    if (!r) msg = message_new_from_record(mbox, &record);
+                }
+            }
+            if (!msg) {
                 /* Not a valid id */
                 json_array_append_new(get.not_found, json_string(id));
                 continue;
             }
 
-            if (!ids) ids = sync_msgid_list_create(json_array_size(get.ids)+1);
-        
-            sync_msgid_insert(ids, &guid);
+            r = getsubmission(&get, id, msg);
         }
     }
+    else {
+        struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, 0);
+        const message_t *msg;
+        while ((msg = mailbox_iter_step(iter))) {
+            char id[JMAP_SUBID_SIZE];
+            uint32_t uid;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, 0);
-    const message_t *msg;
-    char id[JMAP_BLOBID_SIZE];
-    while ((msg = mailbox_iter_step(iter))) {
-        const struct message_guid *guid;
+            r = message_get_uid((message_t *) msg, &uid);
+            if (r) continue;
 
-        r = message_get_guid((message_t *) msg, &guid);
-        if (r) continue;
-
-        if (ids) {
-            if (!sync_msgid_lookup(ids, guid)) continue;
-
-            /* Remove from the hash as we process them */
-            sync_msgid_remove(ids, guid);
+            /* Create id from message UID, using 'S' prefix */
+            sprintf(id, "S%u", uid);
+            r = getsubmission(&get, id, (message_t *) msg);
         }
-
-        /* Create id from message GUID, using 'S' prefix */
-        sprintf(id, "S%s", message_guid_encode(guid));
-        r = getsubmission(&get, id, (message_t *) msg);
+        mailbox_iter_done(&iter);
     }
 
-    if (ids) {
-        /* Leftover ids are ones that we didn't find */
-        struct sync_msgid *msgid;
-
-        for (msgid = ids->head; msgid; msgid = msgid->next) {
-            if (!message_guid_isnull(&msgid->guid)) {
-                /* Create id from message GUID, using 'S' prefix */
-                sprintf(id, "S%s", message_guid_encode(&msgid->guid));
-                json_array_append_new(get.not_found, json_string(id));
-            }
-        }
-
-        sync_msgid_list_free(&ids);
-    }
-
-    mailbox_iter_done(&iter);
     jmap_closembox(req, &mbox);
 
     json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
