@@ -28,7 +28,7 @@ Release changes
 We're trialing using the Github Releases feature.  If you have trouble downloading
 this release, please report this to the mailing lists.  Thanks!
 
-Data-loss bug fix (:issue:`2389`)
+Data-loss bug fix (:issue:`2839`)
 ---------------------------------
 
 This bug affects upgrades to all Cyrus IMAP 3.0.x releases prior to 3.0.11,
