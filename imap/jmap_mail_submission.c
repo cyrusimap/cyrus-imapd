@@ -865,7 +865,7 @@ static void _emailsubmission_update(struct mailbox *submbox,
                 }
                 else if (!strcmp(arg, "undoStatus")) {
                     if (record.internal_flags & FLAG_INTERNAL_EXPUNGED) {
-                        if (!(record.system_flags & FLAG_DELETED)) {
+                        if (!(record.internal_flags & FLAG_INTERNAL_UNLINKED)) {
                             /* Already sent */
                             *set_err = json_pack("{s:s}", "type", "cannotUnsend");
                         }
@@ -911,8 +911,7 @@ static void _emailsubmission_update(struct mailbox *submbox,
     if (*set_err) return;
 
     if (do_cancel) {
-        record.system_flags |= FLAG_DELETED;
-        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+        record.internal_flags |= FLAG_INTERNAL_UNLINKED | FLAG_INTERNAL_EXPUNGED;
 
         r = mailbox_rewrite_index_record(submbox, &record);
         if (r) *set_err = json_pack("{s:s}", "type", error_message(r));
@@ -972,17 +971,15 @@ static int getsubmission(struct jmap_get *get,
 
         /* undoStatus */
         if (jmap_wantprop(get->props, "undoStatus")) {
-            uint32_t internal, system;
+            uint32_t internal;
             const char *status = "pending";
 
             r = message_get_internalflags(msg, &internal);
             if (r) goto done;
 
             if (internal & FLAG_INTERNAL_EXPUNGED) {
-                r = message_get_systemflags(msg, &system);
-                if (r) goto done;
-
-                status = (system & FLAG_DELETED) ? "canceled" : "final";
+                status = (internal & FLAG_INTERNAL_UNLINKED) ?
+                    "canceled" : "final";
             }
 
             json_object_set_new(sub, "undoStatus", json_string(status));
