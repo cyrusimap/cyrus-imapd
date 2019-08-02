@@ -391,14 +391,21 @@ sub test_email_get_multimailboxes_expunged
     $msg = $res->[1][1]{list}[0];
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
+    my $val = join(',', sort keys %{$msg->{mailboxIds}});
 
-    xlog "delete the message in INBOX";
-    $talk->store($uid, "+flags", "\\Deleted");
+    xlog "Move the message to target2";
+    $talk->create("INBOX.target2");
+    $talk->copy($uid, "INBOX.target2");
+
+    xlog "and move it back again!";
+    $talk->select("INBOX.target2");
+    $talk->move("1:*", "INBOX");
+
+    # and finally delete the SECOND copy by UID sorting
+    xlog "and delete one of them";
+    $talk->select("INBOX");
+    $talk->store('2', "+flags", "\\Deleted");
     $talk->expunge();
-
-    xlog "copy the message back into INBOX again";
-    $talk->select("INBOX.target");
-    $talk->copy("1:*", "INBOX");
 
     xlog "check that email is still in both mailboxes";
     $res = $jmap->CallMethods([
@@ -408,6 +415,7 @@ sub test_email_get_multimailboxes_expunged
     $msg = $res->[1][1]{list}[0];
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
+    $self->assert_str_equals($val, join(',', sort keys %{$msg->{mailboxIds}}));
 }
 
 sub test_email_get_body_both
