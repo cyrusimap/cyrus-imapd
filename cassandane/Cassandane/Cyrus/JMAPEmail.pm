@@ -352,6 +352,64 @@ sub test_email_get_multimailboxes
     $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
 }
 
+sub test_email_get_multimailboxes_expunged
+    :min_version_3_1 :needs_component_jmap :DelayedExpunge
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $now = DateTime->now();
+
+    xlog "Generate a email in INBOX via IMAP";
+    my $res = $self->make_message("foo") || die;
+    my $uid = $res->{attrs}->{uid};
+    my $msg;
+
+    xlog "get email";
+    $res = $jmap->CallMethods([
+        ['Email/query', {}, "R1"],
+        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2'],
+    ]);
+    $msg = $res->[1][1]{list}[0];
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+
+    xlog "Create target mailbox";
+    $talk->create("INBOX.target");
+
+    xlog "Copy email into INBOX.target";
+    $talk->copy($uid, "INBOX.target");
+
+    xlog "get email";
+    $res = $jmap->CallMethods([
+        ['Email/query', {}, "R1"],
+        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2'],
+    ]);
+    $msg = $res->[1][1]{list}[0];
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
+
+    xlog "delete the message in INBOX";
+    $talk->store($uid, "+flags", "\\Deleted");
+    $talk->expunge();
+
+    xlog "copy the message back into INBOX again";
+    $talk->select("INBOX.target");
+    $talk->copy("1:*", "INBOX");
+
+    xlog "check that email is still in both mailboxes";
+    $res = $jmap->CallMethods([
+        ['Email/query', {}, "R1"],
+        ['Email/get', { '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' } }, 'R2'],
+    ]);
+    $msg = $res->[1][1]{list}[0];
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+    $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
+}
+
 sub test_email_get_body_both
     :min_version_3_1 :needs_component_jmap
 {
