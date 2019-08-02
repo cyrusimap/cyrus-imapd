@@ -783,6 +783,142 @@ done:
     buf_free(&buf);
 }
 
+static uint32_t imap_uid_from_subid(const char *id)
+{
+    uint32_t uid = 0;
+
+    if (id[0] == 'S' && id[1] != '-' && strlen(id) < JMAP_SUBID_SIZE) {
+        char *endptr = NULL;
+
+        uid = strtoul(id+1, &endptr, 10);
+
+        if (*endptr || errno == ERANGE || uid > UINT_MAX) uid = 0;
+    }
+
+    return uid;
+}
+
+static void _emailsubmission_update(struct mailbox *submbox,
+                                    const char *id,
+                                    json_t *emailsubmission,
+                                    json_t **set_err)
+{
+    uint32_t uid = imap_uid_from_subid(id);
+    struct buf buf = BUF_INITIALIZER;
+    struct index_record record;
+    message_t *msg = NULL;
+    json_t *sub = NULL;
+    int r = 0;
+
+    /* Lookup message by IMAP UID */
+    if (uid) {
+        r = mailbox_find_index_record(submbox, uid, &record);
+
+        if (!r) msg = message_new_from_record(submbox, &record);
+    }
+
+    if (!msg) {
+        /* Not a valid id */
+        *set_err = json_pack("{s:s}", "type", "notFound");
+        return;
+    }
+
+    r = message_get_field(msg, JMAP_SUBMISSION_HDR,
+                          MESSAGE_DECODED|MESSAGE_TRIM, &buf);
+    message_unref(&msg);
+
+    if (!r && buf_len(&buf)) {
+        json_error_t jerr;
+        sub = json_loadb(buf_base(&buf), buf_len(&buf),
+                         JSON_DISABLE_EOF_CHECK, &jerr);
+    }
+    buf_free(&buf);
+
+    if (!sub) {
+        if (!r) r = IMAP_IOERROR;
+
+        *set_err = json_pack("{s:s}", "type", error_message(r));
+        return;
+    }
+
+    const char *arg;
+    json_t *val;
+    int do_cancel = 0;
+    json_object_foreach(emailsubmission, arg, val) {
+        /* Make sure values in update match */
+        if (!json_equal(val, json_object_get(sub, arg))) {
+            /* Check the values that /get adds to the object */
+            switch (json_typeof(val)) {
+            case JSON_STRING:
+            {
+                const char *strval = json_string_value(val);
+
+                if (!strcmp(arg, "id") && !strcmp(strval, id)) {
+                    continue;
+                }
+                else if (!strcmp(arg, "sendAt")) {
+                    time_t t = 0;
+                    if (time_from_iso8601(strval, &t) == (int) strlen(strval) &&
+                        t == record.internaldate) {
+                        continue;
+                    }
+                }
+                else if (!strcmp(arg, "undoStatus")) {
+                    if (record.internal_flags & FLAG_INTERNAL_EXPUNGED) {
+                        if (!(record.system_flags & FLAG_DELETED)) {
+                            /* Already sent */
+                            *set_err = json_pack("{s:s}", "type", "cannotUnsend");
+                        }
+                        else if (!strcmp(strval, "canceled")) {
+                            /* Already canceled */
+                            continue;
+                        }
+                    }
+                    else if (!strcmp(strval, "pending")) {
+                        continue;
+                    }
+                    else if (!strcmp(strval, "canceled")) {
+                        do_cancel = 1;
+                        continue;
+                    }
+                }
+                break;
+            }
+
+            case JSON_NULL:
+                if (!strcmp(arg, "deliveryStatus")) continue;
+                break;
+
+            case JSON_ARRAY:
+                if (json_array_size(val) == 0 &&
+                    (!strcmp(arg, "dsnBlobIds") ||
+                     !strcmp(arg, "mdnBlobIds"))) {
+                    continue;
+                }
+                break;
+
+            default:
+                break;
+            }
+
+            if (!*set_err)
+                *set_err = json_pack("{s:s}", "type", "invalidProperties");
+            break;
+        }
+    }
+    json_decref(sub);
+
+    if (*set_err) return;
+
+    if (do_cancel) {
+        record.system_flags |= FLAG_DELETED;
+        record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+
+        r = mailbox_rewrite_index_record(submbox, &record);
+        if (r) *set_err = json_pack("{s:s}", "type", error_message(r));
+    }
+}
+
 static int getsubmission(struct jmap_get *get,
                          const char *id, message_t *msg)
 {
@@ -967,19 +1103,15 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
 
         json_array_foreach(get.ids, i, val) {
             const char *id = json_string_value(val);
+            uint32_t uid = imap_uid_from_subid(id);
             message_t *msg = NULL;
 
             /* Lookup message by IMAP UID */
-            if (id[0] == 'S' && id[1] != '-' && strlen(id) < JMAP_SUBID_SIZE) {
-                char *endptr = NULL;
-                uint32_t uid = strtoul(id+1, &endptr, 10);
+            if (uid) {
+                struct index_record record;
+                int r = mailbox_find_index_record(mbox, uid, &record);
 
-                if (!(*endptr || errno == ERANGE || uid > UINT_MAX)) {
-                    struct index_record record;
-                    int r = mailbox_find_index_record(mbox, uid, &record);
-
-                    if (!r) msg = message_new_from_record(mbox, &record);
-                }
+                if (!r) msg = message_new_from_record(mbox, &record);
             }
             if (!msg) {
                 /* Not a valid id */
@@ -1115,8 +1247,13 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
 
     const char *id;
     json_object_foreach(set.update, id, jsubmission) {
-        json_t *set_err = json_pack("{s:s}", "type", "notFound");
-        json_object_set_new(set.not_updated, id, set_err);
+        json_t *set_err = NULL;
+        _emailsubmission_update(submbox, id, jsubmission, &set_err);
+        if (set_err) {
+            json_object_set_new(set.not_updated, id, set_err);
+            continue;
+        }
+        json_object_set_new(set.updated, id, json_pack("{s:s}", "id", id));
     }
 
     size_t i;
