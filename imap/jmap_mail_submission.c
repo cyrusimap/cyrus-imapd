@@ -1140,9 +1140,9 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
         mailbox_iter_done(&iter);
     }
 
+    json_t *jstate = jmap_fmtstate(mbox->i.highestmodseq);
     jmap_closembox(req, &mbox);
 
-    json_t *jstate = jmap_getstate(req, MBTYPE_EMAIL, /*refresh*/0);
     get.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
@@ -1213,20 +1213,26 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
 
     /* Process request */
 
-    /* As long as EmailSubmission/set returns random states, we
-     * never can guarantee the EmailSubmission state not to have
-     * changed. Reject all ifInState requests. */
-    if (set.if_in_state) {
-        jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
-        goto done;
-    }
-
     int r = create_submission_collection(req->accountid, &submbox);
     if (r) {
         syslog(LOG_ERR,
                "jmap_emailsubmission_set: create_submission_collection(%s): %s",
                req->accountid, error_message(r));
         goto done;
+    }
+
+    if (set.if_in_state) {
+        modseq_t client_modseq = atomodseq_t(set.if_in_state);
+        if (client_modseq != submbox->i.highestmodseq) {
+            jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+            goto done;
+        }
+        set.old_state = xstrdup(set.if_in_state);
+    }
+    else {
+        json_t *jstate = jmap_fmtstate(submbox->i.highestmodseq);
+        set.old_state = xstrdup(json_string_value(jstate));
+        json_decref(jstate);
     }
 
     json_t *jsubmission;
@@ -1305,8 +1311,9 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         }
     }
 
-    /* Create a random new state. /changes will return empty changes. */
-    set.new_state = xstrdup(makeuuid());
+    json_t *jstate = jmap_fmtstate(submbox->i.highestmodseq);
+    set.new_state = xstrdup(json_string_value(jstate));
+    json_decref(jstate);
 
     jmap_ok(req, jmap_set_reply(&set));
 
