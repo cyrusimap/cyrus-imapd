@@ -942,9 +942,33 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
 
         if (r) goto done;
         time_to_rfc3339(t, datestr, RFC3339_DATETIME_MAX);
-        json_object_set_new(mboxs, mbox->uniqueid,
-                            json_pack("{s:s}",
-                                      exists ? "added" : "removed", datestr));
+
+        json_t *mboxdata = json_object_get(mboxs, mbox->uniqueid);
+        if (!mboxdata) {
+            mboxdata = json_object();
+            json_object_set_new(mboxs, mbox->uniqueid, mboxdata);
+        }
+
+        if (exists) {
+            json_t *prev = json_object_get(mboxdata, "added");
+            if (prev) {
+                const char *val = json_string_value(prev);
+                // we want the FIRST date it was added to the mailbox, so skip if this is newer
+                if (strcmp(datestr, val) >= 0) goto done;
+            }
+
+            json_object_set_new(mboxdata, "added", json_string(datestr));
+        }
+        else {
+            json_t *prev = json_object_get(mboxdata, "removed");
+            if (prev) {
+                const char *val = json_string_value(prev);
+                // we want the LAST date it was removed from the mailbox, so skip if this is older
+                if (strcmp(datestr, val) <= 0) goto done;
+            }
+
+            json_object_set_new(mboxdata, "removed", json_string(datestr));
+        }
     }
 
 
