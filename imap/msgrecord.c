@@ -301,7 +301,10 @@ EXPORTED int msgrecord_get_savedate(msgrecord_t *mr, time_t *t)
         int r = msgrecord_need(mr, M_RECORD);
         if (r) return r;
     }
-    *t = mr->record.savedate;
+    if (mr->record.savedate)
+        *t = mr->record.savedate;
+    else
+        *t = mr->record.internaldate;
     return 0;
 }
 
