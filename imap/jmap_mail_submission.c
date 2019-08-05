@@ -783,8 +783,9 @@ done:
     buf_free(&buf);
 }
 
-static uint32_t imap_uid_from_subid(const char *id)
+static message_t *msg_from_subid(struct mailbox *submbox, const char *id)
 {
+    message_t *msg = NULL;
     uint32_t uid = 0;
 
     if (id[0] == 'S' && id[1] != '-' && strlen(id) < JMAP_SUBID_SIZE) {
@@ -795,7 +796,16 @@ static uint32_t imap_uid_from_subid(const char *id)
         if (*endptr || errno == ERANGE || uid > UINT_MAX) uid = 0;
     }
 
-    return uid;
+    if (uid) {
+        struct index_record record;
+        int r = mailbox_find_index_record(submbox, uid, &record);
+
+        if (!r && !(record.system_flags & FLAG_DELETED)) {
+            msg = message_new_from_record(submbox, &record);
+        }
+    }
+
+    return msg;
 }
 
 static void _emailsubmission_update(struct mailbox *submbox,
@@ -803,25 +813,18 @@ static void _emailsubmission_update(struct mailbox *submbox,
                                     json_t *emailsubmission,
                                     json_t **set_err)
 {
-    uint32_t uid = imap_uid_from_subid(id);
+    message_t *msg = msg_from_subid(submbox, id);
     struct buf buf = BUF_INITIALIZER;
-    struct index_record record;
-    message_t *msg = NULL;
+    const struct index_record *record;
     json_t *sub = NULL;
     int r = 0;
-
-    /* Lookup message by IMAP UID */
-    if (uid) {
-        r = mailbox_find_index_record(submbox, uid, &record);
-
-        if (!r) msg = message_new_from_record(submbox, &record);
-    }
 
     if (!msg) {
         /* Not a valid id */
         *set_err = json_pack("{s:s}", "type", "notFound");
         return;
     }
+    record = msg_record(msg);
 
     r = message_get_field(msg, JMAP_SUBMISSION_HDR,
                           MESSAGE_DECODED|MESSAGE_TRIM, &buf);
@@ -859,13 +862,13 @@ static void _emailsubmission_update(struct mailbox *submbox,
                 else if (!strcmp(arg, "sendAt")) {
                     time_t t = 0;
                     if (time_from_iso8601(strval, &t) == (int) strlen(strval) &&
-                        t == record.internaldate) {
+                        t == record->internaldate) {
                         continue;
                     }
                 }
                 else if (!strcmp(arg, "undoStatus")) {
-                    if (record.internal_flags & FLAG_INTERNAL_EXPUNGED) {
-                        if (!(record.internal_flags & FLAG_INTERNAL_UNLINKED)) {
+                    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
+                        if (!(record->internal_flags & FLAG_INTERNAL_UNLINKED)) {
                             /* Already sent */
                             *set_err = json_pack("{s:s}", "type", "cannotUnsend");
                         }
@@ -911,9 +914,13 @@ static void _emailsubmission_update(struct mailbox *submbox,
     if (*set_err) return;
 
     if (do_cancel) {
-        record.internal_flags |= FLAG_INTERNAL_UNLINKED | FLAG_INTERNAL_EXPUNGED;
+        struct index_record newrecord;
 
-        r = mailbox_rewrite_index_record(submbox, &record);
+        memcpy(&newrecord, record, sizeof(struct index_record));
+        newrecord.internal_flags |=
+            FLAG_INTERNAL_UNLINKED | FLAG_INTERNAL_EXPUNGED;
+
+        r = mailbox_rewrite_index_record(submbox, &newrecord);
         if (r) *set_err = json_pack("{s:s}", "type", error_message(r));
     }
 }
@@ -1100,16 +1107,8 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
 
         json_array_foreach(get.ids, i, val) {
             const char *id = json_string_value(val);
-            uint32_t uid = imap_uid_from_subid(id);
-            message_t *msg = NULL;
+            message_t *msg = msg_from_subid(mbox, id);
 
-            /* Lookup message by IMAP UID */
-            if (uid) {
-                struct index_record record;
-                int r = mailbox_find_index_record(mbox, uid, &record);
-
-                if (!r) msg = message_new_from_record(mbox, &record);
-            }
             if (!msg) {
                 /* Not a valid id */
                 json_array_append_new(get.not_found, json_string(id));
