@@ -34,9 +34,37 @@ How are you planning on upgrading?
 
 Ideally, you will do a sandboxed test installation of 3.0 using a snapshot of your existing data before you switch off your existing installation. The rest of the instructions are assuming a sandboxed 3.0 installation.
 
-If you're familiar with replication, and your current installation is 2.4 or newer, you can set up your existing
-installation to replicate data to a new 3.0 installation and failover to the new installation when you're
-ready. The replication protocol has been kept backwards compatible.
+Upgrade by replicating
+~~~~~~~~~~~~~~~~~~~~~~
+
+If you're familiar with replication, and your current installation is 2.4 or
+newer, you can set up your existing installation to replicate data to a new
+3.0 installation and failover to the new installation when you're ready. The
+replication protocol has been kept backwards compatible.
+
+If your old installation contains mailboxes or messages that are older than
+2.4, they may not have GUID fields in their indexes (index version too old),
+or they may have their GUID field set to zero.  3.0 will not accept message
+replications without valid matching GUIDs, so you need to fix this on your
+old installation first.
+
+You can check for affected mailboxes by examining the output from the
+:cyrusman:`mbexamine(8)` tool:
+
+* mailboxes that report a 'Minor Version:' less than 10 will need to have
+  their index upgraded using :cyrusman:`reconstruct(8)` with the
+  `-V <version>` parameter to be at least 10.
+* mailboxes containing messages that report 'GUID:0' will need to have
+  their GUIDs recalculated using :cyrusman:`reconstruct(8)` with the `-G`
+  parameter.
+
+If you have a large amount of data, these reconstructs will take a long time,
+so it's better to identify the mailboxes needing attention and target them
+specifically.  But if you have a small amount of data, it might be less work
+to just `reconstruct -G -V max` everything.
+
+Upgrade in place
+~~~~~~~~~~~~~~~~
 
 If you are upgrading in place, you will need to shut down Cyrus
 entirely while you install the new package.  If your old installation
@@ -116,7 +144,7 @@ We recommend backing up all your data before continuing.
 * :ref:`Cyrus Databases <databases>`
 
 (You do already have a backup strategy in place, right? Once you're on 3.0, you can
-consider using the new inbuilt :ref:`backup tools <cyrus-backups>`.)
+consider using the experimental :ref:`backup tools <cyrus-backups>`.)
 
 Copy all of this to the new instance, using ``rsync`` or similar tools.
 
