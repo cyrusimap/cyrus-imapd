@@ -6085,15 +6085,29 @@ sub test_email_query_attachmenttype
             blobId => $blobId,
             type => 'application/msword',
           }],
+      },
+      "4" => {
+          mailboxIds => {$inboxid => JSON::true},
+          from => [ { name => "", email => "elmer\@acme.local" } ] ,
+          to => [ { name => "", email => "porky\@acme.local" } ],
+          subject => "baz",
+          textBody => [{ partId => '1' }],
+          bodyValues => { '1' => { value => "baz" } },
+          attachments => [{
+            blobId => $blobId,
+            type => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          }],
       }
       }}, 'R1']
     ]);
     my $idGif = $res->[0][1]{created}{"1"}{id};
     my $idTxt = $res->[0][1]{created}{"2"}{id};
     my $idDoc = $res->[0][1]{created}{"3"}{id};
+    my $idWord = $res->[0][1]{created}{"4"}{id};
     $self->assert_not_null($idGif);
     $self->assert_not_null($idTxt);
     $self->assert_not_null($idDoc);
+    $self->assert_not_null($idWord);
 
     xlog "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
@@ -6115,9 +6129,17 @@ sub test_email_query_attachmenttype
         wantIds => [$idDoc],
     }, {
         filter => {
+            # this should be application/vnd... but Xapian has a 64 character limit on terms
+            # indexed, so application_vndopenxmlformatsofficedocumentwordprocessingmldocument
+            # never got indexed
+            attachmentType => 'vnd.openxmlformats-officedocument.wordprocessingml.document',
+        },
+        wantIds => [$idWord],
+    }, {
+        filter => {
             attachmentType => 'document',
         },
-        wantIds => [$idDoc],
+        wantIds => [$idDoc, $idWord],
     }, {
         filter => {
             operator => 'NOT',
