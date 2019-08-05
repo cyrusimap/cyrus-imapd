@@ -1691,6 +1691,8 @@ static void _email_search_type(search_expr_t *parent, const char *s, strarray_t 
     strarray_t types = STRARRAY_INITIALIZER;
 
     /* Handle type wildcards */
+    // XXX: due to Xapian's 64 character indexing limitation, we're not prefixing application_
+    // to the Microsoft types
     if (!strcasecmp(s, "image")) {
         strarray_append(&types, "image_gif");
         strarray_append(&types, "image_jpeg");
@@ -1702,8 +1704,8 @@ static void _email_search_type(search_expr_t *parent, const char *s, strarray_t 
     }
     else if (!strcasecmp(s, "document")) {
         strarray_append(&types, "application_msword");
-        strarray_append(&types, "application_vnd.openxmlformats-officedocument.wordprocessingml.document");
-        strarray_append(&types, "application_vnd.openxmlformats-officedocument.wordprocessingml.template");
+        strarray_append(&types, "vnd.openxmlformats-officedocument.wordprocessingml.document");
+        strarray_append(&types, "vnd.openxmlformats-officedocument.wordprocessingml.template");
         strarray_append(&types, "application_vnd.sun.xml.writer");
         strarray_append(&types, "application_vnd.sun.xml.writer.template");
         strarray_append(&types, "application_vnd.oasis.opendocument.text");
@@ -1713,8 +1715,8 @@ static void _email_search_type(search_expr_t *parent, const char *s, strarray_t 
     }
     else if (!strcasecmp(s, "spreadsheet")) {
         strarray_append(&types, "application_vnd.ms-excel");
-        strarray_append(&types, "application_vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        strarray_append(&types, "application_vnd.openxmlformats-officedocument.spreadsheetml.template");
+        strarray_append(&types, "vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        strarray_append(&types, "vnd.openxmlformats-officedocument.spreadsheetml.template");
         strarray_append(&types, "application_vnd.sun.xml.calc");
         strarray_append(&types, "application_vnd.sun.xml.calc.template");
         strarray_append(&types, "application_vnd.oasis.opendocument.spreadsheet");
@@ -1724,9 +1726,9 @@ static void _email_search_type(search_expr_t *parent, const char *s, strarray_t 
     }
     else if (!strcasecmp(s, "presentation")) {
         strarray_append(&types, "application_vnd.ms-powerpoint");
-        strarray_append(&types, "application_vnd.openxmlformats-officedocument.presentationml.presentation");
-        strarray_append(&types, "application_vnd.openxmlformats-officedocument.presentationml.template");
-        strarray_append(&types, "application_vnd.openxmlformats-officedocument.presentationml.slideshow");
+        strarray_append(&types, "vnd.openxmlformats-officedocument.presentationml.presentation");
+        strarray_append(&types, "vnd.openxmlformats-officedocument.presentationml.template");
+        strarray_append(&types, "vnd.openxmlformats-officedocument.presentationml.slideshow");
         strarray_append(&types, "application_vnd.sun.xml.impress");
         strarray_append(&types, "application_vnd.sun.xml.impress.template");
         strarray_append(&types, "application_vnd.oasis.opendocument.presentation");
