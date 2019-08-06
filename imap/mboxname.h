@@ -272,6 +272,8 @@ struct mboxname_counters {
     modseq_t notesfoldersmodseq;
     modseq_t quotamodseq;
     modseq_t raclmodseq;
+    modseq_t submissionmodseq;
+    modseq_t submissionfoldersmodseq;
     uint32_t uidvalidity;
 };
 

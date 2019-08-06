@@ -1434,6 +1434,25 @@ EXPORTED int mboxname_isnotesmailbox(const char *name, int mbtype __attribute__(
 }
 
 /*
+ * If (internal) mailbox 'name' is a user's #jmapsubmission mailbox
+ * returns boolean
+ */
+EXPORTED int mboxname_issubmissionmailbox(const char *name, int mbtype)
+{
+    if (mbtype & MBTYPE_SUBMISSION) return 1;  /* Only works on backends */
+    int res = 0;
+
+    mbname_t *mbname = mbname_from_intname(name);
+    const strarray_t *boxes = mbname_boxes(mbname);
+    const char *prefix = config_getstring(IMAPOPT_JMAPSUBMISSIONFOLDER);
+    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+        res = 1;
+
+    mbname_free(&mbname);
+    return res;
+}
+
+/*
  * If (internal) mailbox 'name' is a user's mail outbox
  * returns boolean
  */
@@ -2132,7 +2151,7 @@ static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
     return fileval;
 }
 
-#define MV_VERSION 4
+#define MV_VERSION 5
 
 #define MV_OFF_GENERATION 0
 #define MV_OFF_VERSION 4
@@ -2147,9 +2166,11 @@ static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
 #define MV_OFF_NOTESFOLDERSMODSEQ 72
 #define MV_OFF_QUOTAMODSEQ 80
 #define MV_OFF_RACLMODSEQ 88
-#define MV_OFF_UIDVALIDITY 96
-#define MV_OFF_CRC 100
-#define MV_LENGTH 104
+#define MV_OFF_SUBMISSIONMODSEQ 96
+#define MV_OFF_SUBMISSIONFOLDERSMODSEQ 104
+#define MV_OFF_UIDVALIDITY 112
+#define MV_OFF_CRC 116
+#define MV_LENGTH 120
 
 /* NOTE: you need a MV_LENGTH byte base here */
 static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxname_counters *vals)
@@ -2248,6 +2269,27 @@ static int mboxname_buf_to_counters(const char *base, size_t len, struct mboxnam
         vals->uidvalidity = ntohl(*((uint32_t *)(base+96)));
         break;
 
+    case 5:
+        if (len != 120) return IMAP_MAILBOX_CHECKSUM;
+        if (crc32_map(base, 116) != ntohl(*((uint32_t *)(base+116))))
+            return IMAP_MAILBOX_CHECKSUM;
+
+        vals->highestmodseq = ntohll(*((uint64_t *)(base+8)));
+        vals->mailmodseq = ntohll(*((uint64_t *)(base+16)));
+        vals->caldavmodseq = ntohll(*((uint64_t *)(base+24)));
+        vals->carddavmodseq = ntohll(*((uint64_t *)(base+32)));
+        vals->notesmodseq = ntohll(*((uint64_t *)(base+40)));
+        vals->mailfoldersmodseq = ntohll(*((uint64_t *)(base+48)));
+        vals->caldavfoldersmodseq = ntohll(*((uint64_t *)(base+56)));
+        vals->carddavfoldersmodseq = ntohll(*((uint64_t *)(base+64)));
+        vals->notesfoldersmodseq = ntohll(*((uint64_t *)(base+72)));
+        vals->quotamodseq = ntohll(*((uint64_t *)(base+80)));
+        vals->raclmodseq = ntohll(*((uint64_t *)(base+88)));
+        vals->submissionmodseq = ntohll(*((uint64_t *)(base+96)));
+        vals->submissionfoldersmodseq = ntohll(*((uint64_t *)(base+104)));
+        vals->uidvalidity = ntohl(*((uint32_t *)(base+112)));
+        break;
+
     default:
         return IMAP_MAILBOX_BADFORMAT;
     }
@@ -2272,6 +2314,8 @@ static void mboxname_counters_to_buf(const struct mboxname_counters *vals, char 
     *((uint32_t *)(base+MV_OFF_UIDVALIDITY)) = htonl(vals->uidvalidity);
     align_htonll(base+MV_OFF_QUOTAMODSEQ, vals->quotamodseq);
     align_htonll(base+MV_OFF_RACLMODSEQ, vals->raclmodseq);
+    align_htonll(base+MV_OFF_SUBMISSIONMODSEQ, vals->submissionmodseq);
+    align_htonll(base+MV_OFF_SUBMISSIONFOLDERSMODSEQ, vals->submissionfoldersmodseq);
     *((uint32_t *)(base+MV_OFF_CRC)) = htonl(crc32_map(base, MV_OFF_CRC));
 }
 
@@ -2530,6 +2574,10 @@ static modseq_t mboxname_domodseq(const char *mboxname,
         else if (mboxname_isnotesmailbox(mboxname, mbtype)) {
             typemodseqp = &counters.notesmodseq;
             foldersmodseqp = &counters.notesfoldersmodseq;
+        }
+        else if (mboxname_issubmissionmailbox(mboxname, mbtype)) {
+            typemodseqp = &counters.submissionmodseq;
+            foldersmodseqp = &counters.submissionfoldersmodseq;
         }
         else {
             typemodseqp = &counters.mailmodseq;

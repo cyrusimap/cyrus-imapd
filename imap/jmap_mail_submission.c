@@ -1166,12 +1166,12 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
         mailbox_iter_done(&iter);
     }
 
-    json_t *jstate = jmap_fmtstate(mbox->i.highestmodseq);
     jmap_closembox(req, &mbox);
 
+    /* Build response */
+    json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/0);
     get.state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
-
     jmap_ok(req, jmap_get_reply(&get));
 
 done:
@@ -1248,15 +1248,18 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     }
 
     if (set.if_in_state) {
-        modseq_t client_modseq = atomodseq_t(set.if_in_state);
-        if (client_modseq != submbox->i.highestmodseq) {
+        /* TODO rewrite state function to use char* not json_t* */
+        json_t *jstate = json_string(set.if_in_state);
+        if (jmap_cmpstate(req, jstate, MBTYPE_SUBMISSION)) {
             jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+            json_decref(jstate);
             goto done;
         }
+        json_decref(jstate);
         set.old_state = xstrdup(set.if_in_state);
     }
     else {
-        json_t *jstate = jmap_fmtstate(submbox->i.highestmodseq);
+        json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/0);
         set.old_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
     }
@@ -1337,7 +1340,9 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         }
     }
 
-    json_t *jstate = jmap_fmtstate(submbox->i.highestmodseq);
+    // TODO refactor jmap_getstate to return a string, once
+    // all code has been migrated to the new JMAP parser.
+    json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/1);
     set.new_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
 
