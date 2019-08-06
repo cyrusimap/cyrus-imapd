@@ -351,7 +351,9 @@ static int stage_futurerelease(struct mailbox *mailbox,
     struct stagemsg *stage = NULL;
     struct appendstate as;
     strarray_t flags = STRARRAY_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
     struct body *body = NULL;
+    char datestr[80], *from;
     FILE *f = NULL;
     int r;
 
@@ -362,16 +364,42 @@ static int stage_futurerelease(struct mailbox *mailbox,
         goto done;
     }
 
-    /* Add JMAP submission object as first header */
-    char *json = json_dumps(emailsubmission, JSON_COMPACT);
-    size_t json_len = strlen(json);
-    r = fprintf(f, "%s: %s\r\n", JMAP_SUBMISSION_HDR, json);
-    free(json);
+    /* Stage the message to send as message/rfc822 */
+    time_to_rfc5322(time(0), datestr, sizeof(datestr));
 
-    if (r < (int) (strlen(JMAP_SUBMISSION_HDR) + json_len + 4)) {
+    if (strchr(httpd_userid, '@')) {
+        /* XXX  This needs to be done via an LDAP/DB lookup */
+        buf_printf(&buf, "<%s>", httpd_userid);
+    }
+    else {
+        buf_printf(&buf, "<%s@%s>", httpd_userid, config_servername);
+    }
+
+    from = charset_encode_mimeheader(buf_cstring(&buf), buf_len(&buf), 0);
+
+    fprintf(f, "MIME-Version: 1.0\r\n"
+            "Date: %s\r\n"
+            "From: %s\r\n"
+            "Subject: JMAP EmailSubmission for %s\r\n"
+            "Content-Type: message/rfc822\r\n"
+            "Content-Length: %ld\r\n"
+            "%s: ", datestr, from,
+            json_string_value(json_object_get(emailsubmission, "emailId")),
+            buf_len(msg), JMAP_SUBMISSION_HDR);
+    free(from);
+
+    /* Add JMAP submission object as content of header field */
+    size_t size = json_dumpb(emailsubmission, NULL, 0, 0);
+    buf_truncate(&buf, size);
+    size = json_dumpb(emailsubmission,
+                      (char *) buf_base(&buf), size, JSON_COMPACT);
+    r = fwrite(buf_base(&buf), size, 1, f);
+    buf_free(&buf);
+    if (!r) {
         r = IMAP_IOERROR;
         goto done;
     }
+    fputs("\r\n\r\n", f);
 
     /* Add submitted message */
     if (!fwrite(buf_base(msg), buf_len(msg), 1, f) || fflush(f)) {

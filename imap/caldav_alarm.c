@@ -856,6 +856,7 @@ done_item:
 static void process_futurerelease(struct mailbox *mailbox,
                                     struct index_record *record)
 {
+    message_t *m = message_new_from_record(mailbox, record);
     struct buf buf = BUF_INITIALIZER;
     json_t *submission = NULL, *identity, *envelope;
     int r = 0;
@@ -863,41 +864,11 @@ static void process_futurerelease(struct mailbox *mailbox,
     syslog(LOG_DEBUG, "processing future release for mailbox %s uid %u",
            mailbox->name, record->uid);
 
-    /* Load message */
-    message_t *m = message_new_from_record(mailbox, record);
-    const char *fname;
-    r = message_get_fname(m, &fname);
-    if (r) {
-        syslog(LOG_ERR, "process_futurerelease: can't get fname for %s:%u",
-               mailbox->name, record->uid);
-        goto done;
-    }
-
-    int msgfd = open(fname, 0);
-    if (msgfd == -1) {
-        syslog(LOG_ERR, "process_futurerelease: can't open %s: %m", fname);
-        goto done;
-    }
-
-    struct stat sbuf;
-    if (fstat(msgfd, &sbuf) == -1) {
-        syslog(LOG_ERR, "process_futurerelease: can't fstat %s: %m", fname);
-        close(msgfd);
-        goto done;
-    }
-
-    buf_init_mmap(&buf, 1, msgfd, fname, sbuf.st_size, mailbox->name);
-    close(msgfd);
-    if (!buf_len(&buf)) {
-        syslog(LOG_ERR, "process_futurerelease: can't mmap %s: %m", fname);
-        goto done;
-    }
-
-    /* Parse the submission object from the first header field */
-    json_error_t jerr;
-    size_t hdrlen = strlen(JMAP_SUBMISSION_HDR) + 1; /* +1 for ':' */
-    if (!strncasecmp(buf_base(&buf), JMAP_SUBMISSION_HDR ":", hdrlen)) {
-        submission = json_loadb(buf_base(&buf) + hdrlen, buf_len(&buf) - hdrlen,
+    /* Parse the submission object from the header field */
+    r = message_get_field(m, JMAP_SUBMISSION_HDR, MESSAGE_RAW, &buf);
+    if (!r) {
+        json_error_t jerr;
+        submission = json_loadb(buf_base(&buf), buf_len(&buf),
                                 JSON_DISABLE_EOF_CHECK, &jerr);
     }
     if (!submission) {
@@ -908,13 +879,13 @@ static void process_futurerelease(struct mailbox *mailbox,
     envelope = json_object_get(submission, "envelope");
     identity = json_object_get(submission, "identityId");
 
-    /* Trim submission header field */
-    const char *p = strstr(buf_base(&buf), "}\r\n") + 3; /* +3 for '}\r\n' */
-    while (isblank(*p)) {
-        /* Folded header -- keep looking for the end */
-        p = strstr(p, "}\r\n") + 3; /* +3 for '}\r\n' */
+    /* Load message */
+    r = message_get_field(m, "rawbody", MESSAGE_RAW, &buf);
+    if (r) {
+        syslog(LOG_ERR, "process_futurerelease: can't get body for %s:%u",
+               mailbox->name, record->uid);
+        goto done;
     }
-    buf_remove(&buf, 0, p - buf_base(&buf));
 
     /* Open the SMTP connection */
     smtpclient_t *sm = NULL;

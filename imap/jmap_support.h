@@ -50,7 +50,7 @@
 
 #include "smtpclient.h"
 
-#define JMAP_SUBMISSION_HDR "JMAP-Submission"
+#define JMAP_SUBMISSION_HDR "Content-Description"
 
 extern void jmap_emailsubmission_envelope_to_smtp(smtp_envelope_t *smtpenv,
                                                   json_t *env);
