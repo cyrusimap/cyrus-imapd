@@ -856,7 +856,6 @@ static void _emailsubmission_update(struct mailbox *submbox,
 
     r = message_get_field(msg, JMAP_SUBMISSION_HDR,
                           MESSAGE_DECODED|MESSAGE_TRIM, &buf);
-    message_unref(&msg);
 
     if (!r && buf_len(&buf)) {
         json_error_t jerr;
@@ -869,7 +868,7 @@ static void _emailsubmission_update(struct mailbox *submbox,
         if (!r) r = IMAP_IOERROR;
 
         *set_err = json_pack("{s:s}", "type", error_message(r));
-        return;
+        goto done;
     }
 
     const char *arg;
@@ -939,7 +938,7 @@ static void _emailsubmission_update(struct mailbox *submbox,
     }
     json_decref(sub);
 
-    if (*set_err) return;
+    if (*set_err) goto done;
 
     if (do_cancel) {
         struct index_record newrecord;
@@ -951,6 +950,9 @@ static void _emailsubmission_update(struct mailbox *submbox,
         r = mailbox_rewrite_index_record(submbox, &newrecord);
         if (r) *set_err = json_pack("{s:s}", "type", error_message(r));
     }
+
+  done:
+    message_unref(&msg);
 }
 
 static int getsubmission(struct jmap_get *get,
