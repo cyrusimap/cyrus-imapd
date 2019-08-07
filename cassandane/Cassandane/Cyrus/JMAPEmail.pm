@@ -2620,6 +2620,127 @@ sub test_emailsubmission_set_with_envelope
     $self->assert_not_null($msgsubid);
 }
 
+sub test_emailsubmission_set_futurerelease
+    :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    $self->assert_not_null($identityid);
+
+    xlog "Generate a email via IMAP";
+    $self->make_message("foo", body => "a email\r\nwithCRLF\r\n") or die;
+
+    xlog "get email id";
+    $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R1" ] ] );
+    my $emailid = $res->[0][1]->{ids}[0];
+
+    xlog "create email submissions";
+    $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
+        create => {
+            '1' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                        parameters => {
+                            "holdfor" => "30",
+                        }
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost',
+                    }, {
+                        email => 'rcpt2@localhost',
+                    }],
+                },
+            },
+            '2' => {
+                identityId => $identityid,
+                emailId  => $emailid,
+                envelope => {
+                    mailFrom => {
+                        email => 'from@localhost',
+                        parameters => {
+                            "holdfor" => "30",
+                        }
+                    },
+                    rcptTo => [{
+                        email => 'rcpt1@localhost',
+                    }, {
+                        email => 'rcpt2@localhost',
+                    }],
+                },
+            }
+       }
+    }, "R1" ] ] );
+    my $msgsubid1 = $res->[0][1]->{created}{1}{id};
+    my $msgsubid2 = $res->[0][1]->{created}{2}{id};
+    $self->assert_not_null($msgsubid1);
+    $self->assert_not_null($msgsubid2);
+
+    $res = $jmap->CallMethods([['EmailSubmission/get', { ids => undef }, "R2"]]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]->{list}});
+    $self->assert_deep_equals([], $res->[0][1]->{notFound});
+    $self->assert_str_equals('pending', $res->[0][1]->{list}[0]->{undoStatus});
+    $self->assert_str_equals('pending', $res->[0][1]->{list}[1]->{undoStatus});
+    my $state = $res->[0][1]->{state};
+
+    xlog "cancel first email submission";
+    $res = $jmap->CallMethods([
+        ['EmailSubmission/set', {
+            update => { $msgsubid1 => {
+                "undoStatus" => "canceled",
+            }},
+        }, 'R3'],
+    ]);
+
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_null($res->[0][1]{notUpdated});
+
+    $res = $jmap->CallMethods([['EmailSubmission/get', { ids => [ $msgsubid1 ] }, "R4"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
+    $self->assert_deep_equals([], $res->[0][1]->{notFound});
+    $self->assert_str_equals('canceled', $res->[0][1]->{list}[0]->{undoStatus});
+
+    xlog "destroy second email submission";
+    $res = $jmap->CallMethods([
+        ['EmailSubmission/set', {
+            destroy => [ $msgsubid1 ]
+        }, 'R5'],
+    ]);
+
+    $self->assert_not_null($res->[0][1]{destroyed});
+    $self->assert_null($res->[0][1]{notDestroyed});
+
+    $res = $jmap->CallMethods([['EmailSubmission/get', { ids => undef }, "R6"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
+    $self->assert_deep_equals([], $res->[0][1]->{notFound});
+
+    xlog "trigger delivery of second email submission";
+    my $now = DateTime->now();
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $now->epoch() + 60 );
+
+    $res = $jmap->CallMethods([['EmailSubmission/get', { ids => [ $msgsubid2 ] }, "R7"]]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
+    $self->assert_deep_equals([], $res->[0][1]->{notFound});
+    $self->assert_str_equals('final', $res->[0][1]->{list}[0]->{undoStatus});
+
+    xlog "attempt to cancel second email submission (should fail)";
+    $res = $jmap->CallMethods([
+        ['EmailSubmission/set', {
+            update => { $msgsubid2 => {
+                "undoStatus" => "canceled",
+            }},
+        }, 'R8'],
+    ]);
+
+    $self->assert_null($res->[0][1]{updated});
+    $self->assert_not_null($res->[0][1]{notUpdated});
+}
+
 sub test_emailsubmission_set_creationid
     :min_version_3_1 :needs_component_jmap
 {
