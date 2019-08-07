@@ -7134,10 +7134,9 @@ int meth_put(struct transaction_t *txn, void *params)
     }
 
   done:
-    if (obj) {
-        if (pparams->mime_types[0].free) pparams->mime_types[0].free(obj);
-        buf_free(&msg_buf);
-    }
+    if (obj && pparams->mime_types[0].free)
+        pparams->mime_types[0].free(obj);
+    buf_free(&msg_buf);
     if (davdb) pparams->davdb.close_db(davdb);
     mailbox_close(&mailbox);
 
