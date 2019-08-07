@@ -86,6 +86,8 @@ static int sieve_vacation_enabled = 0;
 
 HIDDEN void jmap_vacation_init(jmap_settings_t *settings)
 {
+    if (!config_getswitch(IMAPOPT_JMAP_VACATION)) return;
+
 #ifdef USE_SIEVE
     unsigned long config_ext = config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
     unsigned long required =

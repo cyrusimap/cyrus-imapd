@@ -1105,6 +1105,9 @@ Blank lines and lines beginning with ``#'' are ignored.
    typically be enabled, but installations using Cyrus-external message
    annatotors to determine the $hasAttachment flag might want to disable it. */
 
+{ "jmap_vacation", 1, SWITCH }
+/* If enabled, support the JMAP vacation extension */
+
 { "jmapuploadfolder", "#jmap", STRING }
 /* the name of the folder for JMAP uploads (#jmap) */
 
