@@ -1384,11 +1384,11 @@ EXPORTED int mboxlist_createmailbox_unq(const char *name, int mbtype,
     struct mailbox *mailbox = NULL;
     uint32_t uidvalidity = 0;
     modseq_t createdmodseq = 0;
+    mbentry_t *oldmbentry = NULL;
 
     init_internal();
 
     /* check if a mailbox tombstone or intermediate record exists */
-    mbentry_t *oldmbentry = NULL;
     r = mboxlist_lookup_allow_all(name, &oldmbentry, NULL);
     if (!r) {
         if (oldmbentry->mbtype == MBTYPE_DELETED) {
@@ -1402,7 +1402,6 @@ EXPORTED int mboxlist_createmailbox_unq(const char *name, int mbtype,
             createdmodseq = oldmbentry->createdmodseq;
         }
     }
-    mboxlist_entry_free(&oldmbentry);
 
     r = mboxlist_createmailbox_full(name, mbtype, partition,
                                     isadmin, userid, auth_state,
@@ -1422,6 +1421,8 @@ EXPORTED int mboxlist_createmailbox_unq(const char *name, int mbtype,
 
     if (mailboxptr && !r) *mailboxptr = mailbox;
     else mailbox_close(&mailbox);
+
+    mboxlist_entry_free(&oldmbentry);
 
     return r;
 }
