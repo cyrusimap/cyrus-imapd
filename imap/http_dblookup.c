@@ -134,7 +134,7 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
     json_t *json;
     int ret = HTTP_NO_CONTENT;
     int i;
-    const char *mboxname = NULL;
+    char *mboxname = NULL;
     const char **mailboxhdrs;
     const char *mailbox = "Default";
 
@@ -167,6 +167,7 @@ static int get_email2uids(struct transaction_t *txn __attribute__((unused)),
     ret = 0;
 
 done:
+    free(mboxname);
     free(result);
     if (array) strarray_free(array);
     if (db) carddav_close(db);
@@ -182,7 +183,7 @@ static int get_email2details(struct transaction_t *txn __attribute__((unused)),
     json_t *uids, *json;
     int ret = HTTP_NO_CONTENT;
     int i;
-    const char *mboxname = NULL;
+    char *mboxname = NULL;
     const char **mailboxhdrs;
     const char *mailbox = "Default";
     int ispinned = 0;
@@ -218,6 +219,7 @@ static int get_email2details(struct transaction_t *txn __attribute__((unused)),
     ret = 0;
 
 done:
+    free(mboxname);
     free(result);
     if (array) strarray_free(array);
     if (db) carddav_close(db);
@@ -233,7 +235,7 @@ static int get_uid2groups(struct transaction_t *txn,
     json_t *json;
     int ret = HTTP_NO_CONTENT;
     int i;
-    const char *mboxname = NULL;
+    char *mboxname = NULL;
     const char **otheruserhdrs;
     const char *otheruser = "";
     const char **mailboxhdrs;
@@ -273,6 +275,7 @@ static int get_uid2groups(struct transaction_t *txn,
     ret = 0;
 
 done:
+    free(mboxname);
     free(result);
     if (array) strarray_free(array);
     if (db) carddav_close(db);
