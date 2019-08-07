@@ -1422,6 +1422,8 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_changes changes;
+    struct mailbox *mbox = NULL;
+    mbentry_t *mbentry = NULL;
 
     json_t *err = NULL;
     jmap_changes_parse(req, &parser, NULL, NULL, &changes, &err);
@@ -1430,9 +1432,67 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
         return 0;
     }
 
-    /* Trivially find no message submission updates at all. */
-    changes.new_modseq = jmap_highestmodseq(req, MBTYPE_SUBMISSION);
+    int r = ensure_submission_collection(req->accountid, &mbentry, NULL, NULL);
+    if (r) {
+        syslog(LOG_ERR,
+               "jmap_emailsubmission_changes: ensure_submission_collection(%s): %s",
+               req->accountid, error_message(r));
+        goto done;
+    }
+
+    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    mboxlist_entry_free(&mbentry);
+    if (r) goto done;
+
+    struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, 0);
+    const message_t *msg;
+    size_t changes_count = 0;
+    modseq_t highest_modseq = 0;
+    while ((msg = mailbox_iter_step(iter))) {
+        char id[JMAP_SUBID_SIZE];
+        const struct index_record *record = msg_record(msg);
+
+        /* Create id from message UID, using 'S' prefix */
+        sprintf(id, "S%u", record->uid);
+
+        /* Skip any changes prior to since modseq */
+        if (record->modseq <= changes.since_modseq) continue;
+
+        /* Skip any submissions created AND deleted since modseq */
+        if ((record->system_flags & FLAG_DELETED) &&
+            record->createdmodseq > changes.since_modseq) continue;
+
+        /* Apply limit, if any */
+        if (changes.max_changes && ++changes_count > changes.max_changes) {
+            changes.has_more_changes = 1;
+            break;
+        }
+
+        /* Keep track of the highest modseq */
+        if (highest_modseq < record->modseq) highest_modseq = record->modseq;
+
+        /* Add change to the proper array */
+        if (record->system_flags & FLAG_DELETED) {
+            json_array_append_new(changes.destroyed, json_string(id));
+        }
+        else if (record->createdmodseq > changes.since_modseq) {
+            json_array_append_new(changes.created, json_string(id));
+        }
+        else {
+            json_array_append_new(changes.updated, json_string(id));
+        }
+    }
+    mailbox_iter_done(&iter);
+
+    jmap_closembox(req, &mbox);
+
+    /* Set new state */
+    changes.new_modseq = changes.has_more_changes ?
+        highest_modseq : jmap_highestmodseq(req, MBTYPE_SUBMISSION);
+
     jmap_ok(req, jmap_changes_reply(&changes));
+
+done:
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
     return 0;
