@@ -2859,7 +2859,10 @@ EXPORTED void icalcomponent_add_required_timezones(icalcomponent *ical)
         /* XXX  These were added by KSM in a previous version of vzic,
            but libical doesn't allow them in its restrictions checks */
         tzprop = icalcomponent_get_first_property(tzcomp, ICAL_COMMENT_PROPERTY);
-        if (tzprop) icalcomponent_remove_property(tzcomp, tzprop);
+        if (tzprop) {
+            icalcomponent_remove_property(tzcomp, tzprop);
+            icalproperty_free(tzprop);
+        }
 
         /* Add the truncated timezone. */
         icalcomponent_add_component(ical, tzcomp);
