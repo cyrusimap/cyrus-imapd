@@ -2060,6 +2060,10 @@ EXPORTED int mailbox_has_conversations(struct mailbox *mailbox)
     if (mboxname_isdeletedmailbox(mailbox->name, NULL))
         return 0;
 
+    /* we never store data about submission mailboxes */
+    if (mboxname_issubmissionmailbox(mailbox->name, mailbox->mbtype))
+        return 0;
+
     path = conversations_getmboxpath(mailbox->name);
     if (!path) return 0;
     free(path);
