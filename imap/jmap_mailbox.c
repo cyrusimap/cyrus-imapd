@@ -95,7 +95,7 @@ static struct rolesort_data ROLESORT[] = {
     { NULL, 10 }  // default
 };
 
-static jmap_method_t jmap_mailbox_methods[] = {
+static jmap_method_t jmap_mailbox_methods_standard[] = {
     {
         "Mailbox/get",
         JMAP_URN_MAIL,
@@ -129,11 +129,21 @@ static jmap_method_t jmap_mailbox_methods[] = {
     { NULL, NULL, NULL, 0}
 };
 
+static jmap_method_t jmap_mailbox_methods_nonstandard[] = {
+    { NULL, NULL, NULL, 0}
+};
+
 HIDDEN void jmap_mailbox_init(jmap_settings_t *settings)
 {
     jmap_method_t *mp;
-    for (mp = jmap_mailbox_methods; mp->name; mp++) {
+    for (mp = jmap_mailbox_methods_standard; mp->name; mp++) {
         hash_insert(mp->name, mp, &settings->methods);
+    }
+
+    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        for (mp = jmap_mailbox_methods_nonstandard; mp->name; mp++) {
+            hash_insert(mp->name, mp, &settings->methods);
+        }
     }
 }
 

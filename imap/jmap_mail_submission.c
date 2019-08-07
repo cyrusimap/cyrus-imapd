@@ -69,7 +69,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req);
 static int jmap_emailsubmission_query(jmap_req_t *req);
 static int jmap_emailsubmission_querychanges(jmap_req_t *req);
 
-static jmap_method_t jmap_emailsubmission_methods[] = {
+static jmap_method_t jmap_emailsubmission_methods_standard[] = {
     {
         "EmailSubmission/get",
         JMAP_URN_SUBMISSION,
@@ -103,15 +103,25 @@ static jmap_method_t jmap_emailsubmission_methods[] = {
     { NULL, NULL, NULL, 0}
 };
 
+static jmap_method_t jmap_emailsubmission_methods_nonstandard[] = {
+    { NULL, NULL, NULL, 0}
+};
+
 HIDDEN void jmap_emailsubmission_init(jmap_settings_t *settings)
 {
     jmap_method_t *mp;
-    for (mp = jmap_emailsubmission_methods; mp->name; mp++) {
+    for (mp = jmap_emailsubmission_methods_standard; mp->name; mp++) {
         hash_insert(mp->name, mp, &settings->methods);
     }
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_SUBMISSION, json_object());
+
+    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        for (mp = jmap_emailsubmission_methods_nonstandard; mp->name; mp++) {
+            hash_insert(mp->name, mp, &settings->methods);
+        }
+    }
 }
 
 HIDDEN void jmap_emailsubmission_capabilities(json_t *account_capabilities)

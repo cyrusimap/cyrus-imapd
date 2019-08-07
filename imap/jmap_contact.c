@@ -98,7 +98,11 @@ static json_t *jmap_contact_from_vcard(struct vparse_card *card,
 
 #define JMAPCACHE_CONTACTVERSION 1
 
-jmap_method_t jmap_contact_methods[] = {
+jmap_method_t jmap_contact_methods_standard[] = {
+    { NULL, NULL, NULL, 0}
+};
+
+jmap_method_t jmap_contact_methods_nonstandard[] = {
     {
         "ContactGroup/get",
         JMAP_CONTACTS_EXTENSION,
@@ -155,12 +159,18 @@ static char *_prodid = NULL;
 HIDDEN void jmap_contact_init(jmap_settings_t *settings)
 {
     jmap_method_t *mp;
-    for (mp = jmap_contact_methods; mp->name; mp++) {
+    for (mp = jmap_contact_methods_standard; mp->name; mp++) {
         hash_insert(mp->name, mp, &settings->methods);
     }
 
-    json_object_set_new(settings->server_capabilities,
-            JMAP_CONTACTS_EXTENSION, json_object());
+    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        json_object_set_new(settings->server_capabilities,
+                JMAP_CONTACTS_EXTENSION, json_object());
+
+        for (mp = jmap_contact_methods_nonstandard; mp->name; mp++) {
+            hash_insert(mp->name, mp, &settings->methods);
+        }
+    }
 
     /* Initialize PRODID value
      *
@@ -178,7 +188,9 @@ HIDDEN void jmap_contact_init(jmap_settings_t *settings)
 
 HIDDEN void jmap_contact_capabilities(json_t *account_capabilities)
 {
-    json_object_set_new(account_capabilities, JMAP_CONTACTS_EXTENSION, json_object());
+    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        json_object_set_new(account_capabilities, JMAP_CONTACTS_EXTENSION, json_object());
+    }
 }
 
 struct changes_rock {

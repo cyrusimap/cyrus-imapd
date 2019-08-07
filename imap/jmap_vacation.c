@@ -66,7 +66,7 @@
 static int jmap_vacation_get(jmap_req_t *req);
 static int jmap_vacation_set(jmap_req_t *req);
 
-jmap_method_t jmap_vacation_methods[] = {
+jmap_method_t jmap_vacation_methods_standard[] = {
     {
         "VacationResponse/get",
         JMAP_URN_VACATION,
@@ -79,6 +79,10 @@ jmap_method_t jmap_vacation_methods[] = {
         &jmap_vacation_set,
         JMAP_SHARED_CSTATE
     },
+    { NULL, NULL, NULL, 0}
+};
+
+jmap_method_t jmap_vacation_methods_nonstandard[] = {
     { NULL, NULL, NULL, 0}
 };
 
@@ -101,12 +105,19 @@ HIDDEN void jmap_vacation_init(jmap_settings_t *settings)
     if (!sieve_vacation_enabled) return;
 
     jmap_method_t *mp;
-    for (mp = jmap_vacation_methods; mp->name; mp++) {
+    for (mp = jmap_vacation_methods_standard; mp->name; mp++) {
         hash_insert(mp->name, mp, &settings->methods);
     }
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_VACATION, json_object());
+
+    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        for (mp = jmap_vacation_methods_nonstandard; mp->name; mp++) {
+            hash_insert(mp->name, mp, &settings->methods);
+        }
+    }
+
 }
 
 HIDDEN void jmap_vacation_capabilities(json_t *account_capabilities)

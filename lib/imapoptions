@@ -1099,6 +1099,9 @@ Blank lines and lines beginning with ``#'' are ignored.
    property of the JMAP \"urn:ietf:params:jmap:mail\" capabilities object. The Cyrus
    JMAP implementation does not enforce this size limit. Default is 10 Mb.*/
 
+{ "jmap_nonstandard_extensions", 1, SWITCH }
+/* If enabled (the default) support non-standard JMAP extensions */
+
 { "jmap_set_has_attachment", 1, SWITCH }
 /* If enabled, the $hasAttachment flag is determined and set for new messages
    created with the JMAP Email/set or Email/import methods. This option should

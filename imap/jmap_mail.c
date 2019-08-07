@@ -115,7 +115,7 @@ static int jmap_identity_get(jmap_req_t *req);
  * - Identity/set
  */
 
-static jmap_method_t jmap_mail_methods[] = {
+static jmap_method_t jmap_mail_methods_standard[] = {
     {
         "Email/query",
         JMAP_URN_MAIL,
@@ -191,8 +191,13 @@ static jmap_method_t jmap_mail_methods[] = {
     { NULL, NULL, NULL, 0}
 };
 
+static jmap_method_t jmap_mail_methods_nonstandard[] = {
+    { NULL, NULL, NULL, 0}
+};
+
 /* NULL terminated list of supported jmap_email_query sort fields */
-static const char *msglist_sortfields[];
+static const char *msglist_sortfields_standard[];
+static const char *msglist_sortfields_nonstandard[];
 
 #define JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL 20
 #define JMAP_MAIL_MAX_KEYWORDS_PER_EMAIL 100 /* defined in mailbox_user_flag */
@@ -200,16 +205,23 @@ static const char *msglist_sortfields[];
 HIDDEN void jmap_mail_init(jmap_settings_t *settings)
 {
     jmap_method_t *mp;
-    for (mp = jmap_mail_methods; mp->name; mp++) {
+    for (mp = jmap_mail_methods_standard; mp->name; mp++) {
         hash_insert(mp->name, mp, &settings->methods);
     }
 
     json_object_set_new(settings->server_capabilities,
             JMAP_URN_MAIL, json_object());
-    json_object_set_new(settings->server_capabilities,
-            JMAP_SEARCH_EXTENSION, json_object());
-    json_object_set_new(settings->server_capabilities,
-            JMAP_MAIL_EXTENSION, json_object());
+
+    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        json_object_set_new(settings->server_capabilities,
+                JMAP_SEARCH_EXTENSION, json_object());
+        json_object_set_new(settings->server_capabilities,
+                JMAP_MAIL_EXTENSION, json_object());
+
+        for (mp = jmap_mail_methods_nonstandard; mp->name; mp++) {
+            hash_insert(mp->name, mp, &settings->methods);
+        }
+    }
 
     jmap_emailsubmission_init(settings);
     jmap_mailbox_init(settings);
@@ -220,8 +232,14 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities)
 {
     json_t *sortopts = json_array();
     const char **sp;
-    for (sp = msglist_sortfields; *sp; sp++) {
+    for (sp = msglist_sortfields_standard; *sp; sp++) {
         json_array_append_new(sortopts, json_string(*sp));
+    }
+
+    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        for (sp = msglist_sortfields_nonstandard; *sp; sp++) {
+            json_array_append_new(sortopts, json_string(*sp));
+        }
     }
 
     long max_size_attachments_per_email =
@@ -241,8 +259,12 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities)
             "emailsListSortOptions", sortopts);
 
     json_object_set_new(account_capabilities, JMAP_URN_MAIL, email_capabilities);
-    json_object_set_new(account_capabilities, JMAP_SEARCH_EXTENSION, json_object());
-    json_object_set_new(account_capabilities, JMAP_MAIL_EXTENSION, json_object());
+
+    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        json_object_set_new(account_capabilities, JMAP_SEARCH_EXTENSION, json_object());
+        json_object_set_new(account_capabilities, JMAP_MAIL_EXTENSION, json_object());
+    }
+
     jmap_emailsubmission_capabilities(account_capabilities);
     jmap_mailbox_capabilities(account_capabilities);
     jmap_vacation_capabilities(account_capabilities);
@@ -2685,7 +2707,7 @@ static int _emailsearch_run(struct emailsearch *search, const ptrarray_t **msgda
     return 0;
 }
 
-static const char *msglist_sortfields[] = {
+static const char *msglist_sortfields_standard[] = {
     "receivedAt",
     "sentAt",
     "from",
@@ -2696,7 +2718,11 @@ static const char *msglist_sortfields[] = {
     "to",
     "hasKeyword",
     "someInThreadHaveKeyword",
-    // FM specific
+    NULL
+};
+
+// FM specific
+static const char *msglist_sortfields_nonstandard[] = {
     "addedDates",
     "threadSize",
     "spamScore",
@@ -2715,7 +2741,14 @@ static int _email_parse_comparator(jmap_req_t *req __attribute__((unused)),
 
     /* Search in list of supported sortFields */
     const char **sp;
-    for (sp = msglist_sortfields; *sp; sp++) {
+    for (sp = msglist_sortfields_standard; *sp; sp++) {
+        if (!strcmp(*sp, comp->property)) {
+            return 1;
+        }
+    }
+
+    // XXX - we should really be looking in "using" to know which to support
+    for (sp = msglist_sortfields_nonstandard; *sp; sp++) {
         if (!strcmp(*sp, comp->property)) {
             return 1;
         }

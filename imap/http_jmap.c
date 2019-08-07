@@ -152,7 +152,7 @@ static jmap_settings_t my_jmap_settings = {
     HASH_TABLE_INITIALIZER, NULL, { 0 }
 };
 
-jmap_method_t jmap_core_methods[] = {
+jmap_method_t jmap_core_methods_standard[] = {
     {
         "Blob/copy",
         JMAP_URN_CORE,
@@ -171,6 +171,10 @@ jmap_method_t jmap_core_methods[] = {
         &jmap_core_echo,
         JMAP_SHARED_CSTATE
     },
+    { NULL, NULL, NULL, 0}
+};
+
+jmap_method_t jmap_core_methods_nonstandard[] = {
     {
         "Quota/get",
         JMAP_QUOTA_EXTENSION,
@@ -225,7 +229,7 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
                 "maxObjectsInSet",
                 settings->limits[MAX_OBJECTS_IN_SET],
                 "collationAlgorithms", json_array()));
- 
+
     if (ws_enabled()) {
         json_object_set_new(settings->server_capabilities,
                 JMAP_URN_WEBSOCKET,
@@ -234,16 +238,22 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
                           "supportsWebSocketPush", 0));
     }
 
-    json_object_set_new(settings->server_capabilities,
-            JMAP_QUOTA_EXTENSION, json_object());
-    json_object_set_new(settings->server_capabilities,
-            JMAP_PERFORMANCE_EXTENSION, json_object());
-    json_object_set_new(settings->server_capabilities,
-            JMAP_DEBUG_EXTENSION, json_object());
-
     jmap_method_t *mp;
-    for (mp = jmap_core_methods; mp->name; mp++) {
+    for (mp = jmap_core_methods_standard; mp->name; mp++) {
         hash_insert(mp->name, mp, &my_jmap_settings.methods);
+    }
+
+    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        json_object_set_new(settings->server_capabilities,
+                JMAP_QUOTA_EXTENSION, json_object());
+        json_object_set_new(settings->server_capabilities,
+                JMAP_PERFORMANCE_EXTENSION, json_object());
+        json_object_set_new(settings->server_capabilities,
+                JMAP_DEBUG_EXTENSION, json_object());
+
+        for (mp = jmap_core_methods_nonstandard; mp->name; mp++) {
+            hash_insert(mp->name, mp, &my_jmap_settings.methods);
+        }
     }
 
 }
@@ -253,14 +263,16 @@ HIDDEN void jmap_core_capabilities(json_t *account_capabilities)
     json_object_set_new(account_capabilities,
             JMAP_URN_CORE, json_object());
 
-    json_object_set_new(account_capabilities,
-            JMAP_QUOTA_EXTENSION, json_object());
+    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
+        json_object_set_new(account_capabilities,
+                JMAP_QUOTA_EXTENSION, json_object());
 
-    json_object_set_new(account_capabilities,
-            JMAP_PERFORMANCE_EXTENSION, json_object());
+        json_object_set_new(account_capabilities,
+                JMAP_PERFORMANCE_EXTENSION, json_object());
 
-    json_object_set_new(account_capabilities,
-            JMAP_DEBUG_EXTENSION, json_object());
+        json_object_set_new(account_capabilities,
+                JMAP_DEBUG_EXTENSION, json_object());
+    }
 }
 
 static void jmap_init(struct buf *serverinfo __attribute__((unused)))
