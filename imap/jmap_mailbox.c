@@ -86,12 +86,12 @@ struct rolesort_data {
 
 static struct rolesort_data ROLESORT[] = {
     { "inbox", 1 },
-    { "archive", 2 },
-    { "drafts", 3 },
-    { "sent", 4 },
-    { "junk", 5 },
-    { "trash", 6 },
-    { "xtemplates", 7 },
+    { "archive", 3 },
+    { "drafts", 4 },
+    { "sent", 5 },
+    { "junk", 6 },
+    { "trash", 7 },
+    { "xtemplates", 9 },
     { NULL, 10 }  // default
 };
 
