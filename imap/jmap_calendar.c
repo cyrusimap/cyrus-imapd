@@ -2598,11 +2598,13 @@ static int jmap_calendarevent_set(struct jmap_req *req)
             r = 0;
             continue;
         }
+
         if (json_array_size(invalid)) {
             json_t *err = json_pack(
                 "{s:s, s:o}", "type", "invalidProperties",
                 "properties", invalid);
             json_object_set_new(set.not_updated, uid, err);
+            json_decref(update);
             continue;
         }
         json_decref(invalid);
