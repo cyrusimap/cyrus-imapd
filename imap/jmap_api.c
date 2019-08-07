@@ -2681,7 +2681,8 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
            If overwrite: Create a new ACL with only
                          existing owner and system users preserved.
         */
-        char *newacl, *nextid;
+        char *newacl = NULL;
+        char *nextid = NULL;
 
         if (overwrite) newacl = xstrdup("");  /* start with empty ACL */
 
@@ -2820,19 +2821,20 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
         r = mailbox_open_iwl(outboxname, &outbox);
 
         if (!r) {
-            char *acl = xstrdup(outbox->acl);
+            char *outboxacl = xstrdup(outbox->acl);
             json_object_foreach(shareWith, userid, rights) {
                 change = hash_lookup(userid, &user_access);
                 if (change && change->new & ACL_INSERT) {
-                    if (!r) r = cyrus_acl_set(&acl, userid, ACL_MODE_ADD, grant, NULL, NULL);
+                    if (!r) r = cyrus_acl_set(&outboxacl, userid, ACL_MODE_ADD, grant, NULL, NULL);
                 }
             }
-            if (!r && strcmp(outbox->acl, acl)) {
-                r = mboxlist_sync_setacls(outbox->name, acl);
-                if (!r) r = mailbox_set_acl(outbox, acl, 1 /*dirty_modseq*/);
+            if (!r && strcmp(outbox->acl, outboxacl)) {
+                r = mboxlist_sync_setacls(outbox->name, outboxacl);
+                if (!r) r = mailbox_set_acl(outbox, outboxacl, 1 /*dirty_modseq*/);
                 if (r) syslog(LOG_ERR, "failed to set ACL on %s : %s", outbox->name,
                               error_message(r));
             }
+            free(outboxacl);
         }
 
         mailbox_close(&outbox);
