@@ -1453,6 +1453,25 @@ EXPORTED int mboxname_issubmissionmailbox(const char *name, int mbtype)
 }
 
 /*
+ * If (internal) mailbox 'name' is a user's #jmappushsubscription mailbox
+ * returns boolean
+ */
+EXPORTED int mboxname_ispushsubscriptionmailbox(const char *name, int mbtype)
+{
+    if (mbtype & MBTYPE_PUSHSUBSCRIPTION) return 1;  /* Only works on backends */
+    int res = 0;
+
+    mbname_t *mbname = mbname_from_intname(name);
+    const strarray_t *boxes = mbname_boxes(mbname);
+    const char *prefix = config_getstring(IMAPOPT_JMAPPUSHSUBSCRIPTIONFOLDER);
+    if (strarray_size(boxes) && !strcmpsafe(prefix, strarray_nth(boxes, 0)))
+        res = 1;
+
+    mbname_free(&mbname);
+    return res;
+}
+
+/*
  * If (internal) mailbox 'name' is a user's mail outbox
  * returns boolean
  */

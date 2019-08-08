@@ -210,6 +210,8 @@ EXPORTED const char *mboxlist_mbtype_to_string(uint32_t mbtype)
         buf_putc(&buf, 'i');
     if (mbtype & MBTYPE_SUBMISSION)
         buf_putc(&buf, 's');
+    if (mbtype & MBTYPE_PUSHSUBSCRIPTION)
+        buf_putc(&buf, 'p');
 
     return buf_cstring(&buf);
 }
@@ -342,6 +344,9 @@ EXPORTED uint32_t mboxlist_string_to_mbtype(const char *string)
             break;
         case 'r':
             mbtype |= MBTYPE_REMOTE;
+            break;
+        case 'p':
+            mbtype |= MBTYPE_PUSHSUBSCRIPTION;
             break;
         case 's':
             mbtype |= MBTYPE_SUBMISSION;
