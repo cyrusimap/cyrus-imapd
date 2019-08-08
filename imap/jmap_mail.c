@@ -9461,7 +9461,7 @@ static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrar
             int r = seen_lockread(bulk->seendb, plan->mbox->uniqueid, &plan->old_seendata);
             if (!r) {
                 plan->old_seenseq = seqset_parse(plan->old_seendata.seenuids, NULL, 0);
-                hash_insert(plan->mbox_id, plan->old_seenseq, &seenseq_by_mbox_id);
+                hash_insert(plan->mbox_id, seqset_dup(plan->old_seenseq), &seenseq_by_mbox_id);
             }
             else {
                 int j;
@@ -9560,7 +9560,7 @@ static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrar
     }
     hash_iter_free(&iter);
 
-    free_hash_table(&seenseq_by_mbox_id, NULL);
+    free_hash_table(&seenseq_by_mbox_id, (void(*)(void*))seqset_free);
 }
 
 
