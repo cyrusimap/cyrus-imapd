@@ -185,12 +185,6 @@ int mboxname_isnotesmailbox(const char *name, int mbtype);
  */
 int mboxname_issubmissionmailbox(const char *name, int mbtype);
 
-/*
- * If (internal) mailbox 'name' is a user's #jmappushsubscription mailbox
- * returns boolean
- */
-int mboxname_ispushsubscriptionmailbox(const char *name, int mbtype);
-
 /* If (internal) mailbox is a user's mail outbox,
  * returns boolean
  */
@@ -286,8 +280,6 @@ struct mboxname_counters {
     modseq_t raclmodseq;
     modseq_t submissionmodseq;
     modseq_t submissionfoldersmodseq;
-    modseq_t pushsubscriptionmodseq;
-    modseq_t pushsubscriptionfoldersmodseq;
     uint32_t uidvalidity;
 };
 

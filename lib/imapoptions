@@ -1117,9 +1117,6 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "jmapsubmissionfolder", "#jmapsubmission", STRING }
 /* the name of the folder for JMAP Submissions (#jmapsubmission) */
 
-{ "jmappushsubscriptionfolder", "#jmappushsubscription", STRING }
-/* the name of the folder for JMAP Push Subscriptions (#jmappushsubscription) */
-
 { "iolog", 0, SWITCH }
 /* Should cyrus output I/O log entries */
 
