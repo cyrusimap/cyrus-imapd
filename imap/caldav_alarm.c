@@ -940,6 +940,8 @@ static void process_snoozed(struct mailbox *mailbox,
     mbname_t *mbname = NULL;
     struct appendstate as;
     struct mailbox *inbox = NULL;
+    struct auth_state *authstate = NULL;
+    const char *userid;
     int r = 0;
 
     syslog(LOG_DEBUG, "processing snoozed email for mailbox %s uid %u",
@@ -954,8 +956,10 @@ static void process_snoozed(struct mailbox *mailbox,
     r = mailbox_open_iwl(mbname_intname(mbname), &inbox);
     if (r) goto done;
 
-    r = append_setup_mbox(&as, inbox, mbname_userid(mbname), NULL,
-                          0, NULL, NULL, 0, EVENT_MESSAGE_COPY);
+    userid = mbname_userid(mbname);
+    authstate = auth_newstate(userid);
+    r = append_setup_mbox(&as, inbox, userid, authstate,
+                          ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_COPY);
     if (r) goto done;
 
     ptrarray_t msgrecs = PTRARRAY_INITIALIZER;
@@ -985,6 +989,7 @@ static void process_snoozed(struct mailbox *mailbox,
     }
 
     mailbox_close(&inbox);
+    if (authstate) auth_freestate(authstate);
     if (mbname) mbname_free(&mbname);
     if (mr) msgrecord_unref(&mr);
 }
