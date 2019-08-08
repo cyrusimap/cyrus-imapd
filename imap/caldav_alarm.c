@@ -49,6 +49,7 @@
 
 #include <libical/ical.h>
 
+#include "append.h"
 #include "caldav_alarm.h"
 #include "cyrusdb.h"
 #include "httpd.h"
@@ -59,6 +60,7 @@
 #include "mboxevent.h"
 #include "mboxlist.h"
 #include "mboxname.h"
+#include "msgrecord.h"
 #include "util.h"
 #include "xstrlcat.h"
 #include "xmalloc.h"
@@ -929,6 +931,63 @@ static void process_futurerelease(struct mailbox *mailbox,
 
     return;
 }
+
+static void process_snoozed(struct mailbox *mailbox,
+                            struct index_record *record)
+{
+    int nolink = !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
+    msgrecord_t *mr = NULL;
+    mbname_t *mbname = NULL;
+    struct appendstate as;
+    struct mailbox *inbox = NULL;
+    int r = 0;
+
+    syslog(LOG_DEBUG, "processing snoozed email for mailbox %s uid %u",
+           mailbox->name, record->uid);
+
+    mr = msgrecord_from_index_record(mailbox, record);
+    if (!mr) goto done;
+
+    mbname = mbname_from_intname(mailbox->name);
+    mbname_set_boxes(mbname, NULL);
+
+    r = mailbox_open_iwl(mbname_intname(mbname), &inbox);
+    if (r) goto done;
+
+    r = append_setup_mbox(&as, inbox, mbname_userid(mbname), NULL,
+                          0, NULL, NULL, 0, EVENT_MESSAGE_COPY);
+    if (r) goto done;
+
+    ptrarray_t msgrecs = PTRARRAY_INITIALIZER;
+    ptrarray_add(&msgrecs, mr);
+    r = append_copy(mailbox, &as, &msgrecs, nolink, 1);
+    ptrarray_fini(&msgrecs);
+    if (r) {
+        append_abort(&as);
+        goto done;
+    }
+
+    r = append_commit(&as);
+    if (r) goto done;
+
+    /* Expunge the resource from the \Snoozed mailbox */
+    record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
+    r = mailbox_rewrite_index_record(mailbox, record);
+    if (r) {
+        syslog(LOG_ERR, "expunging record (%s:%u) failed: %s",
+               mailbox->name, record->uid, error_message(r));
+    }
+
+  done:
+    if (r) {
+        /* XXX  Error handling */
+        caldav_alarm_delete_record(mailbox->name, record->uid);
+    }
+
+    mailbox_close(&inbox);
+    if (mbname) mbname_free(&mbname);
+    if (mr) msgrecord_unref(&mr);
+}
 #endif /* WITH_JMAP */
 
 static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
@@ -973,6 +1032,7 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     }
     else if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
         /* XXX  Check special-use flag on mailbox */
+        process_snoozed(mailbox, &record);
     }
 #endif
     else {

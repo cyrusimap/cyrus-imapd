@@ -2194,6 +2194,9 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     /* Create mailbox */
     uint32_t options = 0;
     if (args->is_seenshared > 0) options |= OPT_IMAP_SHAREDSEEN;
+    if (args->specialuse && !strcmp("\\Snoozed", args->specialuse))
+        options |= OPT_IMAP_HAS_ALARMS;
+
     r = mboxlist_createsync(mboxname, 0 /* MBTYPE */,
             NULL /* partition */,
             req->userid, req->authstate,

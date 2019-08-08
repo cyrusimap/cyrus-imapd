@@ -3261,6 +3261,7 @@ EXPORTED int specialuse_validate(const char *mboxname, const char *userid,
     strarray_add(valid, "\\Junk");
     strarray_add(valid, "\\Sent");
     strarray_add(valid, "\\Trash");
+    strarray_add(valid, "\\Snoozed"); // JMAP
 
     new_attribs = strarray_split(src, NULL, 0);
 
