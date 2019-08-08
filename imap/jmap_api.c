@@ -1283,6 +1283,9 @@ HIDDEN int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype)
          case MBTYPE_SUBMISSION:
              server_modseq = req->counters.submissionmodseq;
              break;
+         case MBTYPE_PUSHSUBSCRIPTION:
+             server_modseq = req->counters.pushsubscriptionmodseq;
+             break;
          default:
              server_modseq = req->counters.mailmodseq;
         }
@@ -1310,6 +1313,9 @@ HIDDEN modseq_t jmap_highestmodseq(jmap_req_t *req, int mbtype)
             break;
         case MBTYPE_SUBMISSION:
             modseq = req->counters.submissionmodseq;
+            break;
+        case MBTYPE_PUSHSUBSCRIPTION:
+            modseq = req->counters.pushsubscriptionmodseq;
             break;
         case 0:
             modseq = req->counters.mailmodseq;
