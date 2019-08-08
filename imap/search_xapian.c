@@ -2853,6 +2853,8 @@ static int end_mailbox_snippets(search_text_receiver_t *rx,
 
     xapiandb_lock_release(&tr->lock);
     tr->super.mailbox = NULL;
+    xapian_snipgen_free(tr->snipgen);
+    tr->snipgen = NULL;
 
     return 0;
 }
