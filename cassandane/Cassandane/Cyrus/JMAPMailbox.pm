@@ -1937,47 +1937,7 @@ sub test_mailbox_set_role
     $self->assert_str_equals($errType, "invalidProperties");
     $self->assert_deep_equals($errProp, [ "role" ]);
 
-    xlog "create mailbox with x-bam role";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { create => { "1" => {
-                            name => "baz",
-                            parentId => undef,
-                            role => "x-bam"
-             }}}, "R1"]
-    ]);
-    $self->assert_not_null($res->[0][1]{created});
-    $id = $res->[0][1]{created}{"1"}{id};
-
-    xlog "get mailbox $id";
-    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{list}[0]->{role}, "x-bam");
-
-    xlog "update of mailbox role";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { update => { "$id" => {
-                            role => "x-baz"
-             }}}, "R1"]
-    ]);
-    $self->assert_not_null($res->[0][1]{updated});
-
-    xlog "get mailbox $id";
-    $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{list}[0]->{role}, "x-baz");
-
-    xlog "try to create another mailbox with the x-baz role";
-    $res = $jmap->CallMethods([
-            ['Mailbox/set', { create => { "1" => {
-                            name => "bar",
-                            parentId => $inbox->{id},
-                            role => "x-baz"
-             }}}, "R1"]
-    ]);
-    $errType = $res->[0][1]{notCreated}{"1"}{type};
-    $errProp = $res->[0][1]{notCreated}{"1"}{properties};
-    $self->assert_str_equals($errType, "invalidProperties");
-    $self->assert_deep_equals($errProp, [ "role" ]);
-
-    xlog "try to create a mailbox with an unknown, non-x role";
+    xlog "try to create a mailbox with an unknown role";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "bam",
