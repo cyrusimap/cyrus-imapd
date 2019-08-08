@@ -4014,8 +4014,6 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
         r = jmap_openmbox(req, mboxname, &mbox, 0);
         if (r) goto done;
 
-        r = rx->begin_mailbox(rx, mbox, /*incremental*/0);
-
         r = msgrecord_find(mbox, uid, &mr);
         if (r) goto doneloop;
 
@@ -4033,18 +4031,19 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
         json_object_set_new(snippet, "emailId", json_string(msgid));
         json_object_set_new(snippet, "subject", json_null());
         json_object_set_new(snippet, "preview", json_null());
+
+        r = rx->begin_mailbox(rx, mbox, /*incremental*/0);
         r = index_getsearchtext(msg, jpartids ? &partids : NULL, rx, 1);
         if (!r || r == IMAP_OK_COMPLETED) {
             json_array_append_new(*snippets, json_deep_copy(snippet));
             r = 0;
         }
+        int r2 = rx->end_mailbox(rx, mbox);
+        if (!r) r = r2;
 
         json_object_clear(snippet);
         strarray_truncate(&partids, 0);
         msgrecord_unref(&mr);
-
-        int r2 = rx->end_mailbox(rx, mbox);
-        if (!r) r = r2;
 
 doneloop:
         if (mr) msgrecord_unref(&mr);
