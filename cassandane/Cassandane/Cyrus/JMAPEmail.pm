@@ -2741,6 +2741,81 @@ sub test_emailsubmission_set_futurerelease
     $self->assert_not_null($res->[0][1]{notUpdated});
 }
 
+sub test_email_snooze
+    :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "Get mailbox id of Inbox";
+    my $res = $jmap->CallMethods([['Mailbox/query',
+                                   {filter => {role => 'inbox'}}, "R1"]]);
+    my $inboxId = $res->[0][1]->{ids}[0];
+
+    xlog "Generate a email via IMAP";
+    $self->make_message("foo", body => "a email\r\nwithCRLF\r\n") or die;
+
+    xlog "get email id";
+    $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R2" ] ] );
+    my $emailId = $res->[0][1]->{ids}[0];
+
+    $res = $jmap->CallMethods( [ [ 'Email/get',
+                                   { ids => [ $emailId ],
+                                     properties => [ 'mailboxIds' ]}, "R3" ] ] );
+    my $msg = $res->[0][1]->{list}[0];
+    $self->assert_not_null($msg->{mailboxIds}{$inboxId});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+
+    xlog "create snooze mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "snoozed",
+                            parentId => undef,
+                            role => "snoozed"
+             }}}, "R4"]
+    ]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $snoozedId = $res->[0][1]{created}{"1"}{id};
+
+    xlog "Move message to snooze mailbox";
+    my $maildate = DateTime->now();
+    $maildate->add(DateTime::Duration->new(seconds => 30));
+    my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $emailId => {
+                "mailboxIds/$inboxId" => undef,
+                "mailboxIds/$snoozedId" => $JSON::true,
+                "receivedAt" => $datestr
+            }}
+        }, 'R5']
+    ]);
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_null($res->[0][1]{notUpdated});
+
+    $res = $jmap->CallMethods( [ [ 'Email/get',
+                                   { ids => [ $emailId ],
+                                     properties => [ 'mailboxIds' ]}, "R6" ] ] );
+    $msg = $res->[0][1]->{list}[0];
+    $self->assert_null($msg->{mailboxIds}{$inboxId});
+    $self->assert_not_null($msg->{mailboxIds}{$snoozedId});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+
+    xlog "trigger re-delivery of snoozed email";
+    my $now = DateTime->now();
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $maildate->epoch() + 30 );
+
+    $res = $jmap->CallMethods( [ [ 'Email/get',
+                                   { ids => [ $emailId ],
+                                     properties => [ 'mailboxIds' ]}, "R7" ] ] );
+    $msg = $res->[0][1]->{list}[0];
+    $self->assert_not_null($msg->{mailboxIds}{$inboxId});
+    $self->assert_null($msg->{mailboxIds}{$snoozedId});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+}
+
 sub test_emailsubmission_set_creationid
     :min_version_3_1 :needs_component_jmap
 {
