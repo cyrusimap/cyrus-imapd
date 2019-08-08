@@ -2761,7 +2761,7 @@ sub test_email_snooze
 
     $res = $jmap->CallMethods( [ [ 'Email/get',
                                    { ids => [ $emailId ],
-                                     properties => [ 'mailboxIds' ]}, "R3" ] ] );
+                                     properties => [ 'mailboxIds', 'keywords' ]}, "R3" ] ] );
     my $msg = $res->[0][1]->{list}[0];
     $self->assert_not_null($msg->{mailboxIds}{$inboxId});
     $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
@@ -2787,7 +2787,8 @@ sub test_email_snooze
             update => { $emailId => {
                 "mailboxIds/$inboxId" => undef,
                 "mailboxIds/$snoozedId" => $JSON::true,
-                "receivedAt" => $datestr
+                "receivedAt" => $datestr,
+                keywords => { '$flagged' => JSON::true, '$seen' => JSON::true },
             }}
         }, 'R5']
     ]);
@@ -2796,7 +2797,7 @@ sub test_email_snooze
 
     $res = $jmap->CallMethods( [ [ 'Email/get',
                                    { ids => [ $emailId ],
-                                     properties => [ 'mailboxIds' ]}, "R6" ] ] );
+                                     properties => [ 'mailboxIds', 'keywords' ]}, "R6" ] ] );
     $msg = $res->[0][1]->{list}[0];
     $self->assert_null($msg->{mailboxIds}{$inboxId});
     $self->assert_not_null($msg->{mailboxIds}{$snoozedId});
@@ -2809,7 +2810,7 @@ sub test_email_snooze
 
     $res = $jmap->CallMethods( [ [ 'Email/get',
                                    { ids => [ $emailId ],
-                                     properties => [ 'mailboxIds' ]}, "R7" ] ] );
+                                     properties => [ 'mailboxIds', 'keywords' ]}, "R7" ] ] );
     $msg = $res->[0][1]->{list}[0];
     $self->assert_not_null($msg->{mailboxIds}{$inboxId});
     $self->assert_null($msg->{mailboxIds}{$snoozedId});
