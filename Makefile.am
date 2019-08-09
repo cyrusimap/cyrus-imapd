@@ -339,10 +339,10 @@ EXTRA_DIST = \
 	cunit/cunit-to-junit.pl \
 	cunit/key.pem \
 	cunit/vg.supp \
-	doc/ \
 	doc/legacy/murder.png \
 	doc/legacy/netnews.png \
-	docsrc/ \
+	doc \
+	docsrc \
 	imap/http_caldav.js \
 	imap/http_carddav.js \
 	imap/http_err.et \
@@ -517,6 +517,7 @@ dist_noinst_SCRIPTS = \
 	tools/masssievec \
 	tools/mkimap \
 	tools/mknewsgroups \
+	tools/perl2rst \
 	tools/rehash \
 	tools/translatesieve \
 	snmp/snmpgen
