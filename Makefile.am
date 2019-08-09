@@ -2011,5 +2011,3 @@ libtool: $(LIBTOOL_DEPS)
 # Install for Cassandane
 cassandane:
 	$(MAKE) DESTDIR=`cd ../inst ; /bin/pwd` install
-
-export
