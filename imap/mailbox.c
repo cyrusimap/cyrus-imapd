@@ -3548,6 +3548,7 @@ static int mailbox_abort_dav(struct mailbox *mailbox)
 
 #endif // WITH_DAV
 
+#ifdef WITH_JMAP
 static int mailbox_update_email_alarms(struct mailbox *mailbox,
                                        const struct index_record *old,
                                        struct index_record *new)
@@ -3589,6 +3590,7 @@ static int mailbox_update_email_alarms(struct mailbox *mailbox,
 
     return r;
 }
+#endif // WITH_JMAP
 
 EXPORTED struct conversations_state *mailbox_get_cstate(struct mailbox *mailbox)
 {
@@ -3672,8 +3674,10 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
     if (r) return r;
 #endif
 
+#ifdef WITH_JMAP
     r = mailbox_update_email_alarms(mailbox, old, new);
     if (r) return r;
+#endif
 
     r = mailbox_update_conversations(mailbox, old, new);
     if (r) return r;
