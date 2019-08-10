@@ -1510,6 +1510,7 @@ static void _emailsubmission_filter_parse(jmap_req_t *req __attribute__((unused)
 
     json_object_foreach(filter, field, arg) {
         if (!strcmp(field, "emailIds") ||
+            !strcmp(field, "identityIds") ||
             !strcmp(field, "threadIds")) {
             if (!json_is_array(arg)) {
                 jmap_parser_invalid(parser, field);
@@ -1526,7 +1527,7 @@ static void _emailsubmission_filter_parse(jmap_req_t *req __attribute__((unused)
         else if (!strcmp(field, "before") ||
                  !strcmp(field, "after")) {
             if (!json_is_string(arg) ||
-                jmap_is_valid_utcdate(json_string_value(arg))) {
+                !jmap_is_valid_utcdate(json_string_value(arg))) {
                 jmap_parser_invalid(parser, field);
             }
         }
@@ -1553,10 +1554,187 @@ static int _emailsubmission_comparator_parse(jmap_req_t *req __attribute__((unus
     return 0;
 }
 
+#if (SIZEOF_TIME_T > 4)
+static time_t epoch    = (time_t) LONG_MIN;
+static time_t eternity = (time_t) LONG_MAX;
+#else
+static time_t epoch    = (time_t) INT_MIN;
+static time_t eternity = (time_t) INT_MAX;
+#endif
+
+typedef struct submission_filter {
+    strarray_t *identityIds;
+    strarray_t *emailIds;
+    strarray_t *threadIds;
+    const char *undoStatus;
+    time_t before;
+    time_t after;
+} submission_filter;
+
+/* Parse the JMAP EmailSubmission FilterCondition in arg.
+ * Report any invalid properties in invalid, prefixed by prefix.
+ * Return NULL on error. */
+static void *submission_filter_build(json_t *arg)
+{
+    submission_filter *f =
+        (submission_filter *) xzmalloc(sizeof(struct submission_filter));
+
+    f->before = eternity;
+    f->after = epoch;
+
+    /* identityIds */
+    json_t *identityIds = json_object_get(arg, "identityIds");
+    if (identityIds) {
+        f->identityIds = strarray_new();
+        size_t i;
+        json_t *val;
+        json_array_foreach(identityIds, i, val) {
+            const char *id;
+            if (json_unpack(val, "s", &id) != -1) {
+                strarray_append(f->identityIds, id);
+            }
+        }
+    }
+
+    /* emailIds */
+    json_t *emailIds = json_object_get(arg, "emailIds");
+    if (emailIds) {
+        f->emailIds = strarray_new();
+        size_t i;
+        json_t *val;
+        json_array_foreach(emailIds, i, val) {
+            const char *id;
+            if (json_unpack(val, "s", &id) != -1) {
+                strarray_append(f->emailIds, id);
+            }
+        }
+    }
+
+    /* threadIds */
+    json_t *threadIds = json_object_get(arg, "threadIds");
+    if (threadIds) {
+        f->threadIds = strarray_new();
+        size_t i;
+        json_t *val;
+        json_array_foreach(threadIds, i, val) {
+            const char *id;
+            if (json_unpack(val, "s", &id) != -1) {
+                strarray_append(f->threadIds, id);
+            }
+        }
+    }
+
+    /* undoStatus */
+    if (JNOTNULL(json_object_get(arg, "undoStatus"))) {
+        jmap_readprop(arg, "undoStatus", 0, NULL, "s", &f->undoStatus);
+    }
+
+    /* before */
+    if (JNOTNULL(json_object_get(arg, "before"))) {
+        const char *utcDate;
+        jmap_readprop(arg, "before", 0, NULL, "s", &utcDate);
+        time_from_iso8601(utcDate, &f->before);
+    }
+
+    /* after */
+    if (JNOTNULL(json_object_get(arg, "after"))) {
+        const char *utcDate;
+        jmap_readprop(arg, "after", 0, NULL, "s", &utcDate);
+        time_from_iso8601(utcDate, &f->after);
+    }
+
+    return f;
+}
+
+typedef struct submission_filter_rock {
+    const message_t *msg;
+    json_t *submission;
+} submission_filter_rock;
+
+/* Match the submission in rock against filter. */
+static int submission_filter_match(void *vf, void *rock)
+{
+    submission_filter *f = (submission_filter *) vf;
+    submission_filter_rock *sfrock = (submission_filter_rock*) rock;
+    const struct index_record *record = msg_record(sfrock->msg);
+
+    /* before */
+    if (record->internaldate >= f->before) return 0;
+
+    /* after */
+    if (record->internaldate < f->after) return 0;
+
+    /* undoStatus */
+    if (f->undoStatus) {
+        if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
+            if (record->internal_flags & FLAG_INTERNAL_UNLINKED) {
+                if (strcmp(f->undoStatus, "canceled")) return 0;
+            }
+            else if (strcmp(f->undoStatus, "final")) return 0;
+        }
+        else if (strcmp(f->undoStatus, "pending")) return 0;
+    }
+
+    /* identityIds / emailIds / ThreadIds */
+    if (f->identityIds || f->emailIds || f->threadIds) {
+        struct buf buf = BUF_INITIALIZER;
+
+        int r = message_get_field((message_t *) sfrock->msg, JMAP_SUBMISSION_HDR,
+                                  MESSAGE_DECODED|MESSAGE_TRIM, &buf);
+        if (!r && buf.len) {
+            json_error_t jerr;
+            sfrock->submission = json_loadb(buf_base(&buf), buf_len(&buf),
+                                            JSON_DISABLE_EOF_CHECK, &jerr);
+        }
+        buf_free(&buf);
+
+        if (!sfrock->submission) return 0;
+
+        if (f->identityIds) {
+            const char *identityId =
+                json_string_value(json_object_get(sfrock->submission,
+                                                  "identityId"));
+
+            if (strarray_find(f->identityIds, identityId, 0) == -1) return 0;
+        }
+        if (f->emailIds) {
+            const char *emailId =
+                json_string_value(json_object_get(sfrock->submission,
+                                                  "emailId"));
+
+            if (strarray_find(f->emailIds, emailId, 0) == -1) return 0;
+        }
+        if (f->threadIds) {
+            const char *threadId =
+                json_string_value(json_object_get(sfrock->submission,
+                                                  "threadId"));
+
+            if (strarray_find(f->threadIds, threadId, 0) == -1) return 0;
+        }
+    }
+
+    /* All matched. */
+    return 1;
+}
+
+/* Free the memory allocated by this submission filter. */
+static void submission_filter_free(void *vf)
+{
+    submission_filter *f = (submission_filter*) vf;
+    if (f->identityIds) strarray_free(f->identityIds);
+    if (f->emailIds) strarray_free(f->emailIds);
+    if (f->threadIds) strarray_free(f->threadIds);
+    free(f);
+}
+
 static int jmap_emailsubmission_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_query query;
+    struct mailbox *mbox = NULL;
+    mbentry_t *mbentry = NULL;
+    int created = 0;
+    jmap_filter *parsed_filter = NULL;
 
     /* Parse request */
     json_t *err = NULL;
@@ -1568,19 +1746,83 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         jmap_error(req, err);
         goto done;
     }
+    if (query.position < 0) {
+        /* we currently don't support negative positions */
+        jmap_parser_invalid(&parser, "position");
+    }
+    if (json_array_size(parser.invalid)) {
+        err = json_pack("{s:s}", "type", "invalidArguments");
+        json_object_set(err, "arguments", parser.invalid);
+        jmap_error(req, err);
+        goto done;
+    }
 
-    /* We don't store EmailSubmissions */
-    json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/0);
+    int r = ensure_submission_collection(req->accountid, &mbentry, NULL, &created);
+    if (r) {
+        syslog(LOG_ERR,
+               "jmap_emailsubmission_changes: ensure_submission_collection(%s): %s",
+               req->accountid, error_message(r));
+        goto done;
+    }
+
+    r = jmap_openmbox(req, mbentry->name, &mbox, 0);
+    mboxlist_entry_free(&mbentry);
+    if (r) goto done;
+
+    /* Build filter */
+    json_t *filter = json_object_get(req->args, "filter");
+    if (JNOTNULL(filter)) {
+        parsed_filter = jmap_buildfilter(filter, submission_filter_build);
+    }
+
+    struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, 0);
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        char id[JMAP_SUBID_SIZE];
+        const struct index_record *record = msg_record(msg);
+        submission_filter_rock sfrock = { msg, NULL };
+
+        if (record->system_flags & FLAG_DELETED) continue;
+
+        if (query.filter) {
+            int match = jmap_filter_match(parsed_filter,
+                                          &submission_filter_match, &sfrock);
+            if (sfrock.submission) json_decref(sfrock.submission);
+            if (!match) continue;
+        }
+
+        query.total++;
+        if (query.position > 0 && query.total < ((size_t) query.position) + 1) {
+            continue;
+        }
+
+        /* Apply limit */
+        if (query.limit && query.limit <= json_array_size(query.ids)) {
+            continue;
+        }
+
+        /* Create id from message UID, using 'S' prefix */
+        sprintf(id, "S%u", record->uid);
+
+        /* Add the submission identifier. */
+        json_array_append_new(query.ids, json_string(id));
+    }
+    mailbox_iter_done(&iter);
+
+    jmap_closembox(req, &mbox);
+
+    /* Build response */
+    json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/ created);
     query.query_state = xstrdup(json_string_value(jstate));
     json_decref(jstate);
-    query.position = 0;
-    query.total = 0;
+    query.result_position = query.position;
     query.can_calculate_changes = 0;
     jmap_ok(req, jmap_query_reply(&query));
 
 done:
     jmap_parser_fini(&parser);
     jmap_query_fini(&query);
+    if (parsed_filter) jmap_filter_free(parsed_filter, submission_filter_free);
     return 0;
 }
 
