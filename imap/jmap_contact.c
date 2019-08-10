@@ -280,101 +280,6 @@ static int jmap_match_jsonprop(json_t *arg, const char *name, const char *text)
 
 /* FIXME DUPLICATE END */
 
-/*
- * FIXME Refactored JMAP filter into contacts, since we don't
- * need it anymore for calendar events. You are next, contacts!
- */
-
-enum jmap_filter_op   {
-    JMAP_FILTER_OP_NONE = 0,
-    JMAP_FILTER_OP_AND,
-    JMAP_FILTER_OP_OR,
-    JMAP_FILTER_OP_NOT
-};
-
-typedef struct jmap_filter {
-    enum jmap_filter_op op;
-    ptrarray_t conditions;
-} jmap_filter;
-
-typedef void* jmap_filterparse_cb(json_t* arg);
-typedef int   jmap_filtermatch_cb(void* cond, void* rock);
-typedef void  jmap_filterfree_cb(void* cond);
-
-static int jmap_filter_match(jmap_filter *f,
-                             jmap_filtermatch_cb *match, void *rock)
-{
-    if (f->op == JMAP_FILTER_OP_NONE) {
-        return match(ptrarray_head(&f->conditions), rock);
-    } else {
-        int i;
-        for (i = 0; i < ptrarray_size(&f->conditions); i++) {
-            int m = jmap_filter_match(ptrarray_nth(&f->conditions, i), match, rock);
-            if (m && f->op == JMAP_FILTER_OP_OR) {
-                return 1;
-            } else if (m && f->op == JMAP_FILTER_OP_NOT) {
-                return 0;
-            } else if (!m && f->op == JMAP_FILTER_OP_AND) {
-                return 0;
-            }
-        }
-        return f->op == JMAP_FILTER_OP_AND || f->op == JMAP_FILTER_OP_NOT;
-    }
-}
-
-static void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond)
-{
-    void *cond;
-
-    while ((cond = ptrarray_pop(&f->conditions))) {
-        if (f->op == JMAP_FILTER_OP_NONE) {
-            if (freecond) freecond(cond);
-        }
-        else {
-            jmap_filter_free(cond, freecond);
-        }
-    }
-    ptrarray_fini(&f->conditions);
-    free(f);
-}
-
-static jmap_filter *buildfilter(json_t *arg, jmap_filterparse_cb *parse)
-{
-    jmap_filter *f = (jmap_filter *) xzmalloc(sizeof(struct jmap_filter));
-    int pe;
-    const char *val;
-    int iscond = 1;
-
-    /* operator */
-    pe = jmap_readprop(arg, "operator", 0 /*mandatory*/, NULL, "s", &val);
-    if (pe > 0) {
-        if (!strncmp("AND", val, 3)) {
-            f->op = JMAP_FILTER_OP_AND;
-        } else if (!strncmp("OR", val, 2)) {
-            f->op = JMAP_FILTER_OP_OR;
-        } else if (!strncmp("NOT", val, 3)) {
-            f->op = JMAP_FILTER_OP_NOT;
-        }
-    }
-    iscond = f->op == JMAP_FILTER_OP_NONE;
-
-    /* conditions */
-    json_t *conds = json_object_get(arg, "conditions");
-    if (conds && !iscond && json_array_size(conds)) {
-        size_t i, n_conditions = json_array_size(conds);
-        for (i = 0; i < n_conditions; i++) {
-            json_t *cond = json_array_get(conds, i);
-            ptrarray_push(&f->conditions, buildfilter(cond, parse));
-        }
-    }
-
-    if (iscond) {
-        ptrarray_push(&f->conditions, parse(arg));
-    }
-
-    return f;
-}
-
 /*****************************************************************************
  * JMAP Contacts API
  ****************************************************************************/
@@ -2327,7 +2232,7 @@ static int jmap_contact_query(struct jmap_req *req)
     /* Build filter */
     json_t *filter = json_object_get(req->args, "filter");
     if (JNOTNULL(filter)) {
-        parsed_filter = buildfilter(filter, contact_filter_parse);
+        parsed_filter = jmap_buildfilter(filter, contact_filter_parse);
     }
 
     /* Inspect every entry in this accounts addressbook mailboxes. */

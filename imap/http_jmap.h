@@ -394,6 +394,27 @@ struct jmap_query {
     json_t *ids;
 };
 
+enum jmap_filter_op   {
+    JMAP_FILTER_OP_NONE = 0,
+    JMAP_FILTER_OP_AND,
+    JMAP_FILTER_OP_OR,
+    JMAP_FILTER_OP_NOT
+};
+
+typedef struct jmap_filter {
+    enum jmap_filter_op op;
+    ptrarray_t conditions;
+} jmap_filter;
+
+typedef void* jmap_buildfilter_cb(json_t* arg);
+typedef int   jmap_filtermatch_cb(void* cond, void* rock);
+typedef void  jmap_filterfree_cb(void* cond);
+
+extern jmap_filter *jmap_buildfilter(json_t *arg, jmap_buildfilter_cb *parse);
+extern int jmap_filter_match(jmap_filter *f,
+                             jmap_filtermatch_cb *match, void *rock);
+extern void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond);
+
 typedef void jmap_filter_parse_cb(jmap_req_t *req, struct jmap_parser *parser,
                                   json_t *filter, json_t *unsupported,
                                   void *rock, json_t **err);

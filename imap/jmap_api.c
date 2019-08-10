@@ -2153,6 +2153,80 @@ HIDDEN json_t *jmap_copy_reply(struct jmap_copy *copy)
 
 /* Foo/query */
 
+HIDDEN jmap_filter *jmap_buildfilter(json_t *arg, jmap_buildfilter_cb *parse)
+{
+    jmap_filter *f = (jmap_filter *) xzmalloc(sizeof(struct jmap_filter));
+    int pe;
+    const char *val;
+    int iscond = 1;
+
+    /* operator */
+    pe = jmap_readprop(arg, "operator", 0 /*mandatory*/, NULL, "s", &val);
+    if (pe > 0) {
+        if (!strncmp("AND", val, 3)) {
+            f->op = JMAP_FILTER_OP_AND;
+        } else if (!strncmp("OR", val, 2)) {
+            f->op = JMAP_FILTER_OP_OR;
+        } else if (!strncmp("NOT", val, 3)) {
+            f->op = JMAP_FILTER_OP_NOT;
+        }
+    }
+    iscond = f->op == JMAP_FILTER_OP_NONE;
+
+    /* conditions */
+    json_t *conds = json_object_get(arg, "conditions");
+    if (conds && !iscond && json_array_size(conds)) {
+        size_t i, n_conditions = json_array_size(conds);
+        for (i = 0; i < n_conditions; i++) {
+            json_t *cond = json_array_get(conds, i);
+            ptrarray_push(&f->conditions, jmap_buildfilter(cond, parse));
+        }
+    }
+
+    if (iscond) {
+        ptrarray_push(&f->conditions, parse(arg));
+    }
+
+    return f;
+}
+
+HIDDEN int jmap_filter_match(jmap_filter *f,
+                             jmap_filtermatch_cb *match, void *rock)
+{
+    if (f->op == JMAP_FILTER_OP_NONE) {
+        return match(ptrarray_head(&f->conditions), rock);
+    } else {
+        int i;
+        for (i = 0; i < ptrarray_size(&f->conditions); i++) {
+            int m = jmap_filter_match(ptrarray_nth(&f->conditions, i), match, rock);
+            if (m && f->op == JMAP_FILTER_OP_OR) {
+                return 1;
+            } else if (m && f->op == JMAP_FILTER_OP_NOT) {
+                return 0;
+            } else if (!m && f->op == JMAP_FILTER_OP_AND) {
+                return 0;
+            }
+        }
+        return f->op == JMAP_FILTER_OP_AND || f->op == JMAP_FILTER_OP_NOT;
+    }
+}
+
+HIDDEN void jmap_filter_free(jmap_filter *f, jmap_filterfree_cb *freecond)
+{
+    void *cond;
+
+    while ((cond = ptrarray_pop(&f->conditions))) {
+        if (f->op == JMAP_FILTER_OP_NONE) {
+            if (freecond) freecond(cond);
+        }
+        else {
+            jmap_filter_free(cond, freecond);
+        }
+    }
+    ptrarray_fini(&f->conditions);
+    free(f);
+}
+
 HIDDEN void jmap_filter_parse(jmap_req_t *req, struct jmap_parser *parser,
                               json_t *filter, json_t *unsupported,
                               jmap_filter_parse_cb parse_condition, void *cond_rock,
