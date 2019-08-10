@@ -132,8 +132,8 @@ struct statusdata {
     uint32_t uidvalidity;
     const char *mailboxid;
     uint32_t unseen;
-    uint32_t size;
     uint32_t mboptions;
+    quota_t size;
     modseq_t createdmodseq;
     modseq_t highestmodseq;
     conv_status_t xconv;

@@ -9105,7 +9105,7 @@ static int print_statusline(const char *extname, unsigned statusitems,
         sepchar = ' ';
     }
     if (statusitems & STATUS_SIZE) {
-        prot_printf(imapd_out, "%cSIZE %u", sepchar, sd->size);
+        prot_printf(imapd_out, "%cSIZE %llu", sepchar, sd->size);
         sepchar = ' ';
     }
     if (statusitems & STATUS_CREATEDMODSEQ) {
