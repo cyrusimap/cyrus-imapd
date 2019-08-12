@@ -2247,6 +2247,11 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     if (args->is_seenshared < 0) {
         json_object_set_new(*mbox, "isSeenShared", json_false());
     }
+    if (args->sortorder < 0) {
+        mbname_t *mbname = mbname_from_intname(mboxname);
+        json_object_set_new(*mbox, "sortOrder", json_integer(_mbox_get_sortorder(req, mbname)));
+        mbname_free(&mbname);
+    }
 
 done:
     if (json_array_size(parser.invalid)) {
