@@ -149,7 +149,7 @@ sub test_contact_changes
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
 
     xlog "create contact 1";
     $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
@@ -164,7 +164,7 @@ sub test_contact_changes
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -186,7 +186,7 @@ sub test_contact_changes
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -199,7 +199,7 @@ sub test_contact_changes
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -211,7 +211,7 @@ sub test_contact_changes
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::true);
+    $self->assert_equals(JSON::true, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -225,7 +225,7 @@ sub test_contact_changes
                 }, "R2"]]);
     $self->assert_str_equals($interimState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -247,7 +247,7 @@ sub test_contact_changes
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($id2, $res->[0][1]{updated}[0]);
@@ -300,7 +300,7 @@ sub test_contact_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
 
     xlog "create contact 1";
     $res = $jmap->CallMethods([['Contact/set', {
@@ -319,7 +319,7 @@ sub test_contact_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -345,7 +345,7 @@ sub test_contact_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -359,7 +359,7 @@ sub test_contact_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -372,7 +372,7 @@ sub test_contact_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::true);
+    $self->assert_equals(JSON::true, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -387,7 +387,7 @@ sub test_contact_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($interimState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -411,7 +411,7 @@ sub test_contact_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($id2, $res->[0][1]{updated}[0]);
@@ -1014,7 +1014,7 @@ sub test_contactgroup_changes
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1037,7 +1037,7 @@ sub test_contactgroup_changes
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1050,7 +1050,7 @@ sub test_contactgroup_changes
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1062,7 +1062,7 @@ sub test_contactgroup_changes
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::true);
+    $self->assert_equals(JSON::true, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1076,7 +1076,7 @@ sub test_contactgroup_changes
                 }, "R2"]]);
     $self->assert_str_equals($interimState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1098,7 +1098,7 @@ sub test_contactgroup_changes
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($id2, $res->[0][1]{updated}[0]);
@@ -1179,7 +1179,7 @@ sub test_contactgroup_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1205,7 +1205,7 @@ sub test_contactgroup_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1219,7 +1219,7 @@ sub test_contactgroup_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1232,7 +1232,7 @@ sub test_contactgroup_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($oldState, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::true);
+    $self->assert_equals(JSON::true, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1247,7 +1247,7 @@ sub test_contactgroup_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($interimState, $res->[0][1]{oldState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
@@ -1271,7 +1271,7 @@ sub test_contactgroup_changes_shared
                 }, "R2"]]);
     $self->assert_str_equals($state, $res->[0][1]{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
-    $self->assert_equals($res->[0][1]{hasMoreChanges}, JSON::false);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals($id2, $res->[0][1]{updated}[0]);
@@ -1338,7 +1338,7 @@ sub test_contact_set
     $self->assert_str_equals('Contact/get', $fetch->[0][0]);
     $self->assert_str_equals('R2', $fetch->[0][2]);
     $contact->{"x-href"} = $fetch->[0][1]{list}[0]{"x-href"};
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     xlog "update isFlagged";
     $contact->{isFlagged} = JSON::true;
@@ -1347,7 +1347,7 @@ sub test_contact_set
 
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     xlog "update prefix";
     $contact->{prefix} = 'foo';
@@ -1356,7 +1356,7 @@ sub test_contact_set
 
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     xlog "update suffix";
     $contact->{suffix} = 'bar';
@@ -1365,7 +1365,7 @@ sub test_contact_set
 
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     xlog "update nickname";
     $contact->{nickname} = 'nick';
@@ -1374,7 +1374,7 @@ sub test_contact_set
 
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     xlog "update birthday (with JMAP datetime error)";
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {birthday => '1979-04-01T00:00:00Z'} }}, "R1"]]);
@@ -1388,7 +1388,7 @@ sub test_contact_set
 
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     xlog "update anniversary (with JMAP datetime error)";
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {anniversary => '1989-12-17T00:00:00Z'} }}, "R1"]]);
@@ -1402,7 +1402,7 @@ sub test_contact_set
 
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     xlog "update company";
     $contact->{company} = 'acme';
@@ -1411,7 +1411,7 @@ sub test_contact_set
 
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     xlog "update department";
     $contact->{department} = 'looney tunes';
@@ -1420,7 +1420,7 @@ sub test_contact_set
 
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     xlog "update jobTitle";
     $contact->{jobTitle} = 'director of everything';
@@ -1429,7 +1429,7 @@ sub test_contact_set
 
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     # emails
     xlog "update emails (with missing type error)";
@@ -1455,7 +1455,7 @@ sub test_contact_set
 
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     # phones
     xlog "update phones (with missing type error)";
@@ -1481,7 +1481,7 @@ sub test_contact_set
 
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     # online
     xlog "update online (with missing type error)";
@@ -1507,7 +1507,7 @@ sub test_contact_set
 
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     # addresses
     xlog "update addresses";
@@ -1535,7 +1535,7 @@ sub test_contact_set
 
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     xlog "update notes";
     $contact->{notes} = 'baz';
@@ -1544,7 +1544,7 @@ sub test_contact_set
 
     xlog "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     # avatar
     xlog "upload avatar";
@@ -1570,7 +1570,7 @@ sub test_contact_set
 
     xlog "get avatar $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
-    $self->assert_deep_equals($fetch->[0][1]{list}[0], $contact);
+    $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 }
 
 sub test_contact_set_uid
@@ -1610,8 +1610,8 @@ sub test_contact_set_uid
     $self->assert_not_null($res->[1][1]{list}[0]{uid});
     my($filename, $dirs, $suffix) = fileparse($res->[1][1]{list}[0]{"x-href"}, ".vcf");
     $self->assert_not_null($res->[1][1]{list}[0]->{id});
-    $self->assert_str_equals($res->[1][1]{list}[0]->{id}, $res->[1][1]{list}[0]->{uid});
-    $self->assert_str_equals($res->[1][1]{list}[0]->{id}, $filename);
+    $self->assert_str_equals($res->[1][1]{list}[0]->{uid}, $res->[1][1]{list}[0]->{id});
+    $self->assert_str_equals($filename, $res->[1][1]{list}[0]->{id});
 
     # A non-pathsafe UID maps to uid but not the DAV resource.
     $res = $jmap->CallMethods([
@@ -1683,8 +1683,8 @@ sub test_contactgroup_set_uid
     $self->assert_not_null($res->[1][1]{list}[0]{uid});
     my($filename, $dirs, $suffix) = fileparse($res->[1][1]{list}[0]{"x-href"}, ".vcf");
     $self->assert_not_null($res->[1][1]{list}[0]->{id});
-    $self->assert_str_equals($res->[1][1]{list}[0]->{id}, $res->[1][1]{list}[0]->{uid});
-    $self->assert_str_equals($res->[1][1]{list}[0]->{id}, $filename);
+    $self->assert_str_equals($res->[1][1]{list}[0]->{uid}, $res->[1][1]{list}[0]->{id});
+    $self->assert_str_equals($filename, $res->[1][1]{list}[0]->{id});
 
     # A non-pathsafe UID maps to uid but not the DAV resource.
     $res = $jmap->CallMethods([
@@ -2079,12 +2079,12 @@ sub test_misc_creationids
         ['ContactGroup/get', {ids => ["#g1"]}, "R4"],
     ]);
     my $contact = $res->[2][1]{list}[0];
-    $self->assert_str_equals($contact->{firstName}, "foo");
+    $self->assert_str_equals("foo", $contact->{firstName});
 
     my $group = $res->[3][1]{list}[0];
-    $self->assert_str_equals($group->{name}, "group1");
+    $self->assert_str_equals("group1", $group->{name});
 
-    $self->assert_str_equals($group->{contactIds}[0], $contact->{id});
+    $self->assert_str_equals($contact->{id}, $group->{contactIds}[0]);
 }
 
 sub test_misc_categories

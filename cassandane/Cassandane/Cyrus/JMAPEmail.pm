@@ -195,7 +195,7 @@ sub test_email_get
 
     xlog "get email list";
     $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
-    $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
 
     my @props = $self->defaultprops_for_email_get();
 
@@ -212,31 +212,31 @@ sub test_email_get
 
     $self->assert_str_equals('fake.123456789@local', $msg->{messageId}[0]);
     $self->assert_str_equals(" foo bar\r\n baz", $msg->{'header:x-tra'});
-    $self->assert_deep_equals($msg->{from}[0], {
+    $self->assert_deep_equals({
             name => "Sally Sender",
             email => "sally\@local"
-    });
-    $self->assert_deep_equals($msg->{to}[0], {
+    }, $msg->{from}[0]);
+    $self->assert_deep_equals({
             name => "Tom To",
             email => "tom\@local"
-    });
-    $self->assert_num_equals(scalar @{$msg->{to}}, 1);
-    $self->assert_deep_equals($msg->{cc}[0], {
+    }, $msg->{to}[0]);
+    $self->assert_num_equals(1, scalar @{$msg->{to}});
+    $self->assert_deep_equals({
             name => "Cindy CeeCee",
             email => "cindy\@local"
-    });
-    $self->assert_num_equals(scalar @{$msg->{cc}}, 1);
-    $self->assert_deep_equals($msg->{bcc}[0], {
+    }, $msg->{cc}[0]);
+    $self->assert_num_equals(1, scalar @{$msg->{cc}});
+    $self->assert_deep_equals({
             name => "Benny CarbonCopy",
             email => "benny\@local"
-    });
-    $self->assert_num_equals(scalar @{$msg->{bcc}}, 1);
+    }, $msg->{bcc}[0]);
+    $self->assert_num_equals(1, scalar @{$msg->{bcc}});
     $self->assert_null($msg->{replyTo});
-    $self->assert_deep_equals($msg->{sender}, [{
+    $self->assert_deep_equals([{
             name => "Bla",
             email => "blu\@local"
-    }]);
-    $self->assert_str_equals($msg->{subject}, "Email A");
+    }], $msg->{sender});
+    $self->assert_str_equals("Email A", $msg->{subject});
 
     my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
     $self->assert_str_equals($datestr, $msg->{receivedAt});
@@ -302,7 +302,7 @@ sub test_email_get_mimeencode
             properties => [ 'subject', 'header:x-mood:asText', 'from', 'to' ],
         }, 'R2'],
     ]);
-    $self->assert_num_equals(scalar @{$res->[0][1]->{ids}}, 1);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     my $msg = $res->[1][1]->{list}[0];
 
     $self->assert_str_equals("If you can read this you understand the example.", $msg->{subject});
@@ -1075,8 +1075,8 @@ sub test_email_set_draft
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $self->assert_str_equals($res->[0][0], 'Mailbox/set');
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{created});
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
@@ -1440,8 +1440,8 @@ sub test_email_set_userkeywords
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $self->assert_str_equals($res->[0][0], 'Mailbox/set');
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{created});
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
@@ -1586,8 +1586,8 @@ sub test_misc_upload_zero
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $self->assert_str_equals($res->[0][0], 'Mailbox/set');
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{created});
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
@@ -1635,8 +1635,8 @@ sub test_misc_upload
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $self->assert_str_equals($res->[0][0], 'Mailbox/set');
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{created});
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
@@ -1691,10 +1691,10 @@ sub test_misc_upload_multiaccount
     $self->{instance}->create_user("bar");
 
     my @res = $jmap->Upload("a email with some text", "text/rubbish", "foo");
-    $self->assert_str_equals($res[0]->{status}, '201');
+    $self->assert_str_equals('201', $res[0]->{status});
 
     @res = $jmap->Upload("a email with some text", "text/rubbish", "bar");
-    $self->assert_str_equals($res[0]->{status}, '404');
+    $self->assert_str_equals('404', $res[0]->{status});
 }
 
 sub test_misc_upload_bin
@@ -1711,8 +1711,8 @@ sub test_misc_upload_bin
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $self->assert_str_equals($res->[0][0], 'Mailbox/set');
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{created});
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
@@ -1794,7 +1794,7 @@ sub test_misc_download
     $self->assert_not_null($blobid2);
 
     $res = $jmap->Download('cassandane', $blobid1);
-    $self->assert_str_equals(encode_base64($res->{content}, ''), "beefc0de");
+    $self->assert_str_equals("beefc0de", encode_base64($res->{content}, ''));
 }
 
 sub test_misc_download_shared
@@ -2090,8 +2090,8 @@ sub test_email_set_attachments
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $self->assert_str_equals($res->[0][0], 'Mailbox/set');
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{created});
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
     my $shortfname = "test\N{GRINNING FACE}.jpg";
@@ -2203,8 +2203,8 @@ sub test_email_set_flagged
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $self->assert_str_equals($res->[0][0], 'Mailbox/set');
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{created});
     my $drafts = $res->[0][1]{created}{"1"}{id};
 
@@ -2410,7 +2410,7 @@ sub test_email_set_keywords
     xlog "Get JMAP mailboxes";
     my $res = $jmap->CallMethods([['Mailbox/get', { properties => [ 'name' ]}, "R1"]]);
     my %jmailboxes = map { $_->{name} => $_ } @{$res->[0][1]{list}};
-    $self->assert_num_equals(scalar keys %jmailboxes, 4);
+    $self->assert_num_equals(4, scalar keys %jmailboxes);
     my $jmailboxA = $jmailboxes{A};
     my $jmailboxB = $jmailboxes{B};
     my $jmailboxC = $jmailboxes{C};
@@ -3239,7 +3239,7 @@ sub test_emailsubmission_set_too_many_recipients
        }
     }, "R1" ] ] );
     my $errType = $res->[0][1]->{notCreated}{1}{type};
-    $self->assert_str_equals($errType, "tooManyRecipients");
+    $self->assert_str_equals("tooManyRecipients", $errType);
 }
 
 sub test_emailsubmission_set_fail_some_recipients
@@ -3295,7 +3295,7 @@ sub test_emailsubmission_set_fail_some_recipients
        }
     }, "R1" ] ] );
     my $errType = $res->[0][1]->{notCreated}{1}{type};
-    $self->assert_str_equals($errType, "invalidRecipients");
+    $self->assert_str_equals("invalidRecipients", $errType);
 }
 
 sub test_emailsubmission_set_message_too_large
@@ -3334,7 +3334,7 @@ sub test_emailsubmission_set_message_too_large
        }
     }, "R1" ] ] );
     my $errType = $res->[0][1]->{notCreated}{1}{type};
-    $self->assert_str_equals($errType, "tooLarge");
+    $self->assert_str_equals("tooLarge", $errType);
 }
 
 sub test_emailsubmission_set_issue2285
@@ -3625,8 +3625,8 @@ sub test_email_set_update
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $self->assert_str_equals($res->[0][0], 'Mailbox/set');
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{created});
     my $drafts = $res->[0][1]{created}{"1"}{id};
 
@@ -3737,8 +3737,8 @@ sub test_email_set_destroy
             ]
         ]
     );
-    $self->assert_str_equals( $res->[0][0], 'Mailbox/set' );
-    $self->assert_str_equals( $res->[0][2], 'R1' );
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null( $res->[0][1]{created} );
     my $mailboxids = {
         $res->[0][1]{created}{"1"}{id} => JSON::true,
@@ -3770,11 +3770,11 @@ sub test_email_set_destroy
     $res = $jmap->CallMethods(
         [ [ 'Email/set', { destroy => [ $id ] }, "R1" ] ],
     );
-    $self->assert_str_equals( $res->[0][1]{destroyed}[0], $id );
+    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
 
     xlog "Get draft $id";
     $res = $jmap->CallMethods( [ [ 'Email/get', { ids => [$id] }, "R1" ] ]);
-    $self->assert_str_equals( $res->[0][1]->{notFound}[0], $id );
+    $self->assert_str_equals($id, $res->[0][1]->{notFound}[0]);
 
     xlog "Get emails";
     $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
@@ -4639,7 +4639,7 @@ sub test_email_query_keywords
     }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     my $barid = $res->[0][1]->{ids}[0];
-    $self->assert_str_not_equals($barid, $fooid);
+    $self->assert_str_not_equals($fooid, $barid);
 
     xlog "fetch emails sorted ascending by \$Seen flag";
     $res = $jmap->CallMethods([['Email/query', {
@@ -6091,8 +6091,8 @@ sub test_email_query_attachments
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $self->assert_str_equals($res->[0][0], 'Mailbox/set');
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{created});
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
@@ -6194,8 +6194,8 @@ sub test_email_query_attachmentname
                             role => "drafts"
              }}}, "R1"]
     ]);
-    $self->assert_str_equals($res->[0][0], 'Mailbox/set');
-    $self->assert_str_equals($res->[0][2], 'R1');
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
     $self->assert_not_null($res->[0][1]{created});
     my $draftsmbox = $res->[0][1]{created}{"1"}{id};
 
@@ -7013,8 +7013,8 @@ sub test_email_changes
 
     xlog "get email updates (expect error)";
     $res = $jmap->CallMethods([['Email/changes', { sinceState => 0 }, "R1"]]);
-    $self->assert_str_equals($res->[0][1]->{type}, "invalidArguments");
-    $self->assert_str_equals($res->[0][1]->{arguments}[0], "sinceState");
+    $self->assert_str_equals("invalidArguments", $res->[0][1]->{type});
+    $self->assert_str_equals("sinceState", $res->[0][1]->{arguments}[0]);
 
     xlog "get email state";
     $res = $jmap->CallMethods([['Email/get', { ids => []}, "R1"]]);
@@ -7189,12 +7189,12 @@ sub test_email_querychanges
     xlog "get email list updates";
     $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state }, "R1"]]);
 
-    $self->assert_equals($res->[0][1]{added}[0]{id}, $idb);
+    $self->assert_equals($idb, $res->[0][1]{added}[0]{id});
 
     xlog "get email list updates with threads collapsed";
     $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state, collapseThreads => JSON::true }, "R1"]]);
 
-    $self->assert_equals($res->[0][1]{added}[0]{id}, $idb);
+    $self->assert_equals($idb, $res->[0][1]{added}[0]{id});
 }
 
 sub test_email_querychanges_toomany
@@ -7269,7 +7269,7 @@ sub test_email_querychanges_zerosince
     xlog "get email list updates";
     $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => $state }, "R1"]]);
 
-    $self->assert_equals($res->[0][1]{added}[0]{id}, $idb);
+    $self->assert_equals($idb, $res->[0][1]{added}[0]{id});
 
     xlog "get email list updates with threads collapsed";
     $res = $jmap->CallMethods([['Email/queryChanges', { sinceQueryState => "0", collapseThreads => JSON::true }, "R1"]]);
@@ -8102,7 +8102,7 @@ EOF
 
     my $download = $jmap->Download('cassandane', $blobid);
 
-    $self->assert_str_equals($download->{content}, $email);
+    $self->assert_str_equals($email, $download->{content});
 }
 
 sub test_email_get_bogus_encoding
@@ -8815,7 +8815,7 @@ sub test_thread_changes
         destroy => [ $msgB->{id} ],
         update =>  { $msgD->{id} => { 'keywords/$foo' => JSON::true }},
     }, "R1"]]);
-    $self->assert_str_equals($res->[0][1]{destroyed}[0], $msgB->{id});
+    $self->assert_str_equals($msgB->{id}, $res->[0][1]{destroyed}[0]);
     $self->assert(exists $res->[0][1]->{updated}{$msgD->{id}});
 
     xlog "get thread updates";
