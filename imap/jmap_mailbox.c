@@ -459,10 +459,10 @@ static int _mbox_get_roleorder(jmap_req_t *req, const mbname_t *mbname)
     return role_order;
 }
 
-static int _mbox_get_sortorder(const mbname_t *mbname)
+static int _mbox_get_sortorder(jmap_req_t *req, const mbname_t *mbname)
 {
     struct buf attrib = BUF_INITIALIZER;
-    int sort_order = 0;
+    int sort_order = -1;
 
     /* Ignore lookup errors here. */
     const char *annot = IMAP_ANNOT_NS "sortorder";
@@ -478,6 +478,10 @@ static int _mbox_get_sortorder(const mbname_t *mbname)
     }
 
     buf_free(&attrib);
+
+    if (sort_order < 0)
+        sort_order = _mbox_get_roleorder(req, mbname);
+
     return sort_order;
 }
 
@@ -627,7 +631,7 @@ static json_t *_mbox_get(jmap_req_t *req,
             }
         }
         if (jmap_wantprop(props, "sortOrder")) {
-            int sortOrder = _mbox_get_sortorder(mbname);
+            int sortOrder = _mbox_get_sortorder(req, mbname);
             json_object_set_new(obj, "sortOrder", json_integer(sortOrder));
         }
         if (jmap_wantprop(props, "isSeenShared") || jmap_wantprop(props, "storageUsed")) {
@@ -1278,7 +1282,7 @@ static int _mboxquery_cb(const mbentry_t *mbentry, void *rock)
         rec->jmapname = _mbox_get_name(q->req->accountid, rec->mbname);
     }
     if (q->need_sort_order) {
-        rec->sort_order = _mbox_get_sortorder(rec->mbname);
+        rec->sort_order = _mbox_get_sortorder(q->req, rec->mbname);
     }
     if (q->need_role_order) {
         rec->role_order = _mbox_get_roleorder(q->req, rec->mbname);
