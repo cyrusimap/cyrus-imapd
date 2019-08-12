@@ -268,8 +268,10 @@ enum {
     SORT_FOLDER,        /* nonstandard */
     SORT_RELEVANCY,     /* RFC 6203 */
     SORT_SPAMSCORE,     /* nonstandard */
-    SORT_GUID           /* nonstandard */
+    SORT_GUID,          /* nonstandard */
     /* values > 255 are reserved for internal use */
+    SORT_EMAILID = 256,
+    SORT_THREADID = 257,
 };
 
 /* Sort key modifier flag bits */

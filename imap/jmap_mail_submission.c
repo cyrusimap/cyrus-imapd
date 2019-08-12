@@ -843,13 +843,30 @@ static message_t *msg_from_subid(struct mailbox *submbox, const char *id)
     return msg;
 }
 
+static json_t *fetch_submission(message_t *msg)
+{
+    struct buf buf = BUF_INITIALIZER;
+    json_t *sub = NULL;
+
+    int r = message_get_field(msg, JMAP_SUBMISSION_HDR,
+                              MESSAGE_DECODED|MESSAGE_TRIM, &buf);
+
+    if (!r && buf_len(&buf)) {
+        json_error_t jerr;
+        sub = json_loadb(buf_base(&buf), buf_len(&buf),
+                         JSON_DISABLE_EOF_CHECK, &jerr);
+    }
+    buf_free(&buf);
+
+    return sub;
+}
+
 static void _emailsubmission_update(struct mailbox *submbox,
                                     const char *id,
                                     json_t *emailsubmission,
                                     json_t **set_err)
 {
     message_t *msg = msg_from_subid(submbox, id);
-    struct buf buf = BUF_INITIALIZER;
     const struct index_record *record;
     json_t *sub = NULL;
     int r = 0;
@@ -861,16 +878,7 @@ static void _emailsubmission_update(struct mailbox *submbox,
     }
     record = msg_record(msg);
 
-    r = message_get_field(msg, JMAP_SUBMISSION_HDR,
-                          MESSAGE_DECODED|MESSAGE_TRIM, &buf);
-
-    if (!r && buf_len(&buf)) {
-        json_error_t jerr;
-        sub = json_loadb(buf_base(&buf), buf_len(&buf),
-                         JSON_DISABLE_EOF_CHECK, &jerr);
-    }
-    buf_free(&buf);
-
+    sub = fetch_submission(msg);
     if (!sub) {
         if (!r) r = IMAP_IOERROR;
 
@@ -988,18 +996,10 @@ static void _emailsubmission_destroy(struct mailbox *submbox,
 static int getsubmission(struct jmap_get *get,
                          const char *id, message_t *msg)
 {
-    struct buf buf = BUF_INITIALIZER;
     json_t *sub = NULL;
+    int r = 0;
 
-    int r = message_get_field(msg, JMAP_SUBMISSION_HDR,
-                              MESSAGE_DECODED|MESSAGE_TRIM, &buf);
-    if (!r && buf.len) {
-        json_error_t jerr;
-        sub = json_loadb(buf_base(&buf), buf_len(&buf),
-                         JSON_DISABLE_EOF_CHECK, &jerr);
-    }
-    buf_free(&buf);
-
+    sub = fetch_submission(msg);
     if (sub) {
         /* id */
         json_object_set_new(sub, "id", json_string(id));
@@ -1648,6 +1648,8 @@ static void *submission_filter_build(json_t *arg)
 
 typedef struct submission_filter_rock {
     const message_t *msg;
+    const char *emailId;
+    const char *threadId;
     json_t *submission;
 } submission_filter_rock;
 
@@ -1677,16 +1679,7 @@ static int submission_filter_match(void *vf, void *rock)
 
     /* identityIds / emailIds / ThreadIds */
     if (f->identityIds || f->emailIds || f->threadIds) {
-        struct buf buf = BUF_INITIALIZER;
-
-        int r = message_get_field((message_t *) sfrock->msg, JMAP_SUBMISSION_HDR,
-                                  MESSAGE_DECODED|MESSAGE_TRIM, &buf);
-        if (!r && buf.len) {
-            json_error_t jerr;
-            sfrock->submission = json_loadb(buf_base(&buf), buf_len(&buf),
-                                            JSON_DISABLE_EOF_CHECK, &jerr);
-        }
-        buf_free(&buf);
+        sfrock->submission = fetch_submission((message_t *) sfrock->msg);
 
         if (!sfrock->submission) return 0;
 
@@ -1698,18 +1691,18 @@ static int submission_filter_match(void *vf, void *rock)
             if (strarray_find(f->identityIds, identityId, 0) == -1) return 0;
         }
         if (f->emailIds) {
-            const char *emailId =
+            sfrock->emailId =
                 json_string_value(json_object_get(sfrock->submission,
                                                   "emailId"));
 
-            if (strarray_find(f->emailIds, emailId, 0) == -1) return 0;
+            if (strarray_find(f->emailIds, sfrock->emailId, 0) == -1) return 0;
         }
         if (f->threadIds) {
-            const char *threadId =
+            sfrock->threadId =
                 json_string_value(json_object_get(sfrock->submission,
                                                   "threadId"));
 
-            if (strarray_find(f->threadIds, threadId, 0) == -1) return 0;
+            if (strarray_find(f->threadIds, sfrock->threadId, 0) == -1) return 0;
         }
     }
 
@@ -1727,6 +1720,107 @@ static void submission_filter_free(void *vf)
     free(f);
 }
 
+static struct sortcrit *sub_buildsort(json_t *sort, int *need_submission)
+{
+    json_t *jcomp;
+    size_t i;
+    struct sortcrit *sortcrit;
+
+    *need_submission = 0;
+
+    sortcrit = xzmalloc((json_array_size(sort) + 1) * sizeof(struct sortcrit));
+
+    json_array_foreach(sort, i, jcomp) {
+        const char *prop = json_string_value(json_object_get(jcomp, "property"));
+
+        if (json_object_get(jcomp, "isAscending") == json_false()) {
+            sortcrit[i].flags |= SORT_REVERSE;
+        }
+
+        /* Note: add any new sort criteria also to is_supported_msglist_sort */
+
+        if (!strcmp(prop, "emailId")) {
+            sortcrit[i].key = SORT_EMAILID;
+            *need_submission = 1;
+        }
+        else if (!strcmp(prop, "threadId")) {
+            sortcrit[i].key = SORT_THREADID;
+            *need_submission = 1;
+        }
+        else if (!strcmp(prop, "sentAt")) {
+            sortcrit[i].key = SORT_ARRIVAL;
+        }
+    }
+
+    i = json_array_size(sort);
+    sortcrit[i].key = SORT_UID;
+
+    return sortcrit;
+}
+
+struct sub_match {
+    char id[JMAP_SUBID_SIZE];
+    uint32_t uid;
+    time_t sentAt;
+    const char *emailId;
+    const char *threadId;
+    json_t *submission;
+    struct sortcrit *sortcrit;
+};
+
+/*
+ * Comparison function for sorting EmailSubmissions.
+ */
+static int sub_sort_compare(const void **vp1, const void **vp2)
+{
+    struct sub_match *m1 = (struct sub_match *) *vp1;
+    struct sub_match *m2 = (struct sub_match *) *vp2;
+    const struct sortcrit *sortcrit = m1->sortcrit;
+    int reverse, ret = 0, i = 0;
+
+    for (i = 0; !ret && sortcrit[i].key != SORT_UID; i++) {
+        /* determine sort order from reverse flag bit */
+        reverse = sortcrit[i].flags & SORT_REVERSE;
+
+        switch (sortcrit[i].key) {
+        case SORT_ARRIVAL:
+            ret = m1->sentAt - m2->sentAt;
+            break;
+        case SORT_EMAILID:
+            if (!m1->emailId) {
+                m1->emailId =
+                    json_string_value(json_object_get(m1->submission,
+                                                      "emailId"));
+            }
+            if (!m2->emailId) {
+                m2->emailId =
+                    json_string_value(json_object_get(m2->submission,
+                                                      "emailId"));
+            }
+            ret = strcmpsafe(m1->emailId, m2->emailId);
+            break;
+        case SORT_THREADID:
+            if (!m1->threadId) {
+                m1->threadId =
+                    json_string_value(json_object_get(m1->submission,
+                                                      "threadId"));
+            }
+            if (!m2->threadId) {
+                m2->threadId =
+                    json_string_value(json_object_get(m2->submission,
+                                                      "threadId"));
+            }
+            ret = strcmpsafe(m1->threadId, m2->threadId);
+            break;
+        }
+    }
+
+    // tiebreaker is UID
+    if (!ret) return (m1->uid - m2->uid);
+
+    return (reverse ? -ret : ret);
+}
+
 static int jmap_emailsubmission_query(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -1735,6 +1829,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
     mbentry_t *mbentry = NULL;
     int created = 0;
     jmap_filter *parsed_filter = NULL;
+    struct sortcrit *sortcrit = NULL;
 
     /* Parse request */
     json_t *err = NULL;
@@ -1746,18 +1841,9 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         jmap_error(req, err);
         goto done;
     }
-    if (query.position < 0) {
-        /* we currently don't support negative positions */
-        jmap_parser_invalid(&parser, "position");
-    }
-    if (json_array_size(parser.invalid)) {
-        err = json_pack("{s:s}", "type", "invalidArguments");
-        json_object_set(err, "arguments", parser.invalid);
-        jmap_error(req, err);
-        goto done;
-    }
 
-    int r = ensure_submission_collection(req->accountid, &mbentry, NULL, &created);
+    int r = ensure_submission_collection(req->accountid,
+                                         &mbentry, NULL, &created);
     if (r) {
         syslog(LOG_ERR,
                "jmap_emailsubmission_changes: ensure_submission_collection(%s): %s",
@@ -1775,41 +1861,94 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         parsed_filter = jmap_buildfilter(filter, submission_filter_build);
     }
 
+    /* Build sortcrit */
+    int need_submission = 0;
+    json_t *sort = json_object_get(req->args, "sort");
+    if (JNOTNULL(sort)) {
+        sortcrit = sub_buildsort(sort, &need_submission);
+    }
+
+    ptrarray_t matches = PTRARRAY_INITIALIZER;
+    struct sub_match *anchor = NULL;
     struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, 0);
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
-        char id[JMAP_SUBID_SIZE];
         const struct index_record *record = msg_record(msg);
-        submission_filter_rock sfrock = { msg, NULL };
+        submission_filter_rock sfrock = { msg, NULL, NULL, NULL };
 
         if (record->system_flags & FLAG_DELETED) continue;
 
         if (query.filter) {
             int match = jmap_filter_match(parsed_filter,
                                           &submission_filter_match, &sfrock);
-            if (sfrock.submission) json_decref(sfrock.submission);
-            if (!match) continue;
+            if (!match) {
+                if (sfrock.submission) json_decref(sfrock.submission);
+                continue;
+            }
+        }
+
+        /* Add record of the match to our array */
+        struct sub_match *match = xmalloc(sizeof(struct sub_match));
+
+        /* Create id from message UID, using 'S' prefix */
+        sprintf(match->id, "S%u", record->uid);
+        match->uid = record->uid;
+        match->sentAt = record->internaldate;
+        match->emailId = sfrock.emailId;
+        match->threadId = sfrock.threadId;
+        match->submission = sfrock.submission;
+        if (!match->submission && need_submission)
+            match->submission = fetch_submission((message_t *) msg);
+        match->sortcrit = sortcrit;
+        ptrarray_append(&matches, match);
+
+        if (query.anchor && !strcmp(query.anchor, match->id)) {
+            /* Mark record corresponding to anchor */
+            anchor = match;
         }
 
         query.total++;
-        if (query.position > 0 && query.total < ((size_t) query.position) + 1) {
-            continue;
-        }
-
-        /* Apply limit */
-        if (query.limit && query.limit <= json_array_size(query.ids)) {
-            continue;
-        }
-
-        /* Create id from message UID, using 'S' prefix */
-        sprintf(id, "S%u", record->uid);
-
-        /* Add the submission identifier. */
-        json_array_append_new(query.ids, json_string(id));
     }
     mailbox_iter_done(&iter);
 
     jmap_closembox(req, &mbox);
+
+    /* Sort results */
+    if (sortcrit) {
+        ptrarray_sort(&matches, &sub_sort_compare);
+    }
+
+    /* Process results */
+    if (query.anchor) {
+        query.position = ptrarray_find(&matches, anchor, 0);
+        if (query.position < 0) {
+            query.position = query.total;
+        }
+        else {
+            query.position += query.anchor_offset;
+        }
+    }
+    else if (query.position < 0) {
+        query.position += query.total;
+    }
+    if (query.position < 0) query.position = 0;
+
+    size_t i;
+    for (i = 0; i < query.total; i++) {
+        struct sub_match *match = ptrarray_nth(&matches, i);
+
+        /* Apply position and limit */
+        if (i >= (size_t) query.position &&
+            (!query.limit || query.limit > json_array_size(query.ids))) {
+            /* Add the submission identifier */
+            json_array_append_new(query.ids, json_string(match->id));
+        }
+
+        json_decref(match->submission);
+        free(match);
+    }
+    ptrarray_fini(&matches);
+    free(sortcrit);
 
     /* Build response */
     json_t *jstate = jmap_getstate(req, MBTYPE_SUBMISSION, /*refresh*/ created);
