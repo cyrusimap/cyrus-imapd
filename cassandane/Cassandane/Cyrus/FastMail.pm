@@ -411,5 +411,75 @@ sub test_issue_LP52545479
     $self->assert(not exists $res->[1][1]{updated}{$eventId1});
 }
 
+sub test_mailbox_query
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                1 => { name => 'Sent', role => 'sent' },
+                2 => { name => 'Trash', role => 'junk' },
+                3 => { name => 'Foo' },
+                4 => { name => 'Bar', sortOrder => 30 },
+                5 => { name => 'Early', sortOrder => 2 },
+                6 => { name => 'Child', parentId => '#5' },
+                7 => { name => 'EarlyChild', parentId => '#5', sortOrder => 0 },
+            },
+        }, 'a'],
+        ['Mailbox/query', {
+            sortAsTree => $JSON::true,
+            sort => [{property => 'sortOrder'}, {property => 'name'}],
+            filterAsTree => $JSON::true,
+            filter => {
+                operator => 'OR',
+                conditions => [{role => 'inbox'}, {hasAnyRole => $JSON::false}],
+            },
+        }, 'b'],
+        ['Mailbox/get', {
+            '#ids' => {
+                resultOf => 'b',
+                name => 'Mailbox/query',
+                path => '/ids',
+            },
+        }, 'c'],
+    ]);
+
+    # default sort orders should have been set for Sent, Trash and Foo:
+
+    $self->assert_num_equals(5, $res->[0][1]{created}{1}{sortOrder});
+    $self->assert_num_equals(6, $res->[0][1]{created}{2}{sortOrder});
+    $self->assert_num_equals(10, $res->[0][1]{created}{3}{sortOrder});
+    $self->assert_num_equals(10, $res->[0][1]{created}{6}{sortOrder});
+
+    # sortOrder shouldn't be returned where it's been set explicitly
+    $self->assert_null($res->[0][1]{created}{4}{sortOrder});
+    $self->assert_null($res->[0][1]{created}{5}{sortOrder});
+    $self->assert_null($res->[0][1]{created}{7}{sortOrder});
+
+    my %mailboxes = map { $_->{id} => $_ } @{$res->[2][1]{list}};
+
+    my $list = $res->[1][1]{ids};
+
+    # expected values for name and sortOrder
+    my @expected = (
+      ['Inbox', 1],
+      ['Early', 2],
+        ['EarlyChild', 0],
+        ['Child', 10],
+      ['Foo', 10],
+      ['Bar', 30],
+    );
+    $self->assert_num_equals(scalar @expected, scalar @$list);
+
+    for (0..$#expected) {
+        $self->assert_str_equals($expected[$_][0], $mailboxes{$list->[$_]}{name});
+        $self->assert_num_equals($expected[$_][1], $mailboxes{$list->[$_]}{sortOrder});
+    }
+}
+
 
 1;
