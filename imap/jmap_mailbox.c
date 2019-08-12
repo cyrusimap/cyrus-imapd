@@ -444,12 +444,14 @@ static int _mbox_get_roleorder(jmap_req_t *req, const mbname_t *mbname)
 {
     char *role = _mbox_get_role(req, mbname);
     int role_order = 10;
-    int i;
 
-    for (i = 0; ROLESORT[i].name; i++) {
-        if (!strcmp(role, ROLESORT[i].name)) {
-            role_order = ROLESORT[i].order;
-            break;
+    if (role) {
+        int i;
+        for (i = 0; ROLESORT[i].name; i++) {
+            if (!strcmp(role, ROLESORT[i].name)) {
+                role_order = ROLESORT[i].order;
+                break;
+            }
         }
     }
 
