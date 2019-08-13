@@ -133,7 +133,7 @@ sub test_mailbox_get
     $self->assert_str_equals("Inbox", $inbox->{name});
     $self->assert_null($inbox->{parentId});
     $self->assert_str_equals("inbox", $inbox->{role});
-    $self->assert_num_equals(0, $inbox->{sortOrder});
+    $self->assert_num_equals(1, $inbox->{sortOrder});
     $self->assert_equals(JSON::true, $inbox->{myRights}->{mayReadItems});
     $self->assert_equals(JSON::true, $inbox->{myRights}->{mayAddItems});
     $self->assert_equals(JSON::true, $inbox->{myRights}->{mayRemoveItems});
@@ -152,7 +152,7 @@ sub test_mailbox_get
     $self->assert_str_equals("foo", $foo->{name});
     $self->assert_null($foo->{parentId});
     $self->assert_null($foo->{role});
-    $self->assert_num_equals(0, $foo->{sortOrder});
+    $self->assert_num_equals(10, $foo->{sortOrder});
     $self->assert_equals(JSON::true, $foo->{myRights}->{mayReadItems});
     $self->assert_equals(JSON::true, $foo->{myRights}->{mayAddItems});
     $self->assert_equals(JSON::true, $foo->{myRights}->{mayRemoveItems});
@@ -168,7 +168,7 @@ sub test_mailbox_get
     $self->assert_str_equals("bar", $bar->{name});
     $self->assert_str_equals($foo->{id}, $bar->{parentId});
     $self->assert_null($bar->{role});
-    $self->assert_num_equals(0, $bar->{sortOrder});
+    $self->assert_num_equals(10, $bar->{sortOrder});
     $self->assert_equals(JSON::true, $bar->{myRights}->{mayReadItems});
     $self->assert_equals(JSON::true, $bar->{myRights}->{mayAddItems});
     $self->assert_equals(JSON::true, $bar->{myRights}->{mayRemoveItems});
@@ -211,7 +211,7 @@ sub test_mailbox_get_inbox_sub
     $self->assert_str_equals("Inbox", $inbox->{name});
     $self->assert_null($inbox->{parentId});
     $self->assert_str_equals("inbox", $inbox->{role});
-    $self->assert_num_equals(0, $inbox->{sortOrder});
+    $self->assert_num_equals(1, $inbox->{sortOrder});
     $self->assert_equals(JSON::true, $inbox->{myRights}->{mayReadItems});
     $self->assert_equals(JSON::true, $inbox->{myRights}->{mayAddItems});
     $self->assert_equals(JSON::true, $inbox->{myRights}->{mayRemoveItems});
@@ -230,7 +230,7 @@ sub test_mailbox_get_inbox_sub
     $self->assert_str_equals("foo", $foo->{name});
     $self->assert_str_equals($inbox->{id}, $foo->{parentId});
     $self->assert_null($foo->{role});
-    $self->assert_num_equals(0, $foo->{sortOrder});
+    $self->assert_num_equals(10, $foo->{sortOrder});
     $self->assert_equals(JSON::true, $foo->{myRights}->{mayReadItems});
     $self->assert_equals(JSON::true, $foo->{myRights}->{mayAddItems});
     $self->assert_equals(JSON::true, $foo->{myRights}->{mayRemoveItems});
@@ -246,7 +246,7 @@ sub test_mailbox_get_inbox_sub
     $self->assert_str_equals("bar", $bar->{name});
     $self->assert_str_equals($foo->{id}, $bar->{parentId});
     $self->assert_null($bar->{role});
-    $self->assert_num_equals(0, $bar->{sortOrder});
+    $self->assert_num_equals(10, $bar->{sortOrder});
     $self->assert_equals(JSON::true, $bar->{myRights}->{mayReadItems});
     $self->assert_equals(JSON::true, $bar->{myRights}->{mayAddItems});
     $self->assert_equals(JSON::true, $bar->{myRights}->{mayRemoveItems});
@@ -1258,7 +1258,7 @@ sub test_mailbox_set
     $self->assert_str_equals("foo", $mbox->{name});
     $self->assert_null($mbox->{parentId});
     $self->assert_null($mbox->{role});
-    $self->assert_num_equals(0, $mbox->{sortOrder});
+    $self->assert_num_equals(10, $mbox->{sortOrder});
     $self->assert_equals(JSON::true, $mbox->{myRights}->{mayReadItems});
     $self->assert_equals(JSON::true, $mbox->{myRights}->{mayAddItems});
     $self->assert_equals(JSON::true, $mbox->{myRights}->{mayRemoveItems});
@@ -3021,7 +3021,7 @@ sub test_mailbox_get_inboxsub
     $self->assert_str_equals('foo', $mboxfoo->{name});
     $self->assert_str_equals($inbox->{id}, $mboxfoo->{parentId});
     $self->assert_null($mboxfoo->{role});
-    $self->assert_num_equals(0, $mboxfoo->{sortOrder}, 0);
+    $self->assert_num_equals(10, $mboxfoo->{sortOrder});
     $self->assert_equals(JSON::true, $mboxfoo->{myRights}->{mayReadItems});
     $self->assert_equals(JSON::true, $mboxfoo->{myRights}->{mayAddItems});
     $self->assert_equals(JSON::true, $mboxfoo->{myRights}->{mayRemoveItems});
