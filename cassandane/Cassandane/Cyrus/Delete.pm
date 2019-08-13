@@ -466,6 +466,10 @@ sub test_bz3781
     $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
 
     $self->check_folder_not_ondisk($subfolder);
+
+    # We should have generated an IOERROR
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert_matches(qr/IOERROR: bogus filename/, "@lines");
 }
 
 sub test_cyr_expire_delete
