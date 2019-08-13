@@ -1205,6 +1205,10 @@ sub test_msg_replication_new_bot_mse_gul
 
     xlog "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
+
+    # We should have generated a SYNCERROR or two
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert_matches(qr/SYNCERROR: guid mismatch user.cassandane 1/, "@lines");
 }
 
 sub test_msg_replication_new_bot_mse_guh
@@ -1260,6 +1264,10 @@ sub test_msg_replication_new_bot_mse_guh
 
     xlog "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
+
+    # We should have generated a SYNCERROR or two
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert_matches(qr/SYNCERROR: guid mismatch user.cassandane 1/, "@lines");
 }
 
 
