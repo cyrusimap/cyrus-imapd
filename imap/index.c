@@ -329,7 +329,7 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
     }
 
     if (state->mailbox->mbtype & MBTYPES_NONIMAP) {
-        if (state->want_dav && (state->mailbox->mbtype & MBTYPES_DAV)) {
+        if (state->want_dav) {
             /* User logged in using imapmagicplus token "dav" */
         }
         else if (state->mailbox->mbtype == state->want_mbtype) {
