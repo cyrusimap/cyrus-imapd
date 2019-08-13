@@ -1132,6 +1132,7 @@ sub start
     my $syslog_file = $cassini->val('cassandane', 'syslog_file', '/var/log/syslog');
     if ($syslog_file) {
       $self->{_syslogfh} = IO::File->new($syslog_file, 'r') || die "can't open file $syslog_file";
+      $self->{_syslogfh}->seek(0, 2); # start at the current end of the log
       $self->{_syslogfh}->blocking(0);
     }
 
