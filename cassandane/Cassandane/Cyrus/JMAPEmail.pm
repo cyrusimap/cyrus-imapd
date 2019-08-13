@@ -2561,7 +2561,7 @@ sub test_emailsubmission_set
     $res = $jmap->CallMethods( [ [ 'EmailSubmission/get', {
         ids => [ $msgsubid ],
     }, "R1" ] ] );
-    $self->assert_str_equals($msgsubid, $res->[0][1]->{notFound}[0]);
+    $self->assert_str_equals($msgsubid, $res->[0][1]->{list}[0]{id});
 
     xlog "update email submission";
     $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
@@ -2571,13 +2571,13 @@ sub test_emailsubmission_set
             }
        }
     }, "R1" ] ] );
-    $self->assert_str_equals('notFound', $res->[0][1]->{notUpdated}{$msgsubid}{type});
+    $self->assert_str_equals('cannotUnsend', $res->[0][1]->{notUpdated}{$msgsubid}{type});
 
     xlog "destroy email submission";
     $res = $jmap->CallMethods( [ [ 'EmailSubmission/set', {
         destroy => [ $msgsubid ],
     }, "R1" ] ] );
-    $self->assert_str_equals("notFound", $res->[0][1]->{notDestroyed}{$msgsubid}{type});
+    $self->assert_str_equals($msgsubid, $res->[0][1]->{destroyed}[0]);
 
     xlog "make sure #jmapsubmission folder isn't visible via IMAP";
     my $talk = $self->{store}->get_client();
@@ -3443,12 +3443,14 @@ sub test_emailsubmission_changes
             }
        }
     }, "R1" ] ] );
+    my $subid = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($subid);
 
     xlog "get email submission updates";
     $res = $jmap->CallMethods( [ [ 'EmailSubmission/changes', {
         sinceState => $state,
     }, "R1" ] ] );
-    $self->assert_deep_equals([], $res->[0][1]->{created});
+    $self->assert_deep_equals([$subid], $res->[0][1]->{created});
     $self->assert_deep_equals([], $res->[0][1]->{updated});
     $self->assert_deep_equals([], $res->[0][1]->{destroyed});
 }
