@@ -474,9 +474,6 @@ static void _emailsubmission_create(jmap_req_t *req,
         jmap_parser_invalid(&parser, "emailId");
     }
 
-    /* Replace any creation id with actual emailId */
-    json_object_set_new(emailsubmission, "emailId", json_string(msgid));
-
     /* identityId */
     const char *identityid = NULL;
     json_t *jidentityId = json_object_get(emailsubmission, "identityId");
@@ -790,6 +787,9 @@ static void _emailsubmission_create(jmap_req_t *req,
     smtp_envelope_fini(&smtpenv);
 
     if (r) goto done;
+
+    /* Replace any creation id with actual emailId */
+    json_object_set_new(emailsubmission, "emailId", json_string(msgid));
 
     r = store_submission(submbox, &buf, holduntil,
                          emailsubmission, new_submission);
