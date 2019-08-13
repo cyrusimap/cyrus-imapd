@@ -13024,6 +13024,8 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
             if (mboxname_iscalendarmailbox(intname, mbtype)    ||
                 mboxname_isaddressbookmailbox(intname, mbtype) ||
                 mboxname_isdavdrivemailbox(intname, mbtype)    ||
+                mboxname_issubmissionmailbox(intname, mbtype)    ||
+                mboxname_ispushsubscriptionmailbox(intname, mbtype)    ||
                 mboxname_isdavnotificationsmailbox(intname, mbtype)) {
                 skip = 1;
             }
