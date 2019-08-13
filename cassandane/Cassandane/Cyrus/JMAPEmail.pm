@@ -2578,6 +2578,11 @@ sub test_emailsubmission_set
         destroy => [ $msgsubid ],
     }, "R1" ] ] );
     $self->assert_str_equals("notFound", $res->[0][1]->{notDestroyed}{$msgsubid}{type});
+
+    xlog "make sure #jmapsubmission folder isn't visible via IMAP";
+    my $talk = $self->{store}->get_client();
+    my @list = $talk->list('', '*');
+    $self->assert_num_equals(0, scalar grep { $_->[2] eq 'INBOX.#jmapsubmission' } @list);
 }
 
 sub test_emailsubmission_set_with_envelope
