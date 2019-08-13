@@ -474,6 +474,9 @@ static void _emailsubmission_create(jmap_req_t *req,
         jmap_parser_invalid(&parser, "emailId");
     }
 
+    /* Replace any creation id with actual emailId */
+    json_object_set_new(emailsubmission, "emailId", json_string(msgid));
+
     /* identityId */
     const char *identityid = NULL;
     json_t *jidentityId = json_object_get(emailsubmission, "identityId");
@@ -679,17 +682,15 @@ static void _emailsubmission_create(jmap_req_t *req,
         goto done;
     }
 
-    if (holduntil) {
-        /* Fetch and set threadId */
-        char thread_id[JMAP_THREADID_SIZE];
-        bit64 cid;
+    /* Fetch and set threadId */
+    char thread_id[JMAP_THREADID_SIZE];
+    bit64 cid;
 
-        r = msgrecord_get_cid(mr, &cid);
-        if (r) goto done;
+    r = msgrecord_get_cid(mr, &cid);
+    if (r) goto done;
 
-        jmap_set_threadid(cid, thread_id);
-        json_object_set_new(emailsubmission, "threadId", json_string(thread_id));
-    }
+    jmap_set_threadid(cid, thread_id);
+    json_object_set_new(emailsubmission, "threadId", json_string(thread_id));
 
     /* Close the message record and mailbox. There's a race
      * with us still keeping the file descriptor to the
