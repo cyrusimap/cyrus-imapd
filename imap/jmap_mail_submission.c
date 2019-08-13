@@ -291,7 +291,6 @@ static int lookup_submission_collection(const char *accountid,
 
 static int ensure_submission_collection(const char *accountid,
                                         mbentry_t **mbentryp,
-                                        struct mailbox **mailbox,
                                         int *created)
 {
     /* submission collection */
@@ -321,7 +320,7 @@ static int ensure_submission_collection(const char *accountid,
         r = mboxlist_createmailbox_opts(mbentry->name, MBTYPE_SUBMISSION,
                                         NULL, 1 /* admin */, accountid,
                                         httpd_authstate,
-                                        options, 0, 0, 0, 0, NULL, mailbox);
+                                        options, 0, 0, 0, 0, NULL, NULL);
         /* we lost the race, that's OK */
         if (r == IMAP_MAILBOX_LOCKED) r = 0;
         else {
@@ -330,16 +329,6 @@ static int ensure_submission_collection(const char *accountid,
                         mbentry->name, error_message(r));
             }
             goto done;
-        }
-    }
-    else if (r) goto done;
-
-    if (mailbox) {
-        /* Open mailbox for writing */
-        r = mailbox_open_iwl(mbentry->name, mailbox);
-        if (r) {
-            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
-                   mbentry->name, error_message(r));
         }
     }
 
@@ -1156,7 +1145,7 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
     }
 
     int r = ensure_submission_collection(req->accountid,
-                                         &mbentry, NULL, &created);
+                                         &mbentry, &created);
     if (r) {
         syslog(LOG_ERR,
                "jmap_emailsubmission_get: ensure_submission_collection(%s): %s",
@@ -1268,6 +1257,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     struct submission_set_args sub_args = { NULL, NULL };
     json_t *err = NULL;
     struct mailbox *submbox = NULL;
+    mbentry_t *mbentry = NULL;
 
     /* Parse request */
     jmap_set_parse(req, &parser, submission_props,
@@ -1280,13 +1270,18 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
 
     /* Process request */
 
-    int r = ensure_submission_collection(req->accountid, NULL, &submbox, NULL);
+    int r = ensure_submission_collection(req->accountid, &mbentry, NULL);
     if (r) {
         syslog(LOG_ERR,
                "jmap_emailsubmission_set: ensure_submission_collection(%s): %s",
                req->accountid, error_message(r));
         goto done;
     }
+
+    r = jmap_openmbox(req, mbentry->name, &submbox, 1);
+    assert(submbox);
+    mboxlist_entry_free(&mbentry);
+    if (r) goto done;
 
     if (set.if_in_state) {
         /* TODO rewrite state function to use char* not json_t* */
@@ -1411,7 +1406,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     json_decref(destroyEmails);
 
 done:
-    if (submbox) mailbox_close(&submbox);
+    jmap_closembox(req, &submbox);
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
     return 0;
@@ -1431,7 +1426,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
         return 0;
     }
 
-    int r = ensure_submission_collection(req->accountid, &mbentry, NULL, NULL);
+    int r = ensure_submission_collection(req->accountid, &mbentry, NULL);
     if (r) {
         syslog(LOG_ERR,
                "jmap_emailsubmission_changes: ensure_submission_collection(%s): %s",
@@ -1841,8 +1836,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
         goto done;
     }
 
-    int r = ensure_submission_collection(req->accountid,
-                                         &mbentry, NULL, &created);
+    int r = ensure_submission_collection(req->accountid, &mbentry, &created);
     if (r) {
         syslog(LOG_ERR,
                "jmap_emailsubmission_changes: ensure_submission_collection(%s): %s",
