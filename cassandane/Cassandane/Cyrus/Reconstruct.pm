@@ -165,6 +165,10 @@ sub test_reconstruct_truncated
     $self->assert_num_equals(10, scalar @records);
     $self->assert(grep { $_ == 6 } @records);
     $self->assert(not grep { $_ == 11 } @records);
+
+    # We should have generated a SYNCERROR or two
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert_matches(qr/IOERROR: refreshing index/, "@lines");
 }
 #
 # Test removed file
