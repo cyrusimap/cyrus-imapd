@@ -349,11 +349,10 @@ static int ensure_submission_collection(const char *accountid,
     return r;
 }
 
-static int stage_futurerelease(struct mailbox *mailbox,
-                               struct buf *msg, time_t holduntil,
-                               json_t *emailsubmission,
-                               json_t **new_submission,
-                               json_t **set_err __attribute__((unused)))
+static int store_submission(struct mailbox *mailbox,
+                            struct buf *msg, time_t holduntil,
+                            json_t *emailsubmission,
+                            json_t **new_submission)
 {
     struct stagemsg *stage = NULL;
     struct appendstate as;
@@ -361,8 +360,16 @@ static int stage_futurerelease(struct mailbox *mailbox,
     struct buf buf = BUF_INITIALIZER;
     struct body *body = NULL;
     char datestr[80], *from;
+    size_t msglen = buf_len(msg);
     FILE *f = NULL;
     int r;
+
+    if (!holduntil) {
+        /* Already sent */
+        msglen = 0;
+        holduntil = time(0);
+        strarray_append(&flags, "\\Expunged");
+    }
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox->name, holduntil, 0, &stage))) {
@@ -392,7 +399,7 @@ static int stage_futurerelease(struct mailbox *mailbox,
             "Content-Length: %ld\r\n"
             "%s: ", datestr, from,
             json_string_value(json_object_get(emailsubmission, "emailId")),
-            buf_len(msg), JMAP_SUBMISSION_HDR);
+            msglen, JMAP_SUBMISSION_HDR);
     free(from);
 
     /* Add JMAP submission object as content of header field */
@@ -409,7 +416,7 @@ static int stage_futurerelease(struct mailbox *mailbox,
     fputs("\r\n\r\n", f);
 
     /* Add submitted message */
-    if (!fwrite(buf_base(msg), buf_len(msg), 1, f) || fflush(f)) {
+    if ((msglen && !fwrite(buf_base(msg), msglen, 1, f)) || fflush(f)) {
         r = IMAP_IOERROR;
         goto done;
     }
@@ -794,16 +801,8 @@ static void _emailsubmission_create(jmap_req_t *req,
 
     if (r) goto done;
 
-    if (holduntil) {
-        r = stage_futurerelease(submbox, &buf, holduntil, emailsubmission,
-                                new_submission, set_err);
-        goto done;
-    }
-
-    /* All done */
-    char *new_id = xstrdup(makeuuid());
-    *new_submission = json_pack("{s:s}", "id", new_id);
-    free(new_id);
+    r = store_submission(submbox, &buf, holduntil,
+                         emailsubmission, new_submission);
 
 done:
     if (r && *set_err == NULL) {
