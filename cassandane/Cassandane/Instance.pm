@@ -1128,6 +1128,13 @@ sub start
     $self->{_stopped} = 0;
     $self->{_started} = 1;
 
+    my $cassini = Cassandane::Cassini::instance();
+    my $syslog_file = $cassini->val('cassandane', 'syslog_file', '/var/log/syslog');
+    if ($syslog_file) {
+      $self->{_syslogfh} = IO::File->new($syslog_file, 'r') || die "can't open file $syslog_file";
+      $self->{_syslogfh}->blocking(0);
+    }
+
     if ($created && $self->{setup_mailbox})
     {
         $self->create_user("cassandane");
@@ -1279,6 +1286,21 @@ sub _check_cores
     die "Core files found in $coredir" if $ncores;
 }
 
+sub _check_syslog
+{
+    my ($self) = @_;
+
+    my @lines = $self->getsyslog();
+
+    my @errors = grep { m/ERROR/ } @lines;
+
+    @errors = grep { not m/DBERROR.*skipstamp/ } @errors;
+
+    $self->xlog("syslog error: $_") for @errors;
+
+    die "Errors found in syslog" if @errors;
+}
+
 # Stop a given PID.  Returns 1 if the process died
 # gracefully (i.e. soon after receiving SIGTERM)
 # or wasn't even running beforehand.
@@ -1365,6 +1387,7 @@ sub stop
     $self->_compress_berkeley_crud();
     $self->_check_valgrind_logs();
     $self->_check_cores();
+    $self->_check_syslog();
 }
 
 sub cleanup
@@ -2004,6 +2027,17 @@ sub getnotify
     }
 
     return $data;
+}
+
+sub getsyslog
+{
+    my ($self) = @_;
+    my $logname = $self->{name};
+    if ($self->{_syslogfh}) {
+        my @lines = grep { m/$logname/ } $self->{_syslogfh}->getlines();
+        chomp for @lines;
+        return @lines;
+    }
 }
 
 sub get_sieve_script_dir

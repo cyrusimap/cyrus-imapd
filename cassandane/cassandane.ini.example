@@ -72,6 +72,9 @@
 # Base port number to use.  All Cyrus instances run by Cassandane
 # will listen at ports starting from this number.
 ##base_port = 9100
+# Path to the syslog file where Cyrus writes its logs.  Needs to be
+# readable by user 'cyrus'
+##syslog_file = /var/log/syslog
 
 # This section describes configurable properties of Valgrind.
 [valgrind]
