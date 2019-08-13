@@ -473,6 +473,10 @@ sub test_max_userflags
     $self->assert_null($r);
     $self->assert_matches(qr/Too many user flags in mailbox/, $e);
 
+    # We should have generated an IOERROR
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert_matches(qr/IOERROR: out of flags/, "@lines");
+
     xlog "Can set all the flags at once";
     my @flags = sort { $allflags{$a} <=> $allflags{$b} } (keys %allflags);
     xlog "Set all the user flags on message A";
