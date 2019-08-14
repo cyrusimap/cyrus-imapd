@@ -87,12 +87,16 @@ DISTCLEANFILES = \
 	imap/jmap_err.h \
 	imap/lmtp_err.c \
 	imap/lmtp_err.h \
+	imap/lmtpstats.c \
+	imap/lmtpstats.h \
 	imap/mupdate_err.c \
 	imap/mupdate_err.h \
 	imap/nntp_err.c \
 	imap/nntp_err.h \
 	imap/promdata.c \
 	imap/promdata.h \
+	imap/pushstats.c \
+	imap/pushstats.h \
 	imap/tz_err.c \
 	imap/tz_err.h \
 	perl/sieve/scripts/installsieve \
@@ -105,8 +109,6 @@ MAINTAINERCLEANFILES = \
 	doc/legacy/netnews.png \
 	man/imapd.conf.5 \
 	man/sieveshell.1 \
-	imap/lmtpstats.h \
-	imap/pushstats.h \
 	sieve/addr.h \
 	sieve/sieve.h
 
@@ -138,9 +140,11 @@ BUILT_SOURCES += \
 	imap/lmtp_err.c \
 	imap/lmtp_err.h \
 	imap/lmtpstats.c \
+	imap/lmtpstats.h \
 	imap/mupdate_err.c \
 	imap/mupdate_err.h \
 	imap/pushstats.c \
+	imap/pushstats.h \
 	imap/promdata.c \
 	imap/promdata.h \
 	lib/htmlchar.c \
