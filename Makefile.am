@@ -66,6 +66,23 @@ endif # HAVE_LDAP
 
 AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
 
+# have distcheck try to build with all optional components enabled, to aid
+# detection of missing files for these components
+AM_DISTCHECK_CONFIGURE_FLAGS = \
+    --enable-http \
+    --enable-calalarmd \
+    --enable-replication \
+    --with-openssl=yes \
+    --enable-nntp \
+    --enable-murder \
+    --enable-idled \
+    --enable-sieve \
+    --enable-autocreate \
+    --enable-backup \
+    --enable-xapian \
+    --enable-jmap \
+    --with-ldap
+
 BUILT_SOURCES = \
 	lib/imapopts.c \
 	lib/imapopts.h
