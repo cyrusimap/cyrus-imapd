@@ -825,6 +825,7 @@ backup_ctl_backups_SOURCES = \
 backup_ctl_backups_LDADD = backup/libcyrus_backup.la $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 backup_cyr_backup_SOURCES = \
+    imap/json_support.h \
     imap/mutex_fake.c \
     backup/cyr_backup.c
 backup_cyr_backup_LDADD = backup/libcyrus_backup.la $(LD_UTILITY_ADD)
@@ -989,6 +990,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/imapparse.h \
 	imap/index.c \
 	imap/index.h \
+	imap/json_support.h \
 	imap/mailbox.c \
 	imap/mailbox.h \
 	imap/mbdump.c \
@@ -1116,7 +1118,8 @@ if JMAP
 imap_libcyrus_imap_la_SOURCES += \
 	imap/smtpclient.c \
 	imap/smtpclient.h \
-	imap/jmap_support.c
+	imap/jmap_support.c \
+	imap/jmap_support.h
 endif
 
 if USE_XAPIAN
@@ -1238,6 +1241,7 @@ imap_httpd_SOURCES = \
 	imap/httpd.h \
 	imap/jcal.c \
 	imap/jcal.h \
+	imap/json_support.h \
 	imap/mutex_fake.c \
 	imap/proxy.c \
 	imap/smtpclient.c \
@@ -1267,6 +1271,7 @@ imap_httpd_SOURCES += \
 	imap/jmap_ical.c \
 	imap/jmap_ical.h \
 	imap/jmap_mail.c \
+	imap/jmap_mail.h \
 	imap/jmap_mail_submission.c \
 	imap/jmap_mailbox.c \
 	imap/jmap_support.c \
