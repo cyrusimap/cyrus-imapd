@@ -572,7 +572,7 @@ if test "x$enable_xapian" != xno ; then
     AC_DEFINE_UNQUOTED([RSYNC_BIN], ["$RSYNC_BIN"], [Path to 'rsync' binary])
 
     AC_ARG_VAR(XAPIAN_CONFIG, [Location of xapian-config])
-    AC_PATH_PROG(XAPIAN_CONFIG, xapian-config, [])
+    AC_PATH_PROGS(XAPIAN_CONFIG, [xapian-config-1.5 xapian-config], [])
     if test -z "$XAPIAN_CONFIG"; then
         AC_MSG_ERROR([Can't find Xapian library])
     else
