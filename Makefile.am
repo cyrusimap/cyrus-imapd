@@ -65,6 +65,26 @@ AM_CPPFLAGS += $(LDAP_CPPFLAGS)
 endif # HAVE_LDAP
 
 AM_LDFLAGS = $(COV_LDFLAGS) $(ICU_LIBS)
+
+# have distcheck try to build with all optional components enabled, to aid
+# detection of missing files for these components
+AM_DISTCHECK_CONFIGURE_FLAGS = \
+    --enable-http \
+    --enable-calalarmd \
+    --enable-replication \
+    --with-openssl=yes \
+    --enable-nntp \
+    --enable-murder \
+    --enable-idled \
+    --enable-event-notification \
+    --enable-sieve \
+    --enable-autocreate \
+    --enable-backup \
+    --with-lmdb \
+    --enable-xapian \
+    --enable-jmap \
+    --with-ldap
+
 BUILT_SOURCES = \
 	imap/imap_err.c \
 	lib/imapopts.c \
