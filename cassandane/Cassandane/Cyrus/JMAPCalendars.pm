@@ -574,6 +574,22 @@ sub test_calendar_set_sharewith
     %map = @$acl;
     $self->assert_null($map{manifort});  # we don't create Outbox ACLs for read-only
     $self->assert_str_equals('78', $map{paraphrase});
+
+    xlog "Clear initial syslog";
+    $self->{instance}->getsyslog();
+
+    xlog "Update sharewith just for manifold";
+    $jmap->CallMethods([
+            ['Calendar/set', {
+                    accountId => 'master',
+                    update => { "$CalendarId" => {
+                            "shareWith/manifold/mayWrite" => JSON::true,
+             }}}, "R1"]
+    ]);
+
+    my @lines = $self->{instance}->getsyslog();
+    $self->assert_matches(qr/manifold\.\#notifications/, "@lines");
+    $self->assert((not grep { /paraphrase\.\#notifications/ } @lines), Data::Dumper::Dumper(\@lines));
 }
 
 sub test_calendar_set_issubscribed
