@@ -143,7 +143,12 @@ sub test_splitbrain
     $self->check_messages(\%rexp, store => $replica_store);
 
     $self->run_replication();
+    # replication will generate a couple of SYNCERRORS in syslog
+    my @syslog = $self->{instance}->getsyslog();
+    $self->assert_matches(qr/\bSYNCERROR: guid mismatch user.cassandane 5\b/,
+                          "@syslog");
     $self->check_replication('cassandane');
+
 
     %exp = (%mexp, %rexp);
     # we could calculate 6 and 7 by sorting from GUID, but easiest is to ignore UIDs
