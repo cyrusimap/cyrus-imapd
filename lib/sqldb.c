@@ -182,7 +182,7 @@ EXPORTED sqldb_t *sqldb_open(const char *fname, const char *initsql,
 
     rc = sqlite3_exec(open->db, "PRAGMA user_version;", _version_cb, &open->version, NULL);
     if (rc != SQLITE_OK) {
-        syslog(LOG_ERR, "sqldb_open(%s) get user_version: %s",
+        syslog(LOG_ERR, "DBERROR: sqldb_open(%s) get user_version: %s",
             open->fname, sqlite3_errmsg(open->db));
         _free_open(open);
         return NULL;
@@ -353,7 +353,7 @@ EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bva
     sqlite3_clear_bindings(stmt);
 
     if (!r && rc != SQLITE_DONE) {
-        syslog(LOG_ERR, "sqldb_exec() step: %s", sqlite3_errmsg(open->db));
+        syslog(LOG_ERR, "DBERROR: sqldb_exec() step: %s", sqlite3_errmsg(open->db));
         r = -1;
     }
 
