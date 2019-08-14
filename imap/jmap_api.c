@@ -2785,6 +2785,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                     change = xzmalloc(sizeof(struct acl_change));
 
                     cyrus_acl_strtomask(rightstr, &change->old);
+                    if (!overwrite) change->new = change->old;
                     hash_insert(userid, (void *) change, &user_access);
                 }
             }
