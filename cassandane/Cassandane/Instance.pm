@@ -1293,7 +1293,7 @@ sub _check_syslog
 
     my @lines = $self->getsyslog();
 
-    my @errors = grep { m/ERROR/ } @lines;
+    my @errors = grep { m/ERROR|Unknown code ____/ } @lines;
 
     @errors = grep { not m/DBERROR.*skipstamp/ } @errors;
 
