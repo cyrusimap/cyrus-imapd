@@ -310,10 +310,10 @@ extern void sieverestart(FILE *f);
 %type <test> duptags
 %type <nval> idtype
 
-/* draft-ietf-extra-sieve-special-use */
+/* special-use - RFC 8579 */
 %token SPECIALUSEEXISTS SPECIALUSE
 
-/* draft-ietf-extra-sieve-fcc */
+/* fcc - RFC 8580 */
 %token FCC
 
 /* draft-gondwana-sieve-mailboxid */

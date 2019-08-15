@@ -425,11 +425,11 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
     /*   :seconds             defined in 'vacation-seconds' */
     /*   :last                defined in 'index' */
 
-    /* draft-ietf-extra-sieve-special-use */
+    /* special-use - RFC 8579 */
 <INITIAL>specialuse_exists     return SPECIALUSEEXISTS;
 <INITIAL>:specialuse           return SPECIALUSE;
 
-    /* draft-ietf-extra-sieve-fcc */
+    /* fcc - RFC 8580 */
 <INITIAL>:fcc                  return FCC;
 
     /* draft-gondwana-sieve-mailboxid */

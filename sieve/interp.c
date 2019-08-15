@@ -493,10 +493,10 @@ static const struct sieve_capa_t {
     /* Duplicate - RFC 7352 */
     { "duplicate", SIEVE_CAPA_DUPLICATE },
 
-    /* Special-Use - draft-ietf-extra-sieve-special-use */
+    /* Special-Use - RFC 8579 */
     { "special-use", SIEVE_CAPA_SPECIAL_USE },
 
-    /* Fcc - draft-ietf-extra-sieve-fcc */
+    /* Fcc - RFC 8580 */
     { "fcc", SIEVE_CAPA_FCC },
 
     /* Mailboxid - draft-gondwana-sieve-mailboxid */

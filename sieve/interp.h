@@ -193,10 +193,10 @@ enum sieve_capa_flag {
     /* Duplicate - RFC 7352 */
     SIEVE_CAPA_DUPLICATE    = 1LL<<43,
 
-    /* Special-Use - draft-ietf-extra-sieve-special-use */
+    /* Special-Use - RFC 8579 */
     SIEVE_CAPA_SPECIAL_USE  = 1LL<<44,
 
-    /* Fcc - draft-ietf-extra-sieve-fcc */
+    /* Fcc - RFC 8580 */
     SIEVE_CAPA_FCC          = 1LL<<45,
 
     /* Mailboxid - draft-gondwana-sieve-mailboxid */
