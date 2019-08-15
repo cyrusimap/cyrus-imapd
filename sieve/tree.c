@@ -190,6 +190,11 @@ test_t *new_test(int type, sieve_script_t *parse_script)
         capability = "mailboxid";
         supported = parse_script->support & SIEVE_CAPA_MAILBOXID;
         break;
+
+    case JMAPQUERY:
+        capability = "x-cyrus-jmapquery";
+        supported = parse_script->support & SIEVE_CAPA_JMAPQUERY;
+        break;
     }
 
     if (!supported) {

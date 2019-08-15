@@ -306,6 +306,7 @@ static int bc_test_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc)
     case BC_DATE:
     case BC_CURRENTDATE:
     case BC_DUPLICATE:
+    case BC_JMAPQUERY:
         ret = bc_params_emit(fd, codep, stopcodep, bc);
         break;
 

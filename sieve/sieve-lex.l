@@ -439,6 +439,9 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
     /* x-cyrus-log */
 <INITIAL>log                   return LOG;
 
+    /* x-cyrus-jmapquery */
+<INITIAL>jmapquery             return JMAPQUERY;
+
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */
 <INITIAL>[ \t\n\r] ;          /* ignore whitespace */

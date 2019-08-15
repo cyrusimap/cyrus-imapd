@@ -409,6 +409,15 @@ static void print_test(test_t *test)
         print_string("\n\tITEM", test->u.mm.keyname);
         print_stringlist(" KEYS", test->u.mm.keylist);
         break;
+
+    case BC_JMAPQUERY: {
+        char *json = json_dumps(test->u.jquery, JSON_INDENT(2));
+
+        printf("JMAPQUERY");
+        print_string(" ", json);
+        free(json);
+        break;
+    }
     }
 
     printf("\n");

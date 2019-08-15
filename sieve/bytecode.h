@@ -133,8 +133,9 @@ typedef union
  * version 0x15 scripts implemented Redirect-DeliverBy, Redirect-DSN (RFC6009)
  * version 0x16 scripts implemented draft-gondwana-sieve-mailboxid-01
  * version 0x17 scripts implemented x-cyrus-log
+ * version 0x18 scripts implemented x-cyrus-jmapquery
  */
-#define BYTECODE_VERSION 0x17
+#define BYTECODE_VERSION 0x18
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -241,7 +242,8 @@ enum bytecode_comps {
     BC_ENVIRONMENT,     /* require environment */
     BC_VALIDNOTIFYMETHOD,/* require enotify */
     BC_NOTIFYMETHODCAPABILITY,
-    BC_MAILBOXIDEXISTS  /* require mailboxid */
+    BC_MAILBOXIDEXISTS, /* require mailboxid */
+    BC_JMAPQUERY        /* require x-cyrus-jmapquery */
 };
 
 /* currently one enum so as to help determine where values are being misused.

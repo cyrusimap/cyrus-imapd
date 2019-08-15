@@ -132,6 +132,7 @@ static test_t *build_ihave(sieve_script_t*, strarray_t *sa);
 static test_t *build_mbox_meta(sieve_script_t*, test_t *t, char *extname,
                                char *keyname, strarray_t *keylist);
 static test_t *build_duplicate(sieve_script_t*, test_t *t);
+static test_t *build_jmapquery(sieve_script_t*, const char *json);
 
 void yyerror(sieve_script_t*, const char *msg);
 extern int yylex(void*, sieve_script_t*);
@@ -326,6 +327,9 @@ extern void sieverestart(FILE *f);
 
 /* x-cyrus-log */
 %token LOG
+
+/* x-cyrus-jmapquery */
+%token JMAPQUERY
 
 
 %%
@@ -1290,6 +1294,8 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
                                      $$ = build_mbox_meta(sscript,
                                                           $$, NULL, NULL, $2);
                                  }
+
+        | JMAPQUERY STRING       { $$ = build_jmapquery(sscript, $2); }
 
         | error                  { $$ = new_test(SFALSE, sscript); }
         ;
@@ -2725,6 +2731,23 @@ static test_t *build_duplicate(sieve_script_t *sscript, test_t *t)
     else verify_utf8(sscript, t->u.dup.handle);
 
     if (t->u.dup.seconds == -1) t->u.dup.seconds = 7 * 86400; /* 7 days */
+
+    return t;
+}
+
+static test_t *build_jmapquery(sieve_script_t *sscript, const char *json)
+{
+    test_t *t = new_test(JMAPQUERY, sscript);
+    json_error_t jerr;
+
+    if (!supported(SIEVE_CAPA_JMAPQUERY)) {
+        sieveerror_c(sscript, SIEVE_MISSING_REQUIRE, "x-cyrus-jmapquery");
+    }
+
+    t->u.jquery = json_loads(json, 0, &jerr);
+    if (!t->u.jquery) {
+        sieveerror_f(sscript, "string '%s': not valid json", json);
+    }
 
     return t;
 }

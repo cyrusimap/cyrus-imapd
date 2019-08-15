@@ -692,6 +692,14 @@ static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t)
 
         break;
 
+    case JMAPQUERY:
+        retval->data[codep++].u.op = BC_JMAPQUERY;
+        if (!atleast(retval, codep+1)) return -1;
+        retval->data[codep].type = BT_STR;
+        retval->data[codep++].u.str = json_dumps(t->u.jquery, JSON_COMPACT);
+
+        break;
+
     default:
         return -1;
 
