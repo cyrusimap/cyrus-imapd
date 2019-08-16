@@ -370,7 +370,8 @@ static int store_submission(struct mailbox *mailbox,
     }
 
     /* Stage the message to send as message/rfc822 */
-    time_to_rfc5322(time(0), datestr, sizeof(datestr));
+    time_t now = time(0);
+    time_to_rfc5322(now, datestr, sizeof(datestr));
 
     if (strchr(httpd_userid, '@')) {
         /* XXX  This needs to be done via an LDAP/DB lookup */
@@ -441,8 +442,16 @@ static int store_submission(struct mailbox *mailbox,
 
     /* Create id from message UID, using 'S' prefix */
     char sub_id[JMAP_SUBID_SIZE];
+    char sendat[RFC3339_DATETIME_MAX];
+    time_to_rfc3339(holduntil ? holduntil : now, sendat, RFC3339_DATETIME_MAX);
+
     sprintf(sub_id, "S%u", mailbox->i.last_uid);
-    *new_submission = json_pack("{s:s}", "id", sub_id);
+    // XXX: we should include all the other fields from the spec
+    *new_submission = json_pack("{s:s, s:s}",
+         "id", sub_id,
+         "undoStatus", holduntil ? "pending" : "final",
+         "sendAt", sendat
+    );
 
   done:
     if (body) {
