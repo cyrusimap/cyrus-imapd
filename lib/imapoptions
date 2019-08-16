@@ -2339,13 +2339,27 @@ product version in the capabilities
    occur in mailbox names.  The default switched in 3.0 from off to on. */
 
 { "virtdomains", "off", ENUM("off", "userid", "on") }
-/* Enable virtual domain support.  If enabled, the user's domain will
-   be determined by splitting a fully qualified userid at the last '@'
-   or '%' symbol.  If the userid is unqualified, and the virtdomains
-   option is set to "on", then the domain will be determined by doing
-   a reverse lookup on the IP address of the incoming network
-   interface, otherwise the user is assumed to be in the default
-   domain (if set). */
+/* Configure virtual domain support.
+.PP
+.IP off
+Cyrus does not know or care about domains. Only the local part of email
+addresses is ever considered.  This is not recommended for any deployment,
+but is currently the default.
+.\"
+.IP userid
+The user's domain is determined by splitting a fully qualified userid at the
+last '@' or '%' symbol.  If the userid is unqualified, the \fIdefaultdomain\fR
+will be used.  This is the recommended configuration for all deployments.
+If you wish to provide calendaring services you must use this configuration.
+.\"
+.IP on
+Fully qualified userids are respected, as per "userid".  Unqualified userids
+will have their domain determined by doing a reverse lookup on the IP address
+of the incoming network interface, or if no record is found, the
+\fIdefaultdomain\fR will be used.
+
+.PP
+    */
 
 { "xbackup_enabled", 0, SWITCH }
 /* Enable support for the XBACKUP command in imapd.  If enabled, admin
