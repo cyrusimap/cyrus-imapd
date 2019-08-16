@@ -2759,7 +2759,8 @@ struct find_rock {
     mbname_t *mbname;
     mbentry_t *mbentry;
     int matchlen;
-    findall_cb *proc;
+    findall_p *p;
+    findall_cb *cb;
     void *procrock;
 };
 
@@ -2838,7 +2839,16 @@ static int find_p(void *rockp,
     }
 
 good:
-    return 1;
+    if (rock->p) {
+        struct findall_data fdata = { extname, 0, rock->mbentry, NULL };
+        /* mbname confirms that it's an exact match */
+        if (rock->matchlen == (int) strlen(extname))
+            fdata.mbname = rock->mbname;
+        return rock->p(&fdata, rock->procrock);
+    }
+    else {
+        return 1;
+    }
 
 nomatch:
     mboxlist_entry_free(&rock->mbentry);
@@ -2887,7 +2897,7 @@ static int find_cb(void *rockp,
             }
 
             if (matchlen == (int)strlen(testname)) {
-                r = (*rock->proc)(&fdata, rock->procrock);
+                r = (*rock->cb)(&fdata, rock->procrock);
                 if (r) goto done;
             }
 
@@ -2900,7 +2910,7 @@ static int find_cb(void *rockp,
     if (rock->matchlen == (int)strlen(extname))
         fdata.mbname = rock->mbname;
 
-    r = (*rock->proc)(&fdata, rock->procrock);
+    r = (*rock->cb)(&fdata, rock->procrock);
 
  done:
     free(testname);
@@ -3365,7 +3375,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             if (r) goto done;
 
             /* reset the the namebuffer */
-            r = (*rock->proc)(NULL, rock->procrock);
+            r = (*rock->cb)(NULL, rock->procrock);
             if (r) goto done;
         }
 
@@ -3378,7 +3388,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
         /* "Alt Prefix" folders */
         if (rock->namespace->isalt) {
             /* reset the the namebuffer */
-            r = (*rock->proc)(NULL, rock->procrock);
+            r = (*rock->cb)(NULL, rock->procrock);
             if (r) goto done;
 
             rock->mb_category = MBNAME_ALTINBOX;
@@ -3425,7 +3435,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             size_t thislen = (isadmin || crossdomains) ? 0 : strlen(domainpat);
 
             /* reset the the namebuffer */
-            r = (*rock->proc)(NULL, rock->procrock);
+            r = (*rock->cb)(NULL, rock->procrock);
             if (r) goto done;
 
             r = mboxlist_find_category(rock, domainpat, thislen);
@@ -3447,7 +3457,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             rock->mb_category = MBNAME_SHARED;
 
             /* reset the the namebuffer */
-            r = (*rock->proc)(NULL, rock->procrock);
+            r = (*rock->cb)(NULL, rock->procrock);
             if (r) goto done;
 
             /* iterate through all the non-user folders on the server */
@@ -3457,7 +3467,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
     }
 
     /* finish with a reset call always */
-    r = (*rock->proc)(NULL, rock->procrock);
+    r = (*rock->cb)(NULL, rock->procrock);
 
  done:
     for (i = 0; i < rock->globs.count; i++) {
@@ -3474,6 +3484,16 @@ EXPORTED int mboxlist_findallmulti(struct namespace *namespace,
                                    const char *userid, const struct auth_state *auth_state,
                                    findall_cb *proc, void *rock)
 {
+    return mboxlist_findallmulti_withp(namespace, patterns, isadmin,
+                                       userid, auth_state,
+                                       NULL, proc, rock);
+}
+
+EXPORTED int mboxlist_findallmulti_withp(struct namespace *namespace,
+                                   const strarray_t *patterns, int isadmin,
+                                   const char *userid, const struct auth_state *auth_state,
+                                   findall_p *p, findall_cb *cb, void *rock)
+{
     int r = 0;
 
     init_internal();
@@ -3487,7 +3507,8 @@ EXPORTED int mboxlist_findallmulti(struct namespace *namespace,
     cbrock.db = mbdb;
     cbrock.isadmin = isadmin;
     cbrock.namespace = namespace;
-    cbrock.proc = proc;
+    cbrock.p = p;
+    cbrock.cb = cb;
     cbrock.procrock = rock;
     cbrock.userid = userid;
     if (userid) {
@@ -3505,12 +3526,23 @@ EXPORTED int mboxlist_findall(struct namespace *namespace,
                               const char *userid, const struct auth_state *auth_state,
                               findall_cb *proc, void *rock)
 {
+    return mboxlist_findall_withp(namespace, pattern, isadmin,
+                                  userid, auth_state,
+                                  NULL, proc, rock);
+}
+
+EXPORTED int mboxlist_findall_withp(struct namespace *namespace,
+                              const char *pattern, int isadmin,
+                              const char *userid, const struct auth_state *auth_state,
+                              findall_p *p, findall_cb *cb, void *rock)
+{
     strarray_t patterns = STRARRAY_INITIALIZER;
     strarray_append(&patterns, pattern);
 
     init_internal();
 
-    int r = mboxlist_findallmulti(namespace, &patterns, isadmin, userid, auth_state, proc, rock);
+    int r = mboxlist_findallmulti_withp(namespace, &patterns, isadmin, userid, auth_state,
+                                  p, cb, rock);
 
     strarray_fini(&patterns);
 
@@ -3521,6 +3553,16 @@ EXPORTED int mboxlist_findone(struct namespace *namespace,
                               const char *intname, int isadmin,
                               const char *userid, const struct auth_state *auth_state,
                               findall_cb *proc, void *rock)
+{
+    return mboxlist_findone_withp(namespace, intname, isadmin,
+                                  userid, auth_state,
+                                  NULL, proc, rock);
+}
+
+EXPORTED int mboxlist_findone_withp(struct namespace *namespace,
+                              const char *intname, int isadmin,
+                              const char *userid, const struct auth_state *auth_state,
+                              findall_p *p, findall_cb *cb, void *rock)
 {
     int r = 0;
 
@@ -3535,7 +3577,8 @@ EXPORTED int mboxlist_findone(struct namespace *namespace,
     cbrock.db = mbdb;
     cbrock.isadmin = isadmin;
     cbrock.namespace = namespace;
-    cbrock.proc = proc;
+    cbrock.p = p;
+    cbrock.cb = cb;
     cbrock.procrock = rock;
     cbrock.userid = userid;
     if (userid) {
@@ -4017,6 +4060,18 @@ EXPORTED int mboxlist_findsubmulti(struct namespace *namespace,
                                    findall_cb *proc, void *rock,
                                    int force)
 {
+    return mboxlist_findsubmulti_withp(namespace, patterns, isadmin,
+                                       userid, auth_state,
+                                       NULL, proc, rock,
+                                       force);
+}
+
+EXPORTED int mboxlist_findsubmulti_withp(struct namespace *namespace,
+                                   const strarray_t *patterns, int isadmin,
+                                   const char *userid, const struct auth_state *auth_state,
+                                   findall_p *p, findall_cb *cb, void *rock,
+                                   int force)
+{
     int r = 0;
 
     init_internal();
@@ -4038,7 +4093,8 @@ EXPORTED int mboxlist_findsubmulti(struct namespace *namespace,
     cbrock.isadmin = isadmin;
     cbrock.issubs = 1;
     cbrock.namespace = namespace;
-    cbrock.proc = proc;
+    cbrock.p = p;
+    cbrock.cb = cb;
     cbrock.procrock = rock;
     cbrock.userid = userid;
     if (userid) {
@@ -4059,12 +4115,25 @@ EXPORTED int mboxlist_findsub(struct namespace *namespace,
                               findall_cb *proc, void *rock,
                               int force)
 {
+    return mboxlist_findsub_withp(namespace, pattern, isadmin,
+                                  userid, auth_state,
+                                  NULL, proc, rock,
+                                  force);
+}
+
+EXPORTED int mboxlist_findsub_withp(struct namespace *namespace,
+                              const char *pattern, int isadmin,
+                              const char *userid, const struct auth_state *auth_state,
+                              findall_p *p, findall_cb *cb, void *rock,
+                              int force)
+{
     strarray_t patterns = STRARRAY_INITIALIZER;
     strarray_append(&patterns, pattern);
 
     init_internal();
 
-    int r = mboxlist_findsubmulti(namespace, &patterns, isadmin, userid, auth_state, proc, rock, force);
+    int r = mboxlist_findsubmulti_withp(namespace, &patterns, isadmin, userid, auth_state,
+                                  p, cb, rock, force);
 
     strarray_fini(&patterns);
 

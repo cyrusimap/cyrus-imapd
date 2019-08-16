@@ -251,6 +251,7 @@ struct findall_data {
     const mbname_t *mbname;
 };
 
+typedef int findall_p(struct findall_data *data, void *rock);
 typedef int findall_cb(struct findall_data *data, void *rock);
 
 /* Find all mailboxes that match 'pattern'. */
@@ -266,6 +267,19 @@ int mboxlist_findone(struct namespace *namespace,
                      const char *intname, int isadmin,
                      const char *userid, const struct auth_state *auth_state,
                      findall_cb *proc, void *rock);
+
+int mboxlist_findall_withp(struct namespace *namespace,
+                     const char *pattern, int isadmin,
+                     const char *userid, const struct auth_state *auth_state,
+                     findall_p *p, findall_cb *cb, void *rock);
+int mboxlist_findallmulti_withp(struct namespace *namespace,
+                          const strarray_t *patterns, int isadmin,
+                          const char *userid, const struct auth_state *auth_state,
+                          findall_p *p, findall_cb *cb, void *rock);
+int mboxlist_findone_withp(struct namespace *namespace,
+                     const char *intname, int isadmin,
+                     const char *userid, const struct auth_state *auth_state,
+                     findall_p *p, findall_cb *cb, void *rock);
 
 /* Find a mailbox's parent (if any) */
 int mboxlist_findparent(const char *mboxname,
@@ -305,6 +319,17 @@ int mboxlist_findsubmulti(struct namespace *namespace,
                           const strarray_t *patterns, int isadmin,
                           const char *userid, const struct auth_state *auth_state,
                           findall_cb *proc, void *rock,
+                          int force);
+
+int mboxlist_findsub_withp(struct namespace *namespace,
+                     const char *pattern, int isadmin,
+                     const char *userid, const struct auth_state *auth_state,
+                     findall_p *p, findall_cb *cb, void *rock,
+                     int force);
+int mboxlist_findsubmulti_withp(struct namespace *namespace,
+                          const strarray_t *patterns, int isadmin,
+                          const char *userid, const struct auth_state *auth_state,
+                          findall_p *p, findall_cb *cb, void *rock,
                           int force);
 
 /* given a mailbox 'name', where should we stage messages for it?
