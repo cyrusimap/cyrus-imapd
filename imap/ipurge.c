@@ -111,6 +111,7 @@ int main (int argc, char *argv[]) {
   int option;           /* getopt() returns an int */
   char *alt_config = NULL;
   int matchmailbox = 0;
+  int r;
 
   while ((option = getopt(argc, argv, "C:hxd:b:k:m:fsMXionv")) != EOF) {
     switch (option) {
@@ -179,14 +180,15 @@ int main (int argc, char *argv[]) {
 
   cyrus_init(alt_config, "ipurge", 0, CONFIG_NEED_PARTITION_DATA);
 
+  /* Set namespace -- force standard (internal) */
+  if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {
+    fatal(error_message(r), EX_CONFIG);
+  }
+  mboxevent_setnamespace(&purge_namespace);
+
   if (optind == argc) { /* do the whole partition */
     mboxlist_findall(NULL, "*", 1, 0, 0, purge_findall, NULL);
   } else if (matchmailbox) {
-    int r;
-    /* Set namespace -- force standard (internal) */
-    if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {
-        fatal(error_message(r), EX_CONFIG);
-    }
     expand_mboxnames(argc-optind, (const char **)argv+optind);
   } else {
     /* do all matching mailboxes in one pass */
