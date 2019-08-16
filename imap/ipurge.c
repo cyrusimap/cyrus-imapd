@@ -178,6 +178,7 @@ int main (int argc, char *argv[]) {
 
   /* setup for mailbox event notifications */
   mboxevent_init();
+  mboxevent_setnamespace(mboxname_get_adminnamespace());
 
   mboxlist_init(0);
   mboxlist_open(NULL);
