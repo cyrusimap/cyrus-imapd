@@ -46,7 +46,7 @@ One per user:
 * `Mailbox Keys (<userid>.mboxkey)`_
 * `Seen State (<userid>.seen)`_
 * `Subscriptions (<userid>.sub)`_
-* `Search Indexes (cyrus.squat, <userid>.xapianactive)`_
+* `Search Indexes (cyrus.squat, <userid>.xapianactive, cyrus.indexed.db)`_
 
 .. _imap-concepts-deployment-db-mailboxes:
 
@@ -59,7 +59,7 @@ This database contains the master list of all mailboxes on the system. The datab
 
     Data: <Type Number>SP<Partition>SP<ACL (space-separated userid/rights pairs)>
 
-File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, `sql`_, or `twoskip`_.
+File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `sql`_.
 
 .. _imap-concepts-deployment-db-annotations:
 
@@ -213,13 +213,19 @@ File format not selectable.
 
 .. _imap-concepts-deployment-db-search:
 
-Search Indexes (cyrus.squat, <userid>.xapianactive)
+Search Indexes (cyrus.squat, <userid>.xapianactive, cyrus.indexed.db)
 ---------------------------------------------------
 
-This is either cyrus.squat in each folder, or if you're using xapian a single
-<userid>.xapianactive file listing active databases by tier name and number.
+This is either cyrus.squat in each folder, or if you're using Xapian a single
+<userid>.xapianactive file listing active databases with tier name and number.
 
-File type can be: `twoskip`_ (default), `flat`_, or `skiplist`_.
+cyrus.indexed.db is used by the Xapian search engine.  Its file type
+can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `zeroskip`_ and is determined
+by `search_indexed_db` in :cyrusman:`imapd.conf(5)`.
+
+The xapianactive file contains a space separated list of tiers and databases within
+the tier.  The first element is the active tier/database, to which new entries are
+added by `squatter -R`.
 
 .. _imap-concepts-deployment-db-zoneinfo:
 
