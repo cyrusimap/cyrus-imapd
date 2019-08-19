@@ -359,7 +359,7 @@ static int store_submission(struct mailbox *mailbox,
         /* Already sent */
         msglen = 0;
         holduntil = time(0);
-        strarray_append(&flags, "\\Expunged");
+        strarray_append(&flags, "\\Answered");
     }
 
     /* Prepare to stage the message */
@@ -835,7 +835,7 @@ static message_t *msg_from_subid(struct mailbox *submbox, const char *id)
         struct index_record record;
         int r = mailbox_find_index_record(submbox, uid, &record);
 
-        if (!r && !(record.system_flags & FLAG_DELETED)) {
+        if (!r && record.uid && !(record.internal_flags & FLAG_INTERNAL_EXPUNGED)) {
             msg = message_new_from_record(submbox, &record);
         }
     }
@@ -882,7 +882,7 @@ static void _emailsubmission_update(struct mailbox *submbox,
     if (!sub) {
         if (!r) r = IMAP_IOERROR;
 
-        *set_err = json_pack("{s:s}", "type", error_message(r));
+        *set_err = json_pack("{s:s, s:s}", "type", "serverFail", "description", error_message(r));
         goto done;
     }
 
@@ -909,15 +909,11 @@ static void _emailsubmission_update(struct mailbox *submbox,
                     }
                 }
                 else if (!strcmp(arg, "undoStatus")) {
-                    if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
-                        if (!(record->internal_flags & FLAG_INTERNAL_UNLINKED)) {
-                            /* Already sent */
-                            *set_err = json_pack("{s:s}", "type", "cannotUnsend");
-                        }
-                        else if (!strcmp(strval, "canceled")) {
-                            /* Already canceled */
-                            continue;
-                        }
+                    if (record->system_flags & FLAG_ANSWERED) {
+                        if (!strcmp(strval, "final")) continue;
+                    }
+                    else if (record->system_flags & FLAG_FLAGGED) {
+                        if (!strcmp(strval, "canceled")) continue;
                     }
                     else if (!strcmp(strval, "pending")) {
                         continue;
@@ -959,11 +955,10 @@ static void _emailsubmission_update(struct mailbox *submbox,
         struct index_record newrecord;
 
         memcpy(&newrecord, record, sizeof(struct index_record));
-        newrecord.internal_flags |=
-            FLAG_INTERNAL_UNLINKED | FLAG_INTERNAL_EXPUNGED;
+        newrecord.system_flags |= FLAG_FLAGGED;
 
         r = mailbox_rewrite_index_record(submbox, &newrecord);
-        if (r) *set_err = json_pack("{s:s}", "type", error_message(r));
+        if (r) *set_err = json_pack("{s:s, s:s}", "type", "serverFail", "description", error_message(r));
     }
 
   done:
@@ -975,7 +970,7 @@ static void _emailsubmission_destroy(struct mailbox *submbox,
                                      json_t **set_err)
 {
     message_t *msg = msg_from_subid(submbox, id);
-    struct index_record record;
+    struct index_record newrecord;
     int r = 0;
 
     if (!msg) {
@@ -984,10 +979,10 @@ static void _emailsubmission_destroy(struct mailbox *submbox,
         return;
     }
 
-    memcpy(&record, msg_record(msg), sizeof(struct index_record));
-    record.system_flags |= FLAG_DELETED;
+    memcpy(&newrecord, msg_record(msg), sizeof(struct index_record));
+    newrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
 
-    r = mailbox_rewrite_index_record(submbox, &record);
+    r = mailbox_rewrite_index_record(submbox, &newrecord);
     if (r) *set_err = json_pack("{s:s}", "type", error_message(r));
 
     message_unref(&msg);
@@ -1038,15 +1033,17 @@ static int getsubmission(struct jmap_get *get,
 
         /* undoStatus */
         if (jmap_wantprop(get->props, "undoStatus")) {
-            uint32_t internal;
+            uint32_t system_flags;
             const char *status = "pending";
 
-            r = message_get_internalflags(msg, &internal);
+            r = message_get_systemflags(msg, &system_flags);
             if (r) goto done;
 
-            if (internal & FLAG_INTERNAL_EXPUNGED) {
-                status = (internal & FLAG_INTERNAL_UNLINKED) ?
-                    "canceled" : "final";
+            if (system_flags & FLAG_ANSWERED) {
+                status = "final";
+            }
+            else if (system_flags & FLAG_FLAGGED) {
+                status = "canceled";
             }
 
             json_object_set_new(sub, "undoStatus", json_string(status));
@@ -1189,14 +1186,11 @@ static int jmap_emailsubmission_get(jmap_req_t *req)
         }
     }
     else {
-        struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, 0);
+        struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
         const message_t *msg;
         while ((msg = mailbox_iter_step(iter))) {
             char id[JMAP_SUBID_SIZE];
-            uint32_t flags, uid;
-
-            r = message_get_systemflags((message_t *) msg, &flags);
-            if (r || (flags & FLAG_DELETED)) continue;
+            uint32_t uid;
 
             r = message_get_uid((message_t *) msg, &uid);
             if (r) continue;
@@ -1450,7 +1444,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     mboxlist_entry_free(&mbentry);
     if (r) goto done;
 
-    struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, 0);
+    struct mailbox_iter *iter = mailbox_iter_init(mbox, changes.since_modseq, 0);
     const message_t *msg;
     size_t changes_count = 0;
     modseq_t highest_modseq = 0;
@@ -1461,11 +1455,8 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
         /* Create id from message UID, using 'S' prefix */
         sprintf(id, "S%u", record->uid);
 
-        /* Skip any changes prior to since modseq */
-        if (record->modseq <= changes.since_modseq) continue;
-
         /* Skip any submissions created AND deleted since modseq */
-        if ((record->system_flags & FLAG_DELETED) &&
+        if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
             record->createdmodseq > changes.since_modseq) continue;
 
         /* Apply limit, if any */
@@ -1478,7 +1469,7 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
         if (highest_modseq < record->modseq) highest_modseq = record->modseq;
 
         /* Add change to the proper array */
-        if (record->system_flags & FLAG_DELETED) {
+        if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
             json_array_append_new(changes.destroyed, json_string(id));
         }
         else if (record->createdmodseq > changes.since_modseq) {
@@ -1681,13 +1672,15 @@ static int submission_filter_match(void *vf, void *rock)
 
     /* undoStatus */
     if (f->undoStatus) {
-        if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
-            if (record->internal_flags & FLAG_INTERNAL_UNLINKED) {
-                if (strcmp(f->undoStatus, "canceled")) return 0;
-            }
-            else if (strcmp(f->undoStatus, "final")) return 0;
+        if (record->system_flags & FLAG_ANSWERED) {
+            if (strcmp(f->undoStatus, "final")) return 0;
         }
-        else if (strcmp(f->undoStatus, "pending")) return 0;
+        else if (record->system_flags & FLAG_FLAGGED) {
+            if (strcmp(f->undoStatus, "canceled")) return 0;
+        }
+        else {
+            if (strcmp(f->undoStatus, "pending")) return 0;
+        }
     }
 
     /* identityIds / emailIds / ThreadIds */
@@ -1882,13 +1875,11 @@ static int jmap_emailsubmission_query(jmap_req_t *req)
 
     ptrarray_t matches = PTRARRAY_INITIALIZER;
     struct sub_match *anchor = NULL;
-    struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, 0);
+    struct mailbox_iter *iter = mailbox_iter_init(mbox, 0, ITER_SKIP_EXPUNGED);
     const message_t *msg;
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         submission_filter_rock sfrock = { msg, NULL, NULL, NULL };
-
-        if (record->system_flags & FLAG_DELETED) continue;
 
         if (query.filter) {
             int match = jmap_filter_match(parsed_filter,
