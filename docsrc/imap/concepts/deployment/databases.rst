@@ -214,14 +214,14 @@ File format not selectable.
 .. _imap-concepts-deployment-db-search:
 
 Search Indexes (cyrus.squat, <userid>.xapianactive, cyrus.indexed.db)
----------------------------------------------------
+---------------------------------------------------------------------
 
 This is either cyrus.squat in each folder, or if you're using Xapian a single
 <userid>.xapianactive file listing active databases with tier name and number.
 
 cyrus.indexed.db is used by the Xapian search engine.  Its file type
-can be: `twoskip`_ (default), `flat`_, `skiplist`_, or `zeroskip`_ and is determined
-by `search_indexed_db` in :cyrusman:`imapd.conf(5)`.
+can be: `twoskip`_ (default), `flat`_, `skiplist`_, or ``zeroskip`` and is
+determined by `search_indexed_db` in :cyrusman:`imapd.conf(5)`.
 
 The xapianactive file contains a space separated list of tiers and databases within
 the tier.  The first element is the active tier/database, to which new entries are
