@@ -3376,7 +3376,8 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             if (r) goto done;
 
             /* reset the the namebuffer */
-            r = (*rock->cb)(NULL, rock->procrock);
+            if (rock->cb)
+                r = (*rock->cb)(NULL, rock->procrock);
             if (r) goto done;
         }
 
@@ -3389,7 +3390,8 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
         /* "Alt Prefix" folders */
         if (rock->namespace->isalt) {
             /* reset the the namebuffer */
-            r = (*rock->cb)(NULL, rock->procrock);
+            if (rock->cb)
+                r = (*rock->cb)(NULL, rock->procrock);
             if (r) goto done;
 
             rock->mb_category = MBNAME_ALTINBOX;
@@ -3436,7 +3438,8 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             size_t thislen = (isadmin || crossdomains) ? 0 : strlen(domainpat);
 
             /* reset the the namebuffer */
-            r = (*rock->cb)(NULL, rock->procrock);
+            if (rock->cb)
+                r = (*rock->cb)(NULL, rock->procrock);
             if (r) goto done;
 
             r = mboxlist_find_category(rock, domainpat, thislen);
@@ -3458,7 +3461,8 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
             rock->mb_category = MBNAME_SHARED;
 
             /* reset the the namebuffer */
-            r = (*rock->cb)(NULL, rock->procrock);
+            if (rock->cb)
+                r = (*rock->cb)(NULL, rock->procrock);
             if (r) goto done;
 
             /* iterate through all the non-user folders on the server */
@@ -3468,7 +3472,8 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
     }
 
     /* finish with a reset call always */
-    r = (*rock->cb)(NULL, rock->procrock);
+    if (rock->cb)
+        r = (*rock->cb)(NULL, rock->procrock);
 
  done:
     for (i = 0; i < rock->globs.count; i++) {
