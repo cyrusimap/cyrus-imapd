@@ -2844,7 +2844,8 @@ good:
         /* mbname confirms that it's an exact match */
         if (rock->matchlen == (int) strlen(extname))
             fdata.mbname = rock->mbname;
-        return rock->p(&fdata, rock->procrock);
+        if (!rock->p(&fdata, rock->procrock)) goto nomatch;
+        return 1;
     }
     else {
         return 1;
