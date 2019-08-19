@@ -1493,6 +1493,13 @@ static int jmap_emailsubmission_changes(jmap_req_t *req)
     jmap_closembox(req, &mbox);
 
     /* Set new state */
+    // XXX - this is wrong!  If we want to do this, we need to sort all the changes by
+    // their modseq and then only send some of them.  Otherwise consider the following:
+    // UID=1 HMS=5
+    // UID=3 HMS=15
+    // UID=4 HMS=10
+    // if we issued a query for changes since 6, max_changes 1 - we'd get back
+    // has_more_changes: true, new_modseq 15, and we'd never see UID=4 as having changed.
     changes.new_modseq = changes.has_more_changes ?
         highest_modseq : jmap_highestmodseq(req, MBTYPE_SUBMISSION);
 
