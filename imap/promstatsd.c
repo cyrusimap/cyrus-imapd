@@ -322,6 +322,10 @@ static void free_partition_data(void *ptr)
     free(pdata);
 }
 
+/* Tricky optimisation to avoid excess unlocking in twoskip:
+ * instead of using the cb hook, we use the p hook and ALWAYS return 0.
+ * We wouldn't need this if cyrusdb had a real readonly foreach API
+ */
 static int count_users_mailboxes(struct findall_data *data, void *rock)
 {
     hash_table *h = (hash_table *) rock;
@@ -374,6 +378,12 @@ struct quota_cb_rock {
     hash_table *h;
 };
 
+/* n.b. This can't use the same tricky optimisation as count_users_mailboxes()
+ * does, because we need to be able to break the loop early when we reach a
+ * quotaroot boundary, and the 'p' callback doesn't provide that functionality.
+ * Luckily(??) we're "only" iterating a quotaroot at a time here, not the
+ * entire mailboxes.db
+ */
 static int quota_cb(struct findall_data *data, void *rock)
 {
     static char *seen_partition = NULL;
@@ -561,8 +571,10 @@ static void do_collate_usage(struct buf *buf)
 
     construct_hash_table(&h, 10, 0); /* 10 partitions is probably enough right */
 
-    r = mboxlist_findall(NULL /* admin namespace */, "*", 1, NULL, NULL,
-                         count_users_mailboxes, &h);
+    r = mboxlist_findall_withp(NULL /* admin namespace */,
+                               "*", 1,
+                               NULL, NULL,
+                               count_users_mailboxes, NULL, &h);
     if (!r)
         r = quota_foreach(NULL, count_quota_commitments, &h, NULL);
 
