@@ -3575,7 +3575,8 @@ static int mailbox_update_email_alarms(struct mailbox *mailbox,
     }
 
     /* remove associated alarms if canceled or final */
-    else if (new->system_flags & (FLAG_FLAGGED | FLAG_ANSWERED)) {
+    else if ((mailbox->mbtype & MBTYPE_SUBMISSION) &&
+             (new->system_flags & (FLAG_FLAGGED | FLAG_ANSWERED))) {
         r = caldav_alarm_delete_record(mailbox->name, new->uid);
     }
 
