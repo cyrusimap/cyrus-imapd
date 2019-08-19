@@ -3569,22 +3569,21 @@ static int mailbox_update_email_alarms(struct mailbox *mailbox,
     if (!old && (new->internal_flags & FLAG_INTERNAL_UNLINKED))
         return 0;
 
-    if (new->internal_flags & FLAG_INTERNAL_UNLINKED) {
-        /* remove associated alarms */
+    /* remove associated alarms if deleted */
+    if (new->internal_flags & FLAG_INTERNAL_EXPUNGED) {
         r = caldav_alarm_delete_record(mailbox->name, new->uid);
     }
+
+    /* remove associated alarms if canceled or final */
+    else if (new->system_flags & (FLAG_FLAGGED | FLAG_ANSWERED)) {
+        r = caldav_alarm_delete_record(mailbox->name, new->uid);
+    }
+
+    /* touch or create otherwise */
     else if (old && (old->uid == new->uid)) {
-        if (new->internal_flags & FLAG_INTERNAL_EXPUNGED) {
-            /* remove associated alarms */
-            r = caldav_alarm_delete_record(mailbox->name, new->uid);
-        }
-        else {
-            /* make sure record is up to date */
-            r = caldav_alarm_touch_record(mailbox, new);
-        }
+        r = caldav_alarm_touch_record(mailbox, new);
     }
     else {
-        /* add new alarms */
         r = caldav_alarm_add_record(mailbox, new, NULL);
     }
 

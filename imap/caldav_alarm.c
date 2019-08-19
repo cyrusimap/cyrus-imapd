@@ -856,7 +856,7 @@ done_item:
 
 #ifdef WITH_JMAP
 static void process_futurerelease(struct mailbox *mailbox,
-                                    struct index_record *record)
+                                  struct index_record *record)
 {
     message_t *m = message_new_from_record(mailbox, record);
     struct buf buf = BUF_INITIALIZER;
@@ -865,6 +865,20 @@ static void process_futurerelease(struct mailbox *mailbox,
 
     syslog(LOG_DEBUG, "processing future release for mailbox %s uid %u",
            mailbox->name, record->uid);
+
+    if (record->system_flags & FLAG_ANSWERED) {
+        syslog(LOG_NOTICE, "email already sent for mailbox %s uid %u",
+               mailbox->name, record->uid);
+        r = IMAP_NO_NOSUCHMSG;
+        goto done;
+    }
+
+    if (record->system_flags & FLAG_FLAGGED) {
+        syslog(LOG_NOTICE, "submission canceled for mailbox %s uid %u",
+               mailbox->name, record->uid);
+        r = IMAP_NO_NOSUCHMSG;
+        goto done;
+    }
 
     /* Parse the submission object from the header field */
     r = message_get_field(m, JMAP_SUBMISSION_HDR, MESSAGE_RAW, &buf);
@@ -911,11 +925,11 @@ static void process_futurerelease(struct mailbox *mailbox,
     smtp_envelope_fini(&smtpenv);
     smtpclient_close(&sm);
 
-    /* Expunge the resource */
-    record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
+    /* Mark the email as sent */
+    record->system_flags |= FLAG_ANSWERED;
     r = mailbox_rewrite_index_record(mailbox, record);
     if (r) {
-        syslog(LOG_ERR, "expunging record (%s:%u) failed: %s",
+        syslog(LOG_ERR, "marking emailsubmission as sent (%s:%u) failed: %s",
                mailbox->name, record->uid, error_message(r));
     }
 
