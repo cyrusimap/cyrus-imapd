@@ -59,7 +59,6 @@
 #include "sieve/sieve_interface.h"
 #include "sieve/bc_parse.h"
 #include "sync_support.h"
-#include "times.h"
 #include "user.h"
 #include "util.h"
 
@@ -363,16 +362,6 @@ done:
     jmap_get_fini(&get);
 
     return 0;
-}
-
-static int json_is_utcdate(json_t *json)
-{
-    const char *date = json_string_value(json);
-    struct offsettime t;
-
-    return (date &&
-            (offsettime_from_iso8601(date, &t) == (int) strlen(date)) &&
-            (t.tm_off == 0));
 }
 
 static void vacation_update(const char *userid, const char *id,

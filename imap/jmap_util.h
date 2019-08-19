@@ -74,4 +74,6 @@ extern char *jmap_pointer_decode(const char *src, size_t len);
 /* Remove all properties in jobj that have no key in props */
 extern void jmap_filterprops(json_t *jobj, hash_table *props);
 
+extern int json_is_utcdate(json_t *json);
+
 #endif /* JMAP_UTIL_H */

@@ -47,6 +47,7 @@
 
 #include "hash.h"
 #include "jmap_util.h"
+#include "times.h"
 
 EXPORTED int jmap_readprop_full(json_t *root, const char *prefix, const char *name,
                               int mandatory, json_t *invalid, const char *fmt,
@@ -257,3 +258,14 @@ EXPORTED void jmap_filterprops(json_t *jobj, hash_table *props)
         }
     }
 }
+
+EXPORTED int json_is_utcdate(json_t *json)
+{
+    const char *date = json_string_value(json);
+    struct offsettime t;
+
+    return (date &&
+            (offsettime_from_iso8601(date, &t) == (int) strlen(date)) &&
+            (t.tm_off == 0));
+}
+
