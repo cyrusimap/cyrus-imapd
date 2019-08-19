@@ -4384,6 +4384,7 @@ struct email_getargs {
     short fetch_html_body;
     short fetch_all_body;
     size_t max_body_bytes;
+    char *snoozed_uniqueid;
     /* Request-scoped context */
     struct email_getcontext ctx;
 };
@@ -4394,6 +4395,7 @@ struct email_getargs {
         NULL, \
         PTRARRAY_INITIALIZER, \
         PTRARRAY_INITIALIZER, \
+        0, \
         0, \
         0, \
         0, \
@@ -4428,6 +4430,8 @@ static void _email_getargs_fini(struct email_getargs *args)
     }
     ptrarray_fini(&args->want_bodyheaders);
     _email_getcontext_fini(&args->ctx);
+
+    free(args->snoozed_uniqueid);
 }
 
 /* A wrapper to aggregate JMAP keywords over a set of message records.
@@ -5195,6 +5199,30 @@ static int _email_get_meta(jmap_req_t *req,
         if (!r && buf_len(&buf)) jval = json_real(atof(buf_cstring(&buf)));
         json_object_set_new(email, "spamScore", jval);
         buf_free(&buf);
+    }
+
+    if (jmap_wantprop(props, "snoozedUntil")) {
+        struct mailbox *mailbox = NULL;
+        struct buf val = BUF_INITIALIZER;
+        int r;
+
+        r = msgrecord_get_mailbox(msg->mr, &mailbox);
+        if (!r && (mailbox->i.options & OPT_IMAP_HAS_ALARMS) &&
+            !strcmp(mailbox->uniqueid, args->snoozed_uniqueid)) {
+            /* get the snoozed-until annotation */
+            const char *annot = IMAP_ANNOT_NS "snoozed-until";
+
+            msgrecord_annot_lookup(msg->mr, annot, "", &val);
+        }
+
+        if (buf_len(&val)) {
+            json_object_set_new(email, "snoozedUntil",
+                                json_string(buf_cstring(&val)));
+        }
+        else {
+            json_object_set_new(email, "snoozedUntil", json_null());
+        }
+        buf_free(&val);
     }
 
 done:
@@ -6243,6 +6271,11 @@ static const jmap_property_t email_props[] = {
         JMAP_MAIL_EXTENSION,
         0
     },
+    {
+        "snoozedUntil",
+        JMAP_MAIL_EXTENSION,
+        0
+    },
     { NULL, NULL, 0 }
 };
 
@@ -6284,6 +6317,10 @@ static int jmap_email_get(jmap_req_t *req)
         if (args.bodyprops->size == 0) {
             _email_init_default_props(args.bodyprops);
         }
+    }
+
+    if (jmap_wantprop(args.props, "snoozedUntil")) {
+        jmap_mailbox_find_role(req, "snoozed", NULL, &args.snoozed_uniqueid);
     }
 
     if (_isthreadsonly(req->args))
@@ -8712,6 +8749,7 @@ struct email_update {
     json_t *full_keywords;    /* Patched JMAP keywords across index records */
     json_t *mailboxids;       /* JMAP Email/set mailboxIds argument */
     int patch_mailboxids;     /* True if mailboxids is a patch object */
+    const char *snoozed;      /* JMAP Email/set snoozedUntil argument */
 };
 
 static void _email_update_free(struct email_update *update)
@@ -8860,8 +8898,33 @@ done:
     return r;
 }
 
+struct email_bulkupdate {
+    jmap_req_t *req;                /* JMAP Email/set request context */
+    hash_table updates_by_email_id; /* Map to ptrarray of email_update */
+    hash_table uidrecs_by_email_id; /* Map to ptrarray of email_uidrec, excluding expunged */
+    hash_table plans_by_mbox_id;    /* Map to email_updateplan */
+    json_t *set_errors;             /* JMAP SetError by email id */
+    struct seen *seendb;            /* Seen database for shared mailboxes, or NULL */
+    char *snoozed_uniqueid;
+    ptrarray_t *cur_mboxrecs;       /* List of current mbox and UI recs, including expunged */
+    ptrarray_t *new_mboxrecs;       /* New mbox and UID records allocated by planner */
+};
+
+#define _EMAIL_BULKUPDATE_INITIALIZER {\
+    NULL, \
+    HASH_TABLE_INITIALIZER, \
+    HASH_TABLE_INITIALIZER, \
+    HASH_TABLE_INITIALIZER, \
+    json_object(), \
+    NULL, \
+    NULL, \
+    NULL, \
+    ptrarray_new() \
+}
+
 static void _email_update_parse(json_t *jemail,
                                 struct jmap_parser *parser,
+                                struct email_bulkupdate *bulk,
                                 struct email_update *update)
 {
     struct buf buf = BUF_INITIALIZER;
@@ -8951,6 +9014,27 @@ static void _email_update_parse(json_t *jemail,
         }
     }
     update->mailboxids = mailboxids;
+
+    /* Is snoozedUntil being changed? */
+    json_t *snoozedUntil = json_object_get(jemail, "snoozedUntil");
+    if (JNOTNULL(snoozedUntil)) {
+        if (!bulk->snoozed_uniqueid) {
+            jmap_mailbox_find_role(bulk->req, "snoozed",
+                                   NULL, &bulk->snoozed_uniqueid);
+
+            if (!bulk->snoozed_uniqueid)
+                bulk->snoozed_uniqueid = xstrdup("");
+        }
+
+        if (bulk->snoozed_uniqueid && *bulk->snoozed_uniqueid &&
+            json_is_utcdate(snoozedUntil)) {
+            update->snoozed = json_string_value(snoozedUntil);
+        }
+        else {
+            jmap_parser_invalid(parser, "snoozedUntil");
+        }
+    }
+
     buf_free(&buf);
 }
 
@@ -8962,34 +9046,13 @@ struct email_updateplan {
     ptrarray_t copy;      /* Array of array of email_uidrec, grouped by mailbox */
     ptrarray_t setflags;  /* Array of email_uidrec */
     ptrarray_t delete;    /* Array of email_uidrec */
+    ptrarray_t snooze;    /* Array of email_uidrec */
     int needrights;       /* Required ACL bits set */
     int use_seendb;       /* Set if this mailbox requires seen.db */
     struct email_mboxrec *mboxrec; /* Mailbox record */
     struct seendata old_seendata;   /* Lock-read seen data from database */
     struct seqset *old_seenseq;     /* Parsed seen sequence before update */
 };
-
-struct email_bulkupdate {
-    jmap_req_t *req;                /* JMAP Email/set request context */
-    hash_table updates_by_email_id; /* Map to ptrarray of email_update */
-    hash_table uidrecs_by_email_id; /* Map to ptrarray of email_uidrec, excluding expunged */
-    hash_table plans_by_mbox_id;    /* Map to email_updateplan */
-    json_t *set_errors;             /* JMAP SetError by email id */
-    struct seen *seendb;            /* Seen database for shared mailboxes, or NULL */
-    ptrarray_t *cur_mboxrecs;       /* List of current mbox and UI recs, including expunged */
-    ptrarray_t *new_mboxrecs;       /* New mbox and UID records allocated by planner */
-};
-
-#define _EMAIL_BULKUPDATE_INITIALIZER {\
-    NULL, \
-    HASH_TABLE_INITIALIZER, \
-    HASH_TABLE_INITIALIZER, \
-    HASH_TABLE_INITIALIZER, \
-    json_object(), \
-    NULL, \
-    NULL, \
-    ptrarray_new() \
-}
 
 void _email_updateplan_free_p(void* p)
 {
@@ -9005,6 +9068,7 @@ void _email_updateplan_free_p(void* p)
     ptrarray_fini(&plan->copy);
     ptrarray_fini(&plan->setflags);
     ptrarray_fini(&plan->delete);
+    ptrarray_fini(&plan->snooze);
     free(plan);
 }
 
@@ -9029,6 +9093,7 @@ void _email_bulkupdate_close(struct email_bulkupdate *bulk)
     _email_mboxrecs_free(&bulk->cur_mboxrecs);
     _email_mboxrecs_free(&bulk->new_mboxrecs);
     json_decref(bulk->set_errors);
+    free(bulk->snoozed_uniqueid);
 }
 
 static struct email_updateplan *_email_bulkupdate_addplan(struct email_bulkupdate *bulk,
@@ -9075,6 +9140,13 @@ static void _email_updateplan_error(struct email_updateplan *plan, int errcode, 
     }
     for (i = 0; i < ptrarray_size(&plan->delete); i++) {
         struct email_uidrec *uidrec = ptrarray_nth(&plan->delete, i);
+        if (json_object_get(set_errors, uidrec->email_id)) {
+            continue;
+        }
+        json_object_set(set_errors, uidrec->email_id, err);
+    }
+    for (i = 0; i < ptrarray_size(&plan->snooze); i++) {
+        struct email_uidrec *uidrec = ptrarray_nth(&plan->snooze, i);
         if (json_object_get(set_errors, uidrec->email_id)) {
             continue;
         }
@@ -9627,6 +9699,7 @@ static void _email_bulkupdate_plan(struct email_bulkupdate *bulk, ptrarray_t *up
         }
         ptrarray_sort(&plan->setflags, _email_uidrec_compareuid_cb);
         ptrarray_sort(&plan->delete, _email_uidrec_compareuid_cb);
+        ptrarray_sort(&plan->snooze, _email_uidrec_compareuid_cb);
     }
     hash_iter_free(&iter);
 }
@@ -9884,6 +9957,13 @@ static void _email_bulkupdate_dump(struct email_bulkupdate *bulk, json_t *jdump)
         }
         json_object_set_new(jplan, "delete", jdelete);
 
+        json_t *jsnooze = json_array();
+        for (j = 0; j < ptrarray_size(&plan->snooze); j++) {
+            struct email_uidrec *uidrec = ptrarray_nth(&plan->snooze, j);
+            json_array_append_new(jsnooze, json_integer(uidrec->uid));
+        }
+        json_object_set_new(jplan, "snooze", jsnooze);
+
         json_object_set_new(jplans, plan->mboxname, jplan);
     }
     hash_iter_free(&iter);
@@ -9960,6 +10040,11 @@ static void _email_bulkupdate_exec_copy(struct email_bulkupdate *bulk)
                                                           &bulk->updates_by_email_id);
                 if (update->keywords || update->full_keywords) {
                     ptrarray_append(&plan->setflags, new_uidrec);
+                }
+
+                if (update->snoozed &&
+                    !strcmp(plan->mbox_id, bulk->snoozed_uniqueid)) {
+                    ptrarray_append(&plan->snooze, new_uidrec);
                 }
             }
 
@@ -10101,6 +10186,44 @@ static void _email_bulkupdate_exec_delete(struct email_bulkupdate *bulk)
     hash_iter_free(&iter);
 }
 
+static void _email_bulkupdate_exec_snooze(struct email_bulkupdate *bulk)
+{
+    hash_iter *iter = hash_table_iter(&bulk->plans_by_mbox_id);
+    while (hash_iter_next(iter)) {
+        struct email_updateplan *plan = hash_iter_val(iter);
+        int j;
+
+        /* Process uid records */
+        for (j = 0; j < ptrarray_size(&plan->setflags); j++) {
+            struct email_uidrec *uidrec = ptrarray_nth(&plan->setflags, j);
+            if (json_object_get(bulk->set_errors, uidrec->email_id)) {
+                continue;
+            }
+            const char *email_id = uidrec->email_id;
+            struct email_update *update =
+                hash_lookup(email_id, &bulk->updates_by_email_id);
+
+            /* Write annotation */
+            msgrecord_t *mrw = msgrecord_from_uid(plan->mbox, uidrec->uid);
+            int r = 0;
+
+            if (mrw) {
+                const char *annot = IMAP_ANNOT_NS "snoozed-until";
+                struct buf val = BUF_INITIALIZER;
+
+                buf_init_ro_cstr(&val, update->snoozed);
+                r = msgrecord_annot_write(mrw, annot, "", &val);
+                msgrecord_unref(&mrw);
+            }
+
+            if (r) {
+                json_object_set_new(bulk->set_errors, email_id, jmap_server_error(r));
+            }
+        }
+    }
+    hash_iter_free(&iter);
+}
+
 
 static void _email_bulkupdate_exec(struct email_bulkupdate *bulk,
                                    json_t *updated,
@@ -10111,6 +10234,7 @@ static void _email_bulkupdate_exec(struct email_bulkupdate *bulk,
     _email_bulkupdate_exec_copy(bulk);
     _email_bulkupdate_exec_setflags(bulk);
     _email_bulkupdate_exec_delete(bulk);
+    _email_bulkupdate_exec_snooze(bulk);
 
     /* Report results */
     hash_iter *iter = hash_table_iter(&bulk->updates_by_email_id);
@@ -10137,6 +10261,7 @@ static void _email_update_bulk(jmap_req_t *req,
                                json_t *not_updated,
                                json_t *debug)
 {
+    struct email_bulkupdate bulkupdate = _EMAIL_BULKUPDATE_INITIALIZER;
     ptrarray_t updates = PTRARRAY_INITIALIZER;
     int i;
 
@@ -10181,11 +10306,12 @@ static void _email_update_bulk(jmap_req_t *req,
     /* Parse updates and add valid updates to todo list. */
     const char *email_id;
     json_t *jval;
+    bulkupdate.req = req;
     json_object_foreach(update, email_id, jval) {
         struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
         struct email_update *update = xzmalloc(sizeof(struct email_update));
         update->email_id = email_id;
-        _email_update_parse(jval, &parser, update);
+        _email_update_parse(jval, &parser, &bulkupdate, update);
         if (json_array_size(parser.invalid)) {
             json_object_set_new(not_updated, email_id,
                     json_pack("{s:s s:O}", "type", "invalidProperties",
@@ -10200,7 +10326,6 @@ static void _email_update_bulk(jmap_req_t *req,
     if (!ptrarray_size(&updates)) goto done;
 
     /* Build and execute bulk update */
-    struct email_bulkupdate bulkupdate = _EMAIL_BULKUPDATE_INITIALIZER;
     _email_bulkupdate_open(req, &bulkupdate, &updates);
     _email_bulkupdate_exec(&bulkupdate, updated, not_updated, debug);
     _email_bulkupdate_close(&bulkupdate);

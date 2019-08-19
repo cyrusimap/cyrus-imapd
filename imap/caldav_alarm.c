@@ -61,6 +61,7 @@
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "msgrecord.h"
+#include "times.h"
 #include "util.h"
 #include "xstrlcat.h"
 #include "xmalloc.h"
@@ -947,15 +948,23 @@ static void process_futurerelease(struct mailbox *mailbox,
 }
 
 static void process_snoozed(struct mailbox *mailbox,
-                            struct index_record *record)
+                            struct index_record *record, time_t runtime)
 {
-    int nolink = !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE);
+    const char *annot = IMAP_ANNOT_NS "snoozed-until";
+    struct buf buf = BUF_INITIALIZER;
     msgrecord_t *mr = NULL;
     mbname_t *mbname = NULL;
     struct appendstate as;
     struct mailbox *inbox = NULL;
     struct auth_state *authstate = NULL;
-    const char *userid;
+    const char *userid, *inboxname;
+    time_t wakeup;
+    struct stagemsg *stage = NULL;
+    strarray_t flags = STRARRAY_INITIALIZER;
+    struct body *body = NULL;
+    char datestr[80];
+    FILE *f = NULL;
+
     int r = 0;
 
     syslog(LOG_DEBUG, "processing snoozed email for mailbox %s uid %u",
@@ -964,22 +973,63 @@ static void process_snoozed(struct mailbox *mailbox,
     mr = msgrecord_from_index_record(mailbox, record);
     if (!mr) goto done;
 
+    /* Get the snoozed-until annotation */
+    r = msgrecord_annot_lookup(mr, annot, "", &buf);
+    if (r) goto done;
+
+    time_from_iso8601(buf_cstring(&buf), &wakeup);
+    buf_free(&buf);
+
+    /* Check runtime against wakup and adjust as necessary */
+    if (wakeup > runtime) {
+        update_alarmdb(mailbox->name, record->uid, wakeup);
+        goto done;
+    }
+
+    /* Fetch message */
+    r = msgrecord_get_body(mr, &buf);
+    if (r) goto done;
+
+    /* XXX  Fetch flags and annotations */
+
     mbname = mbname_from_intname(mailbox->name);
     mbname_set_boxes(mbname, NULL);
+    inboxname = mbname_intname(mbname);
 
-    r = mailbox_open_iwl(mbname_intname(mbname), &inbox);
+    /* Prepare to stage the message */
+    if (!(f = append_newstage(inboxname, runtime, 0, &stage))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", inboxname);
+        r = IMAP_IOERROR;
+        goto done;
+    }
+
+    /* Prepend new headers */
+    time_to_rfc5322(runtime, datestr, sizeof(datestr));
+    fprintf(f, "Received: by %s with JMAP; %s\r\n",
+            config_servername, datestr);
+
+    time_to_rfc5322(record->internaldate, datestr, sizeof(datestr));
+    fprintf(f, "Snoozed-Original-Date: %s\r\n", datestr);
+
+    /* Add snoozed message */
+    size_t msglen = buf_len(&buf);
+    if ((msglen && !fwrite(buf_base(&buf), msglen, 1, f)) || fflush(f)) {
+        r = IMAP_IOERROR;
+        goto done;
+    }
+    fclose(f);
+
+    r = mailbox_open_iwl(inboxname, &inbox);
     if (r) goto done;
 
     userid = mbname_userid(mbname);
     authstate = auth_newstate(userid);
     r = append_setup_mbox(&as, inbox, userid, authstate,
-                          ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_COPY);
+                          ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_APPEND);
     if (r) goto done;
 
-    ptrarray_t msgrecs = PTRARRAY_INITIALIZER;
-    ptrarray_add(&msgrecs, mr);
-    r = append_copy(mailbox, &as, &msgrecs, nolink, 1);
-    ptrarray_fini(&msgrecs);
+    /* Append the message to the mailbox */
+    r = append_fromstage(&as, &body, stage, runtime, 0, &flags, 0, /*annots*/NULL);
     if (r) {
         append_abort(&as);
         goto done;
@@ -1002,10 +1052,18 @@ static void process_snoozed(struct mailbox *mailbox,
         caldav_alarm_delete_record(mailbox->name, record->uid);
     }
 
+    if (body) {
+        message_free_body(body);
+        free(body);
+    }
+    strarray_fini(&flags);
+    append_removestage(stage);
+
     mailbox_close(&inbox);
     if (authstate) auth_freestate(authstate);
     if (mbname) mbname_free(&mbname);
     if (mr) msgrecord_unref(&mr);
+    buf_free(&buf);
 }
 #endif /* WITH_JMAP */
 
@@ -1051,7 +1109,7 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     }
     else if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
         /* XXX  Check special-use flag on mailbox */
-        process_snoozed(mailbox, &record);
+        process_snoozed(mailbox, &record, runtime);
     }
 #endif
     else {
