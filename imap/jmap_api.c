@@ -569,6 +569,8 @@ static json_t *lookup_capabilities(const char *accountid,
         /* Primary account has all capabilities */
         jmap_core_capabilities(capas);
         jmap_mail_capabilities(capas);
+        jmap_emailsubmission_capabilities(capas);
+        jmap_vacation_capabilities(capas);
         jmap_contact_capabilities(capas);
         jmap_calendar_capabilities(capas);
     }
@@ -582,6 +584,8 @@ static json_t *lookup_capabilities(const char *accountid,
         if (rock.is_visible) {
             jmap_core_capabilities(capas);
             if (rock.has_mail) {
+                // we don't offer emailsubmission or vacation
+                // for shared accounts right now
                 jmap_mail_capabilities(capas);
             }
             if (rock.has_contacts) {

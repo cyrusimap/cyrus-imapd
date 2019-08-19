@@ -265,9 +265,7 @@ HIDDEN void jmap_mail_capabilities(json_t *account_capabilities)
         json_object_set_new(account_capabilities, JMAP_MAIL_EXTENSION, json_object());
     }
 
-    jmap_emailsubmission_capabilities(account_capabilities);
     jmap_mailbox_capabilities(account_capabilities);
-    jmap_vacation_capabilities(account_capabilities);
 }
 
 #define JMAP_HAS_ATTACHMENT_FLAG "$HasAttachment"
