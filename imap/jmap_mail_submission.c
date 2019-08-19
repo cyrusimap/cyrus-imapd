@@ -911,6 +911,9 @@ static void _emailsubmission_update(struct mailbox *submbox,
                 else if (!strcmp(arg, "undoStatus")) {
                     if (record->system_flags & FLAG_ANSWERED) {
                         if (!strcmp(strval, "final")) continue;
+
+                        /* Already sent */
+                        *set_err = json_pack("{s:s}", "type", "cannotUnsend");
                     }
                     else if (record->system_flags & FLAG_FLAGGED) {
                         if (!strcmp(strval, "canceled")) continue;
