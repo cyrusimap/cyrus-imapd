@@ -353,7 +353,8 @@ EXPORTED int sqldb_exec(sqldb_t *open, const char *cmd, struct sqldb_bindval bva
     sqlite3_clear_bindings(stmt);
 
     if (!r && rc != SQLITE_DONE) {
-        syslog(LOG_ERR, "DBERROR: sqldb_exec() step: %s", sqlite3_errmsg(open->db));
+        syslog(LOG_ERR, "DBERROR: sqldb_exec() step: %s for (%s: %s)",
+               sqlite3_errmsg(open->db), open->fname, cmd);
         r = -1;
     }
 
