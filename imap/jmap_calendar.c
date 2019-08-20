@@ -1440,6 +1440,7 @@ struct getcalendarevents_rock {
     struct jmap_req *req;
     struct jmap_get *get;
     struct mailbox *mailbox;
+    hashu64_table jmapcache;
     int check_acl;
 };
 
@@ -1512,10 +1513,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     json_object_set_new(jsevent, "participantId", participant_id ?
             json_string(participant_id) : json_null());
 
-    char *eventrep = json_dumps(jsevent, 0);
-    r = caldav_write_jmapcache(rock->db, cdata->dav.rowid, httpd_userid,
-                               JMAPCACHE_CALVERSION, eventrep);
-    free(eventrep);
+    hashu64_insert(cdata->dav.rowid, json_dumps(jsevent, 0), &rock->jmapcache);
 
 gotevent:
     jmap_filterprops(jsevent, rock->get->props);
@@ -1743,6 +1741,17 @@ static const jmap_property_t event_props[] = {
     { NULL, NULL, 0 }
 };
 
+static void cachecalendarevents_cb(uint64_t rowid, void *payload, void *vrock)
+{
+    const char *eventrep = payload;
+    struct getcalendarevents_rock *rock = vrock;
+
+    // there's no way to return errors, but luckily it doesn't matter if we
+    // fail to cache
+    caldav_write_jmapcache(rock->db, rowid, httpd_userid,
+                           JMAPCACHE_CALVERSION, eventrep);
+}
+
 static int jmap_calendarevent_get(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -1760,7 +1769,10 @@ static int jmap_calendarevent_get(struct jmap_req *req)
 
     /* Build callback data */
     int checkacl = strcmp(req->accountid, req->userid);
-    struct getcalendarevents_rock rock = { NULL, req, &get, NULL /*mbox*/, checkacl };
+    struct getcalendarevents_rock rock = { NULL, req, &get, NULL /*mbox*/,
+                                           HASHU64_TABLE_INITIALIZER, checkacl };
+
+    construct_hashu64_table(&rock.jmapcache, 512, 0);
 
     /* Parse request */
     jmap_get_parse(req, &parser, event_props, /*allow_null_ids*/1,
@@ -1803,6 +1815,8 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         if (r) goto done;
     }
 
+    hashu64_enumerate(&rock.jmapcache, cachecalendarevents_cb, &rock);
+
     r = caldav_commit(db);
     if (r) {
         syslog(LOG_ERR,
@@ -1822,6 +1836,7 @@ done:
     jmap_get_fini(&get);
     if (db) caldav_close(db);
     if (rock.mailbox) mailbox_close(&rock.mailbox);
+    free_hashu64_table(&rock.jmapcache, free);
     return r;
 }
 
