@@ -728,6 +728,12 @@ EXPORTED int caldav_alarm_delete_user(const char *userid)
     return rc;
 }
 
+struct alarm_read_rock {
+    ptrarray_t list;
+    time_t runtime;
+    time_t next;
+};
+
 #define CMD_SELECT_ALARMS                                                \
     "SELECT mboxname, imap_uid, nextcheck"                               \
     " FROM events WHERE"                                                 \
@@ -737,15 +743,20 @@ EXPORTED int caldav_alarm_delete_user(const char *userid)
 
 static int alarm_read_cb(sqlite3_stmt *stmt, void *rock)
 {
-    ptrarray_t *target = (ptrarray_t *)rock;
+    struct alarm_read_rock *alarm = rock;
 
-    struct caldav_alarm_data *data = xzmalloc(sizeof(struct caldav_alarm_data));
+    time_t nextcheck = sqlite3_column_int(stmt, 2);
 
-    data->mboxname    = xstrdup((const char *) sqlite3_column_text(stmt, 0));
-    data->imap_uid    = sqlite3_column_int(stmt, 1);
-    data->nextcheck   = sqlite3_column_int(stmt, 2);
-
-    ptrarray_append(target, data);
+    if (nextcheck <= alarm->runtime) {
+        struct caldav_alarm_data *data = xzmalloc(sizeof(struct caldav_alarm_data));
+        data->mboxname    = xstrdup((const char *) sqlite3_column_text(stmt, 0));
+        data->imap_uid    = sqlite3_column_int(stmt, 1);
+        data->nextcheck   = nextcheck;
+        ptrarray_append(&alarm->list, data);
+    }
+    else if (nextcheck < alarm->next) {
+        alarm->next = nextcheck;
+    }
 
     return 0;
 }
@@ -1164,43 +1175,44 @@ static void process_records(ptrarray_t *list, time_t runtime)
 }
 
 /* process alarms with triggers before a given time */
-EXPORTED int caldav_alarm_process(time_t runtime)
+EXPORTED int caldav_alarm_process(time_t runtime, time_t *intervalp)
 {
     syslog(LOG_DEBUG, "processing alarms");
 
     if (!runtime) {
-        /* check 10s into the future -
-         * we run every 10, so that guarantees we will
-         * deliver on or before the target time */
-        runtime = time(NULL) + 10;
+        runtime = time(NULL);
     }
 
+    struct alarm_read_rock rock = { PTRARRAY_INITIALIZER, runtime, runtime + 10 };
+
+    // check 10 seconds into the future - if there's something in there,
+    // we'll run again - otherwise we'll wait the 10 seconds before checking again
     struct sqldb_bindval bval[] = {
-        { ":before",    SQLITE_INTEGER, { .i = runtime  } },
-        { NULL,         SQLITE_NULL,    { .s = NULL     } }
+        { ":before",    SQLITE_INTEGER, { .i = rock.next } },
+        { NULL,         SQLITE_NULL,    { .s = NULL      } }
     };
 
     sqldb_t *alarmdb = caldav_alarm_open();
     if (!alarmdb)
         return HTTP_SERVER_ERROR;
 
-    ptrarray_t list = PTRARRAY_INITIALIZER;
-
-    int rc = sqldb_exec(alarmdb, CMD_SELECT_ALARMS, bval, &alarm_read_cb, &list);
+    int rc = sqldb_exec(alarmdb, CMD_SELECT_ALARMS, bval, &alarm_read_cb, &rock);
 
     caldav_alarm_close(alarmdb);
 
-    process_records(&list, runtime);
+    process_records(&rock.list, runtime);
 
     int i;
-    for (i = 0; i < list.count; i++) {
-        struct caldav_alarm_data *data = ptrarray_nth(&list, i);
+    for (i = 0; i < rock.list.count; i++) {
+        struct caldav_alarm_data *data = ptrarray_nth(&rock.list, i);
         caldav_alarm_fini(data);
         free(data);
     }
-    ptrarray_fini(&list);
+    ptrarray_fini(&rock.list);
 
     syslog(LOG_DEBUG, "done");
+
+    if (intervalp) *intervalp = rock.next - runtime;
 
     return rc;
 }

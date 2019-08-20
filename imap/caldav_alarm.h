@@ -79,7 +79,7 @@ int caldav_alarm_delete_mailbox(const char *mboxname);
 int caldav_alarm_delete_user(const char *userid);
 
 /* distribute alarms with triggers in the next minute */
-int caldav_alarm_process(time_t runtime);
+int caldav_alarm_process(time_t runtime, time_t *next);
 
 /* upgrade old databases */
 int caldav_alarm_upgrade();

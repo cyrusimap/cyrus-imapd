@@ -121,7 +121,7 @@ int main(int argc, char **argv)
     }
 
     if (runattime) {
-        caldav_alarm_process(runattime);
+        caldav_alarm_process(runattime, NULL);
         shut_down(0);
     }
 
@@ -148,17 +148,18 @@ int main(int argc, char **argv)
         struct timeval start, end;
         double totaltime;
         int tosleep;
+        time_t interval = 1;
 
         signals_poll();
 
         gettimeofday(&start, 0);
-        caldav_alarm_process(0);
+        caldav_alarm_process(0, &interval);
         gettimeofday(&end, 0);
 
         signals_poll();
 
         totaltime = timesub(&start, &end);
-        tosleep = 10 - (int) (totaltime + 0.5); /* round to nearest int */
+        tosleep = interval - (int) (totaltime + 0.5); /* round to nearest int */
         if (tosleep > 0)
             sleep(tosleep);
     }
