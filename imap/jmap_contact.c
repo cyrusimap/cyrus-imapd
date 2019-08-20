@@ -289,6 +289,7 @@ struct cards_rock {
     struct jmap_req *req;
     struct jmap_get *get;
     struct mailbox *mailbox;
+    hashu64_table jmapcache;
     int rows;
 };
 
@@ -375,10 +376,7 @@ static int getgroups_cb(void *rock, struct carddav_data *cdata)
 
     vparse_free_card(vcard);
 
-    char *valuerep = json_dumps(obj, 0);
-    r = carddav_write_jmapcache(crock->db, cdata->dav.rowid,
-                                JMAPCACHE_CONTACTVERSION, valuerep);
-    free(valuerep);
+    hashu64_insert(cdata->dav.rowid, json_dumps(obj, 0), &crock->jmapcache);
 
 gotvalue:
 
@@ -582,6 +580,17 @@ static int _contact_getargs_parse(jmap_req_t *req __attribute__((unused)),
     return r;
 }
 
+static void cachecards_cb(uint64_t rowid, void *payload, void *vrock)
+{
+    const char *eventrep = payload;
+    struct cards_rock *rock = vrock;
+
+    // there's no way to return errors, but luckily it doesn't matter if we
+    // fail to cache
+    carddav_write_jmapcache(rock->db, rowid,
+                            JMAPCACHE_CONTACTVERSION, eventrep);
+}
+
 static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -598,7 +607,10 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
     } else if (r) return r;
 
     /* Build callback data */
-    struct cards_rock rock = { NULL, req, &get, NULL /*mailbox*/, 0 /*rows */ };
+    struct cards_rock rock = { NULL, req, &get, NULL /*mailbox*/,
+                               HASHU64_TABLE_INITIALIZER, 0 /*rows */ };
+
+    construct_hashu64_table(&rock.jmapcache, 512, 0);
 
     /* Parse request */
     char *mboxname = NULL;
@@ -652,6 +664,8 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
         if (r) goto done;
     }
 
+    hashu64_enumerate(&rock.jmapcache, cachecards_cb, &rock);
+
     r = carddav_commit(db);
     if (r) {
         syslog(LOG_ERR,
@@ -671,6 +685,7 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
     jmap_get_fini(&get);
     free(mboxname);
     mailbox_close(&rock.mailbox);
+    free_hashu64_table(&rock.jmapcache, free);
     carddav_close(db);
     return r;
 }
