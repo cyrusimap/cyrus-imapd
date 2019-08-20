@@ -971,7 +971,8 @@ static void process_snoozed(struct mailbox *mailbox,
     const char *userid, *inboxname;
     time_t wakeup;
     struct stagemsg *stage = NULL;
-    strarray_t flags = STRARRAY_INITIALIZER;
+    struct entryattlist *annots = NULL;
+    strarray_t *flags = NULL;
     struct body *body = NULL;
     char datestr[80];
     FILE *f = NULL;
@@ -1000,12 +1001,21 @@ static void process_snoozed(struct mailbox *mailbox,
     r = msgrecord_get_body(mr, &buf);
     if (r) goto done;
 
-    /* XXX  Fetch flags and annotations */
-
     mbname = mbname_from_intname(mailbox->name);
     mbname_set_boxes(mbname, NULL);
     userid = mbname_userid(mbname);
     inboxname = mbname_intname(mbname);
+
+    /* Fetch flags */
+    r = msgrecord_extract_flags(mr, userid, &flags);
+    if (r) goto done;
+
+    /* Fetch annotations */
+    r = msgrecord_extract_annots(mr, &annots);
+    if (r) goto done;
+
+    /* Remove snoozed-until from the annotations */
+    clearentryatt(&annots, annot, "value.shared");
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(inboxname, runtime, 0, &stage))) {
@@ -1043,7 +1053,7 @@ static void process_snoozed(struct mailbox *mailbox,
     if (r) goto done;
 
     /* Append the message to the mailbox */
-    r = append_fromstage(&as, &body, stage, runtime, 0, &flags, 0, /*annots*/NULL);
+    r = append_fromstage(&as, &body, stage, runtime, 0, flags, 0, annots);
     if (r) {
         append_abort(&as);
         goto done;
@@ -1070,7 +1080,8 @@ static void process_snoozed(struct mailbox *mailbox,
         message_free_body(body);
         free(body);
     }
-    strarray_fini(&flags);
+    strarray_free(flags);
+    freeentryatts(annots);
     append_removestage(stage);
 
     mailbox_close(&inbox);
