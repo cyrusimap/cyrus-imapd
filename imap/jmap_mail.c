@@ -9228,6 +9228,12 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
                 if (json_object_get(mailboxids, mboxrec->mbox_id)) {
                     /* Keep message in mailbox */
                     json_object_del(mailboxids, mboxrec->mbox_id);
+
+                    /* Add record to snooze plan if snoozeUntil is updated */
+                    if (update->snoozed &&
+                        !strcmp(mboxrec->mbox_id, bulk->snoozed_uniqueid)) {
+                        ptrarray_append(&plan->snooze, uidrec);
+                    }
                 }
                 else {
                     /* Delete message from mailbox */
@@ -10042,6 +10048,7 @@ static void _email_bulkupdate_exec_copy(struct email_bulkupdate *bulk)
                     ptrarray_append(&plan->setflags, new_uidrec);
                 }
 
+                /* Add new record to snooze plan if copied to snooze folder */
                 if (update->snoozed &&
                     !strcmp(plan->mbox_id, bulk->snoozed_uniqueid)) {
                     ptrarray_append(&plan->snooze, new_uidrec);
