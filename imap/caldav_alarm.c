@@ -964,7 +964,6 @@ static void process_snoozed(struct mailbox *mailbox,
     struct body *body = NULL;
     char datestr[80];
     FILE *f = NULL;
-
     int r = 0;
 
     syslog(LOG_DEBUG, "processing snoozed email for mailbox %s uid %u",
@@ -994,6 +993,7 @@ static void process_snoozed(struct mailbox *mailbox,
 
     mbname = mbname_from_intname(mailbox->name);
     mbname_set_boxes(mbname, NULL);
+    userid = mbname_userid(mbname);
     inboxname = mbname_intname(mbname);
 
     /* Prepare to stage the message */
@@ -1004,9 +1004,13 @@ static void process_snoozed(struct mailbox *mailbox,
     }
 
     /* Prepend new headers */
-    time_to_rfc5322(runtime, datestr, sizeof(datestr));
-    fprintf(f, "Received: by %s with JMAP; %s\r\n",
+    time_to_rfc5322(record->savedate, datestr, sizeof(datestr));
+    fprintf(f, "Received: from %s (using Snooze at %s)\r\n",
             config_servername, datestr);
+
+    time_to_rfc5322(runtime, datestr, sizeof(datestr));
+    fprintf(f, "\twith JMAP id M%s for %s; %s\r\n",
+            message_guid_encode_short(&record->guid, 24), userid, datestr);
 
     time_to_rfc5322(record->internaldate, datestr, sizeof(datestr));
     fprintf(f, "Snoozed-Original-Date: %s\r\n", datestr);
@@ -1022,7 +1026,6 @@ static void process_snoozed(struct mailbox *mailbox,
     r = mailbox_open_iwl(inboxname, &inbox);
     if (r) goto done;
 
-    userid = mbname_userid(mbname);
     authstate = auth_newstate(userid);
     r = append_setup_mbox(&as, inbox, userid, authstate,
                           ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_APPEND);
