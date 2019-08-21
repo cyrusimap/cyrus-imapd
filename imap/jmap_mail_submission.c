@@ -475,7 +475,7 @@ static void _emailsubmission_create(jmap_req_t *req,
                                     json_t *emailsubmission,
                                     json_t **new_submission,
                                     json_t **set_err,
-                                    smtpclient_t **sm)
+                                    smtpclient_t **sm, char **emailid)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
@@ -486,6 +486,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     if (!msgid) {
         jmap_parser_invalid(&parser, "emailId");
     }
+    *emailid = xstrdup(msgid);
 
     /* identityId */
     const char *identityid = NULL;
@@ -866,7 +867,8 @@ static json_t *fetch_submission(message_t *msg)
 static void _emailsubmission_update(struct mailbox *submbox,
                                     const char *id,
                                     json_t *emailsubmission,
-                                    json_t **set_err)
+                                    json_t **set_err,
+                                    char **emailid)
 {
     message_t *msg = msg_from_subid(submbox, id);
     const struct index_record *record;
@@ -887,6 +889,8 @@ static void _emailsubmission_update(struct mailbox *submbox,
         *set_err = json_pack("{s:s, s:s}", "type", "serverFail", "description", error_message(r));
         goto done;
     }
+
+    *emailid = xstrdupnull(json_string_value(json_object_get(sub, "emailId")));
 
     const char *arg;
     json_t *val;
@@ -972,10 +976,12 @@ static void _emailsubmission_update(struct mailbox *submbox,
 
 static void _emailsubmission_destroy(struct mailbox *submbox,
                                      const char *id,
-                                     json_t **set_err)
+                                     json_t **set_err,
+                                     char **emailid)
 {
     message_t *msg = msg_from_subid(submbox, id);
     struct index_record newrecord;
+    json_t *sub = NULL;
     int r = 0;
 
     if (!msg) {
@@ -983,13 +989,26 @@ static void _emailsubmission_destroy(struct mailbox *submbox,
         *set_err = json_pack("{s:s}", "type", "notFound");
         return;
     }
+    const struct index_record *record = msg_record(msg);
 
-    memcpy(&newrecord, msg_record(msg), sizeof(struct index_record));
+    sub = fetch_submission(msg);
+    if (!sub) {
+        if (!r) r = IMAP_IOERROR;
+
+        *set_err = json_pack("{s:s, s:s}", "type", "serverFail", "description", error_message(r));
+        goto done;
+    }
+
+    *emailid = xstrdupnull(json_string_value(json_object_get(sub, "emailId")));
+
+    memcpy(&newrecord, record, sizeof(struct index_record));
     newrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
 
     r = mailbox_rewrite_index_record(submbox, &newrecord);
-    if (r) *set_err = json_pack("{s:s}", "type", error_message(r));
+    if (r) *set_err = json_pack("{s:s, s:s}", "type", "serverFail", "description", error_message(r));
 
+done:
+    json_decref(sub);
     message_unref(&msg);
 }
 
@@ -1269,6 +1288,7 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     json_t *err = NULL;
     struct mailbox *submbox = NULL;
     mbentry_t *mbentry = NULL;
+    json_t *success_emailids = json_object();
 
     /* Parse request */
     jmap_set_parse(req, &parser, submission_props,
@@ -1318,13 +1338,18 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     json_object_foreach(set.create, creation_id, jsubmission) {
         json_t *set_err = NULL;
         json_t *new_submission = NULL;
+        char *emailid = NULL;
         _emailsubmission_create(req, submbox, jsubmission,
-                                &new_submission, &set_err, &sm);
+                                &new_submission, &set_err, &sm, &emailid);
         if (set_err) {
             json_object_set_new(set.not_created, creation_id, set_err);
+            free(emailid);
             continue;
         }
+        const char *id = json_string_value(json_object_get(new_submission, "id"));
         json_object_set_new(set.created, creation_id, new_submission);
+        json_object_set_new(success_emailids, id, json_string(emailid));
+        free(emailid);
     }
     if (sm) smtpclient_close(&sm);
 
@@ -1332,12 +1357,16 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     const char *id;
     json_object_foreach(set.update, id, jsubmission) {
         json_t *set_err = NULL;
-        _emailsubmission_update(submbox, id, jsubmission, &set_err);
+        char *emailid = NULL;
+        _emailsubmission_update(submbox, id, jsubmission, &set_err, &emailid);
         if (set_err) {
             json_object_set_new(set.not_updated, id, set_err);
+            free(emailid);
             continue;
         }
         json_object_set_new(set.updated, id, json_pack("{s:s}", "id", id));
+        json_object_set_new(success_emailids, id, json_string(emailid));
+        free(emailid);
     }
 
     /* destroy */
@@ -1346,32 +1375,32 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
     json_array_foreach(set.destroy, i, jsubmissionId) {
         const char *id = json_string_value(jsubmissionId);
         json_t *set_err = NULL;
-        _emailsubmission_destroy(submbox, id, &set_err);
+        char *emailid = NULL;
+        _emailsubmission_destroy(submbox, id, &set_err, &emailid);
         if (set_err) {
             json_object_set_new(set.not_destroyed, id, set_err);
+            free(emailid);
             continue;
         }
         json_array_append_new(set.destroyed, json_string(id));
+        json_object_set_new(success_emailids, id, json_string(emailid));
+        free(emailid);
     }
 
     /* Process onSuccessXxxEmail */
     json_t *updateEmails = json_object();
     if (JNOTNULL(sub_args.onSuccessUpdate)) {
-        const char *id;
+        const char *jid;
         json_t *jemail;
-        json_object_foreach(sub_args.onSuccessUpdate, id, jemail) {
-            /* Ignore updates, we rejected all of them */
-            if (*id != '#') continue;
-
-            json_t *jsubmission = json_object_get(set.create, id+1);
-            if (!jsubmission) continue;
-            json_t *jsuccess = json_object_get(set.created, id+1);
-            if (!jsuccess) continue;
-            json_t *jemailId = json_object_get(jsubmission, "emailId");
-            if (!jemailId) continue;
-            const char *msgid = jmap_id_string_value(req, jemailId);
-            if (!msgid) continue;
-            json_object_set(updateEmails, msgid, jemail);
+        json_object_foreach(sub_args.onSuccessUpdate, jid, jemail) {
+            const char *id = jid;
+            if (*id == '#') {
+                json_t *jsuccess = json_object_get(set.created, id+1);
+                if (!jsuccess) continue;
+                id = json_string_value(json_object_get(jsuccess, "id"));
+            }
+            const char *emailid = json_string_value(json_object_get(success_emailids, id));
+            json_object_set(updateEmails, emailid, jemail);
         }
     }
     json_t *destroyEmails = json_array();
@@ -1380,18 +1409,13 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         json_t *jid;
         json_array_foreach(sub_args.onSuccessDestroy, i, jid) {
             const char *id = json_string_value(jid);
-            /* Ignore updates, we rejected all of them */
-            if (*id != '#') continue;
-
-            json_t *jsubmission = json_object_get(set.create, id+1);
-            if (!jsubmission) continue;
-            json_t *jsuccess = json_object_get(set.created, id+1);
-            if (!jsuccess) continue;
-            json_t *jemailId = json_object_get(jsubmission, "emailId");
-            if (!jemailId) continue;
-            const char *msgid = jmap_id_string_value(req, jemailId);
-            if (!msgid) continue;
-            json_array_append_new(destroyEmails, json_string(msgid));
+            if (*id == '#') {
+                json_t *jsuccess = json_object_get(set.created, id+1);
+                if (!jsuccess) continue;
+                id = json_string_value(json_object_get(jsuccess, "id"));
+            }
+            const char *emailid = json_string_value(json_object_get(success_emailids, id));
+            json_array_append_new(destroyEmails, json_string(emailid));
         }
     }
 
@@ -1420,6 +1444,7 @@ done:
     jmap_closembox(req, &submbox);
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
+    json_decref(success_emailids);
     return 0;
 }
 
