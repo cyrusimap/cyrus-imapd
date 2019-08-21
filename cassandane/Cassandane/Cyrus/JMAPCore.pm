@@ -217,8 +217,8 @@ sub test_get_session
     $self->assert_equals(JSON::false, $account1->{isPersonal});
     $accountCapabilities = $account1->{accountCapabilities};
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
-    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
-    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
+    $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
     $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
     $self->assert_not_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
 
@@ -228,8 +228,8 @@ sub test_get_session
     $self->assert_equals(JSON::false, $account2->{isPersonal});
     $accountCapabilities = $account2->{accountCapabilities};
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
-    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
-    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
+    $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
+    $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
     $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
     $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
 }
