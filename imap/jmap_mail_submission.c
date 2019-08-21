@@ -354,23 +354,24 @@ static int store_submission(struct mailbox *mailbox,
     size_t msglen = buf_len(msg);
     FILE *f = NULL;
     int r;
+    time_t now = time(0);
+    time_t internaldate = holduntil;
 
     if (!holduntil) {
         /* Already sent */
         msglen = 0;
-        holduntil = time(0);
+        internaldate = now;
         strarray_append(&flags, "\\Answered");
     }
 
     /* Prepare to stage the message */
-    if (!(f = append_newstage(mailbox->name, holduntil, 0, &stage))) {
+    if (!(f = append_newstage(mailbox->name, internaldate, 0, &stage))) {
         syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
         r = IMAP_IOERROR;
         goto done;
     }
 
     /* Stage the message to send as message/rfc822 */
-    time_t now = time(0);
     time_to_rfc5322(now, datestr, sizeof(datestr));
 
     if (strchr(httpd_userid, '@')) {
@@ -424,7 +425,7 @@ static int store_submission(struct mailbox *mailbox,
     }
 
     /* Append the message to the mailbox */
-    r = append_fromstage(&as, &body, stage, holduntil, 0, &flags, 0, /*annots*/NULL);
+    r = append_fromstage(&as, &body, stage, internaldate, 0, &flags, 0, /*annots*/NULL);
 
     if (r) {
         append_abort(&as);
@@ -442,14 +443,15 @@ static int store_submission(struct mailbox *mailbox,
 
     /* Create id from message UID, using 'S' prefix */
     char sub_id[JMAP_SUBID_SIZE];
-    char sendat[RFC3339_DATETIME_MAX];
-    time_to_rfc3339(holduntil ? holduntil : now, sendat, RFC3339_DATETIME_MAX);
-
     sprintf(sub_id, "S%u", mailbox->i.last_uid);
+
+    char sendat[RFC3339_DATETIME_MAX];
+    time_to_rfc3339(internaldate, sendat, RFC3339_DATETIME_MAX);
+
     // XXX: we should include all the other fields from the spec
-    *new_submission = json_pack("{s:s, s:s}",
+    *new_submission = json_pack("{s:s, s:s, s:s}",
          "id", sub_id,
-         "undoStatus", holduntil ? "pending" : "final",
+         "undoStatus", (holduntil ? "pending" : "final"),
          "sendAt", sendat
     );
 
