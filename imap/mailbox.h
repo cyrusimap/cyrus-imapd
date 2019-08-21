@@ -88,7 +88,9 @@
 #define FNAME_ANNOTATIONS "/cyrus.annotations"
 
 #define CRC_INIT_BASIC 0
-#define CRC_INIT_ANNOT 0
+// annot value should be visible as an integer via replication protocol,
+// so let's make it easy to see there
+#define CRC_INIT_ANNOT 12345678
 
 enum meta_filename {
   META_HEADER = 1,
