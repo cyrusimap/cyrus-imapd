@@ -2736,7 +2736,7 @@ int sync_apply_mailbox(struct dlist *kin,
     // immediate bail if we have an old state to compare
     if (!r && since_modseq &&
          (since_modseq != mailbox->i.highestmodseq ||
-          !mailbox_crceq(since_crcs, mailbox_synccrcs(mailbox, 0))))
+          !mailbox_crceq_exact(since_crcs, mailbox_synccrcs(mailbox, 0))))
         r = IMAP_SYNC_CHANGED;
 
     // otherwise check version and whether we need to create
@@ -2941,7 +2941,7 @@ done:
     sync_annot_list_free(&rannots);
 
     /* check the CRC too */
-    if (!r && !mailbox_crceq(synccrcs, mailbox_synccrcs(mailbox, 0))) {
+    if (!r && !mailbox_crceq_exact(synccrcs, mailbox_synccrcs(mailbox, 0))) {
         /* try forcing a recalculation */
         if (!mailbox_crceq(synccrcs, mailbox_synccrcs(mailbox, 1)))
             r = IMAP_SYNC_CHECKSUM;
@@ -5399,7 +5399,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     }
 
     /* if we got here then we should force check the CRCs */
-    if (!mailbox_crceq(remote->synccrcs, mailbox_synccrcs(mailbox, /*force*/0)))
+    if (!mailbox_crceq_exact(remote->synccrcs, mailbox_synccrcs(mailbox, /*force*/0)))
         if (!mailbox_crceq(remote->synccrcs, mailbox_synccrcs(mailbox, /*force*/1)))
             return 0;
 

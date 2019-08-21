@@ -7290,3 +7290,12 @@ EXPORTED int mailbox_crceq(struct synccrcs a, struct synccrcs b)
     return 1;
 }
 
+// exact means it HAS to match, which allows us to know with certainty when
+// checking a replica
+EXPORTED int mailbox_crceq_exact(struct synccrcs a, struct synccrcs b)
+{
+    if (a.basic != b.basic) return 0;
+    if (a.annot != b.annot) return 0;
+    return 1;
+}
+
