@@ -87,6 +87,9 @@
 #endif
 #define FNAME_ANNOTATIONS "/cyrus.annotations"
 
+#define CRC_INIT_BASIC 0
+#define CRC_INIT_ANNOT 0
+
 enum meta_filename {
   META_HEADER = 1,
   META_INDEX,

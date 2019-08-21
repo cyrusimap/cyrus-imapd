@@ -3070,7 +3070,7 @@ EXPORTED struct synccrcs mailbox_synccrcs(struct mailbox *mailbox, int force)
 {
     annotate_state_t *astate = NULL;
     const message_t *msg;
-    struct synccrcs crcs = { 0, 0 };
+    struct synccrcs crcs = { CRC_INIT_BASIC, CRC_INIT_ANNOT };
 
     if (!force)
         return mailbox->i.synccrcs;
@@ -3137,8 +3137,8 @@ EXPORTED int mailbox_index_recalc(struct mailbox *mailbox)
     mailbox->i.exists = 0;
     mailbox->i.quota_mailbox_used = 0;
     mailbox->i.quota_annot_used = 0;
-    mailbox->i.synccrcs.basic = 0;
-    mailbox->i.synccrcs.annot = 0;
+    mailbox->i.synccrcs.basic = CRC_INIT_BASIC;
+    mailbox->i.synccrcs.annot = CRC_INIT_ANNOT;
 
     /* mailbox level annotations */
     mailbox_annot_update_counts(mailbox, NULL, 1);
@@ -5101,6 +5101,8 @@ EXPORTED int mailbox_create(const char *name,
     mailbox->i.uidvalidity = uidvalidity;
     mailbox->i.createdmodseq = createdmodseq;
     mailbox->i.highestmodseq = highestmodseq;
+    mailbox->i.synccrcs.basic = CRC_INIT_BASIC;
+    mailbox->i.synccrcs.annot = CRC_INIT_ANNOT;
 
     /* initialise header size field so appends calculate the
      * correct map size */
