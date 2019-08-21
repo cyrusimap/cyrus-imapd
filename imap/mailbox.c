@@ -7285,11 +7285,9 @@ EXPORTED void mailbox_set_wait_cb(void (*cb)(void *), void *rock)
  * and also allows a client with incomplete local information to request
  * a change be made on a sync_server without having to fetch all the
  * data first just to calculate the CRC */
-// XXX: removed bootstrap magic for now because 0 == 0.  We need to change
-// the zero CRC to not be zero
 EXPORTED int mailbox_crceq(struct synccrcs a, struct synccrcs b)
 {
-    if (a.basic != b.basic) return 0;
-    if (a.annot != b.annot) return 0;
+    if (a.basic && b.basic && a.basic != b.basic) return 0;
+    if (a.annot && b.annot && a.annot != b.annot) return 0;
     return 1;
 }
