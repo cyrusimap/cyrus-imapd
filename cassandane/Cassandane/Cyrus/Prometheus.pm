@@ -210,9 +210,10 @@ sub test_quota_commitments
     my $gchild2 = "$child.gchild2"; # give this one its own quota
     my $ggchild1 = "$gchild1.ggchild1"; # and give this one its own quota
     my $ggchild2 = "$gchild1.ggchild2"; # and this one back on def part
+    my $interm = "$inbox.foo.bar.baz"; # contains intermediate folders
 
     # make some folders
-    foreach my $f ($child, $gchild1, $gchild2, $ggchild1, $ggchild2) {
+    foreach my $f ($child, $gchild1, $gchild2, $ggchild1, $ggchild2, $interm) {
         $admintalk->create($f);
         $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
     }
@@ -257,7 +258,8 @@ sub test_shared_mailbox_namespaces
 
     my $ns1 = 'foo';
     my $ns2 = 'bar';
-    my @folders = map { ("$ns1.$_", "$ns2.$_" ) } qw(cat sheep dog);
+    my @folders = map { ("$ns1.$_", "$ns2.$_" ) }
+                      qw(cat sheep dog interm.interm.rabbit);
 
     foreach my $f (@folders) {
         $admintalk->create($f);
@@ -272,10 +274,10 @@ sub test_shared_mailbox_namespaces
     my $report = parse_report($response->{content});
     $self->assert(scalar keys %{$report});
 
-    # expect to find 3 folders on each of 'foo' and 'bar' namespaces
-    $self->assert_equals(3, $report->{'cyrus_usage_shared_mailboxes'}->{'partition="default",namespace="bar"'}->{value});
+    # expect to find 4 folders on each of 'foo' and 'bar' namespaces
+    $self->assert_equals(4, $report->{'cyrus_usage_shared_mailboxes'}->{'partition="default",namespace="bar"'}->{value});
 
-    $self->assert_equals(3, $report->{'cyrus_usage_shared_mailboxes'}->{'partition="default",namespace="foo"'}->{value});
+    $self->assert_equals(4, $report->{'cyrus_usage_shared_mailboxes'}->{'partition="default",namespace="foo"'}->{value});
 }
 
 1;
