@@ -208,12 +208,13 @@ sub test_quota_commitments
     my $child = "$inbox.child";
     my $gchild1 = "$child.cat"; # we'll stick this one on a sep part
     my $gchild2 = "$child.dog"; # give this one its own quota
+    my $gchild3 = "$child.sheep"; # normal, but sorts after weird ones
     my $ggchild1 = "$gchild1.manx"; # and give this one its own quota
     my $ggchild2 = "$gchild1.siamese"; # and this one back on def part
     my $interm = "$inbox.foo.bar.baz"; # contains intermediate folders
 
     # make some folders
-    foreach my $f ($child, $gchild1, $gchild2, $ggchild1, $ggchild2, $interm) {
+    foreach my $f ($child, $gchild1, $gchild2, $gchild3, $ggchild1, $ggchild2, $interm) {
         $admintalk->create($f);
         $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
     }
