@@ -334,6 +334,9 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
     /* don't want partial matches */
     if (!data || !data->mbname || !data->mbentry) return 0;
 
+    /* don't want intermediates XXX unless we do? in which case count them! */
+    if (!data->mbentry->partition) return 0;
+
     pdata = hash_lookup(data->mbentry->partition, h);
     if (!pdata) {
         pdata = malloc(sizeof *pdata);
