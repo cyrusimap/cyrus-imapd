@@ -282,4 +282,45 @@ sub test_shared_mailbox_namespaces
     $self->assert_equals(4, $report->{'cyrus_usage_shared_mailboxes'}->{'partition="default",namespace="foo"'}->{value});
 }
 
+sub slowtest_50000_users
+    :min_version_3_1 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    foreach my $n (1..50000) {
+        # reconnect every so often so stuff can flush
+        if ($n % 5000 == 0) {
+            $admintalk->logout();
+            $self->{adminstore}->disconnect();
+            $admintalk = $self->{adminstore}->get_client();
+        }
+
+        my $folder = sprintf("user.a%08d", $n);
+        $admintalk->create($folder);
+        $self->assert_str_equals('ok',
+            $admintalk->get_last_completion_response());
+
+        $admintalk->setquota($folder, '(STORAGE 8000)');
+        $self->assert_str_equals('ok',
+            $admintalk->get_last_completion_response());
+
+        foreach my $subfolder (qw(Drafts Sent Spam Trash)) {
+            $admintalk->create("$folder.$subfolder");
+            $self->assert_str_equals('ok',
+                $admintalk->get_last_completion_response());
+        }
+    }
+
+    sleep 3;
+
+    my $response = $self->http_report();
+    $self->assert($response->{success});
+
+    my $report = parse_report($response->{content});
+    $self->assert(scalar keys %{$report});
+    xlog "report: " . Dumper $report;
+}
+
 1;
