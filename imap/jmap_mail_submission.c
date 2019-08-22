@@ -58,7 +58,7 @@
 #include "http_jmap.h"
 #include "http_proxy.h"
 #include "jmap_mail.h"
-#include "jmap_support.h"
+#include "jmap_util.h"
 #include "json_support.h"
 #include "parseaddr.h"
 #include "proxy.h"

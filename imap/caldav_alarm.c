@@ -55,7 +55,7 @@
 #include "httpd.h"
 #include "http_dav.h"
 #include "ical_support.h"
-#include "jmap_support.h"
+#include "jmap_util.h"
 #include "libconfig.h"
 #include "mboxevent.h"
 #include "mboxlist.h"

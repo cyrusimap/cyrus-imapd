@@ -269,3 +269,37 @@ EXPORTED int json_is_utcdate(json_t *json)
             (t.tm_off == 0));
 }
 
+static void address_to_smtp(smtp_addr_t *smtpaddr, json_t *addr)
+{
+    smtpaddr->addr = xstrdup(json_string_value(json_object_get(addr, "email")));
+
+    const char *key;
+    json_t *val;
+    json_object_foreach(json_object_get(addr, "parameters"), key, val) {
+        /* We never take AUTH at face value */
+        if (!strcasecmp(key, "AUTH")) {
+            continue;
+        }
+        /* We handle FUTURERELEASE ourselves */
+        else if (!strcasecmp(key, "HOLDFOR") || !strcasecmp(key, "HOLDUNTIL")) {
+            continue;
+        }
+        smtp_param_t *param = xzmalloc(sizeof(smtp_param_t));
+        param->key = xstrdup(key);
+        param->val = xstrdup(json_string_value(val));
+        ptrarray_append(&smtpaddr->params, param);
+    }
+}
+
+EXPORTED void jmap_emailsubmission_envelope_to_smtp(smtp_envelope_t *smtpenv,
+                                                    json_t *env)
+{
+    address_to_smtp(&smtpenv->from, json_object_get(env, "mailFrom"));
+    size_t i;
+    json_t *val;
+    json_array_foreach(json_object_get(env, "rcptTo"), i, val) {
+        smtp_addr_t *smtpaddr = xzmalloc(sizeof(smtp_addr_t));
+        address_to_smtp(smtpaddr, val);
+        ptrarray_append(&smtpenv->rcpts, smtpaddr);
+    }
+}

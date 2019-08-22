@@ -44,7 +44,11 @@
 #ifndef JMAP_UTIL_H
 #define JMAP_UTIL_H
 
-#include "json_support.h"
+#include <jansson.h>
+
+#include "smtpclient.h"
+
+#define JMAP_SUBMISSION_HDR "Content-Description"
 
 #define jmap_wantprop(props, name) \
     ((props) ? (hash_lookup(name, props) != NULL) : 1)
@@ -75,5 +79,8 @@ extern char *jmap_pointer_decode(const char *src, size_t len);
 extern void jmap_filterprops(json_t *jobj, hash_table *props);
 
 extern int json_is_utcdate(json_t *json);
+
+extern void jmap_emailsubmission_envelope_to_smtp(smtp_envelope_t *smtpenv,
+                                                  json_t *env);
 
 #endif /* JMAP_UTIL_H */

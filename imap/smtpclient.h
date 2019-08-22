@@ -44,6 +44,7 @@
 #define INCLUDED_SMTPCLIENT_H
 
 #include "prot.h"
+#include "ptrarray.h"
 #include "util.h"
 
 /* A parameter for SMTP envelope address, identified by key.

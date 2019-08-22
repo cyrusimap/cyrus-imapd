@@ -1134,9 +1134,7 @@ endif # HTTPD
 if JMAP
 imap_libcyrus_imap_la_SOURCES += \
 	imap/smtpclient.c \
-	imap/smtpclient.h \
-	imap/jmap_support.c \
-	imap/jmap_support.h
+	imap/smtpclient.h
 endif
 
 if USE_XAPIAN
@@ -1291,7 +1289,6 @@ imap_httpd_SOURCES += \
 	imap/jmap_mail.h \
 	imap/jmap_mail_submission.c \
 	imap/jmap_mailbox.c \
-	imap/jmap_support.c \
 	imap/jmap_vacation.c \
 	imap/sync_support.c \
         imap/sync_support.h
