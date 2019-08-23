@@ -1145,7 +1145,10 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
         if (r) goto out;
 
         if (mbentry) {
-            if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
+            if (mbentry->mbtype & MBTYPE_DELETED) {
+                /* fall through to create a new intermediate */
+            }
+            else if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
                 /* existing intermediate - delete unless it still has children */
                 if (mboxlist_haschildren(mboxname))
                     continue;
@@ -1160,8 +1163,8 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
                 newmbentry->foldermodseq = modseq;
 
                 syslog(LOG_NOTICE,
-                       "mboxlist: deleting intermediate with no children: %s",
-                       mboxname);
+                       "mboxlist: deleting intermediate with no children: %s (%s)",
+                       mboxname, mbentry->uniqueid);
                 r = mboxlist_update_entry(mboxname, newmbentry, NULL);
                 mboxlist_entry_free(&newmbentry);
                 if (r) goto out;
@@ -1169,9 +1172,6 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
 
                 /* we've changed the type, we're done at this level */
                 continue;
-            }
-            else if (mbentry->mbtype & MBTYPE_DELETED) {
-                /* fall through to create a new intermediate */
             }
             else {
                 /* real mailbox, we're done at this level */
@@ -1197,7 +1197,8 @@ EXPORTED int mboxlist_update_intermediaries(const char *frommboxname,
         newmbentry->foldermodseq = modseq;
 
         syslog(LOG_NOTICE,
-               "mboxlist: creating intermediate with children: %s", mboxname);
+               "mboxlist: creating intermediate with children: %s (%s)",
+               mboxname, newmbentry->uniqueid);
         r = mboxlist_update_entry(mboxname, newmbentry, NULL);
         mboxlist_entry_free(&newmbentry);
         if (r) goto out;
