@@ -1228,7 +1228,7 @@ EXPORTED int mboxlist_promote_intermediary(const char *mboxname)
     r = mboxlist_create_partition(mboxname, parent->partition,
                                   &mbentry->partition);
     if (r) goto done;
-    mbentry->mbtype &= ~MBTYPE_INTERMEDIATE;
+    mbentry->mbtype = 0; // intermediaries are always standard
     free(mbentry->acl);
     mbentry->acl = xstrdupnull(parent->acl);
 
