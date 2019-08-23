@@ -5819,7 +5819,7 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 
     /* skip deleted items */
     if (mboxname_isdeletedmailbox(mbentry->name, 0) ||
-        mbentry->mbtype == MBTYPE_DELETED) {
+        (mbentry->mbtype & MBTYPE_DELETED)) {
         goto done;
     }
 

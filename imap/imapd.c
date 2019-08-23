@@ -7397,7 +7397,7 @@ static int renmbox(const mbentry_t *mbentry, void *rock)
     r = mboxlist_lookup_allow_all(text->newmailboxname, &newmbentry, NULL);
     /* XXX - otherwise we should probably reject now, but meh, save it for
      * a real cleanup */
-    if (!r && newmbentry->mbtype == MBTYPE_DELETED) {
+    if (!r && (newmbentry->mbtype & MBTYPE_DELETED)) {
         /* changing the unique id since last time? */
         if (strcmpsafe(mbentry->uniqueid, newmbentry->uniqueid)) {
             /* then the UIDVALIDITY must be higher than before */
@@ -7731,7 +7731,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         r = mboxlist_lookup_allow_all(newmailboxname, &newmbentry, NULL);
         /* XXX - otherwise we should probably reject now, but meh, save it for
          * a real cleanup */
-        if (!r && newmbentry->mbtype == MBTYPE_DELETED) {
+        if (!r && (newmbentry->mbtype & MBTYPE_DELETED)) {
             /* changing the unique id since last time? */
             if (!mbentry || strcmpsafe(mbentry->uniqueid, newmbentry->uniqueid)) {
                 /* then the UIDVALIDITY must be higher than before */
@@ -11786,7 +11786,7 @@ static int xfer_delete(struct xfer_header *xfer)
         newentry->acl = xstrdupnull(item->mbentry->acl);
         newentry->server = xstrdupnull(item->mbentry->server);
         newentry->partition = xstrdupnull(item->mbentry->partition);
-        newentry->mbtype = item->mbentry->mbtype|MBTYPE_DELETED;
+        newentry->mbtype = MBTYPE_DELETED;
         r = mboxlist_update(newentry, 1);
         mboxlist_entry_free(&newentry);
 

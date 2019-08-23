@@ -720,10 +720,10 @@ static int mboxlist_update_racl(const char *name, const mbentry_t *oldmbentry, c
 
     if (!admins) admins = strarray_split(config_getstring(IMAPOPT_ADMINS), NULL, 0);
 
-    if (oldmbentry && oldmbentry->mbtype != MBTYPE_DELETED)
+    if (oldmbentry && !(oldmbentry->mbtype & MBTYPE_DELETED))
         oldusers = strarray_split(oldmbentry->acl, "\t", 0);
 
-    if (newmbentry && newmbentry->mbtype != MBTYPE_DELETED)
+    if (newmbentry && !(newmbentry->mbtype & MBTYPE_DELETED))
         newusers = strarray_split(newmbentry->acl, "\t", 0);
 
     if (oldusers) {
@@ -1417,12 +1417,12 @@ EXPORTED int mboxlist_createmailbox_opts(const char *name, int mbtype,
     /* check if a mailbox tombstone or intermediate record exists */
     r = mboxlist_lookup_allow_all(name, &oldmbentry, NULL);
     if (!r) {
-        if (oldmbentry->mbtype == MBTYPE_DELETED) {
+        if (oldmbentry->mbtype & MBTYPE_DELETED) {
             /* then the UIDVALIDITY must be higher than before */
             if (uidvalidity <= oldmbentry->uidvalidity)
                 uidvalidity = oldmbentry->uidvalidity+1;
         }
-        else if (oldmbentry->mbtype == MBTYPE_INTERMEDIATE) {
+        else if (oldmbentry->mbtype & MBTYPE_INTERMEDIATE) {
             /* then use the existing mailbox ID and createdmodseq */
             if (!uniqueid) uniqueid = oldmbentry->uniqueid;
             createdmodseq = oldmbentry->createdmodseq;
