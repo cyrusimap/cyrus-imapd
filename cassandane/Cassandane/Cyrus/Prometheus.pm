@@ -206,10 +206,10 @@ sub test_quota_commitments
 
     my $inbox = 'user.cassandane';  # allocate top level quota here
     my $child = "$inbox.child";
-    my $gchild1 = "$child.gchild1"; # we'll stick this one on a sep part
-    my $gchild2 = "$child.gchild2"; # give this one its own quota
-    my $ggchild1 = "$gchild1.ggchild1"; # and give this one its own quota
-    my $ggchild2 = "$gchild1.ggchild2"; # and this one back on def part
+    my $gchild1 = "$child.cat"; # we'll stick this one on a sep part
+    my $gchild2 = "$child.dog"; # give this one its own quota
+    my $ggchild1 = "$gchild1.manx"; # and give this one its own quota
+    my $ggchild2 = "$gchild1.siamese"; # and this one back on def part
     my $interm = "$inbox.foo.bar.baz"; # contains intermediate folders
 
     # make some folders
@@ -233,6 +233,8 @@ sub test_quota_commitments
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
     $admintalk->setquota($ggchild1, '(STORAGE 2000)');
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $admintalk->logout();
 
     sleep 3;
 
