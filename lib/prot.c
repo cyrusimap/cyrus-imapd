@@ -1392,6 +1392,12 @@ EXPORTED int prot_printamap(struct protstream *out, const char *s, size_t n)
 
     if (!s) return prot_printf(out, "NIL");
 
+    if (!n) {
+        prot_putc('"', out);
+        prot_putc('"', out);
+        return 2;
+    }
+
     if (imparse_isnatom(s, n) && (n != 3 || memcmp(s, "NIL", 3)))
         return prot_write(out, s, n);
 
