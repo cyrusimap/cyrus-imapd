@@ -636,13 +636,14 @@ int main(int argc, char **argv)
     int debugmode = 0;
     int verbose = 0;
     int frequency = 0;
+    int oneshot = 0;
     int opt;
     int r;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
 
-    while ((opt = getopt(argc, argv, "C:Dcdf:v")) != -1) {
+    while ((opt = getopt(argc, argv, "C:D1cdf:v")) != -1) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -650,6 +651,10 @@ int main(int argc, char **argv)
 
         case 'D': /* run gdb */
             call_debugger = 1;
+            break;
+
+        case '1': /* produce report once and exit */
+            oneshot = 1;
             break;
 
         case 'c': /* cleanup stats directory and exit */
@@ -690,7 +695,7 @@ int main(int argc, char **argv)
     }
 
     /* fork unless we were given the -d option or we're running as a daemon */
-    if (debugmode == 0 && !getenv("CYRUS_ISDAEMON")) {
+    if (oneshot == 0 && debugmode == 0 && !getenv("CYRUS_ISDAEMON")) {
         pid_t pid = fork();
 
         if (pid == -1) {
@@ -754,6 +759,10 @@ int main(int argc, char **argv)
                 (now_ms() - starttime) / 1000.0);
 
         do_write_report(report_file, &report_buf);
+
+        if (oneshot) {
+            shut_down(0);
+        }
 
         /* then wait around a bit */
         sleep(frequency); /* XXX substract elapsed time? */
