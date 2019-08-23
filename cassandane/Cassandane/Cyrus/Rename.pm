@@ -636,4 +636,103 @@ sub test_rename_deepuser_unixhs
     $self->check_replication('new.user');
 }
 
+sub _match_intermediates
+{
+    my ($self, %expect) = @_;
+    my @lines = $self->{instance}->getsyslog();
+    #'Aug 23 12:34:20 bat 0234200101/ctl_cyrusdb[14527]: mboxlist: creating intermediate with children: user.cassandane.a (ec10f137-1bee-443e-8cb2-c6c893463b0a)',
+    #'Aug 23 12:34:20 bat 0234200101/ctl_cyrusdb[14527]: mboxlist: deleting intermediate with no children: user.cassandane.hanging (b13ba9d4-9d40-4474-911f-77346a73d747)',
+    for (@lines) {
+        if (m/mboxlist: creating intermediate with children: (.*)($| \()/) {
+            my $mbox = $1;
+            $self->assert(exists $expect{$mbox}, "didn't expect touch of $mbox");
+            my $val = delete $expect{$mbox};
+            $self->assert(!$val, "create when expected delete of $mbox");
+        }
+        if (m/mboxlist: deleting intermediate with no children: (.*)($| \()/) {
+            my $mbox = $1;
+            $self->assert(exists $expect{$mbox}, "didn't expect touch of $mbox");
+            my $val = delete $expect{$mbox};
+            $self->assert(!!$val, "delete when expected create of $mbox");
+        }
+    }
+    use Data::Dumper;
+    $self->assert_num_equals(0, scalar keys %expect, "EXPECTED TO SEE " . Dumper(\%expect, \@lines));
+}
+
+sub test_intermediate_cleanup
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.a.b.c.subdir") || die;
+    $imaptalk->create("INBOX.x.y.z.subdir") || die;
+    $imaptalk->create("INBOX.INBOX.subinbox") || die;
+    $imaptalk->create("INBOX.INBOX.a.b") || die;
+
+    _match_intermediates($self,
+        'user.cassandane.a' => undef,
+        'user.cassandane.a.b' => undef,
+        'user.cassandane.a.b.c' => undef,
+        'user.cassandane.x' => undef,
+        'user.cassandane.x.y' => undef,
+        'user.cassandane.x.y.z' => undef,
+        'user.cassandane.INBOX.a' => undef,
+    );
+
+    $imaptalk->create("INBOX.x.y");
+
+    _match_intermediates($self);
+
+    $imaptalk->delete("INBOX.x.y.z.subdir");
+
+    _match_intermediates($self,
+        'user.cassandane.x.y.z' => 1,
+    );
+
+    $imaptalk->delete("INBOX.x.y");
+
+    _match_intermediates($self,
+        'user.cassandane.x' => 1,
+    );
+
+    $imaptalk->delete("INBOX.INBOX.a.b");
+
+    _match_intermediates($self,
+        'user.cassandane.INBOX.a' => 1,
+    );
+
+    my %set = (
+      'user.cassandane.hanging' => '%(I b13ba9d4-9d40-4474-911f-77346a73d747 T i C 1 F 1 M 1538674002)',
+      'user.cassandane.a'       => undef,
+      'user.cassandane.a.b'     => undef,
+      'user.cassandane.x'       => '%(I 7c89e632-04a0-4560-9a59-18b07c13ddff T i C 1 F 1 M 1538674002)',
+      'user.cassandane.x.y'     => '%(I 385d7a66-6173-4b5e-9340-0301ac55b373 T i C 1 F 1 M 1538674002)',
+    );
+
+    # NOTE: This is all very specific!
+    foreach my $key (keys %set) {
+      $self->{instance}->run_command(
+          { cyrus => 1 },
+          'cyr_dbtool',
+          "$self->{instance}->{basedir}/conf/mailboxes.db",
+          'twoskip',
+          defined($set{$key})
+            ? ('set', $key => $set{$key})
+            : ('delete', $key),
+      );
+    }
+
+    $self->{instance}->getsyslog();
+
+    # perform startup magic
+    $self->{instance}->run_command(
+        { cyrus => 1 },
+        'ctl_cyrusdb', '-r',
+    );
+
+    _match_intermediates($self, %set);
+}
+
 1;
