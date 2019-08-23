@@ -402,10 +402,8 @@ static int quota_cb(const mbentry_t *mbentry, void *rock)
     }
 
     partition = mbentry->partition;
-    char *seenkey = strconcat(partition, " ", qrock->quota->root, NULL);
-    if (hash_lookup(seenkey, qrock->seen)) {
-        /* seen this one already, don't double count it */
-        free(seenkey);
+    if (hash_lookup(partition, qrock->seen)) {
+        /* seen this partition for this quotaroot already, don't double count it */
         return 0;
     }
 
@@ -419,19 +417,25 @@ static int quota_cb(const mbentry_t *mbentry, void *rock)
     }
     pdata->timestamp = now_ms();
 
-    hash_insert(seenkey, (void *) 1, qrock->seen);
-    free(seenkey);
+    hash_insert(partition, (void *) 1, qrock->seen);
     return 0;
 }
 
 static int count_quota_commitments(struct quota *quota, void *rock)
 {
     struct quota_rock *qrock = (struct quota_rock *) rock;
+    hash_table seen = HASH_TABLE_INITIALIZER;
     int r;
 
+    construct_hash_table(&seen, 10, 0); /* XXX */
+    qrock->seen = &seen;
     qrock->quota = quota;
+
     r = mboxlist_mboxtree(quota->root, quota_cb, qrock, 0);
+
     qrock->quota = NULL;
+    free_hash_table(&seen, NULL);
+    qrock->seen = NULL;
 
     return r;
 }
@@ -564,17 +568,13 @@ static void do_collate_usage(struct buf *buf)
                       (now_ms() - starttime) / 1000.0);
 
     if (!r) {
-        hash_table seen = HASH_TABLE_INITIALIZER;
-        construct_hash_table(&seen, 50, 1); /* XXX */
-
-        struct quota_rock rock = { NULL, &h, &seen };
+        struct quota_rock rock = { NULL, &h, NULL };
 
         starttime = now_ms();
         r = quota_foreach(NULL, count_quota_commitments, &rock, NULL);
         syslog(LOG_DEBUG, "counted quota commitments in %f seconds",
                           (now_ms() - starttime) / 1000.0);
 
-        free_hash_table(&seen, NULL);
     }
 
     /* need to invert the hash table on output, so build a list of its keys */
