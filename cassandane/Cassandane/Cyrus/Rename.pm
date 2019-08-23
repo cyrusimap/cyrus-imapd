@@ -643,13 +643,13 @@ sub _match_intermediates
     #'Aug 23 12:34:20 bat 0234200101/ctl_cyrusdb[14527]: mboxlist: creating intermediate with children: user.cassandane.a (ec10f137-1bee-443e-8cb2-c6c893463b0a)',
     #'Aug 23 12:34:20 bat 0234200101/ctl_cyrusdb[14527]: mboxlist: deleting intermediate with no children: user.cassandane.hanging (b13ba9d4-9d40-4474-911f-77346a73d747)',
     for (@lines) {
-        if (m/mboxlist: creating intermediate with children: (.*)($| \()/) {
+        if (m/mboxlist: creating intermediate with children: (.*?)($| \()/) {
             my $mbox = $1;
             $self->assert(exists $expect{$mbox}, "didn't expect touch of $mbox");
             my $val = delete $expect{$mbox};
             $self->assert(!$val, "create when expected delete of $mbox");
         }
-        if (m/mboxlist: deleting intermediate with no children: (.*)($| \()/) {
+        if (m/mboxlist: deleting intermediate with no children: (.*?)($| \()/) {
             my $mbox = $1;
             $self->assert(exists $expect{$mbox}, "didn't expect touch of $mbox");
             my $val = delete $expect{$mbox};
@@ -658,6 +658,20 @@ sub _match_intermediates
     }
     use Data::Dumper;
     $self->assert_num_equals(0, scalar keys %expect, "EXPECTED TO SEE " . Dumper(\%expect, \@lines));
+}
+
+sub _dbset
+{
+    my ($self, $key, $value) = @_;
+    $self->{instance}->run_command(
+        { cyrus => 1 },
+        'cyr_dbtool',
+        "$self->{instance}->{basedir}/conf/mailboxes.db",
+        'twoskip',
+        defined($value)
+          ? ('set', $key => $value)
+          : ('delete', $key),
+    );
 }
 
 sub test_intermediate_cleanup
@@ -703,6 +717,20 @@ sub test_intermediate_cleanup
         'user.cassandane.INBOX.a' => 1,
     );
 
+    _dbset($self, 'user.cassandane.old', '%(I 66eb299a-35a8-423d-a0a6-90cbacfd153a T di C 1 F 1 M 1538674002)');
+
+    $imaptalk->create("INBOX.old.foo");
+
+    _match_intermediates($self,
+        'user.cassandane.old' => undef,
+    );
+
+    $imaptalk->delete("INBOX.old.foo");
+
+    _match_intermediates($self,
+        'user.cassandane.old' => 1,
+    );
+
     my %set = (
       'user.cassandane.hanging' => '%(I b13ba9d4-9d40-4474-911f-77346a73d747 T i C 1 F 1 M 1538674002)',
       'user.cassandane.a'       => undef,
@@ -713,15 +741,7 @@ sub test_intermediate_cleanup
 
     # NOTE: This is all very specific!
     foreach my $key (keys %set) {
-      $self->{instance}->run_command(
-          { cyrus => 1 },
-          'cyr_dbtool',
-          "$self->{instance}->{basedir}/conf/mailboxes.db",
-          'twoskip',
-          defined($set{$key})
-            ? ('set', $key => $set{$key})
-            : ('delete', $key),
-      );
+      _dbset($self, $key, $set{$key});
     }
 
     $self->{instance}->getsyslog();
