@@ -376,33 +376,23 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
     return 0;
 }
 
-struct quota_cb_rock {
+struct quota_rock {
     struct quota *quota;
-    hash_table *h;
+    hash_table *data;
+    hash_table *seen;
 };
 
 static int quota_cb(const mbentry_t *mbentry, void *rock)
 {
-    // FIXME this must be a hash or something, we can't rely on it
-    // to be sequential!
-    static char *seen_partition = NULL;
-
-    struct quota_cb_rock *cbrock = (struct quota_cb_rock *) rock;
+    struct quota_rock *qrock = (struct quota_rock *) rock;
     struct partition_data *pdata;
     const char *partition;
     char qroot[MAX_MAILBOX_NAME];
     int res;
 
-    if (!mbentry) {
-        /* just reset the seen_partition buffer */
-        if (seen_partition) free(seen_partition);
-        seen_partition = NULL;
-        return 0;
-    }
-
     /* don't count if it belongs to a different quotaroot */
     if (quota_findroot(qroot, sizeof(qroot), mbentry->name)
-        && strcmp(qroot, cbrock->quota->root) != 0) {
+        && strcmp(qroot, qrock->quota->root) != 0) {
         return 0;
     }
 
@@ -412,35 +402,36 @@ static int quota_cb(const mbentry_t *mbentry, void *rock)
     }
 
     partition = mbentry->partition;
-    if (seen_partition && !strcmp(seen_partition, partition)) {
+    char *seenkey = strconcat(partition, " ", qrock->quota->root, NULL);
+    if (hash_lookup(seenkey, qrock->seen)) {
         /* seen this one already, don't double count it */
+        free(seenkey);
         return 0;
     }
 
-    pdata = hash_lookup(partition, cbrock->h);
+    pdata = hash_lookup(partition, qrock->data);
 
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-        struct quota *q = cbrock->quota;
+        struct quota *q = qrock->quota;
         double dv = q->limits[res] < 0 ? INFINITY : q->limits[res];
 
         pdata->quota_commitment[res] += dv;
     }
     pdata->timestamp = now_ms();
 
-    if (seen_partition) free(seen_partition);
-    seen_partition = xstrdup(partition);
-
+    hash_insert(seenkey, (void *) 1, qrock->seen);
+    free(seenkey);
     return 0;
 }
 
 static int count_quota_commitments(struct quota *quota, void *rock)
 {
-    hash_table *h = (hash_table *) rock;
-    struct quota_cb_rock cbrock = { quota, h };
+    struct quota_rock *qrock = (struct quota_rock *) rock;
     int r;
 
-    r = mboxlist_mboxtree(quota->root, quota_cb, &cbrock, 0);
-    quota_cb(NULL, NULL);
+    qrock->quota = quota;
+    r = mboxlist_mboxtree(quota->root, quota_cb, qrock, 0);
+    qrock->quota = NULL;
 
     return r;
 }
@@ -573,10 +564,17 @@ static void do_collate_usage(struct buf *buf)
                       (now_ms() - starttime) / 1000.0);
 
     if (!r) {
+        hash_table seen = HASH_TABLE_INITIALIZER;
+        construct_hash_table(&seen, 50, 1); /* XXX */
+
+        struct quota_rock rock = { NULL, &h, &seen };
+
         starttime = now_ms();
-        r = quota_foreach(NULL, count_quota_commitments, &h, NULL);
+        r = quota_foreach(NULL, count_quota_commitments, &rock, NULL);
         syslog(LOG_DEBUG, "counted quota commitments in %f seconds",
                           (now_ms() - starttime) / 1000.0);
+
+        free_hash_table(&seen, NULL);
     }
 
     /* need to invert the hash table on output, so build a list of its keys */
