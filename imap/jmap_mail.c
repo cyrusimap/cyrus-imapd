@@ -10201,8 +10201,8 @@ static void _email_bulkupdate_exec_snooze(struct email_bulkupdate *bulk)
         int j;
 
         /* Process uid records */
-        for (j = 0; j < ptrarray_size(&plan->setflags); j++) {
-            struct email_uidrec *uidrec = ptrarray_nth(&plan->setflags, j);
+        for (j = 0; j < ptrarray_size(&plan->snooze); j++) {
+            struct email_uidrec *uidrec = ptrarray_nth(&plan->snooze, j);
             if (json_object_get(bulk->set_errors, uidrec->email_id)) {
                 continue;
             }
