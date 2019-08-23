@@ -1010,6 +1010,9 @@ static void process_snoozed(struct mailbox *mailbox,
     r = msgrecord_extract_flags(mr, userid, &flags);
     if (r) goto done;
 
+    /* Add $awakened flag */
+    strarray_append(flags, "$awakened");
+
     /* Fetch annotations */
     r = msgrecord_extract_annots(mr, &annots);
     if (r) goto done;
