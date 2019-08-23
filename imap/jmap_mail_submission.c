@@ -486,7 +486,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     if (!msgid) {
         jmap_parser_invalid(&parser, "emailId");
     }
-    *emailid = xstrdup(msgid);
+    *emailid = xstrdupnull(msgid);
 
     /* identityId */
     const char *identityid = NULL;
