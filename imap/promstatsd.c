@@ -628,6 +628,7 @@ int main(int argc, char **argv)
     save_argv0(argv[0]);
 
     const char *alt_config = NULL;
+    int call_debugger = 0;
     char *report_fname = NULL;
     struct mappedfile *report_file = NULL;
     const char *p;
@@ -641,10 +642,14 @@ int main(int argc, char **argv)
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
 
-    while ((opt = getopt(argc, argv, "C:cdf:v")) != -1) {
+    while ((opt = getopt(argc, argv, "C:Dcdf:v")) != -1) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
+            break;
+
+        case 'D': /* run gdb */
+            call_debugger = 1;
             break;
 
         case 'c': /* cleanup stats directory and exit */
@@ -694,6 +699,19 @@ int main(int argc, char **argv)
 
         if (pid != 0) { /* parent */
             exit(0);
+        }
+    }
+
+    if (call_debugger) {
+        char debugbuf[1024];
+        int ret;
+        const char *debugger = config_getstring(IMAPOPT_DEBUG_COMMAND);
+        if (debugger) {
+            snprintf(debugbuf, sizeof(debugbuf), debugger,
+                     argv[0], getpid(), "promstatsd");
+            syslog(LOG_DEBUG, "running external debugger: %s", debugbuf);
+            ret = system(debugbuf); /* run debugger */
+            syslog(LOG_DEBUG, "debugger returned exit status: %d", ret);
         }
     }
 
