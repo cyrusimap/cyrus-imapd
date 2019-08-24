@@ -10333,14 +10333,18 @@ static void _email_update_bulk(jmap_req_t *req,
         }
         jmap_parser_fini(&parser);
     }
-    if (!ptrarray_size(&updates)) goto done;
+    if (ptrarray_size(&updates)) {
+        /* Build and execute bulk update */
+        _email_bulkupdate_open(req, &bulkupdate, &updates);
+        _email_bulkupdate_exec(&bulkupdate, updated, not_updated, debug);
+        _email_bulkupdate_close(&bulkupdate);
+    }
+    else {
+        /* just clean up the memory we allocated above */
+        _email_mboxrecs_free(&bulkupdate.new_mboxrecs);
+        json_decref(bulkupdate.set_errors);
+    }
 
-    /* Build and execute bulk update */
-    _email_bulkupdate_open(req, &bulkupdate, &updates);
-    _email_bulkupdate_exec(&bulkupdate, updated, not_updated, debug);
-    _email_bulkupdate_close(&bulkupdate);
-
-done:
     for (i = 0; i < ptrarray_size(&updates); i++) {
         _email_update_free(ptrarray_nth(&updates, i));
     }
