@@ -798,6 +798,12 @@ static int smtpclient_sendmail_freectx(struct backend *backend)
         syslog(LOG_ERR, "waitpid(): %m");
     }
 
+    if (ctx->infd >= 0)
+        close(ctx->infd);
+
+    if (ctx->outfd >= 0)
+        close(ctx->outfd);
+
     free(backend->context);
     return 0;
 }
