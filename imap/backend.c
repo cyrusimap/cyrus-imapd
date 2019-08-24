@@ -973,6 +973,7 @@ EXPORTED struct backend *backend_connect_pipe(int infd, int outfd,
     return ret;
 
 error:
+    backend_disconnect(ret);
     ret->sock = -1;
     free(ret);
     return NULL;
