@@ -165,3 +165,20 @@
    ...
 }
 
+{
+   sessionid_leak
+   Memcheck:Cond
+   ...
+   fun:session_new_id
+   ...
+}
+
+{
+   sessionid_check
+   Memcheck:Value8
+   ...
+   fun:session_new_id
+   ...
+}
+
+
