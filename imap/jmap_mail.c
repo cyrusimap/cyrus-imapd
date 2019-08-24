@@ -377,6 +377,9 @@ static char *_decode_to_utf8(const char *charset,
                         text = guess;
                         counts = guess_counts;
                     }
+                    else {
+                        free(guess);
+                    }
                 }
                 charset_free(&guess_cs);
             }
