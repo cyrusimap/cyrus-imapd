@@ -930,12 +930,13 @@ static void process_futurerelease(struct mailbox *mailbox,
 
     /* Send message */
     r = smtpclient_send(sm, &smtpenv, &buf);
+    smtp_envelope_fini(&smtpenv);
+    smtpclient_close(&sm);
+
     if (r) {
         syslog(LOG_ERR, "smtpclient_send failed: %s", error_message(r));
         goto done;
     }
-    smtp_envelope_fini(&smtpenv);
-    smtpclient_close(&sm);
 
     /* Mark the email as sent */
     record->system_flags |= FLAG_ANSWERED;
@@ -946,11 +947,6 @@ static void process_futurerelease(struct mailbox *mailbox,
     }
 
   done:
-    if (r) {
-        /* XXX  Error handling: retry, DSN, both, neither? */
-        caldav_alarm_delete_record(mailbox->name, record->uid);
-    }
-
     if (submission) json_decref(submission);
     if (m) message_unref(&m);
     buf_free(&buf);
