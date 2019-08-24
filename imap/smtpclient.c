@@ -74,7 +74,7 @@ struct smtpclient {
 
     /* Client implementations can free their context
      * stored in backend->context. */
-    int (*free_context)(struct backend *backend);
+    int (*free_context)(void *ctx);
 
     /* Telemetry log */
     int logfd;
@@ -121,10 +121,6 @@ static struct protocol_t smtp_protocol =
 };
 
 
-static int smtpclient_new(smtpclient_t **smp,
-                          struct backend *backend,
-                          int (*closebk)(struct backend *), int logfd);
-
 /* SMTP protocol implementation */
 
 typedef int smtp_readcb_t(smtpclient_t *sm, void *rock);
@@ -138,8 +134,6 @@ static int smtpclient_quit(smtpclient_t *sm);
 static int smtpclient_from(smtpclient_t *sm, smtp_addr_t *addr);
 static int smtpclient_rcpt_to(smtpclient_t *sm, ptrarray_t *rcpt);
 static int smtpclient_data(smtpclient_t *sm, struct protstream *data);
-
-static int smtpclient_sendmail_freectx(struct backend* backend);
 
 EXPORTED int smtpclient_open(smtpclient_t **smp)
 {
@@ -171,7 +165,7 @@ EXPORTED int smtpclient_close(smtpclient_t **smp)
     /* Close backend */
     backend_disconnect(sm->backend);
     if (sm->free_context) {
-        r = sm->free_context(sm->backend);
+        r = sm->free_context(sm->backend->context);
     }
     free(sm->backend);
     sm->backend = NULL;
@@ -683,7 +677,7 @@ EXPORTED const char *smtpclient_get_resp_text(smtpclient_t *sm)
 
 static int smtpclient_new(smtpclient_t **smp,
                           struct backend *backend,
-                          int (*freectx)(struct backend *), int logfd)
+                          int (*freectx)(void *), int logfd)
 {
     smtpclient_t *sm = xzmalloc(sizeof(smtpclient_t));
     sm->backend = backend;
@@ -789,10 +783,9 @@ typedef struct {
     pid_t pid;
 } smtpclient_sendmail_ctx_t;
 
-static int smtpclient_sendmail_freectx(struct backend *backend)
+static int smtpclient_sendmail_freectx(smtpclient_sendmail_ctx_t *ctx)
 {
-    smtpclient_sendmail_ctx_t *ctx =
-        (smtpclient_sendmail_ctx_t *) backend->context;
+    if (!ctx) return 0;
 
     if (ctx->pid && waitpid(ctx->pid, NULL, 0) < 0) {
         syslog(LOG_ERR, "waitpid(): %m");
@@ -804,7 +797,7 @@ static int smtpclient_sendmail_freectx(struct backend *backend)
     if (ctx->outfd >= 0)
         close(ctx->outfd);
 
-    free(backend->context);
+    free(ctx);
     return 0;
 }
 
@@ -861,17 +854,17 @@ EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
 
     logfd = telemetry_log("smtpclient.sendmail", NULL, NULL, 0);
 
-
     /* Create backend and setup context */
     bk = backend_connect_pipe(ctx->infd, ctx->outfd, &smtp_protocol, 0, logfd);
     if (!bk) {
         syslog(LOG_ERR, "smptclient_open: can't open sendmail backend");
         r = IMAP_INTERNAL;
+        smtpclient_sendmail_freectx(ctx);
         if (logfd != -1) close(logfd);
         goto done;
     }
     bk->context = ctx;
-    r = smtpclient_new(smp, bk, smtpclient_sendmail_freectx, logfd);
+    r = smtpclient_new(smp, bk, (int (*)(void *)) smtpclient_sendmail_freectx, logfd);
 
 done:
     return r;
