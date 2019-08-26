@@ -9020,7 +9020,7 @@ static void _email_update_parse(json_t *jemail,
 
     /* Is snoozedUntil being changed? */
     json_t *snoozedUntil = json_object_get(jemail, "snoozedUntil");
-    if (JNOTNULL(snoozedUntil)) {
+    if (snoozedUntil) {
         if (!bulk->snoozed_uniqueid) {
             jmap_mailbox_find_role(bulk->req, "snoozed",
                                    NULL, &bulk->snoozed_uniqueid);
@@ -9030,7 +9030,7 @@ static void _email_update_parse(json_t *jemail,
         }
 
         if (bulk->snoozed_uniqueid && *bulk->snoozed_uniqueid &&
-            json_is_utcdate(snoozedUntil)) {
+            (json_is_null(snoozedUntil) || json_is_utcdate(snoozedUntil))) {
             update->snoozed = json_string_value(snoozedUntil);
         }
         else {
