@@ -560,15 +560,24 @@ static void do_collate_usage(struct buf *buf)
     hash_table h = HASH_TABLE_INITIALIZER;
     strarray_t *partition_names = NULL;
     int r;
+    int64_t starttime;
 
     construct_hash_table(&h, 10, 0); /* 10 partitions is probably enough right */
 
+    starttime = now_ms();
     r = mboxlist_findall_withp(NULL /* admin namespace */,
                                "*", 1,
                                NULL, NULL,
                                count_users_mailboxes, NULL, &h);
-    if (!r)
+    syslog(LOG_DEBUG, "counted users and mailboxes in %f seconds",
+                      (now_ms() - starttime) / 1000.0);
+
+    if (!r) {
+        starttime = now_ms();
         r = quota_foreach(NULL, count_quota_commitments, &h, NULL);
+        syslog(LOG_DEBUG, "counted quota commitments in %f seconds",
+                          (now_ms() - starttime) / 1000.0);
+    }
 
     /* need to invert the hash table on output, so build a list of its keys */
     partition_names = get_partition_names(&h);
@@ -701,6 +710,7 @@ int main(int argc, char **argv)
 
     for (;;) {
         int sig;
+        int64_t starttime;
 
         sig = signals_poll();
         if (sig == SIGHUP && getenv("CYRUS_ISDAEMON")) {
@@ -715,8 +725,16 @@ int main(int argc, char **argv)
             shut_down(0);
         }
 
+        starttime = now_ms();
         do_collate_report(&report_buf);
+        syslog(LOG_DEBUG, "collated service report in %f seconds",
+                (now_ms() - starttime) / 1000.0);
+
+        starttime = now_ms();
         do_collate_usage(&report_buf);
+        syslog(LOG_DEBUG, "collated usage report in %f seconds",
+                (now_ms() - starttime) / 1000.0);
+
         do_write_report(report_file, &report_buf);
 
         /* then wait around a bit */
