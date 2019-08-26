@@ -373,6 +373,14 @@ sub test_shared
     if ($maj > 3 or ($maj == 3 and ($min > 1 or ($min == 1 and $rev >= 3)))) {
         $specific_entries{'/shared/vendor/cmu/cyrus-imapd/sortorder'} = undef;
     }
+    # synccrcs got a new default in 3.1.7
+    # XXX Not sure how useful it is to keep subdividing our 3.1 tests, we
+    # XXX expect this unstable series to be a moving target.  Once 3.2 forks
+    # XXX I think we def should collapse all these 3.1s into a single 3.1
+    if ($maj > 3 or ($maj == 3 and ($min > 1 or ($min == 1 and $rev >= 7)))) {
+        $specific_entries{'/shared/vendor/cmu/cyrus-imapd/synccrcs'} =
+            '0 12345678';
+    }
     $self->assert_deep_equals(\%specific_entries, $r);
 
     # individual item fetch:
