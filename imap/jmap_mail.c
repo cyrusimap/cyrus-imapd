@@ -9210,9 +9210,24 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
                 }
                 else {
                     if (uidrec) {
-                        /* Delete the email from this mailbox. */
-                        ptrarray_append(&plan->delete, uidrec);
-                        plan->needrights |= ACL_EXPUNGE|ACL_DELETEMSG;
+                        if (update->snoozed &&
+                            !strcmp(mbox_id, bulk->snoozed_uniqueid)) {
+                            /* Can't set snoozedUntil
+                               if removing from snooze mailbox */
+                            if (json_object_get(bulk->set_errors, email_id) == NULL) {
+                                json_object_set_new(bulk->set_errors, email_id,
+                                                    json_pack("{s:s s:[s]}",
+                                                              "type",
+                                                              "invalidProperties",
+                                                              "properties",
+                                                              "snoozedUntil"));
+                            }
+                        }
+                        else {
+                            /* Delete the email from this mailbox. */
+                            ptrarray_append(&plan->delete, uidrec);
+                            plan->needrights |= ACL_EXPUNGE|ACL_DELETEMSG;
+                        }
                     }
                 }
             }
