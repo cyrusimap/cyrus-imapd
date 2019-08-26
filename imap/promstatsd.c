@@ -381,14 +381,10 @@ struct quota_cb_rock {
     hash_table *h;
 };
 
-/* n.b. This can't use the same tricky optimisation as count_users_mailboxes()
- * does, because we need to be able to break the loop early when we reach a
- * quotaroot boundary, and the 'p' callback doesn't provide that functionality.
- * Luckily(??) we're "only" iterating a quotaroot at a time here, not the
- * entire mailboxes.db
- */
-static int quota_cb(struct findall_data *data, void *rock)
+static int quota_cb(const mbentry_t *mbentry, void *rock)
 {
+    // FIXME this must be a hash or something, we can't rely on it
+    // to be sequential!
     static char *seen_partition = NULL;
 
     struct quota_cb_rock *cbrock = (struct quota_cb_rock *) rock;
@@ -397,25 +393,25 @@ static int quota_cb(struct findall_data *data, void *rock)
     char qroot[MAX_MAILBOX_NAME];
     int res;
 
-    if (!data) {
+    if (!mbentry) {
         /* just reset the seen_partition buffer */
         if (seen_partition) free(seen_partition);
         seen_partition = NULL;
         return 0;
     }
 
-    /* don't want partial matches */
-    if (!data->mbname || !data->mbentry) return 0;
-
-    /* stop if we reach a new quotaroot */
-    if (quota_findroot(qroot, sizeof(qroot), mbname_intname(data->mbname))
+    /* don't count if it belongs to a different quotaroot */
+    if (quota_findroot(qroot, sizeof(qroot), mbentry->name)
         && strcmp(qroot, cbrock->quota->root) != 0) {
-        if (seen_partition) free(seen_partition);
-        seen_partition = NULL;
-        return 1;
+        return 0;
     }
 
-    partition = data->mbentry->partition;
+    /* no partition? nothing to count */
+    if (!mbentry->partition) {
+        return 0;
+    }
+
+    partition = mbentry->partition;
     if (seen_partition && !strcmp(seen_partition, partition)) {
         /* seen this one already, don't double count it */
         return 0;
@@ -441,18 +437,11 @@ static int count_quota_commitments(struct quota *quota, void *rock)
 {
     hash_table *h = (hash_table *) rock;
     struct quota_cb_rock cbrock = { quota, h };
-    char tmp[MAX_MAILBOX_PATH];
-    strarray_t *patterns = strarray_new();
     int r;
 
-    strarray_append(patterns, quota->root);
-    snprintf(tmp, sizeof(tmp), "%s.*", quota->root);
-    strarray_append(patterns, tmp);
+    r = mboxlist_mboxtree(quota->root, quota_cb, &cbrock, 0);
+    quota_cb(NULL, NULL);
 
-    r = mboxlist_findallmulti(NULL /* admin namespace */, patterns, 1, NULL, NULL,
-                              quota_cb, &cbrock);
-
-    strarray_free(patterns);
     return r;
 }
 
