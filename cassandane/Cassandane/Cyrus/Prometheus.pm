@@ -287,9 +287,13 @@ sub slowtest_50000_users
 {
     my ($self) = @_;
 
+    my $nusers = 50000;
+    my @subfolders = qw(Drafts Sent Spam Trash);
+    my $storage = 8000;
+
     my $admintalk = $self->{adminstore}->get_client();
 
-    foreach my $n (1..50000) {
+    foreach my $n (1..$nusers) {
         # reconnect every so often so stuff can flush
         if ($n % 5000 == 0) {
             $admintalk->logout();
@@ -302,17 +306,18 @@ sub slowtest_50000_users
         $self->assert_str_equals('ok',
             $admintalk->get_last_completion_response());
 
-        $admintalk->setquota($folder, '(STORAGE 8000)');
+        $admintalk->setquota($folder, "(STORAGE $storage)");
         $self->assert_str_equals('ok',
             $admintalk->get_last_completion_response());
 
-        foreach my $subfolder (qw(Drafts Sent Spam Trash)) {
+        foreach my $subfolder (@subfolders) {
             $admintalk->create("$folder.$subfolder");
             $self->assert_str_equals('ok',
                 $admintalk->get_last_completion_response());
         }
     }
 
+    # XXX may not be long enough!
     sleep 3;
 
     my $response = $self->http_report();
@@ -320,7 +325,14 @@ sub slowtest_50000_users
 
     my $report = parse_report($response->{content});
     $self->assert(scalar keys %{$report});
-    xlog "report: " . Dumper $report;
+
+    # n.b. user/mailbox counts are +1 cause of user.cassandane!
+    $self->assert_num_equals(1 + $nusers,
+        $report->{'cyrus_usage_users'}->{'partition="default"'}->{value});
+    $self->assert_num_equals(1 + $nusers + ($nusers * scalar @subfolders),
+        $report->{'cyrus_usage_mailboxes'}->{'partition="default"'}->{value});
+    $self->assert_num_equals($nusers * $storage,
+        $report->{'cyrus_usage_quota_commitment'}->{'partition="default",resource="STORAGE"'}->{value});
 }
 
 1;
