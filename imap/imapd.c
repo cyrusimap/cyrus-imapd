@@ -4333,6 +4333,10 @@ static void cmd_select(char *tag, char *cmd, char *name)
                  */
                 ;
             }
+            else if (!strcmp(arg.s, "EXPUNGED")) {
+                /* include EXPUNGED messages */
+                init.want_expunged = 1;
+            }
             else {
                 prot_printf(imapd_out, "%s BAD Invalid %s modifier %s\r\n",
                             tag, cmd, arg.s);
