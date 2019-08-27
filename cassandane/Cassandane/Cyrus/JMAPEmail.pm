@@ -2807,6 +2807,7 @@ sub test_email_snooze
     $self->assert_null($msg->{mailboxIds}{$inboxId});
     $self->assert_not_null($msg->{mailboxIds}{$snoozedId});
     $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+    $self->assert_equals($datestr, $msg->{snoozedUntil});
 
     xlog "Adjust snoozeUntil";
     $maildate->add(DateTime::Duration->new(seconds => 15));
@@ -2829,6 +2830,7 @@ sub test_email_snooze
     $self->assert_null($msg->{mailboxIds}{$inboxId});
     $self->assert_not_null($msg->{mailboxIds}{$snoozedId});
     $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+    $self->assert_equals($datestr, $msg->{snoozedUntil});
 
     xlog "trigger re-delivery of snoozed email";
     $self->{instance}->run_command({ cyrus => 1 },
