@@ -2746,7 +2746,87 @@ sub test_emailsubmission_set_futurerelease
     $self->assert_not_null($res->[0][1]{notUpdated});
 }
 
-sub test_email_snooze
+sub test_email_set_create_snooze
+    :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "create snooze mailbox";
+    my $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "snoozed",
+                            parentId => undef,
+                            role => "snoozed"
+             }}}, "R1"]
+    ]);
+    $self->assert_str_equals('Mailbox/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $snoozedmbox = $res->[0][1]{created}{"1"}{id};
+
+    my $maildate = DateTime->now();
+    $maildate->add(DateTime::Duration->new(seconds => 30));
+    my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
+
+    my $draft =  {
+        mailboxIds => { $snoozedmbox => JSON::true },
+        from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
+        sender => [{ name => "Marvin the Martian", email => "marvin\@acme.local" }],
+        to => [
+            { name => "Bugs Bunny", email => "bugs\@acme.local" },
+            { name => "Rainer M\N{LATIN SMALL LETTER U WITH DIAERESIS}ller", email => "rainer\@de.local" },
+        ],
+        cc => [
+            { name => "Elmer Fudd", email => "elmer\@acme.local" },
+            { name => "Porky Pig", email => "porky\@acme.local" },
+        ],
+        bcc => [
+            { name => "Wile E. Coyote", email => "coyote\@acme.local" },
+        ],
+        replyTo => [ { name => undef, email => "the.other.sam\@acme.local" } ],
+        subject => "Memo",
+        textBody => [{ partId => '1' }],
+        htmlBody => [{ partId => '2' }],
+        bodyValues => {
+            '1' => { value => "I'm givin' ya one last chance ta surrenda!" },
+            '2' => { value => "Oh!!! I <em>hate</em> that Rabbit." },
+        },
+        keywords => { '$Draft' => JSON::true },
+        snoozedUntil => "$datestr",
+    };
+
+    xlog "Create a draft";
+    $res = $jmap->CallMethods([['Email/set', { create => { "1" => $draft }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+
+    xlog "Get draft $id";
+    $res = $jmap->CallMethods([['Email/get', { ids => [$id] }, "R1"]]);
+    my $msg = $res->[0][1]->{list}[0];
+
+    $self->assert_deep_equals($msg->{mailboxIds}, $draft->{mailboxIds});
+    $self->assert_deep_equals($msg->{from}, $draft->{from});
+    $self->assert_deep_equals($msg->{sender}, $draft->{sender});
+    $self->assert_deep_equals($msg->{to}, $draft->{to});
+    $self->assert_deep_equals($msg->{cc}, $draft->{cc});
+    $self->assert_deep_equals($msg->{bcc}, $draft->{bcc});
+    $self->assert_deep_equals($msg->{replyTo}, $draft->{replyTo});
+    $self->assert_str_equals($msg->{subject}, $draft->{subject});
+    $self->assert_equals(JSON::true, $msg->{keywords}->{'$draft'});
+    $self->assert_num_equals(1, scalar keys %{$msg->{keywords}});
+    $self->assert_equals($datestr, $msg->{snoozedUntil});
+
+    # Now change the draft keyword, which is allowed since approx ~Q1/2018.
+    xlog "Update a draft";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $id => { 'keywords/$draft' => undef } },
+        }, "R1"]
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+}
+
+sub test_email_set_update_snooze
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
 {
     my ($self) = @_;
