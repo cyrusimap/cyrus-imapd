@@ -1937,6 +1937,16 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         annotation_set_todb,
         NULL
     },
+    {
+        IMAP_ANNOT_NS "snoozed-until",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED,
+        0,
+        annotation_get_fromdb,
+        annotation_set_todb,
+        NULL
+    },
     { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL }
 };
 
