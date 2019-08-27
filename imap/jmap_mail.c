@@ -9174,6 +9174,37 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
         ptrarray_t *current_uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
 
         if (!update->mailboxids) {
+            if (update->snoozed) {
+                int j;
+
+                /* For all current uid records of this email,
+                   determine if to update snoozedUntil. */
+
+                for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
+                    struct email_uidrec *uidrec =
+                        ptrarray_nth(current_uidrecs, j);
+                    struct email_mboxrec *mboxrec = uidrec->mboxrec;
+                    struct email_updateplan *plan =
+                        hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
+
+                    if (!strcmp(mboxrec->mbox_id, bulk->snoozed_uniqueid)) {
+                        /* Add record to snooze plan if snoozeUntil is updated */
+                        ptrarray_append(&plan->snooze, uidrec);
+                        break;
+                    }
+                }
+
+                if (j >= ptrarray_size(current_uidrecs)) {
+                    /* Can't set snoozedUntil on non-snooze mailbox */
+                    json_object_set_new(bulk->set_errors, email_id,
+                                        json_pack("{s:s s:[s]}",
+                                                  "type",
+                                                  "invalidProperties",
+                                                  "properties",
+                                                  "snoozedUntil"));
+                }
+            }
+
             continue;
         }
 
@@ -9243,20 +9274,34 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
                 struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
                 struct email_mboxrec *mboxrec = uidrec->mboxrec;
                 struct email_updateplan *plan = hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
-                if (json_object_get(mailboxids, mboxrec->mbox_id)) {
+                json_t *keep = json_object_get(mailboxids, mboxrec->mbox_id);
+
+                if (keep) {
                     /* Keep message in mailbox */
                     json_object_del(mailboxids, mboxrec->mbox_id);
-
-                    /* Add record to snooze plan if snoozeUntil is updated */
-                    if (update->snoozed &&
-                        !strcmp(mboxrec->mbox_id, bulk->snoozed_uniqueid)) {
-                        ptrarray_append(&plan->snooze, uidrec);
-                    }
                 }
                 else {
                     /* Delete message from mailbox */
                     ptrarray_append(&plan->delete, uidrec);
                     plan->needrights |= ACL_EXPUNGE|ACL_DELETEMSG;
+                }
+
+                if (update->snoozed &&
+                    !strcmp(mboxrec->mbox_id, bulk->snoozed_uniqueid)) {
+                    if (keep) {
+                        /* Add record to snooze plan if snoozeUntil is updated */
+                        ptrarray_append(&plan->snooze, uidrec);
+                    }
+                    else if (!json_object_get(bulk->set_errors, email_id)) {
+                        /* Can't set snoozedUntil
+                           if removing from snooze mailbox */
+                        json_object_set_new(bulk->set_errors, email_id,
+                                            json_pack("{s:s s:[s]}",
+                                                      "type",
+                                                      "invalidProperties",
+                                                      "properties",
+                                                      "snoozedUntil"));
+                    }
                 }
             }
 
