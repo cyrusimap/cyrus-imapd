@@ -6691,6 +6691,7 @@ static void _email_append(jmap_req_t *req,
                           json_t *mailboxids,
                           strarray_t *keywords,
                           time_t internaldate,
+                          const char *snoozed,
                           int has_attachment,
                           int(*writecb)(jmap_req_t* req, FILE* fp, void* rock, json_t **err),
                           void *rock,
@@ -6700,7 +6701,7 @@ static void _email_append(jmap_req_t *req,
     int fd;
     void *addr;
     FILE *f = NULL;
-    char *mboxname = NULL;
+    char *mboxname = NULL, *last = NULL;
     const char *id;
     struct stagemsg *stage = NULL;
     struct mailbox *mbox = NULL;
@@ -6721,7 +6722,7 @@ static void _email_append(jmap_req_t *req,
 
     if (!internaldate) internaldate = time(NULL);
 
-    /* Pick the mailbox to create the message in, prefer Drafts */
+    /* Pick the mailbox to create the message in, prefer \Snoozed then \Drafts */
     mailboxes = json_pack("{}"); /* maps mailbox ids to mboxnames */
     json_object_foreach(mailboxids, id, val) {
         const char *mboxid = id;
@@ -6742,30 +6743,41 @@ static void _email_append(jmap_req_t *req,
             if (r) goto done;
         }
 
-        mbname_t *mbname = mbname_from_intname(mbentry->name);
-
-        /* Is this the draft mailbox? */
-        struct buf buf = BUF_INITIALIZER;
-        annotatemore_lookup(mbname_intname(mbname), "/specialuse",
-                            req->accountid, &buf);
-        if (buf.len) {
-            strarray_t *uses = strarray_split(buf_cstring(&buf), " ", STRARRAY_TRIM);
-            if (strarray_find_case(uses, "\\Drafts", 0)) {
-                if (mboxname) free(mboxname);
-                mboxname = xstrdup(mbentry->name);
-            }
-            strarray_free(uses);
+        if (json_is_string(val)) {
+            /* $snoozed mailbox */
+            if (mboxname) free(mboxname);
+            mboxname = xstrdup(mbentry->name);
         }
-        buf_free(&buf);
-        mbname_free(&mbname);
+        else if (!mboxname) {
+            mbname_t *mbname = mbname_from_intname(mbentry->name);
 
-        /* If we haven't picked a mailbox, pick this one. */
-        if (!mboxname) mboxname = xstrdup(mbentry->name);
+            /* Is this the draft mailbox? */
+            struct buf buf = BUF_INITIALIZER;
+            annotatemore_lookup(mbname_intname(mbname), "/specialuse",
+                                req->accountid, &buf);
+            if (buf.len) {
+                strarray_t *uses = strarray_split(buf_cstring(&buf), " ", STRARRAY_TRIM);
+                if (strarray_find_case(uses, "\\Drafts", 0)) {
+                    if (mboxname) free(mboxname);
+                    mboxname = xstrdup(mbentry->name);
+                }
+                strarray_free(uses);
+            }
+            buf_free(&buf);
+            mbname_free(&mbname);
+        }
+
+        /* If we haven't picked a mailbox, remember the last one. */
+        if (last) free(last);
+        if (!mboxname) last = xstrdup(mbentry->name);
 
         /* Map mailbox id to mailbox name. */
         json_object_set_new(mailboxes, mboxid, json_string(mbentry->name));
         mboxlist_entry_free(&mbentry);
     }
+
+    /* If we haven't picked a mailbox, pick the last one. */
+    if (!mboxname) mboxname = last;
     if (!mboxname) {
         char *s = json_dumps(mailboxids, 0);
         syslog(LOG_ERR, "_email_append: invalid mailboxids: %s", s);
@@ -6841,7 +6853,20 @@ static void _email_append(jmap_req_t *req,
     r = append_setup_mbox(&as, mbox, req->userid, httpd_authstate,
             0, qdiffs, 0, 0, EVENT_MESSAGE_NEW);
     if (r) goto done;
-    r = append_fromstage(&as, &body, stage, internaldate, 0, flags.count ? &flags : NULL, 0, NULL);
+
+    struct entryattlist *annots = NULL;
+    if (snoozed) {
+        const char *annot = IMAP_ANNOT_NS "snoozed-until";
+        const char *attrib = "value.shared";
+        struct buf buf = BUF_INITIALIZER;
+
+        buf_init_ro_cstr(&buf, snoozed);
+        setentryatt(&annots, annot, attrib, &buf);
+        buf_free(&buf);
+    }
+    r = append_fromstage(&as, &body, stage, internaldate, 0,
+                         flags.count ? &flags : NULL, 0, annots);
+    freeentryatts(annots);
     if (r) {
         append_abort(&as);
         goto done;
@@ -6995,6 +7020,7 @@ struct email {
     struct emailpart *body;      /* top-level MIME part */
     time_t internaldate;    /* RFC 3501 internaldate aka receivedAt */
     int has_attachment;           /* set the HasAttachment flag */
+    const char *snoozed;          /* set snoozed-until annotation */
 };
 
 static void _email_fini(struct email *email)
@@ -8219,6 +8245,15 @@ static void _parse_email(json_t *jemail,
 
     /* Parse bodies */
     _email_parse_bodies(jemail, parser, email);
+
+    /* Is snoozedUntil being set? */
+    json_t *snoozedUntil = json_object_get(jemail, "snoozedUntil");
+    if (json_is_utcdate(snoozedUntil)) {
+        email->snoozed = json_string_value(snoozedUntil);
+    }
+    else if (JNOTNULL(snoozedUntil)) {
+        jmap_parser_invalid(parser, "snoozedUntil");
+    }
 }
 
 static void _emailpart_blob_to_mime(jmap_req_t *req,
@@ -8523,14 +8558,17 @@ static void _email_create(jmap_req_t *req,
                           json_t **set_err)
 {
     strarray_t keywords = STRARRAY_INITIALIZER;
-    int r = 0;
+    char *snoozed_mboxname = NULL, *snoozed_uniqueid = NULL;
+    int r = 0, have_snoozed_mboxid = 0;
     *set_err = NULL;
     struct email_append_detail detail;
     memset(&detail, 0, sizeof(struct email_append_detail));
 
+    jmap_mailbox_find_role(req, "snoozed", &snoozed_mboxname, &snoozed_uniqueid);
+
     /* Parse Email object into internal representation */
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct email email = { HEADERS_INITIALIZER, NULL, NULL, time(NULL), 0 };
+    struct email email = { HEADERS_INITIALIZER, NULL, NULL, time(NULL), 0, NULL };
     _parse_email(jemail, &parser, &email);
 
     /* Validate mailboxIds */
@@ -8547,7 +8585,14 @@ static void _email_create(jmap_req_t *req,
             const char *role = mbox_id + 1;
             char *uniqueid = NULL;
             char *mboxname = NULL;
-            if (!jmap_mailbox_find_role(req, role, &mboxname, &uniqueid) &&
+            if (snoozed_uniqueid && !strcmp(role, "snoozed") &&
+                jmap_hasrights_byname(req, snoozed_mboxname, need_rights)) {
+                json_object_del(jmailboxids, mbox_id);
+                json_object_set_new(jmailboxids,
+                                    snoozed_uniqueid, json_string("$snoozed"));
+                have_snoozed_mboxid = 1;
+            }
+            else if (!jmap_mailbox_find_role(req, role, &mboxname, &uniqueid) &&
                 jmap_hasrights_byname(req, mboxname, need_rights)) {
                 json_object_del(jmailboxids, mbox_id);
                 json_object_set_new(jmailboxids, uniqueid, json_true());
@@ -8572,9 +8617,19 @@ static void _email_create(jmap_req_t *req,
                 jmap_parser_invalid(&parser, NULL);
                 is_valid = 0;
             }
+            else if (!strcmpnull(snoozed_uniqueid, mbentry->uniqueid)) {
+                json_object_set_new(jmailboxids,
+                                    mbox_id, json_string("$snoozed"));
+                have_snoozed_mboxid = 1;
+            }
             mboxlist_entry_free(&mbentry);
         }
         if (!is_valid) break;
+    }
+
+    /* Validate snoozedUntil + mailboxIds */
+    if (email.snoozed && !have_snoozed_mboxid) {
+        jmap_parser_invalid(&parser, "snoozedUntil");
     }
     if (json_array_size(parser.invalid)) {
         *set_err = json_pack("{s:s s:O}", "type", "invalidProperties",
@@ -8601,7 +8656,7 @@ static void _email_create(jmap_req_t *req,
 
     /* Append MIME-encoded Email to mailboxes and write keywords */
 
-    _email_append(req, jmailboxids, &keywords, email.internaldate,
+    _email_append(req, jmailboxids, &keywords, email.internaldate, email.snoozed,
                   config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT) ?
                   email.has_attachment : 0, _email_to_mime, &email,
                   &detail, set_err);
@@ -8627,6 +8682,8 @@ done:
     strarray_fini(&keywords);
     jmap_parser_fini(&parser);
     _email_fini(&email);
+    free(snoozed_mboxname);
+    free(snoozed_uniqueid);
 }
 
 static int _email_uidrec_compareuid_cb(const void **pa, const void **pb)
@@ -10701,7 +10758,7 @@ static void _email_import(jmap_req_t *req,
     free(body);
 
     /* Write the message to the file system */
-    _email_append(req, jmailbox_ids, &keywords, internaldate,
+    _email_append(req, jmailbox_ids, &keywords, internaldate, NULL,
                   has_attachment, _email_import_cb, &content, &detail, err);
     if (*err) goto done;
 
