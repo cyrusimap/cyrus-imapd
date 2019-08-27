@@ -50,6 +50,7 @@
 #include <string.h>
 #include <errno.h>
 
+#include "assert.h"
 #include "signals.h"
 #include "xmalloc.h"
 #include "util.h"
@@ -224,6 +225,11 @@ EXPORTED int signals_poll(void)
 EXPORTED int signals_select(int nfds, fd_set *rfds, fd_set *wfds,
                             fd_set *efds, struct timeval *tout)
 {
+    if (nfds > 0.9 * FD_SETSIZE) {
+        syslog(LOG_WARNING, "signals_select: nfds = %d/%d", nfds, FD_SETSIZE);
+        assert(nfds < FD_SETSIZE);
+    }
+
 #if HAVE_PSELECT
     /* pselect() closes the race between SIGCHLD arriving
     * and select() sleeping for up to 10 seconds. */
