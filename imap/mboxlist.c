@@ -2832,10 +2832,6 @@ static int find_p(void *rockp,
 
     /* check acl */
     if (!rock->isadmin) {
-        /* always suppress deleted for non-admin */
-        if (mbname_isdeleted(rock->mbname)) goto nomatch;
-
-        /* check the acls */
         if (!(cyrus_acl_myrights(rock->auth_state, rock->mbentry->acl) & ACL_LOOKUP)) goto nomatch;
     }
 
