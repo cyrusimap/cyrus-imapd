@@ -12514,6 +12514,8 @@ static int getlistselopts(char *tag, struct listargs *args)
             args->ret |= LIST_RET_SUBSCRIBED;
         } else if (!strcmp(buf.s, "vendor.cmu-dav")) {
             args->sel |= LIST_SEL_DAV;
+        } else if (!strcmp(buf.s, "vendor.fm-include-deleted")) {
+            args->sel |= LIST_SEL_DELETED;
         } else if (!strcmp(buf.s, "vendor.fm-include-nonexistent")) {
             args->sel |= LIST_SEL_INTERMEDIATES;
         } else if (!strcmp(buf.s, "remote")) {
