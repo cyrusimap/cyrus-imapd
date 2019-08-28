@@ -74,6 +74,7 @@ static const char *check_part = NULL; /* partition we are checking */
 static int chkmbox(struct findall_data *data, void *rock __attribute__((unused)))
 {
     if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
     int r;
     mbentry_t *mbentry = NULL;
     const char *name = mbname_intname(data->mbname);

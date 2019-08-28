@@ -249,6 +249,7 @@ struct findall_data {
     int mb_category;
     const mbentry_t *mbentry;
     const mbname_t *mbname;
+    int is_exactmatch;
 };
 
 typedef int findall_p(struct findall_data *data, void *rock);

@@ -444,7 +444,7 @@ static int do_reconstruct(struct findall_data *data, void *rock)
     const char *name = NULL;
 
     /* ignore partial matches */
-    if (!data->mbname) return 0;
+    if (!data->is_exactmatch) return 0;
 
     signals_poll();
 

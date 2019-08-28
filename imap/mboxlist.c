@@ -2841,10 +2841,10 @@ static int find_p(void *rockp,
 
 good:
     if (rock->p) {
-        struct findall_data fdata = { extname, 0, rock->mbentry, NULL };
+        struct findall_data fdata = { extname, 0, rock->mbentry, rock->mbname, 0 };
         /* mbname confirms that it's an exact match */
         if (rock->matchlen == (int) strlen(extname))
-            fdata.mbname = rock->mbname;
+            fdata.is_exactmatch = 1;
         if (!rock->p(&fdata, rock->procrock)) goto nomatch;
         return 1;
     }
@@ -2881,7 +2881,7 @@ static int find_cb(void *rockp,
     const char *extname = mbname_extname(rock->mbname, rock->namespace, rock->userid);
     testname = xstrndup(extname, rock->matchlen);
 
-    struct findall_data fdata = { testname, rock->mb_category, rock->mbentry, NULL };
+    struct findall_data fdata = { testname, rock->mb_category, rock->mbentry, rock->mbname, 0 };
 
     if (rock->singlepercent) {
         char sep = rock->namespace->hier_sep;
@@ -2910,7 +2910,7 @@ static int find_cb(void *rockp,
 
     /* mbname confirms that it's an exact match */
     if (rock->matchlen == (int)strlen(extname))
-        fdata.mbname = rock->mbname;
+        fdata.is_exactmatch = 1;
 
     r = (*rock->cb)(&fdata, rock->procrock);
 

@@ -115,8 +115,7 @@ static int set_specialuse(struct findall_data *data, void *rock)
     int r;
 
     if (!data) return 0;
-
-    if (!data->mbname) return 0; /* XXX what does this mean? */
+    if (!data->is_exactmatch) return 0;
 
     if (!mbname_userid(data->mbname)) return 0;
 
