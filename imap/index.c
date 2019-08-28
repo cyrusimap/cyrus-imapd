@@ -5845,6 +5845,11 @@ static int index_copysetup(struct index_state *state, uint32_t msgno,
     else
         copyargs->records[copyargs->nummsg].system_flags &= ~FLAG_SEEN;
 
+    if (state->want_expunged && (im->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        copyargs->records[copyargs->nummsg].system_flags &= ~FLAG_DELETED;
+        copyargs->records[copyargs->nummsg].internal_flags &= ~FLAG_INTERNAL_EXPUNGED;
+    }
+
     copyargs->nummsg++;
 
     return 0;
