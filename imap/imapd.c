@@ -4333,8 +4333,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
                  */
                 ;
             }
-            else if (!strcmp(arg.s, "EXPUNGED")) {
-                /* include EXPUNGED messages */
+            else if (!strcmp(arg.s, "VENDOR.FM-INCLUDE-EXPUNGED")) {
                 init.want_expunged = 1;
             }
             else {
