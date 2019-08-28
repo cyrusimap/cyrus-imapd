@@ -194,7 +194,8 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
     int j;
 
     /* don't want partial matches */
-    if (!data || !data->mbname) return 0;
+    if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
 
     signals_poll();
 
@@ -362,7 +363,8 @@ static int do_quota(struct findall_data *data, void *rock __attribute__((unused)
     struct stat sbuf;
 
     /* don't want partial matches */
-    if (!data || !data->mbname) return 0;
+    if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
 
     signals_poll();
 
@@ -432,7 +434,8 @@ static int do_compare(struct findall_data *data, void *rock __attribute__((unuse
     uint32_t *uids = NULL, nalloc, count = 0, msgno;
 
     /* don't want partial matches */
-    if (!data || !data->mbname) return 0;
+    if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
 
     signals_poll();
 

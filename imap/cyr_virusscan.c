@@ -374,7 +374,9 @@ static void print_header(void)
 
 int scan_me(struct findall_data *data, void *rock)
 {
-    if (!data || !data->mbname) return 0;
+    if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
+
     struct mailbox *mailbox = NULL;
     int r;
     struct infected_mbox *i_mbox = NULL;

@@ -252,12 +252,14 @@ static int do_reid(const mbname_t *mbname)
 int do_cmd(struct findall_data *data, void *rock)
 {
     if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
+
     int *valp = (int *)rock;
 
-    if (*valp == CMD_TIME && data->mbname != NULL)
+    if (*valp == CMD_TIME)
         return do_timestamp(data->mbname);
 
-    if (*valp == CMD_REID && data->mbname != NULL)
+    if (*valp == CMD_REID)
         return do_reid(data->mbname);
 
     return 0;

@@ -516,6 +516,7 @@ struct changesub_rock_st {
 static int autochangesub(struct findall_data *data, void *rock)
 {
     if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
     struct changesub_rock_st *crock = (struct changesub_rock_st *)rock;
     const char *userid = crock->userid;
     struct auth_state *auth_state = crock->auth_state;

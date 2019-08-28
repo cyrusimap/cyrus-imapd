@@ -5503,12 +5503,8 @@ done:
 static int xbackup_addmbox(struct findall_data *data, void *rock)
 {
     if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
     ptrarray_t *list = (ptrarray_t *) rock;
-
-    if (!data->mbname) {
-        /* No partial matches */ /* FIXME ??? */
-        return 0;
-    }
 
     /* Only add shared mailboxes or user INBOXes */
     if (!mbname_localpart(data->mbname) ||
@@ -9935,13 +9931,11 @@ struct apply_rock {
 static int apply_cb(struct findall_data *data, void* rock)
 {
     if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
+
     struct apply_rock *arock = (struct apply_rock *)rock;
     annotate_state_t *state = arock->state;
     int r;
-
-    /* Suppress any output of a partial match */
-    if (!data->mbname)
-        return 0;
 
     strlcpy(arock->lastname, mbname_intname(data->mbname), sizeof(arock->lastname));
 
@@ -11953,12 +11947,8 @@ struct xfer_list {
 static int xfer_addmbox(struct findall_data *data, void *rock)
 {
     if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
     struct xfer_list *list = (struct xfer_list *) rock;
-
-    if (!data->mbentry || !data->mbname) {
-        /* No partial matches */
-        return 0;
-    }
 
     if (list->part && strcmp(data->mbentry->partition, list->part)) {
         /* Not on specified partition */
@@ -13184,7 +13174,7 @@ static int list_cb(struct findall_data *data, void *rockp)
      * if they're required but not yet set, but it's a little cheaper to
      * precalculate them now while we're iterating the mailboxes anyway.
      */
-    if (last_name_is_ancestor || (rock->last_name && !data->mbname && !strcmp(rock->last_name, extname)))
+    if (last_name_is_ancestor || (rock->last_name && !data->is_exactmatch && !strcmp(rock->last_name, extname)))
         rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
 
     else if (!(rock->last_attributes & MBOX_ATTRIBUTE_HASCHILDREN))
@@ -13202,7 +13192,7 @@ static int list_cb(struct findall_data *data, void *rockp)
     if (!perform_output(data->extname, data->mbentry, rock))
         return 0;
 
-    if (!data->mbname)
+    if (!data->is_exactmatch)
         rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN | MBOX_ATTRIBUTE_NONEXISTENT;
 
     else if (data->mb_category == MBNAME_ALTINBOX)
@@ -13231,10 +13221,10 @@ static int subscribed_cb(struct findall_data *data, void *rockp)
     list_callback_calls++;
 
     if (last_name_is_ancestor ||
-        (rock->last_name && !data->mbname && !strcmp(rock->last_name, extname)))
+        (rock->last_name && !data->is_exactmatch && !strcmp(rock->last_name, extname)))
         rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
 
-    if (data->mbname) { /* exact match */
+    if (data->is_exactmatch) {
         mbentry_t *mbentry = NULL;
         mboxlist_lookup(mbname_intname(data->mbname), &mbentry, NULL);
         perform_output(extname, mbentry, rock);
@@ -13409,7 +13399,7 @@ static int recursivematch_cb(struct findall_data *data, void *rockp)
     }
 
 
-    if (data->mbname) { /* exact match */
+    if (data->is_exactmatch) {
         entry->attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
         if (!data->mbentry) {
             mboxlist_lookup(mbname_intname(data->mbname), &entry->mbentry, NULL);

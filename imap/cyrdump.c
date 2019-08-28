@@ -170,7 +170,8 @@ static int dump_me(struct findall_data *data, void *rock)
     unsigned msgno;
 
     /* don't want partial matches */
-    if (!data || !data->mbname) return 0;
+    if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
 
     const char *name = mbname_intname(data->mbname);
 

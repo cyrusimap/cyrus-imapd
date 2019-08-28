@@ -536,7 +536,7 @@ static int do_list(const char *name, void *rock)
 
 static int list_cb(struct findall_data *data, void *rock)
 {
-    if (data && data->mbname)
+    if (data && data->is_exactmatch)
         return do_list(mbname_intname(data->mbname), rock);
     return do_list(NULL, rock);
 }

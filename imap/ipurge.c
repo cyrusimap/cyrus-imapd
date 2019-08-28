@@ -259,7 +259,8 @@ static int purge_one(const mbname_t *mbname)
 
 static int purge_findall(struct findall_data *data, void *rock __attribute__((unused)))
 {
-    if (!data || !data->mbname) return 0;
+    if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
     return purge_one(data->mbname);
 }
 

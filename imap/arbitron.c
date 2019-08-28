@@ -242,6 +242,7 @@ static void usage(void)
 static int do_mailbox(struct findall_data *data, void *rock __attribute__((unused)))
 {
     if (!data) return 0;
+    if (!data->is_exactmatch) return 0;
     int r;
     struct mailbox *mailbox = NULL;
     const char *name = mbname_intname(data->mbname);
