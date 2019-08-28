@@ -8552,31 +8552,19 @@ static int _email_to_mime(jmap_req_t *req, FILE *fp, void *rock, json_t **err)
     return 0;
 }
 
-static void _email_create(jmap_req_t *req,
-                          json_t *jemail,
-                          json_t **new_email,
-                          json_t **set_err)
+static void _append_validate_mboxids(jmap_req_t *req,
+                                     json_t *jmailboxids,
+                                     struct jmap_parser *parser,
+                                     int *have_snoozed_mboxid)
 {
-    strarray_t keywords = STRARRAY_INITIALIZER;
     char *snoozed_mboxname = NULL, *snoozed_uniqueid = NULL;
-    int r = 0, have_snoozed_mboxid = 0;
-    *set_err = NULL;
-    struct email_append_detail detail;
-    memset(&detail, 0, sizeof(struct email_append_detail));
-
-    jmap_mailbox_find_role(req, "snoozed", &snoozed_mboxname, &snoozed_uniqueid);
-
-    /* Parse Email object into internal representation */
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct email email = { HEADERS_INITIALIZER, NULL, NULL, time(NULL), 0, NULL };
-    _parse_email(jemail, &parser, &email);
-
-    /* Validate mailboxIds */
-    json_t *jmailboxids = json_copy(json_object_get(jemail, "mailboxIds"));
-    jmap_parser_push(&parser, "mailboxIds");
     const char *mbox_id;
     json_t *jval;
     void *tmp;
+
+    jmap_mailbox_find_role(req, "snoozed", &snoozed_mboxname, &snoozed_uniqueid);
+
+    jmap_parser_push(parser, "mailboxIds");
     json_object_foreach_safe(jmailboxids, tmp, mbox_id, jval) {
         int need_rights = ACL_LOOKUP|ACL_INSERT;
         int is_valid = 1;
@@ -8590,7 +8578,7 @@ static void _email_create(jmap_req_t *req,
                 json_object_del(jmailboxids, mbox_id);
                 json_object_set_new(jmailboxids,
                                     snoozed_uniqueid, json_string("$snoozed"));
-                have_snoozed_mboxid = 1;
+                *have_snoozed_mboxid = 1;
             }
             else if (!jmap_mailbox_find_role(req, role, &mboxname, &uniqueid) &&
                 jmap_hasrights_byname(req, mboxname, need_rights)) {
@@ -8598,7 +8586,7 @@ static void _email_create(jmap_req_t *req,
                 json_object_set_new(jmailboxids, uniqueid, json_true());
             }
             else {
-                jmap_parser_invalid(&parser, NULL);
+                jmap_parser_invalid(parser, NULL);
                 is_valid = 0;
             }
             free(uniqueid);
@@ -8614,18 +8602,43 @@ static void _email_create(jmap_req_t *req,
                 mbentry = _mbentry_by_uniqueid(req, mbox_id);
             }
             if (!mbentry || !jmap_hasrights(req, mbentry, need_rights)) {
-                jmap_parser_invalid(&parser, NULL);
+                jmap_parser_invalid(parser, NULL);
                 is_valid = 0;
             }
             else if (!strcmpnull(snoozed_uniqueid, mbentry->uniqueid)) {
                 json_object_set_new(jmailboxids,
                                     mbox_id, json_string("$snoozed"));
-                have_snoozed_mboxid = 1;
+                *have_snoozed_mboxid = 1;
             }
             mboxlist_entry_free(&mbentry);
         }
         if (!is_valid) break;
     }
+    jmap_parser_pop(parser);
+
+    free(snoozed_mboxname);
+    free(snoozed_uniqueid);
+}
+
+static void _email_create(jmap_req_t *req,
+                          json_t *jemail,
+                          json_t **new_email,
+                          json_t **set_err)
+{
+    strarray_t keywords = STRARRAY_INITIALIZER;
+    int r = 0, have_snoozed_mboxid = 0;
+    *set_err = NULL;
+    struct email_append_detail detail;
+    memset(&detail, 0, sizeof(struct email_append_detail));
+
+    /* Parse Email object into internal representation */
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct email email = { HEADERS_INITIALIZER, NULL, NULL, time(NULL), 0, NULL };
+    _parse_email(jemail, &parser, &email);
+
+    /* Validate mailboxIds */
+    json_t *jmailboxids = json_copy(json_object_get(jemail, "mailboxIds"));
+    _append_validate_mboxids(req, jmailboxids, &parser, &have_snoozed_mboxid);
 
     /* Validate snoozedUntil + mailboxIds */
     if (email.snoozed && !have_snoozed_mboxid) {
@@ -8682,8 +8695,6 @@ done:
     strarray_fini(&keywords);
     jmap_parser_fini(&parser);
     _email_fini(&email);
-    free(snoozed_mboxname);
-    free(snoozed_uniqueid);
 }
 
 static int _email_uidrec_compareuid_cb(const void **pa, const void **pb)
@@ -10678,6 +10689,10 @@ static void _email_import(jmap_req_t *req,
         time_from_iso8601(received_at, &internaldate);
     }
 
+    /* check for snoozedUntil */
+    const char *snoozed =
+        json_string_value(json_object_get(jemail_import, "snoozedUntil"));
+
     /* Check mailboxes for ACL */
     if (strcmp(req->userid, req->accountid)) {
         struct msgimport_checkacl_rock rock = { req, jmailbox_ids };
@@ -10758,7 +10773,7 @@ static void _email_import(jmap_req_t *req,
     free(body);
 
     /* Write the message to the file system */
-    _email_append(req, jmailbox_ids, &keywords, internaldate, NULL,
+    _email_append(req, jmailbox_ids, &keywords, internaldate, snoozed,
                   has_attachment, _email_import_cb, &content, &detail, err);
     if (*err) goto done;
 
@@ -10784,6 +10799,7 @@ static int jmap_email_import(jmap_req_t *req)
     json_t *arg, *emails = NULL;
     const char *id;
     json_t *jemail_import;
+    int have_snoozed_mboxid = 0;
 
     /* Parse request */
     json_object_foreach(req->args, key, arg) {
@@ -10853,57 +10869,21 @@ static int jmap_email_import(jmap_req_t *req)
                 jmap_parser_invalid(&parser, "receivedAt");
             }
         }
+
+        /* Validate mailboxIds */
         json_t *jmailboxids = json_copy(json_object_get(jemail_import, "mailboxIds"));
         if (json_object_size(jmailboxids)) {
-            const char *mbox_id;
-            void *tmp;
-            jmap_parser_push(&parser, "mailboxIds");
-            int is_valid = 1;
-            json_object_foreach_safe(jmailboxids, tmp, mbox_id, jval) {
-                if (jval != json_true()) {
-                    jmap_parser_invalid(&parser, s);
-                    continue;
-                }
-                int need_rights = ACL_LOOKUP;
-                if (*mbox_id == '$') {
-                    /* Lookup mailbox by role */
-                    const char *role = mbox_id + 1;
-                    char *uniqueid = NULL;
-                    char *mboxname = NULL;
-                    if (!jmap_mailbox_find_role(req, role, &mboxname, &uniqueid) &&
-                        jmap_hasrights_byname(req, mboxname, need_rights)) {
-                        json_object_del(jmailboxids, mbox_id);
-                        json_object_set_new(jmailboxids, uniqueid, jval);
-                    }
-                    else {
-                        jmap_parser_invalid(&parser, NULL);
-                        is_valid = 0;
-                    }
-                    free(mboxname);
-                    free(uniqueid);
-                }
-                else {
-                    /* Lookup mailbox by id */
-                    if (*mbox_id == '#') {
-                        mbox_id = jmap_lookup_id(req, mbox_id + 1);
-                    }
-                    if (!mbox_id) {
-                        jmap_parser_invalid(&parser, s);
-                        continue;
-                    }
-                    mbentry_t *mbentry = _mbentry_by_uniqueid(req, mbox_id);
-                    if (!mbentry || !jmap_hasrights(req, mbentry, need_rights)) {
-                        jmap_parser_invalid(&parser, NULL);
-                        is_valid = 0;
-                    }
-                    mboxlist_entry_free(&mbentry);
-                }
-                if (!is_valid) break;
-            }
-            jmap_parser_pop(&parser);
+            _append_validate_mboxids(req, jmailboxids, &parser, &have_snoozed_mboxid);
         }
         else {
             jmap_parser_invalid(&parser, "mailboxIds");
+        }
+
+        /* Validate snoozedUntil + mailboxIds */
+        json_t *snoozedUntil = json_object_get(jemail_import, "snoozedUntil");
+        if (JNOTNULL(snoozedUntil) &&
+            !(json_is_utcdate(snoozedUntil) && have_snoozed_mboxid)) {
+            jmap_parser_invalid(&parser, "snoozedUntil");
         }
 
         json_t *invalid = json_incref(parser.invalid);
