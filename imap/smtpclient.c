@@ -113,7 +113,7 @@ static struct protocol_t smtp_protocol =
           { "ENHANCEDSTATUSCODES", SMTPCLIENT_CAPA_STATUS },
           { "FUTURERELEASE", SMTPCLIENT_CAPA_FUTURE },
           { "MT-PRIORITY", SMTPCLIENT_CAPA_PRIORITY },
-          { "SENDCHECK", SMTPCLIENT_CAPA_SENDCHECk },
+          { "SENDCHECK", SMTPCLIENT_CAPA_SENDCHECK },
           { NULL, 0 } } },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
