@@ -535,6 +535,48 @@ sub test_cyr_expire_delete
     $self->assert(!-d "$basedir/data/DELETED/user/cassandane/$subfoldername");
 }
 
+sub test_allowdeleted
+    :AllowDeleted :DelayedDelete :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $store = $self->{store};
+    my $adminstore = $self->{adminstore};
+    my $talk = $store->get_client();
+    my $admintalk = $adminstore->get_client();
+
+    my $inbox = 'INBOX';
+    my $subfolder = 'INBOX.foo';
+    $talk->create($subfolder)
+        or $self->fail("Cannot create folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->make_message('A message');
+    $talk->select("INBOX");
+    $talk->copy("1:*", $subfolder);
+    $talk->unselect();
+
+    xlog "Delete $subfolder";
+    $talk->delete($subfolder)
+        or $self->fail("Cannot delete folder $subfolder: $@");
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Check standard list only included Inbox";
+    my $result = $talk->list('', '*');
+    $self->assert_num_equals(1, scalar(@$result));
+
+    xlog "Check include-deleted LIST includes deleted mailbox";
+    $result = $talk->list(['VENDOR.CMU-INCLUDE-DELETED'], '', '*');
+    $self->assert_num_equals(2, scalar(@$result));
+    $self->assert_str_equals("INBOX", $result->[0][2]);
+    $self->assert_matches(qr/^DELETED./, $result->[1][2]);
+
+    xlog "Check that select of DELETED folder works and finds messages";
+    $talk->select($result->[1][2]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+}
+
 sub test_cyr_expire_delete_with_annotation
     :DelayedDelete :min_version_3_1
 {
