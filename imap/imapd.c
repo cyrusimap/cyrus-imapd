@@ -4340,6 +4340,9 @@ static void cmd_select(char *tag, char *cmd, char *name)
             else if (!strcmp(arg.s, "VENDOR.FM-ALLOW-DELETED")) {
                 allow_deleted = 1;
             }
+            else if (!strcmp(arg.s, "VENDOR.FM-INCLUDE-DAV")) {
+                init.want_dav = 1;
+            }
             else {
                 prot_printf(imapd_out, "%s BAD Invalid %s modifier %s\r\n",
                             tag, cmd, arg.s);
