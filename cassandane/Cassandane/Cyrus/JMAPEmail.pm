@@ -2746,6 +2746,91 @@ sub test_emailsubmission_set_futurerelease
     $self->assert_not_null($res->[0][1]{notUpdated});
 }
 
+sub test_email_import_snooze
+    :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $inbox = $self->getinbox()->{id};
+    $self->assert_not_null($inbox);
+
+    # Generate an embedded email to get a blob id
+    xlog "Generate a email in INBOX via IMAP";
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => ""
+          . "--sub\r\n"
+          . "Content-Type: text/plain; charset=UTF-8\r\n"
+          . "Content-Disposition: inline\r\n" . "\r\n"
+          . "some text"
+          . "\r\n--sub\r\n"
+          . "Content-Type: message/rfc822\r\n"
+          . "\r\n"
+          . "Return-Path: <Ava.Nguyen\@local>\r\n"
+          . "Mime-Version: 1.0\r\n"
+          . "Content-Type: text/plain\r\n"
+          . "Content-Transfer-Encoding: 7bit\r\n"
+          . "Subject: bar\r\n"
+          . "From: Ava T. Nguyen <Ava.Nguyen\@local>\r\n"
+          . "Message-ID: <fake.1475639947.6507\@local>\r\n"
+          . "Date: Wed, 05 Oct 2016 14:59:07 +1100\r\n"
+          . "To: Test User <test\@local>\r\n"
+          . "\r\n"
+          . "An embedded email"
+          . "\r\n--sub--\r\n",
+    ) || die;
+
+    xlog "get blobId";
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => ['attachments'],
+        }, 'R2' ],
+    ]);
+    my $blobid = $res->[1][1]->{list}[0]->{attachments}[0]{blobId};
+    $self->assert_not_null($blobid);
+
+    xlog "create snooze mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "snoozed",
+                            parentId => undef,
+                            role => "snoozed"
+             }}}, "R1"]
+    ]);
+    my $snoozed = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($snoozed);
+
+    my $maildate = DateTime->now();
+    $maildate->add(DateTime::Duration->new(seconds => 30));
+    my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
+
+    xlog "import and get email from blob $blobid";
+    $res = $jmap->CallMethods([['Email/import', {
+        emails => {
+            "1" => {
+                blobId => $blobid,
+                mailboxIds => {$snoozed =>  JSON::true},
+                snoozedUntil => "$datestr",
+            },
+        },
+    }, "R1"], ["Email/get", { ids => ["#1"] }, "R2" ]]);
+
+    $self->assert_str_equals("Email/import", $res->[0][0]);
+    my $msg = $res->[0][1]->{created}{"1"};
+    $self->assert_not_null($msg);
+
+    $self->assert_str_equals("Email/get", $res->[1][0]);
+    $self->assert_str_equals($msg->{id}, $res->[1][1]{list}[0]->{id});
+    $self->assert_str_equals($datestr, $res->[1][1]{list}[0]->{snoozedUntil});
+}
+
 sub test_email_set_create_snooze
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
 {
