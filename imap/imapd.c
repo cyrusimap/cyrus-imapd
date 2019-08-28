@@ -13149,6 +13149,13 @@ static void add_intermediates(const char *extname, struct list_rock *lrock)
 static int list_cb(struct findall_data *data, void *rockp)
 {
     struct list_rock *rock = (struct list_rock *)rockp;
+
+    // skip anything DELETED unless explicitly asked for
+    if (data && !imapd_userisadmin
+             && !(rock->listargs->sel & LIST_SEL_DELETED)
+             && mbname_isdeleted(data->mbname))
+        return 0;
+
     if (!data) {
         if (!(rock->last_attributes & MBOX_ATTRIBUTE_HASCHILDREN))
             rock->last_attributes |= MBOX_ATTRIBUTE_HASNOCHILDREN;
