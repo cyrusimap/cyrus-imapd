@@ -1131,8 +1131,8 @@ EXPORTED const char *mbname_extname(const mbname_t *mbname, const struct namespa
         goto end;
     }
 
-    /* other users */
-    if (strcmpsafe(mbname_userid(mbname), userid)) {
+    /* other users or DELETED */
+    if (mbname->is_deleted || strcmpsafe(mbname_userid(mbname), userid)) {
         buf_appendcstr(&buf, "user");
         buf_putc(&buf, ns->hier_sep);
         _append_extbuf(ns, &buf, mbname_localpart(mbname));
