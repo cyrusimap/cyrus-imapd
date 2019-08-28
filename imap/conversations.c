@@ -102,7 +102,7 @@
 
 #define CONVERSATIONS_VERSION 0
 
-struct conversations_open *open_conversations;
+static struct conversations_open *open_conversations;
 
 static conv_status_t NULLSTATUS = CONV_STATUS_INIT;
 
