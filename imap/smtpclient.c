@@ -96,7 +96,8 @@ enum {
     SMTPCLIENT_CAPA_SIZE      = (1 << 5),
     SMTPCLIENT_CAPA_STATUS    = (1 << 6),
     SMTPCLIENT_CAPA_FUTURE    = (1 << 7),
-    SMTPCLIENT_CAPA_PRIORITY  = (1 << 8)
+    SMTPCLIENT_CAPA_PRIORITY  = (1 << 8),
+    SMTPCLIENT_CAPA_SENDCHECK = (1 << 9)
 };
 
 static struct protocol_t smtp_protocol =
@@ -112,6 +113,7 @@ static struct protocol_t smtp_protocol =
           { "ENHANCEDSTATUSCODES", SMTPCLIENT_CAPA_STATUS },
           { "FUTURERELEASE", SMTPCLIENT_CAPA_FUTURE },
           { "MT-PRIORITY", SMTPCLIENT_CAPA_PRIORITY },
+          { "SENDCHECK", SMTPCLIENT_CAPA_SENDCHECk },
           { NULL, 0 } } },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
@@ -352,6 +354,23 @@ static int smtpclient_rset(smtpclient_t *sm)
 
     /* Say RSET */
     buf_setcstr(&sm->buf, "RSET\r\n");
+    r = smtpclient_writebuf(sm, &sm->buf, 1);
+    if (r) goto done;
+    buf_reset(&sm->buf);
+
+    /* Process response */
+    r = smtpclient_read(sm, expect_code_cb, "2");
+
+done:
+    return r;
+}
+
+static int smtpclient_schk(smtpclient_t *sm)
+{
+    int r = 0;
+
+    /* Say SCHK */
+    buf_setcstr(&sm->buf, "SCHK\r\n");
     r = smtpclient_writebuf(sm, &sm->buf, 1);
     if (r) goto done;
     buf_reset(&sm->buf);
@@ -610,7 +629,12 @@ EXPORTED int smtpclient_sendprot(smtpclient_t *sm, smtp_envelope_t *env, struct 
     }
     else {
         /* simply pre-flighting the envelope */
-        r = smtpclient_rset(sm);
+        if (CAPA(sm->backend, SMTPCLIENT_CAPA_SENDCHECK)) {
+            r = smtpclient_schk(sm);
+        }
+        else {
+            r = smtpclient_rset(sm);
+        }
         if (r) goto done;
     }
 
