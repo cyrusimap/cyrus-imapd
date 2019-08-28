@@ -920,7 +920,10 @@ EXPORTED const char *mbname_recipient(const mbname_t *mbname, const struct names
 EXPORTED int mbname_category(const mbname_t *mbname, const struct namespace *ns, const char *userid)
 {
     if (!mbname_localpart(mbname)) return MBNAME_SHARED;
-    if (mbname_isdeleted(mbname)) return MBNAME_SHARED;
+    if (mbname_isdeleted(mbname)) {
+        if (strcmpsafe(mbname_userid(mbname), userid)) return MBNAME_OTHERDELETED;
+        return MBNAME_OWNERDELETED;
+    }
 
     if (strcmpsafe(mbname_userid(mbname), userid)) return MBNAME_OTHERUSER;
 

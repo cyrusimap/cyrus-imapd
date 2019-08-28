@@ -3468,6 +3468,45 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
         }
     }
 
+    /* finally deleted namespaces - first the owner */
+    if (!isadmin && userid) {
+        char prefix[MAX_MAILBOX_BUFFER];
+        char *inboxcopy = xstrndup(inbox, inboxlen);
+        mboxname_todeleted(inboxcopy, prefix, /*withtime*/0);
+        free(inboxcopy);
+        size_t prefixlen = strlen(prefix);
+        prefix[prefixlen] = '.';
+
+        rock->mb_category = MBNAME_OWNERDELETED;
+
+        /* reset the the namebuffer */
+        if (rock->cb)
+            r = (*rock->cb)(NULL, rock->procrock);
+        if (r) goto done;
+
+        r = cyrusdb_foreach(rock->db, prefix, prefixlen+1, &find_p, &find_cb, rock, NULL);
+        if (r) goto done;
+    }
+
+    /* and everything else */
+    if (isadmin || rock->namespace->accessible[NAMESPACE_SHARED]) {
+        len = strlen(rock->namespace->prefix[NAMESPACE_SHARED]);
+        if (len) len--; // trailing separator
+
+        if (!strncmp(rock->namespace->prefix[NAMESPACE_SHARED], commonpat, MIN(len, prefixlen))) {
+            rock->mb_category = MBNAME_OTHERDELETED;
+
+            /* reset the the namebuffer */
+            if (rock->cb)
+                r = (*rock->cb)(NULL, rock->procrock);
+            if (r) goto done;
+
+            /* iterate through all the non-user folders on the server */
+            r = mboxlist_find_category(rock, domainpat, domainlen);
+            if (r) goto done;
+        }
+    }
+
     /* finish with a reset call always */
     if (rock->cb)
         r = (*rock->cb)(NULL, rock->procrock);
