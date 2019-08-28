@@ -4264,6 +4264,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     struct backend *backend_next = NULL;
     struct index_init init;
     int wasopen = 0;
+    int allow_deleted = 0;
     struct vanished_params *v = &init.vanished;
 
     memset(&init, 0, sizeof(struct index_init));
@@ -4335,6 +4336,9 @@ static void cmd_select(char *tag, char *cmd, char *name)
             }
             else if (!strcmp(arg.s, "VENDOR.FM-INCLUDE-EXPUNGED")) {
                 init.want_expunged = 1;
+            }
+            else if (!strcmp(arg.s, "VENDOR.FM-ALLOW-DELETED")) {
+                allow_deleted = 1;
             }
             else {
                 prot_printf(imapd_out, "%s BAD Invalid %s modifier %s\r\n",
@@ -4492,7 +4496,10 @@ static void cmd_select(char *tag, char *cmd, char *name)
     init.select = 1;
     if (!strcasecmpsafe(imapd_magicplus, "+dav")) init.want_dav = 1;
 
-    r = index_open(intname, &init, &imapd_index);
+    if (!imapd_userisadmin && !allow_deleted)
+        r = IMAP_MAILBOX_NONEXISTENT;
+    else
+        r = index_open(intname, &init, &imapd_index);
     if (!r) doclose = 1;
 
     if (!r && !index_hasrights(imapd_index, ACL_READ)) {
