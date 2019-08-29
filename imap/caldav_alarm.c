@@ -1048,7 +1048,7 @@ static void process_snoozed(struct mailbox *mailbox,
 
     authstate = auth_newstate(userid);
     r = append_setup_mbox(&as, inbox, userid, authstate,
-                          ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_APPEND);
+                          ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_NEW);
     if (r) goto done;
 
     /* Append the message to the mailbox */
