@@ -4335,13 +4335,13 @@ static void cmd_select(char *tag, char *cmd, char *name)
                  */
                 ;
             }
-            else if (allowdeleted && !strcmp(arg.s, "VENDOR.FM-INCLUDE-EXPUNGED")) {
+            else if (allowdeleted && !strcmp(arg.s, "VENDOR.CMU-INCLUDE-EXPUNGED")) {
                 init.want_expunged = 1;
             }
-            else if (allowdeleted && !strcmp(arg.s, "VENDOR.FM-ALLOW-DELETED")) {
+            else if (allowdeleted && !strcmp(arg.s, "VENDOR.CMU-ALLOW-DELETED")) {
                 select_deleted = 1;
             }
-            else if (!strcmp(arg.s, "VENDOR.FM-INCLUDE-DAV")) {
+            else if (!strcmp(arg.s, "VENDOR.CMU-DAV")) {
                 init.want_dav = 1;
             }
             else {
@@ -12515,7 +12515,7 @@ static int getlistselopts(char *tag, struct listargs *args)
             args->ret |= LIST_RET_SUBSCRIBED;
         } else if (!strcmp(buf.s, "vendor.cmu-dav")) {
             args->sel |= LIST_SEL_DAV;
-        } else if (!strcmp(buf.s, "vendor.fm-include-deleted")) {
+        } else if (!strcmp(buf.s, "vendor.cmu-include-deleted")) {
             args->sel |= LIST_SEL_DELETED;
         } else if (!strcmp(buf.s, "vendor.fm-include-nonexistent")) {
             args->sel |= LIST_SEL_INTERMEDIATES;
