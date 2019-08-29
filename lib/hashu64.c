@@ -315,3 +315,17 @@ EXPORTED void hashu64_enumerate(hashu64_table *table,
       }
 }
 
+EXPORTED size_t hashu64_count(hashu64_table *table)
+{
+    size_t count = 0;
+    unsigned i;
+
+    for (i = 0; i < table->size; i++) {
+        bucketu64 *temp;
+        for (temp = (table->table)[i]; temp; temp = temp->next)
+             count++;
+    }
+
+    return count;
+}
+
