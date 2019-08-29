@@ -656,7 +656,13 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
         if (r) goto done;
     }
 
-    hashu64_enumerate(&rock.jmapcache, cachecards_cb, &rock);
+    if (hashu64_count(&rock.jmapcache)) {
+        r = carddav_begin(db);
+        if (!r) hashu64_enumerate(&rock.jmapcache, cachecards_cb, &rock);
+        if (r) carddav_abort(db);
+        else r = carddav_commit(db);
+        if (r) goto done;
+    }
 
     /* Build response */
     json_t *jstate = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);

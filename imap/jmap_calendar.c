@@ -1807,7 +1807,13 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         if (r) goto done;
     }
 
-    hashu64_enumerate(&rock.jmapcache, cachecalendarevents_cb, &rock);
+    if (hashu64_count(&rock.jmapcache)) {
+        r = caldav_begin(db);
+        if (!r) hashu64_enumerate(&rock.jmapcache, cachecalendarevents_cb, &rock);
+        if (r) caldav_abort(db);
+        else r = caldav_commit(db);
+        if (r) goto done;
+    }
 
     /* Build response */
     json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);
