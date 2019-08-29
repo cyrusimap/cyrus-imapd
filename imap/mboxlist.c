@@ -3268,6 +3268,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
     int isadmin = rock->isadmin;
 
     int crossdomains = config_getswitch(IMAPOPT_CROSSDOMAINS);
+    int allowdeleted = config_getswitch(IMAPOPT_ALLOWDELETED);
     char inbox[MAX_MAILBOX_BUFFER];
     size_t inboxlen = 0;
     size_t prefixlen, len;
@@ -3469,7 +3470,7 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
     }
 
     /* finally deleted namespaces - first the owner */
-    if (!isadmin && userid) {
+    if (!isadmin && allowdeleted && userid) {
         char prefix[MAX_MAILBOX_BUFFER];
         char *inboxcopy = xstrndup(inbox, inboxlen);
         mboxname_todeleted(inboxcopy, prefix, /*withtime*/0);
@@ -3489,22 +3490,17 @@ static int mboxlist_do_find(struct find_rock *rock, const strarray_t *patterns)
     }
 
     /* and everything else */
-    if (isadmin || rock->namespace->accessible[NAMESPACE_SHARED]) {
-        len = strlen(rock->namespace->prefix[NAMESPACE_SHARED]);
-        if (len) len--; // trailing separator
+    if (isadmin || (allowdeleted && rock->namespace->accessible[NAMESPACE_SHARED])) {
+        rock->mb_category = MBNAME_OTHERDELETED;
 
-        if (!strncmp(rock->namespace->prefix[NAMESPACE_SHARED], commonpat, MIN(len, prefixlen))) {
-            rock->mb_category = MBNAME_OTHERDELETED;
+        /* reset the the namebuffer */
+        if (rock->cb)
+            r = (*rock->cb)(NULL, rock->procrock);
+        if (r) goto done;
 
-            /* reset the the namebuffer */
-            if (rock->cb)
-                r = (*rock->cb)(NULL, rock->procrock);
-            if (r) goto done;
-
-            /* iterate through all the non-user folders on the server */
-            r = mboxlist_find_category(rock, domainpat, domainlen);
-            if (r) goto done;
-        }
+        /* iterate through all the non-user folders on the server */
+        r = mboxlist_find_category(rock, domainpat, domainlen);
+        if (r) goto done;
     }
 
     /* finish with a reset call always */

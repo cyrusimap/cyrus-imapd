@@ -4264,7 +4264,8 @@ static void cmd_select(char *tag, char *cmd, char *name)
     struct backend *backend_next = NULL;
     struct index_init init;
     int wasopen = 0;
-    int allow_deleted = 0;
+    int select_deleted = 0;
+    int allowdeleted = config_getswitch(IMAPOPT_ALLOWDELETED);
     struct vanished_params *v = &init.vanished;
 
     memset(&init, 0, sizeof(struct index_init));
@@ -4334,11 +4335,11 @@ static void cmd_select(char *tag, char *cmd, char *name)
                  */
                 ;
             }
-            else if (!strcmp(arg.s, "VENDOR.FM-INCLUDE-EXPUNGED")) {
+            else if (allowdeleted && !strcmp(arg.s, "VENDOR.FM-INCLUDE-EXPUNGED")) {
                 init.want_expunged = 1;
             }
-            else if (!strcmp(arg.s, "VENDOR.FM-ALLOW-DELETED")) {
-                allow_deleted = 1;
+            else if (allowdeleted && !strcmp(arg.s, "VENDOR.FM-ALLOW-DELETED")) {
+                select_deleted = 1;
             }
             else if (!strcmp(arg.s, "VENDOR.FM-INCLUDE-DAV")) {
                 init.want_dav = 1;
@@ -4499,7 +4500,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     init.select = 1;
     if (!strcasecmpsafe(imapd_magicplus, "+dav")) init.want_dav = 1;
 
-    if (!imapd_userisadmin && !allow_deleted)
+    if (!imapd_userisadmin && !select_deleted)
         r = IMAP_MAILBOX_NONEXISTENT;
     else
         r = index_open(intname, &init, &imapd_index);
@@ -13162,7 +13163,7 @@ static int list_cb(struct findall_data *data, void *rockp)
 
     // skip anything DELETED unless explicitly asked for
     if (data && !imapd_userisadmin
-             && !(rock->listargs->sel & LIST_SEL_DELETED)
+             && (!(rock->listargs->sel & LIST_SEL_DELETED) || config_getswitch(IMAPOPT_ALLOWDELETED))
              && mbname_isdeleted(data->mbname))
         return 0;
 

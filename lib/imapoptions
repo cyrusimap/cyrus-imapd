@@ -141,6 +141,9 @@ are listed with ``<none>''.
   backend (e.g., sasldb), and that the system can provide enough entropy
   (e.g., from /dev/urandom) to create a challenge in the banner. */
 
+{ "allowdeleted", 0, SWITCH }
+/* Allow access to deleted and expunged data via vendor.cmu-* access */
+
 { "allownewnews", 0, SWITCH }
 /* Allow use of the NNTP NEWNEWS command.
 .PP
