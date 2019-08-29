@@ -2549,6 +2549,11 @@ static struct sortcrit *_email_buildsort(json_t *sort)
         if (!strcmp(prop, "spamScore")) {
             sortcrit[i].key = SORT_SPAMSCORE;
         }
+        if (!strcmp(prop, "snoozedUntil")) {
+            sortcrit[i].key = SORT_ANNOTATION;
+            sortcrit[i].args.annot.entry = xstrdup(IMAP_ANNOT_NS "snoozed-until");
+            sortcrit[i].args.annot.userid = xstrdup("");
+        }
     }
 
     i = json_array_size(sort);
@@ -2727,6 +2732,7 @@ static const char *msglist_sortfields_nonstandard[] = {
     "addedDates",
     "threadSize",
     "spamScore",
+    "snoozedUntil",
     NULL
 };
 

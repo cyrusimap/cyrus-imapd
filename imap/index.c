@@ -5983,6 +5983,15 @@ MsgData **index_msgdata_load(struct index_state *state,
                                         sortcrit[j].args.annot.userid,
                                         &value);
 
+                if (!buf_len(&value) &&
+                    !strcmp(sortcrit[j].args.annot.entry, IMAP_ANNOT_NS "snoozed-until")) {
+                    /* If snoozedUntil is NULL, we use receivedAt */
+                    buf_truncate(&value, RFC3339_DATETIME_MAX);
+                    time_to_rfc3339(record.internaldate,
+                                    (char *) buf_base(&value),
+                                    RFC3339_DATETIME_MAX);
+                }
+
                 /* buf_release() never returns NULL, so if the lookup
                  * fails for any reason we just get an empty string here */
                 strarray_appendm(&cur->annot, buf_release(&value));
