@@ -632,14 +632,6 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
         goto done;
     }
 
-    r = carddav_begin(db);
-    if (r) {
-        syslog(LOG_ERR,
-               "carddav_begin failed for user %s", req->accountid);
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-
     mboxname = addressbookId ?
         carddav_mboxname(req->accountid, addressbookId) : NULL;
 
@@ -665,14 +657,6 @@ static int _contacts_get(struct jmap_req *req, carddav_cb_t *cb, int kind)
     }
 
     hashu64_enumerate(&rock.jmapcache, cachecards_cb, &rock);
-
-    r = carddav_commit(db);
-    if (r) {
-        syslog(LOG_ERR,
-               "carddav_commit failed for user %s", req->accountid);
-        r = IMAP_INTERNAL;
-        goto done;
-    }
 
     /* Build response */
     json_t *jstate = jmap_getstate(req, MBTYPE_ADDRESSBOOK, /*refresh*/0);

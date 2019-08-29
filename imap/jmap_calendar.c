@@ -1790,14 +1790,6 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         goto done;
     }
 
-    r = caldav_begin(db);
-    if (r) {
-        syslog(LOG_ERR,
-               "caldav_begin failed for user %s", req->accountid);
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-
     /* Does the client request specific events? */
     if (JNOTNULL(get.ids)) {
         size_t i;
@@ -1816,14 +1808,6 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     }
 
     hashu64_enumerate(&rock.jmapcache, cachecalendarevents_cb, &rock);
-
-    r = caldav_commit(db);
-    if (r) {
-        syslog(LOG_ERR,
-               "caldav_commit failed for user %s", req->accountid);
-        r = IMAP_INTERNAL;
-        goto done;
-    }
 
     /* Build response */
     json_t *jstate = jmap_getstate(req, MBTYPE_CALENDAR, /*refresh*/0);

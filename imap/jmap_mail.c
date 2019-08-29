@@ -2287,7 +2287,6 @@ struct email_filterrock {
 static void _email_filterrock_fini(struct email_filterrock *rock)
 {
     if (rock->carddavdb) {
-        carddav_commit(rock->carddavdb);
         carddav_close(rock->carddavdb);
     }
     free(rock->addrbook);
@@ -2439,12 +2438,6 @@ static void _email_parse_filter(jmap_req_t *req,
                         if (!rock->carddavdb) {
                             syslog(LOG_ERR, "jmap: carddav_open_userid(%s) failed", req->accountid);
                             *err = jmap_server_error(CYRUSDB_INTERNAL);
-                            return;
-                        }
-                        int r = carddav_begin(rock->carddavdb);
-                        if (r) {
-                            syslog(LOG_ERR, "jmap: carddav_begin failed: %s", error_message(r));
-                            *err = jmap_server_error(r);
                             return;
                         }
                     }
