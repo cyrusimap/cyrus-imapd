@@ -372,7 +372,9 @@ static int _onecmd(sqldb_t *open, const char *cmd, const char *name)
 EXPORTED int sqldb_begin(sqldb_t *open, const char *name)
 {
     if (!name) name = "DUMMY";
-    int r = _onecmd(open, "SAVEPOINT", name);
+    int r = 0;
+    if (!open->writelock) r = sqldb_writelock(open);
+    if (!r) r = _onecmd(open, "SAVEPOINT", name);
     if (!r) strarray_push(&open->trans, name);
     return r;
 }
@@ -385,6 +387,7 @@ EXPORTED int sqldb_commit(sqldb_t *open, const char *name)
     int r = _onecmd(open, "RELEASE SAVEPOINT", prev);
     if (r) strarray_push(&open->trans, prev);
     free(prev);
+    if (!r && !open->trans.count) r = sqldb_writecommit(open);
     return r;
 }
 
@@ -395,6 +398,10 @@ EXPORTED int sqldb_rollback(sqldb_t *open, const char *name)
     if (name) assert(!strcmp(prev, name));
     int r = _onecmd(open, "ROLLBACK TO SAVEPOINT", prev);
     if (r) strarray_push(&open->trans, prev);
+    // it's still commit here even if we rolled back THIS savepoint,
+    // because other savepoints may have committed, so we want to
+    // commit the wrapping transaction
+    if (!r && !open->trans.count) r = sqldb_writecommit(open);
     free(prev);
     return r;
 }
