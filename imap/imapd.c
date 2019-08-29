@@ -9801,7 +9801,10 @@ static int parse_metadata_store_data(const char *tag,
                         "%s BAD Missing metadata entry\r\n", tag);
             goto baddata;
         }
-        lcase(entry.s);
+        /* DAV code uses case significant metadata entries, so if you log in with +dav,
+         * we make the metadata commands case significant! */
+        if (strcasecmpsafe(imapd_magicplus, "+dav"))
+            lcase(entry.s);
 
         /* get value */
         c = getbnstring(imapd_in, imapd_out, &value);
