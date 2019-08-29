@@ -4104,6 +4104,18 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
                     sepchar, datebuf);
         sepchar = ' ';
     }
+
+    if (fetchitems & FETCH_LASTUPDATED) {
+        time_t msgdate = record.last_updated;
+        char datebuf[RFC3501_DATETIME_MAX+1];
+
+        time_to_rfc3501(msgdate, datebuf, sizeof(datebuf));
+
+        prot_printf(state->out, "%cLASTUPDATED \"%s\"",
+                    sepchar, datebuf);
+        sepchar = ' ';
+    }
+
     if (fetchitems & FETCH_MODSEQ || (ischanged && (client_capa & CAPA_CONDSTORE))) {
         prot_printf(state->out, "%cMODSEQ (" MODSEQ_FMT ")",
                     sepchar, record.modseq);
