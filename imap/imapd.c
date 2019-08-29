@@ -4930,6 +4930,13 @@ badannotation:
             else goto badatt;
             break;
 
+        case 'L':
+            if (!strcmp(fetchatt.s, "LASTUPDATED")) {
+                fa->fetchitems |= FETCH_LASTUPDATED;
+            }
+            else goto badatt;
+            break;
+
         case 'M':
             if (config_getswitch(IMAPOPT_CONVERSATIONS)
                 && !strcmp(fetchatt.s, "MAILBOXES")) {
