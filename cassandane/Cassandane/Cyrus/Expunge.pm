@@ -105,6 +105,55 @@ sub test_status_after_expunge
     $self->assert_equals(0, $stat->{messages});
 }
 
+sub test_allowdeleted
+    :AllowDeleted :DelayedExpunge
+{
+    my ($self, $folder, %params) = @_;
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    my $subfolder = 'INBOX.foo';
+
+    xlog "First create a sub folder";
+    $talk->create($subfolder)
+        or die "Cannot create folder $subfolder: $@";
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Generate messages in $subfolder";
+    $store->set_folder($subfolder);
+    $store->_select();
+    for (1..5) {
+        $self->make_message("Message $subfolder $_");
+    }
+    $talk->unselect();
+    $talk->select($subfolder);
+
+    my $stat = $talk->status($subfolder, '(highestmodseq unseen messages)');
+    $self->assert_equals(5, $stat->{unseen});
+    $self->assert_equals(5, $stat->{messages});
+
+    $talk->store('1,3,5', '+flags', '(\\Deleted)');
+    $talk->expunge();
+
+    $stat = $talk->status($subfolder, '(highestmodseq unseen messages)');
+    $self->assert_equals(2, $stat->{unseen});
+    $self->assert_equals(2, $stat->{messages});
+
+    xlog "regular select finds 2 messages";
+    $talk->unselect();
+    $talk->select($subfolder);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_num_equals(2, $talk->get_response_code('exists'));
+
+    xlog "include-expunged select finds 5 messages";
+    $talk->unselect();
+    # this API is janky
+    $talk->select($subfolder, '(vendor.cmu-include-expunged)' => 1);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_num_equals(5, $talk->get_response_code('exists'));
+}
+
 # XXX this isn't really the right place for this test
 sub test_ipurge_mboxevent
 {
