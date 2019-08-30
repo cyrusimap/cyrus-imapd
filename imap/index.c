@@ -3962,6 +3962,10 @@ static void index_fetchflags(struct index_state *state,
         prot_printf(state->out, "%c\\Deleted", sepchar);
         sepchar = ' ';
     }
+    if (state->want_expunged && (im->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        prot_printf(state->out, "%c\\Expunged", sepchar);
+        sepchar = ' ';
+    }
     if (im->isseen) {
         prot_printf(state->out, "%c\\Seen", sepchar);
         sepchar = ' ';
