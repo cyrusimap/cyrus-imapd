@@ -176,6 +176,9 @@ magic(Backups => sub { shift->want('backups'); });
 magic(AnnotationAllowUndefined => sub {
     shift->config_set(annotation_allow_undefined => 1);
 });
+magic(AllowDeleted => sub {
+    shift->config_set(allowdeleted => 1);
+});
 magic(ImmediateDelete => sub {
     shift->config_set(delete_mode => 'immediate');
 });
