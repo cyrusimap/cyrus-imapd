@@ -12495,6 +12495,7 @@ static int getlistselopts(char *tag, struct listargs *args)
 {
     int c;
     static struct buf buf;
+    int allowdeleted = config_getswitch(IMAPOPT_ALLOWDELETED);
 
     if ( (c = prot_getc(imapd_in)) == ')')
         return prot_getc(imapd_in);
@@ -12518,6 +12519,8 @@ static int getlistselopts(char *tag, struct listargs *args)
             args->ret |= LIST_RET_SUBSCRIBED;
         } else if (!strcmp(buf.s, "vendor.cmu-dav")) {
             args->sel |= LIST_SEL_DAV;
+        } else if (!strcmp(buf.s, "vendor.cmu-include-deleted") && allowdeleted) {
+            args->sel |= LIST_SEL_DELETED;
         } else if (!strcmp(buf.s, "vendor.fm-include-nonexistent")) {
             args->sel |= LIST_SEL_INTERMEDIATES;
         } else if (!strcmp(buf.s, "remote")) {
@@ -13161,6 +13164,13 @@ static void add_intermediates(const char *extname, struct list_rock *lrock)
 static int list_cb(struct findall_data *data, void *rockp)
 {
     struct list_rock *rock = (struct list_rock *)rockp;
+
+    // skip anything DELETED unless explicitly asked for
+    if (data && !imapd_userisadmin
+             && (!(rock->listargs->sel & LIST_SEL_DELETED) || !config_getswitch(IMAPOPT_ALLOWDELETED))
+             && mbname_isdeleted(data->mbname))
+        return 0;
+
     if (!data) {
         if (!(rock->last_attributes & MBOX_ATTRIBUTE_HASCHILDREN))
             rock->last_attributes |= MBOX_ATTRIBUTE_HASNOCHILDREN;
