@@ -2947,6 +2947,28 @@ sub test_email_set_update_snooze
     $self->assert_not_null($res->[0][1]{created});
     my $snoozedId = $res->[0][1]{created}{"1"}{id};
 
+    xlog "create drafts mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "drafts",
+                            parentId => undef,
+                            role => "drafts"
+             }}}, "R4"]
+    ]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $draftsId = $res->[0][1]{created}{"1"}{id};
+
+    xlog "Copy message to drafts mailbox";
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $emailId => {
+                "mailboxIds/$draftsId" => $JSON::true,
+            }}
+        }, 'R5']
+    ]);
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_null($res->[0][1]{notUpdated});
+
     xlog "Move message to snooze mailbox";
     my $maildate = DateTime->now();
     $maildate->add(DateTime::Duration->new(seconds => 30));
@@ -2971,7 +2993,7 @@ sub test_email_set_update_snooze
     $msg = $res->[0][1]->{list}[0];
     $self->assert_null($msg->{mailboxIds}{$inboxId});
     $self->assert_not_null($msg->{mailboxIds}{$snoozedId});
-    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+    $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
     $self->assert_equals($datestr, $msg->{snoozedUntil});
 
     xlog "Adjust snoozeUntil";
@@ -2994,7 +3016,7 @@ sub test_email_set_update_snooze
     $msg = $res->[0][1]->{list}[0];
     $self->assert_null($msg->{mailboxIds}{$inboxId});
     $self->assert_not_null($msg->{mailboxIds}{$snoozedId});
-    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+    $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
     $self->assert_equals($datestr, $msg->{snoozedUntil});
 
     xlog "trigger re-delivery of snoozed email";
@@ -3008,7 +3030,7 @@ sub test_email_set_update_snooze
     $self->assert_null($msg->{mailboxIds}{$snoozedId});
     $self->assert_num_equals(0, scalar keys %{$msg->{mailboxIds}});
 
-    $res = $jmap->CallMethods( [ [ 'Email/query', { filter => { inMailbox => $inboxId } }, "R8" ] ] );
+    $res = $jmap->CallMethods( [ [ 'Email/query', { }, "R8" ] ] );
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
 
     $emailId = $res->[0][1]->{ids}[0];
@@ -3017,6 +3039,7 @@ sub test_email_set_update_snooze
                                      properties => [ 'mailboxIds', 'keywords', 'snoozedUntil' ]}, "R9" ] ] );
 
     $msg = $res->[0][1]->{list}[0];
+    $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
     $self->assert_num_equals(3, scalar keys %{$msg->{keywords}});
     $self->assert_equals(JSON::true, $msg->{keywords}{'$awakened'});
 }
