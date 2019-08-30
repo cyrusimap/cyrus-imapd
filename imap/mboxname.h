@@ -64,7 +64,9 @@ enum { MBNAME_INBOX = 1,
        MBNAME_ALTPREFIX = 4,
        MBNAME_OWNER = 5,
        MBNAME_OTHERUSER = 6,
-       MBNAME_SHARED = 7 };
+       MBNAME_SHARED = 7,
+       MBNAME_OWNERDELETED = 8,
+       MBNAME_OTHERDELETED = 9 };
 
 /* structure holding server namespace info */
 struct namespace {
