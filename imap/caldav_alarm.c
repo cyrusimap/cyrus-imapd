@@ -954,6 +954,61 @@ static void process_futurerelease(struct mailbox *mailbox,
     return;
 }
 
+struct replace_msgrec_rock {
+    const char *userid;
+    struct auth_state *authstate;
+    struct mailbox *src;
+    msgrecord_t *mr;
+    int nolink;
+};    
+
+static int _replace_msgrecord_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct replace_msgrec_rock *rrock = (struct replace_msgrec_rock *) rock;
+    struct mailbox *dst = NULL;;
+    struct appendstate as;
+    int r = 0;
+
+    /* Ignore expunged messages */
+    if (rec->internal_flags & FLAG_INTERNAL_EXPUNGED) return 0;
+
+    /* Open destination mailbox */
+    r = mailbox_open_iwl(rec->mboxname, &dst);
+
+    /* Setup for appending */
+    if (!r) {
+        r = append_setup_mbox(&as, dst, rrock->userid, rrock->authstate,
+                              ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_COPY);
+    }
+
+    /* Copy message to destination */
+    if (!r) {
+        ptrarray_t msgrecs = PTRARRAY_INITIALIZER;
+
+        ptrarray_add(&msgrecs, rrock->mr);
+        r = append_copy(rrock->src, &as, &msgrecs, rrock->nolink,
+                        mboxname_same_userid(rrock->src->name, dst->name));
+        ptrarray_fini(&msgrecs);
+
+        if (r) append_abort(&as);
+        else r = append_commit(&as);
+    }
+
+    /* Expunge original message now that is has been replaced */
+    if (!r) {
+        struct index_record record;
+
+        r = mailbox_find_index_record(dst, rec->uid, &record);
+        if (!r) {
+            record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+            r = mailbox_rewrite_index_record(dst, &record);
+        }
+    }
+
+    mailbox_close(&dst);
+    return r;
+}
+
 static void process_snoozed(struct mailbox *mailbox,
                             struct index_record *record, time_t runtime)
 {
@@ -1068,6 +1123,19 @@ static void process_snoozed(struct mailbox *mailbox,
         syslog(LOG_ERR, "expunging record (%s:%u) failed: %s",
                mailbox->name, record->uid, error_message(r));
     }
+
+    /* Load new message record */
+    msgrecord_unref(&mr);
+    r = msgrecord_find(inbox, inbox->i.last_uid, &mr);
+    if (r) goto done;
+
+    /* Replace other copies of the original message with the awakened message */
+    struct replace_msgrec_rock rrock = {
+        userid, authstate, inbox, mr, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE)
+    };
+    conversations_guid_foreach(mailbox->local_cstate,
+                               message_guid_encode(&record->guid),
+                               _replace_msgrecord_cb, &rrock);
 
   done:
     if (r) {
