@@ -50,6 +50,7 @@ use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_iso8601 from_iso8601
                                   from_rfc822
                                   to_rfc3501 from_rfc3501);
+use Cyrus::IndexFile;
 
 sub new
 {
@@ -264,6 +265,24 @@ sub test_reconstruct_splitconv
 #
 # Test APPEND of messages to IMAP
 #
+sub _munge_annot_crc
+{
+    my ($instance, $path, $value) = @_;
+
+    # this needs a bit of magic to know where to write... so
+    # we do some hard-coded cyrus.index handling
+    my $basedir = $instance->{basedir};
+    my $file = "$basedir/$path";
+    my $fh = IO::File->new($file, "+<");
+    die "NO SUCH FILE $file" unless $fh;
+    my $index = Cyrus::IndexFile->new($fh);
+
+    my $header = $index->header();
+    $header->{SyncCRCsAnnot} = $value;
+    $index->rewrite_header($header);
+
+    $fh->close();
+}
 sub test_replication_reply_200
     :min_version_3_1
 {
@@ -310,6 +329,15 @@ sub test_replication_reply_200
 
     $self->check_messages(\%exp, keyed_on => 'uid', store => $master_store);
     $self->run_replication();
+    $self->check_replication('cassandane');
+    $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
+
+    # corrupt the sync_annot_crc at both ends and check that we can fix it without syncback
+    xlog "Damaging annotations CRCs";
+    _munge_annot_crc($self->{instance}, "/data/user/cassandane/cyrus.index", 1);
+    _munge_annot_crc($self->{replica}, "/data/user/cassandane/cyrus.index", 2);
+
+    $self->run_replication(nosyncback => 1);
     $self->check_replication('cassandane');
     $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
 
