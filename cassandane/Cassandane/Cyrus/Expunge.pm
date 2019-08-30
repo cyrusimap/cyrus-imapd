@@ -106,7 +106,7 @@ sub test_status_after_expunge
 }
 
 sub test_allowdeleted
-    :AllowDeleted :DelayedExpunge
+    :AllowDeleted :DelayedExpunge :min_version_3_1
 {
     my ($self, $folder, %params) = @_;
 
@@ -133,6 +133,9 @@ sub test_allowdeleted
     $self->assert_equals(5, $stat->{unseen});
     $self->assert_equals(5, $stat->{messages});
 
+    my $oldemailids = $talk->fetch('1:*', 'emailid');
+    my @oldemailids = map { $oldemailids->{$_}{emailid}[0] } sort { $a <=> $b } keys %$oldemailids;
+
     $talk->store('1,3,5', '+flags', '(\\Deleted)');
     $talk->expunge();
 
@@ -152,6 +155,23 @@ sub test_allowdeleted
     $talk->select($subfolder, '(vendor.cmu-include-expunged)' => 1);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_num_equals(5, $talk->get_response_code('exists'));
+
+    my $newemailids = $talk->fetch('1:*', 'emailid');
+    my @newemailids = map { $newemailids->{$_}{emailid}[0] } sort { $a <=> $b } keys %$newemailids;
+    $self->assert_deep_equals(\@oldemailids, \@newemailids, Data::Dumper::Dumper(\@oldemailids, \@newemailids));
+
+    xlog "copy of deleted messages recreates them";
+    $talk->copy('1,3,5', $subfolder);
+    $talk->unselect();
+    $talk->select($subfolder);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_num_equals(5, $talk->get_response_code('exists'));
+
+    xlog "new mailbox contains the same emails";
+    $newemailids = $talk->fetch('1:*', 'emailid');
+    @newemailids = map { $newemailids->{$_}{emailid}[0] } sort { $a <=> $b } keys %$newemailids;
+    $self->assert_deep_equals([sort @oldemailids], [sort @newemailids],
+           Data::Dumper::Dumper([sort @oldemailids], [sort @newemailids]));
 }
 
 # XXX this isn't really the right place for this test
