@@ -4264,6 +4264,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     struct backend *backend_next = NULL;
     struct index_init init;
     int wasopen = 0;
+    int allowdeleted = config_getswitch(IMAPOPT_ALLOWDELETED);
     struct vanished_params *v = &init.vanished;
 
     memset(&init, 0, sizeof(struct index_init));
@@ -4489,7 +4490,10 @@ static void cmd_select(char *tag, char *cmd, char *name)
     init.select = 1;
     if (!strcasecmpsafe(imapd_magicplus, "+dav")) init.want_dav = 1;
 
-    r = index_open(intname, &init, &imapd_index);
+    if (!imapd_userisadmin && !allowdeleted && mboxname_isdeletedmailbox(intname, NULL))
+        r = IMAP_MAILBOX_NONEXISTENT;
+    else
+        r = index_open(intname, &init, &imapd_index);
     if (!r) doclose = 1;
 
     if (!r && !index_hasrights(imapd_index, ACL_READ)) {
