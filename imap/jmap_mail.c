@@ -319,6 +319,7 @@ static char *_decode_to_utf8(const char *charset,
     int enc = encoding ? encoding_lookupname(encoding) : ENCODING_NONE;
 
     if (cs == CHARSET_UNKNOWN_CHARSET || enc == ENCODING_UNKNOWN) {
+        syslog(LOG_INFO, "decode_to_utf8 error (%s, %s)", charset, encoding);
         *is_encoding_problem = 1;
         goto done;
     }
