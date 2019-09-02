@@ -289,6 +289,10 @@ EXPORTED int encoding_lookupname(const char *s)
         if (!strcasecmp(s, "BINARY"))
             return ENCODING_NONE;
         break;
+    case 'N':
+        if (!strcasecmp(s, "NONE"))
+            return ENCODING_NONE;
+        break;
     case 'Q':
     case 'q':
         if (!strcasecmp(s, "QUOTED-PRINTABLE"))
