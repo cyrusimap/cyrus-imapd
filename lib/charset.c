@@ -265,6 +265,8 @@ static const char index_64[256] = {
 
 EXPORTED int encoding_lookupname(const char *s)
 {
+    if (!s) return ENCODING_NONE;
+
     switch (s[0]) {
     case '7':
         if (!strcasecmp(s, "7BIT"))
