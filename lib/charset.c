@@ -269,9 +269,15 @@ EXPORTED int encoding_lookupname(const char *s)
     case '7':
         if (!strcasecmp(s, "7BIT"))
             return ENCODING_NONE;
+        // non-standard stuff seen in the wild
+        if (!strcasecmp(s, "7-BIT"))
+            return ENCODING_NONE;
         break;
     case '8':
         if (!strcasecmp(s, "8BIT"))
+            return ENCODING_NONE;
+        // non-standard stuff seen in the wild
+        if (!strcasecmp(s, "8-BIT"))
             return ENCODING_NONE;
         break;
     case 'B':
