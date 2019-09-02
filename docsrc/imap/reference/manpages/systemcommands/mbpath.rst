@@ -15,17 +15,18 @@ Synopsis
 
 .. parsed-literal::
 
-    **mbpath** [ **-C** *config-file* ] [ **-q** ] [ **-s** ] [ **-m** ] [ *mailbox-names*... ]
+    **mbpath** [ **-C** *config-file* ] [ **-l** ] [ **-m** ] [ **-q** ] [ **-s** ] [ **-u** ] [ **-a** | **-A** | **-M** | **-S** | **-U** ] [ *mailbox-names*... ]
 
 Description
 ===========
 
 Given a mailbox name or a space separated list of mailbox names,
-**mbpath** outputs the filesystem path to the mailbox.
-
+**mbpath** outputs the filesystem path(s) of the mailbox.  By default,
+the mailboxes' data partition paths are shown (same as **-D**).
+See `Selectors`_ for selecting which filesystem path(s) to output.
 
 **mbpath** |default-conf-text| It uses <configdirectory>/mailboxes.db
-to locate the mailbox on disk.
+to locate the mailboxes on disk.
 
 Options
 =======
@@ -36,6 +37,15 @@ Options
 
     |cli-dash-c-text|
 
+.. option:: -l
+
+    Local mailboxes only (exits with error for remote or nonexistent mailboxes)
+
+.. option:: -m
+
+    Output the path to the metadata files (if different from the
+    message files).  Legacy, use **-M**.
+
 .. option:: -q
 
     Suppress any error output.
@@ -44,10 +54,36 @@ Options
 
     If any error occurs, stop processing the list of mailboxes and exit.
 
-.. option:: -m
+.. option:: -u
 
-    Output the path to the metadata files (if different from the
-    message files).
+    The specified *mailbox-names* are users, not mailboxes.
+
+Selectors
+=========
+
+.. option:: -A
+
+    Show the mailbox archive path
+
+.. option:: -D
+
+    Show the mailbox data path (*default*)
+
+.. option:: -M
+
+    Show the mailbox metadata path (same as **-m**)
+
+.. option:: -S
+
+    Show the user sieve scripts path
+
+.. option:: -U
+
+    Show the user files path (seen, sub, etc)
+
+.. option:: -a
+
+    Show all paths, as if all selectors were specified
 
 Examples
 ========
@@ -58,7 +94,7 @@ Examples
 
 ..
 
-        Display the path for mailbox *user.jsmith*.
+        Display the data path for mailbox *user.jsmith*.
 
 .. only:: html
 
@@ -68,7 +104,7 @@ Examples
 
 .. parsed-literal::
 
-    **mbpath -m** *user.jsmith*
+    **mbpath -M** *user.jsmith*
 
 ..
 
@@ -79,6 +115,20 @@ Examples
     ::
 
         /var/spool/meta/imap/user/jsmith
+
+.. parsed-literal::
+
+    **mbpath -u -S** *jsmith*
+
+..
+
+        Display the sieve scripts path for user *jsmith*.
+
+.. only:: html
+
+    ::
+
+        /var/spool/sieve/j/jsmith
 
 Files
 =====
