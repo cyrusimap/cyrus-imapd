@@ -1084,7 +1084,7 @@ static void process_snoozed(struct mailbox *mailbox,
             config_servername, datestr);
 
     time_to_rfc5322(runtime, datestr, sizeof(datestr));
-    fprintf(f, "\twith JMAP id M%s for %s; %s\r\n",
+    fprintf(f, "\twith JMAP id M%s for %s;\r\n\t%s\r\n",
             message_guid_encode_short(&record->guid, 24), userid, datestr);
 
     time_to_rfc5322(record->internaldate, datestr, sizeof(datestr));
