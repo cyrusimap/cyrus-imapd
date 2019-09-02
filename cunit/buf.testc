@@ -1592,6 +1592,51 @@ static void test_appendoverlap(void)
     buf_free(&buf);
 }
 
+static void test_tocrlf(void)
+{
+    struct testcase {
+        char *input;
+        char *expect;
+    };
+
+    struct testcase testcases[] = {
+        { "\rleading bare cr", "\r\nleading bare cr" },
+        { "\nleading bare lf", "\r\nleading bare lf" },
+        { "\r\nleading crlf", "\r\nleading crlf" },
+        { "bare\rcr", "bare\r\ncr" },
+        { "bare\nlf", "bare\r\nlf" },
+        { "correct\r\ncrlf", "correct\r\ncrlf" },
+        { "trailing bare cr\r", "trailing bare cr\r\n" },
+        { "trailing bare lf\n", "trailing bare lf\r\n" },
+        { "trailing crlf\r\n", "trailing crlf\r\n" },
+        { "multiple\rbare\rcr", "multiple\r\nbare\r\ncr" },
+        { "multiple\nbare\nlf", "multiple\r\nbare\r\nlf" },
+        { "multiple\r\ncrlf\r\n", "multiple\r\ncrlf\r\n" },
+        { "mixed cr\rand\nlf", "mixed cr\r\nand\r\nlf" },
+        { "mixed bare\rcr, bare\nlf and\r\ncrlf",
+           "mixed bare\r\ncr, bare\r\nlf and\r\ncrlf" },
+        { "adjacent\r\rbare cr", "adjacent\r\n\r\nbare cr" },
+        { "adjacent\n\nbare lf", "adjacent\r\n\r\nbare lf" },
+        { "adjacent\r\n\r\ncrlf", "adjacent\r\n\r\ncrlf" },
+        { "more adjacent\r\r\rbare cr", "more adjacent\r\n\r\n\r\nbare cr" },
+        { "more adjacent\n\n\nbare lf", "more adjacent\r\n\r\n\r\nbare lf" },
+        { "more adjacent\r\n\r\n\r\ncrlf", "more adjacent\r\n\r\n\r\ncrlf" },
+        { "adjacent\n\nbare\r\rmixed", "adjacent\r\n\r\nbare\r\n\r\nmixed" },
+        { "tricksy\r\r\n\nsplit", "tricksy\r\n\r\n\r\nsplit" },
+    };
+
+    struct buf buf = BUF_INITIALIZER;
+    size_t i;
+    for (i = 0; i < sizeof(testcases) / sizeof(testcases[0]); i++) {
+        struct testcase tc = testcases[i];
+        buf_setcstr(&buf, tc.input);
+        buf_tocrlf(&buf);
+        CU_ASSERT_STRING_EQUAL(tc.expect, buf_cstring(&buf));
+        buf_reset(&buf);
+    }
+    buf_free(&buf);
+}
+
 /* TODO: test the Copy-On-Write feature of buf_ensure()...if anyone
  * actually uses it */
 /* vim: set ft=c: */
