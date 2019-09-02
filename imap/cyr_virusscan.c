@@ -253,7 +253,8 @@ unsigned virus_check(struct mailbox *mailbox,
 void append_notifications();
 
 
-int main (int argc, char *argv[]) {
+int main (int argc, char *argv[])
+{
     int option;         /* getopt() returns an int */
     char *alt_config = NULL;
     char *search_str = NULL;
