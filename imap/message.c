@@ -715,9 +715,8 @@ static int message_parse_body(struct msg *msg, struct body *body,
         }
         param = param->next;
     }
-    if (body->encoding) {
-        body->charset_enc = encoding_lookupname(body->encoding);
-    }
+
+    body->charset_enc = encoding_lookupname(body->encoding);
 
     /* Recurse according to type */
     if (strcmp(body->type, "MULTIPART") == 0) {
@@ -4557,8 +4556,7 @@ static int body_foreach_section(struct body *body, struct message *message,
         if (r) return r;
     } else {
         buf_init_ro(&data, message->map.s + body->content_offset, body->content_size);
-        r = proc(/*isbody*/1, CHARSET_UNKNOWN_CHARSET,
-                 body->encoding ? encoding_lookupname(body->encoding) : ENCODING_NONE,
+        r = proc(/*isbody*/1, CHARSET_UNKNOWN_CHARSET, encoding_lookupname(body->encoding),
                  body->type, body->subtype, body->params, NULL, NULL,
                  &body->content_guid, body->part_id, &data, rock);
         buf_free(&data);

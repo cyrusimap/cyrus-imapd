@@ -316,7 +316,7 @@ static char *_decode_to_utf8(const char *charset,
 {
     charset_t cs = charset_lookupname(charset);
     char *text = NULL;
-    int enc = encoding ? encoding_lookupname(encoding) : ENCODING_NONE;
+    int enc = encoding_lookupname(encoding);
 
     if (cs == CHARSET_UNKNOWN_CHARSET || enc == ENCODING_UNKNOWN) {
         syslog(LOG_INFO, "decode_to_utf8 error (%s, %s)", charset, encoding);
@@ -10735,8 +10735,8 @@ static void _email_import(jmap_req_t *req,
     struct body *part = subpart ? (struct body*) subpart : body;
     const char *blob_base = buf_base(&msg_buf) + part->content_offset;
     size_t blob_len = part->content_size;
-    if (part->encoding && strcasecmp(part->encoding, "NONE")) {
-        int enc = encoding_lookupname(part->encoding);
+    int enc = encoding_lookupname(part->encoding);
+    if (enc != ENCODING_NONE) {
         char *tmp;
         size_t dec_len;
         const char *dec = charset_decode_mimebody(blob_base, blob_len, enc, &tmp, &dec_len);
