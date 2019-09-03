@@ -769,7 +769,8 @@ static int msgrecord_save(msgrecord_t *mr)
         mr->isappend = 0;
     }
     else {
-        r = mailbox_rewrite_index_record(mr->mbox, &mr->record);
+        r = msgrecord_need(mr, M_RECORD);
+        if (!r) r = mailbox_rewrite_index_record(mr->mbox, &mr->record);
     }
     return r;
 }
