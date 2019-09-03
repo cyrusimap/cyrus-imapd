@@ -66,6 +66,8 @@ extern char *optarg;
 
 static int debugmode = 0;
 
+struct namespace calalarmd_namespace;
+
 EXPORTED void fatal(const char *msg, int err)
 {
     if (debugmode) fprintf(stderr, "dying with %s %d\n", msg, err);
@@ -114,6 +116,9 @@ int main(int argc, char **argv)
     }
 
     cyrus_init(alt_config, "calalarmd", 0, 0);
+
+    mboxname_init_namespace(&calalarmd_namespace, /*isadmin*/1);
+    mboxevent_setnamespace(&calalarmd_namespace);
 
     if (upgrade) {
         caldav_alarm_upgrade();
