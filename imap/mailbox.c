@@ -5350,6 +5350,16 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
     return 0;
 }
 
+#ifdef WITH_JMAP
+int mailbox_delete_alarms(struct mailbox *mailbox)
+{
+    if (!(mailbox->i.options & OPT_IMAP_HAS_ALARMS))
+        return 0;
+
+    return caldav_alarm_delete_mailbox(mailbox->name);
+}
+#endif /* WITH_JMAP */
+
 #ifdef WITH_DAV
 static int mailbox_delete_caldav(struct mailbox *mailbox)
 {
@@ -5419,6 +5429,11 @@ EXPORTED int mailbox_delete(struct mailbox **mailboxptr)
 
     r = mailbox_delete_conversations(mailbox);
     if (r) return r;
+
+#ifdef WITH_JMAP
+    r = mailbox_delete_alarms(mailbox);
+    if (r) return r;
+#endif /* WITH_JMAP */
 
 #ifdef WITH_DAV
     r = mailbox_delete_dav(mailbox);
