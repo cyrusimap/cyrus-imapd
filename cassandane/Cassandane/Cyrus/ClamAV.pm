@@ -175,3 +175,59 @@ sub test_remove_infected
     delete $shared_exp{1};
     $self->check_messages(\%shared_exp, ( keyed_on => 'uid' ));
 }
+
+sub test_notify_deleted
+    :needs_dependency_clamav
+{
+    my ($self) = @_;
+
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    # put some test messages in INBOX (and verify)
+    $self->{store}->set_folder("INBOX");
+    my %cass_exp;
+    $cass_exp{1} = $self->make_message("eicar attached 1", uid => 1, %eicar_attached);
+    $cass_exp{2} = $self->make_message("eicar attached 2", uid => 2, %eicar_attached);
+    $self->check_messages(\%cass_exp, ( keyed_on => 'uid' ));
+
+    # run cyr_virusscan
+    $self->{instance}->run_command({ cyrus => 1, },
+                                   'cyr_virusscan', '-r', '-n');
+
+    # let's see what's in there now
+    my $found_notifications = 0;
+    $self->{store}->read_begin();
+    while (my $msg = $self->{store}->read_message()) {
+        # should not be any of our test messages remaining
+        $self->assert_null($msg->get_header('x-cassandane-unique'));
+
+        # if we find something that looks like a notification, check it
+		if ($msg->get_header('message-id') =~ m{^<cmu-cyrus-\d+-\d+-\d+\@}) {
+            $found_notifications ++;
+
+            my $body = $msg->get_body();
+#            xlog "body: $body";
+
+            # make sure report body includes all our infected tests
+            foreach my $exp (values %cass_exp) {
+                my $message_id = $exp->get_header('message-id');
+                $self->assert_matches(qr/Message-ID: $message_id/, $body);
+
+                my $subject = $exp->get_header('subject');
+                $self->assert_matches(qr/Subject: $subject/, $body);
+
+                my $uid = $exp->get_attribute('uid');
+                $self->assert_matches(qr/IMAP UID: $uid/, $body);
+            }
+
+            # make sure the virus was identified correctly
+            $self->assert_matches(qr/Eicar-Test-Signature/, $body);
+        }
+    }
+    $self->{store}->read_end();
+
+    # finally, there should've been exactly one notification email sent
+    $self->assert_num_equals(1, $found_notifications);
+}
+
+1;
