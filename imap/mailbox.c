@@ -3562,15 +3562,8 @@ static int mailbox_update_email_alarms(struct mailbox *mailbox,
     if (mboxname_isdeletedmailbox(mailbox->name, NULL))
         return 0;
 
-    /* conditions in which there's nothing to do */
-    if (!new) return 0;
-
-    /* phantom record - never really existed at all */
-    if (!old && (new->internal_flags & FLAG_INTERNAL_UNLINKED))
-        return 0;
-
     /* remove associated alarms if deleted */
-    if (new->internal_flags & FLAG_INTERNAL_EXPUNGED) {
+    if (!new || new->internal_flags & FLAG_INTERNAL_EXPUNGED) {
         r = caldav_alarm_delete_record(mailbox->name, new->uid);
     }
 
