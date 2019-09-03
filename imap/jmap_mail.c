@@ -10344,7 +10344,7 @@ static void _email_bulkupdate_exec_snooze(struct email_bulkupdate *bulk)
 
             /* Write annotation */
             msgrecord_t *mrw = msgrecord_from_uid(plan->mbox, uidrec->uid);
-            int r = 0;
+            int r = IMAP_MAILBOX_NONEXISTENT;
 
             if (mrw) {
                 const char *annot = IMAP_ANNOT_NS "snoozed-until";
@@ -10352,6 +10352,7 @@ static void _email_bulkupdate_exec_snooze(struct email_bulkupdate *bulk)
 
                 buf_init_ro_cstr(&val, update->snoozed);
                 r = msgrecord_annot_write(mrw, annot, "", &val);
+                if (!r) r = msgrecord_rewrite(mrw);
                 msgrecord_unref(&mrw);
             }
 
