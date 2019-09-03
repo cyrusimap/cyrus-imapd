@@ -1197,6 +1197,10 @@ static void process_one_record(struct mailbox *mailbox, uint32_t imap_uid,
     }
 #ifdef WITH_JMAP
     else if (mailbox->mbtype == MBTYPE_SUBMISSION) {
+        if (record.internaldate > runtime) {
+            update_alarmdb(mailbox->name, imap_uid, record.internaldate);
+            return;
+        }
         process_futurerelease(mailbox, &record);
     }
     else if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
