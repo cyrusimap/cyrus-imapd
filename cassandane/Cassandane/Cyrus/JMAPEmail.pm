@@ -3044,6 +3044,173 @@ sub test_email_set_update_snooze
     $self->assert_equals(JSON::true, $msg->{keywords}{'$awakened'});
 }
 
+sub test_replication_email_set_update_snooze
+    :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "Get mailbox id of Inbox";
+    my $res = $jmap->CallMethods([['Mailbox/query',
+                                   {filter => {role => 'inbox'}}, "R1"]]);
+    my $inboxId = $res->[0][1]->{ids}[0];
+
+    xlog "Generate a email via IMAP";
+    $self->make_message("foo", body => "a email\r\nwithCRLF\r\n") or die;
+
+    xlog "get email id";
+    $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R2" ] ] );
+    my $emailId = $res->[0][1]->{ids}[0];
+
+    $res = $jmap->CallMethods( [ [ 'Email/get',
+                                   { ids => [ $emailId ],
+                                     properties => [ 'mailboxIds', 'keywords', 'snoozedUntil' ]}, "R3" ] ] );
+    my $msg = $res->[0][1]->{list}[0];
+    my $oldState = $res->[0][1]->{state};
+    $self->assert_not_null($msg->{mailboxIds}{$inboxId});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+
+    xlog "create snooze mailbox";
+    $res = $jmap->CallMethods([
+            ['Mailbox/set', { create => { "1" => {
+                            name => "snoozed",
+                            parentId => undef,
+                            role => "snoozed"
+             }}}, "R4"]
+    ]);
+    $self->assert_not_null($res->[0][1]{created});
+    my $snoozedId = $res->[0][1]{created}{"1"}{id};
+
+    xlog "Move message to snooze mailbox";
+    my $maildate = DateTime->now();
+    $maildate->add(DateTime::Duration->new(seconds => 30));
+    my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $emailId => {
+                "mailboxIds/$inboxId" => undef,
+                "mailboxIds/$snoozedId" => $JSON::true,
+                "snoozedUntil" => $datestr,
+                keywords => { '$flagged' => JSON::true, '$seen' => JSON::true },
+            }}
+        }, 'R5']
+    ]);
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_null($res->[0][1]{notUpdated});
+
+    $res = $jmap->CallMethods([['Email/changes', { sinceState => $oldState }, "R1"]]);
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([$emailId], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $oldState = $res->[0][1]{newState};
+
+    $res = $jmap->CallMethods( [ [ 'Email/get',
+                                   { ids => [ $emailId ],
+                                     properties => [ 'mailboxIds', 'keywords', 'snoozedUntil' ]}, "R6" ] ] );
+    $msg = $res->[0][1]->{list}[0];
+    $self->assert_null($msg->{mailboxIds}{$inboxId});
+    $self->assert_not_null($msg->{mailboxIds}{$snoozedId});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+    $self->assert_equals($datestr, $msg->{snoozedUntil});
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    $res = $jmap->CallMethods([['Email/changes', { sinceState => $oldState }, "R1"]]);
+    $self->assert_str_equals($oldState, $res->[0][1]{newState});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+
+    $res = $jmap->CallMethods( [ [ 'Email/get',
+                                   { ids => [ $emailId ],
+                                     properties => [ 'mailboxIds', 'keywords', 'snoozedUntil' ]}, "R6" ] ] );
+    $msg = $res->[0][1]->{list}[0];
+    $self->assert_null($msg->{mailboxIds}{$inboxId});
+    $self->assert_not_null($msg->{mailboxIds}{$snoozedId});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+    $self->assert_equals($datestr, $msg->{snoozedUntil});
+
+    xlog "Adjust snoozeUntil";
+    $maildate->add(DateTime::Duration->new(seconds => 15));
+    $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
+
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => { $emailId => {
+                "snoozedUntil" => $datestr,
+            }}
+        }, 'R5']
+    ]);
+    $self->assert_not_null($res->[0][1]{updated});
+    $self->assert_null($res->[0][1]{notUpdated});
+
+    $res = $jmap->CallMethods([['Email/changes', { sinceState => $oldState }, "R1"]]);
+    $self->assert_str_not_equals($oldState, $res->[0][1]{newState});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([$emailId], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+    $oldState = $res->[0][1]{newState};
+
+    $res = $jmap->CallMethods( [ [ 'Email/get',
+                                   { ids => [ $emailId ],
+                                     properties => [ 'mailboxIds', 'keywords', 'snoozedUntil' ]}, "R6" ] ] );
+    $msg = $res->[0][1]->{list}[0];
+    $self->assert_null($msg->{mailboxIds}{$inboxId});
+    $self->assert_not_null($msg->{mailboxIds}{$snoozedId});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+    $self->assert_equals($datestr, $msg->{snoozedUntil});
+
+    xlog "make sure replication doesn't revert it!";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    $res = $jmap->CallMethods([['Email/changes', { sinceState => $oldState }, "R1"]]);
+    $self->assert_str_equals($oldState, $res->[0][1]{newState});
+    $self->assert_deep_equals([], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([], $res->[0][1]{destroyed});
+
+    $res = $jmap->CallMethods( [ [ 'Email/get',
+                                   { ids => [ $emailId ],
+                                     properties => [ 'mailboxIds', 'keywords', 'snoozedUntil' ]}, "R6" ] ] );
+    $msg = $res->[0][1]->{list}[0];
+    $self->assert_null($msg->{mailboxIds}{$inboxId});
+    $self->assert_not_null($msg->{mailboxIds}{$snoozedId});
+    $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
+    $self->assert_equals($datestr, $msg->{snoozedUntil});
+
+    xlog "trigger re-delivery of snoozed email";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $maildate->epoch() + 30 );
+
+    $res = $jmap->CallMethods( [ [ 'Email/get',
+                                   { ids => [ $emailId ],
+                                     properties => [ 'mailboxIds', 'keywords', 'snoozedUntil' ]}, "R7" ] ] );
+    $msg = $res->[0][1]->{list}[0];
+    $self->assert_null($msg->{mailboxIds}{$snoozedId});
+    $self->assert_num_equals(0, scalar keys %{$msg->{mailboxIds}});
+
+    $res = $jmap->CallMethods( [ [ 'Email/query', { filter => { inMailbox => $inboxId } }, "R8" ] ] );
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+
+    my $newEmailId = $res->[0][1]->{ids}[0];
+    $res = $jmap->CallMethods( [ [ 'Email/get',
+                                   { ids => [ $newEmailId ],
+                                     properties => [ 'mailboxIds', 'keywords', 'snoozedUntil' ]}, "R9" ] ] );
+
+    $msg = $res->[0][1]->{list}[0];
+    $self->assert_num_equals(3, scalar keys %{$msg->{keywords}});
+    $self->assert_equals(JSON::true, $msg->{keywords}{'$awakened'});
+
+    $res = $jmap->CallMethods([['Email/changes', { sinceState => $oldState }, "R1"]]);
+    $self->assert_str_not_equals($oldState, $res->[0][1]{newState});
+    $self->assert_deep_equals([$newEmailId], $res->[0][1]{created});
+    $self->assert_deep_equals([], $res->[0][1]{updated});
+    $self->assert_deep_equals([$emailId], $res->[0][1]{destroyed});
+}
+
 sub test_email_query_snooze
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
 {
