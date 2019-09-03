@@ -1046,6 +1046,7 @@ int main(int argc, char **argv)
     if ((r = mboxname_init_namespace(&sync_namespace, 1)) != 0) {
         fatal(error_message(r), EX_CONFIG);
     }
+    mboxevent_setnamespace(&sync_namespace);
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
