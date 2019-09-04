@@ -53,6 +53,7 @@
 #include <netinet/in.h>
 
 /* cyrus includes */
+#include "assert.h"
 #include "global.h"
 #include "append.h"
 #include "index.h"
@@ -252,6 +253,15 @@ unsigned virus_check(struct mailbox *mailbox,
                      void *rock);
 void append_notifications();
 
+static const char *default_notification_template =
+	"The following message was deleted from mailbox '%MAILBOX%'\n"
+	"because it was infected with virus '%VIRUS%'\n"
+	"\n"
+	"\tMessage-ID: %MSG_ID%\n"
+	"\tDate: %MSG_DATE%\n"
+	"\tFrom: %MSG_FROM%\n"
+	"\tSubject: %MSG_SUBJECT%\n"
+	"\tIMAP UID: %MSG_UID%\n";
 
 int main (int argc, char *argv[])
 {
@@ -523,6 +533,10 @@ void append_notifications()
     int outgoing_count = 0;
     pid_t p = getpid();;
     int fd = create_tempfile(config_getstring(IMAPOPT_TEMP_PATH));
+    const char *subject = config_getstring(IMAPOPT_VIRUSSCAN_NOTIFICATION_SUBJECT);
+    struct namespace notification_namespace;
+
+    mboxname_init_namespace(&notification_namespace, 0);
 
     while ((i_mbox = user)) {
         if (i_mbox->msgs) {
@@ -534,7 +548,7 @@ void append_notifications()
             struct appendstate as;
             struct body *body = NULL;
             long msgsize;
-            mbname_t *mbname = mbname_from_userid(i_mbox->owner);
+            mbname_t *owner = mbname_from_userid(i_mbox->owner);
 
 
             fprintf(f, "Return-Path: <>\r\n");
@@ -548,20 +562,40 @@ void append_notifications()
             fprintf(f, "From: Mail System Administrator <%s>\r\n",
                     config_getstring(IMAPOPT_POSTMASTER));
             /* XXX  Need to handle virtdomains */
-            fprintf(f, "To: <%s>\r\n", mbname_userid(mbname));
+            fprintf(f, "To: <%s>\r\n", mbname_userid(owner));
             fprintf(f, "MIME-Version: 1.0\r\n");
-            fprintf(f, "Subject: Automatically deleted mail\r\n");
+            fprintf(f, "Subject: %s\r\n", subject);
+            fputs("\r\n", f);
 
             while ((msg = i_mbox->msgs)) {
-                fprintf(f, "\r\n\r\nThe following message was deleted from mailbox "
-                        "'Inbox%s'\r\n", msg->mboxname+4);  /* skip "user" */
-                fprintf(f, "because it was infected with virus '%s'\r\n\r\n",
-                        msg->virname);
-                fprintf(f, "\tMessage-ID: %s\r\n", msg->msgid);
-                fprintf(f, "\tDate: %s\r\n", msg->date);
-                fprintf(f, "\tFrom: %s\r\n", msg->from);
-                fprintf(f, "\tSubject: %s\r\n", msg->subj);
-                fprintf(f, "\tIMAP UID: %lu\r\n", msg->uid);
+                struct buf chunk = BUF_INITIALIZER;
+                char uidbuf[16]; /* UINT32_MAX is 4294967295 */
+                int n;
+
+                /* stringify the uid */
+                n = snprintf(uidbuf, sizeof(uidbuf), "%lu", msg->uid);
+                assert(n > 0 && (unsigned) n < sizeof(uidbuf));
+
+                buf_setcstr(&chunk, default_notification_template);
+                buf_tocrlf(&chunk);
+
+                /* XXX some of these values need to be properly encoded! */
+                mbname_t *mailbox = mbname_from_intname(msg->mboxname);
+                const char *extname = mbname_extname(mailbox,
+                                                     &notification_namespace,
+                                                     mbname_userid(owner));
+                buf_replace_all(&chunk, "%MAILBOX%", extname);
+                buf_replace_all(&chunk, "%VIRUS%", msg->virname);
+                buf_replace_all(&chunk, "%MSG_ID%", msg->msgid);
+                buf_replace_all(&chunk, "%MSG_DATE%", msg->date);
+                buf_replace_all(&chunk, "%MSG_FROM%", msg->from);
+                buf_replace_all(&chunk, "%MSG_SUBJECT%", msg->subj);
+                buf_replace_all(&chunk, "%MSG_UID%", uidbuf);
+                mbname_free(&mailbox);
+
+                fputs(buf_cstring(&chunk), f);
+                fputs("\r\n", f);
+                buf_free(&chunk);
 
                 i_mbox->msgs = msg->next;
 
@@ -579,9 +613,9 @@ void append_notifications()
             msgsize = ftell(f);
 
             /* send MessageAppend event notification */
-            append_setup(&as, mbname_intname(mbname), NULL, NULL, 0, NULL, NULL, 0,
+            append_setup(&as, mbname_intname(owner), NULL, NULL, 0, NULL, NULL, 0,
                          EVENT_MESSAGE_APPEND);
-            mbname_free(&mbname);
+            mbname_free(&owner);
 
             pout = prot_new(fd, 0);
             prot_rewind(pout);
