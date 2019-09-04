@@ -48,7 +48,6 @@
 #include <libxml/tree.h>
 #include <libxml/uri.h>
 #include <libical/ical.h>
-#include <jansson.h>
 
 #include "annotate.h" /* for strlist */
 #include "hash.h"

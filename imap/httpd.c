@@ -741,11 +741,10 @@ int service_init(int argc __attribute__((unused)),
     }
 
     /* Construct serverinfo string */
-    buf_printf(&serverinfo,
-               "Cyrus-HTTP/%s Cyrus-SASL/%u.%u.%u LibXML/%s Jansson/%s",
+    buf_printf(&serverinfo, "Cyrus-HTTP/%s Cyrus-SASL/%u.%u.%u LibXML%s",
                CYRUS_VERSION,
                SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP,
-               LIBXML_DOTTED_VERSION, JANSSON_VERSION);
+               LIBXML_DOTTED_VERSION);
 
     http2_init(&serverinfo);
     ws_init(&serverinfo);
