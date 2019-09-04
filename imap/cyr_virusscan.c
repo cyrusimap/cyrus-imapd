@@ -133,6 +133,7 @@ struct clamav_state {
 void *clamav_init()
 {
     unsigned int sigs = 0;
+    int64_t starttime;
     int r;
 
     /* initialise ClamAV library */
@@ -153,12 +154,14 @@ void *clamav_init()
 
     /* load all available databases from default directory */
     if (verbose) puts("Loading virus signatures...");
+    starttime = now_ms();
     if ((r = cl_load(cl_retdbdir(), st->av_engine, &sigs, CL_DB_STDOPT))) {
         syslog(LOG_ERR, "cl_load: %s", cl_strerror(r));
         fatal(cl_strerror(r), EX_SOFTWARE);
     }
 
-    printf("Loaded %d virus signatures.\n", sigs);
+    printf("Loaded %d virus signatures (%.3f seconds).\n",
+           sigs, (now_ms() - starttime)/1000.0);
 
     /* build av_engine */
     if ((r = cl_engine_compile(st->av_engine))) {
