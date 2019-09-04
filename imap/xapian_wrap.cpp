@@ -1436,3 +1436,7 @@ int xapian_filter(const char *dest, const char **sources,
     return r;
 }
 
+const char *xapian_version_string()
+{
+    return Xapian::version_string();
+}

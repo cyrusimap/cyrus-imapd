@@ -100,4 +100,6 @@ extern int xapian_db_has_otherthan_v4_index(const xapian_db_t *);
 /* Language indexing support */
 extern int xapian_list_lang_stats(xapian_db_t*, ptrarray_t*);
 
+extern const char *xapian_version_string();
+
 #endif
