@@ -552,7 +552,7 @@ void append_notifications()
             struct body *body = NULL;
             long msgsize;
             mbname_t *owner = mbname_from_userid(i_mbox->owner);
-
+            int r;
 
             fprintf(f, "Return-Path: <>\r\n");
             t = time(NULL);
@@ -616,20 +616,30 @@ void append_notifications()
             msgsize = ftell(f);
 
             /* send MessageAppend event notification */
-            append_setup(&as, mbname_intname(owner), NULL, NULL, 0, NULL, NULL, 0,
-                         EVENT_MESSAGE_APPEND);
-            mbname_free(&owner);
+            r = append_setup(&as, mbname_intname(owner), NULL, NULL, 0, NULL, NULL, 0,
+                             EVENT_MESSAGE_APPEND);
 
-            pout = prot_new(fd, 0);
-            prot_rewind(pout);
-            append_fromstream(&as, &body, pout, msgsize, t, NULL);
-            append_commit(&as);
+            if (!r) {
+                pout = prot_new(fd, 0);
+                prot_rewind(pout);
+                r = append_fromstream(&as, &body, pout, msgsize, t, NULL);
+                /* n.b. append_fromstream calls append_abort itself if it fails */
+                if (!r) r = append_commit(&as);
 
-            if (body) {
-                message_free_body(body);
-                free(body);
+                if (body) {
+                    message_free_body(body);
+                    free(body);
+                }
+                prot_free(pout);
             }
-            prot_free(pout);
+
+            if (r) {
+                syslog(LOG_ERR, "couldn't send notification to user %s: %s",
+                                mbname_userid(owner),
+                                error_message(r));
+            }
+
+            mbname_free(&owner);
             fclose(f);
         }
 
