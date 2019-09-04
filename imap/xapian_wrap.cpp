@@ -916,7 +916,7 @@ static Xapian::Query *make_stem_match_query(const xapian_db_t *db,
         else {
             db->parser->set_stemming_strategy(Xapian::QueryParser::STEM_SOME);
         }
-        *q = db->parser->parse_query(lmatch, flags, prefix);
+        *q |= db->parser->parse_query(lmatch, flags, prefix);
 
         return q;
     }
