@@ -256,6 +256,9 @@ unsigned virus_check(struct mailbox *mailbox,
                      const struct index_record *record,
                      void *rock);
 static int load_notification_template(struct buf *dst);
+static int check_notification_template(const struct buf *template);
+static void put_notification_headers(FILE *f, int counter, time_t t,
+                                     const mbname_t *mbname);
 static void append_notifications(const struct buf *template);
 
 static const char *default_notification_template =
@@ -548,6 +551,7 @@ static int load_notification_template(struct buf *dst)
 {
     const char *template_fname =
         config_getstring(IMAPOPT_VIRUSSCAN_NOTIFICATION_TEMPLATE);
+    int r;
 
     if (!template_fname) {
         buf_setcstr(dst, default_notification_template);
@@ -566,18 +570,94 @@ static int load_notification_template(struct buf *dst)
     buf_init_mmap(dst, 1, fd, template_fname, MAP_UNKNOWN_LEN, NULL);
     close(fd);
 
-    /* XXX using a custom template, validate it! */
+    /* using a custom template, validate it! */
+    r = check_notification_template(dst);
+    if (r) buf_reset(dst);
 
-    return 0;
+    return r;
+}
+
+static int check_notification_template(const struct buf *template)
+{
+    struct buf chunk = BUF_INITIALIZER;
+    int fd;
+    FILE *f;
+    mbname_t *mbname;
+    struct protstream *pout;
+    size_t msgsize;
+    size_t i;
+    int r;
+
+    const char *subs[] = {
+        "%MAILBOX%",
+        "%VIRUS%",
+        "%MSG_ID%",
+        "%MSG_DATE%",
+        "%MSG_FROM%",
+        "%MSG_SUBJECT%",
+        "%MSG_UID%",
+    };
+
+    /* warn about missing fields, but they're not catastrophic */
+    for (i = 0; i < sizeof(subs) / sizeof(subs[0]); i++) {
+        if (!memmem(buf_base(template), buf_len(template),
+                    subs[i], strlen(subs[i])))
+            syslog(LOG_WARNING, "notification template is missing %s substitution",
+                                subs[i]);
+    }
+
+    /* stub a message, and do minimal checking for rfc822 compliance */
+    fd = create_tempfile(config_getstring(IMAPOPT_TEMP_PATH));
+    f = fdopen(fd, "w+");
+    mbname = mbname_from_intname("user.nobody");
+    put_notification_headers(f, 0, time(NULL), mbname);
+    mbname_free(&mbname);
+
+    buf_copy(&chunk, template);
+    buf_tocrlf(&chunk);
+    /* not bothering to perform substitutions */
+    fputs(buf_cstring(&chunk), f);
+    fputs("\r\n", f);
+    buf_free(&chunk);
+
+    fflush(f);
+    msgsize = ftell(f);
+
+    pout = prot_new(fd, 0);
+    prot_rewind(pout);
+    r = message_copy_strict(pout, NULL, msgsize, /* allow_null */ 0);
+    prot_free(pout);
+
+    fclose(f);
+    return r;
+}
+
+static void put_notification_headers(FILE *f, int counter, time_t t,
+                                     const mbname_t *mbname)
+{
+    pid_t p = getpid();
+    char datestr[RFC5322_DATETIME_MAX+1];
+
+    time_to_rfc5322(t, datestr, sizeof(datestr));
+
+    fprintf(f, "Return-Path: <>\r\n");
+    fprintf(f, "Message-ID: <cmu-cyrus-%d-%d-%d@%s>\r\n",
+               (int) p, (int) t, counter, config_servername);
+    fprintf(f, "Date: %s\r\n", datestr);
+    fprintf(f, "From: Mail System Administrator <%s>\r\n",
+               config_getstring(IMAPOPT_POSTMASTER));
+    fprintf(f, "To: <%s>\r\n", mbname_userid(mbname));
+    fprintf(f, "MIME-Version: 1.0\r\n");
+    fprintf(f, "Subject: %s\r\n",
+               config_getstring(IMAPOPT_VIRUSSCAN_NOTIFICATION_SUBJECT));
+    fputs("\r\n", f);
 }
 
 static void append_notifications(const struct buf *template)
 {
     struct infected_mbox *i_mbox;
     int outgoing_count = 0;
-    pid_t p = getpid();;
     int fd = create_tempfile(config_getstring(IMAPOPT_TEMP_PATH));
-    const char *subject = config_getstring(IMAPOPT_VIRUSSCAN_NOTIFICATION_SUBJECT);
     struct namespace notification_namespace;
 
     mboxname_init_namespace(&notification_namespace, 0);
@@ -586,7 +666,6 @@ static void append_notifications(const struct buf *template)
         if (i_mbox->msgs) {
             FILE *f = fdopen(fd, "w+");
             struct infected_msg *msg;
-            char buf[8192], datestr[RFC5322_DATETIME_MAX+1];
             time_t t;
             struct protstream *pout;
             struct appendstate as;
@@ -595,21 +674,8 @@ static void append_notifications(const struct buf *template)
             mbname_t *owner = mbname_from_userid(i_mbox->owner);
             int r;
 
-            fprintf(f, "Return-Path: <>\r\n");
             t = time(NULL);
-            snprintf(buf, sizeof(buf), "<cmu-cyrus-%d-%d-%d@%s>",
-                     (int) p, (int) t,
-                     outgoing_count++, config_servername);
-            fprintf(f, "Message-ID: %s\r\n", buf);
-            time_to_rfc5322(t, datestr, sizeof(datestr));
-            fprintf(f, "Date: %s\r\n", datestr);
-            fprintf(f, "From: Mail System Administrator <%s>\r\n",
-                    config_getstring(IMAPOPT_POSTMASTER));
-            /* XXX  Need to handle virtdomains */
-            fprintf(f, "To: <%s>\r\n", mbname_userid(owner));
-            fprintf(f, "MIME-Version: 1.0\r\n");
-            fprintf(f, "Subject: %s\r\n", subject);
-            fputs("\r\n", f);
+            put_notification_headers(f, outgoing_count++, t, owner);
 
             while ((msg = i_mbox->msgs)) {
                 struct buf chunk = BUF_INITIALIZER;
@@ -681,6 +747,10 @@ static void append_notifications(const struct buf *template)
             }
 
             mbname_free(&owner);
+            /* XXX funny smell here, fdopen() promises to close the underlying
+             *     file descriptor at fclose(), but we're about to loop around
+             *     and re-fdopen() it?
+             */
             fclose(f);
         }
 
