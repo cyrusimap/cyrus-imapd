@@ -2814,7 +2814,10 @@ static int flush_snippets(search_text_receiver_t *rx)
                 r = tr->proc(tr->super.mailbox, tr->super.uid, last_part, snippets.s, tr->rock);
             if (r) goto out;
 
-            r = xapian_snipgen_begin_doc(tr->snipgen, &seg->guid, seg->doctype);
+            if (config_getswitch(IMAPOPT_SEARCH_INDEX_PARTS))
+                r = xapian_snipgen_begin_doc(tr->snipgen, &seg->guid, seg->doctype);
+            else
+                r = xapian_snipgen_begin_doc(tr->snipgen, &tr->super.guid, SEARCH_XAPIAN_DOCTYPE_MSG);
             if (r) break;
             generate_snippet_terms(tr->snipgen, seg->part, tr->root);
 

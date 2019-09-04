@@ -641,7 +641,8 @@ int xapian_dbw_doc_part(xapian_dbw_t *dbw, const struct buf *part, int num_part)
             // We only count stemmer language once per document and part,
             // either the detected language or the default (English).
             // We still index them using both stemmers.
-            if ((dbw->doctype == 'G' && !search_part_is_body(num_part)) ||
+            if ((!config_getswitch(IMAPOPT_SEARCH_INDEX_PARTS)) ||
+                (dbw->doctype == 'G' && !search_part_is_body(num_part)) ||
                 (dbw->doctype != 'G' &&  search_part_is_body(num_part))) {
                 std::string key = make_lang_count_key(num_part, iso_lang);
                 std::string val = dbw->database->get_metadata(key);
