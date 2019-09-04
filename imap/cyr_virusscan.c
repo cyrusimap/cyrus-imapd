@@ -58,6 +58,7 @@
 #include "append.h"
 #include "index.h"
 #include "mailbox.h"
+#include "map.h"
 #include "message.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
@@ -254,7 +255,8 @@ int scan_me(struct findall_data *, void *);
 unsigned virus_check(struct mailbox *mailbox,
                      const struct index_record *record,
                      void *rock);
-void append_notifications();
+static int load_notification_template(struct buf *dst);
+static void append_notifications(const struct buf *template);
 
 static const char *default_notification_template =
 	"The following message was deleted from mailbox '%MAILBOX%'\n"
@@ -272,6 +274,7 @@ int main (int argc, char *argv[])
     char *alt_config = NULL;
     char *search_str = NULL;
     struct scan_rock srock;
+    struct buf notification_template = BUF_INITIALIZER;
 
     while ((option = getopt(argc, argv, "C:s:rnv")) != EOF) {
         switch (option) {
@@ -303,6 +306,15 @@ int main (int argc, char *argv[])
     cyrus_init(alt_config, "cyr_virusscan", 0, CONFIG_NEED_PARTITION_DATA);
 
     memset(&srock, 0, sizeof(struct scan_rock));
+
+    if (email_notification) {
+        /* load notification template early, so if it fails we haven't wasted
+         * time initialising the av engine */
+        if (load_notification_template(&notification_template)) {
+            syslog(LOG_ERR, "Couldn't load notification template");
+            fatal("Couldn't load notification template", EX_CONFIG);
+        }
+    }
 
     if (search_str) {
         int r, c;
@@ -348,7 +360,9 @@ int main (int argc, char *argv[])
         strarray_free(array);
     }
 
-    if (email_notification) append_notifications();
+    if (email_notification) append_notifications(&notification_template);
+
+    buf_free(&notification_template);
 
     printf("\n%d mailboxes scanned, %d infected messages %s\n",
            srock.mailboxes_scanned,
@@ -530,7 +544,34 @@ unsigned virus_check(struct mailbox *mailbox,
     return r;
 }
 
-void append_notifications()
+static int load_notification_template(struct buf *dst)
+{
+    const char *template_fname =
+        config_getstring(IMAPOPT_VIRUSSCAN_NOTIFICATION_TEMPLATE);
+
+    if (!template_fname) {
+        buf_setcstr(dst, default_notification_template);
+        return 0;
+    }
+
+    int fd = open(template_fname, O_RDONLY);
+    if (fd == -1) {
+        syslog(LOG_WARNING, "unable to read notification template file %s (%m), "
+                            "using default instead",
+                            template_fname);
+        buf_setcstr(dst, default_notification_template);
+        return 0;
+    }
+
+    buf_init_mmap(dst, 1, fd, template_fname, MAP_UNKNOWN_LEN, NULL);
+    close(fd);
+
+    /* XXX using a custom template, validate it! */
+
+    return 0;
+}
+
+static void append_notifications(const struct buf *template)
 {
     struct infected_mbox *i_mbox;
     int outgoing_count = 0;
@@ -579,7 +620,7 @@ void append_notifications()
                 n = snprintf(uidbuf, sizeof(uidbuf), "%lu", msg->uid);
                 assert(n > 0 && (unsigned) n < sizeof(uidbuf));
 
-                buf_setcstr(&chunk, default_notification_template);
+                buf_copy(&chunk, template);
                 buf_tocrlf(&chunk);
 
                 /* XXX some of these values need to be properly encoded! */
