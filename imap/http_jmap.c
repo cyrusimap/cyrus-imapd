@@ -275,8 +275,13 @@ HIDDEN void jmap_core_capabilities(json_t *account_capabilities)
     }
 }
 
-static void jmap_init(struct buf *serverinfo __attribute__((unused)))
+static void jmap_init(struct buf *serverinfo)
 {
+#ifdef USE_XAPIAN
+#include <xapian/version.h>
+    buf_printf(serverinfo, " Xapian/%s", XAPIAN_VERSION);
+#endif
+
     namespace_jmap.enabled =
         config_httpmodules & IMAP_ENUM_HTTPMODULES_JMAP;
 
