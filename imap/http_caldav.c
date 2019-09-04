@@ -692,7 +692,6 @@ static void my_caldav_init(struct buf *serverinfo)
     char *domain;
     tok_t tok;
 
-    buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
     buf_printf(serverinfo, " LibiCal/%s", ICAL_VERSION);
 #ifdef HAVE_RSCALE
     if ((rscale_calendars = icalrecurrencetype_rscale_supported_calendars())) {
@@ -701,7 +700,6 @@ static void my_caldav_init(struct buf *serverinfo)
         buf_printf(serverinfo, " ICU4C/%s", U_ICU_VERSION);
     }
 #endif
-    buf_printf(serverinfo, " Jansson/%s", JANSSON_VERSION);
 
     namespace_calendar.enabled =
         config_httpmodules & IMAP_ENUM_HTTPMODULES_CALDAV;

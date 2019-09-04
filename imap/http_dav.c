@@ -8473,13 +8473,15 @@ int dav_store_resource(struct transaction_t *txn,
 }
 
 
-static void my_dav_init(struct buf *serverinfo __attribute__((unused)))
+static void my_dav_init(struct buf *serverinfo)
 {
     time_t compile_time = calc_compile_time(__TIME__, __DATE__);
     struct stat sbuf;
     struct message_guid guid;
     xmlNodePtr root, node, apps, app;
     xmlNsPtr ns[NUM_NAMESPACE];
+
+    buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
 
     /* Generate token based on compile date/time of this source file,
        the number of available RSCALEs and the config file size/mtime */

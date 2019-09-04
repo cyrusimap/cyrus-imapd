@@ -65,6 +65,7 @@
 
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
+#include <jansson.h>
 
 #include "httpd.h"
 #include "http_h2.h"
@@ -741,10 +742,11 @@ int service_init(int argc __attribute__((unused)),
     }
 
     /* Construct serverinfo string */
-    buf_printf(&serverinfo, "Cyrus-HTTP/%s Cyrus-SASL/%u.%u.%u LibXML%s",
+    buf_printf(&serverinfo,
+               "Cyrus-HTTP/%s Cyrus-SASL/%u.%u.%u Lib/XML%s Jansson/%s",
                CYRUS_VERSION,
                SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP,
-               LIBXML_DOTTED_VERSION);
+               LIBXML_DOTTED_VERSION, JANSSON_VERSION);
 
     http2_init(&serverinfo);
     ws_init(&serverinfo);
