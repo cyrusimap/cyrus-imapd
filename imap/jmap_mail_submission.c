@@ -971,6 +971,10 @@ static void _emailsubmission_update(struct mailbox *submbox,
 
         memcpy(&newrecord, record, sizeof(struct index_record));
         newrecord.system_flags |= FLAG_FLAGGED;
+        if (config_getswitch(IMAPOPT_JMAPSUBMISSION_DELETEONSEND)) {
+            newrecord.system_flags |= FLAG_DELETED;
+            newrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+        }
 
         r = mailbox_rewrite_index_record(submbox, &newrecord);
         if (r) *set_err = json_pack("{s:s, s:s}", "type", "serverFail", "description", error_message(r));
