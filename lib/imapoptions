@@ -1123,6 +1123,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "jmapuploadfolder", "#jmap", STRING }
 /* the name of the folder for JMAP uploads (#jmap) */
 
+{ "jmapsubmission_deleteonsend", 1, SWITCH }
+/* If enabled (the default) then delete the EmailSubmission as soon as the email
+ * has been sent */
+
 { "jmapsubmissionfolder", "#jmapsubmission", STRING }
 /* the name of the folder for JMAP Submissions (#jmapsubmission) */
 

@@ -362,6 +362,12 @@ static int store_submission(struct mailbox *mailbox,
         msglen = 0;
         internaldate = now;
         strarray_append(&flags, "\\Answered");
+        if (config_getswitch(IMAPOPT_JMAPSUBMISSION_DELETEONSEND)) {
+            /* delete the EmailSubmission object immediately */
+            strarray_append(&flags, "\\Deleted");
+            // this non-standard flag is magic and works on the append layer
+            strarray_append(&flags, "\\Expunged");
+        }
     }
 
     /* Prepare to stage the message */

@@ -940,6 +940,11 @@ static void process_futurerelease(struct mailbox *mailbox,
 
     /* Mark the email as sent */
     record->system_flags |= FLAG_ANSWERED;
+    if (config_getswitch(IMAPOPT_JMAPSUBMISSION_DELETEONSEND)) {
+        /* delete the EmailSubmission object immediately */
+        record->system_flags |= FLAG_DELETED;
+        record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
+    }
     r = mailbox_rewrite_index_record(mailbox, record);
     if (r) {
         syslog(LOG_ERR, "marking emailsubmission as sent (%s:%u) failed: %s",
