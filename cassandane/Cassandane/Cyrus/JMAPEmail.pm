@@ -65,6 +65,7 @@ sub new
     $config->set(caldav_realm => 'Cassandane',
                  conversations => 'yes',
                  conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
+                 jmapsubmission_deleteonsend => 'no',
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no');
 
