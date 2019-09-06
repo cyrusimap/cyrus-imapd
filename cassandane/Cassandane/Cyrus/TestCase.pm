@@ -225,6 +225,12 @@ magic(DisconnectOnVanished => sub {
     shift->config_set('disconnect_on_vanished_mailbox' => 'yes');
 });
 magic(NoStartInstances => sub {
+    # If you use this magic, you must call
+    # $self->_start_instances() and optionally $self->_jmap_setup()
+    # yourself from your test function once you're ready for Cyrus
+    # to be started!
+    # If any test function in your suite uses this magic, then
+    # your suite's set_up function cannot assume Cyrus is running!
     shift->want('start_instances' => 0);
 });
 magic(MagicPlus => sub {
@@ -598,10 +604,16 @@ sub set_up
     xlog "---------- BEGIN $self->{_name} ----------";
 
     $self->_create_instances();
-    $self->_start_instances()
-        if $self->{_want}->{start_instances};
-    $self->_jmap_setup()
-        if $self->{_want}->{jmap};
+    if ($self->{_want}->{start_instances}) {
+        $self->_start_instances();
+        $self->_jmap_setup()
+            if $self->{_want}->{jmap};
+    }
+    else {
+        xlog "Instances not started due to :NoStartInstances magic!";
+        xlog "JMAP not setup due to :NoStartInstances magic!"
+            if $self->{_want}->{jmap};
+    }
     xlog "Calling test function";
 }
 
