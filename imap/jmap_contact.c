@@ -2662,15 +2662,17 @@ static int _blob_to_card(struct jmap_req *req,
     const struct body *part = NULL;
     const char *blobid = NULL;
     const char *accountid = NULL;
+    char *encbuf = NULL;
+    char *decbuf = NULL;
     json_t *val;
-    int r;
+    int r = -1;
 
-    if (!file) return -1;
+    if (!file) goto done;
 
     /* Extract blobId */
     val = json_object_get(file, "blobId");
     if (val) blobid = json_string_value(val);
-    if (!blobid) return -1;
+    if (!blobid) goto done;
 
     /* Find body part containing blob */
     if (!strcmp(req->method, "Contact/copy")) {
@@ -2690,7 +2692,6 @@ static int _blob_to_card(struct jmap_req *req,
     const char *base = buf_base(&blob_buf);
     size_t len = buf_len(&blob_buf);
 
-    char *decbuf = NULL;
     if (part) {
         /* Map into body part */
         base += part->content_offset;
@@ -2706,7 +2707,7 @@ static int _blob_to_card(struct jmap_req *req,
     charset_encode_mimebody(NULL, len, NULL, &len64, NULL, 0 /* no wrap */);
 
     /* Now encode the blob */
-    char *encbuf = xmalloc(len64+1);
+    encbuf = xmalloc(len64+1);
     charset_encode_mimebody(base, len, encbuf, &len64, NULL, 0 /* no wrap */);
     encbuf[len64] = '\0';
     base = encbuf;
@@ -2721,17 +2722,19 @@ static int _blob_to_card(struct jmap_req *req,
     val = json_object_get(file, "type");
     if (val) {
         const char *type = json_string_value(val);
-        char *subtype = xstrdup(strchr(type, '/'));
+        if (!type) goto done;
+        char *subtype = xstrdupnull(strchr(type, '/'));
+        if (!subtype) goto done;
 
         vparse_add_param(entry, "TYPE", ucase(subtype+1));
         free(subtype);
     }
 
-    free(decbuf);
-    free(encbuf);
     r = 0;
 
   done:
+    free(decbuf);
+    free(encbuf);
     if (body) {
         message_free_body(body);
         free(body);
