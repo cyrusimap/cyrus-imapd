@@ -2721,6 +2721,7 @@ static int _blob_to_card(struct jmap_req *req,
 
     val = json_object_get(file, "type");
     if (val) {
+        r = -1;
         const char *type = json_string_value(val);
         if (!type) goto done;
         char *subtype = xstrdupnull(strchr(type, '/'));
