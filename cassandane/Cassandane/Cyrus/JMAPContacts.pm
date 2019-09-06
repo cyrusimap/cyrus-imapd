@@ -1549,18 +1549,31 @@ sub test_contact_set
     # avatar
     xlog "upload avatar";
     $res = $jmap->Upload("some photo", "image/jpeg");
+    my $blobId = $res->{blobId};
     $contact->{"x-hasPhoto"} = JSON::true;
     $contact->{avatar} = {
-        blobId => "$res->{blobId}",
+        blobId => $blobId,
         size => 10,
         type => "image/jpeg",
         name => JSON::null
     };
 
+    xlog "attempt to update avatar with invalid type";
+    $res = $jmap->CallMethods([['Contact/set', {update => {$id =>
+                            {avatar => {
+                                blobId => $blobId,
+                                size => 10,
+                                type => "JPEG",
+                                name => JSON::null
+                             }
+                     } }}, "R1"]]);
+    $self->assert_null($res->[0][1]{updated});
+    $self->assert_not_null($res->[0][1]{notUpdated}{$id});
+
     xlog "update avatar";
     $res = $jmap->CallMethods([['Contact/set', {update => {$id =>
                             {avatar => {
-                                blobId => "$res->{blobId}",
+                                blobId => $blobId,
                                 size => 10,
                                 type => "image/jpeg",
                                 name => JSON::null
