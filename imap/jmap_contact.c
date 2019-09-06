@@ -2720,7 +2720,7 @@ static int _blob_to_card(struct jmap_req *req,
     vparse_add_param(entry, "ENCODING", "b");
 
     val = json_object_get(file, "type");
-    if (val) {
+    if (JNOTNULL(val)) {
         r = -1;
         const char *type = json_string_value(val);
         if (!type) goto done;
