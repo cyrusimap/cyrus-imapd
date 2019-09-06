@@ -616,8 +616,12 @@ static int check_notification_template(const struct buf *template)
     buf_copy(&chunk, template);
     buf_tocrlf(&chunk);
     /* not bothering to perform substitutions */
-    fputs(buf_cstring(&chunk), f);
+    char *encoded_chunk = charset_qpencode_mimebody(buf_base(&chunk),
+                                                    buf_len(&chunk),
+                                                    /* force_quote */ 0, NULL);
+    fputs(encoded_chunk, f);
     fputs("\r\n", f);
+    free(encoded_chunk);
     buf_free(&chunk);
 
     fflush(f);
@@ -637,8 +641,11 @@ static void put_notification_headers(FILE *f, int counter, time_t t,
 {
     pid_t p = getpid();
     char datestr[RFC5322_DATETIME_MAX+1];
+    char *encoded_subject;
 
     time_to_rfc5322(t, datestr, sizeof(datestr));
+    encoded_subject = charset_encode_mimeheader(
+        config_getstring(IMAPOPT_VIRUSSCAN_NOTIFICATION_SUBJECT), 0, 0);
 
     fprintf(f, "Return-Path: <>\r\n");
     fprintf(f, "Message-ID: <cmu-cyrus-%d-%d-%d@%s>\r\n",
@@ -647,10 +654,13 @@ static void put_notification_headers(FILE *f, int counter, time_t t,
     fprintf(f, "From: Mail System Administrator <%s>\r\n",
                config_getstring(IMAPOPT_POSTMASTER));
     fprintf(f, "To: <%s>\r\n", mbname_userid(mbname));
+    fprintf(f, "Subject: %s\r\n", encoded_subject);
     fprintf(f, "MIME-Version: 1.0\r\n");
-    fprintf(f, "Subject: %s\r\n",
-               config_getstring(IMAPOPT_VIRUSSCAN_NOTIFICATION_SUBJECT));
+    fprintf(f, "Content-Type: text/plain; charset=UTF-8\r\n");
+    fprintf(f, "Content-Transfer-Encoding: quoted-printable\r\n");
     fputs("\r\n", f);
+
+    free(encoded_subject);
 }
 
 static void append_notifications(const struct buf *template)
@@ -692,7 +702,6 @@ static void append_notifications(const struct buf *template)
                 buf_copy(&chunk, template);
                 buf_tocrlf(&chunk);
 
-                /* XXX some of these values need to be properly encoded! */
                 mbname_t *mailbox = mbname_from_intname(msg->mboxname);
                 const char *extname = mbname_extname(mailbox,
                                                      &notification_namespace,
@@ -725,10 +734,15 @@ static void append_notifications(const struct buf *template)
                 free(msg);
             }
 
-            fputs(buf_cstring(&message), f);
-            buf_free(&message);
+            char *encoded_message = charset_qpencode_mimebody(
+                                        buf_base(&message), buf_len(&message),
+                                        /* force_quote */ 0, NULL);
+            fputs(encoded_message, f);
             fflush(f);
             msgsize = ftell(f);
+
+            free(encoded_message);
+            buf_free(&message);
 
             /* send MessageAppend event notification */
             r = append_setup(&as, mbname_intname(owner), NULL, NULL, 0, NULL, NULL, 0,
