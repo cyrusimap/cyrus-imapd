@@ -672,11 +672,14 @@ static void append_notifications(const struct buf *template)
             struct body *body = NULL;
             long msgsize;
             mbname_t *owner = mbname_from_userid(i_mbox->owner);
+            struct buf message = BUF_INITIALIZER;
+            int first;
             int r;
 
             t = time(NULL);
             put_notification_headers(f, outgoing_count++, t, owner);
 
+            first = 1;
             while ((msg = i_mbox->msgs)) {
                 struct buf chunk = BUF_INITIALIZER;
                 char uidbuf[16]; /* UINT32_MAX is 4294967295 */
@@ -698,13 +701,16 @@ static void append_notifications(const struct buf *template)
                 buf_replace_all(&chunk, "%VIRUS%", msg->virname);
                 buf_replace_all(&chunk, "%MSG_ID%", msg->msgid);
                 buf_replace_all(&chunk, "%MSG_DATE%", msg->date);
-                buf_replace_all(&chunk, "%MSG_FROM%", msg->from);
+                buf_replace_all(&chunk, "%MSG_FROM%", msg->from); /* XXX fix this! */
                 buf_replace_all(&chunk, "%MSG_SUBJECT%", msg->subj);
                 buf_replace_all(&chunk, "%MSG_UID%", uidbuf);
                 mbname_free(&mailbox);
 
-                fputs(buf_cstring(&chunk), f);
-                fputs("\r\n", f);
+                if (!first)
+                    buf_appendcstr(&message, "\r\n");
+                else
+                    first = 0;
+                buf_append(&message, &chunk);
                 buf_free(&chunk);
 
                 i_mbox->msgs = msg->next;
@@ -719,6 +725,8 @@ static void append_notifications(const struct buf *template)
                 free(msg);
             }
 
+            fputs(buf_cstring(&message), f);
+            buf_free(&message);
             fflush(f);
             msgsize = ftell(f);
 
