@@ -3136,7 +3136,6 @@ static int jmapevent_search(jmap_req_t *req,  struct jmap_query *jquery)
     query->want_mbtype = MBTYPE_CALENDAR;
     r = search_query_run(query);
     if (r && r != IMAP_NOTFOUND) goto done;
-    r = 0;
 
     /* Aggregate result */
     for (i = 0 ; i < query->merged_msgdata.count; i++) {
@@ -3173,6 +3172,8 @@ static int jmapevent_search(jmap_req_t *req,  struct jmap_query *jquery)
         /* Add the search result */
         json_array_append_new(*eventids, json_string(cdata->ical_uid));
     }
+
+    r = 0;
 
 done:
     index_close(&state);
