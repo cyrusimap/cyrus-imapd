@@ -207,7 +207,7 @@ sub test_notify_deleted
             $found_notifications ++;
 
             my $body = $msg->get_body();
-#            xlog "body: $body";
+#            xlog "body:\n>>>>>>\n$body<<<<<<";
 
             # make sure report body includes all our infected tests
             foreach my $exp (values %cass_exp) {
@@ -238,6 +238,7 @@ sub test_custom_notify_deleted
 
     # set up a custom notification template
     $self->{instance}->{config}->set(
+        virusscan_notification_subject => 'custom ½ subject',
         virusscan_notification_template =>
             abs_path('data/custom-notification-template'),
     );
@@ -267,8 +268,15 @@ sub test_custom_notify_deleted
 		if ($msg->get_header('message-id') =~ m{^<cmu-cyrus-\d+-\d+-\d+\@}) {
             $found_notifications ++;
 
+            my $subject = $msg->get_header('subject');
+#            xlog "subject: $subject";
+
+            # make sure our custom subject was used (and correctly encoded)
+            $self->assert_str_equals('=?UTF-8?Q?custom_=C2=BD_subject?=',
+                                     $subject);
+
             my $body = $msg->get_body();
-#            xlog "body: $body";
+#            xlog "body:\n>>>>>>\n$body<<<<<<";
 
             # make sure report body includes all our infected tests
             foreach my $exp (values %cass_exp) {
@@ -287,6 +295,9 @@ sub test_custom_notify_deleted
 
             # make sure our custom notification template was used
             $self->assert_matches(qr/^custom notification!/, $body);
+
+            # make sure message was qp-encoded
+            $self->assert_matches(qr/with =C2=BD as much 8bit/, $body);
         }
     }
     $self->{store}->read_end();
