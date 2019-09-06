@@ -1182,6 +1182,10 @@ EXPORTED void buf_appendcstr(struct buf *buf, const char *str)
     buf_appendmap(buf, str, strlen(str));
 }
 
+/* Append str to buf, omitting any byte sequence at the start
+ * of str that matches the exact same byte sequence at the
+ * end of buf. E.g. if buf="fooxyz" and str="xyzbar" then the
+ * result is "fooxyzbar". */
 EXPORTED void buf_appendoverlap(struct buf *buf, const char *str)
 {
     const char *t = buf_cstring(buf);
