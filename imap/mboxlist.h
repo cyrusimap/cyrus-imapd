@@ -56,7 +56,21 @@
  */
 #define MAX_PARTITION_LEN 64
 
-/* flags for types of mailboxes */
+/* Flags for types of mailboxes
+ *
+ * Historically, mbtype was a bitmask, which is why this set of defines looks
+ * like a bitmask.  But, that was a mistake, which we have almost-entirely
+ * moved away from.
+ *
+ * Nowadays, an mbtype should properly only ever be a single one of these
+ * values, not a bitmask.
+ *
+ * The MBTYPES_DAV and MBTYPES_NONIMAP masks remain because they remain
+ * useful for checking the flavour of an mbtype, but do not take them as
+ * indicative of good style!  Generally, if you need to set an mbtype, set
+ * it to one value, and if you need to compare an mbtype, compare it against
+ * one value.
+ */
 #define MBTYPE_EMAIL            0  /* default mbtype is zero */
 #define MBTYPE_REMOTE       (1<<0) /* Not on this server (part is remote host) */
 #define MBTYPE_RESERVE      (1<<1) /* Reserved [mupdate/imapd] /
