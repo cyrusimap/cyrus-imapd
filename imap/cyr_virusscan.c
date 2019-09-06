@@ -62,6 +62,7 @@
 #include "message.h"
 #include "xmalloc.h"
 #include "mboxlist.h"
+#include "parseaddr.h"
 #include "prot.h"
 #include "util.h"
 #include "times.h"
@@ -487,6 +488,9 @@ void create_digest(struct infected_mbox *i_mbox, struct mailbox *mailbox,
                    const struct index_record *record, const char *virname)
 {
     struct infected_msg *i_msg = xzmalloc(sizeof(struct infected_msg));
+    char *tmp;
+    struct address addr;
+    struct buf from = BUF_INITIALIZER;
 
     i_msg->mboxname = xstrdup(mailbox->name);
     i_msg->virname = xstrdup(virname);
@@ -494,8 +498,16 @@ void create_digest(struct infected_mbox *i_mbox, struct mailbox *mailbox,
 
     i_msg->msgid = mailbox_cache_get_env(mailbox, record, ENV_MSGID);
     i_msg->date = mailbox_cache_get_env(mailbox, record, ENV_DATE);
-    i_msg->from = mailbox_cache_get_env(mailbox, record, ENV_FROM);
     i_msg->subj = mailbox_cache_get_env(mailbox, record, ENV_SUBJECT);
+
+    /* decode the FROM header */
+    tmp = mailbox_cache_get_env(mailbox, record, ENV_FROM);
+    message_parse_env_address(tmp, &addr);
+    if (addr.name)
+        buf_printf(&from, "\"%s\" ", addr.name);
+    buf_printf(&from, "<%s@%s>", addr.mailbox, addr.domain);
+    free(tmp);
+    i_msg->from = buf_release(&from);
 
     i_msg->next = i_mbox->msgs;
     i_mbox->msgs = i_msg;
@@ -710,7 +722,7 @@ static void append_notifications(const struct buf *template)
                 buf_replace_all(&chunk, "%VIRUS%", msg->virname);
                 buf_replace_all(&chunk, "%MSG_ID%", msg->msgid);
                 buf_replace_all(&chunk, "%MSG_DATE%", msg->date);
-                buf_replace_all(&chunk, "%MSG_FROM%", msg->from); /* XXX fix this! */
+                buf_replace_all(&chunk, "%MSG_FROM%", msg->from);
                 buf_replace_all(&chunk, "%MSG_SUBJECT%", msg->subj);
                 buf_replace_all(&chunk, "%MSG_UID%", uidbuf);
                 mbname_free(&mailbox);

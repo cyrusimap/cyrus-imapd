@@ -176,7 +176,7 @@ Examples
 
             Message-ID: <201308131519.r7DFJM9K083763@tselina.kiev.ua>
             Date: Tue, 13 Aug 2013 18:19:22 +0300 (EEST)
-            From: ("FEDEX Thomas Cooper" NIL "thomas_cooper94" "themovieposterpage.com")
+            From: "FEDEX Thomas Cooper" <thomas_cooper94@themovieposterpage.com>
             Subject: Problem with the delivery of parcel
             IMAP UID: 17426
 
