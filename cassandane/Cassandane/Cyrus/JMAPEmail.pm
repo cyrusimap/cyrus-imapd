@@ -2919,15 +2919,13 @@ sub test_email_set_update_snooze
     my $jmap = $self->{jmap};
 
     xlog "Get mailbox id of Inbox";
-    my $res = $jmap->CallMethods([['Mailbox/query',
-                                   {filter => {role => 'inbox'}}, "R1"]]);
-    my $inboxId = $res->[0][1]->{ids}[0];
+    my $inboxId = $self->getinbox()->{id};
 
     xlog "Generate a email via IMAP";
     $self->make_message("foo", body => "a email\r\nwithCRLF\r\n") or die;
 
     xlog "get email id";
-    $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R2" ] ] );
+    my $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R2" ] ] );
     my $emailId = $res->[0][1]->{ids}[0];
 
     $res = $jmap->CallMethods( [ [ 'Email/get',
@@ -3052,15 +3050,13 @@ sub test_replication_email_set_update_snooze
     my $jmap = $self->{jmap};
 
     xlog "Get mailbox id of Inbox";
-    my $res = $jmap->CallMethods([['Mailbox/query',
-                                   {filter => {role => 'inbox'}}, "R1"]]);
-    my $inboxId = $res->[0][1]->{ids}[0];
+    my $inboxId = $self->getinbox()->{id};
 
     xlog "Generate a email via IMAP";
     $self->make_message("foo", body => "a email\r\nwithCRLF\r\n") or die;
 
     xlog "get email id";
-    $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R2" ] ] );
+    my $res = $jmap->CallMethods( [ [ 'Email/query', {}, "R2" ] ] );
     my $emailId = $res->[0][1]->{ids}[0];
 
     $res = $jmap->CallMethods( [ [ 'Email/get',
