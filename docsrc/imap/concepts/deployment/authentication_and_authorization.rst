@@ -30,7 +30,7 @@ The exchange and verification of identity information provided by a client, othe
 
 The most common set of credentials is a *username* and *password*, but other forms exist like Kerberos v5 ticket exchange (for which, to obtain such, most often a password is supplied), or certificate based authentication (the secret keys for which are most often locked with a passphrase). In any case, authentication works based on a shared secret, and/or a trusted source for verification. Kerberos v5 works based on shared secrets (keytab), and certificate based authentication works based on shared, trusted sources for verification.
 
-In the case of usernames and passwords though, the exchange and verification of the credentials is at the basis of its security. Sending plain text usernames and passwords over the wire would not allow any application to verify the source of the credentials is actually the user &mdash; who is supposed to be the only party to know the unique combination of username and password.
+In the case of usernames and passwords though, the exchange and verification of the credentials is at the basis of its security. Sending plain text usernames and passwords over the wire would not allow any application to verify the source of the credentials is actually the user --- who is supposed to be the only party to know the unique combination of username and password.
 
 To obfuscate the login credentials, authentication can be encrypted with CRAM-MD5 or DIGEST-MD5, but this requires the server to have a copy of the original, plain text password. The password in this case becomes the shared secret.
 
@@ -45,7 +45,7 @@ The **user login credentials** that are associated with the user authentication 
 
 For example, the user logs in with username ``john.doe@example.org`` and password ``verysecret``.
 
-The **user's authentication entity** &mdash; with all attributes associated with it &mdash; can have one of those attributes be used to create the relationship between the user authentication entity on the one side, and the mailbox entity on the other side.
+The **user's authentication entity** --- with all attributes associated with it --- can have one of those attributes be used to create the relationship between the user authentication entity on the one side, and the mailbox entity on the other side.
 
 For example, the user that authenticated as ``john.doe@example.org`` may have a mailbox named ``jdoe``.
 
