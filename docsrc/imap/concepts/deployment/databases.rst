@@ -59,20 +59,20 @@ This database contains the master list of all mailboxes on the system. The datab
 
     Data: <Type Number>SP<Partition>SP<ACL (space-separated userid/rights pairs)>
 
-File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, `sql`_, `twoskip`_, or `lmdb`_.
+File type can be: `twoskip`_ (default), `flat`_, `skiplist`_, `sql`_, or `lmdb`_.
 
 .. _imap-concepts-deployment-db-annotations:
 
 Annotations (annotations.db)
 ----------------------------
 
-This database contains mailbox and server annotations. The database is indexed by mailbox name (empty for server annotations) + annotation name + userid (empty for shared annotations) and each data record contains the value size, value data, content-type of the data and timestamp of the record. The format is each record is as follows::
+This database contains mailbox and server annotations, including WebDAV properties. The database is indexed by mailbox name (empty for server annotations) + annotation name + userid (empty for shared annotations) and each data record contains the value size, value data, content-type of the data and timestamp of the record. The format is each record is as follows::
 
     Key: <Mailbox Name>\0<Annotation Name>\0<Userid>\0
 
     Data: <Value Size (4 bytes)><Value>\0<Content-Type>\0<Timestamp (4 bytes)>
 
-File type can be `twoskip`_  (default), `skiplist`_, or `lmdb`_.
+File type can be: `twoskip`_  (default), `skiplist`_, or `lmdb`_.
 
 .. _imap-concepts-deployment-db-quotas:
 
