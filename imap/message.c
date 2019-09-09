@@ -80,6 +80,7 @@
 #include "retry.h"
 #include "rfc822tok.h"
 #include "times.h"
+#include "xstrnchr.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -4834,6 +4835,22 @@ static void extract_one(struct buf *buf,
                         struct buf *raw)
 {
     char *p = NULL;
+
+    if (raw->len && (flags & MESSAGE_LAST)) {
+        /* Skip all but the last header value */
+        const char *q = raw->s;
+        const char *last = raw->s;
+        while ((p = strnchr(q, '\r', raw->s + raw->len - q))) {
+            if (p >= raw->s + raw->len - 2)
+                break;
+            if (*(p+1) == '\n' && *(p+2) && !isspace(*(p+2)))
+                last = p + 2;
+            q = p + 1;
+        }
+        if (last != raw->s)
+            buf_remove(raw, 0, last - raw->s);
+        p = NULL;
+    }
 
     if (has_name && !(flags & MESSAGE_FIELDNAME)) {
         /* remove the fieldname and colon */

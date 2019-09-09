@@ -5019,7 +5019,7 @@ static json_t * _email_get_header(struct cyrusmsg *msg,
             if (r) return json_null();
         }
         struct buf buf = BUF_INITIALIZER;
-        int r = message_get_field(msg->_m, lcasename, MESSAGE_RAW, &buf);
+        int r = message_get_field(msg->_m, lcasename, MESSAGE_RAW|MESSAGE_LAST, &buf);
         if (r) return json_null();
         json_t *jval = NULL;
         if (buf_len(&buf)) jval = conv(buf_cstring(&buf));

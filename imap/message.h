@@ -214,8 +214,7 @@ extern int message_foreach_header(const char *headers, size_t len,
 typedef struct message message_t;
 struct mailbox;
 
-/* Flags for use as the 'format' argument to
- * message_get_field() and part_get_field(). */
+/* Flags for use as the 'flags' argument to message_get_field(). */
 enum message_format
 {
     /* Original raw octets from the on-the-wire RFC5322 format,
@@ -242,6 +241,7 @@ enum message_format
     /* This flag can be OR'd into the format argument to request that
      * all the fields of the given name are returned.  Normally only
      * the first is returned, which is faster. */
+    /* XXX this flag is not implemented! */
     MESSAGE_MULTIPLE=           (1<<6),
 
     /* This flag can be OR'd into the format argument to request that
@@ -249,9 +249,14 @@ enum message_format
      * first. */
     MESSAGE_APPEND=             (1<<7),
 
-    /* This flag can be OR'd into hte format argument to request that
+    /* This flag can be OR'd into the format argument to request that
      * leading and trailing space be trimmed from the buffer */
-    MESSAGE_TRIM=               (1<<8)
+    MESSAGE_TRIM=               (1<<8),
+
+    /* This flag can be OR'd into the format argument to request that
+     * only the last field of the given name is returned.  Normally only
+     * the first is returned, which is faster. */
+    MESSAGE_LAST=               (1<<9),
 };
 
 enum message_indexflags

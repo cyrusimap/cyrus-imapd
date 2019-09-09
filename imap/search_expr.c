@@ -1367,6 +1367,9 @@ static int search_header_match(message_t *m, const union search_value *v,
     const char *field = (const char *)data1;
     struct search_string_internal *internal = internalised;
 
+    /* XXX MESSAGE_MULTIPLE is not actually implemented, we're currently
+     * XXX only searching the first value!
+     */
     r = message_get_field(m, field,
                           MESSAGE_DECODED|MESSAGE_APPEND|MESSAGE_MULTIPLE,
                           &buf);
