@@ -4827,6 +4827,9 @@ EXPORTED int message_get_fname(message_t *m, const char **fnamep)
     return 0;
 }
 
+/* XXX despite the name, this actually gives back ALL the values of the
+ * XXX named header, unless flags contains MESSAGE_LAST
+ */
 static void extract_one(struct buf *buf,
                         const char *name,
                         int flags,

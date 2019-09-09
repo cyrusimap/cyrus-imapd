@@ -241,7 +241,7 @@ enum message_format
     /* This flag can be OR'd into the format argument to request that
      * all the fields of the given name are returned.  Normally only
      * the first is returned, which is faster. */
-    /* XXX this flag is not implemented! */
+    /* XXX this flag is not implemented, but is effectively always set! */
     MESSAGE_MULTIPLE=           (1<<6),
 
     /* This flag can be OR'd into the format argument to request that
