@@ -1,5 +1,7 @@
 .. cyrusman:: cyr_virusscan(8)
 
+.. highlight:: none
+
 .. author: Nic Bernstein (Onlight)
 
 .. _imap-reference-manpages-systemcommands-cyr_virusscan:
@@ -35,9 +37,10 @@ A table of infected messages will be output.
 To remove infected messages, use the **-r** flag. Infected messages will be expunged
 from the user's mailbox.
 
-With the notify flag, **-n**, notifications will be appended to the inbox of the mailbox owner,
-containing message digest information for the affected mail.  This
-flag is only works in combination with **-r**.
+With the notify flag, **-n**, notifications will be appended to the inbox of
+the mailbox owner, containing message digest information for the affected mail.
+This flag only works in combination with **-r**.  The notification message
+can by customised by template, for details see `Notifications`_ below.
 
 **cyr_virusscan** can be configured to run periodically by cron(8)
 via crontab(5) or your preferred method (i.e. /etc/cron.hourly), or by
@@ -77,6 +80,44 @@ Options
 
     Produce more verbose output
 
+Notifications
+=============
+
+When the **-n** flag is provided, notifications are sent to mailbox owners
+when infected messages are removed.  One notification is sent per owner,
+containing a digest of each message that was deleted from any of their
+mailboxes.
+
+The default notification subject is "Automatically deleted mail", which
+can be overridden by setting ``virusscan_notification_subject`` in
+:cyrusman:`imapd.conf(5)` to a UTF-8 value.
+
+Each infected message will be described according to the following template::
+
+	The following message was deleted from mailbox '%MAILBOX%'
+	because it was infected with virus '%VIRUS%'
+
+	    Message-ID: %MSG_ID%
+	    Date: %MSG_DATE%
+	    From: %MSG_FROM%
+	    Subject: %MSG_SUBJECT%
+	    IMAP UID: %MSG_UID%
+
+To use a custom template, create a UTF-8 file containing your desired text
+and using the same %-delimited substitutions as above, and set the
+``virusscan_notification_template`` option in :cyrusman:`imapd.conf(5)` to
+its path.
+
+The notification message will be properly MIME-encoded at delivery. Do not
+pre-encode the template file or the subject!
+
+When **cyr_virusscan** starts up, if notifications have been requested (with
+the **-n** flag), a basic sanity check of the template will be performed
+prior to initialising the antivirus engine.  If it appears that the
+resultant notifications would be undeliverable for some reason,
+**cyr_virusscan** will exit immediately with an error, rather than risk
+deleting messages without notifying.
+
 Examples
 ========
 
@@ -114,7 +155,7 @@ Examples
 ..
 
         Scan mailbox *user/bovik*, removing infected messages and append
-        notifications to bovik's inbox.
+        notifications to Bovik's inbox.
 
 .. only:: html
 
@@ -130,12 +171,12 @@ Examples
 
     ::
 
-        The following message was deleted from mailbox 'Inbox.bovik'
+        The following message was deleted from mailbox 'INBOX'
         because it was infected with virus 'Email.Trojan.Trojan-1051'
 
             Message-ID: <201308131519.r7DFJM9K083763@tselina.kiev.ua>
             Date: Tue, 13 Aug 2013 18:19:22 +0300 (EEST)
-            From: ("FEDEX Thomas Cooper" NIL "thomas_cooper94" "themovieposterpage.com")
+            From: "FEDEX Thomas Cooper" <thomas_cooper94@themovieposterpage.com>
             Subject: Problem with the delivery of parcel
             IMAP UID: 17426
 

@@ -2760,7 +2760,7 @@ EXPORTED char *parse_nstring(char **str)
     return val;
 }
 
-HIDDEN void message_parse_env_address(char *str, struct address *addr)
+EXPORTED void message_parse_env_address(char *str, struct address *addr)
 {
     if (*str == '(') str++; /* skip ( */
     addr->name = parse_nstring(&str);

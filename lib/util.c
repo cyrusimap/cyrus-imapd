@@ -1641,6 +1641,27 @@ EXPORTED const char *buf_ucase(struct buf *buf)
     return buf->s;
 }
 
+EXPORTED const char *buf_tocrlf(struct buf *buf)
+{
+    size_t i;
+
+    buf_cstring(buf);
+
+    for (i = 0; i < buf->len; i++) {
+        if (buf->s[i] == '\r' && buf->s[i+1] != '\n') {
+            /* bare \r: add a \n after it */
+            buf_insertcstr(buf, i+1, "\n");
+        }
+        else if (buf->s[i] == '\n') {
+            if (i == 0 || buf->s[i-1] != '\r') {
+                buf_insertcstr(buf, i, "\r");
+            }
+        }
+    }
+
+    return buf->s;
+}
+
 EXPORTED void buf_trim(struct buf *buf)
 {
     size_t i;
