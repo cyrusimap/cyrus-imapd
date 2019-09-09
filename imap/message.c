@@ -80,7 +80,6 @@
 #include "retry.h"
 #include "rfc822tok.h"
 #include "times.h"
-#include "xstrnchr.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -5020,24 +5019,8 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
         }
     }
 
-    if (raw.len) {
-        /* Skip all but the last header value */
-        struct buf myraw = BUF_INITIALIZER;
-        const char *p, *q = raw.s;
-        const char *hdr = raw.s;
-        while ((p = strnchr(q, '\r', raw.s + raw.len - q))) {
-            if (p >= raw.s + raw.len - 2)
-                break;
-            if (*(p+1) == '\n' && *(p+2) && !isspace(*(p+2)))
-                hdr = p + 2;
-            q = p + 1;
-        }
-        if (hdr != raw.s)
-            buf_appendmap(&myraw, hdr, raw.s + raw.len - hdr);
-        /* Extract header value */
-        extract_one(buf, hdr, flags, hasname, isutf8, myraw.len ? &myraw : &raw);
-        buf_free(&myraw);
-    }
+    if (raw.len)
+        extract_one(buf, hdr, flags, hasname, isutf8, &raw);
 
     buf_free(&raw);
     strarray_fini(&want);
