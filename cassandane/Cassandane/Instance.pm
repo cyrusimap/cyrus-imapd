@@ -58,6 +58,7 @@ use AnyEvent::Socket;
 use AnyEvent::Util;
 use JSON;
 use HTTP::Daemon;
+use DBI;
 
 use lib '.';
 use Cassandane::Util::DateTime qw(to_iso8601);
@@ -2039,6 +2040,36 @@ sub getsyslog
         chomp for @lines;
         return @lines;
     }
+}
+
+sub _get_sqldb
+{
+    my $dbfile = shift;
+    my $dbh = DBI->connect("dbi:SQLite:$dbfile", undef, undef);
+    my @tables = map { s/"//gs; s/^main\.//; $_ } $dbh->tables();
+    my %res;
+    foreach my $table (@tables) {
+        $res{$table} = $dbh->selectall_arrayref("SELECT * FROM $table", { Slice => {} });
+    }
+    return \%res;
+}
+
+sub getalarmdb
+{
+    my $self = shift;
+    my $file = "$self->{basedir}/conf/caldav_alarm.sqlite3";
+    return [] unless -e $file;
+    my $data = _get_sqldb($file);
+    return $data->{events} || die "NO EVENTS IN CALDAV ALARM DB";
+}
+
+sub getdavdb
+{
+    my $self = shift;
+    my $user = shift;
+    my $file = $self->get_conf_user_file($user, 'dav');
+    return unless -e $file;
+    return _get_sqldb($file);
 }
 
 sub get_sieve_script_dir
