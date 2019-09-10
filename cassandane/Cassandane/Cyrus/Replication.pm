@@ -1221,8 +1221,7 @@ sub assert_user_sub_exists
 {
     my ($self, $instance, $user) = @_;
 
-    my $conf_user_dir = $instance->get_conf_user_dir($user);
-    my $subs = "$conf_user_dir$user.sub";
+    my $subs = $instance->get_conf_user_file($user, 'sub');
 
     xlog "Looking for subscriptions file $subs";
 
@@ -1233,8 +1232,7 @@ sub assert_user_sub_not_exists
 {
     my ($self, $instance, $user) = @_;
 
-    my $conf_user_dir = $instance->get_conf_user_dir($user);
-    my $subs = "$conf_user_dir$user.sub";
+    my $subs = $instance->get_conf_user_file($user, 'sub');
 
     xlog "Looking for subscriptions file $subs";
 

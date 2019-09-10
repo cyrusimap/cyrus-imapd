@@ -2061,13 +2061,13 @@ sub get_sieve_script_dir
     return $sieved;
 }
 
-sub get_conf_user_dir
+sub get_conf_user_file
 {
-    my ($self, $user) = @_;
+    my ($self, $user, $ext) = @_;
 
     my $uhash = substr($user, 0, 1);
 
-    return "$self->{basedir}/conf/user/$uhash/";
+    return "$self->{basedir}/conf/user/$uhash/$user.$ext";
 }
 
 sub install_sieve_script
