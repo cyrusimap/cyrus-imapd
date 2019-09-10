@@ -2074,19 +2074,28 @@ sub getdavdb
 
 sub get_sieve_script_dir
 {
-    my ($self, $user) = @_;
+    my ($self, $cyrusname) = @_;
 
-    my $sieved = "$self->{basedir}/conf/sieve/";
+    $cyrusname //= '';
 
-    if (defined $user)
+    my $sieved = "$self->{basedir}/conf/sieve";
+
+    my ($user, $domain) = split '@', $cyrusname;
+
+    if ($domain) {
+        my $dhash = substr($domain, 0, 1);
+        $sieved .= "/domain/$dhash/$domain";
+    }
+
+    if ($user ne '')
     {
         my $uhash = substr($user, 0, 1);
-        $sieved .= "$uhash/$user";
+        $sieved .= "/$uhash/$user/";
     }
     else
     {
         # shared folder
-        $sieved .= 'global/';
+        $sieved .= '/global/';
     }
 
     return $sieved;
@@ -2094,11 +2103,19 @@ sub get_sieve_script_dir
 
 sub get_conf_user_file
 {
-    my ($self, $user, $ext) = @_;
+    my ($self, $cyrusname, $ext) = @_;
+
+    my ($user, $domain) = split '@', $cyrusname;
+
+    my $base = "$self->{basedir}/conf";
+    if ($domain) {
+        my $dhash = substr($domain, 0, 1);
+        $base .= "/domain/$dhash/$domain";
+    }
 
     my $uhash = substr($user, 0, 1);
 
-    return "$self->{basedir}/conf/user/$uhash/$user.$ext";
+    return "$base/user/$uhash/$user.$ext";
 }
 
 sub install_sieve_script
