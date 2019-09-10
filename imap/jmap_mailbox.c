@@ -3241,6 +3241,10 @@ static int _mboxset_args_parse(jmap_req_t *req __attribute__((unused)),
         set->on_destroy_remove_msgs = json_boolean_value(arg);
     }
 
+    if (!strcmp(key, "onDestroyRemoveEmails") && json_is_boolean(arg)) {
+        set->on_destroy_remove_msgs = json_boolean_value(arg);
+    }
+
     else r = 0;
 
     return r;
