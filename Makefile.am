@@ -1525,7 +1525,7 @@ else
 lib_libcyrus_min_la_SOURCES += lib/map_nommap.c
 endif
 endif
-lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS) $(LIB_UUID) $(GCOV_LIBS)
+lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS) $(LIB_UUID) $(GCOV_LIBS) $(LIBCAP_LIBS)
 lib_libcyrus_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
