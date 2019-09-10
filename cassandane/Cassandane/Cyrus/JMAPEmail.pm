@@ -2687,6 +2687,10 @@ sub test_emailsubmission_set_futurerelease
     $self->assert_not_null($msgsubid1);
     $self->assert_not_null($msgsubid2);
 
+    xlog "event were added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(2, scalar @$alarmdata);
+
     $res = $jmap->CallMethods([['EmailSubmission/get', { ids => undef }, "R2"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{list}});
     $self->assert_deep_equals([], $res->[0][1]->{notFound});
@@ -2706,6 +2710,10 @@ sub test_emailsubmission_set_futurerelease
     $self->assert_not_null($res->[0][1]{updated});
     $self->assert_null($res->[0][1]{notUpdated});
 
+    xlog "one event left in the alarmdb";
+    $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$alarmdata);
+
     $res = $jmap->CallMethods([['EmailSubmission/get', { ids => [ $msgsubid1 ] }, "R4"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
     $self->assert_deep_equals([], $res->[0][1]->{notFound});
@@ -2721,6 +2729,10 @@ sub test_emailsubmission_set_futurerelease
     $self->assert_not_null($res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{notDestroyed});
 
+    xlog "one event left in the alarmdb";
+    $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$alarmdata);
+
     $res = $jmap->CallMethods([['EmailSubmission/get', { ids => undef }, "R6"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
     $self->assert_deep_equals([], $res->[0][1]->{notFound});
@@ -2733,6 +2745,10 @@ sub test_emailsubmission_set_futurerelease
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
     $self->assert_deep_equals([], $res->[0][1]->{notFound});
     $self->assert_str_equals('final', $res->[0][1]->{list}[0]->{undoStatus});
+
+    xlog "no events left in the alarmdb";
+    $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
 
     xlog "attempt to cancel second email submission (should fail)";
     $res = $jmap->CallMethods([
@@ -3498,6 +3514,10 @@ sub test_emailsubmission_cancel_creation
         }, 'R3'],
     ]);
 
+    xlog "event gets added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(1, scalar @$alarmdata);
+
     my $emailId = $res->[0][1]->{created}{m1}{id};
     $self->assert_not_null($emailId);
     my $msgSubId = $res->[1][1]->{created}{s1}{id};
@@ -3532,6 +3552,10 @@ sub test_emailsubmission_cancel_creation
     $self->assert(exists $res->[1][1]{updated}{$emailId});
     $self->assert_num_equals(1, scalar keys %{$res->[2][1]{list}[0]{mailboxIds}});
     $self->assert(exists $res->[2][1]{list}[0]{mailboxIds}{$mboxIdA});
+
+    xlog "event is no longer in the alarmdb";
+    $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
 
     xlog "destroy and destroy the email too";
     $res = $jmap->CallMethods([
