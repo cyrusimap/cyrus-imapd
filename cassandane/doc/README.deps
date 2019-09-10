@@ -117,6 +117,10 @@ Cassandane needs the following software to work:
     Base module for implementing LDAP Server functionality in perl
     Available on CPAN, Debian package libnet-ldap-server-perl
 
+ * DBD::SQLite
+    Self-contained RDBMS in a DBI Driver
+    Debian/Ubuntu package libdbd-sqlite3-perl
+
  * AnyEvent
  * Convert::Base64
  * DateTime::Format::ISO8601
@@ -138,7 +142,8 @@ Debian/Ubuntu copypasta:
        libmime-types-perl libtext-levenshteinxs-perl \
        libdatetime-format-ical-perl libuniversal-require-perl \
        libtest-nowarnings-perl libtest-longstring-perl \
-       libtest-warn-perl libnet-ldap-server-perl
+       libtest-warn-perl libnet-ldap-server-perl \
+       libdbd-sqlite3-perl
 
   sudo cpan Math::Int64 Mail::JMAPTalk Mail::IMAPTalk \
        Net::CalDAVTalk Net::CardDAVTalk String::CRC32
