@@ -1003,6 +1003,19 @@ sub create_user
     }
 }
 
+sub set_smtpd {
+    my ($self, $data) = @_;
+    my $basedir = $self->{basedir};
+    if ($data) {
+        open(FH, ">$basedir/conf/smtpd.json");
+        print FH encode_json($data);
+        close(FH);
+    }
+    else {
+        unlink("$basedir/conf/smtpd.json");
+    }
+}
+
 sub _start_smtpd {
     my ($self) = @_;
 
@@ -1027,6 +1040,7 @@ sub _start_smtpd {
             host => $host,
             port => $port,
             max_servers => 3, # default is 50, yikes
+            control_file => "$basedir/conf/smtpd.json",
         });
         $smtpd->run() or die;
         exit 0; # Never reached
