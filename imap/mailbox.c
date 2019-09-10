@@ -3326,8 +3326,9 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
             /* remove associated alarms */
             caldav_alarm_delete_record(cdata->dav.mailbox, cdata->dav.imap_uid);
         }
-        else {
-            /* make sure record is up to date */
+        else if (!new->silent) {
+            /* make sure record is up to date - see add below for description of
+             * why we don't touch silent records */
             caldav_alarm_touch_record(mailbox, new);
         }
 
@@ -3365,7 +3366,11 @@ static int mailbox_update_caldav(struct mailbox *mailbox,
         cdata->comp_flags.shared = shared;
 
         /* add new ones unless this record is expunged */
-        if (cdata->dav.alive) {
+        /* we need to skip silent records (replication)
+         * because the lastalarm annotation won't be set yet -
+         * instead, we have an explicit sync from the annotation
+         * which is done after the annotations are written in sync_support.c */
+        if (cdata->dav.alive && !new->silent) {
             r = caldav_alarm_add_record(mailbox, new, ical);
             if (r) goto alarmdone;
         }

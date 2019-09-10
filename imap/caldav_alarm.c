@@ -636,12 +636,6 @@ EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox,
                                      const struct index_record *record,
                                      icalcomponent *ical)
 {
-    /* we need to skip silent records (replication)
-     * because the lastalarm annotation won't be set yet -
-     * instead, we have an explicit sync from the annotation
-     * which is done after the annotations are written in sync_support.c */
-    if (record->silent) return 0;
-
     if (has_alarms(ical, mailbox, record->uid))
         update_alarmdb(mailbox->name, record->uid, record->internaldate);
 
@@ -651,9 +645,6 @@ EXPORTED int caldav_alarm_add_record(struct mailbox *mailbox,
 EXPORTED int caldav_alarm_touch_record(struct mailbox *mailbox,
                                        const struct index_record *record)
 {
-    /* likewise for touch */
-    if (record->silent) return 0;
-
     /* if there are alarms in the annotations,
      * the next alarm may have become earlier, so get calalarmd to check again */
     if (has_alarms(NULL, mailbox, record->uid))
