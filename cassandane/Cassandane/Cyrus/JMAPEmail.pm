@@ -2558,6 +2558,10 @@ sub test_emailsubmission_set
     my $msgsubid = $res->[0][1]->{created}{1}{id};
     $self->assert_not_null($msgsubid);
 
+    xlog "no events were added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
+
     xlog "get email submission";
     $res = $jmap->CallMethods( [ [ 'EmailSubmission/get', {
         ids => [ $msgsubid ],
@@ -2624,6 +2628,10 @@ sub test_emailsubmission_set_with_envelope
     }, "R1" ] ] );
     my $msgsubid = $res->[0][1]->{created}{1}{id};
     $self->assert_not_null($msgsubid);
+
+    xlog "no events were added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
 }
 
 sub test_emailsubmission_set_futurerelease
@@ -3432,6 +3440,10 @@ sub test_emailsubmission_set_creationid
     $self->assert(exists $res->[2][1]{updated}{$emailId});
     $self->assert_num_equals(1, scalar keys %{$res->[3][1]{list}[0]{mailboxIds}});
     $self->assert(exists $res->[3][1]{list}[0]{mailboxIds}{$mboxIdB});
+
+    xlog "no events were added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
 }
 
 sub test_emailsubmission_cancel_creation
@@ -3920,6 +3932,10 @@ sub test_emailsubmission_set_too_many_recipients
     }, "R1" ] ] );
     my $errType = $res->[0][1]->{notCreated}{1}{type};
     $self->assert_str_equals("tooManyRecipients", $errType);
+
+    xlog "no events were added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
 }
 
 sub test_emailsubmission_set_fail_some_recipients
@@ -3976,6 +3992,10 @@ sub test_emailsubmission_set_fail_some_recipients
     }, "R1" ] ] );
     my $errType = $res->[0][1]->{notCreated}{1}{type};
     $self->assert_str_equals("invalidRecipients", $errType);
+
+    xlog "no events were added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
 }
 
 sub test_emailsubmission_set_message_too_large
@@ -4015,6 +4035,10 @@ sub test_emailsubmission_set_message_too_large
     }, "R1" ] ] );
     my $errType = $res->[0][1]->{notCreated}{1}{type};
     $self->assert_str_equals("tooLarge", $errType);
+
+    xlog "no events were added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
 }
 
 sub test_emailsubmission_set_issue2285
@@ -4077,6 +4101,10 @@ sub test_emailsubmission_set_issue2285
     $self->assert_str_equals('Email/set', $res->[2][0]);
     $self->assert_not_null($res->[2][1]->{destroyed}[0]);
     $self->assert_str_equals('R2', $res->[2][2]);
+
+    xlog "no events were added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
 }
 
 sub test_emailsubmission_changes
@@ -4128,6 +4156,10 @@ sub test_emailsubmission_changes
     $self->assert_deep_equals([$subid], $res->[0][1]->{created});
     $self->assert_deep_equals([], $res->[0][1]->{updated});
     $self->assert_deep_equals([], $res->[0][1]->{destroyed});
+
+    xlog "no events were added to the alarmdb";
+    my $alarmdata = $self->{instance}->getalarmdb();
+    $self->assert_num_equals(0, scalar @$alarmdata);
 }
 
 sub test_emailsubmission_query
