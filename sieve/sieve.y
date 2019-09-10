@@ -138,6 +138,9 @@ extern void sieverestart(FILE *f);
 
 #define supported(capa) (sscript->support & capa)
 
+#define _verify_flaglist(flags) \
+  (supported(SIEVE_CAPA_VARIABLES) || verify_flaglist(flags))
+
 #define YYERROR_VERBOSE /* I want better error messages! */
 
 /* byacc default is 500, bison default is 10000 - go with the
@@ -2008,12 +2011,12 @@ static int check_reqs(sieve_script_t *sscript, strarray_t *sa)
     strarray_free(sa);
 
     if (ret == 0) yyerror(sscript, buf_cstring(&sscript->sieveerr));
-    else if (sscript->support & SIEVE_CAPA_IHAVE) {
+    else if (supported(SIEVE_CAPA_IHAVE)) {
         /* mark all allowed extensions as supported */
         sscript->support |= (SIEVE_CAPA_ALL & ~SIEVE_CAPA_IHAVE_INCOMPAT);
     }
 
-    encoded_char = (sscript->support & SIEVE_CAPA_ENCODED_CHAR);
+    encoded_char = supported(SIEVE_CAPA_ENCODED_CHAR);
 
     return ret;
 }
@@ -2022,8 +2025,7 @@ static commandlist_t *build_keep(sieve_script_t *sscript, commandlist_t *c)
 {
     assert(c && c->type == KEEP);
 
-    if (!(sscript->support & SIEVE_CAPA_VARIABLES) &&
-        c->u.k.flags && !verify_flaglist(c->u.k.flags)) {
+    if (c->u.k.flags && !_verify_flaglist(c->u.k.flags)) {
         strarray_add(c->u.k.flags, "");
     }
 
@@ -2035,8 +2037,7 @@ static commandlist_t *build_fileinto(sieve_script_t *sscript,
 {
     assert(c && c->type == FILEINTO);
 
-    if (!(sscript->support & SIEVE_CAPA_VARIABLES) &&
-        c->u.f.flags && !verify_flaglist(c->u.f.flags)) {
+    if (c->u.f.flags && !_verify_flaglist(c->u.f.flags)) {
         strarray_add(c->u.f.flags, "");
     }
     if (verify_mailbox(sscript, folder) &&
@@ -2168,8 +2169,7 @@ static commandlist_t *build_vacation(sieve_script_t *sscript,
     }
     if (c->u.v.fcc.folder) {
         verify_mailbox(sscript, c->u.v.fcc.folder);
-        if (!(sscript->support & SIEVE_CAPA_VARIABLES) &&
-            c->u.v.fcc.flags && !verify_flaglist(c->u.v.fcc.flags)) {
+        if (c->u.v.fcc.flags && !_verify_flaglist(c->u.v.fcc.flags)) {
             strarray_add(c->u.v.fcc.flags, "");
         }
     }
@@ -2192,7 +2192,7 @@ static commandlist_t *build_flag(sieve_script_t *sscript,
     assert(c &&
            (c->type == SETFLAG || c->type == ADDFLAG || c->type == REMOVEFLAG));
 
-    if (!(sscript->support & SIEVE_CAPA_VARIABLES) && !verify_flaglist(flags)) {
+    if (!_verify_flaglist(flags)) {
         strarray_add(flags, "");
     }
     c->u.fl.flags = flags;
@@ -2272,8 +2272,7 @@ static commandlist_t *build_notify(sieve_script_t *sscript, int t,
         }
         if (c->u.n.fcc.folder) {
             verify_mailbox(sscript, c->u.n.fcc.folder);
-            if (!(sscript->support & SIEVE_CAPA_VARIABLES) &&
-                c->u.n.fcc.flags && !verify_flaglist(c->u.n.fcc.flags)) {
+            if (c->u.n.fcc.flags && !_verify_flaglist(c->u.n.fcc.flags)) {
                 strarray_add(c->u.n.fcc.flags, "");
             }
         }
