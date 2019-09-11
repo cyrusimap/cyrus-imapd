@@ -1774,9 +1774,10 @@ static int contains_variable(sieve_script_t *sscript, char *s)
 
             if (*p == '}') {
                 /* end of variable-ref */
-                if (!is_id && num > 9) {
+                if (!is_id && num > MAX_MATCH_VARS) {
                     sieveerror_f(sscript,
-                                 "string '%s': match variable index > 9", s);
+                                 "string '%s': match variable index > %u",
+                                 s, MAX_MATCH_VARS);
                 }
                 return 1;
             }

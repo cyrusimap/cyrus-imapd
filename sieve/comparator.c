@@ -312,19 +312,17 @@ static int octet_matches(const char *text, size_t tlen, const char *pat,
 
 
 #ifdef ENABLE_REGEX
-#define MAX_MATCH 9  /* MUST support ${1} through ${9} per RFC 5229 */
-
 static int octet_regex(const char *text, size_t tlen, const char *pat,
                        strarray_t *match_vars,
                        void *rock __attribute__((unused)))
 {
-    regmatch_t pm[MAX_MATCH+1];
+    regmatch_t pm[MAX_MATCH_VARS+1];
     size_t nmatch = 0;
     int r;
 
     if (match_vars) {
         strarray_fini(match_vars);
-        nmatch = MAX_MATCH+1;
+        nmatch = MAX_MATCH_VARS+1;
         memset(&pm, 0, sizeof(pm));
     }
 

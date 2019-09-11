@@ -62,6 +62,8 @@
 #include "sieve_interface.h"
 #include "strarray.h"
 
+#define MAX_MATCH_VARS 9  /* MUST support ${1} through ${9} per RFC 5229 */
+
 /* compares pat to text; returns 1 if it's true, 0 otherwise */
 typedef int comparator_t(const char *text, size_t tlen, const char *pat,
                          strarray_t *match_vars, void *rock);
