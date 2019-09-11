@@ -39,13 +39,14 @@
 #
 
 PROGRAMS=lemming gdbtramp crash
+LIBS=syslog.so
 
 CC=gcc
 COPTFLAGS=-g -O0
 CWARNFLAGS=-Wall -Wextra
-CFLAGS=$(COPTFLAGS) $(CWARNFLAGS)
+CFLAGS=$(COPTFLAGS) $(CWARNFLAGS) -fPIC
 
-all: $(PROGRAMS)
+all: $(PROGRAMS) $(LIBS)
 
 lemming_SOURCE=lemming.c
 lemming_OBJS=$(lemming_SOURCE:.c=.o)
@@ -62,5 +63,10 @@ crash_OBJS=$(crash_SOURCE:.c=.o)
 crash: $(crash_OBJS)
 	$(LINK.c) -o $@ $(crash_OBJS)
 
+syslog_SOURCE=syslog.c
+syslog_OBJS=$(syslog_SOURCE:.c=.o)
+syslog.so: $(syslog_OBJS)
+	$(LINK.c) -shared -ldl -o $@ $(syslog_OBJS)
+
 clean:
-	$(RM) $(PROGRAMS) *.o
+	$(RM) $(PROGRAMS) $(LIBS) *.o
