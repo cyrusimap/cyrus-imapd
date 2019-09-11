@@ -5550,13 +5550,13 @@ sub test_calendarevent_set_recurrenceoverrides_mixed_datetypes
             start    => "2018-05-02T17:00:00",
             timeZone => "Europe/Vienna",
             duration => "PT1H",
-            isAllDay => JSON::false,
+            showWithoutTime => JSON::false,
         }
     };
 
     # Validate main event.
     $self->assert_str_equals('2016-01-01T00:00:00', $event->{start});
-    $self->assert_equals(JSON::true, $event->{isAllDay});
+    $self->assert_equals(JSON::true, $event->{showWithoutTime});
     $self->assert_null($event->{timeZone});
     $self->assert_str_equals('P1D', $event->{duration});
     # Validate overrides.
@@ -5577,7 +5577,7 @@ sub test_calendarevent_set_recurrenceoverrides_mixed_datetypes
                         start => "2019-10-02T15:00:00",
                         timeZone => "Europe/London",
                         duration => "PT2H",
-                        isAllDay => JSON::false,
+                        showWithoutTime => JSON::false,
                     },
                 },
             },
@@ -5593,7 +5593,7 @@ sub test_calendarevent_set_recurrenceoverrides_mixed_datetypes
         start => "2019-10-02T15:00:00",
         timeZone => "Europe/London",
         duration => "PT2H",
-        isAllDay => JSON::false,
+        showWithoutTime => JSON::false,
     };
     $event = $res->[1][1]{list}[0];
     $self->assert_deep_equals($wantOverrides, $event->{recurrenceOverrides});
