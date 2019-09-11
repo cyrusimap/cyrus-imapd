@@ -301,7 +301,7 @@ struct datetime {
     bit64 nano;
 };
 
-#define JMAP_DATETIME_INITIALIZER { 0, 0, 0, 0, 0, 0, 0.0 };
+#define JMAP_DATETIME_INITIALIZER { 0, 0, 0, 0, 0, 0, 0 };
 
 static int datetime_has_zero_time(const struct datetime *dt)
 {
@@ -2585,6 +2585,8 @@ static void remove_icalprop(icalcomponent *comp, icalproperty_kind kind)
 
 static void subseconds_to_icalprop(icalproperty *prop, bit64 nano)
 {
+    if (!nano) return;
+
     struct buf buf = BUF_INITIALIZER;
     buf_printf(&buf, "0.%llu", nano);
 
@@ -2642,9 +2644,7 @@ static icalproperty *insert_icaltimeprop(icalcomponent *comp,
             icalproperty_add_parameter(prop,icalparameter_new_tzid(tzid));
         }
     }
-    if (!dt.is_date && nano) {
-        subseconds_to_icalprop(prop, nano);
-    }
+    if (!dt.is_date) subseconds_to_icalprop(prop, nano);
     icalcomponent_add_property(comp, prop);
     return prop;
 }
@@ -3721,7 +3721,7 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
                 trigger.duration = duration_to_icalduration(&offset);
                 prop = icalproperty_new_trigger(trigger);
                 param = icalparameter_new_related(rel);
-                if (offset.nanos) subseconds_to_icalprop(prop, offset.nanos);
+                subseconds_to_icalprop(prop, offset.nanos);
                 icalproperty_add_parameter(prop, param);
                 icalcomponent_add_property(alarm, prop);
             }
@@ -3753,7 +3753,7 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
                     icaldurationtype_null_duration()
                 };
                 prop = icalproperty_new_trigger(snooze_trigger);
-                if (snoozedtime.nano) subseconds_to_icalprop(prop, snoozedtime.nano);
+                subseconds_to_icalprop(prop, snoozedtime.nano);
                 icalcomponent_add_property(snooze, prop);
                 icalcomponent_add_component(comp, snooze);
             } else {
@@ -3769,7 +3769,7 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
             struct datetime acktime = JMAP_DATETIME_INITIALIZER;
             if (parse_utcdatetime(json_string_value(jacknowledged), &acktime) >= 0) {
                 prop = icalproperty_new_acknowledged(datetime_to_icaltime(&acktime, utc));
-                if (acktime.nano) subseconds_to_icalprop(prop, acktime.nano);
+                subseconds_to_icalprop(prop, acktime.nano);
                 icalcomponent_add_property(alarm, prop);
             } else {
                 jmap_parser_invalid(parser, "acknowledged");
