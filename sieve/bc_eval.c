@@ -2330,10 +2330,16 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         }
 
         case B_LOG:
-        {
-            if (i->log) i->log(sc, m, cmd.u.l.text);
+            if (i->log) {
+                const char *text = cmd.u.l.text;
+
+                if (requires & BFE_VARIABLES) {
+                    text = parse_string(text, variables);
+                }
+
+                i->log(sc, m, text);
+            }
             break;
-        }
 
         case B_ERROR:
             res = SIEVE_RUN_ERROR;
