@@ -1,0 +1,71 @@
+#!/usr/bin/env perl
+# A pretend saslauthd that just accepts any password except "bad"
+# for any user.  Use me for testing!
+
+use Getopt::Std;
+use IO::Socket::UNIX;
+use Sys::Syslog qw(:standard :macros);
+
+sub get_counted_string
+{
+    my $sock = shift;
+    my $data;
+    $sock->read($data, 2);
+    my $size = unpack('n', $data);
+    $sock->read($data, $size);
+    return unpack("A$size", $data);
+}
+
+my %opts;
+
+getopts("C:dp:v", \%opts);
+
+die "need a socket path" if not $opts{p};
+
+openlog('fakesaslauthd', '', LOG_LOCAL6)
+    or die "Cannot openlog";
+
+# ok, we're good. background ourselves
+if (not $opts{d} and not $ENV{CYRUS_ISDAEMON}) {
+    my $pid = fork;
+    die "unable to fork: $!" if not defined $pid;
+    exit(0) if $pid != 0; # bye bye parent
+}
+
+# open socket
+unlink($opts{p});
+my $sock = IO::Socket::UNIX->new(
+    Local => $opts{p},
+    Type => SOCK_STREAM,
+    Listen => SOMAXCONN,
+);
+die "FAILED to create socket $opts{p}: $!" unless $sock;
+system "chmod 777 $opts{p}";
+syslog LOG_INFO, "listening on $opts{p}";
+
+my $shutdown = 0;
+$SIG{HUP} = sub { $shutdown++; };
+
+while (my $client = $sock->accept()) {
+    my $LoginName = get_counted_string($client);
+    my $Password = get_counted_string($client);
+    my $Service = lc get_counted_string($client);
+    my $Realm = get_counted_string($client);
+    syslog LOG_INFO, "connection: $LoginName $Password $Service $Realm";
+
+    # XXX - custom logic?
+
+    # OK :)
+    if ($Password eq 'bad') {
+        $client->print(pack("nA3", 2, "NO\000"));
+    }
+    else {
+        $client->print(pack("nA3", 2, "OK\000"));
+    }
+    $client->close();
+
+    last if $shutdown;
+}
+
+$sock->close();
+unlink $opts{p};

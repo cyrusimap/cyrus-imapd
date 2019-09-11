@@ -48,7 +48,6 @@ use File::Find qw(find);
 use File::Basename;
 use File::stat;
 use POSIX qw(geteuid :signal_h :sys_wait_h :errno_h);
-use IO::Socket::UNIX;
 use DateTime;
 use BSD::Resource;
 use Cwd qw(abs_path getcwd);
@@ -59,6 +58,7 @@ use AnyEvent::Util;
 use JSON;
 use HTTP::Daemon;
 use DBI;
+use Time::HiRes qw(usleep);
 
 use lib '.';
 use Cassandane::Util::DateTime qw(to_iso8601);
@@ -904,34 +904,6 @@ sub _start_master
     xlog "_start_master: all services listening";
 }
 
-sub _start_authdaemon
-{
-    my ($self) = @_;
-    my $pwcheck = $self->{_pwcheck};
-
-    my $basedir = $self->{basedir};
-
-    my $saslpid = fork();
-    unless ($saslpid) {
-        $SIG{TERM} = sub { die "killed" };
-
-        POSIX::close( $_ ) for 3 .. 1024; ## Arbitrary upper bound
-
-        # child;
-        $0 = "cassandane saslauthd: $basedir";
-        saslauthd("$basedir/run");
-        exit 0;
-    }
-
-    xlog "started saslauthd for $basedir as $saslpid";
-    push @{$self->{_shutdowncallbacks}}, sub {
-        my $self = shift;
-        xlog "killing saslauthd $saslpid";
-        kill(15, $saslpid);
-        waitpid($saslpid, 0);
-    };
-}
-
 sub _start_notifyd
 {
     my ($self) = @_;
@@ -1119,6 +1091,17 @@ sub start
     # to set smtp_host to the auto-assigned TCP port it listens on.
     $self->_start_smtpd();
 
+    # arrange for fakesaslauthd to be started by master
+    # XXX make this run as a DAEMON rather than a START
+    my $fakesaslauthd_socket = "$self->{basedir}/run/mux";
+    $self->add_start(
+        name => 'fakesaslauthd',
+        argv => [
+            abs_path('utils/fakesaslauthd'),
+            '-p', $fakesaslauthd_socket,
+        ],
+    );
+
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
     {
         $created = 1;
@@ -1136,7 +1119,6 @@ sub start
     {
         $self->_add_services_from_cyrus_conf();
     }
-    $self->_start_authdaemon();
     $self->_start_notifyd();
     $self->_uncompress_berkeley_crud();
     $self->_start_master();
@@ -1150,6 +1132,15 @@ sub start
       $self->{_syslogfh}->seek(0, 2); # start at the current end of the log
       $self->{_syslogfh}->blocking(0);
     }
+
+    # give fakesaslauthd a moment (but not more than 2s) to set up its
+    # socket before anything starts trying to connect to services
+    my $tries = 0;
+    while (not -S $fakesaslauthd_socket && $tries < 2_000_000) {
+        $tries += usleep(10_000); # 10ms as us
+    }
+    die "fakesaslauthd socket $fakesaslauthd_socket not ready after 2s!"
+        if not -S $fakesaslauthd_socket;
 
     if ($created && $self->{setup_mailbox})
     {
@@ -1930,51 +1921,6 @@ sub folder_to_deleted_directories
         closedir DELDIR;
     }
     return @dirs;
-}
-
-sub saslauthd
-{
-    my $dir = shift;
-    unlink("$dir/mux");
-    xlog "opening socket $dir/mux";
-    my $sock = IO::Socket::UNIX->new(
-        Local => "$dir/mux",
-        Type => SOCK_STREAM,
-        Listen => SOMAXCONN,
-    );
-    die "FAILED to create socket $!" unless $sock;
-    system("chmod 777 $dir/mux");
-
-    eval {
-        while (my $client = $sock->accept()) {
-            my $LoginName = get_counted_string($client);
-            my $Password = get_counted_string($client);
-            my $Service = lc get_counted_string($client);
-            my $Realm = get_counted_string($client);
-            xlog "authdaemon connection: $LoginName $Password $Service $Realm";
-
-            # XXX - custom logic?
-
-            # OK :)
-            if ($Password eq 'bad') {
-                $client->print(pack("nA3", 2, "NO\000"));
-            }
-            else {
-                $client->print(pack("nA3", 2, "OK\000"));
-            }
-            $client->close();
-        }
-    };
-}
-
-sub get_counted_string
-{
-    my $sock = shift;
-    my $data;
-    $sock->read($data, 2);
-    my $size = unpack('n', $data);
-    $sock->read($data, $size);
-    return unpack("A$size", $data);
 }
 
 sub notifyd
