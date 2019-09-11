@@ -859,7 +859,6 @@ overrides_from_ical(icalcomponent *comp, json_t *event, const char *tzid_start)
         json_object_del(diff, "relatedTo");
         json_object_del(diff, "prodId");
         json_object_del(diff, "method");
-        json_object_del(diff, "isAllDay");
         json_object_del(diff, "recurrenceRule");
         json_object_del(diff, "recurrenceOverrides");
         json_object_del(diff, "replyTo");
@@ -1986,7 +1985,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     }
 
     /* isAllDay */
-    if (jmap_wantprop(props, "isAllDay") && !is_exception) {
+    if (jmap_wantprop(props, "isAllDay")) {
         json_object_set_new(event, "isAllDay", json_boolean(is_allday));
     }
 
@@ -4229,7 +4228,7 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
                 if (!strcmp(key, "uid") ||
                     !strcmp(key, "relatedTo") ||
                     !strcmp(key, "prodId") ||
-                    !strcmp(key, "isAllDay") ||
+                    // be laxer than outdated spec v16: !strcmp(key, "isAllDay") ||
                     !strcmp(key, "recurrenceRule") ||
                     !strcmp(key, "recurrenceOverrides") ||
                     !strcmp(key, "replyTo") ||
