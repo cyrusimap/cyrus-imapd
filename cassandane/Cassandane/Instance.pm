@@ -2000,6 +2000,7 @@ sub getsyslog
         chomp for @lines;
         return @lines;
     }
+    return ();
 }
 
 sub _get_sqldb
