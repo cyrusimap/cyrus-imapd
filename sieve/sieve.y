@@ -1739,6 +1739,55 @@ void sieveerror_c(sieve_script_t *sscript, int code, ...)
 }
 
 /*
+ * variable-ref        =  "${" [namespace] variable-name "}"
+ * namespace           =  identifier "." *sub-namespace
+ * sub-namespace       =  variable-name "."
+ * variable-name       =  num-variable / identifier
+ * num-variable        =  1*DIGIT
+ * identifier          =  (ALPHA / "_") *(ALPHA / DIGIT / "_")
+ */
+static int contains_variable(sieve_script_t *sscript, char *s)
+{
+    char *p = s;
+
+    if (!supported(SIEVE_CAPA_VARIABLES)) return 0;
+
+    while ((p = strstr(p, "${"))) {
+        long num = 0, is_id = 0;
+
+        p += 2;  /* skip over beginning of variable-ref */
+
+        do {
+            if (isdigit(*p)) {
+                /* possible num-variable - get value and skip over digits */
+                num = strtol(p, &p, 10);
+            }
+            else if (isalpha(*p) || *p == '_') {
+                /* possible identifier - skip over identifier chars */
+                for (++p; isalnum(*p) || *p == '_'; p++);
+                is_id = 1;
+            }
+            else {
+                /* not a valid variable-name */
+                break;
+            }
+
+            if (*p == '}') {
+                /* end of variable-ref */
+                if (!is_id && num > 9) {
+                    sieveerror_f(sscript,
+                                 "string '%s': match variable index > 9", s);
+                }
+                return 1;
+            }
+
+        } while (is_id && *p == '.' && *(++p));  /* (sub-)namespace */
+    }
+
+    return 0;
+}
+
+/*
  * Valid UTF-8 check (from RFC 2640 Annex B.1)
  *
  * The following routine checks if a byte sequence is valid UTF-8. This
@@ -1898,6 +1947,8 @@ static int verify_patternlist(sieve_script_t *sscript,
 
 static int verify_address(sieve_script_t *sscript, char *s)
 {
+    if (contains_variable(sscript, s)) return 1;
+
     YY_BUFFER_STATE buffer = addr_scan_string(s);
     int r = 1;
 
