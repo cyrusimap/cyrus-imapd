@@ -12,12 +12,16 @@
     :license: BSD, see LICENSE for details.
 """
 
+import docutils
 from docutils import nodes
 from sphinx.writers.manpage import (
-    MACRO_DEF,
     ManualPageWriter,
     ManualPageTranslator as BaseTranslator
 )
+
+docutils_version_info = tuple(map(int, docutils.__version__.split('.')))
+if docutils_version_info < (0, 11):
+  from sphinx.writers.manpage import MACRO_DEF
 
 
 from sphinx import addnodes
@@ -73,8 +77,9 @@ class CyrusManualPageTranslator(BaseTranslator):
         self._docinfo['version'] = builder.config.version
         self._docinfo['manual_group'] = builder.config.project
 
-        # since self.append_header() is never called, need to do this here
-        self.body.append(MACRO_DEF)
+        # In docutils < 0.11 self.append_header() was never called
+        if docutils_version_info < (0, 11):
+          self.body.append(MACRO_DEF)
 
         # overwritten -- don't wrap literal_block with font calls
         self.defs['literal_block'] = ('.sp\n.nf\n', '\n.fi\n')

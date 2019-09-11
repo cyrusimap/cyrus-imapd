@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.abspath('exts'))
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
-needs_sphinx = '1.2'
+needs_sphinx = '1.3.2'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -301,7 +301,7 @@ current = os.path.abspath(os.getcwd())
 for tuple in pathset:
     os.chdir(tuple[0])
     for rstfile in glob.glob("*.rst"):
-        author = [("The Cyrus Team")]
+        authors = [("The Cyrus Team")]
         orphan = 'False';
         with io.open(rstfile,'r',encoding="utf8") as f:
             for line in f:
@@ -309,14 +309,14 @@ for tuple in pathset:
                     orphan = 'True';
                     break;
                 if line.startswith('.. author: '):
-                    author.append(line[11: len(line.strip())])
+                    authors.append(line[11: len(line.strip())])
             f.close()
         if orphan == 'False':
             man_pages.append(
                 (os.path.splitext(os.path.join(tuple[0],rstfile))[0],
                 os.path.splitext(rstfile)[0],
                 u'Cyrus IMAP documentation',
-                author,
+                authors,
                 tuple[1])
                 )
 
