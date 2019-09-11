@@ -23,6 +23,7 @@ install:
 - cpanm --notest DateTime
 - cpanm --notest DateTime::Format::ICal
 - cpanm --notest DateTime::Format::ISO8601
+- cpanm --notest DBD::SQLite
 - cpanm --notest Encode::IMAPUTF7
 - cpanm --notest File::LibMagic
 - cpanm --notest File::Slurp
