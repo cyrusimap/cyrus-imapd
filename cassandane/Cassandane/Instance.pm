@@ -1084,8 +1084,18 @@ sub start
     my $created = 0;
 
     $self->_init_basedir_and_name();
-
     xlog "start $self->{description}: basedir $self->{basedir}";
+
+    if (-e 'utils/syslog.so') { # XXX check a bit harder?
+        $self->{syslog_fname} = "$self->{basedir}/conf/log/syslog";
+        $self->{have_syslog_replacement} = 1;
+    }
+    else {
+        xlog "utils/syslog.so not found (do you need to run 'make'?)";
+        xlog "tests will not examine syslog output";
+        $self->{have_syslog_replacement} = 0;
+    }
+
 
     # Start SMTP server before generating imapd config, we need to
     # to set smtp_host to the auto-assigned TCP port it listens on.
@@ -1125,12 +1135,11 @@ sub start
     $self->{_stopped} = 0;
     $self->{_started} = 1;
 
-    my $cassini = Cassandane::Cassini::instance();
-    my $syslog_file = $cassini->val('cassandane', 'syslog_file', '/var/log/syslog');
-    if ($syslog_file) {
-      $self->{_syslogfh} = IO::File->new($syslog_file, 'r') || die "can't open file $syslog_file";
-      $self->{_syslogfh}->seek(0, 2); # start at the current end of the log
-      $self->{_syslogfh}->blocking(0);
+    if ($self->{have_syslog_replacement}) {
+        $self->{_syslogfh} = IO::File->new($self->{syslog_fname}, 'r')
+            || die "can't open file $self->{syslog_fname}";
+        $self->{_syslogfh}->seek(0, 2); # start at the current end of the log
+        $self->{_syslogfh}->blocking(0);
     }
 
     # give fakesaslauthd a moment (but not more than 2s) to set up its
@@ -1696,6 +1705,10 @@ sub _fork_command
     $ENV{CASSANDANE_BASEDIR} = $self->{basedir};
     $ENV{CASSANDANE_VERBOSE} = 1 if get_verbose();
     $ENV{PERL5LIB} = join(':', ($cassroot, $self->_cyrus_perl_search_path()));
+    if ($self->{have_syslog_replacement}) {
+        $ENV{CASSANDANE_SYSLOG_FNAME} = abs_path($self->{syslog_fname});
+        $ENV{LD_PRELOAD} = abs_path('utils/syslog.so')
+    }
 
 #     xlog "\$PERL5LIB is"; map { xlog "    $_"; } split(/:/, $ENV{PERL5LIB});
 
