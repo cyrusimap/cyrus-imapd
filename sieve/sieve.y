@@ -87,6 +87,7 @@ extern int sievelineno;
 void sieveerror_c(sieve_script_t*, int code, ...);
 
 static int check_reqs(sieve_script_t*, strarray_t *sl);
+static int chk_match_vars(sieve_script_t*, char *s);
 
 /* construct/canonicalize action commands */
 static commandlist_t *build_keep(sieve_script_t*, commandlist_t *c);
@@ -155,7 +156,7 @@ extern void sieverestart(FILE *f);
 %destructor  { free_testlist($$); } testlist tests
 %destructor  { free_test($$);     } test
 %destructor  { strarray_free($$); } optstringlist stringlist strings string1
-%destructor  { free($$);          } STRING
+%destructor  { free($$);          } STRING string
 
 %param   { sieve_script_t *sscript }
 %pure-parser
@@ -172,6 +173,7 @@ extern void sieverestart(FILE *f);
 
 %token <nval> NUMBER
 %token <sval> STRING
+%type <sval> string
 %type <sl> optstringlist stringlist strings string1
 %type <cl> commands command action control
 %type <testl> testlist tests
@@ -378,14 +380,18 @@ stringlist: string1
 
 
 strings:  string1
-        | strings ',' STRING     { $$ = $1; strarray_appendm($$, $3); }
+        | strings ',' string     { $$ = $1; strarray_appendm($$, $3); }
         ;
 
 
-string1: STRING                  {
+string1: string                  {
                                      $$ = strarray_new();
                                      strarray_appendm($$, $1);
                                  }
+        ;
+
+
+string: STRING                   { $$ = $1; chk_match_vars(sscript, $$); }
         ;
 
 
@@ -398,7 +404,7 @@ require: REQUIRE stringlist ';'  { check_reqs(sscript, $2); }
 
 control:  IF thenelse            { $$ = $2; }
         | STOP ';'               { $$ = new_command(STOP, sscript); }
-        | ERROR STRING ';'       { $$ = build_rej_err(sscript, ERROR, $2); }
+        | ERROR string ';'       { $$ = build_rej_err(sscript, ERROR, $2); }
         ;
 
 
@@ -428,12 +434,12 @@ block: '{' commands '}'          { $$ = $2; }
  * Action commands
  */
 action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
-        | FILEINTO ftags STRING  { $$ = build_fileinto(sscript, $2, $3); }
-        | REDIRECT rtags STRING  { $$ = build_redirect(sscript, $2, $3); }
+        | FILEINTO ftags string  { $$ = build_fileinto(sscript, $2, $3); }
+        | REDIRECT rtags string  { $$ = build_redirect(sscript, $2, $3); }
         | DISCARD                { $$ = new_command(DISCARD, sscript); }
-        | SET stags STRING STRING
+        | SET stags string string
                                  { $$ = build_set(sscript, $2, $3, $4); }
-        | VACATION vtags STRING  { $$ = build_vacation(sscript, $2, $3); }
+        | VACATION vtags string  { $$ = build_vacation(sscript, $2, $3); }
 
         /* SET/ADD/REMOVEFLAG */ 
         | flagaction flagtags stringlist
@@ -442,23 +448,23 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
         /* MARK/UNMARK */ 
         | flagmark               { $$ = new_command($1, sscript); }
 
-        | ADDHEADER ahtags STRING STRING
+        | ADDHEADER ahtags string string
                                  { $$ = build_addheader(sscript,
                                                         $2, $3, $4); }
-        | DELETEHEADER dhtags STRING optstringlist
+        | DELETEHEADER dhtags string optstringlist
                                  { $$ = build_deleteheader(sscript,
                                                            $2, $3, $4); }
 
-        | reject STRING          { $$ = build_rej_err(sscript, $1, $2); }
-        | NOTIFY ntags STRING    { $$ = build_notify(sscript,
+        | reject string          { $$ = build_rej_err(sscript, $1, $2); }
+        | NOTIFY ntags string    { $$ = build_notify(sscript,
                                                      ENOTIFY, $2, $3); }
 
         | NOTIFY ntags           { $$ = build_notify(sscript,
                                                      NOTIFY, $2, NULL); }
 
         | DENOTIFY dtags         { $$ = build_denotify(sscript, $2); }
-        | INCLUDE itags STRING   { $$ = build_include(sscript, $2, $3); }
-        | LOG STRING             { $$ = build_log(sscript, $2); }
+        | INCLUDE itags string   { $$ = build_include(sscript, $2, $3); }
+        | LOG string             { $$ = build_log(sscript, $2); }
         | RETURN                 { $$ = new_command(RETURN, sscript); }
         ;
 
@@ -564,7 +570,7 @@ create: CREATE                  {
 
 
 /* :specialuse */
-specialuse: SPECIALUSE STRING    {
+specialuse: SPECIALUSE string    {
                                      /* $0 refers to ftags or vtags */
                                      commandlist_t *c = $<cl>0;
                                      char **specialuse = NULL;
@@ -597,7 +603,7 @@ specialuse: SPECIALUSE STRING    {
                                  }
         ;
 
-mailboxid: MAILBOXID STRING      {
+mailboxid: MAILBOXID string      {
                                      /* $0 refers to ftags or vtags */
                                      commandlist_t *c = $<cl>0;
                                      char **mailboxid = NULL;
@@ -677,7 +683,7 @@ delbytags: BYTIMEREL NUMBER      {
                                      buf_printf(&buf, "+%d", $2);
                                      c->u.r.bytime = buf_release(&buf);
                                  }
-        | BYTIMEABS STRING       {
+        | BYTIMEABS string       {
                                      /* $0 refers to rtags */
                                      commandlist_t *c = $<cl>0;
 
@@ -690,7 +696,7 @@ delbytags: BYTIMEREL NUMBER      {
 
                                      c->u.r.bytime = $2;
                                  }
-        | BYMODE STRING          {
+        | BYMODE string          {
                                      /* $0 refers to rtags */
                                      commandlist_t *c = $<cl>0;
 
@@ -718,7 +724,7 @@ delbytags: BYTIMEREL NUMBER      {
 
 
 /* REDIRECT-DSN tagged arguments */
-dsntags:  DSNNOTIFY STRING       {
+dsntags:  DSNNOTIFY string       {
                                      /* $0 refers to rtags */
                                      commandlist_t *c = $<cl>0;
 
@@ -730,7 +736,7 @@ dsntags:  DSNNOTIFY STRING       {
 
                                      c->u.r.dsn_notify = $2;
                                  }
-        | DSNRET STRING          {
+        | DSNRET string          {
                                      /* $0 refers to rtags */
                                      commandlist_t *c = $<cl>0;
 
@@ -853,7 +859,7 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
 
                                      $$->u.v.seconds = $3;
                                  }
-        | vtags SUBJECT STRING   {
+        | vtags SUBJECT string   {
                                      if ($$->u.v.subject != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -863,7 +869,7 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
 
                                      $$->u.v.subject = $3;
                                  }
-        | vtags FROM STRING      {
+        | vtags FROM string      {
                                      if ($$->u.v.from != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -894,7 +900,7 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
 
                                      $$->u.v.mime = 1;
                                  }
-        | vtags HANDLE STRING    {
+        | vtags HANDLE string    {
                                      if ($$->u.v.handle != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -908,7 +914,7 @@ vtags: /* empty */               { $$ = new_command(VACATION, sscript); }
         ;
 
 
-fcctags: FCC STRING              {
+fcctags: FCC string              {
                                      /* $0 refers to vtags or ntags */
                                      commandlist_t *c = $<cl>0;
                                      char **folder = NULL;
@@ -949,7 +955,7 @@ flagaction: SETFLAG
 
 /* SET/ADD/REMOVEFLAG tagged arguments - $0 refers to flagaction */
 flagtags: /* empty */            { $$ = new_command($<nval>0, sscript); }
-        | flagtags STRING        {
+        | flagtags string        {
                                      if ($$->u.fl.variable != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_ARG,
@@ -1012,7 +1018,7 @@ reject:   REJCT
 ntags: /* empty */               { $$ = new_command(ENOTIFY, sscript); }
 
         /* enotify-only tagged arguments */
-        | ntags FROM STRING      {
+        | ntags FROM string      {
                                      if ($$->u.n.from != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1036,7 +1042,7 @@ ntags: /* empty */               { $$ = new_command(ENOTIFY, sscript); }
         | ntags fcctags
 
         /* legacy-only tagged arguments */
-        | ntags ID STRING        {
+        | ntags ID string        {
                                      if ($$->u.n.id != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1046,7 +1052,7 @@ ntags: /* empty */               { $$ = new_command(ENOTIFY, sscript); }
 
                                      $$->u.n.id = $3;
                                  }
-        | ntags METHOD STRING    {
+        | ntags METHOD string    {
                                      if ($$->u.n.method != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1067,7 +1073,7 @@ ntags: /* empty */               { $$ = new_command(ENOTIFY, sscript); }
                                  }
 
         /* common tagged arguments */
-        | ntags MESSAGE STRING   {
+        | ntags MESSAGE string   {
                                      if ($$->u.n.message != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1111,7 +1117,7 @@ dtags: /* empty */               { $$ = new_command(DENOTIFY, sscript); }
                                      $$->u.d.priority = $2;
                                  }
 
-        | dtags { ctags = &($1->u.d.comp); } matchtype STRING
+        | dtags { ctags = &($1->u.d.comp); } matchtype string
                                  {
                                      if ($$->u.d.pattern) free($$->u.d.pattern);
                                      $$->u.d.pattern = $4;
@@ -1194,7 +1200,7 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
 
         | BODY btags stringlist  { $$ = build_body(sscript, $2, $3); }
 
-        | ENVIRONMENT envtags STRING stringlist
+        | ENVIRONMENT envtags string stringlist
                                  { $$ = build_mbox_meta(sscript,
                                                         $2, NULL, $3, $4); }
 
@@ -1211,7 +1217,7 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
                                  { $$ = build_hasflag(sscript, $2, NULL, $3); }
 
         /* getdatepart variable is used to change the start state of the lexer */
-        | DATE dttags STRING { getdatepart = 1; } datepart stringlist
+        | DATE dttags string { getdatepart = 1; } datepart stringlist
                                  { $$ = build_date(sscript, $2, $3, $5, $6); }
 
         | CURRENTDATE cdtags datepart stringlist
@@ -1221,7 +1227,7 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
                                      $$ = new_test(VALIDNOTIFYMETHOD, sscript);
                                      $$->u.sl = $2;
                                  }
-        | NOTIFYMETHODCAPABILITY methtags STRING STRING stringlist
+        | NOTIFYMETHODCAPABILITY methtags string string stringlist
                                  { $$ = build_mbox_meta(sscript,
                                                         $2, $3, $4, $5); }
 
@@ -1234,18 +1240,18 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
                                                           $$, NULL, NULL, $2);
                                  }
 
-        | METADATA mtags STRING STRING stringlist
+        | METADATA mtags string string stringlist
                                  { $$ = build_mbox_meta(sscript,
                                                         $2, $3, $4, $5); }
 
-        | METADATAEXISTS STRING stringlist
+        | METADATAEXISTS string stringlist
                                  {
                                      $$ = new_test(METADATAEXISTS, sscript);
                                      $$ = build_mbox_meta(sscript,
                                                           $$, $2, NULL, $3);
                                  }
 
-        | SERVERMETADATA mtags STRING stringlist
+        | SERVERMETADATA mtags string stringlist
                                  { $$ = build_mbox_meta(sscript,
                                                         $2, NULL, $3, $4); }
 
@@ -1271,7 +1277,7 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
                                                           $$, NULL, NULL, $2);
                                  }
 
-        | SPECIALUSEEXISTS STRING stringlist
+        | SPECIALUSEEXISTS string stringlist
                                  {
                                      $$ = new_test(SPECIALUSEEXISTS, sscript);
                                      $$ = build_mbox_meta(sscript,
@@ -1644,7 +1650,7 @@ mtags: /* empty */               { $$ = new_test($<nval>0, sscript); }
 
 /* DUPLICATE tagged arguments */
 duptags: /* empty */             { $$ = new_test(DUPLICATE, sscript); }
-        | duptags idtype STRING  {
+        | duptags idtype string  {
                                      if ($$->u.dup.idtype != -1) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1656,7 +1662,7 @@ duptags: /* empty */             { $$ = new_test(DUPLICATE, sscript); }
                                      $$->u.dup.idtype = $2;
                                      $$->u.dup.idval = $3;
                                  }
-        | duptags HANDLE STRING  {
+        | duptags HANDLE string  {
                                      if ($$->u.dup.handle != NULL) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
@@ -1746,11 +1752,11 @@ void sieveerror_c(sieve_script_t *sscript, int code, ...)
  * num-variable        =  1*DIGIT
  * identifier          =  (ALPHA / "_") *(ALPHA / DIGIT / "_")
  */
-static int contains_variable(sieve_script_t *sscript, char *s)
+static int find_variables(sieve_script_t *sscript, char *s, int find_one)
 {
     char *p = s;
 
-    if (!supported(SIEVE_CAPA_VARIABLES)) return 0;
+    if (!supported(SIEVE_CAPA_VARIABLES)) return !find_one;
 
     while ((p = strstr(p, "${"))) {
         long num = 0, is_id = 0;
@@ -1761,6 +1767,10 @@ static int contains_variable(sieve_script_t *sscript, char *s)
             if (isdigit(*p)) {
                 /* possible num-variable - get value and skip over digits */
                 num = strtol(p, &p, 10);
+            }
+            else if (!find_one) {
+                /* validating match variables - ignoroe identifiers */
+                break;
             }
             else if (isalpha(*p) || *p == '_') {
                 /* possible identifier - skip over identifier chars */
@@ -1774,18 +1784,31 @@ static int contains_variable(sieve_script_t *sscript, char *s)
 
             if (*p == '}') {
                 /* end of variable-ref */
+                if (find_one) return 1;
+
+                /* validating match variables */
                 if (!is_id && num > MAX_MATCH_VARS) {
-                    sieveerror_f(sscript,
-                                 "string '%s': match variable index > %u",
+                    sieveerror_f(sscript, "string '%s':"
+                                 " match variable index > %u unsupported",
                                  s, MAX_MATCH_VARS);
+                    return 0;
                 }
-                return 1;
             }
 
         } while (is_id && *p == '.' && *(++p));  /* (sub-)namespace */
     }
 
-    return 0;
+    return !find_one;
+}
+
+static int chk_match_vars(sieve_script_t *sscript, char *s)
+{
+    return find_variables(sscript, s, 0 /* find_one */);
+}
+
+static int contains_variable(sieve_script_t *sscript, char *s)
+{
+    return find_variables(sscript, s, 1 /* find_one */);
 }
 
 /*
@@ -2008,6 +2031,8 @@ static int verify_addrheader(sieve_script_t *sscript, char *hdr)
         NULL
     };
 
+    if (contains_variable(sscript, hdr)) return 1;
+
     if (!config_getswitch(IMAPOPT_RFC3028_STRICT))
         return verify_header(sscript, hdr);
 
@@ -2022,6 +2047,8 @@ static int verify_addrheader(sieve_script_t *sscript, char *hdr)
 
 static int verify_envelope(sieve_script_t *sscript, char *env)
 {
+    if (contains_variable(sscript, env)) return 1;
+
     lcase(env);
     if (!config_getswitch(IMAPOPT_RFC3028_STRICT) ||
         !strcmp(env, "from") || !strcmp(env, "to") || !strcmp(env, "auth")) {
