@@ -177,11 +177,33 @@ static int octet_contains(const char *text, size_t tlen, const char *pat,
     return octet_contains_(text, tlen, pat, 0);
 }
 
-static void append_var(int var_num, const char* val_start, const char* val_end,
-                       strarray_t *match_vars)
+static int new_var(strarray_t *match_vars)
 {
+    int size = strarray_size(match_vars);
+
+    if (size-1 > MAX_MATCH_VARS) return size;
+
+    return strarray_append(match_vars, "");
+}
+
+static void set_var(int var_num, const char* val_start, const char* val_end,
+                    strarray_t *match_vars)
+{
+    if (var_num > MAX_MATCH_VARS) return;
+
     char *val = xstrndup(val_start, val_end - val_start);
     strarray_setm(match_vars, var_num, val);
+}
+
+static int append_var(const char* val_start, const char* val_end,
+                       strarray_t *match_vars)
+{
+    int size = strarray_size(match_vars);
+
+    if (size-1 > MAX_MATCH_VARS) return size;
+
+    char *val = xstrndup(val_start, val_end - val_start);
+    return strarray_appendm(match_vars, val);
 }
 
 static int octet_matches_(const char *text, size_t tlen,
@@ -205,16 +227,16 @@ static int octet_matches_(const char *text, size_t tlen,
         c = *p++;
         switch (c) {
         case '?':
-            var_num = strarray_append(match_vars, "");
+            var_num = new_var(match_vars);
             val_start = t;
             if (!tlen) {
                 return 0;
             }
             t++; tlen--;
-            append_var(var_num, val_start, t, match_vars);
+            set_var(var_num, val_start, t, match_vars);
             break;
         case '*':
-            var_num = strarray_append(match_vars, "");
+            var_num = new_var(match_vars);
             val_start = t;
             while (*p == '*' || *p == '?') {
                 if (*p == '?') {
@@ -226,11 +248,10 @@ static int octet_matches_(const char *text, size_t tlen,
                 } else {
                     for (t -= eaten_chars; eaten_chars; eaten_chars--) {
                         t++;
-                        var_num = strarray_append(match_vars, "");
-                        append_var(var_num, val_start, t, match_vars);
+                        var_num = append_var(val_start, t, match_vars);
                         val_start = t;
                     }
-                    var_num = strarray_append(match_vars, "");
+                    var_num = new_var(match_vars);
                     val_start = t;
                 }
                 /* coalesce into a single wildcard */
@@ -240,11 +261,10 @@ static int octet_matches_(const char *text, size_t tlen,
                 /* wildcard at end of string, any remaining text is ok */
                 t += tlen;
                 t -= eaten_chars;
-                append_var(var_num, val_start, t, match_vars);
+                set_var(var_num, val_start, t, match_vars);
                 for (val_start = t; eaten_chars; eaten_chars--) {
                     t++;
-                    var_num = strarray_append(match_vars, "");
-                    append_var(var_num, val_start, t, match_vars);
+                    var_num = append_var(val_start, t, match_vars);
                     val_start = t;
                 }
                 return 1;
@@ -255,15 +275,17 @@ static int octet_matches_(const char *text, size_t tlen,
                 if (octet_matches_(t, tlen, p, casemap, &returned_vars)) {
                     int i;
                     t -= eaten_chars;
-                    append_var(var_num, val_start, t, match_vars);
+                    set_var(var_num, val_start, t, match_vars);
                     for (val_start = t; eaten_chars; eaten_chars--) {
                         t++;
-                        var_num = strarray_append(match_vars, "");
-                        append_var(var_num, val_start, t, match_vars);
+                        var_num = append_var(val_start, t, match_vars);
                         val_start = t;
                     }
                     for (i = 0; i < returned_vars.count; i++) {
-                        strarray_append(match_vars, returned_vars.data[i]);
+                        if (var_num < MAX_MATCH_VARS) {
+                            var_num = strarray_append(match_vars,
+                                                      returned_vars.data[i]);
+                        }
                     }
                     strarray_fini(&returned_vars);
                     return 1;
@@ -271,7 +293,7 @@ static int octet_matches_(const char *text, size_t tlen,
                 strarray_fini(&returned_vars);
                 t++; tlen--;
             }
-            append_var(var_num, val_start, t, match_vars);
+            set_var(var_num, val_start, t, match_vars);
             break;
         case '\\':
             c = *p++;
@@ -352,7 +374,7 @@ static int octet_regex(const char *text, size_t tlen, const char *pat,
 
             if (m->rm_so < 0) break;
 
-            append_var(var_num, text + m->rm_so, text + m->rm_eo, match_vars);
+            append_var(text + m->rm_so, text + m->rm_eo, match_vars);
         }
     }
     return r;
