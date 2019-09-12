@@ -1295,7 +1295,7 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
                                                           $$, NULL, NULL, $2);
                                  }
 
-        | JMAPQUERY STRING       { $$ = build_jmapquery(sscript, $2); }
+        | JMAPQUERY string       { $$ = build_jmapquery(sscript, $2); }
 
         | error                  { $$ = new_test(SFALSE, sscript); }
         ;
