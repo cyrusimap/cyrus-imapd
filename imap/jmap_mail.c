@@ -10712,11 +10712,11 @@ static void _email_import(jmap_req_t *req,
     /* Lookup blob */
     struct mailbox *mbox = NULL;
     struct body *body = NULL;
-    const struct body *subpart = NULL;
+    const struct body *part = NULL;
     msgrecord_t *mr = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
     int r = jmap_findblob(req, NULL/*accountid*/, blob_id,
-                          &mbox, &mr, &body, &subpart, NULL);
+                          &mbox, &mr, &body, &part, NULL);
     if (r) {
         if (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED)
             *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
@@ -10733,16 +10733,23 @@ static void _email_import(jmap_req_t *req,
     }
 
     /* Decode blob */
-    struct body *part = subpart ? (struct body*) subpart : body;
-    const char *blob_base = buf_base(&msg_buf) + part->content_offset;
-    size_t blob_len = part->content_size;
-    int enc = encoding_lookupname(part->encoding);
-    if (enc != ENCODING_NONE) {
-        char *tmp;
-        size_t dec_len;
-        const char *dec = charset_decode_mimebody(blob_base, blob_len, enc, &tmp, &dec_len);
-        buf_setmap(&content.buf, dec, dec_len);
-        free(tmp);
+    const char *blob_base = buf_base(&msg_buf);
+    size_t blob_len = buf_len(&msg_buf);
+    if (part) {
+        blob_base += part->content_offset;
+        blob_len = part->content_size;
+
+        int enc = encoding_lookupname(part->encoding);
+        if (enc != ENCODING_NONE) {
+            char *tmp;
+            size_t dec_len;
+            const char *dec = charset_decode_mimebody(blob_base, blob_len, enc, &tmp, &dec_len);
+            buf_setmap(&content.buf, dec, dec_len);
+            free(tmp);
+        }
+        else {
+            buf_setmap(&content.buf, blob_base, blob_len);
+        }
     }
     else {
         buf_setmap(&content.buf, blob_base, blob_len);
