@@ -38,27 +38,27 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
-PROGRAMS=	lemming gdbtramp crash
+PROGRAMS=lemming gdbtramp crash
 
-CC=		gcc
-COPTFLAGS=	-g -O0
-CWARNFLAGS=	-Wall -Wextra
-CFLAGS=		$(COPTFLAGS) $(CWARNFLAGS)
+CC=gcc
+COPTFLAGS=-g -O0
+CWARNFLAGS=-Wall -Wextra
+CFLAGS=$(COPTFLAGS) $(CWARNFLAGS)
 
 all: $(PROGRAMS)
 
-lemming_SOURCE=	lemming.c
-lemming_OBJS=	$(lemming_SOURCE:.c=.o)
+lemming_SOURCE=lemming.c
+lemming_OBJS=$(lemming_SOURCE:.c=.o)
 lemming: $(lemming_OBJS)
 	$(LINK.c) -o $@ $(lemming_OBJS)
 
-gdbtramp_SOURCE=    gdbtramp.c
-gdbtramp_OBJS=	    $(gdbtramp_SOURCE:.c=.o)
+gdbtramp_SOURCE=gdbtramp.c
+gdbtramp_OBJS=$(gdbtramp_SOURCE:.c=.o)
 gdbtramp: $(gdbtramp_OBJS)
 	$(LINK.c) -o $@ $(gdbtramp_OBJS)
 
-crash_SOURCE=       crash.c
-crash_OBJS=         $(crash_SOURCE:.c=.o)
+crash_SOURCE=crash.c
+crash_OBJS=$(crash_SOURCE:.c=.o)
 crash: $(crash_OBJS)
 	$(LINK.c) -o $@ $(crash_OBJS)
 
