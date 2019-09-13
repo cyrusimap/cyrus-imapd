@@ -1089,9 +1089,15 @@ sub start
     $self->_init_basedir_and_name();
     xlog "start $self->{description}: basedir $self->{basedir}";
 
+    my $syslog_start = 0;
     if (-e 'utils/syslog.so') { # XXX check a bit harder?
         $self->{syslog_fname} = "$self->{basedir}/conf/log/syslog";
         $self->{have_syslog_replacement} = 1;
+
+        # if the syslog file already exists, remember how large it is
+        # so we can seek past existing content without missing the
+        # startup content!
+        $syslog_start = -s $self->{syslog_fname} if -e $self->{syslog_fname};
     }
     else {
         xlog "utils/syslog.so not found (do you need to run 'make'?)";
@@ -1143,7 +1149,7 @@ sub start
     if ($self->{have_syslog_replacement}) {
         $self->{_syslogfh} = IO::File->new($self->{syslog_fname}, 'r')
             || die "can't open file $self->{syslog_fname}";
-        $self->{_syslogfh}->seek(0, 2); # start at the current end of the log
+        $self->{_syslogfh}->seek($syslog_start, 0);
         $self->{_syslogfh}->blocking(0);
     }
 
