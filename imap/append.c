@@ -516,11 +516,11 @@ static int callout_run_executable(const char *callout,
         /* child process */
 
         close(inpipe[PIPE_WRITE]);
-        dup2(inpipe[PIPE_READ], /*FILENO_STDIN*/0);
+        dup2(inpipe[PIPE_READ], STDIN_FILENO);
         close(inpipe[PIPE_READ]);
 
         close(outpipe[PIPE_READ]);
-        dup2(outpipe[PIPE_WRITE], /*FILENO_STDOUT*/1);
+        dup2(outpipe[PIPE_WRITE], STDOUT_FILENO);
         close(outpipe[PIPE_WRITE]);
 
         execl(callout, callout, (char *)NULL);

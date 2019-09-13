@@ -96,7 +96,7 @@ char* notify_mailto(const char *class,
         /* i'm the child! run sendmail! */
         close(fds[1]);
         /* make the pipe be stdin */
-        dup2(fds[0], 0);
+        dup2(fds[0], STDIN_FILENO);
         execv(config_getstring(IMAPOPT_SENDMAIL), (char **) smbuf);
 
         /* if we're here we suck */

@@ -443,15 +443,15 @@ EXPORTED void cyrus_reset_stdio(void)
 
     /* stdin */
     shutdown(0, SHUT_RD);
-    dup2(devnull, 0);
+    dup2(devnull, STDIN_FILENO);
 
     /* stdout */
     shutdown(1, SHUT_RD);
-    dup2(devnull, 1);
+    dup2(devnull, STDOUT_FILENO);
 
     /* stderr */
     shutdown(2, SHUT_RD);
-    dup2(devnull, 2);
+    dup2(devnull, STDERR_FILENO);
 
     if (devnull > 2) close(devnull);
 }

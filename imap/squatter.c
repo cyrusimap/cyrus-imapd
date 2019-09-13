@@ -170,9 +170,9 @@ static void become_daemon(void)
         perror("/dev/null");
         exit(1);
     }
-    dup2(nullfd, 0);
-    dup2(nullfd, 1);
-    dup2(nullfd, 2);
+    dup2(nullfd, STDIN_FILENO);
+    dup2(nullfd, STDOUT_FILENO);
+    dup2(nullfd, STDERR_FILENO);
     for (fd = 3 ; fd < nfds ; fd++)
         close(fd);          /* this will close nullfd too */
 

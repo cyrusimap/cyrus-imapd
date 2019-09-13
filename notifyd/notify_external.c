@@ -98,7 +98,7 @@ char* notify_external(const char *class, const char *priority,
         /* i'm the child! run notify */
         close(fds[1]);
         /* make the pipe be stdin */
-        dup2(fds[0], 0);
+        dup2(fds[0], STDIN_FILENO);
         execv(notify, (char **) buf);
 
         /* should never reach here */

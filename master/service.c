@@ -611,15 +611,15 @@ int main(int argc, char **argv, char **envp)
         notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
         syslog(LOG_DEBUG, "accepted connection");
 
-        if (fd != 0 && dup2(fd, 0) < 0) {
+        if (fd != STDIN_FILENO && dup2(fd, STDIN_FILENO) < 0) {
             syslog(LOG_ERR, "can't duplicate accepted socket: %m");
             service_abort(EX_OSERR);
         }
-        if (fd != 1 && dup2(fd, 1) < 0) {
+        if (fd != STDOUT_FILENO && dup2(fd, STDOUT_FILENO) < 0) {
             syslog(LOG_ERR, "can't duplicate accepted socket: %m");
             service_abort(EX_OSERR);
         }
-        if (fd != 2 && dup2(fd, 2) < 0) {
+        if (fd != STDERR_FILENO && dup2(fd, STDERR_FILENO) < 0) {
             syslog(LOG_ERR, "can't duplicate accepted socket: %m");
             service_abort(EX_OSERR);
         }

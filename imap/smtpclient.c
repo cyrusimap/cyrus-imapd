@@ -853,11 +853,11 @@ EXPORTED int smtpclient_open_sendmail(smtpclient_t **smp)
     if (pid == 0) {
         /* child process */
         close(p_child[1]);
-        dup2(p_child[0], /*FILENO_STDIN*/0);
+        dup2(p_child[0], STDIN_FILENO);
         close(p_child[0]);
 
         close(p_parent[0]);
-        dup2(p_parent[1], /*FILENO_STDOUT*/1);
+        dup2(p_parent[1], STDOUT_FILENO);
         close(p_parent[1]);
 
         execl(config_getstring(IMAPOPT_SENDMAIL), "sendmail", "-bs", (char *)NULL);

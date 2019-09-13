@@ -54,6 +54,17 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
+#ifndef STDIN_FILENO
+/* Standard file descriptors.  */
+#define	STDIN_FILENO	0	/* Standard input.  */
+#define	STDOUT_FILENO	1	/* Standard output.  */
+#define	STDERR_FILENO	2	/* Standard error output.  */
+#endif
+
 #include "xmalloc.h"
 
 /* version string printable in gdb tracking */
