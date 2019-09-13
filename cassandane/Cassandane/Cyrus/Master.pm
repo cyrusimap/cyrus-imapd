@@ -669,8 +669,13 @@ sub test_service_dup_port
     # listener socket: Address already in use
     #
     # and struggle on.
-    # TODO: need a way to check syslog
     $self->start();
+
+    # check syslog for the expected error
+    my @lines = grep { m/unable to create (?:A|B) listener socket:/ }
+                    $self->{instance}->getsyslog();
+    $self->assert_num_equals(1, scalar @lines);
+    $self->assert_matches(qr/Address already in use/, $lines[0]);
 
     xlog "not preforked, so no lemmings running yet";
     $self->assert_deep_equals({},
@@ -718,6 +723,9 @@ sub test_service_noexe
         $self->start();
     };
     xlog "start failed (as expected): $@" if $@;
+
+    # XXX can't currently check syslog in this case because start() bailed
+    # XXX out before we would have started reading it...
 
     xlog "master should have exited when service verification failed";
     $self->assert(!$self->{instance}->is_running());
@@ -880,6 +888,9 @@ sub test_service_bad_name
         $self->start();
     };
     xlog "start failed (as expected): $@" if $@;
+
+    # XXX can't currently check syslog in this case because start() bailed
+    # XXX out before we would have started reading it...
 
     xlog "master should have exited when service verification failed";
     $self->assert(!$self->{instance}->is_running());
