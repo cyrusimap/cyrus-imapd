@@ -2336,9 +2336,9 @@ int main(int argc, char **argv)
     if (daemon_mode && !close_std)
         fatal("Unable to be both debug and daemon mode", EX_CONFIG);
 
-    /* we reserve fds 3 and 4 for children to communicate with us, so they
+    /* we reserve fds for children to communicate with us, so they
        better be available. */
-    for (fd = 3; fd < 5; fd++) {
+    for (fd = STATUS_FD; fd <= LISTEN_FD; fd++) {
         close(fd);
         if (dup(0) != fd) fatalf(2, "couldn't dup fd 0: %m");
     }
