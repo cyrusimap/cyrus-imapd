@@ -1122,14 +1122,6 @@ static int findblob_cb(const conv_guidrec_t *rec, void *rock)
     jmap_req_t *req = d->req;
     int r = 0;
 
-    /* Ignore blobs that don't belong to the current accountId */
-    mbname_t *mbname = mbname_from_intname(rec->mboxname);
-    int is_accountid_mbox =
-        (mbname && !strcmp(mbname_userid(mbname), d->from_accountid));
-    mbname_free(&mbname);
-    if (!is_accountid_mbox)
-        return 0;
-
     /* Check ACL */
     if (d->is_shared_account) {
         mbentry_t *mbentry = NULL;
@@ -1165,13 +1157,13 @@ HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
                          struct body **body, const struct body **part,
                          struct buf *blob)
 {
-
+    const char *accountid = from_accountid ? from_accountid : req->accountid;
     struct findblob_data data = {
         req,
         /* from_accountid */
-        from_accountid ? from_accountid : req->accountid, /* from_accountid */
+        accountid,
         /* is_shared_account */
-        strcmp(req->userid, from_accountid ? from_accountid : req->accountid),
+        strcmp(req->userid, accountid),
         /* mbox */
         NULL,
         /* mr */
@@ -1184,10 +1176,13 @@ HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
     int i, r;
     struct conversations_state *cstate, *mycstate = NULL;
 
-    if (from_accountid && strcmp(req->accountid, from_accountid)) {
-        cstate = conversations_get_user(from_accountid);
+    if (blobid[0] != 'G')
+        return IMAP_NOTFOUND;
+
+    if (strcmp(req->accountid, accountid)) {
+        cstate = conversations_get_user(accountid);
         if (!cstate) {
-            r = conversations_open_user(from_accountid, 1/*shared*/, &mycstate);
+            r = conversations_open_user(accountid, 1/*shared*/, &mycstate);
             if (r) goto done;
 
             cstate = mycstate;
@@ -1197,20 +1192,17 @@ HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
         cstate = req->cstate;
     }
 
-    if (blobid[0] != 'G')
-        return IMAP_NOTFOUND;
-
     r = conversations_guid_foreach(cstate, blobid+1, findblob_cb, &data);
     if (r != IMAP_OK_COMPLETED) {
         if (!r) r = IMAP_NOTFOUND;
         goto done;
     }
 
-    r = msgrecord_extract_bodystructure(data.mr, &mybody);
-    if (r) goto done;
-
     /* Find part containing the data */
     if (data.part_id) {
+        r = msgrecord_extract_bodystructure(data.mr, &mybody);
+        if (r) goto done;
+
         ptrarray_t parts = PTRARRAY_INITIALIZER;
         struct message_guid content_guid;
 
@@ -1241,6 +1233,12 @@ HIDDEN int jmap_findblob(jmap_req_t *req, const char *from_accountid,
         }
     }
 
+    if (blob && !buf_base(blob)) {
+        /* Map the message into memory */
+        r = msgrecord_get_body(data.mr, blob);
+        if (r) goto done;
+    }
+
     *mbox = data.mbox;
     *mr = data.mr;
     *part = mypart;
@@ -1258,7 +1256,6 @@ done:
     if (data.part_id) free(data.part_id);
     return r;
 }
-
 
 HIDDEN int jmap_cmpstate(jmap_req_t* req, json_t *state, int mbtype)
 {

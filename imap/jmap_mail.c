@@ -8261,11 +8261,7 @@ static void _emailpart_blob_to_mime(jmap_req_t *req,
 
     /* Find body part containing blob */
     int r = jmap_findblob(req, NULL/*accountid*/, emailpart->blob_id,
-                          &mbox, &mr, &body, &part, NULL);
-    if (r) goto done;
-
-    /* Map the blob into memory */
-    r = msgrecord_get_body(mr, &blob_buf);
+                          &mbox, &mr, &body, &part, &blob_buf);
     if (r) goto done;
 
     uint32_t size;
@@ -10708,19 +10704,13 @@ static void _email_import(jmap_req_t *req,
     msgrecord_t *mr = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
     int r = jmap_findblob(req, NULL/*accountid*/, blob_id,
-                          &mbox, &mr, &body, &part, NULL);
+                          &mbox, &mr, &body, &part, &msg_buf);
     if (r) {
         if (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED)
             *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
                     "properties", "blobId");
         else
             *err = jmap_server_error(r);
-        goto done;
-    }
-
-    r = msgrecord_get_body(mr, &msg_buf);
-    if (r) {
-        *err = jmap_server_error(r);
         goto done;
     }
 

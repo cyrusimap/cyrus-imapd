@@ -620,16 +620,6 @@ static int jmap_download(struct transaction_t *txn)
         goto done;
     }
 
-    if (!buf_base(&msg_buf)) {
-        /* Map the message into memory */
-        r = msgrecord_get_body(mr, &msg_buf);
-        if (r) {
-            res = HTTP_NOT_FOUND; // XXX errors?
-            txn->error.desc = "failed to map record";
-            goto done;
-        }
-    }
-
     struct strlist *param;
     if ((param = hash_lookup("accept", &txn->req_qparams))) {
         accept_mime = xstrdup(param->s);
@@ -1104,19 +1094,6 @@ static int jmap_copyblob(jmap_req_t *req,
                           &mbox, &mr, &body, &part, &msg_buf);
     if (r) return r;
 
-    if (!part)
-        part = body;
-
-    if (!buf_base(&msg_buf)) {
-        /* Map the message into memory */
-        r = msgrecord_get_body(mr, &msg_buf);
-        if (r) {
-            syslog(LOG_ERR, "jmap_copyblob(%s): msgrecord_get_body: %s",
-                   blobid, error_message(r));
-            goto done;
-        }
-    }
-
     /* Create staging file */
     time_t internaldate = time(NULL);
     if (!(to_fp = append_newstage(to_mbox->name, internaldate, 0, &stage))) {
@@ -1128,8 +1105,13 @@ static int jmap_copyblob(jmap_req_t *req,
 
     /* Copy blob. Keep the original MIME headers, we wouldn't really
      * know which ones are safe to rewrite for arbitrary blobs. */
-    fwrite(buf_base(&msg_buf) + part->header_offset,
-           part->header_size + part->content_size, 1, to_fp);
+    if (part) {
+        fwrite(buf_base(&msg_buf) + part->header_offset,
+               part->header_size + part->content_size, 1, to_fp);
+    }
+    else {
+        fwrite(buf_base(&msg_buf), buf_len(&msg_buf), 1, to_fp);
+    }
     if (ferror(to_fp)) {
         syslog(LOG_ERR, "jmap_copyblob(%s): tofp=%s: %s",
                blobid, append_stagefname(stage), strerror(errno));

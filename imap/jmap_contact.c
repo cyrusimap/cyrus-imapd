@@ -2682,12 +2682,6 @@ static int _blob_to_card(struct jmap_req *req,
                       &mbox, &mr, &body, &part, &blob_buf);
     if (r) goto done;
 
-    if (!buf_base(&blob_buf)) {
-        /* Map the blob into memory */
-        r = msgrecord_get_body(mr, &blob_buf);
-        if (r) goto done;
-    }
-
     /* Fetch blob contents and decode */
     const char *base = buf_base(&blob_buf);
     size_t len = buf_len(&blob_buf);
