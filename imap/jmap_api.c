@@ -604,6 +604,11 @@ static json_t *lookup_capabilities(const char *accountid,
     return capas;
 }
 
+static void _free_json(void *val)
+{
+    json_decref((json_t *)val);
+}
+
 /* Perform an API request */
 HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
                     jmap_settings_t *settings)
@@ -613,7 +618,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     int ret, do_perf = 0;
     char *account_inboxname = NULL;
     int return_created_ids = 0;
-    hash_table *created_ids = NULL;
+    hash_table created_ids = HASH_TABLE_INITIALIZER;
     hash_table capabilities_by_accountid = HASH_TABLE_INITIALIZER;
     hash_table mboxrights = HASH_TABLE_INITIALIZER;
     strarray_t methods = STRARRAY_INITIALIZER;
@@ -641,12 +646,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     /* Set up request-internal state */
     construct_hash_table(&capabilities_by_accountid, 8, 0);
     construct_hash_table(&mboxrights, 64, 0);
-
-    /* Set up creation ids */
-    long max_created_ids = (settings->limits[MAX_CALLS_IN_REQUEST] + 1) *
-                            settings->limits[MAX_OBJECTS_IN_SET];
-    created_ids = xzmalloc(sizeof(hash_table));
-    construct_hash_table(created_ids, max_created_ids, 0);
+    construct_hash_table(&created_ids, 1024, 0);
 
     /* Parse client-supplied creation ids */
     json_t *jcreatedIds = json_object_get(jreq, "createdIds");
@@ -666,7 +666,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
                 ret = HTTP_BAD_REQUEST;
                 goto done;
             }
-            hash_insert(creation_id, xstrdup(id), created_ids);
+            hash_insert(creation_id, xstrdup(id), &created_ids);
         }
     }
     else if (jcreatedIds && jcreatedIds != json_null()) {
@@ -780,7 +780,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         req.args = args;
         req.response = resp;
         req.tag = tag;
-        req.created_ids = created_ids;
+        req.created_ids = &created_ids;
         req.txn = txn;
         req.mboxrights = &mboxrights;
         req.method_calls = &method_calls;
@@ -844,7 +844,7 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
     }
     if (return_created_ids) {
         json_t *jcreatedIds = json_object();
-        hash_enumerate(created_ids, _make_created_ids, jcreatedIds);
+        hash_enumerate(&created_ids, _make_created_ids, jcreatedIds);
         json_object_set_new(*res, "createdIds", jcreatedIds);
     }
     char *user_inboxname = mboxname_user_mbox(httpd_userid, NULL);
@@ -867,16 +867,8 @@ HIDDEN int jmap_api(struct transaction_t *txn, json_t **res,
         ptrarray_fini(&processed_methods);
         ptrarray_fini(&method_calls);
     }
-    free_hash_table(created_ids, free);
-    free(created_ids);
-    if (hash_numrecords(&capabilities_by_accountid)) {
-        hash_iter *it = hash_table_iter(&capabilities_by_accountid);
-        while (hash_iter_next(it)) {
-            json_decref((json_t*)hash_iter_val(it));
-        }
-        hash_iter_free(&it);
-    }
-    free_hash_table(&capabilities_by_accountid, NULL);
+    free_hash_table(&created_ids, free);
+    free_hash_table(&capabilities_by_accountid, _free_json);
     free_hash_table(&mboxrights, free);
     free(account_inboxname);
     json_decref(jreq);
