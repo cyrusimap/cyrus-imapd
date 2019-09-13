@@ -58,7 +58,7 @@ EXPORTED void openlog(const char *ident, int option, int facility)
 
     syslog_fname = getenv("CASSANDANE_SYSLOG_FNAME");
     if (syslog_fname) {
-        out = fopen(syslog_fname, "a");
+        out = fopen(syslog_fname, "ae");
         if (out) {
             gethostname(hostname, sizeof(hostname));
             myident = ident ? strdup(ident) : NULL;
