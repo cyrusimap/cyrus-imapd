@@ -70,7 +70,8 @@ sub set_up
     die "No lemming binary $lemming_bin.  Did you run \"make\" in the Cassandane directory?"
         unless (-f $lemming_bin);
     $self->SUPER::set_up();
-    $self->{instance} = Cassandane::Instance->new(setup_mailbox => 0);
+    $self->{instance} = Cassandane::Instance->new(setup_mailbox => 0,
+                                                  authdaemon => 0);
 }
 
 sub tear_down
