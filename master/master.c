@@ -2148,6 +2148,13 @@ int main(int argc, char **argv)
     if (daemon_mode && !close_std)
         fatal("Unable to be both debug and daemon mode", EX_CONFIG);
 
+    /* we reserve fds 3 and 4 for children to communicate with us, so they
+       better be available. */
+    for (fd = 3; fd < 5; fd++) {
+        close(fd);
+        if (dup(0) != fd) fatalf(2, "couldn't dup fd 0: %m");
+    }
+
     masterconf_init("master", alt_config);
 
     if (close_std || error_log) {
@@ -2161,13 +2168,6 @@ int main(int argc, char **argv)
             if (open(file, mode, 0666) != fd)
                 fatalf(2, "couldn't open %s: %m", file);
         }
-    }
-
-    /* we reserve fds 3 and 4 for children to communicate with us, so they
-       better be available. */
-    for (fd = 3; fd < 5; fd++) {
-        close(fd);
-        if (dup(0) != fd) fatalf(2, "couldn't dup fd 0: %m");
     }
 
     /* Pidfile Algorithm in Daemon Mode.  This is a little subtle because
