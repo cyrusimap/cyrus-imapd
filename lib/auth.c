@@ -61,26 +61,23 @@ struct auth_mech *auth_mechs[] = {
 
 static struct auth_mech *auth_fromname(void)
 {
-    int i;
-    const char *name = libcyrus_config_getstring(CYRUSOPT_AUTH_MECH);
-    static struct auth_mech *auth = NULL;
+    static struct auth_mech *auth;
 
     if (auth)
         return auth;
 
-    for (i = 0; auth_mechs[i]; i++) {
+    const char *name = libcyrus_config_getstring(CYRUSOPT_AUTH_MECH);
+
+    for (int i = 0; auth_mechs[i]; i++) {
         if (!strcmp(auth_mechs[i]->name, name)) {
-            auth = auth_mechs[i]; break;
+            return auth = auth_mechs[i];
         }
     }
-    if (!auth) {
-        char errbuf[1024];
-        snprintf(errbuf, sizeof(errbuf),
-                 "Authorization mechanism %s not supported", name);
-        fatal(errbuf, EX_CONFIG);
-    }
 
-    return auth;
+    char errbuf[1024];
+    snprintf(errbuf, sizeof(errbuf),
+             "Authorization mechanism %s not supported", name);
+    fatal(errbuf, EX_CONFIG);
 }
 
 EXPORTED int auth_memberof(const struct auth_state *auth_state, const char *identifier)
