@@ -11,8 +11,11 @@
 /* need _GNU_SOURCE for RTLD_NEXT */
 #define _GNU_SOURCE
 
+#include <sys/types.h>
+
 #include <dlfcn.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -49,6 +52,7 @@ static FILE *out = NULL;
 static int is_opened = 0;
 static char *myident = NULL;
 static char hostname[HOST_NAME_MAX + 1] = {0};
+static pid_t pid = 0;
 
 EXPORTED void openlog(const char *ident, int option, int facility)
 {
@@ -62,6 +66,7 @@ EXPORTED void openlog(const char *ident, int option, int facility)
         if (out) {
             gethostname(hostname, sizeof(hostname));
             myident = ident ? strdup(ident) : NULL;
+            pid = getpid();
             is_opened = 1;
         }
     }
@@ -78,6 +83,7 @@ EXPORTED void closelog(void)
     free(myident);
     myident = NULL;
     memset(hostname, 0, sizeof(hostname));
+    pid = 0;
     is_opened = 0;
 }
 
@@ -91,7 +97,8 @@ static void fake_vsyslog(int priority __attribute__((unused)),
     if (!is_opened) return; /* no file to write to */
 
     strftime(timestamp, sizeof(timestamp), "%b %d %T", localtime(&now));
-    fprintf(out, "%s %s %s: ", timestamp, hostname, myident);
+    fprintf(out, "%s %s %s[%" PRIdMAX "]: ",
+                 timestamp, hostname, myident, (intmax_t) pid);
     errno = saved_errno;
 
     /* glibc handles %m in vfprintf() so we don't need to do
