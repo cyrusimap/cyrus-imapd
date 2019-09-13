@@ -826,6 +826,8 @@ static int jmap_upload(struct transaction_t *txn)
     const char **hdr;
     time_t now = time(NULL);
     struct appendstate as;
+    char *normalisedtype = NULL;
+    int rawmessage = 0;
 
     struct mailbox *mailbox = NULL;
     int r = 0;
@@ -869,6 +871,26 @@ static int jmap_upload(struct transaction_t *txn)
         txn->error.desc = "append_newstage() failed";
         ret = HTTP_SERVER_ERROR;
         goto done;
+    }
+
+    const char *type = "application/octet-stream";
+    if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
+        type = hdr[0];
+    }
+    /* Remove CFWS and encodings from type */
+    normalisedtype = charset_decode_mimeheader(type, CHARSET_KEEPCASE);
+
+    if (!strcasecmp(normalisedtype, "message/rfc822")) {
+        struct protstream *stream = prot_readmap(data, datalen);
+        r = message_copy_strict(stream, f, datalen, 0);
+        prot_free(stream);
+        if (r) {
+            txn->error.desc = error_message(r);
+            ret = HTTP_UNPROCESSABLE;
+            goto done;
+        }
+        rawmessage = 1;
+        goto wrotebody;
     }
 
     /* Create RFC 5322 header for resource */
@@ -915,10 +937,6 @@ static int jmap_upload(struct transaction_t *txn)
         fprintf(f, "Message-ID: %s\r\n", hdr[0]);
     }
 
-    const char *type = "application/octet-stream";
-    if ((hdr = spool_getheader(hdrcache, "Content-Type"))) {
-        type = hdr[0];
-    }
     fprintf(f, "Content-Type: %s\r\n", type);
 
     int domain = data_domain(data, datalen);
@@ -947,6 +965,9 @@ static int jmap_upload(struct transaction_t *txn)
 
     /* Write the data to the file */
     fwrite(data, datalen, 1, f);
+
+wrotebody:
+
     fclose(f);
 
     /* Prepare to append the message to the mailbox */
@@ -987,23 +1008,20 @@ static int jmap_upload(struct transaction_t *txn)
     time_to_rfc3339(now + 86400, datestr, RFC3339_DATETIME_MAX);
 
     char blob_id[JMAP_BLOBID_SIZE];
-    jmap_set_blobid(&body->content_guid, blob_id);
+    jmap_set_blobid(rawmessage ? &body->guid : &body->content_guid, blob_id);
 
     /* Create response object */
     json_t *resp = json_pack("{s:s}", "accountId", accountid);
     json_object_set_new(resp, "blobId", json_string(blob_id));
     json_object_set_new(resp, "size", json_integer(datalen));
     json_object_set_new(resp, "expires", json_string(datestr));
-
-    /* Remove CFWS and encodings from type */
-    char *normalisedtype = charset_decode_mimeheader(type, CHARSET_KEEPCASE);
     json_object_set_new(resp, "type", json_string(normalisedtype));
-    free(normalisedtype);
 
     /* Output the JSON object */
     ret = json_response(HTTP_CREATED, txn, resp);
 
 done:
+    free(normalisedtype);
     free(accountid);
     if (body) {
         message_free_body(body);
