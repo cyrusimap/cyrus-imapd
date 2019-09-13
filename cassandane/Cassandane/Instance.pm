@@ -103,6 +103,7 @@ sub new
         re_use_dir => 0,
         setup_mailbox => 1,
         persistent => 0,
+        authdaemon => 1,
         _children => {},
         _stopped => 0,
         description => 'unknown',
@@ -133,6 +134,8 @@ sub new
         if defined $params{setup_mailbox};
     $self->{persistent} = $params{persistent}
         if defined $params{persistent};
+    $self->{authdaemon} = $params{authdaemon}
+        if defined $params{authdaemon};
     $self->{description} = $params{description}
         if defined $params{description};
     $self->{pwcheck} = $params{pwcheck}
@@ -1104,13 +1107,15 @@ sub start
     # arrange for fakesaslauthd to be started by master
     # XXX make this run as a DAEMON rather than a START
     my $fakesaslauthd_socket = "$self->{basedir}/run/mux";
-    $self->add_start(
-        name => 'fakesaslauthd',
-        argv => [
-            abs_path('utils/fakesaslauthd'),
-            '-p', $fakesaslauthd_socket,
-        ],
-    );
+    if ($self->{authdaemon}) {
+        $self->add_start(
+            name => 'fakesaslauthd',
+            argv => [
+                abs_path('utils/fakesaslauthd'),
+                '-p', $fakesaslauthd_socket,
+            ],
+        );
+    }
 
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
     {
@@ -1144,12 +1149,14 @@ sub start
 
     # give fakesaslauthd a moment (but not more than 2s) to set up its
     # socket before anything starts trying to connect to services
-    my $tries = 0;
-    while (not -S $fakesaslauthd_socket && $tries < 2_000_000) {
-        $tries += usleep(10_000); # 10ms as us
+    if ($self->{authdaemon}) {
+        my $tries = 0;
+        while (not -S $fakesaslauthd_socket && $tries < 2_000_000) {
+            $tries += usleep(10_000); # 10ms as us
+        }
+        die "fakesaslauthd socket $fakesaslauthd_socket not ready after 2s!"
+            if not -S $fakesaslauthd_socket;
     }
-    die "fakesaslauthd socket $fakesaslauthd_socket not ready after 2s!"
-        if not -S $fakesaslauthd_socket;
 
     if ($created && $self->{setup_mailbox})
     {
