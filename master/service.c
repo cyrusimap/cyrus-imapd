@@ -619,14 +619,17 @@ int main(int argc, char **argv, char **envp)
             syslog(LOG_ERR, "can't duplicate accepted socket: %m");
             service_abort(EX_OSERR);
         }
+#if 0  /* XXX  This appears to have no valid use (and breaks wire protocols).
+          We should look into capturing stderr and sending it to syslog. */
         if (fd != STDERR_FILENO && dup2(fd, STDERR_FILENO) < 0) {
             syslog(LOG_ERR, "can't duplicate accepted socket: %m");
             service_abort(EX_OSERR);
         }
+#endif
 
         /* tcp only */
         if(soctype == SOCK_STREAM) {
-            if (fd > 2) close(fd);
+            if (fd > STDERR_FILENO) close(fd);
         }
 
         notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION);
