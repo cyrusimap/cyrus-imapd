@@ -1763,6 +1763,13 @@ sieve_libcyrus_sieve_la_SOURCES = \
 	sieve/variables.h \
 	sieve/varlist.c \
 	sieve/varlist.h
+
+if JMAP
+sieve_libcyrus_sieve_la_SOURCES += \
+	imap/json_support.c \
+	imap/json_support.h
+endif
+
 sieve_libcyrus_sieve_la_LIBADD = \
     sieve/libcyrus_sieve_lex.la \
     $(COM_ERR_LIBS) \

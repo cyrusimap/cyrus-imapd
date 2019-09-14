@@ -70,6 +70,7 @@
 #include "libconfig.h"
 #include "times.h"
 #include "tok.h"
+#include "imap/json_support.h"
 
 #define ERR_BUF_SIZE 1024
 
@@ -132,7 +133,7 @@ static test_t *build_ihave(sieve_script_t*, strarray_t *sa);
 static test_t *build_mbox_meta(sieve_script_t*, test_t *t, char *extname,
                                char *keyname, strarray_t *keylist);
 static test_t *build_duplicate(sieve_script_t*, test_t *t);
-static test_t *build_jmapquery(sieve_script_t*, const char *json);
+static test_t *build_jmapquery(sieve_script_t*, test_t *t, const char *json);
 
 void yyerror(sieve_script_t*, const char *msg);
 extern int yylex(void*, sieve_script_t*);
@@ -1295,7 +1296,10 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
                                                           $$, NULL, NULL, $2);
                                  }
 
-        | JMAPQUERY string       { $$ = build_jmapquery(sscript, $2); }
+        | JMAPQUERY string       {
+                                     $$ = new_test(JMAPQUERY, sscript);
+                                     $$ = build_jmapquery(sscript, $$, $2);
+                                 }
 
         | error                  { $$ = new_test(SFALSE, sscript); }
         ;
@@ -2735,19 +2739,124 @@ static test_t *build_duplicate(sieve_script_t *sscript, test_t *t)
     return t;
 }
 
-static test_t *build_jmapquery(sieve_script_t *sscript, const char *json)
+static int jmap_parse_condition(json_t *cond, strarray_t *path)
 {
-    test_t *t = new_test(JMAPQUERY, sscript);
+    json_t *val;
+    const char *field;
+
+    json_object_foreach(cond, field, val) {
+        if (!strcmp(field, "before") ||
+            !strcmp(field, "after")) {
+            if (!json_is_utcdate(val)) break;
+        }
+        else if (!strcmp(field, "minSize") ||
+                 !strcmp(field, "maxSize")) {
+            if (!json_is_integer(val)) break;
+        }
+        else if (!strcmp(field, "hasAttachment")) {
+            if (!json_is_boolean(val)) break;
+        }
+        else if (!strcmp(field, "text") ||
+                 !strcmp(field, "from") ||
+                 !strcmp(field, "to") ||
+                 !strcmp(field, "cc") ||
+                 !strcmp(field, "bcc") ||
+                 !strcmp(field, "subject") ||
+                 !strcmp(field, "body") ||
+                 !strcmp(field, "attachmentName") ||  /* FM-specific */
+                 !strcmp(field, "attachmentType") ||  /* FM-specific */
+                 (//jmap_is_using(req, JMAP_SEARCH_EXTENSION) &&
+                     !strcmp(field, "attachmentBody")) ||
+                 (//jmap_is_using(req, JMAP_MAIL_EXTENSION) &&
+                     (!strcmp(field, "fromContactGroupId") ||
+                      !strcmp(field, "toContactGroupId") ||
+                      !strcmp(field, "ccContactGroupId") ||
+                      !strcmp(field, "bccContactGroupId")))) {
+            if (!json_is_string(val)) break;
+        }
+        else if (!strcmp(field, "header")) {
+            size_t n = json_array_size(val);
+
+            if (n == 0 || n > 2) break;
+
+            for (n = 0; n < 2; n++) {
+                const char *s = json_string_value(json_array_get(val, n));
+
+                if (!s || !strlen(s)) {
+                    struct buf buf = BUF_INITIALIZER;
+
+                    buf_printf(&buf, "header[%lu]", n);
+                    strarray_pushm(path, buf_release(&buf));
+                    return 0;
+                }
+            }
+        }
+        else break;
+    }
+
+    if (field) {
+        strarray_push(path, field);
+        return 0;
+    }
+
+    return 1;
+}
+
+static int jmap_parse_filter(json_t *filter, strarray_t *path)
+{
+    json_t *arg, *val;
+    const char *s;
+    size_t i;
+
+    if (!JNOTNULL(filter) || !json_is_object(filter)) return 0;
+
+    arg = json_object_get(filter, "operator");
+    if (!arg) return jmap_parse_condition(filter, path);
+
+    strarray_push(path, "operator");
+    if (!json_is_string(arg)) return 0;
+
+    s = json_string_value(arg);
+    if (strcmp("AND", s) && strcmp("OR", s) && strcmp("NOT", s)) return 0;
+    free(strarray_pop(path));
+
+    arg = json_object_get(filter, "conditions");
+    if (!json_array_size(arg)) {
+        strarray_push(path, "conditions");
+        return 0;
+    }
+
+    json_array_foreach(arg, i, val) {
+        struct buf buf = BUF_INITIALIZER;
+
+        buf_printf(&buf, "conditions[%lu]", i);
+        strarray_pushm(path, buf_release(&buf));
+        if (!jmap_parse_filter(val, path)) return 0;
+        free(strarray_pop(path));
+    }
+
+    return 1;
+}
+
+static test_t *build_jmapquery(sieve_script_t *sscript,
+                               test_t *t, const char *json)
+{
+    strarray_t path = STRARRAY_INITIALIZER;
     json_error_t jerr;
 
-    if (!supported(SIEVE_CAPA_JMAPQUERY)) {
-        sieveerror_c(sscript, SIEVE_MISSING_REQUIRE, "x-cyrus-jmapquery");
-    }
+    assert(t && t->type == JMAPQUERY);
 
+    /* validate query */
     t->u.jquery = json_loads(json, 0, &jerr);
-    if (!t->u.jquery) {
-        sieveerror_f(sscript, "string '%s': not valid json", json);
+    if (!jmap_parse_filter(t->u.jquery, &path)) {
+        char *s = strarray_join(&path, "/");
+
+        if (s) sieveerror_f(sscript, "invalid jmapquery argument: '%s'", s);
+        else sieveerror_f(sscript, "invalid jmapquery format");
+
+        free(s);
     }
+    strarray_fini(&path);
 
     return t;
 }
