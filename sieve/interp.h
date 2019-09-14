@@ -72,6 +72,7 @@ struct sieve_interp {
     sieve_list_comparator *listcompare;
 
     sieve_duplicate_t *duplicate;
+    sieve_jmapquery *jmapquery;
 
     sieve_parse_error *err;
 

@@ -69,7 +69,6 @@ struct Test {
         test_t *t; /* not */
         strarray_t *sl; /* exists, ihave, valid_ext_list */
         testlist_t *tl; /* anyof, allof (bytecode generation only) */
-        json_t *jquery; /* jmapquery */
         struct { /* anyof, allof (bytecode parsing/eval only) */
             int ntests;   /* number of tests */
             int endtests; /* offset to end of tests */
@@ -117,6 +116,7 @@ struct Test {
             int seconds;
             int last;
         } dup;
+        char *jquery; /* jmapquery */
     } u;
 };
 

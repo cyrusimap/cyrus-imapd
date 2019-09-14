@@ -1532,6 +1532,19 @@ envelope_err:
         break;
     }
 
+    case BC_JMAPQUERY:
+        if (interp->jmapquery) {
+            const char *json = test.u.jquery;
+
+            if (requires & BFE_VARIABLES) {
+                json = parse_string(json, variables);
+            }
+
+            res = interp->jmapquery(sc, m, json);
+        }
+        else res = 0;
+        break;
+
     default:
 #if VERBOSE
         printf("WERT, can't evaluate if statement. %d is not a valid command",

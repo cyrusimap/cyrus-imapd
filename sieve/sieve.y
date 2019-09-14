@@ -2842,13 +2842,14 @@ static test_t *build_jmapquery(sieve_script_t *sscript,
                                test_t *t, const char *json)
 {
     strarray_t path = STRARRAY_INITIALIZER;
+    json_t *jquery;
     json_error_t jerr;
 
     assert(t && t->type == JMAPQUERY);
 
     /* validate query */
-    t->u.jquery = json_loads(json, 0, &jerr);
-    if (!jmap_parse_filter(t->u.jquery, &path)) {
+    jquery = json_loads(json, 0, &jerr);
+    if (!jmap_parse_filter(jquery, &path)) {
         char *s = strarray_join(&path, "/");
 
         if (s) sieveerror_f(sscript, "invalid jmapquery argument: '%s'", s);
@@ -2857,6 +2858,9 @@ static test_t *build_jmapquery(sieve_script_t *sscript,
         free(s);
     }
     strarray_fini(&path);
+
+    t->u.jquery = json_dumps(jquery, JSON_COMPACT);
+    json_decref(jquery);
 
     return t;
 }

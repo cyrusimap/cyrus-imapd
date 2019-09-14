@@ -160,10 +160,9 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
             buf_appendcstr(&buf, " servermetadata");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE)
             buf_appendcstr(&buf, " duplicate");
-#ifdef WITH_JMAP
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_JMAPQUERY)
+        if (i->jmapquery &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_JMAPQUERY))
             buf_appendcstr(&buf, " x-cyrus-jmapquery");
-#endif
 
         /* add match-types */
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)
@@ -377,6 +376,11 @@ EXPORTED int sieve_register_duplicate(sieve_interp_t *interp,
 
     interp->duplicate = d;
     return SIEVE_OK;
+}
+
+EXPORTED void sieve_register_jmapquery(sieve_interp_t *interp, sieve_jmapquery *f)
+{
+    interp->jmapquery = f;
 }
 
 EXPORTED void sieve_register_parse_error(sieve_interp_t *interp, sieve_parse_error *f)
@@ -693,11 +697,14 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
         break;
 
     case SIEVE_CAPA_LOG:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_LOG)) capa = 0;
+        if (!(interp->log &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_LOG))) capa = 0;
         break;
 
     case SIEVE_CAPA_JMAPQUERY:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_JMAPQUERY)) capa = 0;
+        if (!(interp->jmapquery &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_JMAPQUERY)))
+            capa = 0;
         break;
 
     default:

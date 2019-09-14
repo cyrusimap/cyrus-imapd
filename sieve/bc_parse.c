@@ -605,14 +605,8 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
 
 
     case BC_JMAPQUERY:            /* 30 */
-    {
-        char *json;
-        json_error_t jerr;
-
-        pos = bc_string_parse(bc, pos, &json);
-        test->u.jquery = json_loads(json, 0, &jerr);
+        pos = bc_string_parse(bc, pos, &test->u.jquery);
         break;
-    }
 
 
     default:

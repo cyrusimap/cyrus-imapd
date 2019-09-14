@@ -203,6 +203,10 @@ EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
                             (sieve_list_comparator *) &stub_generic);
 #endif
 
+#ifdef WITH_JMAP
+    sieve_register_jmapquery(interpreter, (sieve_jmapquery *) &stub_generic);
+#endif
+
     res = sieve_register_vacation(interpreter, &stub_vacation);
     if (res != SIEVE_OK) {
         syslog(LOG_ERR, "sieve_register_vacation() returns %d\n", res);

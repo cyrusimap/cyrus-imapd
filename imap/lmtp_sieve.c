@@ -1496,6 +1496,31 @@ static sieve_duplicate_t duplicate = {
     &sieve_duplicate_track,
 };
 
+#ifdef WITH_JMAP
+#include <jansson.h>
+
+static int jmapquery(void *sc  __attribute__((unused)),
+                     void *mc  __attribute__((unused)),
+                     const char *json)
+{
+    json_error_t jerr;
+    json_t *jquery;
+    int r;
+
+    /* Create Xapian index for message */
+
+    /* Create search_query from json */
+    jquery = json_loads(json, 0, &jerr);
+
+    /* Run query */
+    r = 1;
+
+    json_decref(jquery);
+
+    return r;
+}
+#endif
+
 static int sieve_parse_error_handler(int lineno, const char *msg,
                                      void *ic __attribute__((unused)),
                                      void *sc)
@@ -1595,6 +1620,9 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
 
 #ifdef WITH_DAV
     sieve_register_extlists(interp, &listvalidator, &listcompare);
+#endif
+#ifdef WITH_JMAP
+    sieve_register_jmapquery(interp, &jmapquery);
 #endif
     sieve_register_parse_error(interp, &sieve_parse_error_handler);
     sieve_register_execute_error(interp, &sieve_execute_error_handler);

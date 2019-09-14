@@ -90,6 +90,8 @@ typedef int sieve_list_validator(void *interp_context, const char *list);
 typedef int sieve_list_comparator(const char *text, size_t tlen,
                                   const char *list, strarray_t *match_vars,
                                   void *rock);
+typedef int sieve_jmapquery(void *script_context, void *message_context,
+                            const char *json);
 
 /* MUST keep this struct sync'd with bodypart in imap/message.h */
 typedef struct sieve_bodypart {
@@ -215,8 +217,9 @@ void sieve_register_body(sieve_interp_t *interp, sieve_get_body *f);
 void sieve_register_extlists(sieve_interp_t *interp,
                              sieve_list_validator *v, sieve_list_comparator *c);
                                 
-
 int sieve_register_duplicate(sieve_interp_t *interp, sieve_duplicate_t *d);
+
+void sieve_register_jmapquery(sieve_interp_t *interp, sieve_jmapquery *f);
 
 typedef int sieve_parse_error(int lineno, const char *msg,
                               void *interp_context,

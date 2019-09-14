@@ -401,6 +401,10 @@ void free_test(test_t *t)
         free(t->u.dup.idval);
         free(t->u.dup.handle);
         break;
+
+    case JMAPQUERY:
+        free(t->u.jquery);
+        break;
     }
 
     free(t);
