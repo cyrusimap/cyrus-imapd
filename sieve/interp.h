@@ -205,8 +205,12 @@ enum sieve_capa_flag {
     /* Log - x-cyrus-log */
     SIEVE_CAPA_LOG          = 1LL<<47,
 
-    /* Log - x-cyrus-jmapquery */
+    /* JMAP Query - x-cyrus-jmapquery */
+#ifdef WITH_JMAP
     SIEVE_CAPA_JMAPQUERY    = 1LL<<48
+#else
+    SIEVE_CAPA_JMAPQUERY    = 0LL<<48 /* disabled at compile-time */
+#endif
 };
 
 #define SIEVE_CAPA_ALL (SIEVE_CAPA_BASE           \

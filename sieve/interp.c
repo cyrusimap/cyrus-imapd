@@ -160,6 +160,10 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
             buf_appendcstr(&buf, " servermetadata");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DUPLICATE)
             buf_appendcstr(&buf, " duplicate");
+#ifdef WITH_JMAP
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_JMAPQUERY)
+            buf_appendcstr(&buf, " x-cyrus-jmapquery");
+#endif
 
         /* add match-types */
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_RELATIONAL)
