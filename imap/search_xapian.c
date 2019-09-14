@@ -1235,7 +1235,7 @@ static void optimise_nodes(struct opnode *parent, struct opnode *on)
     }
 }
 
-static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on, int opts)
+static xapian_query_t *opnode_to_query(xapian_db_t *db, struct opnode *on, int opts)
 {
     struct opnode *child;
     xapian_query_t *qq = NULL;
@@ -3760,13 +3760,10 @@ static int delete_user(const char *userid)
     char *activename = activefile_fname(mboxname);
     struct mappedfile *activefile = NULL;
     struct mboxlock *xapiandb_namelock = NULL;
-    char *namelock_fname = NULL;
-    int r = 0;
-
 
     /* Get an exclusive namelock */
-    namelock_fname = xapiandb_namelock_fname_from_userid(userid);
-    r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_EXCLUSIVE);
+    char *namelock_fname = xapiandb_namelock_fname_from_userid(userid);
+    int r = mboxname_lock(namelock_fname, &xapiandb_namelock, LOCK_EXCLUSIVE);
     if (r) {
         syslog(LOG_ERR, "Could not acquire shared namelock on %s\n",
                namelock_fname);
