@@ -411,10 +411,13 @@ static void print_test(test_t *test)
         break;
 
     case BC_JMAPQUERY: {
-        char *json = json_dumps(test->u.jquery, JSON_INDENT(2));
+        json_error_t jerr;
+        json_t *jquery = json_loads(test->u.jquery, 0, &jerr);
+        char *json = json_dumps(jquery, JSON_INDENT(2));
 
         printf("JMAPQUERY");
         print_string(" ", json);
+        json_decref(jquery);
         free(json);
         break;
     }
