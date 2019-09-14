@@ -534,7 +534,6 @@ struct accept {
     struct accept *next;
 };
 
-extern struct namespace_t namespace_default;
 extern struct namespace_t namespace_principal;
 extern struct namespace_t namespace_notify;
 extern struct namespace_t namespace_calendar;

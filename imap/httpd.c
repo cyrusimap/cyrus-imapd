@@ -542,7 +542,7 @@ static struct connect_params ws_params = {
 };
 
 /* Namespace to fetch static content from filesystem */
-struct namespace_t namespace_default = {
+static struct namespace_t namespace_default = {
     URL_NS_DEFAULT, 1, "default", "", NULL,
     http_allow_noauth, /*authschemes*/0,
     /*mbtype*/0,
