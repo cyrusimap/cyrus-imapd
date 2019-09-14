@@ -84,12 +84,18 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         unsigned long config_sieve_extensions =
             config_getbitfield(IMAPOPT_SIEVE_EXTENSIONS);
         struct buf buf = BUF_INITIALIZER;
+        int ext_pos;
 
         /* strarray of ManageSieve capability/value pairs */
         i->extensions = strarray_new();
 
-        /* Add EXTLISTS capability */
+        /* Add SIEVE capability */
         strarray_append(i->extensions, "SIEVE");
+
+        /* Add placeholder for Sieve extensions string */
+        ext_pos = strarray_append(i->extensions, NULL);
+
+        /* Build Sieve extensions string */
 
         /* add comparators */
         buf_setcstr(&buf, "comparator-i;ascii-numeric");
@@ -111,8 +117,13 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAPFLAGS))
             buf_appendcstr(&buf, " imapflags");
         if (i->notify &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY))
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY)) {
             buf_appendcstr(&buf, " notify enotify");
+
+            /* Add NOTIFY capability */
+            strarray_append(i->extensions, "NOTIFY");
+            strarray_append(i->extensions, "mailto");
+        }
         if (i->getinclude &&
             (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_INCLUDE))
             buf_appendcstr(&buf, " include");
@@ -121,6 +132,11 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
             buf_appendcstr(&buf, " editheader");
         if ((config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IHAVE))
             buf_appendcstr(&buf, " ihave");
+#if 0  /* Don't advertise this to ManageSieve clients -
+          We probably don't want end users adding this action themselves */
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_LOG)
+            buf_appendcstr(&buf, " x-cyrus-log");
+#endif
 
         /* add tests */
         if (i->getenvelope &&
@@ -152,8 +168,13 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REGEX)
             buf_appendcstr(&buf, " regex");
 #endif
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS)
+        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS) {
             buf_appendcstr(&buf, " extlists");
+
+            /* Add EXTLISTS capability */
+            strarray_append(i->extensions, "EXTLISTS");
+            strarray_append(i->extensions, "urn:ietf:params:sieve:addrbook");
+        }
 
         /* add misc extensions */
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_SUBADDRESS)
@@ -164,29 +185,11 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
             buf_appendcstr(&buf, " index");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VARIABLES)
             buf_appendcstr(&buf, " variables");
-
-        strarray_appendm(i->extensions, buf_release(&buf));
-
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_EXTLISTS) {
-            /* Add EXTLISTS capability */
-            strarray_append(i->extensions, "EXTLISTS");
-            strarray_append(i->extensions, "urn:ietf:params:sieve:addrbook");
-        }
-
-        if (i->notify &&
-            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_NOTIFY)) {
-            strarray_append(i->extensions, "NOTIFY");
-            strarray_append(i->extensions, "mailto");
-        }
-
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MAILBOXID)
             buf_appendcstr(&buf, " mailboxid");
 
-#if 0  // Don't advertise this to ManageSieve clients -
-       // We probably don't want end users adding this action themselves
-        if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_LOG)
-            buf_appendcstr(&buf, " x-cyrus-log");
-#endif
+        /* Set Sieve extensions string */
+        strarray_setm(i->extensions, ext_pos, buf_release(&buf));
     }
 
     return i->extensions;
