@@ -1,6 +1,6 @@
-/* jmap_mail.h -- Routines for handling JMAP mail messages
+/* json_support.c -- Helper functions for jansson and JSON
  *
- * Copyright (c) 1994-2018 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2019 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,30 +41,20 @@
  *
  */
 
-#ifndef JMAP_MAIL_H
-#define JMAP_MAIL_H
 
 #include <config.h>
 
-#include "hash.h"
-#include "http_jmap.h"
+#include <time.h>
+
 #include "json_support.h"
-#include "msgrecord.h"
 
-extern int jmap_email_find(jmap_req_t *req, const char *email_id,
-                           char **mboxnameptr, uint32_t *uidptr);
-extern int jmap_email_get_with_props(jmap_req_t *req, hash_table *props,
-                                     msgrecord_t *mr, json_t **msgp);
+int json_is_utcdate(json_t *json)
+{
+    const char *s = NULL;
+    struct tm date;
 
-extern int jmap_email_set(jmap_req_t *req);
+    if (!json_is_string(json)) return 0;
 
-extern void jmap_emailsubmission_init(jmap_settings_t *settings);
-extern void jmap_emailsubmission_capabilities(json_t *jcapabilities);
-
-extern void jmap_mailbox_init(jmap_settings_t *settings);
-extern void jmap_mailbox_capabilities(json_t *jcapabilities);
-
-extern int jmap_mailbox_find_role(jmap_req_t *req, const char *role,
-                                  char **mboxnameptr, char **uniqueid);
-
-#endif /* JMAP_MAIL_H */
+    s = strptime(json_string_value(json), "%Y-%m-%dT%H:%M:%SZ", &date);
+    return (s && *s == '\0');
+}

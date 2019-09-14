@@ -1570,8 +1570,7 @@ static void _emailsubmission_filter_parse(jmap_req_t *req __attribute__((unused)
         }
         else if (!strcmp(field, "before") ||
                  !strcmp(field, "after")) {
-            if (!json_is_string(arg) ||
-                !jmap_is_valid_utcdate(json_string_value(arg))) {
+            if (!json_is_utcdate(arg)) {
                 jmap_parser_invalid(parser, field);
             }
         }

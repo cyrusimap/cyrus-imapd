@@ -1299,7 +1299,9 @@ nodist_imap_httpd_SOURCES += \
 
 imap_libcyrus_imap_la_SOURCES += \
 	imap/jmap_util.c \
-	imap/jmap_util.h
+	imap/jmap_util.h \
+	imap/json_support.c \
+	imap/json_support.h
 
 imap_httpd_LDADD += $(LD_SIEVE_ADD)
 

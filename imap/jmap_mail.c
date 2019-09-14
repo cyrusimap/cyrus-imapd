@@ -2270,13 +2270,6 @@ static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
 }
 
 
-HIDDEN int jmap_is_valid_utcdate(const char *s)
-{
-    struct tm date;
-    s = strptime(s, "%Y-%m-%dT%H:%M:%SZ", &date);
-    return s && *s == '\0';
-}
-
 struct email_filterrock {
     struct carddav_db *carddavdb;
     char *addrbook;
@@ -2341,8 +2334,7 @@ static void _email_parse_filter(jmap_req_t *req,
         }
         else if (!strcmp(field, "before") ||
                  !strcmp(field, "after")) {
-            if (!json_is_string(arg) ||
-                !jmap_is_valid_utcdate(json_string_value(arg))) {
+            if (!json_is_utcdate(arg)) {
                 jmap_parser_invalid(parser, field);
             }
         }
@@ -8158,7 +8150,7 @@ static void _parse_email(json_t *jemail,
     }
     /* receivedAt */
     prop = json_object_get(jemail, "receivedAt");
-    if (json_is_string(prop) && jmap_is_valid_utcdate(json_string_value(prop))) {
+    if (json_is_utcdate(prop)) {
         time_from_iso8601(json_string_value(prop), &email->internaldate);
     }
     else if (JNOTNULL(prop)) {
@@ -10873,7 +10865,7 @@ static int jmap_email_import(jmap_req_t *req)
         /* receivedAt */
         json_t *jrecv = json_object_get(jemail_import, "receivedAt");
         if (JNOTNULL(jrecv)) {
-            if (!json_is_string(jrecv) || !jmap_is_valid_utcdate(json_string_value(jrecv))) {
+            if (!json_is_utcdate(jrecv)) {
                 jmap_parser_invalid(&parser, "receivedAt");
             }
         }
@@ -11410,8 +11402,7 @@ static void _email_copy_validate_props(json_t *jemail, json_t **err)
             }
         }
         else if (!strcmp(pname, "receivedAt")) {
-            if (!json_is_string(prop) ||
-                !jmap_is_valid_utcdate(json_string_value(prop))) {
+            if (!json_is_utcdate(prop)) {
                 jmap_parser_invalid(&myparser, "receivedAt");
             }
         }

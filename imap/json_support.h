@@ -1,6 +1,6 @@
 /* json_support.h -- Helper functions for jansson and JSON
  *
- * Copyright (c) 1994-2015 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2019 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -88,5 +88,7 @@ n = json_object_iter_next(object, json_object_key_to_iter(key)))
              && (value = json_array_get(array, index));         \
          index++)
 #endif /* json_array_foreach */
+
+EXPORTED int json_is_utcdate(json_t *json);
 
 #endif /* JSON_SUPPORT_H */

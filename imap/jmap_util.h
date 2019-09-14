@@ -78,8 +78,6 @@ extern char *jmap_pointer_decode(const char *src, size_t len);
 /* Remove all properties in jobj that have no key in props */
 extern void jmap_filterprops(json_t *jobj, hash_table *props);
 
-extern int json_is_utcdate(json_t *json);
-
 extern void jmap_emailsubmission_envelope_to_smtp(smtp_envelope_t *smtpenv,
                                                   json_t *env);
 

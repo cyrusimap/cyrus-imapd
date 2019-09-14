@@ -259,16 +259,6 @@ EXPORTED void jmap_filterprops(json_t *jobj, hash_table *props)
     }
 }
 
-EXPORTED int json_is_utcdate(json_t *json)
-{
-    const char *date = json_string_value(json);
-    struct offsettime t;
-
-    return (date &&
-            (offsettime_from_iso8601(date, &t) == (int) strlen(date)) &&
-            (t.tm_off == 0));
-}
-
 static void address_to_smtp(smtp_addr_t *smtpaddr, json_t *addr)
 {
     smtpaddr->addr = xstrdup(json_string_value(json_object_get(addr, "email")));
