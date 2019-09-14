@@ -485,11 +485,6 @@ enum {
     COLLATION_OCTET
 };
 
-struct collation_t {
-    const char *name;
-    unsigned value;
-};
-
 struct text_match_t {
     xmlChar *text;
     unsigned negate    : 1;
