@@ -225,9 +225,11 @@ sub test_splitbrain_masterexpunge
     xlog "After replication, the replica should have the same 5 messages";
     $self->check_messages(\%exp, store => $replica_store);
 
-    # We should have generated a SYNCERROR or two
-    my @lines = $self->{instance}->getsyslog();
-    $self->assert_matches(qr/SYNCERROR: guid mismatch/, "@lines");
+    # We should have generated a SYNCERROR/SYNCNOTICE or two
+    my @master_lines = $self->{instance}->getsyslog();
+    $self->assert_matches(qr/SYNC(?:ERROR|NOTICE): guid mismatch/, "@master_lines");
+    my @replica_lines = $self->{replica}->getsyslog();
+    $self->assert_matches(qr/SYNC(?:ERROR|NOTICE): guid mismatch/, "@replica_lines");
 }
 
 #
