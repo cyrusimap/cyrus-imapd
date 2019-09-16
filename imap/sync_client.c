@@ -122,10 +122,12 @@ static void shut_down(int code)
     exit(code);
 }
 
-static int usage(const char *name)
+static int usage(const char *name, const char *message)
 {
+    if (message)
+        fprintf(stderr, "%s\n\n", message);
     fprintf(stderr,
-            "usage: %s -S <servername> [-C <alt_config>] [-r] [-v] mailbox...\n", name);
+            "Usage: %s -S <servername> [-C <alt_config>] [-r] [-v] mailbox...\n", name);
 
     exit(EX_USAGE);
 }
@@ -953,31 +955,31 @@ int main(int argc, char **argv)
 
         case 'R':
             if (mode != MODE_UNKNOWN)
-                fatal("Mutually exclusive options defined", EX_USAGE);
+                usage("sync_client", "Mutually exclusive options defined");
             mode = MODE_REPEAT;
             break;
 
         case 'A':
             if (mode != MODE_UNKNOWN)
-                fatal("Mutually exclusive options defined", EX_USAGE);
+                usage("sync_client", "Mutually exclusive options defined");
             mode = MODE_ALLUSER;
             break;
 
         case 'u':
             if (mode != MODE_UNKNOWN)
-                fatal("Mutually exclusive options defined", EX_USAGE);
+                usage("sync_client", "Mutually exclusive options defined");
             mode = MODE_USER;
             break;
 
         case 'm':
             if (mode != MODE_UNKNOWN)
-                fatal("Mutually exclusive options defined", EX_USAGE);
+                usage("sync_client", "Mutually exclusive options defined");
             mode = MODE_MAILBOX;
             break;
 
         case 's':
             if (mode != MODE_UNKNOWN)
-                fatal("Mutually exclusive options defined", EX_USAGE);
+                usage("sync_client", "Mutually exclusive options defined");
             mode = MODE_META;
             break;
 
@@ -1000,12 +1002,12 @@ int main(int argc, char **argv)
             break;
 
         default:
-            usage("sync_client");
+            usage("sync_client", NULL);
         }
     }
 
     if (mode == MODE_UNKNOWN)
-        fatal("No replication mode specified", EX_USAGE);
+        usage("sync_client", "No replication mode specified");
 
     if (verbose) flags |= SYNC_FLAG_VERBOSE;
     if (verbose_logging) flags |= SYNC_FLAG_LOGGING;
