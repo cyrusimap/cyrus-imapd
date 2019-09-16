@@ -10671,6 +10671,9 @@ static void _email_import(jmap_req_t *req,
     struct _email_import_rock content = { BUF_INITIALIZER };
     int has_attachment = 0;
 
+    /* Force write locks on mailboxes. */
+    req->force_openmbox_rw = 1;
+
     /* Gather keywords */
     strarray_t keywords = STRARRAY_INITIALIZER;
     const json_t *val;
