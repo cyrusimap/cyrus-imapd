@@ -92,6 +92,7 @@ struct scan_rock {
     struct infected_mbox *i_mbox;
     struct searchargs *searchargs;
     struct index_state *idx_state;
+    struct namespace *namespace;
     uint32_t msgno;
     char userid[MAX_MAILBOX_NAME];
     int user_infected;
@@ -279,6 +280,8 @@ int main (int argc, char *argv[])
     char *search_str = NULL;
     struct scan_rock srock;
     struct buf notification_template = BUF_INITIALIZER;
+    struct namespace scan_namespace;
+    int r;
 
     while ((option = getopt(argc, argv, "C:s:rnv")) != EOF) {
         switch (option) {
@@ -320,20 +323,20 @@ int main (int argc, char *argv[])
         }
     }
 
+    /* Set namespace -- force standard (internal) */
+    if ((r = mboxname_init_namespace(&scan_namespace, 1)) != 0) {
+        syslog(LOG_ERR, "%s", error_message(r));
+        fatal(error_message(r), EX_CONFIG);
+    }
+    srock.namespace = &scan_namespace;
+
     if (search_str) {
-        int r, c;
-        struct namespace scan_namespace;
+        int c;
         struct protstream *scan_in = NULL;
         struct protstream *scan_out = NULL;
 
         scan_in = prot_readmap(search_str, strlen(search_str)+1); /* inc NUL */
         scan_out = prot_new(2, 1);
-
-        /* Set namespace -- force standard (internal) */
-        if ((r = mboxname_init_namespace(&scan_namespace, 1)) != 0) {
-            syslog(LOG_ERR, "%s", error_message(r));
-            fatal(error_message(r), EX_CONFIG);
-        }
 
         srock.searchargs = new_searchargs("*", GETSEARCH_CHARSET_KEYWORD,
                                           &scan_namespace, NULL, NULL, 1);
@@ -541,9 +544,15 @@ unsigned virus_check(struct mailbox *mailbox,
         /* print header if this is the first infection seen for this user */
         if (verbose || !srock->user_infected) print_header();
 
-        printf("%-40s\t%10u\t%6s\t%s\n", mailbox->name, record->uid,
+        char *extname = mboxname_to_external(mailbox->name,
+                                             srock->namespace,
+                                             NULL);
+
+        printf("%-40s\t%10u\t%6s\t%s\n", extname, record->uid,
                (record->system_flags & FLAG_SEEN) ? "READ" : "UNREAD",
                virname);
+
+        free(extname);
 
         srock->user_infected ++;
         srock->total_infected ++;
