@@ -70,6 +70,12 @@ my %eicar_attached = (
         . "--boundary\r\n",
 );
 
+my %custom_header = (
+    'extra_headers' => [
+        [ 'x-delete-me' => 'please' ],
+    ],
+);
+
 sub new
 {
     my $class = shift;
@@ -97,7 +103,8 @@ sub test_aaasetup
     $self->assert(1);
 }
 
-sub test_remove_infected
+# This test uses the AV engine, which can be very slow to initialise.
+sub test_remove_infected_slow
     :needs_dependency_clamav
 {
     my ($self) = @_;
@@ -177,6 +184,9 @@ sub test_remove_infected
     $self->check_messages(\%shared_exp, ( keyed_on => 'uid' ));
 }
 
+# This test uses the '-s search-string' invocation, which is much faster
+# than waiting for the AV engine to load when we just care about whether
+# the notification gets sent
 sub test_notify_deleted
     :needs_dependency_clamav
 {
@@ -187,13 +197,14 @@ sub test_notify_deleted
     # put some test messages in INBOX (and verify)
     $self->{store}->set_folder("INBOX");
     my %cass_exp;
-    $cass_exp{1} = $self->make_message("eicar attached 1", uid => 1, %eicar_attached);
-    $cass_exp{2} = $self->make_message("eicar attached 2", uid => 2, %eicar_attached);
+    $cass_exp{1} = $self->make_message("custom header 1", uid => 1, %custom_header);
+    $cass_exp{2} = $self->make_message("custom header 2", uid => 2, %custom_header);
     $self->check_messages(\%cass_exp, ( keyed_on => 'uid' ));
 
     # run cyr_virusscan
     $self->{instance}->run_command({ cyrus => 1, },
-                                   'cyr_virusscan', '-r', '-n');
+                                   'cyr_virusscan', '-r', '-n',
+                                   '-s', 'header "x-delete-me" "please"');
 
     # let's see what's in there now
     my $found_notifications = 0;
@@ -221,8 +232,9 @@ sub test_notify_deleted
                 $self->assert_matches(qr/IMAP UID: $uid/, $body);
             }
 
-            # make sure the virus was identified correctly
-            $self->assert_matches(qr/Eicar-Test-Signature/, $body);
+            # make sure the message was removed for the reason we expect
+            $self->assert_matches(qr/Cyrus Administrator Targeted Removal/,
+                                  $body);
         }
     }
     $self->{store}->read_end();
@@ -231,6 +243,9 @@ sub test_notify_deleted
     $self->assert_num_equals(1, $found_notifications);
 }
 
+# This test uses the '-s search-string' invocation, which is much faster
+# than waiting for the AV engine to load when we just care about whether
+# the custom notification gets sent
 sub test_custom_notify_deleted
     :needs_dependency_clamav :NoStartInstances
 {
@@ -249,13 +264,14 @@ sub test_custom_notify_deleted
     # put some test messages in INBOX (and verify)
     $self->{store}->set_folder("INBOX");
     my %cass_exp;
-    $cass_exp{1} = $self->make_message("eicar attached 1", uid => 1, %eicar_attached);
-    $cass_exp{2} = $self->make_message("eicar attached 2", uid => 2, %eicar_attached);
+    $cass_exp{1} = $self->make_message("custom header 1", uid => 1, %custom_header);
+    $cass_exp{2} = $self->make_message("custom header 2", uid => 2, %custom_header);
     $self->check_messages(\%cass_exp, ( keyed_on => 'uid' ));
 
     # run cyr_virusscan
     $self->{instance}->run_command({ cyrus => 1, },
-                                   'cyr_virusscan', '-r', '-n');
+                                   'cyr_virusscan', '-r', '-n',
+                                   '-s', 'header "x-delete-me" "please"');
 
     # let's see what's in there now
     my $found_notifications = 0;
@@ -290,8 +306,9 @@ sub test_custom_notify_deleted
                 $self->assert_matches(qr/IMAP UID: $uid/, $body);
             }
 
-            # make sure the virus was identified correctly
-            $self->assert_matches(qr/Eicar-Test-Signature/, $body);
+            # make sure the message was removed for the reason we expect
+            $self->assert_matches(qr/Cyrus Administrator Targeted Removal/,
+                                  $body);
 
             # make sure our custom notification template was used
             $self->assert_matches(qr/^custom notification!/, $body);
