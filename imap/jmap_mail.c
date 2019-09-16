@@ -6685,6 +6685,7 @@ static void _email_append(jmap_req_t *req,
                           time_t internaldate,
                           const char *snoozed,
                           int has_attachment,
+                          const char *sourcefile,
                           int(*writecb)(jmap_req_t* req, FILE* fp, void* rock, json_t **err),
                           void *rock,
                           struct email_append_detail *detail,
@@ -6782,17 +6783,26 @@ static void _email_append(jmap_req_t *req,
     r = jmap_openmbox(req, mboxname, &mbox, 1);
     if (r) goto done;
 
-    /* Write the message to the filesystem */
-    if (!(f = append_newstage(mbox->name, internaldate, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", mbox->name);
-        r = HTTP_SERVER_ERROR;
-        goto done;
+    if (sourcefile) {
+        if (!(f = append_newstage_full(mbox->name, internaldate, 0, &stage, sourcefile))) {
+            syslog(LOG_ERR, "append_newstage(%s) failed", mbox->name);
+            r = HTTP_SERVER_ERROR;
+            goto done;
+        }
     }
-    r = writecb(req, f, rock, err);
-    if (r) goto done;
-    if (fflush(f)) {
-        r = IMAP_IOERROR;
-        goto done;
+    else {
+        /* Write the message to the filesystem */
+        if (!(f = append_newstage(mbox->name, internaldate, 0, &stage))) {
+            syslog(LOG_ERR, "append_newstage(%s) failed", mbox->name);
+            r = HTTP_SERVER_ERROR;
+            goto done;
+        }
+        r = writecb(req, f, rock, err);
+        if (r) goto done;
+        if (fflush(f)) {
+            r = IMAP_IOERROR;
+            goto done;
+        }
     }
     fseek(f, 0L, SEEK_END);
     len = ftell(f);
@@ -8659,7 +8669,7 @@ static void _email_create(jmap_req_t *req,
 
     _email_append(req, jmailboxids, &keywords, email.internaldate, email.snoozed,
                   config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT) ?
-                  email.has_attachment : 0, _email_to_mime, &email,
+                  email.has_attachment : 0, NULL, _email_to_mime, &email,
                   &detail, set_err);
     if (*set_err) goto done;
 
@@ -10659,6 +10669,7 @@ static void _email_import(jmap_req_t *req,
     json_t *jmailbox_ids = json_object_get(jemail_import, "mailboxIds");
     char *mboxname = NULL;
     struct _email_import_rock content = { BUF_INITIALIZER };
+    int has_attachment = 0;
 
     /* Gather keywords */
     strarray_t keywords = STRARRAY_INITIALIZER;
@@ -10699,12 +10710,27 @@ static void _email_import(jmap_req_t *req,
 
     /* Lookup blob */
     struct mailbox *mbox = NULL;
+    msgrecord_t *mr = NULL;
+
+    /* see if we can get a direct email! */
+    const char *sourcefile = NULL;
+    int r = jmap_findblob_exact(req, NULL/*accountid*/, blob_id,
+                                &mbox, &mr);
+    if (!r) r = msgrecord_get_fname(mr, &sourcefile);
+    if (!r) r = msgrecord_get_body(mr, &content.buf);
+    if (!r) goto gotrecord;
+
+    /* better clean up before we go the slow path */
+    buf_reset(&content.buf);
+    sourcefile = NULL;
+    msgrecord_unref(&mr);
+    jmap_closembox(req, &mbox);
+
     struct body *body = NULL;
     const struct body *part = NULL;
-    msgrecord_t *mr = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
-    int r = jmap_findblob(req, NULL/*accountid*/, blob_id,
-                          &mbox, &mr, &body, &part, &msg_buf);
+    r = jmap_findblob(req, NULL/*accountid*/, blob_id,
+                      &mbox, &mr, &body, &part, &msg_buf);
     if (r) {
         if (r == IMAP_NOTFOUND || r == IMAP_PERMISSION_DENIED)
             *err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
@@ -10737,8 +10763,12 @@ static void _email_import(jmap_req_t *req,
         buf_setmap(&content.buf, blob_base, blob_len);
     }
 
+    message_free_body(body);
+    free(body);
+
+gotrecord:
+
     /* Determine $hasAttachment flag */
-    int has_attachment = 0;
     if (config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT)) {
         /* Parse email */
         json_t *email = NULL;
@@ -10757,14 +10787,13 @@ static void _email_import(jmap_req_t *req,
         json_decref(email);
     }
 
-    msgrecord_unref(&mr);
-    jmap_closembox(req, &mbox);
-    message_free_body(body);
-    free(body);
-
     /* Write the message to the file system */
     _email_append(req, jmailbox_ids, &keywords, internaldate, snoozed,
-                  has_attachment, _email_import_cb, &content, &detail, err);
+                  has_attachment, sourcefile, _email_import_cb, &content, &detail, err);
+
+    msgrecord_unref(&mr);
+    jmap_closembox(req, &mbox);
+
     if (*err) goto done;
 
     *new_email = json_pack("{s:s, s:s, s:s, s:i}",
