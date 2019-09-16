@@ -874,13 +874,13 @@ static int jmap_upload(struct transaction_t *txn)
         struct protstream *stream = prot_readmap(data, datalen);
         r = message_copy_strict(stream, f, datalen, 0);
         prot_free(stream);
-        if (r) {
-            txn->error.desc = error_message(r);
-            ret = HTTP_UNPROCESSABLE;
-            goto done;
+        if (!r) {
+            rawmessage = 1;
+            goto wrotebody;
         }
-        rawmessage = 1;
-        goto wrotebody;
+        // otherwise we gotta clean up and make it an attachment
+        ftruncate(fileno(f), 0L);
+        fseek(f, 0L, SEEK_SET);
     }
 
     /* Create RFC 5322 header for resource */
