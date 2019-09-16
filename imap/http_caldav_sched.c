@@ -59,6 +59,7 @@
 #include "http_dav.h"
 #include "http_proxy.h"
 #include "jmap_ical.h"
+#include "jmap_util.h"
 #include "notify.h"
 #include "crc32.h"
 #include "smtpclient.h"
@@ -622,22 +623,50 @@ static int imip_send_sendmail(icalcomponent *ical, const char *sender,
 
 
 /* Send an iMIP request for attendees in 'ical' */
-static int imip_send(icalcomponent *ical, const char *sender,
-                     const char *recipient, unsigned is_update)
+static int imip_send(struct sched_data *sched_data,
+                     const char *sender, const char *recipient)
 {
     const char *notifier = config_getstring(IMAPOPT_IMIPNOTIFIER);
 
     syslog(LOG_DEBUG, "imip_send(%s)", recipient);
 
     /* if no notifier, fall back to sendmail */
-    if (!notifier) return imip_send_sendmail(ical, sender, recipient, is_update);
+    if (!notifier) {
+        return imip_send_sendmail(sched_data->itip,
+                                  sender, recipient, sched_data->is_update);
+    }
 
-    const char *ical_str = icalcomponent_as_ical_string(ical);
-    json_t *val = json_pack("{s:s s:s s:s s:b}",
+    const char *ical_str = icalcomponent_as_ical_string(sched_data->itip);
+    json_t *jsevent, *patch;
+
+    if (sched_data->oldical) {
+        jsevent = jmapical_tojmap(sched_data->oldical, NULL);
+
+        if (sched_data->newical) {
+            /* Updated event */
+            json_t *new_jsevent = jmapical_tojmap(sched_data->newical, NULL);
+
+            patch = jmap_patchobject_create(jsevent, new_jsevent);
+            json_decref(new_jsevent);
+        }
+        else {
+            /* Canceled event */
+            patch = json_null();
+        }
+    }
+    else {
+        /* New event */
+        jsevent = json_null();
+        patch = jmapical_tojmap(sched_data->newical, NULL);
+    }
+
+    json_t *val = json_pack("{s:s s:s s:s s:o s:o s:b}",
                             "recipient", recipient,
                             "sender", sender,
                             "ical", ical_str,
-                            "is_update", is_update);
+                            "jsevent", jsevent,
+                            "patch", patch,
+                            "is_update", sched_data->is_update);
     char *serial = json_dumps(val, JSON_COMPACT);
     // XXX: should we be replacing httpd_userid with sender?
     notify(notifier, "IMIP", NULL, httpd_userid, NULL, 0, NULL, serial, NULL);
@@ -1098,7 +1127,7 @@ static void sched_deliver_remote(const char *sender, const char *recipient,
         }
     }
     else {
-        r = imip_send(sched_data->itip, sender, recipient, sched_data->is_update);
+        r = imip_send(sched_data, sender, recipient);
         if (!r) {
             sched_data->status =
                 sched_data->ischedule ? REQSTAT_SENT : SCHEDSTAT_SENT;
@@ -2523,7 +2552,7 @@ static void schedule_full_cancel(const char *sender, const char *attendee,
 
     if (do_send) {
         struct sched_data sched =
-            { 0, 0, 0, itip, ICAL_SCHEDULEFORCESEND_NONE, NULL };
+            { 0, 0, 0, itip, oldical, newical, ICAL_SCHEDULEFORCESEND_NONE, NULL };
         sched_deliver(sender, attendee, &sched, httpd_authstate);
     }
 
@@ -2570,7 +2599,7 @@ static void schedule_sub_cancels(const char *sender, const char *attendee,
 
     if (do_send) {
         struct sched_data sched =
-            { 0, 0, 0, itip, ICAL_SCHEDULEFORCESEND_NONE, NULL };
+            { 0, 0, 0, itip, oldical, newical, ICAL_SCHEDULEFORCESEND_NONE, NULL };
         sched_deliver(sender, attendee, &sched, httpd_authstate);
 
     }
@@ -2652,7 +2681,8 @@ static void schedule_sub_updates(const char *sender, const char *attendee,
     }
 
     if (do_send) {
-        struct sched_data sched = { 0, 0, is_update, itip, force_send, NULL };
+        struct sched_data sched =
+            { 0, 0, is_update, itip, oldical, newical, force_send, NULL };
         sched_deliver(sender, attendee, &sched, httpd_authstate);
         update_attendee_status(newical, &recurids, attendee, sched.status);
     }
@@ -2738,7 +2768,8 @@ static void schedule_full_update(const char *sender, const char *attendee,
     }
 
     if (do_send) {
-        struct sched_data sched = { 0, 0, is_update, itip, force_send, NULL };
+        struct sched_data sched =
+            { 0, 0, is_update, itip, oldical, newical, force_send, NULL };
         sched_deliver(sender, attendee, &sched, httpd_authstate);
 
         update_attendee_status(newical, NULL, attendee, sched.status);
@@ -3218,7 +3249,8 @@ void sched_reply(const char *userid, const char *attendee,
     syslog(LOG_NOTICE, "iTIP scheduling reply from %s to %s",
            attendee, reply.organizer ? reply.organizer : "<unknown>");
     if (reply.do_send) {
-        struct sched_data sched = { 0, 1, 0, reply.itip, reply.force_send, NULL };
+        struct sched_data sched =
+            { 0, 1, 0, reply.itip, oldical, newical, reply.force_send, NULL };
         sched_deliver(attendee, reply.organizer, &sched, httpd_authstate);
         update_organizer_status(newical, reply.didparts, sched.status);
     }

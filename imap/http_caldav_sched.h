@@ -81,6 +81,8 @@ struct sched_data {
     unsigned is_reply;
     unsigned is_update;
     icalcomponent *itip;
+    icalcomponent *oldical;
+    icalcomponent *newical;
     icalparameter_scheduleforcesend force_send;
     const char *status;
 };
