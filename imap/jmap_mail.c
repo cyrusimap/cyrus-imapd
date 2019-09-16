@@ -942,6 +942,9 @@ static int _email_mailboxes_cb(const conv_guidrec_t *rec, void *rock)
     r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
     if (r) return r;
 
+    // we only want regular mailboxes!
+    if (mbox->mbtype & MBTYPES_NONIMAP) goto done;
+
     r = msgrecord_find(mbox, rec->uid, &mr);
     if (r) goto done;
 
