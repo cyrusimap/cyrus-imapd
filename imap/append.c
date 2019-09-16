@@ -313,8 +313,8 @@ EXPORTED int append_abort(struct appendstate *as)
  * with the file for the given mailboxname and returns the open file
  * so it can double as the spool file
  */
-EXPORTED FILE *append_newstage(const char *mailboxname, time_t internaldate,
-                      int msgnum, struct stagemsg **stagep)
+EXPORTED FILE *append_newstage_full(const char *mailboxname, time_t internaldate,
+                      int msgnum, struct stagemsg **stagep, const char *sourcefile)
 {
     struct stagemsg *stage;
     char stagedir[MAX_MAILBOX_PATH+1], stagefile[MAX_MAILBOX_PATH+1];
@@ -344,7 +344,19 @@ EXPORTED FILE *append_newstage(const char *mailboxname, time_t internaldate,
 
     /* create this file and put it into stage->parts[0] */
     unlink(stagefile);
-    f = fopen(stagefile, "w+");
+    if (sourcefile) {
+        r = mailbox_copyfile(sourcefile, stagefile, 0);
+        if (r) {
+            syslog(LOG_ERR, "couldn't copy stagefile '%s' for mbox: '%s': %s",
+                   sourcefile, mailboxname, error_message(r));
+            free(stage);
+            return NULL;
+        }
+        f = fopen(stagefile, "r+");
+    }
+    else {
+        f = fopen(stagefile, "w+");
+    }
     if (!f) {
         if (mkdir(stagedir, 0755) != 0) {
             syslog(LOG_ERR, "couldn't create stage directory: %s: %m",

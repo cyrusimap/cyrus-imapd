@@ -113,8 +113,10 @@ extern int append_commit(struct appendstate *as);
 extern int append_abort(struct appendstate *as);
 
 /* creates a new stage and returns stage file corresponding to mailboxname */
-extern FILE *append_newstage(const char *mailboxname, time_t internaldate,
-                             int msgnum, struct stagemsg **stagep);
+extern FILE *append_newstage_full(const char *mailboxname, time_t internaldate,
+                                  int msgnum, struct stagemsg **stagep,
+                                  const char *sourcefile);
+#define append_newstage(m, i, n, s) append_newstage_full((m), (i), (n), (s), NULL)
 
 /* adds a new mailbox to the stage initially created by append_newstage() */
 extern int append_fromstage(struct appendstate *mailbox, struct body **body,
