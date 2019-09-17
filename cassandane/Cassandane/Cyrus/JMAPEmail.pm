@@ -3119,8 +3119,7 @@ sub test_email_set_create_snooze
     $msg = $res->[0][1]->{list}[0];
     $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
     $self->assert_equals(JSON::true, $msg->{mailboxIds}{"$draftsId"});
-    $self->assert_num_equals(1, scalar keys %{$msg->{keywords}});
-    $self->assert_equals(JSON::true, $msg->{keywords}{'$awakened'});
+    $self->assert_num_equals(0, scalar keys %{$msg->{keywords}});
     $self->assert_null($msg->{snoozed});
 }
 
@@ -3340,7 +3339,10 @@ sub test_replication_email_set_update_snooze
     $res = $jmap->CallMethods([
         ['Email/set', {
             update => { $emailId => {
-                "snoozed" => { "until" => $datestr },
+                "snoozed" => {
+                    "until" => $datestr,
+                    "setKeywords" => { '$awakened' => $JSON::true }
+                },
             }}
         }, 'R5']
     ]);
