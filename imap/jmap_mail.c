@@ -4329,7 +4329,6 @@ struct email_getargs {
     short fetch_html_body;
     short fetch_all_body;
     size_t max_body_bytes;
-    char *snoozed_uniqueid;
     /* Request-scoped context */
     struct email_getcontext ctx;
 };
@@ -4340,7 +4339,6 @@ struct email_getargs {
         NULL, \
         PTRARRAY_INITIALIZER, \
         PTRARRAY_INITIALIZER, \
-        0, \
         0, \
         0, \
         0, \
@@ -4375,8 +4373,6 @@ static void _email_getargs_fini(struct email_getargs *args)
     }
     ptrarray_fini(&args->want_bodyheaders);
     _email_getcontext_fini(&args->ctx);
-
-    free(args->snoozed_uniqueid);
 }
 
 /* A wrapper to aggregate JMAP keywords over a set of message records.
@@ -6272,10 +6268,6 @@ static int jmap_email_get(jmap_req_t *req)
         if (args.bodyprops->size == 0) {
             _email_init_default_props(args.bodyprops);
         }
-    }
-
-    if (jmap_wantprop(args.props, "snoozed")) {
-        jmap_mailbox_find_role(req, "snoozed", NULL, &args.snoozed_uniqueid);
     }
 
     if (_isthreadsonly(req->args))
@@ -9050,6 +9042,9 @@ static void _email_update_parse(json_t *jemail,
 
     /* Is snoozed being changed? */
     json_t *snoozed = json_object_get(jemail, "snoozed");
+    if (!snoozed) {
+        /* XXX  Need to handle patching of snooze */
+    }
     if (snoozed) {
         if (!bulk->snoozed_uniqueid) {
             jmap_mailbox_find_role(bulk->req, "snoozed",
