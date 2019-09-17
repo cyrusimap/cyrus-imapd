@@ -953,7 +953,6 @@ static void process_futurerelease(struct mailbox *mailbox,
 static void process_snoozed(struct mailbox *mailbox,
                             struct index_record *record, time_t runtime)
 {
-    const char *annot = IMAP_ANNOT_NS "snoozed";
     struct buf buf = BUF_INITIALIZER;
     msgrecord_t *mr = NULL;
     mbname_t *mbname = NULL;
@@ -1021,9 +1020,6 @@ static void process_snoozed(struct mailbox *mailbox,
     /* Fetch annotations */
     r = msgrecord_extract_annots(mr, &annots);
     if (r) goto done;
-
-    /* Remove snoozed from the annotations */
-    clearentryatt(&annots, annot, "value.shared");
 
     /* Determine destination mailbox of awakened email */
     destmboxid = json_object_get(snoozed, "moveToMailboxId");

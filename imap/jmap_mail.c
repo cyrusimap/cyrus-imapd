@@ -5152,9 +5152,9 @@ static int _email_get_meta(jmap_req_t *req,
         int r;
 
         r = msgrecord_get_mailbox(msg->mr, &mailbox);
-        if (!r && (mailbox->i.options & OPT_IMAP_HAS_ALARMS) &&
-            !strcmp(mailbox->uniqueid, args->snoozed_uniqueid)) {
+        if (!r) {
             /* get the snoozed annotation */
+            /* XXX  Need to check ALL copies of the message (iterate conv.db */
             uint32_t uid;
             r = msgrecord_get_uid(msg->mr, &uid);
             if (!r) snoozed = jmap_fetch_snoozed(mailbox->name, uid);
