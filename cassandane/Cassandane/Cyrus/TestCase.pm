@@ -994,12 +994,11 @@ sub run_replication
     push(@cmd, '-S', $server) if defined $server;
     push(@cmd, '-n', $channel) if defined $channel;
     push(@cmd, '-f', $inputfile) if defined $inputfile;
-    push(@cmd, '-u', $user) if defined $user;
     push(@cmd, '-R') if defined $rolling;
-    push(@cmd, '-m') if defined $mailbox;
     push(@cmd, '-s') if defined $meta;
     push(@cmd, '-O') if defined $nosyncback;
-    push(@cmd, $mailbox) if defined $mailbox;
+    push(@cmd, '-u', $user) if defined $user;
+    push(@cmd, '-m', $mailbox) if defined $mailbox;
 
     my %run_options;
     $run_options{cyrus} = 1;
