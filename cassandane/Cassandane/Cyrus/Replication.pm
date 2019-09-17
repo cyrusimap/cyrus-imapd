@@ -161,6 +161,68 @@ sub test_splitbrain
 }
 
 #
+# Test replication of mailbox only after a rename
+#
+sub test_splitbrain_mailbox
+    :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
+    my $mastertalk = $master_store->get_client();
+    my $replicatalk = $replica_store->get_client();
+
+    $mastertalk->create("INBOX.src-name");
+
+    xlog "run initial replication";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    $mastertalk = $master_store->get_client();
+    $mastertalk->rename("INBOX.src-name", "INBOX.dest-name");
+
+    $self->{instance}->getsyslog();
+    $self->{replica}->getsyslog();
+
+    xlog "try replicating just the mailbox by name fails due to duplicate uniqueid";
+    eval { $self->run_replication(mailbox => 'user.cassandane.dest-name') };
+    $self->assert_matches(qr/exited with code 1/, "$@");
+    my @mastersyslog = $self->{instance}->getsyslog();
+    my @replicasyslog = $self->{replica}->getsyslog();
+
+    $self->assert(grep { m/MAILBOX received NO response: IMAP_MAILBOX_MOVED/ } @mastersyslog);
+    $self->assert(grep { m/SYNCNOTICE: failed to create mailbox user.cassandane.dest-name/ } @replicasyslog);
+
+    xlog "Run a full user replication to repair";
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog "Rename again";
+    $mastertalk = $master_store->get_client();
+    $mastertalk->rename("INBOX.dest-name", "INBOX.foo");
+    my $file = $self->{instance}->{basedir} . "/sync.log";
+    open(FH, ">", $file);
+    print FH "MAILBOX user.cassandane.foo\n";
+    close(FH);
+
+    $self->{instance}->getsyslog();
+    $self->{replica}->getsyslog();
+    xlog "Run replication from a file with just the mailbox name in it";
+    $self->run_replication(inputfile => $file, rolling => 1);
+    @mastersyslog = $self->{instance}->getsyslog();
+    @replicasyslog = $self->{replica}->getsyslog();
+    # initial failures
+    $self->assert(grep { m/do_folders\(\): update failed: user.cassandane.foo/ } @mastersyslog);
+    $self->assert(grep { m/SYNCNOTICE: failed to create mailbox user.cassandane.foo/ } @replicasyslog);
+    # later success
+    $self->assert(grep { m/Rename: user.cassandane.dest-name -> user.cassandane.foo/ } @replicasyslog);
+    # replication fixes itself
+    $self->check_replication('cassandane');
+}
+
+#
 # Test replication of messages APPENDed to the master
 #
 sub test_splitbrain_masterexpunge
