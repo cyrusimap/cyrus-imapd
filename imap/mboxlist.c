@@ -609,6 +609,7 @@ static int _find_specialuse(const mbentry_t *mbentry, void *rock)
 EXPORTED char *mboxlist_find_specialuse(const char *use, const char *userid)
 {
     init_internal();
+    assert(userid);
 
     /* \\Inbox is magical */
     if (!strcasecmp(use, "\\Inbox"))
@@ -634,14 +635,21 @@ static int _find_uniqueid(const mbentry_t *mbentry, void *rock) {
     return r;
 }
 
+// calling this function without a userid is fine, it will scan the entire server!
 EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
                                       const struct auth_state *auth_state)
 {
     struct _find_uniqueid_data rock = { uniqueid, NULL };
 
+    int flags = MBOXTREE_INTERMEDIATES|MBOXTREE_PLUS_RACL;
+
     init_internal();
 
-    mboxlist_usermboxtree(userid, auth_state, _find_uniqueid, &rock, MBOXTREE_PLUS_RACL);
+    if (userid)
+        mboxlist_usermboxtree(userid, auth_state, _find_uniqueid, &rock, flags);
+    else
+        mboxlist_allmbox("", _find_uniqueid, &rock, flags);
+
     return rock.mboxname;
 }
 
