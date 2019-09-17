@@ -4565,6 +4565,29 @@ static int _email_get_keywords(jmap_req_t *req,
     return r;
 }
 
+struct email_get_snoozed_rock {
+    jmap_req_t *req;
+    json_t *snoozed;
+};
+
+static int _email_get_snoozed_cb(const conv_guidrec_t *rec, void *vrock)
+{
+    struct email_get_snoozed_rock *rock = vrock;
+
+    if (rec->part) return 0;
+
+    if (!jmap_hasrights_byname(rock->req, rec->mboxname, ACL_READ|ACL_LOOKUP))
+        return 0;
+
+    /* XXX  Do we want to open the mailbox and check internal $snoozed flag? */
+
+    /* Fetch snoozed annotation */
+    rock->snoozed = jmap_fetch_snoozed(rec->mboxname, rec->uid);
+
+    /* Short-circuit the foreach if we find a snoozed message */
+    return (rock->snoozed != NULL);
+}
+
 static void _email_parse_wantheaders(json_t *jprops,
                                      struct jmap_parser *parser,
                                      const char *prop_name,
@@ -5147,25 +5170,14 @@ static int _email_get_meta(jmap_req_t *req,
     }
 
     if (jmap_wantprop(props, "snoozed")) {
-        struct mailbox *mailbox = NULL;
-        json_t *snoozed = NULL;
-        int r;
+        struct email_get_snoozed_rock rock = { req, NULL };
 
-        r = msgrecord_get_mailbox(msg->mr, &mailbox);
-        if (!r) {
-            /* get the snoozed annotation */
-            /* XXX  Need to check ALL copies of the message (iterate conv.db */
-            uint32_t uid;
-            r = msgrecord_get_uid(msg->mr, &uid);
-            if (!r) snoozed = jmap_fetch_snoozed(mailbox->name, uid);
-        }
+        /* Look for the first snoozed copy of this email_id */
+        conversations_guid_foreach(req->cstate, _guid_from_id(email_id),
+                                   _email_get_snoozed_cb, &rock);
 
-        if (snoozed) {
-            json_object_set_new(email, "snoozed", snoozed);
-        }
-        else {
-            json_object_set_new(email, "snoozed", json_null());
-        }
+        json_object_set_new(email, "snoozed",
+                            rock.snoozed ? rock.snoozed : json_null());
     }
 
 done:
