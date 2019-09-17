@@ -9047,12 +9047,25 @@ static void _email_update_parse(json_t *jemail,
                 bulk->snoozed_uniqueid = xstrdup("");
         }
 
-        if (bulk->snoozed_uniqueid && *bulk->snoozed_uniqueid &&
-            (json_is_null(update->snoozed) ||
-             json_is_utcdate(json_object_get(snoozed, "until")))) {
-            update->snoozed = snoozed;
+        if (bulk->snoozed_uniqueid && *bulk->snoozed_uniqueid) {
+            if (json_is_null(snoozed)) {
+                update->snoozed = snoozed;
+            }
+            else if (json_is_object(snoozed)) {
+                if (json_is_utcdate(json_object_get(snoozed, "until"))) {
+                    update->snoozed = snoozed;
+                }
+                else {
+                    jmap_parser_push(parser, "snooze");
+                    jmap_parser_invalid(parser, "until");
+                    jmap_parser_pop(parser);
+                }
+            }
+            else {
+                jmap_parser_invalid(parser, "snoozed");
+            }
         }
-        else {
+        else if (JNOTNULL(snoozed)) {
             jmap_parser_invalid(parser, "snoozed");
         }
     }
