@@ -152,6 +152,7 @@ static struct MsgFlagMap msgflagmap[] = {
     {"DE", (int)FLAG_DELETED},
     {"DR", (int)FLAG_DRAFT},
     {"SE", (int)FLAG_SEEN},
+    {"SN", (int)FLAG_INTERNAL_SNOOZED},
     {"SP", (int)FLAG_INTERNAL_SPLITCONVERSATION},
     {"NC", (int)FLAG_INTERNAL_NEEDS_CLEANUP},
     {"AR", (int)FLAG_INTERNAL_ARCHIVED},
@@ -161,10 +162,9 @@ static struct MsgFlagMap msgflagmap[] = {
 };
 /* The length of the msgflagmap list * 2 +
  * Total number of separators possible
- * = 30 bytes
+ * = 33 bytes
  */
-#define FLAGMAPSTR_MAXLEN ((sizeof(msgflagmap) / sizeof(struct MsgFlagMap) * 2) + \
-                           (10 + 1))
+#define FLAGMAPSTR_MAXLEN (1 + 3 *(sizeof(msgflagmap) / sizeof(struct MsgFlagMap)))
 
 static int mailbox_index_unlink(struct mailbox *mailbox);
 static int mailbox_index_repack(struct mailbox *mailbox, int version);

@@ -397,6 +397,7 @@ typedef enum _MsgFlags {
 } MsgFlags;
 
 typedef enum _MsgInternalFlags {
+    FLAG_INTERNAL_SNOOZED            = (1<<26),
     FLAG_INTERNAL_SPLITCONVERSATION  = (1<<27),
     FLAG_INTERNAL_NEEDS_CLEANUP      = (1<<28),
     FLAG_INTERNAL_ARCHIVED           = (1<<29),

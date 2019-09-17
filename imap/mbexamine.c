@@ -309,6 +309,8 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
             printf(" FLAG_INTERNAL_ARCHIVED");
         if (record->internal_flags & FLAG_INTERNAL_NEEDS_CLEANUP)
             printf(" FLAG_INTERNAL_NEEDS_CLEANUP");
+        if (record->internal_flags & FLAG_INTERNAL_SNOOZED)
+            printf(" FLAG_INTERNAL_SNOOZED");
 
         printf("      > SYSTEMFLAGS:");
         if (record->system_flags & FLAG_SEEN) printf(" FLAG_SEEN");
