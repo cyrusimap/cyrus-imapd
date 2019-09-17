@@ -973,9 +973,6 @@ static void process_snoozed(struct mailbox *mailbox,
     syslog(LOG_DEBUG, "processing snoozed email for mailbox %s uid %u",
            mailbox->name, record->uid);
 
-    mr = msgrecord_from_index_record(mailbox, record);
-    if (!mr) goto done;
-
     /* Get the snoozed annotation */
     snoozed = jmap_fetch_snoozed(mailbox->name, record->uid);
     if (!snoozed) goto done;
@@ -989,8 +986,15 @@ static void process_snoozed(struct mailbox *mailbox,
         goto done;
     }
 
+    mr = msgrecord_from_index_record(mailbox, record);
+    if (!mr) goto done;
+
     /* Fetch message */
     r = msgrecord_get_body(mr, &buf);
+    if (r) goto done;
+
+    /* Fetch annotations */
+    r = msgrecord_extract_annots(mr, &annots);
     if (r) goto done;
 
     mbname = mbname_from_intname(mailbox->name);
@@ -1016,10 +1020,6 @@ static void process_snoozed(struct mailbox *mailbox,
             }
         }
     }
-
-    /* Fetch annotations */
-    r = msgrecord_extract_annots(mr, &annots);
-    if (r) goto done;
 
     /* Determine destination mailbox of awakened email */
     destmboxid = json_object_get(snoozed, "moveToMailboxId");
