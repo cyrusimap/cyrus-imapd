@@ -950,79 +950,25 @@ static void process_futurerelease(struct mailbox *mailbox,
     return;
 }
 
-struct replace_msgrec_rock {
-    const char *userid;
-    struct auth_state *authstate;
-    struct mailbox *src;
-    msgrecord_t *mr;
-    int nolink;
-};    
-
-static int _replace_msgrecord_cb(const conv_guidrec_t *rec, void *rock)
-{
-    struct replace_msgrec_rock *rrock = (struct replace_msgrec_rock *) rock;
-    struct mailbox *dst = NULL;;
-    struct appendstate as;
-    int r = 0;
-
-    /* Ignore expunged messages */
-    if (rec->internal_flags & FLAG_INTERNAL_EXPUNGED) return 0;
-
-    /* Open destination mailbox */
-    r = mailbox_open_iwl(rec->mboxname, &dst);
-
-    /* Setup for appending */
-    if (!r) {
-        r = append_setup_mbox(&as, dst, rrock->userid, rrock->authstate,
-                              ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_COPY);
-    }
-
-    /* Copy message to destination */
-    if (!r) {
-        ptrarray_t msgrecs = PTRARRAY_INITIALIZER;
-
-        ptrarray_add(&msgrecs, rrock->mr);
-        r = append_copy(rrock->src, &as, &msgrecs, rrock->nolink,
-                        mboxname_same_userid(rrock->src->name, dst->name));
-        ptrarray_fini(&msgrecs);
-
-        if (r) append_abort(&as);
-        else r = append_commit(&as);
-    }
-
-    /* Expunge original message now that is has been replaced */
-    if (!r) {
-        struct index_record record;
-
-        r = mailbox_find_index_record(dst, rec->uid, &record);
-        if (!r) {
-            record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
-            r = mailbox_rewrite_index_record(dst, &record);
-        }
-    }
-
-    mailbox_close(&dst);
-    return r;
-}
-
 static void process_snoozed(struct mailbox *mailbox,
                             struct index_record *record, time_t runtime)
 {
-    const char *annot = IMAP_ANNOT_NS "snoozed-until";
+    const char *annot = IMAP_ANNOT_NS "snoozed";
     struct buf buf = BUF_INITIALIZER;
     msgrecord_t *mr = NULL;
     mbname_t *mbname = NULL;
     struct appendstate as;
-    struct mailbox *inbox = NULL;
+    struct mailbox *destmbox = NULL;
     struct auth_state *authstate = NULL;
-    const char *userid, *inboxname;
+    const char *userid;
+    char *destname = NULL;
     time_t wakeup;
     struct stagemsg *stage = NULL;
     struct entryattlist *annots = NULL;
     strarray_t *flags = NULL;
     struct body *body = NULL;
-    char datestr[80];
     FILE *f = NULL;
+    json_t *snoozed, *destmboxid, *keywords;
     int r = 0;
 
     syslog(LOG_DEBUG, "processing snoozed email for mailbox %s uid %u",
@@ -1031,12 +977,12 @@ static void process_snoozed(struct mailbox *mailbox,
     mr = msgrecord_from_index_record(mailbox, record);
     if (!mr) goto done;
 
-    /* Get the snoozed-until annotation */
-    r = msgrecord_annot_lookup(mr, annot, "", &buf);
-    if (r) goto done;
+    /* Get the snoozed annotation */
+    snoozed = jmap_fetch_snoozed(mailbox->name, record->uid);
+    if (!snoozed) goto done;
 
-    time_from_iso8601(buf_cstring(&buf), &wakeup);
-    buf_free(&buf);
+    time_from_iso8601(json_string_value(json_object_get(snoozed, "until")),
+                      &wakeup);
 
     /* Check runtime against wakup and adjust as necessary */
     if (wakeup > runtime) {
@@ -1051,54 +997,61 @@ static void process_snoozed(struct mailbox *mailbox,
     mbname = mbname_from_intname(mailbox->name);
     mbname_set_boxes(mbname, NULL);
     userid = mbname_userid(mbname);
-    inboxname = mbname_intname(mbname);
+    authstate = auth_newstate(userid);
 
     /* Fetch flags */
     r = msgrecord_extract_flags(mr, userid, &flags);
     if (r) goto done;
 
-    /* Add $awakened flag */
-    strarray_append(flags, "$awakened");
+    /* (Un)set any client-supplied flags */
+    keywords = json_object_get(snoozed, "setKeywords");
+    if (keywords) {
+        const char *key;
+        json_t *val;
+
+        json_object_foreach(keywords, key, val) {
+            const char *flag = jmap_keyword_to_imap(key);
+            if (flag) {
+                if (json_is_true(val)) strarray_add_case(flags, flag);
+                else strarray_remove_all_case(flags, flag);
+            }
+        }
+    }
 
     /* Fetch annotations */
     r = msgrecord_extract_annots(mr, &annots);
     if (r) goto done;
 
-    /* Remove snoozed-until from the annotations */
+    /* Remove snoozed from the annotations */
     clearentryatt(&annots, annot, "value.shared");
 
-    /* Prepare to stage the message */
-    if (!(f = append_newstage(inboxname, runtime, 0, &stage))) {
-        syslog(LOG_ERR, "append_newstage(%s) failed", inboxname);
-        r = IMAP_IOERROR;
-        goto done;
+    /* Determine destination mailbox of awakened email */
+    destmboxid = json_object_get(snoozed, "moveToMailboxId");
+    if (destmboxid) {
+        destname = mboxlist_find_uniqueid(json_string_value(destmboxid),
+                                          userid, authstate);
+    }
+    if (!destname) {
+        destname = xstrdup(mbname_intname(mbname));
     }
 
-    /* Prepend new headers */
-    time_to_rfc5322(record->savedate, datestr, sizeof(datestr));
-    fprintf(f, "Received: from %s (using Snooze at %s)\r\n",
-            config_servername, datestr);
+    /* Fetch message filename */
+    const char *fname;
+    r = msgrecord_get_fname(mr, &fname);
+    if (r) goto done;
 
-    time_to_rfc5322(runtime, datestr, sizeof(datestr));
-    fprintf(f, "\twith JMAP id M%s for %s;\r\n\t%s\r\n",
-            message_guid_encode_short(&record->guid, 24), userid, datestr);
-
-    time_to_rfc5322(record->internaldate, datestr, sizeof(datestr));
-    fprintf(f, "Snoozed-Original-Date: %s\r\n", datestr);
-
-    /* Add snoozed message */
-    size_t msglen = buf_len(&buf);
-    if ((msglen && !fwrite(buf_base(&buf), msglen, 1, f)) || fflush(f)) {
+    /* Prepare to stage the message */
+    if (!(f = append_newstage_full(destname, runtime, 0, &stage, fname))) {
+        syslog(LOG_ERR, "append_newstage(%s) failed", destname);
         r = IMAP_IOERROR;
         goto done;
     }
     fclose(f);
 
-    r = mailbox_open_iwl(inboxname, &inbox);
+    r = mailbox_open_iwl(destname, &destmbox);
     if (r) goto done;
 
-    authstate = auth_newstate(userid);
-    r = append_setup_mbox(&as, inbox, userid, authstate,
+    r = append_setup_mbox(&as, destmbox, userid, authstate,
                           ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_NEW);
     if (r) goto done;
 
@@ -1120,19 +1073,6 @@ static void process_snoozed(struct mailbox *mailbox,
                mailbox->name, record->uid, error_message(r));
     }
 
-    /* Load new message record */
-    msgrecord_unref(&mr);
-    r = msgrecord_find(inbox, inbox->i.last_uid, &mr);
-    if (r) goto done;
-
-    /* Replace other copies of the original message with the awakened message */
-    struct replace_msgrec_rock rrock = {
-        userid, authstate, inbox, mr, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE)
-    };
-    conversations_guid_foreach(mailbox->local_cstate,
-                               message_guid_encode(&record->guid),
-                               _replace_msgrecord_cb, &rrock);
-
   done:
     if (r) {
         /* XXX  Error handling */
@@ -1147,11 +1087,12 @@ static void process_snoozed(struct mailbox *mailbox,
     freeentryatts(annots);
     append_removestage(stage);
 
-    mailbox_close(&inbox);
+    mailbox_close(&destmbox);
     if (authstate) auth_freestate(authstate);
     if (mbname) mbname_free(&mbname);
     if (mr) msgrecord_unref(&mr);
     buf_free(&buf);
+    free(destname);
 }
 #endif /* WITH_JMAP */
 

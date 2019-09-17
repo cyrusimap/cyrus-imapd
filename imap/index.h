@@ -182,8 +182,11 @@ typedef struct msgdata {
     char *xsubj;                /* extracted subject text */
     unsigned xsubj_hash;        /* hash of extracted subject text */
     int is_refwd;               /* is message a reply or forward? */
+
+    /* items from the annotations database */
     strarray_t annot;           /* array of annotation attribute values
                                    (stored in order of sortcrit) */
+    time_t snoozed_until;       /* snoozed#until */
 } MsgData;
 
 typedef struct thread {

@@ -81,4 +81,9 @@ extern void jmap_filterprops(json_t *jobj, hash_table *props);
 extern void jmap_emailsubmission_envelope_to_smtp(smtp_envelope_t *smtpenv,
                                                   json_t *env);
 
+extern json_t *jmap_fetch_snoozed(const char *mbox, uint32_t uid);
+
+extern int jmap_email_keyword_is_valid(const char *keyword);
+extern const char *jmap_keyword_to_imap(const char *keyword);
+
 #endif /* JMAP_UTIL_H */

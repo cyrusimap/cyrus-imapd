@@ -71,6 +71,7 @@
 #include "hash.h"
 #include "hashu64.h"
 #include "http_client.h"
+#include "jmap_util.h"
 #include "global.h"
 #include "times.h"
 #include "imapd.h"
@@ -6004,18 +6005,24 @@ MsgData **index_msgdata_load(struct index_state *state,
                                         sortcrit[j].args.annot.userid,
                                         &value);
 
-                if (!buf_len(&value) &&
-                    !strcmp(sortcrit[j].args.annot.entry, IMAP_ANNOT_NS "snoozed-until")) {
-                    /* If snoozedUntil is NULL, we use receivedAt */
-                    buf_truncate(&value, RFC3339_DATETIME_MAX);
-                    time_to_rfc3339(record.internaldate,
-                                    (char *) buf_base(&value),
-                                    RFC3339_DATETIME_MAX);
-                }
-
                 /* buf_release() never returns NULL, so if the lookup
                  * fails for any reason we just get an empty string here */
                 strarray_appendm(&cur->annot, buf_release(&value));
+                break;
+            }
+            case SORT_SNOOZEDUNTIL: {
+                json_t *snoozed =
+                    jmap_fetch_snoozed(state->mboxname, record.uid);
+
+                if (snoozed) {
+                    time_from_iso8601(json_string_value(json_object_get(snoozed, "until")),
+                                      &cur->snoozed_until);
+                    json_decref(snoozed);
+                }
+                else {
+                    /* If snoozed is NULL, we use receivedAt */
+                    cur->internaldate = record.internaldate;
+                }
                 break;
             }
             case LOAD_IDS:
@@ -6391,6 +6398,14 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
         case SORT_DATE: {
             time_t d1 = md1->sentdate ? md1->sentdate : md1->internaldate;
             time_t d2 = md2->sentdate ? md2->sentdate : md2->internaldate;
+            ret = numcmp(d1, d2);
+            break;
+        }
+        case SORT_SNOOZEDUNTIL: {
+            time_t d1 =
+                md1->snoozed_until ? md1->snoozed_until : md1->internaldate;
+            time_t d2 =
+                md2->snoozed_until ? md2->snoozed_until : md2->internaldate;
             ret = numcmp(d1, d2);
             break;
         }

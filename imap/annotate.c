@@ -1938,7 +1938,18 @@ static const annotate_entrydesc_t message_builtin_entries[] =
         NULL
     },
     {
+        /* Deprecated in favor of "snoozed" */
         IMAP_ANNOT_NS "snoozed-until",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED,
+        0,
+        annotation_get_fromdb,
+        NULL,
+        NULL
+    },
+    {
+        IMAP_ANNOT_NS "snoozed",
         ATTRIB_TYPE_STRING,
         BACKEND_ONLY,
         ATTRIB_VALUE_SHARED,

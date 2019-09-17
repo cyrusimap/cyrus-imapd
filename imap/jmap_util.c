@@ -45,6 +45,7 @@
 
 #include <string.h>
 
+#include "annotate.h"
 #include "hash.h"
 #include "jmap_util.h"
 #include "times.h"
@@ -293,3 +294,89 @@ EXPORTED void jmap_emailsubmission_envelope_to_smtp(smtp_envelope_t *smtpenv,
         ptrarray_append(&smtpenv->rcpts, smtpaddr);
     }
 }
+
+EXPORTED json_t *jmap_fetch_snoozed(const char *mbox, uint32_t uid)
+{
+    /* get the snoozed annotation */
+    const char *annot = IMAP_ANNOT_NS "snoozed";
+    struct buf value = BUF_INITIALIZER;
+    json_t *snooze = NULL;
+    int r;
+
+    r = annotatemore_msg_lookup(mbox, uid, annot, "", &value);
+
+    if (!r) {
+        if (!buf_len(&value)) {
+            /* get the legacy snoozed-until annotation */
+            annot = IMAP_ANNOT_NS "snoozed-until";
+
+            r = annotatemore_msg_lookup(mbox, uid, annot, "", &value);
+            if (!r && buf_len(&value)) {
+                /* build a SnoozeDetails object from the naked "until" value */
+                snooze = json_pack("{s:s}",
+                                   "until", json_string(buf_cstring(&value)));
+            }
+        }
+        else {
+            json_error_t jerr;
+
+            snooze = json_loads(buf_cstring(&value), 0, &jerr);
+        }
+    }
+
+    buf_free(&value);
+
+    return snooze;
+}
+
+EXPORTED int jmap_email_keyword_is_valid(const char *keyword)
+{
+    const char *p;
+
+    if (*keyword == '\0') {
+        return 0;
+    }
+    if (strlen(keyword) > 255) {
+        return 0;
+    }
+    for (p = keyword; *p; p++) {
+        if (*p < 0x21 || *p > 0x7e) {
+            return 0;
+        }
+        switch(*p) {
+            case '(':
+            case ')':
+            case '{':
+            case ']':
+            case '%':
+            case '*':
+            case '"':
+            case '\\':
+                return 0;
+            default:
+                ;
+        }
+    }
+    return 1;
+}
+
+EXPORTED const char *jmap_keyword_to_imap(const char *keyword)
+{
+    if (!strcasecmp(keyword, "$Seen")) {
+        return "\\Seen";
+    }
+    else if (!strcasecmp(keyword, "$Flagged")) {
+        return "\\Flagged";
+    }
+    else if (!strcasecmp(keyword, "$Answered")) {
+        return "\\Answered";
+    }
+    else if (!strcasecmp(keyword, "$Draft")) {
+        return "\\Draft";
+    }
+    else if (jmap_email_keyword_is_valid(keyword)) {
+        return keyword;
+    }
+    return NULL;
+}
+

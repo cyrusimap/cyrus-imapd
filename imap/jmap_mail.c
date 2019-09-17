@@ -1391,57 +1391,6 @@ static json_t *_email_mailboxes(jmap_req_t *req, const char *msgid)
 
 
 
-static int _email_keyword_is_valid(const char *keyword)
-{
-    const char *p;
-
-    if (*keyword == '\0') {
-        return 0;
-    }
-    if (strlen(keyword) > 255) {
-        return 0;
-    }
-    for (p = keyword; *p; p++) {
-        if (*p < 0x21 || *p > 0x7e) {
-            return 0;
-        }
-        switch(*p) {
-            case '(':
-            case ')':
-            case '{':
-            case ']':
-            case '%':
-            case '*':
-            case '"':
-            case '\\':
-                return 0;
-            default:
-                ;
-        }
-    }
-    return 1;
-}
-
-static const char *jmap_keyword_to_imap(const char *keyword)
-{
-    if (!strcasecmp(keyword, "$Seen")) {
-        return "\\Seen";
-    }
-    else if (!strcasecmp(keyword, "$Flagged")) {
-        return "\\Flagged";
-    }
-    else if (!strcasecmp(keyword, "$Answered")) {
-        return "\\Answered";
-    }
-    else if (!strcasecmp(keyword, "$Draft")) {
-        return "\\Draft";
-    }
-    else if (_email_keyword_is_valid(keyword)) {
-        return keyword;
-    }
-    return NULL;
-}
-
 static void _email_read_annot(const jmap_req_t *req, msgrecord_t *mr,
                               const char *annot, struct buf *buf)
 {
@@ -2352,7 +2301,7 @@ static void _email_parse_filter(jmap_req_t *req,
                  !strcmp(field, "noneInThreadHaveKeyword")) {
             if (!json_is_string(arg) ||
                 !(s = json_string_value(arg)) ||
-                !_email_keyword_is_valid(s)) {
+                !jmap_email_keyword_is_valid(s)) {
                 jmap_parser_invalid(parser, field);
             }
             else if (!_email_threadkeyword_is_valid(s)) {
@@ -2362,7 +2311,7 @@ static void _email_parse_filter(jmap_req_t *req,
         else if (!strcmp(field, "hasKeyword") ||
                  !strcmp(field, "notKeyword")) {
             if (!json_is_string(arg) ||
-                !_email_keyword_is_valid(json_string_value(arg))) {
+                !jmap_email_keyword_is_valid(json_string_value(arg))) {
                 jmap_parser_invalid(parser, field);
             }
         }
@@ -2539,9 +2488,7 @@ static struct sortcrit *_email_buildsort(json_t *sort)
             sortcrit[i].key = SORT_SPAMSCORE;
         }
         if (!strcmp(prop, "snoozedUntil")) {
-            sortcrit[i].key = SORT_ANNOTATION;
-            sortcrit[i].args.annot.entry = xstrdup(IMAP_ANNOT_NS "snoozed-until");
-            sortcrit[i].args.annot.userid = xstrdup("");
+            sortcrit[i].key = SORT_SNOOZEDUNTIL;
         }
     }
 
@@ -5199,28 +5146,26 @@ static int _email_get_meta(jmap_req_t *req,
         buf_free(&buf);
     }
 
-    if (jmap_wantprop(props, "snoozedUntil")) {
+    if (jmap_wantprop(props, "snoozed")) {
         struct mailbox *mailbox = NULL;
-        struct buf val = BUF_INITIALIZER;
+        json_t *snoozed = NULL;
         int r;
 
         r = msgrecord_get_mailbox(msg->mr, &mailbox);
         if (!r && (mailbox->i.options & OPT_IMAP_HAS_ALARMS) &&
             !strcmp(mailbox->uniqueid, args->snoozed_uniqueid)) {
-            /* get the snoozed-until annotation */
-            const char *annot = IMAP_ANNOT_NS "snoozed-until";
-
-            msgrecord_annot_lookup(msg->mr, annot, "", &val);
+            /* get the snoozed annotation */
+            uint32_t uid;
+            r = msgrecord_get_uid(msg->mr, &uid);
+            if (!r) snoozed = jmap_fetch_snoozed(mailbox->name, uid);
         }
 
-        if (buf_len(&val)) {
-            json_object_set_new(email, "snoozedUntil",
-                                json_string(buf_cstring(&val)));
+        if (snoozed) {
+            json_object_set_new(email, "snoozed", snoozed);
         }
         else {
-            json_object_set_new(email, "snoozedUntil", json_null());
+            json_object_set_new(email, "snoozed", json_null());
         }
-        buf_free(&val);
     }
 
 done:
@@ -6270,7 +6215,7 @@ static const jmap_property_t email_props[] = {
         0
     },
     {
-        "snoozedUntil",
+        "snoozed",
         JMAP_MAIL_EXTENSION,
         0
     },
@@ -6317,7 +6262,7 @@ static int jmap_email_get(jmap_req_t *req)
         }
     }
 
-    if (jmap_wantprop(args.props, "snoozedUntil")) {
+    if (jmap_wantprop(args.props, "snoozed")) {
         jmap_mailbox_find_role(req, "snoozed", NULL, &args.snoozed_uniqueid);
     }
 
@@ -6686,7 +6631,7 @@ static void _email_append(jmap_req_t *req,
                           json_t *mailboxids,
                           strarray_t *keywords,
                           time_t internaldate,
-                          const char *snoozed,
+                          json_t *snoozed,
                           int has_attachment,
                           const char *sourcefile,
                           int(*writecb)(jmap_req_t* req, FILE* fp, void* rock, json_t **err),
@@ -6861,11 +6806,12 @@ static void _email_append(jmap_req_t *req,
 
     struct entryattlist *annots = NULL;
     if (snoozed) {
-        const char *annot = IMAP_ANNOT_NS "snoozed-until";
+        const char *annot = IMAP_ANNOT_NS "snoozed";
         const char *attrib = "value.shared";
         struct buf buf = BUF_INITIALIZER;
+        char *json = json_dumps(snoozed, JSON_COMPACT);
 
-        buf_init_ro_cstr(&buf, snoozed);
+        buf_initm(&buf, json, strlen(json));
         setentryatt(&annots, annot, attrib, &buf);
         buf_free(&buf);
     }
@@ -7025,7 +6971,7 @@ struct email {
     struct emailpart *body;      /* top-level MIME part */
     time_t internaldate;    /* RFC 3501 internaldate aka receivedAt */
     int has_attachment;           /* set the HasAttachment flag */
-    const char *snoozed;          /* set snoozed-until annotation */
+    json_t *snoozed;              /* set snoozed annotation */
 };
 
 static void _email_fini(struct email *email)
@@ -8078,7 +8024,7 @@ static void _parse_email(json_t *jemail,
         json_t *jval;
         jmap_parser_push(parser, "keywords");
         json_object_foreach(jkeywords, keyword, jval) {
-            if (jval != json_true() || !_email_keyword_is_valid(keyword)) {
+            if (jval != json_true() || !jmap_email_keyword_is_valid(keyword)) {
                 jmap_parser_invalid(parser, keyword);
             }
         }
@@ -8251,13 +8197,16 @@ static void _parse_email(json_t *jemail,
     /* Parse bodies */
     _email_parse_bodies(jemail, parser, email);
 
-    /* Is snoozedUntil being set? */
-    json_t *snoozedUntil = json_object_get(jemail, "snoozedUntil");
-    if (json_is_utcdate(snoozedUntil)) {
-        email->snoozed = json_string_value(snoozedUntil);
-    }
-    else if (JNOTNULL(snoozedUntil)) {
-        jmap_parser_invalid(parser, "snoozedUntil");
+    /* Is snoozed being set? */
+    json_t *snoozed = json_object_get(jemail, "snoozed");
+    if (JNOTNULL(snoozed)) {
+        if (json_is_object(snoozed) &&
+            json_is_utcdate(json_object_get(snoozed, "until"))) {
+            email->snoozed = snoozed;
+        }
+        else {
+            jmap_parser_invalid(parser, "snoozed");
+        }
     }
 }
 
@@ -8641,9 +8590,9 @@ static void _email_create(jmap_req_t *req,
     json_t *jmailboxids = json_copy(json_object_get(jemail, "mailboxIds"));
     _append_validate_mboxids(req, jmailboxids, &parser, &have_snoozed_mboxid);
 
-    /* Validate snoozedUntil + mailboxIds */
+    /* Validate snoozed + mailboxIds */
     if (email.snoozed && !have_snoozed_mboxid) {
-        jmap_parser_invalid(&parser, "snoozedUntil");
+        jmap_parser_invalid(&parser, "snoozed");
     }
     if (json_array_size(parser.invalid)) {
         *set_err = json_pack("{s:s s:O}", "type", "invalidProperties",
@@ -8821,7 +8770,7 @@ struct email_update {
     json_t *full_keywords;    /* Patched JMAP keywords across index records */
     json_t *mailboxids;       /* JMAP Email/set mailboxIds argument */
     int patch_mailboxids;     /* True if mailboxids is a patch object */
-    const char *snoozed;      /* JMAP Email/set snoozedUntil argument */
+    json_t *snoozed;          /* JMAP Email/set snoozed argument */
 };
 
 static void _email_update_free(struct email_update *update)
@@ -9013,7 +8962,7 @@ static void _email_update_parse(json_t *jemail,
                 continue;
             }
             const char *keyword = field + 9;
-            if (!_email_keyword_is_valid(keyword) || (jval != json_true() && jval != json_null())) {
+            if (!jmap_email_keyword_is_valid(keyword) || (jval != json_true() && jval != json_null())) {
                 jmap_parser_push(parser, "keywords");
                 jmap_parser_invalid(parser, keyword);
                 jmap_parser_pop(parser);
@@ -9040,7 +8989,7 @@ static void _email_update_parse(json_t *jemail,
         const char *keyword;
         json_t *jval;
         json_object_foreach(keywords, keyword, jval) {
-            if (!_email_keyword_is_valid(keyword) || jval != json_true()) {
+            if (!jmap_email_keyword_is_valid(keyword) || jval != json_true()) {
                 jmap_parser_push(parser, "keywords");
                 jmap_parser_invalid(parser, keyword);
                 jmap_parser_pop(parser);
@@ -9087,9 +9036,9 @@ static void _email_update_parse(json_t *jemail,
     }
     update->mailboxids = mailboxids;
 
-    /* Is snoozedUntil being changed? */
-    json_t *snoozedUntil = json_object_get(jemail, "snoozedUntil");
-    if (snoozedUntil) {
+    /* Is snoozed being changed? */
+    json_t *snoozed = json_object_get(jemail, "snoozed");
+    if (snoozed) {
         if (!bulk->snoozed_uniqueid) {
             jmap_mailbox_find_role(bulk->req, "snoozed",
                                    NULL, &bulk->snoozed_uniqueid);
@@ -9099,11 +9048,12 @@ static void _email_update_parse(json_t *jemail,
         }
 
         if (bulk->snoozed_uniqueid && *bulk->snoozed_uniqueid &&
-            (json_is_null(snoozedUntil) || json_is_utcdate(snoozedUntil))) {
-            update->snoozed = json_string_value(snoozedUntil);
+            (json_is_null(update->snoozed) ||
+             json_is_utcdate(json_object_get(snoozed, "until")))) {
+            update->snoozed = snoozed;
         }
         else {
-            jmap_parser_invalid(parser, "snoozedUntil");
+            jmap_parser_invalid(parser, "snoozed");
         }
     }
 
@@ -9247,7 +9197,7 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
                 int j;
 
                 /* For all current uid records of this email,
-                   determine if to update snoozedUntil. */
+                   determine if to update snoozed. */
 
                 for (j = 0; j < ptrarray_size(current_uidrecs); j++) {
                     struct email_uidrec *uidrec =
@@ -9257,20 +9207,20 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
                         hash_lookup(mboxrec->mbox_id, &bulk->plans_by_mbox_id);
 
                     if (!strcmp(mboxrec->mbox_id, bulk->snoozed_uniqueid)) {
-                        /* Add record to snooze plan if snoozeUntil is updated */
+                        /* Add record to snooze plan if snooze is updated */
                         ptrarray_append(&plan->snooze, uidrec);
                         break;
                     }
                 }
 
                 if (j >= ptrarray_size(current_uidrecs)) {
-                    /* Can't set snoozedUntil on non-snooze mailbox */
+                    /* Can't set snoozed on non-snooze mailbox */
                     json_object_set_new(bulk->set_errors, email_id,
                                         json_pack("{s:s s:[s]}",
                                                   "type",
                                                   "invalidProperties",
                                                   "properties",
-                                                  "snoozedUntil"));
+                                                  "snoozed"));
                 }
             }
 
@@ -9312,7 +9262,7 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
                     if (uidrec) {
                         if (update->snoozed &&
                             !strcmp(mbox_id, bulk->snoozed_uniqueid)) {
-                            /* Can't set snoozedUntil
+                            /* Can't set snoozed
                                if removing from snooze mailbox */
                             if (json_object_get(bulk->set_errors, email_id) == NULL) {
                                 json_object_set_new(bulk->set_errors, email_id,
@@ -9320,7 +9270,7 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
                                                               "type",
                                                               "invalidProperties",
                                                               "properties",
-                                                              "snoozedUntil"));
+                                                              "snoozed"));
                             }
                         }
                         else {
@@ -9358,18 +9308,18 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
                 if (update->snoozed &&
                     !strcmp(mboxrec->mbox_id, bulk->snoozed_uniqueid)) {
                     if (keep) {
-                        /* Add record to snooze plan if snoozeUntil is updated */
+                        /* Add record to snooze plan if snooze is updated */
                         ptrarray_append(&plan->snooze, uidrec);
                     }
                     else if (!json_object_get(bulk->set_errors, email_id)) {
-                        /* Can't set snoozedUntil
+                        /* Can't set snoozed
                            if removing from snooze mailbox */
                         json_object_set_new(bulk->set_errors, email_id,
                                             json_pack("{s:s s:[s]}",
                                                       "type",
                                                       "invalidProperties",
                                                       "properties",
-                                                      "snoozedUntil"));
+                                                      "snoozed"));
                     }
                 }
             }
@@ -10348,13 +10298,15 @@ static void _email_bulkupdate_exec_snooze(struct email_bulkupdate *bulk)
             int r = IMAP_MAILBOX_NONEXISTENT;
 
             if (mrw) {
-                const char *annot = IMAP_ANNOT_NS "snoozed-until";
+                const char *annot = IMAP_ANNOT_NS "snoozed";
                 struct buf val = BUF_INITIALIZER;
+                char *json = json_dumps(update->snoozed, JSON_COMPACT);
 
-                buf_init_ro_cstr(&val, update->snoozed);
+                buf_initm(&val, json, strlen(json));
                 r = msgrecord_annot_write(mrw, annot, "", &val);
                 if (!r) r = msgrecord_rewrite(mrw);
                 msgrecord_unref(&mrw);
+                buf_free(&val);
             }
 
             if (r) {
@@ -10695,9 +10647,8 @@ static void _email_import(jmap_req_t *req,
         time_from_iso8601(received_at, &internaldate);
     }
 
-    /* check for snoozedUntil */
-    const char *snoozed =
-        json_string_value(json_object_get(jemail_import, "snoozedUntil"));
+    /* check for snoozed */
+    json_t *snoozed = json_object_get(jemail_import, "snoozed");
 
     /* Check mailboxes for ACL */
     if (strcmp(req->userid, req->accountid)) {
@@ -10877,7 +10828,7 @@ static int jmap_email_import(jmap_req_t *req)
         if (json_is_object(keywords)) {
             jmap_parser_push(&parser, "keywords");
             json_object_foreach(keywords, s, jval) {
-                if (jval != json_true() || !_email_keyword_is_valid(s)) {
+                if (jval != json_true() || !jmap_email_keyword_is_valid(s)) {
                     jmap_parser_invalid(&parser, s);
                 }
             }
@@ -10904,11 +10855,12 @@ static int jmap_email_import(jmap_req_t *req)
             jmap_parser_invalid(&parser, "mailboxIds");
         }
 
-        /* Validate snoozedUntil + mailboxIds */
-        json_t *snoozedUntil = json_object_get(jemail_import, "snoozedUntil");
-        if (JNOTNULL(snoozedUntil) &&
-            !(json_is_utcdate(snoozedUntil) && have_snoozed_mboxid)) {
-            jmap_parser_invalid(&parser, "snoozedUntil");
+        /* Validate snoozed + mailboxIds */
+        json_t *snoozed = json_object_get(jemail_import, "snoozed");
+        if (JNOTNULL(snoozed) &&
+            !(json_is_utcdate(json_object_get(snoozed, "until")) &&
+              have_snoozed_mboxid)) {
+            jmap_parser_invalid(&parser, "snoozed");
         }
 
         json_t *invalid = json_incref(parser.invalid);
@@ -11415,7 +11367,7 @@ static void _email_copy_validate_props(json_t *jemail, json_t **err)
                 const char *keyword;
                 json_t *jbool;
                 json_object_foreach(prop, keyword, jbool) {
-                    if (!_email_keyword_is_valid(keyword) ||
+                    if (!jmap_email_keyword_is_valid(keyword) ||
                         jbool != json_true()) {
                         jmap_parser_invalid(&myparser, keyword);
                     }
