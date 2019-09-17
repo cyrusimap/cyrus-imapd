@@ -2742,6 +2742,14 @@ int sync_apply_mailbox(struct dlist *kin,
     // otherwise check version and whether we need to create
     if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
+        char *oldname = mboxlist_find_uniqueid(uniqueid, NULL, NULL);
+        if (oldname) {
+            syslog(LOG_ERR, "SYNCNOTICE: failed to create mailbox %s with uniqueid %s (already used by %s)",
+                   mboxname, uniqueid, oldname);
+            free(oldname);
+            r = IMAP_MAILBOX_MOVED;
+            goto done;
+        }
         r = mboxlist_createsync(mboxname, mbtype, partition,
                                 sstate->userid, sstate->authstate,
                                 options, uidvalidity, createdmodseq,
