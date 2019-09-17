@@ -2135,6 +2135,9 @@ int sync_parse_response(const char *cmd, struct protstream *in,
         else if (!strncmp(errmsg.s, "IMAP_MAILBOX_LOCKED ",
                           strlen("IMAP_MAILBOX_LOCKED ")))
             return IMAP_MAILBOX_LOCKED;
+        else if (!strncmp(errmsg.s, "IMAP_MAILBOX_MOVED ",
+                          strlen("IMAP_MAILBOX_MOVED ")))
+            return IMAP_MAILBOX_MOVED;
         else if (!strncmp(errmsg.s, "IMAP_MAILBOX_NOTSUPPORTED ",
                           strlen("IMAP_MAILBOX_NOTSUPPORTED ")))
             return IMAP_MAILBOX_NOTSUPPORTED;
@@ -3905,6 +3908,9 @@ static const char *sync_response(int r)
         break;
     case IMAP_MAILBOX_LOCKED:
         resp = "NO IMAP_MAILBOX_LOCKED Mailbox locked";
+        break;
+    case IMAP_MAILBOX_MOVED:
+        resp = "NO IMAP_MAILBOX_MOVED Mailbox exists with another name or uniqueid";
         break;
     case IMAP_MAILBOX_NOTSUPPORTED:
         resp = "NO IMAP_MAILBOX_NOTSUPPORTED Operation is not supported on mailbox";
