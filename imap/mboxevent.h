@@ -201,15 +201,21 @@ struct mboxevent {
 };
 
 
-#define FILL_STRING_PARAM(e,p,v) e->params[p].value.s = v; \
-                                 e->params[p].type = EVENT_PARAM_STRING; \
-                                 e->params[p].filled = 1
-#define FILL_ARRAY_PARAM(e,p,v) e->params[p].value.a = v; \
-                                 e->params[p].type = EVENT_PARAM_ARRAY; \
-                                 e->params[p].filled = 1
-#define FILL_UNSIGNED_PARAM(e,p,v) e->params[p].value.u = v; \
-                                  e->params[p].type = EVENT_PARAM_INT; \
-                                  e->params[p].filled = 1
+#define FILL_STRING_PARAM(e,p,v) do { \
+    e->params[p].value.s = v; \
+    e->params[p].type = EVENT_PARAM_STRING; \
+    e->params[p].filled = 1; \
+} while(0)
+#define FILL_ARRAY_PARAM(e,p,v) do { \
+    e->params[p].value.a = v; \
+    e->params[p].type = EVENT_PARAM_ARRAY; \
+    e->params[p].filled = 1; \
+} while (0)
+#define FILL_UNSIGNED_PARAM(e,p,v) do { \
+    e->params[p].value.u = v; \
+    e->params[p].type = EVENT_PARAM_INT; \
+    e->params[p].filled = 1; \
+} while (0)
 
 /*
  * Call this initializer once only at start

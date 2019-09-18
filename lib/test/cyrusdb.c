@@ -10,9 +10,13 @@ struct cyrusdb_backend *DB = &(BACKEND);
 struct cyrusdb_backend *DB = &cyrusdb_flat;
 #endif
 
-#define TRY(s) { r = s; \
-                 if (r && r != CYRUSDB_NOTFOUND) { \
-                     printf("%s failed: %d\n", #s, r); exit(1); } }
+#define TRY(s) do { \
+    r = s; \
+    if (r && r != CYRUSDB_NOTFOUND) { \
+        printf("%s failed: %d\n", #s, r); \
+        exit(1); \
+    } \
+} while (0)
 
 void fatal(const char *msg, int code)
 {

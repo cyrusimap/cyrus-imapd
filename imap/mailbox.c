@@ -129,9 +129,10 @@ struct mailboxlist {
 
 static struct mailboxlist *open_mailboxes = NULL;
 
-#define zeromailbox(m) { memset(&m, 0, sizeof(struct mailbox)); \
-                         (m).index_fd = -1; \
-                         (m).header_fd = -1; }
+#define zeromailbox(m) do { memset(&m, 0, sizeof(struct mailbox)); \
+                            (m).index_fd = -1; \
+                            (m).header_fd = -1; \
+} while (0)
 
 /* for repack */
 struct mailbox_repack {
