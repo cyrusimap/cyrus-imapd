@@ -1006,6 +1006,9 @@ static void process_snoozed(struct mailbox *mailbox,
     r = msgrecord_extract_flags(mr, userid, &flags);
     if (r) goto done;
 
+    /* Add \snoozed pseudo-flag */
+    strarray_add(flags, "\\snoozed");
+
     /* (Un)set any client-supplied flags */
     keywords = json_object_get(snoozed, "setKeywords");
     if (keywords) {
@@ -1051,8 +1054,14 @@ static void process_snoozed(struct mailbox *mailbox,
                           ACL_INSERT, NULL, NULL, 0, EVENT_MESSAGE_NEW);
     if (r) goto done;
 
+    /* Extract until and use it as savedate */
+    time_t savedate;
+    time_from_iso8601(json_string_value(json_object_get(snoozed, "until")),
+                      &savedate);
+
     /* Append the message to the mailbox */
-    r = append_fromstage(&as, &body, stage, runtime, 0, flags, 0, annots);
+    r = append_fromstage_full(&as, &body, stage,
+                              runtime, savedate, 0, flags, 0, annots);
     if (r) {
         append_abort(&as);
         goto done;
