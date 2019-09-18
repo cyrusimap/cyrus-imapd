@@ -3098,7 +3098,8 @@ sub test_email_set_create_snooze
     $self->assert_str_equals($msg->{subject}, $draft->{subject});
     $self->assert_equals(JSON::true, $msg->{keywords}->{'$draft'});
     $self->assert_num_equals(1, scalar keys %{$msg->{keywords}});
-    $self->assert_equals($datestr, $msg->{snoozed}{'until'});
+    $self->assert_str_equals($datestr, $msg->{snoozed}{'until'});
+    $self->assert_str_equals($datestr, $msg->{addedDates}{"$snoozedmbox"});
 
     # Now change the draft keyword, which is allowed since approx ~Q1/2018.
     xlog "Update a draft";
@@ -3115,12 +3116,14 @@ sub test_email_set_create_snooze
 
     $res = $jmap->CallMethods( [ [ 'Email/get',
                                    { ids => [ $id ],
-                                     properties => [ 'mailboxIds', 'keywords', 'snoozed' ]}, "R7" ] ] );
+                                     properties => [ 'mailboxIds', 'keywords', 'snoozed', 'addedDates' ]}, "R7" ] ] );
     $msg = $res->[0][1]->{list}[0];
     $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
     $self->assert_equals(JSON::true, $msg->{mailboxIds}{"$draftsId"});
     $self->assert_num_equals(0, scalar keys %{$msg->{keywords}});
-    $self->assert_null($msg->{snoozed});
+    $self->assert_not_null($msg->{snoozed});
+    $self->assert_str_equals($datestr, $msg->{snoozed}{'until'});
+    $self->assert_str_equals($datestr, $msg->{addedDates}{"$draftsId"});
 }
 
 sub test_email_set_update_snooze
