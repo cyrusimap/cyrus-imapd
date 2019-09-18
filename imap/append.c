@@ -867,11 +867,12 @@ out:
  * Note: @user_annots needs to be freed by the caller but
  * may be modified during processing of callout responses.
  */
-EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
-                     struct stagemsg *stage, time_t internaldate,
-                     modseq_t createdmodseq,
-                     const strarray_t *flags, int nolink,
-                     struct entryattlist *user_annots)
+EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
+                                   struct stagemsg *stage,
+                                   time_t internaldate, time_t savedate,
+                                   modseq_t createdmodseq,
+                                   const strarray_t *flags, int nolink,
+                                   struct entryattlist *user_annots)
 {
     struct mailbox *mailbox = as->mailbox;
     msgrecord_t *msgrec = NULL;
@@ -968,6 +969,10 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
     if (r) goto out;
     r = msgrecord_set_bodystructure(msgrec, *body);
     if (r) goto out;
+    if (savedate) {
+        r = msgrecord_set_savedate(msgrec, savedate);
+        if (r) goto out;
+    }
 
     /* And make sure it has a timestamp */
     r = msgrecord_get_internaldate(msgrec, &internaldate);
