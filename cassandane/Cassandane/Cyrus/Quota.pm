@@ -984,6 +984,95 @@ sub test_quotarename
     );
 }
 
+# https://github.com/cyrusimap/cyrus-imapd/issues/2877
+sub test_quota_f_no_improved_mboxlist_sort
+    :unixHierarchySep :AltNamespace :VirtDomains :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $user = 'user1@example.com';
+    my @otherusers = (
+        'user0@example.com',
+        'user1-z@example.com',
+        'user2@example.com',
+    );
+
+    $self->{instance}->{config}->set('improved_mboxlist_sort', 'no');
+    $self->_start_instances();
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user/$user");
+    $self->assert_str_equals('ok',
+                                $admintalk->get_last_completion_response());
+    $admintalk->setacl("user/$user", $user, 'lrswipkxtecdan');
+    $self->assert_str_equals('ok',
+                                $admintalk->get_last_completion_response());
+
+    xlog "set ourselves a basic usage quota";
+    $self->_set_limits(
+        quotaroot => "user/$user",
+        storage => 100000,
+        message => 50000,
+        'x-annotation-storage' => 10000,
+    );
+    $self->_check_usages(
+        quotaroot => "user/$user",
+        storage => 0,
+        message => 0,
+        'x-annotation-storage' => 0,
+    );
+
+    # create some other users to tickle sort-order issues?
+    foreach my $x (@otherusers) {
+        $admintalk->create("user/$x");
+        $self->_set_limits(
+            quotaroot => "user/$x",
+            storage => 100000,
+            message => 50000,
+            'x-annotation-storage' => 10000,
+        );
+    }
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $userstore = $svc->create_store(username => $user);
+    my $usertalk = $userstore->get_client();
+
+    foreach my $submbox ('Drafts', 'Junk', 'Sent', 'Trash') {
+        xlog "creating $submbox...";
+        $usertalk->create($submbox);
+        $self->assert_str_equals('ok',
+                                  $usertalk->get_last_completion_response());
+    }
+
+    $usertalk->list("", "*");
+
+    foreach my $mbox (qw(INBOX Drafts Sent Junk Trash)) {
+        $usertalk->select($mbox);
+        foreach (1..3) {
+            $self->make_message("msg $_ in $mbox", store => $userstore);
+        }
+    }
+
+    xlog "run quota -d";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'quota', '-d', 'example.com');
+
+    xlog "run quota -d -f";
+    my @data = $self->{instance}->run_command({
+        cyrus => 1,
+        redirects => { stderr => $self->{instance}{basedir} . '/quota.err' },
+    }, 'quota', '-f', '-d', 'example.com');
+
+    open(FH, "<", $self->{instance}{basedir} . '/quota.err');
+    local $/ = undef;
+    my $str = <FH>;
+    close(FH);
+
+    #example.com!user.user1.Junk: quota root example.com!user.user1 --> (none)
+    $self->assert($str !~ m{ quota root \S+ --> \(none\)});
+    $self->assert_num_equals(0, length $str);
+}
+
 sub test_quota_f_unixhs
     :UnixHierarchySep
 {
