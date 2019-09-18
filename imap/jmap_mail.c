@@ -6980,8 +6980,8 @@ static void _emailpart_fini(struct emailpart *part)
 struct email {
     struct headers headers; /* parsed headers */
     json_t *jemail;               /* original Email JSON object */
-    struct emailpart *body;      /* top-level MIME part */
-    time_t internaldate;    /* RFC 3501 internaldate aka receivedAt */
+    struct emailpart *body;       /* top-level MIME part */
+    time_t internaldate;          /* RFC 3501 internaldate aka receivedAt */
     int has_attachment;           /* set the HasAttachment flag */
     json_t *snoozed;              /* set snoozed annotation */
 };
