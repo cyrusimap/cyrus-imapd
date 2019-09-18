@@ -6655,6 +6655,7 @@ static void _email_append(jmap_req_t *req,
     json_t *val, *mailboxes = NULL;
     size_t len;
     int r = 0;
+    time_t savedate = 0;
 
     if (json_object_size(mailboxids) > JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL) {
         *err = json_pack("{s:s}", "type", "tooManyMailboxes");
@@ -6689,7 +6690,7 @@ static void _email_append(jmap_req_t *req,
         }
 
         if (json_is_string(val)) {
-            /* $snoozed mailbox */
+            /* We flagged this mailboxId as the $snoozed mailbox */
             if (mboxname) free(mboxname);
             mboxname = xstrdup(mbentry->name);
         }
@@ -6818,8 +6819,15 @@ static void _email_append(jmap_req_t *req,
         buf_initm(&buf, json, strlen(json));
         setentryatt(&annots, annot, attrib, &buf);
         buf_free(&buf);
+
+        /* Add \snoozed pseudo-flag */
+        strarray_add(&flags, "\\snoozed");
+
+        /* Extract until and use it as savedate */
+        time_from_iso8601(json_string_value(json_object_get(snoozed, "until")),
+                          &savedate);
     }
-    r = append_fromstage(&as, &body, stage, internaldate, 0,
+    r = append_fromstage_full(&as, &body, stage, internaldate, savedate, 0,
                          flags.count ? &flags : NULL, 0, annots);
     freeentryatts(annots);
     if (r) {
@@ -8529,6 +8537,7 @@ static void _append_validate_mboxids(jmap_req_t *req,
             char *mboxname = NULL;
             if (snoozed_uniqueid && !strcmp(role, "snoozed") &&
                 jmap_hasrights_byname(req, snoozed_mboxname, need_rights)) {
+                /* Flag this mailboxId as being $snoozed */
                 json_object_del(jmailboxids, mbox_id);
                 json_object_set_new(jmailboxids,
                                     snoozed_uniqueid, json_string("$snoozed"));
@@ -8560,6 +8569,7 @@ static void _append_validate_mboxids(jmap_req_t *req,
                 is_valid = 0;
             }
             else if (!strcmpnull(snoozed_uniqueid, mbentry->uniqueid)) {
+                /* Flag this mailboxId as being $snoozed */
                 json_object_set_new(jmailboxids,
                                     mbox_id, json_string("$snoozed"));
                 *have_snoozed_mboxid = 1;
