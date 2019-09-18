@@ -3883,11 +3883,13 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
         if (!record->createdmodseq || record->createdmodseq > record->modseq)
             record->createdmodseq = record->modseq;
         record->last_updated = mailbox->last_updated;
-        // store the time of actual append if requested
-        if (config_getswitch(IMAPOPT_SAVEDATE))
-            record->savedate = mailbox->last_updated;
-        else
-            record->savedate = 0;
+        if (!record->savedate) {
+            // store the time of actual append if requested
+            if (config_getswitch(IMAPOPT_SAVEDATE))
+                record->savedate = mailbox->last_updated;
+            else
+                record->savedate = 0;
+        }
     }
 
     int object_storage_enabled = 0 ;
