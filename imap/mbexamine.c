@@ -276,9 +276,10 @@ static int do_examine(struct findall_data *data, void *rock __attribute__((unuse
             flag = 1;
         }
 
-        printf("%06u> UID:%08u   INT_DATE:%lu SENTDATE:%lu SIZE:%-6u\n",
+        printf("%06u> UID:%08u"
+               "   INT_DATE:%lu SENTDATE:%lu SAVEDATE:%lu SIZE:%-6u\n",
                msgno, record->uid, record->internaldate,
-               record->sentdate, record->size);
+               record->sentdate, record->savedate, record->size);
         printf("      > HDRSIZE:%-6u LASTUPD :%lu SYSFLAGS:%08X",
                record->header_size, record->last_updated,
                record->system_flags);
