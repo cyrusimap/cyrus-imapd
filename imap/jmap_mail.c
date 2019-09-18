@@ -8019,11 +8019,12 @@ static void _email_snoozed_parse(json_t *snoozed,
         }
         else if (!strcmp(field, "setKeywords")) {
             const char *keyword;
-            json_t *op;
+            json_t *jbool;
 
             jmap_parser_push(parser, "setKeywords");
-            json_object_foreach(jval, keyword, op) {
-                if (!jmap_email_keyword_is_valid(keyword) || !json_is_boolean(op)) {
+            json_object_foreach(jval, keyword, jbool) {
+                if (!json_is_boolean(jbool) ||
+                    !jmap_email_keyword_is_valid(keyword)) {
                     jmap_parser_invalid(parser, keyword);
                 }
             }
