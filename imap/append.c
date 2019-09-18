@@ -817,6 +817,12 @@ static int append_apply_flags(struct appendstate *as,
                 internal_flags |= FLAG_INTERNAL_EXPUNGED;
             }
         }
+        else if (!strcasecmp(flag, "\\snoozed")) {
+            /* NOTE - this is a fake internal name */
+            if (as->myrights & ACL_WRITE) {
+                internal_flags |= FLAG_INTERNAL_SNOOZED;
+            }
+        }
         else if (!strcasecmp(flag, "\\deleted")) {
             if (as->myrights & ACL_DELETEMSG) {
                 system_flags |= FLAG_DELETED;
