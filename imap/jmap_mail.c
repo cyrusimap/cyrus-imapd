@@ -9050,41 +9050,48 @@ static void _email_update_parse(json_t *jemail,
     }
     update->mailboxids = mailboxids;
 
-    /* Is snoozed being changed? */
+    /* Is snoozed being overwritten or patched? */
     json_t *snoozed = json_object_get(jemail, "snoozed");
-    if (!snoozed) {
+    if (snoozed == NULL) {
         /* XXX  Need to handle patching of snooze */
     }
-    if (snoozed) {
-        if (!bulk->snoozed_uniqueid) {
-            jmap_mailbox_find_role(bulk->req, "snoozed",
-                                   NULL, &bulk->snoozed_uniqueid);
-
-            if (!bulk->snoozed_uniqueid)
-                bulk->snoozed_uniqueid = xstrdup("");
-        }
-
-        if (bulk->snoozed_uniqueid && *bulk->snoozed_uniqueid) {
-            if (json_is_null(snoozed)) {
-                update->snoozed = snoozed;
-            }
-            else if (json_is_object(snoozed)) {
-                if (json_is_utcdate(json_object_get(snoozed, "until"))) {
-                    update->snoozed = snoozed;
-                }
-                else {
-                    jmap_parser_push(parser, "snooze");
+    else if (json_is_object(snoozed)) {
+        const char *field;
+        json_t *jval;
+        jmap_parser_push(parser, "snoozed");
+        json_object_foreach(snoozed, field, jval) {
+            if (!strcmp(field, "until")) {
+                if (!json_is_utcdate(jval)) {
                     jmap_parser_invalid(parser, "until");
-                    jmap_parser_pop(parser);
                 }
             }
-            else {
-                jmap_parser_invalid(parser, "snoozed");
+            else if (!strcmp(field, "setKeywords")) {
+                const char *keyword;
+                json_t *op;
+                jmap_parser_push(parser, "setKeywords");
+                json_object_foreach(jval, keyword, op) {
+                    if (!jmap_email_keyword_is_valid(keyword) || !json_is_boolean(op)) {
+                        jmap_parser_invalid(parser, keyword);
+                    }
+                }
+                jmap_parser_pop(parser);
+            }
+            else if (strcmp(field, "moveToMailboxId")) {
+                jmap_parser_invalid(parser, field);
             }
         }
-        else if (JNOTNULL(snoozed)) {
-            jmap_parser_invalid(parser, "snoozed");
-        }
+        jmap_parser_pop(parser);
+    }
+    else if (JNOTNULL(snoozed)) {
+        jmap_parser_invalid(parser, "snoozed");
+    }
+    update->snoozed = snoozed;
+
+    if (update->snoozed && !bulk->snoozed_uniqueid) {
+        jmap_mailbox_find_role(bulk->req, "snoozed",
+                               NULL, &bulk->snoozed_uniqueid);
+
+        if (!bulk->snoozed_uniqueid) bulk->snoozed_uniqueid = xstrdup("");
     }
 
     buf_free(&buf);
