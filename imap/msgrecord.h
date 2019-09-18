@@ -107,6 +107,7 @@ extern int msgrecord_set_uid(msgrecord_t *mr, uint32_t uid);
 extern int msgrecord_set_cid(msgrecord_t *mr, bit64 cid);
 extern int msgrecord_set_bodystructure(msgrecord_t *mr, struct body *body);
 extern int msgrecord_set_internaldate(msgrecord_t *mr, time_t internaldate);
+extern int msgrecord_set_savedate(msgrecord_t *mr, time_t savedate);
 extern int msgrecord_set_cache_offset(msgrecord_t *mr, size_t offset);
 extern int msgrecord_set_createdmodseq(msgrecord_t *mr, modseq_t modseq);
 
