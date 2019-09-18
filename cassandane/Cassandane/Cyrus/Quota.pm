@@ -158,9 +158,20 @@ sub _zap_quota
     $self->assert_str_equals('quotalegacy', $backend)
         if defined $backend;        # the default value is also ok
 
-    my ($c) = ($quotaroot =~ m/^user\.(.)/);
-    my $dirname = $self->{instance}->{basedir} . "/conf/quota/$c";
-    my $filename = "$dirname/$quotaroot";
+    my ($uc) = ($quotaroot =~ m/^user[\.\/](.)/);
+    my ($domain, $dirname);
+    ($quotaroot, $domain) = split '@', $quotaroot;
+    if ($domain) {
+        my ($dc) = ($domain =~ m/^(.)/);
+        $dirname = $self->{instance}->{basedir} . "/conf/domain/$dc/$domain";
+    }
+    else {
+        $dirname = $self->{instance}->{basedir} . "/conf";
+    }
+    $dirname .= "/quota/$uc";
+    my $qfn = $quotaroot;
+    $qfn =~ s/\//\./g;
+    my $filename = "$dirname/$qfn";
     mkpath $dirname;
 
     open QUOTA,'>',$filename
