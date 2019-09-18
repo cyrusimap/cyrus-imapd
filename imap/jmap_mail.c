@@ -8004,6 +8004,38 @@ static void _email_parse_bodies(json_t *jemail,
     }
 }
 
+static void _email_snoozed_parse(json_t *snoozed,
+                                 struct jmap_parser *parser)
+{
+    const char *field;
+    json_t *jval;
+
+    jmap_parser_push(parser, "snoozed");
+    json_object_foreach(snoozed, field, jval) {
+        if (!strcmp(field, "until")) {
+            if (!json_is_utcdate(jval)) {
+                jmap_parser_invalid(parser, "until");
+            }
+        }
+        else if (!strcmp(field, "setKeywords")) {
+            const char *keyword;
+            json_t *op;
+
+            jmap_parser_push(parser, "setKeywords");
+            json_object_foreach(jval, keyword, op) {
+                if (!jmap_email_keyword_is_valid(keyword) || !json_is_boolean(op)) {
+                    jmap_parser_invalid(parser, keyword);
+                }
+            }
+            jmap_parser_pop(parser);
+        }
+        else if (strcmp(field, "moveToMailboxId")) {
+            jmap_parser_invalid(parser, field);
+        }
+    }
+    jmap_parser_pop(parser);
+}
+
 /* Parse a JMAP Email into its internal representation for creation. */
 static void _parse_email(json_t *jemail,
                          struct jmap_parser *parser,
@@ -8211,15 +8243,13 @@ static void _parse_email(json_t *jemail,
 
     /* Is snoozed being set? */
     json_t *snoozed = json_object_get(jemail, "snoozed");
-    if (JNOTNULL(snoozed)) {
-        if (json_is_object(snoozed) &&
-            json_is_utcdate(json_object_get(snoozed, "until"))) {
-            email->snoozed = snoozed;
-        }
-        else {
-            jmap_parser_invalid(parser, "snoozed");
-        }
+    if (json_is_object(snoozed)) {
+        _email_snoozed_parse(snoozed, parser);
     }
+    else if (JNOTNULL(snoozed)) {
+        jmap_parser_invalid(parser, "snoozed");
+    }
+    email->snoozed = snoozed;
 }
 
 static void _emailpart_blob_to_mime(jmap_req_t *req,
@@ -9056,31 +9086,7 @@ static void _email_update_parse(json_t *jemail,
         /* XXX  Need to handle patching of snooze */
     }
     else if (json_is_object(snoozed)) {
-        const char *field;
-        json_t *jval;
-        jmap_parser_push(parser, "snoozed");
-        json_object_foreach(snoozed, field, jval) {
-            if (!strcmp(field, "until")) {
-                if (!json_is_utcdate(jval)) {
-                    jmap_parser_invalid(parser, "until");
-                }
-            }
-            else if (!strcmp(field, "setKeywords")) {
-                const char *keyword;
-                json_t *op;
-                jmap_parser_push(parser, "setKeywords");
-                json_object_foreach(jval, keyword, op) {
-                    if (!jmap_email_keyword_is_valid(keyword) || !json_is_boolean(op)) {
-                        jmap_parser_invalid(parser, keyword);
-                    }
-                }
-                jmap_parser_pop(parser);
-            }
-            else if (strcmp(field, "moveToMailboxId")) {
-                jmap_parser_invalid(parser, field);
-            }
-        }
-        jmap_parser_pop(parser);
+        _email_snoozed_parse(snoozed, parser);
     }
     else if (JNOTNULL(snoozed)) {
         jmap_parser_invalid(parser, "snoozed");
