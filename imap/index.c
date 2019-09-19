@@ -6010,14 +6010,41 @@ MsgData **index_msgdata_load(struct index_state *state,
                 strarray_appendm(&cur->annot, buf_release(&value));
                 break;
             }
+            case SORT_SAVEDATE:
+                if (!sortcrit[j].args.mailbox.id ||
+                    !strcmp(mailbox->uniqueid, sortcrit[j].args.mailbox.id)) {
+                    if (config_getswitch(IMAPOPT_SAVEDATE))
+                        cur->savedate = record.savedate;
+                    else
+                        cur->savedate = cur->msgno;
+                }
+                else {
+                    /* If not in mailboxId, we use receivedAt */
+                    cur->savedate = record.internaldate;
+                }
+                break;
             case SORT_SNOOZEDUNTIL:
                 if ((record.internal_flags & FLAG_INTERNAL_SNOOZED) &&
                     (!sortcrit[j].args.mailbox.id ||
                      !strcmp(mailbox->uniqueid, sortcrit[j].args.mailbox.id))) {
-                    /* SAVEDATE == snoozed#until */
-                    cur->snoozed_until = record.savedate;
+                    if (config_getswitch(IMAPOPT_SAVEDATE)) {
+                        /* SAVEDATE == snoozed#until */
+                        cur->snoozed_until = record.savedate;
+                    }
+                    else {
+                        json_t *snoozed =
+                            jmap_fetch_snoozed(mailbox->name, record.uid);
+
+                        if (snoozed) {
+                            time_from_iso8601(
+                                json_string_value(json_object_get(snoozed,
+                                                                  "until")),
+                                &cur->snoozed_until);
+                            json_decref(snoozed);
+                        }
+                    }
                 }
-                else {
+                if (!cur->snoozed_until) {
                     /* If not snoozed, we use receivedAt */
                     cur->snoozed_until = record.internaldate;
                 }
@@ -6398,6 +6425,9 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             ret = numcmp(d1, d2);
             break;
         }
+        case SORT_SAVEDATE:
+            ret = numcmp(md1->savedate, md2->savedate);
+            break;
         case SORT_SNOOZEDUNTIL:
             ret = numcmp(md1->snoozed_until, md2->snoozed_until);
             break;
@@ -7935,6 +7965,7 @@ EXPORTED void freesortcrit(struct sortcrit *s)
         case SORT_HASCONVFLAG:
             free(s[i].args.flag.name);
             break;
+        case SORT_SAVEDATE:
         case SORT_SNOOZEDUNTIL:
             free(s[i].args.mailbox.id);
             break;

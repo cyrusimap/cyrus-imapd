@@ -275,6 +275,7 @@ enum {
     SORT_GUID,          /* nonstandard */
     SORT_EMAILID,       /* nonstandard */
     SORT_THREADID,      /* nonstandard */
+    SORT_SAVEDATE,      /* nonstandard */
     SORT_SNOOZEDUNTIL   /* nonstandard */
     /* values > 255 are reserved for internal use */
 };

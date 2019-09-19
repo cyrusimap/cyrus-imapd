@@ -2477,9 +2477,11 @@ static struct sortcrit *_email_buildsort(json_t *sort)
         }
         // FM specific
         if (!strcmp(prop, "addedDates")) {
-            // XXX: this is really cheating, but it works because we only
-            // use this sort when searching on a single mailbox
-            sortcrit[i].key = SORT_SEQUENCE;
+            const char *mboxid =
+                json_string_value(json_object_get(jcomp, "mailboxId"));
+
+            sortcrit[i].key = SORT_SAVEDATE;
+            sortcrit[i].args.mailbox.id = xstrdupnull(mboxid);
         }
         if (!strcmp(prop, "threadSize")) {
             sortcrit[i].key = SORT_CONVSIZE;

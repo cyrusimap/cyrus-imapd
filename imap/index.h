@@ -156,6 +156,7 @@ typedef struct msgdata {
     time_t sentdate;            /* sent date & time of message
                                    from Date: header (adjusted by time zone) */
     time_t internaldate;        /* internaldate */
+    time_t savedate;            /* savedate */
     size_t size;                /* message size */
     modseq_t modseq;            /* modseq of record*/
     bit32 hasflag;              /* hasflag values (up to 32 of them) */
