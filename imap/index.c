@@ -5210,6 +5210,7 @@ static int ping(struct backend *s,
     struct body_t resp_body;
     unsigned statuscode = 0;
     const char *errstr;
+    int r = 0;
 
     prot_printf(s->out,
                 "HEAD %s %s\r\n"
@@ -5226,18 +5227,25 @@ static int ping(struct backend *s,
     /* Read response(s) from backend until final response or error */
     do {
         resp_body.flags = BODY_DISCARD;
-        if (http_read_response(s, METH_HEAD, &statuscode,
-                               &resp_hdrs, &resp_body, &errstr)) {
+        r = http_read_response(s, METH_HEAD, &statuscode,
+                               &resp_hdrs, &resp_body, &errstr);
+        if (r) {
             break;
         }
     } while (statuscode < 200);
 
-    syslog(LOG_DEBUG, "extractor_ping: HEAD %s: got status %u",
-           ctx->path, statuscode);
+    if (r) {
+        syslog(LOG_DEBUG, "extractor_ping: HEAD %s: failed (%s): %s",
+               ctx->path, error_message(r), errstr);
+    }
+    else {
+        syslog(LOG_DEBUG, "extractor_ping: HEAD %s: got status %u",
+               ctx->path, statuscode);
+    }
 
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
 
-    return (!statuscode);
+    return r;
 }
 
 static int logout(struct backend *s __attribute__((unused)))
