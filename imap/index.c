@@ -6010,21 +6010,24 @@ MsgData **index_msgdata_load(struct index_state *state,
                 strarray_appendm(&cur->annot, buf_release(&value));
                 break;
             }
-            case SORT_SNOOZEDUNTIL: {
-                json_t *snoozed =
-                    jmap_fetch_snoozed(state->mboxname, record.uid);
+            case SORT_SNOOZEDUNTIL:
+                if ((record.internal_flags & FLAG_INTERNAL_SNOOZED) &&
+                    (!sortcrit[j].args.mailbox.id ||
+                     !strcmp(mailbox->uniqueid, sortcrit[j].args.mailbox.id))) {
+                    json_t *snoozed =
+                        jmap_fetch_snoozed(mailbox->name, record.uid);
 
-                if (snoozed) {
-                    time_from_iso8601(json_string_value(json_object_get(snoozed, "until")),
-                                      &cur->snoozed_until);
-                    json_decref(snoozed);
+                    if (snoozed) {
+                        time_from_iso8601(
+                            json_string_value(json_object_get(snoozed, "until")),
+                            &cur->snoozed_until);
+                        json_decref(snoozed);
+                    }
                 }
-                else {
-                    /* If snoozed is NULL, we use receivedAt */
-                    cur->internaldate = record.internaldate;
-                }
+
+                /* If snoozed is NULL, we use receivedAt */
+                cur->internaldate = record.internaldate;
                 break;
-            }
             case LOAD_IDS:
                 index_get_ids(cur, envtokens, cacheitem_base(&record, CACHE_HEADERS),
                                               cacheitem_size(&record, CACHE_HEADERS));
@@ -7942,6 +7945,9 @@ EXPORTED void freesortcrit(struct sortcrit *s)
         case SORT_HASFLAG:
         case SORT_HASCONVFLAG:
             free(s[i].args.flag.name);
+            break;
+        case SORT_SNOOZEDUNTIL:
+            free(s[i].args.mailbox.id);
             break;
         }
         i++;

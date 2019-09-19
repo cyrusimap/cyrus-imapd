@@ -2488,7 +2488,11 @@ static struct sortcrit *_email_buildsort(json_t *sort)
             sortcrit[i].key = SORT_SPAMSCORE;
         }
         if (!strcmp(prop, "snoozedUntil")) {
+            const char *mboxid =
+                json_string_value(json_object_get(jcomp, "mailboxId"));
+
             sortcrit[i].key = SORT_SNOOZEDUNTIL;
+            sortcrit[i].args.mailbox.id = xstrdupnull(mboxid);
         }
     }
 

@@ -243,6 +243,9 @@ struct sortcrit {
         struct {
             char *name;
         } flag;
+        struct {
+            char *id;
+        } mailbox;
     } args;
 };
 
