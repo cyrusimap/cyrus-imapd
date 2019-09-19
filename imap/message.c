@@ -1343,6 +1343,7 @@ static void message_parse_params(const char *hdr, struct param **paramp)
         /* Find end of value */
         value = hdr;
         if (*hdr == '\"') {
+            /* Parse quoted-string */
             hdr++;
             while (*hdr && *hdr != '\"') {
                 if (*hdr == '\\') {
@@ -1359,9 +1360,29 @@ static void message_parse_params(const char *hdr, struct param **paramp)
             if (!*hdr++) return;
         }
         else {
-            for (; *hdr && !Uisspace(*hdr) && *hdr != ';' && *hdr != '('; hdr++) {
-                if (*hdr < ' ') goto skip;
+            /* Parse token (leniently allow space and tspecials) */
+            const char *endval = hdr;
+            while (*hdr && *hdr != ';' && *hdr != '(') {
+                if (*hdr == '\r') {
+                    /* Skip FWS and stop at CRLF */
+                    if (hdr[1] == '\n' && (hdr[2] == ' ' || hdr[2] == '\t')) {
+                        hdr += 2;
+                        continue;
+                    }
+                    else break;
+                }
+                if (*hdr < ' ' && *hdr != '\t') {
+                    /* Reject control characters */
+                    goto skip;
+                }
+                if (*hdr != ' ' && *hdr != '\t') {
+                    /* Keep last non-WSP position */
+                    endval = hdr;
+                }
+                hdr++;
             }
+            /* Right-strip white space */
+            hdr = endval + 1;
         }
         valuelen = hdr - value;
 
