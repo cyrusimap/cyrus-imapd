@@ -1070,8 +1070,9 @@ static void process_snoozed(struct mailbox *mailbox,
     r = append_commit(&as);
     if (r) goto done;
 
-    /* Expunge the resource from the \Snoozed mailbox */
+    /* Expunge the resource from the \Snoozed mailbox (also unset \snoozed) */
     record->internal_flags |= FLAG_INTERNAL_EXPUNGED;
+    record->internal_flags &= ~FLAG_INTERNAL_SNOOZED;
     r = mailbox_rewrite_index_record(mailbox, record);
     if (r) {
         syslog(LOG_ERR, "expunging record (%s:%u) failed: %s",
