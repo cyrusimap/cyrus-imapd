@@ -6014,19 +6014,13 @@ MsgData **index_msgdata_load(struct index_state *state,
                 if ((record.internal_flags & FLAG_INTERNAL_SNOOZED) &&
                     (!sortcrit[j].args.mailbox.id ||
                      !strcmp(mailbox->uniqueid, sortcrit[j].args.mailbox.id))) {
-                    json_t *snoozed =
-                        jmap_fetch_snoozed(mailbox->name, record.uid);
-
-                    if (snoozed) {
-                        time_from_iso8601(
-                            json_string_value(json_object_get(snoozed, "until")),
-                            &cur->snoozed_until);
-                        json_decref(snoozed);
-                    }
+                    /* SAVEDATE == snoozed#until */
+                    cur->snoozed_until = record.savedate;
                 }
-
-                /* If snoozed is NULL, we use receivedAt */
-                cur->internaldate = record.internaldate;
+                else {
+                    /* If not snoozed, we use receivedAt */
+                    cur->snoozed_until = record.internaldate;
+                }
                 break;
             case LOAD_IDS:
                 index_get_ids(cur, envtokens, cacheitem_base(&record, CACHE_HEADERS),
@@ -6404,14 +6398,9 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             ret = numcmp(d1, d2);
             break;
         }
-        case SORT_SNOOZEDUNTIL: {
-            time_t d1 =
-                md1->snoozed_until ? md1->snoozed_until : md1->internaldate;
-            time_t d2 =
-                md2->snoozed_until ? md2->snoozed_until : md2->internaldate;
-            ret = numcmp(d1, d2);
+        case SORT_SNOOZEDUNTIL:
+            ret = numcmp(md1->snoozed_until, md2->snoozed_until);
             break;
-        }
         case SORT_FROM:
             ret = strcmpsafe(md1->from, md2->from);
             break;
