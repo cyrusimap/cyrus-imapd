@@ -601,13 +601,36 @@ sub test_email_get_attachment_name
     " filename*1*=\".txt\"\r\n" .
     "\r\n" .
     "test6".
+
+    # RFC 2045, section 5.1. requires quoted-string for parameter
+    # values with tspecial or whitespace, but some clients ignore
+    # this. The following tests check Cyrus leniently accept this.
+
     "\r\n--sub\r\n".
-    # RFC 2045, section 5.1. requires parameter values with tspecial
-    # characters to be quoted, but some clients don't implement this.
     "Content-Type: application/test7; name==?iso-8859-1?b?Q2Fm6S5kb2M=?=\r\n".
     "Content-Disposition: attachment; filename==?iso-8859-1?b?Q2Fm6S5kb2M=?=\r\n".
     "\r\n" .
     "test7".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test8; name= foo \r\n".
+    "\r\n" .
+    "test8".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test9; name=foo bar\r\n".
+    "\r\n" .
+    "test9".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test10; name=foo bar\r\n\t baz \r\n".
+    "\r\n" .
+    "test10".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test11; name=\r\n\t baz \r\n".
+    "\r\n" .
+    "test11".
+    "\r\n--sub\r\n".
+    "Content-Type: application/test12; name= \r\n\t  \r\n".
+    "\r\n" .
+    "test12".
     "\r\n--sub--\r\n";
 
     $exp_sub{A} = $self->make_message("foo",
@@ -660,6 +683,21 @@ sub test_email_get_attachment_name
 
     $att = $m{"application/test7"};
     $self->assert_str_equals("Caf\N{LATIN SMALL LETTER E WITH ACUTE}.doc", $att->{name});
+
+    $att = $m{"application/test8"};
+    $self->assert_str_equals("foo", $att->{name});
+
+    $att = $m{"application/test9"};
+    $self->assert_str_equals("foo bar", $att->{name});
+
+    $att = $m{"application/test10"};
+    $self->assert_str_equals("foo bar\t baz", $att->{name});
+
+    $att = $m{"application/test11"};
+    $self->assert_str_equals("baz", $att->{name});
+
+    $att = $m{"application/test12"};
+    $self->assert_null($att->{name});
 }
 
 sub test_email_get_body_notext
