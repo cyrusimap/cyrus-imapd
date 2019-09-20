@@ -9279,9 +9279,7 @@ static void _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptr
         }
         ptrarray_t *current_uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
 
-        if (update->snooze_in_mboxid/* && update->snoozed_uidrec &&
-            !strcmp(update->snooze_in_mboxid,
-            update->snoozed_uidrec->mboxrec->mbox_id)*/) {
+        if (update->snooze_in_mboxid) {
             /* Update/delete existing snoozeDetails */
 
             if (update->snoozed) {
