@@ -1343,7 +1343,10 @@ xmlNodePtr init_xml_response(const char *resp, int ns,
     xmlNodePtr root = NULL;
 
     if (!doc) return NULL;
-    if (!(root = xmlNewNode(NULL, BAD_CAST resp))) return NULL;
+    if (!(root = xmlNewNode(NULL, BAD_CAST resp))) {
+        xmlFreeDoc(doc);
+        return NULL;
+    }
 
     xmlDocSetRootElement(doc, root);
 
