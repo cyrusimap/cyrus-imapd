@@ -61,6 +61,7 @@ extern void xapian_check_if_needs_reindex(const strarray_t *sources, strarray_t 
 #define XAPIAN_DBW_CONVINDEXED 0
 #define XAPIAN_DBW_XAPINDEXED 1
 extern int xapian_dbw_open(const char **paths, xapian_dbw_t **dbwp, int mode);
+extern int xapian_dbw_openmem(xapian_dbw_t **dbwp);
 extern void xapian_dbw_close(xapian_dbw_t *dbw);
 extern int xapian_dbw_begin_txn(xapian_dbw_t *dbw);
 extern int xapian_dbw_commit_txn(xapian_dbw_t *dbw);
@@ -73,6 +74,7 @@ extern int xapian_dbw_is_indexed(xapian_dbw_t *dbw, const struct message_guid *g
 
 /* query-side interface */
 extern int xapian_db_open(const char **paths, xapian_db_t **dbp);
+extern int xapian_db_opendbw(struct xapian_dbw *dbw, xapian_db_t **dbp);
 extern void xapian_db_close(xapian_db_t *);
 extern xapian_query_t *xapian_query_new_match(const xapian_db_t *, int num_part, const char *term);
 extern xapian_query_t *xapian_query_new_compound(const xapian_db_t *, int is_or, xapian_query_t **children, int n);
