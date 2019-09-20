@@ -741,7 +741,8 @@ static int export_addressbook(struct transaction_t *txn)
     /* Short-circuit for HEAD request */
     if (txn->meth == METH_HEAD) {
         response_header(HTTP_OK, txn);
-        return 0;
+        ret = 0;
+        goto done;
     }
 
     /* vCard data in response should not be transformed */
