@@ -67,4 +67,17 @@ extern void jmap_mailbox_capabilities(json_t *jcapabilities);
 extern int jmap_mailbox_find_role(jmap_req_t *req, const char *role,
                                   char **mboxnameptr, char **uniqueid);
 
+/* Matches MIME message mime against the JMAP Email query
+ * filter.
+ *
+ * Contact groups are looked up in the default addressbook
+ * of accountid.
+ *
+ * Returns non-zero if filter matches.
+ * On error, sets the JMAP error in err. */
+extern int jmap_email_matchmime(struct buf *mime,
+                                json_t *jfilter,
+                                const char *accountid,
+                                json_t **err);
+
 #endif /* JMAP_MAIL_H */

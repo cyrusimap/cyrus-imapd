@@ -87,6 +87,7 @@
 #include "sync_log.h"
 #include "times.h"
 #include "util.h"
+#include "xapian_wrap.h"
 #include "xmalloc.h"
 #include "xsha1.h"
 #include "xstrnchr.h"
@@ -102,6 +103,7 @@ static int jmap_email_changes(jmap_req_t *req);
 static int jmap_email_import(jmap_req_t *req);
 static int jmap_email_parse(jmap_req_t *req);
 static int jmap_email_copy(jmap_req_t *req);
+static int jmap_email_matchmime_method(jmap_req_t *req);
 static int jmap_searchsnippet_get(jmap_req_t *req);
 static int jmap_thread_get(jmap_req_t *req);
 static int jmap_thread_changes(jmap_req_t *req);
@@ -163,6 +165,12 @@ static jmap_method_t jmap_mail_methods_standard[] = {
         JMAP_URN_MAIL,
         &jmap_email_copy,
         /*flags*/ 0
+    },
+    {
+        "Email/matchMime",
+        JMAP_MAIL_EXTENSION,
+        &jmap_email_matchmime_method,
+        JMAP_SHARED_CSTATE
     },
     {
         "SearchSnippet/get",
@@ -2221,67 +2229,57 @@ static search_expr_t *_email_buildsearch(jmap_req_t *req, json_t *filter,
     return root;
 }
 
-
-struct email_filterrock {
+struct email_contactfilter {
+    const char *accountid;
     struct carddav_db *carddavdb;
     char *addrbook;
     hash_table contactgroups; /* maps groupid to emails (strarray) */
 };
 
-#define EMAIL_FILTERROCK_INITIALIZER { NULL, NULL, HASH_TABLE_INITIALIZER }
-
-static void _email_filterrock_fini(struct email_filterrock *rock)
+static void _email_contactfilter_init(const char *accountid,
+                                      const char *addressbookid,
+                                      struct email_contactfilter *cfilter)
 {
-    if (rock->carddavdb) {
-        carddav_close(rock->carddavdb);
+    memset(cfilter, 0, sizeof(struct email_contactfilter));
+    cfilter->accountid = accountid;
+    if (addressbookid) {
+        cfilter->addrbook = carddav_mboxname(accountid, addressbookid);
     }
-    free(rock->addrbook);
-    free_hash_table(&rock->contactgroups, (void(*)(void*))strarray_free);
 }
 
-static void _email_parse_filter(jmap_req_t *req,
-                                struct jmap_parser *parser,
-                                json_t *filter,
-                                json_t *unsupported,
-                                void *vrock,
-                                json_t **err)
+static void _email_contactfilter_initreq(jmap_req_t *req, struct email_contactfilter *cfilter)
+{
+    const char *addressbookid = json_string_value(json_object_get(req->args, "addressbookId"));
+    _email_contactfilter_init(req->accountid, addressbookid, cfilter);
+}
+
+static void _email_contactfilter_fini(struct email_contactfilter *cfilter)
+{
+    if (cfilter->carddavdb) {
+        carddav_close(cfilter->carddavdb);
+    }
+    free(cfilter->addrbook);
+    free_hash_table(&cfilter->contactgroups, (void(*)(void*))strarray_free);
+}
+
+static int _email_parse_filter(struct jmap_parser *parser,
+                               json_t *filter,
+                               json_t *unsupported,
+                               const strarray_t *capabilities,
+                               struct email_contactfilter *cfilter)
 {
     const char *field, *s = NULL;
-    json_t *arg, *val;
-    struct email_filterrock *rock = vrock;
+    json_t *arg;
 
     json_object_foreach(filter, field, arg) {
         if (!strcmp(field, "inMailbox")) {
             if (!json_is_string(arg)) {
                 jmap_parser_invalid(parser, field);
-                continue;
             }
-            mbentry_t *mbentry = _mbentry_by_uniqueid(req, json_string_value(arg));
-            if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
-                jmap_parser_invalid(parser, field);
-            }
-            mboxlist_entry_free(&mbentry);
         }
         else if (!strcmp(field, "inMailboxOtherThan")) {
             if (!json_is_array(arg)) {
                 jmap_parser_invalid(parser, field);
-            }
-            else {
-                size_t i;
-                json_array_foreach(arg, i, val) {
-                    const char *s = json_string_value(val);
-                    int is_valid = 0;
-                    if (s) {
-                        mbentry_t *mbentry = _mbentry_by_uniqueid(req, s);
-                        is_valid = mbentry && jmap_hasrights(req, mbentry, ACL_LOOKUP);
-                        mboxlist_entry_free(&mbentry);
-                    }
-                    if (!is_valid) {
-                        jmap_parser_push_index(parser, field, i, s);
-                        jmap_parser_invalid(parser, NULL);
-                        jmap_parser_pop(parser);
-                    }
-                }
             }
         }
         else if (!strcmp(field, "before") ||
@@ -2330,7 +2328,7 @@ static void _email_parse_filter(jmap_req_t *req,
                  !strcmp(field, "attachmentName") ||  /* FM-specific */
                  !strcmp(field, "attachmentType") ||  /* FM-specific */
                  (!strcmp(field, "attachmentBody") &&
-                  jmap_is_using(req, JMAP_SEARCH_EXTENSION))) {
+                  strarray_find(capabilities, JMAP_SEARCH_EXTENSION, 0) >= 0)) {
             if (!json_is_string(arg)) {
                 jmap_parser_invalid(parser, field);
             }
@@ -2365,38 +2363,33 @@ static void _email_parse_filter(jmap_req_t *req,
                 }
             }
         }
-        else if (jmap_is_using(req, JMAP_MAIL_EXTENSION) &&
+        else if (strarray_find(capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
                  (!strcmp(field, "fromContactGroupId") ||
                   !strcmp(field, "toContactGroupId") ||
                   !strcmp(field, "ccContactGroupId") ||
                   !strcmp(field, "bccContactGroupId"))) {
             const char *groupid = json_string_value(arg);
             if (groupid) {
-                if (!rock->contactgroups.size) {
+                if (!cfilter->contactgroups.size) {
                     /* Initialize groups lookup table */
-                    construct_hash_table(&rock->contactgroups, 32, 0);
+                    construct_hash_table(&cfilter->contactgroups, 32, 0);
                 }
-                if (!hash_lookup(groupid, &rock->contactgroups)) {
-                    if (!rock->carddavdb) {
+                if (!hash_lookup(groupid, &cfilter->contactgroups)) {
+                    if (!cfilter->carddavdb) {
                         /* Open CardDAV db first time we need it */
-                        rock->carddavdb = carddav_open_userid(req->accountid);
-                        if (!rock->carddavdb) {
-                            syslog(LOG_ERR, "jmap: carddav_open_userid(%s) failed", req->accountid);
-                            *err = jmap_server_error(CYRUSDB_INTERNAL);
-                            return;
+                        cfilter->carddavdb = carddav_open_userid(cfilter->accountid);
+                        if (!cfilter->carddavdb) {
+                            syslog(LOG_ERR, "jmap: carddav_open_userid(%s) failed",
+                                    cfilter->accountid);
+                            return CYRUSDB_INTERNAL;
                         }
                     }
-                    if (!rock->addrbook && json_object_get(req->args, "addressbookId")) {
-                        /* Determine addrbook to lookup contact groups */
-                        rock->addrbook = carddav_mboxname(req->accountid,
-                                json_string_value(json_object_get(req->args, "addressbookId")));
-                    }
                     /* Lookup group member email addresses */
-                    strarray_t *members = carddav_getgroup(rock->carddavdb, rock->addrbook, groupid);
+                    strarray_t *members = carddav_getgroup(cfilter->carddavdb, cfilter->addrbook, groupid);
                     if (!members || !strarray_size(members)) {
                         jmap_parser_invalid(parser, field);
                     }
-                    else hash_insert(groupid, members, &rock->contactgroups);
+                    else hash_insert(groupid, members, &cfilter->contactgroups);
                 }
             }
             else {
@@ -2405,6 +2398,62 @@ static void _email_parse_filter(jmap_req_t *req,
         }
         else {
             jmap_parser_invalid(parser, field);
+        }
+    }
+
+    return 0;
+}
+
+static void _email_parse_filter_cb(jmap_req_t *req,
+                                   struct jmap_parser *parser,
+                                   json_t *filter,
+                                   json_t *unsupported,
+                                   void *rock,
+                                   json_t **err)
+{
+    struct email_contactfilter *cfilter = rock;
+
+    /* Parse filter */
+    int r = _email_parse_filter(parser, filter, unsupported,
+                                req->using_capabilities, cfilter);
+    if (r) {
+        *err = jmap_server_error(r);
+        return;
+    }
+
+    const char *field;
+    json_t *arg;
+
+    /* Validate permissions */
+    json_object_foreach(filter, field, arg) {
+        if (!strcmp(field, "inMailbox")) {
+            if (json_is_string(arg)) {
+                mbentry_t *mbentry = _mbentry_by_uniqueid(req, json_string_value(arg));
+                if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
+                    jmap_parser_invalid(parser, field);
+                }
+                mboxlist_entry_free(&mbentry);
+            }
+        }
+        else if (!strcmp(field, "inMailboxOtherThan")) {
+            if (json_is_array(arg)) {
+                size_t i;
+                json_t *val;
+                json_array_foreach(arg, i, val) {
+                    const char *s = json_string_value(val);
+                    int is_valid = 0;
+                    if (s) {
+                        mbentry_t *mbentry = _mbentry_by_uniqueid(req, s);
+                        is_valid = mbentry && jmap_hasrights(req, mbentry, ACL_LOOKUP);
+                        mboxlist_entry_free(&mbentry);
+                    }
+                    if (!is_valid) {
+                        jmap_parser_push_index(parser, field, i, s);
+                        jmap_parser_invalid(parser, NULL);
+                        jmap_parser_pop(parser);
+                    }
+                }
+            }
         }
     }
 }
@@ -3135,14 +3184,16 @@ static int jmap_email_query(jmap_req_t *req)
     struct jmap_query query;
     int collapse_threads = 0;
     json_t *jemailpartids = NULL;
-    struct email_filterrock filterrock = EMAIL_FILTERROCK_INITIALIZER;
+    struct email_contactfilter contactfilter;
     int r = 0;
+
+    _email_contactfilter_initreq(req, &contactfilter);
 
     /* Parse request */
     json_t *err = NULL;
     jmap_query_parse(req, &parser,
                      _email_queryargs_parse, &collapse_threads,
-                     _email_parse_filter, &filterrock,
+                     _email_parse_filter_cb, &contactfilter,
                      _email_parse_comparator, NULL,
                      &query, &err);
     if (err) {
@@ -3165,7 +3216,7 @@ static int jmap_email_query(jmap_req_t *req)
     }
 
     /* Run query */
-    _email_query(req, &query, collapse_threads, &filterrock.contactgroups,
+    _email_query(req, &query, collapse_threads, &contactfilter.contactgroups,
                  &jemailpartids, &err);
     if (err) {
         jmap_error(req, err);
@@ -3201,7 +3252,7 @@ static int jmap_email_query(jmap_req_t *req)
     jmap_ok(req, res);
 
 done:
-    _email_filterrock_fini(&filterrock);
+    _email_contactfilter_fini(&contactfilter);
     json_decref(jemailpartids);
     jmap_query_fini(&query);
     jmap_parser_fini(&parser);
@@ -3210,7 +3261,7 @@ done:
 
 static void _email_querychanges_collapsed(jmap_req_t *req,
                                           struct jmap_querychanges *query,
-                                          struct email_filterrock *filterrock,
+                                          struct email_contactfilter *contactfilter,
                                           json_t **err)
 {
     modseq_t since_modseq;
@@ -3230,7 +3281,7 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     }
 
     struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort,
-                                                  &filterrock->contactgroups,
+                                                  &contactfilter->contactgroups,
                                                   /*want_expunged*/1, /*ignore_timer*/0);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
@@ -3418,7 +3469,7 @@ done:
 
 static void _email_querychanges_uncollapsed(jmap_req_t *req,
                                             struct jmap_querychanges *query,
-                                            struct email_filterrock *filterrock,
+                                            struct email_contactfilter *contactfilter,
                                             json_t **err)
 {
     modseq_t since_modseq;
@@ -3438,7 +3489,7 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     }
 
     struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort,
-                                                  &filterrock->contactgroups,
+                                                  &contactfilter->contactgroups,
                                                   /*want_expunged*/1, /*ignore_timer*/0);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
@@ -3576,14 +3627,16 @@ static int jmap_email_querychanges(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_querychanges query;
-    struct email_filterrock filterrock = EMAIL_FILTERROCK_INITIALIZER;
+    struct email_contactfilter contactfilter;
     int collapse_threads = 0;
+
+    _email_contactfilter_initreq(req, &contactfilter);
 
     /* Parse arguments */
     json_t *err = NULL;
     jmap_querychanges_parse(req, &parser,
                             _email_queryargs_parse, &collapse_threads,
-                            _email_parse_filter, &filterrock,
+                            _email_parse_filter_cb, &contactfilter,
                             _email_parse_comparator, NULL,
                             &query, &err);
     if (err) {
@@ -3600,9 +3653,9 @@ static int jmap_email_querychanges(jmap_req_t *req)
 
     /* Query changes */
     if (collapse_threads)
-        _email_querychanges_collapsed(req, &query, &filterrock, &err);
+        _email_querychanges_collapsed(req, &query, &contactfilter, &err);
     else
-        _email_querychanges_uncollapsed(req, &query, &filterrock, &err);
+        _email_querychanges_uncollapsed(req, &query, &contactfilter, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
@@ -3614,7 +3667,7 @@ static int jmap_email_querychanges(jmap_req_t *req)
     jmap_ok(req, res);
 
 done:
-    _email_filterrock_fini(&filterrock);
+    _email_contactfilter_fini(&contactfilter);
     jmap_querychanges_fini(&query);
     jmap_parser_fini(&parser);
     return 0;
@@ -4074,8 +4127,10 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     json_t *snippets, *notfound;
     struct buf buf = BUF_INITIALIZER;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct email_filterrock filterrock = EMAIL_FILTERROCK_INITIALIZER;
+    struct email_contactfilter contactfilter;
     json_t *err = NULL;
+
+    _email_contactfilter_initreq(req, &contactfilter);
 
     /* Parse and validate arguments. */
     json_t *unsupported_filter = json_pack("[]");
@@ -4091,7 +4146,7 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
             if (JNOTNULL(jfilter)) {
                 jmap_parser_push(&parser, "filter");
                 jmap_filter_parse(req, &parser, jfilter, unsupported_filter,
-                                  _email_parse_filter, &filterrock, &err);
+                                  _email_parse_filter_cb, &contactfilter, &err);
                 jmap_parser_pop(&parser);
                 if (err) break;
             }
@@ -4190,7 +4245,7 @@ static int jmap_searchsnippet_get(jmap_req_t *req)
     jmap_ok(req, res);
 
 done:
-    _email_filterrock_fini(&filterrock);
+    _email_contactfilter_fini(&contactfilter);
     jmap_parser_fini(&parser);
     buf_free(&buf);
     return r;
@@ -11876,5 +11931,433 @@ static int jmap_identity_get(jmap_req_t *req)
 done:
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
+    return 0;
+}
+
+struct matchmime_receiver {
+    struct search_text_receiver super;
+    xapian_dbw_t *dbw;
+    struct buf buf;
+};
+
+static int _matchmime_tr_begin_mailbox(search_text_receiver_t *rx __attribute__((unused)),
+                                       struct mailbox *mailbox __attribute__((unused)),
+                                       int incremental __attribute__((unused)))
+{
+    return 0;
+}
+
+static uint32_t _matchmime_tr_first_unindexed_uid(search_text_receiver_t *rx __attribute__((unused)))
+{
+    return 1;
+}
+
+static int _matchmime_tr_is_indexed(search_text_receiver_t *rx __attribute__((unused)),
+                                    message_t *msg __attribute__((unused)))
+{
+    return 0;
+}
+
+static int _matchmime_tr_begin_message(search_text_receiver_t *rx, message_t *msg)
+{
+    const struct message_guid *guid;
+    int r = message_get_guid(msg, &guid);
+    if (r) return r;
+
+    struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
+    return xapian_dbw_begin_doc(tr->dbw, guid, 'G');
+}
+
+static void _matchmime_tr_begin_part(search_text_receiver_t *rx __attribute__((unused)),
+                                     int part __attribute__((unused)),
+                                     const struct message_guid *content_guid __attribute__((unused)))
+{
+}
+
+static void _matchmime_tr_append_text(search_text_receiver_t *rx,
+                                      const struct buf *text)
+{
+    struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
+    buf_append(&tr->buf, text);
+}
+
+static void _matchmime_tr_end_part(search_text_receiver_t *rx, int part)
+{
+    struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
+    xapian_dbw_doc_part(tr->dbw, &tr->buf, part);
+    buf_reset(&tr->buf);
+}
+
+static int _matchmime_tr_end_message(search_text_receiver_t *rx)
+{
+    struct matchmime_receiver *tr = (struct matchmime_receiver *) rx;
+    return xapian_dbw_end_doc(tr->dbw);
+}
+
+static int _matchmime_tr_end_mailbox(search_text_receiver_t *rx __attribute__((unused)),
+                                     struct mailbox *mailbox __attribute__((unused)))
+{
+    return 0;
+}
+
+static int _matchmime_tr_flush(search_text_receiver_t *rx __attribute__((unused)))
+{
+    return 0;
+}
+
+static int _matchmime_tr_audit_mailbox(search_text_receiver_t *rx __attribute__((unused)),
+                                       bitvector_t *unindexed __attribute__((unused)))
+{
+    return 0;
+}
+
+static int _matchmime_tr_index_charset_flags(int base_flags)
+{
+    return base_flags | CHARSET_KEEPCASE;
+}
+
+static int _email_matchmime_evaluate_xcb(void *base __attribute__((unused)),
+                                         size_t n, void *rock)
+{
+    int *matches = rock;
+    /* There's just a single message in the in-memory database,
+     * so no need to check the message guid in the search result. */
+    *matches = n > 0;
+    return 0;
+}
+
+static xapian_query_t *_email_matchmime_contactgroup(const char *groupid,
+                                                     int part,
+                                                     xapian_db_t *db,
+                                                     struct email_contactfilter *cfilter)
+{
+    if (!cfilter->contactgroups.size) return NULL;
+
+    xapian_query_t *xq = NULL;
+    strarray_t *members = hash_lookup(groupid, &cfilter->contactgroups);
+    if (members && strarray_size(members)) {
+        ptrarray_t xsubqs = PTRARRAY_INITIALIZER;
+        for (int j = 0; j < strarray_size(members); j++) {
+            const char *member = strarray_nth(members, j);
+            xapian_query_t *xsubq = xapian_query_new_match(db, part, member);
+            if (xsubq) ptrarray_append(&xsubqs, xsubq);
+        }
+        if (ptrarray_size(&xsubqs)) {
+            xq = xapian_query_new_compound(db, /*is_or*/1,
+                    (xapian_query_t **) xsubqs.data, xsubqs.count);
+        }
+        ptrarray_fini(&xsubqs);
+    }
+    return xq;
+}
+
+static int _email_matchmime_evaluate(json_t *filter,
+                                     message_t *m,
+                                     xapian_db_t *db,
+                                     struct email_contactfilter *cfilter)
+{
+    json_t *conditions = json_object_get(filter, "conditions");
+    if (json_is_array(conditions)) {
+
+        /* Evaluate FilterOperator */
+
+        const char *strop = json_string_value(json_object_get(filter, "operator"));
+        enum search_op op = SEOP_UNKNOWN;
+        int matches;
+
+        if (!strcasecmpsafe(strop, "AND")) {
+            op = SEOP_AND;
+            matches = 1;
+        }
+        else if (!strcasecmpsafe(strop, "OR")) {
+            op = SEOP_OR;
+            matches = json_array_size(conditions) == 0;
+        }
+        else if (!strcasecmpsafe(strop, "NOT")) {
+            op = SEOP_NOT;
+            matches = json_array_size(conditions) != 0;
+        }
+        else return 0;
+
+        json_t *condition;
+        size_t i;
+        json_array_foreach(conditions, i, condition) {
+            int cond_matches = _email_matchmime_evaluate(condition, m, db, cfilter);
+            if (op == SEOP_AND && !cond_matches) {
+                return 0;
+            }
+            if (op == SEOP_OR && cond_matches) {
+                return 1;
+            }
+            if (op == SEOP_NOT && cond_matches) {
+                return 0;
+            }
+        }
+
+        return matches;
+    }
+
+    /* Evaluate FilterCondition */
+
+    int matches = 1;
+
+    /* Xapian-backed criteria */
+    ptrarray_t xqs = PTRARRAY_INITIALIZER;
+    const char *match;
+    if ((match = json_string_value(json_object_get(filter, "text")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_ANY, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "from")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_FROM, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "to")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_TO, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "cc")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_CC, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "bcc")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_BCC, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "subject")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_SUBJECT, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "body")))) {
+        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_BODY, match);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "fromContactGroupId")))) {
+        xapian_query_t *xq = _email_matchmime_contactgroup(match, SEARCH_PART_FROM, db, cfilter);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "toContactGroupId")))) {
+        xapian_query_t *xq = _email_matchmime_contactgroup(match, SEARCH_PART_TO, db, cfilter);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "ccContactGroupId")))) {
+        xapian_query_t *xq = _email_matchmime_contactgroup(match, SEARCH_PART_CC, db, cfilter);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((match = json_string_value(json_object_get(filter, "bccContactGroupId")))) {
+        xapian_query_t *xq = _email_matchmime_contactgroup(match, SEARCH_PART_BCC, db, cfilter);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if (xqs.count) {
+        xapian_query_t *xq = xapian_query_new_compound(db, /*is_or*/0,
+                (xapian_query_t **) xqs.data, xqs.count);
+        xapian_query_run(db, xq, 0, _email_matchmime_evaluate_xcb, &matches);
+        xapian_query_free(xq);
+    }
+    ptrarray_fini(&xqs);
+
+    /* size */
+    if (json_object_get(filter, "minSize") || json_object_get(filter, "maxSize")) {
+        uint32_t size;
+        if (message_get_size(m, &size) == 0) {
+            json_int_t jint;
+            if ((jint = json_integer_value(json_object_get(filter, "minSize"))) > 0) {
+                if (size < jint) return 0;
+            }
+            if ((jint = json_integer_value(json_object_get(filter, "maxSize"))) > 0) {
+                if (size > jint) return 0;
+            }
+        }
+    }
+
+    json_t *jval;
+
+    /* hasAttachment */
+    if (JNOTNULL(jval = json_object_get(filter, "hasAttachment"))) {
+        const struct body *body;
+        if (message_get_cachebody(m, &body) == 0) {
+            struct emailbodies bodies = EMAILBODIES_INITIALIZER;
+            if (_email_extract_bodies(body, &bodies) == 0) {
+                int have = ptrarray_size(&bodies.attslist) > 0;
+                int want = jval == json_true();
+                if (have != want) {
+                    matches = 0;
+                }
+            }
+            _emailbodies_fini(&bodies);
+        }
+    }
+
+    /* header */
+    if (JNOTNULL((jval = json_object_get(filter, "header")))) {
+        const char *hdr, *val;
+
+        if (json_array_size(jval) == 2) {
+            hdr = json_string_value(json_array_get(jval, 0));
+            val = json_string_value(json_array_get(jval, 1));
+        } else {
+            hdr = json_string_value(json_array_get(jval, 0));
+            val = NULL; // match any value
+        }
+
+        matches = 0;
+
+        /* Replicate match_header logic in search_expr.c */
+        char *lhdr = lcase(xstrdup(hdr));
+        struct buf buf = BUF_INITIALIZER;
+        int r = message_get_field(m, lhdr,
+                MESSAGE_DECODED|MESSAGE_APPEND|MESSAGE_MULTIPLE, &buf);
+        if (!r) {
+            if (val) {
+                charset_t utf8 = charset_lookupname("utf-8");
+                char *v = NULL;
+                if ((v = charset_convert(val, utf8, charset_flags))) {
+                    comp_pat *pat = charset_compilepat(v);
+                    if (pat) {
+                        matches = charset_searchstring(v, pat, buf.s, buf.len,
+                                                       charset_flags);
+                    }
+                    charset_freepat(pat);
+                }
+                free(v);
+                charset_free(&utf8);
+            }
+            else {
+                matches = buf_len(&buf) > 0;
+            }
+        }
+        buf_free(&buf);
+        free(lhdr);
+
+        if (!matches) return 0;
+    }
+
+    // FIXME before, after?
+
+    return matches;
+}
+
+HIDDEN int jmap_email_matchmime(struct buf *mime,
+                                json_t *jfilter,
+                                const char *accountid,
+                                json_t **err)
+{
+    int r = 0;
+    xapian_dbw_t *dbw = NULL;
+    message_t *m = NULL;
+    int matches = 0;
+
+    /* Parse filter */
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    strarray_t capabilities = STRARRAY_INITIALIZER;
+    struct email_contactfilter cfilter;
+    json_t *unsupported = json_array();
+
+    strarray_append(&capabilities, JMAP_URN_MAIL);
+    strarray_append(&capabilities, JMAP_MAIL_EXTENSION);
+    _email_contactfilter_init(accountid, /*addressbookid*/NULL, &cfilter);
+    r = _email_parse_filter(&parser, jfilter, unsupported,
+                            &capabilities, &cfilter);
+    if (r) {
+        syslog(LOG_ERR, "jmap_matchmime: can't parse filter: %s",
+                error_message(r));
+        *err = jmap_server_error(r);
+        goto done;
+    }
+    else if (json_array_size(parser.invalid)) {
+        *err = json_pack("{s:s s:O}", "type", "invalidArguments",
+                "arguments", parser.invalid);
+        goto done;
+    }
+    else if (json_array_size(unsupported)) {
+        *err = json_pack("{s:s s:O}", "type", "unsupportedFilter",
+                         "filters", unsupported);
+        goto done;
+    }
+
+    /* Parse message into memory */
+    m = message_new_from_data(buf_base(mime), buf_len(mime));
+    if (!m) {
+        syslog(LOG_ERR, "jmap_matchmime: can't create Cyrus message");
+        *err = jmap_server_error(r);
+        goto done;
+    }
+
+    /* Open in-memory search index */
+    r = xapian_dbw_openmem(&dbw);
+    if (r) {
+        syslog(LOG_ERR, "jmap_matchmime: can't open in-memory search backend: %s",
+                error_message(r));
+        *err = jmap_server_error(r);
+        goto done;
+    }
+
+    /* Index message bodies in-memory */
+    struct matchmime_receiver tr = {
+        {
+            _matchmime_tr_begin_mailbox,
+            _matchmime_tr_first_unindexed_uid,
+            _matchmime_tr_is_indexed,
+            _matchmime_tr_begin_message,
+            _matchmime_tr_begin_part,
+            _matchmime_tr_append_text,
+            _matchmime_tr_end_part,
+            _matchmime_tr_end_message,
+            _matchmime_tr_end_mailbox,
+            _matchmime_tr_flush,
+            _matchmime_tr_audit_mailbox,
+            _matchmime_tr_index_charset_flags,
+        },
+        dbw, BUF_INITIALIZER
+    };
+    r = index_getsearchtext(m, NULL, (struct search_text_receiver*) &tr, /*snippet*/0);
+    if (r) {
+        syslog(LOG_ERR, "jmap_matchmime: can't index MIME message: %s",
+                error_message(r));
+        *err = jmap_server_error(r);
+        goto done;
+    }
+    buf_free(&tr.buf);
+
+    /* Evaluate filter */
+    xapian_db_t *db = NULL;
+    r = xapian_db_opendbw(dbw, &db);
+    if (r) {
+        syslog(LOG_ERR, "jmap_matchmime: can't open query backend: %s",
+                error_message(r));
+        *err = jmap_server_error(r);
+        goto done;
+    }
+    matches = _email_matchmime_evaluate(jfilter, m, db, &cfilter);
+    xapian_db_close(db);
+
+done:
+    _email_contactfilter_fini(&cfilter);
+    jmap_parser_fini(&parser);
+    strarray_fini(&capabilities);
+    json_decref(unsupported);
+    xapian_dbw_close(dbw);
+    message_unref(&m);
+    return matches;
+}
+
+static int jmap_email_matchmime_method(jmap_req_t *req)
+{
+    json_t *jfilter = json_object_get(req->args, "filter");
+    json_t *jmime = json_object_get(req->args, "mime");
+    json_t *err = NULL;
+
+    struct buf mime = BUF_INITIALIZER;
+    buf_setcstr(&mime, json_string_value(jmime));
+    int matches = jmap_email_matchmime(&mime, jfilter, req->accountid, &err);
+    buf_free(&mime);
+    if (!err) {
+        json_t *res = json_pack("{s:O s:b}", "filter", jfilter, "matches", matches);
+        jmap_ok(req, res);
+    }
+    else {
+        jmap_error(req, err);
+    }
+
     return 0;
 }
