@@ -3219,7 +3219,8 @@ sub test_email_set_update_snooze
             update => { $emailId => {
                 "mailboxIds/$inboxId" => undef,
                 "mailboxIds/$snoozedId" => $JSON::true,
-                "snoozed" => { "until" => "$datestr" },
+                "snoozed" => { "until" => "$datestr",
+                               "setKeywords" => { '$seen' => $JSON::true } },
                 keywords => { '$flagged' => JSON::true, '$seen' => JSON::true },
             }}
         }, 'R5']
@@ -3244,10 +3245,9 @@ sub test_email_set_update_snooze
         ['Email/set', {
             update => { $emailId => {
                 "mailboxIds/$draftsId" => $JSON::true,
-                "snoozed" => {
-                    "until" => "$datestr",
-                    "setKeywords" => { '$awakened' => $JSON::true, '$seen' => $JSON::false }
-                },
+                "snoozed/until" => "$datestr",
+                'snoozed/setKeywords/$awakened' => $JSON::true,
+                'snoozed/setKeywords/$seen' => $JSON::false,
             }}
         }, 'R5']
     ]);
@@ -3262,7 +3262,7 @@ sub test_email_set_update_snooze
     $self->assert_not_null($msg->{mailboxIds}{$snoozedId});
     $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
     $self->assert_str_equals($datestr, $msg->{snoozed}{'until'});
-return;
+
     xlog "trigger re-delivery of snoozed email";
     $self->{instance}->run_command({ cyrus => 1 },
                                    'calalarmd', '-t' => $maildate->epoch() + 30 );
