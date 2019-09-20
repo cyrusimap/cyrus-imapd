@@ -414,11 +414,12 @@ int buildquotalist(char *domain, char **roots, int nroots, int isuser)
 
 static int findroot(const char *name, int *thisquota)
 {
-    int i;
+    int i = config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT)
+            ? quota_todo : 0;
 
     *thisquota = -1;
 
-    for (i = quota_todo; i < quota_num; i++) {
+    for (; i < quota_num; i++) {
         const char *root = quotaroots[i].name;
 
         /* have we already passed the name, then there can
@@ -452,21 +453,23 @@ static int fixquota_dombox(const mbentry_t *mbentry, void *rock)
     int thisquota = -1;
     struct txn *txn = NULL;
 
-    while (quota_todo < quota_num) {
-        const char *root = quotaroots[quota_todo].name;
+    if (config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT)) {
+        while (quota_todo < quota_num) {
+            const char *root = quotaroots[quota_todo].name;
 
-        /* in the future, definitely don't close yet */
-        if (compar(mbentry->name, root) < 0)
-            break;
+            /* in the future, definitely don't close yet */
+            if (compar(mbentry->name, root) < 0)
+                break;
 
-        /* inside the first root, don't close yet */
-        if (mboxname_is_prefix(mbentry->name, root))
-            break;
+            /* inside the first root, don't close yet */
+            if (mboxname_is_prefix(mbentry->name, root))
+                break;
 
-        /* finished, close out now */
-        r = fixquota_finish(quota_todo);
-        quota_todo++;
-        if (r) goto done;
+            /* finished, close out now */
+            r = fixquota_finish(quota_todo);
+            quota_todo++;
+            if (r) goto done;
+        }
     }
 
     test_sync_wait(mbentry->name);
