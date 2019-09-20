@@ -8827,6 +8827,7 @@ struct email_update {
     json_t *mailboxids;       /* JMAP Email/set mailboxIds argument */
     int patch_mailboxids;     /* True if mailboxids is a patch object */
     json_t *snoozed;          /* JMAP Email/set snoozed argument */
+    int patch_snoozed;        /* True if snoozed is a patch object */
     struct email_uidrec *snoozed_uidrec; /* Currently snoozed email */
     char *snooze_in_mboxid;   /* Snooze the email in this mailboxid */
 };
@@ -9094,9 +9095,47 @@ static void _email_update_parse(json_t *jemail,
     update->mailboxids = mailboxids;
 
     /* Is snoozed being overwritten or patched? */
-    json_t *snoozed = json_object_get(jemail, "snoozed");
+    json_t *snoozed = json_copy(json_object_get(jemail, "snoozed"));
     if (snoozed == NULL) {
-        /* XXX  Need to handle patching of snooze */
+        /* Collect fields as patch */
+        const char *field = NULL;
+        json_t *jval;
+
+        snoozed = json_object();
+        json_object_foreach(jemail, field, jval) {
+            int invalid = 0;
+
+            if (strncmp(field, "snoozed/", 8)) {
+                continue;
+            }
+
+            const char *subfield = field +8;
+            if (!strcmp(subfield, "until")) {
+                if (!json_is_utcdate(jval)) invalid = 1;
+            }
+            else if (!strncmp(subfield, "setKeywords/", 12)) {
+                const char *keyword = subfield + 12;
+                if (!(json_is_boolean(jval) || json_is_null(jval)) ||
+                    !jmap_email_keyword_is_valid(keyword)) invalid = 1;
+            }
+            else if (!strcmp(subfield, "moveToMailboxId")) {
+                if (!json_is_string(jval)) invalid = 1;
+            }
+            else invalid = 1;
+
+            if (invalid) {
+                jmap_parser_invalid(parser, field);
+            }
+            else {
+                /* At least one field gets patched */
+                update->patch_snoozed = 1;
+                json_object_set(snoozed, subfield, jval);
+            }
+        }
+        if (json_object_size(snoozed) == 0) {
+            json_decref(snoozed);
+            snoozed = NULL;
+        }
     }
     else if (json_is_object(snoozed)) {
         _email_snoozed_parse(snoozed, parser);
@@ -9104,7 +9143,7 @@ static void _email_update_parse(json_t *jemail,
     else if (JNOTNULL(snoozed)) {
         jmap_parser_invalid(parser, "snoozed");
     }
-    update->snoozed = json_incref(snoozed);
+    update->snoozed = snoozed;
 
     buf_free(&buf);
 }
@@ -10471,6 +10510,17 @@ static void _email_bulkupdate_exec_snooze(struct email_bulkupdate *bulk)
 
                 if (uidrec->is_snoozed) {
                     /* Set/update annotation */
+                    if (update->patch_snoozed) {
+                        json_t *patch = update->snoozed;
+                        json_t *orig =
+                            jmap_fetch_snoozed(uidrec->mboxrec->mboxname,
+                                               uidrec->uid);
+
+                        update->snoozed = jmap_patchobject_apply(orig, patch);
+                        json_decref(orig);
+                        json_decref(patch);
+                    }
+
                     char *json = json_dumps(update->snoozed, JSON_COMPACT);
 
                     buf_initm(&val, json, strlen(json));
