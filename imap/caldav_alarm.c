@@ -1097,6 +1097,7 @@ static void process_snoozed(struct mailbox *mailbox,
     if (authstate) auth_freestate(authstate);
     if (mbname) mbname_free(&mbname);
     if (mr) msgrecord_unref(&mr);
+    if (snoozed) json_decref(snoozed);
     buf_free(&buf);
     free(destname);
 }
