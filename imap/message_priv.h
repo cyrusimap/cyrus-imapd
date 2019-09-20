@@ -90,6 +90,9 @@ struct message
     struct body *body;
     char **envelope;
     struct index_record record;
+
+    /* fallback fields for messages without record */
+    struct message_guid guid;
 };
 
 

@@ -4684,9 +4684,15 @@ EXPORTED const struct index_record *msg_record(const message_t *m)
 EXPORTED int message_get_size(message_t *m, uint32_t *sizep)
 {
     int r = message_need(m, M_RECORD);
-    if (r) return r;
-    *sizep = m->record.size;
-    return 0;
+    if (!r) {
+        *sizep = m->record.size;
+        return 0;
+    }
+    r = message_need(m, M_MAP);
+    if (!r) {
+        *sizep = buf_len(&m->map);
+    }
+    return r;
 }
 
 EXPORTED uint32_t msg_size(const message_t *m)
@@ -4754,8 +4760,16 @@ EXPORTED int msg_msgno(const message_t *m)
 EXPORTED int message_get_guid(message_t *m, const struct message_guid **guidp)
 {
     int r = message_need(m, M_RECORD);
-    if (r) return r;
-    *guidp = &m->record.guid;
+    if (!r) {
+        *guidp = &m->record.guid;
+        return 0;
+    }
+    if (message_guid_isnull(&m->guid)) {
+        r = message_need(m, M_MAP);
+        if (r) return r;
+        message_guid_generate(&m->guid, buf_base(&m->map), buf_len(&m->map));
+    }
+    *guidp = &m->guid;
     return 0;
 }
 
@@ -5031,10 +5045,8 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
     }
     else {
         int r = message_need(m, M_RECORD);
-        if (r) return r;
-
         unsigned cache_version = mailbox_cached_header(hdr);
-        if (m->record.cache_version >= cache_version) {
+        if (!r && m->record.cache_version >= cache_version) {
             /* it's in the cache */
             char *headers = NULL;
             int r = message_need(m, M_CACHE);
