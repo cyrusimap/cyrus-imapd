@@ -1283,6 +1283,7 @@ imap_httpd_SOURCES += \
 	imap/jmap_api.c \
 	imap/jmap_calendar.c \
 	imap/jmap_contact.c \
+	imap/jmap_core.c \
 	imap/jmap_ical.c \
 	imap/jmap_ical.h \
 	imap/jmap_mail.c \
