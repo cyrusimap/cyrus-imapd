@@ -466,7 +466,7 @@ static void subseconds_from_icalprop(icalproperty *prop, bit64 *nanoptr)
     }
 }
 
-static int parse_datetime_from_icalprop(icalproperty *prop, struct datetime *dt)
+static int datetime_from_icalprop(icalproperty *prop, struct datetime *dt)
 {
     icaltimetype icaldt = icalvalue_get_datetimedate(icalproperty_get_value(prop));
     if (!icaltime_is_valid_time(icaldt)) return -1;
@@ -1863,7 +1863,7 @@ alerts_from_ical(icalcomponent *comp)
         /* acknowledged */
         if ((prop = icalcomponent_get_acknowledged_property(alarm))) {
 			struct datetime tstamp = JMAP_DATETIME_INITIALIZER;
-			parse_datetime_from_icalprop(prop, &tstamp);
+			datetime_from_icalprop(prop, &tstamp);
 			format_utcdatetime(&tstamp, &buf);
 			json_t *jval = json_string(buf_cstring(&buf));
 			buf_reset(&buf);
@@ -1880,7 +1880,7 @@ alerts_from_ical(icalcomponent *comp)
             icaltimetype t = icalproperty_get_trigger(prop).time;
             if (!icaltime_is_null_time(t) && icaltime_is_valid_time(t)) {
                 struct datetime tstamp = JMAP_DATETIME_INITIALIZER;
-                parse_datetime_from_icalprop(prop, &tstamp);
+                datetime_from_icalprop(prop, &tstamp);
                 format_utcdatetime(&tstamp, &buf);
                 json_t *jval = json_string(buf_cstring(&buf));
                 buf_reset(&buf);
@@ -2263,7 +2263,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     if (jmap_wantprop(props, "start")) {
         struct datetime start = JMAP_DATETIME_INITIALIZER;
         if ((prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))) {
-            parse_datetime_from_icalprop(prop, &start);
+            datetime_from_icalprop(prop, &start);
         }
         format_localdatetime(&start, &buf);
         json_object_set_new(event, "start", json_string(buf_cstring(&buf)));
@@ -2323,7 +2323,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     if (jmap_wantprop(props, "created")) {
         struct datetime created = JMAP_DATETIME_INITIALIZER;
         if ((prop = icalcomponent_get_first_property(comp, ICAL_CREATED_PROPERTY))) {
-            parse_datetime_from_icalprop(prop, &created);
+            datetime_from_icalprop(prop, &created);
             format_utcdatetime(&created, &buf);
             json_t *jval = json_string(buf_cstring(&buf));
             buf_reset(&buf);
@@ -2335,7 +2335,7 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
     if (jmap_wantprop(props, "updated")) {
         struct datetime updated = JMAP_DATETIME_INITIALIZER;
         if ((prop = icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY))) {
-            parse_datetime_from_icalprop(prop, &updated);
+            datetime_from_icalprop(prop, &updated);
             format_utcdatetime(&updated, &buf);
             json_t* jval = json_string(buf_cstring(&buf));
             buf_reset(&buf);
