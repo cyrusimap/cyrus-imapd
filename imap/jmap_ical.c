@@ -1806,36 +1806,37 @@ alerts_from_ical(icalcomponent *comp)
             }
         }
 
-        /* Determine duration between alarm and start/end */
-        struct duration duration = JMAP_DURATION_INITIALIZER;
+        /* trigger */
+        json_t *jtrigger = json_object();
         if (!icaldurationtype_is_null_duration(trigger.duration) ||
              icaltime_is_null_time(trigger.time)) {
+
+            /* Convert to offset trigger */
+            json_object_set_new(jtrigger, "type", json_string("offset"));
+            struct duration duration = JMAP_DURATION_INITIALIZER;
             duration_from_icalduration(trigger.duration, &duration);
             subseconds_from_icalprop(triggerprop, &duration.nanos);
+
+            /* relativeTo */
+            const char *relative_to = related == ICAL_RELATED_START ?  "start" : "end";
+            json_object_set_new(jtrigger, "relativeTo", json_string(relative_to));
+
+            /* offset*/
+            format_duration(&duration, &buf);
+            json_object_set_new(jtrigger, "offset", json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
         } else {
-            icaltimezone *utc = icaltimezone_get_utc_timezone();
+            /* Convert to absolute trigger */
+            json_object_set_new(jtrigger, "type", json_string("absolute"));
 
-            time_t ttrg = icaltime_as_timet_with_zone(trigger.time, utc);
-            bit64 ttrgnanos = 0;
-            subseconds_from_icalprop(triggerprop, &ttrgnanos);
+            struct datetime when = JMAP_DATETIME_INITIALIZER;
+            datetime_from_icalprop(triggerprop, &when);
+            format_utcdatetime(&when, &buf);
 
-            time_t tref = ttrg;
-            bit64 trefnanos = 0;
-            if (related == ICAL_RELATED_START) {
-                icaltimetype utcstart = icaltime_convert_to_zone(dtstart_from_ical(comp), utc);
-                tref = icaltime_as_timet_with_zone(utcstart, utc);
-                if ((prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))) {
-                    subseconds_from_icalprop(prop, &trefnanos);
-                }
-            } else {
-                icaltimetype utcend = icaltime_convert_to_zone(dtend_from_ical(comp), utc);
-                tref = icaltime_as_timet_with_zone(utcend, utc);
-                if ((prop = icalcomponent_get_first_property(comp, ICAL_DTEND_PROPERTY))) {
-                    subseconds_from_icalprop(prop, &trefnanos);
-                }
-            }
-            duration_between(tref, trefnanos, ttrg, ttrgnanos, &duration);
+            /* when */
+            json_object_set_new(jtrigger, "when", json_string(buf_cstring(&buf)));
         }
+        json_object_set_new(alert, "trigger", jtrigger);
 
         /*  action */
         const char *action = "display";
@@ -1844,21 +1845,6 @@ alerts_from_ical(icalcomponent *comp)
             action = "email";
         }
         json_object_set_new(alert, "action", json_string(action));
-
-        /* trigger */
-        json_t *jtrigger = json_object();
-        json_object_set_new(jtrigger, "type", json_string("offset"));
-
-        /* trigger.relativeTo */
-        const char *relative_to = related == ICAL_RELATED_START ?  "start" : "end";
-        json_object_set_new(jtrigger, "relativeTo", json_string(relative_to));
-
-        /* trigger.offset*/
-        format_duration(&duration, &buf);
-        json_object_set_new(jtrigger, "offset", json_string(buf_cstring(&buf)));
-        buf_reset(&buf);
-
-        json_object_set_new(alert, "trigger", jtrigger);
 
         /* acknowledged */
         if ((prop = icalcomponent_get_acknowledged_property(alarm))) {
@@ -3740,13 +3726,31 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
 
                 jmap_parser_pop(parser);
 
-                /* Add TRIGGER */
+                /* Add offset trigger */
                 trigger.duration = duration_to_icalduration(&offset);
                 prop = icalproperty_new_trigger(trigger);
-                param = icalparameter_new_related(rel);
                 subseconds_to_icalprop(prop, offset.nanos);
+                param = icalparameter_new_related(rel);
                 icalproperty_add_parameter(prop, param);
                 icalcomponent_add_property(alarm, prop);
+            }
+            else if (!strcmpsafe(triggertype, "absolute")) {
+                jmap_parser_push(parser, "trigger");
+
+                json_t *jwhen = json_object_get(jtrigger, "when");
+                struct datetime when = JMAP_DATETIME_INITIALIZER;
+                if (json_is_string(jwhen) &&
+                    parse_utcdatetime(json_string_value(jwhen), &when) >= 0) {
+
+                    /* Add absolute trigger */
+                    trigger.time = datetime_to_icaltime(&when, utc);
+                    prop = icalproperty_new_trigger(trigger);
+                    subseconds_to_icalprop(prop, when.nano);
+                    icalcomponent_add_property(alarm, prop);
+                }
+                else jmap_parser_invalid(parser, "when");
+
+                jmap_parser_pop(parser);
             }
             else {
                 /* XXX should preserve unknown triggers */
