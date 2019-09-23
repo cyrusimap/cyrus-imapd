@@ -67,7 +67,7 @@ sub tear_down
 #
 # Test COPY behaviour with a very long sequence set
 #
-sub test_copy_longset
+sub test_copy_longset_slow
 {
     my ($self) = @_;
 
@@ -80,6 +80,8 @@ sub test_copy_longset
     my $list = join(',', map { $_ * 2 } 1..1000);
 
     $imaptalk->copy($list, "INBOX.dest");
+
+    # XXX this doesn't even verify that the messages were copied!
 }
 
 1;
