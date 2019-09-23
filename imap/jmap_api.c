@@ -1537,78 +1537,6 @@ static void jmap_add_perf(jmap_req_t *req, json_t *res)
     json_object_set_new(res, "performance", perf);
 }
 
-HIDDEN void jmap_parser_fini(struct jmap_parser *parser)
-{
-    strarray_fini(&parser->path);
-    json_decref(parser->invalid);
-    buf_free(&parser->buf);
-}
-
-HIDDEN void jmap_parser_push(struct jmap_parser *parser, const char *prop)
-{
-    strarray_push(&parser->path, prop);
-}
-
-HIDDEN void jmap_parser_push_index(struct jmap_parser *parser, const char *prop,
-                                   size_t index, const char *name)
-{
-    /* TODO make this more clever: won't need to printf most of the time */
-    buf_reset(&parser->buf);
-    if (name) buf_printf(&parser->buf, "%s[%zu:%s]", prop, index, name);
-    else buf_printf(&parser->buf, "%s[%zu]", prop, index);
-    strarray_push(&parser->path, buf_cstring(&parser->buf));
-    buf_reset(&parser->buf);
-}
-
-HIDDEN void jmap_parser_push_name(struct jmap_parser *parser,
-                                  const char *prop, const char *name)
-{
-    /* TODO make this more clever: won't need to printf most of the time */
-    buf_reset(&parser->buf);
-    buf_printf(&parser->buf, "%s{%s}", prop, name);
-    strarray_push(&parser->path, buf_cstring(&parser->buf));
-    buf_reset(&parser->buf);
-}
-
-HIDDEN void jmap_parser_pop(struct jmap_parser *parser)
-{
-    free(strarray_pop(&parser->path));
-}
-
-HIDDEN const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf)
-{
-    int i;
-    buf_reset(buf);
-
-    for (i = 0; i < parser->path.count; i++) {
-        const char *p = strarray_nth(&parser->path, i);
-        if (jmap_pointer_needsencode(p)) {
-            char *tmp = jmap_pointer_encode(p);
-            buf_appendcstr(buf, tmp);
-            free(tmp);
-        } else {
-            buf_appendcstr(buf, p);
-        }
-        if ((i + 1) < parser->path.count) {
-            buf_appendcstr(buf, "/");
-        }
-    }
-
-    return buf_cstring(buf);
-}
-
-HIDDEN void jmap_parser_invalid(struct jmap_parser *parser, const char *prop)
-{
-    if (prop)
-        jmap_parser_push(parser, prop);
-
-    json_array_append_new(parser->invalid,
-            json_string(jmap_parser_path(parser, &parser->buf)));
-
-    if (prop)
-        jmap_parser_pop(parser);
-}
-
 HIDDEN void jmap_ok(jmap_req_t *req, json_t *res)
 {
     json_object_set_new(res, "accountId", json_string(req->accountid));
@@ -1627,13 +1555,6 @@ HIDDEN void jmap_error(jmap_req_t *req, json_t *err)
 {
     json_array_append_new(req->response,
             json_pack("[s,o,s]", "error", err, req->tag));
-}
-
-HIDDEN json_t *jmap_server_error(int r)
-{
-    return json_pack("{s:s, s:s}",
-                     "type", "serverError",
-                     "description", error_message(r));
 }
 
 

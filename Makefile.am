@@ -1172,6 +1172,11 @@ endif # AUTOCREATE
 
 if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c
+
+if JMAP
+imap_lmtpd_SOURCES += imap/jmap_util.c
+endif # JMAP
+
 endif # SIEVE
 
 imap_lmtpd_LDADD = $(LD_SIEVE_ADD) $(LD_SERVER_ADD)
@@ -1290,6 +1295,8 @@ imap_httpd_SOURCES += \
 	imap/jmap_mail.h \
 	imap/jmap_mail_submission.c \
 	imap/jmap_mailbox.c \
+	imap/jmap_util.c \
+	imap/jmap_util.h \
 	imap/jmap_vacation.c \
 	imap/sync_support.c \
         imap/sync_support.h

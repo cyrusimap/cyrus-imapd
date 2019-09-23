@@ -234,27 +234,8 @@ extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch);
 extern json_t *jmap_patchobject_create(json_t *a, json_t *b);
 
 
-/* JMAP request parser */
-struct jmap_parser {
-    struct buf buf;
-    strarray_t path;
-    json_t *invalid;
-};
-
-#define JMAP_PARSER_INITIALIZER { BUF_INITIALIZER, STRARRAY_INITIALIZER, json_array() }
-
-extern void jmap_parser_fini(struct jmap_parser *parser);
-extern void jmap_parser_push(struct jmap_parser *parser, const char *prop);
-extern void jmap_parser_push_index(struct jmap_parser *parser,
-                                   const char *prop, size_t index, const char *name);
-extern void jmap_parser_pop(struct jmap_parser *parser);
-extern const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf);
-extern void jmap_parser_invalid(struct jmap_parser *parser, const char *prop);
-
 extern void jmap_ok(jmap_req_t *req, json_t *res);
 extern void jmap_error(jmap_req_t *req, json_t *err);
-
-extern json_t *jmap_server_error(int r);
 
 extern int jmap_parse_strings(json_t *arg,
                               struct jmap_parser *parser, const char *prop);

@@ -1497,25 +1497,39 @@ static sieve_duplicate_t duplicate = {
 };
 
 #ifdef WITH_JMAP
-#include <jansson.h>
+#include "jmap_mail.h"
 
 static int jmapquery(void *sc  __attribute__((unused)),
                      void *mc  __attribute__((unused)),
                      const char *json)
 {
+    script_data_t *sd = (script_data_t *) sc;
+    message_data_t *md = ((deliver_data_t *) mc)->m;
+    struct buf msg = BUF_INITIALIZER;
+    const char *userid = mbname_userid(sd->mbname);
     json_error_t jerr;
-    json_t *jquery;
+    json_t *jfilter, *err = NULL;
     int r;
 
-    /* Create Xapian index for message */
+    /* Create filter from json */
+    jfilter = json_loads(json, 0, &jerr);
+    if (!jfilter) return 0;
 
-    /* Create search_query from json */
-    jquery = json_loads(json, 0, &jerr);
+    /* mmap the staged message file */
+    buf_init_mmap(&msg, 1, fileno(md->f), md->id, md->size, NULL);
 
     /* Run query */
-    r = 1;
+    r = jmap_email_matchmime(&msg, jfilter, userid, &err);
 
-    json_decref(jquery);
+    if (err) {
+        char *errstr = json_dumps(err, JSON_COMPACT);
+        syslog(LOG_ERR, "sieve: jmapquery: %s", errstr);
+        free(errstr);
+        r = SIEVE_RUN_ERROR;
+    }
+
+    json_decref(jfilter);
+    buf_free(&msg);
 
     return r;
 }

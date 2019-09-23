@@ -46,7 +46,23 @@
 
 #include <jansson.h>
 
+#include "hash.h"
+#include "message.h"
 #include "smtpclient.h"
+
+#define JMAP_URN_CORE       "urn:ietf:params:jmap:core"
+#define JMAP_URN_MAIL       "urn:ietf:params:jmap:mail"
+#define JMAP_URN_SUBMISSION "urn:ietf:params:jmap:submission"
+#define JMAP_URN_VACATION   "urn:ietf:params:jmap:vacationresponse"
+#define JMAP_URN_WEBSOCKET  "urn:ietf:params:jmap:websocket"
+
+#define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
+#define JMAP_CALENDARS_EXTENSION     "https://cyrusimap.org/ns/jmap/calendars"
+#define JMAP_MAIL_EXTENSION          "https://cyrusimap.org/ns/jmap/mail"
+#define JMAP_PERFORMANCE_EXTENSION   "https://cyrusimap.org/ns/jmap/performance"
+#define JMAP_DEBUG_EXTENSION         "https://cyrusimap.org/ns/jmap/debug"
+#define JMAP_QUOTA_EXTENSION         "https://cyrusimap.org/ns/jmap/quota"
+#define JMAP_SEARCH_EXTENSION        "https://cyrusimap.org/ns/jmap/search"
 
 #define JMAP_SUBMISSION_HDR "Content-Description"
 
@@ -85,5 +101,72 @@ extern json_t *jmap_fetch_snoozed(const char *mbox, uint32_t uid);
 
 extern int jmap_email_keyword_is_valid(const char *keyword);
 extern const char *jmap_keyword_to_imap(const char *keyword);
+
+/* JMAP request parser */
+struct jmap_parser {
+    struct buf buf;
+    strarray_t path;
+    json_t *invalid;
+};
+
+#define JMAP_PARSER_INITIALIZER { BUF_INITIALIZER, STRARRAY_INITIALIZER, json_array() }
+
+extern void jmap_parser_fini(struct jmap_parser *parser);
+extern void jmap_parser_push(struct jmap_parser *parser, const char *prop);
+extern void jmap_parser_push_index(struct jmap_parser *parser,
+                                   const char *prop, size_t index, const char *name);
+extern void jmap_parser_pop(struct jmap_parser *parser);
+extern const char* jmap_parser_path(struct jmap_parser *parser, struct buf *buf);
+extern void jmap_parser_invalid(struct jmap_parser *parser, const char *prop);
+
+extern json_t *jmap_server_error(int r);
+
+struct email_contactfilter {
+    const char *accountid;
+    struct carddav_db *carddavdb;
+    char *addrbook;
+    hash_table contactgroups; /* maps groupid to emails (strarray) */
+};
+
+extern void jmap_email_contactfilter_init(const char *accountid,
+                                          const char *addressbookid,
+                                          struct email_contactfilter *cfilter);
+extern void jmap_email_contactfilter_fini(struct email_contactfilter *cfilter);
+
+extern int jmap_email_parse_filter(struct jmap_parser *parser,
+                                   json_t *filter,
+                                   json_t *unsupported,
+                                   const strarray_t *capabilities,
+                                   struct email_contactfilter *cfilter);
+
+struct emailbodies {
+    ptrarray_t attslist;
+    ptrarray_t textlist;
+    ptrarray_t htmllist;
+};
+
+#define EMAILBODIES_INITIALIZER { \
+    PTRARRAY_INITIALIZER, \
+    PTRARRAY_INITIALIZER, \
+    PTRARRAY_INITIALIZER \
+}
+
+extern void jmap_emailbodies_fini(struct emailbodies *bodies);
+
+extern int jmap_email_extract_bodies(const struct body *root,
+                                     struct emailbodies *bodies);
+
+/* Matches MIME message mime against the JMAP Email query
+ * filter.
+ *
+ * Contact groups are looked up in the default addressbook
+ * of accountid.
+ *
+ * Returns non-zero if filter matches.
+ * On error, sets the JMAP error in err. */
+extern int jmap_email_matchmime(struct buf *mime,
+                                json_t *jfilter,
+                                const char *accountid,
+                                json_t **err);
 
 #endif /* JMAP_UTIL_H */
