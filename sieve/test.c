@@ -91,6 +91,7 @@ typedef struct {
 } message_data_t;
 
 typedef struct {
+    const char *userid;
     const char *host;
     const char *remotehost;
     const char *remoteip;
@@ -479,6 +480,45 @@ static int send_response(void *ac, void *ic, void *sc,
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
+#ifdef WITH_JMAP
+#include "imap/jmap_util.h"
+#include "imap/mboxname.h"
+
+static int jmapquery(void *sc, void *mc, const char *json)
+{
+    script_data_t *sd = (script_data_t *) sc;
+    message_data_t *md = (message_data_t *) mc;
+    struct buf msg = BUF_INITIALIZER;
+    const char *userid = sd->userid;
+    json_error_t jerr;
+    json_t *jfilter, *err = NULL;
+    int r;
+
+    /* Create filter from json */
+    jfilter = json_loads(json, 0, &jerr);
+    if (!jfilter) return 0;
+
+    /* mmap the staged message file */
+    buf_init_mmap(&msg, 1, fileno(md->data), md->name, md->size, NULL);
+
+    /* Run query */
+    r = jmap_email_matchmime(&msg, jfilter, userid, &err);
+
+    if (err) {
+        char *errstr = json_dumps(err, JSON_COMPACT);
+        fprintf(stderr, "sieve: jmapquery: %s\n", errstr);
+
+        free(errstr);
+        r = SIEVE_RUN_ERROR;
+    }
+
+    json_decref(jfilter);
+    buf_free(&msg);
+
+    return r;
+}
+#endif
+
 static sieve_vacation_t vacation = {
     0,                          /* min response */
     0,                          /* max response */
@@ -493,6 +533,7 @@ static int usage(const char *argv0)
     fprintf(stderr, "%s -v script\n", argv0);
     fprintf(stderr, "%s [opts] message script\n", argv0);
     fprintf(stderr, "\n");
+    fprintf(stderr, "   -u userid\n");
     fprintf(stderr, "   -e envelope_from\n");
     fprintf(stderr, "   -t envelope_to\n");
     fprintf(stderr, "   -r y|n - have sent vacation response already? (if required)\n");
@@ -515,14 +556,14 @@ int main(int argc, char *argv[])
     static strarray_t e_from = STRARRAY_INITIALIZER;
     static strarray_t e_to = STRARRAY_INITIALIZER;
     char *alt_config = NULL;
-    script_data_t sd = { NULL, "", NULL, 0 };
+    script_data_t sd = { NULL, NULL, "", NULL, 0 };
     FILE *f;
 
     /* prevent crashes if -e or -t aren't specified */
     strarray_append(&e_from, "");
     strarray_append(&e_to, "");
 
-    while ((c = getopt(argc, argv, "C:v:fe:t:r:h:H:I:")) != EOF)
+    while ((c = getopt(argc, argv, "C:v:fe:t:r:h:H:I:u:")) != EOF)
         switch (c) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -552,6 +593,9 @@ int main(int argc, char *argv[])
             break;
         case 'I':
             sd.remoteip = optarg;
+            break;
+        case 'u':
+            sd.userid = optarg;
             break;
         default:
             usage(argv[0]);
@@ -665,6 +709,10 @@ int main(int argc, char *argv[])
     sieve_register_notify(i, notify, NULL);
     sieve_register_parse_error(i, mysieve_error);
     sieve_register_execute_error(i, mysieve_execute_error);
+
+#ifdef WITH_JMAP
+    sieve_register_jmapquery(i, &jmapquery);
+#endif
 
     res = sieve_script_load(script, &exe);
     if (res != SIEVE_OK) {
