@@ -1796,9 +1796,8 @@ sub test_calendarevent_get_alerts
         },
         '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-2' => {
             trigger => {
-                type => 'offset',
-                relativeTo => "start",
-                offset => "-PT5M",
+                type => 'absolute',
+                when => "2016-09-28T13:55:00Z",
             },
             acknowledged => "2016-09-28T14:00:05Z",
             action => "display",
@@ -2127,33 +2126,29 @@ sub test_calendarevent_get_alerts_utctrigger_subseconds
     my $alerts = {
         '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-1' => {
             trigger => {
-                type => 'offset',
-                relativeTo => "start",
-                offset => "-PT4M59.014S",
+                type => 'absolute',
+                when => '2016-09-28T13:55:00.987Z',
             },
             action => "display",
         },
         '0CF835D0-CFEB-44AE-904A-C36AB63B73BB-2' => {
             trigger => {
-                type => 'offset',
-                relativeTo => "start",
-                offset => "PT5M0.122S",
+                type => 'absolute',
+                when => '2016-09-28T14:05:00.123Z',
             },
             action => "display",
         },
         '0CF835D0-CFEB-44AE-904A-C46AB64B73BB-3' => {
             trigger => {
-                type => 'offset',
-                relativeTo => "end",
-                offset => "-PT4M59.889S",
+                type => 'absolute',
+                when => '2016-09-28T14:55:00.987Z',
             },
             action => "display",
         },
         '0CF855D0-CFEB-44AE-904A-C56AB65B75BB-4' => {
             trigger => {
-                type => 'offset',
-                relativeTo => "end",
-                offset => "PT4M59.247S",
+                type => 'absolute',
+                when => '2016-09-28T15:05:00.123Z',
             },
             action => "display",
         },
