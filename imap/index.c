@@ -6013,10 +6013,7 @@ MsgData **index_msgdata_load(struct index_state *state,
             case SORT_SAVEDATE:
                 if (!sortcrit[j].args.mailbox.id ||
                     !strcmp(mailbox->uniqueid, sortcrit[j].args.mailbox.id)) {
-                    if (config_getswitch(IMAPOPT_SAVEDATE))
-                        cur->savedate = record.savedate;
-                    else
-                        cur->savedate = cur->msgno;
+                    cur->savedate = record.savedate;
                 }
                 else {
                     /* If not in mailboxId, we use receivedAt */
@@ -6027,11 +6024,11 @@ MsgData **index_msgdata_load(struct index_state *state,
                 if ((record.internal_flags & FLAG_INTERNAL_SNOOZED) &&
                     (!sortcrit[j].args.mailbox.id ||
                      !strcmp(mailbox->uniqueid, sortcrit[j].args.mailbox.id))) {
-                    if (config_getswitch(IMAPOPT_SAVEDATE)) {
-                        /* SAVEDATE == snoozed#until */
-                        cur->snoozed_until = record.savedate;
-                    }
-                    else {
+                    /* SAVEDATE == snoozed#until */
+                    cur->snoozed_until = record.savedate;
+
+                    if (!cur->snoozed_until) {
+                        /* Try fetching snoozed#until directly */
                         json_t *snoozed =
                             jmap_fetch_snoozed(mailbox->name, record.uid);
 

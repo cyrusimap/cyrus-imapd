@@ -3886,10 +3886,7 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
         record->last_updated = mailbox->last_updated;
         if (!record->savedate) {
             // store the time of actual append if requested
-            if (config_getswitch(IMAPOPT_SAVEDATE))
-                record->savedate = mailbox->last_updated;
-            else
-                record->savedate = 0;
+            record->savedate = mailbox->last_updated;
         }
     }
 
