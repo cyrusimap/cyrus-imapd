@@ -6818,7 +6818,7 @@ static void _email_append(jmap_req_t *req,
     if (r) goto done;
 
     struct entryattlist *annots = NULL;
-    if (snoozed) {
+    if (json_is_object(snoozed)) {
         const char *annot = IMAP_ANNOT_NS "snoozed";
         const char *attrib = "value.shared";
         struct buf buf = BUF_INITIALIZER;
@@ -8644,7 +8644,7 @@ static void _email_create(jmap_req_t *req,
     _append_validate_mboxids(req, jmailboxids, &parser, &have_snoozed_mboxid);
 
     /* Validate snoozed + mailboxIds */
-    if (email.snoozed && !have_snoozed_mboxid) {
+    if (json_is_object(email.snoozed) && !have_snoozed_mboxid) {
         jmap_parser_invalid(&parser, "snoozed");
     }
     if (json_array_size(parser.invalid)) {
