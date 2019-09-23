@@ -1905,7 +1905,7 @@ static int mycheckpoint(struct dbengine *db)
    if detail == 2, also dump pointers for active records.
    if detail == 3, dump all records/all pointers.
 */
-static int dump(struct dbengine *db, int detail __attribute__((unused)))
+static int dump(struct dbengine *db, int detail)
 {
     struct skiprecord record;
     struct buf scratch = BUF_INITIALIZER;
@@ -1954,6 +1954,11 @@ static int dump(struct dbengine *db, int detail __attribute__((unused)))
                     printf("\n\t");
             }
             printf("\n");
+            if (detail > 2) {
+                buf_setmap(&scratch, VAL(db, &record), record.vallen);
+                buf_replace_char(&scratch, '\0', '-');
+                printf("\tv=(%s)\n", buf_cstring(&scratch));
+            }
             break;
         }
 
