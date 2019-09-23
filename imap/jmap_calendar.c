@@ -754,6 +754,7 @@ static int setcalendars_update(jmap_req_t *req,
                                int sortOrder,
                                int isVisible,
                                int isSubscribed,
+                               long comp_types,
                                json_t *shareWith,
                                json_t *scheduleAddressSet,
                                int overwrite_acl)
@@ -868,6 +869,19 @@ static int setcalendars_update(jmap_req_t *req,
     /* shareWith */
     if (!r && shareWith) {
         r = jmap_set_sharewith(mbox, shareWith, overwrite_acl);
+    }
+
+    /* supported components */
+    if (!r && comp_types >= 0) {
+        const char *comp_annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
+        buf_printf(&val, "%lu", (unsigned long) comp_types);
+        r = annotate_state_writemask(astate, comp_annot, req->userid, &val);
+        if (r) {
+            syslog(LOG_ERR, "failed to write annotation %s: %s",
+                    comp_annot, error_message(r));
+        }
+        buf_reset(&val);
     }
 
     buf_free(&val);
@@ -1104,8 +1118,10 @@ static int jmap_calendar_set(struct jmap_req *req)
             free(mboxname);
             goto done;
         }
+        long comp_types = config_types_to_caldav_types();
         r = setcalendars_update(req, mboxname, name, color, sortOrder,
-                                isVisible, isSubscribed, shareWith, scheduleAddressSet, 1);
+                                isVisible, isSubscribed, comp_types,
+                                shareWith, scheduleAddressSet, 1);
         if (r) {
             free(uid);
             int rr = mboxlist_delete(mboxname);
@@ -1252,7 +1268,8 @@ static int jmap_calendar_set(struct jmap_req *req)
 
         /* Update the calendar */
         r = setcalendars_update(req, mboxname, name, color, sortOrder,
-                                isVisible, isSubscribed, shareWith, scheduleAddressSet, overwrite_acl);
+                                isVisible, isSubscribed, /*comp_types*/-1,
+                                shareWith, scheduleAddressSet, overwrite_acl);
         free(mboxname);
         if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
             json_t *err = json_pack("{s:s}", "type", "notFound");

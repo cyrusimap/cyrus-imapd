@@ -46,6 +46,7 @@
 
 /* Create the calendar home, default calendars and scheduling
  * boxes for userid, if they don't already exist. */
+extern unsigned long config_types_to_caldav_types(void);
 extern int caldav_create_defaultcalendars(const char *userid);
 
 extern int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
