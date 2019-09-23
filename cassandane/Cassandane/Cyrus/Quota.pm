@@ -1058,19 +1058,23 @@ sub test_quota_f_no_improved_mboxlist_sort
                                    'quota', '-d', 'example.com');
 
     xlog "run quota -d -f";
+    my $outfile = $self->{instance}->{basedir} . '/quota.out';
     my @data = $self->{instance}->run_command({
         cyrus => 1,
-        redirects => { stderr => $self->{instance}{basedir} . '/quota.err' },
+        redirects => {
+            stderr => $outfile,
+            stdout => $outfile,
+        },
     }, 'quota', '-f', '-d', 'example.com');
 
-    open(FH, "<", $self->{instance}{basedir} . '/quota.err');
+    open(FH, "<", $outfile);
     local $/ = undef;
     my $str = <FH>;
     close(FH);
+    xlog $str;
 
     #example.com!user.user1.Junk: quota root example.com!user.user1 --> (none)
     $self->assert($str !~ m{ quota root \S+ --> \(none\)});
-    $self->assert_num_equals(0, length $str);
 }
 
 sub test_quota_f_unixhs
