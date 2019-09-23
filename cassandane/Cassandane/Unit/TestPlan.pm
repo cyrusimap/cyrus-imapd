@@ -478,6 +478,7 @@ sub new
         keep_going => delete $opts{keep_going} || 0,
         log_directory => delete $opts{log_directory},
         maxworkers => delete $opts{maxworkers} || 1,
+        skip_slow => delete $opts{skip_slow} // 1,
     };
     die "Unknown options: " . join(' ', keys %opts)
         if scalar %opts;
@@ -586,6 +587,13 @@ sub schedule
     {
         my ($neg, $type, $path, $test) = _parse_test_spec($name);
 
+        # slow test explicitly requested by name, so turn off the filter
+        if (defined $test and $test =~ m/_slow$/ and not $neg) {
+            xlog "$name was explicitly requested. Enabling slow tests!";
+            $self->{skip_slow} = 0;
+        }
+
+        # to negate tests, first we need to have something to negate from
         $self->schedule(@test_roots)
             if $neg eq '!' && !scalar %{$self->{schedule}};
 

@@ -114,6 +114,7 @@ sub filter
     my ($self) = @_;
     return
     {
+        # filters return 1 if the test should be skipped, or undef otherwise
         x => sub
         {
             my $method = shift;
@@ -155,7 +156,13 @@ sub filter
                 }
             }
             return;
-        }
+        },
+        skip_slow => sub
+        {
+            my ($method) = @_;
+            return 1 if $method =~ m/_slow$/;
+            return;
+        },
     };
 }
 

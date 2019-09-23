@@ -61,6 +61,7 @@ my $output_dir = 'reports';
 my $do_list = 0;
 # The default really should be --no-keep-going like make
 my $keep_going = 1;
+my $skip_slow = 1;
 my $log_directory;
 my @names;
 
@@ -116,21 +117,27 @@ my %runners =
     {
         my ($plan, $fh) = @_;
         my $runner = Cassandane::Unit::Runner->new($fh);
-        $runner->filter('x', 'skip_version', 'skip_missing_features');
+        my @filters = qw(x skip_version skip_missing_features);
+        push @filters, 'skip_slow' if $plan->{skip_slow};
+        $runner->filter(@filters);
         return $runner->do_run($plan, 0);
     },
     pretty => sub
     {
         my ($plan, $fh) = @_;
         my $runner = Cassandane::Unit::RunnerPretty->new({}, $fh);
-        $runner->filter('x', 'skip_version', 'skip_missing_features');
+        my @filters = qw(x skip_version skip_missing_features);
+        push @filters, 'skip_slow' if $plan->{skip_slow};
+        $runner->filter(@filters);
         return $runner->do_run($plan, 0);
     },
     prettier => sub
     {
         my ($plan, $fh) = @_;
         my $runner = Cassandane::Unit::RunnerPretty->new({quiet=>1}, $fh);
-        $runner->filter('x', 'skip_version', 'skip_missing_features');
+        my @filters = qw(x skip_version skip_missing_features);
+        push @filters, 'skip_slow' if $plan->{skip_slow};
+        $runner->filter(@filters);
         return $runner->do_run($plan, 0);
     },
 );
@@ -157,7 +164,9 @@ eval
         my ($plan, $fh) = @_;
 
         my $runner = Cassandane::Unit::RunnerXML->new($output_dir);
-        $runner->filter('x', 'skip_version', 'skip_missing_features');
+        my @filters = qw(x skip_version skip_missing_features);
+        push @filters, 'skip_slow' if $plan->{skip_slow};
+        $runner->filter(@filters);
         $runner->start($plan);
         return $runner->all_tests_passed();
     };
@@ -257,6 +266,10 @@ while (my $a = shift)
         my ($sec, $param, $val) = ($a =~ m/^-D([^.=]+)\.([^.=]+)=(.*)$/);
         push(@cassini_overrides, [$sec, $param, $val]);
     }
+    elsif ($a eq '--slow')
+    {
+        $skip_slow = 0;
+    }
     elsif ($a =~ m/^-/)
     {
         usage;
@@ -277,6 +290,7 @@ my $plan = Cassandane::Unit::TestPlan->new(
         keep_going => $keep_going,
         maxworkers => $cassini->val('cassandane', 'maxworkers') || undef,
         log_directory => $log_directory,
+        skip_slow => $skip_slow,
     );
 
 if ($do_list)
