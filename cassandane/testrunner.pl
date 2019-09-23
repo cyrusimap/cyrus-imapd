@@ -157,7 +157,7 @@ eval
         my ($plan, $fh) = @_;
 
         my $runner = Cassandane::Unit::RunnerXML->new($output_dir);
-        $runner->filter('x', 'skip_version');
+        $runner->filter('x', 'skip_version', 'skip_missing_features');
         $runner->start($plan);
         return $runner->all_tests_passed();
     };
