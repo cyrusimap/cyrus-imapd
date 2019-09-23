@@ -348,6 +348,26 @@ static void datetime_from_icaltime(icaltimetype icaldt, struct datetime *dt)
     dt->second = icaldt.second;
 }
 
+static int compare_datetime(const struct datetime *a,
+                            const struct datetime *b)
+{
+    if (a->year != b->year)
+        return a->year > b->year ? 1 : -1;
+    if (a->month != b->month)
+        return a->month > b->month ? 1 : -1;
+    if (a->day != b->day)
+        return a->day > b->day ? 1 : -1;
+    if (a->hour != b->hour)
+        return a->hour > b->hour ? 1 : -1;
+    if (a->minute != b->minute)
+        return a->minute > b->minute ? 1 : -1;
+    if (a->second != b->second)
+        return a->second > b->second ? 1 : -1;
+    if (a->nano != b->nano)
+        return a->nano > b->nano ? 1 : -1;
+    return 0;
+}
+
 static void format_datetime(const struct datetime *dt, struct buf *dst)
 {
     buf_reset(dst);
@@ -1099,6 +1119,9 @@ overrides_from_ical(icalcomponent *comp, json_t *event, const char *tzid_start)
         if (exstart && !strcmp(exstart, recurid)) {
             json_object_del(ex, "start");
         }
+
+        /* recurrenceId */
+        json_object_set_new(ex, "recurrenceId", json_string(recurid));
 
         /* Create override patch */
         json_t *diff = jmap_patchobject_create(event, ex);
@@ -4558,6 +4581,19 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
 
             /* Convert the override event to iCalendar */
             jmap_parser_push(parser, recuridval);
+            /* recurrenceId */
+            json_t *jrecurrenceId = json_object_get(myoverride, "recurrenceId");
+            if (json_is_string(jrecurrenceId)) {
+                const char *val = json_string_value(jrecurrenceId);
+                struct datetime dt = JMAP_DATETIME_INITIALIZER;
+                if (parse_localdatetime(val, &dt) < 0 ||
+                    compare_datetime(&dt, &recurid) != 0) {
+                    jmap_parser_invalid(parser, "recurrenceId");
+                }
+            }
+            else if (jrecurrenceId) {
+                jmap_parser_invalid(parser, "recurrenceId");
+            }
             calendarevent_to_ical(excomp, parser, ex);
             jmap_parser_pop(parser);
 
