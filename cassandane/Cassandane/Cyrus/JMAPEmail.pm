@@ -3230,12 +3230,14 @@ sub test_email_set_update_snooze
 
     $res = $jmap->CallMethods( [ [ 'Email/get',
                                    { ids => [ $emailId ],
-                                     properties => [ 'mailboxIds', 'keywords', 'snoozed' ]}, "R6" ] ] );
+                                     properties => [ 'mailboxIds', 'keywords', 'addedDates', 'snoozed' ]}, "R6" ] ] );
     $msg = $res->[0][1]->{list}[0];
     $self->assert_null($msg->{mailboxIds}{$inboxId});
     $self->assert_not_null($msg->{mailboxIds}{$snoozedId});
+    $self->assert_null($msg->{mailboxIds}{$draftsId});
     $self->assert_num_equals(1, scalar keys %{$msg->{mailboxIds}});
     $self->assert_str_equals($datestr, $msg->{snoozed}{'until'});
+    $self->assert_str_equals($datestr, $msg->{addedDates}{$snoozedId});
 
     xlog "Adjust snooze#until";
     $maildate->add(DateTime::Duration->new(seconds => 15));
@@ -3256,12 +3258,17 @@ sub test_email_set_update_snooze
 
     $res = $jmap->CallMethods( [ [ 'Email/get',
                                    { ids => [ $emailId ],
-                                     properties => [ 'mailboxIds', 'keywords', 'snoozed' ]}, "R6" ] ] );
+                                     properties => [ 'mailboxIds', 'keywords', 'addedDates', 'snoozed' ]}, "R6" ] ] );
     $msg = $res->[0][1]->{list}[0];
     $self->assert_null($msg->{mailboxIds}{$inboxId});
     $self->assert_not_null($msg->{mailboxIds}{$snoozedId});
+    $self->assert_not_null($msg->{mailboxIds}{$draftsId});
     $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
     $self->assert_str_equals($datestr, $msg->{snoozed}{'until'});
+    $self->assert_str_equals($datestr, $msg->{addedDates}{$snoozedId});
+    # but it shouldn't be changed on the drafts folder.  This is a little raceful, in that
+    # the snooze#until date could just happen to be now...
+    $self->assert_str_not_equals($datestr, $msg->{addedDates}{$draftsId});
 
     xlog "trigger re-delivery of snoozed email";
     $self->{instance}->run_command({ cyrus => 1 },
@@ -3269,7 +3276,7 @@ sub test_email_set_update_snooze
 
     $res = $jmap->CallMethods( [ [ 'Email/get',
                                    { ids => [ $emailId ],
-                                     properties => [ 'mailboxIds', 'keywords', 'snoozed' ]}, "R7" ] ] );
+                                     properties => [ 'mailboxIds', 'keywords', 'addedDates', 'snoozed' ]}, "R7" ] ] );
     $msg = $res->[0][1]->{list}[0];
     $self->assert_num_equals(2, scalar keys %{$msg->{mailboxIds}});
     $self->assert_not_null($msg->{snoozed});
@@ -3277,6 +3284,10 @@ sub test_email_set_update_snooze
     $self->assert_equals(JSON::true, $msg->{keywords}{'$awakened'});
     $self->assert_null($msg->{keywords}{'$seen'});
     $self->assert_str_equals($datestr, $msg->{snoozed}{'until'});
+    $self->assert_str_equals($datestr, $msg->{addedDates}{$inboxId});
+    # but it shouldn't be changed on the drafts folder.  This is a little raceful, in that
+    # the snooze#until date could just happen to be now...
+    $self->assert_str_not_equals($datestr, $msg->{addedDates}{$draftsId});
 
     xlog "Remove snoozed";
     $res = $jmap->CallMethods([
