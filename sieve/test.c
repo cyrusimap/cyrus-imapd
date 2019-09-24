@@ -502,7 +502,7 @@ static int jmapquery(void *sc, void *mc, const char *json)
     buf_init_mmap(&msg, 1, fileno(md->data), md->name, md->size, NULL);
 
     /* Run query */
-    r = jmap_email_matchmime(&msg, jfilter, userid, &err);
+    r = jmap_email_matchmime(&msg, jfilter, userid, time(NULL), &err);
 
     if (err) {
         char *errstr = json_dumps(err, JSON_COMPACT);

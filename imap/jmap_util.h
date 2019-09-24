@@ -160,13 +160,15 @@ extern int jmap_email_extract_bodies(const struct body *root,
  * filter.
  *
  * Contact groups are looked up in the default addressbook
- * of accountid.
+ * of accountid. Before/after filters are matched against
+ * internaldate.
  *
  * Returns non-zero if filter matches.
  * On error, sets the JMAP error in err. */
 extern int jmap_email_matchmime(struct buf *mime,
                                 json_t *jfilter,
                                 const char *accountid,
+                                time_t internaldate,
                                 json_t **err);
 
 #endif /* JMAP_UTIL_H */

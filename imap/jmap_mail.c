@@ -11598,7 +11598,7 @@ static int jmap_email_matchmime_method(jmap_req_t *req)
 
     struct buf mime = BUF_INITIALIZER;
     buf_setcstr(&mime, json_string_value(jmime));
-    int matches = jmap_email_matchmime(&mime, jfilter, req->accountid, &err);
+    int matches = jmap_email_matchmime(&mime, jfilter, req->accountid, time(NULL), &err);
     buf_free(&mime);
     if (!err) {
         json_t *res = json_pack("{s:O s:b}", "filter", jfilter, "matches", matches);

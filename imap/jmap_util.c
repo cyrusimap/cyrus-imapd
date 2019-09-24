@@ -910,7 +910,8 @@ static xapian_query_t *_email_matchmime_contactgroup(const char *groupid,
 static int _email_matchmime_evaluate(json_t *filter,
                                      message_t *m,
                                      xapian_db_t *db,
-                                     struct email_contactfilter *cfilter)
+                                     struct email_contactfilter *cfilter,
+                                     time_t internaldate)
 {
     json_t *conditions = json_object_get(filter, "conditions");
     if (json_is_array(conditions)) {
@@ -938,7 +939,7 @@ static int _email_matchmime_evaluate(json_t *filter,
         json_t *condition;
         size_t i;
         json_array_foreach(conditions, i, condition) {
-            int cond_matches = _email_matchmime_evaluate(condition, m, db, cfilter);
+            int cond_matches = _email_matchmime_evaluate(condition, m, db, cfilter, internaldate);
             if (op == SEOP_AND && !cond_matches) {
                 return 0;
             }
@@ -1088,7 +1089,18 @@ static int _email_matchmime_evaluate(json_t *filter,
         if (!matches) return 0;
     }
 
-    // FIXME before, after?
+    /* before */
+    if (JNOTNULL(jval = json_object_get(filter, "before"))) {
+        time_t t;
+        time_from_iso8601(json_string_value(jval), &t);
+        if (internaldate >= t) return 0;
+    }
+    /* after */
+    if (JNOTNULL(jval = json_object_get(filter, "after"))) {
+        time_t t;
+        time_from_iso8601(json_string_value(jval), &t);
+        if (internaldate < t) return 0;
+    }
 
     return matches;
 }
@@ -1135,6 +1147,7 @@ static int jmap_email_matchmime_parsefilter(struct jmap_parser *parser,
 HIDDEN int jmap_email_matchmime(struct buf *mime,
                                 json_t *jfilter,
                                 const char *accountid,
+                                time_t internaldate,
                                 json_t **err)
 {
     int r = 0;
@@ -1223,7 +1236,7 @@ HIDDEN int jmap_email_matchmime(struct buf *mime,
         *err = jmap_server_error(r);
         goto done;
     }
-    matches = _email_matchmime_evaluate(jfilter, m, db, &cfilter);
+    matches = _email_matchmime_evaluate(jfilter, m, db, &cfilter, internaldate);
     xapian_db_close(db);
 
 done:
