@@ -1499,9 +1499,7 @@ static sieve_duplicate_t duplicate = {
 #ifdef WITH_JMAP
 #include "jmap_mail.h"
 
-static int jmapquery(void *sc  __attribute__((unused)),
-                     void *mc  __attribute__((unused)),
-                     const char *json)
+static int jmapquery(void *sc, void *mc, const char *json)
 {
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = ((deliver_data_t *) mc)->m;
@@ -1523,7 +1521,7 @@ static int jmapquery(void *sc  __attribute__((unused)),
 
     if (err) {
         char *errstr = json_dumps(err, JSON_COMPACT);
-        syslog(LOG_ERR, "sieve: jmapquery: %s", errstr);
+        syslog(LOG_ERR, "sieve: jmapquery error: %s", errstr);
         free(errstr);
         r = SIEVE_RUN_ERROR;
     }
