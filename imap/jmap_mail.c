@@ -10499,8 +10499,10 @@ static void _email_bulkupdate_exec_snooze(struct email_bulkupdate *bulk)
             msgrecord_t *mrw = msgrecord_from_uid(plan->mbox, uidrec->uid);
             uint32_t internalflags = 0;
             int r = IMAP_MAILBOX_NONEXISTENT;
+            time_t savedate = 0;
 
             if (mrw) r = msgrecord_get_internalflags(mrw, &internalflags);
+            if (!r) r = msgrecord_get_savedate(mrw, &savedate);
 
             if (!r) {
                 const char *annot = IMAP_ANNOT_NS "snoozed";
@@ -10523,6 +10525,10 @@ static void _email_bulkupdate_exec_snooze(struct email_bulkupdate *bulk)
 
                     buf_initm(&val, json, strlen(json));
 
+                    /* Extract until and use it as savedate */
+                    time_from_iso8601(json_string_value(json_object_get(update->snoozed, "until")),
+                                      &savedate);
+
                     internalflags |= FLAG_INTERNAL_SNOOZED;
                 }
                 else {
@@ -10531,7 +10537,8 @@ static void _email_bulkupdate_exec_snooze(struct email_bulkupdate *bulk)
                 }
 
                 r = msgrecord_annot_write(mrw, annot, "", &val);
-                if (!r) msgrecord_set_internalflags(mrw, internalflags);
+                if (!r) r = msgrecord_set_internalflags(mrw, internalflags);
+                if (!r) r = msgrecord_set_savedate(mrw, savedate);
                 if (!r) r = msgrecord_rewrite(mrw);
                 msgrecord_unref(&mrw);
                 buf_free(&val);
