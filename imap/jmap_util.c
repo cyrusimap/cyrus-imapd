@@ -1093,6 +1093,45 @@ static int _email_matchmime_evaluate(json_t *filter,
     return matches;
 }
 
+static int jmap_email_matchmime_parsefilter(struct jmap_parser *parser,
+                                            json_t *filter,
+                                            json_t *unsupported,
+                                            const strarray_t *capabilities,
+                                            struct email_contactfilter *cfilter)
+{
+    int r = 0;
+
+    if (!JNOTNULL(filter) || json_typeof(filter) != JSON_OBJECT) {
+        jmap_parser_invalid(parser, NULL);
+        return 0;
+    }
+    json_t *jop = json_object_get(filter, "operator");
+    if (json_is_string(jop)) {
+        const char *op = json_string_value(jop);
+        if (strcmp("AND", op) && strcmp("OR", op) && strcmp("NOT", op)) {
+            jmap_parser_invalid(parser, "operator");
+        }
+        json_t *jconds = json_object_get(filter, "conditions");
+        if (!json_array_size(jconds)) {
+            jmap_parser_invalid(parser, "conditions");
+        }
+        size_t i;
+        json_t *jcond;
+        json_array_foreach(jconds, i, jcond) {
+            jmap_parser_push_index(parser, "conditions", i, NULL);
+            r = jmap_email_matchmime_parsefilter(parser, jcond, unsupported, capabilities, cfilter);
+            jmap_parser_pop(parser);
+            if (r) break;
+        }
+    } else if (jop) {
+        jmap_parser_invalid(parser, "operator");
+    } else {
+        r = jmap_email_parse_filter(parser, filter, unsupported, capabilities, cfilter);
+    }
+
+    return r;
+}
+
 HIDDEN int jmap_email_matchmime(struct buf *mime,
                                 json_t *jfilter,
                                 const char *accountid,
@@ -1112,8 +1151,8 @@ HIDDEN int jmap_email_matchmime(struct buf *mime,
     strarray_append(&capabilities, JMAP_URN_MAIL);
     strarray_append(&capabilities, JMAP_MAIL_EXTENSION);
     jmap_email_contactfilter_init(accountid, /*addressbookid*/NULL, &cfilter);
-    r = jmap_email_parse_filter(&parser, jfilter, unsupported,
-                                 &capabilities, &cfilter);
+    r = jmap_email_matchmime_parsefilter(&parser, jfilter, unsupported,
+                                         &capabilities, &cfilter);
     if (r) {
         syslog(LOG_ERR, "jmap_matchmime: can't parse filter: %s",
                 error_message(r));
