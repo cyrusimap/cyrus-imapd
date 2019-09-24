@@ -727,6 +727,8 @@ static int identity_int(int i) {
  * Conversion from iCalendar to JMAP
  */
 
+static json_t* relatedto_from_ical(icalcomponent*);
+
 /* Convert at most nmemb entries in the ical recurrence byDay/Month/etc array
  * named byX using conv. Return a new JSON array, sorted in ascending order. */
 static json_t* recurrence_byX_fromical(short byX[], size_t nmemb, int (*conv)(int)) {
@@ -1729,55 +1731,13 @@ alerts_from_ical(icalcomponent *comp)
 {
     json_t* alerts = json_pack("{}");
     icalcomponent* alarm;
-    hash_table snoozes;
-    ptrarray_t alarms = PTRARRAY_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
 
-    construct_hash_table(&snoozes, 32, 0);
-
-    /* Split VALARMS into regular alerst and their snoozing VALARMS */
     for (alarm = icalcomponent_get_first_component(comp, ICAL_VALARM_COMPONENT);
          alarm;
          alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
 
-        icalparameter *param = NULL;
-        const char *uid = NULL;
-
-        /* Ignore alarms with NONE action. */
-        icalproperty *prop = icalcomponent_get_first_property(alarm, ICAL_ACTION_PROPERTY);
-        if (prop) {
-            icalvalue *val = icalproperty_get_value(prop);
-            if (val && !strcasecmp(icalvalue_as_ical_string(val), "NONE")) {
-                continue;
-            }
-        }
-
-        /* Check for RELATED-TO property... */
-        prop = icalcomponent_get_first_property(alarm, ICAL_RELATEDTO_PROPERTY);
-        if (!prop) {
-            ptrarray_push(&alarms, alarm);
-            continue;
-        }
-        /* .. that has a UID value... */
-        uid = icalproperty_get_value_as_string(prop);
-        if (!uid || !strlen(uid)) {
-            ptrarray_push(&alarms, alarm);
-            continue;
-        }
-        /* ... and it's RELTYPE is set to SNOOZE */
-        param = icalproperty_get_first_parameter(prop, ICAL_RELTYPE_PARAMETER);
-        if (!param || strcasecmp(icalparameter_get_xvalue(param), "SNOOZE")) {
-            ptrarray_push(&alarms, alarm);
-            continue;
-        }
-
-        /* Must be a SNOOZE alarm */
-        hash_insert(uid, alarm, &snoozes);
-    }
-
-    while ((alarm = (icalcomponent*) ptrarray_pop(&alarms))) {
         icalproperty* prop;
-
         json_t *alert = json_object();
 
         /* alert id */
@@ -1856,22 +1816,10 @@ alerts_from_ical(icalcomponent *comp)
 			json_object_set_new(alert, "acknowledged", jval);
         }
 
-        /* snoozed */
-        icalcomponent *snooze;
-        const char *uid;
-        if ((uid = icalcomponent_get_uid(alarm)) &&
-            (snooze = hash_lookup(uid, &snoozes)) &&
-            (prop = icalcomponent_get_first_property(snooze,
-                                        ICAL_TRIGGER_PROPERTY))) {
-            icaltimetype t = icalproperty_get_trigger(prop).time;
-            if (!icaltime_is_null_time(t) && icaltime_is_valid_time(t)) {
-                struct datetime tstamp = JMAP_DATETIME_INITIALIZER;
-                datetime_from_icalprop(prop, &tstamp);
-                format_utcdatetime(&tstamp, &buf);
-                json_t *jval = json_string(buf_cstring(&buf));
-                buf_reset(&buf);
-                json_object_set_new(alert, "snoozed", jval);
-            }
+        /* relatedTo */
+        json_t *jrelatedto = relatedto_from_ical(alarm);
+        if (JNOTNULL(jrelatedto)) {
+            json_object_set_new(alert, "relatedTo", jrelatedto);
         }
 
         json_object_set_new(alerts, id, alert);
@@ -1883,8 +1831,6 @@ alerts_from_ical(icalcomponent *comp)
         alerts = json_null();
     }
 
-    ptrarray_fini(&alarms);
-    free_hash_table(&snoozes, NULL);
     buf_free(&buf);
     return alerts;
 }
@@ -1940,12 +1886,8 @@ relatedto_from_ical(icalcomponent *comp)
             else json_object_set_new(relation, "parent", json_true());
         }
 
-        if (!json_object_size(relation)) {
-            json_decref(relation);
-            relation = json_null();
-        }
-
         json_object_set_new(ret, uid, json_pack("{s:o}", "relation", relation));
+
     }
 
     if (!json_object_size(ret)) {
@@ -2573,6 +2515,8 @@ jmapical_tojmap(icalcomponent *ical, hash_table *props)
 /*
  * Convert to iCalendar from JMAP
  */
+
+static void relatedto_to_ical(icalcomponent *, struct jmap_parser *, json_t *);
 
 /* defined in http_tzdist */
 extern void icalcomponent_add_required_timezones(icalcomponent *ical);
@@ -3758,38 +3702,6 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
         }
         else jmap_parser_invalid(parser, "trigger");
 
-        /* snoozed */
-        json_t *jsnoozed = json_object_get(alert, "snoozed");
-        if (json_is_string(jsnoozed)) {
-            struct datetime snoozedtime = JMAP_DATETIME_INITIALIZER;
-            if (parse_utcdatetime(json_string_value(jsnoozed), &snoozedtime) >= 0) {
-
-                icalcomponent *snooze = icalcomponent_new_valarm();
-
-                /* Add RELATED-TO */
-                remove_icalprop(snooze, ICAL_UID_PROPERTY);
-                prop = icalproperty_new_relatedto(id);
-                param = icalparameter_new(ICAL_RELTYPE_PARAMETER);
-                icalparameter_set_xvalue(param, "SNOOZE");
-                icalproperty_add_parameter(prop, param);
-                icalcomponent_add_property(snooze, prop);
-
-                /* Add TRIGGER */
-                struct icaltriggertype snooze_trigger = {
-                    datetime_to_icaltime(&snoozedtime, utc),
-                    icaldurationtype_null_duration()
-                };
-                prop = icalproperty_new_trigger(snooze_trigger);
-                subseconds_to_icalprop(prop, snoozedtime.nano);
-                icalcomponent_add_property(snooze, prop);
-                icalcomponent_add_component(comp, snooze);
-            } else {
-                jmap_parser_invalid(parser, "snoozed");
-            }
-        } else if (JNOTNULL(jsnoozed)) {
-            jmap_parser_invalid(parser, "snoozed");
-        }
-
         /* acknowledged */
         json_t *jacknowledged = json_object_get(alert, "acknowledged");
         if (json_is_string(jacknowledged)) {
@@ -3822,6 +3734,15 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
         }
         prop = icalproperty_new_action(action);
         icalcomponent_add_property(alarm, prop);
+
+        /* relatedTo */
+        json_t *jrelatedto = json_object_get(alert, "relatedTo");
+        if (json_is_object(jrelatedto)) {
+            relatedto_to_ical(alarm, parser, jrelatedto);
+        }
+        else if (JNOTNULL(jrelatedto)) {
+            jmap_parser_invalid(parser, "relatedTo");
+        }
 
         if (action == ICAL_ACTION_EMAIL) {
             /* ATTENDEE */
@@ -4233,14 +4154,11 @@ relatedto_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *relat
             icalcomponent_add_property(comp, prop);
             jmap_parser_pop(parser);
         }
-        else if (relation == NULL || relation == json_null()) {
+        else if (json_is_object(relation) || relation == NULL || relation == json_null()) {
             icalcomponent_add_property(comp, icalproperty_new_relatedto(uid));
         }
         else if (!json_is_object(relation)) {
             jmap_parser_invalid(parser, "relation");
-        }
-        else if (!json_object_size(relationObj)) {
-            jmap_parser_invalid(parser, NULL);
         }
         jmap_parser_pop(parser);
     }
