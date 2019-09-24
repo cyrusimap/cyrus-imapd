@@ -70,7 +70,6 @@
 #include "libconfig.h"
 #include "times.h"
 #include "tok.h"
-#include "imap/json_support.h"
 
 #define ERR_BUF_SIZE 1024
 
@@ -2739,6 +2738,9 @@ static test_t *build_duplicate(sieve_script_t *sscript, test_t *t)
     return t;
 }
 
+#ifdef WITH_JMAP
+#include "imap/json_support.h"
+
 static int jmap_parse_condition(json_t *cond, strarray_t *path)
 {
     json_t *val;
@@ -2864,3 +2866,12 @@ static test_t *build_jmapquery(sieve_script_t *sscript,
 
     return t;
 }
+#else
+static test_t *build_jmapquery(sieve_script_t *sscript, test_t *t,
+                               const char *json __attribute__((unused)))
+{
+    sieveerror_c(sscript, SIEVE_UNSUPP_EXT, "x-cyrus-jmapquery");
+
+    return t;
+}
+#endif /* WITH_JMAP */
