@@ -2917,7 +2917,7 @@ index_copy(struct index_state *state,
                 strarray_split(buf_cstring(&attrib), NULL, 0);
 
             if (strarray_find(specialuse, "\\Snoozed", 0) >= 0) {
-                r = IMAP_PERMISSION_DENIED;
+                r = IMAP_MAILBOX_NOTSUPPORTED;
             }
             strarray_free(specialuse);
         }
