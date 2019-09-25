@@ -199,11 +199,11 @@ EXPORTED int smtpclient_close(smtpclient_t **smp)
 
 /* Match the response code to an expected return code defined in rock.
  *
- * Rock must be a zero-terminated string up to length 3 (excluding the
+ * rock->code must be a zero-terminated string up to length 3 (excluding the
  * NUL byte). Matching is performed by string matching the SMTP return
  * code to the expected code, stopping at the zero byte.
  *
- * E.g. return code "250", "251" both would match a "2" or "25" rock.
+ * E.g. return code "250", "251" both would match a "2" or "25" rock->code.
  *
  * Also see Daniel Bernstein's site https://cr.yp.to/smtp/request.html:
  * "I recommend that clients avoid looking past the first digit of the
@@ -211,18 +211,29 @@ EXPORTED int smtpclient_close(smtpclient_t **smp)
  * primarily for human consumption. (Exception: See EHLO.)"
  *
  * Return IMAP_PROTOCOL_ERROR on mismatch, 0 on success.
+ *
+ * rock->cmd should describe the command whose response you're checking.
+ * If set, it'll be included in the error log on mismatch.
+ *
  */
+struct expect_code_rock {
+    const char *cmd;
+    const char *code;
+};
+
 static int expect_code_cb(smtpclient_t *sm, void *rock)
 {
     size_t i;
-    const char *code = rock;
+    const struct expect_code_rock *ecrock = (const struct expect_code_rock *) rock;
     smtp_resp_t *resp = &sm->resp;
 
-    for (i = 0; i < 3 && code[i]; i++) {
-        if (code[i] != resp->code[i]) {
+    for (i = 0; i < 3 && ecrock->code[i]; i++) {
+        if (ecrock->code[i] != resp->code[i]) {
             const char *text = buf_cstring(&resp->text);
 
-            syslog(LOG_ERR, "smtpclient: unexpected response: code=%c%c%c text=%s",
+            syslog(LOG_ERR, "smtpclient: unexpected response%s%s: code=%c%c%c text=%s",
+                   ecrock->cmd ? " to " : "",
+                   ecrock->cmd ? ecrock->cmd : "",
                    resp->code[0], resp->code[1], resp->code[2], text);
 
             /* Try to glean specific error from response */
@@ -375,7 +386,8 @@ static int smtpclient_rset(smtpclient_t *sm)
     buf_reset(&sm->buf);
 
     /* Process response */
-    r = smtpclient_read(sm, expect_code_cb, "2");
+    struct expect_code_rock rock = { "RSET", "2" };
+    r = smtpclient_read(sm, expect_code_cb, &rock);
 
 done:
     if (r) smtpclient_logerror(sm, "RSET", r);
@@ -393,7 +405,8 @@ static int smtpclient_schk(smtpclient_t *sm)
     buf_reset(&sm->buf);
 
     /* Process response */
-    r = smtpclient_read(sm, expect_code_cb, "2");
+    struct expect_code_rock rock = { "SCHK", "2" };
+    r = smtpclient_read(sm, expect_code_cb, &rock);
 
 done:
     if (r) smtpclient_logerror(sm, "SCHK", r);
@@ -410,7 +423,8 @@ __attribute__((unused)) static int smtpclient_quit(smtpclient_t *sm)
     if (r) goto done;
 
     /* Don't insist on an answer */
-    r = smtpclient_read(sm, expect_code_cb, "2");
+    struct expect_code_rock rock = { "QUIT", "2" };
+    r = smtpclient_read(sm, expect_code_cb, &rock);
     if (r) {
         syslog(LOG_INFO, "smtpclient: QUIT without reply: %s", error_message(r));
         return r;
@@ -455,7 +469,8 @@ static int write_addr(smtpclient_t *sm,
     r = smtpclient_writebuf(sm, &sm->buf, 1);
     if (r) goto done;
 
-    r = smtpclient_read(sm, expect_code_cb, "2");
+    struct expect_code_rock rock = { cmd, "2" };
+    r = smtpclient_read(sm, expect_code_cb, &rock);
     if (r) goto done;
 
 done:
@@ -553,7 +568,8 @@ static int smtpclient_data(smtpclient_t *sm, struct protstream *data)
     buf_reset(&sm->buf);
 
     /* Expect Start Input */
-    r = smtpclient_read(sm, expect_code_cb, "3");
+    struct expect_code_rock rock = { "DATA", "3" };
+    r = smtpclient_read(sm, expect_code_cb, &rock);
     if (r) goto done;
 
     /* Write message, escaping dot characters. */
@@ -594,7 +610,9 @@ static int smtpclient_data(smtpclient_t *sm, struct protstream *data)
     buf_reset(&sm->buf);
 
     /* Expect OK */
-    r = smtpclient_read(sm, expect_code_cb, "2");
+    rock.cmd = "EOT";
+    rock.code = "2";
+    r = smtpclient_read(sm, expect_code_cb, &rock);
     if (r) goto done;
 
 done:
