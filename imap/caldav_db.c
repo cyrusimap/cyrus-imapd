@@ -55,6 +55,7 @@
 #include "httpd.h"
 #include "http_dav.h"
 #include "ical_support.h"
+#include "imap_err.h"
 #include "libconfig.h"
 #include "mboxname.h"
 #include "util.h"
@@ -833,4 +834,167 @@ EXPORTED int caldav_write_jmapcache(struct caldav_db *caldavdb, int rowid, const
     return sqldb_exec(caldavdb->db, CMD_INSERT_JMAPCACHE_USER, bval, NULL, NULL);
 }
 
+struct shareacls_rock {
+    const char *userid;
+    char *inboxname;
+    char *inboxacl;
+    char *newinboxacl;
+    char *outboxname;
+    char *outboxacl;
+    char *newoutboxacl;
+    hash_table user_access;
+};
+
+#define CALSHARE_WANTSCHED 1
+#define CALSHARE_HAVESCHED 2
+#define CALSHARE_WANTPRIN 4
+#define CALSHARE_HAVEPRIN 8
+
+static int _add_shareacls(const mbentry_t *mbentry, void *rock)
+{
+    struct shareacls_rock *share = rock;
+
+    char *acl = xstrdup(mbentry->acl);
+
+    int isinbox = !strcmp(mbentry->name, share->inboxname);
+    int isoutbox = !strcmp(mbentry->name, share->outboxname);
+
+    if (isinbox) {
+        share->inboxacl = xstrdup(acl);
+        share->newinboxacl = xstrdup(acl);
+    }
+
+    if (isoutbox) {
+        share->outboxacl = xstrdup(acl);
+        share->newoutboxacl = xstrdup(acl);
+    }
+
+    char *userid;
+    char *nextid = NULL;
+    for (userid = acl; userid; userid = nextid) {
+        char *rightstr;
+        int access;
+
+        rightstr = strchr(userid, '\t');
+        if (!rightstr) break;
+        *rightstr++ = '\0';
+
+        nextid = strchr(rightstr, '\t');
+        if (!nextid) break;
+        *nextid++ = '\0';
+
+        /* skip system users and owner */
+        if (is_system_user(userid)) continue;
+        if (!strcmp(userid, share->userid)) continue;
+
+        cyrus_acl_strtomask(rightstr, &access);
+
+        unsigned long long have = (unsigned long long)hash_lookup(userid, &share->user_access);
+        unsigned long long set = have;
+
+        // if it's the Inbox, we have each user with principal read access
+        if (isinbox) {
+            if (access & DACL_PRIN)
+                set |= CALSHARE_HAVEPRIN;
+        }
+        // if it's the Outbox, we have each user with reply ability
+        else if (isoutbox) {
+            if (access & DACL_REPLY)
+                set |= CALSHARE_HAVESCHED;
+        }
+        // and if they can see anything else, then we NEED the above!
+        else {
+            if (access & ACL_READ)
+                set |= CALSHARE_WANTPRIN;
+            if (access & ACL_INSERT)
+                set |= CALSHARE_WANTSCHED;
+        }
+
+        if (set != have) hash_insert(userid, (void *)set, &share->user_access);
+    }
+
+    free(acl);
+    return 0;
+}
+
+static void _update_acls(const char *userid, void *data, void *rock)
+{
+    struct shareacls_rock *share = rock;
+    unsigned long long aclstatus = (unsigned long long)data;
+
+    int schedacl = DACL_REPLY|DACL_INVITE;
+    int prinacl = DACL_PRIN;
+
+    if ((aclstatus & CALSHARE_WANTSCHED) && !(aclstatus & CALSHARE_HAVESCHED)) {
+        cyrus_acl_set(&share->newoutboxacl, userid, ACL_MODE_ADD, schedacl, NULL, NULL);
+    }
+
+    if (!(aclstatus & CALSHARE_WANTSCHED) && (aclstatus & CALSHARE_HAVESCHED)) {
+        cyrus_acl_set(&share->newoutboxacl, userid, ACL_MODE_REMOVE, schedacl, NULL, NULL);
+    }
+
+    if ((aclstatus & CALSHARE_WANTPRIN) && !(aclstatus & CALSHARE_HAVEPRIN)) {
+        cyrus_acl_set(&share->newinboxacl, userid, ACL_MODE_ADD, prinacl, NULL, NULL);
+    }
+
+    if (!(aclstatus & CALSHARE_WANTPRIN) && (aclstatus & CALSHARE_HAVEPRIN)) {
+        cyrus_acl_set(&share->newinboxacl, userid, ACL_MODE_REMOVE, prinacl, NULL, NULL);
+    }
+}
+
+/* update the share acls.  We do this by:
+ * 1) iterating all the calendars for this user, looking at all the ACLs and
+ *    tracking for each user mentioned, whether they have or need principal
+ *    access or scheduling access.
+ * 2) when we see the inbox and outbox, clone the ACLs.
+ * 3) iterate all seen users, and decide whether we need to change the ACLs
+ *    for either of those mailboxes.
+ */
+EXPORTED int caldav_update_shareacls(const char *userid)
+{
+    struct shareacls_rock rock = {
+        userid,
+        NULL, NULL, NULL,
+        NULL, NULL, NULL,
+        HASH_TABLE_INITIALIZER
+    };
+    construct_hash_table(&rock.user_access, 10, 0);
+    rock.inboxname = caldav_mboxname(userid, SCHED_INBOX);
+    rock.outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
+
+    // find out what the values should be
+    char *prefix = caldav_mboxname(userid, NULL);
+    int r = mboxlist_mboxtree(prefix, _add_shareacls, &rock, MBOXTREE_SKIP_ROOT);
+    free(prefix);
+
+    // did we find the ACLs?  If not, bail now!
+    if (!rock.inboxacl || !rock.outboxacl) {
+        r = IMAP_MAILBOX_NONEXISTENT;
+        goto done;
+    }
+
+    // change the ACLs as required
+    hash_enumerate(&rock.user_access, _update_acls, &rock);
+
+    if (strcmp(rock.inboxacl, rock.newinboxacl)) {
+        r = mboxlist_sync_setacls(rock.inboxname, rock.newinboxacl);
+        if (r) goto done;
+    }
+
+    if (strcmp(rock.outboxacl, rock.newoutboxacl)) {
+        r = mboxlist_sync_setacls(rock.outboxname, rock.newoutboxacl);
+        if (r) goto done;
+    }
+
+done:
+    free(rock.inboxname);
+    free(rock.inboxacl);
+    free(rock.newinboxacl);
+    free(rock.outboxname);
+    free(rock.outboxacl);
+    free(rock.newoutboxacl);
+    free_hash_table(&rock.user_access, NULL);
+
+    return r;
+}
 
