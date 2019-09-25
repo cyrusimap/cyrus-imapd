@@ -571,6 +571,7 @@ EOF
 
 # Disabled for now - addflag does not work
 # on shared mailboxes in 2.5.
+# https://github.com/cyrusimap/cyrus-imapd/issues/1453
 sub XXXtest_shared_delivery_addflag
     :Admin
     :needs_component_sieve
@@ -578,7 +579,7 @@ sub XXXtest_shared_delivery_addflag
     my ($self) = @_;
 
     xlog "Testing setting a flag on a sieve script on a";
-    xlog "shared folder.  Bug 3617";
+    xlog "shared folder.  Bug 3617 / issue #1453";
 
     my $imaptalk = $self->{store}->get_client();
     $self->{store}->set_fetch_attributes(qw(uid flags));
