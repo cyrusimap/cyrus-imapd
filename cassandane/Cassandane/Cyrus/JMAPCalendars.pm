@@ -572,8 +572,20 @@ sub test_calendar_set_sharewith
     xlog "check Outbox ACL";
     $acl = $admintalk->getacl("user.master.#calendars.Outbox");
     %map = @$acl;
-    $self->assert_null($map{manifort});  # we don't create Outbox ACLs for read-only
+    $self->assert_null($map{manifold});  # we don't create Outbox ACLs for read-only
     $self->assert_str_equals('78', $map{paraphrase});
+
+    xlog "check Principal ACL";
+    $acl = $admintalk->getacl("user.master.#calendars");
+    %map = @$acl;
+    # both users get ACLs on the Inbox
+    $self->assert_str_equals('lr', $map{manifold});
+    $self->assert_str_equals('lr', $map{paraphrase});
+
+    my $Name = $mantalk->GetProps('/dav/principals/user/master', 'D:displayname');
+    $self->assert_str_equals('master', $Name);
+    $Name = $partalk->GetProps('/dav/principals/user/master', 'D:displayname');
+    $self->assert_str_equals('master', $Name);
 
     xlog "Clear initial syslog";
     $self->{instance}->getsyslog();
@@ -590,6 +602,47 @@ sub test_calendar_set_sharewith
     my @lines = $self->{instance}->getsyslog();
     $self->assert_matches(qr/manifold\.\#notifications/, "@lines");
     $self->assert((not grep { /paraphrase\.\#notifications/ } @lines), Data::Dumper::Dumper(\@lines));
+
+    xlog "Remove the access for manifold";
+    $res = $jmap->CallMethods([
+            ['Calendar/set', {
+                    accountId => 'master',
+                    update => { "$CalendarId" => {
+                            "shareWith/paraphrase" => undef,
+             }}}, "R1"]
+    ]);
+
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Calendar/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    $self->assert_not_null($res->[0][1]{newState});
+    $self->assert_not_null($res->[0][1]{updated});
+
+    xlog "check ACL";
+    $acl = $admintalk->getacl("user.master.#calendars.$CalendarId");
+    %map = @$acl;
+    $self->assert_str_equals('lrswipkxtecdan9', $map{cassandane});
+    $self->assert_str_equals('lrswitedn9', $map{manifold});
+    $self->assert_null($map{paraphrase});
+
+    xlog "check Outbox ACL";
+    $acl = $admintalk->getacl("user.master.#calendars.Outbox");
+    %map = @$acl;
+    $self->assert_str_equals('78', $map{manifold});
+    $self->assert_null($map{paraphrase});
+
+    xlog "check Principal ACL";
+    $acl = $admintalk->getacl("user.master.#calendars");
+    %map = @$acl;
+    # both users get ACLs on the Inbox
+    $self->assert_str_equals('lr', $map{manifold});
+    $self->assert_null($map{paraphrase});
+
+    xlog "Check propfind";
+    $Name = eval { $partalk->GetProps('/dav/principals/user/master', 'D:displayname') };
+    my $error = $@;
+    $self->assert_null($Name);
+    $self->assert_matches(qr/403 Forbidden/, $error);
 }
 
 sub test_calendar_set_issubscribed
