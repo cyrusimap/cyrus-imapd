@@ -2904,6 +2904,28 @@ index_copy(struct index_state *state,
     r = mailbox_open_iwl(name, &destmailbox);
     if (r) goto done;
 
+    /* prohibit copying into \Snoozed mailbox */
+    if (destmailbox->i.options & OPT_IMAP_HAS_ALARMS) {
+        struct buf attrib = BUF_INITIALIZER;
+        char *userid = mboxname_to_userid(destmailbox->name);
+
+        r = annotatemore_lookup(destmailbox->name, "/specialuse", userid, &attrib);
+        free(userid);
+
+        if (!r && buf_len(&attrib)) {
+            strarray_t *specialuse =
+                strarray_split(buf_cstring(&attrib), NULL, 0);
+
+            if (strarray_find(specialuse, "\\Snoozed", 0) >= 0) {
+                r = IMAP_PERMISSION_DENIED;
+            }
+            strarray_free(specialuse);
+        }
+        buf_free(&attrib);
+
+        if (r) goto done;
+    }
+
     /* not moving or different quota root - need to check quota */
     if (!ismove || strcmpsafe(srcmailbox->quotaroot, destmailbox->quotaroot)) {
         for (i = 0; i < copyargs.nummsg; i++)
