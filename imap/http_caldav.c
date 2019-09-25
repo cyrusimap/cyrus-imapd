@@ -844,7 +844,6 @@ int caldav_create_defaultcalendars(const char *userid)
 {
     int r;
     char *mailboxname;
-    struct buf acl = BUF_INITIALIZER;
 
     /* calendar-home-set */
     mailboxname = caldav_mboxname(userid, NULL);
@@ -912,7 +911,6 @@ int caldav_create_defaultcalendars(const char *userid)
     }
 
   done:
-    buf_free(&acl);
     return r;
 }
 
