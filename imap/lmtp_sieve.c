@@ -853,8 +853,8 @@ static int sieve_redirect(void *ac, void *ic,
                m->id ? m->id : "<nomsgid>", rc->addr);
         if (config_auditlog)
             syslog(LOG_NOTICE,
-                   "auditlog: redirect sessionid=<%s> message-id=%s target=<%s>",
-                   session_id(), m->id ? m->id : "<nomsgid>", rc->addr);
+                   "auditlog: redirect sessionid=<%s> message-id=%s target=<%s> userid=<%s>",
+                   session_id(), m->id ? m->id : "<nomsgid>", rc->addr, ctx->userid);
         return SIEVE_OK;
     } else {
         if (res == -1) {
@@ -934,8 +934,8 @@ static int sieve_reject(void *ac, void *ic,
                md->id ? md->id : "<nomsgid>");
         if (config_auditlog)
             syslog(LOG_NOTICE,
-                   "auditlog: LMTP reject sessionid=<%s> message-id=%s",
-                   session_id(), md->id ? md->id : "<nomsgid>");
+                   "auditlog: LMTP reject sessionid=<%s> message-id=%s userid=<%s>",
+                   session_id(), md->id ? md->id : "<nomsgid>", ctx->userid);
 
         return SIEVE_OK;
     }
@@ -951,8 +951,8 @@ static int sieve_reject(void *ac, void *ic,
                mbname_userid(sd->mbname), md->id ? md->id : "<nomsgid>");
         if (config_auditlog)
             syslog(LOG_NOTICE,
-                   "auditlog: discard-reject sessionid=<%s> message-id=%s",
-                   session_id(), md->id ? md->id : "<nomsgid>");
+                   "auditlog: discard-reject sessionid=<%s> message-id=%s userid=<%s>",
+                   session_id(), md->id ? md->id : "<nomsgid>", ctx->userid);
         return SIEVE_OK;
     }
 
@@ -967,8 +967,9 @@ static int sieve_reject(void *ac, void *ic,
                md->id ? md->id : "<nomsgid>", md->return_path);
         if (config_auditlog)
             syslog(LOG_NOTICE,
-                   "auditlog: reject sessionid=<%s> message-id=%s target=<%s>",
-                   session_id(), md->id ? md->id : "<nomsgid>", md->return_path);
+                   "auditlog: reject sessionid=<%s> message-id=%s target=<%s> userid=<%s>",
+                   session_id(), md->id ? md->id : "<nomsgid>", md->return_path,
+                   ctx->userid);
         return SIEVE_OK;
     } else {
         if (res == -1) {
