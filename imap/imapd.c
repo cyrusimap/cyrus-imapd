@@ -6757,13 +6757,19 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
   done:
 
     if (r && !(usinguid && r == IMAP_NO_NOSUCHMSG)) {
+        const char *respcode = "";
+        if (r == IMAP_MAILBOX_NOTSUPPORTED) {
+            respcode = "[CANNOT] ";
+        }
+        else if (r == IMAP_MAILBOX_NONEXISTENT &&
+                 mboxlist_createmailboxcheck(intname, 0, 0,
+                                             imapd_userisadmin,
+                                             imapd_userid, imapd_authstate,
+                                             NULL, NULL, 0) == 0) {
+            respcode = "[TRYCREATE] ";
+        }
         prot_printf(imapd_out, "%s NO %s%s\r\n", tag,
-                    (r == IMAP_MAILBOX_NONEXISTENT &&
-                     mboxlist_createmailboxcheck(intname, 0, 0,
-                                                 imapd_userisadmin,
-                                                 imapd_userid, imapd_authstate,
-                                                 NULL, NULL, 0) == 0)
-                    ? "[TRYCREATE] " : "", error_message(r));
+                    respcode, error_message(r));
     }
     else if (copyuid) {
             prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag,
