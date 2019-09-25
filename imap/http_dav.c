@@ -4940,6 +4940,11 @@ int meth_delete(struct transaction_t *txn, void *params)
                                        /*checkack*/1, /*localonly*/0, /*force*/0,
                                        /* keep_intermediaries */0);
         }
+        if (!r) {
+            char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
+            r = caldav_update_shareacls(userid);
+            free(userid);
+        }
         if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
         else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
         else if (r) ret = HTTP_SERVER_ERROR;
