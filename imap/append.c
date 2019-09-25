@@ -1408,7 +1408,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         if (r) goto out;
 
         /* wipe out the bits that aren't magically copied */
-        uint32_t dst_system_flags;
+        uint32_t dst_system_flags, dst_internal_flags;
         uint32_t dst_user_flags[MAX_USER_FLAGS/32];
 
         dst_msgrec = msgrecord_copy_msgrecord(as->mailbox, src_msgrec);
@@ -1416,6 +1416,10 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         r = msgrecord_get_systemflags(dst_msgrec, &dst_system_flags);
         if (r) goto out;
         dst_system_flags &= ~FLAG_SEEN;
+
+        r = msgrecord_get_internalflags(dst_msgrec, &dst_internal_flags);
+        if (r) goto out;
+        dst_internal_flags &= ~FLAG_INTERNAL_SNOOZED;
 
         for (i = 0; i < MAX_USER_FLAGS/32; i++) {
             dst_user_flags[i] = 0;
@@ -1481,7 +1485,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         if (r) goto out;
 
         /* set internal flags */
-        r = msgrecord_set_internalflags(dst_msgrec, src_internal_flags);
+        r = msgrecord_set_internalflags(dst_msgrec, dst_internal_flags);
         if (r) goto out;
 
         /* should this message be marked \Seen? */
