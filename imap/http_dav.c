@@ -4061,6 +4061,11 @@ int meth_acl(struct transaction_t *txn, void *params)
 
     mailbox_set_acl(mailbox, buf_cstring(&acl), 1);
     r = mboxlist_sync_setacls(txn->req_tgt.mbentry->name, buf_cstring(&acl));
+    if (!r) {
+        char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
+        r = caldav_update_shareacls(userid);
+        free(userid);
+    }
     if (r) {
         syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
                txn->req_tgt.mbentry->name, error_message(r));
