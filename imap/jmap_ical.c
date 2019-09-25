@@ -1512,6 +1512,12 @@ static json_t *participant_from_ical(icalproperty *prop,
         }
     }
 
+    /* participationComment */
+    const char *comment = get_icalxparam_value(prop, JMAPICAL_XPARAM_COMMENT);
+    if (comment) {
+        json_object_set_new(p, "participationComment", json_string(comment));
+    }
+
     buf_free(&buf);
     return p;
 }
@@ -3247,6 +3253,18 @@ participant_to_ical(icalcomponent *comp,
     }
     else if (JNOTNULL(scheduleUpdated)) {
         jmap_parser_invalid(parser, "scheduleSequence");
+    }
+
+    /* participationComment */
+    json_t *jcomment = json_object_get(jpart, "participationComment");
+    if (json_is_string(jcomment)) {
+        const char *comment = json_string_value(jcomment);
+        if (*comment) {
+            set_icalxparam(prop, JMAPICAL_XPARAM_COMMENT, comment, 1);
+        }
+    }
+    else if (JNOTNULL(jcomment)) {
+        jmap_parser_invalid(parser, "participationComment");
     }
 
     if (is_orga) {
