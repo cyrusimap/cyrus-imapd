@@ -439,27 +439,28 @@ static const struct precond_t {
 };
 
 
-/* Check ACL on userid's principal (Inbox): LOOKUP right gives access */
+/* Check ACL on userid's principal (Inbox): DACL_PRIN (USER6) or ACL_READ right gives access */
 static int principal_acl_check(const char *userid, struct auth_state *authstate)
 {
     int r = 0;
 
     if (!httpd_userisadmin) {
-        char *inboxname = mboxname_user_mbox(userid, NULL);
+        char *mboxname = caldav_mboxname(userid, SCHED_INBOX);
         mbentry_t *mbentry = NULL;
 
-        r = http_mlookup(inboxname, &mbentry, NULL);
+        r = http_mlookup(mboxname, &mbentry, NULL);
         if (r) {
             syslog(LOG_ERR, "mlookup(%s) failed: %s",
-                   inboxname, error_message(r));
+                   mboxname, error_message(r));
             r = HTTP_NOT_FOUND;
         }
-        else if (!(httpd_myrights(authstate, mbentry) & ACL_LOOKUP)) {
+        else if (!(httpd_myrights(authstate, mbentry) & (DACL_PRIN|ACL_READ))) {
+            // allow READ (for owner) or USER6 (to grant access generally without anything else)
             r = HTTP_NOT_FOUND;
         }
 
         mboxlist_entry_free(&mbentry);
-        free(inboxname);
+        free(mboxname);
     }
 
     return r;
