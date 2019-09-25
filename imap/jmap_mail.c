@@ -69,6 +69,7 @@
 #include "http_proxy.h"
 #include "jmap_ical.h"
 #include "jmap_mail.h"
+#include "jmap_mail_query.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mappedfile.h"
@@ -90,6 +91,7 @@
 #include "xmalloc.h"
 #include "xsha1.h"
 #include "xstrnchr.h"
+
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
@@ -2070,8 +2072,12 @@ static void _email_parse_filter_cb(jmap_req_t *req,
     struct email_contactfilter *cfilter = rock;
 
     /* Parse filter */
-    int r = jmap_email_parse_filter(parser, filter, unsupported,
-                                    req->using_capabilities, cfilter);
+    jmap_email_filtercondition_parse(parser, filter, unsupported,
+                                     req->using_capabilities);
+    if (json_array_size(parser->invalid)) return;
+
+    /* Gather contactgroups */
+    int r = jmap_email_contactfilter_from_filtercondition(parser, filter, cfilter);
     if (r) {
         *err = jmap_server_error(r);
         return;
@@ -5366,7 +5372,7 @@ static int _email_get_bodies(jmap_req_t *req,
     }
 
     /* Dissect message into its parts */
-    r = jmap_email_extract_bodies(part, &bodies);
+    r = jmap_emailbodies_extract(part, &bodies);
     if (r) goto done;
 
     /* bodyStructure */

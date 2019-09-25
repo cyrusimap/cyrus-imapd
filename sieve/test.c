@@ -481,7 +481,7 @@ static int send_response(void *ac, void *ic, void *sc,
 }
 
 #ifdef WITH_JMAP
-#include "imap/jmap_util.h"
+#include "imap/jmap_mail_query.h"
 #include "imap/mboxname.h"
 
 static int jmapquery(void *sc, void *mc, const char *json)

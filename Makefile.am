@@ -1174,7 +1174,7 @@ if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/lmtp_sieve.h imap/smtpclient.c
 
 if JMAP
-imap_lmtpd_SOURCES += imap/jmap_util.c
+imap_lmtpd_SOURCES += imap/jmap_util.c imap/jmap_mail_query.c
 endif # JMAP
 
 endif # SIEVE
@@ -1293,6 +1293,8 @@ imap_httpd_SOURCES += \
 	imap/jmap_ical.h \
 	imap/jmap_mail.c \
 	imap/jmap_mail.h \
+	imap/jmap_mail_query.c \
+	imap/jmap_mail_query.h \
 	imap/jmap_mail_submission.c \
 	imap/jmap_mailbox.c \
 	imap/jmap_util.c \
@@ -1787,7 +1789,7 @@ sieve_libcyrus_sieve_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)
 
-sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c imap/jmap_util.c
+sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c imap/jmap_util.c imap/jmap_mail_query.c
 sieve_test_LDADD = $(LD_SIEVE_ADD) $(LD_UTILITY_ADD)
 
 sieve_test_mailbox_SOURCES = sieve/test_mailbox.c imap/mutex_fake.c

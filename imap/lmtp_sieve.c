@@ -1497,7 +1497,7 @@ static sieve_duplicate_t duplicate = {
 };
 
 #ifdef WITH_JMAP
-#include "jmap_mail.h"
+#include "jmap_mail_query.h"
 
 static int jmapquery(void *sc, void *mc, const char *json)
 {
