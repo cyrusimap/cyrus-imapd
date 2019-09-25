@@ -2112,6 +2112,15 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         /*set*/NULL,
         NULL
     },{
+        IMAP_ANNOT_NS "hasalarms",
+        ATTRIB_TYPE_BOOLEAN,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED,
+        0,
+        annotation_get_mailboxopt,
+        /*set*/NULL,
+        (void *)OPT_IMAP_HAS_ALARMS
+    },{
         IMAP_ANNOT_NS "lastupdate",
         ATTRIB_TYPE_STRING,
         BACKEND_ONLY,
