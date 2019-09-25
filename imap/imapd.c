@@ -8479,11 +8479,8 @@ static void cmd_setacl(char *tag, const char *name,
             /* They aren't an admin remotely, so let's refer them */
             imapd_refer(tag, mbentry->server, name);
             referral_kick = 1;
-            mboxlist_entry_free(&mbentry);
-            return;
+            goto done;
         }
-
-        mboxlist_entry_free(&mbentry);
 
         if (!r) {
             if (rights) {
@@ -8519,11 +8516,8 @@ static void cmd_setacl(char *tag, const char *name,
             prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
         }
 
-        free(intname);
-        return;
+        goto done;
     }
-
-    mboxlist_entry_free(&mbentry);
 
     /* local mailbox */
     if (!r) {
@@ -8535,8 +8529,7 @@ static void cmd_setacl(char *tag, const char *name,
             if (r) {
                 prot_printf(imapd_out, "%s BAD %s\r\n", tag, err);
                 free(err);
-                free(intname);
-                return;
+                goto done;
             }
         }
 
@@ -8556,7 +8549,10 @@ static void cmd_setacl(char *tag, const char *name,
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
     }
+
+done:
     free(intname);
+    mboxlist_entry_free(&mbentry);
 }
 
 static void print_quota_used(struct protstream *o, const struct quota *q)
