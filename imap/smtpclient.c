@@ -136,6 +136,7 @@ static int smtpclient_quit(smtpclient_t *sm);
 static int smtpclient_from(smtpclient_t *sm, smtp_addr_t *addr);
 static int smtpclient_rcpt_to(smtpclient_t *sm, ptrarray_t *rcpt);
 static int smtpclient_data(smtpclient_t *sm, struct protstream *data);
+static void smtpclient_logerror(smtpclient_t *sm, const char *cmd, int r);
 
 EXPORTED int smtpclient_open(smtpclient_t **smp)
 {
@@ -331,6 +332,20 @@ static int smtpclient_writebuf(smtpclient_t *sm, struct buf *buf, int flush)
     return 0;
 }
 
+static void smtpclient_logerror(smtpclient_t *sm, const char *cmd, int r)
+{
+    if (r == IMAP_IOERROR) {
+        /* try to dig a more specific error out of the prot streams */
+        const char *errstr = prot_error(sm->backend->out);
+        if (!errstr) errstr = prot_error(sm->backend->in);
+        if (!errstr) errstr = error_message(r);
+        syslog(LOG_ERR, "smtpclient: %s during %s", errstr, cmd);
+    }
+    else {
+        syslog(LOG_ERR, "smtpclient: %s during %s", error_message(r), cmd);
+    }
+}
+
 static int smtpclient_ehlo(smtpclient_t *sm)
 {
     int r = 0;
@@ -345,6 +360,7 @@ static int smtpclient_ehlo(smtpclient_t *sm)
     r = smtpclient_read(sm, ehlo_cb, NULL);
 
 done:
+    if (r) smtpclient_logerror(sm, "EHLO", r);
     return r;
 }
 
@@ -362,6 +378,7 @@ static int smtpclient_rset(smtpclient_t *sm)
     r = smtpclient_read(sm, expect_code_cb, "2");
 
 done:
+    if (r) smtpclient_logerror(sm, "RSET", r);
     return r;
 }
 
@@ -379,6 +396,7 @@ static int smtpclient_schk(smtpclient_t *sm)
     r = smtpclient_read(sm, expect_code_cb, "2");
 
 done:
+    if (r) smtpclient_logerror(sm, "SCHK", r);
     return r;
 }
 
@@ -395,9 +413,11 @@ __attribute__((unused)) static int smtpclient_quit(smtpclient_t *sm)
     r = smtpclient_read(sm, expect_code_cb, "2");
     if (r) {
         syslog(LOG_INFO, "smtpclient: QUIT without reply: %s", error_message(r));
+        return r;
     }
 
 done:
+    if (r) smtpclient_logerror(sm, "QUIT", r);
     return r;
 }
 
@@ -439,6 +459,7 @@ static int write_addr(smtpclient_t *sm,
     if (r) goto done;
 
 done:
+    if (r) smtpclient_logerror(sm, cmd, r);
     buf_reset(&sm->buf);
     return r;
 }
@@ -493,6 +514,7 @@ static int smtpclient_from(smtpclient_t *sm, smtp_addr_t *addr)
         smtp_params_set_extra(&addr->params, &extra_params, "SIZE", szbuf);
     }
     int r = write_addr(sm, "MAIL FROM", addr, &extra_params);
+    if (r) smtpclient_logerror(sm, "MAIL FROM", r);
     smtp_params_fini(&extra_params);
     return r;
 }
@@ -514,6 +536,7 @@ static int smtpclient_rcpt_to(smtpclient_t *sm, ptrarray_t *rcpts)
         else if (!r) r = r1;
     }
 
+    if (r) smtpclient_logerror(sm, "RCPT TO", r);
     return r;
 }
 
@@ -575,6 +598,7 @@ static int smtpclient_data(smtpclient_t *sm, struct protstream *data)
     if (r) goto done;
 
 done:
+    if (r) smtpclient_logerror(sm, "DATA", r);
     return r;
 }
 
