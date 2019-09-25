@@ -445,7 +445,7 @@ static int principal_acl_check(const char *userid, struct auth_state *authstate)
     int r = 0;
 
     if (!httpd_userisadmin) {
-        char *mboxname = caldav_mboxname(userid, SCHED_INBOX);
+        char *mboxname = caldav_mboxname(userid, NULL);
         mbentry_t *mbentry = NULL;
 
         r = http_mlookup(mboxname, &mbentry, NULL);
@@ -548,7 +548,7 @@ static int principal_parse_path(const char *path, struct request_target_t *tgt,
 
     if (tgt->userid) {
         /* Locate the mailbox */
-        char *mboxname = mboxname_user_mbox(tgt->userid, NULL);
+        char *mboxname = caldav_mboxname(tgt->userid, NULL);
         int r = http_mlookup(mboxname, &tgt->mbentry, NULL);
 
         if (r) {

@@ -836,9 +836,9 @@ EXPORTED int caldav_write_jmapcache(struct caldav_db *caldavdb, int rowid, const
 
 struct shareacls_rock {
     const char *userid;
-    char *inboxname;
-    char *inboxacl;
-    char *newinboxacl;
+    char *principalname;
+    char *principalacl;
+    char *newprincipalacl;
     char *outboxname;
     char *outboxacl;
     char *newoutboxacl;
@@ -856,12 +856,12 @@ static int _add_shareacls(const mbentry_t *mbentry, void *rock)
 
     char *acl = xstrdup(mbentry->acl);
 
-    int isinbox = !strcmp(mbentry->name, share->inboxname);
+    int isprincipal = !strcmp(mbentry->name, share->principalname);
     int isoutbox = !strcmp(mbentry->name, share->outboxname);
 
-    if (isinbox) {
-        share->inboxacl = xstrdup(acl);
-        share->newinboxacl = xstrdup(acl);
+    if (isprincipal) {
+        share->principalacl = xstrdup(acl);
+        share->newprincipalacl = xstrdup(acl);
     }
 
     if (isoutbox) {
@@ -892,14 +892,14 @@ static int _add_shareacls(const mbentry_t *mbentry, void *rock)
         unsigned long long have = (unsigned long long)hash_lookup(userid, &share->user_access);
         unsigned long long set = have;
 
-        // if it's the Inbox, we have each user with principal read access
-        if (isinbox) {
+        // if it's the principal, we have each user with principal read access
+        if (isprincipal) {
             if ((access & DACL_READ) == DACL_READ)
                 set |= CALSHARE_HAVEPRIN;
         }
         // if it's the Outbox, we have each user with reply ability
         else if (isoutbox) {
-            if ((access & DACL_SCHED) == DACL_SCHED)
+            if ((access & (DACL_INVITE|DACL_REPLY)) == (DACL_INVITE|DACL_REPLY))
                 set |= CALSHARE_HAVESCHED;
         }
         // and if they can see anything else, then we NEED the above!
@@ -923,19 +923,19 @@ static void _update_acls(const char *userid, void *data, void *rock)
     unsigned long long aclstatus = (unsigned long long)data;
 
     if ((aclstatus & CALSHARE_WANTSCHED) && !(aclstatus & CALSHARE_HAVESCHED)) {
-        cyrus_acl_set(&share->newoutboxacl, userid, ACL_MODE_ADD, DACL_SCHED, NULL, NULL);
+        cyrus_acl_set(&share->newoutboxacl, userid, ACL_MODE_ADD, (DACL_INVITE|DACL_REPLY), NULL, NULL);
     }
 
     if (!(aclstatus & CALSHARE_WANTSCHED) && (aclstatus & CALSHARE_HAVESCHED)) {
-        cyrus_acl_set(&share->newoutboxacl, userid, ACL_MODE_REMOVE, DACL_SCHED, NULL, NULL);
+        cyrus_acl_set(&share->newoutboxacl, userid, ACL_MODE_REMOVE, (DACL_INVITE|DACL_REPLY), NULL, NULL);
     }
 
     if ((aclstatus & CALSHARE_WANTPRIN) && !(aclstatus & CALSHARE_HAVEPRIN)) {
-        cyrus_acl_set(&share->newinboxacl, userid, ACL_MODE_ADD, DACL_READ, NULL, NULL);
+        cyrus_acl_set(&share->newprincipalacl, userid, ACL_MODE_ADD, DACL_READ, NULL, NULL);
     }
 
     if (!(aclstatus & CALSHARE_WANTPRIN) && (aclstatus & CALSHARE_HAVEPRIN)) {
-        cyrus_acl_set(&share->newinboxacl, userid, ACL_MODE_REMOVE, DACL_READ, NULL, NULL);
+        cyrus_acl_set(&share->newprincipalacl, userid, ACL_MODE_REMOVE, DACL_READ, NULL, NULL);
     }
 }
 
@@ -956,16 +956,14 @@ EXPORTED int caldav_update_shareacls(const char *userid)
         HASH_TABLE_INITIALIZER
     };
     construct_hash_table(&rock.user_access, 10, 0);
-    rock.inboxname = caldav_mboxname(userid, SCHED_INBOX);
+    rock.principalname = caldav_mboxname(userid, NULL);
     rock.outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
 
     // find out what the values should be
-    char *prefix = caldav_mboxname(userid, NULL);
-    int r = mboxlist_mboxtree(prefix, _add_shareacls, &rock, MBOXTREE_SKIP_ROOT);
-    free(prefix);
+    int r = mboxlist_mboxtree(rock.principalname, _add_shareacls, &rock, 0);
 
     // did we find the ACLs?  If not, bail now!
-    if (!rock.inboxacl || !rock.outboxacl) {
+    if (!rock.principalacl || !rock.outboxacl) {
         r = IMAP_MAILBOX_NONEXISTENT;
         goto done;
     }
@@ -973,8 +971,8 @@ EXPORTED int caldav_update_shareacls(const char *userid)
     // change the ACLs as required
     hash_enumerate(&rock.user_access, _update_acls, &rock);
 
-    if (strcmp(rock.inboxacl, rock.newinboxacl)) {
-        r = mboxlist_sync_setacls(rock.inboxname, rock.newinboxacl);
+    if (strcmp(rock.principalacl, rock.newprincipalacl)) {
+        r = mboxlist_sync_setacls(rock.principalname, rock.newprincipalacl);
         if (r) goto done;
     }
 
@@ -984,9 +982,9 @@ EXPORTED int caldav_update_shareacls(const char *userid)
     }
 
 done:
-    free(rock.inboxname);
-    free(rock.inboxacl);
-    free(rock.newinboxacl);
+    free(rock.principalname);
+    free(rock.principalacl);
+    free(rock.newprincipalacl);
     free(rock.outboxname);
     free(rock.outboxacl);
     free(rock.newoutboxacl);
