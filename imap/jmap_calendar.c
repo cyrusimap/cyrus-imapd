@@ -905,9 +905,11 @@ static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
     if (!jmap_hasrights_byname(req, mboxname, DACL_RMCOL))
         return IMAP_PERMISSION_DENIED;
 
-    struct caldav_db *db = caldav_open_userid(req->userid);
+    char *userid = mboxname_to_userid(mboxname);
+    struct caldav_db *db = caldav_open_userid(userid);
     if (!db) {
-        syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", req->userid);
+        syslog(LOG_ERR, "caldav_open_mailbox failed for user %s", userid);
+        free(userid);
         return IMAP_INTERNAL;
     }
     /* XXX 
@@ -925,6 +927,7 @@ static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
     if (r) {
         syslog(LOG_ERR, "failed to delete mailbox from caldav_db: %s",
                 error_message(r));
+        free(userid);
         return r;
     }
     jmap_myrights_delete(req, mboxname);
@@ -948,8 +951,12 @@ static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
     }
     mboxevent_free(&mboxevent);
 
+    if (!r) r = caldav_update_shareacls(userid);
+
     int rr = caldav_close(db);
     if (!r) r = rr;
+
+    free(userid);
 
     return r;
 }
