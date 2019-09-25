@@ -894,12 +894,12 @@ static int _add_shareacls(const mbentry_t *mbentry, void *rock)
 
         // if it's the Inbox, we have each user with principal read access
         if (isinbox) {
-            if (access & DACL_PRIN)
+            if ((access & DACL_READ) == DACL_READ)
                 set |= CALSHARE_HAVEPRIN;
         }
         // if it's the Outbox, we have each user with reply ability
         else if (isoutbox) {
-            if (access & DACL_REPLY)
+            if ((access & DACL_SCHED) == DACL_SCHED)
                 set |= CALSHARE_HAVESCHED;
         }
         // and if they can see anything else, then we NEED the above!
@@ -922,23 +922,20 @@ static void _update_acls(const char *userid, void *data, void *rock)
     struct shareacls_rock *share = rock;
     unsigned long long aclstatus = (unsigned long long)data;
 
-    int schedacl = DACL_REPLY|DACL_INVITE;
-    int prinacl = DACL_PRIN;
-
     if ((aclstatus & CALSHARE_WANTSCHED) && !(aclstatus & CALSHARE_HAVESCHED)) {
-        cyrus_acl_set(&share->newoutboxacl, userid, ACL_MODE_ADD, schedacl, NULL, NULL);
+        cyrus_acl_set(&share->newoutboxacl, userid, ACL_MODE_ADD, DACL_SCHED, NULL, NULL);
     }
 
     if (!(aclstatus & CALSHARE_WANTSCHED) && (aclstatus & CALSHARE_HAVESCHED)) {
-        cyrus_acl_set(&share->newoutboxacl, userid, ACL_MODE_REMOVE, schedacl, NULL, NULL);
+        cyrus_acl_set(&share->newoutboxacl, userid, ACL_MODE_REMOVE, DACL_SCHED, NULL, NULL);
     }
 
     if ((aclstatus & CALSHARE_WANTPRIN) && !(aclstatus & CALSHARE_HAVEPRIN)) {
-        cyrus_acl_set(&share->newinboxacl, userid, ACL_MODE_ADD, prinacl, NULL, NULL);
+        cyrus_acl_set(&share->newinboxacl, userid, ACL_MODE_ADD, DACL_READ, NULL, NULL);
     }
 
     if (!(aclstatus & CALSHARE_WANTPRIN) && (aclstatus & CALSHARE_HAVEPRIN)) {
-        cyrus_acl_set(&share->newinboxacl, userid, ACL_MODE_REMOVE, prinacl, NULL, NULL);
+        cyrus_acl_set(&share->newinboxacl, userid, ACL_MODE_REMOVE, DACL_READ, NULL, NULL);
     }
 }
 

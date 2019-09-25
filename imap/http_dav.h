@@ -172,10 +172,6 @@ enum {
                                            schedule-send-reply,
                                            schedule-send-freebusy) */
 
-#define DACL_PRIN      ACL_USER6        /* For Scheduling Inbox:
-                                           Allow read of user principal */
-
-
 /* Index into preconditions array */
 enum {
     /* WebDAV (RFC 4918) preconditions */
