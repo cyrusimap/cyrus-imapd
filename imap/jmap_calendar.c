@@ -869,6 +869,11 @@ static int setcalendars_update(jmap_req_t *req,
     /* shareWith */
     if (!r && shareWith) {
         r = jmap_set_sharewith(mbox, shareWith, overwrite_acl);
+        if (!r) {
+            char *userid = mboxname_to_userid(mbox->name);
+            r = caldav_update_shareacls(userid);
+            free(userid);
+        }
     }
 
     /* supported components */
