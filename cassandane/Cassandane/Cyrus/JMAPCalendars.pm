@@ -2894,6 +2894,7 @@ sub test_calendarevent_set_participants
                 linkIds => {
                     'link1' => JSON::true,
                 },
+                participationComment => 'Sure; see you "soon"!',
                 # Auto-generated sendTo{imip}
             },
             'bar' => {
