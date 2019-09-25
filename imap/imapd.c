@@ -4098,6 +4098,21 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
                          (imapd_userisadmin || imapd_userisproxyadmin),
                          EVENT_MESSAGE_APPEND);
     }
+    if (!r && appendstate.mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
+        struct buf attrib = BUF_INITIALIZER;
+        r = annotatemore_lookup(intname, "/specialuse", imapd_userid, &attrib);
+
+        if (!r && buf_len(&attrib)) {
+            strarray_t *specialuse =
+                strarray_split(buf_cstring(&attrib), NULL, 0);
+
+            if (strarray_find(specialuse, "\\Snoozed", 0) >= 0) {
+                r = IMAP_MAILBOX_NOTSUPPORTED;
+            }
+            strarray_free(specialuse);
+        }
+        buf_free(&attrib);
+    }
     if (!r) {
         struct body *body;
 
@@ -4126,12 +4141,11 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
                 body = NULL;
             }
         }
-
-        if (!r) {
-            r = append_commit(&appendstate);
-        } else {
-            append_abort(&appendstate);
-        }
+    }
+    if (!r) {
+        r = append_commit(&appendstate);
+    } else {
+        append_abort(&appendstate);
     }
 
     imapd_check(NULL, 1);
@@ -4142,15 +4156,22 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
         prot_printf(imapd_out, "%s NO [BADURL \"%s\"] %s\r\n",
                     tag, url, parseerr);
     } else if (r) {
+        const char *respcode = "";
+        if (r == IMAP_MAILBOX_NOTSUPPORTED) {
+            respcode = "[CANNOT] ";
+        }
+        else if (r == IMAP_MESSAGE_TOO_LARGE) {
+            respcode = "[TOOBIG] ";
+        }
+        else if (r == IMAP_MAILBOX_NONEXISTENT &&
+                 mboxlist_createmailboxcheck(intname, 0, 0,
+                                             imapd_userisadmin,
+                                             imapd_userid, imapd_authstate,
+                                             NULL, NULL, 0) == 0) {
+            respcode = "[TRYCREATE] ";
+        }
         prot_printf(imapd_out, "%s NO %s%s\r\n",
-                    tag,
-                    (r == IMAP_MAILBOX_NONEXISTENT &&
-                     mboxlist_createmailboxcheck(intname, 0, 0,
-                                                 imapd_userisadmin,
-                                                 imapd_userid, imapd_authstate,
-                                                 NULL, NULL, 0) == 0)
-                    ? "[TRYCREATE] " : r == IMAP_MESSAGE_TOO_LARGE
-                    ? "[TOOBIG]" : "", error_message(r));
+                    tag, respcode, error_message(r));
     } else if (doappenduid) {
         /* is this a space separated list or sequence list? */
         prot_printf(imapd_out, "%s OK [APPENDUID %lu ", tag, uidvalidity);
