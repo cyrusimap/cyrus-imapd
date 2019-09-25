@@ -163,7 +163,10 @@ EXPORTED int append_setup(struct appendstate *as, const char *name,
     struct mailbox *mailbox = NULL;
 
     r = mailbox_open_iwl(name, &mailbox);
-    if (r) return r;
+    if (r) {
+        memset(as, 0, sizeof(*as));
+        return r;
+    }
 
     r = append_setup_mbox(as, mailbox, userid, auth_state,
                           aclcheck, quotacheck, namespace, isadmin, event_type);
