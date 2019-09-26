@@ -2772,6 +2772,7 @@ struct acl_change {
 struct invite_rock {
     xmlNodePtr notify;
     xmlNsPtr ns[NUM_NAMESPACE];
+    const char *owner;
     const char *mboxname;
     struct buf resource;
     struct request_target_t tgt;
@@ -2801,10 +2802,12 @@ static void send_dav_invite(const char *userid, void *val, void *rock)
         }
 
         if (!r) {
-            /* Notify sharee */
+            /* Notify sharee (use resource buffer to create invite text) */
+            buf_reset(&irock->resource);
+            buf_printf(&irock->resource, "Shared by %s", irock->owner);
             r = dav_create_invite(&irock->notify, irock->ns, &irock->tgt,
                                   irock->live_props, userid, access,
-                                  BAD_CAST "Shared via JMAP");
+                                  BAD_CAST buf_cstring(&irock->resource));
         }
         if (!r) {
             /* Create a resource name for the notifications -
@@ -2987,6 +2990,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
         const char *errstr = NULL;
 
         memset(&irock, 0, sizeof(struct invite_rock));
+        irock.owner = owner;
 
         /* Find the DAV namespace for this mailbox */
         if (iscalendar)
