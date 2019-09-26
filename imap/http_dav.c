@@ -278,6 +278,9 @@ static const struct prop_entry principal_props[] = {
     { "notification-URL", NS_CS,
       PROP_COLLECTION,
       propfind_notifyurl, NULL, NULL },
+    { "email-address-set", NS_CS,
+      PROP_COLLECTION,
+      propfind_caluseraddr, NULL, NULL },
 
     { NULL, 0, 0, NULL, NULL, NULL }
 };
