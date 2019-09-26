@@ -9786,7 +9786,7 @@ static void _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
     for (i = 0; i < ptrarray_size(updates); i++) {
         struct email_update *update = ptrarray_nth(updates, i);
         const char *email_id = update->email_id;
-        int invalid = 0;
+        int invalid = 0, find_mbox = 0;
 
         if (json_object_get(bulk->set_errors, email_id)) {
             continue;
@@ -9804,17 +9804,14 @@ static void _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
             }
         }
 
-        const char *movetoid =
-            json_string_value(json_object_get(update->snoozed,
-                                              "moveToMailboxId"));
         if (update->snoozed_uidrec) {
             const char *current_mboxid =
                 update->snoozed_uidrec->mboxrec->mbox_id;
             struct email_updateplan *plan =
                 hash_lookup(current_mboxid, &bulk->plans_by_mbox_id);
 
-            if (json_is_object(update->snoozed)) {
-                /* Updating snoozeDetails */
+            if (update->snoozed) {
+                /* Updating/removing snoozeDetails */
                 json_t *jval = NULL;
 
                 if (update->mailboxids) {
@@ -9822,25 +9819,15 @@ static void _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
                 }
                 if (!update->mailboxids || jval == json_true() ||
                      (jval == NULL && update->patch_mailboxids)) {
-                    /* This message is NOT being deleted - Update snoozed */
+                    /* This message is NOT being deleted -
+                       Update/remove snoozed */
                     update->snooze_in_mboxid = xstrdup(current_mboxid);
                     update->snoozed_uidrec->is_snoozed = 0;
                     ptrarray_append(&plan->snooze, update->snoozed_uidrec);
                 }
-            }
-            else if (json_is_null(update->snoozed)) {
-                /* Removing snoozeDetails */
-                json_t *jval = NULL;
-
-                if (update->mailboxids) {
-                    jval = json_object_get(update->mailboxids, current_mboxid);
-                }
-                if (!update->mailboxids || jval == json_true() ||
-                    (jval == NULL && update->patch_mailboxids)) {
-                    /* This message is NOT being deleted - Remove snoozed */
-                    update->snooze_in_mboxid = xstrdup(current_mboxid);
-                    update->snoozed_uidrec->is_snoozed = 0;
-                    ptrarray_append(&plan->snooze, update->snoozed_uidrec);
+                else {
+                    /* Determine which mailbox to use for the snoozed email */
+                    find_mbox = 1;
                 }
             }
             else if (update->mailboxids) {
@@ -9866,38 +9853,47 @@ static void _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
             }
             else {
                 /* Determine which mailbox to use for the snoozed email */
-                if (json_is_true(json_object_get(update->mailboxids,
-                                                 snoozed_mboxid))) {
-                    /* Being added to \snoozed mailbox */
-                    update->snooze_in_mboxid = xstrdup(snoozed_mboxid);
-                }
-                else if (movetoid &&
-                         json_is_true(json_object_get(update->mailboxids,
-                                                      movetoid))) {
-                    /* Being added to moveToMailboxId */
-                    update->snooze_in_mboxid = xstrdup(movetoid);
-                }
-                else if (json_is_true(json_object_get(update->mailboxids,
-                                                      inboxid))) {
-                    /* Being added to Inbox */
-                    update->snooze_in_mboxid = xstrdup(inboxid);
-                }
-                else {
-                    const char *mbox_id = NULL;
-                    json_t *jval = NULL;
+                find_mbox = 1;
+            }
+        }
 
-                    json_object_foreach(update->mailboxids, mbox_id, jval) {
-                        if (json_is_true(jval)) {
-                            /* Use the first mailbox being added to */
-                            update->snooze_in_mboxid = xstrdup(mbox_id);
-                            break;
-                        }
-                    }
+        if (find_mbox) {
+            /* Determine which mailbox to use for the snoozed email */
+            const char *movetoid =
+                json_string_value(json_object_get(update->snoozed,
+                                                  "moveToMailboxId"));
 
-                    if (!update->snooze_in_mboxid) {
-                        /* invalidArguments */
-                        invalid = 1;
+            if (json_is_true(json_object_get(update->mailboxids,
+                                             snoozed_mboxid))) {
+                /* Being added to \snoozed mailbox */
+                update->snooze_in_mboxid = xstrdup(snoozed_mboxid);
+            }
+            else if (movetoid &&
+                     json_is_true(json_object_get(update->mailboxids,
+                                                  movetoid))) {
+                /* Being added to moveToMailboxId */
+                update->snooze_in_mboxid = xstrdup(movetoid);
+            }
+            else if (json_is_true(json_object_get(update->mailboxids,
+                                                  inboxid))) {
+                /* Being added to Inbox */
+                update->snooze_in_mboxid = xstrdup(inboxid);
+            }
+            else {
+                const char *mbox_id = NULL;
+                json_t *jval = NULL;
+
+                json_object_foreach(update->mailboxids, mbox_id, jval) {
+                    if (json_is_true(jval)) {
+                        /* Use the first mailbox being added to */
+                        update->snooze_in_mboxid = xstrdup(mbox_id);
+                        break;
                     }
+                }
+
+                if (!update->snooze_in_mboxid) {
+                    /* invalidArguments */
+                    invalid = 1;
                 }
             }
         }
