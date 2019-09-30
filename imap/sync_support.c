@@ -253,7 +253,7 @@ EXPORTED int sync_get_durationconfig(const char *channel, const char *val, int d
         snprintf(name, MAX_MAILBOX_NAME, "%s_%s", channel, val);
         result = config_getoverflowstring(name, NULL);
         if (result)
-            response = config_parseduration(result, defunit);
+            config_parseduration(result, defunit, &response);
     }
 
     if (response == -1) {

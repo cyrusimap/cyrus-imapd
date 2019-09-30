@@ -69,7 +69,7 @@ extern const char *config_backupstagingpath(void);
 
 /* for parsing a duration-format string obtained elsewhere,
  * such as from an overflow string */
-extern int config_parseduration(const char *str, int defunit);
+extern int config_parseduration(const char *str, int defunit, int *out_duration);
 
 /* cached configuration variables accessable to external world */
 extern const char *config_filename;
