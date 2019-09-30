@@ -2253,9 +2253,12 @@ product version in the capabilities
    user's scripts reside on a remote server (in a Murder).
    Otherwise, timsieved will proxy traffic to the remote server. */
 
-{ "sieve_duplicate_max_expiration", 7776000 /* 90 days */, INT }
-/* Maximum expiration time (in seconds) for duplicate message tracking
-   records. */
+{ "sieve_duplicate_max_expiration", "90d", DURATION }
+/* Maximum expiration time for duplicate message tracking records.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
+*/
 
 { "sieve_extensions", "fileinto reject vacation vacation-seconds imapflags notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid x-cyrus-log x-cyrus-jmapquery", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "imapflags", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid", "x-cyrus-log", "x-cyrus-jmapquery") }
 /* Space-separated list of Sieve extensions allowed to be used in
