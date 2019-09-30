@@ -4630,7 +4630,7 @@ static void section_list_free(struct section *l)
  * Parse the syntax for a partial fetch:
  *   "<" number "." nz-number ">"
  */
-#define PARSE_PARTIAL(start_octet, octet_count)                         \
+#define PARSE_PARTIAL(start_octet, octet_count) do {                    \
     (start_octet) = (octet_count) = 0;                                  \
     if (*p == '<' && Uisdigit(p[1])) {                                  \
         (start_octet) = p[1] - '0';                                     \
@@ -4659,7 +4659,8 @@ static void section_list_free(struct section *l)
             goto freeargs;                                              \
         }                                                               \
         p++;                                                            \
-    }
+    }                                                                   \
+} while(0)
 
 static int parse_fetch_args(const char *tag, const char *cmd,
                             int allow_vanished,
