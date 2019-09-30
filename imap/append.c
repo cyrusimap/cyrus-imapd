@@ -297,7 +297,7 @@ EXPORTED int append_commit(struct appendstate *as)
 /* may return non-zero, indicating an internal error of some sort. */
 EXPORTED int append_abort(struct appendstate *as)
 {
-    int i;
+    int i, r = 0;
     if (as->s == APPEND_DONE) return 0;
 
     // nuke any files that we've created
@@ -305,7 +305,7 @@ EXPORTED int append_abort(struct appendstate *as)
         mailbox_cleanup_uid(as->mailbox, as->baseuid + i, "ZZ");
     }
 
-    int r = mailbox_abort(as->mailbox);
+    if (as->mailbox) r = mailbox_abort(as->mailbox);
     append_free(as);
 
     return r;
