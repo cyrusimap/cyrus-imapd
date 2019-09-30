@@ -751,6 +751,15 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
     const char *tls_versions = config_getstring(IMAPOPT_TLS_VERSIONS);
 
+    if (strstr(tls_versions, "tls1_3") == NULL) {
+#if (OPENSSL_VERSION_NUMBER >= 0x1010100fL)
+        //syslog(LOG_DEBUG, "TLS server engine: Disabled TLSv1.3");
+        off |= SSL_OP_NO_TLSv1_3;
+#else
+        syslog(LOG_ERR, "ERROR: TLSv1.3 configured, OpenSSL < 1.1.1 insufficient");
+#endif // (OPENSSL_VERSION_NUMBER >= 0x1010100fL)
+    }
+
     if (strstr(tls_versions, "tls1_2") == NULL) {
 #if (OPENSSL_VERSION_NUMBER >= 0x1000105fL)
         //syslog(LOG_DEBUG, "TLS server engine: Disabled TLSv1.2");
