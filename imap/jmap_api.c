@@ -2803,8 +2803,15 @@ static void send_dav_invite(const char *userid, void *val, void *rock)
 
         if (!r) {
             /* Notify sharee (use resource buffer to create invite text) */
+            static const char *displayname_annot =
+                DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
             buf_reset(&irock->resource);
-            buf_printf(&irock->resource, "Shared by %s", irock->owner);
+            r = annotatemore_lookupmask(irock->mboxname, displayname_annot,
+                                        irock->owner, &irock->resource);
+            /* Fall back to last part of mailbox name */
+            if (r || !buf_len(&irock->resource)) {
+                buf_setcstr(&irock->resource, strrchr(irock->mboxname, '.') + 1);
+            }
             r = dav_create_invite(&irock->notify, irock->ns, &irock->tgt,
                                   irock->live_props, userid, access,
                                   BAD_CAST buf_cstring(&irock->resource));
