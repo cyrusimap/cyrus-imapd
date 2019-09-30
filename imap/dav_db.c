@@ -233,7 +233,7 @@ EXPORTED sqldb_t *dav_open_userid(const char *userid)
     dav_getpath_byuserid(&fname, userid);
     if (in_reconstruct) buf_printf(&fname, ".NEW");
     db = sqldb_open(buf_cstring(&fname), CMD_CREATE, DB_VERSION, davdb_upgrade,
-                    config_getint(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000);
+                    config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
     buf_free(&fname);
     return db;
 }
@@ -245,7 +245,7 @@ EXPORTED sqldb_t *dav_open_mailbox(struct mailbox *mailbox)
     dav_getpath(&fname, mailbox);
     if (in_reconstruct) buf_printf(&fname, ".NEW");
     db = sqldb_open(buf_cstring(&fname), CMD_CREATE, DB_VERSION, davdb_upgrade,
-                    config_getint(IMAPOPT_DAV_LOCK_TIMEOUT) * 1000);
+                    config_getduration(IMAPOPT_DAV_LOCK_TIMEOUT, 's') * 1000);
     buf_free(&fname);
     return db;
 }
