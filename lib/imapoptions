@@ -1735,15 +1735,20 @@ If all partitions are over that limit, this feature is not used anymore.
 { "plaintextloginalert", NULL, STRING }
 /* Message to send to client after a successful plaintext login. */
 
-{ "popexpiretime", -1, INT }
-/* The number of days advertised as being the minimum a message may be
+{ "popexpiretime", "-1", DURATION }
+/* The duration advertised as being the minimum a message may be
    left on the POP server before it is deleted (via the CAPA command,
    defined in the POP3 Extension Mechanism, which some clients may
-   support).  "NEVER", the default, may be specified with a negative
-   number.  The Cyrus POP3 server never deletes mail, no matter what
-   the value of this parameter is.  However, if a site implements a
-   less liberal policy, it needs to change this parameter
-   accordingly. */
+   support).  This duration has a granularity of whole days, with partial
+   days truncated (so e.g. "45m" is effectively "0d").  "NEVER", the
+   default, may be specified with a negative number.
+.PP
+   The Cyrus POP3 server never deletes mail, no matter what the value of
+   this parameter is.  However, if a site implements a less liberal policy,
+   it needs to change this parameter accordingly.
+.PP
+   For backward compatibility, if no unit is specified, days is
+   assumed. */
 
 { "popminpoll", NULL, DURATION }
 /* Set the minimum amount of time the server forces users to wait

@@ -1531,7 +1531,7 @@ static void cmd_pass(char *pass)
 static void cmd_capa(void)
 {
     int minpoll = config_getduration(IMAPOPT_POPMINPOLL, 'm');
-    int expire = config_getint(IMAPOPT_POPEXPIRETIME);
+    int expire = config_getduration(IMAPOPT_POPEXPIRETIME, 'd');
     int mechcount;
     const char *mechlist;
 
@@ -1553,6 +1553,7 @@ static void cmd_capa(void)
     if (expire < 0) {
         prot_printf(popd_out, "EXPIRE NEVER\r\n");
     } else {
+        expire /= (24 * 60 * 60);
         prot_printf(popd_out, "EXPIRE %d\r\n", expire);
     }
 
