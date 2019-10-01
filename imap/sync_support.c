@@ -2746,7 +2746,9 @@ int sync_apply_mailbox(struct dlist *kin,
     if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         char *oldname = mboxlist_find_uniqueid(uniqueid, NULL, NULL);
-        if (oldname) {
+        // if they have the same name it's probably an intermediate being
+        // promoted.  Intermediates, the gift that keeps on giving.
+        if (oldname && strcmp(oldname, mboxname)) {
             syslog(LOG_ERR, "SYNCNOTICE: failed to create mailbox %s with uniqueid %s (already used by %s)",
                    mboxname, uniqueid, oldname);
             free(oldname);
