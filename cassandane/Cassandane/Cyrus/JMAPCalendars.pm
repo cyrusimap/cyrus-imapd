@@ -1024,6 +1024,9 @@ sub normalize_event
             if (not exists $loc->{name}) {
                 $loc->{name} = '';
             }
+            if (not exists $loc->{q{@type}}) {
+                $loc->{q{@type}} = 'Location';
+            }
         }
     }
     if (not exists $event->{virtualLocations}) {
@@ -1039,6 +1042,9 @@ sub normalize_event
             if (not exists $loc->{uri}) {
                 $loc->{uri} = undef;
             }
+            if (not exists $loc->{q{@type}}) {
+                $loc->{q{@type}} = 'VirtualLocation';
+            }
         }
     }
     if (not exists $event->{keywords}) {
@@ -1049,9 +1055,21 @@ sub normalize_event
     }
     if (not exists $event->{links}) {
         $event->{links} = undef;
+    } elsif (defined $event->{links}) {
+        foreach my $link (values %{$event->{links}}) {
+            if (not exists $link->{q{@type}}) {
+                $link->{q{@type}} = 'Link';
+            }
+        }
     }
     if (not exists $event->{relatedTo}) {
         $event->{relatedTo} = undef;
+    } elsif (defined $event->{relatedTo}) {
+        foreach my $rel (values %{$event->{relatedTo}}) {
+            if (not exists $rel->{q{@type}}) {
+                $rel->{q{@type}} = 'Relation';
+            }
+        }
     }
     if (not exists $event->{participantId}) {
         # non-standard
@@ -1076,6 +1094,9 @@ sub normalize_event
             if (not exists $p->{scheduleSequence}) {
                 $p->{scheduleSequence} = 0;
             }
+            if (not exists $p->{q{@type}}) {
+                $p->{q{@type}} = 'Participant';
+            }
         }
     }
     if (not exists $event->{replyTo}) {
@@ -1095,6 +1116,9 @@ sub normalize_event
         }
         if (not exists $event->{recurrenceRule}{skip}) {
             $event->{recurrenceRule}{skip} = 'omit';
+        }
+        if (not exists $event->{recurrenceRule}{q{@type}}) {
+            $event->{recurrenceRule}{q{@type}} = 'Recurrence';
         }
     }
     if (not exists $event->{recurrenceOverrides}) {
@@ -1116,7 +1140,19 @@ sub normalize_event
             if (not exists $alert->{action}) {
                 $alert->{action} = 'display';
             }
-            if ($alert->{trigger} and $alert->{trigger}{type} eq 'offset') {
+            if (not exists $alert->{q{@type}}) {
+                $alert->{q{@type}} = 'Alert';
+            }
+            if (not exists $alert->{relatedTo}) {
+                $alert->{relatedTo} = undef;
+            } elsif (defined $alert->{relatedTo}) {
+                foreach my $rel (values %{$alert->{relatedTo}}) {
+                    if (not exists $rel->{q{@type}}) {
+                        $rel->{q{@type}} = 'Relation';
+                    }
+                }
+            }
+            if ($alert->{trigger} and $alert->{trigger}{q{@type}} eq 'OffsetTrigger') {
                 if (not exists $alert->{trigger}{relativeTo}) {
                     $alert->{trigger}{relativeTo} = 'start';
                 }
@@ -1132,21 +1168,24 @@ sub normalize_event
     if (not exists $event->{links}) {
         $event->{links} = undef;
     } elsif (defined $event->{links}) {
-        foreach my $att (values %{$event->{links}}) {
-            if (not exists $att->{cid}) {
-                $att->{cid} = undef;
+        foreach my $link (values %{$event->{links}}) {
+            if (not exists $link->{cid}) {
+                $link->{cid} = undef;
             }
-            if (not exists $att->{type}) {
-                $att->{type} = undef;
+            if (not exists $link->{type}) {
+                $link->{type} = undef;
             }
-            if (not exists $att->{size}) {
-                $att->{size} = undef;
+            if (not exists $link->{size}) {
+                $link->{size} = undef;
             }
-            if (not exists $att->{rel}) {
-                $att->{rel} = 'related';
+            if (not exists $link->{rel}) {
+                $link->{rel} = 'related';
             }
-            if (not exists $att->{title}) {
-                $att->{title} = undef;
+            if (not exists $link->{title}) {
+                $link->{title} = undef;
+            }
+            if (not exists $link->{q{@type}}) {
+                $link->{q{@type}} = 'Link';
             }
         }
     }
@@ -1288,17 +1327,29 @@ sub test_calendarevent_get_relatedto
     $self->assert_not_null($event);
     $self->assert_str_equals($id, $event->{uid});
     $self->assert_deep_equals({
-            "58ADE31-001" => { relation => {
-                'first' => JSON::true,
-            }},
-            "58ADE31-003" => { relation => {
-                'next' => JSON::true,
-            }},
-            "foo" => { relation => {
-                'x-unknown1' => JSON::true,
-                'x-unknown2' => JSON::true,
-            }},
-            "bar" => { relation => {} },
+            "58ADE31-001" => {
+                '@type' => 'Relation',
+                relation => {
+                    'first' => JSON::true,
+                }
+            },
+            "58ADE31-003" => {
+                '@type' => 'Relation',
+                relation => {
+                    'next' => JSON::true,
+                }
+            },
+            "foo" => {
+                '@type' => 'Relation',
+                relation => {
+                    'x-unknown1' => JSON::true,
+                    'x-unknown2' => JSON::true,
+                }
+            },
+            "bar" => {
+                '@type' => 'Relation',
+                relation => {}
+            },
     }, $event->{relatedTo});
 }
 
@@ -1312,6 +1363,7 @@ sub test_calendarevent_get_links
 
     my $links = {
         'fad3249914b09ede1558fa01004f4f8149559591' => {
+            '@type' => 'Link',
             href => "http://jmap.io/spec.html#calendar-events",
             type => "text/html",
             size => 4480,
@@ -1320,14 +1372,17 @@ sub test_calendarevent_get_links
             cid => '123456789asd',
         },
         '113fa6c507397df199a18d1371be615577f9117f' => {
+            '@type' => 'Link',
             href => "http://example.com/some.url",
             rel => "enclosure",
         },
         'describedby-attach' => {
+            '@type' => 'Link',
             href => "http://describedby/attach",
             rel => "describedby",
         },
         'describedby-url' => {
+            '@type' => 'Link',
             href => "http://describedby/url",
             rel => "describedby",
         }
@@ -1429,6 +1484,7 @@ sub test_calendarevent_get_participants
 
     my $wantParticipants = {
         '375507f588e65ec6eb800757ab94ccd10ad58599' => {
+            '@type' => 'Participant',
             name => 'Monty Burns',
             email => 'smithers@example.com',
             roles => {
@@ -1444,6 +1500,7 @@ sub test_calendarevent_get_participants
             scheduleSequence => 0,
         },
         '39b16b858076733c1d890cbcef73eca0e874064d' => {
+            '@type' => 'Participant',
             name => 'Homer Simpson',
             participationStatus => 'accepted',
             attendance => 'optional',
@@ -1459,6 +1516,7 @@ sub test_calendarevent_get_participants
             scheduleSequence => 0,
         },
         'carl' => {
+            '@type' => 'Participant',
             name => 'Carl Carlson',
             participationStatus => 'tentative',
             email => 'carl@example.com',
@@ -1477,6 +1535,7 @@ sub test_calendarevent_get_participants
             attendance => 'required',
         },
         'a6ef900d284067bb327d7be1469fb44693a5ec13' => {
+            '@type' => 'Participant',
             name => 'Lenny Leonard',
             participationStatus => 'tentative',
             email => 'lenny@example.com',
@@ -1494,6 +1553,7 @@ sub test_calendarevent_get_participants
             attendance => 'required',
         },
         'd6db3540fe51335b7154f144456e9eac2778fc8f' => {
+            '@type' => 'Participant',
             name => 'Larry Burns',
             participationStatus => 'declined',
             email => 'larry@example.com',
@@ -1525,6 +1585,7 @@ sub test_calendarevent_get_organizer
     my $event = $self->putandget_vevent($id, $ical);
     my $wantParticipants = {
         'bf8360ce374961f497599431c4bacb50d4a67ca1' => {
+            '@type' => 'Participant',
             name => 'Organizer',
             email => 'organizer@local',
             roles => {
@@ -1539,6 +1600,7 @@ sub test_calendarevent_get_organizer
             attendance => 'required',
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
+            '@type' => 'Participant',
             name => '',
             email => 'attendee@local',
             roles => {
@@ -1572,6 +1634,7 @@ sub test_calendarevent_organizer_noattendees
 
     my $wantParticipants = {
         'bf8360ce374961f497599431c4bacb50d4a67ca1' => {
+            '@type' => 'Participant',
             name => 'Organizer',
             email => 'organizer@local',
             roles => {
@@ -1604,6 +1667,7 @@ sub test_calendarevent_get_organizer_bogusuri
 
     my $wantParticipants = {
         '55d3677ce6a79b250d0fc3b5eed5130807d93dd3' => {
+            '@type' => 'Participant',
             name => 'Organizer',
             email => undef,
             roles => {
@@ -1619,6 +1683,7 @@ sub test_calendarevent_get_organizer_bogusuri
             attendance => 'required',
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
+            '@type' => 'Participant',
             name => '',
             email => 'attendee@local',
             roles => {
@@ -1649,6 +1714,7 @@ sub test_calendarevent_get_organizermailto
 
     my $wantParticipants = {
         'bf8360ce374961f497599431c4bacb50d4a67ca1' => {
+            '@type' => 'Participant',
             name => 'Organizer',
             email => 'organizer@local',
             roles => {
@@ -1664,6 +1730,7 @@ sub test_calendarevent_get_organizermailto
             attendance => 'required',
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
+            '@type' => 'Participant',
             name => 'Attendee',
             email => 'attendee@local',
             roles => {
@@ -1690,6 +1757,7 @@ sub test_calendarevent_get_recurrence
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event->{recurrenceRule});
+    $self->assert_str_equals("Recurrence", $event->{recurrenceRule}{q{@type}});
     $self->assert_str_equals("monthly", $event->{recurrenceRule}{frequency});
     $self->assert_str_equals("gregorian", $event->{recurrenceRule}{rscale});
     # This assertion is a bit brittle. It depends on the libical-internal
@@ -1787,37 +1855,42 @@ sub test_calendarevent_get_alerts
 
     my $alerts = {
         '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-1' => {
+            '@type' => 'Alert',
             trigger => {
-                type => 'offset',
+                '@type' => 'OffsetTrigger',
                 relativeTo => "start",
                 offset => "-PT5M",
             },
             action => "email",
         },
         '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-2' => {
+            '@type' => 'Alert',
             trigger => {
-                type => 'absolute',
+                '@type' => 'AbsoluteTrigger',
                 when => "2016-09-28T13:55:00Z",
             },
             acknowledged => "2016-09-28T14:00:05Z",
             action => "display",
         },
         '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-3' => {
+            '@type' => 'Alert',
             trigger => {
-                type => 'offset',
+                '@type' => 'OffsetTrigger',
                 relativeTo => "start",
                 offset => "PT10M",
             },
             action => "display",
         },
         '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-3-snoozed1' => {
+            '@type' => 'Alert',
             trigger => {
-                type => 'absolute',
+                '@type' => 'AbsoluteTrigger',
                 when => '2016-09-28T15:00:05Z',
             },
             action => "display",
             relatedTo => {
                 '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-3' => {
+                    '@type' => 'Relation',
                     relation => {
                         parent => JSON::true,
                     },
@@ -1825,20 +1898,23 @@ sub test_calendarevent_get_alerts
             },
         },
         '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-3-snoozed2' => {
+            '@type' => 'Alert',
             trigger => {
-                type => 'absolute',
+                '@type' => 'AbsoluteTrigger',
                 when => '2016-09-28T15:00:05Z',
             },
             action => "display",
             relatedTo => {
                 '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-3' => {
+                    '@type' => 'Relation',
                     relation => {}
                 },
             },
         },
         '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-4' => {
+            '@type' => 'Alert',
             trigger => {
-                type => 'absolute',
+                '@type' => 'AbsoluteTrigger',
                 when => '1976-04-01T00:55:45Z',
             },
             action => "display",
@@ -2076,6 +2152,7 @@ sub test_calendarevent_set_subseconds
         duration=> "PT5M3.45S",
         timeZone=> "Europe/Vienna",
         recurrenceRule => {
+            '@type' => 'Recurrence',
             frequency => "daily",
             until => '2011-12-10T04:05:06.78',
         },
@@ -2084,6 +2161,7 @@ sub test_calendarevent_set_subseconds
         },
         "participants" => {
             'foo' => {
+                '@type' => 'Participant',
                 name => 'Foo',
                 email => 'foo@local',
                 roles => {
@@ -2100,7 +2178,7 @@ sub test_calendarevent_set_subseconds
         alerts => {
             alert1 => {
                 trigger => {
-                    type => 'offset',
+                    '@type' => 'OffsetTrigger',
                     relativeTo => "start",
                     offset => "-PT5M0.7S",
                 },
@@ -2121,6 +2199,7 @@ sub test_calendarevent_set_subseconds
                 duration => 'PT1H2.345S',
                 locations => {
                     endLocation => {
+                        '@type' => 'Location',
                         name => 'end location in another timezone',
                         relativeTo => 'end',
                         timeZone => 'Europe/London',
@@ -2156,29 +2235,33 @@ sub test_calendarevent_get_alerts_utctrigger_subseconds
 
     my $alerts = {
         '0CF835D0-CFEB-44AE-904A-C26AB62B73BB-1' => {
+            '@type' => 'Alert',
             trigger => {
-                type => 'absolute',
+                '@type' => 'AbsoluteTrigger',
                 when => '2016-09-28T13:55:00.987Z',
             },
             action => "display",
         },
         '0CF835D0-CFEB-44AE-904A-C36AB63B73BB-2' => {
+            '@type' => 'Alert',
             trigger => {
-                type => 'absolute',
+                '@type' => 'AbsoluteTrigger',
                 when => '2016-09-28T14:05:00.123Z',
             },
             action => "display",
         },
         '0CF835D0-CFEB-44AE-904A-C46AB64B73BB-3' => {
+            '@type' => 'Alert',
             trigger => {
-                type => 'absolute',
+                '@type' => 'AbsoluteTrigger',
                 when => '2016-09-28T14:55:00.987Z',
             },
             action => "display",
         },
         '0CF855D0-CFEB-44AE-904A-C56AB65B75BB-4' => {
+            '@type' => 'Alert',
             trigger => {
-                type => 'absolute',
+                '@type' => 'AbsoluteTrigger',
                 when => '2016-09-28T15:05:00.123Z',
             },
             action => "display",
@@ -3092,6 +3175,7 @@ sub test_calendarevent_set_participants_organame
         },
         "participants" => {
             'foo' => {
+                '@type' => 'Participant',
                 name => 'Foo',
                 email => 'foo@local',
                 roles => {
@@ -3102,6 +3186,7 @@ sub test_calendarevent_set_participants_organame
                 },
             },
             'bar' => {
+                '@type' => 'Participant',
                 name => 'Bar',
                 email => 'bar@local',
                 kind => 'individual',
@@ -3128,7 +3213,7 @@ sub test_calendarevent_set_alerts
     my $alerts = {
         alert1 => {
             trigger => {
-                type => 'offset',
+                '@type' => 'OffsetTrigger',
                 relativeTo => "start",
                 offset => "-PT5M",
             },
@@ -3137,7 +3222,7 @@ sub test_calendarevent_set_alerts
         },
         alert2 => {
             trigger => {
-                type => 'absolute',
+                '@type' => 'AbsoluteTrigger',
                 when => "2019-03-04T04:05:06Z",
             },
             action => "display",
@@ -3151,13 +3236,13 @@ sub test_calendarevent_set_alerts
         },
         alert3 => {
             trigger => {
-                type => 'offset',
+                '@type' => 'OffsetTrigger',
                 offset => "PT1S",
             }
         },
         alert4 => {
             trigger => {
-                type => 'absolute',
+                '@type' => 'AbsoluteTrigger',
                 when => "2019-03-04T05:06:07Z",
             },
             action => "display",
@@ -3274,6 +3359,7 @@ sub test_calendarevent_set_participants_justorga
         participantId => 'foo',
         "participants" => {
             'foo' => {
+                '@type' => 'Participant',
                 name => 'Foo',
                 roles => {
                     'owner' => JSON::true,
@@ -3486,8 +3572,9 @@ sub test_calendarevent_set_shared
         "participants" => undef,
         "alerts" => {
             'foo' => {
+                '@type' => 'Alert',
                 trigger => {
-                    type => 'offset',
+                    '@type' => 'OffsetTrigger',
                     relativeTo => "start",
                     offset => "-PT5M",
                 },
@@ -3514,7 +3601,7 @@ sub test_calendarevent_set_shared
         "alerts" => {
             'foo' => {
                 trigger => {
-                    type => 'offset',
+                    '@type' => 'OffsetTrigger',
                     relativeTo => "start",
                     offset => "-PT5M",
                 },
@@ -5428,6 +5515,7 @@ sub test_rscale_in_jmap_hidden_in_caldav
     # rscale should now be in jmap
     $self->assert_deep_equals(
         {
+            '@type' => 'Recurrence',
             count          => 12,
             firstDayOfWeek => 'mo',
             frequency      => 'monthly',
