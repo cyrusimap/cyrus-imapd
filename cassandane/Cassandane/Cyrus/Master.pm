@@ -95,7 +95,7 @@ sub lemming_connect
     # this as a fixed sized field.
     my $pid;
     $sock->sysread($pid, 4)
-        or die "Cannot read from lemming: $!";
+        or die "Cannot read from lemming: " . $srv->address() . " $!";
     $pid = unpack("L", $pid);
     die "Cannot read from lemming: $!"
         unless defined $pid;
