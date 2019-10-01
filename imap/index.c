@@ -637,16 +637,9 @@ static void index_refresh_locked(struct index_state *state)
      * last time plus however many new records might be unEXPUNGEd on the
      * end */
 
+    need_records = state->want_expunged ? mailbox->i.num_records : mailbox->i.exists;
     if (state->last_uid) {
-        need_records = state->exists + (mailbox->i.last_uid - state->last_uid);
-    }
-    else if (state->want_expunged) {
-        /* could need the lot! */
-        need_records = mailbox->i.num_records;
-    }
-    else {
-        /* init case */
-        need_records = mailbox->i.exists;
+        need_records += (mailbox->i.last_uid - state->last_uid);
     }
 
     /* make sure we have space */
