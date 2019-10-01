@@ -3686,6 +3686,9 @@ static void index_tellexpunge(struct index_state *state)
     struct index_map *im;
     unsigned exists = state->exists;
 
+    // if we want expunged, we can't tell them!
+    if (state->want_expunged) return;
+
     vanishedlist = seqset_init(0, SEQ_SPARSE);
 
     for (oldmsgno = 1; oldmsgno <= exists; oldmsgno++) {
