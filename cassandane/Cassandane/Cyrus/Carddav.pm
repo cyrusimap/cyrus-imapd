@@ -58,7 +58,7 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane');
-    $config->set(httpmodules => 'carddav');
+    $config->set(httpmodules => 'carddav caldav');
     $config->set(httpallowcompress => 'no');
     return $class->SUPER::new({
         adminstore => 1,
