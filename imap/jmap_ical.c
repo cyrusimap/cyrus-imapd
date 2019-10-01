@@ -755,7 +755,6 @@ recurrence_from_ical(icalcomponent *comp)
 {
     char *s = NULL;
     size_t i;
-    json_t *recur;
     struct buf buf = BUF_INITIALIZER;
     icalproperty *prop;
     struct icalrecurrencetype rrule;
@@ -769,7 +768,7 @@ recurrence_from_ical(icalcomponent *comp)
         return json_null();
     }
 
-    recur = json_pack("{}");
+    json_t *recur = json_pack("{s:s}", "@type", "Recurrence");
 
     /* frequency */
     s = lcase(xstrdup(icalrecur_freq_to_string(rrule.freq)));
@@ -1239,7 +1238,7 @@ static json_t *participant_from_ical(icalproperty *prop,
                                      hash_table *id_by_uri,
                                      icalproperty *orga)
 {
-    json_t *p = json_object();
+    json_t *p = json_pack("{s:s}", "@type", "Participant");
     icalparameter *param;
     struct buf buf = BUF_INITIALIZER;
 
@@ -1525,7 +1524,7 @@ static json_t *participant_from_ical(icalproperty *prop,
 static json_t*
 participant_from_icalorganizer(icalproperty *orga)
 {
-    json_t *jorga = json_object();
+    json_t *jorga = json_pack("{s:s}", "@type", "Participant");
 
     /* name */
     icalparameter *param;
@@ -1643,7 +1642,7 @@ link_from_ical(icalproperty *prop)
     }
     if (!href || *href == '\0') return NULL;
 
-    json_t *link = json_pack("{s:s}", "href", href);
+    json_t *link = json_pack("{s:s: s:s}", "@type", "Link", "href", href);
     icalparameter *param = NULL;
     const char *s;
 
@@ -1744,7 +1743,7 @@ alerts_from_ical(icalcomponent *comp)
          alarm = icalcomponent_get_next_component(comp, ICAL_VALARM_COMPONENT)) {
 
         icalproperty* prop;
-        json_t *alert = json_object();
+        json_t *alert = json_pack("{s:s}", "@type", "Alert");
 
         /* alert id */
         char *id = (char *) icalcomponent_get_uid(alarm);
@@ -1778,7 +1777,7 @@ alerts_from_ical(icalcomponent *comp)
              icaltime_is_null_time(trigger.time)) {
 
             /* Convert to offset trigger */
-            json_object_set_new(jtrigger, "type", json_string("offset"));
+            json_object_set_new(jtrigger, "@type", json_string("OffsetTrigger"));
             struct duration duration = JMAP_DURATION_INITIALIZER;
             duration_from_icalduration(trigger.duration, &duration);
             subseconds_from_icalprop(triggerprop, &duration.nanos);
@@ -1793,7 +1792,7 @@ alerts_from_ical(icalcomponent *comp)
             buf_reset(&buf);
         } else {
             /* Convert to absolute trigger */
-            json_object_set_new(jtrigger, "type", json_string("absolute"));
+            json_object_set_new(jtrigger, "@type", json_string("AbsoluteTrigger"));
 
             struct datetime when = JMAP_DATETIME_INITIALIZER;
             datetime_from_icalprop(triggerprop, &when);
@@ -1892,7 +1891,8 @@ relatedto_from_ical(icalcomponent *comp)
             else json_object_set_new(relation, "parent", json_true());
         }
 
-        json_object_set_new(ret, uid, json_pack("{s:o}", "relation", relation));
+        json_object_set_new(ret, uid, json_pack("{s:s s:o}",
+                    "@type", "Relation", "relation", relation));
 
     }
 
@@ -1907,7 +1907,7 @@ relatedto_from_ical(icalcomponent *comp)
 static json_t* location_from_ical(icalproperty *prop, json_t *links)
 {
     icalparameter *param;
-    json_t *loc = json_object();
+    json_t *loc = json_pack("{s:s}", "@type", "Location");
 
     /* name */
     const char *name = icalvalue_get_text(icalproperty_get_value(prop));
@@ -2081,7 +2081,7 @@ virtuallocations_from_ical(icalcomponent *comp)
          prop = icalcomponent_get_next_property(comp, ICAL_CONFERENCE_PROPERTY)) {
 
         char *id = xjmapid_from_ical(prop);
-        json_t *loc = json_object();
+        json_t *loc = json_pack("{s:s}", "@type", "VirtualLocation");
 
         const char *uri = icalproperty_get_value_as_string(prop);
         if (uri) json_object_set_new(loc, "uri", json_string(uri));
@@ -2521,6 +2521,18 @@ jmapical_tojmap(icalcomponent *ical, hash_table *props)
 /*
  * Convert to iCalendar from JMAP
  */
+
+static int validate_type(struct jmap_parser *parser, json_t *jobj, const char *wanttype)
+{
+    json_t *jtype = json_object_get(jobj, "@type");
+    if (jtype && jtype != json_null()) {
+        if (!json_is_string(jtype) || strcasecmp(json_string_value(jtype), wanttype)) {
+            jmap_parser_invalid(parser, "@type");
+            return 0;
+        }
+    }
+    return 1;
+}
 
 static void relatedto_to_ical(icalcomponent *, struct jmap_parser *, json_t *);
 
@@ -3387,6 +3399,8 @@ participants_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *ev
             continue;
         }
 
+        validate_type(parser, jval, "Participant");
+
         const char *caladdress = hash_lookup(key, &caladdress_by_participant_id);
         if (!caladdress) {
             jmap_parser_invalid(parser, "sendTo");
@@ -3448,6 +3462,8 @@ links_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *links)
             jmap_parser_pop(parser);
             continue;
         }
+
+        validate_type(parser, link, "Link");
 
         /* href */
         href = json_string_value(json_object_get(link, "href"));
@@ -3646,6 +3662,8 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
         }
         jmap_parser_push(parser, id);
 
+        validate_type(parser, alert, "Alert");
+
         alarm = icalcomponent_new_valarm();
         icalcomponent_set_uid(alarm, id);
 
@@ -3655,8 +3673,8 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
         };
         json_t *jtrigger = json_object_get(alert, "trigger");
         if (json_is_object(jtrigger)) {
-            const char *triggertype = json_string_value(json_object_get(jtrigger, "type"));
-            if (!strcmpsafe(triggertype, "offset")) {
+            const char *triggertype = json_string_value(json_object_get(jtrigger, "@type"));
+            if (!strcmpsafe(triggertype, "OffsetTrigger")) {
                 jmap_parser_push(parser, "trigger");
 
                 /* offset */
@@ -3696,7 +3714,7 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
                 icalproperty_add_parameter(prop, param);
                 icalcomponent_add_property(alarm, prop);
             }
-            else if (!strcmpsafe(triggertype, "absolute")) {
+            else if (!strcmpsafe(triggertype, "AbsoluteTrigger")) {
                 jmap_parser_push(parser, "trigger");
 
                 json_t *jwhen = json_object_get(jtrigger, "when");
@@ -3864,6 +3882,8 @@ recurrence_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrul
     }
 
     jmap_parser_push(parser, "recurrenceRule");
+
+    validate_type(parser, rrule, "Recurrence");
 
     /* frequency */
     const char *freq = NULL;
@@ -4151,6 +4171,10 @@ relatedto_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *relat
     jmap_parser_push(parser, "relatedTo");
     json_object_foreach(relatedTo, uid, relationObj) {
         jmap_parser_push(parser, uid);
+
+        validate_type(parser, relationObj, "Relation");
+
+        /* relation */
         json_t *relation = json_object_get(relationObj, "relation");
         if (json_object_size(relation)) {
             prop = icalproperty_new_relatedto(uid);
@@ -4178,6 +4202,7 @@ relatedto_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *relat
         else if (!json_is_object(relation)) {
             jmap_parser_invalid(parser, "relation");
         }
+
         jmap_parser_pop(parser);
     }
     jmap_parser_pop(parser);
@@ -4188,10 +4213,16 @@ validate_location(json_t *loc, struct jmap_parser *parser, json_t *links)
 {
     size_t invalid_cnt = json_array_size(parser->invalid);
     json_t *jprop = NULL;
+    json_t *jtype = json_object_get(links, "@type");
+
+    validate_type(parser, loc, "Location");
 
     /* At least one property other than rel MUST be set */
-    if (json_object_size(loc) == 0 ||
-        (json_object_size(loc) == 1 && json_object_get(loc, "relativeTo"))) {
+    if ((json_object_size(loc) == 0) ||
+        (json_object_size(loc) == 1 && !JNOTNULL(jtype) &&
+         json_object_get(loc, "relativeTo")) ||
+        (json_object_size(loc) == 2 && JNOTNULL(jtype) &&
+         json_object_get(loc, "relativeTo"))) {
         jmap_parser_invalid(parser, NULL);
         return 0;
     }
@@ -4345,6 +4376,8 @@ virtuallocations_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t
         }
 
         jmap_parser_push(parser, id);
+
+        validate_type(parser, loc, "VirtualLocation");
 
         icalproperty *prop = icalproperty_new(ICAL_CONFERENCE_PROPERTY);
         xjmapid_to_ical(prop, id);
