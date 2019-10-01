@@ -1325,8 +1325,13 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If enabled, lmtpd will convert the recipient addresses to lowercase
    (up to a '+' character, if present). */
 
-{ "lmtp_exclude_specialuse", NULL, STRING }
-/* Don't allow delivery to folders with given special-use attributes. */
+{ "lmtp_exclude_specialuse", "\\Snoozed", STRING }
+/* Don't allow delivery to folders with given special-use attributes.
+.PP
+   Note that "snoozing" of emails can currently only be done via the
+   JMAP protocol, so delivery directly to the \Snoozed mailbox is
+   prohibited by default as it will not be moved back into INBOX
+   automatically. */
 
 { "lmtp_fuzzy_mailbox_match", 0, SWITCH }
 /* If enabled, and the mailbox specified in the detail part of the
