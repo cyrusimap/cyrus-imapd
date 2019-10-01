@@ -3877,6 +3877,8 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
     struct appendstage *curstage;
     mbentry_t *mbentry = NULL;
 
+    memset(&appendstate, 0, sizeof(struct appendstate));
+
     /* See if we can append */
     char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
     r = mlookup(tag, name, intname, &mbentry);
