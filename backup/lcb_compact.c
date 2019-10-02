@@ -462,12 +462,12 @@ EXPORTED int backup_compact(const char *name,
     /* calculate current time after obtaining locks, in case of a wait */
     const time_t now = time(NULL);
 
-    const int retention_days = config_getint(IMAPOPT_BACKUP_RETENTION_DAYS);
-    if (retention_days > 0) {
-        since = now - (retention_days * 24 * 60 * 60);
+    const int retention = config_getduration(IMAPOPT_BACKUP_RETENTION, 'd');
+    if (retention > 0) {
+        since = now - retention;
     }
     else {
-        /* zero or negative retention days means "keep forever" */
+        /* zero or negative retention means "keep forever" */
         since = -1;
     }
 

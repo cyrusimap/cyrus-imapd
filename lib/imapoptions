@@ -499,10 +499,16 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The absolute path of the backup staging area.  If not specified,
    will be temp_path/backup */
 
-{ "backup_retention_days", 7, INT }
-/* The number of days to keep content in backup after it has been deleted
+{ "backup_retention_days", NULL, DURATION, "3.1.8", "backup_retention" }
+/* Deprecated in favor of \fIbackup_retention\fR. */
+
+{ "backup_retention", "7d", DURATION }
+/* How long to keep content in backup after it has been deleted
    from the source.  If set to a negative value or zero, deleted content
-   will be kept indefinitely. */
+   will be kept indefinitely.
+.PP
+   For backward compatibility, if no unit is specified, days is
+   assumed.  */
 
 { "backup_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip")}
 /* The cyrusdb backend to use for the backup locations database. */
