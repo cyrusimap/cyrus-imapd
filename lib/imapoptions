@@ -303,9 +303,16 @@ Blank lines and lines beginning with ``#'' are ignored.
    to be stored on slower, cheaper disks - even within the same
    mailbox, as distinct from partitions. */
 
-{ "archive_days", 7, INT }
-/* The number of days after which to move messages to the archive partition
-   if archiving is enabled */
+{ "archive_days", NULL, DURATION, "3.1.8", "archive_after" }
+/* Deprecated in favour of \fIarchive_after\fR. */
+
+{ "archive_after", "7d", DURATION }
+/* The duration after which to move messages to the archive partition
+   if archiving is enabled.
+.PP
+   For backward compatibility, if no unit is specified, days is
+   assumed.  */
+*/
 
 { "archive_maxsize", 1024, INT }
 /* The size in kilobytes of the largest message that won't be archived
