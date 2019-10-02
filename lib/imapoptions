@@ -664,10 +664,16 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "conversations_db", "skiplist", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip")}
 /* The cyrusdb backend to use for the per-user conversations database. */
 
-{ "conversations_expire_days", 90, INT }
+{ "conversations_expire_days", NULL, DURATION, "3.1.8", "conversations_expire_after" }
+/* Deprecated in favor of \fIconversations_expire_after\fR. */
+
+{ "conversations_expire_after", "90d", DURATION }
 /* How long the conversations database keeps the message tracking
    information needed for receiving new messages in existing
-   conversations, in days. */
+   conversations.
+.PP
+   For backward compatibility, if no unit is specified, days is
+   assumed. */
 
 { "conversations_max_thread", 100, INT }
 /* maximum size for a single thread.  Threads will split if they have this many
