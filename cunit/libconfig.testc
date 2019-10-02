@@ -287,4 +287,163 @@ static void test_magic_configdirectory_default(void)
     CU_ASSERT_STRING_EQUAL(idlesocket, DBDIR"/conf/socket/idle");
 }
 
+static void test_deprecated_int(void)
+{
+    /* { "autocreatequota", 0, INT, "2.5.0", "autocreate_quota" } */
+    int val;
+
+    /* set the deprecated name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreatequota: 12\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should not be able to read the deprecated name */
+    CU_EXPECT_CYRFATAL_BEGIN
+    val = config_getint(IMAPOPT_AUTOCREATEQUOTA);
+    CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
+        "Option 'autocreatequota' is deprecated in favor of "
+        "'autocreate_quota' since version 2.5.0.");
+
+    /* should be able to read the value at the new name */
+    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+    CU_ASSERT_EQUAL(val, 12);
+
+    /* set the new name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreate_quota: 12\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 0);
+
+    /* should be able to read it at the new name */
+    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+    CU_ASSERT_EQUAL(val, 12);
+
+    /* set both names to different values */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "autocreatequota: 12\n"
+        "autocreate_quota: 15\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should read new value at the new name */
+    val = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
+    CU_ASSERT_EQUAL(val, 15);
+}
+
+static void test_deprecated_string(void)
+{
+    /* { "tlscache_db_path", NULL, STRING, "2.5.0", "tls_sessions_db_path" } */
+    const char *val;
+
+    /* set the deprecated name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "tlscache_db_path: foo\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should not be able to read the deprecated name */
+    CU_EXPECT_CYRFATAL_BEGIN
+    val = config_getstring(IMAPOPT_TLSCACHE_DB_PATH);
+    CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
+        "Option 'tlscache_db_path' is deprecated in favor of "
+        "'tls_sessions_db_path' since version 2.5.0.");
+
+    /* should be able to read the value at the new name */
+    val = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val, "foo");
+
+    /* set the new name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "tls_sessions_db_path: foo\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 0);
+
+    /* should be able to read it at the new name */
+    val = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val, "foo");
+
+    /* set both names to different values */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "tlscache_db_path: foo\n"
+        "tls_sessions_db_path: bar\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should read new value at the new name */
+    val = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val, "bar");
+}
+
+static void test_deprecated_stringlist(void)
+{
+    /* { "tlscache_db", "twoskip",
+     *   STRINGLIST("skiplist", "sql", "twoskip", "zeroskip"),
+     *   "2.5.0", "tls_sessions_db" }
+     */
+    const char *val;
+
+    /* set the deprecated name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "tlscache_db: sql\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should not be able to read the deprecated name */
+    CU_EXPECT_CYRFATAL_BEGIN
+    val = config_getstring(IMAPOPT_TLSCACHE_DB);
+    CU_EXPECT_CYRFATAL_END(EX_SOFTWARE,
+        "Option 'tlscache_db' is deprecated in favor of "
+        "'tls_sessions_db' since version 2.5.0.");
+
+    /* should be able to read it at the new name */
+    val = config_getstring(IMAPOPT_TLS_SESSIONS_DB);
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val, "sql");
+
+    /* set the new name */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "tls_sessions_db: sql\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 0);
+
+    /* should be able to read it at the new name */
+    val = config_getstring(IMAPOPT_TLS_SESSIONS_DB);
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val, "sql");
+
+    /* set both names to different values */
+    CU_SYSLOG_MATCH("Option '.*' is deprecated");
+    config_read_string(
+        "configdirectory: "DBDIR"/conf\n"
+        "tlscache_db: sql\n"
+        "tls_sessions_db: zeroskip\n"
+    );
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+
+    /* should read new value at the new name */
+    val = config_getstring(IMAPOPT_TLS_SESSIONS_DB);
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val, "zeroskip");
+}
+
 /* vim: set ft=c: */

@@ -95,10 +95,31 @@ extern void fatal(const char *fatal_message, int fatal_code)
 /* prototype to allow for sane function ordering */
 static void config_read_file(const char *filename);
 
+static void assert_not_deprecated(enum imapopt opt)
+{
+    if (imapopts[opt].deprecated_since) {
+        char errbuf[1024];
+        enum imapopt popt = imapopts[opt].preferred_opt;
+        if (popt != IMAPOPT_ZERO) {
+            snprintf(errbuf, sizeof(errbuf),
+                    "Option '%s' is deprecated in favor of '%s' since version %s.",
+                    imapopts[opt].optname, imapopts[popt].optname,
+                    imapopts[opt].deprecated_since);
+        }
+        else {
+            snprintf(errbuf, sizeof(errbuf),
+                    "Option '%s' is deprecated in version %s.",
+                    imapopts[opt].optname, imapopts[opt].deprecated_since);
+        }
+        fatal(errbuf, EX_SOFTWARE);
+    }
+}
+
 EXPORTED const char *config_getstring(enum imapopt opt)
 {
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert_not_deprecated(opt);
     assert((imapopts[opt].t == OPT_STRING) ||
            (imapopts[opt].t == OPT_STRINGLIST));
 
@@ -109,6 +130,7 @@ EXPORTED int config_getint(enum imapopt opt)
 {
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert_not_deprecated(opt);
     assert(imapopts[opt].t == OPT_INT);
 #if (SIZEOF_LONG != 4)
     if ((imapopts[opt].val.i > 0x7fffffff)||
@@ -124,6 +146,7 @@ EXPORTED int config_getswitch(enum imapopt opt)
 {
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert_not_deprecated(opt);
     assert(imapopts[opt].t == OPT_SWITCH);
 #if (SIZEOF_LONG != 4)
     if ((imapopts[opt].val.b > 0x7fffffff)||
@@ -139,6 +162,7 @@ EXPORTED enum enum_value config_getenum(enum imapopt opt)
 {
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert_not_deprecated(opt);
     assert(imapopts[opt].t == OPT_ENUM);
 
     return imapopts[opt].val.e;
@@ -148,6 +172,7 @@ EXPORTED unsigned long config_getbitfield(enum imapopt opt)
 {
     assert(config_loaded);
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
+    assert_not_deprecated(opt);
     assert(imapopts[opt].t == OPT_BITFIELD);
 
     return imapopts[opt].val.x;
@@ -532,6 +557,19 @@ EXPORTED void config_read(const char *alt_config, const int config_need_data)
 
 #define GROWSIZE 4096
 
+static void config_add_overflowstring(const char *key, const char *value, int lineno)
+{
+    char *newval = xstrdup(value);
+    if (newval != hash_insert(key, newval, &confighash)) {
+        char errbuf[1024];
+        snprintf(errbuf, sizeof(errbuf),
+                "option '%s' was specified twice in config file "
+                "(second occurrence on line %d)",
+                key, lineno);
+        fatal(errbuf, EX_CONFIG);
+    }
+}
+
 static void config_read_file(const char *filename)
 {
     FILE *infile = NULL;
@@ -540,7 +578,7 @@ static void config_read_file(const char *filename)
     char *buf, errbuf[1024];
     const char *cyrus_path;
     unsigned bufsize, len;
-    char *p, *q, *key, *fullkey, *srvkey, *val, *newval;
+    char *p, *q, *key, *fullkey, *srvkey;
     int service_specific;
     int idlen = (config_ident ? strlen(config_ident) : 0);
 
@@ -717,6 +755,14 @@ static void config_read_file(const char *filename)
             else
                 imapopts[opt].seen = 1;
 
+            /* If this is a deprecated option, save a copy of its value to the
+             * overflow hash.  If we need to look up the deprecated name for
+             * some reason, we can do so with config_getoverflowstring().
+             */
+            if (imapopts[opt].deprecated_since) {
+                config_add_overflowstring(fullkey, p, lineno);
+            }
+
             /* this is a known option */
             switch (imapopts[opt].t) {
             case OPT_STRING:
@@ -839,14 +885,7 @@ static void config_read_file(const char *filename)
 */
 
             /* Put it in the overflow hash table */
-            newval = xstrdup(p);
-            val = hash_insert(key, newval, &confighash);
-            if (val != newval) {
-                snprintf(errbuf, sizeof(errbuf),
-                        "option '%s' was specified twice in config file (second occurrence on line %d)",
-                        fullkey, lineno);
-                fatal(errbuf, EX_CONFIG);
-            }
+            config_add_overflowstring(key, p, lineno);
         }
     }
 
