@@ -203,7 +203,7 @@ static const char *dbfname(struct cyrusdb *db)
     else if (!strcmp(db->name, FNAME_DELIVERDB))
         fname = config_getstring(IMAPOPT_DUPLICATE_DB_PATH);
     else if (!strcmp(db->name, FNAME_TLSSESSIONS))
-        fname = config_getstring(IMAPOPT_TLSCACHE_DB_PATH);
+        fname = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
     else if (!strcmp(db->name, FNAME_PTSDB))
         fname = config_getstring(IMAPOPT_PTSCACHE_DB_PATH);
     else if (!strcmp(db->name, FNAME_STATUSCACHEDB))
