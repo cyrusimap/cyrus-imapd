@@ -89,7 +89,9 @@ Duration options take the form of a number followed by a unit, for example
 (minutes) and \fBs\fR (seconds).  Multiple units can be combined and will
 be summed together, for example \fB1h30m\fR is equivalent to \fB90m\fR.  If
 no unit is specified, an option-specific backward-compatible default unit
-is assumed (documented on an option-by-option basis).
+is assumed (documented on an option-by-option basis).  These are simple time
+units: 1d=24h, 1h=60m, 1m=60s (daylight savings, timezones, leap adjustments,
+etc are not considered).
 .SH FIELD DESCRIPTIONS
 .PP
 The sections below detail options that can be placed in the
