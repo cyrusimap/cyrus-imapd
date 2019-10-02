@@ -7177,11 +7177,11 @@ localcreate:
                     (void) mboxlist_setquotas(mbname_intname(mbname), newquotas, 0, 0);
                 } // (autocreatequotastorage > 0) || (autocreatequotamessage > 0)
 
-            } else { // (autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATEQUOTA))
+            } else {
                 prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
                 goto done;
 
-            } // (autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATEQUOTA))
+            }
 
         } else { // (!strcasecmp(name, "INBOX"))
             prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
