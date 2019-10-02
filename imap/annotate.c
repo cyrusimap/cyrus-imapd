@@ -3579,6 +3579,8 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
     int r = 0;
 
     if (rrock->newmailbox &&
+            /* snoozed MUST only appear on one copy of a message */
+            strcmp(entry, IMAP_ANNOT_NS "snoozed") &&
             /* displayname stores the UTF-8 encoded JMAP name of a mailbox */
             strcmp(entry, IMAP_ANNOT_NS "displayname")) {
         /* create newly renamed entry */
