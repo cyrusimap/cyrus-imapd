@@ -457,8 +457,7 @@ static void myinit(void)
         fatal("xmalloc() failed", EX_CONFIG);
     }
 
-    ptsm->uri = (config_getstring(IMAPOPT_LDAP_URI) ?
-        config_getstring(IMAPOPT_LDAP_URI) : config_getstring(IMAPOPT_LDAP_SERVERS));
+    ptsm->uri = config_getstring(IMAPOPT_LDAP_URI);
 
     ptsm->version = (config_getint(IMAPOPT_LDAP_VERSION) == 2 ? LDAP_VERSION2 : LDAP_VERSION3);
     ptsm->timeout.tv_sec = config_getint(IMAPOPT_LDAP_TIMEOUT);
@@ -493,21 +492,11 @@ static void myinit(void)
 
     ptsm->bind_dn = config_getstring(IMAPOPT_LDAP_BIND_DN);
     ptsm->sasl = config_getswitch(IMAPOPT_LDAP_SASL);
-    ptsm->id = (config_getstring(IMAPOPT_LDAP_ID) ?
-        config_getstring(IMAPOPT_LDAP_ID) : config_getstring(IMAPOPT_LDAP_SASL_AUTHC));
-
-    ptsm->authz = (config_getstring(IMAPOPT_LDAP_AUTHZ) ?
-        config_getstring(IMAPOPT_LDAP_AUTHZ) : config_getstring(IMAPOPT_LDAP_SASL_AUTHZ));
-
-    ptsm->mech = (config_getstring(IMAPOPT_LDAP_MECH) ?
-        config_getstring(IMAPOPT_LDAP_MECH) : config_getstring(IMAPOPT_LDAP_SASL_MECH));
-
-    ptsm->realm = (config_getstring(IMAPOPT_LDAP_REALM) ?
-        config_getstring(IMAPOPT_LDAP_REALM) : config_getstring(IMAPOPT_LDAP_SASL_REALM));
-
-    ptsm->password = (config_getstring(IMAPOPT_LDAP_PASSWORD) ?
-        config_getstring(IMAPOPT_LDAP_PASSWORD) : config_getstring(IMAPOPT_LDAP_SASL_PASSWORD));
-
+    ptsm->id = config_getstring(IMAPOPT_LDAP_ID);
+    ptsm->authz = config_getstring(IMAPOPT_LDAP_AUTHZ);
+    ptsm->mech = config_getstring(IMAPOPT_LDAP_MECH);
+    ptsm->realm = config_getstring(IMAPOPT_LDAP_REALM);
+    ptsm->password = config_getstring(IMAPOPT_LDAP_PASSWORD);
     ptsm->start_tls = config_getswitch(IMAPOPT_LDAP_START_TLS);
     ptsm->tls_check_peer = config_getswitch(IMAPOPT_LDAP_VERIFY_PEER);
     ptsm->tls_cacert_file = config_getstring(IMAPOPT_LDAP_CA_FILE);
