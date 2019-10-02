@@ -611,8 +611,19 @@ static int _email_matchmime_evaluate(json_t *filter,
     ptrarray_t xqs = PTRARRAY_INITIALIZER;
     const char *match;
     if ((match = json_string_value(json_object_get(filter, "text")))) {
-        xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_ANY, match);
+        ptrarray_t childqueries = PTRARRAY_INITIALIZER;
+        int i;
+        for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
+            if (i == SEARCH_PART_ATTACHMENTBODY)
+                continue;
+            void *xq = xapian_query_new_match(db, i, match);
+            if (xq) ptrarray_push(&childqueries, xq);
+        }
+        xapian_query_t *xq = xapian_query_new_compound(db, /*is_or*/1,
+                                       (xapian_query_t **)childqueries.data,
+                                       childqueries.count);
         if (xq) ptrarray_append(&xqs, xq);
+        ptrarray_fini(&childqueries);
     }
     if ((match = json_string_value(json_object_get(filter, "from")))) {
         xapian_query_t *xq = xapian_query_new_match(db, SEARCH_PART_FROM, match);
@@ -655,12 +666,14 @@ static int _email_matchmime_evaluate(json_t *filter,
         if (xq) ptrarray_append(&xqs, xq);
     }
     if (xqs.count) {
+        matches = 0;
         xapian_query_t *xq = xapian_query_new_compound(db, /*is_or*/0,
                 (xapian_query_t **) xqs.data, xqs.count);
         xapian_query_run(db, xq, 0, _email_matchmime_evaluate_xcb, &matches);
         xapian_query_free(xq);
     }
     ptrarray_fini(&xqs);
+    if (!matches) return 0;
 
     /* size */
     if (json_object_get(filter, "minSize") || json_object_get(filter, "maxSize")) {
