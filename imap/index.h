@@ -352,4 +352,6 @@ extern int index_reload_record(struct index_state *state,
 extern void index_text_extractor_init(struct protstream *clientin);
 extern void index_text_extractor_destroy(void);
 
+extern int insert_into_mailbox_allowed(struct mailbox *mailbox);
+
 #endif /* INDEX_H */

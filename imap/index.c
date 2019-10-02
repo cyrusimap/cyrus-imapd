@@ -2897,27 +2897,9 @@ index_copy(struct index_state *state,
     r = mailbox_open_iwl(name, &destmailbox);
     if (r) goto done;
 
-    /* prohibit copying into \Snoozed mailbox */
-    if (destmailbox->i.options & OPT_IMAP_HAS_ALARMS) {
-        struct buf attrib = BUF_INITIALIZER;
-        char *userid = mboxname_to_userid(destmailbox->name);
-
-        r = annotatemore_lookup(destmailbox->name, "/specialuse", userid, &attrib);
-        free(userid);
-
-        if (!r && buf_len(&attrib)) {
-            strarray_t *specialuse =
-                strarray_split(buf_cstring(&attrib), NULL, 0);
-
-            if (strarray_find(specialuse, "\\Snoozed", 0) >= 0) {
-                r = IMAP_MAILBOX_NOTSUPPORTED;
-            }
-            strarray_free(specialuse);
-        }
-        buf_free(&attrib);
-
-        if (r) goto done;
-    }
+    /* make sure copying into this mailbox is enabled */
+    r = insert_into_mailbox_allowed(destmailbox);
+    if (r) goto done;
 
     /* not moving or different quota root - need to check quota */
     if (!ismove || strcmpsafe(srcmailbox->quotaroot, destmailbox->quotaroot)) {
@@ -7996,4 +7978,31 @@ EXPORTED void freesortcrit(struct sortcrit *s)
         i++;
     } while (s[i].key != SORT_SEQUENCE);
     free(s);
+}
+
+EXPORTED int insert_into_mailbox_allowed(struct mailbox *mailbox)
+{
+    int r = 0;
+
+    /* prohibit inserting into \Snoozed mailbox */
+    if (mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
+        struct buf attrib = BUF_INITIALIZER;
+        char *userid = mboxname_to_userid(mailbox->name);
+
+        r = annotatemore_lookup(mailbox->name, "/specialuse", userid, &attrib);
+        free(userid);
+
+        if (!r && buf_len(&attrib)) {
+            strarray_t *specialuse =
+                strarray_split(buf_cstring(&attrib), NULL, 0);
+
+            if (strarray_find(specialuse, "\\Snoozed", 0) >= 0) {
+                r = IMAP_MAILBOX_NOTSUPPORTED;
+            }
+            strarray_free(specialuse);
+        }
+        buf_free(&attrib);
+    }
+
+    return r;
 }

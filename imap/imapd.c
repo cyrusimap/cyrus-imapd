@@ -4100,20 +4100,9 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
                          (imapd_userisadmin || imapd_userisproxyadmin),
                          EVENT_MESSAGE_APPEND);
     }
-    if (!r && appendstate.mailbox->i.options & OPT_IMAP_HAS_ALARMS) {
-        struct buf attrib = BUF_INITIALIZER;
-        r = annotatemore_lookup(intname, "/specialuse", imapd_userid, &attrib);
-
-        if (!r && buf_len(&attrib)) {
-            strarray_t *specialuse =
-                strarray_split(buf_cstring(&attrib), NULL, 0);
-
-            if (strarray_find(specialuse, "\\Snoozed", 0) >= 0) {
-                r = IMAP_MAILBOX_NOTSUPPORTED;
-            }
-            strarray_free(specialuse);
-        }
-        buf_free(&attrib);
+    if (!r) {
+        /* make sure appending to this mailbox is allowed */
+        r = insert_into_mailbox_allowed(appendstate.mailbox);
     }
     if (!r) {
         struct body *body;
