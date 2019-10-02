@@ -541,8 +541,9 @@ static xapian_query_t *_email_matchmime_contactgroup(const char *groupid,
     strarray_t *members = hash_lookup(groupid, &cfilter->contactgroups);
     if (members && strarray_size(members)) {
         ptrarray_t xsubqs = PTRARRAY_INITIALIZER;
-        for (int j = 0; j < strarray_size(members); j++) {
-            const char *member = strarray_nth(members, j);
+        int i;
+        for (i = 0; i < strarray_size(members); i++) {
+            const char *member = strarray_nth(members, i);
             xapian_query_t *xsubq = xapian_query_new_match(db, part, member);
             if (xsubq) ptrarray_append(&xsubqs, xsubq);
         }
