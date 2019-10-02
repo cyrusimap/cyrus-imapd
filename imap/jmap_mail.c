@@ -9531,6 +9531,19 @@ static void _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
                 /* Updating/removing snoozeDetails */
                 json_t *jval = NULL;
 
+                if (update->patch_snoozed) {
+                    const char *current_mboxname =
+                        update->snoozed_uidrec->mboxrec->mboxname;
+                    json_t *orig =
+                        jmap_fetch_snoozed(current_mboxname,
+                                           update->snoozed_uidrec->uid);
+                    json_t *patch = update->snoozed;
+                  
+                    update->snoozed = jmap_patchobject_apply(orig, patch);
+                    json_decref(orig);
+                    json_decref(patch);
+                }
+
                 if (update->mailboxids) {
                     jval = json_object_get(update->mailboxids, current_mboxid);
                 }
@@ -10223,17 +10236,6 @@ static void _email_bulkupdate_exec_snooze(struct email_bulkupdate *bulk)
 
                 if (uidrec->is_snoozed) {
                     /* Set/update annotation */
-                    if (update->patch_snoozed) {
-                        json_t *patch = update->snoozed;
-                        json_t *orig =
-                            jmap_fetch_snoozed(uidrec->mboxrec->mboxname,
-                                               uidrec->uid);
-
-                        update->snoozed = jmap_patchobject_apply(orig, patch);
-                        json_decref(orig);
-                        json_decref(patch);
-                    }
-
                     char *json = json_dumps(update->snoozed, JSON_COMPACT);
 
                     buf_initm(&val, json, strlen(json));
