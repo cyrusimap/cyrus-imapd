@@ -4978,53 +4978,66 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
     if (!(flags & MESSAGE_APPEND))
         buf_reset(buf);
 
+    /* Attempt to read field from the least-cost source available */
+    int found_field = 0;
+
     /* the 5 standalone cache fields */
     if (!strcasecmp(hdr, "from")) {
         int r = message_need(m, M_CACHE);
-        if (r) return r;
-        buf_setmap(&raw, cacheitem_base(&m->record, CACHE_FROM),
-                         cacheitem_size(&m->record, CACHE_FROM));
-        if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
-            buf_reset(&raw);
-        hasname = 0;
-        isutf8 = 1;
+        if (!r) {
+            buf_setmap(&raw, cacheitem_base(&m->record, CACHE_FROM),
+                    cacheitem_size(&m->record, CACHE_FROM));
+            if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
+                buf_reset(&raw);
+            hasname = 0;
+            isutf8 = 1;
+            found_field = 1;
+        } else if (r != IMAP_NOTFOUND) return r;
     }
     else if (!strcasecmp(hdr, "to")) {
         int r = message_need(m, M_CACHE);
-        if (r) return r;
-        buf_setmap(&raw, cacheitem_base(&m->record, CACHE_TO),
-                         cacheitem_size(&m->record, CACHE_TO));
-        if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
-            buf_reset(&raw);
-        hasname = 0;
-        isutf8 = 1;
+        if (!r) {
+            buf_setmap(&raw, cacheitem_base(&m->record, CACHE_TO),
+                    cacheitem_size(&m->record, CACHE_TO));
+            if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
+                buf_reset(&raw);
+            hasname = 0;
+            isutf8 = 1;
+            found_field = 1;
+        } else if (r != IMAP_NOTFOUND) return r;
     }
     else if (!strcasecmp(hdr, "cc")) {
         int r = message_need(m, M_CACHE);
-        if (r) return r;
-        buf_setmap(&raw, cacheitem_base(&m->record, CACHE_CC),
-                         cacheitem_size(&m->record, CACHE_CC));
-        if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
-            buf_reset(&raw);
-        hasname = 0;
-        isutf8 = 1;
+        if (!r) {
+            buf_setmap(&raw, cacheitem_base(&m->record, CACHE_CC),
+                    cacheitem_size(&m->record, CACHE_CC));
+            if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
+                buf_reset(&raw);
+            hasname = 0;
+            isutf8 = 1;
+            found_field = 1;
+        } else if (r != IMAP_NOTFOUND) return r;
     }
     else if (!strcasecmp(hdr, "bcc")) {
         int r = message_need(m, M_CACHE);
-        if (r) return r;
-        buf_setmap(&raw, cacheitem_base(&m->record, CACHE_BCC),
-                         cacheitem_size(&m->record, CACHE_BCC));
-        if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
-            buf_reset(&raw);
-        hasname = 0;
-        isutf8 = 1;
+        if (!r) {
+            buf_setmap(&raw, cacheitem_base(&m->record, CACHE_BCC),
+                    cacheitem_size(&m->record, CACHE_BCC));
+            if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
+                buf_reset(&raw);
+            hasname = 0;
+            isutf8 = 1;
+            found_field = 1;
+        } else if (r != IMAP_NOTFOUND) return r;
     }
     else if (!strcasecmp(hdr, "subject")) {
         int r = message_need(m, M_CACHE);
-        if (r) return r;
-        message1_get_subject(&m->record, &raw);
-        hasname = 0;
-        isutf8 = 1;
+        if (!r) {
+            message1_get_subject(&m->record, &raw);
+            hasname = 0;
+            isutf8 = 1;
+            found_field = 1;
+        } else if (r != IMAP_NOTFOUND) return r;
     }
 
     /* message-id is from the envelope */
@@ -5032,16 +5045,18 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
         char *envtokens[NUMENVTOKENS];
         char *c_env;
         int r = message_need(m, M_CACHE);
-        if (r) return r;
-        c_env = xstrndup(cacheitem_base(&m->record, CACHE_ENVELOPE) + 1,
-                         cacheitem_size(&m->record, CACHE_ENVELOPE) - 2);
-        parse_cached_envelope(c_env, envtokens, NUMENVTOKENS);
-        if (envtokens[ENV_MSGID])
-            buf_appendcstr(&raw, envtokens[ENV_MSGID]);
-        free(c_env);
-        if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
-            buf_reset(&raw);
-        hasname = 0;
+        if (!r) {
+            c_env = xstrndup(cacheitem_base(&m->record, CACHE_ENVELOPE) + 1,
+                    cacheitem_size(&m->record, CACHE_ENVELOPE) - 2);
+            parse_cached_envelope(c_env, envtokens, NUMENVTOKENS);
+            if (envtokens[ENV_MSGID])
+                buf_appendcstr(&raw, envtokens[ENV_MSGID]);
+            free(c_env);
+            if (raw.len == 3 && raw.s[0] == 'N' && raw.s[1] == 'I' && raw.s[2] == 'L')
+                buf_reset(&raw);
+            hasname = 0;
+            found_field = 1;
+        } else if (r != IMAP_NOTFOUND) return r;
     }
     else {
         int r = message_need(m, M_RECORD);
@@ -5058,18 +5073,22 @@ EXPORTED int message_get_field(message_t *m, const char *hdr, int flags, struct 
             buf_appendcstr(&raw, headers);
             free(headers);
             hasname = 1;
-        }
-        else {
-            char *headers = NULL;
-            int r = message_need(m, M_MAP|M_CACHEBODY);
-            if (r) return r;
-            headers = xstrndup(m->map.s + m->body->header_offset, m->body->header_size);
-            strarray_append(&want, hdr);
-            message_pruneheader(headers, &want, NULL);
-            buf_appendcstr(&raw, headers);
-            free(headers);
-            hasname = 1;
-        }
+            found_field = 1;
+        } else if (r && r != IMAP_NOTFOUND) return r;
+    }
+
+    if (!found_field) {
+        /* fall back to read field from raw headers */
+        char *headers = NULL;
+        int r = message_need(m, M_MAP|M_CACHEBODY);
+        if (r) return r;
+        headers = xstrndup(m->map.s + m->body->header_offset, m->body->header_size);
+        strarray_append(&want, hdr);
+        message_pruneheader(headers, &want, NULL);
+        buf_appendcstr(&raw, headers);
+        free(headers);
+        hasname = 1;
+        found_field = 1;
     }
 
     if (raw.len)
