@@ -194,7 +194,7 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
 
     const size_t len = strlen(str);
     const char *p;
-    int accum = 0, duration = 0, neg = 0, r = 0;
+    int accum = 0, duration = 0, neg = 0, sawdigit = 0, r = 0;
     char *copy = NULL;
 
     /* the default default unit is seconds */
@@ -215,8 +215,16 @@ EXPORTED int config_parseduration(const char *str, int defunit, int *out_duratio
         if (cyrus_isdigit(*p)) {
             accum *= 10;
             accum += (*p - '0');
+            sawdigit = 1;
         }
         else {
+            if (!sawdigit) {
+                syslog(LOG_DEBUG, "%s: no digit before '%c' in '%s'",
+                                  __func__, *p, str);
+                r = -1;
+                goto done;
+            }
+            sawdigit = 0;
             switch (*p) {
             case 'd':
                 accum *= 24;
