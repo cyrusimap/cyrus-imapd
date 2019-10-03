@@ -1651,10 +1651,10 @@ link_from_ical(icalproperty *prop)
         json_object_set_new(link, "cid", json_string(s));
     }
 
-    /* type */
+    /* contentType */
     param = icalproperty_get_first_parameter(prop, ICAL_FMTTYPE_PARAMETER);
     if (param && ((s = icalparameter_get_fmttype(param)))) {
-        json_object_set_new(link, "type", json_string(s));
+        json_object_set_new(link, "contentType", json_string(s));
     }
 
     /* title - reuse the same x-param as Apple does for their locations  */
@@ -3448,7 +3448,7 @@ links_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *links)
     json_t *link;
     json_object_foreach(links, id, link) {
         const char *href = NULL;
-        const char *type = NULL;
+        const char *contenttype = NULL;
         const char *title = NULL;
         const char *rel = NULL;
         const char *cid = NULL;
@@ -3472,10 +3472,10 @@ links_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *links)
             href = NULL;
         }
 
-        /* type */
-        jprop = json_object_get(link, "type");
+        /* contentType */
+        jprop = json_object_get(link, "contentType");
         if (json_is_string(jprop)) {
-            type = json_string_value(jprop);
+            contenttype = json_string_value(jprop);
         }
         else if (JNOTNULL(jprop)) {
             jmap_parser_invalid(parser, "type");
@@ -3548,10 +3548,10 @@ links_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *links)
                 icalattach_unref(icalatt);
             }
 
-            /* type */
-            if (type) {
+            /* contentType */
+            if (contenttype) {
                 icalproperty_add_parameter(prop,
-                        icalparameter_new_fmttype(type));
+                        icalparameter_new_fmttype(contenttype));
             }
 
             /* title */
