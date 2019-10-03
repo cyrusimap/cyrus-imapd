@@ -279,7 +279,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
     json_object_set_new(obj, "id", json_string(id));
 
     if (jmap_wantprop(rock->get->props, "x-href")) {
-        // FIXME - should the x-ref for a shared calendar point
+        // XXX - should the x-ref for a shared calendar point
         // to the authenticated user's calendar home?
         char *xhref = jmap_xhref(mbentry->name, NULL);
         json_object_set_new(obj, "x-href", json_string(xhref));
@@ -1388,79 +1388,6 @@ static int jmap_calendar_set(struct jmap_req *req)
 done:
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
-    return r;
-}
-
-/* FIXME dup from jmapical.c */
-/* Convert the JMAP local datetime in buf to tm time. Return non-zero on success. */
-static int localdate_to_tm(const char *buf, struct tm *tm) {
-    /* Initialize tm. We don't know about daylight savings time here. */
-    memset(tm, 0, sizeof(struct tm));
-    tm->tm_isdst = -1;
-
-    /* Parse LocalDate. */
-    const char *p = strptime(buf, "%Y-%m-%dT%H:%M:%S", tm);
-    if (!p || *p) {
-        return 0;
-    }
-    return 1;
-}
-
-/* FIXME dup from jmapical.c */
-static int localdate_to_icaltime(const char *buf,
-                                 icaltimetype *dt,
-                                 icaltimezone *tz,
-                                 int is_allday) {
-    struct tm tm;
-    int r;
-    char *s = NULL;
-    icaltimetype tmp;
-    int is_utc;
-    size_t n;
-
-    r = localdate_to_tm(buf, &tm);
-    if (!r) return 0;
-
-    if (is_allday && (tm.tm_sec || tm.tm_min || tm.tm_hour)) {
-        return 0;
-    }
-
-    is_utc = tz == icaltimezone_get_utc_timezone();
-
-    /* Can't use icaltime_from_timet_with_zone since it tries to convert
-     * t from UTC into tz. Let's feed ical a DATETIME string, instead. */
-    s = xcalloc(19, sizeof(char));
-    n = strftime(s, 18, "%Y%m%dT%H%M%S", &tm);
-    if (is_utc) {
-        s[n]='Z';
-    }
-    tmp = icaltime_from_string(s);
-    free(s);
-    if (icaltime_is_null_time(tmp)) {
-        return 0;
-    }
-    tmp.zone = tz;
-    tmp.is_date = is_allday;
-    *dt = tmp;
-    return 1;
-}
-
-/* FIXME dup from jmapical.c */
-static int utcdate_to_icaltime(const char *src,
-                               icaltimetype *dt)
-{
-    struct buf buf = BUF_INITIALIZER;
-    size_t len = strlen(src);
-    int r;
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
-
-    if (!len || src[len-1] != 'Z') {
-        return 0;
-    }
-
-    buf_setmap(&buf, src, len-1);
-    r = localdate_to_icaltime(buf_cstring(&buf), dt, utc, 0);
-    buf_free(&buf);
     return r;
 }
 
@@ -3227,7 +3154,6 @@ static void validatefilter(jmap_req_t *req __attribute__((unused)),
                            void *rock __attribute__((unused)),
                            json_t **err __attribute__((unused)))
 {
-    icaltimetype timeval;
     const char *field;
     json_t *arg;
 
@@ -3251,10 +3177,21 @@ static void validatefilter(jmap_req_t *req __attribute__((unused)),
         }
         else if (!strcmp(field, "before") ||
                  !strcmp(field, "after")) {
-            if (!json_is_string(arg) ||
-                !utcdate_to_icaltime(json_string_value(arg), &timeval)) {
-                jmap_parser_invalid(parser, field);
+            const char *s;
+            if ((s = json_string_value(arg))) {
+                int is_valid = 0;
+                size_t len = strlen(s);
+                if (len && s[len-1] == 'Z') {
+                    /* Validate UTCDateTime */
+                    struct tm tm;
+                    memset(&tm, 0, sizeof(struct tm));
+                    tm.tm_isdst = -1;
+                    const char *p = strptime(s, "%Y-%m-%dT%H:%M:%S", &tm);
+                    is_valid = p && *p == 'Z';
+                }
+                if (!is_valid) jmap_parser_invalid(parser, field);
             }
+            else jmap_parser_invalid(parser, field);
         }
         else if (!strcmp(field, "text") ||
                  !strcmp(field, "title") ||
