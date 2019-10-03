@@ -1555,25 +1555,18 @@ static int xapian_run_guid_cb(const conv_guidrec_t *rec, void *rock)
     return 0;
 }
 
-static int xapian_run_cb(void *data, size_t n, void *rock)
+static int xapian_run_cb(const void *data, size_t n, void *rock)
 {
     struct xapian_run_rock *xrock = rock;
     xapian_builder_t *bb = xrock->bb;
 
     int r = cmd_cancelled(/*insearch*/1);
-    if (r) goto done;
+    if (r) return r;
 
     struct conversations_state *cstate = mailbox_get_cstate(bb->mailbox);
-    if (!cstate) {
-        r = IMAP_NOTFOUND;
-        goto done;
-    }
+    if (!cstate) return IMAP_NOTFOUND;
 
-    r = conversations_iterate_searchset(cstate, data, n, xapian_run_guid_cb, xrock);
-
-done:
-    free(data);
-    return r;
+    return conversations_iterate_searchset(cstate, data, n, xapian_run_guid_cb, xrock);
 }
 
 static int run_legacy_v4_query(xapian_builder_t *bb)

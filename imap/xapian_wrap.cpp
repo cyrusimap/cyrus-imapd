@@ -1142,7 +1142,7 @@ int bincmp21(const void *a, const void *b)
 }
 
 int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_legacy,
-                     int (*cb)(void *data, size_t n, void *rock), void *rock)
+                     int (*cb)(const void *data, size_t n, void *rock), void *rock)
 {
     const Xapian::Query *query = (const Xapian::Query *)qq;
     void *data = NULL;
@@ -1187,12 +1187,17 @@ int xapian_query_run(const xapian_db_t *db, const xapian_query_t *qq, int is_leg
         return IMAP_IOERROR;
     }
 
-    if (!n) return 0;
+    if (!n) {
+        free(data);
+        return 0;
+    }
 
     // sort the response by GUID for more efficient later handling
     qsort(data, n, 21, bincmp21);
 
-    return cb(data, n, rock);
+    int r = cb(data, n, rock);
+    free(data);
+    return r;
 }
 
 int xapian_list_lang_stats(xapian_db_t *db, ptrarray_t* lstats)

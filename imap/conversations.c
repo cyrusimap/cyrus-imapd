@@ -1888,7 +1888,7 @@ struct guid_foreach_rock {
     struct conversations_state *state;
     int(*cb)(const conv_guidrec_t *, void *);
     void *cbrock;
-    void *filterdata;
+    const void *filterdata;
     int filternum;
     int filterpos;
     struct buf partbuf;
@@ -2044,7 +2044,7 @@ static int _guid_foreach_helper(struct conversations_state *state,
                                 const char *prefix,
                                 int(*cb)(const conv_guidrec_t *, void *),
                                 void *cbrock,
-                                void *data,
+                                const void *data,
                                 size_t num)
 {
     struct guid_foreach_rock rock = { state, cb, cbrock, data, num, 0, BUF_INITIALIZER };
@@ -2069,7 +2069,7 @@ EXPORTED int conversations_guid_foreach(struct conversations_state *state,
 }
 
 EXPORTED int conversations_iterate_searchset(struct conversations_state *state,
-                                             void *data, size_t n,
+                                             const void *data, size_t n,
                                              int(*cb)(const conv_guidrec_t*,void*),
                                              void *cbrock)
 {
@@ -2095,7 +2095,7 @@ EXPORTED int conversations_iterate_searchset(struct conversations_state *state,
     guid[40] = '\0';
     size_t i;
     for (i = 0; i < n; i++) {
-        char *entry = data + (i*21);
+        const char *entry = data + (i*21);
         bin_to_lchex(entry, 20, guid);
         int r = conversations_guid_foreach(state, guid, cb, cbrock);
         if (r) return r;

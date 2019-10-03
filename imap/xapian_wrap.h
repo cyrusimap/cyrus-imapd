@@ -82,7 +82,7 @@ extern xapian_query_t *xapian_query_new_not(const xapian_db_t *, xapian_query_t 
 extern xapian_query_t *xapian_query_new_has_doctype(const xapian_db_t *, char doctype, xapian_query_t *);
 extern void xapian_query_free(xapian_query_t *);
 extern int xapian_query_run(const xapian_db_t *, const xapian_query_t *query, int is_legacy,
-                            int (*cb)(void *base, size_t n, void *rock), void *rock);
+                            int (*cb)(const void *base, size_t n, void *rock), void *rock);
 /* snippets interface */
 extern xapian_snipgen_t *xapian_snipgen_new(xapian_db_t *db, const char *hi_start, const char *hi_end, const char *omit);
 extern void xapian_snipgen_free(xapian_snipgen_t *);
