@@ -2860,7 +2860,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                 unsigned access = 0;
 
                 if (!strcmp(right, "mayAdmin"))
-                    access = ACL_ADMIN;
+                    access = ACL_ADMIN|ACL_CREATE|ACL_DELETEMBOX;
                 else if (!strcmp(right, "mayWrite"))
                     access = WRITERIGHTS;
                 else if (!strcmp(right, "mayRead"))
