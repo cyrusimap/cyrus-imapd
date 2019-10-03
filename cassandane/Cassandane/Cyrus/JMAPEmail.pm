@@ -15281,4 +15281,65 @@ sub test_email_get_header_last_value
         $res->[1][1]{list}[0]{'header:x-tra:asDate'});
 }
 
+sub test_email_matchmime
+    :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $email = <<'EOF';
+From: sender@local
+To: recipient@local
+Subject: test email
+Date: Wed, 7 Dec 2016 00:21:50 -0500
+X-tra: baz
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+Some body.
+EOF
+    $email =~ s/\r?\n/\r\n/gs;
+
+    my $res = $jmap->CallMethods([
+        ['Email/matchMime', {
+            mime => $email,
+            filter => {
+                subject => "test",
+                header => [ "X-tra", 'baz' ],
+            },
+        }, "R1"],
+    ]);
+
+    $self->assert_equals(JSON::true, $res->[0][1]{matches});
+
+    $res = $jmap->CallMethods([
+        ['Email/matchMime', {
+            mime => $email,
+            filter => {
+                operator => 'AND',
+                conditions => [{
+                    text => "body",
+                }, {
+                    header => [ "X-tra" ],
+                }],
+            },
+        }, "R1"],
+    ]);
+
+    $self->assert_equals(JSON::true, $res->[0][1]{matches});
+
+    $res = $jmap->CallMethods([
+        ['Email/matchMime', {
+            mime => $email,
+            filter => {
+                hasAttachment => JSON::true,
+            },
+        }, "R1"],
+    ]);
+
+    $self->assert_equals(JSON::false, $res->[0][1]{matches});
+}
+
+
 1;
