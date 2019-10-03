@@ -1172,8 +1172,8 @@ sub normalize_event
             if (not exists $link->{cid}) {
                 $link->{cid} = undef;
             }
-            if (not exists $link->{type}) {
-                $link->{type} = undef;
+            if (not exists $link->{contentType}) {
+                $link->{contentType} = undef;
             }
             if (not exists $link->{size}) {
                 $link->{size} = undef;
@@ -1365,7 +1365,7 @@ sub test_calendarevent_get_links
         'fad3249914b09ede1558fa01004f4f8149559591' => {
             '@type' => 'Link',
             href => "http://jmap.io/spec.html#calendar-events",
-            type => "text/html",
+            contentType => "text/html",
             size => 4480,
             title => "the spec",
             rel => "enclosure",
