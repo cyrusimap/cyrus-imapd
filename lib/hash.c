@@ -350,6 +350,20 @@ EXPORTED int hash_numrecords(hash_table *table)
     return count;
 }
 
+EXPORTED void hash_enumerate_sorted(hash_table *table, void (*func)(const char *, void *, void *),
+                    void *rock, strarray_cmp_fn_t *cmp)
+{
+    strarray_t *sa = hash_keys(table);
+    strarray_sort(sa, cmp);
+    int i;
+    for (i = 0; i < strarray_size(sa); i++) {
+        const char *key = strarray_nth(sa, i);
+        void *val = hash_lookup(key, table);
+        func(key, val, rock);
+    }
+    strarray_free(sa);
+}
+
 
 struct hash_iter {
     hash_table *table;
