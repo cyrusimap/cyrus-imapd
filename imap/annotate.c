@@ -857,16 +857,14 @@ static int make_key(const char *mboxname,
 
     if (!uid) {
         strlcpy(key, mboxname, keysize);
-        keylen = strlen(mboxname) + 1;
     }
     else if (uid == ANNOTATE_ANY_UID) {
         strlcpy(key, "*", keysize);
-        keylen = strlen(key) + 1;
     }
     else {
         snprintf(key, keysize, "%u", uid);
-        keylen = strlen(key) + 1;
     }
+    keylen = strlen(key) + 1;
     strlcpy(key+keylen, entry, keysize-keylen);
     keylen += strlen(entry);
     /* if we don't have a userid, we're doing a foreach() */
