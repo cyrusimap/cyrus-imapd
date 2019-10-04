@@ -566,8 +566,8 @@ sub test_calendar_set_sharewith
     my $acl = $admintalk->getacl("user.master.#calendars.$CalendarId");
     my %map = @$acl;
     $self->assert_str_equals('lrswipkxtecdan9', $map{cassandane});
-    $self->assert_str_equals('lr9', $map{manifold});
-    $self->assert_str_equals('lrswitedn9', $map{paraphrase});
+    $self->assert_str_equals('lrs9', $map{manifold});
+    $self->assert_str_equals('lrswiptedn9', $map{paraphrase});
 
     xlog "check Outbox ACL";
     $acl = $admintalk->getacl("user.master.#calendars.Outbox");
@@ -622,7 +622,7 @@ sub test_calendar_set_sharewith
     $acl = $admintalk->getacl("user.master.#calendars.$CalendarId");
     %map = @$acl;
     $self->assert_str_equals('lrswipkxtecdan9', $map{cassandane});
-    $self->assert_str_equals('lrswitedn9', $map{manifold});
+    $self->assert_str_equals('lrswiptedn9', $map{manifold});
     $self->assert_null($map{paraphrase});
 
     xlog "check Outbox ACL";
