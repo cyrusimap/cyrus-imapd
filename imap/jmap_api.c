@@ -2836,7 +2836,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                 change->old.mayReadFreeBusy = 1;
             if (oldrights & (ACL_READ|ACL_LOOKUP))
                 change->old.mayRead = 1;
-            if (oldrights & WRITERIGHTS)
+            if ((oldrights & WRITERIGHTS) == WRITERIGHTS)
                 change->old.mayWrite = 1;
             if (oldrights & ACL_ADMIN)
                 change->old.mayAdmin = 1;
