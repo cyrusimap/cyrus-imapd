@@ -154,6 +154,13 @@ static void jmap_init(struct buf *serverinfo)
     namespace_jmap.enabled =
         config_httpmodules & IMAP_ENUM_HTTPMODULES_JMAP;
 
+    if (namespace_jmap.enabled && !config_getswitch(IMAPOPT_CONVERSATIONS)) {
+        syslog(LOG_ERR,
+               "ERROR: cannot enable %s module with conversations disabled",
+               namespace_jmap.name);
+        namespace_jmap.enabled = 0;
+    }
+
     if (!namespace_jmap.enabled) return;
 
     compile_time = calc_compile_time(__TIME__, __DATE__);
