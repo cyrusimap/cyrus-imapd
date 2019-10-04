@@ -2685,9 +2685,16 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
     return sharewith;
 }
 
+struct acl_item {
+    unsigned int mayAdmin:1;
+    unsigned int mayWrite:1;
+    unsigned int mayRead:1;
+    unsigned int mayReadFreeBusy:1;
+};
+
 struct acl_change {
-    int old;
-    int new;
+    struct acl_item old;
+    struct acl_item new;
 };
 
 struct invite_rock {
@@ -2700,20 +2707,35 @@ struct invite_rock {
     const struct prop_entry *live_props;
 };
 
+static unsigned access_from_acl_item(struct acl_item *item)
+{
+    unsigned access = 0;
+
+    if (item->mayReadFreeBusy)
+        access |= DACL_READFB;
+    if (item->mayRead)
+        access |= ACL_READ|ACL_LOOKUP|ACL_SETSEEN;
+    if (item->mayWrite)
+        access |= WRITERIGHTS;
+    if (item->mayAdmin)
+        access |= ACL_ADMIN|ACL_CREATE|ACL_DELETEMBOX;
+
+    return access;
+}
 
 /* Create and send a sharing invite */
 static void send_dav_invite(const char *userid, void *val, void *rock)
 {
     struct acl_change *change = (struct acl_change *) val;
     struct invite_rock *irock = (struct invite_rock *) rock;
-    long old = change->old & (ACL_READ|ACL_LOOKUP|WRITERIGHTS);
-    long new = change->new & (ACL_READ|ACL_LOOKUP|WRITERIGHTS);
+    long old = access_from_acl_item(&change->old);
+    long new = access_from_acl_item(&change->new);
 
     if (old != new) {
         int access, r = 0;
 
         if (!new) access = SHARE_NONE;
-        else if (new & WRITERIGHTS) access = SHARE_READWRITE;
+        else if (change->new.mayWrite) access = SHARE_READWRITE;
         else access = SHARE_READONLY;
 
         if (!old || !new) {
@@ -2755,81 +2777,88 @@ static void send_dav_invite(const char *userid, void *val, void *rock)
     }
 }
 
+static void add_useracls(const char *userid, void *val, void *rock)
+{
+    struct acl_change *change = val;
+    char **aclptr = rock;
+
+    unsigned access = access_from_acl_item(&change->new);
+
+    if (access)
+        cyrus_acl_set(aclptr, userid, ACL_MODE_SET, access, NULL, NULL);
+}
+
 HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                               json_t *shareWith, int overwrite)
 {
     hash_table user_access = HASH_TABLE_INITIALIZER;
-    int isdav = (mbox->mbtype & MBTYPES_DAV), iscalendar = 0;
+    int isdav = (mbox->mbtype & MBTYPES_DAV);
+    int iscalendar = (mbox->mbtype & MBTYPE_CALENDAR);
     char *owner = mboxname_to_userid(mbox->name);
     char *acl = xstrdup(mbox->acl);
     struct acl_change *change;
     const char *userid;
     json_t *rights;
     int r;
+    char *newacl = xstrdup("");  /* start with empty ACL */
 
     if (json_is_null(shareWith)) overwrite = 1;
 
-    if (isdav) {
-        /* Create a hash table of user/access for DAV invites */
-        iscalendar = (mbox->mbtype & MBTYPE_CALENDAR);
-        construct_hash_table(&user_access, 10, 0);
-    }
+    construct_hash_table(&user_access, 64, 0);
 
-    if (isdav || overwrite) {
-        /* If DAV: Populate a table of existing users and their access.
-           If overwrite: Create a new ACL with only
-                         existing owner and system users preserved.
-        */
-        char *newacl = NULL;
-        char *nextid = NULL;
+    /* parse the existing ACL and calculate the types of shares */
+    char *nextid = NULL;
+    for (userid = acl; userid; userid = nextid) {
+        char *rightstr;
+        int access;
 
-        if (overwrite) newacl = xstrdup("");  /* start with empty ACL */
+        rightstr = strchr(userid, '\t');
+        if (!rightstr) break;
+        *rightstr++ = '\0';
 
-        for (userid = acl; userid; userid = nextid) {
-            char *rightstr;
-            int access;
+        nextid = strchr(rightstr, '\t');
+        if (!nextid) break;
+        *nextid++ = '\0';
 
-            rightstr = strchr(userid, '\t');
-            if (!rightstr) break;
-            *rightstr++ = '\0';
+        /* Is this a shareable user? (not owner or admin) */
+        if (strcmp(userid, owner) && !is_system_user(userid)) {
+            int oldrights;
+            cyrus_acl_strtomask(rightstr, &oldrights);
 
-            nextid = strchr(rightstr, '\t');
-            if (!nextid) break;
-            *nextid++ = '\0';
+            /* Add regular user to our table */
+            change = xzmalloc(sizeof(struct acl_change));
 
-            /* Is this the owner or system user? */
-            if (strcmp(userid, owner) && !is_system_user(userid)) {
-                if (isdav) {
-                    /* Add regular user to our table */
-                    change = xzmalloc(sizeof(struct acl_change));
+            if (oldrights & DACL_READFB)
+                change->old.mayReadFreeBusy = 1;
+            if (oldrights & (ACL_READ|ACL_LOOKUP))
+                change->old.mayRead = 1;
+            if (oldrights & WRITERIGHTS)
+                change->old.mayWrite = 1;
+            if (oldrights & ACL_ADMIN)
+                change->old.mayAdmin = 1;
 
-                    cyrus_acl_strtomask(rightstr, &change->old);
-                    if (!overwrite) change->new = change->old;
-                    hash_insert(userid, (void *) change, &user_access);
-                }
-            }
-            else if (overwrite) {
-                /* Add owner or system user to new ACL */
-                cyrus_acl_strtomask(rightstr, &access);
+            /* unless we're overwriting, we start with the existing state */
+            if (!overwrite) change->new = change->old;
 
-                r = cyrus_acl_set(&newacl, userid,
-                                  ACL_MODE_SET, access, NULL, NULL);
-                if (r) {
-                    syslog(LOG_ERR, "cyrus_acl_set(%s, %s) failed: %s",
-                           mbox->name, userid, error_message(r));
-                    free(newacl);
-                    goto done;
-                }
+            hash_insert(userid, (void *) change, &user_access);
+        }
+        else {
+            /* Add owner or system user to new ACL */
+            cyrus_acl_strtomask(rightstr, &access);
+
+            r = cyrus_acl_set(&newacl, userid,
+                              ACL_MODE_SET, access, NULL, NULL);
+            if (r) {
+                syslog(LOG_ERR, "cyrus_acl_set(%s, %s) failed: %s",
+                       mbox->name, userid, error_message(r));
+                free(newacl);
+                goto done;
             }
         }
-
-        free(acl);
-        acl = overwrite ? newacl : xstrdup(mbox->acl);
     }
 
     /* Patch the ACL from shareWith */
     json_object_foreach(shareWith, userid, rights) {
-        unsigned grant = 0, deny = 0;
         const char *right;
         json_t *val;
 
@@ -2843,67 +2872,46 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
         if (is_system_user(userid)) continue;
         if (!strcmp(userid, owner)) continue;
 
+        change = hash_lookup(userid, &user_access);
+        if (!change) {
+            change = xzmalloc(sizeof(struct acl_change));
+            hash_insert(userid, (void *) change, &user_access);
+        }
+
         if (json_is_null(rights)) {
             /* remove user from ACL */
-            r = cyrus_acl_remove(&acl, userid, NULL, NULL);
-            if (r) {
-                syslog(LOG_ERR, "cyrus_acl_remove(%s, %s) failed: %s",
-                       mbox->name, userid, error_message(r));
-                goto done;
-            }
-            if (isdav && (change = hash_lookup(userid, &user_access)))
-                change->new = 0;
+            struct acl_item zero = {0,0,0,0};
+            if (change) change->new = zero;
         }
         else {
             /* accumulate rights be granted and denied */
             json_object_foreach(rights, right, val) {
-                unsigned access = 0;
+                unsigned set = json_boolean_value(val);
 
                 if (!strcmp(right, "mayAdmin"))
-                    access = ACL_ADMIN|ACL_CREATE|ACL_DELETEMBOX;
+                    change->new.mayAdmin = set;
                 else if (!strcmp(right, "mayWrite"))
-                    access = WRITERIGHTS;
+                    change->new.mayWrite = set;
                 else if (!strcmp(right, "mayRead"))
-                    access = ACL_READ|ACL_LOOKUP|ACL_SETSEEN;
+                    change->new.mayRead = set;
                 else if (iscalendar && !strcmp(right, "mayReadFreeBusy"))
-                    access = DACL_READFB;
-
-                if (json_boolean_value(val)) grant |= access;
-                else deny |= access;
-            }
-
-            r = cyrus_acl_set(&acl, userid, ACL_MODE_ADD, grant, NULL, NULL);
-            if (!r) {
-                r = cyrus_acl_set(&acl, userid,
-                                  ACL_MODE_REMOVE, deny, NULL, NULL);
-            }
-            if (r) {
-                syslog(LOG_ERR, "cyrus_acl_set(%s, %s) failed: %s",
-                       mbox->name, userid, error_message(r));
-                goto done;
-            }
-
-            if (isdav) {
-                change = hash_lookup(userid, &user_access);
-                if (!change) {
-                    change = xzmalloc(sizeof(struct acl_change));
-                    hash_insert(userid, (void *) change, &user_access);
-                }
-                change->new = change->old | grant;
-                change->new &= ~deny;
+                    change->new.mayReadFreeBusy = set;
             }
         }
     }
 
+    /* add all the users back to the share ACL */
+    hash_enumerate(&user_access, add_useracls, &newacl);
+
     /* ok, change the mailboxes database */
-    r = mboxlist_sync_setacls(mbox->name, acl);
+    r = mboxlist_sync_setacls(mbox->name, newacl);
     if (r) {
         syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
                mbox->name, error_message(r));
     }
     else {
         /* ok, change the backup in cyrus.header */
-        r = mailbox_set_acl(mbox, acl, 1 /*dirty_modseq*/);
+        r = mailbox_set_acl(mbox, newacl, 1 /*dirty_modseq*/);
         if (r) {
             syslog(LOG_ERR, "mailbox_set_acl(%s) failed: %s",
                    mbox->name, error_message(r));
