@@ -5707,7 +5707,8 @@ sub test_calendarevent_set_recurrenceoverrides_mixed_datetypes
     $self->assert_deep_equals($wantOverrides, $event->{recurrenceOverrides});
     my $eventId = $event->{id};
 
-    # Add recurrenceOverrides with isAllDay=true and isAllDay=false.
+    # Add recurrenceOverrides with showWithoutTime=true
+    # and showWithoutTime=false.
     $self->assert_not_null($eventId);
     my $res = $jmap->CallMethods([
         ['CalendarEvent/set', {

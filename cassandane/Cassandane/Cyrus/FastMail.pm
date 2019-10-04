@@ -370,7 +370,7 @@ sub test_issue_LP52545479
                     duration => 'PT5M',
                     sequence => 42,
                     timeZone => 'Etc/UTC',
-                    isAllDay => JSON::false,
+                    showWithoutTime => JSON::false,
                     locale => 'en',
                     description => 'x' x 1024,
                     freeBusyStatus => 'busy',
