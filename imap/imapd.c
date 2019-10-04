@@ -9667,11 +9667,14 @@ static int apply_mailbox_array(annotate_state_t *state,
     int r = 0;
 
     for (i = 0 ; i < mboxes->count ; i++) {
-        intname = mboxname_from_external(strarray_nth(mboxes, i), &imapd_namespace, imapd_userid);
+        const char *extname = strarray_nth(mboxes, i);
+        intname = mboxname_from_external(extname, &imapd_namespace, imapd_userid);
 
         r = mboxlist_lookup(intname, &mbentry, NULL);
         if (r)
             break;
+
+        mbentry->ext_name = xstrdup(extname);
 
         r = annotate_state_set_mailbox_mbe(state, mbentry);
         if (r)
