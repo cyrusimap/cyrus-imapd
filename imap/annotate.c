@@ -853,19 +853,19 @@ static int make_key(const char *mboxname,
                     const char *userid,
                     char *key, size_t keysize)
 {
-    int keylen = 0;
+    int keylen;
 
     if (!uid) {
-        strlcpy(key+keylen, mboxname, keysize-keylen);
-        keylen += strlen(mboxname) + 1;
+        strlcpy(key, mboxname, keysize);
+        keylen = strlen(mboxname) + 1;
     }
     else if (uid == ANNOTATE_ANY_UID) {
-        strlcpy(key+keylen, "*", keysize-keylen);
-        keylen += strlen(key+keylen) + 1;
+        strlcpy(key, "*", keysize);
+        keylen = strlen(key) + 1;
     }
     else {
-        snprintf(key+keylen, keysize-keylen, "%u", uid);
-        keylen += strlen(key+keylen) + 1;
+        snprintf(key, keysize, "%u", uid);
+        keylen = strlen(key) + 1;
     }
     strlcpy(key+keylen, entry, keysize-keylen);
     keylen += strlen(entry);
