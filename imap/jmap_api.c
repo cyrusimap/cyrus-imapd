@@ -49,6 +49,7 @@
 #include <errno.h>
 
 #include "append.h"
+#include "bsearch.h"
 #include "cyrusdb.h"
 #include "hash.h"
 #include "httpd.h"
@@ -2901,7 +2902,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
     }
 
     /* add all the users back to the share ACL */
-    hash_enumerate(&user_access, add_useracls, &newacl);
+    hash_enumerate_sorted(&user_access, add_useracls, &newacl, cmpstringp_raw);
 
     /* ok, change the mailboxes database */
     r = mboxlist_sync_setacls(mbox->name, newacl);
