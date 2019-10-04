@@ -595,6 +595,8 @@ sub _jmap_setup
         $self->tear_down();
         die $e;
     }
+
+    xlog "JMAP setup complete!";
 }
 
 sub set_up
