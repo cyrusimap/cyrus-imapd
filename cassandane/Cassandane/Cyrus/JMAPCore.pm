@@ -487,5 +487,33 @@ sub test_using_unknown_capability
     $self->assert_str_equals('urn:ietf:params:jmap:error:unknownCapability', $Response->{type});
 }
 
+sub test_require_conversations
+    :min_version_3_1 :needs_component_jmap :NoStartInstances
+{
+    my ($self) = @_;
+
+    my $instance = $self->{instance};
+    $instance->{config}->set(conversations => 'no');
+
+    $self->_start_instances();
+    $self->_jmap_setup();
+
+    my $jmap = $self->{jmap};
+    my $JMAPRequest = {
+        using => ['urn:ietf:params:jmap:core'],
+        methodCalls => [['Core/echo', { }, 'R1']],
+    };
+
+    # request should fail
+    my ($response, undef) = $jmap->Request($JMAPRequest);
+    $self->assert(not $response->{success});
+
+    # httpd should syslog an error
+    my @syslog = $self->{instance}->getsyslog();
+    $self->assert_matches(
+        qr/ERROR: cannot enable \w+ module with conversations disabled/,
+        "@syslog"
+    );
+}
 
 1;
