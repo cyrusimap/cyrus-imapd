@@ -2689,6 +2689,7 @@ HIDDEN json_t *jmap_get_sharewith(const mbentry_t *mbentry)
 struct acl_item {
     unsigned int mayAdmin:1;
     unsigned int mayWrite:1;
+    unsigned int mayPost:1;
     unsigned int mayRead:1;
     unsigned int mayReadFreeBusy:1;
 };
@@ -2718,6 +2719,8 @@ static unsigned access_from_acl_item(struct acl_item *item)
         access |= ACL_READ|ACL_LOOKUP|ACL_SETSEEN;
     if (item->mayWrite)
         access |= WRITERIGHTS;
+    if (item->mayPost)
+        access |= ACL_POST;
     if (item->mayAdmin)
         access |= ACL_ADMIN|ACL_CREATE|ACL_DELETEMBOX;
 
@@ -2837,6 +2840,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                 change->old.mayWrite = 1;
             if (oldrights & ACL_ADMIN)
                 change->old.mayAdmin = 1;
+            if (isdav) change->old.mayPost = change->old.mayWrite;
 
             /* unless we're overwriting, we start with the existing state */
             if (!overwrite) change->new = change->old;
@@ -2881,7 +2885,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
 
         if (json_is_null(rights)) {
             /* remove user from ACL */
-            struct acl_item zero = {0,0,0,0};
+            struct acl_item zero = {0,0,0,0,0};
             if (change) change->new = zero;
         }
         else {
@@ -2898,6 +2902,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
                 else if (iscalendar && !strcmp(right, "mayReadFreeBusy"))
                     change->new.mayReadFreeBusy = set;
             }
+            if (isdav) change->new.mayPost = change->new.mayWrite;
         }
     }
 
