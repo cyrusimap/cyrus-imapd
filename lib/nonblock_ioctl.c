@@ -49,7 +49,7 @@
 /* for fatal */
 #include "xmalloc.h"
 
-EXPORTED const char *nonblock_method_desc = "ioctl";
+EXPORTED const char nonblock_method_desc[] = "ioctl";
 
 /*
  * Modifies the non-blocking mode on the file descriptor 'fd'.  If

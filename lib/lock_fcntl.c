@@ -52,7 +52,7 @@
 #include <syslog.h>
 #include <time.h>
 
-EXPORTED const char *lock_method_desc = "fcntl";
+EXPORTED const char lock_method_desc[] = "fcntl";
 
 EXPORTED double debug_locks_longer_than = 0.0;
 

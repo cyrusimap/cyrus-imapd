@@ -51,7 +51,7 @@
 #include "map.h"
 #include "xmalloc.h"
 
-EXPORTED const char *map_method_desc = "stupidshared";
+EXPORTED const char map_method_desc[] = "stupidshared";
 
 #ifndef MAP_FAILED
 #define MAP_FAILED ((void *)-1)
