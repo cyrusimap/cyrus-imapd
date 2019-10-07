@@ -55,13 +55,14 @@
 #include "httpd.h"
 #include "http_dav.h"
 #include "ical_support.h"
-#include "imap_err.h"
 #include "libconfig.h"
 #include "mboxname.h"
 #include "util.h"
 #include "xstrlcat.h"
 #include "xmalloc.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/imap_err.h"
 
 struct caldav_db {
     sqldb_t *db;                        /* DB handle */
