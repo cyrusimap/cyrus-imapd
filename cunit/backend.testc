@@ -719,7 +719,7 @@ static void server_emit_caps(struct server_state *state)
                 words[n++] = "LOGIN";
                 got_login = 1;
             }
-            if (!strcasecmp(p, "LOGIN") && state->config.sasl_plain) {
+            if (!strcasecmp(p, "PLAIN") && state->config.sasl_plain) {
                 words[n++] = "PLAIN";
                 got_plain = 1;
             }
