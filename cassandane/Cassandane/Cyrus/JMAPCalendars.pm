@@ -4093,6 +4093,11 @@ sub test_calendarevent_query
     $res = $jmap->CallMethods([ ['CalendarEvent/query', { position => 1 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
+
+    xlog "set negative position";
+    $res = $jmap->CallMethods([ ['CalendarEvent/query', { position => -1 }, "R1"] ]);
+    $self->assert_num_equals(2, $res->[0][1]{total});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
 }
 
 sub test_calendarevent_query_shared
@@ -4686,10 +4691,6 @@ sub test_calendarevent_query_sort
 
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    # Implementation quirk - time-bounded queries take a different codepath
-
-    # Without time-range:
-
     $res = $jmap->CallMethods([
         ['CalendarEvent/query', {
             sort => [{
@@ -4698,7 +4699,7 @@ sub test_calendarevent_query_sort
             }]
         }, 'R1']
     ]);
-    $self->assert_deep_equals([$eventId1,$eventId2], $res->{ids});
+    $self->assert_deep_equals([$eventId2,$eventId1], $res->[0][1]{ids});
 
     $res = $jmap->CallMethods([
         ['CalendarEvent/query', {
@@ -4708,37 +4709,101 @@ sub test_calendarevent_query_sort
             }]
         }, 'R1']
     ]);
-    $self->assert_deep_equals([$eventId2,$eventId1], $res->{ids});
+    $self->assert_deep_equals([$eventId1,$eventId2], $res->[0][1]{ids});
 
-    # With time-range:
+}
+
+sub test_calendarevent_query_anchor
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $calid = 'Default';
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                '1' => {
+                    'calendarId' => $calid,
+                    'uid' => 'event1uid@local',
+                    'title' => 'event1',
+                    'start' => '2019-10-01T10:00:00',
+                    'timeZone' => 'Etc/UTC',
+                },
+                '2' => {
+                    'calendarId' => $calid,
+                    'uid' => 'event2uid@local',
+                    'title' => 'event2',
+                    'start' => '2019-10-02T10:00:00',
+                    'timeZone' => 'Etc/UTC',
+                },
+                '3' => {
+                    'calendarId' => $calid,
+                    'uid' => 'event3uid@local',
+                    'title' => 'event3',
+                    'start' => '2019-10-03T10:00:00',
+                    'timeZone' => 'Etc/UTC',
+                },
+        }
+    }, 'R1']]);
+    my $eventId1 = $res->[0][1]{created}{1}{id};
+    my $eventId2 = $res->[0][1]{created}{2}{id};
+    my $eventId3 = $res->[0][1]{created}{3}{id};
+    $self->assert_not_null($eventId1);
+    $self->assert_not_null($eventId2);
+    $self->assert_not_null($eventId3);
+
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
     $res = $jmap->CallMethods([
         ['CalendarEvent/query', {
-            filter => {
-                after =>  '2019-10-01T00:00:00Z',
-                before => '2019-10-02T00:00:00Z',
-            },
             sort => [{
                 property => 'start',
                 isAscending => JSON::true,
-            }]
+            }],
+            anchor => $eventId2,
         }, 'R1']
     ]);
-    $self->assert_deep_equals([$eventId1,$eventId2], $res->{ids});
+    $self->assert_deep_equals([$eventId2,$eventId3], $res->[0][1]{ids});
 
     $res = $jmap->CallMethods([
         ['CalendarEvent/query', {
-            filter => {
-                after =>  '2019-10-01T00:00:00Z',
-                before => '2019-10-02T00:00:00Z',
-            },
             sort => [{
                 property => 'start',
-                isAscending => JSON::false,
-            }]
+                isAscending => JSON::true,
+            }],
+            anchor => $eventId3,
+            anchorOffset => -2,
+            limit => 1,
         }, 'R1']
     ]);
-    $self->assert_deep_equals([$eventId2,$eventId1], $res->{ids});
+    $self->assert_deep_equals([$eventId1], $res->[0][1]{ids});
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+            sort => [{
+                property => 'start',
+                isAscending => JSON::true,
+            }],
+            anchor => $eventId2,
+            anchorOffset => -5,
+        }, 'R1']
+    ]);
+    $self->assert_deep_equals([$eventId1, $eventId2, $eventId3], $res->[0][1]{ids});
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+            sort => [{
+                property => 'start',
+                isAscending => JSON::true,
+            }],
+            anchor => $eventId2,
+            anchorOffset => 5,
+        }, 'R1']
+    ]);
+    $self->assert_deep_equals([], $res->[0][1]{ids});
 }
 
 
