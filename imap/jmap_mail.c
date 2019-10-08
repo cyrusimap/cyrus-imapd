@@ -1308,44 +1308,48 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
 {
     struct _email_find_rock *d = (struct _email_find_rock*) rock;
     jmap_req_t *req = d->req;
-    int r = 0;
 
     if (rec->part) return 0;
 
-    if (!d->mboxname || jmap_isopenmbox(req, rec->mboxname)) {
-        struct mailbox *mbox = NULL;
-        msgrecord_t *mr = NULL;
-        uint32_t flags;
+    /* Make sure we are allowed to read this mailbox */
+    if (!jmap_hasrights_byname(req, rec->mboxname, ACL_READ))
+        return 0;
 
-        /* Make sure we are allowed to read this mailbox */
-        if (!jmap_hasrights_byname(req, rec->mboxname, ACL_READ))
-            return 0;
+    int r = 0;
+    struct mailbox *mbox = NULL;
+    msgrecord_t *mr = NULL;
+    uint32_t system_flags;
+    uint32_t internal_flags;
 
-        /* Prefer to use messages in already opened mailboxes */
-
-        r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
-        if (r) return r;
-
-        r = msgrecord_find(mbox, rec->uid, &mr);
-        if (!r) {
-            uint32_t internal_flags;
-            r = msgrecord_get_systemflags(mr, &flags);
-            if (!r) msgrecord_get_internalflags(mr, &internal_flags);
-            if (!r && !(flags & FLAG_DELETED || internal_flags & FLAG_INTERNAL_EXPUNGED)) {
-                if (d->mboxname) {
-                    free(d->mboxname);
-                    r = IMAP_OK_COMPLETED;
-                }
-                d->mboxname = xstrdup(rec->mboxname);
-                d->uid = rec->uid;
-            }
-            msgrecord_unref(&mr);
-        }
-
-        jmap_closembox(req, &mbox);
+    r = jmap_openmbox(req, rec->mboxname, &mbox, 0);
+    if (r) {
+        // we want to keep looking and see if we can find a mailbox we can open
+        syslog(LOG_ERR, "IOERROR: email_find_cb failed to open %s: %s",
+               rec->mboxname, error_message(r));
+        goto done;
     }
 
-    return r;
+    r = msgrecord_find(mbox, rec->uid, &mr);
+    if (!r) r = msgrecord_get_systemflags(mr, &system_flags);
+    if (!r) r = msgrecord_get_internalflags(mr, &internal_flags);
+    if (r) {
+        // we want to keep looking and see if we can find a message we can read
+        syslog(LOG_ERR, "IOERROR: email_find_cb failed to find message %u in mailbox %s: %s",
+               rec->uid, rec->mboxname, error_message(r));
+        goto done;
+    }
+
+    // if it's deleted, skip
+    if ((system_flags & FLAG_DELETED) || (internal_flags & FLAG_INTERNAL_EXPUNGED))
+        goto done;
+
+    d->mboxname = xstrdup(rec->mboxname);
+    d->uid = rec->uid;
+
+done:
+    jmap_closembox(req, &mbox);
+    msgrecord_unref(&mr);
+    return d->mboxname ? IMAP_OK_COMPLETED : 0;
 }
 
 static int _email_find_in_account(jmap_req_t *req,
