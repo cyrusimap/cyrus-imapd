@@ -84,7 +84,7 @@ static int jmap_calendarevent_query(struct jmap_req *req);
 static int jmap_calendarevent_set(struct jmap_req *req);
 static int jmap_calendarevent_copy(struct jmap_req *req);
 
-#define JMAPCACHE_CALVERSION 1
+#define JMAPCACHE_CALVERSION 19
 
 jmap_method_t jmap_calendar_methods_standard[] = {
     // we have no standard for JMAP calendars yet!
