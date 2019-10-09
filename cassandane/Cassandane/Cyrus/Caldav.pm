@@ -4084,5 +4084,60 @@ EOF
 
 }
 
+sub test_header_cache_control
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
+    $self->assert_not_null($CalendarId);
+
+    # Create an event
+    my $href = "$CalendarId/event1.ics";
+    my $card = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.10.4//EN
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+CREATED:20150806T234327Z
+DTEND:20160831T183000Z
+TRANSP:OPAQUE
+SUMMARY:An Event
+UID:event1
+DTSTART:20160831T153000Z
+DTSTAMP:20150806T234327Z
+SEQUENCE:0
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
+
+    # Check that we can get the event via the CalDAV module
+    my $response = $CalDAV->Request('GET', $href);
+    $self->assert_matches(qr{An Event}, $response->{content});
+
+    my %Headers = (
+        'Authorization' => $CalDAV->auth_header(),
+    );
+    my $URI = $CalDAV->request_url($href);
+
+    # Request the event without an authorization header
+    $response = $CalDAV->{ua}->get($URI, { headers => {} });
+
+    # Should be rejected
+    $self->assert_num_equals(401, $response->{status});
+    $self->assert_str_equals('Unauthorized', $response->{reason});
+
+    # Request the event with an authorization header
+    $response = $CalDAV->{ua}->get($URI, { headers => \%Headers });
+
+    # Should have Cache-Control: private set
+    $self->assert_matches(qr{An Event}, $response->{content});
+    $self->assert_matches(qr{\bprivate\b},
+                          $response->{headers}->{'cache-control'});
+}
 
 1;
