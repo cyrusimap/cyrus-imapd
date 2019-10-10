@@ -5963,6 +5963,69 @@ sub test_calendarevent_set_recurrenceoverrides_mixed_datetypes
     $self->assert_deep_equals($wantOverrides, $event->{recurrenceOverrides});
 }
 
+sub test_calendarevent_query_expandrecurrences
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
 
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+    my $calid = 'Default';
+
+    xlog "create events";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                "1" => {
+                    calendarId => $calid,
+                    uid => 'event1uid@local',
+                    title => "event1",
+                    description => "",
+                    freeBusyStatus => "busy",
+                    start => "2019-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                    recurrenceRule => {
+                        frequency => 'weekly',
+                        count => 3,
+                    },
+                },
+                "2" => {
+                    calendarId => $calid,
+                    uid => 'event2uid@local',
+                    title => "event2",
+                    description => "",
+                    freeBusyStatus => "busy",
+                    start => "2019-01-02T11:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                },
+            }
+        }, 'R1']
+    ]);
+
+    xlog "Run squatter";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {
+            filter => {
+                before => '2019-02-01T00:00:00Z',
+            },
+            sort => [{
+                property => 'start',
+                isAscending => JSON::false,
+            }],
+            expandRecurrences => JSON::true,
+        }, 'R1']
+    ]);
+    $self->assert_num_equals(4, $res->[0][1]{total});
+    $self->assert_deep_equals([
+            'event1uid@local;20190115T090000',
+            'event1uid@local;20190108T090000',
+            'event2uid@local',
+            'event1uid@local;20190101T090000',
+    ], $res->[0][1]{ids});
+}
 
 1;
