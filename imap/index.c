@@ -6019,13 +6019,12 @@ MsgData **index_msgdata_load(struct index_state *state,
                 break;
             }
             case SORT_SAVEDATE:
-                if (!sortcrit[j].args.mailbox.id ||
-                    !strcmp(mailbox->uniqueid, sortcrit[j].args.mailbox.id)) {
+                if (!strcmpnull(mailbox->uniqueid, sortcrit[j].args.mailbox.id)) {
                     cur->savedate = record.savedate;
                 }
                 else {
                     /* If not in mailboxId, we use receivedAt */
-                    cur->savedate = record.internaldate;
+                    cur->internaldate = record.internaldate;
                 }
                 break;
             case SORT_SNOOZEDUNTIL:
@@ -6430,9 +6429,12 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             ret = numcmp(d1, d2);
             break;
         }
-        case SORT_SAVEDATE:
-            ret = numcmp(md1->savedate, md2->savedate);
+        case SORT_SAVEDATE: {
+            time_t d1 = md1->savedate ? md1->savedate : md1->internaldate;
+            time_t d2 = md2->savedate ? md2->savedate : md2->internaldate;
+            ret = numcmp(d1, d2);
             break;
+        }
         case SORT_SNOOZEDUNTIL:
             ret = numcmp(md1->snoozed_until, md2->snoozed_until);
             break;
@@ -7924,7 +7926,8 @@ EXPORTED char *sortcrit_as_string(const struct sortcrit *sortcrit)
         "SIZE", "SUBJECT", "TO", "ANNOTATION",
         "MODSEQ", "UID", "HASFLAG", "CONVMODSEQ",
         "CONVEXISTS", "CONVSIZE", "HASCONVFLAG",
-        "FOLDER", "RELEVANCY", "SPAMSCORE", "GUID"
+        "FOLDER", "RELEVANCY", "SPAMSCORE", "GUID",
+        "EMAILID", "THREADID", "SAVEDATE", "SNOOZEDUNTIL"
     };
 
     do {

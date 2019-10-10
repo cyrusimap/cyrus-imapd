@@ -2120,7 +2120,7 @@ static void _email_parse_filter_cb(jmap_req_t *req,
     }
 }
 
-static struct sortcrit *_email_buildsort(json_t *sort)
+static struct sortcrit *_email_buildsort(json_t *sort, int *sort_savedate)
 {
     json_t *jcomp;
     size_t i;
@@ -2191,6 +2191,7 @@ static struct sortcrit *_email_buildsort(json_t *sort)
             const char *mboxid =
                 json_string_value(json_object_get(jcomp, "mailboxId"));
 
+            if (sort_savedate) *sort_savedate = 1;
             sortcrit[i].key = SORT_SAVEDATE;
             sortcrit[i].args.mailbox.id = xstrdupnull(mboxid);
         }
@@ -2310,7 +2311,8 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
                                             json_t *sort,
                                             hash_table *contactgroups,
                                             int want_expunged,
-                                            int ignore_timer)
+                                            int ignore_timer,
+                                            int *sort_savedate)
 {
     struct emailsearch* search = xzmalloc(sizeof(struct emailsearch));
     int r = 0;
@@ -2338,7 +2340,8 @@ static struct emailsearch* _emailsearch_new(jmap_req_t *req,
 
     /* Build query */
     search->query = search_query_new(search->state, search->args);
-    search->query->sortcrit = search->sortcrit = _email_buildsort(sort);
+    search->query->sortcrit =
+        search->sortcrit = _email_buildsort(sort, sort_savedate);
     search->query->multiple = 1;
     search->query->need_ids = 1;
     search->query->verbose = 0;
@@ -2574,7 +2577,8 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     int is_cached = 0;
 
     struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort,
-                                                  contactgroups, 0, 0);
+                                                  contactgroups, 0, 0,
+                                                  &query->sort_savedate);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
         goto done;
@@ -2692,6 +2696,17 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
         if (md->system_flags & FLAG_DELETED ||
             md->internal_flags & FLAG_INTERNAL_EXPUNGED)
             continue;
+
+        if (query->sort_savedate && !md->savedate) {
+            /* Is there another copy of this message with a targeted savedate? */
+            int j;
+            for (j = i+1; j < msgdata->count; j++) {
+                MsgData *md2 = ptrarray_nth(msgdata, j);
+                if (md2->savedate && message_guid_equal(&md2->guid, &md->guid))
+                    break;
+            }
+            if (j < msgdata->count) continue;
+        }
 
         /* Have we seen this message already? */
         if (!hashset_add(seen_emails, &md->guid.value))
@@ -2944,7 +2959,8 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
 
     struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort,
                                                   &contactfilter->contactgroups,
-                                                  /*want_expunged*/1, /*ignore_timer*/0);
+                                                  /*want_expunged*/1, /*ignore_timer*/0,
+                                                  &query->sort_savedate);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
         goto done;
@@ -3152,7 +3168,8 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
 
     struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort,
                                                   &contactfilter->contactgroups,
-                                                  /*want_expunged*/1, /*ignore_timer*/0);
+                                                  /*want_expunged*/1, /*ignore_timer*/0,
+                                                  &query->sort_savedate);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
         goto done;
@@ -3345,7 +3362,8 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes, json_t
     struct emailsearch *search = _emailsearch_new(req, filter, sort,
                                                   /*contactgroups*/NULL,
                                                   /*want_expunged*/1,
-                                                  /*ignore_timer*/1);
+                                                  /*ignore_timer*/1,
+                                                  NULL);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
         goto done;
@@ -3470,7 +3488,8 @@ static void _thread_changes(jmap_req_t *req, struct jmap_changes *changes, json_
     struct emailsearch *search = _emailsearch_new(req, filter, sort,
                                                   /*contactgroups*/NULL,
                                                   /*want_expunged*/1,
-                                                  /*ignore_timer*/1);
+                                                  /*ignore_timer*/1,
+                                                  NULL);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
         goto done;

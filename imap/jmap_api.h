@@ -368,6 +368,7 @@ struct jmap_query {
     size_t limit;
     int have_limit;
     int calculate_total;
+    int sort_savedate;
 
     /* Response fields */
     char *query_state;
@@ -442,6 +443,7 @@ struct jmap_querychanges {
     size_t max_changes;
     const char *up_to_id;
     int calculate_total;
+    int sort_savedate;
 
     /* Response fields */
     char *new_querystate;
