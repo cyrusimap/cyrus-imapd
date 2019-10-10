@@ -6637,14 +6637,14 @@ sub test_email_query_addedDates
         }, 'R1'],
     ]);
 
-    # Move email4 to mailbox using role as id
+    # Copy email4 to mailbox using role as id
     sleep 1;
     $res = $jmap->CallMethods([
         ['Email/set', {
             update => {
                 $emailId4 => {
-                    "mailboxIds/$inboxid" => undef,
-                    "mailboxIds/$trashId" => JSON::true
+                     "mailboxIds/$trashId" => JSON::true,
+                     keywords => { '$flagged' => JSON::true }
                 }
             },
         }, 'R1'],
@@ -6681,6 +6681,11 @@ sub test_email_query_addedDates
     $res = $jmap->CallMethods([
         ['Email/query', {
             sort => [{
+                property => 'someInThreadHaveKeyword',
+                keyword => '$flagged',
+                isAscending => JSON::false,
+              },
+              {
                 property => 'addedDates',
                 mailboxId => "$trashId",
                 isAscending => JSON::false,
@@ -6690,8 +6695,8 @@ sub test_email_query_addedDates
     $self->assert_num_equals(4, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[2]);
     $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[3]);
-    $self->assert_str_equals($emailId3, $res->[0][1]->{ids}[0]);
-    $self->assert_str_equals($emailId4, $res->[0][1]->{ids}[1]);
+    $self->assert_str_equals($emailId3, $res->[0][1]->{ids}[1]);
+    $self->assert_str_equals($emailId4, $res->[0][1]->{ids}[0]);
 }
 
 
