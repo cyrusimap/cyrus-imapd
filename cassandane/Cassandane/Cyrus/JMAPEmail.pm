@@ -6567,17 +6567,34 @@ sub test_email_query_addedDates
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
+    my $inboxid = $self->getinbox()->{id};
+
+    xlog "Create Trash folder";
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                "trash" => {
+                    name => "Trash",
+                    parentId => undef,
+                    role => "trash"
+                }
+            }
+        }, "R1"],
+    ]);
+    my $trashId = $res->[0][1]{created}{trash}{id};
+    $self->assert_not_null($trashId);
+
     xlog "create messages";
     $self->make_message('uid1') || die;
-    sleep 1;
     $self->make_message('uid2') || die;
     sleep 1;
     $self->make_message('uid3') || die;
+    $self->make_message('uid4') || die;
 
     xlog "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    my $res = $jmap->CallMethods([
+    $res = $jmap->CallMethods([
         ['Email/query', {
             sort => [{
                 property => 'subject',
@@ -6588,36 +6605,93 @@ sub test_email_query_addedDates
     my $emailId1 = $res->[0][1]{ids}[0];
     my $emailId2 = $res->[0][1]{ids}[1];
     my $emailId3 = $res->[0][1]{ids}[2];
+    my $emailId4 = $res->[0][1]{ids}[3];
     $self->assert_not_null($emailId1);
     $self->assert_not_null($emailId2);
     $self->assert_not_null($emailId3);
+    $self->assert_not_null($emailId4);
+
+    # Move email2 to mailbox using role as id
+    sleep 1;
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailId2 => {
+                    "mailboxIds/$inboxid" => undef,
+                    "mailboxIds/$trashId" => JSON::true
+                }
+            },
+        }, 'R1'],
+    ]);
+
+    # Move email1 to mailbox using role as id
+    sleep 1;
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailId1 => {
+                    "mailboxIds/$inboxid" => undef,
+                    "mailboxIds/$trashId" => JSON::true
+                }
+            },
+        }, 'R1'],
+    ]);
+
+    # Move email4 to mailbox using role as id
+    sleep 1;
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailId4 => {
+                    "mailboxIds/$inboxid" => undef,
+                    "mailboxIds/$trashId" => JSON::true
+                }
+            },
+        }, 'R1'],
+    ]);
+
+    # Copy email3 to mailbox using role as id
+    sleep 1;
+    $res = $jmap->CallMethods([
+        ['Email/set', {
+            update => {
+                $emailId3 => {
+                    "mailboxIds/$trashId" => JSON::true
+                }
+            },
+        }, 'R1'],
+    ]);
 
     xlog "query emails sorted by addedDates";
     $res = $jmap->CallMethods([
         ['Email/query', {
             sort => [{
                 property => 'addedDates',
+                mailboxId => "$trashId",
                 isAscending => JSON::true
             }],
         }, 'R1'],
     ]);
-    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
-    $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[0]);
-    $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[1]);
-    $self->assert_str_equals($emailId3, $res->[0][1]->{ids}[2]);
+    $self->assert_num_equals(4, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[1]);
+    $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($emailId3, $res->[0][1]->{ids}[3]);
+    $self->assert_str_equals($emailId4, $res->[0][1]->{ids}[2]);
 
     $res = $jmap->CallMethods([
         ['Email/query', {
             sort => [{
                 property => 'addedDates',
+                mailboxId => "$trashId",
                 isAscending => JSON::false,
             }],
         }, 'R1'],
     ]);
-    $self->assert_num_equals(3, scalar @{$res->[0][1]->{ids}});
-    $self->assert_str_equals($emailId3, $res->[0][1]->{ids}[0]);
-    $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[1]);
+    $self->assert_num_equals(4, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($emailId1, $res->[0][1]->{ids}[2]);
+    $self->assert_str_equals($emailId2, $res->[0][1]->{ids}[3]);
+    $self->assert_str_equals($emailId3, $res->[0][1]->{ids}[0]);
+    $self->assert_str_equals($emailId4, $res->[0][1]->{ids}[1]);
 }
 
 
