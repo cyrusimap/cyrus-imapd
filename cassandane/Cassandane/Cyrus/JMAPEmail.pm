@@ -3652,7 +3652,8 @@ sub test_email_query_snooze
 
     xlog "sort by ascending snoozedUntil";
     $res = $jmap->CallMethods([['Email/query', {
-                    sort => [{ property => "snoozedUntil" }],
+                    sort => [{ property => "snoozedUntil",
+                               mailboxId => "$snoozedmbox" }],
                 }, "R1"]]);
     $self->assert_num_equals(6, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($id2, $res->[0][1]->{ids}[0]);
@@ -3662,9 +3663,10 @@ sub test_email_query_snooze
     $self->assert_str_equals($id6, $res->[0][1]->{ids}[4]);
     $self->assert_str_equals($id5, $res->[0][1]->{ids}[5]);
 
-    xlog "sort by descending receivedAt";
+    xlog "sort by descending snoozedUntil";
     $res = $jmap->CallMethods([['Email/query', {
                     sort => [{ property => "snoozedUntil",
+                               mailboxId => "$snoozedmbox",
                                isAscending => JSON::false }],
                 }, "R1"]]);
     $self->assert_num_equals(6, scalar @{$res->[0][1]->{ids}});
