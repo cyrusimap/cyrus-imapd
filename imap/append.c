@@ -1413,6 +1413,10 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
 
         dst_msgrec = msgrecord_copy_msgrecord(as->mailbox, src_msgrec);
 
+        /* clear savedate */
+        r = msgrecord_set_savedate(dst_msgrec, 0);
+        if (r) goto out;
+
         r = msgrecord_get_systemflags(dst_msgrec, &dst_system_flags);
         if (r) goto out;
         dst_system_flags &= ~FLAG_SEEN;
