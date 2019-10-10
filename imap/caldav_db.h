@@ -143,12 +143,23 @@ int caldav_lookup_uid(struct caldav_db *caldavdb, const char *ical_uid,
 int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
                    caldav_cb_t *cb, void *rock);
 
+enum caldav_sort {
+    CAL_SORT_NONE = 0,
+    CAL_SORT_UID,
+    CAL_SORT_START,
+    CAL_SORT_MAILBOX,
+    CAL_SORT_DESC  = 0x80 /* bit-flag for descending sort */
+};
+
 /* process each entry for 'mailbox' in 'caldavdb' with cb()
  * which last recurrence ends after 'after' and first
  * recurrence starts before 'before'. The largest possible
- * timerange spans from caldav_epoch to caldav_eternity. */
+ * timerange spans from caldav_epoch to caldav_eternity.
+ * The callback is called in order of sort, or by an
+ * arbitrary order if no sort is specified. */
 int caldav_foreach_timerange(struct caldav_db *caldavdb, const char *mailbox,
                              time_t after, time_t before,
+                             enum caldav_sort* sort, size_t nsort,
                              caldav_cb_t *cb, void *rock);
 
 /* write an entry to 'caldavdb' */

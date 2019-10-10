@@ -468,15 +468,16 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 
 #define CMD_SELRANGE_MBOX CMD_READFIELDS \
     " WHERE dtend > :after AND dtstart < :before " \
-    " AND mailbox = :mailbox AND alive = 1;"
+    " AND mailbox = :mailbox AND alive = 1 "
 
 #define CMD_SELRANGE CMD_READFIELDS \
     " WHERE dtend > :after AND dtstart < :before " \
-    " AND alive = 1;"
+    " AND alive = 1 "
 
 EXPORTED int caldav_foreach_timerange(struct caldav_db *caldavdb,
                                       const char *mailbox,
                                       time_t after, time_t before,
+                                      enum caldav_sort* sort, size_t nsort,
                                       caldav_cb_t *cb, void *rock)
 {
     struct sqldb_bindval bval[] = {
@@ -501,11 +502,34 @@ EXPORTED int caldav_foreach_timerange(struct caldav_db *caldavdb,
 
     /* XXX - tombstones */
 
-    if (mailbox) {
-        return sqldb_exec(caldavdb->db, CMD_SELRANGE_MBOX, bval, &read_cb, &rrock);
-    } else {
-        return sqldb_exec(caldavdb->db, CMD_SELRANGE, bval, &read_cb, &rrock);
+    struct buf stmt = BUF_INITIALIZER;
+    buf_setcstr(&stmt, mailbox ? CMD_SELRANGE_MBOX : CMD_SELRANGE);
+    if (nsort) {
+        buf_appendcstr(&stmt, " ORDER BY ");
+        size_t i;
+        for (i = 0; i < nsort; i++) {
+            if (i) buf_appendcstr(&stmt, ", ");
+            switch (sort[i] & ~CAL_SORT_DESC) {
+                case CAL_SORT_UID:
+                    buf_appendcstr(&stmt, "uid");
+                    break;
+                case CAL_SORT_START:
+                    buf_appendcstr(&stmt, "dtstart");
+                    break;
+                case CAL_SORT_MAILBOX:
+                    buf_appendcstr(&stmt, "mailbox");
+                    break;
+                default:
+                    continue;
+            }
+            buf_appendcstr(&stmt, sort[i] & CAL_SORT_DESC ? " DESC" : " ASC");
+        }
     }
+    buf_putc(&stmt, ';');
+
+    int r = sqldb_exec(caldavdb->db, buf_cstring(&stmt), bval, &read_cb, &rrock);
+    buf_free(&stmt);
+    return r;
 }
 
 
