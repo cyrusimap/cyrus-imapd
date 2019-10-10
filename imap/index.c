@@ -6029,12 +6029,11 @@ MsgData **index_msgdata_load(struct index_state *state,
                 break;
             case SORT_SNOOZEDUNTIL:
                 if ((record.internal_flags & FLAG_INTERNAL_SNOOZED) &&
-                    (!sortcrit[j].args.mailbox.id ||
-                     !strcmp(mailbox->uniqueid, sortcrit[j].args.mailbox.id))) {
+                    !strcmpnull(mailbox->uniqueid, sortcrit[j].args.mailbox.id)) {
                     /* SAVEDATE == snoozed#until */
-                    cur->snoozed_until = record.savedate;
+                    cur->savedate = record.savedate;
 
-                    if (!cur->snoozed_until) {
+                    if (!cur->savedate) {
                         /* Try fetching snoozed#until directly */
                         json_t *snoozed =
                             jmap_fetch_snoozed(mailbox->name, record.uid);
@@ -6043,14 +6042,14 @@ MsgData **index_msgdata_load(struct index_state *state,
                             time_from_iso8601(
                                 json_string_value(json_object_get(snoozed,
                                                                   "until")),
-                                &cur->snoozed_until);
+                                &cur->savedate);
                             json_decref(snoozed);
                         }
                     }
                 }
-                if (!cur->snoozed_until) {
-                    /* If not snoozed, we use receivedAt */
-                    cur->snoozed_until = record.internaldate;
+                if (!cur->savedate) {
+                    /* If not snoozed in mailboxId, we use receivedAt */
+                    cur->internaldate = record.internaldate;
                 }
                 break;
             case LOAD_IDS:
@@ -6429,15 +6428,13 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
             ret = numcmp(d1, d2);
             break;
         }
+        case SORT_SNOOZEDUNTIL:
         case SORT_SAVEDATE: {
             time_t d1 = md1->savedate ? md1->savedate : md1->internaldate;
             time_t d2 = md2->savedate ? md2->savedate : md2->internaldate;
             ret = numcmp(d1, d2);
             break;
         }
-        case SORT_SNOOZEDUNTIL:
-            ret = numcmp(md1->snoozed_until, md2->snoozed_until);
-            break;
         case SORT_FROM:
             ret = strcmpsafe(md1->from, md2->from);
             break;

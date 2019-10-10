@@ -2187,12 +2187,12 @@ static struct sortcrit *_email_buildsort(json_t *sort, int *sort_savedate)
             }
         }
         // FM specific
-        if (!strcmp(prop, "addedDates")) {
+        if (!strcmp(prop, "addedDates") || !strcmp(prop, "snoozedUntil")) {
             const char *mboxid =
                 json_string_value(json_object_get(jcomp, "mailboxId"));
 
             if (sort_savedate) *sort_savedate = 1;
-            sortcrit[i].key = SORT_SAVEDATE;
+            sortcrit[i].key = (*prop == 's') ? SORT_SNOOZEDUNTIL : SORT_SAVEDATE;
             sortcrit[i].args.mailbox.id = xstrdupnull(mboxid);
         }
         if (!strcmp(prop, "threadSize")) {
@@ -2200,13 +2200,6 @@ static struct sortcrit *_email_buildsort(json_t *sort, int *sort_savedate)
         }
         if (!strcmp(prop, "spamScore")) {
             sortcrit[i].key = SORT_SPAMSCORE;
-        }
-        if (!strcmp(prop, "snoozedUntil")) {
-            const char *mboxid =
-                json_string_value(json_object_get(jcomp, "mailboxId"));
-
-            sortcrit[i].key = SORT_SNOOZEDUNTIL;
-            sortcrit[i].args.mailbox.id = xstrdupnull(mboxid);
         }
     }
 

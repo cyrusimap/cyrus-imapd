@@ -187,7 +187,6 @@ typedef struct msgdata {
     /* items from the annotations database */
     strarray_t annot;           /* array of annotation attribute values
                                    (stored in order of sortcrit) */
-    time_t snoozed_until;       /* snoozed#until */
 } MsgData;
 
 typedef struct thread {
