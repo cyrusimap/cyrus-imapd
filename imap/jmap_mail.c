@@ -2682,11 +2682,30 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
 
     struct hashset *seen_emails = hashset_new(12);
     struct hashset *seen_threads = hashset_new(8);
+    struct hashset *savedates = NULL;
 
     /* List of all matching email ids */
     strarray_t email_ids = STRARRAY_INITIALIZER;
 
     int found_anchor = 0;
+
+    if (query->sort_savedate) {
+        /* Build hashset of messages with savedates */
+        int j;
+
+        savedates = hashset_new(12);
+
+        for (j = 0; j < msgdata->count; j++) {
+            MsgData *md = ptrarray_nth(msgdata, j);
+
+            /* Skip expunged or hidden messages */
+            if (md->system_flags & FLAG_DELETED ||
+                md->internal_flags & FLAG_INTERNAL_EXPUNGED)
+                continue;
+
+            if (md->savedate) hashset_add(savedates, &md->guid.value);
+        }
+    }
 
     int i;
     for (i = 0 ; i < msgdata->count; i++) {
@@ -2697,16 +2716,10 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
             md->internal_flags & FLAG_INTERNAL_EXPUNGED)
             continue;
 
-        if (query->sort_savedate && !md->savedate) {
-            /* Is there another copy of this message with a targeted savedate? */
-            int j;
-            for (j = i+1; j < msgdata->count; j++) {
-                MsgData *md2 = ptrarray_nth(msgdata, j);
-                if (md2->savedate && message_guid_equal(&md2->guid, &md->guid))
-                    break;
-            }
-            if (j < msgdata->count) continue;
-        }
+        /* Is there another copy of this message with a targeted savedate? */
+        if (!md->savedate &&
+            savedates && hashset_exists(savedates, &md->guid.value))
+            continue;
 
         /* Have we seen this message already? */
         if (!hashset_add(seen_emails, &md->guid.value))
@@ -2788,6 +2801,7 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     }
     hashset_free(&seen_threads);
     hashset_free(&seen_emails);
+    if (savedates) hashset_free(&savedates);
 
     if (!query->anchor) {
         query->result_position = query->position;
