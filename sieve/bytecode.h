@@ -134,8 +134,9 @@ typedef union
  * version 0x16 scripts implemented draft-gondwana-sieve-mailboxid-01
  * version 0x17 scripts implemented x-cyrus-log
  * version 0x18 scripts implemented x-cyrus-jmapquery
+ * version 0x19 scripts implemented x-cyrus-snooze
  */
-#define BYTECODE_VERSION 0x18
+#define BYTECODE_VERSION 0x19
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -210,6 +211,8 @@ enum bytecode {
     B_FILEINTO,         /* require mailbox, imap4flags, copy, specialuse, mailboxid */
 
     B_LOG,              /* require x-cyrus-log */
+
+    B_SNOOZE,           /* require x-cyrus-snooze */
 };
 
 enum bytecode_comps {

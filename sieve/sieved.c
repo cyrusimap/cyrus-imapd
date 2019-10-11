@@ -745,6 +745,16 @@ static void dump2(bytecode_input_t *d, int bc_len)
             break;
 
 
+        case B_SNOOZE:
+            printf("SNOOZE");
+            print_string(" MAILBOX", cmd.u.sn.mailbox);
+            print_stringlist("\n\tADDFLAGS", cmd.u.sn.addflags);
+            print_stringlist("\n\tREMOVEFLAGS", cmd.u.sn.removeflags);
+            print_stringlist("\n\tDAYS", cmd.u.sn.days);
+            print_stringlist("\n\tTIMES", cmd.u.sn.times);
+            break;
+
+
         default:
             printf("%d (NOT AN OP)\n", cmd.type);
             exit(1);

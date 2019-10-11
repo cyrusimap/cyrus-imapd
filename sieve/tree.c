@@ -299,6 +299,11 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         capability = "editheader";
         supported = parse_script->support & SIEVE_CAPA_EDITHEADER;
         break;
+
+    case SNOOZE:
+        capability = "x-cyrus-snooze";
+        supported = parse_script->support & SIEVE_CAPA_SNOOZE;
+        break;
     }
 
     if (!supported) {
@@ -505,6 +510,14 @@ void free_tree(commandlist_t *cl)
         case DELETEHEADER:
             free(cl->u.dh.name);
             strarray_free(cl->u.dh.values);
+            break;
+
+        case SNOOZE:
+            free(cl->u.sn.mailbox);
+            strarray_free(cl->u.sn.addflags);
+            strarray_free(cl->u.sn.removeflags);
+            strarray_free(cl->u.sn.days);
+            strarray_free(cl->u.sn.times);
             break;
         }
 

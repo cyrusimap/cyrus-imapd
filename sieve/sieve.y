@@ -110,6 +110,8 @@ static commandlist_t *build_addheader(sieve_script_t*, commandlist_t *c,
 static commandlist_t *build_deleteheader(sieve_script_t*, commandlist_t *c,
                                          char *name, strarray_t *values);
 static commandlist_t *build_log(sieve_script_t*, char *text);
+static commandlist_t *build_snooze(sieve_script_t *sscript,
+                                   commandlist_t *c, strarray_t *times);
 
 /* construct/canonicalize test commands */
 static test_t *build_anyof(sieve_script_t*, testlist_t *tl);
@@ -331,6 +333,10 @@ extern void sieverestart(FILE *f);
 /* x-cyrus-jmapquery */
 %token JMAPQUERY
 
+/* x-cyrus-snooze */
+%token SNOOZE MAILBOX ADDFLAGS REMOVEFLAGS DAYSOFWEEK
+%type <cl> sntags
+
 
 %%
 
@@ -469,6 +475,8 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
         | DENOTIFY dtags         { $$ = build_denotify(sscript, $2); }
         | INCLUDE itags string   { $$ = build_include(sscript, $2, $3); }
         | LOG string             { $$ = build_log(sscript, $2); }
+        | SNOOZE sntags stringlist
+                                 { $$ = build_snooze(sscript, $2, $3); }
         | RETURN                 { $$ = new_command(RETURN, sscript); }
         ;
 
@@ -1164,6 +1172,54 @@ itags: /* empty */               { $$ = new_command(INCLUDE, sscript); }
 /* location tags */
 location: PERSONAL
         | GLOBAL
+        ;
+
+
+/* SNOOZE tagged arguments */
+sntags: /* empty */              { $$ = new_command(SNOOZE, sscript); }
+        | sntags MAILBOX string  {
+                                     if ($$->u.sn.mailbox != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":mailbox");
+                                         free($$->u.sn.mailbox);
+                                     }
+
+                                     $$->u.sn.mailbox = $3;
+                                 }
+        | sntags ADDFLAGS stringlist
+                                 {
+                                     if ($$->u.sn.addflags != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":addflags");
+                                         free($$->u.sn.addflags);
+                                     }
+
+                                     $$->u.sn.addflags = $3;
+                                 }
+        | sntags REMOVEFLAGS stringlist
+                                 {
+                                     if ($$->u.sn.removeflags != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":removeflags");
+                                         free($$->u.sn.removeflags);
+                                     }
+
+                                     $$->u.sn.removeflags = $3;
+                                 }
+        | sntags DAYSOFWEEK stringlist
+                                 {
+                                     if ($$->u.sn.days != NULL) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":daysofweek");
+                                         free($$->u.sn.days);
+                                     }
+
+                                     $$->u.sn.days = $3;
+                                 }
         ;
 
 
@@ -2324,6 +2380,61 @@ static commandlist_t *build_deleteheader(sieve_script_t *sscript,
 
     c->u.dh.name = name;
     c->u.dh.values = values;
+
+    return c;
+}
+
+static int verify_weekday(sieve_script_t *sscript, char *day)
+{
+    if (contains_variable(sscript, day)) return 1;
+
+    lcase(day);
+    if (!strcmp(day, "sun") ||
+        !strcmp(day, "mon") ||
+        !strcmp(day, "tue") ||
+        !strcmp(day, "wed") ||
+        !strcmp(day, "thu") ||
+        !strcmp(day, "fri") ||
+        !strcmp(day, "sat")) {
+        return 1;
+    }
+
+    sieveerror_f(sscript, "'%s': not a valid weekday for snooze", day);
+    return 0;
+}
+
+static int verify_time(sieve_script_t *sscript, char *time)
+{
+    if (contains_variable(sscript, time)) return 1;
+
+    unsigned n, hour = -1, minute = -1;
+
+    n = sscanf(time, "%02u:%02u", &hour, &minute);
+    if (n == 2 && hour < 24 && minute < 60) {
+        return 1;
+    }
+
+    sieveerror_f(sscript, "'%s': not a valid time for snooze", time);
+    return 0;
+}
+
+static commandlist_t *build_snooze(sieve_script_t *sscript,
+                                   commandlist_t *c, strarray_t *times)
+{
+    assert(c && c->type == SNOOZE);
+
+    if (c->u.sn.mailbox) verify_mailbox(sscript, c->u.sn.mailbox);
+    if (c->u.sn.addflags && !_verify_flaglist(c->u.sn.addflags)) {
+        strarray_add(c->u.sn.addflags, "");
+    }
+    if (c->u.sn.removeflags && !_verify_flaglist(c->u.sn.removeflags)) {
+        strarray_add(c->u.sn.removeflags, "");
+    }
+    if (c->u.sn.days) {
+        verify_stringlist(sscript, c->u.sn.days, verify_weekday);
+    }
+    verify_stringlist(sscript, times, verify_time);
+    c->u.sn.times = times;
 
     return c;
 }

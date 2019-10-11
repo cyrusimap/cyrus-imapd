@@ -519,6 +519,9 @@ static const struct sieve_capa_t {
     /* JMAP Query - x-cyrus-jmapquery */
     { "x-cyrus-jmapquery", SIEVE_CAPA_JMAPQUERY },
 
+    /* Snooze - x-cyrus-snooze */
+    { "x-cyrus-snooze", SIEVE_CAPA_SNOOZE },
+
     { NULL, 0 }
 };
     
@@ -705,6 +708,10 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
         if (!(interp->jmapquery &&
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_JMAPQUERY)))
             capa = 0;
+        break;
+
+    case SIEVE_CAPA_SNOOZE:
+        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_SNOOZE)) capa = 0;
         break;
 
     default:

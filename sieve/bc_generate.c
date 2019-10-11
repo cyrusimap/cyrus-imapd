@@ -1144,6 +1144,29 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 retval->data[codep++].u.str = c->u.l.text;
                 break;
 
+            case SNOOZE:
+                /* SNOOZE
+                   STRING mailbox
+                   STRINGLIST addflags
+                   STRINGLIST removeflags
+                   STRINGLIST daysofweek
+                   STRINGLIST times
+                */
+                retval->data[codep++].u.op = B_SNOOZE;
+                if (!atleast(retval, codep+1)) return -1;
+                retval->data[codep].type = BT_STR;
+                retval->data[codep++].u.str = c->u.sn.mailbox;
+
+                codep = bc_stringlist_generate(codep, retval, c->u.sn.addflags);
+                if (codep == -1) return -1;
+                codep = bc_stringlist_generate(codep, retval, c->u.sn.removeflags);
+                if (codep == -1) return -1;
+                codep = bc_stringlist_generate(codep, retval, c->u.sn.days);
+                if (codep == -1) return -1;
+                codep = bc_stringlist_generate(codep, retval, c->u.sn.times);
+                if (codep == -1) return -1;
+                break;
+
             case IF:
             {
                 int jumpVal;

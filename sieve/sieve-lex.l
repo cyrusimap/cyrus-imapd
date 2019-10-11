@@ -442,6 +442,13 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
     /* x-cyrus-jmapquery */
 <INITIAL>jmapquery             return JMAPQUERY;
 
+    /* x-cyrus-snooze */
+<INITIAL>snooze                return SNOOZE;
+<INITIAL>:mailbox              return MAILBOX;
+<INITIAL>:addflags             return ADDFLAGS;
+<INITIAL>:removeflags          return REMOVEFLAGS;
+<INITIAL>:daysofweek           return DAYSOFWEEK;
+
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */
 <INITIAL>[ \t\n\r] ;          /* ignore whitespace */

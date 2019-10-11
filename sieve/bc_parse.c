@@ -358,6 +358,15 @@ EXPORTED int bc_action_parse(bytecode_input_t *bc, int pos, int version,
         break;
 
 
+    case B_SNOOZE:          /* 42 */
+        pos = bc_string_parse(bc, pos, &cmd->u.sn.mailbox);
+        pos = bc_stringlist_parse(bc, pos, &cmd->u.sn.addflags);
+        pos = bc_stringlist_parse(bc, pos, &cmd->u.sn.removeflags);
+        pos = bc_stringlist_parse(bc, pos, &cmd->u.sn.days);
+        pos = bc_stringlist_parse(bc, pos, &cmd->u.sn.times);
+        break;
+
+
     default:
         /* Unknown opcode? */
         pos = -1;

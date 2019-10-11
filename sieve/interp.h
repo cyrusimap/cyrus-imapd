@@ -208,10 +208,13 @@ enum sieve_capa_flag {
 
     /* JMAP Query - x-cyrus-jmapquery */
 #ifdef WITH_JMAP
-    SIEVE_CAPA_JMAPQUERY    = 1LL<<48
+    SIEVE_CAPA_JMAPQUERY    = 1LL<<48,
 #else
-    SIEVE_CAPA_JMAPQUERY    = 0LL<<48 /* disabled at compile-time */
+    SIEVE_CAPA_JMAPQUERY    = 0LL<<48, /* disabled at compile-time */
 #endif
+
+    /* Snooze - x-cyrus-snooze */
+    SIEVE_CAPA_SNOOZE       = 1LL<<49,
 };
 
 #define SIEVE_CAPA_ALL (SIEVE_CAPA_BASE           \
@@ -263,6 +266,7 @@ enum sieve_capa_flag {
                         | SIEVE_CAPA_MAILBOXID    \
                         | SIEVE_CAPA_LOG          \
                         | SIEVE_CAPA_JMAPQUERY    \
+                        | SIEVE_CAPA_SNOOZE       \
                         )
 
 #define SIEVE_CAPA_IHAVE_INCOMPAT (SIEVE_CAPA_ENCODED_CHAR | SIEVE_CAPA_VARIABLES)

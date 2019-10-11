@@ -215,6 +215,13 @@ struct Commandlist {
         struct { /* it's a log action */
             char *text;
         } l;
+        struct { /* it's a snooze action */
+            char *mailbox;
+            strarray_t *addflags;
+            strarray_t *removeflags;
+            strarray_t *days;
+            strarray_t *times;
+        } sn;
     } u;
     struct Commandlist *next;
 };
