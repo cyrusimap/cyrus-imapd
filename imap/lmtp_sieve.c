@@ -1095,7 +1095,7 @@ static int sieve_fileinto(void *ac,
     if (!intname) goto done;
 
     ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
-                          &imap4flags, userid, sd->authstate, md->id,
+                          &imap4flags, NULL, userid, sd->authstate, md->id,
                           userid, mdata->notifyheader,
                           intname, md->date, quotaoverride, 0);
 
@@ -1119,7 +1119,7 @@ static int sieve_fileinto(void *ac,
             }
 
             ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
-                                  &imap4flags, userid, sd->authstate, md->id,
+                                  &imap4flags, NULL, userid, sd->authstate, md->id,
                                   userid, mdata->notifyheader,
                                   intname, md->date, quotaoverride, 0);
         }

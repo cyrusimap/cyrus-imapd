@@ -505,6 +505,7 @@ int deliver_mailbox(FILE *f,
                     struct stagemsg *stage,
                     unsigned size,
                     struct imap4flags *imap4flags,
+                    struct entryattlist *annotations,
                     const char *authuser,
                     const struct auth_state *authstate,
                     char *id,
@@ -596,7 +597,7 @@ int deliver_mailbox(FILE *f,
         r = append_fromstage(&as, &content->body, stage,
                              internaldate, /*createdmodseq*/0,
                              flags, !singleinstance,
-                             /*annotations*/NULL);
+                             annotations);
 
         if (r) {
             append_abort(&as);
@@ -735,7 +736,7 @@ EXPORTED int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags
     /* case 1: shared mailbox request */
     if (!mbname_userid(origmbname)) {
         return deliver_mailbox(md->f, mydata->content, mydata->stage,
-                               md->size, imap4flags,
+                               md->size, imap4flags, NULL,
                                mydata->authuser, mydata->authstate, md->id,
                                NULL, mydata->notifyheader,
                                mbname_intname(origmbname), md->date, quotaoverride, 0);
@@ -745,7 +746,7 @@ EXPORTED int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags
 
     if (strarray_size(mbname_boxes(mbname))) {
         ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
-                              md->size, imap4flags,
+                              md->size, imap4flags, NULL,
                               mydata->authuser, mydata->authstate, md->id,
                               mbname_userid(mbname), mydata->notifyheader,
                               mbname_intname(mbname), md->date, quotaoverride, 0);
@@ -755,7 +756,7 @@ EXPORTED int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags
             if (fuzzy_match(mbname)) {
                 /* try delivery to a fuzzy matched mailbox */
                 ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
-                                      md->size, imap4flags,
+                                      md->size, imap4flags, NULL,
                                       mydata->authuser, mydata->authstate, md->id,
                                       mbname_userid(mbname), mydata->notifyheader,
                                       mbname_intname(mbname), md->date, quotaoverride, 0);
@@ -769,7 +770,7 @@ EXPORTED int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags
         struct auth_state *authstate = auth_newstate(mbname_userid(mbname));
 
         ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
-                              md->size, imap4flags,
+                              md->size, imap4flags, NULL,
                               mbname_userid(mbname), authstate, md->id,
                               mbname_userid(mbname), mydata->notifyheader,
                               mbname_intname(mbname), md->date, quotaoverride, 1);
