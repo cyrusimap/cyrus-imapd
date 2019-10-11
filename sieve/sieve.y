@@ -136,6 +136,8 @@ static test_t *build_mbox_meta(sieve_script_t*, test_t *t, char *extname,
 static test_t *build_duplicate(sieve_script_t*, test_t *t);
 static test_t *build_jmapquery(sieve_script_t*, test_t *t, const char *json);
 
+static int verify_weekday(sieve_script_t *sscript, char *day);
+
 void yyerror(sieve_script_t*, const char *msg);
 extern int yylex(void*, sieve_script_t*);
 extern void sieverestart(FILE *f);
@@ -335,6 +337,7 @@ extern void sieverestart(FILE *f);
 
 /* x-cyrus-snooze */
 %token SNOOZE MAILBOX ADDFLAGS REMOVEFLAGS DAYSOFWEEK
+%type <nval> weekdaylist weekdays weekday
 %type <cl> sntags
 
 
@@ -1209,17 +1212,30 @@ sntags: /* empty */              { $$ = new_command(SNOOZE, sscript); }
 
                                      $$->u.sn.removeflags = $3;
                                  }
-        | sntags DAYSOFWEEK stringlist
+        | sntags DAYSOFWEEK weekdaylist
                                  {
-                                     if ($$->u.sn.days != NULL) {
+                                     if ($$->u.sn.days != 0) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
                                                       ":daysofweek");
-                                         free($$->u.sn.days);
                                      }
 
                                      $$->u.sn.days = $3;
                                  }
+        ;
+
+
+weekdaylist: weekday
+        | '[' weekdays ']'       { $$ = $2; }
+        ;
+
+
+weekdays:  weekday
+        | weekdays ',' weekday   { $$ = $1 | $3; }
+        ;
+
+
+weekday: STRING                  { $$ = verify_weekday(sscript, $1); }
         ;
 
 
@@ -2386,17 +2402,12 @@ static commandlist_t *build_deleteheader(sieve_script_t *sscript,
 
 static int verify_weekday(sieve_script_t *sscript, char *day)
 {
-    if (contains_variable(sscript, day)) return 1;
+    const char *days[] = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
+    int i;
 
-    lcase(day);
-    if (!strcmp(day, "sun") ||
-        !strcmp(day, "mon") ||
-        !strcmp(day, "tue") ||
-        !strcmp(day, "wed") ||
-        !strcmp(day, "thu") ||
-        !strcmp(day, "fri") ||
-        !strcmp(day, "sat")) {
-        return 1;
+    ucase(day);
+    for (i = 0; i < 7; i++) {
+        if (!strcmp(day, days[i])) return (1<<i);
     }
 
     sieveerror_f(sscript, "'%s': not a valid weekday for snooze", day);
@@ -2430,9 +2441,7 @@ static commandlist_t *build_snooze(sieve_script_t *sscript,
     if (c->u.sn.removeflags && !_verify_flaglist(c->u.sn.removeflags)) {
         strarray_add(c->u.sn.removeflags, "");
     }
-    if (c->u.sn.days) {
-        verify_stringlist(sscript, c->u.sn.days, verify_weekday);
-    }
+    if (!c->u.sn.days) c->u.sn.days = 0x7f; /* all days */
     verify_stringlist(sscript, times, verify_time);
     c->u.sn.times = times;
 

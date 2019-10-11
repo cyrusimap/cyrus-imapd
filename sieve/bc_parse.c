@@ -362,7 +362,7 @@ EXPORTED int bc_action_parse(bytecode_input_t *bc, int pos, int version,
         pos = bc_string_parse(bc, pos, &cmd->u.sn.mailbox);
         pos = bc_stringlist_parse(bc, pos, &cmd->u.sn.addflags);
         pos = bc_stringlist_parse(bc, pos, &cmd->u.sn.removeflags);
-        pos = bc_stringlist_parse(bc, pos, &cmd->u.sn.days);
+        cmd->u.sn.days = ntohl(bc[pos++].value);
         pos = bc_stringlist_parse(bc, pos, &cmd->u.sn.times);
         break;
 

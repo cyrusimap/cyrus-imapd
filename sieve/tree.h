@@ -219,7 +219,7 @@ struct Commandlist {
             char *mailbox;
             strarray_t *addflags;
             strarray_t *removeflags;
-            strarray_t *days;
+            unsigned char days;
             strarray_t *times;
         } sn;
     } u;

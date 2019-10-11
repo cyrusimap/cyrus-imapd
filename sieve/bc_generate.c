@@ -1161,8 +1161,8 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 if (codep == -1) return -1;
                 codep = bc_stringlist_generate(codep, retval, c->u.sn.removeflags);
                 if (codep == -1) return -1;
-                codep = bc_stringlist_generate(codep, retval, c->u.sn.days);
-                if (codep == -1) return -1;
+                retval->data[codep].type = BT_VALUE;
+                retval->data[codep++].u.value = c->u.sn.days;
                 codep = bc_stringlist_generate(codep, retval, c->u.sn.times);
                 if (codep == -1) return -1;
                 break;

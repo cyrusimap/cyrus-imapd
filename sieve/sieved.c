@@ -745,14 +745,27 @@ static void dump2(bytecode_input_t *d, int bc_len)
             break;
 
 
-        case B_SNOOZE:
+        case B_SNOOZE: {
+            const char *days[] =
+                { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
+            const char *sep = "";
+            int i;
+
             printf("SNOOZE");
             print_string(" MAILBOX", cmd.u.sn.mailbox);
             print_stringlist("\n\tADDFLAGS", cmd.u.sn.addflags);
             print_stringlist("\n\tREMOVEFLAGS", cmd.u.sn.removeflags);
-            print_stringlist("\n\tDAYS", cmd.u.sn.days);
+            printf("\n\tDAYSOFWEEK [");
+            for (i = 0; i < 7; i++) {
+                if (cmd.u.sn.days & (1<<i)) {
+                    printf("%s %s", sep, days[i]);
+                    sep = ",";
+                }
+            }
+            printf(" ]");
             print_stringlist("\n\tTIMES", cmd.u.sn.times);
             break;
+        }
 
 
         default:

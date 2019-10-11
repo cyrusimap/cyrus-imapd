@@ -516,7 +516,6 @@ void free_tree(commandlist_t *cl)
             free(cl->u.sn.mailbox);
             strarray_free(cl->u.sn.addflags);
             strarray_free(cl->u.sn.removeflags);
-            strarray_free(cl->u.sn.days);
             strarray_free(cl->u.sn.times);
             break;
         }
