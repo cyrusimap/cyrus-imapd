@@ -107,7 +107,7 @@ static int bc_stringlist_generate(int codep, bytecode_info_t *retval,
     /* Bounds check the string list length */
     if (!atleast(retval, codep+1)) return -1;
 
-    retval->data[codep].type = BT_LISTLEN;
+    retval->data[codep].type = BT_STRLISTLEN;
     retval->data[codep++].u.listlen = strcount;
 
     for (i = 0 ; i < strcount ; i++) {
@@ -120,6 +120,32 @@ static int bc_stringlist_generate(int codep, bytecode_info_t *retval,
 
         retval->data[codep].type = BT_STR;
         retval->data[codep++].u.str = s;
+    }
+
+    return codep;
+}
+
+
+/* given a location and a value list, compile it into almost-flat form.
+ * <list len> <value><value> etc... */
+static int bc_vallist_generate(int codep, bytecode_info_t *retval,
+                               arrayu64_t *va)
+{
+    int count = va ? va->count : 0;
+    int i;
+
+    /* Bounds check the string list length */
+    if (!atleast(retval, codep+1)) return -1;
+
+    retval->data[codep].type = BT_VALLISTLEN;
+    retval->data[codep++].u.listlen = count;
+
+    for (i = 0 ; i < count ; i++) {
+        /* Bounds check for each string before we allocate it */
+        if (!atleast(retval, codep+1)) return -1;
+
+        retval->data[codep].type = BT_VALUE;
+        retval->data[codep++].u.value = arrayu64_nth(va, i);;
     }
 
     return codep;
@@ -155,7 +181,7 @@ static int bc_testlist_generate(int codep, bytecode_info_t *retval,
         retval->data[oldcodep].u.jump = codep;
     }
 
-    retval->data[len_codep].type = BT_LISTLEN;
+    retval->data[len_codep].type = BT_STRLISTLEN;
     retval->data[len_codep].u.listlen = testcount;
 
     return codep;
@@ -1163,7 +1189,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                 if (codep == -1) return -1;
                 retval->data[codep].type = BT_VALUE;
                 retval->data[codep++].u.value = c->u.sn.days;
-                codep = bc_stringlist_generate(codep, retval, c->u.sn.times);
+                codep = bc_vallist_generate(codep, retval, c->u.sn.times);
                 if (codep == -1) return -1;
                 break;
 

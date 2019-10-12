@@ -75,7 +75,8 @@ enum bytecode_data_type {
     BT_OPCODE,
     BT_JUMP,
     BT_VALUE,
-    BT_LISTLEN,
+    BT_VALLISTLEN,
+    BT_STRLISTLEN,
     BT_STR
 };
 

@@ -48,6 +48,7 @@
 
 #include "comparator.h"
 #include "strarray.h"
+#include "arrayu64.h"
 
 /* abstract syntax tree for sieve */
 typedef struct Commandlist commandlist_t;
@@ -220,7 +221,7 @@ struct Commandlist {
             strarray_t *addflags;
             strarray_t *removeflags;
             unsigned char days;
-            strarray_t *times;
+            arrayu64_t *times;
         } sn;
     } u;
     struct Commandlist *next;

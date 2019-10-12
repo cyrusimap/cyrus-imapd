@@ -156,6 +156,30 @@ static void print_stringlist(const char *label, strarray_t *list)
     free(strarray_takevf(list));
 }
 
+static void print_time(uint64_t t)
+{
+    printf(" %02lu:%02lu", t / 60, t % 60);
+}
+
+static void print_vallist(const char *label, arrayu64_t *list,
+                          void (*print_cb)(uint64_t))
+{
+    int x, list_len = arrayu64_size(list);
+
+    printf("%s{%d} [", label, list_len);
+
+    for (x = 0; x < list_len; x++) {
+        uint64_t i = arrayu64_nth(list, x);
+
+        if (!(x % 5)) printf("\n\t\t");
+        if (print_cb) print_cb(i);
+        else printf(" %lu", i);
+    }
+    printf("\n\t]");
+
+    arrayu64_free(list);
+}
+
 static void print_comparator(comp_t *comp)
 {
     printf(" COMPARATOR [ ");
@@ -763,7 +787,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
                 }
             }
             printf(" ]");
-            print_stringlist("\n\tTIMES", cmd.u.sn.times);
+            print_vallist("\n\tTIMES", cmd.u.sn.times, &print_time);
             break;
         }
 

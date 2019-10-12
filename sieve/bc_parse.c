@@ -118,6 +118,24 @@ static int bc_stringlist_parse(bytecode_input_t *bc, int pos,
     return pos;
 }
 
+/* Given a bytecode_input_t at the beginning of a valuelist (the len block),
+ * return the vallist, and the bytecode index of the NEXT item */
+static int bc_vallist_parse(bytecode_input_t *bc, int pos,
+                            arrayu64_t **vallist)
+{
+    int len = ntohl(bc[pos++].listlen);
+
+    pos++; /* Skip Total Byte Length */
+
+    *vallist = arrayu64_new();
+
+    while (len--) {
+        arrayu64_append(*vallist, ntohl(bc[pos++].value));
+    }
+
+    return pos;
+}
+
 static int bc_comparator_parse(bytecode_input_t *bc, int pos, comp_t *comp)
 {
     comp->match = ntohl(bc[pos++].value);
@@ -363,7 +381,7 @@ EXPORTED int bc_action_parse(bytecode_input_t *bc, int pos, int version,
         pos = bc_stringlist_parse(bc, pos, &cmd->u.sn.addflags);
         pos = bc_stringlist_parse(bc, pos, &cmd->u.sn.removeflags);
         cmd->u.sn.days = ntohl(bc[pos++].value);
-        pos = bc_stringlist_parse(bc, pos, &cmd->u.sn.times);
+        pos = bc_vallist_parse(bc, pos, &cmd->u.sn.times);
         break;
 
 

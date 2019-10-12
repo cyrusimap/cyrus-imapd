@@ -111,7 +111,7 @@ static commandlist_t *build_deleteheader(sieve_script_t*, commandlist_t *c,
                                          char *name, strarray_t *values);
 static commandlist_t *build_log(sieve_script_t*, char *text);
 static commandlist_t *build_snooze(sieve_script_t *sscript,
-                                   commandlist_t *c, strarray_t *times);
+                                   commandlist_t *c, arrayu64_t *times);
 
 /* construct/canonicalize test commands */
 static test_t *build_anyof(sieve_script_t*, testlist_t *tl);
@@ -137,6 +137,7 @@ static test_t *build_duplicate(sieve_script_t*, test_t *t);
 static test_t *build_jmapquery(sieve_script_t*, test_t *t, const char *json);
 
 static int verify_weekday(sieve_script_t *sscript, char *day);
+static int verify_time(sieve_script_t *sscript, char *time);
 
 void yyerror(sieve_script_t*, const char *msg);
 extern int yylex(void*, sieve_script_t*);
@@ -162,6 +163,7 @@ extern void sieverestart(FILE *f);
 %destructor  { free_test($$);     } test
 %destructor  { strarray_free($$); } optstringlist stringlist strings string1
 %destructor  { free($$);          } STRING string
+%destructor  { arrayu64_free($$); } timelist times time1
 
 %param   { sieve_script_t *sscript }
 %pure-parser
@@ -169,6 +171,7 @@ extern void sieverestart(FILE *f);
 %union {
     int nval;
     char *sval;
+    arrayu64_t *nl;
     strarray_t *sl;
     comp_t *ctag;
     test_t *test;
@@ -337,7 +340,8 @@ extern void sieverestart(FILE *f);
 
 /* x-cyrus-snooze */
 %token SNOOZE MAILBOX ADDFLAGS REMOVEFLAGS DAYSOFWEEK
-%type <nval> weekdaylist weekdays weekday
+%type <nval> weekdaylist weekdays weekday time
+%type <nl> timelist times time1
 %type <cl> sntags
 
 
@@ -478,7 +482,7 @@ action:   KEEP ktags             { $$ = build_keep(sscript, $2); }
         | DENOTIFY dtags         { $$ = build_denotify(sscript, $2); }
         | INCLUDE itags string   { $$ = build_include(sscript, $2, $3); }
         | LOG string             { $$ = build_log(sscript, $2); }
-        | SNOOZE sntags stringlist
+        | SNOOZE sntags timelist
                                  { $$ = build_snooze(sscript, $2, $3); }
         | RETURN                 { $$ = new_command(RETURN, sscript); }
         ;
@@ -1236,6 +1240,27 @@ weekdays:  weekday
 
 
 weekday: STRING                  { $$ = verify_weekday(sscript, $1); }
+        ;
+
+
+timelist: time1
+        | '[' times ']'          { $$ = $2; }
+        ;
+
+
+times:  time1
+        | times ',' time         { $$ = $1; arrayu64_add($$, $3); }
+        ;
+
+
+time1: time                      {
+                                     $$ = arrayu64_new();
+                                     arrayu64_add($$, $1);
+                                 }
+        ;
+
+
+time: STRING                     { $$ = verify_time(sscript, $1); }
         ;
 
 
@@ -2416,13 +2441,11 @@ static int verify_weekday(sieve_script_t *sscript, char *day)
 
 static int verify_time(sieve_script_t *sscript, char *time)
 {
-    if (contains_variable(sscript, time)) return 1;
-
     unsigned n, hour = -1, minute = -1;
 
     n = sscanf(time, "%02u:%02u", &hour, &minute);
     if (n == 2 && hour < 24 && minute < 60) {
-        return 1;
+        return (60 * hour + minute);
     }
 
     sieveerror_f(sscript, "'%s': not a valid time for snooze", time);
@@ -2430,7 +2453,7 @@ static int verify_time(sieve_script_t *sscript, char *time)
 }
 
 static commandlist_t *build_snooze(sieve_script_t *sscript,
-                                   commandlist_t *c, strarray_t *times)
+                                   commandlist_t *c, arrayu64_t *times)
 {
     assert(c && c->type == SNOOZE);
 
@@ -2442,7 +2465,6 @@ static commandlist_t *build_snooze(sieve_script_t *sscript,
         strarray_add(c->u.sn.removeflags, "");
     }
     if (!c->u.sn.days) c->u.sn.days = 0x7f; /* all days */
-    verify_stringlist(sscript, times, verify_time);
     c->u.sn.times = times;
 
     return c;
