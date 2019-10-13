@@ -2737,10 +2737,19 @@ int sync_apply_mailbox(struct dlist *kin,
     r = mailbox_open_iwl(mboxname, &mailbox);
 
     // immediate bail if we have an old state to compare
-    if (!r && since_modseq &&
-         (since_modseq != mailbox->i.highestmodseq ||
-          !mailbox_crceq(since_crcs, mailbox_synccrcs(mailbox, 0))))
-        r = IMAP_SYNC_CHANGED;
+    if (!r && since_modseq) {
+        struct synccrcs mycrcs = mailbox_synccrcs(mailbox, 0);
+        if (since_modseq != mailbox->i.highestmodseq ||
+            !mailbox_crceq(since_crcs, mycrcs)) {
+            syslog(LOG_ERR, "SYNCNOTICE: mailbox sync mismatch %s "
+                            "hms (m=%llu,r=%llu) crcs (m=%u/%u,r=%u/%u)",
+                   mailbox->name,
+                   since_modseq, mailbox->i.highestmodseq,
+                   since_crcs.basic, since_crcs.annot,
+                   mycrcs.basic, mycrcs.annot);
+            r = IMAP_SYNC_CHANGED;
+        }
+    }
 
     // otherwise check version and whether we need to create
     if (!r) r = sync_mailbox_version_check(&mailbox);
