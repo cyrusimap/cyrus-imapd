@@ -233,4 +233,64 @@ sub test_shared_mailbox
     );
 }
 
+sub test_deleted_mailbox
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $usertalk = $self->{store}->get_client();
+    $usertalk->create('INBOX.foo');
+    $self->assert_str_equals('ok', $usertalk->get_last_completion_response());
+
+    $self->{store}->set_folder('INBOX.foo');
+
+    my %exp;
+    $exp{A} = $self->make_message("Message A");
+    $exp{B} = $self->make_message("Message B");
+    $exp{C} = $self->make_message("Message C");
+    $exp{D} = $self->make_message("Message D");
+
+    # XXX probably don't do this like this
+    $self->{instance}->run_command(
+        { cyrus => 1 },
+        qw(sync_client -vv -n backup -u cassandane)
+    );
+
+    # backup should contain four messages
+    my $messages = $self->cyr_backup_json({}, 'messages');
+    $self->assert_equals(4, scalar @{$messages});
+
+    my $mailboxes = $self->cyr_backup_json({}, 'mailboxes');
+	$self->assert_equals(2, scalar @{$mailboxes});
+    $self->assert_deep_equals([qw(user.cassandane user.cassandane.foo)],
+                              [ map { $_->{mboxname} } @{$mailboxes} ]);
+
+    # delete the mailbox
+    $usertalk->delete('INBOX.foo');
+    $self->assert_str_equals('ok', $usertalk->get_last_completion_response());
+
+    # XXX probably don't do this like this
+    $self->{instance}->run_command(
+        { cyrus => 1 },
+        qw(sync_client -vv -n backup -u cassandane)
+    );
+
+    $messages = $self->cyr_backup_json({}, 'messages');
+    $self->assert_equals(4, scalar @{$messages});
+
+    $mailboxes = $self->cyr_backup_json({}, 'mailboxes');
+	$self->assert_equals(2, scalar @{$mailboxes});
+    $self->assert_deep_equals([qw(user.cassandane DELETED.user.cassandane.foo)],
+                              [ map { $_->{mboxname} =~ s/\.[A-F0-9]{8}$//r }
+									@{$mailboxes} ]);
+
+	my $deleted_mboxname = $mailboxes->[1]->{mboxname};
+
+    # should be able to find the correct backup by the deleted name
+    # and see the four messages in it
+    $messages = $self->cyr_backup_json({ mailbox => $deleted_mboxname },
+                                       'messages');
+    $self->assert_equals(4, scalar @{$messages});
+}
+
 1;
