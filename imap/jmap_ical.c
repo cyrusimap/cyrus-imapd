@@ -291,24 +291,12 @@ static void xjmapid_to_ical(icalproperty *prop, const char *id)
     buf_free(&buf);
 }
 
-struct datetime {
-    int year;
-    int month; // Jan=1
-    int day;
-    int hour;
-    int minute;
-    int second;
-    bit64 nano;
-};
-
-#define JMAP_DATETIME_INITIALIZER { 0, 0, 0, 0, 0, 0, 0 };
-
-static int datetime_has_zero_time(const struct datetime *dt)
+HIDDEN int jmapical_datetime_has_zero_time(const struct jmapical_datetime *dt)
 {
     return dt->hour == 0 && dt->minute == 0 && dt->second == 0 && dt->nano == 0;
 }
 
-static struct icaltimetype datetime_to_icaldate(const struct datetime *dt)
+HIDDEN struct icaltimetype jmapical_datetime_to_icaldate(const struct jmapical_datetime *dt)
 {
     struct icaltimetype icaldt = icaltime_null_time();
     icaldt.year = dt->year;
@@ -321,8 +309,8 @@ static struct icaltimetype datetime_to_icaldate(const struct datetime *dt)
     return icaldt;
 }
 
-static icaltimetype datetime_to_icaltime(const struct datetime *dt,
-                                         const icaltimezone* zone)
+HIDDEN icaltimetype jmapical_datetime_to_icaltime(const struct jmapical_datetime *dt,
+                                                  const icaltimezone* zone)
 {
     struct icaltimetype icaldt = icaltime_null_time();
     icaldt.year = dt->year;
@@ -337,9 +325,9 @@ static icaltimetype datetime_to_icaltime(const struct datetime *dt,
 }
 
 
-static void datetime_from_icaltime(icaltimetype icaldt, struct datetime *dt)
+HIDDEN void jmapical_datetime_from_icaltime(icaltimetype icaldt, struct jmapical_datetime *dt)
 {
-    memset(dt, 0, sizeof(struct datetime));
+    memset(dt, 0, sizeof(struct jmapical_datetime));
     dt->year = icaldt.year;
     dt->month = icaldt.month;
     dt->day = icaldt.day;
@@ -348,8 +336,8 @@ static void datetime_from_icaltime(icaltimetype icaldt, struct datetime *dt)
     dt->second = icaldt.second;
 }
 
-static int compare_datetime(const struct datetime *a,
-                            const struct datetime *b)
+HIDDEN int jmapical_datetime_compare(const struct jmapical_datetime *a,
+                                     const struct jmapical_datetime *b)
 {
     if (a->year != b->year)
         return a->year > b->year ? 1 : -1;
@@ -368,7 +356,7 @@ static int compare_datetime(const struct datetime *a,
     return 0;
 }
 
-static void format_datetime(const struct datetime *dt, struct buf *dst)
+static void format_datetime(const struct jmapical_datetime *dt, struct buf *dst)
 {
     buf_reset(dst);
     buf_printf(dst, "%04d-%02d-%02dT%02d:%02d:%02d",
@@ -383,13 +371,13 @@ static void format_datetime(const struct datetime *dt, struct buf *dst)
     buf_cstring(dst);
 }
 
-static void format_localdatetime(const struct datetime *dt, struct buf *dst)
+HIDDEN void jmapical_localdatetime_as_string(const struct jmapical_datetime *dt, struct buf *dst)
 {
     format_datetime(dt, dst);
     buf_cstring(dst);
 }
 
-static void format_utcdatetime(const struct datetime *dt, struct buf *dst)
+HIDDEN void jmapical_utcdatetime_as_string(const struct jmapical_datetime *dt, struct buf *dst)
 {
     format_datetime(dt, dst);
     buf_putc(dst, 'Z');
@@ -418,7 +406,7 @@ static const char *parse_fracsec(const char *val, bit64 *nanoptr)
     else return NULL;
 }
 
-static const char *parse_datetime(const char *val, struct datetime *dt)
+static const char *parse_datetime(const char *val, struct jmapical_datetime *dt)
 {
     struct tm tm;
     memset(&tm, 0, sizeof(struct tm));
@@ -427,7 +415,7 @@ static const char *parse_datetime(const char *val, struct datetime *dt)
     const char *p = strptime(val, "%Y-%m-%dT%H:%M:%S", &tm);
     if (!p) return NULL;
 
-    memset(dt, 0, sizeof(struct datetime));
+    memset(dt, 0, sizeof(struct jmapical_datetime));
     dt->year = tm.tm_year + 1900;
     dt->month = tm.tm_mon + 1;
     dt->day = tm.tm_mday;
@@ -440,13 +428,13 @@ static const char *parse_datetime(const char *val, struct datetime *dt)
     return p;
 }
 
-static int parse_localdatetime(const char *val, struct datetime *dt)
+HIDDEN int jmapical_localdatetime_from_string(const char *val, struct jmapical_datetime *dt)
 {
     const char *p = parse_datetime(val, dt);
     return (!p || p[0] != '\0') ? -1 : 0;
 }
 
-static int parse_utcdatetime(const char *val, struct datetime *dt)
+HIDDEN int jmapical_utcdatetime_from_string(const char *val, struct jmapical_datetime *dt)
 {
     const char *p = parse_datetime(val, dt);
     return (!p || p[0] != 'Z' || p[1] != '\0') ? -1 : 0;
@@ -466,37 +454,24 @@ static void subseconds_from_icalprop(icalproperty *prop, bit64 *nanoptr)
     }
 }
 
-static int datetime_from_icalprop(icalproperty *prop, struct datetime *dt)
+HIDDEN int jmapical_datetime_from_icalprop(icalproperty *prop, struct jmapical_datetime *dt)
 {
     icaltimetype icaldt = icalvalue_get_datetimedate(icalproperty_get_value(prop));
     if (!icaltime_is_valid_time(icaldt)) return -1;
 
-    datetime_from_icaltime(icaldt, dt);
+    jmapical_datetime_from_icaltime(icaldt, dt);
     subseconds_from_icalprop(prop, &dt->nano);
 
     return 0;
 }
 
-struct duration {
-    int is_neg;
-    unsigned int days;
-    unsigned int weeks;
-    unsigned int hours;
-    unsigned int minutes;
-    unsigned int seconds;
-    bit64 nanos;
-};
-
-#define JMAP_DURATION_INITIALIZER { 0, 0, 0, 0, 0, 0, 0 }
-
-static int duration_has_zero_time(const struct duration *dur)
+HIDDEN int jmapical_duration_has_zero_time(const struct jmapical_duration *dur)
 {
     return dur->hours == 0 && dur->minutes == 0 &&
            dur->seconds == 0 && dur->nanos == 0;
 }
 
-
-static struct icaldurationtype duration_to_icalduration(const struct duration *dur)
+static struct icaldurationtype duration_to_icalduration(const struct jmapical_duration *dur)
 {
     struct icaldurationtype icaldur = icaldurationtype_null_duration();
 
@@ -510,9 +485,10 @@ static struct icaldurationtype duration_to_icalduration(const struct duration *d
     return icaldur;
 }
 
-static void duration_from_icalduration(struct icaldurationtype icaldur, struct duration *dur)
+HIDDEN void jmapical_duration_from_icalduration(struct icaldurationtype icaldur,
+                                                struct jmapical_duration *dur)
 {
-    memset(dur, 0, sizeof(struct duration));
+    memset(dur, 0, sizeof(struct jmapical_duration));
     dur->is_neg = icaldur.is_neg;
     dur->days = icaldur.days;
     dur->weeks = icaldur.weeks;
@@ -521,7 +497,9 @@ static void duration_from_icalduration(struct icaldurationtype icaldur, struct d
     dur->seconds = icaldur.seconds;
 }
 
-static void duration_between(time_t t1, bit64 t1nanos, time_t t2, bit64 t2nanos, struct duration *dur)
+HIDDEN void jmapical_duration_between(time_t t1, bit64 t1nanos,
+                                      time_t t2, bit64 t2nanos,
+                                      struct jmapical_duration *dur)
 {
     const icaltimezone *utc = icaltimezone_get_utc_timezone();
     int is_neg = t1 > t2 || (t1 == t2 && t1nanos > t2nanos);
@@ -545,11 +523,11 @@ static void duration_between(time_t t1, bit64 t1nanos, time_t t2, bit64 t2nanos,
     icaltimetype icalty = icaltime_from_timet_with_zone(ty, 0, utc);
     struct icaldurationtype icaldur = icaltime_subtract(icalty, icaltx);
     icaldur.is_neg = is_neg;
-    duration_from_icalduration(icaldur, dur);
+    jmapical_duration_from_icalduration(icaldur, dur);
     dur->nanos = nanos;
 }
 
-static int parse_duration(const char *val, struct duration *dur)
+HIDDEN int jmapical_duration_from_string(const char *val, struct jmapical_duration *dur)
 {
     bit64 nanos = 0;
     char *myval = NULL;
@@ -570,13 +548,13 @@ static int parse_duration(const char *val, struct duration *dur)
     struct icaldurationtype icaldur = icaldurationtype_from_string(val);
     free(myval);
     if (icaldurationtype_is_bad_duration(icaldur)) return -1;
-    duration_from_icalduration(icaldur, dur);
+    jmapical_duration_from_icalduration(icaldur, dur);
     dur->nanos = nanos;
 
     return 0;
 }
 
-static void format_duration(const struct duration *dur, struct buf *buf)
+HIDDEN void jmapical_duration_as_string(const struct jmapical_duration *dur, struct buf *buf)
 {
     struct icaldurationtype icaldur = duration_to_icalduration(dur);
     char *tmp = icaldurationtype_as_ical_string_r(icaldur);
@@ -930,10 +908,10 @@ recurrence_from_ical(icalcomponent *comp)
         else {
             dtuntil = icaltime_convert_to_zone(rrule.until, tz);
         }
-        struct datetime until = JMAP_DATETIME_INITIALIZER;
-        datetime_from_icaltime(dtuntil, &until);
+        struct jmapical_datetime until = JMAPICAL_DATETIME_INITIALIZER;
+        jmapical_datetime_from_icaltime(dtuntil, &until);
         struct buf buf = BUF_INITIALIZER;
-        format_localdatetime(&until, &buf);
+        jmapical_localdatetime_as_string(&until, &buf);
         json_object_set_new(recur, "until", json_string(buf_cstring(&buf)));
         buf_free(&buf);
     }
@@ -955,13 +933,13 @@ override_rdate_from_ical(icalproperty *prop)
     json_t *o = json_pack("{}");
     struct icaldatetimeperiodtype rdate = icalproperty_get_rdate(prop);
     struct buf buf = BUF_INITIALIZER;
-    struct datetime rdatedt = JMAP_DATETIME_INITIALIZER;
+    struct jmapical_datetime rdatedt = JMAPICAL_DATETIME_INITIALIZER;
 
     if (!icaltime_is_null_time(rdate.time)) {
-        datetime_from_icaltime(rdate.time, &rdatedt);
+        jmapical_datetime_from_icaltime(rdate.time, &rdatedt);
     } else {
         /* PERIOD */
-        datetime_from_icaltime(rdate.period.start, &rdatedt);
+        jmapical_datetime_from_icaltime(rdate.period.start, &rdatedt);
 
         /* Determine duration */
         struct icaldurationtype icaldur;
@@ -970,9 +948,9 @@ override_rdate_from_ical(icalproperty *prop)
         } else {
             icaldur = rdate.period.duration;
         }
-        struct duration dur = JMAP_DURATION_INITIALIZER;
-        duration_from_icalduration(icaldur, &dur);
-        format_duration(&dur, &buf);
+        struct jmapical_duration dur = JMAPICAL_DURATION_INITIALIZER;
+        jmapical_duration_from_icalduration(icaldur, &dur);
+        jmapical_duration_as_string(&dur, &buf);
         json_object_set_new(o, "duration", json_string(buf_cstring(&buf)));
         buf_reset(&buf);
     }
@@ -980,7 +958,7 @@ override_rdate_from_ical(icalproperty *prop)
     if (!icaltime_is_null_time(rdate.time) ||
         !icaltime_is_null_time(rdate.period.start)) {
         subseconds_from_icalprop(prop, &rdatedt.nano);
-        format_localdatetime(&rdatedt, &buf);
+        jmapical_localdatetime_as_string(&rdatedt, &buf);
         json_object_set_new(override, buf_cstring(&buf), o);
         buf_reset(&buf);
     }
@@ -1012,11 +990,11 @@ override_exdate_from_ical(icalproperty *prop, const char *tzid_start)
     }
 
     if (!icaltime_is_null_time(exdate)) {
-        struct datetime exdatedt = JMAP_DATETIME_INITIALIZER;
-        datetime_from_icaltime(exdate, &exdatedt);
+        struct jmapical_datetime exdatedt = JMAPICAL_DATETIME_INITIALIZER;
+        jmapical_datetime_from_icaltime(exdate, &exdatedt);
         subseconds_from_icalprop(prop, &exdatedt.nano);
         struct buf buf = BUF_INITIALIZER;
-        format_localdatetime(&exdatedt, &buf);
+        jmapical_localdatetime_as_string(&exdatedt, &buf);
         json_object_set_new(override, buf_cstring(&buf), json_pack("{s:b}", "excluded", 1));
         buf_free(&buf);
     }
@@ -1102,8 +1080,8 @@ overrides_from_ical(icalcomponent *comp, json_t *event, const char *tzid_start)
         }
 
         /* Format recurrence id */
-        struct datetime exrecurdt = JMAP_DATETIME_INITIALIZER;
-        datetime_from_icaltime(icalrecurid, &exrecurdt);
+        struct jmapical_datetime exrecurdt = JMAPICAL_DATETIME_INITIALIZER;
+        jmapical_datetime_from_icaltime(icalrecurid, &exrecurdt);
         // Set subseconds
         prop = icalcomponent_get_first_property(excomp, ICAL_RECURRENCEID_PROPERTY);
         if (prop) subseconds_from_icalprop(prop, &exrecurdt.nano);
@@ -1112,7 +1090,7 @@ overrides_from_ical(icalcomponent *comp, json_t *event, const char *tzid_start)
             if (prop) subseconds_from_icalprop(prop, &exrecurdt.nano);
         }
         struct buf buf = BUF_INITIALIZER;
-        format_localdatetime(&exrecurdt, &buf);
+        jmapical_localdatetime_as_string(&exrecurdt, &buf);
         char *recurid = buf_release(&buf);
 
         /* start */
@@ -1501,9 +1479,9 @@ static json_t *participant_from_ical(icalproperty *prop,
         icaltimetype icaltstamp = icaltime_from_string(xval);
         if (!icaltime_is_null_time(icaltstamp) && !icaltstamp.is_date &&
                 icaltstamp.zone == icaltimezone_get_utc_timezone()) {
-            struct datetime tstamp = JMAP_DATETIME_INITIALIZER;
-            datetime_from_icaltime(icaltstamp, &tstamp); // XXX subseconds
-            format_utcdatetime(&tstamp, &buf);
+            struct jmapical_datetime tstamp = JMAPICAL_DATETIME_INITIALIZER;
+            jmapical_datetime_from_icaltime(icaltstamp, &tstamp); // XXX subseconds
+            jmapical_utcdatetime_as_string(&tstamp, &buf);
             json_object_set_new(p, "scheduleUpdated", json_string(buf_cstring(&buf)));
             buf_reset(&buf);
         }
@@ -1776,8 +1754,8 @@ alerts_from_ical(icalcomponent *comp)
 
             /* Convert to offset trigger */
             json_object_set_new(jtrigger, "@type", json_string("OffsetTrigger"));
-            struct duration duration = JMAP_DURATION_INITIALIZER;
-            duration_from_icalduration(trigger.duration, &duration);
+            struct jmapical_duration duration = JMAPICAL_DURATION_INITIALIZER;
+            jmapical_duration_from_icalduration(trigger.duration, &duration);
             subseconds_from_icalprop(triggerprop, &duration.nanos);
 
             /* relativeTo */
@@ -1785,16 +1763,16 @@ alerts_from_ical(icalcomponent *comp)
             json_object_set_new(jtrigger, "relativeTo", json_string(relative_to));
 
             /* offset*/
-            format_duration(&duration, &buf);
+            jmapical_duration_as_string(&duration, &buf);
             json_object_set_new(jtrigger, "offset", json_string(buf_cstring(&buf)));
             buf_reset(&buf);
         } else {
             /* Convert to absolute trigger */
             json_object_set_new(jtrigger, "@type", json_string("AbsoluteTrigger"));
 
-            struct datetime when = JMAP_DATETIME_INITIALIZER;
-            datetime_from_icalprop(triggerprop, &when);
-            format_utcdatetime(&when, &buf);
+            struct jmapical_datetime when = JMAPICAL_DATETIME_INITIALIZER;
+            jmapical_datetime_from_icalprop(triggerprop, &when);
+            jmapical_utcdatetime_as_string(&when, &buf);
 
             /* when */
             json_object_set_new(jtrigger, "when", json_string(buf_cstring(&buf)));
@@ -1811,9 +1789,9 @@ alerts_from_ical(icalcomponent *comp)
 
         /* acknowledged */
         if ((prop = icalcomponent_get_acknowledged_property(alarm))) {
-			struct datetime tstamp = JMAP_DATETIME_INITIALIZER;
-			datetime_from_icalprop(prop, &tstamp);
-			format_utcdatetime(&tstamp, &buf);
+			struct jmapical_datetime tstamp = JMAPICAL_DATETIME_INITIALIZER;
+			jmapical_datetime_from_icalprop(prop, &tstamp);
+			jmapical_utcdatetime_as_string(&tstamp, &buf);
 			json_t *jval = json_string(buf_cstring(&buf));
 			buf_reset(&buf);
 			json_object_set_new(alert, "acknowledged", jval);
@@ -2105,7 +2083,7 @@ virtuallocations_from_ical(icalcomponent *comp)
     return locations;
 }
 
-static void duration_from_vevent(icalcomponent *comp, struct duration *dur)
+static void duration_from_vevent(icalcomponent *comp, struct jmapical_duration *dur)
 {
     struct icaldurationtype icaldur = icaldurationtype_null_duration();
     struct icaltimetype dtstart = dtstart_from_ical(comp);
@@ -2124,8 +2102,8 @@ static void duration_from_vevent(icalcomponent *comp, struct duration *dur)
             if ((prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))) {
                 subseconds_from_icalprop(prop, &startnanos);
             }
-            struct duration utcduration = JMAP_DURATION_INITIALIZER;
-            duration_between(tstart, startnanos, tend, endnanos, &utcduration);
+            struct jmapical_duration utcduration = JMAPICAL_DURATION_INITIALIZER;
+            jmapical_duration_between(tstart, startnanos, tend, endnanos, &utcduration);
             icaldur = duration_to_icalduration(&utcduration);
             nanos = utcduration.nanos;
         }
@@ -2139,7 +2117,7 @@ static void duration_from_vevent(icalcomponent *comp, struct duration *dur)
         }
     }
 
-    duration_from_icalduration(icaldur, dur);
+    jmapical_duration_from_icalduration(icaldur, dur);
     dur->nanos = nanos;
 }
 
@@ -2193,11 +2171,11 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
 
     /* start */
     if (jmap_wantprop(props, "start")) {
-        struct datetime start = JMAP_DATETIME_INITIALIZER;
+        struct jmapical_datetime start = JMAPICAL_DATETIME_INITIALIZER;
         if ((prop = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY))) {
-            datetime_from_icalprop(prop, &start);
+            jmapical_datetime_from_icalprop(prop, &start);
         }
-        format_localdatetime(&start, &buf);
+        jmapical_localdatetime_as_string(&start, &buf);
         json_object_set_new(event, "start", json_string(buf_cstring(&buf)));
         buf_reset(&buf);
     }
@@ -2210,9 +2188,9 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
 
     /* duration */
     if (jmap_wantprop(props, "duration")) {
-        struct duration dur = JMAP_DURATION_INITIALIZER;
+        struct jmapical_duration dur = JMAPICAL_DURATION_INITIALIZER;
         duration_from_vevent(comp, &dur);
-        format_duration(&dur, &buf);
+        jmapical_duration_as_string(&dur, &buf);
         json_object_set_new(event, "duration", json_string(buf_cstring(&buf)));
         buf_reset(&buf);
     }
@@ -2253,10 +2231,10 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
 
     /* created */
     if (jmap_wantprop(props, "created")) {
-        struct datetime created = JMAP_DATETIME_INITIALIZER;
+        struct jmapical_datetime created = JMAPICAL_DATETIME_INITIALIZER;
         if ((prop = icalcomponent_get_first_property(comp, ICAL_CREATED_PROPERTY))) {
-            datetime_from_icalprop(prop, &created);
-            format_utcdatetime(&created, &buf);
+            jmapical_datetime_from_icalprop(prop, &created);
+            jmapical_utcdatetime_as_string(&created, &buf);
             json_t *jval = json_string(buf_cstring(&buf));
             buf_reset(&buf);
             json_object_set_new(event, "created", jval);
@@ -2265,10 +2243,10 @@ calendarevent_from_ical(icalcomponent *comp, hash_table *props, icalcomponent *m
 
     /* updated */
     if (jmap_wantprop(props, "updated")) {
-        struct datetime updated = JMAP_DATETIME_INITIALIZER;
+        struct jmapical_datetime updated = JMAPICAL_DATETIME_INITIALIZER;
         if ((prop = icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY))) {
-            datetime_from_icalprop(prop, &updated);
-            format_utcdatetime(&updated, &buf);
+            jmapical_datetime_from_icalprop(prop, &updated);
+            jmapical_utcdatetime_as_string(&updated, &buf);
             json_t* jval = json_string(buf_cstring(&buf));
             buf_reset(&buf);
             json_object_set_new(event, "updated", jval);
@@ -2679,10 +2657,10 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     }
 
     /* Read duration */
-    struct duration dur = JMAP_DURATION_INITIALIZER;
+    struct jmapical_duration dur = JMAPICAL_DURATION_INITIALIZER;
     jprop = json_object_get(event, "duration");
     if (json_is_string(jprop)) {
-        if (parse_duration(json_string_value(jprop), &dur) < 0) {
+        if (jmapical_duration_from_string(json_string_value(jprop), &dur) < 0) {
             jmap_parser_invalid(parser, "duration");
         }
     } else if (JNOTNULL(jprop)) {
@@ -2690,10 +2668,10 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     }
 
     /* Read start */
-    struct datetime start = JMAP_DATETIME_INITIALIZER;
+    struct jmapical_datetime start = JMAPICAL_DATETIME_INITIALIZER;
     jprop = json_object_get(event, "start");
     if (json_is_string(jprop)) {
-        if (parse_localdatetime(json_string_value(jprop), &start) < 0) {
+        if (jmapical_localdatetime_from_string(json_string_value(jprop), &start) < 0) {
             jmap_parser_invalid(parser, "start");
         }
     } else {
@@ -2711,7 +2689,8 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
 
     /* Add DTSTART */
     int is_date = 0;
-    if (!tzstart && !tzend && datetime_has_zero_time(&start) && duration_has_zero_time(&dur)) {
+    if (!tzstart && !tzend && jmapical_datetime_has_zero_time(&start) &&
+            jmapical_duration_has_zero_time(&dur)) {
         /* Determine if to store DTSTART as DATE type */
         is_date = 1;
         /* Check recurrence frequency */
@@ -2729,9 +2708,9 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
                 const char *recuridval;
                 json_t *jval;
                 json_object_foreach(joverrides, recuridval, jval) {
-                    struct datetime recurid = JMAP_DATETIME_INITIALIZER;
-                    if ((parse_localdatetime(recuridval, &recurid) >= 0) &&
-                            !datetime_has_zero_time(&recurid)) {
+                    struct jmapical_datetime recurid = JMAPICAL_DATETIME_INITIALIZER;
+                    if ((jmapical_localdatetime_from_string(recuridval, &recurid) >= 0) &&
+                            !jmapical_datetime_has_zero_time(&recurid)) {
                         is_date = 0;
                         break;
                     }
@@ -2745,8 +2724,8 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     }
 
     struct icaltimetype dtstart = is_date ?
-        datetime_to_icaldate(&start) :
-        datetime_to_icaltime(&start, tzstart);
+        jmapical_datetime_to_icaldate(&start) :
+        jmapical_datetime_to_icaltime(&start, tzstart);
     insert_icaltimeprop(comp, dtstart, start.nano, 1, ICAL_DTSTART_PROPERTY);
     if (tzstart != tzend) {
         /* Add DTEND */
@@ -3250,9 +3229,9 @@ participant_to_ical(icalcomponent *comp,
     /* scheduleUpdated */
     json_t *scheduleUpdated = json_object_get(jpart, "scheduleUpdated");
     if (json_is_string(scheduleUpdated)) {
-        struct datetime tstamp = JMAP_DATETIME_INITIALIZER;
-        if (parse_utcdatetime(json_string_value(scheduleUpdated), &tstamp) >= 0) {
-            icaltimetype icaltstamp = datetime_to_icaltime(&tstamp, utc);
+        struct jmapical_datetime tstamp = JMAPICAL_DATETIME_INITIALIZER;
+        if (jmapical_utcdatetime_from_string(json_string_value(scheduleUpdated), &tstamp) >= 0) {
+            icaltimetype icaltstamp = jmapical_datetime_to_icaltime(&tstamp, utc);
             char *tmp = icaltime_as_ical_string_r(icaltstamp);
             set_icalxparam(prop, JMAPICAL_XPARAM_DTSTAMP, tmp, 0);
             free(tmp);
@@ -3676,10 +3655,10 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
                 jmap_parser_push(parser, "trigger");
 
                 /* offset */
-                struct duration offset = JMAP_DURATION_INITIALIZER;
+                struct jmapical_duration offset = JMAPICAL_DURATION_INITIALIZER;
                 json_t *joffset = json_object_get(jtrigger, "offset");
                 if (json_is_string(joffset)) {
-                    if (parse_duration(json_string_value(joffset), &offset) < 0) {
+                    if (jmapical_duration_from_string(json_string_value(joffset), &offset) < 0) {
                         jmap_parser_invalid(parser, "offset");
                     }
                 } else {
@@ -3716,12 +3695,12 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
                 jmap_parser_push(parser, "trigger");
 
                 json_t *jwhen = json_object_get(jtrigger, "when");
-                struct datetime when = JMAP_DATETIME_INITIALIZER;
+                struct jmapical_datetime when = JMAPICAL_DATETIME_INITIALIZER;
                 if (json_is_string(jwhen) &&
-                    parse_utcdatetime(json_string_value(jwhen), &when) >= 0) {
+                    jmapical_utcdatetime_from_string(json_string_value(jwhen), &when) >= 0) {
 
                     /* Add absolute trigger */
-                    trigger.time = datetime_to_icaltime(&when, utc);
+                    trigger.time = jmapical_datetime_to_icaltime(&when, utc);
                     prop = icalproperty_new_trigger(trigger);
                     subseconds_to_icalprop(prop, when.nano);
                     icalcomponent_add_property(alarm, prop);
@@ -3739,9 +3718,9 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
         /* acknowledged */
         json_t *jacknowledged = json_object_get(alert, "acknowledged");
         if (json_is_string(jacknowledged)) {
-            struct datetime acktime = JMAP_DATETIME_INITIALIZER;
-            if (parse_utcdatetime(json_string_value(jacknowledged), &acktime) >= 0) {
-                prop = icalproperty_new_acknowledged(datetime_to_icaltime(&acktime, utc));
+            struct jmapical_datetime acktime = JMAPICAL_DATETIME_INITIALIZER;
+            if (jmapical_utcdatetime_from_string(json_string_value(jacknowledged), &acktime) >= 0) {
+                prop = icalproperty_new_acknowledged(jmapical_datetime_to_icaltime(&acktime, utc));
                 subseconds_to_icalprop(prop, acktime.nano);
                 icalcomponent_add_property(alarm, prop);
             } else {
@@ -4072,18 +4051,18 @@ recurrence_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrul
     /* until */
     jprop = json_object_get(rrule, "until");
     if (json_is_string(jprop)) {
-        struct datetime until = JMAP_DATETIME_INITIALIZER;
-        if (parse_localdatetime(json_string_value(jprop), &until) >= 0) {
+        struct jmapical_datetime until = JMAPICAL_DATETIME_INITIALIZER;
+        if (jmapical_localdatetime_from_string(json_string_value(jprop), &until) >= 0) {
             int is_date = icalcomponent_get_dtstart(comp).is_date;
             icaltimezone *tzstart = tz_from_tzid(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
             icaltimetype untilutc;
             /* XXX we don't set SUBSECOND on RRULEs, because clients such
              * as iOS reject the whole RRULE for unknown rrule fields */
             if (is_date) {
-                untilutc = datetime_to_icaldate(&until);
+                untilutc = jmapical_datetime_to_icaldate(&until);
             }
             else {
-                icaltimetype untillocal = datetime_to_icaltime(&until, tzstart);
+                icaltimetype untillocal = jmapical_datetime_to_icaltime(&until, tzstart);
                 icaltimezone *utc = icaltimezone_get_utc_timezone();
                 untilutc = icaltime_convert_to_zone(untillocal, utc);
             }
@@ -4471,13 +4450,13 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
     json_t *joverride;
     const char *recuridval;
     json_object_foreach(overrides, recuridval, joverride) {
-        struct datetime recurid = JMAP_DATETIME_INITIALIZER;
+        struct jmapical_datetime recurid = JMAPICAL_DATETIME_INITIALIZER;
 
-        if (parse_localdatetime(recuridval, &recurid) < 0) {
+        if (jmapical_localdatetime_from_string(recuridval, &recurid) < 0) {
             jmap_parser_invalid(parser, recuridval);
             continue;
         }
-        else if (is_date && !datetime_has_zero_time(&recurid)) {
+        else if (is_date && !jmapical_datetime_has_zero_time(&recurid)) {
             jmap_parser_invalid(parser, recuridval);
             continue;
         }
@@ -4487,8 +4466,8 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
             if (json_object_size(joverride) == 1) {
                 /* Add EXDATE */
                 struct icaltimetype exdate = is_date ?
-                    datetime_to_icaldate(&recurid) :
-                    datetime_to_icaltime(&recurid, tzstart);
+                    jmapical_datetime_to_icaldate(&recurid) :
+                    jmapical_datetime_to_icaltime(&recurid, tzstart);
                 insert_icaltimeprop(comp, exdate, recurid.nano, 0, ICAL_EXDATE_PROPERTY);
             }
             else {
@@ -4498,8 +4477,8 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
         } else if (!json_object_size(joverride)) {
             /* Add RDATE */
             struct icaltimetype rdate = is_date ?
-                datetime_to_icaldate(&recurid) :
-                datetime_to_icaltime(&recurid, tzstart);
+                jmapical_datetime_to_icaldate(&recurid) :
+                jmapical_datetime_to_icaltime(&recurid, tzstart);
             insert_icaltimeprop(comp, rdate, recurid.nano, 0, ICAL_RDATE_PROPERTY);
         } else {
             /* Add VEVENT exception */
@@ -4546,8 +4525,8 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
             /* Create a new VEVENT for this override */
             excomp = icalcomponent_new_vevent();
             struct icaltimetype icalrecurid = is_date ?
-                datetime_to_icaldate(&recurid) :
-                datetime_to_icaltime(&recurid, tzstart);
+                jmapical_datetime_to_icaldate(&recurid) :
+                jmapical_datetime_to_icaltime(&recurid, tzstart);
             insert_icaltimeprop(excomp, icalrecurid, recurid.nano, 1, ICAL_RECURRENCEID_PROPERTY);
             icalcomponent_set_uid(excomp, icalcomponent_get_uid(comp));
 
@@ -4557,9 +4536,9 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
             json_t *jrecurrenceId = json_object_get(myoverride, "recurrenceId");
             if (json_is_string(jrecurrenceId)) {
                 const char *val = json_string_value(jrecurrenceId);
-                struct datetime dt = JMAP_DATETIME_INITIALIZER;
-                if (parse_localdatetime(val, &dt) < 0 ||
-                    compare_datetime(&dt, &recurid) != 0) {
+                struct jmapical_datetime dt = JMAPICAL_DATETIME_INITIALIZER;
+                if (jmapical_localdatetime_from_string(val, &dt) < 0 ||
+                    jmapical_datetime_compare(&dt, &recurid) != 0) {
                     jmap_parser_invalid(parser, "recurrenceId");
                 }
             }
@@ -4670,9 +4649,9 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     /* created */
     jprop = json_object_get(event, "created");
     if (json_is_string(jprop)) {
-        struct datetime tstamp = JMAP_DATETIME_INITIALIZER;
-        if (parse_utcdatetime(json_string_value(jprop), &tstamp) >= 0) {
-            icaltimetype dt = datetime_to_icaltime(&tstamp, utc);
+        struct jmapical_datetime tstamp = JMAPICAL_DATETIME_INITIALIZER;
+        if (jmapical_utcdatetime_from_string(json_string_value(jprop), &tstamp) >= 0) {
+            icaltimetype dt = jmapical_datetime_to_icaltime(&tstamp, utc);
             insert_icaltimeprop(comp, dt, tstamp.nano, 1, ICAL_CREATED_PROPERTY);
         }
         else {
@@ -4685,9 +4664,9 @@ calendarevent_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *e
     /* updated */
     jprop = json_object_get(event, "updated");
     if (json_is_string(jprop)) {
-        struct datetime tstamp = JMAP_DATETIME_INITIALIZER;
-        if (parse_utcdatetime(json_string_value(jprop), &tstamp) >= 0) {
-            icaltimetype dt = datetime_to_icaltime(&tstamp, utc);
+        struct jmapical_datetime tstamp = JMAPICAL_DATETIME_INITIALIZER;
+        if (jmapical_utcdatetime_from_string(json_string_value(jprop), &tstamp) >= 0) {
+            icaltimetype dt = jmapical_datetime_to_icaltime(&tstamp, utc);
             insert_icaltimeprop(comp, dt, tstamp.nano, 1, ICAL_DTSTAMP_PROPERTY);
         }
         else {
@@ -5033,7 +5012,3 @@ EXPORTED icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf)
 
     return ical;
 }
-
-#undef JMAP_DURATION_INITIALIZER
-#undef JMAP_DATETIME_INITIALIZER
-

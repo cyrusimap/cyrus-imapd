@@ -104,6 +104,76 @@ void icalcomponent_add_required_timezones(icalcomponent *ical);
 struct buf *icalcomponent_as_jevent_string(icalcomponent *ical);
 icalcomponent *jevent_string_as_icalcomponent(const struct buf *buf);
 
+/* Base type for JSCalendar LocalDateTime and UTCDateTime */
+
+struct jmapical_datetime {
+    int year;
+    int month; // Jan=1
+    int day;
+    int hour;
+    int minute;
+    int second;
+    bit64 nano;
+};
+
+#define JMAPICAL_DATETIME_INITIALIZER { 0, 0, 0, 0, 0, 0, 0 };
+
+/* True if all components are zero */
+extern int jmapical_datetime_has_zero_time(const struct jmapical_datetime *dt);
+
+/* Convert DateTime to ical date, truncating time components */
+extern struct icaltimetype jmapical_datetime_to_icaldate(const struct jmapical_datetime *dt);
+
+/* Convert DateTime to ical time, truncating subseconds */
+extern icaltimetype jmapical_datetime_to_icaltime(const struct jmapical_datetime *dt,
+                                                  const icaltimezone* zone);
+
+/* Convert ical time to DateTime with zero subseconds  */
+extern void jmapical_datetime_from_icaltime(icaltimetype icaldt, struct jmapical_datetime *dt);
+
+/* Compare DateTime a and b, using semantics suitable for qsort */
+extern int jmapical_datetime_compare(const struct jmapical_datetime *a,
+                                     const struct jmapical_datetime *b);
+
+/* Convert icaltime value and subseconds parameter to DateTime */
+extern int jmapical_datetime_from_icalprop(icalproperty *prop, struct jmapical_datetime *dt);
+
+/* JSCalendar LocalDateTime */
+extern void jmapical_localdatetime_as_string(const struct jmapical_datetime *dt, struct buf *dst);
+extern int jmapical_localdatetime_from_string(const char *val, struct jmapical_datetime *dt);
+
+/* JSCalendar UTCDateTime */
+extern void jmapical_utcdatetime_as_string(const struct jmapical_datetime *dt, struct buf *dst);
+extern int jmapical_utcdatetime_from_string(const char *val, struct jmapical_datetime *dt);
+
+/* JSCalendar Duration */
+
+struct jmapical_duration {
+    int is_neg;
+    unsigned int days;
+    unsigned int weeks;
+    unsigned int hours;
+    unsigned int minutes;
+    unsigned int seconds;
+    bit64 nanos;
+};
+
+#define JMAPICAL_DURATION_INITIALIZER { 0, 0, 0, 0, 0, 0, 0 }
+
+/* True if all components are zero */
+extern int jmapical_duration_has_zero_time(const struct jmapical_duration *dur);
+
+/* Convert ical duration to Duration with zero subseconds */
+extern void jmapical_duration_from_icalduration(struct icaldurationtype icaldur,
+                                                struct jmapical_duration *dur);
+
+/* Calculate time-range between t1 and t2 into Duration dur */
+extern void jmapical_duration_between(time_t t1, bit64 t1nanos,
+                                      time_t t2, bit64 t2nanos,
+                                      struct jmapical_duration *dur);
+
+extern void jmapical_duration_as_string(const struct jmapical_duration *dur, struct buf *buf);
+extern int jmapical_duration_from_string(const char *val, struct jmapical_duration *dur);
 
 #ifdef __cplusplus
 }
