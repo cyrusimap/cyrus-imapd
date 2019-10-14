@@ -153,8 +153,13 @@ EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 
 EXPORTED void *hash_lookup(const char *key, hash_table *table)
 {
-      unsigned val = strhash(key) % table->size;
+      unsigned val;
       bucket *ptr;
+
+      if (!table->size)
+          return NULL;
+
+      val = strhash(key) % table->size;
 
       if (!(table->table)[val])
             return NULL;
