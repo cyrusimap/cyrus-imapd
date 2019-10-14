@@ -460,7 +460,7 @@ static struct open_backup *open_backups_list_add(struct open_backups_list *list,
     list->head = open;
     list->count++;
 
-    open->name = xstrdup(name);
+    open->name = xstrdupnull(name);
     open->backup = backup;
     open->timestamp = time(0);
 
@@ -479,7 +479,7 @@ static struct open_backup *open_backups_list_find(struct open_backups_list *list
     struct open_backup *open;
 
     for (open = list->head; open; open = open->next) {
-        if (strcmp(name, open->name) == 0)
+        if (strcmpnull(name, open->name) == 0)
             return open;
     }
 
@@ -991,6 +991,44 @@ done:
     return r;
 }
 
+static int reserve_one(const mbname_t *mbname,
+                       struct dlist *dl, struct dlist *gl,
+                       struct sync_msgid_list *missing)
+{
+    struct open_backup *open = NULL;
+    struct dlist *di;
+    int r;
+
+    r = backupd_open_backup(&open, mbname);
+    if (r) return r;
+
+    r = backup_append(open->backup, dl, NULL, BACKUP_APPEND_FLUSH);
+    if (r) return r;
+
+    for (di = gl->head; di; di = di->next) {
+        struct message_guid *guid = NULL;
+        const char *guid_str;
+
+        if (!dlist_toguid(di, &guid)) continue;
+        guid_str = message_guid_encode(guid);
+
+        int message_id = backup_get_message_id(open->backup, guid_str);
+
+        if (message_id <= 0) {
+            syslog(LOG_DEBUG, "%s: %s wants message %s",
+                              __func__, mbname_intname(mbname), guid_str);
+
+            /* add it to the reserved guids list */
+            sync_msgid_insert(open->reserved_guids, guid);
+
+            /* add it to the missing list */
+            sync_msgid_insert(missing, guid);
+        }
+    }
+
+    return 0;
+}
+
 static int cmd_apply_reserve(struct dlist *dl)
 {
     const char *partition = NULL;
@@ -998,6 +1036,7 @@ static int cmd_apply_reserve(struct dlist *dl)
     struct dlist *gl = NULL;
     struct dlist *di;
     strarray_t userids = STRARRAY_INITIALIZER;
+    mbname_t *shared_mbname = NULL;
     int i, r;
 
     if (!dlist_getatom(dl, "PARTITION", &partition)) return IMAP_PROTOCOL_ERROR;
@@ -1007,8 +1046,16 @@ static int cmd_apply_reserve(struct dlist *dl)
     /* find the list of users this reserve applies to */
     for (di = ml->head; di; di = di->next) {
         mbname_t *mbname = mbname_from_intname(di->sval);
-        strarray_append(&userids, mbname_userid(mbname));
-        mbname_free(&mbname);
+        if (mbname_userid(mbname)) {
+            strarray_append(&userids, mbname_userid(mbname));
+            mbname_free(&mbname);
+        }
+        else if (!shared_mbname) {
+            shared_mbname = mbname;
+        }
+        else {
+            mbname_free(&mbname);
+        }
     }
     strarray_sort(&userids, cmpstringp_raw);
     strarray_uniq(&userids);
@@ -1018,37 +1065,17 @@ static int cmd_apply_reserve(struct dlist *dl)
 
     /* log the entire reserve to all relevant backups, and accumulate missing list */
     for (i = 0; i < strarray_size(&userids); i++) {
-        struct open_backup *open = NULL;
         mbname_t *mbname = mbname_from_userid(strarray_nth(&userids, i));
-        r = backupd_open_backup(&open, mbname);
+        r = reserve_one(mbname, dl, gl, missing);
         mbname_free(&mbname);
 
         if (r) goto done;
+    }
 
-        r = backup_append(open->backup, dl, NULL, BACKUP_APPEND_FLUSH);
+    /* and the shared mailboxes backup, if there were any */
+    if (shared_mbname) {
+        r = reserve_one(shared_mbname, dl, gl, missing);
         if (r) goto done;
-
-        for (di = gl->head; di; di = di->next) {
-            struct message_guid *guid = NULL;
-            const char *guid_str;
-
-            if (!dlist_toguid(di, &guid)) continue;
-            guid_str = message_guid_encode(guid);
-
-            int message_id = backup_get_message_id(open->backup, guid_str);
-
-            if (message_id <= 0) {
-                syslog(LOG_DEBUG,
-                       "%s: %s wants message %s",
-                       __func__, strarray_nth(&userids, i), guid_str);
-
-                /* add it to the reserved guids list */
-                sync_msgid_insert(open->reserved_guids, guid);
-
-                /* add it to the missing list */
-                sync_msgid_insert(missing, guid);
-            }
-        }
     }
 
     if (missing->head) {
@@ -1066,6 +1093,7 @@ static int cmd_apply_reserve(struct dlist *dl)
     }
 
 done:
+    mbname_free(&shared_mbname);
     strarray_fini(&userids);
     sync_msgid_list_free(&missing);
     return r;
@@ -1083,7 +1111,7 @@ static int cmd_apply_rename(struct dlist *dl)
     mbname_t *old = mbname_from_intname(old_mboxname);
     mbname_t *new = mbname_from_intname(old_mboxname);
 
-    if (strcmp(mbname_userid(old), mbname_userid(new)) == 0) {
+    if (strcmpnull(mbname_userid(old), mbname_userid(new)) == 0) {
         // same user, unremarkable folder rename *whew*
         struct open_backup *open = NULL;
         r = backupd_open_backup(&open, old);
@@ -1435,9 +1463,9 @@ static int is_mailboxes_single_user(struct dlist *dl)
         mbname_t *mbname = mbname_from_intname(di->sval);
 
         if (!userid) {
-            userid = xstrdup(mbname_userid(mbname));
+            userid = xstrdupnull(mbname_userid(mbname));
         }
-        else if (strcmp(userid, mbname_userid(mbname)) != 0) {
+        else if (strcmpnull(userid, mbname_userid(mbname)) != 0) {
             mbname_free(&mbname);
             free(userid);
             return 0;
@@ -1447,6 +1475,7 @@ static int is_mailboxes_single_user(struct dlist *dl)
     }
 
     free(userid);
+    /* also returns 1 if all mailboxes belong to no user (shared)*/
     return 1;
 }
 

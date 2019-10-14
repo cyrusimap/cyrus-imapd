@@ -71,6 +71,8 @@
 #include "backup/lcb_internal.h"
 #include "backup/lcb_sqlconsts.h"
 
+static const char *NOUSERID = "\%SHARED";
+
 /* remove this process's staging directory.
  * will warn about and clean up files that are hanging around - these should
  * be removed by dlist_unlink_files but may be missed if we're shutdown by a
@@ -299,6 +301,8 @@ static const char *_make_path(const mbname_t *mbname, int *out_fd)
     const char *partition = partlist_backup_select();
     const char *ret = NULL;
 
+    if (!userid) userid = NOUSERID;
+
     if (!partition) {
         syslog(LOG_ERR,
                "unable to make backup path for %s: "
@@ -370,6 +374,8 @@ EXPORTED int backup_get_paths(const mbname_t *mbname,
     const char *userid = mbname_userid(mbname);
     const char *backup_path = NULL;
     size_t path_len = 0;
+
+    if (!userid) userid = NOUSERID;
 
     r = cyrusdb_fetch(backups_db,
                       userid, strlen(userid),
@@ -700,6 +706,9 @@ EXPORTED int backup_rename(const mbname_t *old_mbname, const mbname_t *new_mbnam
     const char *path;
     size_t path_len;
     int r;
+
+    if (!old.userid) old.userid = NOUSERID;
+    if (!new.userid) new.userid = NOUSERID;
 
     /* bail out if the names are the same */
     if (strcmp(old.userid, new.userid) == 0)
