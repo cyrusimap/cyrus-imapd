@@ -53,7 +53,7 @@ $Data::Dumper::Sortkeys = 1;
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({ backups => 1 }, @_);
+    return $class->SUPER::new({ backups => 1, adminstore => 1 }, @_);
 }
 
 sub set_up
@@ -79,17 +79,28 @@ sub cyr_backup_json
 
     my $instance = $params->{instance} // $self->{backups};
     my $user = $params->{user} // 'cassandane';
+    my $mailbox = $params->{mailbox};
 
     my $out = "$instance->{basedir}/$self->{_name}"
           . "-cyr_backup-$user-json-$subcommand.stdout";
     my $err = "$instance->{basedir}/$self->{_name}"
           . "-cyr_backup-$user-json-$subcommand.stderr";
 
+    my ($mode, $backup);
+    if (defined $mailbox) {
+        $mode = '-m';
+        $backup = $mailbox;
+    }
+    else {
+        $mode = '-u';
+        $backup = $user;
+    }
+
     $instance->run_command(
         { cyrus => 1,
           redirects => { 'stdout' => $out,
                          'stderr' => $err } },
-        'cyr_backup', '-u', $user, 'json', $subcommand, @args
+        'cyr_backup', $mode, $backup, 'json', $subcommand, @args
     );
 
     local $/;
@@ -167,6 +178,59 @@ sub test_messages
     } keys %{$headers};
 
     $self->assert_deep_equals(\%expected, \%actual);
+}
+
+sub test_shared_mailbox
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create('shared.folder');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setacl('shared.folder', 'cassandane' => 'lrswipkxtecdn');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $self->{store}->set_folder('shared.folder');
+    my %exp;
+    $exp{A} = $self->make_message("Message A");
+    $exp{B} = $self->make_message("Message B");
+    $exp{C} = $self->make_message("Message C");
+    $exp{D} = $self->make_message("Message D");
+
+    # XXX probably don't do this like this
+    $self->{instance}->run_command(
+        { cyrus => 1 },
+        qw(sync_client -vv -n backup -m shared.folder)
+    );
+
+    my $messages = $self->cyr_backup_json({ mailbox => 'shared.folder'},
+                                          'messages');
+
+    # backup should contain four messages
+    $self->assert_equals(4, scalar @{$messages});
+
+    my $headers = $self->cyr_backup_json({ mailbox => 'shared.folder' },
+                                         'headers',
+                                         map { $_->{guid} } @{$messages});
+
+    # transform out enough data for comparison purposes
+    my %expected = map {
+        $_->get_guid() => $_->get_header('X-Cassandane-Unique')
+    } values %exp;
+
+    my %actual = map {
+        $_ => $headers->{$_}->{'X-Cassandane-Unique'}->[0]
+    } keys %{$headers};
+
+    $self->assert_deep_equals(\%expected, \%actual);
+
+    # XXX probably don't do this like this
+    $self->{backups}->run_command(
+        { cyrus => 1 },
+        qw(ctl_backups -S -vvv verify -m shared.folder)
+    );
 }
 
 1;
