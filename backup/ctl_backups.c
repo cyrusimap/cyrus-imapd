@@ -527,7 +527,9 @@ int main(int argc, char **argv)
                     mbname_free(&mbname);
                     continue;
                 }
-                buf_setcstr(&userid, mbname_userid(mbname));
+                if (mbname_userid(mbname)) {
+                    buf_setcstr(&userid, mbname_userid(mbname));
+                }
             }
             else
                 buf_setcstr(&fname, argv[i]);
