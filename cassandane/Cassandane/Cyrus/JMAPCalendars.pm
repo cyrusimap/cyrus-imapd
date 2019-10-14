@@ -5982,12 +5982,20 @@ sub test_calendarevent_query_expandrecurrences
                     title => "event1",
                     description => "",
                     freeBusyStatus => "busy",
-                    start => "2019-01-01T09:00:00",
+                    start => "2019-01-01T09:00:00.123",
                     timeZone => "Europe/Vienna",
                     duration => "PT1H",
                     recurrenceRule => {
                         frequency => 'weekly',
                         count => 3,
+                    },
+                    recurrenceOverrides => {
+                        '2019-01-08T09:00:00.123' => {
+                            start => '2019-01-08T12:00:00.456',
+                        },
+                        '2019-01-03T13:00:00.789' => {
+                            title => 'rdate',
+                        },
                     },
                 },
                 "2" => {
@@ -6019,12 +6027,13 @@ sub test_calendarevent_query_expandrecurrences
             expandRecurrences => JSON::true,
         }, 'R1']
     ]);
-    $self->assert_num_equals(4, $res->[0][1]{total});
+    $self->assert_num_equals(5, $res->[0][1]{total});
     $self->assert_deep_equals([
-            'event1uid@local;20190115T090000',
-            'event1uid@local;20190108T090000',
+            'event1uid@local;2019-01-15T09:00:00.123',
+            'event1uid@local;2019-01-08T09:00:00.123',
+            'event1uid@local;2019-01-03T13:00:00.789',
             'event2uid@local',
-            'event1uid@local;20190101T090000',
+            'event1uid@local;2019-01-01T09:00:00.123',
     ], $res->[0][1]{ids});
 }
 
