@@ -1512,6 +1512,9 @@ EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
  * Apply site policy restrictions on mailbox names.
  * Restrictions are hardwired for now.
  * NOTE: '^' is '.' externally in unixhs, and invalid in unixhs
+ *
+ * The set of printable chars that are not in GOODCHARS are:
+ *    !"%&/;<>\`{|}
  */
 #define GOODCHARS " #$'()*+,-.0123456789:=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz~"
 HIDDEN int mboxname_policycheck(const char *name)
