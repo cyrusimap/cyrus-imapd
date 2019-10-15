@@ -1970,6 +1970,166 @@ EOF
     $self->assert_str_equals($names, "Manifold Calendar/personal");
 }
 
+sub test_alarm_peruser
+    :MagicPlus :min_version_3_0 :needs_component_httpd
+{
+    my ($self) = @_;
+
+    my $CalDAV = $self->{caldav};
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.manifold");
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    my $service = $self->{instance}->get_service("http");
+    my $mantalk = Net::CalDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $invite = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<D:share-resource xmlns:D="DAV:">
+  <D:sharee>
+    <D:href>mailto:cassandane\@example.com</D:href>
+    <D:prop>
+      <D:displayname>Cassandane</D:displayname>
+    </D:prop>
+    <D:comment>Shared calendar</D:comment>
+    <D:share-access>
+      <D:read-write />
+    </D:share-access>
+  </D:sharee>
+</D:share-resource>
+EOF
+
+    my $reply = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<D:invite-reply xmlns:D="DAV:">
+  <D:invite-accepted />
+  <D:create-in>
+    <D:href>/dav/calendars/users/cassandane/</D:href>
+  </D:create-in>
+  <D:comment>Thanks for the share!</D:comment>
+</D:invite-reply>
+EOF
+
+    xlog "create calendar";
+    my $CalendarId = $mantalk->NewCalendar({name => 'Manifold Calendar'});
+    $self->assert_not_null($CalendarId);
+
+    xlog "share to user";
+    $mantalk->Request('POST', $CalendarId, $invite,
+                      'Content-Type' => 'application/davsharing+xml');
+
+    xlog "fetch invite";
+    my ($adds) = $CalDAV->SyncEventLinks("/dav/notifications/user/cassandane");
+    $self->assert_equals(scalar %$adds, 1);
+    my $notification = (keys %$adds)[0];
+
+    xlog "accept invite";
+    $CalDAV->Request('POST', $notification, $reply,
+                     'Content-Type' => 'application/davsharing+xml');
+
+    xlog "get calendars as manifold";
+    my $ManCal = $mantalk->GetCalendars();
+    $self->assert_num_equals(2, scalar @$ManCal);
+    my $names = join "/", sort map { $_->{name} } @$ManCal;
+    $self->assert_str_equals($names, "Manifold Calendar/personal");
+
+    xlog "get calendars as cassandane";
+    my $CasCal = $CalDAV->GetCalendars();
+    $self->assert_num_equals(2, scalar @$CasCal);
+    $names = join "/", sort map { $_->{name} } @$CasCal;
+    $self->assert_str_equals($names, "Manifold Calendar/personal");
+
+    my $uuid = 'fb7b57d1-8a49-4af8-8597-2c17bab1f987';
+    my $event = <<EOF;
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Apple Inc.//Mac OS X 10.9.5//EN
+CALSCALE:GREGORIAN
+BEGIN:VTIMEZONE
+TZID:Europe/Vienna
+X-LIC-LOCATION:Europe/Vienna
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+TZNAME:CEST
+DTSTART:19700329T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+TZNAME:CET
+DTSTART:19701025T030000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+TRANSP:TRANSPARENT
+XXDATESXX
+UID:$uuid
+DTSTAMP:20150928T132434Z
+CREATED:20150928T125212Z
+SUMMARY:Yep
+DESCRIPTION:
+LAST-MODIFIED:20150928T132434Z
+BEGIN:VALARM
+UID:$uuid-alarm
+ACTION:DISPLAY
+DESCRIPTION:Your event 'Yep' already started.
+TRIGGER:PT10M
+END:VALARM
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    my $nonallday = <<EOF;
+DTSTART;TZID=Europe/Vienna:20160928T160000
+DTEND;TZID=Europe/Vienna:20160928T170000
+EOF
+
+    my $allday = <<EOF;
+DTSTART;TYPE=DATE:20160928
+DURATION:P1D
+EOF
+    my $nonallevent = $event;
+    $nonallevent =~ s/XXDATESXX/$nonallday/;
+    my $allevent = $event;
+    $allevent =~ s/XXDATESXX/$allday/;
+
+    xlog "Create an event as cassandane with an alarm";
+    my ($cal) = grep { $_->{name} eq 'Manifold Calendar' } @$CasCal;
+    $CalDAV->Request('PUT', "$cal->{id}/$uuid.ics", $nonallevent, 'Content-Type' => 'text/calendar');
+
+    my $plusstore = $self->{instance}->get_service('imap')->create_store(username => 'cassandane+dav');
+    my $plustalk = $plusstore->get_client();
+
+    my @list = $plustalk->list("", "*");
+
+    my @bits = split /\./, $cal->{id};
+    $plustalk->select("user.manifold.#calendars.$bits[1]");
+    my $res = $plustalk->fetch('1', '(rfc822.peek annotation (/* value.priv))');
+
+    $self->assert($res->{1}{'rfc822'} !~ m/VALARM/);
+    $self->assert_matches(qr/VALARM/, $res->{1}{'annotation'}{'/vendor/cmu/cyrus-httpd/<http://cyrusimap.org/ns/>per-user-calendar-data'}{'value.priv'});
+
+    $CalDAV->Request('PUT', "$cal->{id}/$uuid.ics", $allevent, 'Content-Type' => 'text/calendar');
+
+    $res = $plustalk->fetch('2', '(rfc822.peek annotation (/* value.priv))');
+    $self->assert($res->{2}{'rfc822'} !~ m/VALARM/);
+    $self->assert_matches(qr/VALARM/, $res->{2}{'annotation'}{'/vendor/cmu/cyrus-httpd/<http://cyrusimap.org/ns/>per-user-calendar-data'}{'value.priv'});
+}
+
 sub test_multiinvite_add_person_changes
     :needs_component_httpd
 {
