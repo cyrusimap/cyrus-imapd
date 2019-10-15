@@ -3881,7 +3881,7 @@ recurrence_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrul
 
     jmap_parser_push(parser, "recurrenceRule");
 
-    validate_type(parser, rrule, "Recurrence");
+    validate_type(parser, rrule, "RecurrenceRule");
 
     /* frequency */
     const char *freq = NULL;
