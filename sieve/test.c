@@ -358,14 +358,6 @@ static int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-static int uint64_cmp(const void *v1, const void *v2)
-{
-    uint64_t u1 = *((uint64_t *) v1);
-    uint64_t u2 = *((uint64_t *) v2);
-
-    return (u1 - u2);
-}
-
 static int snooze(void *ac, void *ic, void *sc __attribute__((unused)),
                   void *mc, const char **errmsg __attribute__((unused)))
 {
@@ -377,9 +369,6 @@ static int snooze(void *ac, void *ic, void *sc __attribute__((unused)),
     struct tm *tm = localtime(&now);
     int i, day_inc = -1;
     unsigned t;
-
-    /* Sort times earliest -> latest */
-    arrayu64_sort(sn->times, &uint64_cmp);
 
     if (sn->days & (1 << tm->tm_wday)) {
         /* We have times for today - see if a future one is still available */
