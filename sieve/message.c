@@ -94,6 +94,58 @@ int do_reject(action_list_t *a, int action, const char *msg)
     return 0;
 }
 
+/* snooze message m
+ *
+ * incompatible with: [e]reject
+ */
+int do_snooze(action_list_t *a, const char *awaken_mbox,
+              strarray_t *addflags, strarray_t *removeflags,
+              unsigned char days, arrayu64_t *times,
+              strarray_t *imapflags)
+{
+    action_list_t *b = NULL;
+
+    /* see if this conflicts with any previous actions taken on this message */
+    while (a != NULL) {
+        if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT) {
+            strarray_free(imapflags);
+            return SIEVE_RUN_ERROR;
+        }
+#if 0  /* XXX  should we allow multiple snooze of same message? */
+        if (a->a == ACTION_FILEINTO && !strcmp(a->u.fil.mailbox, mbox)) {
+            /* don't bother doing it twice */
+            /* check that we have a valid action */
+            if (b == NULL) {
+                strarray_free(imapflags);
+                return SIEVE_INTERNAL_ERROR;
+            }
+
+            /* cut this action out of the list */
+            b->next = a->next;
+            a->next = NULL;
+            free_action_list(a);
+            a = b;
+        }
+#endif
+        b = a;
+        a = a->next;
+    }
+
+    a = new_action_list();
+    a->a = ACTION_SNOOZE;
+    a->cancel_keep = 1;
+    a->u.snz.awaken_mbox = awaken_mbox;
+    a->u.snz.imapflags = imapflags;
+    a->u.snz.addflags = addflags;
+    a->u.snz.removeflags = removeflags;
+    a->u.snz.days = days;
+    a->u.snz.times = times;
+
+    b->next = a;
+
+    return 0;
+}
+
 /* fileinto message m into mailbox
  *
  * incompatible with: [e]reject

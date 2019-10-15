@@ -48,7 +48,7 @@
 
 struct sieve_interp {
     /* standard callbacks for actions */
-    sieve_callback *redirect, *discard, *reject, *fileinto, *keep;
+    sieve_callback *redirect, *discard, *reject, *fileinto, *snooze, *keep;
     sieve_callback *notify;
     sieve_vacation_t *vacation;
 

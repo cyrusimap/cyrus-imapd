@@ -50,6 +50,7 @@
 /* error codes */
 #define SIEVE_OK (0)
 
+#include "arrayu64.h"
 #include "strarray.h"
 #include "sieve/sieve_err.h"
 
@@ -137,6 +138,15 @@ typedef struct sieve_reject_context {
     int is_extended :1;
 } sieve_reject_context_t;
 
+typedef struct sieve_snooze_context {
+    const char *awaken_mbox;
+    strarray_t *imapflags;
+    strarray_t *addflags;
+    strarray_t *removeflags;
+    unsigned char days;
+    arrayu64_t *times;
+} sieve_snooze_context_t;
+
 typedef struct sieve_fileinto_context {
     const char *mailbox;
     const char *specialuse;
@@ -188,6 +198,7 @@ void sieve_register_redirect(sieve_interp_t *interp, sieve_callback *f);
 void sieve_register_discard(sieve_interp_t *interp, sieve_callback *f);
 void sieve_register_reject(sieve_interp_t *interp, sieve_callback *f);
 void sieve_register_fileinto(sieve_interp_t *interp, sieve_callback *f);
+void sieve_register_snooze(sieve_interp_t *interp, sieve_callback *f);
 void sieve_register_keep(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v);
 void sieve_register_imapflags(sieve_interp_t *interp, const strarray_t *mark);

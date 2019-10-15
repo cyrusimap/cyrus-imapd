@@ -177,6 +177,7 @@ EXPORTED int sieve_script_parse_only(FILE *stream, char **out_errors,
     sieve_register_discard(interpreter, (sieve_callback *) &stub_generic);
     sieve_register_reject(interpreter, (sieve_callback *) &stub_generic);
     sieve_register_fileinto(interpreter, (sieve_callback *) &stub_generic);
+    sieve_register_snooze(interpreter, (sieve_callback *) &stub_generic);
     sieve_register_keep(interpreter, (sieve_callback *) &stub_generic);
     sieve_register_imapflags(interpreter, NULL);
     sieve_register_size(interpreter, (sieve_get_size *) &stub_generic);
@@ -399,6 +400,7 @@ static char *action_to_string(action_t action)
         case ACTION_REJECT: return "Reject";
         case ACTION_EREJECT: return "eReject";
         case ACTION_FILEINTO: return "Fileinto";
+        case ACTION_SNOOZE: return "Snooze";
         case ACTION_KEEP: return "Keep";
         case ACTION_REDIRECT: return "Redirect";
         case ACTION_DISCARD: return "Discard";
@@ -710,6 +712,22 @@ static int do_action_list(sieve_interp_t *interp,
                 snprintf(actions_string+strlen(actions_string),
                          ACTIONS_STRING_LEN-strlen(actions_string),
                          "Filed into: %s\n",a->u.fil.mailbox);
+            break;
+        case ACTION_SNOOZE:
+            if (!interp->snooze)
+                return SIEVE_INTERNAL_ERROR;
+            ret = interp->snooze(&a->u.snz,
+                                 interp->interp_context,
+                                 script_context,
+                                 message_context,
+                                 &errmsg);
+            free(interp->lastitem);
+            interp->lastitem = NULL;
+
+            if (ret == SIEVE_OK)
+                snprintf(actions_string+strlen(actions_string),
+                         ACTIONS_STRING_LEN-strlen(actions_string),
+                         "Snoozed\n");
             break;
         case ACTION_KEEP:
             if (!interp->keep)

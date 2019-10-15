@@ -358,6 +358,72 @@ static int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
+static int uint64_cmp(const void *v1, const void *v2)
+{
+    uint64_t u1 = *((uint64_t *) v1);
+    uint64_t u2 = *((uint64_t *) v2);
+
+    return (u1 - u2);
+}
+
+static int snooze(void *ac, void *ic, void *sc __attribute__((unused)),
+                  void *mc, const char **errmsg __attribute__((unused)))
+{
+    sieve_snooze_context_t *sn = (sieve_snooze_context_t *) ac;
+    message_data_t *m = (message_data_t *) mc;
+    int *force_fail = (int*) ic;
+
+    time_t now = time(NULL);
+    struct tm *tm = localtime(&now);
+    int i, day_inc = -1;
+    unsigned t;
+
+    /* Sort times earliest -> latest */
+    arrayu64_sort(sn->times, &uint64_cmp);
+
+    if (sn->days & (1 << tm->tm_wday)) {
+        /* We have times for today - see if a future one is still available */
+        unsigned now_min = 60 * tm->tm_hour + tm->tm_min;
+
+        for (i = 0; i < arrayu64_size(sn->times); i++) {
+            t = arrayu64_nth(sn->times, i);
+            if (t >= now_min) {
+                day_inc = 0;
+                break;
+            }
+        }
+    }
+    if (day_inc == -1) {
+        /* Use first time on next available day */
+        t = arrayu64_nth(sn->times, 0);
+
+        /* Find next available day */
+        for (i = tm->tm_wday+1; i < 14; i++) {
+            if (sn->days & (1 << (i % 7))) {
+                day_inc = i - tm->tm_wday;
+                break;
+            }
+        }
+    }
+
+    tm->tm_mday += day_inc;
+    tm->tm_hour = t / 60;
+    tm->tm_min = t % 60;
+    tm->tm_sec = 0;
+    mktime(tm);
+
+    printf("snoozing message '%s' until %s\n", m->name, asctime(tm));
+    if (sn->imapflags->count) {
+        char *s = strarray_join(sn->imapflags, "' '");
+        if (s) {
+            printf("\twith flags '%s'\n", s);
+            free(s);
+        }
+    }
+
+    return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
+}
+
 static int keep(void *ac, void *ic, void *sc __attribute__((unused)),
                 void *mc, const char **errmsg __attribute__((unused)))
 {
@@ -686,6 +752,7 @@ int main(int argc, char *argv[])
     sieve_register_discard(i, discard);
     sieve_register_reject(i, reject);
     sieve_register_fileinto(i, fileinto);
+    sieve_register_snooze(i, snooze);
     sieve_register_keep(i, keep);
     sieve_register_size(i, getsize);
     sieve_register_header(i, getheader);

@@ -55,6 +55,7 @@ typedef enum {
     ACTION_REJECT,
     ACTION_EREJECT,
     ACTION_FILEINTO,
+    ACTION_SNOOZE,
     ACTION_KEEP,
     ACTION_REDIRECT,
     ACTION_DISCARD,
@@ -82,6 +83,7 @@ struct Action {
     int cancel_keep;
     union {
         sieve_reject_context_t rej;
+        sieve_snooze_context_t snz;
         sieve_fileinto_context_t fil;
         sieve_keep_context_t keep;
         sieve_redirect_context_t red;
@@ -150,5 +152,9 @@ int do_notify(notify_list_t *n, const char *id, const char *from,
 int do_denotify(notify_list_t *n, comparator_t *comp, const void *pat,
                 strarray_t *match_vars, void *comprock, const char *priority);
 int do_duptrack(duptrack_list_t *d, sieve_duplicate_context_t *dc);
+int do_snooze(action_list_t *a, const char *awaken_mbox,
+              strarray_t *addflags, strarray_t *removeflags,
+              unsigned char days, arrayu64_t *times,
+              strarray_t *imapflags);
 
 #endif

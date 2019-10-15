@@ -1757,6 +1757,34 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
         }
 
 
+        case B_SNOOZE:
+        {
+            const char *awaken_mbox = cmd.u.sn.mailbox;
+            strarray_t *addflags = NULL;
+            strarray_t *removeflags = NULL;
+
+            if (requires & BFE_VARIABLES) {
+                awaken_mbox = parse_string(awaken_mbox, variables);
+            }
+
+            unwrap_flaglist(cmd.u.sn.addflags, &addflags,
+                            (requires & BFE_VARIABLES) ? variables: NULL);
+            unwrap_flaglist(cmd.u.sn.removeflags, &removeflags,
+                            (requires & BFE_VARIABLES) ? variables: NULL);
+
+            actionflags = strarray_dup(variables->var);
+
+            res = do_snooze(actions, awaken_mbox, addflags, removeflags,
+                            cmd.u.sn.days, cmd.u.sn.times, actionflags);
+
+            if (res == SIEVE_RUN_ERROR)
+                *errmsg = "Snooze can not be used with Reject";
+
+            actionflags = NULL;
+            break;
+        }
+
+
         case B_REDIRECT:
         case B_REDIRECT_LIST:
         case B_REDIRECT_COPY:

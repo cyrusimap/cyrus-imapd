@@ -231,6 +231,11 @@ EXPORTED void sieve_register_fileinto(sieve_interp_t *interp, sieve_callback *f)
     interp->fileinto = f;
 }
 
+EXPORTED void sieve_register_snooze(sieve_interp_t *interp, sieve_callback *f)
+{
+    interp->snooze = f;
+}
+
 EXPORTED void sieve_register_keep(sieve_interp_t *interp, sieve_callback *f)
 {
     interp->keep = f;
@@ -711,7 +716,8 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
         break;
 
     case SIEVE_CAPA_SNOOZE:
-        if (!(config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_SNOOZE)) capa = 0;
+        if (!(interp->snooze &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_X_CYRUS_SNOOZE))) capa = 0;
         break;
 
     default:
