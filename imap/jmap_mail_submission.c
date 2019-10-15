@@ -146,7 +146,7 @@ HIDDEN void jmap_emailsubmission_capabilities(json_t *account_capabilities)
                                     "DELIVERBY", "MT-PRIORITY", NULL };
         const char **capa;
         struct buf buf = BUF_INITIALIZER;
-        int delay_time = config_getint(IMAPOPT_JMAP_MAX_DELAYED_SEND);
+        int delay_time = config_getduration(IMAPOPT_JMAP_MAX_DELAYED_SEND, 's');
         if (delay_time < 0) delay_time = 0;
 
         for (capa = smtp_capa; *capa; capa++) {

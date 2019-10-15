@@ -817,12 +817,12 @@ static int cmd_stat_one(void *rock,
         if (r) goto done;
     }
 
-    const int retention_days = config_getint(IMAPOPT_BACKUP_RETENTION_DAYS);
-    if (retention_days > 0) {
-        since = time(0) - (retention_days * 24 * 60 * 60);
+    const int retention = config_getduration(IMAPOPT_BACKUP_RETENTION, 'd');
+    if (retention > 0) {
+        since = time(0) - retention;
     }
     else {
-        /* zero or negative retention days means "keep forever" */
+        /* zero or negative retention means "keep forever" */
         since = -1;
     }
 

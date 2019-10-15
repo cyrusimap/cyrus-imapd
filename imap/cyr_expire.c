@@ -697,7 +697,7 @@ static int do_cid_expire(struct cyr_expire_ctx *ctx)
     if (ctx->args.do_cid_expire) {
         int cid_expire_seconds;
 
-        cid_expire_seconds = config_getint(IMAPOPT_CONVERSATIONS_EXPIRE_DAYS) * SECS_IN_A_DAY;
+        cid_expire_seconds = config_getduration(IMAPOPT_CONVERSATIONS_EXPIRE_AFTER, 'd');
         ctx->crock.expire_mark = time(0) - cid_expire_seconds;
 
         verbosep("Removing conversation entries older than %0.2f days\n",

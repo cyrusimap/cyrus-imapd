@@ -518,9 +518,8 @@ int service_main(int argc __attribute__((unused)),
     popd_tls_required = config_getswitch(IMAPOPT_TLS_REQUIRED);
 
     /* Set inactivity timer */
-    popd_timeout = config_getint(IMAPOPT_POPTIMEOUT);
-    if (popd_timeout < 10) popd_timeout = 10;
-    popd_timeout *= 60;
+    popd_timeout = config_getduration(IMAPOPT_POPTIMEOUT, 'm');
+    if (popd_timeout < 10 * 60) popd_timeout = 10 * 60;
     prot_settimeout(popd_in, popd_timeout);
     prot_setflushonread(popd_in, popd_out);
 
@@ -936,7 +935,7 @@ static void cmdloop(void)
         if (!strcmp(inputbuf, "quit")) {
             if (!arg) {
                 int pollpadding =config_getint(IMAPOPT_POPPOLLPADDING);
-                int minpollsec = config_getint(IMAPOPT_POPMINPOLL)*60;
+                int minpollsec = config_getduration(IMAPOPT_POPMINPOLL, 'm');
 
                 /* check preconditions! */
                 if (!popd_mailbox)
@@ -1337,7 +1336,7 @@ static void cmd_apop(char *response)
                popd_clienthost, popd_apop_chal,
                sasl_errdetail(popd_saslconn));
 
-        failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+        failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
             sleep(failedloginpause);
         }
@@ -1471,7 +1470,7 @@ static void cmd_pass(char *pass)
                             strlen(pass))!=SASL_OK) {
         syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
                popd_clienthost, popd_userid, sasl_errdetail(popd_saslconn));
-        failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+        failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
             sleep(failedloginpause);
         }
@@ -1511,7 +1510,7 @@ static void cmd_pass(char *pass)
                popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
 
         if ((!popd_starttls_done) &&
-            (plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE))
+            (plaintextloginpause = config_getduration(IMAPOPT_PLAINTEXTLOGINPAUSE, 's'))
              != 0) {
             sleep(plaintextloginpause);
         }
@@ -1531,8 +1530,8 @@ static void cmd_pass(char *pass)
  */
 static void cmd_capa(void)
 {
-    int minpoll = config_getint(IMAPOPT_POPMINPOLL) * 60;
-    int expire = config_getint(IMAPOPT_POPEXPIRETIME);
+    int minpoll = config_getduration(IMAPOPT_POPMINPOLL, 'm');
+    int expire = config_getduration(IMAPOPT_POPEXPIRETIME, 'd');
     int mechcount;
     const char *mechlist;
 
@@ -1554,6 +1553,7 @@ static void cmd_capa(void)
     if (expire < 0) {
         prot_printf(popd_out, "EXPIRE NEVER\r\n");
     } else {
+        expire /= (24 * 60 * 60);
         prot_printf(popd_out, "EXPIRE %d\r\n", expire);
     }
 
@@ -1668,7 +1668,7 @@ static void cmd_auth(char *arg)
                        popd_clienthost, authtype);
             }
 
-            failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+            failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {
                 sleep(failedloginpause);
             }
@@ -1871,11 +1871,11 @@ int openinbox(void)
             goto fail;
         }
 
-        if ((minpoll = config_getint(IMAPOPT_POPMINPOLL)) &&
-            popd_mailbox->i.pop3_last_login + 60*minpoll > popd_login_time) {
+        if ((minpoll = config_getduration(IMAPOPT_POPMINPOLL, 'm')) &&
+            popd_mailbox->i.pop3_last_login + minpoll > popd_login_time) {
             prot_printf(popd_out,
                         "-ERR [LOGIN-DELAY] Logins must be at least %d minute%s apart\r\n",
-                        minpoll, minpoll > 1 ? "s" : "");
+                        minpoll / 60, minpoll / 60 > 1 ? "s" : "");
             mailbox_close(&popd_mailbox);
             goto fail;
         }

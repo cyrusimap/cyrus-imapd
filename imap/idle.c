@@ -149,7 +149,7 @@ EXPORTED void idle_init(void)
 
 EXPORTED int idle_enabled(void)
 {
-    int idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
+    int idle_period = config_getduration(IMAPOPT_IMAPIDLEPOLL, 's');
 
     /* only enabled if a positive period */
     return (idle_period > 0);
@@ -165,7 +165,7 @@ EXPORTED void idle_start(const char *mboxname)
      * matter if it fails, we'll still poll */
     r = idle_send_msg(IDLE_MSG_INIT, mboxname);
     if (r) {
-        int idle_timeout = config_getint(IMAPOPT_IMAPIDLEPOLL);
+        int idle_timeout = config_getduration(IMAPOPT_IMAPIDLEPOLL, 's');
         syslog(LOG_ERR, "IDLE: error sending message "
                         "INIT to idled for mailbox %s: %s. "
                         "Falling back to polling every %d seconds.",
@@ -184,7 +184,7 @@ EXPORTED int idle_wait(int otherfd)
     struct timeval timeout;
     int r;
     int flags = 0;
-    int idle_timeout = config_getint(IMAPOPT_IMAPIDLEPOLL);
+    int idle_timeout = config_getduration(IMAPOPT_IMAPIDLEPOLL, 's');
 
     if (!idle_enabled()) return 0;
 

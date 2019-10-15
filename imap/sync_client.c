@@ -766,7 +766,7 @@ static void replica_connect(const char *channel)
     }
 
     /* Set inactivity timer */
-    timeout = config_getint(IMAPOPT_SYNC_TIMEOUT);
+    timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
     if (timeout < 3) timeout = 3;
     prot_settimeout(sync_in, timeout);
 
@@ -1188,7 +1188,7 @@ int main(int argc, char **argv)
                 sync_shutdown_file = sync_get_config(channel, "sync_shutdown_file");
 
             if (!min_delta)
-                min_delta = sync_get_intconfig(channel, "sync_repeat_interval");
+                min_delta = sync_get_durationconfig(channel, "sync_repeat_interval", 's');
 
             do_daemon(channel, sync_shutdown_file, timeout, min_delta);
         }

@@ -2474,14 +2474,14 @@ static void update_attendee_status(icalcomponent *ical, strarray_t *onrecurids,
 
 static icaltimetype get_historical_cutoff()
 {
-    int age = config_getint(IMAPOPT_CALDAV_HISTORICAL_AGE);
+    int age = config_getduration(IMAPOPT_CALDAV_HISTORICAL_AGE, 'd');
     icaltimetype cutoff;
 
     if (age < 0) return icaltime_null_time();
 
     /* Set cutoff to current time -age days */
     cutoff = icaltime_current_time_with_zone(icaltimezone_get_utc_timezone());
-    icaltime_adjust(&cutoff, -age, 0, 0, 0);
+    icaltime_adjust(&cutoff, 0, 0, 0, -age);
 
     return cutoff;
 }

@@ -342,8 +342,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
                                   config_getswitch(IMAPOPT_SKIPLIST_UNSAFE));
         libcyrus_config_setstring(CYRUSOPT_TEMP_PATH,
                                   config_getstring(IMAPOPT_TEMP_PATH));
-        libcyrus_config_setint(CYRUSOPT_PTS_CACHE_TIMEOUT,
-                               config_getint(IMAPOPT_PTSCACHE_TIMEOUT));
+        libcyrus_config_setint(CYRUSOPT_PTS_CACHE_TIMEOUT, /* <-- n.b. still an int */
+                               config_getduration(IMAPOPT_PTSCACHE_TIMEOUT, 's'));
         libcyrus_config_setswitch(CYRUSOPT_FULLDIRHASH,
                                   config_getswitch(IMAPOPT_FULLDIRHASH));
         libcyrus_config_setstring(CYRUSOPT_PTSCACHE_DB,

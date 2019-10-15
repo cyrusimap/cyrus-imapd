@@ -352,7 +352,7 @@ int service_main(int argc __attribute__((unused)),
     proc_register(config_ident, sync_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
-    timeout = config_getint(IMAPOPT_SYNC_TIMEOUT);
+    timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
     if (timeout < 3) timeout = 3;
     prot_settimeout(sync_in, timeout);
 
@@ -714,7 +714,7 @@ static void cmd_authenticate(char *mech, char *resp)
             syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
                    sync_clienthost, mech, sasl_errdetail(sync_saslconn));
 
-            failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+            failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {
                 sleep(failedloginpause);
             }

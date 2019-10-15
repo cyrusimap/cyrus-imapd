@@ -83,6 +83,15 @@ Blank lines and lines beginning with ``#'' are ignored.
 For boolean and enumerated options, the values ``yes'', ``on'', ``t'',
 ``true'' and ``1'' turn the option on, the values ``no'', ``off'',
 ``f'', ``false'' and ``0'' turn the option off.
+.PP
+Duration options take the form of a number followed by a unit, for example
+\fB32m\fR (32 minutes).  Units are \fBd\fR (days), \fBh\fR (hours), \fBm\fR
+(minutes) and \fBs\fR (seconds).  Multiple units can be combined and will
+be summed together, for example \fB1h30m\fR is equivalent to \fB90m\fR.  If
+no unit is specified, an option-specific backward-compatible default unit
+is assumed (documented on an option-by-option basis).  These are simple time
+units: 1d=24h, 1h=60m, 1m=60s (daylight savings, timezones, leap adjustments,
+etc are not considered).
 .SH FIELD DESCRIPTIONS
 .PP
 The sections below detail options that can be placed in the
@@ -296,9 +305,16 @@ Blank lines and lines beginning with ``#'' are ignored.
    to be stored on slower, cheaper disks - even within the same
    mailbox, as distinct from partitions. */
 
-{ "archive_days", 7, INT }
-/* The number of days after which to move messages to the archive partition
-   if archiving is enabled */
+{ "archive_days", NULL, DURATION, "3.1.8", "archive_after" }
+/* Deprecated in favour of \fIarchive_after\fR. */
+
+{ "archive_after", "7d", DURATION }
+/* The duration after which to move messages to the archive partition
+   if archiving is enabled.
+.PP
+   For backward compatibility, if no unit is specified, days is
+   assumed.  */
+*/
 
 { "archive_maxsize", 1024, INT }
 /* The size in kilobytes of the largest message that won't be archived
@@ -485,10 +501,16 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The absolute path of the backup staging area.  If not specified,
    will be temp_path/backup */
 
-{ "backup_retention_days", 7, INT }
-/* The number of days to keep content in backup after it has been deleted
+{ "backup_retention_days", NULL, DURATION, "3.1.8", "backup_retention" }
+/* Deprecated in favor of \fIbackup_retention\fR. */
+
+{ "backup_retention", "7d", DURATION }
+/* How long to keep content in backup after it has been deleted
    from the source.  If set to a negative value or zero, deleted content
-   will be kept indefinitely. */
+   will be kept indefinitely.
+.PP
+   For backward compatibility, if no unit is specified, days is
+   assumed.  */
 
 { "backup_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip")}
 /* The cyrusdb backend to use for the backup locations database. */
@@ -533,12 +555,16 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "caldav_create_sched", 1, SWITCH }
 /* Create the 'Inbox' and 'Outbox' calendars if they don't already exist */
 
-{ "caldav_historical_age", 7, INT }
-/* Number of days after an occurrence of event or task has concluded
+{ "caldav_historical_age", "7d", DURATION }
+/* How long after an occurrence of event or task has concluded
    that it is considered 'historical'.  Changes to historical
    occurrences of events or tasks WILL NOT have invite or reply
-   messages sent for them.  A value less than zero means that events
-   and tasks are NEVER considered historical. */
+   messages sent for them.  A negative value means that events
+   and tasks are NEVER considered historical.
+.PP
+   For backward compatibility, if no unit is specified, days is
+   assumed.  */
+*/
 
 { "caldav_maxdatetime", "20380119T031407Z", STRING }
 /* The latest date and time accepted by the server (ISO format).  This
@@ -608,9 +634,12 @@ Blank lines and lines beginning with ``#'' are ignored.
    \fBclient_bind\fR is enabled.  If not set (the default),
    \fRservername\fR will be used. */
 
-{ "client_timeout", 10, INT }
-/* Number of seconds to wait before returning a timeout failure when
-   performing a client connection (e.g., in a murder environment) */
+{ "client_timeout", "10s", DURATION }
+/* Time to wait before returning a timeout failure when performing a
+   client connection (e.g. in a murder environment).
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed.  */
 
 { "commandmintimer", NULL, STRING }
 /* Time in seconds. Any imap command that takes longer than this
@@ -637,10 +666,16 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "conversations_db", "skiplist", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip")}
 /* The cyrusdb backend to use for the per-user conversations database. */
 
-{ "conversations_expire_days", 90, INT }
+{ "conversations_expire_days", NULL, DURATION, "3.1.8", "conversations_expire_after" }
+/* Deprecated in favor of \fIconversations_expire_after\fR. */
+
+{ "conversations_expire_after", "90d", DURATION }
 /* How long the conversations database keeps the message tracking
    information needed for receiving new messages in existing
-   conversations, in days. */
+   conversations.
+.PP
+   For backward compatibility, if no unit is specified, days is
+   assumed. */
 
 { "conversations_max_thread", 100, INT }
 /* maximum size for a single thread.  Threads will split if they have this many
@@ -681,10 +716,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    resources (principals).  If not set (the default), the value of the
    "servername" option will be used.*/
 
-{ "dav_lock_timeout", 20, INT }
-/* The maximum time in seconds to wait for a write lock on the per-user
-   DAV database before timeout. For HTTP requests, the HTTP status code
-   503 is returned if the lock can not be obtained within this time. */
+{ "dav_lock_timeout", "20s", DURATION }
+/* The maximum time to wait for a write lock on the per-user DAV database
+   before timeout. For HTTP requests, the HTTP status code 503 is returned
+   if the lock can not be obtained within this time.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "debug_command", NULL, STRING }
 /* Debug command to be used by processes started with -D option.  The string
@@ -844,8 +882,11 @@ Blank lines and lines beginning with ``#'' are ignored.
    EXPUNGE and should result in greater responsiveness for the client,
    especially when expunging a large number of messages. */
 
-{ "failedloginpause", 3, INT }
-/* Number of seconds to pause after a failed login. */
+{ "failedloginpause", "3s", DURATION }
+/* Time to pause after a failed login.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "flushseenstate", 1, SWITCH, "2.5.0" }
 /* Deprecated. No longer used */
@@ -937,13 +978,16 @@ Blank lines and lines beginning with ``#'' are ignored.
    files, etc) rooted at this directory.  Otherwise, httpd will not
    serve any static content. */
 
-{ "httpkeepalive", 20, INT }
-/* Set the length of the HTTP server's keepalive heartbeat in seconds.
-   The default is 20.  The minimum value is 0, which will disable the
-   keepalive heartbeat.  When enabled, if a request takes longer than
-   \fIhttpkeepalive\fR seconds to process, the server will send the client
-   provisional responses every \fIhttpkeepalive\fR seconds until the
-   final response can be sent */
+{ "httpkeepalive", "20s", DURATION }
+/* Set the length of the HTTP server's keepalive heartbeat.  The
+   default is 20 seconds.  The minimum value is 0, which will disable
+   the keepalive heartbeat.  When enabled, if a request takes longer
+   than \fIhttpkeepalive\fR to process, the server will send the client
+   provisional responses every \fIhttpkeepalive\fR until the final
+   response can be sent.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "httpmodules", "", BITFIELD("admin", "caldav", "carddav", "cgi", "domainkey", "freebusy", "ischedule", "jmap", "prometheus", "rss", "tzdist", "webdav") }
 /* Space-separated list of HTTP modules that will be enabled in
@@ -961,10 +1005,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    Note that enabling this option will increase the amount of data
    sent across the wire. */
 
-{ "httptimeout", 5, INT }
-/* Set the length of the HTTP server's inactivity autologout timer,
-   in minutes.  The default is 5.  The minimum value is 0, which will
-   disable persistent connections. */
+{ "httptimeout", "5m", DURATION }
+/* Set the length of the HTTP server's inactivity autologout timer.
+   The default is 5 minutes.  The minimum value is 0, which will
+   disable persistent connections.
+.PP
+   For backwards compatibility, if no unit is specified, minutes
+   is assumed. */
 
 { "idlesocket", "{configdirectory}/socket/idle", STRING }
 /* Unix domain socket that idled listens on. */
@@ -973,11 +1020,14 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* For backwards compatibility with Cyrus 1.5.10 and earlier -- ignore
   the reference argument in LIST or LSUB commands. */
 
-{ "imapidlepoll", 60, INT }
-/* The interval (in seconds) for polling for mailbox changes and
-   ALERTs while running the IDLE command.  This option is used when
-   idled is not enabled or cannot be contacted.  The minimum value is
-   1.  A value of 0 will disable IDLE. */
+{ "imapidlepoll", "60s", DURATION }
+/* The interval for polling for mailbox changes and ALERTs while running
+   the IDLE command.  This option is used when idled is not enabled or
+   cannot be contacted.  The minimum value is 1 second.  A value of 0
+   will disable IDLE.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "imapidresponse", 1, SWITCH }
 /* If enabled, the server responds to an ID command with a parameter
@@ -1083,11 +1133,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    Returned as the maxCallsInRequest property value of the
    JMAP \"urn:ietf:params:jmap:core\" capabilities object. */
 
-{ "jmap_max_delayed_send", 44236800, INT }
+{ "jmap_max_delayed_send", "512d", DURATION }
 /* The value to return for the maxDelayedSend property of
-   the JMAP \"urn:ietf:params:jmap:emailsubmission\" capabilities object
-   (which is measured in seconds).
-   The Cyrus JMAP implementation does not enforce this limit. */
+   the JMAP \"urn:ietf:params:jmap:emailsubmission\" capabilities object.
+   The Cyrus JMAP implementation does not enforce this limit.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "jmap_max_objects_in_get", 4096, INT }
 /* The maximum number of ids that a JMAP client may request in
@@ -1264,11 +1316,17 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Use transport layer security for ldap:// using STARTTLS. Do not use
    ldaps:// in 'ldap_uri' with this option enabled. */
 
-{ "ldap_time_limit", 5, INT }
-/* Specify a number of seconds for a search request to complete. */
+{ "ldap_time_limit", "5s", DURATION }
+/* How long to wait for a search request to complete.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
-{ "ldap_timeout", 5, INT }
-/* Specify a number of seconds a search can take before timing out. */
+{ "ldap_timeout", "5s", DURATION }
+/* How long a search can take before timing out.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "ldap_ca_dir", NULL, STRING }
 /* Path to a directory with CA (Certificate Authority) certificates. */
@@ -1360,11 +1418,14 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Unix domain socket that lmtpd listens on, used by deliver(8). This should
    match the path specified in cyrus.conf(5). */
 
-{ "lmtptxn_timeout", 300, INT }
-/* Timeout (in seconds) used during a lmtp transaction to a remote backend
-   (e.g. in a murder environment).  Can be used to prevent hung lmtpds
-   on proxy hosts when a backend server becomes unresponsive during a
-   lmtp transaction.  The default is 300 - change to zero for infinite. */
+{ "lmtptxn_timeout", "5m", DURATION }
+/* Timeout used during a lmtp transaction to a remote backend (e.g. in a
+   murder environment).  Can be used to prevent hung lmtpds on proxy hosts
+   when a backend server becomes unresponsive during a lmtp transaction.
+   The default is 5 minutes - change to zero for infinite.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "lock_debugtime", NULL, STRING }
 /* A floating point number of seconds.  If set, time how long we wait for
@@ -1596,9 +1657,12 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The absolute path to the newsrc db file.  If not specified,
    will be configdirectory/fetchnews.db */
 
-{ "nntptimeout", 3, INT }
-/* Set the length of the NNTP server's inactivity autologout timer,
-   in minutes.  The minimum value is 3, the default. */
+{ "nntptimeout", "3m", DURATION }
+/* Set the length of the NNTP server's inactivity autologout timer.
+   The minimum value is 3 minutes, also the default.
+.PP
+   For backward compatibility, if no unit is specified, minutes is
+   assumed. */
 
 { "notesmailbox", NULL, STRING }
 /* The top level mailbox in each user's account which is used to store
@@ -1680,28 +1744,39 @@ selected, and those chances increase when other partitions get closer
 If all partitions are over that limit, this feature is not used anymore.
  */
 
-{ "plaintextloginpause", 0, INT }
-/* Number of seconds to pause after a successful plaintext login.  For
-   systems that support strong authentication, this permits users to
-   perceive a cost of using plaintext passwords.  (This does not
-   affect the use of PLAIN in SASL authentications.) */
+{ "plaintextloginpause", NULL, DURATION }
+/* Time to pause after a successful plaintext login.  For systems that
+   support strong authentication, this permits users to perceive a cost
+   of using plaintext passwords.  (This does not affect the use of PLAIN
+   in SASL authentications.)
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "plaintextloginalert", NULL, STRING }
 /* Message to send to client after a successful plaintext login. */
 
-{ "popexpiretime", -1, INT }
-/* The number of days advertised as being the minimum a message may be
+{ "popexpiretime", "-1", DURATION }
+/* The duration advertised as being the minimum a message may be
    left on the POP server before it is deleted (via the CAPA command,
    defined in the POP3 Extension Mechanism, which some clients may
-   support).  "NEVER", the default, may be specified with a negative
-   number.  The Cyrus POP3 server never deletes mail, no matter what
-   the value of this parameter is.  However, if a site implements a
-   less liberal policy, it needs to change this parameter
-   accordingly. */
+   support).  This duration has a granularity of whole days, with partial
+   days truncated (so e.g. "45m" is effectively "0d").  "NEVER", the
+   default, may be specified with a negative number.
+.PP
+   The Cyrus POP3 server never deletes mail, no matter what the value of
+   this parameter is.  However, if a site implements a less liberal policy,
+   it needs to change this parameter accordingly.
+.PP
+   For backward compatibility, if no unit is specified, days is
+   assumed. */
 
-{ "popminpoll", 0, INT }
+{ "popminpoll", NULL, DURATION }
 /* Set the minimum amount of time the server forces users to wait
-   between successive POP logins, in minutes. */
+   between successive POP logins.
+.PP
+   For backward compatibility, if no unit is specified, minutes is
+   assumed. */
 
 { "popsubfolders", 0, SWITCH }
 /* Allow access to subfolders of INBOX via POP3 by using
@@ -1723,9 +1798,12 @@ If all partitions are over that limit, this feature is not used anymore.
    user waits a sufficient amount of time, they will get back many or all
    of the slots. */
 
-{ "poptimeout", 10, INT }
-/* Set the length of the POP server's inactivity autologout timer,
-   in minutes.  The minimum value is 10, the default. */
+{ "poptimeout", "10m", DURATION }
+/* Set the length of the POP server's inactivity autologout timer.
+   The minimum value is 10 minutes, the default.
+.PP
+   For backward compatibility, if no unit is specified, minutes is
+   assumed. */
 
 { "popuseacl", 0, SWITCH }
 /* Enforce IMAP ACLs in the pop server.  Due to the nature of the POP3
@@ -1765,9 +1843,13 @@ If all partitions are over that limit, this feature is not used anymore.
 { "prometheus_need_auth", "admin", STRINGLIST("none", "user", "admin") }
 /* Authentication level required to fetch Prometheus metrics. */
 
-{ "prometheus_update_freq", 10, INT }
-/* Frequency in seconds at which promstatsd should re-collate its
-   statistics report.  The minimum value is 1, the default is 10. */
+{ "prometheus_update_freq", "10s", DURATION }
+/* Frequency in at which promstatsd should re-collate its statistics
+   report.  The minimum value is 1 second, the default is 10 seconds.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
+   */
 
 { "prometheus_stats_dir", NULL, STRING }
 /* Directory to use for gathering prometheus statistics.  If specified,
@@ -1828,9 +1910,12 @@ If all partitions are over that limit, this feature is not used anymore.
 /* The absolute path to the ptscache db file.  If not specified,
    will be configdirectory/ptscache.db */
 
-{ "ptscache_timeout", 10800, INT }
-/* The timeout (in seconds) for the PTS cache database when using the
-   auth_krb_pts authorization method (default: 3 hours). */
+{ "ptscache_timeout", "3h", DURATION }
+/* The timeout for the PTS cache database when using the auth_krb_pts
+   authorization method (default: 3 hours).
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "ptskrb5_convert524", 1, SWITCH }
 /* When using the AFSKRB ptloader module with Kerberos 5 canonicalization,
@@ -1928,11 +2013,13 @@ If all partitions are over that limit, this feature is not used anymore.
    have their messages available via RSS.  If not set, a default
    wildmat of "*" (ALL mailboxes) will be used. */
 
-{ "rss_maxage", 0, INT }
-/* Maximum age (in days) of items to display in an RSS channel.  If
-   non-zero, httpd will only display items received within the last
-   \fIrss_maxage\fR days.  If set to 0, all available items will be
-   displayed (the default). */
+{ "rss_maxage", NULL, DURATION }
+/* Maximum age of items to display in an RSS channel.  If non-zero,
+   httpd will only display items received within this time period.
+   If set to 0, all available items will be displayed (the default).
+.PP
+   For backward compatibility, if no unit is specified, days is
+   assumed. */
 
 { "rss_maxitems", 0, INT }
 /* Maximum number of items to display in an RSS channel.  If non-zero,
@@ -2196,9 +2283,12 @@ product version in the capabilities
    user's scripts reside on a remote server (in a Murder).
    Otherwise, timsieved will proxy traffic to the remote server. */
 
-{ "sieve_duplicate_max_expiration", 7776000 /* 90 days */, INT }
-/* Maximum expiration time (in seconds) for duplicate message tracking
-   records. */
+{ "sieve_duplicate_max_expiration", "90d", DURATION }
+/* Maximum expiration time for duplicate message tracking records.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
+*/
 
 { "sieve_extensions", "fileinto reject vacation vacation-seconds imapflags notify include envelope environment body relational regex subaddress copy date index imap4flags mailbox mboxmetadata servermetadata variables editheader extlists duplicate ihave fcc special-use redirect-dsn redirect-deliverby mailboxid x-cyrus-log x-cyrus-jmapquery", BITFIELD("fileinto", "reject", "vacation", "vacation-seconds", "imapflags", "notify", "include", "envelope", "environment", "body", "relational", "regex", "subaddress", "copy", "date", "index", "imap4flags", "mailbox", "mboxmetadata", "servermetadata", "variables", "editheader", "extlists", "duplicate", "ihave", "fcc", "special-use", "redirect-dsn", "redirect-deliverby", "mailboxid", "x-cyrus-log", "x-cyrus-jmapquery") }
 /* Space-separated list of Sieve extensions allowed to be used in
@@ -2229,13 +2319,20 @@ product version in the capabilities
 /* Enabled by default.  If reject can be done via LMTP, then return a 550
    rather than generating the bounce message in Cyrus. */
 
-{ "sieve_vacation_min_response", 259200 /* 3 days */, INT }
-/* Minimum time interval (in seconds) between consecutive vacation responses,
-   per draft-ietf-vacation-seconds.txt . */
+{ "sieve_vacation_min_response", "3d", DURATION }
+/* Minimum time interval between consecutive vacation responses, per
+   draft-ietf-vacation-seconds.txt.  The default is 3 days.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
-{ "sieve_vacation_max_response", 7776000 /* 90 days */, INT }
-/* Maximum time interval (in seconds) between consecutive vacation responses,
-   per draft-ietf-vacation-seconds.txt . */
+{ "sieve_vacation_max_response", "90d", DURATION }
+/* Maximum time interval between consecutive vacation responses, per
+   draft-ietf-vacation-seconds.txt.  The default is 90 days.  The
+   minimum is 7 days.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "sievedir", "/usr/sieve", STRING }
 /* If sieveusehomedir is false, this directory is searched for Sieve
@@ -2465,20 +2562,27 @@ product version in the capabilities
 /* The authentication realm to use when authenticating to a sync server.
    Prefix with a channel name to only apply for that channel */
 
-{ "sync_repeat_interval", 1, INT }
-/* Minimum interval (in seconds) between replication runs in rolling
-   replication mode. If a replication run takes longer than this
-   time, we repeat immediately.
-   Prefix with a channel name to only apply for that channel */
+{ "sync_repeat_interval", "1s", DURATION }
+/* Minimum interval between replication runs in rolling replication
+   mode. If a replication run takes longer than this time, we repeat
+   immediately.  Prefix with a channel name to only apply for that
+   channel.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "sync_shutdown_file", NULL, STRING }
 /* Simple latch used to tell sync_client(8) that it should shut down at the
    next opportunity. Safer than sending signals to running processes.
    Prefix with a channel name to only apply for that channel */
 
-{ "sync_timeout", 1800, INT }
-/* Number of seconds to wait for a response before returning a timeout
-   failure when talking to a replication peer (client or server). */
+{ "sync_timeout", "30m", DURATION }
+/* How long to wait for a response before returning a timeout failure
+   when talking to a replication peer (client or server).  The minimum
+   duration is 3 seconds, the default is 30 minutes.
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "sync_try_imap", 1, SWITCH }
 /* Whether sync_client should try to perform an IMAP connection
@@ -2501,12 +2605,18 @@ product version in the capabilities
 /* Number of TCP keepalive probes to send before declaring the
    connection dead (0 == system default) */
 
-{ "tcp_keepalive_idle", 0, INT }
-/* Number of seconds a connection must be idle before keepalive
-   probes are sent (0 == system default) */
+{ "tcp_keepalive_idle", "0", DURATION }
+/* How long a connection must be idle before keepalive probes are sent
+   (0 == system default).
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
-{ "tcp_keepalive_intvl", 0, INT }
-/* Number of seconds between keepalive probes (0 == system default) */
+{ "tcp_keepalive_intvl", "0", DURATION }
+/* Time between keepalive probes (0 == system default).
+.PP
+   For backward compatibility, if no unit is specified, seconds is
+   assumed. */
 
 { "temp_path", "/tmp", STRING }
 /* The pathname to store temporary files in */
@@ -2514,11 +2624,14 @@ product version in the capabilities
 { "telemetry_bysessionid", 0, SWITCH }
 /* If true, log by sessionid instead of PID for telemetry */
 
-{ "timeout", 32, INT }
-/* The length of the IMAP server's inactivity autologout timer,
-   in minutes.  The minimum value is 30.  The default is 32 to
-   allow a bit of leeway for clients that try to NOOP every 30
-   minutes. */
+{ "timeout", "32m", DURATION }
+/* The length of the IMAP server's inactivity autologout timer.
+   The minimum value is 30 minutes.  The default is 32 minutes,
+   to allow a bit of leeway for clients that try to NOOP every
+   30 minutes.
+.PP
+   For backward compatibility, if no unit is specified, minutes
+   is assumed. */
 
 { "zoneinfo_dir", NULL, STRING }
 /* The directory where timezones generated by the Cyrus IMAPd vzic
@@ -2526,10 +2639,12 @@ product version in the capabilities
    in the CYRUS_TIMEZONES_ZONEINFO_DIR path as defined during the
    Cyrus build. */
 
-{ "imapidletimeout", 0, INT }
-/* Timeout for idling clients (RFC 2177) in minutes. If set to
-   zero (the default) or less, the value of "timeout" will be
-   used instead. */
+{ "imapidletimeout", NULL, DURATION }
+/* Timeout for idling clients (RFC 2177).  If not set (the default),
+   the value of "timeout" will be used instead.
+.PP
+   For backward compatibility, if no unit is specified, minutes
+   is assumed. */
 
 { "tls_ca_file", NULL, STRING, "2.5.0", "tls_client_ca_file" }
 /* Deprecated in favor of \fItls_client_ca_file\fR. */
@@ -2624,10 +2739,13 @@ product version in the capabilities
 /* The absolute path to the TLS sessions db file. If not specified,
    will be configdirectory/tls_sessions.db */
 
-{ "tls_session_timeout", 1440, INT }
-/* The length of time (in minutes) that a TLS session will be cached
-   for later reuse.  The maximum value is 1440 (24 hours), the
-   default.  A value of 0 will disable session caching. */
+{ "tls_session_timeout", "24h", DURATION }
+/* The length of time that a TLS session will be cached for later
+   reuse.  The maximum value is 24 hours, also the default.  A
+   value of 0 will disable session caching.
+.PP
+   For backward compatibility, if no unit is specified, minutes is
+   assumed. */
 
 { "tls_versions", "tls1_0 tls1_1 tls1_2 tls1_3", STRING }
 /* A list of SSL/TLS versions to not disable. Cyrus IMAP SSL/TLS starts
@@ -2756,10 +2874,10 @@ of the incoming network interface, or if no record is found, the
    in their namespace. They provides virtual partitions, with quotas and QoS
    features. */
 
-{ "openio_rawx_timeout", 30, INT }
+{ "openio_rawx_timeout", "30s", DURATION }
 /* The OpenIO timeout to query to the RAWX services (default 30 sec). */
 
-{ "openio_proxy_timeout", 5, INT }
+{ "openio_proxy_timeout", "5s", DURATION }
 /* The OpenIO timeout to query to the PROXY services (default 5 sec). */
 
 { "openio_autocreate", 0, SWITCH }

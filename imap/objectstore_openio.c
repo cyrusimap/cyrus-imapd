@@ -130,12 +130,12 @@ static int openio_sds_lazy_init (void)
         return ENOTSUP;
     }
 
-    v = config_getint(IMAPOPT_OPENIO_RAWX_TIMEOUT);
+    v = config_getduration(IMAPOPT_OPENIO_RAWX_TIMEOUT, 's');
     rc = oio_sds_configure(sds, OIOSDS_CFG_TIMEOUT_RAWX, &v, sizeof(int));
     if (0 != rc)
         syslog(LOG_WARNING, "OIOSDS: could not set the query timeout to rawx services: %m");
 
-    v = config_getint(IMAPOPT_OPENIO_PROXY_TIMEOUT);
+    v = config_getduration(IMAPOPT_OPENIO_PROXY_TIMEOUT, 's');
     rc = oio_sds_configure(sds, OIOSDS_CFG_TIMEOUT_PROXY, &v, sizeof(int));
     if (0 != rc)
         syslog(LOG_WARNING, "OIOSDS: could not set the query timeout to proxy services: %m");

@@ -240,9 +240,8 @@ EXPORTED int service_main(int argc __attribute__((unused)),
     sieved_in = prot_new(0, 0);
     sieved_out = prot_new(1, 1);
 
-    sieved_timeout = config_getint(IMAPOPT_TIMEOUT);
-    if (sieved_timeout < 10) sieved_timeout = 10;
-    sieved_timeout *= 60;
+    sieved_timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
+    if (sieved_timeout < 10 * 60) sieved_timeout = 10 * 60;
     prot_settimeout(sieved_in, sieved_timeout);
     prot_setflushonread(sieved_in, sieved_out);
 

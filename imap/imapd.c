@@ -958,9 +958,8 @@ int service_main(int argc __attribute__((unused)),
     proc_register(config_ident, imapd_clienthost, NULL, NULL, NULL);
 
     /* Set inactivity timer */
-    imapd_timeout = config_getint(IMAPOPT_TIMEOUT);
-    if (imapd_timeout < 30) imapd_timeout = 30;
-    imapd_timeout *= 60;
+    imapd_timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
+    if (imapd_timeout < 30 * 60) imapd_timeout = 30 * 60;
     prot_settimeout(imapd_in, imapd_timeout);
     prot_setflushonread(imapd_in, imapd_out);
 
@@ -2754,7 +2753,7 @@ static void cmd_login(char *tag, char *user)
         syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
                imapd_clienthost, canon_user, sasl_errdetail(imapd_saslconn));
 
-        failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+        failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
             sleep(failedloginpause);
         }
@@ -2809,7 +2808,7 @@ static void cmd_login(char *tag, char *user)
 
         /* Apply penalty only if not under layer */
         if (!imapd_starttls_done) {
-            int plaintextloginpause = config_getint(IMAPOPT_PLAINTEXTLOGINPAUSE);
+            int plaintextloginpause = config_getduration(IMAPOPT_PLAINTEXTLOGINPAUSE, 's');
             if (plaintextloginpause) {
                 sleep(plaintextloginpause);
             }
@@ -2880,7 +2879,7 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
             snmp_increment_args(AUTHENTICATION_NO, 1,
                                 VARIABLE_AUTH, 0, /* hash_simple(authtype) */
                                 VARIABLE_LISTEND);
-            failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+            failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {
                 sleep(failedloginpause);
             }
@@ -3274,11 +3273,10 @@ static void cmd_idle(char *tag)
     struct timespec deadline = { 0, 0 };
 
     if (idle_timeout == -1) {
-        idle_timeout = config_getint(IMAPOPT_IMAPIDLETIMEOUT);
+        idle_timeout = config_getduration(IMAPOPT_IMAPIDLETIMEOUT, 'm');
         if (idle_timeout <= 0) {
-            idle_timeout = config_getint(IMAPOPT_TIMEOUT);
+            idle_timeout = config_getduration(IMAPOPT_TIMEOUT, 'm');
         }
-        idle_timeout *= 60; /* unit is minutes */
     }
 
     if (idle_timeout > 0) {
@@ -3351,7 +3349,7 @@ static void cmd_idle(char *tag)
 
         /* get polling period */
         if (idle_period == -1) {
-            idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
+            idle_period = config_getduration(IMAPOPT_IMAPIDLEPOLL, 's');
         }
 
         if (CAPA(backend_current, CAPA_IDLE)) {

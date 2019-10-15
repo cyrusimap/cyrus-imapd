@@ -95,7 +95,7 @@ print HFILE "\n";
 
 # prototypes
 my @opttype = ("OPT_NOTOPT","OPT_STRING","OPT_INT","OPT_SWITCH",
-               "OPT_ENUM","OPT_STRINGLIST","OPT_BITFIELD");
+               "OPT_ENUM","OPT_STRINGLIST","OPT_BITFIELD", "OPT_DURATION");
 print HFILE "enum opttype {\n";
 while (my $opt = pop (@opttype)) {
     if ($#opttype == -1) {
@@ -254,6 +254,10 @@ while (<STDIN>) {
 
             # [re]set the size of the enum_options array
             if ($count > $enum_size) { $enum_size = $count; }
+        } elsif ($3 eq "DURATION") {
+            $def = $use_gcc_extension
+                        ? "U_CFG_V((const char *) $2)"
+                        : "{(void *)($2)}";
         } else {
             $def = $use_gcc_extension
                         ? "U_CFG_V((long) $2)"
@@ -304,7 +308,7 @@ print HFILE <<EOF
 
 union config_value {
     $dummy_field
-    const char *s;      /* OPT_STRING, OPT_STRINGLIST */
+    const char *s;      /* OPT_STRING, OPT_STRINGLIST, OPT_DURATION */
     long i;             /* OPT_INT */
     long b;             /* OPT_SWITCH */
     enum enum_value e;  /* OPT_ENUM */

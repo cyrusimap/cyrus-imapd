@@ -243,7 +243,7 @@ EXPORTED const char *sync_get_config(const char *channel, const char *val)
     return response;
 }
 
-EXPORTED int sync_get_intconfig(const char *channel, const char *val)
+EXPORTED int sync_get_durationconfig(const char *channel, const char *val, int defunit)
 {
     int response = -1;
 
@@ -252,12 +252,13 @@ EXPORTED int sync_get_intconfig(const char *channel, const char *val)
         char name[MAX_MAILBOX_NAME]; /* crazy long, but hey */
         snprintf(name, MAX_MAILBOX_NAME, "%s_%s", channel, val);
         result = config_getoverflowstring(name, NULL);
-        if (result) response = atoi(result);
+        if (result)
+            config_parseduration(result, defunit, &response);
     }
 
     if (response == -1) {
         if (!strcmp(val, "sync_repeat_interval"))
-            response = config_getint(IMAPOPT_SYNC_REPEAT_INTERVAL);
+            response = config_getduration(IMAPOPT_SYNC_REPEAT_INTERVAL, defunit);
     }
 
     return response;

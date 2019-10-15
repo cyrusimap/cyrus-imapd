@@ -718,8 +718,10 @@ int main(int argc, char **argv)
         }
     }
 
-    if (frequency <= 0) frequency = config_getint(IMAPOPT_PROMETHEUS_UPDATE_FREQ);
-    if (frequency <= 0) frequency = 10;
+    if (frequency <= 0)
+        frequency = config_getduration(IMAPOPT_PROMETHEUS_UPDATE_FREQ, 's');
+    if (frequency <= 0)
+        frequency = 10;
 
     report_fname = strconcat(prometheus_stats_dir(), FNAME_PROM_REPORT, NULL);
     syslog(LOG_DEBUG, "updating %s every %d seconds", report_fname, frequency);

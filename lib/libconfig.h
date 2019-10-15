@@ -54,6 +54,7 @@ extern int config_getint(enum imapopt opt);
 extern int config_getswitch(enum imapopt opt);
 extern enum enum_value config_getenum(enum imapopt opt);
 extern unsigned long config_getbitfield(enum imapopt opt);
+extern int config_getduration(enum imapopt opt, int defunit);
 
 /* these work on additional strings that are not defined in the
  * imapoptions table */
@@ -65,6 +66,10 @@ extern const char *config_metapartitiondir(const char *partition);
 extern const char *config_archivepartitiondir(const char *partition);
 
 extern const char *config_backupstagingpath(void);
+
+/* for parsing a duration-format string obtained elsewhere,
+ * such as from an overflow string */
+extern int config_parseduration(const char *str, int defunit, int *out_duration);
 
 /* cached configuration variables accessable to external world */
 extern const char *config_filename;

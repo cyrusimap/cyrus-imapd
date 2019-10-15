@@ -595,7 +595,7 @@ static struct backend *restore_connect(const char *servername,
     }
 
     /* Set inactivity timer */
-    timeout = config_getint(IMAPOPT_SYNC_TIMEOUT);
+    timeout = config_getduration(IMAPOPT_SYNC_TIMEOUT, 's');
     if (timeout < 3) timeout = 3;
     prot_settimeout(backend->in, timeout);
 
