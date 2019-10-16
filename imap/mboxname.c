@@ -1644,6 +1644,9 @@ HIDDEN int mboxname_policycheck(const char *name)
     // special users
     if (!strcmp(name, "user.anyone")) return IMAP_MAILBOX_BADNAME;
     if (!strcmp(name, "user.anonymous")) return IMAP_MAILBOX_BADNAME;
+    // redundant but explicit ban on userids starting with '%'
+    // (would conflict with backups of shared mailboxes)
+    if (!strncmp(name, "user.%", 6)) return IMAP_MAILBOX_BADNAME;
 
     while (*name) {
         if (*name == '&') {
