@@ -1392,14 +1392,169 @@ done:
     return r;
 }
 
+struct event_id {
+    const char *raw; /* as requested by client */
+    char *uid;
+    char *recurid;
+};
+
+/* Return NULL if neither a simple UID or structured id */
+static struct event_id *parse_eventid(const char *id)
+{
+    struct event_id *eid = xzmalloc(sizeof(struct event_id));
+    const char *p;
+
+    if ((p = strchr(id, ';')) == NULL) {
+        eid->raw = id;
+        eid->uid = xstrdup(id);
+        return eid;
+    }
+    if (*p + 1 == '\0') {
+        free(eid);
+        return NULL;
+    }
+    eid->raw = id;
+    eid->uid = xstrndup(id, p - id);
+    eid->recurid = xstrdup(p + 1);
+
+    return eid;
+}
+
 struct getcalendarevents_rock {
     struct caldav_db *db;
     struct jmap_req *req;
     struct jmap_get *get;
     struct mailbox *mailbox;
     hashu64_table jmapcache;
+    ptrarray_t *want_eventids;
     int check_acl;
 };
+
+struct recurid_instanceof_rock {
+    icaltimetype recurid;
+    int found;
+};
+
+static int _recurid_instanceof_cb(icalcomponent *comp __attribute__((unused)),
+                                  icaltimetype start,
+                                  icaltimetype end __attribute__((unused)),
+                                  void *vrock)
+{
+    struct recurid_instanceof_rock *rock = vrock;
+    int cmp = icaltime_compare(start, rock->recurid);
+    if (cmp == 0) {
+        rock->found = 1;
+    }
+    return cmp < 0;
+}
+
+static int _recurid_is_instanceof(icaltimetype recurid, icalcomponent *ical)
+{
+    icaltimetype tstart = recurid;
+    icaltime_adjust(&tstart, -1, 0, 0, 0);
+    icaltimetype tend = tstart;
+    icaltime_adjust(&tend, 1, 0, 0, 0);
+    struct icalperiodtype timerange = {
+        tstart, tend, icaldurationtype_null_duration()
+    };
+    struct recurid_instanceof_rock rock = { recurid, 0 };
+    icalcomponent_myforeach(ical, timerange, NULL, _recurid_instanceof_cb, &rock);
+    return rock.found;
+}
+
+static void getcalendarevents_filterinstance(json_t *myevent,
+                                             hash_table *props,
+                                             const char *id,
+                                             const char *ical_uid)
+{
+    json_object_del(myevent, "recurrenceOverrides");
+    json_object_del(myevent, "recurrenceRule");
+    jmap_filterprops(myevent, props);
+    json_object_set_new(myevent, "id", json_string(id));
+    json_object_set_new(myevent, "uid", json_string(ical_uid));
+    json_object_set_new(myevent, "@type", json_string("jsevent"));
+}
+
+static void getcalendarevents_getinstances(json_t *jsevent,
+                                           struct caldav_data *cdata,
+                                           icalcomponent *ical,
+                                           struct getcalendarevents_rock *rock)
+{
+    icalcomponent *myical = NULL;
+
+    int i;
+    for (i = 0; i < ptrarray_size(rock->want_eventids); i++) {
+        struct event_id *eid = ptrarray_nth(rock->want_eventids, i);
+
+        if (eid->recurid == NULL) {
+            /* Client requested main event */
+            json_t *myevent = json_deep_copy(jsevent);
+            jmap_filterprops(myevent, rock->get->props);
+            json_object_set_new(myevent, "id", json_string(cdata->ical_uid));
+            json_object_set_new(myevent, "uid", json_string(cdata->ical_uid));
+            json_object_set_new(myevent, "@type", json_string("jsevent"));
+            json_array_append_new(rock->get->list, myevent);
+            continue;
+        }
+
+        /* Client requested event recurrence instance */
+        json_t *override = json_object_get(
+                json_object_get(jsevent, "recurrenceOverrides"), eid->recurid);
+        if (override) {
+            if (json_object_get(override, "excluded") != json_true()) {
+                /* Instance is a recurrence override */
+                json_t *myevent = jmap_patchobject_apply(jsevent, override);
+                getcalendarevents_filterinstance(myevent, rock->get->props, eid->raw, cdata->ical_uid);
+                if (json_object_get(override, "start") == NULL) {
+                    json_object_set_new(myevent, "start", json_string(eid->recurid));
+                }
+                json_object_set_new(myevent, "recurrenceId", json_string(eid->recurid));
+                json_array_append_new(rock->get->list, myevent);
+            }
+            else {
+                /* Instance is excluded */
+                json_array_append_new(rock->get->not_found, json_string(eid->raw));
+            }
+        }
+        else {
+            /* Check if RRULE generates an instance at this timestamp */
+            if (!ical) {
+                myical = caldav_record_to_ical(rock->mailbox, cdata, httpd_userid, NULL);
+                if (!myical) {
+                    syslog(LOG_ERR, "caldav_record_to_ical failed for record %u:%s",
+                            cdata->dav.imap_uid, rock->mailbox->name);
+                    json_array_append_new(rock->get->not_found, json_string(eid->raw));
+                    continue;
+                }
+                else ical = myical;
+            }
+            struct jmapical_datetime timestamp = JMAPICAL_DATETIME_INITIALIZER;
+            if (jmapical_localdatetime_from_string(eid->recurid, &timestamp) < 0) {
+                json_array_append_new(rock->get->not_found, json_string(eid->raw));
+                continue;
+            }
+            icaltimetype icalrecurid = jmapical_datetime_to_icaltime(&timestamp, NULL);
+            if (!_recurid_is_instanceof(icalrecurid, ical)) {
+                json_array_append_new(rock->get->not_found, json_string(eid->raw));
+                continue;
+            }
+
+            /* Build instance */
+            struct buf buf = BUF_INITIALIZER;
+            jmapical_localdatetime_as_string(&timestamp, &buf);
+            json_t *jstart = json_string(buf_cstring(&buf));
+            buf_free(&buf);
+
+            json_t *myevent = json_deep_copy(jsevent);
+            getcalendarevents_filterinstance(myevent, rock->get->props, eid->raw, cdata->ical_uid);
+            json_object_set_new(myevent, "start", jstart);
+            json_object_set_new(myevent, "recurrenceId", json_string(eid->recurid));
+            json_array_append_new(rock->get->list, myevent);
+        }
+    }
+
+    if (myical) icalcomponent_free(myical);
+}
 
 static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
 {
@@ -1413,13 +1568,11 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     if (!cdata->dav.alive)
         return 0;
 
-    /* check that it's the right type */
-    if (cdata->comp_type != CAL_COMP_VEVENT)
+    /* Check component type and ACL */
+    if (cdata->comp_type != CAL_COMP_VEVENT ||
+       !jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ)) {
         return 0;
-
-    /* Check mailbox ACL rights */
-    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ))
-        return 0;
+    }
 
     if (cdata->jmapversion == JMAPCACHE_CALVERSION) {
         json_error_t jerr;
@@ -1470,10 +1623,10 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     json_object_set_new(jsevent, "participantId", participant_id ?
             json_string(participant_id) : json_null());
 
+    /* Add to cache */
     hashu64_insert(cdata->dav.rowid, json_dumps(jsevent, 0), &rock->jmapcache);
 
 gotevent:
-    jmap_filterprops(jsevent, rock->get->props);
 
     /* Add JMAP-only fields. */
     if (jmap_wantprop(rock->get->props, "x-href")) {
@@ -1485,12 +1638,20 @@ gotevent:
         json_object_set_new(jsevent, "calendarId",
                             json_string(strrchr(cdata->dav.mailbox, '.')+1));
     }
-    json_object_set_new(jsevent, "id", json_string(cdata->ical_uid));
-    json_object_set_new(jsevent, "uid", json_string(cdata->ical_uid));
-    json_object_set_new(jsevent, "@type", json_string("jsevent"));
 
-    /* Add JMAP event to response */
-    json_array_append_new(rock->get->list, jsevent);
+    if (rock->want_eventids == NULL) {
+        /* Client requested all events */
+        jmap_filterprops(jsevent, rock->get->props);
+        json_object_set_new(jsevent, "id", json_string(cdata->ical_uid));
+        json_object_set_new(jsevent, "uid", json_string(cdata->ical_uid));
+        json_object_set_new(jsevent, "@type", json_string("jsevent"));
+        json_array_append_new(rock->get->list, jsevent);
+    }
+    else {
+        /* Client requested specific event ids */
+        getcalendarevents_getinstances(jsevent, cdata, ical, rock);
+        json_decref(jsevent);
+    }
 
 done:
     free(schedule_address);
@@ -1603,6 +1764,11 @@ static const jmap_property_t event_props[] = {
     },
     {
         "color",
+        NULL,
+        0
+    },
+    {
+        "recurrenceId",
         NULL,
         0
     },
@@ -1726,8 +1892,12 @@ static int jmap_calendarevent_get(struct jmap_req *req)
 
     /* Build callback data */
     int checkacl = strcmp(req->accountid, req->userid);
-    struct getcalendarevents_rock rock = { NULL, req, &get, NULL /*mbox*/,
-                                           HASHU64_TABLE_INITIALIZER, checkacl };
+    struct getcalendarevents_rock rock = { NULL /* db */,
+                                           req, &get,
+                                           NULL /* mbox */,
+                                           HASHU64_TABLE_INITIALIZER, /* cache */
+                                           NULL, /* want_eventids */
+                                           checkacl };
 
     construct_hashu64_table(&rock.jmapcache, 512, 0);
 
@@ -1751,18 +1921,62 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     if (JNOTNULL(get.ids)) {
         size_t i;
         json_t *jval;
+        hash_table eventids_by_uid = HASH_TABLE_INITIALIZER;
+        construct_hash_table(&eventids_by_uid, json_array_size(get.ids), 0);
+
+        /* Split into single-valued uids and event recurrence instance ids */
         json_array_foreach(get.ids, i, jval) {
             const char *id = json_string_value(jval);
-            size_t nfound = json_array_size(get.list);
-            r = caldav_get_events(db, httpd_userid, NULL, id, &getcalendarevents_cb, &rock);
-            if (r || nfound == json_array_size(get.list)) {
-                json_array_append(get.not_found, jval);
+            struct event_id *eid = parse_eventid(id);
+            if (eid) {
+                ptrarray_t *eventids = hash_lookup(eid->uid, &eventids_by_uid);
+                if (!eventids) {
+                    eventids = ptrarray_new();
+                    hash_insert(eid->uid, eventids, &eventids_by_uid);
+                }
+                ptrarray_append(eventids, eid);
+            }
+            else json_array_append(get.not_found, jval);
+        }
+
+        /* Lookup events by UID */
+        hash_iter *iter = hash_table_iter(&eventids_by_uid);
+        while (hash_iter_next(iter)) {
+            const char *uid = hash_iter_key(iter);
+            size_t nseen = json_array_size(get.list) + json_array_size(get.not_found);
+            rock.want_eventids = hash_iter_val(iter);
+            r = caldav_get_events(db, httpd_userid, NULL, uid, &getcalendarevents_cb, &rock);
+            if (r) break;
+            if (nseen == json_array_size(get.list) + json_array_size(get.not_found)) {
+                /* caldavdb silently ignores non-existent uids */
+                int j;
+                for (j = 0; j < ptrarray_size(rock.want_eventids); j++) {
+                    struct event_id *eid = ptrarray_nth(rock.want_eventids, j);
+                    json_array_append(rock.get->not_found, json_string(eid->raw));
+                }
             }
         }
+        hash_iter_free(&iter);
+
+        /* Clean up memory */
+        iter = hash_table_iter(&eventids_by_uid);
+        while (hash_iter_next(iter)) {
+            ptrarray_t *eventids = hash_iter_val(iter);
+            struct event_id *eid;
+            while ((eid = ptrarray_pop(eventids))) {
+                free(eid->uid);
+                free(eid->recurid);
+                free(eid);
+            }
+            ptrarray_free(eventids);
+        }
+        hash_iter_free(&iter);
+        free_hash_table(&eventids_by_uid, NULL);
     } else {
+        /* Return all visible events */
         r = caldav_get_events(db, httpd_userid, NULL, NULL, &getcalendarevents_cb, &rock);
-        if (r) goto done;
     }
+    if (r) goto done;
 
     if (hashu64_count(&rock.jmapcache)) {
         r = caldav_begin(db);
