@@ -187,6 +187,11 @@ sub test_shared_mailbox
 
     my $admintalk = $self->{adminstore}->get_client();
 
+    # should definitely not be able to create a user that would conflict
+    # with where shared mailbox backups are stored!
+    $admintalk->create('user.%SHARED');
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+
     $admintalk->create('shared.folder');
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
     $admintalk->setacl('shared.folder', 'cassandane' => 'lrswipkxtecdn');
