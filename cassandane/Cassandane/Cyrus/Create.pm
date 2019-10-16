@@ -108,6 +108,23 @@ sub test_bad_userids_unixhs
     }
 }
 
+sub test_good_userids
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my @good_userids = (
+        'user.$RACL',
+    );
+
+    foreach my $u (@good_userids) {
+        $admintalk->create($u);
+        $self->assert_str_equals('ok',
+            $admintalk->get_last_completion_response());
+    }
+}
+
 sub test_bad_mailboxes
 {
     my ($self) = @_;
@@ -117,12 +134,31 @@ sub test_bad_mailboxes
     my @bad_mailboxes = (
         '$RACL',
         '$RACL$U$anyone$user.foo',
-        'domain!user.foo', # virtdomains=off
+        'domain.com!user.foo', # virtdomains=off
     );
 
     foreach my $m (@bad_mailboxes) {
         $admintalk->create($m);
         $self->assert_str_equals('no',
+            $admintalk->get_last_completion_response());
+    }
+}
+
+sub test_good_mailboxes_virtdomains
+    :VirtDomains
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my @good_mailboxes = (
+        'user.cassandane.$RACL',
+        'domain.com!user.foo',
+    );
+
+    foreach my $m (@good_mailboxes) {
+        $admintalk->create($m);
+        $self->assert_str_equals('ok',
             $admintalk->get_last_completion_response());
     }
 }
