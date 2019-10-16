@@ -78,6 +78,7 @@ sub test_bad_userids
         'user.anyone',
         'user.anonymous',
         'user.%SHARED',
+        #'user..foo', # silently fixed by namespace conversion
     );
 
     foreach my $u (@bad_userids) {
@@ -99,6 +100,7 @@ sub test_bad_userids_unixhs
         'user/anyone',
         'user/anonymous',
         'user/%SHARED',
+        #'user//foo', # silently fixed by namespace conversion
     );
 
     foreach my $u (@bad_userids) {
@@ -125,6 +127,25 @@ sub test_good_userids
     }
 }
 
+sub test_good_userids_unixhs
+    :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my @good_userids = (
+        'user/$RACL',
+        'user/.foo', # with unixhs, this is not a double-sep!
+    );
+
+    foreach my $u (@good_userids) {
+        $admintalk->create($u);
+        $self->assert_str_equals('ok',
+            $admintalk->get_last_completion_response());
+    }
+}
+
 sub test_bad_mailboxes
 {
     my ($self) = @_;
@@ -135,11 +156,33 @@ sub test_bad_mailboxes
         '$RACL',
         '$RACL$U$anyone$user.foo',
         'domain.com!user.foo', # virtdomains=off
+        #'user.cassandane..blah', # silently fixed by namespace conversion
     );
 
     foreach my $m (@bad_mailboxes) {
         $admintalk->create($m);
         $self->assert_str_equals('no',
+            $admintalk->get_last_completion_response());
+    }
+}
+
+sub test_good_mailboxes_unixhs
+    :UnixHierarchySep
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my @good_mailboxes = (
+        'user/cassandane/$RACL',
+        'user/cassandane/.foo', # with unixhs, this is not a double-sep!
+        'user/foo.',
+        'user/foo./bar', # with unixhs, this is not a double-sep!
+    );
+
+    foreach my $m (@good_mailboxes) {
+        $admintalk->create($m);
+        $self->assert_str_equals('ok',
             $admintalk->get_last_completion_response());
     }
 }
