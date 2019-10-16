@@ -68,6 +68,43 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub do_backup
+{
+    my ($self, $params) = @_;
+
+    die "params not a hashref"
+        if defined $params and ref $params ne 'HASH';
+
+    my $users = $params->{users};
+    my $mailboxes = $params->{mailboxes};
+
+    if (defined $users) {
+        $users = [ $users ] if not ref $users;
+        die "users is not an array reference" if ref $users ne 'ARRAY';
+        xlog "backing up users: @{$users}";
+        $self->{instance}->run_command(
+            { cyrus => 1},
+            qw(sync_client -vv -n backup -u), @{$users});
+    }
+
+    if (defined $mailboxes) {
+        $mailboxes = [ $mailboxes ] if not ref $mailboxes;
+        die "mailboxes is not an array reference" if ref $mailboxes ne 'ARRAY';
+        xlog "backing up mailboxes: @{$mailboxes}";
+        $self->{instance}->run_command(
+            { cyrus => 1 },
+            qw(sync_client -vv -n backup -m), @{$mailboxes});
+    }
+
+    if (not defined $users and not defined $mailboxes) {
+        xlog "backing up all users";
+        # n.b. this does not include shared mailboxes! see sync_client(8)
+        $self->{instance}->run_command(
+            { cyrus => 1 },
+            qw(sync_client -vv -n backup -A));
+    }
+}
+
 sub cyr_backup_json
 {
     my ($self, $params, $subcommand, @args) = @_;
@@ -126,11 +163,7 @@ sub test_basic
 {
     my ($self) = @_;
 
-    # XXX probably don't do this like this
-    $self->{instance}->run_command(
-        { cyrus => 1 },
-        qw(sync_client -vv -n backup -u cassandane)
-    );
+    $self->do_backup({ users => 'cassandane' });
 
     my $chunks = $self->cyr_backup_json({}, 'chunks');
 
@@ -155,11 +188,7 @@ sub test_messages
     $exp{C} = $self->make_message("Message C");
     $exp{D} = $self->make_message("Message D");
 
-    # XXX probably don't do this like this
-    $self->{instance}->run_command(
-        { cyrus => 1 },
-        qw(sync_client -vv -n backup -u cassandane)
-    );
+    $self->do_backup({ users => 'cassandane' });
 
     my $messages = $self->cyr_backup_json({}, 'messages');
 
@@ -204,11 +233,7 @@ sub test_shared_mailbox
     $exp{C} = $self->make_message("Message C");
     $exp{D} = $self->make_message("Message D");
 
-    # XXX probably don't do this like this
-    $self->{instance}->run_command(
-        { cyrus => 1 },
-        qw(sync_client -vv -n backup -m shared.folder)
-    );
+    $self->do_backup({ mailboxes => 'shared.folder' });
 
     my $messages = $self->cyr_backup_json({ mailbox => 'shared.folder'},
                                           'messages');
@@ -255,11 +280,7 @@ sub test_deleted_mailbox
     $exp{C} = $self->make_message("Message C");
     $exp{D} = $self->make_message("Message D");
 
-    # XXX probably don't do this like this
-    $self->{instance}->run_command(
-        { cyrus => 1 },
-        qw(sync_client -vv -n backup -u cassandane)
-    );
+    $self->do_backup({ users => 'cassandane' });
 
     # backup should contain four messages
     my $messages = $self->cyr_backup_json({}, 'messages');
@@ -274,11 +295,7 @@ sub test_deleted_mailbox
     $usertalk->delete('INBOX.foo');
     $self->assert_str_equals('ok', $usertalk->get_last_completion_response());
 
-    # XXX probably don't do this like this
-    $self->{instance}->run_command(
-        { cyrus => 1 },
-        qw(sync_client -vv -n backup -u cassandane)
-    );
+    $self->do_backup({ users => 'cassandane' });
 
     $messages = $self->cyr_backup_json({}, 'messages');
     $self->assert_equals(4, scalar @{$messages});
