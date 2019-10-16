@@ -391,6 +391,9 @@ static int build_sieve_interp(void)
     sieve_register_discard(interp, (sieve_callback *) &timsieved_generic_cb);
     sieve_register_reject(interp, (sieve_callback *) &timsieved_generic_cb);
     sieve_register_fileinto(interp, (sieve_callback *) &timsieved_generic_cb);
+#ifdef HAVE_JANSSON
+    sieve_register_snooze(interp, (sieve_callback *) &timsieved_generic_cb);
+#endif
     sieve_register_keep(interp, (sieve_callback *) &timsieved_generic_cb);
     sieve_register_imapflags(interp, NULL);
     sieve_register_size(interp, (sieve_get_size *) &timsieved_generic_cb);

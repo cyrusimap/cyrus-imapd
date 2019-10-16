@@ -90,6 +90,7 @@ extern int deliver_mailbox(FILE *f,
                            char *notifyheader,
                            const char *mailboxname,
                            char *date,
+                           time_t savedate,
                            int quotaoverride,
                            int acloverride);
 

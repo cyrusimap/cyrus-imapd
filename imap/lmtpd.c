@@ -513,6 +513,7 @@ int deliver_mailbox(FILE *f,
                     char *notifyheader,
                     const char *mailboxname,
                     char *date,
+                    time_t savedate,
                     int quotaoverride,
                     int acloverride)
 {
@@ -525,9 +526,12 @@ int deliver_mailbox(FILE *f,
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
     time_t internaldate = 0;
 
-    /* make sure delivery is enabled for this mailbox */
-    r = delivery_enabled_for_mailbox(mailboxname);
-    if (r) return r;
+    if (!savedate) {
+        /* make sure delivery is enabled for this mailbox */
+        r = delivery_enabled_for_mailbox(mailboxname);
+        if (r) return r;
+    }
+    /* Otherwise, this is snooze via Sieve */
 
     /* open the mailbox separately so we can hold it open until
      * after the duplicate elimination is done */
@@ -594,10 +598,9 @@ int deliver_mailbox(FILE *f,
             }
         }
 
-        r = append_fromstage(&as, &content->body, stage,
-                             internaldate, /*createdmodseq*/0,
-                             flags, !singleinstance,
-                             annotations);
+        r = append_fromstage_full(&as, &content->body, stage,
+                                  internaldate, savedate, /*createdmodseq*/0,
+                                  flags, !singleinstance, annotations);
 
         if (r) {
             append_abort(&as);
@@ -739,7 +742,8 @@ EXPORTED int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags
                                md->size, imap4flags, NULL,
                                mydata->authuser, mydata->authstate, md->id,
                                NULL, mydata->notifyheader,
-                               mbname_intname(origmbname), md->date, quotaoverride, 0);
+                               mbname_intname(origmbname), md->date,
+                               0 /*savedate*/, quotaoverride, 0);
     }
 
     mbname_t *mbname = mbname_dup(origmbname);
@@ -749,7 +753,8 @@ EXPORTED int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags
                               md->size, imap4flags, NULL,
                               mydata->authuser, mydata->authstate, md->id,
                               mbname_userid(mbname), mydata->notifyheader,
-                              mbname_intname(mbname), md->date, quotaoverride, 0);
+                              mbname_intname(mbname), md->date,
+                              0 /*savedate*/, quotaoverride, 0);
 
         if (ret == IMAP_MAILBOX_NONEXISTENT &&
             config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH)) {
@@ -759,7 +764,8 @@ EXPORTED int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags
                                       md->size, imap4flags, NULL,
                                       mydata->authuser, mydata->authstate, md->id,
                                       mbname_userid(mbname), mydata->notifyheader,
-                                      mbname_intname(mbname), md->date, quotaoverride, 0);
+                                      mbname_intname(mbname), md->date,
+                                      0 /*savedate*/, quotaoverride, 0);
             }
         }
     }
@@ -773,7 +779,8 @@ EXPORTED int deliver_local(deliver_data_t *mydata, struct imap4flags *imap4flags
                               md->size, imap4flags, NULL,
                               mbname_userid(mbname), authstate, md->id,
                               mbname_userid(mbname), mydata->notifyheader,
-                              mbname_intname(mbname), md->date, quotaoverride, 1);
+                              mbname_intname(mbname), md->date,
+                              0 /*savedate*/, quotaoverride, 1);
 
         if (authstate) auth_freestate(authstate);
     }

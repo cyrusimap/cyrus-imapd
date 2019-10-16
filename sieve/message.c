@@ -67,6 +67,7 @@ int do_reject(action_list_t *a, int action, const char *msg)
     while (a != NULL) {
         b = a;
         if (a->a == ACTION_FILEINTO ||
+            a->a == ACTION_SNOOZE ||
             a->a == ACTION_KEEP ||
             a->a == ACTION_REDIRECT ||
             a->a == ACTION_REJECT ||
@@ -509,6 +510,13 @@ void free_action_list(action_list_t *a)
         switch (a->a) {
         case ACTION_FILEINTO:
             strarray_free(a->u.fil.imapflags);
+            break;
+
+        case ACTION_SNOOZE:
+            strarray_free(a->u.snz.imapflags);
+            strarray_free(a->u.snz.addflags);
+            strarray_free(a->u.snz.removeflags);
+            arrayu64_free(a->u.snz.times);
             break;
 
         case ACTION_KEEP:

@@ -106,6 +106,7 @@ C,SIEVE_REDIRECT        ,"sieve redirects",auto
 C,SIEVE_DISCARD         ,"sieve discards",auto
 C,SIEVE_REJECT          ,"sieve rejects",auto
 C,SIEVE_FILEINTO        ,"sieve fileintos",auto
+C,SIEVE_SNOOZE          ,"sieve snoozes",auto
 C,SIEVE_KEEP            ,"sieve messages kept",auto
 C,SIEVE_NOTIFY          ,"sieve notifications sent",auto
 C,SIEVE_VACATION_REPLIED,"vacation messages sent",auto
