@@ -40,6 +40,34 @@ static void test_star(void)
     CU_ASSERT_EQUAL(r, -1);
 
     glob_free(&g);
+
+    g = glob_init(".*", '.');
+    CU_ASSERT_PTR_NOT_EQUAL_FATAL(g, NULL);
+
+    r = glob_test(g, ".foo");
+    CU_ASSERT_EQUAL(r, 4);
+
+    r = glob_test(g, "user.foo");
+    CU_ASSERT_EQUAL(r, -1);
+
+    r = glob_test(g, "user..foo");
+    CU_ASSERT_EQUAL(r, -1);
+
+    glob_free(&g);
+
+    g = glob_init(".*", '/');
+    CU_ASSERT_PTR_NOT_EQUAL_FATAL(g, NULL);
+
+    r = glob_test(g, ".foo");
+    CU_ASSERT_EQUAL(r, 4);
+
+    r = glob_test(g, "user.foo");
+    CU_ASSERT_EQUAL(r, -1);
+
+    r = glob_test(g, "user/.foo");
+    CU_ASSERT_EQUAL(r, -1);
+
+    glob_free(&g);
 }
 
 static void test_globmatch(void)
