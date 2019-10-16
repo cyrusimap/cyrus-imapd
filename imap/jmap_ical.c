@@ -1121,9 +1121,6 @@ overrides_from_ical(icalcomponent *comp, json_t *event, const char *tzid_start)
             json_object_del(ex, "start");
         }
 
-        /* recurrenceId */
-        json_object_set_new(ex, "recurrenceId", json_string(recurid));
-
         /* Create override patch */
         json_t *diff = jmap_patchobject_create(event, ex);
         json_object_del(diff, "@type");
@@ -1131,6 +1128,7 @@ overrides_from_ical(icalcomponent *comp, json_t *event, const char *tzid_start)
         json_object_del(diff, "relatedTo");
         json_object_del(diff, "prodId");
         json_object_del(diff, "method");
+        json_object_del(diff, "recurrenceId");
         json_object_del(diff, "recurrenceRule");
         json_object_del(diff, "recurrenceOverrides");
         json_object_del(diff, "replyTo");
@@ -4517,6 +4515,7 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
                     !strcmp(key, "relatedTo") ||
                     !strcmp(key, "prodId") ||
                     !strcmp(key, "method") ||
+                    !strcmp(key, "recurrenceId") ||
                     !strcmp(key, "recurrenceRule") ||
                     !strcmp(key, "recurrenceOverrides") ||
                     !strcmp(key, "replyTo") ||
