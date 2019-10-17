@@ -5310,11 +5310,12 @@ sub test_calendarevent_set_rsvpsequence
     $self->assert_not_null($event);
     $self->assert_num_equals(1, $event->{sequence});
 
-    my $participantId = (keys %{$event->{participants}})[0];
+    my $participantId = $event->{participantId};
     $self->assert_not_null($participantId);
 
     my $eventId = $event->{id};
 
+    # Update a partstat doesn't bump sequence.
     my $res = $jmap->CallMethods([
             ['CalendarEvent/set',{
                 update => {
@@ -5330,6 +5331,40 @@ sub test_calendarevent_set_rsvpsequence
         ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId});
     $self->assert_num_equals(1, $res->[1][1]{list}[0]->{sequence});
+
+    # Neither does setting a per-user property.
+    $res = $jmap->CallMethods([
+            ['CalendarEvent/set',{
+                update => {
+                    $eventId => {
+                        color => 'red',
+                    },
+                }
+            }, "R1"],
+            ['CalendarEvent/get',{
+                ids => [$eventId],
+                properties => ['sequence'],
+            }, "R2"],
+        ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_num_equals(1, $res->[1][1]{list}[0]->{sequence});
+
+    # But setting a property shared by all users does!
+    $res = $jmap->CallMethods([
+            ['CalendarEvent/set',{
+                update => {
+                    $eventId => {
+                        title => 'foo',
+                    },
+                }
+            }, "R1"],
+            ['CalendarEvent/get',{
+                ids => [$eventId],
+                properties => ['sequence'],
+            }, "R2"],
+        ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $self->assert_num_not_equals(1, $res->[1][1]{list}[0]->{sequence});
 }
 
 sub test_calendarevent_set_participants_recur
