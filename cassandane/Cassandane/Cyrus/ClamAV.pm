@@ -246,8 +246,11 @@ sub test_notify_deleted
 # This test uses the '-s search-string' invocation, which is much faster
 # than waiting for the AV engine to load when we just care about whether
 # the custom notification gets sent
+# XXX https://github.com/cyrusimap/cyrus-imapd/issues/2516 might be
+# XXX backported to 3.0 if anyone volunteers to test it
 sub test_custom_notify_deleted
     :needs_dependency_clamav :NoStartInstances
+    :min_version_3_1
 {
     my ($self) = @_;
 
