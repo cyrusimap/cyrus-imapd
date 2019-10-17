@@ -146,7 +146,7 @@ EXPORTED char *jmap_pointer_decode(const char *src, size_t len)
     return buf_release(&buf);
 }
 
-EXPORTED json_t* jmap_patchobject_apply(json_t *val, json_t *patch)
+EXPORTED json_t* jmap_patchobject_apply(json_t *val, json_t *patch, json_t *invalid)
 {
     const char *path;
     json_t *newval, *dst;
@@ -165,6 +165,9 @@ EXPORTED json_t* jmap_patchobject_apply(json_t *val, json_t *patch)
         }
         if (!it) {
             /* No such path in 'val' */
+            if (invalid) {
+                json_array_append_new(invalid, json_string(path));
+            }
             json_decref(dst);
             return NULL;
         }

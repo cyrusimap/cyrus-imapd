@@ -4537,7 +4537,7 @@ overrides_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *overr
 
             /* Create overridden event from patch and master event */
             json_t *ex;
-            if (!(ex = jmap_patchobject_apply(master, myoverride))) {
+            if (!(ex = jmap_patchobject_apply(master, myoverride, NULL))) {
                 jmap_parser_invalid(parser, recuridval);
                 json_decref(myoverride);
                 continue;

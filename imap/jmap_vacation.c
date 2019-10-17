@@ -423,7 +423,7 @@ static void vacation_update(const char *userid, const char *id,
 
     /* Update VacationResponse object */
 
-    json_t *new_vacation = jmap_patchobject_apply(vacation, patch);
+    json_t *new_vacation = jmap_patchobject_apply(vacation, patch, NULL);
     json_decref(vacation);
     vacation = new_vacation;
 

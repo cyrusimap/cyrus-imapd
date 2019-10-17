@@ -227,13 +227,6 @@ extern char *jmap_xhref(const char *mboxname, const char *resource);
 
 /* Patch-object support */
 
-/* Apply patch to a deep copy of val and return the result. */
-extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch);
-
-/* Create a patch-object that transforms a to b. */
-extern json_t *jmap_patchobject_create(json_t *a, json_t *b);
-
-
 extern void jmap_ok(jmap_req_t *req, json_t *res);
 extern void jmap_error(jmap_req_t *req, json_t *err);
 

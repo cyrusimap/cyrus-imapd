@@ -1064,7 +1064,7 @@ static void _contacts_set(struct jmap_req *req, unsigned kind)
                         json_object_set_new(set.not_updated, uid, err);
                         goto finish;
                     }
-                    jupdated = jmap_patchobject_apply(jcurrent, arg);
+                    jupdated = jmap_patchobject_apply(jcurrent, arg, NULL);
                     json_decref(jcurrent);
                     if (JNOTNULL(jupdated)) {
                         json_object_del(jupdated, "addressbookId");
@@ -3344,7 +3344,7 @@ static void _contact_copy(jmap_req_t *req,
     if (src_card) {
         json_object_del(src_card, "x-href");  // immutable and WILL change
         json_object_del(src_card, "x-hasPhoto");  // immutable and WILL change
-        dst_card = jmap_patchobject_apply(src_card, jcard);
+        dst_card = jmap_patchobject_apply(src_card, jcard, NULL);
     }
     json_decref(src_card);
 

@@ -9457,7 +9457,7 @@ static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrar
                         json_t *aggregated_keywords = _email_bulkupdate_aggregate_keywords(bulk,
                                 uidrec->email_id, &seenseq_by_mbox_id);
                         update->full_keywords = jmap_patchobject_apply(aggregated_keywords,
-                                update->keywords);
+                                update->keywords, NULL);
                         json_decref(aggregated_keywords);
                     }
                     else {
@@ -9499,7 +9499,7 @@ static void _email_bulkupdate_plan_keywords(struct email_bulkupdate *bulk, ptrar
             _email_keywords_fini(&keywords);
             json_t *new_keywords;
             if (update->patch_keywords) {
-                new_keywords = jmap_patchobject_apply(current_keywords, update->keywords);
+                new_keywords = jmap_patchobject_apply(current_keywords, update->keywords, NULL);
             }
             else {
                 new_keywords = json_incref(update->keywords);
@@ -9569,7 +9569,7 @@ static void _email_bulkupdate_plan_snooze(struct email_bulkupdate *bulk,
                                            update->snoozed_uidrec->uid);
                     json_t *patch = update->snoozed;
                   
-                    update->snoozed = jmap_patchobject_apply(orig, patch);
+                    update->snoozed = jmap_patchobject_apply(orig, patch, NULL);
                     json_decref(orig);
                     json_decref(patch);
                 }
