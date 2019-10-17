@@ -941,7 +941,7 @@ EXPORTED struct backend *backend_connect_pipe(int infd, int outfd,
     ret->in = prot_new(infd, 0);
     ret->out = prot_new(outfd, 1);
     ret->sock = -1;
-    prot_settimeout(ret->in, config_getint(IMAPOPT_CLIENT_TIMEOUT));
+    prot_settimeout(ret->in, config_getduration(IMAPOPT_CLIENT_TIMEOUT, 's'));
     prot_setflushonread(ret->in, ret->out);
     ret->prot = prot;
 
