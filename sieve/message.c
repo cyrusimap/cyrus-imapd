@@ -109,15 +109,21 @@ int do_snooze(action_list_t *a, const char *awaken_mbox, int is_mboxid,
     /* see if this conflicts with any previous actions taken on this message */
     while (a != NULL) {
         if (a->a == ACTION_REJECT || a->a == ACTION_EREJECT) {
+            strarray_free(addflags);
+            strarray_free(removeflags);
             strarray_free(imapflags);
+            arrayu64_free(times);
             return SIEVE_RUN_ERROR;
         }
-#if 0  /* XXX  should we allow multiple snooze of same message? */
-        if (a->a == ACTION_FILEINTO && !strcmp(a->u.fil.mailbox, mbox)) {
+
+        if (a->a == ACTION_SNOOZE) {
             /* don't bother doing it twice */
             /* check that we have a valid action */
             if (b == NULL) {
+                strarray_free(addflags);
+                strarray_free(removeflags);
                 strarray_free(imapflags);
+                arrayu64_free(times);
                 return SIEVE_INTERNAL_ERROR;
             }
 
@@ -127,7 +133,7 @@ int do_snooze(action_list_t *a, const char *awaken_mbox, int is_mboxid,
             free_action_list(a);
             a = b;
         }
-#endif
+
         b = a;
         a = a->next;
     }
