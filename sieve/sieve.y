@@ -623,13 +623,16 @@ specialuse: SPECIALUSE string    {
         ;
 
 mailboxid: MAILBOXID string      {
-                                     /* $0 refers to ftags or vtags */
+                                     /* $0 refers to ftags, sntags or vtags */
                                      commandlist_t *c = $<cl>0;
                                      char **mailboxid = NULL;
 
                                      switch (c->type) {
                                      case FILEINTO:
                                          mailboxid = &c->u.f.mailboxid;
+                                         break;
+                                     case SNOOZE:
+                                         mailboxid = &c->u.sn.mailbox;
                                          break;
                                      case VACATION:
                                          mailboxid = &c->u.v.fcc.mailboxid;
@@ -1194,6 +1197,8 @@ sntags: /* empty */              { $$ = new_command(SNOOZE, sscript); }
 
                                      $$->u.sn.mailbox = $3;
                                  }
+        | sntags mailboxid       { $$->u.sn.is_mboxid = 1; }
+
         | sntags ADDFLAGS stringlist
                                  {
                                      if ($$->u.sn.addflags != NULL) {

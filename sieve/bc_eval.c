@@ -1774,7 +1774,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
             actionflags = strarray_dup(variables->var);
 
-            res = do_snooze(actions, awaken_mbox, addflags, removeflags,
+            res = do_snooze(actions, awaken_mbox, cmd.u.sn.is_mboxid,
+                            addflags, removeflags,
                             cmd.u.sn.days, cmd.u.sn.times, actionflags);
 
             if (res == SIEVE_RUN_ERROR)

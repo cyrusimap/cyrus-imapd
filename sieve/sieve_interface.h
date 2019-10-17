@@ -145,6 +145,7 @@ typedef struct sieve_snooze_context {
     strarray_t *removeflags;
     unsigned char days;
     arrayu64_t *times;
+    int is_mboxid : 1;
 } sieve_snooze_context_t;
 
 typedef struct sieve_fileinto_context {

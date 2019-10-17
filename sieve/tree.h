@@ -218,6 +218,7 @@ struct Commandlist {
         } l;
         struct { /* it's a snooze action */
             char *mailbox;
+            int is_mboxid;
             strarray_t *addflags;
             strarray_t *removeflags;
             unsigned char days;

@@ -448,6 +448,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
 <INITIAL>:addflags             return ADDFLAGS;
 <INITIAL>:removeflags          return REMOVEFLAGS;
 <INITIAL>:daysofweek           return DAYSOFWEEK;
+    /*   :mailboxid            defined in draft-gondwana-sieve-mailboxid */
 
 <INITIAL>"/*"([^\*]|\*[^\/])*\*?"*/" ;  /* ignore bracketed comments */
 <INITIAL>#.* ;                /* ignore hash comments */

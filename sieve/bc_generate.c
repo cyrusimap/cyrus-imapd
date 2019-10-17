@@ -1172,23 +1172,29 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
             case SNOOZE:
                 /* SNOOZE
-                   STRING mailbox
+                   STRING mailbox / mailboxid
                    STRINGLIST addflags
                    STRINGLIST removeflags
-                   STRINGLIST daysofweek
-                   STRINGLIST times
+                   VALUE daysofweek + (is_mboxid << 7)
+                   VALUELIST times
                 */
                 retval->data[codep++].u.op = B_SNOOZE;
                 if (!atleast(retval, codep+1)) return -1;
                 retval->data[codep].type = BT_STR;
                 retval->data[codep++].u.str = c->u.sn.mailbox;
-
                 codep = bc_stringlist_generate(codep, retval, c->u.sn.addflags);
                 if (codep == -1) return -1;
                 codep = bc_stringlist_generate(codep, retval, c->u.sn.removeflags);
                 if (codep == -1) return -1;
                 retval->data[codep].type = BT_VALUE;
-                retval->data[codep++].u.value = c->u.sn.days;
+                if (c->u.sn.is_mboxid) {
+                    retval->data[codep++].u.value =
+                        c->u.sn.days | SNOOZE_IS_ID_MASK;
+                }
+                else {
+                    retval->data[codep++].u.value =
+                        c->u.sn.days & ~SNOOZE_IS_ID_MASK;
+                }
                 codep = bc_vallist_generate(codep, retval, c->u.sn.times);
                 if (codep == -1) return -1;
                 break;

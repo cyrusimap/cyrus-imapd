@@ -1231,14 +1231,25 @@ static int sieve_snooze(void *ac,
     json_t *snoozed = json_pack("{s:s}", "until", tbuf);
 
     if (sn->awaken_mbox) {
-        char *awaken =
-            mboxname_from_external_utf8(sn->awaken_mbox, sd->ns, userid);
+        char *awaken = NULL;
+        const char *awakenid = NULL;
         mbentry_t *mbentry = NULL;
 
-        ret = mboxlist_lookup(awaken, &mbentry, NULL);
-        if (!ret) {
+        if (sn->is_mboxid) {
+            awaken = mboxlist_find_uniqueid(sn->awaken_mbox,
+                                            userid, sd->authstate);
+            if (awaken) awakenid = sn->awaken_mbox;
+        }
+        else {
+            awaken = mboxname_from_external_utf8(sn->awaken_mbox,
+                                                 sd->ns, userid);
+            ret = mboxlist_lookup(awaken, &mbentry, NULL);
+            if (!ret) awakenid = mbentry->uniqueid;
+        }
+
+        if (awakenid) {
             json_object_set_new(snoozed, "moveToMailboxId",
-                                json_string(mbentry->uniqueid));
+                                json_string(awakenid));
         }
 
         mboxlist_entry_free(&mbentry);

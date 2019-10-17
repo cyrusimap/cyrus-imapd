@@ -776,7 +776,8 @@ static void dump2(bytecode_input_t *d, int bc_len)
             int i;
 
             printf("SNOOZE");
-            print_string(" MAILBOX", cmd.u.sn.mailbox);
+            print_string(cmd.u.sn.is_mboxid ? " MAILBOXID" : " MAILBOX",
+                         cmd.u.sn.mailbox);
             print_stringlist("\n\tADDFLAGS", cmd.u.sn.addflags);
             print_stringlist("\n\tREMOVEFLAGS", cmd.u.sn.removeflags);
             printf("\n\tDAYSOFWEEK [");

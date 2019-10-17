@@ -380,7 +380,9 @@ EXPORTED int bc_action_parse(bytecode_input_t *bc, int pos, int version,
         pos = bc_string_parse(bc, pos, &cmd->u.sn.mailbox);
         pos = bc_stringlist_parse(bc, pos, &cmd->u.sn.addflags);
         pos = bc_stringlist_parse(bc, pos, &cmd->u.sn.removeflags);
-        cmd->u.sn.days = ntohl(bc[pos++].value);
+        bits = ntohl(bc[pos++].value);
+        cmd->u.sn.days = (bits & SNOOZE_WDAYS_MASK);
+        cmd->u.sn.is_mboxid = (bits & SNOOZE_IS_ID_MASK);
         pos = bc_vallist_parse(bc, pos, &cmd->u.sn.times);
         break;
 

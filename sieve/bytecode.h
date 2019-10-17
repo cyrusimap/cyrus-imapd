@@ -376,6 +376,9 @@ enum bytecode_tags {
 #define INC_OPTIONAL_MASK 0x40
 #define INC_ONCE_MASK     0x80
 
+#define SNOOZE_WDAYS_MASK 0x7F
+#define SNOOZE_IS_ID_MASK 0x80
+
 enum bytecode_variables_bitflags {
     BFV_LOWER	        = 1<<0,
     BFV_UPPER	        = 1<<1,
