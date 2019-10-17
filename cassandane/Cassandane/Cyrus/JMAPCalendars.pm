@@ -1118,7 +1118,7 @@ sub normalize_event
             $event->{recurrenceRule}{skip} = 'omit';
         }
         if (not exists $event->{recurrenceRule}{q{@type}}) {
-            $event->{recurrenceRule}{q{@type}} = 'Recurrence';
+            $event->{recurrenceRule}{q{@type}} = 'RecurrenceRule';
         }
     }
     if (not exists $event->{recurrenceOverrides}) {
@@ -1749,7 +1749,7 @@ sub test_calendarevent_get_recurrence
 
     my $event = $self->putandget_vevent($id, $ical);
     $self->assert_not_null($event->{recurrenceRule});
-    $self->assert_str_equals("Recurrence", $event->{recurrenceRule}{q{@type}});
+    $self->assert_str_equals("RecurrenceRule", $event->{recurrenceRule}{q{@type}});
     $self->assert_str_equals("monthly", $event->{recurrenceRule}{frequency});
     $self->assert_str_equals("gregorian", $event->{recurrenceRule}{rscale});
     # This assertion is a bit brittle. It depends on the libical-internal
@@ -2126,7 +2126,7 @@ sub test_calendarevent_set_subseconds
         duration=> "PT5M3.45S",
         timeZone=> "Europe/Vienna",
         recurrenceRule => {
-            '@type' => 'Recurrence',
+            '@type' => 'RecurrenceRule',
             frequency => "daily",
             until => '2011-12-10T04:05:06.78',
         },
@@ -5523,7 +5523,7 @@ sub test_rscale_in_jmap_hidden_in_caldav
     # rscale should now be in jmap
     $self->assert_deep_equals(
         {
-            '@type' => 'Recurrence',
+            '@type' => 'RecurrenceRule',
             count          => 12,
             firstDayOfWeek => 'mo',
             frequency      => 'monthly',
