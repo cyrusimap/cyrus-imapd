@@ -2065,6 +2065,71 @@ done:
     return r;
 }
 
+static int updates_peruserprops_only(json_t *jdiff, const char *participant_id)
+{
+    strarray_t userprops = STRARRAY_INITIALIZER;
+    if (participant_id) {
+        strarray_appendm(&userprops,
+                strconcat("participants/", participant_id, "/participationStatus", NULL));
+        strarray_appendm(&userprops,
+                strconcat("participants/", participant_id, "/participationComment", NULL));
+        strarray_appendm(&userprops,
+                strconcat("participants/", participant_id, "/expectReply", NULL));
+    }
+
+    const char *prop;
+    json_t *jval;
+    int ret = 1;
+
+    json_object_foreach(jdiff, prop, jval) {
+        if (!strcmp(prop, "recurrenceOverrides")) {
+            const char *recurid;
+            json_t *joverride;
+            json_object_foreach(jval, recurid, joverride) {
+                if (!updates_peruserprops_only(joverride, participant_id)) {
+                    ret = 0;
+                    goto done;
+                }
+            }
+            continue;
+        }
+        else if (!strcmp(prop, "participants")) {
+            /* Patches *all* participants */
+            ret = 0;
+            goto done;
+        }
+        else if (!strncmp(prop, "recurrenceOverrides/", 20)) {
+            /* Does prop point *into* an override? */
+            const char *p = strchr(prop + 21, '/');
+            if (!p) {
+                /* Override value is a JSON object */
+                if (!updates_peruserprops_only(jval, participant_id)) {
+                    ret = 0;
+                    goto done;
+                }
+                continue;
+            }
+            /* fall through */
+            prop = p + 1;
+        }
+
+        if (strcmp(prop, "keywords") &&
+            strcmp(prop, "color") &&
+            strcmp(prop, "freeBusyStatus") &&
+            strcmp(prop, "useDefaultAlerts") &&
+            strcmp(prop, "alerts") &&
+            (!participant_id || strarray_find(&userprops, prop, 0) < 0)) {
+            /* Patches some non-user property */
+            ret = 0;
+            goto done;
+        }
+    }
+
+done:
+    strarray_fini(&userprops);
+    return ret;
+}
+
 static int setcalendarevents_update(jmap_req_t *req,
                                     json_t *event_patch,
                                     const char *id,
@@ -2167,28 +2232,48 @@ static int setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
     json_object_del(old_event, "updated");
-    json_t *new_event = jmap_patchobject_apply(old_event, event_patch);
-    ical = jmapical_toical(new_event, invalid);
-
-    json_t *jparticipantId = json_object_get(new_event, "participantId");
-    if (json_is_string(jparticipantId)) {
-        const char *participant_id = json_string_value(jparticipantId);
-        json_t *participants = json_object_get(new_event, "participants");
-        json_t *participant = json_object_get(participants, participant_id);
-        schedule_address = xstrdupnull(json_string_value(json_object_get(participant, "email")));
+    json_t *new_event = jmap_patchobject_apply(old_event, event_patch, invalid);
+    if (json_array_size(invalid)) {
+        r = 0;
+        goto done;
     }
-    else if (JNOTNULL(jparticipantId)) {
+
+    /* Determine participant id */
+    json_t *jparticipantId = json_object_get(new_event, "participantId");
+    if (JNOTNULL(jparticipantId) && !json_is_string(jparticipantId)) {
         json_array_append_new(invalid, json_string("participantId"));
     }
-
-    json_t *jnewsequence = json_object_get(event_patch, "sequence");
-    if (!JNOTNULL(jnewsequence)) {
-        json_t *joldseq = json_object_get(old_event, "sequence");
-        int oldseq = joldseq ? json_integer_value(joldseq) : 0;
-        int newseq = oldseq + 1;
-        json_object_set_new(new_event, "sequence", json_integer(newseq));
-        json_object_set_new(update, "sequence", json_integer(newseq));
+    const char *participant_id = json_string_value(jparticipantId);
+    if (!participant_id && schedule_address) {
+        const char *key;
+        json_t *participant;
+        json_object_foreach(json_object_get(new_event, "participants"), key, participant) {
+            const char *email = json_string_value(json_object_get(participant, "email"));
+            if (email && !strcmp(email, schedule_address)) {
+                participant_id = key;
+                break;
+            }
+        }
     }
+    if (participant_id && !schedule_address) {
+        schedule_address = xstrdup(participant_id);
+    }
+
+    /* Determine if to bump sequence */
+    json_t *jdiff = jmap_patchobject_create(old_event, new_event);
+    json_object_del(jdiff, "updated");
+    if (!updates_peruserprops_only(jdiff, participant_id)) {
+        json_int_t oldseq = json_integer_value(json_object_get(old_event, "sequence"));
+        json_int_t newseq = json_integer_value(json_object_get(new_event, "sequence"));
+        if (newseq <= oldseq) {
+            json_int_t newseq = oldseq + 1;
+            json_object_set_new(new_event, "sequence", json_integer(newseq));
+            json_object_set_new(update, "sequence", json_integer(newseq));
+        }
+    }
+    json_decref(jdiff);
+
+    ical = jmapical_toical(new_event, invalid);
 
     json_decref(new_event);
     json_decref(old_event);
@@ -3333,7 +3418,7 @@ static void _calendarevent_copy(jmap_req_t *req,
     /* Patch JMAP event */
     json_t *src_event = jmapical_tojmap(src_ical, NULL);
     if (src_event) {
-        dst_event = jmap_patchobject_apply(src_event, jevent);
+        dst_event = jmap_patchobject_apply(src_event, jevent, NULL);
     }
     json_decref(src_event);
     if (!dst_event) {
