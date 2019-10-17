@@ -2043,7 +2043,7 @@ EOF
 }
 
 sub test_encoded_character_mboxname
-    :needs_component_sieve
+    :needs_component_sieve :min_version_3_1
 {
     my ($self) = @_;
 
