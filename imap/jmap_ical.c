@@ -768,7 +768,7 @@ recurrence_from_ical(icalcomponent *comp)
         return json_null();
     }
 
-    json_t *recur = json_pack("{s:s}", "@type", "Recurrence");
+    json_t *recur = json_pack("{s:s}", "@type", "RecurrenceRule");
 
     /* frequency */
     s = lcase(xstrdup(icalrecur_freq_to_string(rrule.freq)));
