@@ -2770,7 +2770,7 @@ static int _annotate_lookup(const char *mboxname, const char *mboxid,
             r = mboxlist_lookup_allow_all(mboxname, &mbentry, NULL);
             if (r || !mbentry->uniqueid ||(mbentry->mbtype & MBTYPE_DELETED)) {
                 buf_free(value);
-                r = CYRUSDB_NOTFOUND;
+                if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
                 goto done;
             }
         }
