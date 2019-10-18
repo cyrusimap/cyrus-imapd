@@ -2118,6 +2118,7 @@ static int updates_peruserprops_only(json_t *jdiff, const char *participant_id)
             strcmp(prop, "freeBusyStatus") &&
             strcmp(prop, "useDefaultAlerts") &&
             strcmp(prop, "alerts") &&
+            strncmp(prop, "alerts/", 7) &&
             (!participant_id || strarray_find(&userprops, prop, 0) < 0)) {
             /* Patches some non-user property */
             ret = 0;
