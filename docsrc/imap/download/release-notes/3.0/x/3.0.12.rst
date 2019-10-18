@@ -1,0 +1,63 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.0.12 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 3.0 series.
+
+    Refer to the Cyrus IMAP 3.0.0 Release Notes for important information
+    about the 3.0 series, including upgrading instructions.
+
+Download via HTTPS:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.12/cyrus-imapd-3.0.12.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.12/cyrus-imapd-3.0.12.tar.gz.sig
+
+
+.. _relnotes-3.0.12-changes:
+
+Changes Since 3.0.11
+====================
+
+Release changes
+---------------
+
+We're trialing using the Github Releases feature.  If you have trouble downloading
+this release, please report this to the mailing lists.  Thanks!
+
+Security fixes
+--------------
+
+* Fixed CVE-2019-18928: unauthenticated HTTP requests no longer inherit
+  authentication from the previous request on the same connection
+
+Build changes
+-------------
+
+* `configure` can now find xapian-config-1.5 on its own, if it's in your PATH.
+* `make distcheck` now tries to build with most components enabled
+* Sphinx 2 is now supported for documentation builds (thanks Jakob Gahde)
+* Now builds cleanly with GCC 9.1.1 (thanks Дилян Палаузов)
+* `configure --disable-pcre` now works properly, and falls back to POSIX regexes
+
+Other changes
+-------------
+
+* Added support for tls1_3
+
+Bug fixes
+---------
+
+* Fixed :issue:`2848`: MessageExpunge events from ipurge now have valid uri field
+* Fixed :issue:`2877`: `quota -f` now works correctly with `improved_mboxlist_sort: no`
+* Fixed :issue:`2741`: Murder frontends no longer crash on GETMETADATA
+* Fixed :issue:`2808`: UNDUMP no longer crashes when quota needs updating
+* Fixed: mailboxes can no longer be created in the namespace reserved for
+  reverseacls data
+* Fixed :issue:`2893`: the experimental backup system now supports shared mailboxes
+* Fixed: can now assign a sieve variable based on itself
+* Fixed :issue:`2904`: authenticataed, cacheable DAV responses now include a
+  Cache-Control: private header
