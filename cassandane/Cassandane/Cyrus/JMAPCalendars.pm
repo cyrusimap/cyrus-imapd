@@ -5338,6 +5338,7 @@ sub test_calendarevent_set_rsvpsequence
                 update => {
                     $eventId => {
                         color => 'red',
+                        'alerts/alert1/trigger/offset' => '-PT10M',
                     },
                 }
             }, "R1"],
