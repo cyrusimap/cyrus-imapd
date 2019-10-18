@@ -107,6 +107,7 @@ sub test_counters
 {
     my ($self) = @_;
     my $KEY = "/private/vendor/cmu/cyrus-imapd/usercounters";
+    my ($maj, $min) = Cassandane::Instance->get_version();
 
     my $CardDAV = $self->{carddav};
     my $Id = $CardDAV->NewAddressBook('foo');
@@ -117,7 +118,17 @@ sub test_counters
 
     my $counters1 = $talk->getmetadata("", $KEY);
     $counters1 = $counters1->{''}{$KEY};
+    #"3 22 20 16 22 0 20 14 22 0 1571356860")
+
+
     my ($v1, $all1, $mail1, $cal1, $card1, $notes1, $mailfolders1, $calfolders1, $cardfolders1, $notesfolders1, $quota1, $racl1, $valid1, $nothing1) = split / /, $counters1;
+
+    if ($maj < 3 || $maj == 3 && $min == 0) {
+        # 3.0 and earlier did not have quotamodseq or raclmodseq, but
+        # uidvalidity was still the last field
+        $valid1 = $quota1;
+        $quota1 = undef;
+    }
 
     my $VCard = Net::CardDAVTalk::VCard->new_fromstring(<<EOF);
 BEGIN:VCARD
@@ -147,6 +158,13 @@ EOF
 
     my ($v2, $all2, $mail2, $cal2, $card2, $notes2, $mailfolders2, $calfolders2, $cardfolders2, $notesfolders2, $quota2, $racl2, $valid2, $nothing2) = split / /, $counters2;
 
+    if ($maj < 3 || $maj == 3 && $min == 0) {
+        # 3.0 and earlier did not have quotamodseq or raclmodseq, but
+        # uidvalidity was still the last field
+        $valid2 = $quota2;
+        $quota2 = undef;
+    }
+
     $self->assert_num_equals($v1, $v2);
     $self->assert_num_not_equals($all1, $all2);
     $self->assert_num_equals($mail1, $mail2);
@@ -157,8 +175,15 @@ EOF
     $self->assert_num_equals($calfolders1, $calfolders2);
     $self->assert_num_equals($cardfolders1, $cardfolders2);
     $self->assert_num_equals($notesfolders1, $notesfolders2);
-    $self->assert_num_equals($quota1, $quota2);
-    $self->assert_num_equals($racl1, $racl2);
+    if ($maj > 3 || $maj == 3 && $min >= 1) {
+        # quotamodseq and raclmodseq added in 3.1
+        $self->assert_num_equals($quota1, $quota2);
+        $self->assert_num_equals($racl1, $racl2);
+    }
+    else {
+        $self->assert_null($quota2);
+        $self->assert_null($racl2);
+    }
     $self->assert_num_equals($valid1, $valid2);
     $self->assert_null($nothing1);
     $self->assert_null($nothing2);
