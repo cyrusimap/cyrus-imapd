@@ -2065,7 +2065,7 @@ done:
     return r;
 }
 
-static int updates_peruserprops_only(json_t *jdiff, const char *participant_id)
+static int eventpatch_updates_peruserprops_only(json_t *jdiff, const char *participant_id)
 {
     strarray_t userprops = STRARRAY_INITIALIZER;
     if (participant_id) {
@@ -2086,7 +2086,7 @@ static int updates_peruserprops_only(json_t *jdiff, const char *participant_id)
             const char *recurid;
             json_t *joverride;
             json_object_foreach(jval, recurid, joverride) {
-                if (!updates_peruserprops_only(joverride, participant_id)) {
+                if (!eventpatch_updates_peruserprops_only(joverride, participant_id)) {
                     ret = 0;
                     goto done;
                 }
@@ -2103,7 +2103,7 @@ static int updates_peruserprops_only(json_t *jdiff, const char *participant_id)
             const char *p = strchr(prop + 21, '/');
             if (!p) {
                 /* Override value is a JSON object */
-                if (!updates_peruserprops_only(jval, participant_id)) {
+                if (!eventpatch_updates_peruserprops_only(jval, participant_id)) {
                     ret = 0;
                     goto done;
                 }
@@ -2129,6 +2129,18 @@ static int updates_peruserprops_only(json_t *jdiff, const char *participant_id)
 done:
     strarray_fini(&userprops);
     return ret;
+}
+
+static int eventpatch_updates_recurrenceoverrides(json_t *event_patch)
+{
+    const char *prop;
+    json_t *jval;
+    json_object_foreach(event_patch, prop, jval) {
+        if (!strncmp(prop, "recurrenceOverrides/", 20) && strchr(prop + 21, '/')) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static int setcalendarevents_update(jmap_req_t *req,
@@ -2233,7 +2245,97 @@ static int setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
     json_object_del(old_event, "updated");
-    json_t *new_event = jmap_patchobject_apply(old_event, event_patch, invalid);
+
+    json_t *new_event = NULL;
+    if (eventpatch_updates_recurrenceoverrides(event_patch)) {
+        /* Split patch into main event and override patches */
+        json_t *mainevent_patch = json_object();
+        json_t *overrides_patch = json_object();
+        const char *key;
+        json_t *jval;
+        json_object_foreach(event_patch, key, jval) {
+            if (!strncmp(key, "recurrenceOverrides/", 20)) {
+                json_object_set(overrides_patch, key, jval);
+            }
+            else {
+                json_object_set(mainevent_patch, key, jval);
+            }
+        }
+
+        /* Apply patch to main event */
+        json_t *old_mainevent = json_deep_copy(old_event);
+        json_object_del(old_mainevent, "recurrenceOverrides");
+        new_event = jmap_patchobject_apply(old_mainevent, mainevent_patch, invalid);
+
+        /* Expand current overrides from patched main event */
+        json_t *old_overrides = json_object_get(old_event, "recurrenceOverrides");
+        json_t *old_exp_overrides = json_object();
+        json_t *old_override;
+        const char *recurid;
+        json_object_foreach(old_overrides, recurid, old_override) {
+            if (json_boolean_value(json_object_get(old_override, "excluded"))) {
+                json_object_set(old_exp_overrides, recurid, old_override);
+                continue;
+            }
+            json_t *override = jmap_patchobject_apply(new_event, old_override, NULL);
+            if (override) {
+                json_object_set_new(old_exp_overrides, recurid, override);
+            }
+        }
+        if (!json_object_size(old_exp_overrides)) {
+            json_decref(old_exp_overrides);
+            old_exp_overrides = json_null();
+        }
+
+        /* Apply override patches to expanded overrides */
+        json_t *new_exp_overrides = NULL;
+        if (json_object_size(old_exp_overrides)) {
+            json_t *old_wrapper = json_pack("{s:O}", "recurrenceOverrides", old_exp_overrides);
+            json_t *new_wrapper = jmap_patchobject_apply(old_wrapper, overrides_patch, invalid);
+            new_exp_overrides = json_incref(json_object_get(new_wrapper, "recurrenceOverrides"));
+            json_decref(old_wrapper);
+            json_decref(new_wrapper);
+        }
+
+        /* Diff patched overrides with patched main event */
+        json_t *new_overrides = json_object();
+        struct buf buf = BUF_INITIALIZER;
+        json_object_foreach(new_exp_overrides, recurid, jval) {
+            /* Don't diff excluded overrides */
+            if (json_boolean_value(json_object_get(jval, "excluded"))) {
+                json_object_set(new_overrides, recurid, jval);
+                continue;
+            }
+            /* Don't diff replaced overrides */
+            buf_setcstr(&buf, "recurrenceOverrides/");
+            buf_appendcstr(&buf, recurid);
+            if (json_object_get(overrides_patch, buf_cstring(&buf))) {
+                json_object_set(new_overrides, recurid, jval);
+                continue;
+            }
+            /* Diff updated override */
+            json_t *new_override = jmap_patchobject_create(new_event, jval);
+            if (!new_override) continue;
+            json_object_set_new(new_overrides, recurid, new_override);
+        }
+        buf_free(&buf);
+        if (!json_object_size(new_overrides)) {
+            json_decref(new_overrides);
+            new_overrides = json_null();
+        }
+
+        /* Combine new main event with new overrides */
+        json_object_set_new(new_event, "recurrenceOverrides", new_overrides);
+
+        json_decref(mainevent_patch);
+        json_decref(overrides_patch);
+        json_decref(old_exp_overrides);
+        json_decref(new_exp_overrides);
+        json_decref(old_mainevent);
+    }
+    else {
+        new_event = jmap_patchobject_apply(old_event, event_patch, invalid);
+    }
     if (json_array_size(invalid)) {
         r = 0;
         goto done;
@@ -2263,7 +2365,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     /* Determine if to bump sequence */
     json_t *jdiff = jmap_patchobject_create(old_event, new_event);
     json_object_del(jdiff, "updated");
-    if (!updates_peruserprops_only(jdiff, participant_id)) {
+    if (!eventpatch_updates_peruserprops_only(jdiff, participant_id)) {
         json_int_t oldseq = json_integer_value(json_object_get(old_event, "sequence"));
         json_int_t newseq = json_integer_value(json_object_get(new_event, "sequence"));
         if (newseq <= oldseq) {
