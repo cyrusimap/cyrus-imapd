@@ -1241,8 +1241,7 @@ static int sieve_snooze(void *ac,
             if (awaken) awakenid = sn->awaken_mbox;
         }
         else {
-            awaken = mboxname_from_external_utf8(sn->awaken_mbox,
-                                                 sd->ns, userid);
+            awaken = mboxname_from_external(sn->awaken_mbox, sd->ns, userid);
             ret = mboxlist_lookup(awaken, &mbentry, NULL);
             if (!ret) awakenid = mbentry->uniqueid;
         }
