@@ -1106,14 +1106,16 @@ static int _mboxquery_eval_filter(mboxquery_t *query,
             char *role = _mbox_get_role(query->req, mbname);
             int has_role = role != NULL;
             int is_match = 1;
-            if (JNOTNULL(filter->has_any_role)) {
-                is_match = (filter->has_any_role == json_true()) == (has_role != 0);
+            if (has_role) {
+                if (filter->has_any_role == json_false()) is_match = 0;
+                else if (filter->role == json_null()) is_match = 0;
+                else if (filter->role) {
+                    is_match = !strcmp(json_string_value(filter->role), role);
+                }
             }
-            if (filter->role == json_null() && role) {
-                is_match = 0;
-            }
-            else if (JNOTNULL(filter->role) && role) {
-                if (is_match) is_match = !strcmp(json_string_value(filter->role), role);
+            else {
+                if (filter->has_any_role == json_true()) is_match = 0;
+                else if (JNOTNULL(filter->role)) is_match = 0;
             }
             free(role);
             mbname_free(&mbname);
