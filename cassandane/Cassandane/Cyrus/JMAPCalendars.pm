@@ -2910,6 +2910,62 @@ sub test_calendarevent_set_recurrence_bymonthday
     $self->assert_normalized_event_equals($event, $ret);
 }
 
+sub test_calendarevent_set_recurrence_patch
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "Create a recurring event with alert";
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create =>  {
+                1 => {
+                    "calendarId" => 'Default',
+                    "title"=> "title",
+                    "description"=> "description",
+                    "start"=> "2019-01-01T09:00:00",
+                    "duration"=> "PT1H",
+                    "timeZone" => "Europe/London",
+                    "showWithoutTime"=> JSON::false,
+                    "freeBusyStatus"=> "busy",
+                    "recurrenceRule" => {
+                        frequency => 'monthly',
+                    },
+                    "recurrenceOverrides" => {
+                        '2019-02-01T09:00:00' => {
+                            duration => 'PT2H',
+                        },
+                    },
+                    alerts => {
+                        alert1 => {
+                            trigger => {
+                                relativeTo => "start",
+                                offset => "-PT5M",
+                            },
+                        },
+                    }
+                }
+            }
+        }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId);
+
+    xlog "Patch alert in a recurrence override";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'recurrenceOverrides/2019-02-01T09:00:00/alerts/alert1/trigger/offset' => '-PT10M',
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+}
+
 sub test_calendarevent_set_participants
     :min_version_3_1 :needs_component_jmap
 {
