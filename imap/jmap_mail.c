@@ -205,8 +205,73 @@ static jmap_method_t jmap_mail_methods_nonstandard[] = {
 };
 
 /* NULL terminated list of supported jmap_email_query sort fields */
-static const char *msglist_sortfields_standard[];
-static const char *msglist_sortfields_nonstandard[];
+struct email_sortfield {
+    const char *name;
+    const char *capability;
+};
+
+static struct email_sortfield email_sortfields[] = {
+    {
+        "receivedAt",
+        NULL
+    },
+    {
+        "sentAt",
+        NULL
+    },
+    {
+        "from",
+        NULL
+    },
+    {
+        "id",
+        NULL
+    },
+    {
+        "emailstate",
+        NULL
+    },
+    {
+        "size",
+        NULL
+    },
+    {
+        "subject",
+        NULL
+    },
+    {
+        "to",
+        NULL
+    },
+    {
+        "hasKeyword",
+        NULL
+    },
+    {
+        "someInThreadHaveKeyword",
+        NULL
+    },
+    {
+        "addedDates",
+        JMAP_MAIL_EXTENSION
+    },
+    {
+        "threadSize",
+        JMAP_MAIL_EXTENSION
+    },
+    {
+        "spamScore",
+        JMAP_MAIL_EXTENSION
+    },
+    {
+        "snoozedUntil",
+        JMAP_MAIL_EXTENSION
+    },
+    {
+        NULL,
+        NULL
+    }
+};
 
 #define JMAP_MAIL_MAX_MAILBOXES_PER_EMAIL 20
 #define JMAP_MAIL_MAX_KEYWORDS_PER_EMAIL 100 /* defined in mailbox_user_flag */
@@ -240,15 +305,12 @@ HIDDEN void jmap_mail_init(jmap_settings_t *settings)
 HIDDEN void jmap_mail_capabilities(json_t *account_capabilities)
 {
     json_t *sortopts = json_array();
-    const char **sp;
-    for (sp = msglist_sortfields_standard; *sp; sp++) {
-        json_array_append_new(sortopts, json_string(*sp));
-    }
+    struct email_sortfield *sp;
+    int support_extensions = config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS);
 
-    if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        for (sp = msglist_sortfields_nonstandard; *sp; sp++) {
-            json_array_append_new(sortopts, json_string(*sp));
-        }
+    for (sp = email_sortfields; sp->name; sp++) {
+        if (sp->capability && !support_extensions) continue;
+        json_array_append_new(sortopts, json_string(sp->name));
     }
 
     long max_size_attachments_per_email =
@@ -2148,7 +2210,7 @@ static struct sortcrit *_email_buildsort(json_t *sort, int *sort_savedate)
             sortcrit[i].flags |= SORT_REVERSE;
         }
 
-        /* Note: add any new sort criteria also to is_supported_msglist_sort */
+        /* Note: add any new sort criteria also to is_supported_email_sort */
 
         if (!strcmp(prop, "receivedAt")) {
             sortcrit[i].key = SORT_ARRIVAL;
@@ -2366,30 +2428,7 @@ static int _emailsearch_run(struct emailsearch *search, const ptrarray_t **msgda
     return 0;
 }
 
-static const char *msglist_sortfields_standard[] = {
-    "receivedAt",
-    "sentAt",
-    "from",
-    "id",
-    "emailstate",
-    "size",
-    "subject",
-    "to",
-    "hasKeyword",
-    "someInThreadHaveKeyword",
-    NULL
-};
-
-// FM specific
-static const char *msglist_sortfields_nonstandard[] = {
-    "addedDates",
-    "threadSize",
-    "spamScore",
-    "snoozedUntil",
-    NULL
-};
-
-static int _email_parse_comparator(jmap_req_t *req __attribute__((unused)),
+static int _email_parse_comparator(jmap_req_t *req,
                                    struct jmap_comparator *comp,
                                    void *rock __attribute__((unused)),
                                    json_t **err __attribute__((unused)))
@@ -2400,17 +2439,10 @@ static int _email_parse_comparator(jmap_req_t *req __attribute__((unused)),
     }
 
     /* Search in list of supported sortFields */
-    const char **sp;
-    for (sp = msglist_sortfields_standard; *sp; sp++) {
-        if (!strcmp(*sp, comp->property)) {
-            return 1;
-        }
-    }
-
-    // XXX - we should really be looking in "using" to know which to support
-    for (sp = msglist_sortfields_nonstandard; *sp; sp++) {
-        if (!strcmp(*sp, comp->property)) {
-            return 1;
+    struct email_sortfield *sp = email_sortfields;
+    for (sp = email_sortfields; sp->name; sp++) {
+        if (!strcmp(sp->name, comp->property)) {
+            return !sp->capability || jmap_is_using(req, sp->capability);
         }
     }
 
