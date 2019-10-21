@@ -146,10 +146,11 @@ HIDDEN void jmap_email_filtercondition_parse(struct jmap_parser *parser,
                  !strcmp(field, "bcc") ||
                  !strcmp(field, "subject") ||
                  !strcmp(field, "body") ||
-                 !strcmp(field, "attachmentName") ||  /* FM-specific */
-                 !strcmp(field, "attachmentType") ||  /* FM-specific */
-                 (!strcmp(field, "attachmentBody") &&
-                  strarray_find(capabilities, JMAP_SEARCH_EXTENSION, 0) >= 0)) {
+                 (strarray_find(capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
+                  (!strcmp(field, "attachmentName") ||    /* FM-specific */
+                   !strcmp(field, "attachmentType"))) ||  /* FM-specific */
+                 (strarray_find(capabilities, JMAP_SEARCH_EXTENSION, 0) >= 0 &&
+                   !strcmp(field, "attachmentBody"))) {
             if (!json_is_string(arg)) {
                 jmap_parser_invalid(parser, field);
             }
