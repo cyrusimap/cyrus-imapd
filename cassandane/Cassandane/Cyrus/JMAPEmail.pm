@@ -7306,12 +7306,21 @@ sub test_email_query_attachments
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($id1, $res->[0][1]->{ids}[0]);
 
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+    ];
+
     xlog "filter attachmentName";
     $res = $jmap->CallMethods([['Email/query', {
         filter => {
             attachmentName => "somethingelse.gif",
         },
-    }, "R1"]]);
+    }, "R1"]], $using);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($id2, $res->[0][1]->{ids}[0]);
 
@@ -7320,7 +7329,7 @@ sub test_email_query_attachments
         filter => {
             attachmentName => "gif",
         },
-    }, "R1"]]);
+    }, "R1"]], $using);
     $self->assert_num_equals(2, scalar @{$res->[0][1]->{ids}});
 
     xlog "filter text";
@@ -7328,7 +7337,7 @@ sub test_email_query_attachments
         filter => {
             text => "logo",
         },
-    }, "R1"]]);
+    }, "R1"]], $using);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($id1, $res->[0][1]->{ids}[0]);
 }
@@ -7382,12 +7391,21 @@ sub test_email_query_attachmentname
     xlog "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+    ];
+
     xlog "filter attachmentName";
     $res = $jmap->CallMethods([['Email/query', {
         filter => {
             attachmentName => "r\N{LATIN SMALL LETTER U WITH DIAERESIS}bezahl",
         },
-    }, "R1"]]);
+    }, "R1"]], $using);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($id1, $res->[0][1]->{ids}[0]);
 }
@@ -7502,12 +7520,21 @@ sub test_email_query_attachmenttype
         wantIds => [$idTxt],
     });
 
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:submission',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/quota',
+        'https://cyrusimap.org/ns/jmap/debug',
+    ];
+
     foreach (@testCases) {
         my $filter = $_->{filter};
         my $wantIds = $_->{wantIds};
         $res = $jmap->CallMethods([['Email/query', {
             filter => $filter,
-        }, "R1"]]);
+        }, "R1"]], $using);
         my @wantIds = sort @{$wantIds};
         my @gotIds = sort @{$res->[0][1]->{ids}};
         $self->assert_deep_equals(\@wantIds, \@gotIds);
