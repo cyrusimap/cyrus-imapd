@@ -2043,7 +2043,7 @@ EOF
 }
 
 sub test_encoded_character_mboxname
-    :needs_component_sieve :min_version_3_1
+    :needs_component_sieve :min_version_3_1 :SieveUTF8Fileinto
 {
     my ($self) = @_;
 
@@ -2062,6 +2062,38 @@ sub test_encoded_character_mboxname
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "encoded-character"];
 fileinto "INBOX.\${unicode:2217}";
+EOF
+    );
+
+    xlog "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    xlog "Check that the message made it to the target";
+    $self->{store}->set_folder($target);
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+}
+
+sub test_utf8_mboxname
+    :needs_component_sieve :min_version_3_1 :SieveUTF8Fileinto
+{
+    my ($self) = @_;
+
+    my $target = "INBOX.A & B";
+
+    xlog "Testing '&' in a mailbox name";
+
+    xlog "Actually create the target folder";
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create($target)
+         or die "Cannot create $target: $@";
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog "Install script";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "encoded-character"];
+fileinto "INBOX.A & B";
 EOF
     );
 

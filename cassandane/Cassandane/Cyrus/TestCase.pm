@@ -276,6 +276,9 @@ magic(SearchLanguage => sub {
     $self->config_set('search_index_language' => 'yes');
     $self->config_set('search_query_language' => 'yes');
 });
+magic(SieveUTF8Fileinto => sub {
+    shift->config_set('sieve_utf8fileinto' => 'yes');
+});
 
 # Run any magic handlers indicated by the test name or attributes
 sub _run_magic
