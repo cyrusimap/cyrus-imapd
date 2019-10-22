@@ -98,7 +98,10 @@ extern time_t icaltime_to_timet(icaltimetype t, const icaltimezone *floatingtz);
 
 /* If range is a NULL period, callback() is executed for ALL occurrences,
    otherwise callback() is only executed for occurrences that overlap the range.
-   callback() returns true (1) while it wants more occurrences, 0 to finish */
+   callback() returns true (1) while it wants more occurrences, 0 to finish.
+   If comp is a VCALENDAR then in addition to the main component, any embedded
+   component with RECURRENCE-ID is included in the occurrences.
+   If comp is a VEVENT or similar, only RRULE and RDATEs are considered. */
 extern int icalcomponent_myforeach(icalcomponent *comp,
                                    struct icalperiodtype range,
                                    const icaltimezone *floatingtz,
