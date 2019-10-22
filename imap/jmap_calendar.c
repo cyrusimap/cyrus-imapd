@@ -1398,7 +1398,7 @@ struct event_id {
     char *recurid;
 };
 
-/* Return NULL if neither a simple UID or structured id */
+/* Return NULL if id is neither a simple UID or structured id */
 static struct event_id *parse_eventid(const char *id)
 {
     struct event_id *eid = xzmalloc(sizeof(struct event_id));
@@ -1418,6 +1418,17 @@ static struct event_id *parse_eventid(const char *id)
     eid->recurid = xstrdup(p + 1);
 
     return eid;
+}
+
+static void free_eventid(struct event_id **eidptr)
+{
+    if (eidptr == NULL || *eidptr == NULL) return;
+
+    struct event_id *eid = *eidptr;
+    free(eid->uid);
+    free(eid->recurid);
+    free(eid);
+    *eidptr = NULL;
 }
 
 struct getcalendarevents_rock {
@@ -1448,7 +1459,7 @@ static int _recurid_instanceof_cb(icalcomponent *comp __attribute__((unused)),
     return cmp < 0;
 }
 
-static int _recurid_is_instanceof(icaltimetype recurid, icalcomponent *ical)
+static int _recurid_is_instanceof(icaltimetype recurid, icalcomponent *ical, int rrule_only)
 {
     icaltimetype tstart = recurid;
     icaltime_adjust(&tstart, -1, 0, 0, 0);
@@ -1458,8 +1469,44 @@ static int _recurid_is_instanceof(icaltimetype recurid, icalcomponent *ical)
         tstart, tend, icaldurationtype_null_duration()
     };
     struct recurid_instanceof_rock rock = { recurid, 0 };
+    icalcomponent *mycomp = NULL;
+
+    if (rrule_only) {
+        if (icalcomponent_isa(ical) == ICAL_VCALENDAR_COMPONENT) {
+            /* Find the master component */
+            icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+            icalcomponent_kind kind = icalcomponent_isa(comp);
+            icalcomponent *mastercomp = NULL;
+
+            for (; comp; comp = icalcomponent_get_next_component(ical, kind)) {
+                if (!icalcomponent_get_first_property(comp, ICAL_RECURRENCEID_PROPERTY)) {
+                    mastercomp = comp;
+                    break;
+                }
+            }
+            if (!mastercomp) {
+                return 0;
+            }
+            ical = mastercomp;
+        }
+        if (icalcomponent_get_first_property(ical, ICAL_RDATE_PROPERTY)) {
+            /* Remove RDATEs */
+            mycomp = icalcomponent_clone(ical);
+            icalproperty *next;
+            icalproperty *prop = icalcomponent_get_first_property(mycomp, ICAL_RDATE_PROPERTY);
+            for ( ; prop; prop = next) {
+                next = icalcomponent_get_next_property(mycomp, ICAL_RDATE_PROPERTY);
+                icalcomponent_remove_property(mycomp, prop);
+                icalproperty_free(prop);
+            }
+            ical = mycomp;
+        }
+    }
+
     icalcomponent_myforeach(ical, timerange, NULL, _recurid_instanceof_cb, &rock);
-    return rock.found;
+    int found = rock.found;
+    if (mycomp) icalcomponent_free(mycomp);
+    return found;
 }
 
 static void getcalendarevents_filterinstance(json_t *myevent,
@@ -1503,7 +1550,7 @@ static void getcalendarevents_getinstances(json_t *jsevent,
         if (override) {
             if (json_object_get(override, "excluded") != json_true()) {
                 /* Instance is a recurrence override */
-                json_t *myevent = jmap_patchobject_apply(jsevent, override);
+                json_t *myevent = jmap_patchobject_apply(jsevent, override, NULL);
                 getcalendarevents_filterinstance(myevent, rock->get->props, eid->raw, cdata->ical_uid);
                 if (json_object_get(override, "start") == NULL) {
                     json_object_set_new(myevent, "start", json_string(eid->recurid));
@@ -1534,7 +1581,7 @@ static void getcalendarevents_getinstances(json_t *jsevent,
                 continue;
             }
             icaltimetype icalrecurid = jmapical_datetime_to_icaltime(&timestamp, NULL);
-            if (!_recurid_is_instanceof(icalrecurid, ical)) {
+            if (!_recurid_is_instanceof(icalrecurid, ical, 1/*rrule_only*/)) {
                 json_array_append_new(rock->get->not_found, json_string(eid->raw));
                 continue;
             }
@@ -1964,9 +2011,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
             ptrarray_t *eventids = hash_iter_val(iter);
             struct event_id *eid;
             while ((eid = ptrarray_pop(eventids))) {
-                free(eid->uid);
-                free(eid->recurid);
-                free(eid);
+                free_eventid(&eid);
             }
             ptrarray_free(eventids);
         }
@@ -2358,9 +2403,240 @@ static int eventpatch_updates_recurrenceoverrides(json_t *event_patch)
     return 0;
 }
 
+static int setcalendarevents_apply_patch(json_t *event_patch,
+                                         icalcomponent *oldical,
+                                         const char *recurid,
+                                         json_t *invalid,
+                                         char **schedule_address,
+                                         icalcomponent **newical,
+                                         json_t *update)
+{
+    json_t *old_event = NULL;
+    json_t *new_event = NULL;
+    int r = 0;
+
+    old_event = jmapical_tojmap(oldical, NULL);
+    if (!old_event) {
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    json_object_del(old_event, "updated");
+
+    if (recurid) {
+        /* Update or create an override */
+        struct jmapical_datetime recuriddt = JMAPICAL_DATETIME_INITIALIZER;
+        if (jmapical_localdatetime_from_string(recurid, &recuriddt) < 0) {
+            r = IMAP_NOTFOUND;
+            goto done;
+        }
+        icaltimetype icalrecurid = jmapical_datetime_to_icaltime(&recuriddt, NULL);
+
+        int is_rdate = !_recurid_is_instanceof(icalrecurid, oldical, 1/*rrule_only*/);
+
+        json_t *old_overrides = json_object_get(old_event, "recurrenceOverrides");
+        json_t *old_override = json_object_get(old_overrides, recurid);
+        json_t *new_instance = NULL;
+        json_t *new_override = NULL;
+        if (old_override) {
+            /* Patch an existing override */
+            json_t *old_instance = jmap_patchobject_apply(old_event, old_override, NULL);
+            new_instance = jmap_patchobject_apply(old_instance, event_patch, invalid);
+            json_decref(old_instance);
+        }
+        else {
+            /* Create a new override */
+            new_instance = jmap_patchobject_apply(old_event, event_patch, invalid);
+        }
+        json_object_del(new_instance, "recurrenceRule");
+        json_object_del(new_instance, "recurrenceOverrides");
+        new_override = jmap_patchobject_create(old_event, new_instance);
+        json_object_del(new_override, "@type");
+        json_object_del(new_override, "method");
+        json_object_del(new_override, "prodId");
+        json_object_del(new_override, "recurrenceId");
+        json_object_del(new_override, "recurrenceRule");
+        json_object_del(new_override, "recurrenceOverrides");
+        json_object_del(new_override, "relatedTo");
+        json_object_del(new_override, "replyTo");
+        json_object_del(new_override, "uid");
+        json_decref(new_instance);
+
+        if (json_boolean_value(json_object_get(new_override, "excluded"))) {
+            if (is_rdate) {
+                /* No need to set it in recurrenceOverrides */
+                json_decref(new_override);
+                new_override = NULL;
+            }
+            else if (json_object_size(new_override) > 1) {
+                /* Normalize excluded override */
+                json_decref(new_override);
+                new_override = json_pack("{s:b}", "excluded", 1);
+            }
+        }
+        else if (json_object_size(new_override) == 0) {
+            if (!is_rdate) {
+                /* No need to set it in recurrenceOverrides */
+                json_decref(new_override);
+                new_override = NULL;
+            }
+        }
+
+        /* Create the new JSEvent */
+        new_event = json_deep_copy(old_event);
+        json_t *new_overrides = json_object_get(new_event, "recurrenceOverrides");
+        if (new_override) {
+            /* Update or create override */
+            if (new_overrides == NULL || json_is_null(new_overrides)) {
+                new_overrides = json_object();
+                json_object_set_new(new_event, "recurrenceOverrides", new_overrides);
+            }
+            json_object_set_new(new_overrides, recurid, new_override);
+        } else {
+            /* Remove existing override */
+            json_object_del(new_overrides, recurid);
+        }
+    }
+    else {
+        /* Update a regular event */
+        if (eventpatch_updates_recurrenceoverrides(event_patch)) {
+            /* Split patch into main event and override patches */
+            json_t *mainevent_patch = json_object();
+            json_t *overrides_patch = json_object();
+            const char *key;
+            json_t *jval;
+            json_object_foreach(event_patch, key, jval) {
+                if (!strncmp(key, "recurrenceOverrides/", 20)) {
+                    json_object_set(overrides_patch, key, jval);
+                }
+                else {
+                    json_object_set(mainevent_patch, key, jval);
+                }
+            }
+
+            /* Apply patch to main event */
+            json_t *old_mainevent = json_deep_copy(old_event);
+            json_object_del(old_mainevent, "recurrenceOverrides");
+            new_event = jmap_patchobject_apply(old_mainevent, mainevent_patch, invalid);
+
+            /* Expand current overrides from patched main event */
+            json_t *old_overrides = json_object_get(old_event, "recurrenceOverrides");
+            json_t *old_exp_overrides = json_object();
+            json_t *old_override;
+            const char *recurid;
+            json_object_foreach(old_overrides, recurid, old_override) {
+                if (json_boolean_value(json_object_get(old_override, "excluded"))) {
+                    json_object_set(old_exp_overrides, recurid, old_override);
+                    continue;
+                }
+                json_t *override = jmap_patchobject_apply(new_event, old_override, NULL);
+                if (override) {
+                    json_object_set_new(old_exp_overrides, recurid, override);
+                }
+            }
+            if (!json_object_size(old_exp_overrides)) {
+                json_decref(old_exp_overrides);
+                old_exp_overrides = json_null();
+            }
+
+            /* Apply override patches to expanded overrides */
+            json_t *new_exp_overrides = NULL;
+            if (json_object_size(old_exp_overrides)) {
+                json_t *old_wrapper = json_pack("{s:O}", "recurrenceOverrides", old_exp_overrides);
+                json_t *new_wrapper = jmap_patchobject_apply(old_wrapper, overrides_patch, invalid);
+                new_exp_overrides = json_incref(json_object_get(new_wrapper, "recurrenceOverrides"));
+                json_decref(old_wrapper);
+                json_decref(new_wrapper);
+            }
+
+            /* Diff patched overrides with patched main event */
+            json_t *new_overrides = json_object();
+            struct buf buf = BUF_INITIALIZER;
+            json_object_foreach(new_exp_overrides, recurid, jval) {
+                /* Don't diff excluded overrides */
+                if (json_boolean_value(json_object_get(jval, "excluded"))) {
+                    json_object_set(new_overrides, recurid, jval);
+                    continue;
+                }
+                /* Don't diff replaced overrides */
+                buf_setcstr(&buf, "recurrenceOverrides/");
+                buf_appendcstr(&buf, recurid);
+                if (json_object_get(overrides_patch, buf_cstring(&buf))) {
+                    json_object_set(new_overrides, recurid, jval);
+                    continue;
+                }
+                /* Diff updated override */
+                json_t *new_override = jmap_patchobject_create(new_event, jval);
+                if (!new_override) continue;
+                json_object_set_new(new_overrides, recurid, new_override);
+            }
+            buf_free(&buf);
+            if (!json_object_size(new_overrides)) {
+                json_decref(new_overrides);
+                new_overrides = json_null();
+            }
+
+            /* Combine new main event with new overrides */
+            json_object_set_new(new_event, "recurrenceOverrides", new_overrides);
+
+            json_decref(mainevent_patch);
+            json_decref(overrides_patch);
+            json_decref(old_exp_overrides);
+            json_decref(new_exp_overrides);
+            json_decref(old_mainevent);
+        }
+        else {
+            /* The happy path - just apply the patch as provided */
+            new_event = jmap_patchobject_apply(old_event, event_patch, invalid);
+        }
+    }
+
+    /* Determine participant id */
+    json_t *jparticipantId = json_object_get(new_event, "participantId");
+    if (JNOTNULL(jparticipantId) && !json_is_string(jparticipantId)) {
+        json_array_append_new(invalid, json_string("participantId"));
+    }
+    const char *participant_id = json_string_value(jparticipantId);
+    if (!participant_id && *schedule_address) {
+        const char *key;
+        json_t *participant;
+        json_object_foreach(json_object_get(new_event, "participants"), key, participant) {
+            const char *email = json_string_value(json_object_get(participant, "email"));
+            if (email && !strcmp(email, *schedule_address)) {
+                participant_id = key;
+                break;
+            }
+        }
+    }
+    if (participant_id && !schedule_address) {
+        *schedule_address = xstrdup(participant_id);
+    }
+
+    /* Determine if to bump sequence */
+    json_t *jdiff = jmap_patchobject_create(old_event, new_event);
+    json_object_del(jdiff, "updated");
+    if (!eventpatch_updates_peruserprops_only(jdiff, participant_id)) {
+        json_int_t oldseq = json_integer_value(json_object_get(old_event, "sequence"));
+        json_int_t newseq = json_integer_value(json_object_get(new_event, "sequence"));
+        if (newseq <= oldseq) {
+            json_int_t newseq = oldseq + 1;
+            json_object_set_new(new_event, "sequence", json_integer(newseq));
+            json_object_set_new(update, "sequence", json_integer(newseq));
+        }
+    }
+    json_decref(jdiff);
+
+    /* Convert to iCalendar */
+    *newical = jmapical_toical(new_event, invalid);
+
+done:
+    json_decref(new_event);
+    json_decref(old_event);
+    return r;
+}
+
 static int setcalendarevents_update(jmap_req_t *req,
                                     json_t *event_patch,
-                                    const char *id,
+                                    struct event_id *eid,
                                     struct caldav_db *db,
                                     json_t *invalid,
                                     json_t *update)
@@ -2391,14 +2667,15 @@ static int setcalendarevents_update(jmap_req_t *req,
         }
     }
     if (json_array_size(invalid)) {
-        return 0;
+        r = 0;
+        goto done;
     }
 
     /* Determine mailbox and resource name of calendar event. */
-    r = caldav_lookup_uid(db, id, &cdata);
+    r = caldav_lookup_uid(db, eid->uid, &cdata);
     if (r && r != CYRUSDB_NOTFOUND) {
         syslog(LOG_ERR,
-               "caldav_lookup_uid(%s) failed: %s", id, error_message(r));
+               "caldav_lookup_uid(%s) failed: %s", eid->uid, error_message(r));
         goto done;
     }
     if (r == CYRUSDB_NOTFOUND || !cdata->dav.alive ||
@@ -2450,159 +2727,14 @@ static int setcalendarevents_update(jmap_req_t *req,
         r = IMAP_INTERNAL;
         goto done;
     }
-
-    /* Patch the old JMAP calendar event */
-    json_t *old_event = jmapical_tojmap(oldical, NULL);
-    if (!old_event) {
-        syslog(LOG_ERR, "jmapical_tojmap: can't convert oldical %u:%s",
-                cdata->dav.imap_uid, mbox->name);
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-    json_object_del(old_event, "updated");
-
-    json_t *new_event = NULL;
-    if (eventpatch_updates_recurrenceoverrides(event_patch)) {
-        /* Split patch into main event and override patches */
-        json_t *mainevent_patch = json_object();
-        json_t *overrides_patch = json_object();
-        const char *key;
-        json_t *jval;
-        json_object_foreach(event_patch, key, jval) {
-            if (!strncmp(key, "recurrenceOverrides/", 20)) {
-                json_object_set(overrides_patch, key, jval);
-            }
-            else {
-                json_object_set(mainevent_patch, key, jval);
-            }
-        }
-
-        /* Apply patch to main event */
-        json_t *old_mainevent = json_deep_copy(old_event);
-        json_object_del(old_mainevent, "recurrenceOverrides");
-        new_event = jmap_patchobject_apply(old_mainevent, mainevent_patch, invalid);
-
-        /* Expand current overrides from patched main event */
-        json_t *old_overrides = json_object_get(old_event, "recurrenceOverrides");
-        json_t *old_exp_overrides = json_object();
-        json_t *old_override;
-        const char *recurid;
-        json_object_foreach(old_overrides, recurid, old_override) {
-            if (json_boolean_value(json_object_get(old_override, "excluded"))) {
-                json_object_set(old_exp_overrides, recurid, old_override);
-                continue;
-            }
-            json_t *override = jmap_patchobject_apply(new_event, old_override, NULL);
-            if (override) {
-                json_object_set_new(old_exp_overrides, recurid, override);
-            }
-        }
-        if (!json_object_size(old_exp_overrides)) {
-            json_decref(old_exp_overrides);
-            old_exp_overrides = json_null();
-        }
-
-        /* Apply override patches to expanded overrides */
-        json_t *new_exp_overrides = NULL;
-        if (json_object_size(old_exp_overrides)) {
-            json_t *old_wrapper = json_pack("{s:O}", "recurrenceOverrides", old_exp_overrides);
-            json_t *new_wrapper = jmap_patchobject_apply(old_wrapper, overrides_patch, invalid);
-            new_exp_overrides = json_incref(json_object_get(new_wrapper, "recurrenceOverrides"));
-            json_decref(old_wrapper);
-            json_decref(new_wrapper);
-        }
-
-        /* Diff patched overrides with patched main event */
-        json_t *new_overrides = json_object();
-        struct buf buf = BUF_INITIALIZER;
-        json_object_foreach(new_exp_overrides, recurid, jval) {
-            /* Don't diff excluded overrides */
-            if (json_boolean_value(json_object_get(jval, "excluded"))) {
-                json_object_set(new_overrides, recurid, jval);
-                continue;
-            }
-            /* Don't diff replaced overrides */
-            buf_setcstr(&buf, "recurrenceOverrides/");
-            buf_appendcstr(&buf, recurid);
-            if (json_object_get(overrides_patch, buf_cstring(&buf))) {
-                json_object_set(new_overrides, recurid, jval);
-                continue;
-            }
-            /* Diff updated override */
-            json_t *new_override = jmap_patchobject_create(new_event, jval);
-            if (!new_override) continue;
-            json_object_set_new(new_overrides, recurid, new_override);
-        }
-        buf_free(&buf);
-        if (!json_object_size(new_overrides)) {
-            json_decref(new_overrides);
-            new_overrides = json_null();
-        }
-
-        /* Combine new main event with new overrides */
-        json_object_set_new(new_event, "recurrenceOverrides", new_overrides);
-
-        json_decref(mainevent_patch);
-        json_decref(overrides_patch);
-        json_decref(old_exp_overrides);
-        json_decref(new_exp_overrides);
-        json_decref(old_mainevent);
-    }
-    else {
-        new_event = jmap_patchobject_apply(old_event, event_patch, invalid);
-    }
+    /* Apply patch */
+    r = setcalendarevents_apply_patch(event_patch, oldical, eid->recurid,
+                                      invalid, &schedule_address, &ical, update);
     if (json_array_size(invalid)) {
         r = 0;
         goto done;
     }
-
-    /* Determine participant id */
-    json_t *jparticipantId = json_object_get(new_event, "participantId");
-    if (JNOTNULL(jparticipantId) && !json_is_string(jparticipantId)) {
-        json_array_append_new(invalid, json_string("participantId"));
-    }
-    const char *participant_id = json_string_value(jparticipantId);
-    if (!participant_id && schedule_address) {
-        const char *key;
-        json_t *participant;
-        json_object_foreach(json_object_get(new_event, "participants"), key, participant) {
-            const char *email = json_string_value(json_object_get(participant, "email"));
-            if (email && !strcmp(email, schedule_address)) {
-                participant_id = key;
-                break;
-            }
-        }
-    }
-    if (participant_id && !schedule_address) {
-        schedule_address = xstrdup(participant_id);
-    }
-
-    /* Determine if to bump sequence */
-    json_t *jdiff = jmap_patchobject_create(old_event, new_event);
-    json_object_del(jdiff, "updated");
-    if (!eventpatch_updates_peruserprops_only(jdiff, participant_id)) {
-        json_int_t oldseq = json_integer_value(json_object_get(old_event, "sequence"));
-        json_int_t newseq = json_integer_value(json_object_get(new_event, "sequence"));
-        if (newseq <= oldseq) {
-            json_int_t newseq = oldseq + 1;
-            json_object_set_new(new_event, "sequence", json_integer(newseq));
-            json_object_set_new(update, "sequence", json_integer(newseq));
-        }
-    }
-    json_decref(jdiff);
-
-    ical = jmapical_toical(new_event, invalid);
-
-    json_decref(new_event);
-    json_decref(old_event);
-
-    if (json_array_size(invalid)) {
-        r = 0;
-        goto done;
-    } else if (!ical) {
-        r = IMAP_INTERNAL;
-        goto done;
-    }
+    else if (r) goto done;
 
     if (calendarId) {
         /* Check, if we need to move the event. */
@@ -2700,7 +2832,7 @@ done:
 }
 
 static int setcalendarevents_destroy(jmap_req_t *req,
-                                     const char *id,
+                                     struct event_id *eid,
                                      struct caldav_db *db)
 {
     int r;
@@ -2717,11 +2849,26 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     struct index_record record;
     char *schedule_address = NULL;
 
+    if (eid->recurid) {
+        /* Destroying a recurrence instance is setting it excluded */
+        json_t *event_patch = json_pack("{s:b}", "excluded", 1);
+        json_t *invalid = json_array();
+        json_t *update = NULL;
+        r = setcalendarevents_update(req, event_patch, eid, db, invalid, update);
+        json_decref(event_patch);
+        json_decref(update);
+        if (!r && json_array_size(invalid)) {
+            r = IMAP_INTERNAL;
+        }
+        json_decref(invalid);
+        return r;
+    }
+
     /* Determine mailbox and resource name of calendar event. */
-    r = caldav_lookup_uid(db, id, &cdata);
+    r = caldav_lookup_uid(db, eid->uid, &cdata);
     if (r) {
         syslog(LOG_ERR,
-               "caldav_lookup_uid(%s) failed: %s", id, cyrusdb_strerror(r));
+               "caldav_lookup_uid(%s) failed: %s", eid->uid, cyrusdb_strerror(r));
         r = CYRUSDB_NOTFOUND ? IMAP_NOTFOUND : IMAP_INTERNAL;
         goto done;
     }
@@ -2804,12 +2951,25 @@ done:
     return r;
 }
 
+static struct event_id *setcalendarevents_parse_id(jmap_req_t *req, const char *id)
+{
+    if (id && id[0] == '#') {
+        const char *newid = jmap_lookup_id(req, id + 1);
+        if (!newid) return NULL;
+        id = newid;
+    }
+    return parse_eventid(id);
+}
+
+
 static int jmap_calendarevent_set(struct jmap_req *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
     json_t *err = NULL;
     struct caldav_db *db = NULL;
+    struct event_id *eid = NULL;
+    const char *id;
     int r = 0;
 
     /* Parse arguments */
@@ -2904,33 +3064,25 @@ static int jmap_calendarevent_set(struct jmap_req *req)
 
 
     /* update */
-    const char *uid;
+    json_object_foreach(set.update, id, arg) {
+        free_eventid(&eid);
 
-    json_object_foreach(set.update, uid, arg) {
-        const char *val = NULL;
-
-        /* Validate uid. */
-        if (!uid) {
+        eid = setcalendarevents_parse_id(req, id);
+        if (!eid) {
+            json_object_set_new(set.not_updated, id,
+                    json_pack("{s:s}", "type", "notFound"));
             continue;
         }
-        if (uid && uid[0] == '#') {
-            const char *newuid = jmap_lookup_id(req, uid + 1);
-            if (!newuid) {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(set.not_updated, uid, err);
-                continue;
-            }
-            uid = newuid;
-        }
 
-        if ((val = (char *)json_string_value(json_object_get(arg, "uid")))) {
+        const char *uidval = NULL;
+        if ((uidval = json_string_value(json_object_get(arg, "uid")))) {
             /* The uid property must match the current iCalendar UID */
-            if (strcmp(val, uid)) {
+            if (strcmp(uidval, eid->uid)) {
                 json_t *err = json_pack(
                     "{s:s, s:o}",
                     "type", "invalidProperties",
                     "properties", json_pack("[s]"));
-                json_object_set_new(set.not_updated, uid, err);
+                json_object_set_new(set.not_updated, eid->raw, err);
                 continue;
             }
         }
@@ -2938,7 +3090,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         /* Update the calendar event. */
         json_t *invalid = json_pack("[]");
         json_t *update = json_pack("{}");
-        r = setcalendarevents_update(req, arg, uid, db, invalid, update);
+        r = setcalendarevents_update(req, arg, eid, db, invalid, update);
         if (r) {
             json_t *err;
             switch (r) {
@@ -2956,7 +3108,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
                 default:
                     err = jmap_server_error(r);
             }
-            json_object_set_new(set.not_updated, uid, err);
+            json_object_set_new(set.not_updated, eid->raw, err);
             json_decref(invalid);
             json_decref(update);
             r = 0;
@@ -2967,7 +3119,7 @@ static int jmap_calendarevent_set(struct jmap_req *req)
             json_t *err = json_pack(
                 "{s:s, s:o}", "type", "invalidProperties",
                 "properties", invalid);
-            json_object_set_new(set.not_updated, uid, err);
+            json_object_set_new(set.not_updated, eid->raw, err);
             json_decref(update);
             continue;
         }
@@ -2979,8 +3131,9 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         }
 
         /* Report calendar event as updated. */
-        json_object_set_new(set.updated, uid, update);
+        json_object_set_new(set.updated, eid->raw, update);
     }
+    free_eventid(&eid);
 
 
     /* destroy */
@@ -2988,31 +3141,28 @@ static int jmap_calendarevent_set(struct jmap_req *req)
     json_t *juid;
 
     json_array_foreach(set.destroy, index, juid) {
-        /* Validate uid. */
-        const char *uid = json_string_value(juid);
-        if (!uid) {
+        free_eventid(&eid);
+
+        const char *id = json_string_value(juid);
+        if (!id) continue;
+
+        eid = setcalendarevents_parse_id(req, id);
+        if (!eid) {
+            json_object_set_new(set.not_destroyed, id,
+                    json_pack("{s:s}", "type", "notFound"));
             continue;
-        }
-        if (uid && uid[0] == '#') {
-            const char *newuid = jmap_lookup_id(req, uid + 1);
-            if (!newuid) {
-                json_t *err = json_pack("{s:s}", "type", "notFound");
-                json_object_set_new(set.not_destroyed, uid, err);
-                continue;
-            }
-            uid = newuid;
         }
 
         /* Destroy the calendar event. */
-        r = setcalendarevents_destroy(req, uid, db);
+        r = setcalendarevents_destroy(req, eid, db);
         if (r == IMAP_NOTFOUND) {
             json_t *err = json_pack("{s:s}", "type", "notFound");
-            json_object_set_new(set.not_destroyed, uid, err);
+            json_object_set_new(set.not_destroyed, eid->raw, err);
             r = 0;
             continue;
         } else if (r == IMAP_PERMISSION_DENIED) {
             json_t *err = json_pack("{s:s}", "type", "forbidden");
-            json_object_set_new(set.not_destroyed, uid, err);
+            json_object_set_new(set.not_destroyed, eid->raw, err);
             r = 0;
             continue;
         } else if (r) {
@@ -3020,8 +3170,9 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         }
 
         /* Report calendar event as destroyed. */
-        json_array_append_new(set.destroyed, json_string(uid));
+        json_array_append_new(set.destroyed, json_string(eid->raw));
     }
+    free_eventid(&eid);
 
 
     // TODO refactor jmap_getstate to return a string, once
@@ -3036,6 +3187,7 @@ done:
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
     if (db) caldav_close(db);
+    free_eventid(&eid);
     return r;
 }
 
