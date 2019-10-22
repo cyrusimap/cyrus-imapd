@@ -10201,7 +10201,7 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
     }
     if (mboxrec == NULL) {
         mbentry_t *mbentry = NULL;
-        int r = mboxlist_lookup(rec->mboxname, &mbentry, NULL);
+        int r = mboxlist_lookup_by_guidrec(rec, &mbentry, NULL);
         if (r) return r;
 
         // we only want regular mailboxes!

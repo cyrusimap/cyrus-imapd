@@ -458,7 +458,7 @@ static int jmap_blob_get(jmap_req_t *req)
         if (req->cstate->folders_byname)
             jmap_mboxlist_lookup(mailbox, &mbentry, NULL);
         else
-            mbentry = jmap_mbentry_by_uniqueid(req, mailbox, 0);
+            mbentry = jmap_mbentry_by_uniqueid_copy(req, mailbox);
 
         /* Open mailbox */
         if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
