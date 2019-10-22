@@ -1999,7 +1999,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                 int j;
                 for (j = 0; j < ptrarray_size(rock.want_eventids); j++) {
                     struct event_id *eid = ptrarray_nth(rock.want_eventids, j);
-                    json_array_append(rock.get->not_found, json_string(eid->raw));
+                    json_array_append_new(rock.get->not_found, json_string(eid->raw));
                 }
             }
         }
@@ -3718,6 +3718,8 @@ done:
     if (sortcrit) freesortcrit(sortcrit);
     if (query) search_query_free(query);
     jmap_closembox(req, &mailbox);
+    free(icalbefore);
+    free(icalafter);
     buf_free(&buf);
     return r;
 }
