@@ -2106,4 +2106,54 @@ EOF
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
 
+sub test_snooze
+    :needs_component_sieve :needs_component_calalarmd :min_version_3_1
+{
+    my ($self) = @_;
+
+    my $snoozed = "INBOX.snoozed";
+    my $awakened = "INBOX.awakened";
+
+    xlog "Create the snoozed folder";
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create($snoozed, "(USE (\\Snoozed))");
+    $self->assert_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "Create the awakened folder";
+    $imaptalk->create($awakened)
+         or die "Cannot create $awakened: $@";
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    my $localtz = DateTime::TimeZone->new( name => 'local' );
+    my $maildate = DateTime->now(time_zone => $localtz);
+    $maildate->add(DateTime::Duration->new(minutes => 1));
+    my $timestr = $maildate->strftime('%H:%M');
+
+    xlog "Install script";
+    $self->{instance}->install_sieve_script(<<EOF
+require ["x-cyrus-snooze"];
+snooze :mailbox "$awakened" :addflags [ "\\\\Flagged", "\$awakened" ] "$timestr";
+#snooze "$timestr";
+EOF
+    );
+
+    xlog "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    xlog "Check that the message made it to the snoozed folder";
+    $self->{store}->set_folder($snoozed);
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+
+    xlog "Trigger re-delivery of snoozed email";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $maildate->epoch() + 90 );
+
+    xlog "Check that the message made it to the awakened folder";
+    $self->{store}->set_folder($awakened);
+    $msg1->set_attribute(flags => [ '\\Recent', '\\Flagged', '$awakened' ]);
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+}
+
 1;
