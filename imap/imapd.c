@@ -6849,6 +6849,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 {
     int r = 0;
     int mbtype = 0;
+    int options = 0;
     const char *partition = NULL;
     const char *server = NULL;
     const char *uniqueid = NULL;
@@ -6903,6 +6904,9 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
             prot_printf(imapd_out, "%s NO [USEATTR] %s\r\n", tag, error_message(r));
             goto done;
         }
+
+        if (strstr(buf_cstring(&specialuse), "\\Snoozed"))
+            options |= OPT_IMAP_HAS_ALARMS;
     }
 
     // A non-admin is not allowed to specify the server nor partition on which
@@ -7107,13 +7111,14 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
     }
 
 localcreate:
-    r = mboxlist_createmailbox_unq(
+    r = mboxlist_createmailbox_opts(
             mbname_intname(mbname),                             // const char *name
             mbtype,                                             // int mbtype
             partition,                                          // const char *partition
             imapd_userisadmin || imapd_userisproxyadmin,        // int isadmin
             imapd_userid,                                       // const char *userid
             imapd_authstate,                                    // struct auth_state *auth_state
+            options,                                            // options
             localonly,                                          // int localonly
             localonly,                                          // int forceuser
             0,                                                  // int dbonly
