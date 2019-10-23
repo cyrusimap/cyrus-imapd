@@ -53,7 +53,7 @@
 
 #include <sys/stat.h>
 
-extern const char *lock_method_desc;
+extern const char lock_method_desc[];
 
 extern double debug_locks_longer_than;
 

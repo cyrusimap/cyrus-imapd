@@ -53,7 +53,7 @@
 
 #define SLOP (8*1024)
 
-EXPORTED const char *map_method_desc = "shared";
+EXPORTED const char map_method_desc[] = "shared";
 
 /*
  * Create/refresh mapping of file

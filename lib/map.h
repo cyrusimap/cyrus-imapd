@@ -45,7 +45,7 @@
 
 #define MAP_UNKNOWN_LEN ((unsigned long)-1)
 
-extern const char *map_method_desc;
+extern const char map_method_desc[];
 
 /* Create a memory map
  *

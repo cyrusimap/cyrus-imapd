@@ -59,7 +59,7 @@
 #define NON_BLOCKING_MODE FNDELAY
 #endif
 
-EXPORTED const char *nonblock_method_desc = "fcntl";
+EXPORTED const char nonblock_method_desc[] = "fcntl";
 
 /*
  * Modifies the non-blocking mode on the file descriptor 'fd'.  If
