@@ -49,6 +49,9 @@
 /* Factor for converting days to seconds. */
 #define DAY2SEC (24 * 60 * 60)
 
+extern const char const monthname[][4];
+extern const char const wday[][4];
+
 /* Default precision to print timeval is millisecond (timeval_ms)
  * change to timeval_us in times.c to print microsecond. */
 enum timeval_precision { timeval_s, timeval_ms, timeval_us };

@@ -67,6 +67,7 @@
 #include <pwd.h>
 
 #include "prot.h"
+#include "lib/times.h"
 
 #include "imclient.h"
 #include "util.h"
@@ -392,26 +393,6 @@ static void mark_all_deleted(const char *mbox, uid_list_t *list, mbox_stats_t *s
     }
 }
 
-static char *month_string(int mon)
-{
-    switch(mon)
-        {
-            case 0: return "Jan";
-            case 1: return "Feb";
-            case 2: return "Mar";
-            case 3: return "Apr";
-            case 4: return "May";
-            case 5: return "Jun";
-            case 6: return "Jul";
-            case 7: return "Aug";
-            case 8: return "Sep";
-            case 9: return "Oct";
-            case 10: return "Nov";
-            case 11: return "Dec";
-        default: return "BAD";
-        }
-}
-
 /* we don't check what comes in on matchlen and category, should we? */
 static int purge_me(char *name, time_t when)
 {
@@ -427,7 +408,7 @@ static int purge_me(char *name, time_t when)
     snprintf(search_string,sizeof(search_string),
              "BEFORE %d-%s-%d",
              my_tm->tm_mday,
-             month_string(my_tm->tm_mon),
+             monthname[my_tm->tm_mon],
              1900+my_tm->tm_year);
 
     if (noop) {

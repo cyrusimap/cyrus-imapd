@@ -58,6 +58,7 @@
 #include <sys/statvfs.h>
 #include <sys/types.h>
 
+#include "lib/times.h"
 #include "cyr_qsort_r.h"
 #include "global.h"
 #include "httpd.h"
@@ -664,10 +665,6 @@ static int action_proc(struct transaction_t *txn)
                 /* W */ " (paging)",
                 /* X */ "", /* Y */ "",
                 /* Z */ " (zombie)"
-            };
-            const char *monthname[] = {
-                "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
             };
 
             buf_printf_markup(body, level, "<td>%c%s</td>", pinfo->state,

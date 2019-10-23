@@ -2062,10 +2062,6 @@ EXPORTED time_t calc_compile_time(const char *time, const char *date)
 {
     struct tm tm;
     char month[4];
-    const char *monthname[] = {
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-    };
 
     memset(&tm, 0, sizeof(struct tm));
     tm.tm_isdst = -1;
@@ -2273,15 +2269,11 @@ void parse_query_params(struct transaction_t *txn, const char *query)
 /* Create HTTP-date ('buf' must be at least 30 characters) */
 EXPORTED char *httpdate_gen(char *buf, size_t len, time_t t)
 {
-    static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-    static char *wday[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-
     struct tm *tm = gmtime(&t);
 
     snprintf(buf, len, "%3s, %02d %3s %4d %02d:%02d:%02d GMT",
              wday[tm->tm_wday],
-             tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
+             tm->tm_mday, monthname[tm->tm_mon], tm->tm_year + 1900,
              tm->tm_hour, tm->tm_min, tm->tm_sec);
 
     return buf;

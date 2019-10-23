@@ -276,13 +276,6 @@ static int imip_send_sendmail(icalcomponent *ical, const char *sender,
     pid_t p = getpid();
     time_t t = time(NULL);
     static unsigned send_count = 0;
-    const char *day_of_week[] = {
-        "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
-    };
-    const char *month_of_year[] = {
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-    };
 
     meth = icalcomponent_get_method(ical);
     comp = icalcomponent_get_first_real_component(ical);
@@ -341,8 +334,8 @@ static int imip_send_sendmail(icalcomponent *ical, const char *sender,
 
     cp = when;
     cp += sprintf(cp, "%s, %02u %s %04u",
-                  day_of_week[icaltime_day_of_week(start)-1],
-                  start.day, month_of_year[start.month-1], start.year);
+                  wday[icaltime_day_of_week(start)-1],
+                  start.day, monthname[start.month-1], start.year);
     if (!icaltime_is_date(start)) {
         cp += sprintf(cp, " %02u:%02u", start.hour, start.minute);
         if (start.second) cp += sprintf(cp, ":%02u", start.second);
@@ -355,8 +348,8 @@ static int imip_send_sendmail(icalcomponent *ical, const char *sender,
         cp += 2;
         if (icaltime_compare_date_only(end, start)) {
             cp += sprintf(cp, " %s, %02u %s %04u",
-                          day_of_week[icaltime_day_of_week(end)-1],
-                          end.day, month_of_year[end.month-1], end.year);
+                          wday[icaltime_day_of_week(end)-1],
+                          end.day, monthname[end.month-1], end.year);
         }
         if (!icaltime_is_date(end)) {
             cp += sprintf(cp, " %02u:%02u", end.hour, end.minute);
