@@ -1965,7 +1965,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
     }
 
     /* Does the client request specific events? */
-    if (JNOTNULL(get.ids)) {
+    if (json_array_size(get.ids)) {
         size_t i;
         json_t *jval;
         hash_table eventids_by_uid = HASH_TABLE_INITIALIZER;
@@ -2017,7 +2017,7 @@ static int jmap_calendarevent_get(struct jmap_req *req)
         }
         hash_iter_free(&iter);
         free_hash_table(&eventids_by_uid, NULL);
-    } else {
+    } else if (json_is_null(get.ids) || get.ids == NULL) {
         /* Return all visible events */
         r = caldav_get_events(db, httpd_userid, NULL, NULL, &getcalendarevents_cb, &rock);
     }
