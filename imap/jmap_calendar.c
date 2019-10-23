@@ -1522,12 +1522,13 @@ static void getcalendarevents_filterinstance(json_t *myevent,
     json_object_set_new(myevent, "@type", json_string("jsevent"));
 }
 
-static void getcalendarevents_getinstances(json_t *jsevent,
+static int getcalendarevents_getinstances(json_t *jsevent,
                                            struct caldav_data *cdata,
                                            icalcomponent *ical,
                                            struct getcalendarevents_rock *rock)
 {
     icalcomponent *myical = NULL;
+    int r = 0;
 
     int i;
     for (i = 0; i < ptrarray_size(rock->want_eventids); i++) {
@@ -1566,6 +1567,12 @@ static void getcalendarevents_getinstances(json_t *jsevent,
         else {
             /* Check if RRULE generates an instance at this timestamp */
             if (!ical) {
+                /* Open calendar mailbox. */
+                if (!rock->mailbox || strcmp(rock->mailbox->name, cdata->dav.mailbox)) {
+                    mailbox_close(&rock->mailbox);
+                    r = mailbox_open_irl(cdata->dav.mailbox, &rock->mailbox);
+                    if (r) goto done;
+                }
                 myical = caldav_record_to_ical(rock->mailbox, cdata, httpd_userid, NULL);
                 if (!myical) {
                     syslog(LOG_ERR, "caldav_record_to_ical failed for record %u:%s",
@@ -1600,7 +1607,9 @@ static void getcalendarevents_getinstances(json_t *jsevent,
         }
     }
 
+done:
     if (myical) icalcomponent_free(myical);
+    return r;
 }
 
 static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
@@ -1696,8 +1705,9 @@ gotevent:
     }
     else {
         /* Client requested specific event ids */
-        getcalendarevents_getinstances(jsevent, cdata, ical, rock);
+        r = getcalendarevents_getinstances(jsevent, cdata, ical, rock);
         json_decref(jsevent);
+        if (r) goto done;
     }
 
 done:
