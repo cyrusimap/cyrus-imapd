@@ -1902,6 +1902,13 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         /* zero properties evaluate to true */
         search_expr_new(this, SEOP_TRUE);
 
+        if ((s = json_string_value(json_object_get(filter, "destroyedAfter")))) {
+            time_from_iso8601(s, &t);
+            e = search_expr_new(this, SEOP_GE);
+            e->attr = search_attr_find("lastupdated");
+            e->value.u = t;
+            _email_search_perf_attr(e->attr, perf_filters);
+        }
         if ((s = json_string_value(json_object_get(filter, "after")))) {
             time_from_iso8601(s, &t);
             e = search_expr_new(this, SEOP_GE);
@@ -2606,9 +2613,10 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     struct db *cache_db = NULL;
     modseq_t current_modseq = jmap_highestmodseq(req, MBTYPE_EMAIL);
     int is_cached = 0;
+    int want_expunged = JNOTNULL(json_object_get(query->filter, "destroyedAfter"));
 
     struct emailsearch *search = _emailsearch_new(req, query->filter, query->sort,
-                                                  contactgroups, 0, 0,
+                                                  contactgroups, want_expunged, 0,
                                                   &query->sort_savedate);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
@@ -2744,8 +2752,10 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
 
         /* Skip expunged or hidden messages */
         if (md->system_flags & FLAG_DELETED ||
-            md->internal_flags & FLAG_INTERNAL_EXPUNGED)
-            continue;
+            md->internal_flags & FLAG_INTERNAL_EXPUNGED) {
+            if (!want_expunged) continue;
+        }
+        else if (want_expunged) continue;
 
         /* Is there another copy of this message with a targeted savedate? */
         if (!md->savedate &&

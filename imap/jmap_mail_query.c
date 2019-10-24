@@ -114,7 +114,8 @@ HIDDEN void jmap_email_filtercondition_parse(struct jmap_parser *parser,
             }
         }
         else if (!strcmp(field, "before") ||
-                 !strcmp(field, "after")) {
+                 !strcmp(field, "after") ||
+                 !strcmp(field, "destroyedAfter")) {
             if (!json_is_utcdate(arg)) {
                 jmap_parser_invalid(parser, field);
             }
