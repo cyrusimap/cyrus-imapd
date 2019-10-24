@@ -2572,6 +2572,20 @@ EXPORTED void search_attr_init(void)
             /*free*/NULL,
             (void *)message_get_internaldate
         },{
+            "lastupdated",
+            /*flags*/0,
+            SEARCH_PART_NONE,
+            SEARCH_COST_INDEX,
+            /*internalise*/NULL,
+            search_time_t_cmp,
+            search_time_t_match,
+            search_time_t_serialise,
+            search_time_t_unserialise,
+            /*get_countability*/NULL,
+            /*duplicate*/NULL,
+            /*free*/NULL,
+            (void *)message_get_lastupdated
+        },{
             "savedate",
             /*flags*/0,
             SEARCH_PART_NONE,
