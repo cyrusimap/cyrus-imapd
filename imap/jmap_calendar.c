@@ -1463,7 +1463,7 @@ static int _recurid_is_instanceof(icaltimetype recurid, icalcomponent *ical, int
 {
     icaltimetype tstart = recurid;
     icaltime_adjust(&tstart, -1, 0, 0, 0);
-    icaltimetype tend = tstart;
+    icaltimetype tend = recurid;
     icaltime_adjust(&tend, 1, 0, 0, 0);
     struct icalperiodtype timerange = {
         tstart, tend, icaldurationtype_null_duration()
