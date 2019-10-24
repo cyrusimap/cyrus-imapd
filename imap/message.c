@@ -4854,6 +4854,14 @@ EXPORTED int message_get_internaldate(message_t *m, time_t *datep)
     return 0;
 }
 
+EXPORTED int message_get_lastupdated(message_t *m, time_t *datep)
+{
+    int r = message_need(m, M_RECORD);
+    if (r) return r;
+    *datep = m->record.last_updated;
+    return 0;
+}
+
 EXPORTED int message_get_fname(message_t *m, const char **fnamep)
 {
     int r = message_need(m, M_FILENAME);
