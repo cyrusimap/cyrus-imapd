@@ -1364,6 +1364,7 @@ static json_t *_email_read_jannot(const jmap_req_t *req, msgrecord_t *mr,
 
 struct _email_find_rock {
     jmap_req_t *req;
+    short show_destroyed;
     char *mboxname;
     uint32_t uid;
 };
@@ -1403,9 +1404,11 @@ static int _email_find_cb(const conv_guidrec_t *rec, void *rock)
         goto done;
     }
 
-    // if it's deleted, skip
-    if ((system_flags & FLAG_DELETED) || (internal_flags & FLAG_INTERNAL_EXPUNGED))
-        goto done;
+    if (!d->show_destroyed) {
+        // if it's deleted, skip
+        if ((system_flags & FLAG_DELETED) || (internal_flags & FLAG_INTERNAL_EXPUNGED))
+            goto done;
+    }
 
     d->mboxname = xstrdup(rec->mboxname);
     d->uid = rec->uid;
@@ -1419,10 +1422,11 @@ done:
 static int _email_find_in_account(jmap_req_t *req,
                                   const char *account_id,
                                   const char *email_id,
+                                  short show_destroyed,
                                   char **mboxnameptr,
                                   uint32_t *uidptr)
 {
-    struct _email_find_rock rock = { req, NULL, 0 };
+    struct _email_find_rock rock = { req, show_destroyed, NULL, 0 };
     int r;
 
     /* must be prefixed with 'M' */
@@ -1457,10 +1461,12 @@ static int _email_find_in_account(jmap_req_t *req,
 
 HIDDEN int jmap_email_find(jmap_req_t *req,
                            const char *email_id,
+                           short show_destroyed,
                            char **mboxnameptr,
                            uint32_t *uidptr)
 {
-    return _email_find_in_account(req, req->accountid, email_id, mboxnameptr, uidptr);
+    return _email_find_in_account(req, req->accountid, email_id,
+                                  show_destroyed, mboxnameptr, uidptr);
 }
 
 struct email_getcid_rock {
@@ -3740,7 +3746,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
 
         const char *msgid = json_string_value(val);
 
-        r = jmap_email_find(req, msgid, &mboxname, &uid);
+        r = jmap_email_find(req, msgid, 0, &mboxname, &uid);
         if (r) {
             if (r == IMAP_NOTFOUND) {
                 json_array_append_new(*notfound, json_string(msgid));
@@ -4125,6 +4131,7 @@ struct email_getargs {
     short fetch_text_body;
     short fetch_html_body;
     short fetch_all_body;
+    short show_destroyed;
     size_t max_body_bytes;
     /* Request-scoped context */
     struct email_getcontext ctx;
@@ -4136,6 +4143,7 @@ struct email_getargs {
         NULL, \
         PTRARRAY_INITIALIZER, \
         PTRARRAY_INITIALIZER, \
+        0, \
         0, \
         0, \
         0, \
@@ -4481,6 +4489,11 @@ static int _email_getargs_parse(jmap_req_t *req __attribute__((unused)),
     /* fetchAllBodyValues */
     else if (!strcmp(key, "fetchAllBodyValues") && json_is_boolean(arg)) {
         args->fetch_all_body = json_boolean_value(arg);
+    }
+
+    /* showDestroyed */
+    else if (!strcmp(key, "showDestroyed") && json_is_boolean(arg)) {
+        args->show_destroyed = json_boolean_value(arg);
     }
 
     /* maxBodyValueBytes */
@@ -5814,7 +5827,7 @@ static void jmap_email_get_full(jmap_req_t *req, struct jmap_get *get, struct em
         struct mailbox *mbox = NULL;
 
         uint32_t uid;
-        int r = jmap_email_find(req, id, &mboxname, &uid);
+        int r = jmap_email_find(req, id, args->show_destroyed, &mboxname, &uid);
         if (!r) {
             r = jmap_openmbox(req, mboxname, &mbox, 0);
             if (!r) {
@@ -6579,7 +6592,7 @@ static void _email_append(jmap_req_t *req,
      *  visible for the authenticated user. */
     char *exist_mboxname = NULL;
     uint32_t exist_uid;
-    r = jmap_email_find(req, detail->email_id, &exist_mboxname, &exist_uid);
+    r = jmap_email_find(req, detail->email_id, 0, &exist_mboxname, &exist_uid);
     free(exist_mboxname);
     if (r != IMAP_NOTFOUND) {
         if (!r) r = IMAP_MAILBOX_EXISTS;

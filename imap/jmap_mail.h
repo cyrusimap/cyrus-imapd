@@ -53,6 +53,7 @@
 #include "msgrecord.h"
 
 extern int jmap_email_find(jmap_req_t *req, const char *email_id,
+                           short show_destroyed,
                            char **mboxnameptr, uint32_t *uidptr);
 extern int jmap_email_get_with_props(jmap_req_t *req, hash_table *props,
                                      msgrecord_t *mr, json_t **msgp);

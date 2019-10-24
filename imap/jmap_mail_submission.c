@@ -581,7 +581,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     int fd_msg = -1;
 
     /* Lookup the message */
-    r = jmap_email_find(req, msgid, &mboxname, &uid);
+    r = jmap_email_find(req, msgid, 0, &mboxname, &uid);
     if (r) {
         if (r == IMAP_NOTFOUND) {
             *set_err = json_pack("{s:s}", "type", "emailNotFound");
