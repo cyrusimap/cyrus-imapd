@@ -1910,7 +1910,7 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
 
         if ((s = json_string_value(json_object_get(filter, "destroyedAfter")))) {
             time_from_iso8601(s, &t);
-            e = search_expr_new(this, SEOP_GE);
+            e = search_expr_new(this, SEOP_GT);
             e->attr = search_attr_find("lastupdated");
             e->value.u = t;
             _email_search_perf_attr(e->attr, perf_filters);
@@ -4492,7 +4492,8 @@ static int _email_getargs_parse(jmap_req_t *req __attribute__((unused)),
     }
 
     /* showDestroyed */
-    else if (!strcmp(key, "showDestroyed") && json_is_boolean(arg)) {
+    else if (!strcmp(key, "showDestroyed") && json_is_boolean(arg) &&
+             jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
         args->show_destroyed = json_boolean_value(arg);
     }
 
