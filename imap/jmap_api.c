@@ -2856,7 +2856,6 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
             if (r) {
                 syslog(LOG_ERR, "cyrus_acl_set(%s, %s) failed: %s",
                        mbox->name, userid, error_message(r));
-                free(newacl);
                 goto done;
             }
         }
@@ -2974,6 +2973,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
   done:
     free_hash_table(&user_access, &free);
     free(owner);
+    free(newacl);
     free(acl);
 
     return r;
