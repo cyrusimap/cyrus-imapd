@@ -117,10 +117,20 @@ typedef struct jmap_req {
     const strarray_t *using_capabilities;
 } jmap_req_t;
 
+/* Load blob data identified by URL-encoded blobid into buffer blob.
+ * Blob handlers are chained to allow for overriding the default
+ * blob handler. The handler chain is setup in jmap_settings_t.
+ *
+ * Return HTTP_OK on success or any non-zero HTTP status on error.
+ * Return zero if the next blob handler should be called. */
+typedef int jmap_getblob_handler(jmap_req_t *req, const char *blobid,
+                                 const char *accept_mime, struct buf *blob);
+
 typedef struct {
     hash_table methods;
     json_t *server_capabilities;
     long limits[JMAP_NUM_LIMITS];
+    ptrarray_t getblob_handlers; // array of jmap_getblob_handler
 } jmap_settings_t;
 
 typedef struct {
