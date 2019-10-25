@@ -768,9 +768,9 @@ static int setcalendars_update(jmap_req_t *req,
     if (!jmap_hasrights_byname(req, mboxname, DACL_READ))
         return IMAP_MAILBOX_NONEXISTENT;
 
-    r = mailbox_open_iwl(mboxname, &mbox);
+    r = jmap_openmbox(req, mboxname, &mbox, 1);
     if (r) {
-        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+        syslog(LOG_ERR, "jmap_openmbox(req, %s) failed: %s",
                 mboxname, error_message(r));
         return r;
     }
@@ -894,7 +894,7 @@ static int setcalendars_update(jmap_req_t *req,
     if (r) {
         mailbox_abort(mbox);
     }
-    mailbox_close(&mbox);
+    jmap_closembox(req, &mbox);
     return r;
 }
 
@@ -1527,6 +1527,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
                                            icalcomponent *ical,
                                            struct getcalendarevents_rock *rock)
 {
+    jmap_req_t *req = rock->req;
     icalcomponent *myical = NULL;
     int r = 0;
 
@@ -1569,8 +1570,8 @@ static int getcalendarevents_getinstances(json_t *jsevent,
             if (!ical) {
                 /* Open calendar mailbox. */
                 if (!rock->mailbox || strcmp(rock->mailbox->name, cdata->dav.mailbox)) {
-                    mailbox_close(&rock->mailbox);
-                    r = mailbox_open_irl(cdata->dav.mailbox, &rock->mailbox);
+                    jmap_closembox(req, &rock->mailbox);
+                    r = jmap_openmbox(req, cdata->dav.mailbox, &rock->mailbox, 0);
                     if (r) goto done;
                 }
                 myical = caldav_record_to_ical(rock->mailbox, cdata, httpd_userid, NULL);
@@ -1638,8 +1639,8 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
 
     /* Open calendar mailbox. */
     if (!rock->mailbox || strcmp(rock->mailbox->name, cdata->dav.mailbox)) {
-        mailbox_close(&rock->mailbox);
-        r = mailbox_open_irl(cdata->dav.mailbox, &rock->mailbox);
+        jmap_closembox(req, &rock->mailbox);
+        r = jmap_openmbox(req, cdata->dav.mailbox, &rock->mailbox, 0);
         if (r) goto done;
     }
 
@@ -2051,7 +2052,7 @@ done:
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
     if (db) caldav_close(db);
-    if (rock.mailbox) mailbox_close(&rock.mailbox);
+    if (rock.mailbox) jmap_closembox(req, &rock.mailbox);
     free_hashu64_table(&rock.jmapcache, free);
     return r;
 }
@@ -2240,9 +2241,9 @@ static int setcalendarevents_create(jmap_req_t *req,
     }
 
     /* Open mailbox for writing */
-    r = mailbox_open_iwl(mboxname, &mbox);
+    r = jmap_openmbox(req, mboxname, &mbox, 1);
     if (r) {
-        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s", mboxname, error_message(r));
+        syslog(LOG_ERR, "jmap_openmbox(req, %s) failed: %s", mboxname, error_message(r));
         if (r == IMAP_MAILBOX_NONEXISTENT) {
             json_array_append_new(invalid, json_string("calendarId"));
             r = 0;
@@ -2326,7 +2327,7 @@ static int setcalendarevents_create(jmap_req_t *req,
     free(xhref);
 
 done:
-    if (mbox) mailbox_close(&mbox);
+    if (mbox) jmap_closembox(req, &mbox);
     if (ical) icalcomponent_free(ical);
     free(schedule_address);
     free(resource);
@@ -2705,14 +2706,14 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
 
     /* Open mailbox for writing */
-    r = mailbox_open_iwl(mboxname, &mbox);
+    r = jmap_openmbox(req, mboxname, &mbox, 1);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         json_array_append_new(invalid, json_string("calendarId"));
         r = 0;
         goto done;
     }
     else if (r) {
-        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+        syslog(LOG_ERR, "jmap_openmbox(req, %s) failed: %s",
                 mboxname, error_message(r));
         goto done;
     }
@@ -2757,13 +2758,13 @@ static int setcalendarevents_update(jmap_req_t *req,
                 goto done;
             }
             /* Open destination mailbox for writing. */
-            r = mailbox_open_iwl(dstmboxname, &dstmbox);
+            r = jmap_openmbox(req, dstmboxname, &dstmbox, 1);
             if (r == IMAP_MAILBOX_NONEXISTENT) {
                 json_array_append_new(invalid, json_string("calendarId"));
                 r = 0;
                 goto done;
             } else if (r) {
-                syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                syslog(LOG_ERR, "jmap_openmbox(req, %s) failed: %s",
                         dstmboxname, error_message(r));
                 goto done;
             }
@@ -2784,7 +2785,7 @@ static int setcalendarevents_update(jmap_req_t *req,
         if (r) {
             syslog(LOG_ERR, "mailbox_rewrite_index_record (%s) failed: %s",
                     cdata->dav.mailbox, error_message(r));
-            mailbox_close(&mbox);
+            jmap_closembox(req, &mbox);
             goto done;
         }
         mboxevent_extract_record(mboxevent, mbox, &record);
@@ -2792,12 +2793,12 @@ static int setcalendarevents_update(jmap_req_t *req,
         mboxevent_set_numunseen(mboxevent, mbox, -1);
         mboxevent_set_access(mboxevent, NULL, NULL,
                              req->userid, cdata->dav.mailbox, 0);
-        mailbox_close(&mbox);
+        jmap_closembox(req, &mbox);
         mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
 
         /* Close the mailbox we moved the event from. */
-        mailbox_close(&mbox);
+        jmap_closembox(req, &mbox);
         mbox = dstmbox;
         dstmbox = NULL;
         free(mboxname);
@@ -2830,8 +2831,8 @@ static int setcalendarevents_update(jmap_req_t *req,
     r = 0;
 
 done:
-    if (mbox) mailbox_close(&mbox);
-    if (dstmbox) mailbox_close(&dstmbox);
+    if (mbox) jmap_closembox(req, &mbox);
+    if (dstmbox) jmap_closembox(req, &dstmbox);
     if (ical) icalcomponent_free(ical);
     if (oldical) icalcomponent_free(oldical);
     free(schedule_address);
@@ -2896,9 +2897,9 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     }
 
     /* Open mailbox for writing */
-    r = mailbox_open_iwl(mboxname, &mbox);
+    r = jmap_openmbox(req, mboxname, &mbox, 1);
     if (r) {
-        syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+        syslog(LOG_ERR, "jmap_openmbox(req, %s) failed: %s",
                 mboxname, error_message(r));
         goto done;
     }
@@ -2933,7 +2934,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     if (r) {
         syslog(LOG_ERR, "mailbox_rewrite_index_record (%s) failed: %s",
                 cdata->dav.mailbox, error_message(r));
-        mailbox_close(&mbox);
+        jmap_closembox(req, &mbox);
         goto done;
     }
     mboxevent_extract_record(mboxevent, mbox, &record);
@@ -2941,7 +2942,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     mboxevent_set_numunseen(mboxevent, mbox, -1);
     mboxevent_set_access(mboxevent, NULL, NULL,
                          req->userid, cdata->dav.mailbox, 0);
-    mailbox_close(&mbox);
+    jmap_closembox(req, &mbox);
     mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
@@ -2953,7 +2954,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     r = caldav_write(db, cdata);
 
 done:
-    if (mbox) mailbox_close(&mbox);
+    if (mbox) jmap_closembox(req, &mbox);
     if (oldical) icalcomponent_free(oldical);
     free(schedule_address);
     free(resource);
