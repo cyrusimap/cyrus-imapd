@@ -512,7 +512,8 @@ static json_t *_mbox_get(jmap_req_t *req,
                          hash_table *roles,
                          hash_table *props,
                          enum shared_mbox_type share_type,
-                         strarray_t *sublist)
+                         strarray_t *sublist,
+                         short show_destroyed)
 {
     int is_inbox = 0, parent_is_inbox = 0;
     int r = 0;
@@ -547,6 +548,12 @@ static json_t *_mbox_get(jmap_req_t *req,
     obj = json_object();
 
     json_object_set_new(obj, "id", json_string(mbentry->uniqueid));
+
+    if (show_destroyed) {
+        json_object_set_new(obj, "isDestroyed",
+                            json_boolean(mbname_isdeleted(mbname)));
+    }
+
     if (jmap_wantprop(props, "name")) {
         char *name = _mbox_get_name(req->accountid, mbname);
         if (!name) goto done;
@@ -699,6 +706,7 @@ struct jmap_mailbox_get_cb_rock {
     hash_table *want;
     struct shared_mboxes *shared_mboxes;
     strarray_t *sublist;
+    short show_destroyed;
 };
 
 static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
@@ -747,7 +755,8 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
         return 0;
 
     /* Convert mbox to JMAP object. */
-    obj = _mbox_get(req, mbentry, rock->roles, rock->get->props, share_type, rock->sublist);
+    obj = _mbox_get(req, mbentry, rock->roles, rock->get->props,
+                    share_type, rock->sublist, rock->show_destroyed);
     if (!obj) {
         syslog(LOG_INFO, "could not convert mailbox %s to JMAP", mbentry->name);
         return IMAP_INTERNAL;
@@ -768,6 +777,26 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
 static void jmap_mailbox_get_notfound(const char *id, void *data __attribute__((unused)), void *rock)
 {
     json_array_append_new((json_t*) rock, json_string(id));
+}
+
+static int _mailbox_getargs_parse(jmap_req_t *req __attribute__((unused)),
+                                  struct jmap_parser *parser __attribute__((unused)),
+                                  const char *key,
+                                  json_t *arg,
+                                  void *rock)
+{
+    short *show_destroyed = (short *) rock;
+    int r = 1;
+
+    /* showDestroyed */
+    if (!strcmp(key, "showDestroyed") && json_is_boolean(arg) &&
+        jmap_is_using(req, JMAP_MAIL_EXTENSION)) {
+        *show_destroyed = json_boolean_value(arg);
+    }
+
+    else r = 0;
+
+    return r;
 }
 
 static const jmap_property_t mailbox_props[] = {
@@ -900,11 +929,13 @@ static int jmap_mailbox_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_get get;
+    short show_destroyed = 0;
+    int flags = MBOXTREE_INTERMEDIATES;
     json_t *err = NULL;
 
     /* Parse request */
     jmap_get_parse(req, &parser, mailbox_props, /*allow_null_ids*/1,
-                   NULL, NULL, &get, &err);
+                   &_mailbox_getargs_parse, &show_destroyed, &get, &err);
     if (err) {
         jmap_error(req, err);
         jmap_parser_fini(&parser);
@@ -912,13 +943,16 @@ static int jmap_mailbox_get(jmap_req_t *req)
         return 0;
     }
 
+    if (show_destroyed) flags |= MBOXTREE_DELETED;
+
     /* Build callback data */
     struct shared_mboxes *shared_mboxes = _shared_mboxes_new(req, /*flags*/0);
     strarray_t *sublist = NULL;
     if (jmap_wantprop(get.props, "isSubscribed")) {
         sublist = mboxlist_sublist(req->userid);
     }
-    struct jmap_mailbox_get_cb_rock rock = { req, &get, NULL, NULL, shared_mboxes, sublist };
+    struct jmap_mailbox_get_cb_rock rock =
+        { req, &get, NULL, NULL, shared_mboxes, sublist, show_destroyed };
     rock.roles = (hash_table *) xmalloc(sizeof(hash_table));
     construct_hash_table(rock.roles, 8, 0);
 
@@ -943,7 +977,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
      * all mailbox ids. XXX Optimise this codepath if the ids[] array
      * length is small */
     mboxlist_usermboxtree(req->accountid, req->authstate,
-                          jmap_mailbox_get_cb, &rock, MBOXTREE_INTERMEDIATES);
+                          jmap_mailbox_get_cb, &rock, flags);
 
     /* Report if any requested mailbox has not been found */
     if (rock.want) {
