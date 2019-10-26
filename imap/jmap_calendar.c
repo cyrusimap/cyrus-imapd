@@ -3699,16 +3699,17 @@ static int eventquery_search_run(jmap_req_t *req,
                     }
                     r = jmap_openmbox(req, cdata->dav.mailbox, &mailbox, 0);
                     if (r) goto done;
-                    match->ical = caldav_record_to_ical(mailbox, cdata, req->userid, NULL);
-                    if (!match->ical) {
-                        syslog(LOG_ERR, "%s: can't load ical for ical uid %s",
-                                __func__, cdata->ical_uid);
-                        free(match->ical_uid);
-                        free(match->utcstart);
-                        free(match);
-                        r = IMAP_INTERNAL;
-                        goto done;
-                    }
+                }
+
+                match->ical = caldav_record_to_ical(mailbox, cdata, req->userid, NULL);
+                if (!match->ical) {
+                    syslog(LOG_ERR, "%s: can't load ical for ical uid %s",
+                           __func__, cdata->ical_uid);
+                    free(match->ical_uid);
+                    free(match->utcstart);
+                    free(match);
+                    r = IMAP_INTERNAL;
+                    goto done;
                 }
             }
             ptrarray_append(matches, match);
