@@ -148,7 +148,7 @@ extern void jmap_calendar_init(jmap_settings_t *settings);
 extern void jmap_vacation_init(jmap_settings_t *settings);
 
 extern void jmap_core_capabilities(json_t *account_capabilities);
-extern void jmap_mail_capabilities(json_t *account_capabilities);
+extern void jmap_mail_capabilities(json_t *account_capabilities, int mayCreateTopLevel);
 extern void jmap_emailsubmission_capabilities(json_t *account_capabilities);
 extern void jmap_vacation_capabilities(json_t *account_capabilities);
 extern void jmap_contact_capabilities(json_t *account_capabilities);

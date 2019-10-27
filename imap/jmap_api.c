@@ -566,10 +566,23 @@ static json_t *lookup_capabilities(const char *accountid,
 {
     json_t *capas = json_object();
 
+    // we need to know if we can write children of the inbox
+    mbentry_t *inboxentry = NULL;
+    char *inboxname = mboxname_user_mbox(accountid, NULL);
+    if (mboxlist_lookup(inboxname, &inboxentry, NULL)) {
+        json_decref(capas);
+        return json_null();
+    }
+    free(inboxname);
+    int inboxrights = _rights_for_mbentry(authuserid, authstate, inboxentry, mboxrights);
+    mboxlist_entry_free(&inboxentry);
+
+    int mayCreateTopLevel = (inboxrights & ACL_CREATE) ? 1 : 0;
+
     if (!strcmp(authuserid, accountid)) {
         /* Primary account has all capabilities */
         jmap_core_capabilities(capas);
-        jmap_mail_capabilities(capas);
+        jmap_mail_capabilities(capas, mayCreateTopLevel);
         jmap_emailsubmission_capabilities(capas);
         jmap_vacation_capabilities(capas);
         jmap_contact_capabilities(capas);
@@ -587,7 +600,7 @@ static json_t *lookup_capabilities(const char *accountid,
             if (rock.has_mail) {
                 // we don't offer emailsubmission or vacation
                 // for shared accounts right now
-                jmap_mail_capabilities(capas);
+                jmap_mail_capabilities(capas, mayCreateTopLevel);
             }
             if (rock.has_contacts) {
                 jmap_contact_capabilities(capas);
