@@ -138,7 +138,7 @@ sub test_get_session
     $admintalk->setacl("user.account1.#calendars.Default", "cassandane" => 'lr') or die;
     $admintalk->setacl("user.account1.#addressbooks.Default", "cassandane" => '') or die;
     # Account 2: read/write mail
-    $admintalk->setacl("user.account2", "cassandane", "lrswp") or die;
+    $admintalk->setacl("user.account2", "cassandane", "lrswipkxtecdn") or die;
     # Account 3: no access
 
     # GET session
@@ -206,6 +206,7 @@ sub test_get_session
     $self->assert_equals(JSON::true, $primaryAccount->{isPersonal});
     my $accountCapabilities = $primaryAccount->{accountCapabilities};
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
+    $self->assert_equals(JSON::true, $accountCapabilities->{'urn:ietf:params:jmap:mail'}{mayCreateTopLevelMailbox});
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
     $self->assert_not_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
@@ -217,6 +218,7 @@ sub test_get_session
     $self->assert_equals(JSON::false, $account1->{isPersonal});
     $accountCapabilities = $account1->{accountCapabilities};
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
+    $self->assert_equals(JSON::false, $accountCapabilities->{'urn:ietf:params:jmap:mail'}{mayCreateTopLevelMailbox});
     $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
     $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
     $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
@@ -228,6 +230,7 @@ sub test_get_session
     $self->assert_equals(JSON::false, $account2->{isPersonal});
     $accountCapabilities = $account2->{accountCapabilities};
     $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:mail'});
+    $self->assert_equals(JSON::true, $accountCapabilities->{'urn:ietf:params:jmap:mail'}{mayCreateTopLevelMailbox});
     $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:submission'});
     $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
     $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
