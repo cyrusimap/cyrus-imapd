@@ -574,7 +574,7 @@ static json_t *lookup_capabilities(const char *accountid,
         return json_null();
     }
     free(inboxname);
-    int inboxrights = _rights_for_mbentry(authuserid, authstate, inboxentry, mboxrights);
+    int inboxrights = _rights_for_mbentry(authstate, inboxentry, mboxrights);
     mboxlist_entry_free(&inboxentry);
 
     int mayCreateTopLevel = (inboxrights & ACL_CREATE) ? 1 : 0;
