@@ -65,6 +65,7 @@
 #include "msgrecord.h"
 #include "statuscache.h"
 #include "stristr.h"
+#include "times.h"
 #include "util.h"
 #include "xmalloc.h"
 
@@ -550,8 +551,15 @@ static json_t *_mbox_get(jmap_req_t *req,
     json_object_set_new(obj, "id", json_string(mbentry->uniqueid));
 
     if (show_destroyed) {
-        json_object_set_new(obj, "isDestroyed",
-                            json_boolean(mbname_isdeleted(mbname)));
+        json_t *is_destroyed = json_boolean(mbname_isdeleted(mbname));
+
+        json_object_set_new(obj, "isDestroyed", is_destroyed);
+        if (json_is_true(is_destroyed)) {
+            char datestr[30];
+
+            time_to_iso8601(mbentry->mtime, datestr, 30, 1);
+            json_object_set_new(obj, "destroyedAt", json_string(datestr));
+        }
     }
 
     if (jmap_wantprop(props, "name")) {
