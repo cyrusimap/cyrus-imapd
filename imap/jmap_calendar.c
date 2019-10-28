@@ -2432,7 +2432,8 @@ static int setcalendarevents_apply_patch(json_t *event_patch,
                                          json_t *invalid,
                                          char **schedule_address,
                                          icalcomponent **newical,
-                                         json_t *update)
+                                         json_t *update,
+                                         json_t **err)
 {
     json_t *old_event = NULL;
     json_t *new_event = NULL;
@@ -2469,6 +2470,10 @@ static int setcalendarevents_apply_patch(json_t *event_patch,
         else {
             /* Create a new override */
             new_instance = jmap_patchobject_apply(old_event, event_patch, invalid);
+        }
+        if (!new_instance) {
+            *err = json_pack("{s:s}", "type", "invalidPatch");
+            goto done;
         }
         json_object_del(new_instance, "recurrenceRule");
         json_object_del(new_instance, "recurrenceOverrides");
@@ -2540,6 +2545,11 @@ static int setcalendarevents_apply_patch(json_t *event_patch,
             json_t *old_mainevent = json_deep_copy(old_event);
             json_object_del(old_mainevent, "recurrenceOverrides");
             new_event = jmap_patchobject_apply(old_mainevent, mainevent_patch, invalid);
+            if (!new_event) {
+                *err = json_pack("{s:s}", "type", "invalidPatch");
+                json_decref(old_mainevent);
+                goto done;
+            }
 
             /* Expand current overrides from patched main event */
             json_t *old_overrides = json_object_get(old_event, "recurrenceOverrides");
@@ -2566,6 +2576,11 @@ static int setcalendarevents_apply_patch(json_t *event_patch,
             if (json_object_size(old_exp_overrides)) {
                 json_t *old_wrapper = json_pack("{s:O}", "recurrenceOverrides", old_exp_overrides);
                 json_t *new_wrapper = jmap_patchobject_apply(old_wrapper, overrides_patch, invalid);
+                if (!new_wrapper) {
+                    *err = json_pack("{s:s}", "type", "invalidPatch");
+                    json_decref(old_wrapper);
+                    goto done;
+                }
                 new_exp_overrides = json_incref(json_object_get(new_wrapper, "recurrenceOverrides"));
                 json_decref(old_wrapper);
                 json_decref(new_wrapper);
@@ -2610,6 +2625,10 @@ static int setcalendarevents_apply_patch(json_t *event_patch,
         else {
             /* The happy path - just apply the patch as provided */
             new_event = jmap_patchobject_apply(old_event, event_patch, invalid);
+            if (!new_event) {
+                *err = json_pack("{s:s}", "type", "invalidPatch");
+                goto done;
+            }
         }
     }
 
@@ -2662,7 +2681,8 @@ static int setcalendarevents_update(jmap_req_t *req,
                                     struct event_id *eid,
                                     struct caldav_db *db,
                                     json_t *invalid,
-                                    json_t *update)
+                                    json_t *update,
+                                    json_t **err)
 {
     int r, pe;
     int needrights = DACL_RMRSRC|DACL_WRITEPROPS|DACL_WRITECONT;
@@ -2752,7 +2772,8 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
     /* Apply patch */
     r = setcalendarevents_apply_patch(event_patch, oldical, eid->recurid,
-                                      invalid, &schedule_address, &ical, update);
+                                      invalid, &schedule_address, &ical,
+                                      update, err);
     if (json_array_size(invalid)) {
         r = 0;
         goto done;
@@ -2877,11 +2898,13 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         json_t *event_patch = json_pack("{s:b}", "excluded", 1);
         json_t *invalid = json_array();
         json_t *update = NULL;
-        r = setcalendarevents_update(req, event_patch, eid, db, invalid, update);
+        json_t *err = NULL;
+        r = setcalendarevents_update(req, event_patch, eid, db, invalid, update, &err);
         json_decref(event_patch);
         json_decref(update);
-        if (!r && json_array_size(invalid)) {
+        if (err || (!r && json_array_size(invalid))) {
             r = IMAP_INTERNAL;
+            json_decref(err);
         }
         json_decref(invalid);
         return r;
@@ -3113,23 +3136,25 @@ static int jmap_calendarevent_set(struct jmap_req *req)
         /* Update the calendar event. */
         json_t *invalid = json_pack("[]");
         json_t *update = json_pack("{}");
-        r = setcalendarevents_update(req, arg, eid, db, invalid, update);
-        if (r) {
-            json_t *err;
-            switch (r) {
-                case IMAP_NOTFOUND:
-                    err = json_pack("{s:s}", "type", "notFound");
-                    break;
-                case HTTP_FORBIDDEN:
-                case IMAP_PERMISSION_DENIED:
-                    err = json_pack("{s:s}", "type", "forbidden");
-                    break;
-                case HTTP_NO_STORAGE:
-                case IMAP_QUOTA_EXCEEDED:
-                    err = json_pack("{s:s}", "type", "overQuota");
-                    break;
-                default:
-                    err = jmap_server_error(r);
+        json_t *err = NULL;
+        r = setcalendarevents_update(req, arg, eid, db, invalid, update, &err);
+        if (r || err) {
+            if (!err) {
+                switch (r) {
+                    case IMAP_NOTFOUND:
+                        err = json_pack("{s:s}", "type", "notFound");
+                        break;
+                    case HTTP_FORBIDDEN:
+                    case IMAP_PERMISSION_DENIED:
+                        err = json_pack("{s:s}", "type", "forbidden");
+                        break;
+                    case HTTP_NO_STORAGE:
+                    case IMAP_QUOTA_EXCEEDED:
+                        err = json_pack("{s:s}", "type", "overQuota");
+                        break;
+                    default:
+                        err = jmap_server_error(r);
+                }
             }
             json_object_set_new(set.not_updated, eid->raw, err);
             json_decref(invalid);
