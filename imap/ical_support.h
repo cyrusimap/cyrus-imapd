@@ -123,7 +123,7 @@ extern struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp);
 
 extern icalcomponent *record_to_ical(struct mailbox *mailbox,
                                      const struct index_record *record,
-                                     char **schedule_userid);
+                                     strarray_t *schedule_addresses);
 
 extern const char *get_icalcomponent_errstr(icalcomponent *ical);
 

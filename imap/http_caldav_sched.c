@@ -1990,9 +1990,12 @@ static void sched_deliver_local(const char *sender, const char *recipient,
     if (!txn.req_hdrs) r = HTTP_SERVER_ERROR;
 
     /* Store the (updated) object in the recipients's calendar */
+    strarray_t schedule_addresses = STRARRAY_INITIALIZER;
+    strarray_append(&schedule_addresses, recipient);
     if (!r) r = caldav_store_resource(&txn, ical, mailbox,
                                       buf_cstring(&resource), cdata->dav.createdmodseq,
-                                      caldavdb, NEW_STAG, recipient, recipient);
+                                      caldavdb, NEW_STAG, recipient, &schedule_addresses);
+    strarray_fini(&schedule_addresses);
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
         sched_data->status =

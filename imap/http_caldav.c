@@ -1442,7 +1442,7 @@ static int open_attachments(const char *userid, struct mailbox **attachments,
 static int manage_attachments(struct transaction_t *txn,
                               struct mailbox *mailbox,
                               icalcomponent *ical, struct caldav_data *cdata,
-                              icalcomponent **oldical, char **schedule_address)
+                              icalcomponent **oldical, strarray_t *schedule_addresses)
 {
     /* Compare any managed attachments in new and existing resources */
     struct mailbox *attachments = NULL;
@@ -1518,7 +1518,7 @@ static int manage_attachments(struct transaction_t *txn,
 
             /* Load message containing the resource and parse iCal data */
             *oldical = caldav_record_to_ical(mailbox, cdata,
-                                             NULL, schedule_address);
+                                             NULL, schedule_addresses);
             if (!*oldical) {
                 txn->error.desc = "Failed to read record";
                 ret = HTTP_SERVER_ERROR;
@@ -1647,7 +1647,7 @@ static int caldav_delete_cal(struct transaction_t *txn,
     struct caldav_data *cdata = (struct caldav_data *) data;
     icalcomponent *ical = NULL;
     struct buf buf = BUF_INITIALIZER;
-    char *schedule_address = NULL;
+    strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     int r = 0;
 
     /* Only process deletes on regular calendar collections */
@@ -1656,19 +1656,18 @@ static int caldav_delete_cal(struct transaction_t *txn,
     if ((namespace_calendar.allow & ALLOW_CAL_ATTACH) &&
         cdata->comp_flags.mattach) {
         r = manage_attachments(txn, mailbox, NULL,
-                               cdata, &ical, &schedule_address);
+                               cdata, &ical, &schedule_addresses);
         if (r) goto done;
     }
 
     if (cdata->organizer) {
         /* Scheduling object resource */
-        strarray_t schedule_addresses = STRARRAY_INITIALIZER;
         const char **hdr;
 
         /* XXX - check date range? - don't send in the past */
 
         /* Load message containing the resource and parse iCal data */
-        if (!ical) ical = record_to_ical(mailbox, record, &schedule_address);
+        if (!ical) ical = record_to_ical(mailbox, record, &schedule_addresses);
 
         if (!ical) {
             syslog(LOG_ERR,
@@ -1677,10 +1676,6 @@ static int caldav_delete_cal(struct transaction_t *txn,
             return HTTP_SERVER_ERROR;
         }
 
-        if (schedule_address) {
-            strarray_appendm(&schedule_addresses, schedule_address);
-            schedule_address = NULL;
-        }
         get_schedule_addresses(txn, &schedule_addresses);
 
         /* XXX - after legacy records are gone, we can strip this and just not send a
@@ -1689,25 +1684,22 @@ static int caldav_delete_cal(struct transaction_t *txn,
         char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
         if (strarray_find_case(&schedule_addresses, cdata->organizer, 0) >= 0) {
             /* Organizer scheduling object resource */
-            schedule_address = xstrdupnull(cdata->organizer);
             if (_scheduling_enabled(txn, mailbox))
-                sched_request(userid, schedule_address, ical, NULL);
+                sched_request(userid, cdata->organizer, ical, NULL);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
-            schedule_address = xstrdupnull(strarray_nth(&schedule_addresses, 0));
-            if (_scheduling_enabled(txn, mailbox) && schedule_address)
-                sched_reply(userid, schedule_address, ical, NULL);
+            if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses))
+                sched_reply(userid, strarray_nth(&schedule_addresses, 0), ical, NULL);
         }
 
         free(userid);
-        strarray_fini(&schedule_addresses);
     }
 
   done:
     if (ical) icalcomponent_free(ical);
-    free(schedule_address);
+    strarray_fini(&schedule_addresses);
     buf_free(&buf);
 
     return r;
@@ -2577,7 +2569,7 @@ static void add_personal_data(icalcomponent *ical, struct buf *userdata)
 EXPORTED icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
                                               const struct caldav_data *cdata,
                                               const char *userid,
-                                              char **schedule_userid)
+                                              strarray_t *schedule_addresses)
 {
     icalcomponent *ical = NULL;
     struct index_record record;
@@ -2587,7 +2579,7 @@ EXPORTED icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
     r = mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record);
     if (r) return NULL;
 
-    ical = record_to_ical(mailbox, &record, schedule_userid);
+    ical = record_to_ical(mailbox, &record, schedule_addresses);
 
     if (userid && (namespace_calendar.allow & ALLOW_USERDATA)) {
         struct buf userdata = BUF_INITIALIZER;
@@ -2657,7 +2649,6 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
         else if (!need_tz && (namespace_calendar.allow & ALLOW_CAL_NOTZ)) {
             /* Strip known VTIMEZONEs */
             struct caldav_db *caldavdb = caldav_open_mailbox(mailbox);
-            char *schedule_address = NULL;
 
             mailbox_unlock_index(mailbox, NULL);
             r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
@@ -2667,13 +2658,16 @@ static int caldav_get(struct transaction_t *txn, struct mailbox *mailbox,
                 goto done;
             }
 
-            *obj = ical = record_to_ical(mailbox, record, &schedule_address);
+            strarray_t schedule_addresses = STRARRAY_INITIALIZER;
+
+            *obj = ical = record_to_ical(mailbox, record, &schedule_addresses);
 
             caldav_store_resource(txn, ical, mailbox,
                                   cdata->dav.resource, cdata->dav.createdmodseq, caldavdb,
                                   TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0),
-                                  NULL, schedule_address);
-            free(schedule_address);
+                                  NULL, &schedule_addresses);
+
+            strarray_fini(&schedule_addresses);
 
             /* Fetch the new DAV and index records */
             /* NOTE: previous contents of cdata was freed by store_resource */
@@ -2865,7 +2859,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     struct webdav_db *webdavdb = NULL;
     struct webdav_data *wdata;
     struct index_record record;
-    char *schedule_address = NULL;
+    strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     const char *etag = NULL, **hdr;
     time_t lastmod = 0;
     icalcomponent *ical = NULL, *comp, *nextc, *master = NULL;
@@ -2953,7 +2947,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     lastmod = record.internaldate;
 
     /* Load and parse message containing the resource */
-    ical = record_to_ical(calendar, &record, &schedule_address);
+    ical = record_to_ical(calendar, &record, &schedule_addresses);
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
 
@@ -3243,7 +3237,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     /* Store updated calendar resource */
     ret = caldav_store_resource(txn, ical, calendar, txn->req_tgt.resource,
                                 record.createdmodseq,
-                                caldavdb, return_rep, NULL, schedule_address);
+                                caldavdb, return_rep, NULL, &schedule_addresses);
 
     if (ret == HTTP_NO_CONTENT) {
         if (aprop) {
@@ -3283,7 +3277,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
 
   done:
     strarray_free(rids);
-    free(schedule_address);
+    strarray_fini(&schedule_addresses);
     if (aprop) icalproperty_free(aprop);
     if (ical) icalcomponent_free(ical);
     if (caldavdb) caldav_close(caldavdb);
@@ -4247,7 +4241,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     icaltimetype dtstart, dtend;
     icalproperty *prop, *rrule = NULL;
     const char *uid, *organizer = NULL;
-    char *schedule_address = NULL;
+    strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     struct buf buf = BUF_INITIALIZER;
     struct caldav_data *cdata;
 
@@ -4406,7 +4400,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 
     if (namespace_calendar.allow & ALLOW_CAL_ATTACH) {
         ret = manage_attachments(txn, mailbox, ical,
-                                 cdata, &oldical, &schedule_address);
+                                 cdata, &oldical, &schedule_addresses);
         if (ret) goto done;
     }
 
@@ -4416,7 +4410,6 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     case ICAL_VPOLL_COMPONENT:
         if (organizer) {
             /* Scheduling object resource */
-            strarray_t schedule_addresses = STRARRAY_INITIALIZER;
 
             syslog(LOG_DEBUG, "caldav_put: organizer: %s", organizer);
 
@@ -4457,9 +4450,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                     txn->error.precond = CALDAV_ALLOWED_ORG_CHANGE;
                 }
                 else {
-                    schedule_address = xstrdupnull(organizer);
                     if (_scheduling_enabled(txn, mailbox))
-                        sched_request(userid, schedule_address, oldical, ical);
+                        sched_request(userid, organizer, oldical, ical);
                 }
             }
             else {
@@ -4476,13 +4468,11 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
 #endif
                 else {
-                    schedule_address = xstrdupnull(strarray_nth(&schedule_addresses, 0));
-                    if (_scheduling_enabled(txn, mailbox) && schedule_address)
-                        sched_reply(userid, schedule_address, oldical, ical);
+                    if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses))
+                        sched_reply(userid, strarray_nth(&schedule_addresses, 0), oldical, ical);
                 }
             }
             free(userid);
-            strarray_fini(&schedule_addresses);
 
             if (ret) goto done;
 
@@ -4505,12 +4495,12 @@ static int caldav_put(struct transaction_t *txn, void *obj,
     /* Store resource at target */
     if (!ret) {
         ret = caldav_store_resource(txn, ical, mailbox, resource, cdata->dav.createdmodseq,
-                                    db, flags, httpd_userid, schedule_address);
+                                    db, flags, httpd_userid, &schedule_addresses);
     }
 
   done:
     if (oldical) icalcomponent_free(oldical);
-    free(schedule_address);
+    strarray_fini(&schedule_addresses);
     buf_free(&buf);
 
     return ret;
@@ -5229,16 +5219,16 @@ static int caldav_propfind_by_resource(void *rock, void *data)
         }
 
         if (fctx->record) {
-            char *schedule_address = NULL;
+            strarray_t schedule_addresses = STRARRAY_INITIALIZER;
             icalcomponent *ical =
-                record_to_ical(fctx->mailbox, fctx->record, &schedule_address);
+                record_to_ical(fctx->mailbox, fctx->record, &schedule_addresses);
             struct transaction_t txn;
 
             if (!ical) {
                 syslog(LOG_NOTICE,
                        "Unable to parse iCal %s:%u prior to stripping TZ",
                        fctx->mailbox->name, fctx->record->uid);
-                free(schedule_address);
+                strarray_fini(&schedule_addresses);
                 goto done;
             }
 
@@ -5249,10 +5239,10 @@ static int caldav_propfind_by_resource(void *rock, void *data)
                                   cdata->dav.resource, cdata->dav.createdmodseq,
                                   fctx->davdb,
                                   TZ_STRIP | (!cdata->sched_tag ? NEW_STAG : 0),
-                                  NULL, schedule_address);
+                                  NULL, &schedule_addresses);
             spool_free_hdrcache(txn.req_hdrs);
             buf_free(&txn.buf);
-            free(schedule_address);
+            strarray_fini(&schedule_addresses);
 
             icalcomponent_free(ical);
 
@@ -7889,7 +7879,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                           struct mailbox *mailbox, const char *resource,
                           modseq_t createdmodseq,
                           struct caldav_db *caldavdb, unsigned flags,
-                          const char *userid, const char *schedule_address)
+                          const char *userid, const strarray_t *schedule_addresses)
 {
     int ret;
     icalcomponent *comp, *userdata = NULL, *store_ical = ical;
@@ -8015,10 +8005,12 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                             xstrdup(icalcomponent_kind_to_string(kind)),
                             txn->req_hdrs);
 
-    if (schedule_address) {
-        mimehdr = charset_encode_mimeheader(schedule_address, 0, 0);
+    if (schedule_addresses) {
+        char *value = strarray_join(schedule_addresses, ",");
+        mimehdr = charset_encode_mimeheader(value, 0, 0);
         spool_replace_header(xstrdup("X-Schedule-User-Address"),
                              mimehdr, txn->req_hdrs);
+        free(value);
     }
 
     time_to_rfc5322(icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),

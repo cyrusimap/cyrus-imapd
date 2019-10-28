@@ -525,7 +525,7 @@ EXPORTED struct buf *my_icalcomponent_as_ical_string(icalcomponent* comp)
 
 EXPORTED icalcomponent *record_to_ical(struct mailbox *mailbox,
                               const struct index_record *record,
-                              char **schedule_userid)
+                              strarray_t *schedule_addresses)
 {
     icalcomponent *ical = NULL;
     message_t *m = message_new_from_record(mailbox, record);
@@ -537,13 +537,15 @@ EXPORTED icalcomponent *record_to_ical(struct mailbox *mailbox,
     }
 
     /* extract the schedule user header */
-    if (schedule_userid) {
+    if (schedule_addresses) {
         buf_reset(&buf);
         if (!message_get_field(m, "x-schedule-user-address",
                                MESSAGE_DECODED|MESSAGE_TRIM, &buf)) {
             if (buf.len) {
                 buf_replace_all(&buf, "mailto:", "");
-                *schedule_userid = buf_release(&buf);
+                strarray_t *vals = strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
+                strarray_cat(schedule_addresses, vals);
+                strarray_free(vals);
             }
         }
     }
