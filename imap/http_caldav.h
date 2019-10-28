@@ -60,4 +60,9 @@ extern icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
                                             const char *userid,
                                             char **schedule_userid);
 
+extern int caldav_is_personalized(struct mailbox *mailbox,
+                                  const struct caldav_data *cdata,
+                                  const char *userid,
+                                  struct buf *userdata);
+
 #endif /* HTTP_CALDAV_H */
