@@ -1839,6 +1839,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
 {
     jmap_req_t *req = rock->req;
     icalcomponent *myical = NULL;
+    mbentry_t *mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
     int r = 0;
 
     int i;
@@ -1879,9 +1880,9 @@ static int getcalendarevents_getinstances(json_t *jsevent,
             /* Check if RRULE generates an instance at this timestamp */
             if (!ical) {
                 /* Open calendar mailbox. */
-                if (!rock->mailbox || strcmp(rock->mailbox->name, cdata->dav.mailbox)) {
+                if (!rock->mailbox || strcmp(rock->mailbox->name, mbentry->name)) {
                     jmap_closembox(req, &rock->mailbox);
-                    r = jmap_openmbox(req, cdata->dav.mailbox, &rock->mailbox, 0);
+                    r = jmap_openmbox(req, mbentry->name, &rock->mailbox, 0);
                     if (r) goto done;
                 }
                 myical = caldav_record_to_ical(rock->mailbox, cdata, httpd_userid, NULL);
@@ -1920,6 +1921,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
 
 done:
     if (myical) icalcomponent_free(myical);
+    mboxlist_entry_free(&mbentry);
     return r;
 }
 
@@ -4183,16 +4185,17 @@ static int eventquery_search_run(jmap_req_t *req,
         }
 
         /* Fetch the CalDAV db record */
-        r = caldav_lookup_imapuid(db, mbentry, md->uid, &cdata, 0);
-        mboxlist_entry_free(&mbentry);
-        if (r) continue;
-        else {
+        if (caldav_lookup_imapuid(db, mbentry, md->uid, &cdata, 0) == 0) {
 
             /* Check time-range */
-            if (icalafter && strcmp(cdata->dtend, icalafter) <= 0)
+            if (icalafter && strcmp(cdata->dtend, icalafter) <= 0) {
+                mboxlist_entry_free(&mbentry);
                 continue;
-            if (icalbefore && strcmp(cdata->dtstart, icalbefore) >= 0)
+            }
+            if (icalbefore && strcmp(cdata->dtstart, icalbefore) >= 0) {
+                mboxlist_entry_free(&mbentry);
                 continue;
+            }
 
             if (wantuid && strcmp(wantuid, cdata->ical_uid))
                 continue;
@@ -4202,12 +4205,11 @@ static int eventquery_search_run(jmap_req_t *req,
             match->utcstart = xstrdup(cdata->dtstart);
             if (expandrecur) {
                 /* Load iCalendar data */
-                if (!mailbox || strcmp(mailbox->name, cdata->dav.mailbox)) {
+                if (!mailbox || strcmp(mailbox->name, mbentry->name)) {
                     if (mailbox) {
                         jmap_closembox(req, &mailbox);
                     }
-                    r = jmap_openmbox(req, cdata->dav.mailbox, &mailbox, 0);
-                    if (r) goto done;
+                    r = jmap_openmbox(req, mbentry->name, &mailbox, 0);
                 }
 
                 match->ical = caldav_record_to_ical(mailbox, cdata, req->userid, NULL);
@@ -4218,11 +4220,13 @@ static int eventquery_search_run(jmap_req_t *req,
                     free(match->utcstart);
                     free(match);
                     r = IMAP_INTERNAL;
-                    goto done;
                 }
             }
             ptrarray_append(matches, match);
         }
+
+        mboxlist_entry_free(&mbentry);
+        if (r) goto done;
     }
 
     if (!expandrecur) {
@@ -4261,9 +4265,13 @@ static int eventquery_fastpath_cb(void *rock, struct caldav_data *cdata)
     if (!cdata->dav.alive || cdata->comp_type != CAL_COMP_VEVENT) {
         return 0;
     }
-    if (!jmap_hasrights(req, cdata->dav.mailbox, JACL_READITEMS)) {
-        return 0;
-    }
+
+    mbentry_t *mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+
+    /* Check permissions */
+    int rights = mbentry && jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS);
+    mboxlist_entry_free(&mbentry);
+    if (!rights) return 0;
 
     query->total++;
 
