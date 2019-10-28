@@ -218,12 +218,18 @@ static json_t *get_schedule_address_set(const char *userid,
         strarray_t *values = strarray_split(buf_cstring(&attrib), ",", STRARRAY_TRIM);
         int i;
         for (i = 0; i < strarray_size(values); i++) {
-            json_array_append_new(val, json_string(strarray_nth(values, i)));
+            const char *item = strarray_nth(values, i);
+            if (!strncasecmp(item, "mailto:", 7)) item += 7;
+            char *value = strconcat("mailto:", item, NULL);
+            json_array_append_new(val, json_string(value));
+            free(value);
         }
         strarray_free(values);
     }
     else if (strchr(userid, '@')) {
-        json_array_append_new(val, json_string(userid));
+        char *value = strconcat("mailto:", userid, NULL);
+        json_array_append_new(val, json_string(value));
+        free(value);
     }
     else {
         char *value = strconcat("mailto:", userid, "@", config_defdomain, NULL);
