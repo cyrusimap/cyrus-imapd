@@ -6359,4 +6359,41 @@ sub test_calendarevent_set_recurrenceinstances_rdate
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 }
 
+sub test_calendarevent_set_invalidpatch
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                "1" => {
+                    calendarId => 'Default',
+                    uid => 'event1uid@local',
+                    title => "event1",
+                    description => "",
+                    freeBusyStatus => "busy",
+                    start => "2019-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                },
+            }
+        }, 'R1']
+    ]);
+    my $eventId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    'alerts/alert1/trigger/offset' => '-PT5M',
+                },
+            }
+        }, 'R1']
+    ]);
+    $self->assert_str_equals("invalidPatch", $res->[0][1]{notUpdated}{$eventId}{type});
+}
+
 1;
