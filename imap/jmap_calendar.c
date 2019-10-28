@@ -2090,15 +2090,21 @@ static int setcalendarevents_schedule(jmap_req_t *req,
         const char *annotname =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
         char *mailboxname = caldav_mboxname(*schedaddrp, NULL);
-        struct buf buf = BUF_INITIALIZER;
+        struct buf attrib = BUF_INITIALIZER;
         int r = annotatemore_lookupmask(mailboxname, annotname,
-                                        *schedaddrp, &buf);
-        free(mailboxname);
-        if (!r && buf.len > 7 && !strncasecmp(buf_cstring(&buf), "mailto:", 7)) {
-            free(*schedaddrp);
-            *schedaddrp = xstrdup(buf_cstring(&buf) + 7);
+                                        *schedaddrp, &attrib);
+        if (!r) {
+            strarray_t *values = strarray_split(buf_cstring(&attrib), ",", STRARRAY_TRIM);
+            const char *item = strarray_nth(values, 0);
+            if (item) {
+                if (!strncasecmp(item, "mailto:", 7)) item += 7;
+                free(*schedaddrp);
+                *schedaddrp = xstrdup(item);
+            }
+            strarray_free(values);
         }
-        buf_free(&buf);
+        free(mailboxname);
+        buf_free(&attrib);
     }
 
     /* Validate create/update. */

@@ -95,11 +95,12 @@ int caladdress_lookup(const char *addr,
         int r = annotatemore_lookupmask(mboxname, annotname,
                                         myuserid, &mybuf);
 
-        if (!r && mybuf.len) {
-            if (!strncasecmp(buf_cstring(&mybuf), "mailto:", 7))
-                testuser = xstrdup(buf_cstring(&mybuf) + 7);
-            else
-                testuser = buf_release(&mybuf);
+        if (!r && buf_len(&mybuf)) {
+            strarray_t *values = strarray_split(buf_cstring(&mybuf), ",", STRARRAY_TRIM);
+            const char *item = strarray_nth(values, 0);
+            if (!strncasecmp(item, "mailto:", 7)) item += 7;
+            testuser = xstrdup(item);
+            strarray_free(values);
         }
         else if (strchr(myuserid, '@') || !httpd_extradomain) {
             testuser = xstrdup(myuserid);

@@ -1598,7 +1598,7 @@ static void get_schedule_addresses(struct transaction_t *txn,
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
         int r = annotatemore_lookupmask(txn->req_tgt.mbentry->name, annotname,
                                         txn->req_tgt.userid, &buf);
-        if (r || buf.len <= 6) {
+        if (r || !buf.len) {
             /* check calendar-user-address-set for target user's principal */
             char *mailboxname = caldav_mboxname(txn->req_tgt.userid, NULL);
             buf_reset(&buf);
@@ -1606,9 +1606,16 @@ static void get_schedule_addresses(struct transaction_t *txn,
                                         txn->req_tgt.userid, &buf);
             free(mailboxname);
         }
-        if (!r && buf.len > 7 &&
-            !strncasecmp(buf_cstring(&buf), "mailto:", 7)) {
-            strarray_append(addresses, buf_cstring(&buf) + 7);
+
+        if (!r && buf.len) {
+            strarray_t *values = strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
+            int i;
+            for (i = 0; i < strarray_size(values); i++) {
+                const char *item = strarray_nth(values, i);
+                if (!strncasecmp(item, "mailto:", 7)) item += 7;
+                strarray_append(addresses, item);
+            }
+            strarray_free(values);
         }
         else if (strchr(txn->req_tgt.userid, '@')) {
             /* userid corresponding to target */
