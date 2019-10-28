@@ -2745,8 +2745,10 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
 
             /* Skip expunged or hidden messages */
             if (md->system_flags & FLAG_DELETED ||
-                md->internal_flags & FLAG_INTERNAL_EXPUNGED)
-                continue;
+                md->internal_flags & FLAG_INTERNAL_EXPUNGED) {
+                if (!want_expunged) continue;
+            }
+            else if (want_expunged) continue;
 
             if (md->savedate) hashset_add(savedates, &md->guid.value);
         }
