@@ -143,6 +143,10 @@ static int propfind_principalname(const xmlChar *name, xmlNsPtr ns,
                                   struct propfind_ctx *fctx,
                                   xmlNodePtr prop, xmlNodePtr resp,
                                   struct propstat propstat[], void *rock);
+static int proppatch_principalname(xmlNodePtr prop, unsigned set,
+                                   struct proppatch_ctx *pctx,
+                                   struct propstat propstat[],
+                                   void *rock);
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
                             xmlNodePtr prop, xmlNodePtr resp,
@@ -193,7 +197,7 @@ static const struct prop_entry principal_props[] = {
       PROP_ALLPROP, NULL, NULL, NULL },
     { "displayname", NS_DAV,
       PROP_ALLPROP | PROP_COLLECTION,
-      propfind_principalname, NULL, NULL },
+      propfind_principalname, proppatch_principalname, NULL },
     { "getcontentlanguage", NS_DAV,
       PROP_ALLPROP, NULL, NULL, NULL },
     { "getcontentlength", NS_DAV,
@@ -1782,6 +1786,67 @@ int propfind_creationdate(const xmlChar *name, xmlNsPtr ns,
     return 0;
 }
 
+/* Callback to write CALDAV:displayname for the principal */
+int proppatch_principalname(xmlNodePtr prop, unsigned set,
+                          struct proppatch_ctx *pctx,
+                          struct propstat propstat[],
+                          void *rock __attribute__((unused)))
+{
+    struct mailbox *mailbox = pctx->mailbox;
+    struct mailbox *calhomeset = NULL;
+
+    if (pctx->txn->req_tgt.namespace->id == URL_NS_PRINCIPAL) {
+        /* We have been storing CUAS on cal-home-set, NOT INBOX */
+        char *mboxname = caldav_mboxname(pctx->txn->req_tgt.userid, NULL);
+        int r = 0;
+
+        if (!mailbox || strcmp(mboxname, mailbox->name)) {
+            r = mailbox_open_iwl(mboxname, &calhomeset);
+            if (!r) pctx->mailbox = calhomeset;
+        }
+        free(mboxname);
+
+        if (r) {
+            xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
+                         &propstat[PROPSTAT_ERROR],
+                         prop->name, prop->ns, NULL, 0);
+            *pctx->ret = HTTP_SERVER_ERROR;
+            return 0;
+        }
+    }
+    else {
+        /* shouldn't happen!  Internal server error 'r' us */
+        *pctx->ret = HTTP_SERVER_ERROR;
+        return 0;
+    }
+
+    /* Make sure this is on a collection and the user has admin rights */
+    if (pctx->txn->req_tgt.resource ||
+        !(cyrus_acl_myrights(httpd_authstate, pctx->mailbox->acl) & DACL_ADMIN)) {
+        xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
+                     &propstat[PROPSTAT_FORBID],
+                     prop->name, prop->ns, NULL, 0);
+
+        *pctx->ret = HTTP_FORBIDDEN;
+    }
+    else {
+        char *value = NULL;
+
+        if (set) {
+            value = (char *) xmlNodeGetContent(prop);
+        }
+
+        proppatch_todb(prop, set, pctx, propstat, (void *) value);
+        free(value);
+    }
+
+    if (calhomeset) {
+        mailbox_close(&calhomeset);
+        pctx->mailbox = mailbox;
+    }
+
+    return 0;
+}
 
 /* Callback to fetch DAV:displayname for principals */
 static int propfind_principalname(const xmlChar *name, xmlNsPtr ns,
