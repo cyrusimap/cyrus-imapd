@@ -164,7 +164,7 @@ ec IMAP_BADURL,
 ec IMAP_ZERO_LENGTH_LITERAL,
    "Zero-length message literal"
 
-ec IMAP_DISABLED
+ec IMAP_DISABLED,
    "Command is disabled by configuration"
 
 # following used only proxy/db operations
