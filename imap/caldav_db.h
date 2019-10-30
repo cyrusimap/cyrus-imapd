@@ -71,6 +71,9 @@ enum {
     CAL_COMP_VCALENDAR =        (1<<15)
 };
 
+/* Returns NULL for unknown type */
+extern const char *caldav_comp_type_as_string(unsigned comp_type);
+
 #define CAL_COMP_REAL            0xff   /* All "real" components */
 
 struct caldav_db;

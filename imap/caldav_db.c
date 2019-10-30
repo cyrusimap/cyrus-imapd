@@ -1018,3 +1018,32 @@ done:
     return r;
 }
 
+
+EXPORTED const char *caldav_comp_type_as_string(unsigned comp_type)
+{
+    switch (comp_type) {
+        /* "Real" components */
+        case CAL_COMP_VEVENT:
+            return "VEVENT";
+        case CAL_COMP_VTODO:
+            return "VTODO";
+        case CAL_COMP_VJOURNAL:
+            return "VJOURNAL";
+        case CAL_COMP_VFREEBUSY:
+            return "VFREEBUSY";
+        case CAL_COMP_VAVAILABILITY:
+            return "VAVAILABILITY";
+        case CAL_COMP_VPOLL:
+            return "VPOLL";
+        /* Other components */
+        case CAL_COMP_VALARM:
+            return "VALARM";
+        case CAL_COMP_VTIMEZONE:
+            return "VTIMEZONE";
+        case CAL_COMP_VCALENDAR:
+            return "VCALENDAR";
+        default:
+            return NULL;
+    }
+}
+
