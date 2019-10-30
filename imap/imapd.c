@@ -8485,7 +8485,10 @@ static void cmd_setacl(char *tag, const char *name,
 
     /* is it remote? */
     r = mlookup(tag, name, intname, &mbentry);
-    if (r == IMAP_MAILBOX_MOVED) return;
+    if (r == IMAP_MAILBOX_MOVED) goto done;
+
+    if (!config_getswitch(IMAPOPT_ALLOWSETACL))
+        r = IMAP_DISABLED;
 
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
         /* remote mailbox */

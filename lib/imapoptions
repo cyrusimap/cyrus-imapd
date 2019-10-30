@@ -168,6 +168,10 @@ are listed with ``<none>''.
   TLS/SSL encryption layer to be negotiated prior to ANY
   authentication, see the \fItls_required\fR option. */
 
+{ "allowsetacl", 1, SWITCH }
+/* Defaults to enabled.  If disabled, disallows the use of the SETACL
+   command at all via IMAP. */
+
 { "allowusermoves", 0, SWITCH }
 /* Allow moving user accounts (with associated meta-data) via RENAME
    or XFER.
