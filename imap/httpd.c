@@ -3105,11 +3105,16 @@ EXPORTED void keepalive_response(struct transaction_t *txn)
  *
  * An initial call with 'code' != 0 will output a response header
  * and the preamble.
+ *
  * All subsequent calls should have 'code' = 0 to output just a body part.
+ * A body part may include custom headers (exluding Content-Type and Length),
+ * which must be properly folded and must end with CRLF.
+ *
  * A final call with 'len' = 0 ends the multipart body.
  */
 EXPORTED void write_multipart_body(long code, struct transaction_t *txn,
-                          const char *buf, unsigned len)
+                                   const char *buf, unsigned len,
+                                   const char *part_headers)
 {
     static char boundary[100];
     struct buf *body = &txn->resp_body.payload;
@@ -3150,7 +3155,11 @@ EXPORTED void write_multipart_body(long code, struct transaction_t *txn,
                        txn->resp_body.range->last,
                        txn->resp_body.len);
         }
-        buf_printf(body, "Content-Length: %d\r\n\r\n", len);
+        buf_printf(body, "Content-Length: %d\r\n", len);
+        if (part_headers) {
+            buf_appendcstr(body, part_headers);
+        }
+        buf_appendcstr(body, "\r\n");
         write_body(0, txn, buf_cstring(body), buf_len(body));
 
         /* Output body-part data */
@@ -3181,7 +3190,7 @@ static void multipart_byteranges(struct transaction_t *txn,
     /* Start multipart response */
     txn->resp_body.range = NULL;
     txn->resp_body.type = "multipart/byteranges";
-    write_multipart_body(HTTP_PARTIAL, txn, NULL, 0);
+    write_multipart_body(HTTP_PARTIAL, txn, NULL, 0, NULL);
 
     txn->resp_body.type = type;
     while (range) {
@@ -3191,7 +3200,7 @@ static void multipart_byteranges(struct transaction_t *txn,
 
         /* Output range as body part */
         txn->resp_body.range = range;
-        write_multipart_body(0, txn, msg_base + offset, datalen);
+        write_multipart_body(0, txn, msg_base + offset, datalen, NULL);
 
         /* Cleanup */
         free(range);
@@ -3199,7 +3208,7 @@ static void multipart_byteranges(struct transaction_t *txn,
     }
 
     /* End of multipart body */
-    write_multipart_body(0, txn, NULL, 0);
+    write_multipart_body(0, txn, NULL, 0, NULL);
 }
 
 

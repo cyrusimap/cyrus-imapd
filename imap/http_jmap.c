@@ -411,14 +411,15 @@ static char *parse_accept_header(const char **hdr)
 
 static int jmap_getblob_default_handler(jmap_req_t *req,
                                         const char *blobid,
-                                        const char *accept_mime __attribute__((unused)),
-                                        struct buf *blob)
+                                        const char *accept_mime,
+                                        const char *fname)
 {
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
     struct body *body = NULL;
     const struct body *part = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
+    struct buf blob = BUF_INITIALIZER;
     char *decbuf = NULL;
     int res = 0;
 
@@ -457,7 +458,11 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
     }
 
     // success
-    buf_setmap(blob, base, len);
+    buf_setmap(&blob, base, len);
+    req->txn->resp_body.type = accept_mime ? accept_mime : "application/octet-stream";
+    req->txn->resp_body.len = buf_len(&blob);
+    req->txn->resp_body.dispo.fname = fname;
+    write_body(HTTP_OK, req->txn, buf_base(&blob), buf_len(&blob));
     res = HTTP_OK;
 
  done:
@@ -471,6 +476,7 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
         msgrecord_unref(&mr);
     }
     buf_free(&msg_buf);
+    buf_free(&blob);
     return res;
 }
 
@@ -492,7 +498,7 @@ static int jmap_download(struct transaction_t *txn)
         return HTTP_BAD_REQUEST;
     }
     size_t bloblen = slash - blobbase;
-    const char *name = slash + 1;
+    const char *fname = slash + 1;
 
     /* now we're allocating memory, so don't return from here! */
 
@@ -538,33 +544,25 @@ static int jmap_download(struct transaction_t *txn)
     if (!accept_mime && (hdr = spool_getheader(txn->req_hdrs, "Accept"))) {
         accept_mime = parse_accept_header(hdr);
     }
-    if (!accept_mime) accept_mime = xstrdup("application/octet-stream");
 
     /* Call blob download handlers */
     int i;
     for (i = 0; i < ptrarray_size(&my_jmap_settings.getblob_handlers); i++) {
         jmap_getblob_handler *h = ptrarray_nth(&my_jmap_settings.getblob_handlers, i);
-        res = h(&req, blobid, accept_mime, &blob);
+        res = h(&req, blobid, accept_mime, fname);
         if (res) break;
     }
     if (!res) {
         /* Try default blob download handler */
-        res = jmap_getblob_default_handler(&req, blobid, accept_mime, &blob);
+        res = jmap_getblob_default_handler(&req, blobid, accept_mime, fname);
         if (!res) res = HTTP_NOT_FOUND;
     }
-    if (res != HTTP_OK) {
-        if (!txn->error.desc)
-            txn->error.desc = error_message(res);
-        goto done;
+
+    if (res != HTTP_OK && !txn->error.desc) {
+        txn->error.desc = error_message(res);
     }
-    res = 0;
+    else if (res == HTTP_OK) res = 0;
 
-    txn->resp_body.type = accept_mime;
-    txn->resp_body.len = buf_len(&blob);
-    txn->resp_body.dispo.fname = name;
-    write_body(HTTP_OK, txn, buf_base(&blob), buf_len(&blob));
-
-done:
     buf_free(&blob);
     free_hash_table(&mboxrights, free);
     conversations_commit(&cstate);

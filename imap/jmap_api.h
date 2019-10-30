@@ -117,14 +117,18 @@ typedef struct jmap_req {
     const strarray_t *using_capabilities;
 } jmap_req_t;
 
-/* Load blob data identified by URL-encoded blobid into buffer blob.
- * Blob handlers are chained to allow for overriding the default
- * blob handler. The handler chain is setup in jmap_settings_t.
+/* Write the contents of the blob identified by blobid on the
+ * HTTP transaction embedded in JMAP request req.
+ * If not NULL, accept_mime and fname define the requested
+ * MIME type and content disposition filename.
  *
- * Return HTTP_OK on success or any non-zero HTTP status on error.
+ * Return HTTP_OK if the blob has been written or any other
+ * HTTP status on error.
  * Return zero if the next blob handler should be called. */
-typedef int jmap_getblob_handler(jmap_req_t *req, const char *blobid,
-                                 const char *accept_mime, struct buf *blob);
+typedef int jmap_getblob_handler(jmap_req_t *req,
+                                 const char *blobid,
+                                 const char *accept_mime,
+                                 const char *fname);
 
 typedef struct {
     hash_table methods;

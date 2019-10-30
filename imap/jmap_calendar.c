@@ -72,6 +72,8 @@
 #include "util.h"
 #include "xmalloc.h"
 
+#include <sasl/saslutil.h>
+
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
@@ -84,6 +86,9 @@ static int jmap_calendarevent_changes(struct jmap_req *req);
 static int jmap_calendarevent_query(struct jmap_req *req);
 static int jmap_calendarevent_set(struct jmap_req *req);
 static int jmap_calendarevent_copy(struct jmap_req *req);
+
+static int jmap_calendarevent_getblob(jmap_req_t *req, const char *blobid,
+                                      const char *accept, const char *fname);
 
 #define JMAPCACHE_CALVERSION 19
 
@@ -160,6 +165,8 @@ HIDDEN void jmap_calendar_init(jmap_settings_t *settings)
             hash_insert(mp->name, mp, &settings->methods);
         }
     }
+
+    ptrarray_append(&settings->getblob_handlers, jmap_calendarevent_getblob);
 }
 
 HIDDEN void jmap_calendar_capabilities(json_t *account_capabilities)
@@ -1398,6 +1405,376 @@ done:
     return r;
 }
 
+static char *_encode_base64_nopad(const char *data, size_t len)
+{
+    if (!len) return NULL;
+
+    /* Encode data */
+    size_t b64len = ((len + 2) / 3) << 2;
+    char *b64 = xzmalloc(b64len + 1);
+    if (sasl_encode64(data, len, b64, b64len + 1, NULL) != SASL_OK) {
+        free(b64);
+        return NULL;
+    }
+    /* Remove padding */
+    char *end = b64 + strlen(b64) - 1;
+    while (*end == '=') {
+        *end = '\0';
+        end--;
+    }
+
+    return b64;
+}
+
+static char *_decode_base64_nopad(const char *b64, size_t b64len)
+{
+    /* Pad base64 data. */
+    size_t myb64len = b64len;
+    switch (b64len % 4) {
+        case 3:
+            myb64len += 1;
+            break;
+        case 2:
+            myb64len += 2;
+            break;
+        case 1:
+            return NULL;
+        default:
+            ; // do nothing
+    }
+    char *myb64 = xzmalloc(myb64len+1);
+    memcpy(myb64, b64, b64len);
+    switch (myb64len - b64len) {
+        case 2:
+            myb64[b64len+1] = '=';
+            // fall through
+        case 1:
+            myb64[b64len] = '=';
+            break;
+        default:
+            ; // do nothing
+    }
+    /* Decode data. */
+    size_t datalen = ((4 * myb64len / 3) + 3) & ~3;
+    char *data = xzmalloc(datalen + 1);
+    if (sasl_decode64(myb64, myb64len, data, datalen, NULL) != SASL_OK) {
+        free(data);
+        free(myb64);
+        return NULL;
+    }
+
+    free(myb64);
+    return data;
+}
+
+static const char *_encode_calendarevent_blobid(struct caldav_data *cdata,
+                                                const char *userid,
+                                                struct buf *dst)
+{
+    /* Set iCalendar smart blob prefix */
+    buf_putc(dst, 'I');
+
+    /* Encode iCalendar UID */
+    char *b64uid = _encode_base64_nopad(cdata->ical_uid, strlen(cdata->ical_uid));
+    if (!b64uid) {
+        buf_reset(dst);
+        return NULL;
+    }
+    buf_appendcstr(dst, b64uid);
+    free(b64uid);
+
+    /* Encode modseq */
+    buf_printf(dst, "-" MODSEQ_FMT, cdata->dav.modseq);
+
+    /* Encode user id */
+    if (userid) {
+        buf_putc(dst, '-');
+        char *b64userid = _encode_base64_nopad(userid, strlen(userid));
+        if (!b64userid) {
+            buf_reset(dst);
+            return NULL;
+        }
+        buf_appendcstr(dst, b64userid);
+        free(b64userid);
+    }
+
+    return buf_cstring(dst);
+}
+
+static int _decode_calendarevent_blobid(const char *blobid,
+                                        char **uidptr,
+                                        modseq_t *modseqptr,
+                                        char **useridptr)
+{
+    char *uid = NULL;
+    modseq_t modseq = 0;
+    char *userid = NULL;
+    int is_valid = 0;
+
+    /* Decode iCalendar UID */
+    const char *base = blobid+1;
+    const char *p = strchr(base, '-');
+    if (!p) goto done;
+    uid = _decode_base64_nopad(base, p-base);
+    if (!uid) goto done;
+    base = p + 1;
+
+    /* Decode modseq */
+    if (*base == '\0') goto done;
+    char *endptr = NULL;
+    errno = 0;
+    modseq = strtoull(base, &endptr, 10);
+    if (errno == ERANGE || (*endptr && *endptr != '-')) {
+        goto done;
+    }
+    base = endptr;
+
+    /* Decode userid */
+    if (*base == '-') {
+        base += 1;
+        size_t len = strlen(base);
+        if (len) {
+            userid = _decode_base64_nopad(base, len);
+            if (!userid) goto done;
+        }
+        base += len;
+    }
+
+    /* All done */
+    *uidptr = uid;
+    *modseqptr = modseq;
+    *useridptr = userid;
+    is_valid = 1;
+
+done:
+    if (!is_valid) {
+        free(uid);
+        free(userid);
+    }
+    return is_valid;
+}
+
+
+struct calendarevent_getblob_rock {
+    jmap_req_t *req;
+    struct buf *buf;
+};
+
+static int _calendarevent_getblob_cb(const char *mailbox __attribute__((unused)),
+                                     uint32_t uid __attribute__((unused)),
+                                     const char *entry __attribute__((unused)),
+                                     const char *userid,
+                                     const struct buf *value,
+                                     const struct annotate_metadata *mdata __attribute__((unused)),
+                                     void *vrock)
+{
+    if (!buf_len(value)) return 0;
+
+    struct calendarevent_getblob_rock *rock = vrock;
+    jmap_req_t *req = rock->req;
+    struct buf *buf = rock->buf;
+
+    /* Parse the value and fetch the patch */
+    struct dlist *dl;
+    const char *vpatchstr = NULL;
+    dlist_parsemap(&dl, 1, 0, buf_base(value), buf_len(value));
+    dlist_getatom(dl, "VPATCH", &vpatchstr);
+    if (vpatchstr) buf_setcstr(buf, vpatchstr);
+    dlist_free(&dl);
+    if (!buf_len(buf)) return 0;
+
+    /* Write VPATCH blob */
+    char *part_headers = NULL;
+    if (userid) part_headers = strconcat("X-UserId: ", userid, "\r\n", NULL);
+    req->txn->resp_body.type = "text/calendar; component=VPATCH";
+    req->txn->resp_body.len = buf_len(buf);
+    write_multipart_body(0, req->txn, buf_base(buf), buf_len(buf), part_headers);
+    free(part_headers);
+
+    return 0;
+}
+
+static int jmap_calendarevent_getblob(jmap_req_t *req,
+                                      const char *blobid,
+                                      const char *accept_mime,
+                                      const char *fname)
+{
+    struct caldav_db *db = NULL;
+    struct caldav_data *cdata = NULL;
+    struct mailbox *mailbox = NULL;
+    icalcomponent *ical = NULL;
+    char *uid = NULL;
+    char *userid = NULL;
+    modseq_t modseq;
+    struct buf buf = BUF_INITIALIZER;
+    int res = 0;
+    int r;
+
+    if (*blobid != 'I') return 0;
+
+    if (!_decode_calendarevent_blobid(blobid, &uid, &modseq, &userid)) {
+        res = HTTP_BAD_REQUEST;
+        goto done;
+    }
+
+    /* Validate user id */
+    if ((userid && strcmp(userid, req->userid)) || (!userid && (!httpd_userisadmin))) {
+        res = HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    /* Lookup uid in CaldavDB */
+    db = caldav_open_userid(req->accountid);
+    if (!db) {
+        req->txn->error.desc = "no calendar db";
+        res = HTTP_SERVER_ERROR;
+        goto done;
+    }
+    if (caldav_lookup_uid(db, uid, &cdata)) {
+        res = HTTP_NOT_FOUND;
+        goto done;
+    }
+    if (!jmap_hasrights_byname(req, cdata->dav.mailbox, DACL_READ)) {
+        res = HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    /* Validate modseq */
+    if (modseq != cdata->dav.modseq) {
+        res = HTTP_NOT_FOUND;
+        goto done;
+    }
+
+    /* Open mailbox, we need it now */
+    if ((r = jmap_openmbox(req, cdata->dav.mailbox, &mailbox, 0))) {
+        req->txn->error.desc = error_message(r);
+        res = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Make sure client can handle blob type. */
+    if (accept_mime) {
+        if (userid) {
+            if (strcmp(accept_mime, "application/octet-stream") &&
+                strcmp(accept_mime, "text/calendar")) {
+                res = HTTP_NOT_ACCEPTABLE;
+                goto done;
+            }
+        }
+        else if (strcmp(accept_mime, "multipart/mixed")) {
+            res = HTTP_NOT_ACCEPTABLE;
+            goto done;
+        }
+    }
+
+    /* Load iCalendar data */
+    if (userid) {
+        /* Fetch ical resource with personalized data */
+        ical = caldav_record_to_ical(mailbox, cdata, req->userid, NULL);
+    }
+    else {
+        /* Fetch ical resource without personalized data */
+        struct index_record record;
+        if (!mailbox_find_index_record(mailbox, cdata->dav.imap_uid, &record)) {
+            ical = record_to_ical(mailbox, &record, NULL);
+        }
+    }
+    if (!ical) {
+        req->txn->error.desc = "failed to load record";
+        res = HTTP_SERVER_ERROR;
+        goto done;
+    }
+
+    /* Write blob to socket */
+    if (userid) {
+        /* Set Content headers */
+        if (accept_mime) {
+            if (strcmp(accept_mime, "application/octet-stream") &&
+                strcmp(accept_mime, "text/calendar")) {
+                res = HTTP_NOT_ACCEPTABLE;
+                goto done;
+            }
+        }
+        char *content_type = NULL;
+        if (!accept_mime || !strcmp(accept_mime, "text/calendar")) {
+            const char *comp_type = caldav_comp_type_as_string(cdata->comp_type);
+            if (comp_type) {
+                content_type = strconcat("text/calendar; component=", comp_type, NULL);
+                req->txn->resp_body.type = content_type;
+            }
+        }
+        if (!req->txn->resp_body.type) {
+            req->txn->resp_body.type = accept_mime;
+        }
+        req->txn->resp_body.dispo.fname = fname;
+
+        /* Write body */
+        buf_setcstr(&buf, icalcomponent_as_ical_string(ical));
+        req->txn->resp_body.len = buf_len(&buf);
+        write_body(HTTP_OK, req->txn, buf_base(&buf), buf_len(&buf));
+        free(content_type);
+        res = HTTP_OK;
+    }
+    else {
+        /* Iniitialize multipart body */
+        if (accept_mime && strcmp(accept_mime, "multipart/mixed")) {
+            res = HTTP_NOT_ACCEPTABLE;
+            goto done;
+        }
+        req->txn->resp_body.type = "multipart/mixed";
+        req->txn->resp_body.dispo.fname = fname;
+        write_multipart_body(HTTP_OK, req->txn, NULL, 0, NULL);
+
+        /* Set main component Content headers */
+        char *content_type = NULL;
+        const char *comp_type = caldav_comp_type_as_string(cdata->comp_type);
+        if (comp_type) {
+            content_type = strconcat("text/calendar; component=", comp_type, NULL);
+            req->txn->resp_body.type = content_type;
+        }
+        else req->txn->resp_body.type = "text/calendar";
+
+        /* Write main component body */
+        buf_setcstr(&buf, icalcomponent_as_ical_string(ical));
+        req->txn->resp_body.len = buf_len(&buf);
+        write_multipart_body(0, req->txn, buf_base(&buf), buf_len(&buf), NULL);
+
+        /* Write userdata parts */
+        struct calendarevent_getblob_rock rock = { req, &buf };
+        annotatemore_findall(cdata->dav.mailbox, cdata->dav.imap_uid,
+                             PER_USER_CAL_DATA, 0, _calendarevent_getblob_cb,
+                             &rock, 0);
+
+        write_multipart_body(0, req->txn, NULL, 0, NULL);
+
+        free(content_type);
+        res = HTTP_OK;
+    }
+
+done:
+    if (res != HTTP_OK && !req->txn->error.desc) {
+        const char *desc = NULL;
+        switch (res) {
+            case HTTP_BAD_REQUEST:
+                desc = "invalid calendar event blobid";
+                break;
+            case HTTP_NOT_FOUND:
+                desc = "failed to find blob by calendar blobid";
+                break;
+            default:
+                desc = error_message(res);
+        }
+        req->txn->error.desc = desc;
+    }
+    if (ical) icalcomponent_free(ical);
+    if (mailbox) jmap_closembox(req, &mailbox);
+    if (db) caldav_close(db);
+    buf_free(&buf);
+    free(userid);
+    free(uid);
+    return res;
+}
+
 struct event_id {
     const char *raw; /* as requested by client */
     char *uid;
@@ -1701,6 +2078,26 @@ gotevent:
         json_object_set_new(jsevent, "calendarId",
                             json_string(strrchr(cdata->dav.mailbox, '.')+1));
     }
+    if (jmap_wantprop(rock->get->props, "blobId")) {
+        json_t *jblobid = json_null();
+        struct buf blobid = BUF_INITIALIZER;
+        if (_encode_calendarevent_blobid(cdata, req->userid, &blobid)) {
+            jblobid = json_string(buf_cstring(&blobid));
+        }
+        buf_free(&blobid);
+        json_object_set_new(jsevent, "blobId", jblobid);
+    }
+    if (jmap_wantprop(rock->get->props, "debugBlobId")) {
+        json_t *jblobid = json_null();
+        if (httpd_userisadmin) {
+            struct buf blobid = BUF_INITIALIZER;
+            if (_encode_calendarevent_blobid(cdata, NULL, &blobid)) {
+                jblobid = json_string(buf_cstring(&blobid));
+            }
+            buf_free(&blobid);
+        }
+        json_object_set_new(jsevent, "debugBlobId", jblobid);
+    }
 
     if (rock->want_eventids == NULL) {
         /* Client requested all events */
@@ -1924,6 +2321,16 @@ static const jmap_property_t event_props[] = {
         "x-href",
         JMAP_CALENDARS_EXTENSION,
         0
+    },
+    {
+        "blobId",
+        JMAP_CALENDARS_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_SKIP_GET
+    },
+    {
+        "debugBlobId",
+        JMAP_DEBUG_EXTENSION,
+        JMAP_PROP_SERVER_SET | JMAP_PROP_SKIP_GET
     },
     { NULL, NULL, 0 }
 };

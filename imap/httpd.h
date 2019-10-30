@@ -567,7 +567,8 @@ extern void xml_partial_response(struct transaction_t *txn,
 extern void write_body(long code, struct transaction_t *txn,
                        const char *buf, unsigned len);
 extern void write_multipart_body(long code, struct transaction_t *txn,
-                                 const char *buf, unsigned len);
+                                 const char *buf, unsigned len,
+                                 const char *part_headers);
 
 extern int meth_connect(struct transaction_t *txn, void *params);
 extern int meth_options(struct transaction_t *txn, void *params);
