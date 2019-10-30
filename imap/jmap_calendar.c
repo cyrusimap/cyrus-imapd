@@ -44,6 +44,7 @@
 #include <config.h>
 
 #include <ctype.h>
+#include <errno.h>
 #include <assert.h>
 #include <string.h>
 #include <syslog.h>
