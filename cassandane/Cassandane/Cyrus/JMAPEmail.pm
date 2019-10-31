@@ -11278,7 +11278,7 @@ sub test_email_set_filename
     }, {
         name   => "I feel \N{WHITE SMILING FACE}",
         wantCt => ' image/gif; name="=?UTF-8?Q?I_feel_=E2=98=BA?="',
-        wantCd => " attachment;filename*=utf-8''%49%20%66%65%65%6c%20%e2%98%ba",
+        wantCd => " attachment;filename*=utf-8''I%20feel%20%E2%98%BA",
     }, {
         name   => "foo" . ("_foo" x 20),
         wantCt => " image/gif;\r\n name=\"=?UTF-8?Q?foo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffo?=\r\n =?UTF-8?Q?o=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo=5Ffoo?=\"",
