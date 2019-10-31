@@ -2788,11 +2788,27 @@ EXPORTED void response_header(long code, struct transaction_t *txn)
     }
     if (resp_body->type) {
         simple_hdr(txn, "Content-Type", resp_body->type);
-
         if (resp_body->dispo.fname) {
-            simple_hdr(txn, "Content-Disposition", "%s; filename=\"%s\"",
-                       resp_body->dispo.attach ? "attachment" : "inline",
-                       resp_body->dispo.fname);
+            /* Construct Content-Disposition header */
+            const unsigned char *p = (const unsigned char *)resp_body->dispo.fname;
+            char *encfname = NULL;
+            for (p = (unsigned char *)resp_body->dispo.fname; p && *p; p++) {
+                if (*p >= 0x80) {
+                    encfname = charset_encode_mimexvalue(resp_body->dispo.fname, NULL);
+                    break;
+                }
+            }
+            if (encfname) {
+                simple_hdr(txn, "Content-Disposition", "%s; filename*=%s",
+                        resp_body->dispo.attach ? "attachment" : "inline",
+                        encfname);
+            }
+            else {
+                simple_hdr(txn, "Content-Disposition", "%s; filename=\"%s\"",
+                        resp_body->dispo.attach ? "attachment" : "inline",
+                        resp_body->dispo.fname);
+            }
+            free(encfname);
         }
         if (txn->resp_body.enc.proc) {
             /* Construct Content-Encoding header */
