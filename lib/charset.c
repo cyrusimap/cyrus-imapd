@@ -2615,21 +2615,20 @@ EXPORTED char *charset_encode_mimexvalue(const char *s, const char *lang)
 {
     const unsigned char *p;
     struct buf buf = BUF_INITIALIZER;
-    char *hex;
-    size_t hexlen;
 
     if (!s) return NULL;
 
-    hexlen = strlen(s) * 2;
-    hex = xmalloc(hexlen + 1);
-    bin_to_hex(s, hexlen/2, hex, 0);
-    hex[hexlen] = 0;
-
     buf_printf(&buf, "utf-8'%s'", lang ? lang : "");
-    for (p = (const unsigned char*) hex; *p; p += 2) {
-        buf_printf(&buf, "%%%c%c", *p, *(p+1));
+    for (p = (const unsigned char*) s; *p; p++) {
+        if ((*p >= '0' && *p <= '9') ||
+            (*p >= 'a' && *p <= 'z') ||
+            (*p >= 'A' && *p <= 'Z') ||
+            (strchr("!#$&+-.^_`|~", *p))) {
+            // Safe attr char
+            buf_putc(&buf, *p);
+        }
+        else buf_printf(&buf, "%%%X%X", *p >> 4, *p & 0xf);
     }
-    free(hex);
 
     return buf_release(&buf);
 }
