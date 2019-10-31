@@ -411,8 +411,7 @@ static char *parse_accept_header(const char **hdr)
 
 static int jmap_getblob_default_handler(jmap_req_t *req,
                                         const char *blobid,
-                                        const char *accept_mime,
-                                        const char *fname)
+                                        const char *accept_mime)
 {
     struct mailbox *mbox = NULL;
     msgrecord_t *mr = NULL;
@@ -461,7 +460,6 @@ static int jmap_getblob_default_handler(jmap_req_t *req,
     buf_setmap(&blob, base, len);
     req->txn->resp_body.type = accept_mime ? accept_mime : "application/octet-stream";
     req->txn->resp_body.len = buf_len(&blob);
-    req->txn->resp_body.dispo.fname = fname;
     write_body(HTTP_OK, req->txn, buf_base(&blob), buf_len(&blob));
     res = HTTP_OK;
 
@@ -545,21 +543,27 @@ static int jmap_download(struct transaction_t *txn)
         accept_mime = parse_accept_header(hdr);
     }
 
+    /* Set Content-Disposition header */
+    txn->resp_body.dispo.attach = fname != NULL;
+    txn->resp_body.dispo.fname = fname;
+
     /* Call blob download handlers */
     int i;
     for (i = 0; i < ptrarray_size(&my_jmap_settings.getblob_handlers); i++) {
         jmap_getblob_handler *h = ptrarray_nth(&my_jmap_settings.getblob_handlers, i);
-        res = h(&req, blobid, accept_mime, fname);
+        res = h(&req, blobid, accept_mime);
         if (res) break;
     }
     if (!res) {
         /* Try default blob download handler */
-        res = jmap_getblob_default_handler(&req, blobid, accept_mime, fname);
+        res = jmap_getblob_default_handler(&req, blobid, accept_mime);
         if (!res) res = HTTP_NOT_FOUND;
     }
 
-    if (res != HTTP_OK && !txn->error.desc) {
-        txn->error.desc = error_message(res);
+    if (res != HTTP_OK) {
+        if (!txn->error.desc) txn->error.desc = error_message(res);
+        txn->resp_body.dispo.attach = 0;
+        txn->resp_body.dispo.fname = NULL;
     }
     else if (res == HTTP_OK) res = 0;
 

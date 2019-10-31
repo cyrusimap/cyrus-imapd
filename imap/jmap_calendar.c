@@ -89,7 +89,7 @@ static int jmap_calendarevent_set(struct jmap_req *req);
 static int jmap_calendarevent_copy(struct jmap_req *req);
 
 static int jmap_calendarevent_getblob(jmap_req_t *req, const char *blobid,
-                                      const char *accept, const char *fname);
+                                      const char *accept);
 
 #define JMAPCACHE_CALVERSION 19
 
@@ -1597,8 +1597,7 @@ static int _calendarevent_getblob_cb(const char *mailbox __attribute__((unused))
 
 static int jmap_calendarevent_getblob(jmap_req_t *req,
                                       const char *blobid,
-                                      const char *accept_mime,
-                                      const char *fname)
+                                      const char *accept_mime)
 {
     struct caldav_db *db = NULL;
     struct caldav_data *cdata = NULL;
@@ -1707,7 +1706,6 @@ static int jmap_calendarevent_getblob(jmap_req_t *req,
         if (!req->txn->resp_body.type) {
             req->txn->resp_body.type = accept_mime;
         }
-        req->txn->resp_body.dispo.fname = fname;
 
         /* Write body */
         buf_setcstr(&buf, icalcomponent_as_ical_string(ical));
@@ -1723,7 +1721,6 @@ static int jmap_calendarevent_getblob(jmap_req_t *req,
             goto done;
         }
         req->txn->resp_body.type = "multipart/mixed";
-        req->txn->resp_body.dispo.fname = fname;
         write_multipart_body(HTTP_OK, req->txn, NULL, 0, NULL);
 
         /* Set main component Content headers */
