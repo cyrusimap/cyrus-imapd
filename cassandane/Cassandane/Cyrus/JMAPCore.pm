@@ -275,6 +275,25 @@ sub test_blob_download
     $self->assert_str_equals('some test', $resp->{content});
 }
 
+sub test_blob_download_name
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    my $data = $jmap->Upload("some test", "text/plain");
+
+    my $resp = $jmap->Download('cassandane', $data->{blobId}, 'foo');
+
+    $self->assert_str_equals('attachment; filename="foo"',
+        $resp->{headers}{'content-disposition'});
+
+    $resp = $jmap->Download('cassandane', $data->{blobId}, '%D1%82%D0%B5%D1%81%D1%82.txt');
+
+    $self->assert_str_equals("attachment; filename*=utf-8''%D1%82%D0%B5%D1%81%D1%82.txt",
+        $resp->{headers}{'content-disposition'});
+}
+
 sub test_created_ids
     :min_version_3_1 :needs_component_jmap
 {
