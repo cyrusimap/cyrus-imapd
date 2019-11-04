@@ -191,7 +191,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     int syslog_opts = LOG_PID;
     const char *facility;
 
-    if(cyrus_init_run != NOT_RUNNING) {
+    if (cyrus_init_run != NOT_RUNNING) {
         fatal("cyrus_init called twice!", EX_CONFIG);
     } else {
         cyrus_init_run = RUNNING;
@@ -209,7 +209,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 
     /* various things can run our commands with only two file descriptors, e.g. old strace on FreeBSD,
      * or IPC::Run from Perl.  Make sure we don't accidentally reuse low FD numbers */
-    while(1) {
+    while (1) {
         int fd = open("/dev/null", 0);
         if (fd == -1) fatal("can't open /dev/null", EX_SOFTWARE);
         if (fd >= 3) {
@@ -218,8 +218,8 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         }
     }
 
-    if(!ident)
-        fatal("service name was not specified to cyrus_init", EX_CONFIG);
+    if (!ident)
+        fatal("service name was not specified to cyrus_init", EX_SOFTWARE);
 
     config_ident = ident;
 
