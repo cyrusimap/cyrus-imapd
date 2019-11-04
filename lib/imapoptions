@@ -2595,7 +2595,14 @@ product version in the capabilities
    apply only for that channel */
 
 { "syslog_prefix", NULL, STRING }
-/* String to be prepended to the process name in syslog entries. */
+/* String to be prepended to the process name in syslog entries. Can
+   be further overridden by setting the $CYRUS_SYSLOG_PREFIX environment
+   variable.
+.PP
+   Using the $CYRUS_SYSLOG_PREFIX environment variable has the additional
+   advantage that it can be set before the \fBimapd.conf\fR is read, so
+   errors while reading the config file can be syslogged with the correct
+   prefix. */
 
 { "syslog_facility", NULL, STRING }
 /* Configure a syslog facility.  The default is whatever is compiled

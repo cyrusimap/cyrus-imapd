@@ -190,6 +190,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
     int umaskval = 0;
     int syslog_opts = LOG_PID;
     const char *facility;
+    char *ident_buf = NULL;
 
     if (cyrus_init_run != NOT_RUNNING) {
         fatal("cyrus_init called twice!", EX_CONFIG);
@@ -223,9 +224,16 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 
     config_ident = ident;
 
-    /* xxx we lose here since we can't have the prefix until we load the
-     * config file */
-    openlog(config_ident, syslog_opts, SYSLOG_FACILITY);
+    /* If we have the syslog prefix in the environment, set it before reading
+     * config, so that config read failures get logged with the right prefix!
+     */
+    if ((prefix = getenv("CYRUS_SYSLOG_PREFIX"))) {
+        ident_buf = strconcat(prefix, "/", ident, NULL);
+        openlog(ident_buf, syslog_opts, SYSLOG_FACILITY);
+    }
+    else {
+        openlog(config_ident, syslog_opts, SYSLOG_FACILITY);
+    }
 
     /* Load configuration file.  This will set config_dir when it finds it */
     config_read(alt_config, config_need_data);
@@ -235,25 +243,25 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
         fatal("must run as the Cyrus user", EX_USAGE);
     }
 
-
+    /* Now that we have config loaded, we might need to openlog again with
+     * the configured facility and/or prefix. */
     prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
     facility = config_getstring(IMAPOPT_SYSLOG_FACILITY);
-
-    /* Reopen the log with the new prefix, if needed  */
     if (prefix || facility) {
-        char *ident_buf;
         int facnum = facility ? get_facility(facility) : SYSLOG_FACILITY;
 
-        if (prefix)
-            ident_buf = strconcat(prefix, "/", ident, (char *)NULL);
-        else
-            ident_buf = xstrdup(ident);
+        /* The $CYRUS_SYSLOG_PREFIX environment variable takes precedence */
+        if (!ident_buf) {
+            if (prefix)
+                ident_buf = strconcat(prefix, "/", ident, NULL);
+            else
+                ident_buf = xstrdup(ident);
+        }
 
         closelog();
         openlog(ident_buf, syslog_opts, facnum);
-
-        /* don't free the openlog() string! */
     }
+    /* Do not free ident_buf, syslog needs it for the life of this process! */
 
     /* allow debug logging */
     if (!config_debug)
