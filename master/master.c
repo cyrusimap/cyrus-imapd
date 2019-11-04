@@ -387,7 +387,7 @@ static void centry_set_state(struct centry *c, enum sstate state)
 /*
  * Parse the "listen" parameter as one of the forms:
  *
- * hostname
+ * port
  * hostname ':' port
  * ipv4-address
  * ipv4-address ':' port
