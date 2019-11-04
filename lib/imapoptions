@@ -2717,16 +2717,16 @@ product version in the capabilities
 
 { "tls_server_ca_dir", NULL, STRING }
 /* Path to a directory with CA certificates used to verify certificates
-   offered when this server connects to other servers. This directory must
+   offered by the server, when cyrus acts as client. This directory must
    have filenames with the hashed value of the certificates (see
    openssl(1)). */
 
 { "tls_server_ca_file", NULL, STRING }
 /* Path to a file containing CA certificates used to verify certificates
-   offered when this server connects to other servers. */
+   offered by the server, when cyrus acts as client. */
 
 { "tls_server_cert", NULL, STRING }
-/* File containing the certificate presented to clients. */
+/* File containing the certificate, including the full chain, presented to clients. */
 
 { "tls_server_dhparam", NULL, STRING }
 /* File containing the DH parameters belonging to the certificate in
