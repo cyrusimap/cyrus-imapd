@@ -52,11 +52,11 @@
 #include "gmtoff.h"
 #include "mkgmtime.h"
 
-EXPORTED const char const monthname[][4] = {
+EXPORTED const char monthname[][4] = {
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
-EXPORTED const char const wday[][4] = {
+EXPORTED const char wday[][4] = {
     "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
 };
 
