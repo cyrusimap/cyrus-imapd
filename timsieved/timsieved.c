@@ -394,8 +394,8 @@ static int build_sieve_interp(void)
 #ifdef HAVE_JANSSON
     sieve_register_snooze(interp, (sieve_callback *) &timsieved_generic_cb);
 #endif
-#ifdef HAVE_JMAP
-    sieve_register_jmapquery(interp, (sieve_callback *) &timsieved_generic_cb);
+#ifdef WITH_JMAP
+    sieve_register_jmapquery(interp, (sieve_jmapquery *) &timsieved_generic_cb);
 #endif
     sieve_register_keep(interp, (sieve_callback *) &timsieved_generic_cb);
     sieve_register_imapflags(interp, NULL);
