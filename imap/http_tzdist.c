@@ -1968,13 +1968,9 @@ static int action_get(struct transaction_t *txn)
 }
 
 
-static const char *dow[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
-static const char *mon[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                             "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
-
 #define CTIME_FMT "%s %s %2d %02d:%02d:%02d %4d"
 #define CTIME_ARGS(tt) \
-    dow[icaltime_day_of_week(tt)-1], mon[tt.month-1], \
+    wday[icaltime_day_of_week(tt)-1], monthname[tt.month-1], \
     tt.day, tt.hour, tt.minute, tt.second, tt.year
 
 
