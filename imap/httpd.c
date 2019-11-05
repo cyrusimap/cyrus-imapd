@@ -1567,6 +1567,25 @@ static int auth_check_hdrs(struct transaction_t *txn, int *sasl_result)
         txn->auth_chal.scheme = NULL;
     }
 
+    /* Drop auth credentials, if not a backend in a Murder */
+    else if (!config_mupdate_server || !config_getstring(IMAPOPT_PROXYSERVERS)) {
+        syslog(LOG_DEBUG, "drop auth creds");
+
+        free(httpd_userid);
+        httpd_userid = NULL;
+
+        free(httpd_extrafolder);
+        httpd_extrafolder = NULL;
+
+        free(httpd_extradomain);
+        httpd_extradomain = NULL;
+
+        if (httpd_authstate) {
+            auth_freestate(httpd_authstate);
+            httpd_authstate = NULL;
+        }
+    }
+
     /* Perform proxy authorization, if necessary */
     else if (httpd_authid &&
              (hdr = spool_getheader(txn->req_hdrs, "Authorize-As")) &&
