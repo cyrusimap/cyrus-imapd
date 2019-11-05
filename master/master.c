@@ -658,6 +658,14 @@ static void service_create(struct service *s)
         r = cap_bind(s->socket, res->ai_addr, res->ai_addrlen);
         umask(oldumask);
         if (r < 0) {
+            int e = errno;
+            if (config_getswitch(IMAPOPT_MASTER_BIND_ERRORS_FATAL)) {
+                struct buf buf = BUF_INITIALIZER;
+                buf_printf(&buf, "unable to bind to %s/%s socket: %s",
+                                 s->name, s->familyname, strerror(e));
+                fatal(buf_cstring(&buf), EX_UNAVAILABLE);
+            }
+
             syslog(LOG_ERR, "unable to bind to %s/%s socket: %m",
                 s->name, s->familyname);
             xclose(s->socket);
