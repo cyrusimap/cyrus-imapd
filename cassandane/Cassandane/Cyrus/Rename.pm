@@ -40,6 +40,7 @@
 package Cassandane::Cyrus::Rename;
 use strict;
 use warnings;
+use Data::Dumper;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -508,18 +509,76 @@ sub test_rename_conversations
     $self->assert_num_equals(1, scalar @postdata);
 }
 
+sub get_partition
+{
+    my ($talk, $folder) = @_;
+
+    my $key = '/shared/vendor/cmu/cyrus-imapd/partition';
+    my $md = $talk->getmetadata($folder, $key);
+
+    return undef if $talk->get_last_completion_response() ne 'ok';
+    return $md->{$folder}->{$key};
+}
+
 sub test_rename_user
-    :Partition2
+    :Partition2 :AllowMoves
 {
     my ($self) = @_;
     my $admintalk = $self->{adminstore}->get_client();
 
     xlog "Test Cyrus extension which renames a user to a different partition";
 
-    $admintalk->rename('user.cassandane', 'user.cassandane'); # should have an error;
-    $self->assert($admintalk->get_last_error());
+    # set up a sub mailbox
+    $admintalk->create('user.cassandane.submailbox');
+    $self->assert_str_equals('ok',
+                             $admintalk->get_last_completion_response());
 
-    $admintalk->rename('user.cassandane', 'user.cassandane', 'p2') || die; # partition move
+    # rename to same name (only) should fail
+    $admintalk->rename('user.cassandane', 'user.cassandane');
+    $self->assert_str_equals('no',
+                             $admintalk->get_last_completion_response());
+    $self->assert_matches(qr{Mailbox already exists},
+                          $admintalk->get_last_error());
+
+    # rename to same name with new partition should succeed
+    $admintalk->rename('user.cassandane', 'user.cassandane', 'p2');
+    $self->assert_str_equals('ok',
+                             $admintalk->get_last_completion_response());
+
+    # rename to same name with same partition should fail
+    $admintalk->rename('user.cassandane', 'user.cassandane', 'p2');
+    $self->assert_str_equals('no',
+                             $admintalk->get_last_completion_response());
+    $self->assert_matches(qr{Mailbox already exists},
+                          $admintalk->get_last_error());
+
+    # rename to new name with new partition should fail
+    $admintalk->rename('user.cassandane', 'user.bob', 'default');
+    $self->assert_str_equals('no',
+                             $admintalk->get_last_completion_response());
+    $self->assert_matches(qr{Cross-server or cross-partition move w/rename not supported},
+                          $admintalk->get_last_error());
+
+    # rename to new name without partition should not change partition
+    my $before_partition = get_partition($admintalk, 'user.cassandane');
+    $self->assert_not_null($before_partition);
+    $admintalk->rename('user.cassandane', 'user.bob');
+    $self->assert_str_equals('ok',
+                             $admintalk->get_last_completion_response());
+    my $after_partition = get_partition($admintalk, 'user.bob');
+    $self->assert_equals($before_partition, $after_partition);
+    my $sub_partition = get_partition($admintalk, 'user.bob.submailbox');
+    $self->assert_equals($after_partition, $sub_partition);
+
+    # XXX rename to new name with explicit current partition should succeed
+    # XXX not implemented, but would be nice :)
+#    $before_partition = get_partition($admintalk, 'user.bob');
+#    $self->assert_not_null($before_partition);
+#    $admintalk->rename('user.bob', 'user.cassandane', $before_partition);
+#    $self->assert_str_equals('ok',
+#                             $admintalk->get_last_completion_response());
+#    $after_partition = get_partition($admintalk, 'user.cassandane');
+#    $self->assert_str_equals($before_partition, $after_partition);
 }
 
 sub test_rename_deepuser
