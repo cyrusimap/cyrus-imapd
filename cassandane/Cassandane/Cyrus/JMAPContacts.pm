@@ -2395,4 +2395,35 @@ sub test_contactgroup_set_patch
     }, $res->[1][1]{list}[0]{otherAccountContactIds});
 }
 
+sub test_contact_blobid
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create contact";
+    my $res = $jmap->CallMethods([['Contact/set', {create => {
+        "1" => { firstName => "foo", lastName => "last1" },
+    }}, "R1"]]);
+    my $contactId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($contactId);
+
+    xlog "get contact blobId";
+    $res = $jmap->CallMethods([
+        ['Contact/get', {
+            ids => [$contactId],
+            properties => ['blobId'],
+        }, 'R2']
+    ]);
+    my $blobId = $res->[0][1]{list}[0]{blobId};
+    $self->assert_not_null($blobId);
+
+    xlog "download blob";
+
+    $res = $jmap->Download('cassandane', $blobId);
+    $self->assert_str_equals("BEGIN:VCARD", substr($res->{content}, 0, 11));
+    $self->assert_num_not_equals(-1, index($res->{content}, 'FN:foo last1'));
+}
+
 1;
