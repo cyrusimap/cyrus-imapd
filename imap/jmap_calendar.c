@@ -240,7 +240,8 @@ static json_t *get_schedule_address_set(const char *userid,
         free(value);
     }
     else {
-        char *value = strconcat("mailto:", userid, "@", config_defdomain, NULL);
+        const char *domain = httpd_extradomain ? httpd_extradomain : config_defdomain;
+        char *value = strconcat("mailto:", userid, "@", domain, NULL);
         json_array_append_new(val, json_string(value));
         free(value);
     }
