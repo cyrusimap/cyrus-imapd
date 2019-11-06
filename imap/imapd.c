@@ -7523,6 +7523,10 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     }
 
     if (location && strcmp(oldname, newname)) {
+        /* XXX It would be nice to not complain here iff the location
+         * XXX is actually the mailbox's current partition, but we
+         * XXX don't have that info until much later!
+         */
         prot_printf(imapd_out,
                     "%s NO Cross-server or cross-partition move w/rename not supported\r\n",
                     tag);
@@ -7773,7 +7777,8 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         }
         mboxlist_entry_free(&newmbentry);
 
-        r = mboxlist_renamemailbox(mbentry, newmailboxname, location,
+        r = mboxlist_renamemailbox(mbentry, newmailboxname,
+                                   location ? location : mbentry->partition,
                                    0 /* uidvalidity */, imapd_userisadmin,
                                    imapd_userid, imapd_authstate, mboxevent,
                                    0, 0, rename_user, 0, 0, 0);
