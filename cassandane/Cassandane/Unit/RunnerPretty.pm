@@ -114,6 +114,16 @@ sub _getpaddedname
     return $res;
 }
 
+sub _prettytest
+{
+    my $test = shift;
+    die "WEIRD TEST $test" unless $test =~ m/^test_(.*)\((.*)\)$/;
+    my $item = $1;
+    my $suite = $2;
+    $suite =~ s/^Cassandane::Cyrus:://;
+    return "$suite.$item";
+}
+
 sub print_errors
 {
     my $self = shift;
@@ -132,8 +142,9 @@ sub print_errors
     for my $e (@{$result->errors()}) {
         my ($test, $errors) = split(/\n/, $e->to_string(), 2);
         chomp $errors;
-        $i++;
-        $self->_print($self->ansi([31], "$i) $test") . "\n$errors\n");
+        my $prettytest = _prettytest($test);
+        $self->_print("\n") if $i++;
+        $self->_print($self->ansi([31], "$i) $prettytest") . "\n$errors\n");
         $self->_print("\nAnnotations:\n", $e->object->annotations())
           if $e->object->annotations();
     }
@@ -157,8 +168,9 @@ sub print_failures
     for my $f (@{$result->failures()}) {
         my ($test, $failures) = split(/\n/, $f->to_string(), 2);
         chomp $failures;
+        my $prettytest = _prettytest($test);
         $self->_print("\n") if $i++;
-        $self->_print($self->ansi([33], "$i) $test") . "\n$failures\n");
+        $self->_print($self->ansi([33], "$i) $prettytest") . "\n$failures\n");
         $self->_print("\nAnnotations:\n", $f->object->annotations())
           if $f->object->annotations();
     }
