@@ -123,4 +123,7 @@ extern void jmap_parser_invalid(struct jmap_parser *parser, const char *prop);
 
 extern json_t *jmap_server_error(int r);
 
+extern char *jmap_encode_base64_nopad(const char *data, size_t len);
+extern char *jmap_decode_base64_nopad(const char *b64, size_t b64len);
+
 #endif /* JMAP_UTIL_H */

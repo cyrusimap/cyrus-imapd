@@ -46,6 +46,8 @@
 #include <string.h>
 #include <syslog.h>
 
+#include <sasl/saslutil.h>
+
 #include "annotate.h"
 #include "carddav_db.h"
 #include "global.h"
@@ -467,4 +469,66 @@ HIDDEN json_t *jmap_server_error(int r)
     return json_pack("{s:s, s:s}",
                      "type", "serverError",
                      "description", error_message(r));
+}
+
+HIDDEN char *jmap_encode_base64_nopad(const char *data, size_t len)
+{
+    if (!len) return NULL;
+
+    /* Encode data */
+    size_t b64len = ((len + 2) / 3) << 2;
+    char *b64 = xzmalloc(b64len + 1);
+    if (sasl_encode64(data, len, b64, b64len + 1, NULL) != SASL_OK) {
+        free(b64);
+        return NULL;
+    }
+    /* Remove padding */
+    char *end = b64 + strlen(b64) - 1;
+    while (*end == '=') {
+        *end = '\0';
+        end--;
+    }
+
+    return b64;
+}
+
+HIDDEN char *jmap_decode_base64_nopad(const char *b64, size_t b64len)
+{
+    /* Pad base64 data. */
+    size_t myb64len = b64len;
+    switch (b64len % 4) {
+        case 3:
+            myb64len += 1;
+            break;
+        case 2:
+            myb64len += 2;
+            break;
+        case 1:
+            return NULL;
+        default:
+            ; // do nothing
+    }
+    char *myb64 = xzmalloc(myb64len+1);
+    memcpy(myb64, b64, b64len);
+    switch (myb64len - b64len) {
+        case 2:
+            myb64[b64len+1] = '=';
+            // fall through
+        case 1:
+            myb64[b64len] = '=';
+            break;
+        default:
+            ; // do nothing
+    }
+    /* Decode data. */
+    size_t datalen = ((4 * myb64len / 3) + 3) & ~3;
+    char *data = xzmalloc(datalen + 1);
+    if (sasl_decode64(myb64, myb64len, data, datalen, NULL) != SASL_OK) {
+        free(data);
+        free(myb64);
+        return NULL;
+    }
+
+    free(myb64);
+    return data;
 }

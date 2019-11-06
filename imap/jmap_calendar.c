@@ -73,8 +73,6 @@
 #include "util.h"
 #include "xmalloc.h"
 
-#include <sasl/saslutil.h>
-
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
@@ -1407,68 +1405,6 @@ done:
     return r;
 }
 
-static char *_encode_base64_nopad(const char *data, size_t len)
-{
-    if (!len) return NULL;
-
-    /* Encode data */
-    size_t b64len = ((len + 2) / 3) << 2;
-    char *b64 = xzmalloc(b64len + 1);
-    if (sasl_encode64(data, len, b64, b64len + 1, NULL) != SASL_OK) {
-        free(b64);
-        return NULL;
-    }
-    /* Remove padding */
-    char *end = b64 + strlen(b64) - 1;
-    while (*end == '=') {
-        *end = '\0';
-        end--;
-    }
-
-    return b64;
-}
-
-static char *_decode_base64_nopad(const char *b64, size_t b64len)
-{
-    /* Pad base64 data. */
-    size_t myb64len = b64len;
-    switch (b64len % 4) {
-        case 3:
-            myb64len += 1;
-            break;
-        case 2:
-            myb64len += 2;
-            break;
-        case 1:
-            return NULL;
-        default:
-            ; // do nothing
-    }
-    char *myb64 = xzmalloc(myb64len+1);
-    memcpy(myb64, b64, b64len);
-    switch (myb64len - b64len) {
-        case 2:
-            myb64[b64len+1] = '=';
-            // fall through
-        case 1:
-            myb64[b64len] = '=';
-            break;
-        default:
-            ; // do nothing
-    }
-    /* Decode data. */
-    size_t datalen = ((4 * myb64len / 3) + 3) & ~3;
-    char *data = xzmalloc(datalen + 1);
-    if (sasl_decode64(myb64, myb64len, data, datalen, NULL) != SASL_OK) {
-        free(data);
-        free(myb64);
-        return NULL;
-    }
-
-    free(myb64);
-    return data;
-}
-
 static const char *_encode_calendarevent_blobid(struct caldav_data *cdata,
                                                 const char *userid,
                                                 struct buf *dst)
@@ -1477,7 +1413,8 @@ static const char *_encode_calendarevent_blobid(struct caldav_data *cdata,
     buf_putc(dst, 'I');
 
     /* Encode iCalendar UID */
-    char *b64uid = _encode_base64_nopad(cdata->ical_uid, strlen(cdata->ical_uid));
+    char *b64uid =
+        jmap_encode_base64_nopad(cdata->ical_uid, strlen(cdata->ical_uid));
     if (!b64uid) {
         buf_reset(dst);
         return NULL;
@@ -1491,7 +1428,7 @@ static const char *_encode_calendarevent_blobid(struct caldav_data *cdata,
     /* Encode user id */
     if (userid) {
         buf_putc(dst, '-');
-        char *b64userid = _encode_base64_nopad(userid, strlen(userid));
+        char *b64userid = jmap_encode_base64_nopad(userid, strlen(userid));
         if (!b64userid) {
             buf_reset(dst);
             return NULL;
@@ -1517,7 +1454,7 @@ static int _decode_calendarevent_blobid(const char *blobid,
     const char *base = blobid+1;
     const char *p = strchr(base, '-');
     if (!p) goto done;
-    uid = _decode_base64_nopad(base, p-base);
+    uid = jmap_decode_base64_nopad(base, p-base);
     if (!uid) goto done;
     base = p + 1;
 
@@ -1536,7 +1473,7 @@ static int _decode_calendarevent_blobid(const char *blobid,
         base += 1;
         size_t len = strlen(base);
         if (len) {
-            userid = _decode_base64_nopad(base, len);
+            userid = jmap_decode_base64_nopad(base, len);
             if (!userid) goto done;
         }
         base += len;
