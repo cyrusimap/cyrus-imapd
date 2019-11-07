@@ -108,19 +108,31 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
 
     // does this user have an inbox on this machine?
 
-    mbentry_t *mbentry = NULL;
+    /* XXX  Do LDAP/DB/socket lookup to see if user is local */
+    /* XXX  Hack until real lookup stuff is written */
+    int islocal = 0;
 
-    /* Lookup user's cal-home-set to see if its on this server */
-    mbname_t *mbname = mbname_from_userid(userid);
-    mbname_push_boxes(mbname, config_getstring(IMAPOPT_CALENDARPREFIX));
-    int r = http_mlookup(mbname_intname(mbname), &mbentry, NULL);
-    mbname_free(&mbname);
+    const char *at = strchr(userid, '@');
+    if (at) {
+        struct strlist *domains = cua_domains;
+        for (; domains && strcmp(at+1, domains->s); domains = domains->next);
+        if (domains) islocal = 1;
+    }
 
-    if (!r) {
-        param->server = xstrdupnull(mbentry->server); /* freed by sched_param_fini */
-        mboxlist_entry_free(&mbentry);
-        if (param->server) param->flags |= SCHEDTYPE_ISCHEDULE;
-        return 0;
+    if (islocal) {
+        mbentry_t *mbentry = NULL;
+        /* Lookup user's cal-home-set to see if its on this server */
+        mbname_t *mbname = mbname_from_userid(userid);
+        mbname_push_boxes(mbname, config_getstring(IMAPOPT_CALENDARPREFIX));
+        int r = http_mlookup(mbname_intname(mbname), &mbentry, NULL);
+        mbname_free(&mbname);
+
+        if (!r) {
+            param->server = xstrdupnull(mbentry->server); /* freed by sched_param_fini */
+            mboxlist_entry_free(&mbentry);
+            if (param->server) param->flags |= SCHEDTYPE_ISCHEDULE;
+            return 0;
+        }
     }
 
     /* User is outside of our domain(s) -
