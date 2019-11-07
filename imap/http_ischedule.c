@@ -535,7 +535,7 @@ static int meth_post_isched(struct transaction_t *txn,
         case ICAL_METHOD_CANCEL: {
             struct sched_data sched_data =
                 { 1, meth == ICAL_METHOD_REPLY, 0,
-                  ical, NULL, NULL, ICAL_SCHEDULEFORCESEND_NONE, NULL };
+                  ical, NULL, NULL, ICAL_SCHEDULEFORCESEND_NONE, NULL, NULL };
             xmlNodePtr root = NULL;
             xmlNsPtr ns[NUM_NAMESPACE];
             struct auth_state *authstate;
@@ -560,7 +560,7 @@ static int meth_post_isched(struct transaction_t *txn,
                 while ((recipient = tok_next(&tok))) {
                     /* Is recipient remote or local? */
                     struct caldav_sched_param sparam;
-                    int r = caladdress_lookup(recipient, &sparam, /*myuserid*/NULL);
+                    int r = caladdress_lookup(recipient, &sparam, /*schedule_addresses*/NULL);
 
                     /* Don't allow scheduling with remote users via iSchedule */
                     if (sparam.flags & SCHEDTYPE_REMOTE) r = HTTP_FORBIDDEN;

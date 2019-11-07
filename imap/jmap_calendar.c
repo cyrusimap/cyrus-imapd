@@ -2482,7 +2482,7 @@ static int setcalendarevents_schedule(jmap_req_t *req,
         /* Send scheduling message. */
         if (strarray_find_case(schedule_addresses, organizer, 0) >= 0) {
             /* Organizer scheduling object resource */
-            sched_request(req->userid, organizer, oldical, ical);
+            sched_request(req->userid, schedule_addresses, organizer, oldical, ical);
         } else {
             /* Attendee scheduling object resource */
             int omit_reply = 0;
@@ -2499,7 +2499,7 @@ static int setcalendarevents_schedule(jmap_req_t *req,
                 }
             }
             if (!omit_reply && strarray_size(schedule_addresses))
-                sched_reply(req->userid, strarray_nth(schedule_addresses, 0), oldical, ical);
+                sched_reply(req->userid, schedule_addresses, oldical, ical);
         }
     }
 

@@ -77,105 +77,54 @@ static const char *get_organizer(icalcomponent *comp);
 static int partstat_changed(icalcomponent *oldcomp,
                             icalcomponent *newcomp, const char *attendee);
 
-int caladdress_lookup(const char *addr,
-                      struct caldav_sched_param *param, const char *myuserid)
+int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
+                      const strarray_t *schedule_addresses)
 {
-    const char *userid = addr, *p;
-    int islocal = 1, found = 1;
-    size_t len;
-    char *testuser = NULL;
+    const char *userid = addr;
+    int i;
 
     if (!addr) return HTTP_NOT_FOUND;
 
-    if (myuserid) {
-        const char *annotname =
-            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-        char *mboxname = caldav_mboxname(myuserid, NULL);
-        struct buf mybuf = BUF_INITIALIZER;
-        int r = annotatemore_lookupmask(mboxname, annotname,
-                                        myuserid, &mybuf);
-
-        if (!r && buf_len(&mybuf)) {
-            strarray_t *values = strarray_split(buf_cstring(&mybuf), ",", STRARRAY_TRIM);
-            const char *item = strarray_nth(values, 0);
-            if (!strncasecmp(item, "mailto:", 7)) item += 7;
-            testuser = xstrdup(item);
-            strarray_free(values);
-        }
-        else if (strchr(myuserid, '@') || !httpd_extradomain) {
-            testuser = xstrdup(myuserid);
-        }
-        else {
-            testuser = strconcat(myuserid, "@", httpd_extradomain, (char *)NULL);
-        }
-
-        free(mboxname);
-        buf_free(&mybuf);
-    }
-
     if (!strncasecmp(userid, "mailto:", 7)) userid += 7;
 
+    char *addresses = schedule_addresses ? strarray_join(schedule_addresses, ",") : xstrdup("NULL");
     syslog(LOG_DEBUG,
-           "caladdress_lookup(userid: '%s', myuserid: '%s', testuser: '%s')",
-           userid, myuserid ? myuserid : "NULL", testuser ? testuser : "NULL");
+           "caladdress_lookup(userid: '%s', schedule_addresses: '%s')",
+           userid, addresses);
+    free(addresses);
 
     memset(param, 0, sizeof(struct caldav_sched_param));
 
-    if (testuser && !strcasecmp(userid, testuser)) {
+    param->userid = xstrdup(userid);
+
+    for (i = 0; i < strarray_size(schedule_addresses); i++) {
+        const char *item = strarray_nth(schedule_addresses, i);
+        if (!strncasecmp(item, "mailto:", 7)) item += 7;
+        if (strcasecmp(item, userid)) continue;
+        // found one!
         param->isyou = 1;
-        if (param->userid) free(param->userid);
-        param->userid = testuser;
         return 0; // myself is always local
     }
-    free(testuser);
-    len = strlen(userid);
 
-    /* XXX  Do LDAP/DB/socket lookup to see if user is local */
-    /* XXX  Hack until real lookup stuff is written */
-    if ((p = strchr(userid, '@')) && *++p) {
-        struct strlist *domains = cua_domains;
+    // does this user have an inbox on this machine?
 
-        for (; domains && strcmp(p, domains->s); domains = domains->next);
+    mbentry_t *mbentry = NULL;
 
-        if (!domains) islocal = 0;
-        else if (!config_virtdomains) len = p - userid - 1;
-    }
+    /* Lookup user's cal-home-set to see if its on this server */
+    mbname_t *mbname = mbname_from_userid(userid);
+    mbname_push_boxes(mbname, config_getstring(IMAPOPT_CALENDARPREFIX));
+    int r = http_mlookup(mbname_intname(mbname), &mbentry, NULL);
+    mbname_free(&mbname);
 
-    if (islocal) {
-        /* User is in a local domain */
-        int r;
-        const char *mboxname = NULL;
-        mbentry_t *mbentry = NULL;
-        mbname_t *mbname = NULL;
-
-        if (!found) return HTTP_NOT_FOUND;
-        else {
-            if (param->userid) free(param->userid);
-            param->userid = xstrndup(userid, len); /* freed by sched_param_fini */
-        }
-
-        /* Lookup user's cal-home-set to see if its on this server */
-
-        mbname = mbname_from_userid(param->userid);
-        mbname_push_boxes(mbname, config_getstring(IMAPOPT_CALENDARPREFIX));
-        mboxname = mbname_intname(mbname);
-
-        r = http_mlookup(mboxname, &mbentry, NULL);
-        mbname_free(&mbname);
-
-        if (!r) {
-            param->server = xstrdupnull(mbentry->server); /* freed by sched_param_fini */
-            mboxlist_entry_free(&mbentry);
-            if (param->server) param->flags |= SCHEDTYPE_ISCHEDULE;
-            return 0;
-        }
-        /* Fall through and try remote */
+    if (!r) {
+        param->server = xstrdupnull(mbentry->server); /* freed by sched_param_fini */
+        mboxlist_entry_free(&mbentry);
+        if (param->server) param->flags |= SCHEDTYPE_ISCHEDULE;
+        return 0;
     }
 
     /* User is outside of our domain(s) -
        Do remote scheduling (default = iMIP) */
-    if (param->userid) free(param->userid);
-    param->userid = xstrdupnull(userid); /* freed by sched_param_fini */
     param->flags |= SCHEDTYPE_REMOTE;
 
     /* Do iSchedule DNS SRV lookup */
@@ -844,7 +793,7 @@ int sched_busytime_query(struct transaction_t *txn,
     organizer = icalproperty_get_organizer(prop);
 
     /* XXX  Do we need to do more checks here? */
-    if (caladdress_lookup(organizer, &sparam, httpd_userid) ||
+    if (caladdress_lookup(organizer, &sparam, NULL) ||
         (sparam.flags & SCHEDTYPE_REMOTE))
         org_authstate = auth_newstate("anonymous");
     else
@@ -898,7 +847,7 @@ int sched_busytime_query(struct transaction_t *txn,
 
         /* Is attendee remote or local? */
         attendee = icalproperty_get_attendee(prop);
-        r = caladdress_lookup(attendee, &sparam, httpd_userid);
+        r = caladdress_lookup(attendee, &sparam, NULL);
 
         /* Don't allow scheduling of remote users via an iSchedule request */
         if ((sparam.flags & SCHEDTYPE_REMOTE) &&
@@ -1990,12 +1939,12 @@ static void sched_deliver_local(const char *sender, const char *recipient,
     if (!txn.req_hdrs) r = HTTP_SERVER_ERROR;
 
     /* Store the (updated) object in the recipients's calendar */
-    strarray_t schedule_addresses = STRARRAY_INITIALIZER;
-    strarray_append(&schedule_addresses, recipient);
+    strarray_t recipient_addresses = STRARRAY_INITIALIZER;
+    strarray_append(&recipient_addresses, recipient);
     if (!r) r = caldav_store_resource(&txn, ical, mailbox,
                                       buf_cstring(&resource), cdata->dav.createdmodseq,
-                                      caldavdb, NEW_STAG, recipient, &schedule_addresses);
-    strarray_fini(&schedule_addresses);
+                                      caldavdb, NEW_STAG, recipient, &recipient_addresses);
+    strarray_fini(&recipient_addresses);
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
         sched_data->status =
@@ -2028,7 +1977,7 @@ static void sched_deliver_local(const char *sender, const char *recipient,
         if (icalcomponent_isa(comp) == ICAL_VPOLL_COMPONENT)
             sched_pollstatus(recipient, sparam, ical, attendee);
         else
-            sched_request(userid, userid, NULL, ical); // oldical?
+            sched_request(userid, NULL, recipient, NULL, ical); // oldical?
     }
 
   done:
@@ -2078,7 +2027,7 @@ void sched_deliver(const char *sender, const char *recipient, void *data, void *
         return;
     }
 
-    if (caladdress_lookup(recipient, &sparam, sender)) {
+    if (caladdress_lookup(recipient, &sparam, sched_data->schedule_addresses)) {
         sched_data->status =
             sched_data->ischedule ? REQSTAT_NOUSER : SCHEDSTAT_NOUSER;
         /* Unknown user */
@@ -2506,7 +2455,8 @@ static int icalcomponent_is_historical(icalcomponent *comp, icaltimetype cutoff)
     return (icaltime_compare(span.end, cutoff) < 0);
 }
 
-static void schedule_full_cancel(const char *sender, const char *attendee,
+static void schedule_full_cancel(const strarray_t *schedule_addresses,
+                                 const char *organizer, const char *attendee,
                                  icalcomponent *mastercomp, icaltimetype h_cutoff,
                                  icalcomponent *oldical, icalcomponent *newical)
 {
@@ -2549,15 +2499,16 @@ static void schedule_full_cancel(const char *sender, const char *attendee,
 
     if (do_send) {
         struct sched_data sched =
-            { 0, 0, 0, itip, oldical, newical, ICAL_SCHEDULEFORCESEND_NONE, NULL };
-        sched_deliver(sender, attendee, &sched, httpd_authstate);
+            { 0, 0, 0, itip, oldical, newical, ICAL_SCHEDULEFORCESEND_NONE, schedule_addresses, NULL };
+        sched_deliver(organizer, attendee, &sched, httpd_authstate);
     }
 
     icalcomponent_free(itip);
 }
 
 /* we've already tested that master does NOT contain this attendee */
-static void schedule_sub_cancels(const char *sender, const char *attendee,
+static void schedule_sub_cancels(const strarray_t *schedule_addresses,
+                                 const char *organizer, const char *attendee,
                                  icaltimetype h_cutoff,
                                  icalcomponent *oldical, icalcomponent *newical)
 {
@@ -2596,8 +2547,8 @@ static void schedule_sub_cancels(const char *sender, const char *attendee,
 
     if (do_send) {
         struct sched_data sched =
-            { 0, 0, 0, itip, oldical, newical, ICAL_SCHEDULEFORCESEND_NONE, NULL };
-        sched_deliver(sender, attendee, &sched, httpd_authstate);
+            { 0, 0, 0, itip, oldical, newical, ICAL_SCHEDULEFORCESEND_NONE, schedule_addresses, NULL };
+        sched_deliver(organizer, attendee, &sched, httpd_authstate);
 
     }
 
@@ -2615,7 +2566,8 @@ icalparameter_scheduleforcesend get_forcesend(icalproperty *prop)
 
 /* we've already tested that master does NOT contain this attendee or that
  * master doesn't need to be scheduled */
-static void schedule_sub_updates(const char *sender, const char *attendee,
+static void schedule_sub_updates(const strarray_t *schedule_addresses,
+                                 const char *organizer, const char *attendee,
                                  icaltimetype h_cutoff,
                                  icalcomponent *oldical, icalcomponent *newical)
 {
@@ -2679,8 +2631,8 @@ static void schedule_sub_updates(const char *sender, const char *attendee,
 
     if (do_send) {
         struct sched_data sched =
-            { 0, 0, is_update, itip, oldical, newical, force_send, NULL };
-        sched_deliver(sender, attendee, &sched, httpd_authstate);
+            { 0, 0, is_update, itip, oldical, newical, force_send, schedule_addresses, NULL };
+        sched_deliver(organizer, attendee, &sched, httpd_authstate);
         update_attendee_status(newical, &recurids, attendee, sched.status);
     }
 
@@ -2689,7 +2641,8 @@ static void schedule_sub_updates(const char *sender, const char *attendee,
 }
 
 /* we've already tested that master does contain this attendee */
-static void schedule_full_update(const char *sender, const char *attendee,
+static void schedule_full_update(const strarray_t *schedule_addresses,
+                                 const char *organizer, const char *attendee,
                                  icalcomponent *mastercomp, icaltimetype h_cutoff,
                                  icalcomponent *oldical, icalcomponent *newical)
 {
@@ -2766,14 +2719,14 @@ static void schedule_full_update(const char *sender, const char *attendee,
 
     if (do_send) {
         struct sched_data sched =
-            { 0, 0, is_update, itip, oldical, newical, force_send, NULL };
-        sched_deliver(sender, attendee, &sched, httpd_authstate);
+            { 0, 0, is_update, itip, oldical, newical, force_send, schedule_addresses, NULL };
+        sched_deliver(organizer, attendee, &sched, httpd_authstate);
 
         update_attendee_status(newical, NULL, attendee, sched.status);
     }
     else {
         /* just look for sub updates */
-        schedule_sub_updates(sender, attendee, h_cutoff, oldical, newical);
+        schedule_sub_updates(schedule_addresses, organizer, attendee, h_cutoff, oldical, newical);
     }
 
     icalcomponent_free(itip);
@@ -2781,44 +2734,43 @@ static void schedule_full_update(const char *sender, const char *attendee,
 
 /* sched_request() helper
  * handles scheduling for a single attendee */
-static void schedule_one_attendee(const char *organizer, const char *attendee,
+static void schedule_one_attendee(const strarray_t *schedule_addresses,
+                                  const char *organizer, const char *attendee,
                                   icaltimetype h_cutoff,
                                   icalcomponent *oldical, icalcomponent *newical)
 {
     /* case: this attendee is attending the master event */
     icalcomponent *mastercomp;
     if ((mastercomp = find_attended_component(newical, "", attendee))) {
-        schedule_full_update(organizer, attendee, mastercomp, h_cutoff, oldical, newical);
+        schedule_full_update(schedule_addresses, organizer, attendee,
+                             mastercomp, h_cutoff, oldical, newical);
         return;
     }
 
     /* otherwise we need to cancel for each sub event and then we'll still
      * send the updates if any */
     if ((mastercomp = find_attended_component(oldical, "", attendee))) {
-        schedule_full_cancel(organizer, attendee, mastercomp, h_cutoff, oldical, newical);
+        schedule_full_cancel(schedule_addresses, organizer, attendee, mastercomp, h_cutoff, oldical, newical);
     }
     else {
-        schedule_sub_cancels(organizer, attendee, h_cutoff, oldical, newical);
+        schedule_sub_cancels(schedule_addresses, organizer, attendee, h_cutoff, oldical, newical);
     }
 
-    schedule_sub_updates(organizer, attendee, h_cutoff, oldical, newical);
+    schedule_sub_updates(schedule_addresses, organizer, attendee, h_cutoff, oldical, newical);
 }
 
 
 /* Create and deliver an organizer scheduling request */
-void sched_request(const char *userid, const char *organizer,
+void sched_request(const char *asuserid, const strarray_t *schedule_addresses,
+                   const char *organizer,
                    icalcomponent *oldical, icalcomponent *newical)
 {
-    int r;
-
-    int rights = 0;
-    mbentry_t *mbentry = NULL;
     /* Check ACL of auth'd user on userid's Scheduling Outbox */
-    char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
+    int rights = 0;
 
-    syslog(LOG_DEBUG, "sched_request(%s as %s)", userid, organizer);
-
-    r = mboxlist_lookup(outboxname, &mbentry, NULL);
+    mbentry_t *mbentry = NULL;
+    char *outboxname = caldav_mboxname(asuserid, SCHED_OUTBOX);
+    int r = mboxlist_lookup(outboxname, &mbentry, NULL);
     if (r) {
         syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
                outboxname, error_message(r));
@@ -2839,7 +2791,7 @@ void sched_request(const char *userid, const char *organizer,
         return;
     }
 
-    /* ok, permissions are checked, let's figure out who the attendees are */
+    /* ok, let's figure out who the attendees are */
     strarray_t attendees = STRARRAY_INITIALIZER;
     add_attendees(oldical, organizer, &attendees);
     add_attendees(newical, organizer, &attendees);
@@ -2851,7 +2803,7 @@ void sched_request(const char *userid, const char *organizer,
         const char *attendee = strarray_nth(&attendees, i);
         syslog(LOG_NOTICE, "iTIP scheduling request from %s to %s",
                organizer, attendee);
-        schedule_one_attendee(organizer, attendee, h_cutoff, oldical, newical);
+        schedule_one_attendee(schedule_addresses, organizer, attendee, h_cutoff, oldical, newical);
     }
 
     strarray_fini(&attendees);
@@ -3203,19 +3155,15 @@ static void schedule_full_reply(const char *attendee,
 }
 
 /* Create and deliver an attendee scheduling reply */
-void sched_reply(const char *userid, const char *attendee,
+void sched_reply(const char *onuserid, const strarray_t *schedule_addresses,
                  icalcomponent *oldical, icalcomponent *newical)
 {
-    int r;
-
-    syslog(LOG_DEBUG, "sched_reply(%s as %s)", userid, attendee);
-
     /* Check ACL of auth'd user on userid's Scheduling Outbox */
-    char *outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
-
     int rights = 0;
+
     mbentry_t *mbentry = NULL;
-    r = mboxlist_lookup(outboxname, &mbentry, NULL);
+    char *outboxname = caldav_mboxname(onuserid, SCHED_OUTBOX);
+    int r = mboxlist_lookup(outboxname, &mbentry, NULL);
     if (r) {
         syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
                outboxname, error_message(r));
@@ -3229,31 +3177,37 @@ void sched_reply(const char *userid, const char *attendee,
     if (!(rights & DACL_REPLY)) {
         /* DAV:need-privileges */
         syslog(LOG_DEBUG, "No scheduling send ACL for user %s on Outbox %s",
-               httpd_userid, attendee);
+               httpd_userid, onuserid);
         update_organizer_status(newical, NULL, SCHEDSTAT_NOPRIVS);
         return;
     }
 
     /* otherwise we need to decline for each sub event and then we'll still
      * send the accepts if any */
-    struct reply_data reply = { NULL, NULL, NULL, 0, 0, ICAL_SCHEDULEFORCESEND_NONE };
     icaltimetype h_cutoff = get_historical_cutoff();
 
-    schedule_full_reply(attendee, h_cutoff, oldical, newical, &reply);
-    schedule_sub_replies(attendee, h_cutoff, oldical, newical, &reply);
-    schedule_sub_declines(attendee, h_cutoff, oldical, newical, &reply);
+    int i;
+    for (i = 0; i < strarray_size(schedule_addresses); i++) {
+        const char *attendee = strarray_nth(schedule_addresses, i);
+        struct reply_data reply = { NULL, NULL, NULL, 0, 0, ICAL_SCHEDULEFORCESEND_NONE };
+        if (!strncasecmp(attendee, "mailto:", 7)) attendee += 7;
 
-    syslog(LOG_NOTICE, "iTIP scheduling reply from %s to %s",
-           attendee, reply.organizer ? reply.organizer : "<unknown>");
-    if (reply.do_send) {
-        struct sched_data sched =
-            { 0, 1, 0, reply.itip, oldical, newical, reply.force_send, NULL };
-        sched_deliver(attendee, reply.organizer, &sched, httpd_authstate);
-        update_organizer_status(newical, reply.didparts, sched.status);
+        schedule_full_reply(attendee, h_cutoff, oldical, newical, &reply);
+        schedule_sub_replies(attendee, h_cutoff, oldical, newical, &reply);
+        schedule_sub_declines(attendee, h_cutoff, oldical, newical, &reply);
+
+        if (reply.do_send) {
+            struct sched_data sched =
+                { 0, 1, 0, reply.itip, oldical, newical, reply.force_send, schedule_addresses, NULL };
+            syslog(LOG_NOTICE, "iTIP scheduling reply from %s to %s",
+                   attendee, reply.organizer ? reply.organizer : "<unknown>");
+            sched_deliver(attendee, reply.organizer, &sched, httpd_authstate);
+            update_organizer_status(newical, reply.didparts, sched.status);
+        }
+
+        if (reply.didparts) strarray_free(reply.didparts);
+        if (reply.itip) icalcomponent_free(reply.itip);
     }
-
-    if (reply.didparts) strarray_free(reply.didparts);
-    if (reply.itip) icalcomponent_free(reply.itip);
 }
 
 void sched_param_fini(struct caldav_sched_param *sparam)

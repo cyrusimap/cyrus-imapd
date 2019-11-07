@@ -1685,13 +1685,13 @@ static int caldav_delete_cal(struct transaction_t *txn,
         if (strarray_find_case(&schedule_addresses, cdata->organizer, 0) >= 0) {
             /* Organizer scheduling object resource */
             if (_scheduling_enabled(txn, mailbox))
-                sched_request(userid, cdata->organizer, ical, NULL);
+                sched_request(userid, &schedule_addresses, cdata->organizer, ical, NULL);
         }
         else if (!(hdr = spool_getheader(txn->req_hdrs, "Schedule-Reply")) ||
                  strcasecmp(hdr[0], "F")) {
             /* Attendee scheduling object resource */
             if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses))
-                sched_reply(userid, strarray_nth(&schedule_addresses, 0), ical, NULL);
+                sched_reply(userid, &schedule_addresses, ical, NULL);
         }
 
         free(userid);
@@ -3356,7 +3356,7 @@ static int caldav_post_outbox(struct transaction_t *txn, int rights)
         ret = HTTP_FORBIDDEN;
         goto done;
     }
-    r = caladdress_lookup(organizer, &sparam, txn->req_tgt.userid);
+    r = caladdress_lookup(organizer, &sparam, NULL); // XXX: this needs to lookup the user's principal
     if (r) {
         txn->error.precond = CALDAV_VALID_ORGANIZER;
         ret = HTTP_FORBIDDEN;
@@ -4451,7 +4451,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
                 else {
                     if (_scheduling_enabled(txn, mailbox))
-                        sched_request(userid, organizer, oldical, ical);
+                        sched_request(userid, &schedule_addresses, organizer, oldical, ical);
                 }
             }
             else {
@@ -4469,7 +4469,7 @@ static int caldav_put(struct transaction_t *txn, void *obj,
 #endif
                 else {
                     if (_scheduling_enabled(txn, mailbox) && strarray_size(&schedule_addresses))
-                        sched_reply(userid, strarray_nth(&schedule_addresses, 0), oldical, ical);
+                        sched_reply(userid, &schedule_addresses, oldical, ical);
                 }
             }
             free(userid);
