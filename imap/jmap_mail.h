@@ -57,8 +57,6 @@ extern int jmap_email_find(jmap_req_t *req, const char *email_id,
 extern int jmap_email_get_with_props(jmap_req_t *req, hash_table *props,
                                      msgrecord_t *mr, json_t **msgp);
 
-extern int jmap_email_set(jmap_req_t *req);
-
 extern void jmap_emailsubmission_init(jmap_settings_t *settings);
 extern void jmap_emailsubmission_capabilities(json_t *jcapabilities);
 

@@ -100,6 +100,7 @@
 static int jmap_email_query(jmap_req_t *req);
 static int jmap_email_querychanges(jmap_req_t *req);
 static int jmap_email_get(jmap_req_t *req);
+static int jmap_email_set(jmap_req_t *req);
 static int jmap_email_changes(jmap_req_t *req);
 static int jmap_email_import(jmap_req_t *req);
 static int jmap_email_parse(jmap_req_t *req);
@@ -10519,7 +10520,7 @@ static void _email_destroy_bulk(jmap_req_t *req,
     strarray_fini(&email_ids);
 }
 
-HIDDEN int jmap_email_set(jmap_req_t *req)
+static int jmap_email_set(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
