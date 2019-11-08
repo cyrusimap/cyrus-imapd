@@ -1406,10 +1406,11 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
             const char *id = jid;
             if (*id == '#') {
                 json_t *jsuccess = json_object_get(set.created, id+1);
-                if (!jsuccess) continue;
-                id = json_string_value(json_object_get(jsuccess, "id"));
+                if (jsuccess)
+                    id = json_string_value(json_object_get(jsuccess, "id"));
             }
             const char *emailid = json_string_value(json_object_get(success_emailids, id));
+            if (!emailid) emailid = id;
             json_object_set(updateEmails, emailid, jemail);
         }
     }
@@ -1421,10 +1422,11 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
             const char *id = json_string_value(jid);
             if (*id == '#') {
                 json_t *jsuccess = json_object_get(set.created, id+1);
-                if (!jsuccess) continue;
-                id = json_string_value(json_object_get(jsuccess, "id"));
+                if (jsuccess)
+                    id = json_string_value(json_object_get(jsuccess, "id"));
             }
             const char *emailid = json_string_value(json_object_get(success_emailids, id));
+            if (!emailid) emailid = id;
             json_array_append_new(destroyEmails, json_string(emailid));
         }
     }
