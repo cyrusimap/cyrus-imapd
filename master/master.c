@@ -617,6 +617,14 @@ static void service_create(struct service *s)
 
         s->socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
         if (s->socket < 0) {
+            int e = errno;
+            if (config_getswitch(IMAPOPT_MASTER_BIND_ERRORS_FATAL)) {
+                struct buf buf = BUF_INITIALIZER;
+                buf_printf(&buf, "unable to open %s/%s socket: %s",
+                                 s->name, s->familyname, strerror(e));
+                fatal(buf_cstring(&buf), EX_UNAVAILABLE);
+            }
+
             syslog(LOG_ERR, "unable to open %s/%s socket: %m",
                 s->name, s->familyname);
             continue;
@@ -681,6 +689,14 @@ static void service_create(struct service *s)
         if ((!strcmp(s->proto, "tcp") || !strcmp(s->proto, "tcp4")
              || !strcmp(s->proto, "tcp6"))
             && listen(s->socket, listen_queue_backlog) < 0) {
+            int e = errno;
+            if (config_getswitch(IMAPOPT_MASTER_BIND_ERRORS_FATAL)) {
+                struct buf buf = BUF_INITIALIZER;
+                buf_printf(&buf, "unable to listen to %s/%s socket: %s",
+                                 s->name, s->familyname, strerror(e));
+                fatal(buf_cstring(&buf), EX_UNAVAILABLE);
+            }
+
             syslog(LOG_ERR, "unable to listen to %s/%s socket: %m",
                 s->name, s->familyname);
             xclose(s->socket);
