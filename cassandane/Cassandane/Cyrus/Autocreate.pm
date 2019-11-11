@@ -40,6 +40,7 @@
 package Cassandane::Cyrus::Autocreate;
 use strict;
 use warnings;
+use Data::Dumper;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -53,9 +54,10 @@ sub new
     $config->set(
         autocreate_post => 'yes',
         autocreate_quota => '500000',
-        autocreate_inbox_folders => 'Drafts|Sent|Trash|SPAM',
-        autocreate_subscribe_folder => 'Drafts|Sent|Trash|SPAM',
+        autocreate_inbox_folders => 'Drafts|Sent|Trash|SPAM|plus',
+        autocreate_subscribe_folder => 'Drafts|Sent|Trash|SPAM|plus',
         autocreate_sieve_script => '@basedir@/conf/foo_sieve.script',
+        autocreate_acl => 'plus anyone p',
         'xlist-drafts' => 'Drafts',
         'xlist-junk' => 'SPAM',
         'xlist-sent' => 'Sent',
@@ -136,6 +138,30 @@ sub test_autocreate_sieve_script_generation
     $self->assert(-f "$basedir/conf/sieve/f/foo/foo_sieve.script.script");
     $self->assert(-f "$basedir/conf/sieve/f/foo/defaultbc");
     $self->assert(-f "$basedir/conf/sieve/f/foo/foo_sieve.script.bc");
+}
+
+sub test_autocreate_acl
+    :min_version_3_1 :needs_component_autocreate :needs_component_sieve
+{
+    my ($self) = @_;
+
+    my %folder_acls = (
+        'INBOX'         => [qw( foo lrswipkxtecdan )],
+        'INBOX.Drafts'  => [qw( foo lrswipkxtecdan )],
+        'INBOX.Sent'    => [qw( foo lrswipkxtecdan )],
+        'INBOX.SPAM'    => [qw( foo lrswipkxtecdan )],
+        'INBOX.Trash'   => [qw( foo lrswipkxtecdan )],
+        'INBOX.plus'    => [qw( foo lrswipkxtecdan anyone p )],
+    );
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $store = $svc->create_store(username => 'foo');
+    my $talk = $store->get_client();
+
+    while (my ($folder, $acl) = each %folder_acls) {
+        my $res = $talk->getacl($folder);
+        $self->assert_deep_equals($folder_acls{$folder}, $res);
+    }
 }
 
 1;
