@@ -63,6 +63,8 @@
 #define JMAP_URN_VACATION   "urn:ietf:params:jmap:vacationresponse"
 #define JMAP_URN_WEBSOCKET  "urn:ietf:params:jmap:websocket"
 #define JMAP_URN_MDN        "urn:ietf:params:jmap:mdn"
+#define JMAP_URN_CALENDARS  "urn:ietf:params:jmap:calendars"
+#define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:calendarprincipals"
 
 #define JMAP_BLOB_EXTENSION          "https://cyrusimap.org/ns/jmap/blob"
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
