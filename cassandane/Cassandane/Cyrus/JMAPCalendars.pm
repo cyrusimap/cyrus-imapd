@@ -6647,7 +6647,10 @@ sub test_calendarevent_debugblobid
     xlog "attempt to download debugBlob as non-admin";
 
     my $downloadUri = $jmap->downloaduri('other', $debugBlobId);
-    my $RawResponse = $jmap->ua->get($downloadUri);
+    my %Headers = (
+        'Authorization' => $jmap->auth_header(),
+    );
+    my $RawResponse = $jmap->ua->get($downloadUri, { headers => \%Headers });
     if ($ENV{DEBUGJMAP}) {
         warn "JMAP " . Dumper($RawResponse);
     }

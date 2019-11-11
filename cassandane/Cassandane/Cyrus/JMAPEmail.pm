@@ -1880,10 +1880,11 @@ sub test_misc_download_shared
     xlog "Unshare mailbox";
     $admintalk->setacl("user.foo.B", "cassandane", "") or die;
 
-    my %Headers;
-    $Headers{'Authorization'} = $jmap->auth_header();
-    my %getopts = (headers => \%Headers);
-    my $httpRes = $jmap->ua->get($jmap->downloaduri('foo', $blobId));
+    my %Headers = (
+        'Authorization' => $jmap->auth_header(),
+    );
+    my $httpRes = $jmap->ua->get($jmap->downloaduri('foo', $blobId),
+                                 { headers => \%Headers });
     $self->assert_str_equals('404', $httpRes->{status});
 }
 
