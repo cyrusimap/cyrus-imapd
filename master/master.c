@@ -486,7 +486,7 @@ static struct service *service_add(const struct service *proto)
     return s;
 }
 
-static void service_create(struct service *s)
+static void service_create(struct service *s, int is_startup)
 {
     struct service service0, service;
     struct addrinfo hints, *res0, *res;
@@ -618,7 +618,7 @@ static void service_create(struct service *s)
         s->socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
         if (s->socket < 0) {
             int e = errno;
-            if (config_getswitch(IMAPOPT_MASTER_BIND_ERRORS_FATAL)) {
+            if (is_startup && config_getswitch(IMAPOPT_MASTER_BIND_ERRORS_FATAL)) {
                 struct buf buf = BUF_INITIALIZER;
                 buf_printf(&buf, "unable to open %s/%s socket: %s",
                                  s->name, s->familyname, strerror(e));
@@ -667,7 +667,7 @@ static void service_create(struct service *s)
         umask(oldumask);
         if (r < 0) {
             int e = errno;
-            if (config_getswitch(IMAPOPT_MASTER_BIND_ERRORS_FATAL)) {
+            if (is_startup && config_getswitch(IMAPOPT_MASTER_BIND_ERRORS_FATAL)) {
                 struct buf buf = BUF_INITIALIZER;
                 buf_printf(&buf, "unable to bind to %s/%s socket: %s",
                                  s->name, s->familyname, strerror(e));
@@ -690,7 +690,7 @@ static void service_create(struct service *s)
              || !strcmp(s->proto, "tcp6"))
             && listen(s->socket, listen_queue_backlog) < 0) {
             int e = errno;
-            if (config_getswitch(IMAPOPT_MASTER_BIND_ERRORS_FATAL)) {
+            if (is_startup && config_getswitch(IMAPOPT_MASTER_BIND_ERRORS_FATAL)) {
                 struct buf buf = BUF_INITIALIZER;
                 buf_printf(&buf, "unable to listen to %s/%s socket: %s",
                                  s->name, s->familyname, strerror(e));
@@ -2237,7 +2237,7 @@ static void reread_conf(struct timeval now)
         else if (Services[i].exec && (Services[i].socket < 0)) {
             /* initialize new services */
 
-            service_create(&Services[i]);
+            service_create(&Services[i], 0);
             if (verbose > 2)
                 syslog(LOG_DEBUG, "init: service %s/%s socket %d pipe %d %d",
                        Services[i].name, Services[i].familyname,
@@ -2600,7 +2600,7 @@ int main(int argc, char **argv)
 
     /* initialize services */
     for (i = 0; i < nservices; i++) {
-        service_create(&Services[i]);
+        service_create(&Services[i], 1);
         if (verbose > 2)
             syslog(LOG_DEBUG, "init: service %s/%s socket %d pipe %d %d",
                    Services[i].name, Services[i].familyname,
