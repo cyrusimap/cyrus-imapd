@@ -59,6 +59,7 @@
 #include <syslog.h>
 
 #include "global.h"
+#include "acl.h"
 #include "annotate.h"
 #include "util.h"
 #include "user.h"
@@ -638,6 +639,63 @@ static void autocreate_specialuse_cb(const char *key, const char *val, void *roc
     buf_free(&usebuf);
 }
 
+struct autocreate_acl_rock {
+    struct namespace *namespace;
+    const char *intname;
+    const char *shortname;
+    struct auth_state *auth_state;
+    const char *userid;
+};
+
+static void autocreate_acl_cb(const char *key, const char *val, void *rock)
+{
+    char *freeme = NULL, *folder, *identifier, *rights, *junk;
+    char *err = NULL;
+    struct autocreate_acl_rock *acl_rock = (struct autocreate_acl_rock *) rock;
+    int r;
+
+    if (strcmp(key, "autocreate_acl")) return;
+
+    freeme = xstrdup(val);
+    folder = strtok(freeme, " ");
+    identifier = strtok(NULL, " ");
+    rights = strtok(NULL, " ");
+    junk = strtok(NULL, " ");
+
+    if (strcmpnull(folder, acl_rock->shortname)) goto done;
+
+    if (!folder || !identifier || !rights || junk) {
+        syslog(LOG_WARNING, "autocreate: ignoring invalid autocreate_acl: %s",
+                            val);
+        goto done;
+    }
+
+    r = cyrus_acl_checkstr(rights, &err);
+    if (r) {
+        syslog(LOG_WARNING, "autocreate_acl %s: ignoring invalid rights string '%s': %s",
+                            acl_rock->shortname, rights, err);
+        goto done;
+    }
+
+    r = mboxlist_setacl(acl_rock->namespace,
+                        acl_rock->intname,
+                        identifier, rights,
+                        /* isadmin */ 1, acl_rock->userid,
+                        acl_rock->auth_state);
+
+    if (r) {
+        syslog(LOG_ERR, "autocreate_acl %s: unable to setacl for %s to %s: %s",
+                          acl_rock->shortname, identifier, rights,
+                          error_message(r));
+        goto done;
+    }
+
+done:
+    free(freeme);
+    free(err);
+    return;
+}
+
 int autocreate_user(struct namespace *namespace, const char *userid)
 {
     int r = IMAP_MAILBOX_NONEXISTENT; /* default error if we break early */
@@ -754,6 +812,8 @@ int autocreate_user(struct namespace *namespace, const char *userid)
         const char *name = strarray_nth(create, n);
         char *foldername = mboxname_user_mbox(userid, name);
         struct autocreate_specialuse_rock specialrock = { userid, foldername, name };
+        struct autocreate_acl_rock aclrock = { namespace, foldername, name,
+                                               auth_state, userid };
 
         r = mboxlist_createmailbox(foldername, /*mbtype*/0, /*partition*/NULL,
                                    /*isadmin*/1, userid, auth_state,
@@ -789,6 +849,9 @@ int autocreate_user(struct namespace *namespace, const char *userid)
 
         /* set specialuse if requested */
         config_foreachoverflowstring(autocreate_specialuse_cb, &specialrock);
+
+        /* add additional acl's if requested */
+        config_foreachoverflowstring(autocreate_acl_cb, &aclrock);
 
         free(foldername);
     }

@@ -374,6 +374,23 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "autosubscribe_all_sharedfolders", 0, SWITCH, "2.5.0", "2.5.0", "autocreate_subscribe_sharedfolders_all" }
 /* Deprecated in favor of \fIautocreate_subscribe_sharedfolders_all\fR. */
 
+# Commented out - there's no single setting "autocreate_acl",
+# but we need this for the man page
+# { "autocreate_acl", NULL, STRING, "3.1.10" }
+/* If folders are to be created by \fIautocreate_inbox_folders\R, this
+   setting can be used to apply additional ACLs to the autocreated
+   folders.  The syntax is "autocreate_acl folder identifier rights",
+   where \fIfolder\fR must match one of the \fIautocreate_inbox_folders\fR
+   folders, \fIidentifier\fR must be a valid cyrus identifier, and
+   \fIrights\fR must be a valid cyrus rights string.  Multiple
+   identifier|rights pairs can be assigned to a single folder by providing
+   this setting multiple times.
+.PP
+   For example, "autocreate_acl Plus anyone p" would allow lmtp delivery
+   to a folder named "Plus".
+   */
+
+
 { "autocreate_inbox_folders", NULL, STRING, "2.5.0" }
 /* If a user does not have an INBOX already, and the INBOX is to be
    created, create the list of folders in this setting as well.
