@@ -108,6 +108,7 @@ sub set_up
     $self->SUPER::set_up();
     $self->{jmap}->DefaultUsing([
         'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 }
@@ -6230,6 +6231,7 @@ sub test_calendar_treat_as_mailbox
 
     my $using = [
         'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/calendars',
         'urn:ietf:params:jmap:mail',
     ];
@@ -6867,6 +6869,7 @@ sub test_calendarevent_blobid
     );
     $otherJmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
@@ -6995,6 +6998,7 @@ sub test_calendarevent_debugblobid
     );
     $otherJmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
@@ -7060,6 +7064,7 @@ sub test_calendarevent_debugblobid
 
     my $using = [
         'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/calendars',
         'https://cyrusimap.org/ns/jmap/debug',
     ];
@@ -7796,6 +7801,7 @@ sub test_no_shared_calendar
     );
     $otherJmap->DefaultUsing([
         'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
