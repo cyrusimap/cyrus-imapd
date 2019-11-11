@@ -52,6 +52,16 @@
 #include "jmap_util.h"
 #include "json_support.h"
 
+#ifndef JMAP_URN_MAIL
+#define JMAP_URN_MAIL                "urn:ietf:params:jmap:mail"
+#endif
+#ifndef JMAP_MAIL_EXTENSION
+#define JMAP_MAIL_EXTENSION          "https://cyrusimap.org/ns/jmap/mail"
+#endif
+#ifndef JMAP_SEARCH_EXTENSION
+#define JMAP_SEARCH_EXTENSION        "https://cyrusimap.org/ns/jmap/search"
+#endif
+
 static int _email_threadkeyword_is_valid(const char *keyword)
 {
     /* \Seen is always supported */

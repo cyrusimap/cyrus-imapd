@@ -50,20 +50,6 @@
 #include "message.h"
 #include "smtpclient.h"
 
-#define JMAP_URN_CORE       "urn:ietf:params:jmap:core"
-#define JMAP_URN_MAIL       "urn:ietf:params:jmap:mail"
-#define JMAP_URN_SUBMISSION "urn:ietf:params:jmap:submission"
-#define JMAP_URN_VACATION   "urn:ietf:params:jmap:vacationresponse"
-#define JMAP_URN_WEBSOCKET  "urn:ietf:params:jmap:websocket"
-
-#define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
-#define JMAP_CALENDARS_EXTENSION     "https://cyrusimap.org/ns/jmap/calendars"
-#define JMAP_MAIL_EXTENSION          "https://cyrusimap.org/ns/jmap/mail"
-#define JMAP_PERFORMANCE_EXTENSION   "https://cyrusimap.org/ns/jmap/performance"
-#define JMAP_DEBUG_EXTENSION         "https://cyrusimap.org/ns/jmap/debug"
-#define JMAP_QUOTA_EXTENSION         "https://cyrusimap.org/ns/jmap/quota"
-#define JMAP_SEARCH_EXTENSION        "https://cyrusimap.org/ns/jmap/search"
-
 #define JMAP_SUBMISSION_HDR "Content-Description"
 
 #define jmap_wantprop(props, name) \
