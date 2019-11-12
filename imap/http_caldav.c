@@ -6148,14 +6148,13 @@ static int propfind_schedtag(const xmlChar *name, xmlNsPtr ns,
     return 0;
 }
 
-
-/* Callback to fetch CALDAV:calendar-user-address-set */
-int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
+static int propfind_caluseraddr_all(const xmlChar *name, xmlNsPtr ns,
                          struct propfind_ctx *fctx,
                          xmlNodePtr prop __attribute__((unused)),
                          xmlNodePtr resp __attribute__((unused)),
                          struct propstat propstat[],
-                         void *rock __attribute__((unused)))
+                         void *rock __attribute__((unused)),
+                         int isemail)
 {
     const char *annotname =
         DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
@@ -6177,14 +6176,19 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
         free(mailboxname);
         if (!r && fctx->buf.len) {
             strarray_t *items = strarray_split(buf_cstring(&fctx->buf), ",", STRARRAY_TRIM);
-            int i;
-            for (i = 0; i < strarray_size(items); i++) {
-                xmlNodePtr href = xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, i));
-                /* apple will use the LAST href by default - but it also looks to see what the
-                 * preferred value is according to how icloud behaves */
-                if (!i) xmlNewProp(href, BAD_CAST "preferred", BAD_CAST "1");
+            if (isemail) {
+                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, 0));
             }
-            strarray_free(items);
+            else {
+                int i;
+                for (i = 0; i < strarray_size(items); i++) {
+                    xmlNodePtr href = xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, i));
+                    /* apple will use the LAST href by default - but it also looks to see what the
+                    * preferred value is according to how icloud behaves */
+                    if (!i) xmlNewProp(href, BAD_CAST "preferred", BAD_CAST "1");
+                }
+                strarray_free(items);
+            }
         }
 
         /* XXX  This needs to be done via an LDAP/DB lookup */
@@ -6235,6 +6239,29 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
 
     return ret;
 }
+
+/* Callback to fetch CALDAV:calendar-user-address-set */
+EXPORTED int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
+                         struct propfind_ctx *fctx,
+                         xmlNodePtr prop,
+                         xmlNodePtr resp,
+                         struct propstat propstat[],
+                         void *rock)
+{
+    return propfind_caluseraddr_all(name, ns, fctx, prop, resp, propstat, rock, 0);
+}
+
+/* Callback to fetch APPLE:calendar-email-set */
+EXPORTED int propfind_caluseremail(const xmlChar *name, xmlNsPtr ns,
+                         struct propfind_ctx *fctx,
+                         xmlNodePtr prop,
+                         xmlNodePtr resp,
+                         struct propstat propstat[],
+                         void *rock)
+{
+    return propfind_caluseraddr_all(name, ns, fctx, prop, resp, propstat, rock, 1);
+}
+
 
 /* Callback to write CALDAV:calendar-user-address-set */
 int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,

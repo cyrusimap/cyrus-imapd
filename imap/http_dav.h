@@ -879,6 +879,10 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
                          struct propfind_ctx *fctx,
                          xmlNodePtr prop, xmlNodePtr resp,
                          struct propstat propstat[], void *rock);
+int propfind_caluseremail(const xmlChar *name, xmlNsPtr ns,
+                         struct propfind_ctx *fctx,
+                         xmlNodePtr prop, xmlNodePtr resp,
+                         struct propstat propstat[], void *rock);
 int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
                           struct proppatch_ctx *pctx,
                           struct propstat propstat[], void *rock);
