@@ -1993,6 +1993,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
         json_t *participant;
         json_object_foreach(json_object_get(jsevent, "participants"), key, participant) {
             const char *email = json_string_value(json_object_get(participant, "email"));
+            if (!email) continue;
             if (!strncasecmp(email, "mailto:", 7)) email += 7;
             if (!strcasecmp(email, test)) {
                 participant_id = key;
@@ -2795,6 +2796,29 @@ static int setcalendarevents_apply_patch(json_t *event_patch,
     }
     json_object_del(old_event, "updated");
 
+    /* Add participant id to old_event */
+    const char *participant_id = NULL;
+    int i;
+    for (i = 0; i < strarray_size(schedule_addresses); i++) {
+        const char *test = strarray_nth(schedule_addresses, i);
+        if (!strncasecmp(test, "mailto:", 7)) test += 7;
+        const char *key;
+        json_t *participant;
+        json_object_foreach(json_object_get(old_event, "participants"), key, participant) {
+            const char *email = json_string_value(json_object_get(participant, "email"));
+            if (!email) continue;
+            if (!strncasecmp(email, "mailto:", 7)) email += 7;
+            if (!strcasecmp(email, test)) {
+                participant_id = key;
+                break;
+            }
+        }
+        if (participant_id) break;
+    }
+    json_object_set_new(old_event, "participantId", participant_id ?
+            json_string(participant_id) : json_null());
+
+
     if (recurid) {
         /* Update or create an override */
         struct jmapical_datetime recuriddt = JMAPICAL_DATETIME_INITIALIZER;
@@ -2981,24 +3005,20 @@ static int setcalendarevents_apply_patch(json_t *event_patch,
         }
     }
 
-    /* Determine participant id */
+    // check that participantId is either not present or is a valid participant
+    participant_id = NULL;
     json_t *jparticipantId = json_object_get(new_event, "participantId");
-    if (JNOTNULL(jparticipantId) && !json_is_string(jparticipantId)) {
+    if (json_is_string(jparticipantId)) {
+        participant_id = json_string_value(jparticipantId);
+        json_t *participants = json_object_get(new_event, "participants");
+        json_t *participant = json_object_get(participants, participant_id);
+        const char *email = json_string_value(json_object_get(participant, "email"));
+        if (email) strarray_addfirst_case(schedule_addresses, email);
+        else json_array_append_new(invalid, json_string("participantId"));
+    }
+    else if (JNOTNULL(jparticipantId)) {
         json_array_append_new(invalid, json_string("participantId"));
     }
-    const char *participant_id = json_string_value(jparticipantId);
-    if (!participant_id) {
-        const char *key;
-        json_t *participant;
-        json_object_foreach(json_object_get(new_event, "participants"), key, participant) {
-            const char *email = json_string_value(json_object_get(participant, "email"));
-            if (email && strarray_find_case(schedule_addresses, email, 0) >= 0) {
-                participant_id = key;
-                break;
-            }
-        }
-    }
-    if (participant_id) strarray_unshift(schedule_addresses, participant_id);
 
     /* Determine if to bump sequence */
     json_t *jdiff = jmap_patchobject_create(old_event, new_event);
