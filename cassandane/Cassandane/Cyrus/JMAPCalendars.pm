@@ -195,8 +195,8 @@ sub test_calendar_get_shared
     my $res = $jmap->CallMethods([['Calendar/get', {accountId => 'manifold'}, "R1"]]);
     $self->assert_str_equals('manifold', $res->[0][1]{accountId});
     $self->assert_str_equals("Manifold Calendar", $res->[0][1]{list}[0]->{name});
-    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]->{mayReadItems});
-    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]->{mayAddItems});
+    $self->assert_equals(JSON::true, $res->[0][1]{list}[0]->{myRights}->{mayReadItems});
+    $self->assert_equals(JSON::false, $res->[0][1]{list}[0]->{myRights}{mayAddItems});
     my $id = $res->[0][1]{list}[0]->{id};
 
     xlog $self, "refetch calendar";
@@ -964,10 +964,12 @@ sub test_calendar_set_error
             ['Calendar/set', { create => { "1" => {
                             name => "foo", color => "coral",
                             sortOrder => 2, isVisible => \1,
+                            myRights => {
                             mayReadFreeBusy => \0, mayReadItems => \0,
                             mayAddItems => \0, mayModifyItems => \0,
                             mayRemoveItems => \0, mayRename => \0,
                             mayDelete => \0
+                            }
              }}}, "R1"]
     ]);
     $errType = $res->[0][1]{notCreated}{"1"}{type};
@@ -1001,10 +1003,12 @@ sub test_calendar_set_error
     xlog $self, "update calendar with immutable optional attributes";
     $res = $jmap->CallMethods([
             ['Calendar/set', { update => { $id => {
+                            myRights => {
                             mayReadFreeBusy => \0, mayReadItems => \0,
                             mayAddItems => \0, mayModifyItems => \0,
                             mayRemoveItems => \0, mayRename => \0,
                             mayDelete => \0
+                            }
              }}}, "R1"]
     ]);
     $errType = $res->[0][1]{notUpdated}{$id}{type};
@@ -5942,14 +5946,12 @@ sub test_calendarevent_set_readonly
         ]);
 
     my $calendar = $res->[0][1]{list}[0];
-    $self->assert_equals(JSON::true, $calendar->{mayReadFreeBusy});
-    $self->assert_equals(JSON::true, $calendar->{mayReadItems});
-    $self->assert_equals(JSON::false, $calendar->{mayAddItems});
-    $self->assert_equals(JSON::false, $calendar->{mayModifyItems});
-    $self->assert_equals(JSON::false, $calendar->{mayRemoveItems});
-    $self->assert_equals(JSON::true, $calendar->{mayRename});
-    $self->assert_equals(JSON::true, $calendar->{mayDelete});
-    $self->assert_equals(JSON::true, $calendar->{mayAdmin});
+    $self->assert_equals(JSON::true, $calendar->{myRights}->{mayReadFreeBusy});
+    $self->assert_equals(JSON::true, $calendar->{myRights}->{mayReadItems});
+    $self->assert_equals(JSON::false, $calendar->{myRights}->{mayAddItems});
+    $self->assert_equals(JSON::false, $calendar->{myRights}->{mayUpdateOwn});
+    $self->assert_equals(JSON::true, $calendar->{myRights}->{mayDelete});
+    $self->assert_equals(JSON::true, $calendar->{myRights}->{mayAdmin});
 
     $self->assert_not_null($res->[1][1]{notCreated}{1});
     $self->assert_str_equals("invalidProperties", $res->[1][1]{notCreated}{1}{type});
