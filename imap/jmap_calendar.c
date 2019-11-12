@@ -2627,13 +2627,15 @@ static int setcalendarevents_create(jmap_req_t *req,
     }
     ical = jmapical_toical(event, invalid);
 
+    // check that participantId is either not present or is a valid participant
     json_t *jparticipantId = json_object_get(event, "participantId");
     if (json_is_string(jparticipantId)) {
         const char *participant_id = json_string_value(jparticipantId);
         json_t *participants = json_object_get(event, "participants");
         json_t *participant = json_object_get(participants, participant_id);
         const char *email = json_string_value(json_object_get(participant, "email"));
-        if (email) strarray_add(&schedule_addresses, email);
+        if (email) strarray_addfirst_case(&schedule_addresses, email);
+        else json_array_append_new(invalid, json_string("participantId"));
     }
     else if (JNOTNULL(jparticipantId)) {
         json_array_append_new(invalid, json_string("participantId"));
