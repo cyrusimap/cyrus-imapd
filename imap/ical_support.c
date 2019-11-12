@@ -542,9 +542,13 @@ EXPORTED icalcomponent *record_to_ical(struct mailbox *mailbox,
         if (!message_get_field(m, "x-schedule-user-address",
                                MESSAGE_DECODED|MESSAGE_TRIM, &buf)) {
             if (buf.len) {
-                buf_replace_all(&buf, "mailto:", "");
                 strarray_t *vals = strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
-                strarray_cat(schedule_addresses, vals);
+                int i;
+                for (i = 0; i < strarray_size(vals); i++) {
+                    const char *email = strarray_nth(vals, i);
+                    if (!strncasecmp(email, "mailto:", 7)) email += 7;
+                    strarray_add(schedule_addresses, email);
+                }
                 strarray_free(vals);
             }
         }
