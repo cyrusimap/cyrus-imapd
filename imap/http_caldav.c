@@ -6179,7 +6179,10 @@ int propfind_caluseraddr(const xmlChar *name, xmlNsPtr ns,
             strarray_t *items = strarray_split(buf_cstring(&fctx->buf), ",", STRARRAY_TRIM);
             int i;
             for (i = 0; i < strarray_size(items); i++) {
-                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, i));
+                xmlNodePtr href = xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, i));
+                /* apple will use the LAST href by default - but it also looks to see what the
+                 * preferred value is according to how icloud behaves */
+                if (!i) xmlNewProp(href, BAD_CAST "preferred", BAD_CAST "1");
             }
             strarray_free(items);
         }
