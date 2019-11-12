@@ -393,46 +393,36 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
 
-    int writerights = JACL_ADDITEMS|JACL_SETMETADATA;
+    if (jmap_wantprop(rock->get->props, "myRights")) {
+        int writerights = DACL_WRITECONT|DACL_WRITEPROPS;
+        int mayupdateall = writerights|DACL_CHANGEORG;
+        int mayremoveall = DACL_RMRSRC|DACL_CHANGEORG;
 
-    if (jmap_wantprop(rock->get->props, "mayReadFreeBusy")) {
-        json_object_set_new(obj, "mayReadFreeBusy",
-                            ((rights & JACL_READFB) == JACL_READFB) ? json_true() : json_false());
-    }
-
-    if (jmap_wantprop(rock->get->props, "mayReadItems")) {
-        json_object_set_new(obj, "mayReadItems",
-                            ((rights & JACL_READITEMS) == JACL_READITEMS) ? json_true() : json_false());
-    }
-
-    if (jmap_wantprop(rock->get->props, "mayAddItems")) {
-        json_object_set_new(obj, "mayAddItems",
-                            ((rights & writerights) == writerights) ? json_true() : json_false());
-    }
-
-    if (jmap_wantprop(rock->get->props, "mayModifyItems")) {
-        json_object_set_new(obj, "mayModifyItems",
-                            ((rights & writerights) == writerights) ? json_true() : json_false());
-    }
-
-    if (jmap_wantprop(rock->get->props, "mayRemoveItems")) {
-        json_object_set_new(obj, "mayRemoveItems",
-                            ((rights & JACL_REMOVEITEMS) == JACL_REMOVEITEMS) ? json_true() : json_false());
-    }
-
-    if (jmap_wantprop(rock->get->props, "mayRename")) {
-        json_object_set_new(obj, "mayRename",
-                            ((rights & JACL_RENAME) == JACL_RENAME) ? json_true() : json_false());
-    }
-
-    if (jmap_wantprop(rock->get->props, "mayDelete")) {
-        json_object_set_new(obj, "mayDelete",
-                            ((rights & JACL_DELETE) == JACL_DELETE) ? json_true() : json_false());
-    }
-
-    if (jmap_wantprop(rock->get->props, "mayAdmin")) {
-        json_object_set_new(obj, "mayAdmin",
-                            ((rights & JACL_ADMIN) == JACL_ADMIN) ? json_true() : json_false());
+        json_object_set_new(obj, "myRights",
+                            json_pack("{s:b s:b s:b s:b s:b s:b s:b s:b s:b s:b s:b}",
+                                      "mayReadFreeBusy",
+                                      (rights & JACL_READFB) == JACL_READFB,
+                                      "mayReadItems",
+                                      (rights & JACL_READITEMS) == JACL_READITEMS,
+                                      "mayAddItems",
+                                      (rights & JACL_ADDITEMS) == JACL_ADDITEMS,
+                                      "mayRSVP",
+                                      (rights & JACL_RSVP) == JACL_RSVP,
+                                      "mayDelete",
+                                      (rights & JACL_DELETE) == JACL_DELETE,
+                                      "mayAdmin",
+                                      (rights & JACL_ADMIN) == JACL_ADMIN,
+                                      // FIXME the JACL definitions for the following rights are incomplete
+                                      "mayUpdatePrivate",
+                                      (rights & DACL_PROPRSRC) == DACL_PROPRSRC,
+                                      "mayUpdateOwn",
+                                      (rights & writerights) == writerights,
+                                      "mayUpdateAll",
+                                      (rights & mayupdateall) == mayupdateall,
+                                      "mayRemoveOwn",
+                                      (rights & DACL_RMRSRC) == DACL_RMRSRC,
+                                      "mayRemoveAll",
+                                      (rights & mayremoveall) == mayremoveall));
     }
 
     if (jmap_wantprop(rock->get->props, "shareWith")) {
@@ -485,47 +475,12 @@ static const jmap_property_t calendar_props[] = {
         0
     },
     {
-        "mayReadFreeBusy",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "mayReadItems",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "mayAddItems",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "mayModifyItems",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "mayRemoveItems",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "mayRename",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-    {
-        "mayDelete",
+        "myRights",
         NULL,
         JMAP_PROP_SERVER_SET
     },
 
     /* FM extensions (do ALL of these get through to Cyrus?) */
-    {
-        "mayAdmin",
-        JMAP_CALENDARS_EXTENSION,
-        JMAP_PROP_SERVER_SET
-    },
     {
         "syncedFrom",
         JMAP_CALENDARS_EXTENSION,
@@ -1082,7 +1037,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         int isVisible = 1;
         int isSubscribed = 1;
         int pe; /* parse error */
-        short flag;
+        json_t  *myrights = NULL;
         json_t *scheduleAddressSet = NULL;
 
         /* Mandatory properties. */
@@ -1114,40 +1069,12 @@ static int jmap_calendar_set(struct jmap_req *req)
 
         jmap_readprop(arg, "scheduleAddressSet", 0,  invalid, "o", &scheduleAddressSet);
 
-        /* Optional properties. If present, these MUST be set to true. */
-        flag = 1; jmap_readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
-        if (!flag) {
-            json_array_append_new(invalid, json_string("mayReadFreeBusy"));
+        /* The myRights property is server-sete and MUST NOT be set. */
+        pe = jmap_readprop(arg, "myRights", 0,  invalid, "o", &myrights);
+        if (pe > 0) {
+            json_array_append_new(invalid, json_string("myRights"));
         }
-        flag = 1; jmap_readprop(arg, "mayReadItems", 0,  invalid, "b", &flag);
-        if (!flag) {
-            json_array_append_new(invalid, json_string("mayReadItems"));
-        }
-        flag = 1; jmap_readprop(arg, "mayAddItems", 0,  invalid, "b", &flag);
-        if (!flag) {
-            json_array_append_new(invalid, json_string("mayAddItems"));
-        }
-        flag = 1; jmap_readprop(arg, "mayModifyItems", 0,  invalid, "b", &flag);
-        if (!flag) {
-            json_array_append_new(invalid, json_string("mayModifyItems"));
-        }
-        flag = 1; jmap_readprop(arg, "mayRemoveItems", 0,  invalid, "b", &flag);
-        if (!flag) {
-            json_array_append_new(invalid, json_string("mayRemoveItems"));
-        }
-        flag = 1; jmap_readprop(arg, "mayRename", 0,  invalid, "b", &flag);
-        if (!flag) {
-            json_array_append_new(invalid, json_string("mayRename"));
-        }
-        flag = 1; jmap_readprop(arg, "mayDelete", 0,  invalid, "b", &flag);
-        if (!flag) {
-            json_array_append_new(invalid, json_string("mayDelete"));
-        }
-        flag = 1; jmap_readprop(arg, "mayAdmin", 0,  invalid, "b", &flag);
-        if (!flag) {
-            json_array_append_new(invalid, json_string("mayAdmin"));
-        }
-
+        
         /* Report any property errors and bail out. */
         if (json_array_size(invalid)) {
             json_t *err = json_pack("{s:s, s:o}",
@@ -1287,7 +1214,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         int isVisible = -1;
         int isSubscribed = -1;
         int overwrite_acl = 1;
-        int flag;
+        json_t  *myrights = NULL;
         json_t *scheduleAddressSet = NULL;
         int pe = 0; /* parse error */
         pe = jmap_readprop(arg, "name", 0,  invalid, "s", &name);
@@ -1324,34 +1251,10 @@ static int jmap_calendar_set(struct jmap_req *req)
 
         jmap_readprop(arg, "scheduleAddressSet", 0,  invalid, "o", &scheduleAddressSet);
 
-        /* The mayFoo properties are immutable and MUST NOT set. */
-        pe = jmap_readprop(arg, "mayReadFreeBusy", 0,  invalid, "b", &flag);
+        /* The myRights property is server-sete and MUST NOT be set. */
+        pe = jmap_readprop(arg, "myRights", 0,  invalid, "o", &myrights);
         if (pe > 0) {
-            json_array_append_new(invalid, json_string("mayReadFreeBusy"));
-        }
-        pe = jmap_readprop(arg, "mayReadItems", 0,  invalid, "b", &flag);
-        if (pe > 0) {
-            json_array_append_new(invalid, json_string("mayReadItems"));
-        }
-        pe = jmap_readprop(arg, "mayAddItems", 0,  invalid, "b", &flag);
-        if (pe > 0) {
-            json_array_append_new(invalid, json_string("mayAddItems"));
-        }
-        pe = jmap_readprop(arg, "mayModifyItems", 0,  invalid, "b", &flag);
-        if (pe > 0) {
-            json_array_append_new(invalid, json_string("mayModifyItems"));
-        }
-        pe = jmap_readprop(arg, "mayRemoveItems", 0,  invalid, "b", &flag);
-        if (pe > 0) {
-            json_array_append_new(invalid, json_string("mayRemoveItems"));
-        }
-        pe = jmap_readprop(arg, "mayRename", 0,  invalid, "b", &flag);
-        if (pe > 0) {
-            json_array_append_new(invalid, json_string("mayRename"));
-        }
-        pe = jmap_readprop(arg, "mayDelete", 0,  invalid, "b", &flag);
-        if (pe > 0) {
-            json_array_append_new(invalid, json_string("mayDelete"));
+            json_array_append_new(invalid, json_string("myRights"));
         }
 
         /* Report any property errors and bail out. */

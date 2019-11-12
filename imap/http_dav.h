@@ -112,6 +112,7 @@ enum {
 #define DACL_ADMIN      ACL_ADMIN       /* CY:admin (aggregates
                                            DAV:read-acl, DAV:write-acl,
                                            DAV:unlock and DAV:share) */
+#define DACL_CHANGEORG  ACL_USER6       /* CY:change-organizer */
 
 /* WebDAV (RFC 3744) privileges */
 #define DACL_READ       (ACL_READ\
