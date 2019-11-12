@@ -1985,16 +1985,21 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
 
     /* Add participant id */
     const char *participant_id = NULL;
-    if (strarray_size(&schedule_addresses)) {
+    int i;
+    for (i = 0; i < strarray_size(&schedule_addresses); i++) {
+        const char *test = strarray_nth(&schedule_addresses, i);
+        if (!strncasecmp(test, "mailto:", 7)) test += 7;
         const char *key;
         json_t *participant;
         json_object_foreach(json_object_get(jsevent, "participants"), key, participant) {
             const char *email = json_string_value(json_object_get(participant, "email"));
-            if (email && !strcasecmp(strarray_nth(&schedule_addresses, 0), email)) {
+            if (!strncasecmp(email, "mailto:", 7)) email += 7;
+            if (!strcasecmp(email, test)) {
                 participant_id = key;
                 break;
             }
         }
+        if (participant_id) break;
     }
     json_object_set_new(jsevent, "participantId", participant_id ?
             json_string(participant_id) : json_null());
