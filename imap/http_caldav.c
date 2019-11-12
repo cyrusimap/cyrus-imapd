@@ -8010,7 +8010,7 @@ int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                             xstrdup(icalcomponent_kind_to_string(kind)),
                             txn->req_hdrs);
 
-    if (schedule_addresses) {
+    if (strarray_size(schedule_addresses)) {
         char *value = strarray_join(schedule_addresses, ",");
         mimehdr = charset_encode_mimeheader(value, 0, 0);
         spool_replace_header(xstrdup("X-Schedule-User-Address"),
