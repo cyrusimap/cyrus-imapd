@@ -473,3 +473,16 @@ EXPORTED int strarray_cmp(const strarray_t *a, const strarray_t *b)
 
     return 0;
 }
+
+EXPORTED void strarray_addfirst(strarray_t *sa, const char *s)
+{
+    strarray_remove_all(sa, s);
+    strarray_unshift(sa, s);
+
+}
+
+EXPORTED void strarray_addfirst_case(strarray_t *sa, const char *s)
+{
+    strarray_remove_all_case(sa, s);
+    strarray_unshift(sa, s);
+}
