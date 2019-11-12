@@ -97,13 +97,15 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
 
     param->userid = xstrdup(userid);
 
-    for (i = 0; i < strarray_size(schedule_addresses); i++) {
-        const char *item = strarray_nth(schedule_addresses, i);
-        if (!strncasecmp(item, "mailto:", 7)) item += 7;
-        if (strcasecmp(item, userid)) continue;
-        // found one!
-        param->isyou = 1;
-        return 0; // myself is always local
+    if (schedule_addresses) {
+        for (i = 0; i < strarray_size(schedule_addresses); i++) {
+            const char *item = strarray_nth(schedule_addresses, i);
+            if (!strncasecmp(item, "mailto:", 7)) item += 7;
+            if (strcasecmp(item, userid)) continue;
+            // found one!
+            param->isyou = 1;
+            return 0; // myself is always local
+        }
     }
 
     // does this user have an inbox on this machine?
