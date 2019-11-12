@@ -5641,11 +5641,16 @@ static int propfind_scheduser(const xmlChar *name, xmlNsPtr ns,
         rc = 0;
         xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
                                        name, ns, NULL, 0);
-        buf_reset(&fctx->buf);
-        const char *address = buf_cstring(&buf);
-        if (!strncasecmp(address, "mailto:", 7)) address += 7;
-        buf_printf(&fctx->buf, "mailto:%s", address);
-        xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+        strarray_t *schedule_addresses = strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
+        int i;
+        for (i = 0; i < strarray_size(schedule_addresses); i++) {
+            const char *address = strarray_nth(schedule_addresses, i);
+            if (!strncasecmp(address, "mailto:", 7)) address += 7;
+            buf_reset(&fctx->buf);
+            buf_printf(&fctx->buf, "mailto:%s", address);
+            xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
+        }
+        strarray_free(schedule_addresses);
     }
 
     buf_free(&buf);
