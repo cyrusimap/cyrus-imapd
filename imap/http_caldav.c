@@ -6182,7 +6182,6 @@ static int propfind_caluseraddr_all(const xmlChar *name, xmlNsPtr ns,
             else {
                 int i;
                 for (i = strarray_size(items); i; i--) {
-                    xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, i-1));
                     xmlNodePtr href = xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, i-1));
                     /* apple will use the alphabetically first href, and Thunderbird will use the
                      * last one in order, so we set preferred for Apple, and put the preferred one
