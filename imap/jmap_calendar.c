@@ -310,6 +310,13 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         free(xhref);
     }
 
+    if (jmap_wantprop(rock->get->props, "role")) {
+        const char *role = NULL;
+        if (!strcmp(id, "Default")) role = "inbox";
+        json_object_set_new(obj, "role",
+                            role ? json_string(role) : json_null());
+    }
+
     if (jmap_wantprop(rock->get->props, "name")) {
         buf_reset(&attrib);
         static const char *displayname_annot =
@@ -319,6 +326,17 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         /* fall back to last part of mailbox name */
         if (r || !attrib.len) buf_setcstr(&attrib, id);
         json_object_set_new(obj, "name", json_string(buf_cstring(&attrib)));
+        buf_free(&attrib);
+    }
+
+    if (jmap_wantprop(rock->get->props, "description")) {
+        buf_reset(&attrib);
+        static const char *description_annot =
+            DAV_ANNOT_NS "<" XML_NS_DAV ">description";
+        r = annotatemore_lookupmask(mbentry->name, description_annot,
+                                    httpd_userid, &attrib);
+        json_object_set_new(obj, "description", buf_len(&attrib) ?
+                            json_string(buf_cstring(&attrib)) : json_null());
         buf_free(&attrib);
     }
 
@@ -393,6 +411,70 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(obj, "isSubscribed", json_boolean(is_subscribed));
     }
 
+    if (jmap_wantprop(rock->get->props, "includeInAvailability")) {
+        buf_reset(&attrib);
+        static const char *transp_annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
+        r = annotatemore_lookupmask(mbentry->name, transp_annot,
+                                    httpd_userid, &attrib);
+        if (buf_len(&attrib) && !strcmp(buf_cstring(&attrib), "transparent")) {
+            json_object_set_new(obj, "includeInAvailability",
+                                json_string("none"));
+        }
+        /* XXX  Need to define a value that maps to "attending" */
+        else {
+            json_object_set_new(obj, "includeInAvailability",
+                                json_string("all"));
+        }
+        buf_free(&attrib);
+    }
+
+    if (jmap_wantprop(rock->get->props, "defaultAlertsWithTime")) {
+        /* XXX  Do we use CALDAV:default-alarm-vevent-datetime
+           or some new annotation? */
+        json_object_set_new(obj, "defaultAlertsWithTime", json_array());
+    }
+
+    if (jmap_wantprop(rock->get->props, "defaultAlertsWithoutTime")) {
+        /* XXX  Do we use CALDAV:default-alarm-vevent-date
+           or some new annotation? */
+        json_object_set_new(obj, "defaultAlertsWithoutTime", json_array());
+    }
+
+    if (jmap_wantprop(rock->get->props, "timeZone")) {
+        buf_reset(&attrib);
+        static const char *tzid_annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+        r = annotatemore_lookupmask(mbentry->name, tzid_annot,
+                                    httpd_userid, &attrib);
+        if (buf_len(&attrib)) {
+            json_object_set_new(obj, "timeZone",
+                                json_string(buf_cstring(&attrib)));
+        }
+        else {
+            static const char *tz_annot =
+                DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+            r = annotatemore_lookupmask(mbentry->name, tz_annot,
+                                    httpd_userid, &attrib);
+            if (buf_len(&attrib)) {
+                icalcomponent *ical, *vtz;
+                icalproperty *tzid;
+
+                ical = icalparser_parse_string(buf_cstring(&attrib));
+                vtz = icalcomponent_get_first_component(ical,
+                                                        ICAL_VTIMEZONE_COMPONENT);
+                tzid = icalcomponent_get_first_property(vtz, ICAL_TZID_PROPERTY);
+                json_object_set_new(obj, "timeZone",
+                                    json_string(icalproperty_get_tzid(tzid)));
+                icalcomponent_free(ical);
+            }
+            else {
+                json_object_set_new(obj, "timeZone", json_null());
+            }
+        }
+        buf_free(&attrib);
+    }
+
     if (jmap_wantprop(rock->get->props, "myRights")) {
         int writerights = DACL_WRITECONT|DACL_WRITEPROPS;
         int mayupdateall = writerights|DACL_CHANGEORG;
@@ -430,6 +512,11 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
+    if (jmap_wantprop(rock->get->props, "shareesActAs")) {
+        /* XXX  Decide on owner vs. self once we have delegation done */
+        json_object_set_new(obj, "shareesActAs", json_string("self"));
+    }
+
     if (jmap_wantprop(rock->get->props, "scheduleAddressSet")) {
         json_t *set = get_schedule_address_set(rock->req->userid, mbentry->name);
         json_object_set_new(obj, "scheduleAddressSet", set);
@@ -450,7 +537,17 @@ static const jmap_property_t calendar_props[] = {
         JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
     },
     {
+        "role",
+        NULL,
+        0
+    },
+    {
         "name",
+        NULL,
+        0
+    },
+    {
+        "description",
         NULL,
         0
     },
@@ -473,6 +570,41 @@ static const jmap_property_t calendar_props[] = {
         "isSubscribed",
         NULL,
         0
+    },
+    {
+        "includeInAvailability",
+        NULL,
+        0
+    },
+    {
+        "defaultAlertsWithTime",
+        NULL,
+        0
+    },
+    {
+        "defaultAlertsWithoutTime",
+        NULL,
+        0
+    },
+    {
+        "timeZone",
+        NULL,
+        0
+    },
+    {
+        "paticipantIdentities",
+        NULL,
+        JMAP_PROP_SERVER_SET
+    },
+    {
+        "shareWith",
+        NULL,
+        0
+    },
+    {
+        "shareesActAs",
+        NULL,
+        JMAP_PROP_IMMUTABLE
     },
     {
         "myRights",
@@ -510,11 +642,6 @@ static const jmap_property_t calendar_props[] = {
         "calDavUrl",
         JMAP_CALENDARS_EXTENSION,
         JMAP_PROP_SERVER_SET
-    },
-    {
-        "shareWith",
-        JMAP_CALENDARS_EXTENSION,
-        0
     },
     {
         "x-href",
