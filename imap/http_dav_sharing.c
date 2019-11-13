@@ -752,7 +752,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
 {
     xmlNodePtr root = NULL, node, resp = NULL;
     int rights, ret, r, legacy = 0, add = 0;
-    struct mailbox *mailbox = NULL, *shared = NULL;
+    struct mailbox *shared = NULL;
     struct webdav_db *webdavdb = NULL;
     struct webdav_data *wdata;
     struct dlist *dl = NULL, *data;
@@ -852,16 +852,8 @@ HIDDEN int notify_post(struct transaction_t *txn)
         }
     }
 
-    /* Open notification mailbox for reading */
-    r = mailbox_open_irl(txn->req_tgt.mbentry->name, &mailbox);
-    if (r) {
-        syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
-               txn->req_tgt.mbentry->name, error_message(r));
-        goto done;
-    }
-
     /* Open the WebDAV DB corresponding to the mailbox */
-    webdavdb = webdav_open_mailbox(mailbox);
+    webdavdb = webdav_open_userid(txn->req_tgt.userid);
 
     /* Find message UID for the resource */
     webdav_lookup_resource(webdavdb, txn->req_tgt.mbentry->name,
@@ -1004,7 +996,6 @@ HIDDEN int notify_post(struct transaction_t *txn)
     if (root) xmlFreeDoc(root->doc);
     if (notify) xmlFreeDoc(notify->doc);
     webdav_close(webdavdb);
-    mailbox_close(&mailbox);
     mbname_free(&mbname);
     dlist_free(&dl);
 
