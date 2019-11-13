@@ -102,6 +102,7 @@ sub test_capabilities
         }, "R1"]
     ], [
         'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
     $self->assert_str_equals('error', $res->[0][0]);
@@ -187,6 +188,7 @@ sub test_get_session
     $self->assert(exists $coreCapability->{collationAlgorithms});
     $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:mail'});
     $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:submission'});
+    $self->assert_deep_equals({}, $capabilities->{'urn:ietf:params:jmap:calendars'});
     $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
     $self->assert_deep_equals({}, $capabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
     if ($buildinfo->get('component', 'sieve')) {
@@ -201,6 +203,7 @@ sub test_get_session
     my $expect_primaryAccounts = {
         'urn:ietf:params:jmap:mail' => 'cassandane',
         'urn:ietf:params:jmap:submission' => 'cassandane',
+        'urn:ietf:params:jmap:calendars' => 'cassandane',
         'https://cyrusimap.org/ns/jmap/contacts' => 'cassandane',
         'https://cyrusimap.org/ns/jmap/calendars' => 'cassandane',
     };
@@ -241,6 +244,7 @@ sub test_get_session
     if ($buildinfo->get('component', 'sieve')) {
         $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
     }
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:calendars'});
     $self->assert_not_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
     $self->assert_not_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
 
@@ -256,6 +260,7 @@ sub test_get_session
         $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
     }
     $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
+    $self->assert_not_null($accountCapabilities->{'urn:ietf:params:jmap:calendars'});
     $self->assert_not_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
 
     # Account 2: read/write mail
@@ -269,6 +274,7 @@ sub test_get_session
     if ($buildinfo->get('component', 'sieve')) {
         $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:vacationresponse'});
     }
+    $self->assert_null($accountCapabilities->{'urn:ietf:params:jmap:calendars'});
     $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/contacts'});
     $self->assert_null($accountCapabilities->{'https://cyrusimap.org/ns/jmap/calendars'});
 }
