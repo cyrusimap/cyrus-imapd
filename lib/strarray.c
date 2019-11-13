@@ -454,6 +454,7 @@ EXPORTED int strarray_intersect_case(const strarray_t *sa, const strarray_t *sb)
 
 EXPORTED int strarray_size(const strarray_t *sa)
 {
+    if (!sa) return 0;
     return sa->count;
 }
 
