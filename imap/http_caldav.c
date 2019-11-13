@@ -6181,11 +6181,13 @@ static int propfind_caluseraddr_all(const xmlChar *name, xmlNsPtr ns,
             }
             else {
                 int i;
-                for (i = 0; i < strarray_size(items); i++) {
-                    xmlNodePtr href = xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, i));
-                    /* apple will use the LAST href by default - but it also looks to see what the
-                    * preferred value is according to how icloud behaves */
-                    if (!i) xmlNewProp(href, BAD_CAST "preferred", BAD_CAST "1");
+                for (i = strarray_size(items); i; i--) {
+                    xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, i-1));
+                    xmlNodePtr href = xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(items, i-1));
+                    /* apple will use the alphabetically first href, and Thunderbird will use the
+                     * last one in order, so we set preferred for Apple, and put the preferred one
+                     * last for Thunderbird (and maybe others) */
+                    if (i == 1) xmlNewProp(href, BAD_CAST "preferred", BAD_CAST "1");
                 }
                 strarray_free(items);
             }
@@ -6224,13 +6226,13 @@ static int propfind_caluseraddr_all(const xmlChar *name, xmlNsPtr ns,
                                     fctx->req_tgt->userid, &fctx->buf);
         if (!r && fctx->buf.len) {
             strarray_t *addr =
-                strarray_splitm(buf_release(&fctx->buf), ",", STRARRAY_TRIM);
-            int i;
+                strarray_split(buf_cstring(&fctx->buf), ",", STRARRAY_TRIM);
 
             node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
                                 &propstat[PROPSTAT_OK], name, ns, NULL, 0);
-            for (i = 0; i < strarray_size(addr); i++) {
-                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(addr, i));
+            int i;
+            for (i = strarray_size(addr); i; i--) {
+                xml_add_href(node, fctx->ns[NS_DAV], strarray_nth(addr, i-1));
             }
             strarray_free(addr);
             ret = 0;
@@ -6319,7 +6321,11 @@ int proppatch_caluseraddr(xmlNodePtr prop, unsigned set,
                 for (; node; node = xmlNextElementSibling(node)) {
                     /* Make sure its a value we understand */
                     if (!xmlStrcmp(node->name, BAD_CAST "href")) {
-                        strarray_appendm(&addr, (char *) xmlNodeGetContent(node));
+                        /* because clients look for the last item, we put the default last,
+                         * but we want it first in the internal data structure because that
+                         * makes iterating to look for matches more sensible, so reverse it
+                         * right here! */
+                        strarray_unshiftm(&addr, (char *) xmlNodeGetContent(node));
                     }
                     else {
                         /* Unknown value */
