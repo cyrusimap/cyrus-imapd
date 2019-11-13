@@ -870,6 +870,7 @@ static int jmap_calendar_changes(struct jmap_req *req)
 
 struct setcalendar_props {
     const char *name;
+    const char *desc;
     const char *color;
     int sortOrder;
     int isVisible;
@@ -918,6 +919,18 @@ static int setcalendars_update(jmap_req_t *req,
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
                     displayname_annot, error_message(r));
+        }
+        buf_reset(&val);
+    }
+    /* description */
+    if (!r && props->desc) {
+        buf_setcstr(&val, props->desc);
+        static const char *description_annot =
+            DAV_ANNOT_NS "<" XML_NS_DAV ">description";
+        r = annotate_state_writemask(astate, description_annot, req->userid, &val);
+        if (r) {
+            syslog(LOG_ERR, "failed to write annotation %s: %s",
+                    description_annot, error_message(r));
         }
         buf_reset(&val);
     }
@@ -1149,6 +1162,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         /* Parse and validate properties. */
         json_t *invalid = json_array(), *shareWith = NULL;
         const char *name = NULL;
+        const char *desc = NULL;
         const char *color = NULL;
         int32_t sortOrder = 0;
         int isVisible = 1;
@@ -1182,6 +1196,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         }
 
         /* Optional properties. */
+        jmap_readprop(arg, "description", 0,  invalid, "s", &desc);
         jmap_readprop(arg, "shareWith", 0,  invalid, "o", &shareWith);
 
         jmap_readprop(arg, "scheduleAddressSet", 0,  invalid, "o", &scheduleAddressSet);
@@ -1273,7 +1288,7 @@ static int jmap_calendar_set(struct jmap_req *req)
             goto done;
         }
         struct setcalendar_props props = {
-            name, color, sortOrder, isVisible, isSubscribed, scheduleAddressSet,
+            name, desc, color, sortOrder, isVisible, isSubscribed, scheduleAddressSet,
             { shareWith, /*overwrite_acl*/ 1}, config_types_to_caldav_types()
         };
         r = setcalendars_update(req, mboxname, &props, /*ignore_acl*/1);
@@ -1326,6 +1341,7 @@ static int jmap_calendar_set(struct jmap_req *req)
 
         char *mboxname = caldav_mboxname(req->accountid, uid);
         const char *name = NULL;
+        const char *desc = NULL;
         const char *color = NULL;
         int32_t sortOrder = -1;
         int isVisible = -1;
@@ -1338,6 +1354,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         if (pe > 0 && strnlen(name, 256) == 256) {
             json_array_append_new(invalid, json_string("name"));
         }
+        jmap_readprop(arg, "description", 0,  invalid, "s", &desc);
         jmap_readprop(arg, "color", 0,  invalid, "s", &color);
         pe = jmap_readprop(arg, "sortOrder", 0,  invalid, "i", &sortOrder);
         if (pe > 0 && sortOrder < 0) {
@@ -1398,7 +1415,7 @@ static int jmap_calendar_set(struct jmap_req *req)
 
         /* Update the calendar */
         struct setcalendar_props props = {
-            name, color, sortOrder, isVisible, isSubscribed, scheduleAddressSet,
+            name, desc, color, sortOrder, isVisible, isSubscribed, scheduleAddressSet,
             { shareWith, overwrite_acl}, /*comp_types*/ -1
         };
         r = setcalendars_update(req, mboxname, &props, /*ignore_acl*/0);
