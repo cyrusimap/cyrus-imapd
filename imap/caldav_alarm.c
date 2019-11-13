@@ -194,11 +194,17 @@ static int send_alarm(struct get_alarm_rock *rock,
 {
     const char *userid = rock->userid;
     struct buf calname = BUF_INITIALIZER;
+    struct buf calcolor = BUF_INITIALIZER;
+    char *calid = xstrdup(strrchr(rock->mboxname, '.') + 1);
 
     /* get the display name annotation */
     const char *displayname_annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
     annotatemore_lookupmask(rock->mboxname, displayname_annot, userid, &calname);
-    if (!calname.len) buf_setcstr(&calname, strrchr(rock->mboxname, '.') + 1);
+    if (!calname.len) buf_setcstr(&calname, calid);
+
+    /* get the calendar color annotation */
+    const char *color_annot = DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
+    annotatemore_lookupmask(rock->mboxname, color_annot, userid, &calcolor);
 
     struct mboxevent *event = mboxevent_new(EVENT_CALENDAR_ALARM);
     icalproperty *prop;
@@ -218,7 +224,9 @@ static int send_alarm(struct get_alarm_rock *rock,
     }
 
     FILL_STRING_PARAM(event, EVENT_CALENDAR_USER_ID, xstrdup(userid));
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_ID, calid);
     FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_NAME, buf_release(&calname));
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_COLOR, buf_release(&calcolor));
 
     prop = icalcomponent_get_first_property(comp, ICAL_UID_PROPERTY);
     FILL_STRING_PARAM(event, EVENT_CALENDAR_UID,
