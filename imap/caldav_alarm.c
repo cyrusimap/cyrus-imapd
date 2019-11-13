@@ -195,7 +195,10 @@ static int send_alarm(struct get_alarm_rock *rock,
     const char *userid = rock->userid;
     struct buf calname = BUF_INITIALIZER;
     struct buf calcolor = BUF_INITIALIZER;
-    char *calid = xstrdup(strrchr(rock->mboxname, '.') + 1);
+
+    /* get the calendar id */
+    mbname_t *mbname = mbname_from_intname(rock->mboxname);
+    const char *calid = strarray_nth(mbname_boxes(mbname), -1);
 
     /* get the display name annotation */
     const char *displayname_annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
@@ -224,7 +227,7 @@ static int send_alarm(struct get_alarm_rock *rock,
     }
 
     FILL_STRING_PARAM(event, EVENT_CALENDAR_USER_ID, xstrdup(userid));
-    FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_ID, calid);
+    FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_ID, xstrdup(calid));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_NAME, buf_release(&calname));
     FILL_STRING_PARAM(event, EVENT_CALENDAR_CALENDAR_COLOR, buf_release(&calcolor));
 
@@ -308,6 +311,8 @@ static int send_alarm(struct get_alarm_rock *rock,
     strarray_free(attendee_status);
 
     buf_free(&calname);
+    buf_free(&calcolor);
+    mbname_free(&mbname);
 
     return 0;
 }
