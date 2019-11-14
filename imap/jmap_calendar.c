@@ -417,11 +417,14 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
         r = annotatemore_lookupmask(mbentry->name, transp_annot,
                                     httpd_userid, &attrib);
-        if (buf_len(&attrib) && !strcmp(buf_cstring(&attrib), "transparent")) {
+        if (!strcmpsafe(buf_cstring(&attrib), "transparent")) {
             json_object_set_new(obj, "includeInAvailability",
                                 json_string("none"));
         }
-        /* XXX  Need to define a value that maps to "attending" */
+        else if (!strcmpsafe(buf_cstring(&attrib), "opaque=attending")) {
+            json_object_set_new(obj, "includeInAvailability",
+                                json_string("attending"));
+        }
         else {
             json_object_set_new(obj, "includeInAvailability",
                                 json_string("all"));
