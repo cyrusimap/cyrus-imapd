@@ -759,19 +759,25 @@ static int jmap_calendar_changes(struct jmap_req *req)
 
 /* jmap calendar APIs */
 
+struct setcalendar_props {
+    const char *name;
+    const char *color;
+    int sortOrder;
+    int isVisible;
+    int isSubscribed;
+    json_t *scheduleAddressSet;
+    struct {
+        json_t *With;
+        int overwrite_acl;
+    } share;
+    long comp_types;
+};              
+
 /* Update the calendar properties in the calendar mailbox named mboxname.
  * NULL values and negative integers are ignored. Return 0 on success. */
 static int setcalendars_update(jmap_req_t *req,
                                const char *mboxname,
-                               const char *name,
-                               const char *color,
-                               int sortOrder,
-                               int isVisible,
-                               int isSubscribed,
-                               long comp_types,
-                               json_t *shareWith,
-                               json_t *scheduleAddressSet,
-                               int overwrite_acl)
+                               struct setcalendar_props *props)
 {
     struct mailbox *mbox = NULL;
     annotate_state_t *astate = NULL;
@@ -794,8 +800,8 @@ static int setcalendars_update(jmap_req_t *req,
                 mbox->name, error_message(r));
     }
     /* name */
-    if (!r && name) {
-        buf_setcstr(&val, name);
+    if (!r && props->name) {
+        buf_setcstr(&val, props->name);
         static const char *displayname_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
         r = annotate_state_writemask(astate, displayname_annot, req->userid, &val);
@@ -806,8 +812,8 @@ static int setcalendars_update(jmap_req_t *req,
         buf_reset(&val);
     }
     /* color */
-    if (!r && color) {
-        buf_setcstr(&val, color);
+    if (!r && props->color) {
+        buf_setcstr(&val, props->color);
         static const char *color_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-color";
         r = annotate_state_writemask(astate, color_annot, req->userid, &val);
@@ -818,8 +824,8 @@ static int setcalendars_update(jmap_req_t *req,
         buf_reset(&val);
     }
     /* sortOrder */
-    if (!r && sortOrder >= 0) {
-        buf_printf(&val, "%d", sortOrder);
+    if (!r && props->sortOrder >= 0) {
+        buf_printf(&val, "%d", props->sortOrder);
         static const char *sortOrder_annot =
             DAV_ANNOT_NS "<" XML_NS_APPLE ">calendar-order";
         r = annotate_state_writemask(astate, sortOrder_annot, req->userid, &val);
@@ -830,8 +836,8 @@ static int setcalendars_update(jmap_req_t *req,
         buf_reset(&val);
     }
     /* isVisible */
-    if (!r && isVisible >= 0) {
-        buf_setcstr(&val, isVisible ? "true" : "false");
+    if (!r && props->isVisible >= 0) {
+        buf_setcstr(&val, props->isVisible ? "true" : "false");
         static const char *visible_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">X-FM-isVisible";
         r = annotate_state_writemask(astate, visible_annot, req->userid, &val);
@@ -842,13 +848,13 @@ static int setcalendars_update(jmap_req_t *req,
         buf_reset(&val);
     }
     /* scheduleAddressSet */
-    if (!r && json_is_array(scheduleAddressSet)) {
+    if (!r && json_is_array(props->scheduleAddressSet)) {
         static const char *annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
         strarray_t *array = strarray_new();
         size_t i;
         json_t *jval;
-        json_array_foreach(scheduleAddressSet, i, jval) {
+        json_array_foreach(props->scheduleAddressSet, i, jval) {
             strarray_add(array, json_string_value(jval));
         }
         char *joined = strarray_join(array, ",");
@@ -864,13 +870,13 @@ static int setcalendars_update(jmap_req_t *req,
     }
 
     /* isSubscribed */
-    if (!r && isSubscribed >= 0) {
+    if (!r && props->isSubscribed >= 0) {
         /* Update subscription database */
         r = mboxlist_changesub(mboxname, req->userid, req->authstate,
-                               isSubscribed, 0, /*notify*/1);
+                               props->isSubscribed, 0, /*notify*/1);
 
         /* Set invite status for CalDAV */
-        buf_setcstr(&val, isSubscribed ? "invite-accepted" : "invite-declined");
+        buf_setcstr(&val, props->isSubscribed ? "invite-accepted" : "invite-declined");
         static const char *invite_annot =
             DAV_ANNOT_NS "<" XML_NS_DAV ">invite-status";
         r = annotate_state_writemask(astate, invite_annot, req->userid, &val);
@@ -881,8 +887,9 @@ static int setcalendars_update(jmap_req_t *req,
         buf_reset(&val);
     }
     /* shareWith */
-    if (!r && shareWith) {
-        r = jmap_set_sharewith(mbox, shareWith, overwrite_acl);
+    if (!r && props->share.With) {
+        r = jmap_set_sharewith(mbox,
+                               props->share.With, props->share.overwrite_acl);
         if (!r) {
             char *userid = mboxname_to_userid(mbox->name);
             r = caldav_update_shareacls(userid);
@@ -891,10 +898,10 @@ static int setcalendars_update(jmap_req_t *req,
     }
 
     /* supported components */
-    if (!r && comp_types >= 0) {
+    if (!r && props->comp_types >= 0) {
         const char *comp_annot =
             DAV_ANNOT_NS "<" XML_NS_CALDAV ">supported-calendar-component-set";
-        buf_printf(&val, "%lu", (unsigned long) comp_types);
+        buf_printf(&val, "%lu", (unsigned long) props->comp_types);
         r = annotate_state_writemask(astate, comp_annot, req->userid, &val);
         if (r) {
             syslog(LOG_ERR, "failed to write annotation %s: %s",
@@ -1144,10 +1151,11 @@ static int jmap_calendar_set(struct jmap_req *req)
             free(mboxname);
             goto done;
         }
-        long comp_types = config_types_to_caldav_types();
-        r = setcalendars_update(req, mboxname, name, color, sortOrder,
-                                isVisible, isSubscribed, comp_types,
-                                shareWith, scheduleAddressSet, 1);
+        struct setcalendar_props props = {
+            name, color, sortOrder, isVisible, isSubscribed, scheduleAddressSet,
+            { shareWith, /*overwrite_acl*/ 1}, config_types_to_caldav_types()
+        };
+        r = setcalendars_update(req, mboxname, &props);
         if (r) {
             free(uid);
             int rr = mboxlist_delete(mboxname);
@@ -1293,9 +1301,11 @@ static int jmap_calendar_set(struct jmap_req *req)
         mbname_free(&mbname);
 
         /* Update the calendar */
-        r = setcalendars_update(req, mboxname, name, color, sortOrder,
-                                isVisible, isSubscribed, /*comp_types*/-1,
-                                shareWith, scheduleAddressSet, overwrite_acl);
+        struct setcalendar_props props = {
+            name, color, sortOrder, isVisible, isSubscribed, scheduleAddressSet,
+            { shareWith, overwrite_acl}, /*comp_types*/ -1
+        };
+        r = setcalendars_update(req, mboxname, &props);
         free(mboxname);
         if (r == IMAP_NOTFOUND || r == IMAP_MAILBOX_NONEXISTENT) {
             json_t *err = json_pack("{s:s}", "type", "notFound");
