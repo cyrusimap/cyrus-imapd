@@ -72,6 +72,7 @@
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "zoneinfo_db.h"
 
 /* generated headers are not necessarily in current directory */
 #include "imap/http_err.h"
@@ -878,6 +879,7 @@ struct setcalendar_props {
     const char *name;
     const char *desc;
     const char *color;
+    const char *tzid;
     int sortOrder;
     int isVisible;
     int isSubscribed;
@@ -1050,6 +1052,19 @@ static int setcalendars_update(jmap_req_t *req,
         buf_reset(&val);
     }
 
+    /* timeZone */
+    if (!r && props->tzid) {
+        buf_setcstr(&val, props->tzid);
+        static const char *tzid_annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+        r = annotate_state_writemask(astate, tzid_annot, req->userid, &val);
+        if (r) {
+            syslog(LOG_ERR, "failed to write annotation %s: %s",
+                    tzid_annot, error_message(r));
+        }
+        buf_reset(&val);
+    }
+
     /* shareWith */
     if (!r && props->share.With) {
         r = jmap_set_sharewith(mbox,
@@ -1215,6 +1230,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         const char *desc = NULL;
         const char *color = NULL;
         const char *avail = NULL;
+        const char *tzid = NULL;
         int32_t sortOrder = 0;
         int isVisible = 1;
         int isSubscribed = 1;
@@ -1255,6 +1271,14 @@ static int jmap_calendar_set(struct jmap_req *req)
 
         pe = jmap_readprop(arg, "includeInAvailablity", 0, invalid, "s", &avail);
         if (pe > 0) transp = validate_includeInAvailability(avail, invalid);
+
+        pe = jmap_readprop(arg, "timeZone", 0, invalid, "s", &tzid);
+        if (pe > 0) {
+            /* Verify we have tzid record in the database */
+            if (zoneinfo_lookup(tzid, NULL) != 0) {
+                json_array_append_new(invalid, json_string("timeZone"));
+            }
+        }
 
         /* The myRights property is server-sete and MUST NOT be set. */
         pe = jmap_readprop(arg, "myRights", 0,  invalid, "o", &myrights);
@@ -1343,7 +1367,7 @@ static int jmap_calendar_set(struct jmap_req *req)
             goto done;
         }
         struct setcalendar_props props = {
-            name, desc, color, sortOrder,
+            name, desc, color, tzid, sortOrder,
             isVisible, isSubscribed, transp, scheduleAddressSet,
             { shareWith, /*overwrite_acl*/ 1}, config_types_to_caldav_types()
         };
@@ -1400,6 +1424,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         const char *desc = NULL;
         const char *color = NULL;
         const char *avail = NULL;
+        const char *tzid = NULL;
         int32_t sortOrder = -1;
         int isVisible = -1;
         int isSubscribed = -1;
@@ -1432,6 +1457,14 @@ static int jmap_calendar_set(struct jmap_req *req)
 
         pe = jmap_readprop(arg, "includeInAvailablity", 0, invalid, "s", &avail);
         if (pe > 0) transp = validate_includeInAvailability(avail, invalid);
+
+        pe = jmap_readprop(arg, "timeZone", 0, invalid, "s", &tzid);
+        if (pe > 0) {
+            /* Verify we have tzid record in the database */
+            if (zoneinfo_lookup(tzid, NULL) != 0) {
+                json_array_append_new(invalid, json_string("timeZone"));
+            }
+        }
 
         /* Is shareWith overwritten or patched? */
         jmap_parse_sharewith_patch(arg, &shareWith);
@@ -1476,7 +1509,7 @@ static int jmap_calendar_set(struct jmap_req *req)
 
         /* Update the calendar */
         struct setcalendar_props props = {
-            name, desc, color, sortOrder,
+            name, desc, color, tzid, sortOrder,
             isVisible, isSubscribed, transp, scheduleAddressSet,
             { shareWith, overwrite_acl}, /*comp_types*/ -1
         };
