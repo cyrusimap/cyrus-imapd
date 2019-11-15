@@ -421,7 +421,7 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
             json_object_set_new(obj, "includeInAvailability",
                                 json_string("none"));
         }
-        else if (!strcmpsafe(buf_cstring(&attrib), "opaque=attending")) {
+        else if (!strcmpsafe(buf_cstring(&attrib), "opaque-attending")) {
             json_object_set_new(obj, "includeInAvailability",
                                 json_string("attending"));
         }
@@ -872,6 +872,8 @@ static int jmap_calendar_changes(struct jmap_req *req)
 
 /* jmap calendar APIs */
 
+enum { TRANSP_TRANSPARENT = 0, TRANSP_OPAQUE_ATTENDING, TRANSP_OPAQUE };
+
 struct setcalendar_props {
     const char *name;
     const char *desc;
@@ -879,13 +881,24 @@ struct setcalendar_props {
     int sortOrder;
     int isVisible;
     int isSubscribed;
+    int transp;
     json_t *scheduleAddressSet;
     struct {
         json_t *With;
         int overwrite_acl;
     } share;
     long comp_types;
-};              
+};
+
+static int validate_includeInAvailability(const char *avail, json_t *invalid)
+{
+    if (!strcmp(avail, "all")) return TRANSP_OPAQUE;
+    if (!strcmp(avail, "none")) return TRANSP_TRANSPARENT;
+    if (!strcmp(avail, "attending")) return TRANSP_OPAQUE_ATTENDING;
+
+    json_array_append_new(invalid, json_string("includeInAvailability"));
+    return -1;
+}
 
 /* Update the calendar properties in the calendar mailbox named mboxname.
  * NULL values and negative integers are ignored. Return 0 on success. */
@@ -1013,6 +1026,30 @@ static int setcalendars_update(jmap_req_t *req,
         }
         buf_reset(&val);
     }
+
+    /* includeInAvailability */
+    if (!r && props->transp >= 0) {
+        switch (props->transp) {
+        case TRANSP_TRANSPARENT:
+            buf_setcstr(&val, "transparent");
+            break;
+        case TRANSP_OPAQUE_ATTENDING:
+            buf_setcstr(&val, "opaque-attending");
+            break;
+        default:
+            buf_setcstr(&val, "opaque");
+            break;
+        }
+        static const char *transp_annot =
+            DAV_ANNOT_NS "<" XML_NS_CALDAV ">schedule-calendar-transp";
+        r = annotate_state_writemask(astate, transp_annot, req->userid, &val);
+        if (r) {
+            syslog(LOG_ERR, "failed to write annotation %s: %s",
+                   transp_annot, error_message(r));
+        }
+        buf_reset(&val);
+    }
+
     /* shareWith */
     if (!r && props->share.With) {
         r = jmap_set_sharewith(mbox,
@@ -1177,10 +1214,12 @@ static int jmap_calendar_set(struct jmap_req *req)
         const char *name = NULL;
         const char *desc = NULL;
         const char *color = NULL;
+        const char *avail = NULL;
         int32_t sortOrder = 0;
         int isVisible = 1;
         int isSubscribed = 1;
         int pe; /* parse error */
+        int transp = -1;
         json_t  *myrights = NULL;
         json_t *scheduleAddressSet = NULL;
 
@@ -1213,6 +1252,9 @@ static int jmap_calendar_set(struct jmap_req *req)
         jmap_readprop(arg, "shareWith", 0,  invalid, "o", &shareWith);
 
         jmap_readprop(arg, "scheduleAddressSet", 0,  invalid, "o", &scheduleAddressSet);
+
+        pe = jmap_readprop(arg, "includeInAvailablity", 0, invalid, "s", &avail);
+        if (pe > 0) transp = validate_includeInAvailability(avail, invalid);
 
         /* The myRights property is server-sete and MUST NOT be set. */
         pe = jmap_readprop(arg, "myRights", 0,  invalid, "o", &myrights);
@@ -1301,7 +1343,8 @@ static int jmap_calendar_set(struct jmap_req *req)
             goto done;
         }
         struct setcalendar_props props = {
-            name, desc, color, sortOrder, isVisible, isSubscribed, scheduleAddressSet,
+            name, desc, color, sortOrder,
+            isVisible, isSubscribed, transp, scheduleAddressSet,
             { shareWith, /*overwrite_acl*/ 1}, config_types_to_caldav_types()
         };
         r = setcalendars_update(req, mboxname, &props, /*ignore_acl*/1);
@@ -1356,10 +1399,12 @@ static int jmap_calendar_set(struct jmap_req *req)
         const char *name = NULL;
         const char *desc = NULL;
         const char *color = NULL;
+        const char *avail = NULL;
         int32_t sortOrder = -1;
         int isVisible = -1;
         int isSubscribed = -1;
         int overwrite_acl = 1;
+        int transp = -1;
         json_t  *myrights = NULL;
         json_t *scheduleAddressSet = NULL;
         int pe = 0; /* parse error */
@@ -1384,6 +1429,9 @@ static int jmap_calendar_set(struct jmap_req *req)
                 isSubscribed = -1; // ignore
             }
         }
+
+        pe = jmap_readprop(arg, "includeInAvailablity", 0, invalid, "s", &avail);
+        if (pe > 0) transp = validate_includeInAvailability(avail, invalid);
 
         /* Is shareWith overwritten or patched? */
         jmap_parse_sharewith_patch(arg, &shareWith);
@@ -1428,7 +1476,8 @@ static int jmap_calendar_set(struct jmap_req *req)
 
         /* Update the calendar */
         struct setcalendar_props props = {
-            name, desc, color, sortOrder, isVisible, isSubscribed, scheduleAddressSet,
+            name, desc, color, sortOrder,
+            isVisible, isSubscribed, transp, scheduleAddressSet,
             { shareWith, overwrite_acl}, /*comp_types*/ -1
         };
         r = setcalendars_update(req, mboxname, &props, /*ignore_acl*/0);
