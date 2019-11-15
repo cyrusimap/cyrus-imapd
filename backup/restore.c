@@ -199,10 +199,6 @@ int main(int argc, char **argv)
     struct dlist *upload = NULL;
     int opt, r;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     while ((opt = getopt(argc, argv, ":A:C:DF:LM:P:UXaf:m:nru:vw:xz")) != EOF) {
         switch (opt) {
         case 'A':

@@ -75,10 +75,6 @@ int main(int argc, char *argv[])
     char *days = NULL;
     enum { DUMP, PRUNE, NONE } op = NONE;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     while ((opt = getopt(argc, argv, "C:drE:f:")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */

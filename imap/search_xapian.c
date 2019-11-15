@@ -739,13 +739,13 @@ static const char *make_cyrusid(const struct message_guid *guid)
 /* XXX - replace with cyrus_mkdir and cyrus_copyfile */
 static void remove_dir(const char *dir)
 {
-    run_command("/bin/rm", "-rf", dir, (char *)NULL);
+    run_command(RM_BIN, "-rf", dir, (char *)NULL);
 }
 
 static int copy_files(const char *fromdir, const char *todir)
 {
     char *fromdir2 = strconcat(fromdir, "/", (char *)NULL);
-    int r = run_command("/usr/bin/rsync", "-a", fromdir2, todir, (char *)NULL);
+    int r = run_command(RSYNC_BIN, "-a", fromdir2, todir, (char *)NULL);
 
     free(fromdir2);
     return r;

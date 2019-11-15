@@ -41,7 +41,7 @@ Options
 
 .. option:: -d
 
-    Ignored for compatability with **/bin/mail**.
+    Ignored for compatibility with **/bin/mail**.
 
 .. option:: -r  address
 

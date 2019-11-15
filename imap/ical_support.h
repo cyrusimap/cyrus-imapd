@@ -299,8 +299,7 @@ extern icalparameter *icalparameter_new_schedulestatus(const char *stat);
 
 #define icalparameter_get_scheduleforcesend(param) ICAL_SCHEDULEFORCESEND_NONE
 
-#define icalparameter_new_schedulestatus(stat) NULL; \
-    (void) stat  /* silence compiler */
+#define icalparameter_new_schedulestatus(stat) ((void) stat, NULL)
 
 #define icalproperty_get_scheduleagent_parameter(prop) NULL
 

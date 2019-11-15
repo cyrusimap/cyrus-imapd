@@ -472,7 +472,7 @@ EXPORTED int quota_update_useds(const char *quotaroot,
     if (!r) {
         int res;
         int cmp = 1;
-        if (q.scanmbox) {
+        if (mboxname && q.scanmbox) {
             cmp = cyrusdb_compar(qdb, mboxname, strlen(mboxname),
                                  q.scanmbox, strlen(q.scanmbox));
         }

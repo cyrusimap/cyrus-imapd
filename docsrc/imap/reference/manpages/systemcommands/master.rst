@@ -25,7 +25,7 @@ Description
 
 **master** is the process that controls all of the Cyrus
 processes. This process is responsible for creating all imapd, pop3d,
-lmtpd and sieved child processes. This process also initializes the
+lmtpd and timsieved child processes. This process also initializes the
 Berkeley DB code and performs scheduled cleanup/maintenance.
 
 If this process dies, then no new sessions will be started.
@@ -56,7 +56,7 @@ Options
 
 .. option:: -j  janitor full-sweeps per second
 
-    Sets the amount of times per second the janitor should sweep the
+    Sets the number of times per second the janitor should sweep the
     entire child table.  Leave it at the default of 1 unless you have a
     really high fork rate (and you have not increased the child hash
     table size when you compiled Cyrus from its default of 10000

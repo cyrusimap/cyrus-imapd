@@ -5984,8 +5984,10 @@ static int propfind_timezone(const xmlChar *name, xmlNsPtr ns,
             prop_annot = DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
 
             buf_free(&attrib);
-            r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
-                                        httpd_userid, &attrib);
+
+            if (fctx->mailbox)
+                r = annotatemore_lookupmask(fctx->mailbox->name, prop_annot,
+                                            httpd_userid, &attrib);
 
             if (r) r = HTTP_SERVER_ERROR;
             else if (!attrib.len) r = HTTP_NOT_FOUND;

@@ -789,7 +789,7 @@ EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
 
     if (r2) {
         syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_update: %s",
-               r ? "aborting" : "commiting", cyrusdb_strerror(r2));
+               r ? "aborting" : "committing", cyrusdb_strerror(r2));
     }
 
     return r;
@@ -1298,13 +1298,6 @@ EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
     return r;
 }
 
-static int addmbox_to_list(const mbentry_t *mbentry, void *rock)
-{
-    strarray_t *list = (strarray_t *)rock;
-    strarray_append(list, mbentry->name);
-    return 0;
-}
-
 /*
  * Delayed Delete a mailbox: translate delete into rename
  */
@@ -1319,7 +1312,6 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
 {
     mbentry_t *mbentry = NULL;
     strarray_t existing = STRARRAY_INITIALIZER;
-    int i;
     char newname[MAX_MAILBOX_BUFFER];
     int r = 0;
     long myrights;
@@ -1370,20 +1362,6 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
 
             goto done;
         }
-    }
-
-    /* check if there are already too many! */
-    mboxname_todeleted(name, newname, 0);
-    r = mboxlist_mboxtree(newname, addmbox_to_list, &existing, MBOXTREE_SKIP_ROOT);
-    if (r) goto done;
-
-    /* keep the last 19, so the new one is the 20th */
-    for (i = 0; i < (int)existing.count - 19; i++) {
-        const char *subname = strarray_nth(&existing, i);
-        syslog(LOG_NOTICE, "too many subfolders for %s, deleting %s (%d / %d)",
-               newname, subname, i+1, (int)existing.count);
-        r = mboxlist_deletemailbox(subname, 1, userid, auth_state, NULL, 0, 1, 1);
-        if (r) goto done;
     }
 
     /* get the deleted name */

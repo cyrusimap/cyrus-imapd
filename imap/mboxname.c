@@ -1512,6 +1512,9 @@ EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
  * Apply site policy restrictions on mailbox names.
  * Restrictions are hardwired for now.
  * NOTE: '^' is '.' externally in unixhs, and invalid in unixhs
+ *
+ * The set of printable chars that are not in GOODCHARS are:
+ *    !"%&/;<>\`{|}
  */
 #define GOODCHARS " #$'()*+,-.0123456789:=?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz~"
 HIDDEN int mboxname_policycheck(const char *name)
@@ -1522,6 +1525,17 @@ HIDDEN int mboxname_policycheck(const char *name)
     int ucs4;
     int namelen = strlen(name);
     int hasdom = 0;
+
+    /* We reserve mailboxes.db keys beginning with $ for internal use
+     * (e.g. $RACL), so don't allow a real mailbox to sneak in there.
+     *
+     * N.B This is only forbidden at the absolute top of the internal
+     * namespace: stuff like "user.foo.$bar", "domain!user.foo.$bar",
+     * "domain!$bar", and even "user.$bar" are all still valid here,
+     * because none of those names start with $, and won't conflict.
+     */
+    if (name[0] == '$')
+        return IMAP_MAILBOX_BADNAME;
 
     /* Skip policy check on mailbox created in delayed delete namespace
      * assuming the mailbox existed before and was OK then.
@@ -1569,6 +1583,9 @@ HIDDEN int mboxname_policycheck(const char *name)
     // special users
     if (!strcmp(name, "user.anyone")) return IMAP_MAILBOX_BADNAME;
     if (!strcmp(name, "user.anonymous")) return IMAP_MAILBOX_BADNAME;
+    // redundant but explicit ban on userids starting with '%'
+    // (would conflict with backups of shared mailboxes)
+    if (!strncmp(name, "user.%", 6)) return IMAP_MAILBOX_BADNAME;
 
     while (*name) {
         if (*name == '&') {

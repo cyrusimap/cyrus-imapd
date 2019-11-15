@@ -474,10 +474,6 @@ int main(int argc, char *argv[])
     struct conversations_rock crock;
     struct sigaction action;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     /* zero the expire_rock & delete_rock */
     memset(&erock, 0, sizeof(erock));
     construct_hash_table(&erock.table, 10000, 1);

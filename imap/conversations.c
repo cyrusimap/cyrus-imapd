@@ -111,6 +111,7 @@ static int _conversations_set_key(struct conversations_state *state,
                                   const char *key, size_t keylen,
                                   const arrayu64_t *cids, time_t stamp);
 
+static struct conversations_open *open_conversations;
 EXPORTED void conversations_set_directory(const char *dir)
 {
     free(convdir);
@@ -1926,7 +1927,7 @@ EXPORTED int conversations_update_record(struct conversations_state *cstate,
 
     /* calculate the changes */
     if (old) {
-        /* decrease any relevent counts */
+        /* decrease any relevant counts */
         if (!(old->system_flags & FLAG_EXPUNGED)) {
             delta_exists--;
             delta_size -= old->size;

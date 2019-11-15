@@ -1409,7 +1409,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    When set, the Cyrus NNTP server will add the header(s) specified in
    the \fBnewsaddheaders\fR option to each incoming usenet article.
    The added header(s) will contain email delivery addresses
-   corresponding to each relevent newsgroup.  If not set, no headers
+   corresponding to each relevant newsgroup.  If not set, no headers
    are added to usenet articles. */
 
 { "newsprefix", NULL, STRING }
@@ -1820,7 +1820,7 @@ If all partitions are over that limit, this feature is not used anymore.
 { "search_skipdiacrit", 1, SWITCH }
 /* When searching, should diacriticals be stripped from the search
    terms.  The default is "true", a search for "hav" will match
-   "Håvard".  This is not RFC5051 complient, but it backwards
+   "Håvard".  This is not RFC5051 compliant, but it backwards
    compatible, and may be preferred by some sites. */
 
 { "search_skiphtml", 0, SWITCH }
@@ -2267,16 +2267,16 @@ product version in the capabilities
 
 { "tls_server_ca_dir", NULL, STRING }
 /* Path to a directory with CA certificates used to verify certificates
-   offered when this server connects to other servers. This directory must
+   offered by the server, when cyrus acts as client. This directory must
    have filenames with the hashed value of the certificates (see
    openssl(1)). */
 
 { "tls_server_ca_file", NULL, STRING }
 /* Path to a file containing CA certificates used to verify certificates
-   offered when this server connects to other servers. */
+   offered by the server, when cyrus acts as client. */
 
 { "tls_server_cert", NULL, STRING }
-/* File containing the certificate presented to clients. */
+/* File containing the certificate, including the full chain, presented to clients. */
 
 { "tls_server_key", NULL, STRING }
 /* File containing the private key belonging to the certificate in
@@ -2294,9 +2294,9 @@ product version in the capabilities
    for later reuse.  The maximum value is 1440 (24 hours), the
    default.  A value of 0 will disable session caching. */
 
-{ "tls_versions", "tls1_0 tls1_1 tls1_2", STRING }
+{ "tls_versions", "tls1_0 tls1_1 tls1_2 tls1_3", STRING }
 /* A list of SSL/TLS versions to not disable. Cyrus IMAP SSL/TLS starts
-   with all protocols, and substracts protocols not in this list. Newer
+   with all protocols, and subtracts protocols not in this list. Newer
    versions of SSL/TLS will need to be added here to allow them to get
    disabled. */
 
@@ -2339,13 +2339,27 @@ product version in the capabilities
    occur in mailbox names.  The default switched in 3.0 from off to on. */
 
 { "virtdomains", "off", ENUM("off", "userid", "on") }
-/* Enable virtual domain support.  If enabled, the user's domain will
-   be determined by splitting a fully qualified userid at the last '@'
-   or '%' symbol.  If the userid is unqualified, and the virtdomains
-   option is set to "on", then the domain will be determined by doing
-   a reverse lookup on the IP address of the incoming network
-   interface, otherwise the user is assumed to be in the default
-   domain (if set). */
+/* Configure virtual domain support.
+.PP
+.IP off
+Cyrus does not know or care about domains. Only the local part of email
+addresses is ever considered.  This is not recommended for any deployment,
+but is currently the default.
+.\"
+.IP userid
+The user's domain is determined by splitting a fully qualified userid at the
+last '@' or '%' symbol.  If the userid is unqualified, the \fIdefaultdomain\fR
+will be used.  This is the recommended configuration for all deployments.
+If you wish to provide calendaring services you must use this configuration.
+.\"
+.IP on
+Fully qualified userids are respected, as per "userid".  Unqualified userids
+will have their domain determined by doing a reverse lookup on the IP address
+of the incoming network interface, or if no record is found, the
+\fIdefaultdomain\fR will be used.
+
+.PP
+    */
 
 { "xbackup_enabled", 0, SWITCH }
 /* Enable support for the XBACKUP command in imapd.  If enabled, admin

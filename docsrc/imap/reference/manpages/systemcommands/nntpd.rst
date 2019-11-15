@@ -29,7 +29,7 @@ connection.
 **nntpd** |default-conf-text|  The optional ``newsprefix`` setting
 specifies a prefix to be prepended to newsgroup names to make the
 corresponding IMAP mailbox names.  The optional ``newspostuser``
-setting specifies the special userid to be used when contructing the
+setting specifies the special userid to be used when constructing the
 *To:* header address for following up to articles when read via IMAP.
 The optional ``newspeer`` setting specifies the fully qualified hostname
 of the upstream news server to which articles are fed.  The optional

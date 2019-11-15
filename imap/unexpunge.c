@@ -281,10 +281,6 @@ int main(int argc, char *argv[])
     unsigned long *uids = NULL;
     unsigned nuids = 0;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     while ((opt = getopt(argc, argv, "C:laudt:f:v")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */

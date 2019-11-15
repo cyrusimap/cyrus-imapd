@@ -143,7 +143,7 @@ static int apns_enabled = 0;
 static const int ultraparanoid = 1; /* should we kick after every operation? */
 unsigned int proxy_cmdcnt;
 
-static int referral_kick = 0; /* kick after next command recieved, for
+static int referral_kick = 0; /* kick after next command received, for
                                  referrals that are likely to change the
                                  mailbox list */
 
@@ -4435,7 +4435,7 @@ static void section_list_free(struct section *l)
  * Parse the syntax for a partial fetch:
  *   "<" number "." nz-number ">"
  */
-#define PARSE_PARTIAL(start_octet, octet_count)                         \
+#define PARSE_PARTIAL(start_octet, octet_count) do {                    \
     (start_octet) = (octet_count) = 0;                                  \
     if (*p == '<' && Uisdigit(p[1])) {                                  \
         (start_octet) = p[1] - '0';                                     \
@@ -4464,7 +4464,8 @@ static void section_list_free(struct section *l)
             goto freeargs;                                              \
         }                                                               \
         p++;                                                            \
-    }
+    }                                                                   \
+} while(0)
 
 static int parse_fetch_args(const char *tag, const char *cmd,
                             int allow_vanished,
@@ -7203,6 +7204,10 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     }
 
     if (location && strcmp(oldname, newname)) {
+        /* XXX It would be nice to not complain here iff the location
+         * XXX is actually the mailbox's current partition, but we
+         * XXX don't have that info until much later!
+         */
         prot_printf(imapd_out,
                     "%s NO Cross-server or cross-partition move w/rename not supported\r\n",
                     tag);
@@ -7412,6 +7417,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     if (!r) {
         struct mboxevent *mboxevent = NULL;
         uint32_t uidvalidity = mbentry ? mbentry->uidvalidity : 0;
+        const char *partition = mbentry ? mbentry->partition : NULL;
 
         /* don't send rename notification if we only change the partition */
         if (strcmp(oldmailboxname, newmailboxname))
@@ -7432,7 +7438,8 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
         }
         mboxlist_entry_free(&newmbentry);
 
-        r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, location,
+        r = mboxlist_renamemailbox(oldmailboxname, newmailboxname,
+                                   location ? location : partition,
                                    0 /* uidvalidity */, imapd_userisadmin,
                                    imapd_userid, imapd_authstate, mboxevent,
                                    0, 0, rename_user);
@@ -9666,11 +9673,14 @@ static int apply_mailbox_array(annotate_state_t *state,
     int r = 0;
 
     for (i = 0 ; i < mboxes->count ; i++) {
-        intname = mboxname_from_external(strarray_nth(mboxes, i), &imapd_namespace, imapd_userid);
+        const char *extname = strarray_nth(mboxes, i);
+        intname = mboxname_from_external(extname, &imapd_namespace, imapd_userid);
 
         r = mboxlist_lookup(intname, &mbentry, NULL);
         if (r)
             break;
+
+        mbentry->ext_name = xstrdup(extname);
 
         r = annotate_state_set_mailbox_mbe(state, mbentry);
         if (r)

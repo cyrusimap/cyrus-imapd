@@ -138,8 +138,8 @@ extern int append_copy(struct mailbox *mailbox,
 extern int append_collectnews(struct appendstate *mailbox,
                               const char *group, unsigned long feeduid);
 
-#define append_getuidvalidity(as) ((as)->m.uidvalidity);
-#define append_getlastuid(as) ((as)->m.last_uid);
+#define append_getuidvalidity(as) ((as)->m.uidvalidity)
+#define append_getlastuid(as) ((as)->m.last_uid)
 
 extern int append_run_annotator(struct appendstate *as,
                                 struct index_record *record);

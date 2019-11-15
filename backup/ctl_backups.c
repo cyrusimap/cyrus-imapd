@@ -327,10 +327,6 @@ int main(int argc, char **argv)
     struct ctlbu_cmd_options options = {0};
     options.wait = BACKUP_OPEN_NONBLOCK;
 
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
-
     while ((opt = getopt(argc, argv, ":AC:DFPSVcfmpst:x:uvw")) != EOF) {
         switch (opt) {
         case 'A':
@@ -531,7 +527,9 @@ int main(int argc, char **argv)
                     mbname_free(&mbname);
                     continue;
                 }
-                buf_setcstr(&userid, mbname_userid(mbname));
+                if (mbname_userid(mbname)) {
+                    buf_setcstr(&userid, mbname_userid(mbname));
+                }
             }
             else
                 buf_setcstr(&fname, argv[i]);

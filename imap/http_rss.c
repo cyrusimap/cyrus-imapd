@@ -252,6 +252,7 @@ static int meth_get(struct transaction_t *txn,
                 resp_body->lastmod = lastmod;
                 resp_body->maxage = 31536000;  /* 1 year */
                 txn->flags.cc |= CC_MAXAGE;
+                if (httpd_userid) txn->flags.cc |= CC_PRIVATE;
 
                 if (precond != HTTP_NOT_MODIFIED) break;
 

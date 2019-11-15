@@ -1,0 +1,78 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.0.11 Release Notes
+===============================
+
+.. IMPORTANT::
+
+    This is a bug-fix release in the stable 3.0 series.
+
+    Refer to the Cyrus IMAP 3.0.0 Release Notes for important information
+    about the 3.0 series, including upgrading instructions.
+
+Download via HTTPS:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.11/cyrus-imapd-3.0.11.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.0.11/cyrus-imapd-3.0.11.tar.gz.sig
+
+
+.. _relnotes-3.0.11-changes:
+
+Changes Since 3.0.10
+====================
+
+Release changes
+---------------
+
+We're trialing using the Github Releases feature.  If you have trouble downloading
+this release, please report this to the mailing lists.  Thanks!
+
+Data-loss bug fix (:issue:`2839`)
+---------------------------------
+
+This bug affects upgrades to all Cyrus IMAP 3.0.x releases prior to 3.0.11,
+where mailboxes have existed from 2.3 and earlier.
+
+Specifically, mailboxes that either:
+
+* still have an index version less than 8, or
+* previously had an index version less than 8, but were upgraded to a newer
+  index version by Cyrus IMAP 2.4 or 2.5, or
+* previously had an index version less than 8, but were upgraded to a newer
+  index version by some earlier Cyrus IMAP 2.3.x versions (unknown which)
+
+may contain message records with an unitialised modseq of 0.
+
+Some later versions of 2.3.x (unknown which) would rewrite modseqs of 0 to 1
+while upgrading indexes.  If one of these versions was used to upgrade the
+index, then there will no longer be message records with a modseq of 0.
+
+This behaviour was removed during pre-2.4 refactors, so Cyrus IMAP 2.4 and
+2.5 do not replace modseq of 0 when upgrading indexes.
+
+A new API introduced in Cyrus IMAP 3.0.0 resulted in index records with a
+modseq of 0 being completely ignored (therefore invisible to users, and
+apparently "missing").  This includes the `reconstruct` utility, which means
+that attempting to fix the "missing messages" by running `reconstruct` will
+ignore (and maybe remove) the existing index records, and then "rediscover"
+the message files on disk and add new records for them (without the index-only
+data from the old record, like seen state and other flags).
+
+Cyrus IMAP 3.0.11 no longer ignores these records.
+
+Bug fixes
+---------
+
+* Fixed :issue:`2777`: `rm` and `rsync` binary locations are now detected during
+  configure, rather than just hardcoded as `/bin/rm` and `/usr/bin/rsync`
+* Many documentation enhancements (thanks Дилян Палаузов, Christoph Moench-Tegeder,
+  Xavier Guimard)
+* Fixed :issue:`2795`: failing unit test on PPC (32-bit, Big Endian)
+* Fixed :issue:`2817`: build failure with ICU 64
+* Fixed: removed old limit of 20 delayed-delete subfolders
+  (`mailing list discussion <https://lists.andrew.cmu.edu/pipermail/info-cyrus/2019-July/040948.html>`_)
+* Fixed :issue:`2831`: httpd version info footer formats LibXML version correctly
+  (thanks Дилян Палаузов)
+* Fixed :issue:`2832`: httpd no longer crashes on timezone propfind for
+  nonexistent mailbox (thanks Дилян Палаузов)

@@ -32,6 +32,12 @@ from sphinx.builders.manpage import ManualPageBuilder
 # Translater in it.
 from sphinxlocal.writers.manpage import CyrusManualPageWriter
 
+try:
+    from sphinx.util import logging
+    logger = logging.getLogger(__name__)
+except:
+    logger = None
+
 class CyrusManualPageBuilder(ManualPageBuilder):
     """
     Builds groff output in manual page format.
@@ -44,8 +50,11 @@ class CyrusManualPageBuilder(ManualPageBuilder):
     #settings_defaults = {}
 
     def init(self):
+        global logger
+        if logger is None:
+            logger = self
         if not self.config.man_pages:
-            self.warn('no "man_pages" config value found; no manual pages '
+            logger.warn('no "man_pages" config value found; no manual pages '
                       'will be written')
 
     def write(self, *ignored):
@@ -56,7 +65,7 @@ class CyrusManualPageBuilder(ManualPageBuilder):
             components=(docwriter,),
             read_config_files=True).get_default_values()
 
-        self.info(bold('writing... '), nonl=True)
+        logger.info(bold('writing... '), nonl=True)
 
         for info in self.config.man_pages:
             docname, name, description, authors, section = info
@@ -67,7 +76,7 @@ class CyrusManualPageBuilder(ManualPageBuilder):
                     authors = []
 
             targetname = '%s.%s' % (name, section)
-            self.info(darkgreen(targetname) + ' { ', nonl=True)
+            logger.info(darkgreen(targetname) + ' { ', nonl=True)
             destination = FileOutput(
                 destination_path=path.join(self.outdir, targetname),
                 encoding='utf-8')
@@ -76,7 +85,7 @@ class CyrusManualPageBuilder(ManualPageBuilder):
             docnames = set()
             largetree = inline_all_toctrees(self, docnames, docname, tree,
                                             darkgreen, [docname])
-            self.info('} ', nonl=True)
+            logger.info('} ', nonl=True)
             self.env.resolve_references(largetree, docname, self)
             # remove pending_xref nodes
             for pendingnode in largetree.traverse(addnodes.pending_xref):
@@ -89,7 +98,7 @@ class CyrusManualPageBuilder(ManualPageBuilder):
             largetree.settings.section = section
 
             docwriter.write(largetree, destination)
-        self.info()
+        logger.info('')
 
 def setup(app):
     app.add_builder(CyrusManualPageBuilder)

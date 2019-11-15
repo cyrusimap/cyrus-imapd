@@ -13,9 +13,13 @@ struct cyrusdb_backend *DB = &(BACKEND);
 struct cyrusdb_backend *DB = &cyrusdb_skiplist;
 #endif
 
-#define TRY(s) { r = s; \
-                 if (r && r != CYRUSDB_NOTFOUND) { \
-                     printf("%s failed (i=%d): %d\n", #s, i, r); exit(1); } }
+#define TRY(s) do { \
+    r = s; \
+    if (r && r != CYRUSDB_NOTFOUND) { \
+        printf("%s failed (i=%d): %d\n", #s, i, r); \
+        exit(1); \
+    } \
+} while (0)
 
 char *victim;
 int count;

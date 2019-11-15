@@ -343,7 +343,7 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
         r = mupdate_activate(d->h, mbentry->name, realpart, mbentry->acl);
 
         if (r == MUPDATE_NOCONN) {
-            fprintf(stderr, "permanant failure storing '%s'\n", mbentry->name);
+            fprintf(stderr, "permanent failure storing '%s'\n", mbentry->name);
             r = IMAP_IOERROR;
         } else if (r == MUPDATE_FAIL) {
             fprintf(stderr,
@@ -893,10 +893,6 @@ int main(int argc, char *argv[])
     int opt;
     enum mboxop op = NONE;
     char *alt_config = NULL;
-
-    if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
-        fatal("must run as the Cyrus user", EC_USAGE);
-    }
 
     while ((opt = getopt(argc, argv, "C:awmdurcxf:p:vi")) != EOF) {
         switch (opt) {

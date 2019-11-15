@@ -30,14 +30,14 @@ Install and configure Cassandane
 
    .. code-block:: bash
 
-        sudo apt-get install libtest-unit-perl libconfig-inifiles-perl \
+        sudo apt-get install libanyevent-perl libtest-unit-perl libconfig-inifiles-perl \
             libdatetime-perl libbsd-resource-perl libxml-generator-perl \
             libencode-imaputf7-perl libio-stringy-perl libnews-nntpclient-perl \
-            libfile-chdir-perl libnet-server-perl libunix-syslog-perl \
+            libfile-chdir-perl libfile-libmagic-perl libnet-server-perl libunix-syslog-perl \
             libdata-uuid-perl libjson-xs-perl libdata-ical-perl libjson-perl \
             libdatetime-format-ical-perl libtext-levenshteinxs-perl \
             libmime-types-perl libdatetime-format-iso8601-perl libcal-dav-perl \
-            libclone-perl
+            libclone-perl libstring-crc32-perl libnet-ldap-server-perl
 
    The quickest option for the rest is installing via CPAN, but you could build
    packages using dh-make-perl if that is preferred.

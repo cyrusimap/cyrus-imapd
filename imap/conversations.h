@@ -77,7 +77,6 @@ struct conversations_open {
     struct conversations_open *next;
 };
 
-struct conversations_open *open_conversations;
 
 typedef struct conversation conversation_t;
 typedef struct conv_folder  conv_folder_t;

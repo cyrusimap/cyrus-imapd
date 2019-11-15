@@ -28,10 +28,16 @@ Configure sieve
 
 Depending on what's in your ``/etc/services`` file, sieve will usually be set to listen on port 2000 (old convention) or port 4190 (as specified by :rfc:`5804`).
 
-Add lines to :cyrusman:`cyrus.conf(5)` to make the server listen to the right ports for sieveshell commands::
+Add lines to the SERVICES section of :cyrusman:`cyrus.conf(5)` to make the
+server listen to the right ports for sieveshell commands::
 
     sieve         cmd="timsieved" listen="servername:sieve" prefork=0
     managesieve   cmd="timsieved" listen="servername:4190" prefork=0
+
+Sieve scripts are stored in the directory hierarchy specified by the
+**sievedir** :cyrusman:`imapd.conf(5)` option (default: ``/usr/sieve``).
+This directory must exist and be writeable by the cyrus user for ``timsieved``
+to function, so organise that now.
 
 Configure outgoing mail
 -----------------------
@@ -47,7 +53,9 @@ in your :cyrusman:`imapd.conf(5)`. If you're using Postfix or another MTA, make 
 Managing Sieve Scripts
 ======================
 
-Since Cyrus is based around the concept of a sealed-server, the normal way for users to manipulate Sieve scripts is through the :cyrusman:`sieveshell(1)` utility.
+Since Cyrus is based around the concept of a sealed-server, the normal way for
+users to manipulate Sieve scripts is through the :cyrusman:`sieveshell(1)`
+utility, in communication with the :cyrusman:`timsieved(8)` service.
 
 If, for some reason, you do have user home directories on the server, you can use the **sieveusehomedir** option in :cyrusman:`imapd.conf(5)` and have the sieve script stored in the home directory of the user as ``~/.sieve``.
 

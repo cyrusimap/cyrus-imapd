@@ -29,7 +29,7 @@ Features
 
 Read more in our full :ref:`list of features <imap-features>`.
 
-Cyrus has been under active development since the year 2000. It's used in production
+Cyrus has been under active development since the year 1993 when the project was launched at Carnegie Mellon University. It's used in production
 systems around the world, at universities and in private enterprise.
 
 Need help? We have :ref:`active mailing lists <feedback-mailing-lists>`.

@@ -2576,8 +2576,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             /* get the variable value */
             ip = unwrap_string(bc, ip, &data, NULL);
 
-            strarray_fini(variable->var);
             data = parse_string(data, variables);
+            strarray_fini(variable->var);
             strarray_appendm(variable->var,
                              variables_modify_string(data, modifiers));
 #if VERBOSE

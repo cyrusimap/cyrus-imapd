@@ -953,7 +953,7 @@ int service_init(int argc __attribute__((unused)),
     buf_printf(&serverinfo, " Brotli/%u.%u.%u",
                (version >> 24) & 0xfff, (version >> 12) & 0xfff, version & 0xfff);
 #endif
-    buf_printf(&serverinfo, " LibXML%s", LIBXML_DOTTED_VERSION);
+    buf_printf(&serverinfo, " LibXML/%s", LIBXML_DOTTED_VERSION);
 
     /* Do any namespace specific initialization */
     config_httpmodules = config_getbitfield(IMAPOPT_HTTPMODULES);
@@ -1727,6 +1727,25 @@ static int examine_request(struct transaction_t *txn)
         syslog(LOG_DEBUG, "client didn't complete auth - reinit");
         reset_saslconn(&httpd_saslconn);
         txn->auth_chal.scheme = NULL;
+    }
+
+    /* Drop auth credentials, if not a backend in a Murder */
+    else if (!config_mupdate_server || !config_getstring(IMAPOPT_PROXYSERVERS)) {
+        syslog(LOG_DEBUG, "drop auth creds");
+
+        free(httpd_userid);
+        httpd_userid = NULL;
+
+        free(httpd_extrafolder);
+        httpd_extrafolder = NULL;
+
+        free(httpd_extradomain);
+        httpd_extradomain = NULL;
+
+        if (httpd_authstate) {
+            auth_freestate(httpd_authstate);
+            httpd_authstate = NULL;
+        }
     }
 
     /* Perform proxy authorization, if necessary */

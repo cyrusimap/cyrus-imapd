@@ -687,7 +687,7 @@ static void config_read_file(const char *filename)
                 ) {
 
                 sprintf(errbuf,
-                        "option '%s' was specified twice in config file (second occurance on line %d)",
+                        "option '%s' was specified twice in config file (second occurrence on line %d)",
                         fullkey, lineno);
                 fatal(errbuf, EC_CONFIG);
 
@@ -831,7 +831,7 @@ static void config_read_file(const char *filename)
             val = hash_insert(key, newval, &confighash);
             if (val != newval) {
                 snprintf(errbuf, sizeof(errbuf),
-                        "option '%s' was specified twice in config file (second occurance on line %d)",
+                        "option '%s' was specified twice in config file (second occurrence on line %d)",
                         fullkey, lineno);
                 fatal(errbuf, EC_CONFIG);
             }
