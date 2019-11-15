@@ -96,7 +96,7 @@ Requirements
 Cyrus Backups server
 --------------------
 
-#. Compile cyrus with the --enable-backup configure option and install it.
+#. Compile cyrus with the ``--enable-backup`` configure option and install it.
 #. Set up an :cyrusman:`imapd.conf(5)` file for it with the following options
    (default values shown):
 
@@ -112,7 +112,7 @@ Cyrus Backups server
         of running backupd's, plus some wiggle room.
     backup\_retention\_days: 7
         Number of days for which backup data (messages etc) should be kept
-        within the backup storage after the corresponding item has been 
+        within the backup storage after the corresponding item has been
         deleted/expunged from the Cyrus IMAP server.
     backuppartition-\ *name*: /path/to/this/partition
         You need at least one backuppartition-\ *name* to store backup data.
@@ -349,7 +349,7 @@ down backupd. Just use the :cyrusman:`ctl_backups(8)` ``lock`` command to hold
 a lock on each backup while you work with its files, and the rest of the backup
 system will work around that.
 
-Restorating is more complicated, depending on what you actually need to do:
+Restoring is more complicated, depending on what you actually need to do:
 when you restart the backupd after restoring a filesystem snapshot, the next
 time your Cyrus IMAP server replicates to it, the restored backups will be
 brought up to date. Probably not what you wanted -- so don't restart backupd

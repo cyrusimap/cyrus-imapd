@@ -16,8 +16,8 @@ Features
 * Speed
 * Security
 * Efficiency
-* CardDAV and CalDAV support
 * Search
+* CardDAV and CalDAV support
 * Robust data storage
 * Replication
 * Scalable for large installations

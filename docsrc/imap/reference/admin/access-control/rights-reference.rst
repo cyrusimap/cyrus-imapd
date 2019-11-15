@@ -189,7 +189,7 @@ Individual Rights Reference
         implements as implying as the
         :ref:`imap-admin-access-control-right-k` right, implementations
         should not count on the :ref:`imap-admin-access-control-right-c`
-        right backwards compability to be around forever, and fully
+        right backwards compatibility to be around forever, and fully
         implement the successor rights
         :ref:`imap-admin-access-control-right-k` and
         :ref:`imap-admin-access-control-right-x`.
@@ -273,7 +273,7 @@ Individual Rights Reference
     ``\Deleted``.
 
     In IMAP, messages are only actually deleted (i.e. in a way that
-    makes them invisble to users of the folder) after the folder's
+    makes them invisible to users of the folder) after the folder's
     contents have been expunged.
 
     For the corresponding ``EXPUNGE`` command however, the
@@ -369,7 +369,7 @@ Individual Rights Reference
         :ref:`imap-admin-access-control-right-e` and
         :ref:`imap-admin-access-control-right-t` rights, implementations
         should not count on the :ref:`imap-admin-access-control-right-d`
-        right backwards compability to be around forever, and instead
+        right backwards compatibility to be around forever, and instead
         fully implement the successor rights
         :ref:`imap-admin-access-control-right-e`,
         :ref:`imap-admin-access-control-right-t` and

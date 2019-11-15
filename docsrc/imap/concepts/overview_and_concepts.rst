@@ -440,7 +440,7 @@ message files
     This file contains fixed-length information about the mailbox itself and each message in the mailbox.
 
 ``cyrus.cache``
-    This file contans variable-length information about each message in the mailbox.
+    This file contains variable-length information about each message in the mailbox.
 
 ``cyrus.seen``
     This file contains variable-length state information about each reader of the mailbox who has ``s`` permissions.
@@ -577,7 +577,7 @@ MTA.
 
 The Cyrus server implements LMTP via the ``lmtpd`` daemon.  LMTP
 can either be used over a network via TCP or local via a UNIX domain
-socket. There are security differnces between these two alternatives; read
+socket. There are security differences between these two alternatives; read
 more below.
 
 For final delivery via LMTP over a TCP socket, it is necessary to use
@@ -611,7 +611,7 @@ Duplicate Delivery Suppression
 ==============================
 
 A message is considered a duplicate if two copies of a message with
-the same message-id and the same envelope receipient are received.
+the same message-id and the same envelope recipient are received.
 Cyrus uses the duplicate delivery database to hold this information,
 and it looks approximately 3 days back in the default install.
 

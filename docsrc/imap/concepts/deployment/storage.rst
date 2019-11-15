@@ -8,7 +8,7 @@
 Storage Considerations
 ======================
 
-Storage considerations are a complex matter as the various options
+Storage considerations are a complex matter, as the various options
 provide or restrict one's ability to adjust the necessary parameters as
 the need arises. It is foremost a challenge to clearly articulate and
 prioritize the criteria for storage, and map the theory on to a
@@ -433,7 +433,7 @@ possibly by a hardware device (an :term:`HBA`, or in iSCSI, an
 As such, use of these network protocols for which the purpose just so
 happens to be storage does **not** provide redundancy.
 
-It is imperitive this is understood and equally well applied in planning
+It is imperative this is understood and equally well applied in planning
 for storage infrastructure, or that your storage appliance vendor or
 consultancy partner is trusted in their judgement.
 
@@ -463,7 +463,7 @@ I/O, known as in-memory buffer caching.
 A technology called `FS Cache`_ can facilitate eliminating round-trip-
 incurred network-latency, but is still a filesystem-backed solution
 (for which filesystem the local kernel applies buffer caching), requires
-yet another daemon, and introduces yet another layer of synchronisity to
+yet another daemon, and introduces yet another layer of synchronicity to
 be maintained -- aside from `other limitations <https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Storage_Administration_Guide/fscachelimitnfs.html>`_.
 
 An NFS-backed storage volume can still be used for fewer, larger files,
@@ -764,7 +764,7 @@ otherwise incorporates another.
 
 Today's storage coming with a certain price-tag, and tomorrow's with a
 different one, it can be an interesting exercise to plan for storage to
-grow organicly as needed, rather than make large investments to provide
+grow organically as needed, rather than make large investments to provide
 capacity that may only be used years from today, or not be used at all,
 or turn out to still not be sufficient.
 

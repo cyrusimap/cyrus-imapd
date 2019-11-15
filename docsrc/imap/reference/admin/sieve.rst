@@ -168,20 +168,20 @@ Supported extensions
 Sieve has a lot of `extensions <http://www.iana.org/assignments/sieve-extensions/sieve-extensions.xhtml>`_. Cyrus supports a subset of these:
 
 * Sieve language reference :rfc:`5228`
-* Vacation extension :rfc:`5230`
-* Vacation seconds :rfc:`6131`
+* Vacation Extension :rfc:`5230`
+* Vacation Seconds :rfc:`6131`
 * Relational Tests :rfc:`5231`
 * Subaddress Extension :rfc:`5233`
 * Copying Without Side Effects :rfc:`3894`
 * Regular Expression Extension `Draft regex RFC <http://tools.ietf.org/html/draft-ietf-sieve-regex-01>`_
-* Checking mailbox status and accessing mailbox metadata :rfc:`5490`
+* Checking Mailbox Status and Accessing Mailbox Metadata :rfc:`5490`
 * Notify Extension :rfc:`5435`
 * Include :rfc:`6609`
 * Date :rfc:`5260`
 * Index :rfc:`5260`
 * Variables :rfc:`5229`
 * IMAP flag Extension `Draft imap flags RFC <http://tools.ietf.org/html/draft-ietf-sieve-imapflags-05>`_
-* Body Extension `Draft body extension RFC <http://tools.ietf.org/html/draft-ietf-sieve-body-02>`_
+* Body Extension :rfc:`5173`
 
 Note that the final RFCs of these last sieve extensions have significant changes that are not currently supported.
 

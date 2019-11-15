@@ -22,7 +22,7 @@ the message files from the filesystem a separate event.
 
 This enables administrators to quickly recover access to messages that
 have been accidentally deleted, as well as allows the environment to
-ensure messages remain available for includion in the next backup cycle.
+ensure messages remain available for inclusion in the next backup cycle.
 
 ------------------------------------------
 Configuring Cyrus IMAP for Delayed Expunge

@@ -8,7 +8,7 @@ DAV Collection Management
     third-party interfaces
 
 Calendars and addressbooks are maintained as "Collections" within the
-Cyrus mail store.  They appear as mailboxes within the heirarchy, as
+Cyrus mail store.  They appear as mailboxes within the hierarchy, as
 set by the ``calendarprefix:`` option in :cyrusman:`imapd.conf(5)`
 (default is ``#calendars``), but should rarely be directly accessed or
 created using either :cyrusman:`cyradm(8)` or other mailbox-centric tools.
