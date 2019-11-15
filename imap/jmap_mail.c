@@ -8586,6 +8586,11 @@ static void _email_mboxrecs_read(jmap_req_t *req,
     int i;
     for (i = 0; i < strarray_size(email_ids); i++) {
         const char *email_id = strarray_nth(email_ids, i);
+        if (email_id[0] != 'M' || strlen(email_id) != 25) {
+            // not a valid emailId
+            continue;
+        }
+
         struct email_mboxrecs_make_rock rock = { req, email_id, mboxrecs };
         int r = conversations_guid_foreach(cstate, _guid_from_id(email_id),
                                            _email_mboxrecs_read_cb, &rock);
