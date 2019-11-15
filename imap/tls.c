@@ -455,23 +455,34 @@ static int set_cert_stuff(SSL_CTX * ctx,
 {
     int err;
     if (cert_file != NULL) {
+        char *cf1 = xstrdup(cert_file), *kf1 = xstrdupnull(key_file);
+        char *cf2 = strchr(cf1, ','), *kf2 = NULL;
         /* SSL_CTX_use_certificate_chain_file() requires an empty error stack.
          * To make sure there is no error from previous op, we clear it here...
          */
         ERR_clear_error();
-        if (SSL_CTX_use_certificate_chain_file(ctx, cert_file) <= 0) {
+        if (cf2) {
+            /* two comma-separated files provided in cert_file */
+            *cf2++ = '\0';
+            if (key_file && (kf2 = strchr(kf1, ',')))
+                /* two comma-separated files provided in key_file */
+                *kf2++ = '\0';
+        }
+        if (SSL_CTX_use_certificate_chain_file(ctx, cf1) <= 0) {
             err = ERR_get_error();
-            syslog(LOG_ERR, "unable to get certificate from '%s'", cert_file);
-            syslog(LOG_ERR, "%s", ERR_reason_error_string(err));
+            syslog(LOG_ERR, "unable to get certificate from '%s': %s", cf1, ERR_reason_error_string(err));
+            free(cf1);
+            free(kf1);
             return 0;
         }
         if (key_file == NULL)
-            key_file = cert_file;
-        if (SSL_CTX_use_PrivateKey_file(ctx, key_file,
+            kf1 = cf1;
+        if (SSL_CTX_use_PrivateKey_file(ctx, kf1,
                                         SSL_FILETYPE_PEM) <= 0) {
             err = ERR_get_error();
-            syslog(LOG_ERR, "unable to get private key from '%s'", key_file);
-            syslog(LOG_ERR, "%s", ERR_reason_error_string(err));
+            syslog(LOG_ERR, "unable to get private key from '%s': %s", kf1, ERR_reason_error_string(err));
+            if (kf1 != cf1) free(kf1);
+            free(cf1);
             return 0;
         }
         /* Now we know that a key and cert have been set against
@@ -480,13 +491,48 @@ static int set_cert_stuff(SSL_CTX * ctx,
             err = ERR_get_error();
             syslog(
                     LOG_ERR,
-                    "Private key '%s' does not match public key '%s'",
-                    cert_file,
-                    key_file
-                );
-            syslog(LOG_ERR, "%s", ERR_reason_error_string(err));
+                    "Private key '%s' does not match public key '%s': %s",
+                    kf1, cf1, ERR_reason_error_string(err));
+            if (kf1 != cf1) free(kf1);
+            free(cf1);
             return 0;
         }
+
+        if (cf2) {
+            /* Load second certificate */
+            if (SSL_CTX_use_certificate_chain_file(ctx, cf2) <= 0) {
+                err = ERR_get_error();
+                syslog(LOG_ERR, "unable to get certificate from '%s': %s", cf2, ERR_reason_error_string(err));
+                if (kf1 != cf1) free(kf1);
+                free(cf1);
+                return 0;
+            }
+            if (kf2 == NULL)
+                kf2 = cf2;
+            if (SSL_CTX_use_PrivateKey_file(ctx, kf2,
+                                            SSL_FILETYPE_PEM) <= 0) {
+                err = ERR_get_error();
+                syslog(LOG_ERR, "unable to get private key from '%s': %s", kf2, ERR_reason_error_string(err));
+                if (kf1 != cf1) free(kf1);
+                free(cf1);
+                return 0;
+            }
+            /* Now we know that a key and cert have been set against
+             * the SSL context */
+            if (!SSL_CTX_check_private_key(ctx)) {
+                err = ERR_get_error();
+                syslog(
+                        LOG_ERR,
+                        "Private key '%s' does not match public key '%s': %s",
+                        kf2, cf2, ERR_reason_error_string(err));
+                if (kf1 != cf1) free(kf1);
+                free(cf1);
+                return 0;
+            }
+
+       if (kf1 != cf1) free(kf1);
+       free(cf1);
+       }
     }
 
     return 1;

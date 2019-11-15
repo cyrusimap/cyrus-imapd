@@ -2733,7 +2733,9 @@ product version in the capabilities
    offered by the server, when cyrus acts as client. */
 
 { "tls_server_cert", NULL, STRING }
-/* File containing the certificate, including the full chain, presented to clients. */
+/* File containing the certificate, including the full chain, presented to clients.
+   Two certificates can be set, e.g RSA and EC, if the filenames are separated with
+   comma without spaces. */
 
 { "tls_server_dhparam", NULL, STRING }
 /* File containing the DH parameters belonging to the certificate in
@@ -2741,7 +2743,9 @@ product version in the capabilities
 
 { "tls_server_key", NULL, STRING }
 /* File containing the private key belonging to the certificate in
-   tls_server_cert. */
+   tls_server_cert.  If not set, tls_server_cert must contain both private and
+   public key.  Two files with keys can be set, if two certifates are used, in
+   which case the files must be separated with comma without spaces */
 
 { "tls_sessions_db", "twoskip", STRINGLIST("skiplist", "sql", "twoskip", "zeroskip")}
 /* The cyrusdb backend to use for the TLS cache. */
