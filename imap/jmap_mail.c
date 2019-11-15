@@ -8549,6 +8549,13 @@ static int _email_mboxrecs_read_cb(const conv_guidrec_t *rec, void *_rock)
         mbentry_t *mbentry = NULL;
         int r = mboxlist_lookup(rec->mboxname, &mbentry, NULL);
         if (r) return r;
+
+        // we only want regular mailboxes!
+        if (mbentry->mbtype & MBTYPES_NONIMAP) {
+            mboxlist_entry_free(&mbentry);
+            return 0;
+        }
+
         mboxrec = xzmalloc(sizeof(struct email_mboxrec));
         mboxrec->mboxname = xstrdup(rec->mboxname);
         mboxrec->mbox_id = xstrdup(mbentry->uniqueid);
