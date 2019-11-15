@@ -1407,7 +1407,7 @@ static void cmd_user(char *user)
              strlen(userbuf) + 6 >= MAX_MAILBOX_BUFFER) {
         prot_printf(popd_out, "-ERR [AUTH] Invalid user\r\n");
         syslog(LOG_NOTICE,
-               "badlogin: %s plaintext %s invalid user",
+               "badlogin: %s plaintext (%s) invalid user",
                popd_clienthost, beautify_string(user));
     }
     else {
@@ -1468,7 +1468,7 @@ static void cmd_pass(char *pass)
                             strlen(popd_userid),
                             pass,
                             strlen(pass))!=SASL_OK) {
-        syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
+        syslog(LOG_NOTICE, "badlogin: %s plaintext (%s) [%s]",
                popd_clienthost, popd_userid, sasl_errdetail(popd_saslconn));
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
@@ -1644,6 +1644,7 @@ static void cmd_auth(char *arg)
 
     if (r) {
         const char *errorstring = NULL;
+        const char *userid = "-notset-";
 
         switch (r) {
         case IMAP_SASL_CANCEL:
@@ -1660,8 +1661,12 @@ static void cmd_auth(char *arg)
         default:
             /* failed authentication */
             if (authtype) {
-                syslog(LOG_NOTICE, "badlogin: %s %s %s",
-                       popd_clienthost, authtype,
+                if (sasl_result != SASL_NOUSER)
+                    sasl_getprop(popd_saslconn, SASL_USERNAME,
+                                 (const void **) &userid);
+
+                syslog(LOG_NOTICE, "badlogin: %s %s (%s) [%s]",
+                       popd_clienthost, authtype, userid,
                        sasl_errstring(sasl_result, NULL, NULL));
             } else {
                 syslog(LOG_NOTICE, "badlogin: %s %s",

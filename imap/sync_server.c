@@ -694,6 +694,7 @@ static void cmd_authenticate(char *mech, char *resp)
 
     if (r) {
         const char *errorstring = NULL;
+        const char *userid = "-notset-";
 
         switch (r) {
         case IMAP_SASL_CANCEL:
@@ -711,8 +712,11 @@ static void cmd_authenticate(char *mech, char *resp)
             /* failed authentication */
             errorstring = sasl_errstring(sasl_result, NULL, NULL);
 
-            syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
-                   sync_clienthost, mech, sasl_errdetail(sync_saslconn));
+            if (r != SASL_NOUSER)
+                sasl_getprop(sync_saslconn, SASL_USERNAME, (const void **) &userid);
+
+            syslog(LOG_NOTICE, "badlogin: %s %s (%s) [%s]",
+                   sync_clienthost, mech, userid, sasl_errdetail(sync_saslconn));
 
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {

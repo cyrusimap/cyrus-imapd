@@ -2018,7 +2018,7 @@ static void cmd_authinfo_pass(char *pass)
                             strlen(nntp_userid),
                             pass,
                             strlen(pass))!=SASL_OK) {
-        syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
+        syslog(LOG_NOTICE, "badlogin: %s plaintext (%s) [%s]",
                nntp_clienthost, nntp_userid, sasl_errdetail(nntp_saslconn));
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
         if (failedloginpause != 0) {
@@ -2125,6 +2125,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     if (r) {
         int code;
         const char *errorstring = NULL;
+        const char *userid = "-notset-";
 
         switch (r) {
         case IMAP_SASL_CANCEL:
@@ -2155,8 +2156,11 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
                 code = 481;
             }
 
-            syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
-                   nntp_clienthost, mech, sasl_errdetail(nntp_saslconn));
+            if (sasl_result != SASL_NOUSER)
+                sasl_getprop(nntp_saslconn, SASL_USERNAME, (const void **) &userid);
+
+            syslog(LOG_NOTICE, "badlogin: %s %s (%s) [%s]",
+                   nntp_clienthost, mech, userid, sasl_errdetail(nntp_saslconn));
 
             failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
             if (failedloginpause != 0) {

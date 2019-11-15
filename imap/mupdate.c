@@ -1492,6 +1492,7 @@ static void cmd_authenticate(struct conn *C,
 
     if (r) {
         const char *errorstring = NULL;
+        const char *userid = "-notset-";
 
         switch (r) {
         case IMAP_SASL_CANCEL:
@@ -1511,9 +1512,12 @@ static void cmd_authenticate(struct conn *C,
                 sleep(failedloginpause);
             }
 
-            syslog(LOG_ERR, "badlogin: %s %s %s",
+            if (r != SASL_NOUSER)
+                sasl_getprop(C->saslconn, SASL_USERNAME, (const void **) &userid);
+
+            syslog(LOG_ERR, "badlogin: %s %s (%s) [%s]",
                    C->clienthost,
-                   mech, sasl_errdetail(C->saslconn));
+                   mech, userid, sasl_errdetail(C->saslconn));
 
             prot_printf(C->pout, "%s NO \"%s\"\r\n", tag,
                         sasl_errstring((r == SASL_NOUSER ? SASL_BADAUTH : r),

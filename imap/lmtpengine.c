@@ -1080,6 +1080,7 @@ void lmtpmode(struct lmtp_func *func,
 
               if (r) {
                   const char *errorstring = NULL;
+                  const char *userid = "-notset-";
 
                   switch (r) {
                   case IMAP_SASL_CANCEL:
@@ -1100,8 +1101,11 @@ void lmtpmode(struct lmtp_func *func,
                           continue;
                       }
                       else {
-                          syslog(LOG_ERR, "badlogin: %s %s %s",
-                                 cd.clienthost, mech, sasl_errdetail(cd.conn));
+                          if (r != SASL_NOUSER)
+                              sasl_getprop(cd.conn, SASL_USERNAME, (const void **) &userid);
+
+                          syslog(LOG_ERR, "badlogin: %s %s (%s) [%s]",
+                                 cd.clienthost, mech, userid, sasl_errdetail(cd.conn));
 
                           prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_NO);
                           snmp_increment_args(AUTHENTICATION_NO, 1,

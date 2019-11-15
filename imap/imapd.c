@@ -2684,7 +2684,7 @@ static void cmd_login(char *tag, char *user)
 
     if (r) {
         eatline(imapd_in, ' ');
-        syslog(LOG_NOTICE, "badlogin: %s plaintext %s invalid user",
+        syslog(LOG_NOTICE, "badlogin: %s plaintext (%s) invalid user",
                imapd_clienthost, beautify_string(user));
         prot_printf(imapd_out, "%s NO %s\r\n", tag,
                     error_message(IMAP_INVALID_USER));
@@ -2750,7 +2750,7 @@ static void cmd_login(char *tag, char *user)
                                  strlen(canon_user),
                                  passwd,
                                  strlen(passwd))) != SASL_OK) {
-        syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
+        syslog(LOG_NOTICE, "badlogin: %s plaintext (%s) [%s]",
                imapd_clienthost, canon_user, sasl_errdetail(imapd_saslconn));
 
         failedloginpause = config_getduration(IMAPOPT_FAILEDLOGINPAUSE, 's');
@@ -2857,6 +2857,7 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
 
     if (r) {
         const char *errorstring = NULL;
+        const char *userid = "-notset-";
 
         switch (r) {
         case IMAP_SASL_CANCEL:
@@ -2872,8 +2873,11 @@ static void cmd_authenticate(char *tag, char *authtype, char *resp)
             break;
         default:
             /* failed authentication */
-            syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
-                   imapd_clienthost, authtype, sasl_errdetail(imapd_saslconn));
+            if (sasl_result != SASL_NOUSER)
+                sasl_getprop(imapd_saslconn, SASL_USERNAME, (const void **) &userid);
+
+            syslog(LOG_NOTICE, "badlogin: %s %s (%s) [%s]",
+                   imapd_clienthost, authtype, userid, sasl_errdetail(imapd_saslconn));
 
             prometheus_increment(CYRUS_IMAP_AUTHENTICATE_TOTAL_RESULT_NO);
             snmp_increment_args(AUTHENTICATION_NO, 1,
