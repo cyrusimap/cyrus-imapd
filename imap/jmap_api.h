@@ -476,4 +476,6 @@ extern int jmap_set_sharewith(struct mailbox *mbox,
                               json_t *shareWith, int overwrite);
 extern void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith);
 
+extern mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *id);
+
 #endif /* JMAP_API_H */

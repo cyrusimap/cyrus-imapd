@@ -3066,3 +3066,32 @@ HIDDEN int jmap_mboxlist_lookup(const char *name,
 
     return 0;
 }
+
+struct _mbentry_by_uniqueid_rock {
+    const char *uniqueid;
+    mbentry_t **mbentry;
+};
+
+static int _mbentry_by_uniqueid_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct _mbentry_by_uniqueid_rock *data = rock;
+    if (strcmp(mbentry->uniqueid, data->uniqueid))
+        return 0;
+    *(data->mbentry) = mboxlist_entry_copy(mbentry);
+    return IMAP_OK_COMPLETED;
+}
+
+mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *id)
+{
+    mbentry_t *mbentry = NULL;
+
+    struct _mbentry_by_uniqueid_rock rock = { id, &mbentry };
+    int r = mboxlist_usermboxtree(req->accountid, req->authstate,
+                                  _mbentry_by_uniqueid_cb, &rock,
+                                  MBOXTREE_INTERMEDIATES);
+    if (r != IMAP_OK_COMPLETED && mbentry) {
+        mboxlist_entry_free(&mbentry);
+        mbentry = NULL;
+    }
+    return mbentry;
+}
