@@ -63,7 +63,6 @@
 #include "sieve/grammar.h"
 #include "sieve/sieve_err.h"
 
-#include "imapurl.h"
 #include "lib/gmtoff.h"
 #include "util.h"
 #include "imparse.h"
@@ -2230,13 +2229,8 @@ static commandlist_t *build_fileinto(sieve_script_t *sscript,
     if (c->u.f.flags && !_verify_flaglist(c->u.f.flags)) {
         strarray_add(c->u.f.flags, "");
     }
-    if (verify_mailbox(sscript, folder) &&
-        config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
-        c->u.f.folder = xmalloc(5 * strlen(folder) + 1);
-        UTF8_to_mUTF7(c->u.f.folder, folder);
-        free(folder);
-    }
-    else c->u.f.folder = folder;
+    verify_mailbox(sscript, folder);
+    c->u.f.folder = folder;
 
     return c;
 }

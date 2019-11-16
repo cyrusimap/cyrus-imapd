@@ -58,6 +58,8 @@
 #include "bc_parse.h"
 
 #include "charset.h"
+#include "imapurl.h"
+#include "libconfig.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "util.h"
@@ -1735,6 +1737,13 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             if (requires & BFE_VARIABLES) {
                 folder = parse_string(folder, variables);
                 specialuse = parse_string(specialuse, variables);
+            }
+
+            if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
+                char *mUTF7 = xmalloc(5 * strlen(folder) + 1);
+                strarray_appendm(&i->tmp_strings, mUTF7);
+                UTF8_to_mUTF7(mUTF7, folder);
+                folder = mUTF7;
             }
 
             unwrap_flaglist(cmd.u.f.flags, &actionflags,
