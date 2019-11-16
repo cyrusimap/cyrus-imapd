@@ -2042,7 +2042,7 @@ EOF
     }
 }
 
-sub test_encoded_character_mboxname
+sub test_encoded_char_variable_in_mboxname
     :needs_component_sieve :min_version_3_1 :SieveUTF8Fileinto
 {
     my ($self) = @_;
@@ -2060,8 +2060,9 @@ sub test_encoded_character_mboxname
 
     xlog "Install script";
     $self->{instance}->install_sieve_script(<<EOF
-require ["fileinto", "encoded-character"];
-fileinto "INBOX.\${unicode:2217}";
+require ["fileinto", "encoded-character", "variables"];
+set "star" "\${unicode:2217}";
+fileinto "INBOX.\${star}";
 EOF
     );
 
