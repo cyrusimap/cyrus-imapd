@@ -113,6 +113,7 @@ typedef struct jmap_req {
     ptrarray_t *mboxes;
     hash_table *mboxrights;
     hash_table *created_ids;
+    hash_table *mbentry_byid;
     ptrarray_t *method_calls;
     const strarray_t *using_capabilities;
 } jmap_req_t;
@@ -476,6 +477,8 @@ extern int jmap_set_sharewith(struct mailbox *mbox,
                               json_t *shareWith, int overwrite);
 extern void jmap_parse_sharewith_patch(json_t *arg, json_t **shareWith);
 
-extern mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *id);
+extern void jmap_mbentry_cache_free(jmap_req_t *req);
+extern const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *id);
+extern mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req, const char *id);
 
 #endif /* JMAP_API_H */

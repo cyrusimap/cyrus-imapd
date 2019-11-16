@@ -2095,7 +2095,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
 {
     char *mboxname = NULL;
     int r = 0;
-    mbentry_t *mbinbox = NULL, *mbparent = NULL, *mbentry = NULL;
+    mbentry_t *mbinbox = NULL, *mbentry = NULL;
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct mailbox *mailbox = NULL;
 
@@ -2123,7 +2123,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
     parent_id = args->is_toplevel ? mbinbox->uniqueid : parent_id;
 
     /* Check parent exists and has the proper ACL. */
-    mbparent = jmap_mbentry_by_uniqueid(req, parent_id);
+    const mbentry_t *mbparent = jmap_mbentry_by_uniqueid(req, parent_id);
     if (!mbparent || !jmap_hasrights(req, mbparent, ACL_CREATE)) {
         jmap_parser_invalid(&parser, "parentId");
         goto done;
@@ -2192,6 +2192,7 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
 
      /* invalidate ACL cache */
     jmap_myrights_delete(req, mboxname);
+    jmap_mbentry_cache_free(req);
 
     /* shareWith */
     if (args->shareWith) {
@@ -2234,7 +2235,6 @@ done:
     }
     free(mboxname);
     mboxlist_entry_free(&mbinbox);
-    mboxlist_entry_free(&mbparent);
     mboxlist_entry_free(&mbentry);
     jmap_parser_fini(&parser);
 }
@@ -2269,7 +2269,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
     }
 
     /* Lookup current mailbox entry */
-    mbentry = jmap_mbentry_by_uniqueid(req, args->mbox_id);
+    mbentry = jmap_mbentry_by_uniqueid_copy(req, args->mbox_id);
     if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
         mboxlist_entry_free(&mbentry);
         result->err = json_pack("{s:s}", "type", "notFound");
@@ -2321,11 +2321,10 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
         /* Compare old parent with new parent. */
         char *newparentname = NULL;
 
-        mbentry_t *pmbentry = jmap_mbentry_by_uniqueid(req, parent_id);
+        mbentry_t *pmbentry = jmap_mbentry_by_uniqueid_copy(req, parent_id);
         if (pmbentry && jmap_hasrights(req, pmbentry, ACL_LOOKUP)) {
             newparentname = xstrdup(pmbentry->name);
         }
-        mboxlist_entry_free(&pmbentry);
         int new_toplevel = args->is_toplevel;
         if (!newparentname) {
             jmap_parser_invalid(&parser, "parentId");
@@ -2453,6 +2452,7 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             /* invalidate ACL cache */
             jmap_myrights_delete(req, oldmboxname);
             jmap_myrights_delete(req, newmboxname);
+            jmap_mbentry_cache_free(req);
 
             if (r) {
                 syslog(LOG_ERR, "mboxlist_renametree(old=%s new=%s): %s",
@@ -2544,7 +2544,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
     }
 
     /* Lookup mailbox by id. */
-    mbentry = jmap_mbentry_by_uniqueid(req, mboxid);
+    mbentry = jmap_mbentry_by_uniqueid_copy(req, mboxid);
     if (!mbentry) {
         result->err = json_pack("{s:s}", "type", "notFound");
         goto done;
@@ -2628,6 +2628,7 @@ static void _mbox_destroy(jmap_req_t *req, const char *mboxid, int remove_msgs,
 
     /* invalidate ACL cache */
     jmap_myrights_delete(req, mbentry->name);
+    jmap_mbentry_cache_free(req);
 
     /* Keep track of the deleted mailbox name */
     result->old_imapname = xstrdup(mbentry->name);
@@ -2776,7 +2777,7 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
         construct_hash_table(&parent_id_by_id, set->destroy.count + 1, 0);
         for (i = 0; i < strarray_size(&set->destroy); i++) {
             const char *mbox_id = strarray_nth(&set->destroy, i);
-            mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
+            const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, mbox_id);
             if (!mbentry || !jmap_hasrights(req, mbentry, ACL_LOOKUP)) {
                 json_object_set_new(set->super.not_destroyed, mbox_id,
                         json_pack("{s:s}", "type", "notFound"));
@@ -2790,7 +2791,6 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
                 strarray_append(ops->del, mbox_id);
             }
             mboxlist_entry_free(&parent);
-            mboxlist_entry_free(&mbentry);
         }
         strarray_t tmp = STRARRAY_INITIALIZER;
         _toposort(&parent_id_by_id, &tmp); /* destroy can't be cyclic */
@@ -2915,6 +2915,7 @@ static void _mboxset_run(jmap_req_t *req, struct mboxset *set,
         }
         /* invalidate ACL cache */
         if (tmp->old_imapname) jmap_myrights_delete(req, tmp->old_imapname);
+        jmap_mbentry_cache_free(req);
         jmap_myrights_delete(req, tmp->tmp_imapname);
         jmap_myrights_delete(req, tmp->new_imapname);
         free(tmp->old_imapname);

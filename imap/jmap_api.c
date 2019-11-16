@@ -466,6 +466,8 @@ HIDDEN void jmap_finireq(jmap_req_t *req)
     ptrarray_free(req->mboxes);
     req->mboxes = NULL;
 
+    jmap_mbentry_cache_free(req);
+
     json_decref(req->perf_details);
     req->perf_details = NULL;
 }
@@ -3067,31 +3069,44 @@ HIDDEN int jmap_mboxlist_lookup(const char *name,
     return 0;
 }
 
-struct _mbentry_by_uniqueid_rock {
-    const char *uniqueid;
-    mbentry_t **mbentry;
-};
-
 static int _mbentry_by_uniqueid_cb(const mbentry_t *mbentry, void *rock)
 {
-    struct _mbentry_by_uniqueid_rock *data = rock;
-    if (strcmp(mbentry->uniqueid, data->uniqueid))
-        return 0;
-    *(data->mbentry) = mboxlist_entry_copy(mbentry);
-    return IMAP_OK_COMPLETED;
+    struct hash_table *hash = rock;
+    hash_insert(mbentry->uniqueid, mboxlist_entry_copy(mbentry), hash);
+    return 0;
 }
 
-mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *id)
+EXPORTED const mbentry_t *jmap_mbentry_by_uniqueid(jmap_req_t *req, const char *id)
 {
-    mbentry_t *mbentry = NULL;
-
-    struct _mbentry_by_uniqueid_rock rock = { id, &mbentry };
-    int r = mboxlist_usermboxtree(req->accountid, req->authstate,
-                                  _mbentry_by_uniqueid_cb, &rock,
-                                  MBOXTREE_INTERMEDIATES);
-    if (r != IMAP_OK_COMPLETED && mbentry) {
-        mboxlist_entry_free(&mbentry);
-        mbentry = NULL;
+    if (!req->mbentry_byid) {
+        req->mbentry_byid = xzmalloc(sizeof(struct hash_table));
+        construct_hash_table(req->mbentry_byid, 1024, 0);
+        mboxlist_usermboxtree(req->accountid, req->authstate,
+                              _mbentry_by_uniqueid_cb, req->mbentry_byid,
+                              MBOXTREE_INTERMEDIATES);
     }
-    return mbentry;
+
+    return (const mbentry_t *)hash_lookup(id, req->mbentry_byid);
+}
+
+EXPORTED mbentry_t *jmap_mbentry_by_uniqueid_copy(jmap_req_t *req, const char *id)
+{
+    const mbentry_t *mbentry = jmap_mbentry_by_uniqueid(req, id);
+    if (!mbentry) return NULL;
+    return mboxlist_entry_copy(mbentry);
+}
+
+static void _free_mbentry(void *rock)
+{
+    mbentry_t *entry = rock;
+    mboxlist_entry_free(&entry);
+}
+
+EXPORTED void jmap_mbentry_cache_free(jmap_req_t *req)
+{
+    if (req->mbentry_byid) {
+        free_hash_table(req->mbentry_byid, _free_mbentry);
+        free(req->mbentry_byid);
+        req->mbentry_byid = NULL;
+    }
 }
