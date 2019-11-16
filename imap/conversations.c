@@ -1894,8 +1894,7 @@ struct guid_foreach_rock {
     struct buf partbuf;
 };
 
-static int _guid_one(const char *item,
-                     struct guid_foreach_rock *frock,
+static int _guid_one(struct guid_foreach_rock *frock,
                      conversation_id_t cid,
                      uint32_t system_flags,
                      uint32_t internal_flags,
@@ -1912,6 +1911,10 @@ static int _guid_one(const char *item,
     rec.internal_flags = internal_flags;
     rec.internaldate = internaldate;
     rec.version = version;
+
+    /* ensure a NULL terminated key string */
+    buf_cstring(&frock->partbuf);
+    char *item = frock->partbuf.s;
 
     /* Parse G record key */
     p = strchr(item, ':');
@@ -1933,12 +1936,13 @@ static int _guid_one(const char *item,
     /* part */
     rec.part = NULL;
     if (*p) {
-        const char *end = strchr(p+1, ']');
+        char *end = strchr(p+1, ']');
         if (*p != '[' || !end || p+1 == end) {
             return IMAP_INTERNAL;
         }
-        buf_setmap(&frock->partbuf, p+1, end-p-1);
-        rec.part = buf_cstring(&frock->partbuf);
+        // overwrite the end of the part in the buffer buffer to avoid double-dupe
+        *end = '\0';
+        rec.part = p+1;
     }
 
     r = frock->cb(&rec, frock->cbrock);
@@ -1986,7 +1990,8 @@ static int _guid_cb(void *rock,
         strarray_t *recs = strarray_nsplit(data, datalen, ",", /*flags*/0);
         int i;
         for (i = 0; i < recs->count; i++) {
-            r = _guid_one(strarray_nth(recs, i), frock, /*cid*/0,
+            buf_setcstr(&frock->partbuf, strarray_nth(recs, i));
+            r = _guid_one(frock, /*cid*/0,
                           /*system_flags*/0, /*internal_flags*/0,
                           /*internaldate*/0, /*version*/0);
             if (r) break;
@@ -2032,10 +2037,9 @@ static int _guid_cb(void *rock,
         }
     }
 
-    char *freeme = xstrndup(key+42, keylen-42);
-    r = _guid_one(freeme, frock, cid, system_flags, internal_flags,
+    buf_setmap(&frock->partbuf, key+42, keylen-42);
+    r = _guid_one(frock, cid, system_flags, internal_flags,
                   internaldate, version);
-    free(freeme);
 
     return r;
 }
