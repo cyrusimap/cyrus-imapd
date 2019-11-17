@@ -459,6 +459,8 @@ EXPORTED int backup_close(struct backup **backupp)
     gzFile gzfile = NULL;
     int r1 = 0, r2 = 0;
 
+    if (!backup) return 0;
+
     if (backup->append_state) {
         if (backup->append_state->mode != BACKUP_APPEND_INACTIVE)
             r1 = backup_append_end(backup, NULL);
