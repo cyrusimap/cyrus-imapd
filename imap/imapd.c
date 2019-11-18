@@ -2563,17 +2563,24 @@ static int checklimits(const char *tag)
 
     if (proc_checklimits(&limits)) {
         const char *sep = "";
+        char part1[1024] = "";
+        char part2[1024] = "";
         prot_printf(imapd_out, "%s NO Too many open connections (", tag);
         if (limits.maxhost) {
             prot_printf(imapd_out, "%s%d of %d from %s", sep,
+                        limits.host, limits.maxhost, imapd_clienthost);
+            snprintf(part1, sizeof(part1), "%s%d of %d from %s", sep,
                         limits.host, limits.maxhost, imapd_clienthost);
             sep = ", ";
         }
         if (limits.maxuser) {
             prot_printf(imapd_out, "%s%d of %d for %s", sep,
                         limits.user, limits.maxuser, imapd_userid);
+            snprintf(part2, sizeof(part2), "%s%d of %d for %s", sep,
+                        limits.user, limits.maxuser, imapd_userid);
         }
         prot_printf(imapd_out, ")\r\n");
+        syslog(LOG_ERR, "Too many open connections (%s%s)", part1, part2);
         free(imapd_userid);
         imapd_userid = NULL;
         auth_freestate(imapd_authstate);

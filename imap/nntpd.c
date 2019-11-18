@@ -2281,18 +2281,25 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     limits.userid = nntp_userid;
     if (proc_checklimits(&limits)) {
         const char *sep = "";
+        char part1[1024] = "";
+        char part2[1024] = "";
         prot_printf(nntp_out,
                     "400 Too many open connections (");
         if (limits.maxhost) {
             prot_printf(nntp_out, "%s%d of %d from %s", sep,
+                        limits.host, limits.maxhost, nntp_clienthost);
+            snprintf(part1, sizeof(part1), "%s%d of %d from %s", sep,
                         limits.host, limits.maxhost, nntp_clienthost);
             sep = ", ";
         }
         if (limits.maxuser) {
             prot_printf(nntp_out, "%s%d of %d for %s", sep,
                         limits.user, limits.maxuser, nntp_userid);
+            snprintf(part2, sizeof(part2), "%s%d of %d for %s", sep,
+                        limits.user, limits.maxuser, nntp_userid);
         }
         prot_printf(nntp_out, ")\r\n");
+        syslog(LOG_ERR, "Too many open connections (%s%s)", part1, part2);
         reset_saslconn(&nntp_saslconn);
         free(nntp_userid);
         nntp_userid = NULL;

@@ -1940,6 +1940,8 @@ int openinbox(void)
 
         if ((minpoll = config_getint(IMAPOPT_POPMINPOLL)) &&
             popd_mailbox->i.pop3_last_login + 60*minpoll > popd_login_time) {
+            syslog(LOG_ERR, "%s: Logins must be at least %d minute%s apart",
+                        mbname_intname(mbname), minpoll, minpoll > 1 ? "s" : "");
             prot_printf(popd_out,
                         "-ERR [LOGIN-DELAY] Logins must be at least %d minute%s apart\r\n",
                         minpoll, minpoll > 1 ? "s" : "");
@@ -1991,18 +1993,25 @@ int openinbox(void)
     limits.userid = popd_userid;
     if (proc_checklimits(&limits)) {
         const char *sep = "";
+        char part1[1024] = "";
+        char part2[1024] = "";
         prot_printf(popd_out,
                     "-ERR Too many open connections (");
         if (limits.maxhost) {
             prot_printf(popd_out, "%s%d of %d from %s", sep,
+                        limits.host, limits.maxhost, popd_clienthost);
+            snprintf(part1, sizeof(part1), "%s%d of %d from %s", sep,
                         limits.host, limits.maxhost, popd_clienthost);
             sep = ", ";
         }
         if (limits.maxuser) {
             prot_printf(popd_out, "%s%d of %d for %s", sep,
                         limits.user, limits.maxuser, popd_userid);
+            snprintf(part2, sizeof(part2), "%s%d of %d for %s", sep,
+                        limits.user, limits.maxuser, popd_userid);
         }
         prot_printf(popd_out, ")\r\n");
+        syslog(LOG_ERR, "Too many open connections (%s%s)", part1, part2);
         mailbox_close(&popd_mailbox);
         goto fail;
     }
