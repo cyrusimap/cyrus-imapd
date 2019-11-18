@@ -1688,6 +1688,7 @@ sub _fork_command
             if !defined $pid;
         if ($pid)
         {
+            xlog "child pid=$pid";
             # parent process
             $self->_add_child($binary, $pid, $options->{handlers});
             print $fh ${$data};
@@ -1704,6 +1705,7 @@ sub _fork_command
         if ($pid)
         {
             # parent process
+            xlog "child pid=$pid";
             $self->_add_child($binary, $pid, $options->{handlers});
             return ($pid, undef);
         }
