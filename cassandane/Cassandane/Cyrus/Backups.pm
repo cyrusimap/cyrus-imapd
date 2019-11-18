@@ -327,8 +327,12 @@ sub test_locks
     my $wait = 10; # seconds
     my $sleeper = $self->{backups}->run_command(
         { cyrus => 1, background => 1 },
-        qw(ctl_backups -S -vvv lock -u cassandane -x ), "/bin/sleep $wait",
+        qw(ctl_backups -w -vvv lock -u cassandane -x ), "/bin/sleep $wait",
     );
+
+    # give the sleeper a moment to start up so it can definitely get the
+    # lock without racing against the next bit...
+    sleep 2;
 
     # meanwhile, try to get another lock on the same backup
     my $errfile = $self->{backups}->get_basedir() . "/ctl_backups_lock.stderr";
