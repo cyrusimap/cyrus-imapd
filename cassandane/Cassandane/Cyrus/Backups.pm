@@ -315,4 +315,51 @@ sub test_deleted_mailbox
     $self->assert_equals(4, scalar @{$messages});
 }
 
+sub test_locks
+    :min_version_3_0
+{
+    my ($self) = @_;
+
+    # make sure there's a backup file
+    $self->do_backup({ users => 'cassandane' });
+
+    # lock it for a while
+    my $wait = 10; # seconds
+    my $sleeper = $self->{backups}->run_command(
+        { cyrus => 1, background => 1 },
+        qw(ctl_backups -S -vvv lock -u cassandane -x ), "/bin/sleep $wait",
+    );
+
+    # meanwhile, try to get another lock on the same backup
+    my $errfile = $self->{backups}->get_basedir() . "/ctl_backups_lock.stderr";
+    my ($code, $output);
+    $self->{backups}->run_command(
+        {
+            cyrus => 1,
+            handlers => {
+                exited_abnormally => sub { (undef, $code) = @_ },
+            },
+            redirects => {
+                stderr => $errfile,
+            },
+        },
+        qw(ctl_backups -vvv lock -u cassandane -x ), "/bin/echo locked",
+    );
+
+    {
+        local $/;
+        open my $fh, '<', $errfile
+            or die "Cannot open $errfile for reading: $!";
+        $output = <$fh>;
+        close $fh;
+    }
+
+    # clean up after the sleeper
+    $self->{backups}->reap_command($sleeper);
+
+    # expect the second lock failed, specifically due to being locked
+    $self->assert_num_equals(75, $code); # EX_TEMPFAIL
+    $self->assert_matches(qr{Mailbox is locked}, $output);
+}
+
 1;
