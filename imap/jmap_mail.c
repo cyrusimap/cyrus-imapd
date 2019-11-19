@@ -8836,12 +8836,15 @@ static void _email_update_parse(json_t *jemail,
             if (strncmp(field, "mailboxIds/", 11)) {
                 continue;
             }
+            const char *mailboxid = field + 11;
             update->patch_mailboxids = 1;
             if (jval == json_true() || jval == json_null()) {
-                json_object_set(mailboxids, field + 11, jval);
+                json_object_set(mailboxids, mailboxid, jval);
             }
             else {
-                jmap_parser_invalid(parser, field);
+                jmap_parser_push(parser, "mailboxIds");
+                jmap_parser_invalid(parser, mailboxid);
+                jmap_parser_pop(parser);
             }
         }
         if (json_object_size(mailboxids) == 0) {
