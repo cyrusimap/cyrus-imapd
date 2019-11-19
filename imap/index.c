@@ -6650,7 +6650,7 @@ static int index_sort_compare_reverse_arrival(const void *v1, const void *v2)
     ret = md2->internaldate - md1->internaldate;
     if (ret) return ret;
 
-    ret = md1->uid - md2->uid;
+    ret = md2->uid - md1->uid;
     if (ret) return ret;
 
     return message_guid_cmp(&md1->guid, &md2->guid);
@@ -6672,7 +6672,7 @@ static int index_sort_compare_reverse_flagged(const void *v1, const void *v2)
     ret = md2->internaldate - md1->internaldate;
     if (ret) return ret;
 
-    ret = md1->uid - md2->uid;
+    ret = md2->uid - md1->uid;
     if (ret) return ret;
 
     return message_guid_cmp(&md1->guid, &md2->guid);
