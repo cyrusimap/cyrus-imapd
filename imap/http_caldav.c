@@ -5643,8 +5643,8 @@ static int propfind_scheduser(const xmlChar *name, xmlNsPtr ns,
                                        name, ns, NULL, 0);
         strarray_t *schedule_addresses = strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
         int i;
-        for (i = 0; i < strarray_size(schedule_addresses); i++) {
-            const char *address = strarray_nth(schedule_addresses, i);
+        for (i = strarray_size(schedule_addresses); i; i--) {
+            const char *address = strarray_nth(schedule_addresses, i-1);
             if (!strncasecmp(address, "mailto:", 7)) address += 7;
             buf_reset(&fctx->buf);
             buf_printf(&fctx->buf, "mailto:%s", address);
