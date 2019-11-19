@@ -2933,8 +2933,8 @@ static int jmap_parse_condition(json_t *cond, strarray_t *path)
 
             if (n == 0 || n > 2) break;
 
-            for (n = 0; n < 2; n++) {
-                const char *s = json_string_value(json_array_get(val, n));
+            do {
+                const char *s = json_string_value(json_array_get(val, --n));
 
                 if (!s || !strlen(s)) {
                     struct buf buf = BUF_INITIALIZER;
@@ -2943,7 +2943,7 @@ static int jmap_parse_condition(json_t *cond, strarray_t *path)
                     strarray_pushm(path, buf_release(&buf));
                     return 0;
                 }
-            }
+            } while (n);
         }
         else break;
     }
