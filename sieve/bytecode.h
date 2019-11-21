@@ -136,8 +136,9 @@ typedef union
  * version 0x17 scripts implemented x-cyrus-log
  * version 0x18 scripts implemented x-cyrus-jmapquery
  * version 0x19 scripts implemented x-cyrus-snooze
+ * version 0x1A scripts store fileinto mailbox names in UTF8 rather than mUTF7
  */
-#define BYTECODE_VERSION 0x19
+#define BYTECODE_VERSION 0x1A
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
