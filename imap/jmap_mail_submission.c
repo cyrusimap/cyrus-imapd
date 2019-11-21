@@ -1309,6 +1309,57 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         goto done;
     }
 
+    /* Validate submissionIds in onSuccessXxxEmail */
+    if (JNOTNULL(sub_args.onSuccessUpdate)) {
+        const char *id;
+        json_t *jemail;
+
+        jmap_parser_push(&parser, "onSuccessUpdateEmail");
+        json_object_foreach(sub_args.onSuccessUpdate, id, jemail) {
+            int found;
+
+            if (*id == '#') {
+                found = json_object_get(set.create, id+1) != NULL;
+            }
+            else {
+                found = json_object_get(set.update, id) != NULL;
+                if (!found) found = json_array_find(set.destroy, id) >= 0;
+            }
+
+            if (!found) jmap_parser_invalid(&parser, id);
+        }
+        jmap_parser_pop(&parser);
+    }
+
+    if (JNOTNULL(sub_args.onSuccessDestroy)) {
+        size_t i;
+        json_t *jid;
+
+        jmap_parser_push(&parser, "onSuccessDestroyEmail");
+        json_array_foreach(sub_args.onSuccessDestroy, i, jid) {
+            const char *id = json_string_value(jid);
+            int found;
+
+            if (*id == '#') {
+                found = json_object_get(set.create, id+1) != NULL;
+            }
+            else {
+                found = json_object_get(set.update, id) != NULL;
+                if (!found) found = json_array_find(set.destroy, id) >= 0;
+            }
+
+            if (!found) jmap_parser_invalid(&parser, id);
+        }
+        jmap_parser_pop(&parser);
+    }
+
+    if (json_array_size(parser.invalid)) {
+        err = json_pack("{s:s}", "type", "invalidProperties");
+        json_object_set(err, "properties", parser.invalid);
+        jmap_error(req, err);
+        goto done;
+    }
+
     /* Process request */
 
     int r = ensure_submission_collection(req->accountid, &mbentry, NULL);
