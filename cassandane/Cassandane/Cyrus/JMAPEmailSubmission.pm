@@ -1106,5 +1106,22 @@ sub test_emailsubmission_querychanges
     $self->assert_str_equals("R1", $res->[0][2]);
 }
 
+sub test_emailsubmission_onsuccess_invalid_subids
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "set email submission with invalid submission ids";
+    my $res = $jmap->CallMethods([['EmailSubmission/set', {
+        onSuccessUpdateEmail => {
+            'foo' => { mailboxIds => { 'INBOX' => JSON::true } } },
+        onSuccessDestroyEmail => [ 'bar' ]
+    }, "R1"]]);
+    $self->assert_str_equals("error", $res->[0][0]);
+    $self->assert_str_equals("invalidProperties", $res->[0][1]{type});
+    $self->assert_str_equals("R1", $res->[0][2]);
+}
+
 
 1;
