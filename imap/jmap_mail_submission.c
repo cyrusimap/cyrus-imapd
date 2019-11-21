@@ -1397,38 +1397,6 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
         free(emailid);
     }
 
-    /* Process onSuccessXxxEmail */
-    json_t *updateEmails = json_object();
-    if (JNOTNULL(sub_args.onSuccessUpdate)) {
-        const char *jid;
-        json_t *jemail;
-        json_object_foreach(sub_args.onSuccessUpdate, jid, jemail) {
-            const char *id = jid;
-            if (*id == '#') {
-                json_t *jsuccess = json_object_get(set.created, id+1);
-                if (jsuccess)
-                    id = json_string_value(json_object_get(jsuccess, "id"));
-            }
-            const char *emailid = json_string_value(json_object_get(success_emailids, id));
-            if (emailid) json_object_set(updateEmails, emailid, jemail);
-        }
-    }
-    json_t *destroyEmails = json_array();
-    if (JNOTNULL(sub_args.onSuccessDestroy)) {
-        size_t i;
-        json_t *jid;
-        json_array_foreach(sub_args.onSuccessDestroy, i, jid) {
-            const char *id = json_string_value(jid);
-            if (*id == '#') {
-                json_t *jsuccess = json_object_get(set.created, id+1);
-                if (jsuccess)
-                    id = json_string_value(json_object_get(jsuccess, "id"));
-            }
-            const char *emailid = json_string_value(json_object_get(success_emailids, id));
-            if (emailid) json_array_append_new(destroyEmails, json_string(emailid));
-        }
-    }
-
     /* force modseq to stable */
     if (submbox) mailbox_unlock_index(submbox, NULL);
 
@@ -1440,15 +1408,52 @@ static int jmap_emailsubmission_set(jmap_req_t *req)
 
     jmap_ok(req, jmap_set_reply(&set));
 
-    if (json_object_size(updateEmails) || json_array_size(destroyEmails)) {
+    /* Process onSuccessXxxEmail */
+    if (JNOTNULL(sub_args.onSuccessUpdate) ||
+        JNOTNULL(sub_args.onSuccessDestroy)) {
         json_t *subargs = json_object();
-        json_object_set(subargs, "update", updateEmails);
-        json_object_set(subargs, "destroy", destroyEmails);
+
         json_object_set_new(subargs, "accountId", json_string(req->accountid));
+
+        if (JNOTNULL(sub_args.onSuccessUpdate)) {
+            json_t *updateEmails = json_object();
+            const char *jid;
+            json_t *jemail;
+
+            json_object_foreach(sub_args.onSuccessUpdate, jid, jemail) {
+                const char *id = jid;
+                if (*id == '#') {
+                    json_t *jsuccess = json_object_get(set.created, id+1);
+                    if (jsuccess)
+                        id = json_string_value(json_object_get(jsuccess, "id"));
+                }
+                const char *emailid = json_string_value(json_object_get(success_emailids, id));
+                if (emailid) json_object_set(updateEmails, emailid, jemail);
+            }
+
+            json_object_set_new(subargs, "update", updateEmails);
+        }
+
+        if (JNOTNULL(sub_args.onSuccessDestroy)) {
+            json_t *destroyEmails = json_array();
+            size_t i;
+            json_t *jid;
+            json_array_foreach(sub_args.onSuccessDestroy, i, jid) {
+                const char *id = json_string_value(jid);
+                if (*id == '#') {
+                    json_t *jsuccess = json_object_get(set.created, id+1);
+                    if (jsuccess)
+                        id = json_string_value(json_object_get(jsuccess, "id"));
+                }
+                const char *emailid = json_string_value(json_object_get(success_emailids, id));
+                if (emailid) json_array_append_new(destroyEmails, json_string(emailid));
+            }
+
+            json_object_set_new(subargs, "destroy", destroyEmails);
+        }
+
         jmap_add_subreq(req, "Email/set", subargs, NULL);
     }
-    json_decref(updateEmails);
-    json_decref(destroyEmails);
 
 done:
     jmap_closembox(req, &submbox);
