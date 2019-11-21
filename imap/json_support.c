@@ -44,6 +44,7 @@
 
 #include <config.h>
 
+#include <string.h>
 #include <time.h>
 
 #include "json_support.h"
@@ -57,4 +58,16 @@ int json_is_utcdate(json_t *json)
 
     s = strptime(json_string_value(json), "%Y-%m-%dT%H:%M:%SZ", &date);
     return (s && *s == '\0');
+}
+
+int json_array_find(json_t *array, const char *needle)
+{
+    size_t i;
+    json_t *val;
+
+    json_array_foreach(array, i, val) {
+        if (!strcmp(needle, json_string_value(val))) return i;
+    }
+
+    return -1;
 }

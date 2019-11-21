@@ -91,4 +91,6 @@ n = json_object_iter_next(object, json_object_key_to_iter(key)))
 
 EXPORTED int json_is_utcdate(json_t *json);
 
+EXPORTED int json_array_find(json_t *array, const char *needle);
+
 #endif /* JSON_SUPPORT_H */
