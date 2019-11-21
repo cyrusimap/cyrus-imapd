@@ -573,11 +573,6 @@ sub test_emailsubmission_set_creationid
                         $mboxIdB => JSON::true,
                     },
                },
-               'foo' => {
-                    mailboxIds => {
-                        $mboxIdB => JSON::true,
-                    },
-               },
            },
         }, 'R2' ],
         [ 'Email/get', {
@@ -590,7 +585,6 @@ sub test_emailsubmission_set_creationid
     my $msgSubId = $res->[1][1]->{created}{s1}{id};
     $self->assert_not_null($msgSubId);
     $self->assert(exists $res->[2][1]{updated}{$emailId});
-#    $self->assert(exists $res->[2][1]{notUpdated}{"foo"});
     $self->assert_num_equals(1, scalar keys %{$res->[3][1]{list}[0]{mailboxIds}});
     $self->assert(exists $res->[3][1]{list}[0]{mailboxIds}{$mboxIdB});
 
