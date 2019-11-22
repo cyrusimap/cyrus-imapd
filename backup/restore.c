@@ -61,6 +61,8 @@
 
 #include "backup/backup.h"
 
+static struct namespace restore_namespace;
+
 EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s\n", s);
@@ -304,6 +306,11 @@ int main(int argc, char **argv)
     /* okay, arguments seem sane, we are go */
     cyrus_init(alt_config, "restore", 0, 0);
 
+    if ((r = mboxname_init_namespace(&restore_namespace, 1)) != 0) {
+        fatal(error_message(r), EX_CONFIG);
+    }
+    mboxevent_setnamespace(&restore_namespace);
+
     /* load the SASL plugins */
     global_sasl_init(1, 0, mysasl_cb);
 
@@ -320,7 +327,7 @@ int main(int argc, char **argv)
                               BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);
         break;
     case RESTORE_MODE_MBOXNAME:
-        mbname = mbname_from_intname(backup_name);
+        mbname = mbname_from_extname(backup_name, &restore_namespace, NULL);
         if (!mbname) usage();
         r = backup_open(&backup, mbname,
                         BACKUP_OPEN_NONBLOCK, BACKUP_OPEN_NOCREATE);

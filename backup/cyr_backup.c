@@ -68,6 +68,8 @@
 
 #include "backup/backup.h"
 
+static struct namespace cyr_backup_namespace;
+
 EXPORTED void fatal(const char *error, int code)
 {
     fprintf(stderr, "fatal error: %s\n", error);
@@ -346,6 +348,11 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "cyr_backup", 0, 0);
 
+    if ((r = mboxname_init_namespace(&cyr_backup_namespace, 1)) != 0) {
+        fatal(error_message(r), EX_CONFIG);
+    }
+    mboxevent_setnamespace(&cyr_backup_namespace);
+
     /* use xmalloc rather than malloc for json internals */
     json_set_alloc_funcs(xmalloc, free);
 
@@ -356,7 +363,7 @@ int main(int argc, char **argv)
                               BACKUP_OPEN_BLOCK, BACKUP_OPEN_NOCREATE);
         break;
     case CYRBU_MODE_MBOXNAME:
-        mbname = mbname_from_intname(backup_name);
+        mbname = mbname_from_extname(backup_name, &cyr_backup_namespace, NULL);
         if (!mbname) usage();
         r = backup_open(&backup, mbname,
                         BACKUP_OPEN_BLOCK, BACKUP_OPEN_NOCREATE);
