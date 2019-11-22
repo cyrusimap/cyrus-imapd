@@ -1271,33 +1271,27 @@ static json_t *participant_from_ical(icalproperty *prop,
         json_object_set_new(p, "kind", json_string(kind));
     }
 
-    /* attendance */
-    const char *attendance = NULL;
+    /* roles */
+    json_t *roles = json_object();
     icalparameter_role ical_role = ICAL_ROLE_REQPARTICIPANT;
     param = icalproperty_get_first_parameter(prop, ICAL_ROLE_PARAMETER);
     if (param) {
         ical_role = icalparameter_get_role(param);
         switch (ical_role) {
-            case ICAL_ROLE_REQPARTICIPANT:
-                attendance = "required";
-                break;
             case ICAL_ROLE_OPTPARTICIPANT:
-                attendance = "optional";
+                json_object_set_new(roles, "optional", json_true());
                 break;
             case ICAL_ROLE_NONPARTICIPANT:
-                attendance = "none";
+                json_object_set_new(roles, "informational", json_true());
                 break;
             case ICAL_ROLE_CHAIR:
-                /* fall through */
+                json_object_set_new(roles, "chair", json_true());
+                break;
             default:
-                attendance = "required";
+                json_object_set_new(roles, "attendee", json_true());
+                break;  // nothing to add
         }
     }
-    if (!attendance) attendance = "required";
-    json_object_set_new(p, "attendance", json_string(attendance));
-
-    /* roles */
-    json_t *roles = json_object();
     for (param = icalproperty_get_first_parameter(prop, ICAL_X_PARAMETER);
          param;
          param = icalproperty_get_next_parameter(prop, ICAL_X_PARAMETER)) {
@@ -1315,9 +1309,6 @@ static json_t *participant_from_ical(icalproperty *prop,
             json_object_set_new(roles, "owner", json_true());
             json_object_set_new(roles, "attendee", json_true());
         }
-    }
-    if (ical_role == ICAL_ROLE_CHAIR) {
-        json_object_set_new(roles, "chair", json_true());
     }
     if (!json_object_size(roles)) {
         json_object_set_new(roles, "attendee", json_true());
@@ -1528,7 +1519,6 @@ participant_from_icalorganizer(icalproperty *orga)
     }
 
     /* Set default values */
-    json_object_set_new(jorga, "attendance", json_string("required"));
     json_object_set_new(jorga, "participationStatus", json_string("needs-action"));
     json_object_set_new(jorga, "scheduleSequence", json_integer(0));
     json_object_set_new(jorga, "expectReply", json_false());
@@ -2767,7 +2757,6 @@ static void
 participant_roles_to_ical(icalproperty *prop,
                           struct jmap_parser *parser,
                           json_t *roles,
-                          icalparameter_role ical_role,
                           int is_replyto)
 {
     if (!json_object_size(roles)) {
@@ -2785,42 +2774,39 @@ participant_roles_to_ical(icalproperty *prop,
     }
     jmap_parser_pop(parser);
 
-    int has_owner = json_object_get(roles, "owner") == json_true();
+    icalparameter_role ical_role = ICAL_ROLE_REQPARTICIPANT;
     int has_chair = json_object_get(roles, "chair") == json_true();
-    int has_attendee = json_object_get(roles, "attendee") == json_true();
-    size_t xroles_count = json_object_size(roles);
+    int has_optional = json_object_get(roles, "optional") == json_true();
+    int has_informational = json_object_get(roles, "informational") == json_true();
 
     /* Try to map roles to iCalendar without falling back to X-ROLE */
     if (has_chair && ical_role == ICAL_ROLE_REQPARTICIPANT) {
         /* Can use iCalendar ROLE=CHAIR parameter */
-        xroles_count--;
+        ical_role = ICAL_ROLE_CHAIR;
     }
-    if (has_owner && is_replyto) {
-        /* This is the ORGANIZER or its ATTENDEE, which is implicit "owner" */
-        xroles_count--;
+    if (has_optional && ical_role == ICAL_ROLE_REQPARTICIPANT) {
+        /* Can use iCalendar ROLE=OPT-PARTICIPANT parameter */
+        ical_role = ICAL_ROLE_OPTPARTICIPANT;
     }
-    if (has_attendee) {
-        /* Default role for ATTENDEE without X-ROLE is "attendee" */
-        xroles_count--;
+    if (has_informational && ical_role == ICAL_ROLE_REQPARTICIPANT) {
+        /* Can use iCalendar ROLE=NON-PARTICIPANT parameter */
+        ical_role = ICAL_ROLE_NONPARTICIPANT;
     }
-    if (xroles_count == 0) {
-        /* No need to set X-ROLE parameters on this ATTENDEE */
-        if (has_chair) {
-            icalparameter *param = icalparameter_new_role(ICAL_ROLE_CHAIR);
-            icalproperty_add_parameter(prop, param);
-        }
+
+    /* Map roles */
+    json_object_foreach(roles, key, jval) {
+        if (!strcasecmp(key, "ATTENDEE")) continue;
+        if (!strcasecmp(key, "OWNER") && is_replyto) continue;  // ORGANIZER
+        if (!strcasecmp(key, "CHAIR") && ical_role == ICAL_ROLE_CHAIR) continue;
+        if (!strcasecmp(key, "OPTIONAL") && ical_role == ICAL_ROLE_OPTPARTICIPANT) continue;
+        if (!strcasecmp(key, "INFORMATIONAL") && ical_role == ICAL_ROLE_NONPARTICIPANT) continue;
+        // everything else needs an XROLE
+        set_icalxparam(prop, JMAPICAL_XPARAM_ROLE, key, 0);
     }
-    else {
-        /* Map roles to X-ROLE */
-        json_object_foreach(roles, key, jval) {
-            /* Try to use standard CHAIR role */
-            if (!strcasecmp(key, "CHAIR") && ical_role == ICAL_ROLE_REQPARTICIPANT) {
-                icalparameter *param = icalparameter_new_role(ICAL_ROLE_CHAIR);
-                icalproperty_add_parameter(prop, param);
-            } else {
-                set_icalxparam(prop, JMAPICAL_XPARAM_ROLE, key, 0);
-            }
-        }
+
+    if (ical_role != ICAL_ROLE_REQPARTICIPANT) {
+        icalparameter *param = icalparameter_new_role(ical_role);
+        icalproperty_add_parameter(prop, param);
     }
 }
 
@@ -2888,11 +2874,6 @@ participant_equals(json_t *jpart1, json_t *jpart2)
         json_object_del(jval1, "participationStatus");
     if (!strcmpsafe(json_string_value(json_object_get(jval2, "participationStatus")), "needs-action"))
         json_object_del(jval2, "participationStatus");
-
-    if (!strcmpsafe(json_string_value(json_object_get(jval1, "attendance")), "required"))
-        json_object_del(jval1, "attendance");
-    if (!strcmpsafe(json_string_value(json_object_get(jval2, "attendance")), "required"))
-        json_object_del(jval2, "attendance");
 
     if (!json_boolean_value(json_object_get(jval1, "expectReply")))
         json_object_del(jval1, "expectReply");
@@ -3037,32 +3018,10 @@ participant_to_ical(icalcomponent *comp,
         jmap_parser_invalid(parser, "kind");
     }
 
-    /* attendance */
-    icalparameter_role ical_role = ICAL_ROLE_REQPARTICIPANT;
-    json_t *attendance = json_object_get(jpart, "attendance");
-    if (json_is_string(attendance)) {
-        const char *s = json_string_value(attendance);
-        if (!strcasecmp(s, "required")) {
-            ical_role = ICAL_ROLE_REQPARTICIPANT;
-        }
-        else if (!strcasecmp(s, "optional")) {
-            ical_role = ICAL_ROLE_OPTPARTICIPANT;
-        }
-        else if (!strcasecmp(s, "none")) {
-            ical_role = ICAL_ROLE_NONPARTICIPANT;
-        }
-        if (ical_role != ICAL_ROLE_REQPARTICIPANT) {
-            icalproperty_add_parameter(prop, icalparameter_new_role(ical_role));
-        }
-    }
-    else if (JNOTNULL(attendance)) {
-        jmap_parser_invalid(parser, "attendance");
-    }
-
     /* roles */
     json_t *roles = json_object_get(jpart, "roles");
     if (json_object_size(roles)) {
-        participant_roles_to_ical(prop, parser, roles, ical_role, is_orga);
+        participant_roles_to_ical(prop, parser, roles, is_orga);
     }
     else if (roles) {
         jmap_parser_invalid(parser, "roles");
