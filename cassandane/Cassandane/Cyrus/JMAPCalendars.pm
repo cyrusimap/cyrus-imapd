@@ -1082,9 +1082,6 @@ sub normalize_event
             if (not exists $p->{linkIds}) {
                 $p->{linkIds} = undef;
             }
-            if (not exists $p->{attendance}) {
-                $p->{attendance} = 'required';
-            }
             if (not exists $p->{participationStatus}) {
                 $p->{participationStatus} = 'needs-action';
             }
@@ -1484,7 +1481,6 @@ sub test_calendarevent_get_participants
                 'attendee' => JSON::true,
             },
             participationStatus => 'accepted',
-            attendance => 'required',
             sendTo => {
                 imip => 'mailto:smithers@example.com',
             },
@@ -1495,10 +1491,10 @@ sub test_calendarevent_get_participants
             '@type' => 'Participant',
             name => 'Homer Simpson',
             participationStatus => 'accepted',
-            attendance => 'optional',
             email => 'homer@example.com',
             roles => {
                 'attendee' => JSON::true,
+                'optional' => JSON::true,
             },
             locationId => 'loc1',
             sendTo => {
@@ -1524,12 +1520,11 @@ sub test_calendarevent_get_participants
                 imip => 'mailto:carl@example.com',
             },
             expectReply => JSON::false,
-            attendance => 'required',
         },
         'a6ef900d284067bb327d7be1469fb44693a5ec13' => {
             '@type' => 'Participant',
             name => 'Lenny Leonard',
-            participationStatus => 'tentative',
+            participationStatus => 'delegated',
             email => 'lenny@example.com',
             roles => {
                 'attendee' => JSON::true,
@@ -1542,7 +1537,6 @@ sub test_calendarevent_get_participants
             },
             expectReply => JSON::false,
             scheduleSequence => 0,
-            attendance => 'required',
         },
         'd6db3540fe51335b7154f144456e9eac2778fc8f' => {
             '@type' => 'Participant',
@@ -1555,7 +1549,6 @@ sub test_calendarevent_get_participants
             memberOf => {
                 '29a545214b66cbd7635fdec3a35d074ff3484479' => JSON::true,
             },
-            attendance => 'required',
             scheduleUpdated => '2015-09-29T14:44:23Z',
             sendTo => {
                 imip => 'mailto:larry@example.com',
@@ -1589,7 +1582,6 @@ sub test_calendarevent_get_organizer
             expectReply => JSON::false,
             scheduleSequence => 0,
             participationStatus => 'needs-action',
-            attendance => 'required',
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             '@type' => 'Participant',
@@ -1604,7 +1596,6 @@ sub test_calendarevent_get_organizer
             expectReply => JSON::false,
             scheduleSequence => 0,
             participationStatus => 'needs-action',
-            attendance => 'required',
         },
     };
     $self->assert_deep_equals($wantParticipants, $event->{participants});
@@ -1638,7 +1629,6 @@ sub test_calendarevent_organizer_noattendees
             expectReply => JSON::false,
             scheduleSequence => 0,
             participationStatus => 'needs-action',
-            attendance => 'required',
         },
     };
     $self->assert_deep_equals($wantParticipants, $event->{participants});
@@ -1672,7 +1662,6 @@ sub test_calendarevent_get_organizer_bogusuri
             expectReply => JSON::false,
             scheduleSequence => 0,
             participationStatus => 'needs-action',
-            attendance => 'required',
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             '@type' => 'Participant',
@@ -1687,7 +1676,6 @@ sub test_calendarevent_get_organizer_bogusuri
             expectReply => JSON::false,
             scheduleSequence => 0,
             participationStatus => 'needs-action',
-            attendance => 'required',
         },
     };
     $self->assert_deep_equals($wantParticipants, $event->{participants});
@@ -1719,7 +1707,6 @@ sub test_calendarevent_get_organizermailto
             expectReply => JSON::false,
             scheduleSequence => 0,
             participationStatus => 'needs-action',
-            attendance => 'required',
         },
         '29deb29d758dbb27ffa3c39b499edd85b53dd33f' => {
             '@type' => 'Participant',
@@ -1734,7 +1721,6 @@ sub test_calendarevent_get_organizermailto
             expectReply => JSON::false,
             scheduleSequence => 0,
             participationStatus => 'needs-action',
-            attendance => 'required',
         },
     };
     $self->assert_deep_equals($wantParticipants, $event->{participants});
@@ -3002,7 +2988,6 @@ sub test_calendarevent_set_participants
                 },
                 locationId => 'loc1',
                 participationStatus => 'accepted',
-                attendance => 'required',
                 expectReply => JSON::false,
                 linkIds => {
                     'link1' => JSON::true,
@@ -3019,7 +3004,6 @@ sub test_calendarevent_set_participants
                 },
                 locationId => 'loc2',
                 participationStatus => 'needs-action',
-                attendance => 'required',
                 expectReply => JSON::true,
                 delegatedTo => {
                     'bam' => JSON::true,
@@ -3137,7 +3121,6 @@ sub test_calendarevent_set_participants_patch
                     'attendee' => JSON::true,
                 },
                 participationStatus => 'needs-action',
-                attendance => 'required',
                 expectReply => JSON::true,
                 sendTo => {
                     imip => 'mailto:bar@local',
@@ -3398,7 +3381,6 @@ sub test_calendarevent_set_participants_justorga
                     "imip" => "mailto:foo\@local",
                 },
                 email => 'foo@local',
-                attendance => 'required',
                 participationStatus => 'needs-action',
                 scheduleSequence => 0,
                 expectReply => JSON::false,
