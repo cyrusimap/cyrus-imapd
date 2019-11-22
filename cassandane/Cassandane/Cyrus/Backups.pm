@@ -366,4 +366,83 @@ sub test_locks
     $self->assert_matches(qr{Mailbox is locked}, $output);
 }
 
+sub test_xbackup
+    :min_version_3_0 :UnixHierarchySep :VirtDomains
+{
+    my ($self) = @_;
+    my $id = 1;
+
+    my @users = qw(
+        user@example.com
+        foo.bar@example.com
+    );
+
+    my @folders = qw( Drafts Sent Trash );
+
+    # create the new users
+    my $admintalk = $self->{adminstore}->get_client();
+    foreach my $u (@users) {
+        $self->{instance}->create_user($u, subdirs => \@folders);
+    }
+
+    # we also want to test the cassandane user (which was already created)
+    unshift @users, 'cassandane';
+    foreach my $f (@folders) {
+        $admintalk->create("user/cassandane/$f");
+        $self->assert_str_equals('ok',
+            $admintalk->get_last_completion_response());
+    }
+
+    # XXX shouldn't be backup files for these users yet
+
+    # kick off a backup with xbackup and a pattern
+    $admintalk->_imap_cmd('xbackup', 0, {}, 'user/*', 'backup');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    # XXX backups should exist now, but with no messages
+
+    # add some content -- four messages per folder per user
+    my %exp;
+    foreach my $u (@users) {
+        foreach my $f (@folders) {
+            my ($l, $d) = split '@', $u;
+            my $p = "user/$l/$f";
+            $p .= "\@$d" if $d;
+            $self->{adminstore}->set_folder($p);
+            for (1..4) {
+                $exp{$u}->{$f}->{$id} =
+                    $self->make_message("Message $id",
+                                        store => $self->{adminstore});
+                $id++;
+            }
+        }
+    }
+
+    # let's xbackup and check each user individually
+    foreach my $u (@users) {
+        $admintalk->_imap_cmd('xbackup', 0, {}, "user/$u", 'backup');
+        $self->assert_str_equals('ok',
+            $admintalk->get_last_completion_response());
+
+        # backup should contain four messages per folder
+        my $messages = $self->cyr_backup_json({ user => $u }, 'messages');
+        $self->assert_equals(4 * scalar(@folders), scalar @{$messages});
+
+        # check them
+        my $headers = $self->cyr_backup_json({ user => $u }, 'headers',
+                                             map { $_->{guid} } @{$messages});
+
+        my %expected = map {
+            $_->get_guid() => $_->get_header('X-Cassandane-Unique')
+        } map { values %{$_} } values %{$exp{$u}};
+
+        my %actual = map {
+            $_ => $headers->{$_}->{'X-Cassandane-Unique'}->[0]
+        } keys %{$headers};
+
+        $self->assert_deep_equals(\%expected, \%actual);
+    }
+}
+
 1;
