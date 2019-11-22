@@ -63,6 +63,8 @@
 
 #include "backup/backup.h"
 
+static struct namespace ctl_backups_namespace;
+
 EXPORTED void fatal(const char *error, int code)
 {
     fprintf(stderr, "fatal error: %s\n", error);
@@ -446,6 +448,11 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "ctl_backups", 0, 0);
 
+    if ((r = mboxname_init_namespace(&ctl_backups_namespace, 1)) != 0) {
+        fatal(error_message(r), EX_CONFIG);
+    }
+    mboxevent_setnamespace(&ctl_backups_namespace);
+
     if (cmd == CTLBU_CMD_RECONSTRUCT) {
         /* special handling for reconstruct */
         // FIXME
@@ -515,7 +522,7 @@ int main(int argc, char **argv)
             if (options.mode == CTLBU_MODE_USERNAME)
                 mbname = mbname_from_userid(argv[i]);
             else if (options.mode == CTLBU_MODE_MBOXNAME)
-                mbname = mbname_from_intname(argv[i]);
+                mbname = mbname_from_extname(argv[i], &ctl_backups_namespace, NULL);
 
             if (mbname) {
                 r = backup_get_paths(mbname, &fname, NULL, BACKUP_OPEN_NOCREATE);
