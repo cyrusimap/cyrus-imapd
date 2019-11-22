@@ -149,6 +149,74 @@ sub cyr_backup_json
     return $data;
 }
 
+sub backup_exists
+{
+    my ($self, $mode, $backup) = @_;
+
+    my $rc = $self->{backups}->run_command(
+        {
+            cyrus => 1,
+            handlers => {
+                exited_abnormally => sub {
+                    my (undef, $code) = @_;
+                    return $code
+                },
+            },
+        },
+        'ctl_backups', 'list', $mode, $backup
+    );
+
+    return $rc == 0;
+}
+
+sub assert_backups_exist
+{
+    my ($self, $params) = @_;
+
+    my @users = exists $params->{users} ? @{$params->{users}} : ();
+    my @mailboxes = exists $params->{mailboxes} ? @{$params->{mailboxes}} : ();
+    my @filenames = exists $params->{filenames} ? @{$params->{filenames}} : ();
+
+    foreach my $u (@users) {
+        my $x = $self->backup_exists('-u', $u);
+        $self->assert($x, "no backup found for user $u");
+    }
+
+    foreach my $m (@mailboxes) {
+        my $x = $self->backup_exists('-m', $m);
+        $self->assert($x, "no backup found for mailbox $m");
+    }
+
+    foreach my $f (@filenames) {
+        my $x = $self->backup_exists('-f', $f);
+        $self->assert($x, "no backup found for filename $f");
+    }
+}
+
+sub assert_backups_not_exist
+{
+    my ($self, $params) = @_;
+
+    my @users = exists $params->{users} ? @{$params->{users}} : ();
+    my @mailboxes = exists $params->{mailboxes} ? @{$params->{mailboxes}} : ();
+    my @filenames = exists $params->{filenames} ? @{$params->{filenames}} : ();
+
+    foreach my $u (@users) {
+        my $x = $self->backup_exists('-u', $u);
+        $self->assert(!$x, "unexpected backup found for user $u");
+    }
+
+    foreach my $m (@mailboxes) {
+        my $x = $self->backup_exists('-m', $m);
+        $self->assert(!$x, "unexpected backup found for mailbox $m");
+    }
+
+    foreach my $f (@filenames) {
+        my $x = $self->backup_exists('-f', $f);
+        $self->assert(!$x, "unexpected backup found for filename $f");
+    }
+}
+
 sub test_aaasetup
     :min_version_3_0
 {
@@ -393,14 +461,20 @@ sub test_xbackup
             $admintalk->get_last_completion_response());
     }
 
-    # XXX shouldn't be backup files for these users yet
+    # shouldn't be backup files for these users yet
+    $self->assert_backups_not_exist({ users => \@users });
 
     # kick off a backup with xbackup and a pattern
     $admintalk->_imap_cmd('xbackup', 0, {}, 'user/*', 'backup');
     $self->assert_str_equals('ok',
         $admintalk->get_last_completion_response());
 
-    # XXX backups should exist now, but with no messages
+    # backups should exist now, but with no messages
+    $self->assert_backups_exist({ users => \@users });
+    foreach my $u (@users) {
+        my $messages = $self->cyr_backup_json({ user => $u }, 'messages');
+        $self->assert_num_equals(0, scalar @{$messages});
+    }
 
     # add some content -- four messages per folder per user
     my %exp;
@@ -421,15 +495,16 @@ sub test_xbackup
 
     # let's xbackup and check each user individually
     foreach my $u (@users) {
+        # run xbackup
         $admintalk->_imap_cmd('xbackup', 0, {}, "user/$u", 'backup');
         $self->assert_str_equals('ok',
             $admintalk->get_last_completion_response());
 
         # backup should contain four messages per folder
         my $messages = $self->cyr_backup_json({ user => $u }, 'messages');
-        $self->assert_equals(4 * scalar(@folders), scalar @{$messages});
+        $self->assert_num_equals(4 * scalar(@folders), scalar @{$messages});
 
-        # check them
+        # check they're the right messages
         my $headers = $self->cyr_backup_json({ user => $u }, 'headers',
                                              map { $_->{guid} } @{$messages});
 
