@@ -109,6 +109,8 @@ struct arguments {
     const char *altconfig;
     const char *mbox_prefix;
     const char *userid;
+
+    char *freeme; /* for mbox_prefix */
 };
 
 struct archive_rock {
@@ -210,6 +212,8 @@ static void cyr_expire_init(const char *progname, struct cyr_expire_ctx *ctx)
 
 static void cyr_expire_cleanup(struct cyr_expire_ctx *ctx)
 {
+    if (ctx->args.freeme) free(ctx->args.freeme);
+
     free_hash_table(&ctx->erock.table, free);
     free_hash_table(&ctx->crock.seen, NULL);
     strarray_fini(&ctx->drock.to_delete);
@@ -892,6 +896,13 @@ int main(int argc, char *argv[])
     }
 
     mboxevent_setnamespace(&expire_namespace);
+
+    /* now that we have a namespace, convert mbox_prefix to internal ns */
+    if (ctx.args.mbox_prefix) {
+        char *intname = mboxname_from_external(ctx.args.mbox_prefix,
+                                               &expire_namespace, NULL);
+        ctx.args.mbox_prefix = ctx.args.freeme = intname;
+    }
 
     if (duplicate_init(NULL) != 0) {
         fprintf(stderr,
