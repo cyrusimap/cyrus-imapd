@@ -826,6 +826,7 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
             break;
 
         case 'p':
+            if (args->userid) usage();
             args->mbox_prefix = optarg;
             break;
 
@@ -834,6 +835,7 @@ static int parse_args(int argc, char *argv[], struct arguments *args)
             break;
 
         case 'u':
+            if (args->mbox_prefix) usage();
             args->userid = optarg;
             break;
 
