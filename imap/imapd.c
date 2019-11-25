@@ -5474,6 +5474,7 @@ static int do_xbackup(const char *channel,
         if (!mbname) continue;
         const char *userid = mbname_userid(mbname);
         const char *intname = mbname_intname(mbname);
+        const char *extname = mbname_extname(mbname, &imapd_namespace, NULL);
 
         if (userid) {
             syslog(LOG_INFO, "XBACKUP: replicating user %s", userid);
@@ -5495,14 +5496,14 @@ static int do_xbackup(const char *channel,
         if (r) {
             prot_printf(imapd_out, "* NO %s %s (%s)\r\n",
                         userid ? "USER" : "MAILBOX",
-                        userid ? userid : intname,
+                        userid ? userid : extname,
                         error_message(r));
         }
         else {
             partial_success++;
             prot_printf(imapd_out, "* OK %s %s\r\n",
                         userid ? "USER" : "MAILBOX",
-                        userid ? userid : intname);
+                        userid ? userid : extname);
         }
         prot_flush(imapd_out);
 
