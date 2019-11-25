@@ -520,4 +520,89 @@ sub test_xbackup
     }
 }
 
+sub test_xbackup_shared
+    :min_version_3_0 :UnixHierarchySep :VirtDomains
+{
+    my ($self) = @_;
+    my $id = 1;
+
+    my @folders = qw( sh1 sh2 );
+    my @subfolders = qw( foo bar baz );
+
+    # create the shared folders
+    my $admintalk = $self->{adminstore}->get_client();
+    foreach my $top (@folders) {
+        $admintalk->create($top);
+        $self->assert_str_equals('ok',
+            $admintalk->get_last_completion_response());
+        $admintalk->setacl($top, 'admin' => 'lrswipkxtecdan');
+        $self->assert_str_equals('ok',
+            $admintalk->get_last_completion_response());
+
+        foreach my $sub (@subfolders) {
+            $admintalk->create("$top/$sub");
+            $self->assert_str_equals('ok',
+                $admintalk->get_last_completion_response());
+            $admintalk->setacl("$top/$sub", 'admin' => 'lrswipkxtecdan');
+            $self->assert_str_equals('ok',
+                $admintalk->get_last_completion_response());
+        }
+    }
+
+    # shouldn't be backup files for these mailboxes yet
+    $self->assert_backups_not_exist({ mailboxes => \@folders });
+
+    # kick off a backup with xbackup and a pattern
+    $admintalk->_imap_cmd('xbackup', 0, {}, 'sh*', 'backup');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    # backups should exist now, but with no messages
+    $self->assert_backups_exist({ mailboxes => \@folders });
+    foreach my $f (@folders) {
+        my $messages = $self->cyr_backup_json({ mailbox => $f }, 'messages');
+        $self->assert_num_equals(0, scalar @{$messages});
+    }
+
+    # add some content -- four messages per folder
+    my %exp;
+    foreach my $top (@folders) {
+        foreach my $sub (@subfolders) {
+            my $p = "$top/$sub";
+            $self->{adminstore}->set_folder($p);
+            for (1..4) {
+                $exp{$id} =
+                    $self->make_message("Message $id",
+                                        store => $self->{adminstore});
+                $id++;
+            }
+        }
+    }
+
+    # xbackup again
+    $admintalk->_imap_cmd('xbackup', 0, {}, "sh*", 'backup');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    # backup should contain four messages per subfolder per folder
+    my $messages = $self->cyr_backup_json({ mailbox => $folders[0] },
+                                          'messages');
+    $self->assert_num_equals(4 * scalar(@folders) * scalar(@subfolders),
+                             scalar @{$messages});
+
+    # check they're the right messages
+    my $headers = $self->cyr_backup_json({ mailbox => $folders[0] }, 'headers',
+                                         map { $_->{guid} } @{$messages});
+
+    my %expected = map {
+        $_->get_guid() => $_->get_header('X-Cassandane-Unique')
+    } values %exp;
+
+    my %actual = map {
+        $_ => $headers->{$_}->{'X-Cassandane-Unique'}->[0]
+    } keys %{$headers};
+
+    $self->assert_deep_equals(\%expected, \%actual);
+}
+
 1;
