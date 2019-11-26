@@ -63,6 +63,9 @@
 #include "util.h"
 
 static int jmap_backup_restore_contacts(jmap_req_t *req);
+static int jmap_backup_restore_calendars(jmap_req_t *req);
+static int jmap_backup_restore_notes(jmap_req_t *req);
+static int jmap_backup_restore_mail(jmap_req_t *req);
 
 jmap_method_t jmap_backup_methods_standard[] = {
     { NULL, NULL, NULL, 0}
@@ -73,6 +76,24 @@ jmap_method_t jmap_backup_methods_nonstandard[] = {
         "Backup/restoreContacts",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_contacts,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Backup/restoreCalendars",
+        JMAP_BACKUP_EXTENSION,
+        &jmap_backup_restore_calendars,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Backup/restoreNotes",
+        JMAP_BACKUP_EXTENSION,
+        &jmap_backup_restore_notes,
+        JMAP_SHARED_CSTATE
+    },
+    {
+        "Backup/restoreMail",
+        JMAP_BACKUP_EXTENSION,
+        &jmap_backup_restore_mail,
         JMAP_SHARED_CSTATE
     },
     { NULL, NULL, NULL, 0}
@@ -215,6 +236,75 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
 
     /* Parse request */
     jmap_restore_parse(req, &parser, /*is_mail*/ 0, &restore, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Build response */
+    jmap_ok(req, jmap_restore_reply(&restore));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_restore_fini(&restore);
+
+    return 0;
+}
+
+static int jmap_backup_restore_calendars(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_restore restore;
+    json_t *err = NULL;
+
+    /* Parse request */
+    jmap_restore_parse(req, &parser, /*is_mail*/ 0, &restore, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Build response */
+    jmap_ok(req, jmap_restore_reply(&restore));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_restore_fini(&restore);
+
+    return 0;
+}
+
+static int jmap_backup_restore_notes(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_restore restore;
+    json_t *err = NULL;
+
+    /* Parse request */
+    jmap_restore_parse(req, &parser, /*is_mail*/ 0, &restore, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    /* Build response */
+    jmap_ok(req, jmap_restore_reply(&restore));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_restore_fini(&restore);
+
+    return 0;
+}
+
+static int jmap_backup_restore_mail(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_restore restore;
+    json_t *err = NULL;
+
+    /* Parse request */
+    jmap_restore_parse(req, &parser, /*is_mail*/ 1, &restore, &err);
     if (err) {
         jmap_error(req, err);
         goto done;
