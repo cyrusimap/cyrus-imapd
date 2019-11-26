@@ -175,6 +175,7 @@ static void jmap_init(struct buf *serverinfo)
     jmap_mail_init(&my_jmap_settings);
     jmap_contact_init(&my_jmap_settings);
     jmap_calendar_init(&my_jmap_settings);
+    jmap_backup_init(&my_jmap_settings);
 
     if (ws_enabled()) {
         json_object_set_new(my_jmap_settings.server_capabilities,
