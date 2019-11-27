@@ -204,6 +204,15 @@ HIDDEN void jmap_email_filtercondition_parse(struct jmap_parser *parser,
                 jmap_parser_invalid(parser, field);
             }
         }
+        else if (strarray_find(capabilities, JMAP_MAIL_EXTENSION, 0) >= 0 &&
+                 (!strcmp(field, "fromAnyContact") ||
+                  !strcmp(field, "toAnyContact") ||
+                  !strcmp(field, "ccAnyContact") ||
+                  !strcmp(field, "bccAnyContact"))) {
+            if (!json_is_boolean(arg)) {
+                jmap_parser_invalid(parser, field);
+            }
+        }
         else {
             jmap_parser_invalid(parser, field);
         }
@@ -274,48 +283,78 @@ HIDDEN void jmap_email_contactfilter_fini(struct email_contactfilter *cfilter)
     free_hash_table(&cfilter->contactgroups, (void(*)(void*))strarray_free);
 }
 
+static const struct contactfilters_t {
+    const char *field;
+    int isany;
+} contactfilters[] = {
+  { "fromContactGroupId", 0 },
+  { "toContactGroupId", 0 },
+  { "ccContactGroupId", 0 },
+  { "bccContactGroupId", 0 },
+  { "fromAnyContact", 1 },
+  { "toAnyContact", 1 },
+  { "ccAnyContact", 1 },
+  { "bccAnyContact", 1 },
+  { NULL, 0 }
+};
+
 HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *parser,
                                                          json_t *filter,
                                                          struct email_contactfilter *cfilter)
 {
-    const char *field;
-    json_t *arg;
+    int havefield = 0;
+    const struct contactfilters_t *c;
+    int r = 0;
 
-    json_object_foreach(filter, field, arg) {
-        if ((!strcmp(field, "fromContactGroupId") ||
-             !strcmp(field, "toContactGroupId") ||
-             !strcmp(field, "ccContactGroupId") ||
-             !strcmp(field, "bccContactGroupId"))) {
-            const char *groupid = json_string_value(arg);
-            if (groupid) {
-                if (!cfilter->contactgroups.size) {
-                    /* Initialize groups lookup table */
-                    construct_hash_table(&cfilter->contactgroups, 32, 0);
-                }
-                if (!hash_lookup(groupid, &cfilter->contactgroups)) {
-                    if (!cfilter->carddavdb) {
-                        /* Open CardDAV db first time we need it */
-                        cfilter->carddavdb = carddav_open_userid(cfilter->accountid);
-                        if (!cfilter->carddavdb) {
-                            syslog(LOG_ERR, "jmap: carddav_open_userid(%s) failed",
-                                    cfilter->accountid);
-                            return CYRUSDB_INTERNAL;
-                        }
-                    }
-                    /* Lookup group member email addresses */
-                    strarray_t *members = carddav_getgroup(cfilter->carddavdb, cfilter->addrbook, groupid);
-                    if (!members || !strarray_size(members)) {
-                        jmap_parser_invalid(parser, field);
-                    }
-                    else {
-                        hash_insert(groupid, members, &cfilter->contactgroups);
-                    }
-                }
-            }
+    /* prefilter to see if there are any fields that we will need to look up */
+    for (c = contactfilters; c->field; c++) {
+        json_t *arg = json_object_get(filter, c->field);
+        if (!arg) continue;
+        const char *groupid = c->isany ? (json_is_true(arg) ? "" : NULL) : json_string_value(arg);
+        if (!groupid) continue; // avoid looking up if invalid!
+        havefield = 1;
+        break;
+    }
+    if (!havefield) goto done;
+
+    /* ensure we have preconditions for lookups */
+    if (!cfilter->contactgroups.size) {
+        /* Initialize groups lookup table */
+        construct_hash_table(&cfilter->contactgroups, 32, 0);
+    }
+
+    if (!cfilter->carddavdb) {
+        /* Open CardDAV db first time we need it */
+        cfilter->carddavdb = carddav_open_userid(cfilter->accountid);
+        if (!cfilter->carddavdb) {
+            syslog(LOG_ERR, "jmap: carddav_open_userid(%s) failed",
+                   cfilter->accountid);
+            r = CYRUSDB_INTERNAL;
+            goto done;
         }
     }
 
-    return 0;
+    /* fetch members for each filter referenced */
+
+    for (c = contactfilters; c->field; c++) {
+        json_t *arg = json_object_get(filter, c->field);
+        if (!arg) continue;
+        const char *groupid = c->isany ? (json_is_true(arg) ? "" : NULL) : json_string_value(arg);
+        if (!groupid) continue;
+        if (hash_lookup(groupid, &cfilter->contactgroups)) continue;
+
+        /* Lookup group member email addresses */
+        strarray_t *members = carddav_getgroup(cfilter->carddavdb, cfilter->addrbook, groupid);
+        if (!members) {
+            jmap_parser_invalid(parser, c->field);
+        }
+        else {
+            hash_insert(groupid, members, &cfilter->contactgroups);
+        }
+    }
+
+done:
+    return r;
 }
 
 HIDDEN void jmap_emailbodies_fini(struct emailbodies *bodies)
@@ -676,6 +715,23 @@ static int _email_matchmime_evaluate(json_t *filter,
         xapian_query_t *xq = _email_matchmime_contactgroup(match, SEARCH_PART_BCC, db, cfilter);
         if (xq) ptrarray_append(&xqs, xq);
     }
+    if ((json_is_true(json_object_get(filter, "fromAnyContact")))) {
+        xapian_query_t *xq = _email_matchmime_contactgroup("", SEARCH_PART_FROM, db, cfilter);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((json_is_true(json_object_get(filter, "toAnyContact")))) {
+        xapian_query_t *xq = _email_matchmime_contactgroup("", SEARCH_PART_TO, db, cfilter);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((json_is_true(json_object_get(filter, "ccAnyContact")))) {
+        xapian_query_t *xq = _email_matchmime_contactgroup("", SEARCH_PART_CC, db, cfilter);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+    if ((json_is_true(json_object_get(filter, "bccAnyContact")))) {
+        xapian_query_t *xq = _email_matchmime_contactgroup("", SEARCH_PART_BCC, db, cfilter);
+        if (xq) ptrarray_append(&xqs, xq);
+    }
+
     if (xqs.count) {
         matches = 0;
         xapian_query_t *xq = xapian_query_new_compound(db, /*is_or*/0,

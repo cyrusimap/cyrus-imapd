@@ -1898,6 +1898,18 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
         if ((s = json_string_value(json_object_get(filter, "from")))) {
             _email_search_string(this, s, "from", perf_filters);
         }
+        if (json_is_true(json_object_get(filter, "fromAnyContact"))) {
+            _email_search_contactgroup(this, "", "from", contactgroups, perf_filters);
+        }
+        if (json_is_true(json_object_get(filter, "toAnyContact"))) {
+            _email_search_contactgroup(this, "", "to", contactgroups, perf_filters);
+        }
+        if (json_is_true(json_object_get(filter, "ccAnyContact"))) {
+            _email_search_contactgroup(this, "", "cc", contactgroups, perf_filters);
+        }
+        if (json_is_true(json_object_get(filter, "bccAnyContact"))) {
+            _email_search_contactgroup(this, "", "bcc", contactgroups, perf_filters);
+        }
         if ((s = json_string_value(json_object_get(filter, "fromContactGroupId")))) {
             _email_search_contactgroup(this, s, "from", contactgroups, perf_filters);
         }
