@@ -48,6 +48,7 @@
 
 #include "auth.h"
 #include "dav_db.h"
+#include "mboxname.h"
 #include "strarray.h"
 #include "util.h"
 #include "vparse.h"
@@ -119,7 +120,8 @@ strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const char *key,
 /* checks if a group exists (by id), optionally filtered by addressbook mailbox.
  * Looks up groups across addressbooks if mailbox is NULL.
    returns emails of its members (if any) */
-strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *mailbox, const char *group);
+strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *mailbox, const char *group,
+                             mbname_t *othermb);
 
 /* get a list of groups the given uid is a member of */
 strarray_t *carddav_getuid_groups(struct carddav_db *carddavdb, const char *uid);

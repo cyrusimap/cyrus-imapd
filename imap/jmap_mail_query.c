@@ -286,13 +286,12 @@ HIDDEN void jmap_email_contactfilter_fini(struct email_contactfilter *cfilter)
 
 static int _get_sharedaddressbook_cb(const mbentry_t *mbentry, void *rock)
 {
-    char **userp = rock;
+    mbname_t **mbnamep = rock;
     if (!mbentry) return 0;
     if (!(mbentry->mbtype & MBTYPE_ADDRESSBOOK)) return 0;
     mbname_t *mbname = mbname_from_intname(mbentry->name);
     if (!strcmpsafe(strarray_nth(mbname_boxes(mbname), -1), "Shared")) {
-        *userp = xstrdupnull(mbname_userid(mbname));
-        mbname_free(&mbname);
+        *mbnamep = mbname;
         return CYRUSDB_DONE;
     }
     mbname_free(&mbname);
@@ -300,15 +299,15 @@ static int _get_sharedaddressbook_cb(const mbentry_t *mbentry, void *rock)
 }
 
 
-static char *_get_sharedaddressbookuser(const char *userid)
+static mbname_t *_get_sharedaddressbookuser(const char *userid)
 {
-    char *res = NULL;
+    mbname_t *res = NULL;
     int flags = MBOXTREE_PLUS_RACL|MBOXTREE_SKIP_ROOT|MBOXTREE_SKIP_CHILDREN;
     // XXX - do we need to pass req->authstate right through??
     int r = mboxlist_usermboxtree(userid, NULL, _get_sharedaddressbook_cb, &res, flags);
     if (r == CYRUSDB_DONE)
         return res;
-    free(res);
+    mbname_free(&res);
     return NULL;
 }
 
@@ -334,7 +333,7 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
 {
     int havefield = 0;
     const struct contactfilters_t *c;
-    char *otheruser = NULL;
+    mbname_t *othermb = NULL;
     int r = 0;
 
     /* prefilter to see if there are any fields that we will need to look up */
@@ -365,8 +364,12 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
         }
     }
 
-    otheruser = _get_sharedaddressbookuser(cfilter->accountid);
-    if (otheruser) carddav_set_otheruser(cfilter->carddavdb, otheruser);
+    othermb = _get_sharedaddressbookuser(cfilter->accountid);
+    if (othermb) {
+        int r2 = carddav_set_otheruser(cfilter->carddavdb, mbname_userid(othermb));
+        if (r2) syslog(LOG_NOTICE, "DBNOTICE: failed to open otheruser %s contacts for %s",
+                 mbname_userid(othermb), cfilter->accountid);
+    }
 
     /* fetch members for each filter referenced */
 
@@ -378,7 +381,7 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
         if (hash_lookup(groupid, &cfilter->contactgroups)) continue;
 
         /* Lookup group member email addresses */
-        strarray_t *members = carddav_getgroup(cfilter->carddavdb, cfilter->addrbook, groupid);
+        strarray_t *members = carddav_getgroup(cfilter->carddavdb, cfilter->addrbook, groupid, othermb);
         if (!members) {
             jmap_parser_invalid(parser, c->field);
         }
@@ -388,7 +391,7 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
     }
 
 done:
-    free(otheruser);
+    mbname_free(&othermb);
     return r;
 }
 
