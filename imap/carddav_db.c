@@ -542,19 +542,67 @@ EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const c
     return groups;
 }
 
+/* FUNCTIONS FOR LOOKING UP headerAllContacts */
 
-#define CMD_GETGROUP_EXISTS \
+#define GETALL_LOCAL \
+    "SELECT E.email FROM vcard_emails E" \
+    " JOIN vcard_objs CO" \
+    " WHERE E.objid = CO.rowid AND CO.alive = 1" \
+    " AND (:mailbox IS NULL OR CO.mailbox = :mailbox)"
+
+#define GETALL_MEMBERS GETALL_LOCAL ";"
+
+#define GETALL_OTHERMEMBERS \
+    GETALL_LOCAL " UNION " \
+    "SELECT E.email FROM other.vcard_emails E" \
+    " JOIN other.vcard_objs CO" \
+    " WHERE E.objid = CO.rowid AND CO.alive = 1" \
+    " AND CO.mailbox LIKE '%.Shared');"
+
+/* FUNCTIONS FOR LOOKING UP headerContactGroupId on own groups */
+
+#define GETGROUP_EXISTS \
     "SELECT rowid " \
     " FROM vcard_objs" \
     " WHERE kind = :kind AND vcard_uid = :group AND alive = 1" \
     " AND (:mailbox IS NULL OR mailbox = :mailbox);"
 
-#define CMD_GETGROUP_MEMBERS \
+#define GETGROUP_LOCAL \
     "SELECT E.email FROM vcard_emails E" \
     " JOIN vcard_objs CO JOIN vcard_groups G JOIN vcard_objs GO" \
     " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
-    " AND E.pos = 0 AND GO.vcard_uid = :group AND GO.alive = 1 AND CO.alive = 1" \
-    " AND (:mailbox IS NULL OR GO.mailbox = :mailbox);"
+    " AND G.otheruser = '' AND GO.vcard_uid = :group AND GO.alive = 1 AND CO.alive = 1" \
+    " AND (:mailbox IS NULL OR GO.mailbox = :mailbox)"
+
+#define GETGROUP_MEMBERS GETGROUP_LOCAL ";"
+
+#define GETGROUP_OTHERMEMBERS \
+    GETGROUP_LOCAL " UNION " \
+    "SELECT E.email FROM other.vcard_emails E" \
+    " JOIN other.vcard_objs CO JOIN vcard_groups G JOIN vcard_objs GO" \
+    " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
+    " AND G.otheruser <> '' AND GO.vcard_uid = :group AND GO.alive = 1 AND CO.alive = 1" \
+    " AND (:mailbox IS NULL OR GO.mailbox = :mailbox) AND CO.mailbox LIKE '%.Shared';"
+
+/* FUNCTIONS FOR LOOKING UPO headerContactGroupId on shared groups:
+ * this is different than GROUP_OTHERMEMBERS in the following way,
+ * GROUP_OTHERMEMBERS: the group is in the user, but contains a member in the masteruser
+ * OTHERGROUP_MEMBERS: the group is in the masteruser, containing members in the masteruser
+ */
+
+#define GETOTHERGROUP_EXISTS \
+    "SELECT rowid " \
+    " FROM other.vcard_objs" \
+    " WHERE kind = :kind AND vcard_uid = :group AND alive = 1" \
+    " AND mailbox LIKE '%.Shared';"
+
+// need to make sure all the contacts are only in 'Shared' as well!
+#define GETOTHERGROUP_MEMBERS \
+    "SELECT E.email FROM other.vcard_emails E" \
+    " JOIN other.vcard_objs CO JOIN other.vcard_groups G JOIN other.vcard_objs GO" \
+    " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
+    " AND G.otheruser = "" AND GO.vcard_uid = :group AND GO.alive = 1 AND CO.alive = 1" \
+    " AND GO.mailbox LIKE '%.Shared' AND CO.mailbox LIKE '%.Shared'"
 
 static int groupexists_cb(sqlite3_stmt *stmt, void *rock)
 {
@@ -573,6 +621,14 @@ static int groupmembers_cb(sqlite3_stmt *stmt, void *rock)
 
 EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *mailbox, const char *group)
 {
+    int isshared = 0;
+    if (!strncmpsafe(group, "shared/", 7)) {
+        assert(!mailbox); // no mailbox filter on shared groups
+        if (!carddavdb->db->attached) return NULL;
+        isshared = 1;
+        group += 1;
+    }
+
     struct sqldb_bindval bval[] = {
         { ":mailbox", SQLITE_TEXT,    { .s = mailbox } },
         { ":group",   SQLITE_TEXT,    { .s = group   } },
@@ -580,11 +636,10 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *
         { NULL,       SQLITE_NULL,    { .s = NULL    } }
     };
 
+    const char *existsql = isshared ? GETOTHERGROUP_EXISTS : GETGROUP_EXISTS;
     int exists = 0;
-    strarray_t *members;
-    int r;
 
-    r = sqldb_exec(carddavdb->db, CMD_GETGROUP_EXISTS, bval, &groupexists_cb, &exists);
+    int r = sqldb_exec(carddavdb->db, existsql, bval, &groupexists_cb, &exists);
     if (r) {
         /* XXX syslog */
         return NULL;
@@ -593,9 +648,18 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *
     if (!exists)
         return NULL;
 
-    members = strarray_new();
+    strarray_t *members = strarray_new();
 
-    r = sqldb_exec(carddavdb->db, CMD_GETGROUP_MEMBERS, bval, &groupmembers_cb, members);
+    // pick which filter to use!
+    const char *membersql = GETGROUP_MEMBERS;
+    if (carddavdb->db->attached) {
+        if (isshared) membersql = GETOTHERGROUP_MEMBERS;
+        else if (!*group) membersql = GETALL_OTHERMEMBERS;
+        else membersql = GETGROUP_OTHERMEMBERS;
+    }
+    else if (!*group) membersql = GETALL_MEMBERS;
+
+    r = sqldb_exec(carddavdb->db, membersql, bval, &groupmembers_cb, members);
     if (r) {
         /* XXX syslog */
     }
