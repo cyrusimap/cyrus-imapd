@@ -11695,7 +11695,7 @@ static void cmd_xfer(const char *tag, const char *name,
         }
         mbname_free(&mbname);
 
-        mboxlist_findall(NULL, intname, 1, NULL, NULL, xfer_addmbox, &list);
+        mboxlist_findall(NULL, name, 1, NULL, NULL, xfer_addmbox, &list);
         free(intname);
     }
 
