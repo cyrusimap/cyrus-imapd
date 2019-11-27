@@ -83,6 +83,9 @@ int carddav_done(void);
 struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox);
 struct carddav_db *carddav_open_userid(const char *userid);
 
+/* add another DB */
+int carddav_set_otheruser(struct carddav_db *db, const char *userid);
+
 /* close this handle */
 int carddav_close(struct carddav_db *carddavdb);
 

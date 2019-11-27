@@ -133,6 +133,12 @@ EXPORTED struct carddav_db *carddav_open_mailbox(struct mailbox *mailbox)
     return carddavdb;
 }
 
+EXPORTED int carddav_set_otheruser(struct carddav_db *carddavdb, const char *userid)
+{
+    sqldb_detach(carddavdb->db); // remove any current
+    return dav_attach_userid(carddavdb->db, userid);
+}
+
 
 /* Close DAV DB */
 EXPORTED int carddav_close(struct carddav_db *carddavdb)
