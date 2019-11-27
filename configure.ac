@@ -1458,7 +1458,6 @@ AM_CONDITIONAL([HTTPD], [test "$enable_http" != "no"])
 
 HTTP_CPPFLAGS=
 HTTP_LIBS=
-with_nghttp2=no
 with_xml2=no
 with_ical=no
 with_icu4c=no
@@ -1568,14 +1567,20 @@ dnl                        AC_DEFINE(WITH_DKIM,[],
 dnl                                [Build DKIM support into iSchedule?]),
 dnl                        AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider patching OpenDKIM with contrib/dkim_canon_ischedule.patch])),
 dnl                AC_MSG_WARN([Your version of OpenDKIM can not support iSchedule.  Consider upgrading to OpenDKIM >= 2.7.0]))
-
-        PKG_CHECK_MODULES([NGHTTP2], [libnghttp2 >= 1.5], [
-                AC_DEFINE(HAVE_NGHTTP2,[],
-                        [Build HTTP/2 support into httpd?])
-                with_nghttp2=yes
-                ],
-                AC_MSG_NOTICE([httpd will not have support for HTTP/2.  Consider installing libnghttp2 >= 1.5]))
-
+        AC_ARG_WITH(nghttp2, [AS_HELP_STRING([--without-nghttp2], [disable HTTP/2 support (check)])],,[with_nghttp2="check"])
+        if test "x$with_nghttp2" = "xyes" -o "x$with_nghttp2" = "xcheck"; then
+                PKG_CHECK_MODULES([NGHTTP2], [libnghttp2 >= 1.5], [
+                    with_nghttp2=yes
+                    AC_DEFINE(HAVE_NGHTTP2,[],
+                            [Build HTTP/2 support into httpd?])
+                ], [
+                    if test "x$with_nghttp2" = "xyes"; then
+                        AC_MSG_ERROR([HTTP/2 explicitly requested, but libnghttp2 was not found])
+                    fi
+                    with_nghttp2=no
+                    AC_MSG_NOTICE([httpd will not have support for HTTP/2.  Consider installing libnghttp2 >= 1.5])
+                ])
+        fi
 
         PKG_CHECK_MODULES([BROTLI], [libbrotlienc], [
                 AC_DEFINE(HAVE_BROTLI,[],
