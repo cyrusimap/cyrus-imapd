@@ -250,6 +250,25 @@ EXPORTED sqldb_t *dav_open_mailbox(struct mailbox *mailbox)
     return db;
 }
 
+EXPORTED int dav_attach_userid(sqldb_t *db, const char *userid)
+{
+    struct buf fname = BUF_INITIALIZER;
+    dav_getpath_byuserid(&fname, userid);
+    int r = sqldb_attach(db, buf_cstring(&fname));
+    buf_free(&fname);
+    return r;
+}
+
+EXPORTED int dav_attach_mailbox(sqldb_t *db, struct mailbox *mailbox)
+{
+    struct buf fname = BUF_INITIALIZER;
+    dav_getpath(&fname, mailbox);
+    int r = sqldb_attach(db, buf_cstring(&fname));
+    buf_free(&fname);
+    return r;
+}
+
+
 /*
  * mboxlist_usermboxtree() callback function to create DAV DB entries for a mailbox
  */
