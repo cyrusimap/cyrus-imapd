@@ -283,6 +283,36 @@ HIDDEN void jmap_email_contactfilter_fini(struct email_contactfilter *cfilter)
     free_hash_table(&cfilter->contactgroups, (void(*)(void*))strarray_free);
 }
 
+
+static int _get_sharedaddressbook_cb(const mbentry_t *mbentry, void *rock)
+{
+    char **userp = rock;
+    if (!mbentry) return 0;
+    if (!(mbentry->mbtype & MBTYPE_ADDRESSBOOK)) return 0;
+    mbname_t *mbname = mbname_from_intname(mbentry->name);
+    if (!strcmpsafe(strarray_nth(mbname_boxes(mbname), -1), "Shared")) {
+        *userp = xstrdupnull(mbname_userid(mbname));
+        mbname_free(&mbname);
+        return CYRUSDB_DONE;
+    }
+    mbname_free(&mbname);
+    return 0;
+}
+
+
+static char *_get_sharedaddressbookuser(const char *userid)
+{
+    char *res = NULL;
+    int flags = MBOXTREE_PLUS_RACL|MBOXTREE_SKIP_ROOT|MBOXTREE_SKIP_CHILDREN;
+    // XXX - do we need to pass req->authstate right through??
+    int r = mboxlist_usermboxtree(userid, NULL, _get_sharedaddressbook_cb, &res, flags);
+    if (r == CYRUSDB_DONE)
+        return res;
+    free(res);
+    return NULL;
+}
+
+
 static const struct contactfilters_t {
     const char *field;
     int isany;
@@ -304,6 +334,7 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
 {
     int havefield = 0;
     const struct contactfilters_t *c;
+    char *otheruser = NULL;
     int r = 0;
 
     /* prefilter to see if there are any fields that we will need to look up */
@@ -334,6 +365,9 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
         }
     }
 
+    otheruser = _get_sharedaddressbookuser(cfilter->accountid);
+    if (otheruser) carddav_set_otheruser(cfilter->carddavdb, otheruser);
+
     /* fetch members for each filter referenced */
 
     for (c = contactfilters; c->field; c++) {
@@ -354,6 +388,7 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(struct jmap_parser *par
     }
 
 done:
+    free(otheruser);
     return r;
 }
 
