@@ -472,3 +472,28 @@ EXPORTED int sqldb_close(sqldb_t **dbp)
 
     return _free_open(open);
 }
+
+EXPORTED int sqldb_attach(sqldb_t *open, const char *fname)
+{
+    if (open->attached) return SQLITE_MISUSE;
+    struct sqldb_bindval bval[] = {
+        { ":fname",  SQLITE_TEXT, { .s = fname         } },
+        { NULL,      SQLITE_NULL, { .s = NULL          } } };
+
+    struct stat sbuf;
+    if (stat(fname, &sbuf)) return SQLITE_NOTFOUND;
+
+    int r = sqldb_exec(open, "ATTACH DATABASE :fname AS other;", bval, NULL, NULL);
+    if (r) return r;
+    open->attached = 1;
+    return 0;
+}
+
+EXPORTED int sqldb_detach(sqldb_t *open)
+{
+    if (!open->attached) return SQLITE_MISUSE;
+    int r = sqldb_exec(open, "DETACH DATABASE other;", NULL, NULL, NULL);
+    if (r) return r;
+    open->attached = 0;
+    return 0;
+}
