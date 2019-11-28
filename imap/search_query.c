@@ -606,7 +606,11 @@ EXPORTED void search_build_query(search_builder_t *bx, search_expr_t *e)
 
     case SEOP_FUZZYMATCH:
         if (e->attr && e->attr->part >= 0) {
-            bx->match(bx, e->attr->part, e->value.s);
+            if (e->attr->flags & SEA_ISLIST) {
+                bx->matchlist(bx, e->attr->part, e->value.list);
+            } else {
+                bx->match(bx, e->attr->part, e->value.s);
+            }
         }
         return;
 

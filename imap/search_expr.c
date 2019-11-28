@@ -1216,6 +1216,83 @@ static void split(search_expr_t *e,
 
 /* ====================================================================== */
 
+static int search_list_match(message_t *m,
+                             const union search_value *v __attribute__((unused)),
+                             void *internalised,
+                             void *data1)
+{
+    int r;
+    struct buf buf = BUF_INITIALIZER;
+    int (*getter)(message_t *, struct buf *) = (int(*)(message_t *, struct buf *))data1;
+    strarray_t *internal = internalised;
+
+    // XXX - this should never happen
+
+    r = getter(m, &buf);
+    if (!r && buf.len) {
+        const char *val = buf_cstring(&buf);
+        r = (strarray_find(internal, val, 0) >= 0) ? 1 : 0;
+    }
+    else
+        r = 0;
+    buf_free(&buf);
+
+    return r;
+}
+
+static void search_list_serialise(struct buf *b, const union search_value *v)
+{
+    buf_putc(b, '(');
+    int i;
+    for (i = 0; i < strarray_size(v->list); i++) {
+        if (i) buf_putc(b, ' ');
+        buf_putc(b, '"');
+        buf_appendcstr(b, strarray_nth(v->list, i));
+        buf_putc(b, '"');
+    }
+    buf_putc(b, ')');
+}
+
+static int search_list_unserialise(struct protstream *prot, union search_value *v)
+{
+    int c;
+    char tmp[1024];
+
+    c = prot_getc(prot);
+    if (c != '(') return EOF;
+
+    v->list = strarray_new();
+    do {
+        c = getseword(prot, tmp, sizeof(tmp));
+        strarray_append(v->list, tmp);
+    } while (c == ' ');
+
+    if (c != ')') return EOF;
+
+    return prot_getc(prot);
+}
+
+static void search_list_internalise(struct index_state *state __attribute__((unused)),
+                                      const union search_value *v, void **internalisedp)
+{
+    if (*internalisedp) *internalisedp = NULL;
+    if (v) *internalisedp = v->list;
+}
+
+static void search_list_duplicate(union search_value *new,
+                                  const union search_value *old)
+{
+    new->list = strarray_dup(old->list);
+}
+
+static void search_list_free(union search_value *v)
+{
+    strarray_free(v->list);
+    v->list = NULL;
+}
+
+/* ====================================================================== */
+
 struct search_string_internal {
     comp_pat *pat;
     char *s;
@@ -2236,6 +2313,62 @@ EXPORTED void search_attr_init(void)
 
     static const search_attr_t attrs[] = {
         {
+            "bcclist",
+            SEA_FUZZABLE|SEA_ISLIST,
+            SEARCH_PART_BCC,
+            SEARCH_COST_CACHE,
+            search_list_internalise,
+            /*cmp*/NULL,
+            search_list_match,
+            search_list_serialise,
+            search_list_unserialise,
+            /*get_countability*/NULL,
+            search_list_duplicate,
+            search_list_free,
+            (void *)message_get_bcc
+        },{
+            "cclist",
+            SEA_FUZZABLE|SEA_ISLIST,
+            SEARCH_PART_CC,
+            SEARCH_COST_CACHE,
+            search_list_internalise,
+            /*cmp*/NULL,
+            search_list_match,
+            search_list_serialise,
+            search_list_unserialise,
+            /*get_countability*/NULL,
+            search_list_duplicate,
+            search_list_free,
+            (void *)message_get_cc
+        },{
+            "fromlist",
+            SEA_FUZZABLE|SEA_ISLIST,
+            SEARCH_PART_FROM,
+            SEARCH_COST_CACHE,
+            search_list_internalise,
+            /*cmp*/NULL,
+            search_list_match,
+            search_list_serialise,
+            search_list_unserialise,
+            /*get_countability*/NULL,
+            search_list_duplicate,
+            search_list_free,
+            (void *)message_get_from
+        },{
+            "tolist",
+            SEA_FUZZABLE|SEA_ISLIST,
+            SEARCH_PART_TO,
+            SEARCH_COST_CACHE,
+            search_list_internalise,
+            /*cmp*/NULL,
+            search_list_match,
+            search_list_serialise,
+            search_list_unserialise,
+            /*get_countability*/NULL,
+            search_list_duplicate,
+            search_list_free,
+            (void *)message_get_to
+        },{
             "bcc",
             SEA_FUZZABLE,
             SEARCH_PART_BCC,
