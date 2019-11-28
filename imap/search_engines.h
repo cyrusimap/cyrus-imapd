@@ -69,6 +69,7 @@ struct search_builder {
     void (*begin_boolean)(search_builder_t *, int op);
     void (*end_boolean)(search_builder_t *, int op);
     void (*match)(search_builder_t *, int part, const char *str);
+    void (*matchlist)(search_builder_t *, int part, const strarray_t *items);
     void *(*get_internalised)(search_builder_t *);
     int (*run)(search_builder_t *, search_hit_cb_t proc, void *rock);
 };

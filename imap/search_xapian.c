@@ -1078,7 +1078,7 @@ out:
 struct opnode
 {
     int op;     /* SEARCH_OP_* or SEARCH_PART_* or XAPIAN_SEARCH_OP_* */
-    char *arg;
+    strarray_t *items;
     struct opnode *next;
     struct opnode *children;
 };
@@ -1096,11 +1096,11 @@ struct xapian_builder {
     void *rock;
 };
 
-static struct opnode *opnode_new(int op, const char *arg)
+static struct opnode *opnode_new(int op, const strarray_t *arg)
 {
     struct opnode *on = xzmalloc(sizeof(struct opnode));
     on->op = op;
-    on->arg = xstrdupnull(arg);
+    on->items = strarray_dup(arg);
     return on;
 }
 
@@ -1113,7 +1113,7 @@ static void opnode_delete(struct opnode *on)
         next = child->next;
         opnode_delete(child);
     }
-    free(on->arg);
+    strarray_free(on->items);
     free(on);
 }
 
@@ -1151,7 +1151,7 @@ static struct opnode *opnode_deep_copy(const struct opnode *on)
 {
     if (!on) return NULL;
 
-    struct opnode *clone = opnode_new(on->op, on->arg);
+    struct opnode *clone = opnode_new(on->op, on->items);
     const struct opnode *child;
     for (child = on->children; child; child = child->next) {
         opnode_append_child(clone, opnode_deep_copy(child));
@@ -1182,11 +1182,17 @@ static const char *opnode_serialise(struct buf *buf, const struct opnode *on)
     else
         buf_appendcstr(buf, "UNKNOWN");
 
-    if (on->arg) {
+    if (on->items) {
         buf_putc(buf, ' ');
-        buf_putc(buf, '"');
-        buf_appendcstr(buf, on->arg);
-        buf_putc(buf, '"');
+        buf_putc(buf, '(');
+        int i = 0;
+        for (i = 0; i < strarray_size(on->items); i++) {
+            if (i) buf_putc(buf, ' ');
+            buf_putc(buf, '"');
+            buf_appendcstr(buf, strarray_nth(on->items, i));
+            buf_putc(buf, '"');
+        }
+        buf_putc(buf, ')');
     }
 
     if (on->children) {
@@ -1239,7 +1245,7 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on,
 {
     struct opnode *child;
     xapian_query_t *qq = NULL;
-    int i;
+    int i, j;
     ptrarray_t childqueries = PTRARRAY_INITIALIZER;
 
     switch (on->op) {
@@ -1268,21 +1274,35 @@ static xapian_query_t *opnode_to_query(const xapian_db_t *db, struct opnode *on,
                 !(opts & SEARCH_ATTACHMENTS_IN_ANY)) {
                 continue;
             }
-            void *q = xapian_query_new_match(db, i, on->arg);
-            if (q) ptrarray_push(&childqueries, q);
+            for (j = 0; j < strarray_size(on->items); j++) {
+                void *q = xapian_query_new_match(db, i, strarray_nth(on->items, j));
+                if (q) ptrarray_push(&childqueries, q);
+            }
         }
         qq = xapian_query_new_compound(db, /*is_or*/1,
                                        (xapian_query_t **)childqueries.data,
                                        childqueries.count);
         break;
     case XAPIAN_SEARCH_OP_DOCTYPE:
-        assert(on->arg != NULL && on->arg[1] == '\0');
-        qq = xapian_query_new_has_doctype(db, on->arg[0], NULL);
+        assert(on->items != NULL && strarray_size(on->items));
+        const char *val = strarray_nth(on->items, 0);
+        qq = xapian_query_new_has_doctype(db, val[0], NULL);
         break;
     default:
-        assert(on->arg != NULL);
+        assert(on->items != NULL);
         assert(on->children == NULL);
-        qq = xapian_query_new_match(db, on->op, on->arg);
+        if (strarray_size(on->items) > 1) {
+            for (j = 0; j < strarray_size(on->items); j++) {
+                void *q = xapian_query_new_match(db, on->op, strarray_nth(on->items, j));
+                if (q) ptrarray_push(&childqueries, q);
+            }
+            qq = xapian_query_new_compound(db, /*is_or*/1,
+                                           (xapian_query_t **)childqueries.data,
+                                           childqueries.count);
+        }
+        else {
+            qq = xapian_query_new_match(db, on->op, strarray_nth(on->items, 0));
+        }
         break;
     }
     ptrarray_fini(&childqueries);
@@ -1737,7 +1757,10 @@ static int run_query(xapian_builder_t *bb)
             if (!search_part_is_body(expr->op) || expr->op == SEARCH_PART_ANY) {
                 /* Transform NOT(MATCH) to AND(NOT(MATCH),NOT(DOCTYPE==P)) */
                 struct opnode *notdp = opnode_new(SEARCH_OP_NOT, NULL);
-                opnode_append_child(notdp, opnode_new(XAPIAN_SEARCH_OP_DOCTYPE, "P"));
+                strarray_t ar = STRARRAY_INITIALIZER;
+                strarray_append(&ar, "P");
+                opnode_append_child(notdp, opnode_new(XAPIAN_SEARCH_OP_DOCTYPE, &ar));
+                strarray_fini(&ar);
                 struct opnode *node = opnode_new(SEARCH_OP_AND, NULL);
                 opnode_append_child(node, child);
                 opnode_append_child(node, notdp);
@@ -1860,22 +1883,33 @@ static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
     ptrarray_pop(&bb->stack);
 }
 
-static void match(search_builder_t *bx, int part, const char *str)
+static void matchlist(search_builder_t *bx, int part, const strarray_t *vals)
 {
     xapian_builder_t *bb = (xapian_builder_t *)bx;
     struct opnode *top = ptrarray_tail(&bb->stack);
     struct opnode *on;
 
-    if (!str) return;
-    if (SEARCH_VERBOSE(bb->opts))
+    if (!vals) return;
+    if (SEARCH_VERBOSE(bb->opts)) {
+        char *item = strarray_join(vals, ",");
         syslog(LOG_INFO, "match(part=%s, str=\"%s\")",
-               search_part_as_string(part), str);
+               search_part_as_string(part), item);
+        free(item);
+    }
 
-    on = opnode_new(part, str);
+    on = opnode_new(part, vals);
     if (top)
         opnode_append_child(top, on);
     else
         bb->root = on;
+}
+
+static void match(search_builder_t *bx, int part, const char *val)
+{
+    strarray_t items = STRARRAY_INITIALIZER;
+    strarray_append(&items, val);
+    matchlist(bx, part, &items);
+    strarray_fini(&items);
 }
 
 static void *get_internalised(search_builder_t *bx)
@@ -1907,6 +1941,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox, int opts)
     bb->super.begin_boolean = begin_boolean;
     bb->super.end_boolean = end_boolean;
     bb->super.match = match;
+    bb->super.matchlist = matchlist;
     bb->super.get_internalised = get_internalised;
     bb->super.run = run;
 
@@ -2740,6 +2775,7 @@ static void generate_snippet_terms(xapian_snipgen_t *snipgen,
                                    struct opnode *on)
 {
     struct opnode *child;
+    int i;
 
     switch (on->op) {
 
@@ -2753,7 +2789,8 @@ static void generate_snippet_terms(xapian_snipgen_t *snipgen,
     case SEARCH_PART_ANY:
         assert(on->children == NULL);
         if (part != SEARCH_PART_HEADERS) {
-            xapian_snipgen_add_match(snipgen, on->arg);
+            for (i = 0; i < strarray_size(on->items); i++)
+                xapian_snipgen_add_match(snipgen, strarray_nth(on->items, i));
         }
         break;
     default:
@@ -2761,7 +2798,8 @@ static void generate_snippet_terms(xapian_snipgen_t *snipgen,
         if (on->op >= 0 && on->op < SEARCH_NUM_PARTS) {
             assert(on->children == NULL);
             if (part == on->op) {
-                xapian_snipgen_add_match(snipgen, on->arg);
+                for (i = 0; i < strarray_size(on->items); i++)
+                    xapian_snipgen_add_match(snipgen, strarray_nth(on->items, i));
             }
         }
         break;
