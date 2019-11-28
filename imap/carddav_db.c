@@ -622,12 +622,14 @@ static int groupmembers_cb(sqlite3_stmt *stmt, void *rock)
 EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *mailbox, const char *group,
                                       mbname_t *othermb)
 {
+    int r = 0;
     int isshared = 0;
     if (!strncmpsafe(group, "shared/", 7)) {
         assert(!mailbox); // no mailbox filter on shared groups
         if (!carddavdb->db->attached) return NULL;
+        if (!*group) return NULL; // can't just be "shared/"
         isshared = 1;
-        group += 1;
+        group += 7;
     }
 
     struct sqldb_bindval bval[] = {
@@ -639,17 +641,20 @@ EXPORTED strarray_t *carddav_getgroup(struct carddav_db *carddavdb, const char *
         { NULL,            SQLITE_NULL,    { .s = NULL    } }
     };
 
-    const char *existsql = isshared ? GETOTHERGROUP_EXISTS : GETGROUP_EXISTS;
-    int exists = 0;
+    if (*group) {
+        // first check that the group exists
 
-    int r = sqldb_exec(carddavdb->db, existsql, bval, &groupexists_cb, &exists);
-    if (r) {
-        /* XXX syslog */
-        return NULL;
+        const char *existsql = isshared ? GETOTHERGROUP_EXISTS : GETGROUP_EXISTS;
+        int exists = 0;
+        r = sqldb_exec(carddavdb->db, existsql, bval, &groupexists_cb, &exists);
+        if (r) {
+            /* XXX syslog */
+            return NULL;
+        }
+
+        if (!exists)
+            return NULL;
     }
-
-    if (!exists)
-        return NULL;
 
     strarray_t *members = strarray_new();
 
