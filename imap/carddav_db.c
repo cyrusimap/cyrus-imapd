@@ -545,7 +545,7 @@ EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const c
 /* FUNCTIONS FOR LOOKING UP headerAllContacts */
 
 #define GETALL_LOCAL \
-    "SELECT E.email FROM vcard_emails E" \
+    "SELECT DISTINCT E.email FROM vcard_emails E" \
     " JOIN vcard_objs CO" \
     " WHERE E.objid = CO.rowid AND CO.alive = 1" \
     " AND (:mailbox IS NULL OR CO.mailbox = :mailbox)"
@@ -554,7 +554,7 @@ EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const c
 
 #define GETALL_OTHERMEMBERS \
     GETALL_LOCAL " UNION " \
-    "SELECT E.email FROM other.vcard_emails E" \
+    "SELECT DISTINCT E.email FROM other.vcard_emails E" \
     " JOIN other.vcard_objs CO" \
     " WHERE E.objid = CO.rowid AND CO.alive = 1" \
     " AND CO.mailbox = :othermailbox;"
@@ -568,7 +568,7 @@ EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const c
     " AND (:mailbox IS NULL OR mailbox = :mailbox);"
 
 #define GETGROUP_LOCAL \
-    "SELECT E.email FROM vcard_emails E" \
+    "SELECT DISTINCT E.email FROM vcard_emails E" \
     " JOIN vcard_objs CO JOIN vcard_groups G JOIN vcard_objs GO" \
     " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
     " AND G.otheruser = '' AND GO.vcard_uid = :group AND GO.alive = 1 AND CO.alive = 1" \
@@ -578,7 +578,7 @@ EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const c
 
 #define GETGROUP_OTHERMEMBERS \
     GETGROUP_LOCAL " UNION " \
-    "SELECT E.email FROM other.vcard_emails E" \
+    "SELECT DISTINCT E.email FROM other.vcard_emails E" \
     " JOIN other.vcard_objs CO JOIN vcard_groups G JOIN vcard_objs GO" \
     " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
     " AND G.otheruser = :otheruser AND GO.vcard_uid = :group AND GO.alive = 1 AND CO.alive = 1" \
@@ -598,7 +598,7 @@ EXPORTED strarray_t *carddav_getuid2groups(struct carddav_db *carddavdb, const c
 
 // need to make sure all the contacts are only in 'Shared' as well!
 #define GETOTHERGROUP_MEMBERS \
-    "SELECT E.email FROM other.vcard_emails E" \
+    "SELECT DISTINCT E.email FROM other.vcard_emails E" \
     " JOIN other.vcard_objs CO JOIN other.vcard_groups G JOIN other.vcard_objs GO" \
     " WHERE E.objid = CO.rowid AND CO.vcard_uid = G.member_uid AND G.objid = GO.rowid" \
     " AND G.otheruser = '' AND GO.vcard_uid = :group AND GO.alive = 1 AND CO.alive = 1" \
@@ -615,7 +615,7 @@ static int groupexists_cb(sqlite3_stmt *stmt, void *rock)
 static int groupmembers_cb(sqlite3_stmt *stmt, void *rock)
 {
     strarray_t *array = (strarray_t *)rock;
-    strarray_add(array, (const char *)sqlite3_column_text(stmt, 0));
+    strarray_append(array, (const char *)sqlite3_column_text(stmt, 0));
     return 0;
 }
 
