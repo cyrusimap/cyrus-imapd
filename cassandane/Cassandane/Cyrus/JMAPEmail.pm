@@ -14103,6 +14103,21 @@ sub test_email_query_fromcontactgroupid
     $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
     $self->assert_str_equals($emailId2, $res->[0][1]{ids}[1]);
 
+    # Filter by fromAnyContact
+    $res = $jmap->CallMethods([
+        ['Email/query', {
+            filter => {
+                fromAnyContact => $JSON::true
+            },
+            sort => [
+                { property => "subject" }
+            ],
+        }, 'R1']
+    ], $using);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
+    $self->assert_str_equals($emailId1, $res->[0][1]{ids}[0]);
+    $self->assert_str_equals($emailId2, $res->[0][1]{ids}[1]);
+
     # Filter by contact group and addressbook.
     $res = $jmap->CallMethods([
         ['Email/query', {
