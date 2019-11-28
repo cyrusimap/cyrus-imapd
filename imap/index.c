@@ -5992,6 +5992,9 @@ MsgData **index_msgdata_load(struct index_state *state,
             case SORT_MODSEQ:
                 /* already copied above */
                 break;
+            case SORT_CREATEDMODSEQ:
+                cur->createdmodseq = record.createdmodseq;
+                break;
             case SORT_SIZE:
                 cur->size = record.size;
                 break;
@@ -6454,6 +6457,9 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
         case SORT_MODSEQ:
             ret = numcmp(md1->modseq, md2->modseq);
             break;
+        case SORT_CREATEDMODSEQ:
+            ret = numcmp(md1->createdmodseq, md2->createdmodseq);
+            break;
         case SORT_DISPLAYFROM:
             ret = strcmpsafe(md1->displayfrom, md2->displayfrom);
             break;
@@ -6631,6 +6637,9 @@ static int index_sort_compare_arrival(const void *v1, const void *v2)
     ret = md1->internaldate - md2->internaldate;
     if (ret) return ret;
 
+    ret = md1->createdmodseq - md2->createdmodseq;
+    if (ret) return ret;
+
     ret = md1->uid - md2->uid;
     if (ret) return ret;
 
@@ -6648,6 +6657,9 @@ static int index_sort_compare_reverse_arrival(const void *v1, const void *v2)
     int ret;
 
     ret = md2->internaldate - md1->internaldate;
+    if (ret) return ret;
+
+    ret = md2->createdmodseq - md1->createdmodseq;
     if (ret) return ret;
 
     ret = md1->uid - md2->uid;
@@ -6670,6 +6682,9 @@ static int index_sort_compare_reverse_flagged(const void *v1, const void *v2)
     if (ret) return ret;
 
     ret = md2->internaldate - md1->internaldate;
+    if (ret) return ret;
+
+    ret = md2->createdmodseq - md1->createdmodseq;
     if (ret) return ret;
 
     ret = md1->uid - md2->uid;

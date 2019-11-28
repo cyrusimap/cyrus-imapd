@@ -2176,67 +2176,71 @@ static void _email_parse_filter_cb(jmap_req_t *req,
 static struct sortcrit *_email_buildsort(json_t *sort, int *sort_savedate)
 {
     json_t *jcomp;
-    size_t i;
+    size_t i, j = 0;
     struct sortcrit *sortcrit;
 
     if (!JNOTNULL(sort) || json_array_size(sort) == 0) {
-        sortcrit = xzmalloc(2 * sizeof(struct sortcrit));
+        sortcrit = xzmalloc(3 * sizeof(struct sortcrit));
         sortcrit[0].flags |= SORT_REVERSE;
         sortcrit[0].key = SORT_ARRIVAL;
         sortcrit[1].flags |= SORT_REVERSE;
-        sortcrit[1].key = SORT_SEQUENCE;
+        sortcrit[1].key = SORT_CREATEDMODSEQ;
+        sortcrit[2].flags |= SORT_REVERSE;
+        sortcrit[2].key = SORT_SEQUENCE;
         return sortcrit;
     }
 
-    sortcrit = xzmalloc((json_array_size(sort) + 1) * sizeof(struct sortcrit));
+    sortcrit = xzmalloc((json_array_size(sort) + 2) * sizeof(struct sortcrit));
 
     json_array_foreach(sort, i, jcomp) {
         const char *prop = json_string_value(json_object_get(jcomp, "property"));
 
         if (json_object_get(jcomp, "isAscending") == json_false()) {
-            sortcrit[i].flags |= SORT_REVERSE;
+            sortcrit[j].flags |= SORT_REVERSE;
         }
 
         /* Note: add any new sort criteria also to is_supported_email_sort */
 
         if (!strcmp(prop, "receivedAt")) {
-            sortcrit[i].key = SORT_ARRIVAL;
+            sortcrit[j++].key = SORT_ARRIVAL;
+            sortcrit[j].flags = sortcrit[j-1].flags;
+            sortcrit[j].key = SORT_CREATEDMODSEQ;
         }
         else if (!strcmp(prop, "sentAt")) {
-            sortcrit[i].key = SORT_DATE;
+            sortcrit[j].key = SORT_DATE;
         }
         else if (!strcmp(prop, "from")) {
-            sortcrit[i].key = SORT_DISPLAYFROM;
+            sortcrit[j].key = SORT_DISPLAYFROM;
         }
         else if (!strcmp(prop, "id")) {
-            sortcrit[i].key = SORT_GUID;
+            sortcrit[j].key = SORT_GUID;
         }
         else if (!strcmp(prop, "emailState")) {
-            sortcrit[i].key = SORT_MODSEQ;
+            sortcrit[j].key = SORT_MODSEQ;
         }
         else if (!strcmp(prop, "size")) {
-            sortcrit[i].key = SORT_SIZE;
+            sortcrit[j].key = SORT_SIZE;
         }
         else if (!strcmp(prop, "subject")) {
-            sortcrit[i].key = SORT_SUBJECT;
+            sortcrit[j].key = SORT_SUBJECT;
         }
         else if (!strcmp(prop, "to")) {
-            sortcrit[i].key = SORT_DISPLAYTO;
+            sortcrit[j].key = SORT_DISPLAYTO;
         }
         else if (!strcmp(prop, "hasKeyword")) {
             const char *name = json_string_value(json_object_get(jcomp, "keyword"));
             const char *flagname = jmap_keyword_to_imap(name);
             if (flagname) {
-                sortcrit[i].key = SORT_HASFLAG;
-                sortcrit[i].args.flag.name = xstrdup(flagname);
+                sortcrit[j].key = SORT_HASFLAG;
+                sortcrit[j].args.flag.name = xstrdup(flagname);
             }
         }
         else if (!strcmp(prop, "someInThreadHaveKeyword")) {
             const char *name = json_string_value(json_object_get(jcomp, "keyword"));
             const char *flagname = jmap_keyword_to_imap(name);
             if (flagname) {
-                sortcrit[i].key = SORT_HASCONVFLAG;
-                sortcrit[i].args.flag.name = xstrdup(flagname);
+                sortcrit[j].key = SORT_HASCONVFLAG;
+                sortcrit[j].args.flag.name = xstrdup(flagname);
             }
         }
         // FM specific
@@ -2245,19 +2249,20 @@ static struct sortcrit *_email_buildsort(json_t *sort, int *sort_savedate)
                 json_string_value(json_object_get(jcomp, "mailboxId"));
 
             if (sort_savedate) *sort_savedate = 1;
-            sortcrit[i].key = (*prop == 's') ? SORT_SNOOZEDUNTIL : SORT_SAVEDATE;
-            sortcrit[i].args.mailbox.id = xstrdupnull(mboxid);
+            sortcrit[j].key = (*prop == 's') ? SORT_SNOOZEDUNTIL : SORT_SAVEDATE;
+            sortcrit[j].args.mailbox.id = xstrdupnull(mboxid);
         }
         else if (!strcmp(prop, "threadSize")) {
-            sortcrit[i].key = SORT_CONVSIZE;
+            sortcrit[j].key = SORT_CONVSIZE;
         }
         else if (!strcmp(prop, "spamScore")) {
-            sortcrit[i].key = SORT_SPAMSCORE;
+            sortcrit[j].key = SORT_SPAMSCORE;
         }
+
+        j++;
     }
 
-    i = json_array_size(sort);
-    sortcrit[i].key = SORT_SEQUENCE;
+    sortcrit[j].key = SORT_SEQUENCE;
 
     return sortcrit;
 }

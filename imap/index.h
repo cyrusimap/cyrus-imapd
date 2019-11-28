@@ -159,6 +159,7 @@ typedef struct msgdata {
     time_t savedate;            /* savedate */
     size_t size;                /* message size */
     modseq_t modseq;            /* modseq of record*/
+    modseq_t createdmodseq;     /* createdmodseq of record*/
     bit32 hasflag;              /* hasflag values (up to 32 of them) */
     struct message_guid guid;   /* message guid */
     uint32_t system_flags;      /* system flags */
