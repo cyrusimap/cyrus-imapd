@@ -1713,6 +1713,9 @@ static void _email_search_contactgroup(search_expr_t *parent,
                     attrname, perf_filters);
         }
     }
+    else {
+         search_expr_new(parent, SEOP_FALSE);
+    }
 }
 
 /* ====================================================================== */
