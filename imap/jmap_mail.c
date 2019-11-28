@@ -2202,28 +2202,28 @@ static struct sortcrit *_email_buildsort(json_t *sort, int *sort_savedate)
         if (!strcmp(prop, "receivedAt")) {
             sortcrit[i].key = SORT_ARRIVAL;
         }
-        if (!strcmp(prop, "sentAt")) {
+        else if (!strcmp(prop, "sentAt")) {
             sortcrit[i].key = SORT_DATE;
         }
-        if (!strcmp(prop, "from")) {
+        else if (!strcmp(prop, "from")) {
             sortcrit[i].key = SORT_DISPLAYFROM;
         }
-        if (!strcmp(prop, "id")) {
+        else if (!strcmp(prop, "id")) {
             sortcrit[i].key = SORT_GUID;
         }
-        if (!strcmp(prop, "emailState")) {
+        else if (!strcmp(prop, "emailState")) {
             sortcrit[i].key = SORT_MODSEQ;
         }
-        if (!strcmp(prop, "size")) {
+        else if (!strcmp(prop, "size")) {
             sortcrit[i].key = SORT_SIZE;
         }
-        if (!strcmp(prop, "subject")) {
+        else if (!strcmp(prop, "subject")) {
             sortcrit[i].key = SORT_SUBJECT;
         }
-        if (!strcmp(prop, "to")) {
+        else if (!strcmp(prop, "to")) {
             sortcrit[i].key = SORT_DISPLAYTO;
         }
-        if (!strcmp(prop, "hasKeyword")) {
+        else if (!strcmp(prop, "hasKeyword")) {
             const char *name = json_string_value(json_object_get(jcomp, "keyword"));
             const char *flagname = jmap_keyword_to_imap(name);
             if (flagname) {
@@ -2231,7 +2231,7 @@ static struct sortcrit *_email_buildsort(json_t *sort, int *sort_savedate)
                 sortcrit[i].args.flag.name = xstrdup(flagname);
             }
         }
-        if (!strcmp(prop, "someInThreadHaveKeyword")) {
+        else if (!strcmp(prop, "someInThreadHaveKeyword")) {
             const char *name = json_string_value(json_object_get(jcomp, "keyword"));
             const char *flagname = jmap_keyword_to_imap(name);
             if (flagname) {
@@ -2240,7 +2240,7 @@ static struct sortcrit *_email_buildsort(json_t *sort, int *sort_savedate)
             }
         }
         // FM specific
-        if (!strcmp(prop, "addedDates") || !strcmp(prop, "snoozedUntil")) {
+        else if (!strcmp(prop, "addedDates") || !strcmp(prop, "snoozedUntil")) {
             const char *mboxid =
                 json_string_value(json_object_get(jcomp, "mailboxId"));
 
@@ -2248,10 +2248,10 @@ static struct sortcrit *_email_buildsort(json_t *sort, int *sort_savedate)
             sortcrit[i].key = (*prop == 's') ? SORT_SNOOZEDUNTIL : SORT_SAVEDATE;
             sortcrit[i].args.mailbox.id = xstrdupnull(mboxid);
         }
-        if (!strcmp(prop, "threadSize")) {
+        else if (!strcmp(prop, "threadSize")) {
             sortcrit[i].key = SORT_CONVSIZE;
         }
-        if (!strcmp(prop, "spamScore")) {
+        else if (!strcmp(prop, "spamScore")) {
             sortcrit[i].key = SORT_SPAMSCORE;
         }
     }
