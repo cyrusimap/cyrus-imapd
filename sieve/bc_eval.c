@@ -58,8 +58,6 @@
 #include "bc_parse.h"
 
 #include "charset.h"
-#include "imapurl.h"
-#include "libconfig.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "util.h"
@@ -388,17 +386,6 @@ static int do_comparisons(strarray_t *needles, const char *hay,
     }
 
     return res;
-}
-
-const char *mboxname_to_mUTF7(const char *mboxname, sieve_interp_t *interp)
-{
-    if (!mboxname) return NULL;
-
-    char *mUTF7 = xmalloc(5 * strlen(mboxname) + 1);
-    strarray_appendm(&interp->tmp_strings, mUTF7);
-    UTF8_to_mUTF7(mUTF7, mboxname);
-
-    return mUTF7;
 }
 
 /* Evaluate a bytecode test */
@@ -1297,10 +1284,6 @@ envelope_err:
                 extname = parse_string(extname, variables);
             }
 
-            if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
-                extname = mboxname_to_mUTF7(extname, interp);
-            }
-
             res = interp->getmailboxexists(sc, extname);
             if (res) break;
         }
@@ -1379,13 +1362,8 @@ envelope_err:
             if (!strcasecmp(keyname, "online")) val = xstrdup("maybe");
             else if (!strcasecmp(keyname, "fcc")) val = xstrdup("no");
         }
-        else {
-            if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
-                extname = mboxname_to_mUTF7(extname, interp);
-            }
-
+        else
             interp->getmetadata(sc, extname, keyname, &val);
-        }
 
         if (val) {
             res = do_comparisons(test.u.mm.keylist, val,
@@ -1411,10 +1389,6 @@ envelope_err:
 
             if (requires & BFE_VARIABLES) {
                 extname = parse_string(extname, variables);
-            }
-
-            if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
-                extname = mboxname_to_mUTF7(extname, interp);
             }
         }
 
@@ -1539,12 +1513,8 @@ envelope_err:
 
         list_len = strarray_size(test.u.mm.keylist);
 
-        if (extname) {
-            if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
-                extname = mboxname_to_mUTF7(extname, interp);
-            }
-
-            if (!(res = interp->getmailboxexists(sc, extname))) break;
+        if (extname && !(res = interp->getmailboxexists(sc, extname))) {
+            break;
         }
 
         for (x = 0; x < list_len; x++) {
@@ -1765,10 +1735,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
             if (requires & BFE_VARIABLES) {
                 folder = parse_string(folder, variables);
                 specialuse = parse_string(specialuse, variables);
-            }
-
-            if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
-                folder = mboxname_to_mUTF7(folder, i);
             }
 
             unwrap_flaglist(cmd.u.f.flags, &actionflags,
@@ -2133,10 +2099,6 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
                 fcc.mailbox = parse_string(fcc.mailbox, variables);
                 fcc.specialuse = parse_string(fcc.specialuse, variables);
-            }
-
-            if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
-                fcc.mailbox = mboxname_to_mUTF7(fcc.mailbox, i);
             }
 
             unwrap_flaglist(cmd.u.v.fcc.flags, &fcc.imapflags,

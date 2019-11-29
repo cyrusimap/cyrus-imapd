@@ -203,7 +203,6 @@ EXPORTED int sieve_interp_free(sieve_interp_t **interp)
     if (*interp) {
         free((*interp)->lastitem);
         strarray_free((*interp)->extensions);
-        strarray_fini(&(*interp)->tmp_strings);
         free(*interp);
         *interp = NULL;
     }

@@ -91,9 +91,6 @@ struct sieve_interp {
 
     /* time when allocated */
     time_t time;
-
-    /* list of temporary allocated strings */
-    strarray_t tmp_strings;
 };
 
 

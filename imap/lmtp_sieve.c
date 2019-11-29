@@ -61,6 +61,7 @@
 #include "auth.h"
 #include "duplicate.h"
 #include "global.h"
+#include "imapurl.h"
 #include "lmtpd.h"
 #include "lmtp_sieve.h"
 #include "lmtpengine.h"
@@ -163,10 +164,29 @@ static int deleteheader(void *sc, void *mc, const char *head, int index)
     return SIEVE_OK;
 }
 
+static char *mboxname_from_externalUTF8(const char *extname,
+                                        const struct namespace *ns,
+                                        const char *userid)
+{
+    char *intname, *freeme = NULL;
+
+    if (config_getswitch(IMAPOPT_SIEVE_UTF8FILEINTO)) {
+        freeme = xmalloc(5 * strlen(extname) + 1);
+        UTF8_to_mUTF7(freeme, extname);
+        extname = freeme;
+    }
+
+    intname = mboxname_from_external(extname, ns, userid);
+    free(freeme);
+
+    return intname;
+}
+
 static int getmailboxexists(void *sc, const char *extname)
 {
     script_data_t *sd = (script_data_t *)sc;
-    char *intname = mboxname_from_external(extname, sd->ns, mbname_userid(sd->mbname));
+    char *intname = mboxname_from_externalUTF8(extname, sd->ns,
+                                               mbname_userid(sd->mbname));
     int r = mboxlist_lookup(intname, NULL, NULL);
     free(intname);
     return r ? 0 : 1; /* 0 => exists */
@@ -189,7 +209,7 @@ static int getspecialuseexists(void *sc, const char *extname, strarray_t *uses)
     int i, r = 1;
 
     if (extname) {
-        char *intname = mboxname_from_external(extname, sd->ns, userid);
+        char *intname = mboxname_from_externalUTF8(extname, sd->ns, userid);
         struct buf attrib = BUF_INITIALIZER;
 
         annotatemore_lookup(intname, "/specialuse", userid, &attrib);
@@ -233,7 +253,8 @@ static int getmetadata(void *sc, const char *extname, const char *keyname, char 
 {
     script_data_t *sd = (script_data_t *)sc;
     struct buf attrib = BUF_INITIALIZER;
-    char *intname = extname ? mboxname_from_external(extname, sd->ns, mbname_userid(sd->mbname)) : xstrdup("");
+    char *intname = !extname ? xstrdup("") :
+        mboxname_from_externalUTF8(extname, sd->ns, mbname_userid(sd->mbname));
     int r;
     if (!strncmp(keyname, "/private/", 9)) {
         r = annotatemore_lookup(intname, keyname+8, mbname_userid(sd->mbname), &attrib);
@@ -1087,7 +1108,7 @@ static int sieve_fileinto(void *ac,
             if (ret) free(intname);
         }
         if (ret) {
-            intname = mboxname_from_external(fc->mailbox, sd->ns, userid);
+            intname = mboxname_from_externalUTF8(fc->mailbox, sd->ns, userid);
         }
     }
 
@@ -1435,7 +1456,7 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
         r = mboxlist_lookup(intname, NULL, NULL);
         if (r) free(intname);
     }
-    if (r) intname = mboxname_from_external(fcc->mailbox, sdata->ns, userid);
+    if (r) intname = mboxname_from_externalUTF8(fcc->mailbox, sdata->ns, userid);
 
     r = mboxlist_lookup(intname, NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
