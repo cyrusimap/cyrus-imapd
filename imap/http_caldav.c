@@ -1321,7 +1321,7 @@ static int _scheduling_enabled(struct transaction_t *txn,
     struct buf buf = BUF_INITIALIZER;
     int is_enabled = 1;
 
-    annotatemore_lookupmask(mailbox->name, entry, httpd_userid, &buf);
+    annotatemore_lookup(mailbox->name, entry, "", &buf);
     /* legacy */
     if (!strcasecmp(buf_cstring(&buf), "no"))
         is_enabled = 0;
