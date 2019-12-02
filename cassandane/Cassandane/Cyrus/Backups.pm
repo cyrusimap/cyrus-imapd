@@ -549,6 +549,14 @@ sub test_xbackup
 
         $self->assert_deep_equals(\%expected, \%actual);
     }
+
+    # let's also xbackup all users with a pattern
+    ($status, $details)  = $self->do_xbackup("user/*");
+    $self->assert_str_equals('ok', $status);
+
+    # each user should only be processed once, even though "user/*" pattern
+    # also matches all their subfolders
+    $self->assert_deep_equals([sort @users], [sort @{$details->{OK}->{USER}}]);
 }
 
 sub test_xbackup_shared
