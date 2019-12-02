@@ -3357,13 +3357,6 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     mboxevent_notify(&mboxevent);
     mboxevent_free(&mboxevent);
 
-    /* Keep the VEVENT in the database but set alive to 0, to report
-     * with CalendarEvents/changes. */
-    cdata->dav.alive = 0;
-    cdata->dav.modseq = record.modseq;
-    cdata->dav.imap_uid = record.uid;
-    r = caldav_write(db, cdata);
-
 done:
     if (mbox) jmap_closembox(req, &mbox);
     if (oldical) icalcomponent_free(oldical);
