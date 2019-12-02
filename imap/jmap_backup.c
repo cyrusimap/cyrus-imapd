@@ -57,10 +57,7 @@
 #include "hash.h"
 #include "http_jmap.h"
 #include "json_support.h"
-#include "map.h"
-#include "sync_support.h"
-#include "user.h"
-#include "util.h"
+#include "vcard_support.h"
 
 static int jmap_backup_restore_contacts(jmap_req_t *req);
 static int jmap_backup_restore_calendars(jmap_req_t *req);
@@ -76,25 +73,25 @@ jmap_method_t jmap_backup_methods_nonstandard[] = {
         "Backup/restoreContacts",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_contacts,
-        JMAP_SHARED_CSTATE
+        /*flags*/0
     },
     {
         "Backup/restoreCalendars",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_calendars,
-        JMAP_SHARED_CSTATE
+        /*flags*/0
     },
     {
         "Backup/restoreNotes",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_notes,
-        JMAP_SHARED_CSTATE
+        /*flags*/0
     },
     {
         "Backup/restoreMail",
         JMAP_BACKUP_EXTENSION,
         &jmap_backup_restore_mail,
-        JMAP_SHARED_CSTATE
+        /*flags*/0
     },
     { NULL, NULL, NULL, 0}
 };
@@ -108,7 +105,7 @@ HIDDEN void jmap_backup_init(jmap_settings_t *settings)
 
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
         json_object_set_new(settings->server_capabilities,
-                JMAP_BACKUP_EXTENSION, json_object());
+                            JMAP_BACKUP_EXTENSION, json_object());
 
         for (mp = jmap_backup_methods_nonstandard; mp->name; mp++) {
             hash_insert(mp->name, mp, &settings->methods);
@@ -120,7 +117,8 @@ HIDDEN void jmap_backup_init(jmap_settings_t *settings)
 HIDDEN void jmap_backup_capabilities(json_t *account_capabilities)
 {
     if (config_getswitch(IMAPOPT_JMAP_NONSTANDARD_EXTENSIONS)) {
-        json_object_set_new(account_capabilities, JMAP_BACKUP_EXTENSION, json_object());
+        json_object_set_new(account_capabilities,
+                            JMAP_BACKUP_EXTENSION, json_object());
     }
 }
 
@@ -131,13 +129,15 @@ HIDDEN void jmap_backup_capabilities(json_t *account_capabilities)
 #define CREATES         2
 #define DRAFT_DESTROYS  1
 
+#define UNDO_DESTROY  (1<<0)
+#define UNDO_UPDATE   (1<<1)
+#define UNDO_CREATE   (1<<2)
+
 struct jmap_restore {
     /* Request arguments */
     time_t cutoff;
-    unsigned is_email     : 1;
-    unsigned undo_create  : 1;
-    unsigned undo_update  : 1;
-    unsigned undo_destroy : 1;
+    unsigned is_email : 1;
+    unsigned undo     : 3;
 
     /* Response fields */
     unsigned num_undone[3];
@@ -171,19 +171,22 @@ static void jmap_restore_parse(jmap_req_t *req,
             }
         }
 
-        else if (is_email &&
-                 !strcmp(key, "undoCreate") && json_is_boolean(arg)) {
-            restore->undo_create = json_boolean_value(arg);
-        }
+        else if (!is_email && json_is_boolean(arg)) {
+            if (!strcmp(key, "undoCreate")) {
+                if (json_is_true(arg)) restore->undo |= UNDO_CREATE;
+            }
 
-        else if (is_email &&
-                 !strcmp(key, "undoUpdate") && json_is_boolean(arg)) {
-            restore->undo_update = json_boolean_value(arg);
-        }
+            else if (!strcmp(key, "undoUpdate")) {
+                if (json_is_true(arg)) restore->undo |= UNDO_UPDATE;
+            }
 
-        else if (is_email &&
-                 !strcmp(key, "undoDestroy") && json_is_boolean(arg)) {
-            restore->undo_destroy = json_boolean_value(arg);
+            else if (!strcmp(key, "undoDestroy")) {
+                if (json_is_true(arg)) restore->undo |= UNDO_DESTROY;
+            }
+
+            else {
+                jmap_parser_invalid(parser, key);
+            }
         }
 
         else {
@@ -228,6 +231,166 @@ static json_t *jmap_restore_reply(struct jmap_restore *restore)
     return res;
 }
 
+struct restore_rock {
+    jmap_req_t *req;
+    struct jmap_restore *jrestore;
+    int mbtype;
+    void (*restore_cb)(const char *, void *, void *);
+    struct mailbox *mailbox;
+};
+
+struct restore_info {
+    unsigned char type;
+    unsigned int msgno;
+};
+
+static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct restore_rock *rrock = (struct restore_rock *) rock;
+    struct mailbox *mailbox = NULL;
+    message_t *msg = message_new();
+    hash_table resources = HASH_TABLE_INITIALIZER;
+    const char *resource = NULL;
+    struct body *body = NULL;
+    struct param *param;
+    int recno, r;
+
+    if ((mbentry->mbtype & rrock->mbtype) != rrock->mbtype) return 0;
+
+    r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/1);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
+        return 0;
+    }
+
+    construct_hash_table(&resources, 32, 0);
+
+    for (recno = mailbox->i.num_records; recno > 0; recno--) {
+        message_set_from_mailbox(mailbox, recno, msg);
+
+        const struct index_record *record = msg_record(msg);
+
+        if (mailbox->mbtype & MBTYPES_DAV) {
+            /* Get resource from filename param in Content-Disposition header */
+            r = mailbox_cacherecord(mailbox, record);
+            if (r) continue;
+
+            message_read_bodystructure(record, &body);
+            for (param = body->disposition_params; param; param = param->next) {
+                if (!strcmp(param->attribute, "FILENAME")) {
+                    resource = param->value;
+                }
+            }
+            assert(resource);
+        }
+        else {
+            /* Get resource from X-Universally-Unique-Identifier header */
+        }
+
+        struct restore_info *restore = NULL;
+        if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
+            /* Destroyed/updated */
+            restore = hash_lookup(resource, &resources);
+
+            if (restore) {
+                /* Tag the most recent version of resource before cutoff */
+                if (restore->type == CREATES) {
+                    restore->type = UPDATES;
+                    restore->msgno = 0;
+                }
+                if (!restore->msgno && (rrock->jrestore->undo & UNDO_UPDATE)) {
+                    restore->msgno = recno;
+                }
+            }
+            else if ((rrock->jrestore->undo & UNDO_DESTROY) &&
+                     record->last_updated > rrock->jrestore->cutoff) {
+                /* Destroyed after cutoff */
+                restore = xzmalloc(sizeof(struct restore_info));
+                hash_insert(resource, restore, &resources);
+                restore->type = DESTROYS;
+
+                if (record->internaldate <= rrock->jrestore->cutoff) {
+                    /* This destroyed version is the latest */
+                    restore->msgno = recno;
+                }
+            }
+        }
+        else if ((rrock->jrestore->undo & (UNDO_CREATE|UNDO_UPDATE)) &&
+                 record->internaldate > rrock->jrestore->cutoff) {
+            /* Created/updated after cutoff */
+            restore = xzmalloc(sizeof(struct restore_info));
+            hash_insert(resource, restore, &resources);
+            restore->type = CREATES;
+            if (rrock->jrestore->undo & UNDO_CREATE) restore->msgno = recno;
+        }
+        else {
+            /* Not interested in the resource */
+        }
+
+        message_free_body(body);
+        free(body);
+    }
+    message_unref(&msg);
+
+    rrock->mailbox = mailbox;
+    hash_enumerate(&resources, rrock->restore_cb, rrock);
+    free_hash_table(&resources, NULL);
+
+    jmap_closembox(rrock->req, &mailbox);
+
+    return 0;
+}
+
+static void restore_vcard(const char *resource, void *data, void *rock)
+{
+    struct restore_info *restore = (struct restore_info *) data;
+    struct restore_rock *rrock = (struct restore_rock *) rock;
+    struct mailbox *mailbox = rrock->mailbox;
+    jmap_req_t *req = rrock->req;
+
+    if (!restore->msgno) goto done;
+
+    message_t *msg = message_new_from_mailbox(mailbox, restore->msgno);
+    const struct index_record *record = msg_record(msg);
+    struct vparse_card *vcard = NULL;
+    struct entryattlist *annots = NULL;
+    strarray_t *flags = NULL;
+    int r = 0, is_update = 0;
+
+    switch (restore->type) {
+    case UPDATES:
+        is_update = 1;
+
+        GCC_FALLTHROUGH
+
+    case DESTROYS:
+        flags = mailbox_extract_flags(mailbox, record, req->accountid);
+        annots = mailbox_extract_annots(mailbox, record);
+        vcard = record_to_vcard(mailbox, record);
+        r = carddav_store(mailbox, vcard->objects, resource,
+                          record->createdmodseq, flags, annots, req->accountid,
+                          req->authstate, /*ignorequota*/ is_update);
+        if (r || !is_update) break;
+
+        GCC_FALLTHROUGH
+
+    case CREATES:
+        r = carddav_remove(mailbox, record->uid,
+                           /*isreplace*/ is_update, req->accountid);
+        break;
+    }
+
+    if (!r) rrock->jrestore->num_undone[restore->type]++;
+
+    if (vcard) vparse_free_card(vcard);
+    freeentryatts(annots);
+    strarray_free(flags);
+    message_unref(&msg);
+
+  done:
+    free(restore);
+}
+
 static int jmap_backup_restore_contacts(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -239,6 +402,15 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
     if (err) {
         jmap_error(req, err);
         goto done;
+    }
+
+    if (restore.undo) {
+        struct restore_rock rrock =
+            { req, &restore, MBTYPE_ADDRESSBOOK, &restore_vcard, NULL };
+        char *addrhomeset = carddav_mboxname(req->accountid, NULL);
+        mboxlist_mboxtree(addrhomeset,
+                          restore_collection_cb, &rrock, MBOXTREE_SKIP_ROOT);
+        free(addrhomeset);
     }
 
     /* Build response */
