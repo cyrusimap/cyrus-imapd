@@ -114,12 +114,12 @@ sub do_xbackup
 
     my $admintalk = $self->{adminstore}->get_client();
 
-    my %results;
+    my %untagged;
     my $handler = sub {
         my ($response, $args, undef) = @_;
         return if scalar @{$args} != 2;
         my ($type, $val) = @{$args};
-        push @{$results{uc $response}->{$type}}, $val;
+        push @{$untagged{uc $response}->{$type}}, $val;
     };
     my %callbacks = (
         'ok' => $handler,
@@ -128,10 +128,12 @@ sub do_xbackup
 
     $admintalk->_imap_cmd('xbackup', 0, \%callbacks,
                           $pattern, $channel);
-    $self->assert_str_equals('ok',
-        $admintalk->get_last_completion_response());
-
-    return \%results;
+    if (wantarray) {
+        return ($admintalk->get_last_completion_response(), \%untagged);
+    }
+    else {
+        return $admintalk->get_last_completion_response();
+    }
 }
 
 sub cyr_backup_json
@@ -494,8 +496,9 @@ sub test_xbackup
     $self->assert_backups_not_exist({ users => \@users });
 
     # kick off a backup with xbackup and a pattern
-    my $res = $self->do_xbackup('user/*');
-    $self->assert_deep_equals([sort @users], [sort @{$res->{OK}->{USER}}]);
+    my ($status, $details) = $self->do_xbackup('user/*');
+    $self->assert_str_equals('ok', $status);
+    $self->assert_deep_equals([sort @users], [sort @{$details->{OK}->{USER}}]);
 
     # backups should exist now, but with no messages
     $self->assert_backups_exist({ users => \@users });
@@ -524,8 +527,9 @@ sub test_xbackup
     # let's xbackup and check each user individually
     foreach my $u (@users) {
         # run xbackup
-        my $res = $self->do_xbackup("user/$u");
-        $self->assert_deep_equals([$u], $res->{OK}->{USER});
+        my ($status, $details) = $self->do_xbackup("user/$u");
+        $self->assert_str_equals('ok', $status);
+        $self->assert_deep_equals([$u], $details->{OK}->{USER});
 
         # backup should contain four messages per folder
         my $messages = $self->cyr_backup_json({ user => $u }, 'messages');
@@ -580,9 +584,10 @@ sub test_xbackup_shared
     $self->assert_backups_not_exist({ mailboxes => \@folders });
 
     # kick off a backup with xbackup and a pattern
-    my $res = $self->do_xbackup('sh*');
+    my ($status, $details) = $self->do_xbackup('sh*');
+    $self->assert_str_equals('ok', $status);
     $self->assert_num_equals(scalar(@folders) * (1 + scalar(@subfolders)),
-                             scalar @{$res->{OK}->{MAILBOX}});
+                             scalar @{$details->{OK}->{MAILBOX}});
 
     # backups should exist now, but with no messages
     $self->assert_backups_exist({ mailboxes => \@folders });
@@ -607,9 +612,10 @@ sub test_xbackup_shared
     }
 
     # xbackup again
-    $res = $self->do_xbackup('sh*');
+    ($status, $details) = $self->do_xbackup('sh*');
+    $self->assert_str_equals('ok', $status);
     $self->assert_num_equals(scalar(@folders) * (1 + scalar(@subfolders)),
-                             scalar @{$res->{OK}->{MAILBOX}});
+                             scalar @{$details->{OK}->{MAILBOX}});
 
     # backup should contain four messages per subfolder per folder
     my $messages = $self->cyr_backup_json({ mailbox => $folders[0] },
