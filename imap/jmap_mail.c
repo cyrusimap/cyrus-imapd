@@ -1699,7 +1699,8 @@ static void _email_search_threadkeyword(search_expr_t *parent, const char *keywo
 static void _email_search_contactgroup(search_expr_t *parent,
                                        const char *groupid,
                                        const char *attrname,
-                                       hash_table *contactgroups)
+                                       hash_table *contactgroups,
+                                       strarray_t *perf_filters)
 {
     if (!contactgroups || !contactgroups->size) return;
 
@@ -1716,6 +1717,7 @@ static void _email_search_contactgroup(search_expr_t *parent,
             strarray_appendm(e->value.list, s);
         }
         charset_free(&utf8);
+        _email_search_perf_attr(e->attr, perf_filters);
     }
     else {
          search_expr_new(parent, SEOP_FALSE);
@@ -1906,28 +1908,28 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
             _email_search_string(this, s, "from", perf_filters);
         }
         if (json_is_true(json_object_get(filter, "fromAnyContact"))) {
-            _email_search_contactgroup(this, "", "fromlist", contactgroups);
+            _email_search_contactgroup(this, "", "fromlist", contactgroups, perf_filters);
         }
         if (json_is_true(json_object_get(filter, "toAnyContact"))) {
-            _email_search_contactgroup(this, "", "tolist", contactgroups);
+            _email_search_contactgroup(this, "", "tolist", contactgroups, perf_filters);
         }
         if (json_is_true(json_object_get(filter, "ccAnyContact"))) {
-            _email_search_contactgroup(this, "", "cclist", contactgroups);
+            _email_search_contactgroup(this, "", "cclist", contactgroups, perf_filters);
         }
         if (json_is_true(json_object_get(filter, "bccAnyContact"))) {
-            _email_search_contactgroup(this, "", "bcclist", contactgroups);
+            _email_search_contactgroup(this, "", "bcclist", contactgroups, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "fromContactGroupId")))) {
-            _email_search_contactgroup(this, s, "fromlist", contactgroups);
+            _email_search_contactgroup(this, s, "fromlist", contactgroups, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "toContactGroupId")))) {
-            _email_search_contactgroup(this, s, "tolist", contactgroups);
+            _email_search_contactgroup(this, s, "tolist", contactgroups, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "ccContactGroupId")))) {
-            _email_search_contactgroup(this, s, "cclist", contactgroups);
+            _email_search_contactgroup(this, s, "cclist", contactgroups, perf_filters);
         }
         if ((s = json_string_value(json_object_get(filter, "bccContactGroupId")))) {
-            _email_search_contactgroup(this, s, "bcclist", contactgroups);
+            _email_search_contactgroup(this, s, "bcclist", contactgroups, perf_filters);
         }
         if (JNOTNULL((val = json_object_get(filter, "hasAttachment")))) {
             e = val == json_false() ? search_expr_new(this, SEOP_NOT) : this;
