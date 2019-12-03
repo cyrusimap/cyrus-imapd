@@ -284,12 +284,10 @@ sub test_blob_download_name
     my $data = $jmap->Upload("some test", "text/plain");
 
     my $resp = $jmap->Download('cassandane', $data->{blobId}, 'foo');
-
     $self->assert_str_equals('attachment; filename="foo"',
         $resp->{headers}{'content-disposition'});
 
     $resp = $jmap->Download('cassandane', $data->{blobId}, '%D1%82%D0%B5%D1%81%D1%82.txt');
-
     $self->assert_str_equals("attachment; filename*=utf-8''%D1%82%D0%B5%D1%81%D1%82.txt",
         $resp->{headers}{'content-disposition'});
 }

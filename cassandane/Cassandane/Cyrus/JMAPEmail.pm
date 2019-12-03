@@ -6724,8 +6724,15 @@ sub test_identity_get
     my $id;
     my $res;
 
+    # Make sure it's in the correct JMAP capability, as reported in
+    # https://github.com/cyrusimap/cyrus-imapd/issues/2912
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:submission',
+    ];
+
     xlog "get identities";
-    $res = $jmap->CallMethods([['Identity/get', { }, "R1"]]);
+    $res = $jmap->CallMethods([['Identity/get', { }, "R1"]], $using);
 
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{list}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{notFound}});
@@ -6735,7 +6742,7 @@ sub test_identity_get
     $self->assert_not_null($id->{email});
 
     xlog "get unknown identities";
-    $res = $jmap->CallMethods([['Identity/get', { ids => ["foo"] }, "R1"]]);
+    $res = $jmap->CallMethods([['Identity/get', { ids => ["foo"] }, "R1"]], $using);
     $self->assert_num_equals(0, scalar @{$res->[0][1]->{list}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{notFound}});
 }
