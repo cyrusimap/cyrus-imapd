@@ -2581,6 +2581,12 @@ done:
     return 0;
 }
 
+static int _email_query_can_calculate_changes(struct emailsearch *search)
+{
+    /* can calculate changes for mutable sort, but not mutable search */
+    return search->is_mutable > 1 ? 0 : 1;
+}
+
 static void _email_query(jmap_req_t *req, struct jmap_query *query,
                          int collapse_threads,
                          hash_table *contactgroups,
@@ -2601,7 +2607,7 @@ static void _email_query(jmap_req_t *req, struct jmap_query *query,
     }
 
     /* can calculate changes for mutable sort, but not mutable search */
-    query->can_calculate_changes = search->is_mutable > 1 ? 0 : 1;
+    query->can_calculate_changes = _email_query_can_calculate_changes(search);
 
     /* make query state */
     query->query_state = _email_make_querystate(current_modseq, 0,
@@ -2995,6 +3001,10 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
         *err = jmap_server_error(IMAP_INTERNAL);
         goto done;
     }
+    if (!_email_query_can_calculate_changes(search)) {
+        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
+        goto done;
+    }
 
     /* Run search */
     const ptrarray_t *msgdata = NULL;
@@ -3202,6 +3212,10 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
                                                   &query->sort_savedate);
     if (!search) {
         *err = jmap_server_error(IMAP_INTERNAL);
+        goto done;
+    }
+    if (!_email_query_can_calculate_changes(search)) {
+        *err = json_pack("{s:s}", "type", "cannotCalculateChanges");
         goto done;
     }
 
