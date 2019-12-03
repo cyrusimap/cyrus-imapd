@@ -291,7 +291,7 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     cdata->dav.alive = sqlite3_column_int(stmt, 16);
     cdata->dav.modseq = sqlite3_column_int64(stmt, 17);
     cdata->dav.createdmodseq = sqlite3_column_int64(stmt, 18);
-    if (!(rrock->flags && RROCK_FLAG_TOMBSTONES) && !cdata->dav.alive)
+    if (!(rrock->flags & RROCK_FLAG_TOMBSTONES) && !cdata->dav.alive)
         return 0;
 
     cdata->dav.rowid = sqlite3_column_int(stmt, 0);
