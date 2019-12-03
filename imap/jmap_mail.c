@@ -109,7 +109,6 @@ static int jmap_email_matchmime_method(jmap_req_t *req);
 static int jmap_searchsnippet_get(jmap_req_t *req);
 static int jmap_thread_get(jmap_req_t *req);
 static int jmap_thread_changes(jmap_req_t *req);
-static int jmap_identity_get(jmap_req_t *req);
 
 /*
  * Possibly to be implemented:
@@ -190,12 +189,6 @@ static jmap_method_t jmap_mail_methods_standard[] = {
         "Thread/changes",
         JMAP_URN_MAIL,
         &jmap_thread_changes,
-        JMAP_SHARED_CSTATE
-    },
-    {
-        "Identity/get",
-        JMAP_URN_MAIL,
-        &jmap_identity_get,
         JMAP_SHARED_CSTATE
     },
     { NULL, NULL, NULL, 0}
@@ -11491,177 +11484,6 @@ done:
     jmap_parser_fini(&parser);
     jmap_copy_fini(&copy);
     seen_close(&seendb);
-    return 0;
-}
-
-/* Identity/get method */
-static const jmap_property_t identity_props[] = {
-    {
-        "id",
-        NULL,
-        JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
-    },
-    {
-        "name",
-        NULL,
-        0
-    },
-    {
-        "email",
-        NULL,
-        JMAP_PROP_IMMUTABLE
-    },
-    {
-        "replyTo",
-        NULL,
-        0
-    },
-    {
-        "bcc",
-        NULL,
-        0
-    },
-    {
-        "textSignature",
-        NULL,
-        0
-    },
-    {
-        "htmlSignature",
-        NULL,
-        0
-    },
-    {
-        "mayDelete",
-        NULL,
-        JMAP_PROP_SERVER_SET
-    },
-
-    /* FM extensions (do ALL of these get through to Cyrus?) */
-    {
-        "displayName",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "addBccOnSMTP",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "saveSentToMailboxId",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "saveOnSMTP",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "useForAutoReply",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "isAutoConfigured",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "enableExternalSMTP",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "smtpServer",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "smtpPort",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "smtpSSL",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "smtpUser",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "smtpPassword",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "smtpRemoteService",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-    {
-        "popLinkId",
-        JMAP_MAIL_EXTENSION,
-        0
-    },
-
-    { NULL, NULL, 0 }
-};
-
-static int jmap_identity_get(jmap_req_t *req)
-{
-    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
-    struct jmap_get get;
-    json_t *err = NULL;
-
-    /* Parse request */
-    jmap_get_parse(req, &parser, identity_props, /*allow_null_ids*/1,
-                   NULL, NULL, &get, &err);
-    if (err) {
-        jmap_error(req, err);
-        goto done;
-    }
-
-    /* Build response */
-    json_t *me = json_pack("{s:s}", "id", req->userid);
-    if (jmap_wantprop(get.props, "name")) {
-        json_object_set_new(me, "name", json_string(""));
-    }
-    if (jmap_wantprop(get.props, "email")) {
-        json_object_set_new(me, "email",
-                json_string(strchr(req->userid, '@') ? req->userid : ""));
-    }
-
-    if (jmap_wantprop(get.props, "mayDelete")) {
-        json_object_set_new(me, "mayDelete", json_false());
-    }
-    if (json_array_size(get.ids)) {
-        size_t i;
-        json_t *val;
-        json_array_foreach(get.ids, i, val) {
-            if (strcmp(json_string_value(val), req->userid)) {
-                json_array_append(get.not_found, val);
-            }
-            else {
-                json_array_append(get.list, me);
-            }
-        }
-    } else if (!JNOTNULL(get.ids)) {
-        json_array_append(get.list, me);
-    }
-    json_decref(me);
-
-    /* Reply */
-    get.state = xstrdup("0");
-    jmap_ok(req, jmap_get_reply(&get));
-
-done:
-    jmap_parser_fini(&parser);
-    jmap_get_fini(&get);
     return 0;
 }
 
