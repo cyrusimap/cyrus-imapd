@@ -471,15 +471,14 @@ static int _email_extract_bodies_internal(const struct body *parts,
         }
         else if (is_inline) {
             if (!strcmp(multipart_type, "ALTERNATIVE")) {
-                switch (parttype) {
-                    case PLAIN:
-                        ptrarray_append(textlist, (void*) part);
-                        break;
-                    case HTML:
-                        ptrarray_append(htmllist, (void*) part);
-                        break;
-                    default:
-                        ptrarray_append(attslist, (void*) part);
+                if (parttype == PLAIN && textlist) {
+                    ptrarray_append(textlist, (void*) part);
+                }
+                else if (parttype == HTML && htmllist) {
+                    ptrarray_append(htmllist, (void*) part);
+                }
+                else {
+                    ptrarray_append(attslist, (void*) part);
                 }
                 continue;
             }
@@ -504,12 +503,12 @@ static int _email_extract_bodies_internal(const struct body *parts,
     if (!strcmp(multipart_type, "ALTERNATIVE")) {
         int j;
         /* Found HTML part only */
-        if (textlist && textlist_count == textlist->count) {
+        if (textlist && htmllist && textlist_count == textlist->count) {
             for (j = htmllist_count; j < htmllist->count; j++)
                 ptrarray_append(textlist, ptrarray_nth(htmllist, j));
         }
         /* Found TEXT part only */
-        if (htmllist && htmllist_count == htmllist->count) {
+        if (htmllist && textlist && htmllist_count == htmllist->count) {
             for (j = textlist_count; j < textlist->count; j++)
                 ptrarray_append(htmllist, ptrarray_nth(textlist, j));
         }
