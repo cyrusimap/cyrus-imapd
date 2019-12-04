@@ -386,7 +386,8 @@ static void restore_vcard(const char *resource, void *data, void *rock)
                 mailbox_extract_annots(mailbox, record);
 
             r = carddav_store(mailbox, vcard->objects, resource,
-                              /*createdmodseq*/ 0, flags, annots,
+                              is_replace ? record->createdmodseq : 0,
+                              flags, annots,
                               req->accountid, req->authstate, /*ignorequota*/ 0);
             freeentryatts(annots);
             strarray_free(flags);
