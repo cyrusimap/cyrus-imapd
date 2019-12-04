@@ -1494,7 +1494,6 @@ sub test_calendarevent_get_participants
             participationStatus => 'accepted',
             email => 'homer@example.com',
             roles => {
-                'attendee' => JSON::true,
                 'optional' => JSON::true,
             },
             locationId => 'loc1',
