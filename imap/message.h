@@ -341,6 +341,7 @@ extern int message_get_leaf_types(message_t *m, strarray_t *types);
 
 /* less shitty interface */
 extern const struct index_record *msg_record(const message_t *m);
+extern struct mailbox *msg_mailbox(const message_t *m);
 extern uint32_t msg_size(const message_t *m);
 extern uint32_t msg_uid(const message_t *m);
 extern conversation_id_t msg_cid(const message_t *m);

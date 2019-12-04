@@ -4734,6 +4734,12 @@ EXPORTED const struct index_record *msg_record(const message_t *m)
     return &m->record;
 }
 
+EXPORTED struct mailbox *msg_mailbox(const message_t *m)
+{
+    assert(!message_need(m, M_MAILBOX))
+    return m->mailbox;
+}
+
 EXPORTED int message_get_size(message_t *m, uint32_t *sizep)
 {
     int r = message_need(m, M_RECORD);
