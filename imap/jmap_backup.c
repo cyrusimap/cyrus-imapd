@@ -241,7 +241,8 @@ struct restore_rock {
 
 struct restore_info {
     unsigned char type;
-    unsigned int msgno;
+    unsigned int msgno_todestroy;
+    unsigned int msgno_torecreate;
 };
 
 static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
@@ -289,42 +290,46 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 
         struct restore_info *restore = NULL;
         if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
-            /* Destroyed/updated */
+            /* Tombstone - resource has been destroyed or updated */
             restore = hash_lookup(resource, &resources);
 
-            if (restore) {
-                /* Tag the most recent version of resource before cutoff */
-                if (restore->type == CREATES) {
-                    restore->type = UPDATES;
-                    restore->msgno = 0;
-                }
-                if (!restore->msgno && (rrock->jrestore->undo & UNDO_UPDATE)) {
-                    restore->msgno = recno;
-                }
-            }
-            else if ((rrock->jrestore->undo & UNDO_DESTROY) &&
-                     record->last_updated > rrock->jrestore->cutoff) {
-                /* Destroyed after cutoff */
-                restore = xzmalloc(sizeof(struct restore_info));
-                hash_insert(resource, restore, &resources);
-                restore->type = DESTROYS;
+            if ((!restore || !restore->msgno_torecreate) &&
+                record->internaldate <= rrock->jrestore->cutoff) {
+                /* Most recent version of the resource before cutoff */
 
-                if (record->internaldate <= rrock->jrestore->cutoff) {
-                    /* This destroyed version is the latest */
-                    restore->msgno = recno;
+                if (!restore &&
+                    record->last_updated > rrock->jrestore->cutoff) {
+                    /* Resource has been destroyed after cutoff */
+                    restore = xzmalloc(sizeof(struct restore_info));
+                    hash_insert(resource, restore, &resources);
+                    restore->type = DESTROYS;
+                }
+
+                if (restore) {
+                    /* Recreate this version of the resource */
+                    restore->msgno_torecreate = recno;
+
+                    if (restore->type == CREATES) {
+                        /* Tombstone is before cutoff so this is an update */
+                        restore->type = UPDATES;
+                    }
+                }
+                else {
+                    /* Resource was destroyed before cutoff - not interested */
                 }
             }
         }
-        else if ((rrock->jrestore->undo & (UNDO_CREATE|UNDO_UPDATE)) &&
-                 record->internaldate > rrock->jrestore->cutoff) {
-            /* Created/updated after cutoff */
+        else if (record->internaldate > rrock->jrestore->cutoff) {
+            /* Resource has been created or updated after cutoff - 
+               assume its a create unless we find a tombstone before cutoff.
+               Either way, we need to destroy this version of the resource */
             restore = xzmalloc(sizeof(struct restore_info));
             hash_insert(resource, restore, &resources);
             restore->type = CREATES;
-            if (rrock->jrestore->undo & UNDO_CREATE) restore->msgno = recno;
+            restore->msgno_todestroy = recno;
         }
         else {
-            /* Not interested in the resource */
+            /* Resource was not modified after cutoff - not interested */
         }
 
         message_free_body(body);
@@ -347,45 +352,61 @@ static void restore_vcard(const char *resource, void *data, void *rock)
     struct restore_rock *rrock = (struct restore_rock *) rock;
     struct mailbox *mailbox = rrock->mailbox;
     jmap_req_t *req = rrock->req;
-
-    if (!restore->msgno) goto done;
-
-    message_t *msg = message_new_from_mailbox(mailbox, restore->msgno);
-    const struct index_record *record = msg_record(msg);
-    struct vparse_card *vcard = NULL;
-    struct entryattlist *annots = NULL;
-    strarray_t *flags = NULL;
-    int r = 0, is_update = 0;
+    int r = 0, is_replace = 0;
 
     switch (restore->type) {
     case UPDATES:
-        is_update = 1;
-
-        GCC_FALLTHROUGH
+        if (!(rrock->jrestore->undo & UNDO_UPDATE)) goto done;
+        is_replace = 1;
+        break;
 
     case DESTROYS:
-        flags = mailbox_extract_flags(mailbox, record, req->accountid);
-        annots = mailbox_extract_annots(mailbox, record);
-        vcard = record_to_vcard(mailbox, record);
-        r = carddav_store(mailbox, vcard->objects, resource,
-                          record->createdmodseq, flags, annots, req->accountid,
-                          req->authstate, /*ignorequota*/ is_update);
-        if (r || !is_update) break;
-
-        GCC_FALLTHROUGH
+        if (!(rrock->jrestore->undo & UNDO_DESTROY)) goto done;
+        break;
 
     case CREATES:
-        r = carddav_remove(mailbox, record->uid,
-                           /*isreplace*/ is_update, req->accountid);
+        if (!(rrock->jrestore->undo & UNDO_CREATE)) goto done;
         break;
+
+    default:
+        goto done;
+    }
+
+    if (restore->msgno_torecreate) {
+        message_t *msg =
+            message_new_from_mailbox(mailbox, restore->msgno_torecreate);
+        const struct index_record *record = msg_record(msg);
+        struct vparse_card *vcard = record_to_vcard(mailbox, record);
+
+        if (!vcard) r = -1;
+        else {
+            strarray_t *flags =
+                mailbox_extract_flags(mailbox, record, req->accountid);
+            struct entryattlist *annots =
+                mailbox_extract_annots(mailbox, record);
+
+            r = carddav_store(mailbox, vcard->objects, resource,
+                              /*createdmodseq*/ 0, flags, annots,
+                              req->accountid, req->authstate, /*ignorequota*/ 0);
+            freeentryatts(annots);
+            strarray_free(flags);
+            vparse_free_card(vcard);
+        }
+
+        message_unref(&msg);
+    }
+
+    if (!r && restore->msgno_todestroy) {
+        message_t *msg =
+            message_new_from_mailbox(mailbox, restore->msgno_todestroy);
+        const struct index_record *record = msg_record(msg);
+
+        r = carddav_remove(mailbox, record->uid, is_replace, req->accountid);
+
+        message_unref(&msg);
     }
 
     if (!r) rrock->jrestore->num_undone[restore->type]++;
-
-    if (vcard) vparse_free_card(vcard);
-    freeentryatts(annots);
-    strarray_free(flags);
-    message_unref(&msg);
 
   done:
     free(restore);
