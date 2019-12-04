@@ -263,6 +263,9 @@ magic(JMAPSearchDB => sub {
 magic(JMAPNoHasAttachment => sub {
     shift->config_set('jmap_set_has_attachment' => 'no');
 });
+magic(JMAPExtensions => sub {
+    shift->config_set('jmap_nonstandard_extensions' => 'yes');
+});
 magic(SearchAttachmentExtractor => sub {
     my $port = Cassandane::PortManager::alloc();
     shift->config_set('search_attachment_extractor_url' =>
