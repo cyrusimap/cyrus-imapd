@@ -189,6 +189,7 @@ sub test_get_session
         'urn:ietf:params:jmap:vacationresponse' => 'cassandane',
         'https://cyrusimap.org/ns/jmap/contacts' => 'cassandane',
         'https://cyrusimap.org/ns/jmap/calendars' => 'cassandane',
+        'https://cyrusimap.org/ns/jmap/backup' => 'cassandane',
     }, $session->{primaryAccounts});
 
     $self->assert_num_equals(3, scalar keys %{$session->{accounts}});
