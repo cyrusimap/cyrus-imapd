@@ -52,6 +52,8 @@
 #include <assert.h>
 #include <errno.h>
 
+#include "acl.h"
+#include "append.h"
 #include "caldav_db.h"
 #include "carddav_db.h"
 #include "hash.h"
@@ -501,6 +503,97 @@ done:
     return 0;
 }
 
+static char *note_resource_name(message_t *msg)
+{
+    struct buf buf = BUF_INITIALIZER;
+    char *resource = NULL;
+    int r;
+
+    r = message_get_field(msg, "X-Uniform-Type-Identifier",
+                          MESSAGE_DECODED|MESSAGE_TRIM, &buf);
+    if  (!r && !strcmp(buf_cstring(&buf), "com.apple.mail-note")) {
+        r = message_get_field(msg, "X-Universally-Unique-Identifier",
+                              MESSAGE_DECODED|MESSAGE_TRIM, &buf);
+        resource = buf_release(&buf);
+    }
+    buf_free(&buf);
+
+    return resource;
+}
+
+static int recreate_note(message_t *msg,
+                         const char *resource __attribute__((unused)),
+                         jmap_req_t *req,
+                         int is_replace __attribute__((unused)))
+{
+    struct mailbox *mailbox = msg_mailbox(msg);
+    const struct index_record *record = msg_record(msg);
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+    struct stagemsg *stage = NULL;
+    struct appendstate as;
+    const char *fname;
+    FILE *f = NULL;
+    int r;
+
+    /* use latest version of the note as the source for our append stage */
+    r = message_get_fname(msg, &fname);
+    if (r) return r;
+
+    f = append_newstage_full(mailbox->name, time(0), 0, &stage, fname);
+    if (!f) return IMAP_INTERNAL;
+
+    /* setup for appending the message to the mailbox. */
+    qdiffs[QUOTA_MESSAGE] = 1;
+    qdiffs[QUOTA_STORAGE] = msg_size(msg);
+    r = append_setup_mbox(&as, mailbox, req->accountid, req->authstate,
+                          ACL_INSERT, qdiffs, NULL, 0, EVENT_MESSAGE_NEW);
+    if (!r) {
+        /* get existing flags and annotations */
+        strarray_t *flags = mailbox_extract_flags(mailbox, record, req->accountid);
+        struct entryattlist *annots = mailbox_extract_annots(mailbox, record);
+        struct body *body = NULL;
+
+        /* mark as undeleted */
+        strarray_remove_all_case(flags, "\\Deleted");
+
+        /* append the message to the mailbox. */
+        r = append_fromstage(&as, &body, stage, 0, 0, flags, 0, annots);
+
+        freeentryatts(annots);
+        strarray_free(flags);
+        message_free_body(body);
+        free(body);
+
+        if (r) append_abort(&as);
+        else r = append_commit(&as);
+    }
+    append_removestage(stage);
+
+    return r;
+}
+
+static int destroy_note(message_t *msg,
+                        jmap_req_t *req __attribute__((unused)),
+                        int is_replace __attribute__((unused)))
+{
+    struct mailbox *mailbox = msg_mailbox(msg);
+    const struct index_record *record = msg_record(msg);
+    struct index_record newrecord;
+    int r;
+
+    /* copy the existing index_record */
+    memcpy(&newrecord, record, sizeof(struct index_record));
+
+    /* mark expunged */
+    newrecord.system_flags |= FLAG_DELETED;
+    newrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+
+    /* store back to the mailbox */
+    r = mailbox_rewrite_index_record(mailbox, &newrecord);
+
+    return r;
+}
+
 static int jmap_backup_restore_notes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -512,6 +605,18 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
     if (err) {
         jmap_error(req, err);
         goto done;
+    }
+
+    const char *subfolder = config_getstring(IMAPOPT_NOTESMAILBOX);
+    if (subfolder && restore.undo) {
+        char *notes = mboxname_user_mbox(req->accountid, subfolder);
+        struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL,
+                                      &note_resource_name, &recreate_note,
+                                      &destroy_note, NULL };
+
+        mboxlist_mboxtree(notes, restore_collection_cb,
+                          &rrock, MBOXTREE_SKIP_CHILDREN);
+        free(notes);
     }
 
     /* Build response */
