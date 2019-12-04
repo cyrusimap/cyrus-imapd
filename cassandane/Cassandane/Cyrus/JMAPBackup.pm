@@ -64,7 +64,8 @@ sub new
     $config->set(caldav_realm => 'Cassandane',
                  conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
-                 httpallowcompress => 'no');
+                 httpallowcompress => 'no',
+                 jmap_nonstandard_extensions => 'yes');
 
     return $class->SUPER::new({
         config => $config,
@@ -85,7 +86,7 @@ sub set_up
     ]);
 }
 
-sub test_backup_restore_contacts
+sub test_restore_contacts
     :min_version_3_1 :needs_component_jmap
 {
     my ($self) = @_;
