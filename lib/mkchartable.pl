@@ -44,10 +44,14 @@
 use strict;
 use warnings;
 
+# n.b. this script MUST NOT 'use locale' as it depends on the stability
+# of perl's default sort order (which is changed by locale-awareness)
+
 use IO::File;
 use Getopt::Long;
 
 my @maps;
+my @charsets;
 my $aliasfile;
 my %codemap;
 my $output;
@@ -56,7 +60,12 @@ GetOptions( 'map|m=s'    => \@maps,      #strings
             'aliases|a=s' => \$aliasfile, #string
             'output|o=s' => \$output);    #string
 open (OUTPUT, ">$output");
-printheader(\@maps, \@ARGV);
+
+# charsets were probably specified in shell-glob order, which can vary by locale.
+# sort them here, so that the ordering in our generated files is stable.
+@charsets = sort @ARGV;
+
+printheader(\@maps, \@charsets);
 
 # first we parse the chartable unicode mappings and the fixes
 # file to build the unicode to search canonical form tables.
@@ -74,7 +83,7 @@ printmap(\%codemap, $aliasfile);
 # XXX - should probably require all files that are
 # mentioned in the lookup table to be specified,
 # or this sucker aintn't gunna compile.
-foreach my $opt (@ARGV) {
+foreach my $opt (@charsets) {
     print "mkchartable: mapping $opt...\n";
     my $table = readcharfile($opt);
     printtable($table, $opt);

@@ -1456,6 +1456,8 @@ endif
 lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS) $(LIB_UUID) $(GCOV_LIBS)
 lib_libcyrus_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
+# n.b. the order of the -m arguments to mkchartable.pl is important,
+# in particular ellie believes unifix.txt must be before UnicodeData.txt
 lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 	$(top_srcdir)/lib/charset/*.t \
 	lib/charset/UnicodeData.txt lib/charset/aliases.txt
