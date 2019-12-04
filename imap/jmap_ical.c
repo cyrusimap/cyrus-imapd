@@ -1210,7 +1210,6 @@ rsvpto_from_ical(icalproperty *prop)
 }
 
 static json_t *participant_from_ical(icalproperty *prop,
-                                     hash_table *attendee_by_uri,
                                      hash_table *id_by_uri,
                                      icalproperty *orga)
 {
@@ -1323,7 +1322,6 @@ static json_t *participant_from_ical(icalproperty *prop,
 
     /* participationStatus */
     const char *partstat = NULL;
-    short depth = 0;
     icalproperty *partstat_prop = prop;
     while (!partstat) {
         param = icalproperty_get_first_parameter(partstat_prop, ICAL_PARTSTAT_PARAMETER);
@@ -1343,26 +1341,8 @@ static json_t *participant_from_ical(icalproperty *prop,
                 partstat = "needs-action";
                 break;
             case ICAL_PARTSTAT_DELEGATED:
-                /* Follow the delegate chain */
-                param = icalproperty_get_first_parameter(prop, ICAL_DELEGATEDTO_PARAMETER);
-                if (param) {
-                    const char *to = icalparameter_get_delegatedto(param);
-                    if (!to) continue;
-                    char *uri = normalized_uri(to);
-                    partstat_prop = hash_lookup(uri, attendee_by_uri);
-                    free(uri);
-                    if (partstat_prop) {
-                        /* Determine PARTSTAT from delegate. */
-                        if (++depth > 64) {
-                            /* This is a pathological case: libical does
-                             * not check for infinite DELEGATE chains, so we
-                             * make sure not to fall in an endless loop. */
-                            partstat = "none";
-                        }
-                        continue;
-                    }
-                }
-                /* fallthrough */
+                partstat = "delegated";
+                break;
             default:
                 partstat = "none";
         }
@@ -1562,7 +1542,7 @@ participants_from_ical(icalcomponent *comp)
 
         char *uri = normalized_uri(icalproperty_get_value_as_string(prop));
         const char *id = hash_lookup(uri, &id_by_uri);
-        json_t *p = participant_from_ical(prop, &attendee_by_uri, &id_by_uri, orga);
+        json_t *p = participant_from_ical(prop, &id_by_uri, orga);
         json_object_set_new(participants, id, p);
         free(uri);
     }
