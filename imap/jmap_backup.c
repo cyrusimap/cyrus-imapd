@@ -239,6 +239,7 @@ struct restore_rock {
     jmap_req_t *req;
     struct jmap_restore *jrestore;
     int mbtype;
+    char *(*resource_name_cb)(struct mailbox *, const struct index_record *);
     int (*recreate_cb)(struct mailbox *, const struct index_record *,
                        const char *, jmap_req_t *, int);
     int (*destroy_cb)(struct mailbox *, const struct index_record *,
@@ -304,12 +305,10 @@ static void restore_resource_cb(const char *resource, void *data, void *rock)
 static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 {
     struct restore_rock *rrock = (struct restore_rock *) rock;
+    hash_table resources = HASH_TABLE_INITIALIZER;
     struct mailbox *mailbox = NULL;
     message_t *msg = message_new();
-    hash_table resources = HASH_TABLE_INITIALIZER;
-    const char *resource = NULL;
-    struct body *body = NULL;
-    struct param *param;
+    char *resource = NULL;
     int recno, r;
 
     if ((mbentry->mbtype & rrock->mbtype) != rrock->mbtype) return 0;
@@ -320,29 +319,15 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
         return 0;
     }
 
-    construct_hash_table(&resources, 32, 0);
+    construct_hash_table(&resources, 64, 0);
 
     for (recno = mailbox->i.num_records; recno > 0; recno--) {
         message_set_from_mailbox(mailbox, recno, msg);
 
         const struct index_record *record = msg_record(msg);
 
-        if (mailbox->mbtype & MBTYPES_DAV) {
-            /* Get resource from filename param in Content-Disposition header */
-            r = mailbox_cacherecord(mailbox, record);
-            if (r) continue;
-
-            message_read_bodystructure(record, &body);
-            for (param = body->disposition_params; param; param = param->next) {
-                if (!strcmp(param->attribute, "FILENAME")) {
-                    resource = param->value;
-                }
-            }
-            assert(resource);
-        }
-        else {
-            /* Get resource from X-Universally-Unique-Identifier header */
-        }
+        resource = rrock->resource_name_cb(mailbox, record);
+        if (!resource) continue;
 
         struct restore_info *restore = NULL;
         if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
@@ -388,8 +373,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
             /* Resource was not modified after cutoff - not interested */
         }
 
-        message_free_body(body);
-        free(body);
+        free(resource);
     }
     message_unref(&msg);
 
@@ -400,6 +384,34 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     jmap_closembox(rrock->req, &mailbox);
 
     return 0;
+}
+
+static char *dav_resource_name(struct mailbox *mailbox,
+                               const struct index_record *record)
+{
+    char *resource = NULL;
+    struct body *body = NULL;
+    struct param *param;
+    int r;
+
+    /* XXX  Should we fetch the resource name from the DAV DB instead? */
+
+    /* Get resource from filename param in Content-Disposition header */
+    r = mailbox_cacherecord(mailbox, record);
+    if (r) return NULL;
+
+    message_read_bodystructure(record, &body);
+    for (param = body->disposition_params; param; param = param->next) {
+        if (!strcmp(param->attribute, "FILENAME")) {
+            resource = xstrdupsafe(param->value);
+            break;
+        }
+    }
+
+    message_free_body(body);
+    free(body);
+
+    return resource;
 }
 
 static int recreate_vcard(struct mailbox *mailbox,
@@ -451,7 +463,8 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
 
     if (restore.undo) {
         struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK,
-                                      &recreate_vcard, &destroy_vcard, NULL };
+                                      &dav_resource_name, &recreate_vcard,
+                                      &destroy_vcard, NULL };
         char *addrhomeset = carddav_mboxname(req->accountid, NULL);
 
         mboxlist_mboxtree(addrhomeset,
