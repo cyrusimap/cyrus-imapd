@@ -239,7 +239,7 @@ struct restore_rock {
     jmap_req_t *req;
     struct jmap_restore *jrestore;
     int mbtype;
-    char *(*resource_name_cb)(struct mailbox *, const struct index_record *);
+    char *(*resource_name_cb)(struct mailbox *, message_t *);
     int (*recreate_cb)(struct mailbox *, const struct index_record *,
                        const char *, jmap_req_t *, int);
     int (*destroy_cb)(struct mailbox *, const struct index_record *,
@@ -324,11 +324,10 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     for (recno = mailbox->i.num_records; recno > 0; recno--) {
         message_set_from_mailbox(mailbox, recno, msg);
 
-        const struct index_record *record = msg_record(msg);
-
-        resource = rrock->resource_name_cb(mailbox, record);
+        resource = rrock->resource_name_cb(mailbox, msg);
         if (!resource) continue;
 
+        const struct index_record *record = msg_record(msg);
         struct restore_info *restore = NULL;
         if (record->internal_flags & FLAG_INTERNAL_EXPUNGED) {
             /* Tombstone - resource has been destroyed or updated */
@@ -386,9 +385,9 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
-static char *dav_resource_name(struct mailbox *mailbox,
-                               const struct index_record *record)
+static char *dav_resource_name(struct mailbox *mailbox, message_t *msg)
 {
+    const struct index_record *record = msg_record(msg);
     char *resource = NULL;
     struct body *body = NULL;
     struct param *param;
@@ -462,10 +461,10 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
     }
 
     if (restore.undo) {
+        char *addrhomeset = carddav_mboxname(req->accountid, NULL);
         struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK,
                                       &dav_resource_name, &recreate_vcard,
                                       &destroy_vcard, NULL };
-        char *addrhomeset = carddav_mboxname(req->accountid, NULL);
 
         mboxlist_mboxtree(addrhomeset,
                           restore_collection_cb, &rrock, MBOXTREE_SKIP_ROOT);
