@@ -75,7 +75,7 @@ sub new
 }
 
 sub test_capabilities
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -108,7 +108,7 @@ sub test_capabilities
 }
 
 sub test_get_session
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -430,12 +430,15 @@ sub test_identity_get
 
     my $jmap = $self->{jmap};
 
-    my $res = $jmap->CallMethods([['Identity/get', {}, "R1"]]);
+    my $using = [
+        'urn:ietf:params:jmap:submission',
+    ];
+
+    my $res = $jmap->CallMethods([['Identity/get', {}, "R1"]], $using);
 
     $self->assert_str_equals('Identity/get', $res->[0][0]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
-    $self->assert_str_equals('cassandane', $res->[0][1]{list}[0]{id});
-    $self->assert_not_null($res->[0][1]->{state});
+    $self->assert_str_equals('cassandane', $res->[0][1]{list}[0]{id}); $self->assert_not_null($res->[0][1]->{state});
     $self->assert_str_equals('R1', $res->[0][2]);
 }
 

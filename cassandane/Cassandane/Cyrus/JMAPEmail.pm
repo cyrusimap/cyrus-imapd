@@ -85,8 +85,6 @@ sub set_up
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
         'urn:ietf:params:jmap:submission',
-        'https://cyrusimap.org/ns/jmap/mail',
-        'https://cyrusimap.org/ns/jmap/quota',
     ]);
 }
 
@@ -2570,9 +2568,16 @@ sub test_email_set_keywords
 
 sub test_email_import_snooze
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # snoozed property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
 
     my $store = $self->{store};
     my $talk = $store->get_client();
@@ -2655,9 +2660,16 @@ sub test_email_import_snooze
 
 sub test_email_set_create_snooze
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # snoozed property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
 
     xlog "create snooze mailbox";
     my $res = $jmap->CallMethods([
@@ -2762,9 +2774,16 @@ sub test_email_set_create_snooze
 
 sub test_email_set_update_snooze
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # snoozed property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
 
     xlog "Get mailbox id of Inbox";
     my $inboxId = $self->getinbox()->{id};
@@ -2985,9 +3004,16 @@ sub test_email_set_update_snooze
 
 sub test_replication_email_set_update_snooze
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # snoozed property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
 
     xlog "Get mailbox id of Inbox";
     my $inboxId = $self->getinbox()->{id};
@@ -3141,9 +3167,16 @@ sub test_replication_email_set_update_snooze
 
 sub test_email_query_snooze
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # snoozed property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
 
     xlog "Get mailbox id of Inbox";
     my $res = $jmap->CallMethods([['Mailbox/query',
@@ -5048,7 +5081,7 @@ sub test_email_query_inmailbox_null
 }
 
 sub test_email_query_cached
-    :min_version_3_1 :needs_component_jmap :JMAPSearchDB
+    :min_version_3_1 :needs_component_jmap :JMAPSearchDB :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -5675,11 +5708,17 @@ sub test_email_query_from
 }
 
 sub test_email_query_addedDates
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # addedDates property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
 
     my $inboxid = $self->getinbox()->{id};
 
@@ -6343,7 +6382,7 @@ sub test_email_query_snippets
 }
 
 sub test_email_query_attachments
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6409,15 +6448,6 @@ sub test_email_query_attachments
     xlog "run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    xlog "filter attachmentName";
-    $res = $jmap->CallMethods([['Email/query', {
-        filter => {
-            attachmentName => "logo",
-        },
-    }, "R1"]]);
-    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
-    $self->assert_str_equals($id1, $res->[0][1]->{ids}[0]);
-
     my $using = [
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
@@ -6426,6 +6456,15 @@ sub test_email_query_attachments
         'https://cyrusimap.org/ns/jmap/quota',
         'https://cyrusimap.org/ns/jmap/debug',
     ];
+
+    xlog "filter attachmentName";
+    $res = $jmap->CallMethods([['Email/query', {
+        filter => {
+            attachmentName => "logo",
+        },
+    }, "R1"]], $using);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
+    $self->assert_str_equals($id1, $res->[0][1]->{ids}[0]);
 
     xlog "filter attachmentName";
     $res = $jmap->CallMethods([['Email/query', {
@@ -6455,7 +6494,7 @@ sub test_email_query_attachments
 }
 
 sub test_email_query_attachmentname
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -6523,7 +6562,7 @@ sub test_email_query_attachmentname
 }
 
 sub test_email_query_attachmenttype
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -11247,10 +11286,16 @@ sub test_email_get_bodystructure
 }
 
 sub test_email_get_calendarevents
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # calendarEvents property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
 
     my $store = $self->{store};
     my $talk = $store->get_client();
@@ -11346,10 +11391,16 @@ sub test_email_get_calendarevents
 }
 
 sub test_email_get_calendarevents_icsfile
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # calendarEvents property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
 
     my $store = $self->{store};
     my $talk = $store->get_client();
@@ -11947,7 +11998,7 @@ sub test_email_set_destroy_bulk
 }
 
 sub test_email_set_update_bulk
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -12068,7 +12119,7 @@ sub test_email_set_update_bulk
 }
 
 sub test_email_set_update_after_attach
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -12951,7 +13002,7 @@ sub _set_quotalimits
 }
 
 sub test_email_set_getquota
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -12962,6 +13013,12 @@ sub test_email_set_getquota
     my $jmap = $self->{jmap};
     my $service = $self->{instance}->get_service("http");
     my $inboxId = $self->getinbox()->{id};
+
+    # we need 'https://cyrusimap.org/ns/jmap/quota' capability for
+    # Quota/get method
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/quota';
+    $jmap->DefaultUsing(\@using);
 
     my $res;
 
@@ -13532,7 +13589,8 @@ sub test_email_get_cid
 }
 
 sub test_searchsnippet_get_attachment
-    :min_version_3_1 :needs_component_jmap :needs_search_xapian :SearchAttachmentExtractor :SearchIndexParts
+    :min_version_3_1 :needs_component_jmap :needs_search_xapian
+    :SearchAttachmentExtractor :SearchIndexParts :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13712,7 +13770,8 @@ sub test_email_set_date
 }
 
 sub test_email_query_language_stats
-    :min_version_3_1 :needs_component_jmap :needs_dependency_cld2 :SearchLanguage :SearchIndexParts
+    :min_version_3_1 :needs_component_jmap :needs_dependency_cld2
+    :SearchLanguage :SearchIndexParts :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13871,7 +13930,7 @@ sub test_email_set_email_duplicates_mailbox_counts
 }
 
 sub test_searchsnippet_get_regression
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -13922,7 +13981,7 @@ sub test_searchsnippet_get_regression
 }
 
 sub test_search_sharedpart
-    :min_version_3_1 :needs_component_jmap :SearchIndexParts
+    :min_version_3_1 :needs_component_jmap :SearchIndexParts :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -14156,7 +14215,7 @@ sub test_email_query_not_match
 }
 
 sub test_email_query_fromcontactgroupid
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -14405,7 +14464,7 @@ sub test_email_query_fromcontactgroupid
 }
 
 sub test_email_querychanges_fromcontactgroupid
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
@@ -14554,9 +14613,16 @@ sub test_email_get_header_last_value
 
 sub test_email_matchmime
     :min_version_3_1 :needs_component_jmap :needs_component_calalarmd
+    :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # Email/matchMime method
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
 
     my $email = <<'EOF';
 From: sender@local

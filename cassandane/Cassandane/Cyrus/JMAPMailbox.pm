@@ -82,7 +82,6 @@ sub set_up
     $self->{jmap}->DefaultUsing([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
-        'https://cyrusimap.org/ns/jmap/mail',
     ]);
 }
 
@@ -384,7 +383,7 @@ sub test_mailbox_get_ids
 }
 
 sub test_mailbox_get_nocalendars
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -2414,10 +2413,16 @@ sub test_mailbox_set_issubscribed
 }
 
 sub test_mailbox_set_isseenshared
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
     my $jmap = $self->{jmap};
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # isSeenShared property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
 
     my $res = $jmap->CallMethods([
         ['Mailbox/set', {
@@ -2965,12 +2970,18 @@ sub test_mailbox_querychanges_intermediary_removed
 }
 
 sub test_mailbox_get_intermediate
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # isSeenShared property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
 
     xlog "Create intermediate mailbox via IMAP";
     $imap->create("INBOX.A.Z") or die;
@@ -3000,12 +3011,18 @@ sub test_mailbox_get_intermediate
 }
 
 sub test_mailbox_get_inboxsub
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
+
+    # we need 'https://cyrusimap.org/ns/jmap/mail' capability for
+    # isSeenShared property
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
 
     xlog "Create INBOX subfolder via IMAP";
     $imap->create("INBOX.INBOX.foo") or die;
