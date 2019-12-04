@@ -74,7 +74,7 @@ void sieverestart (FILE *input_file);
 
 #define ERR_BUF_SIZE 1024
 
-/* does this interpretor support this requirement? */
+/* does this interpreter support this requirement? */
 int script_require(sieve_script_t *s, char *req)
 {
     unsigned long config_sieve_extensions =
@@ -214,7 +214,7 @@ int script_require(sieve_script_t *s, char *req)
     return 0;
 }
 
-/* given an interpretor and a script, produce an executable script */
+/* given an interpreter and a script, produce an executable script */
 EXPORTED int sieve_script_parse(sieve_interp_t *interp, FILE *script,
                        void *script_context, sieve_script_t **ret)
 {

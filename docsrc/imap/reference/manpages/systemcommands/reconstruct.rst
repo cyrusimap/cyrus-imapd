@@ -201,7 +201,7 @@ Examples
 ..
 
         Recursively reconstruct all mailboxes within the
-        *tech.support.Archive* hierarchy with names begining with '2',
+        *tech.support.Archive* hierarchy with names beginning with '2',
         restoring any directories containing ``cyrus.header``
         files.
 
