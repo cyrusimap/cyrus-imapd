@@ -1166,7 +1166,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "jmap_nonstandard_extensions", 0, SWITCH }
 /* If enabled, support non-standard JMAP extensions.  If not enabled,
-   only standard JMAP functionality is supported. */
+   only IETF standard JMAP functionality is supported. */
 
 { "jmap_set_has_attachment", 1, SWITCH }
 /* If enabled, the $hasAttachment flag is determined and set for new messages
