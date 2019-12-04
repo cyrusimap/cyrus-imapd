@@ -56,6 +56,8 @@ GetOptions( 'map|m=s'    => \@maps,      #strings
             'aliases|a=s' => \$aliasfile, #string
             'output|o=s' => \$output);    #string
 open (OUTPUT, ">$output");
+@maps = sort @maps;
+@ARGV = sort @ARGV;
 printheader(\@maps, \@ARGV);
 
 # first we parse the chartable unicode mappings and the fixes
