@@ -59,6 +59,10 @@
 #include "json_support.h"
 #include "vcard_support.h"
 
+/* generated headers are not necessarily in current directory */
+#include "imap/http_err.h"
+#include "imap/imap_err.h"
+
 static int jmap_backup_restore_contacts(jmap_req_t *req);
 static int jmap_backup_restore_calendars(jmap_req_t *req);
 static int jmap_backup_restore_notes(jmap_req_t *req);
@@ -235,7 +239,10 @@ struct restore_rock {
     jmap_req_t *req;
     struct jmap_restore *jrestore;
     int mbtype;
-    void (*restore_cb)(const char *, void *, void *);
+    int (*recreate_cb)(struct mailbox *, const struct index_record *,
+                       const char *, jmap_req_t *, int);
+    int (*destroy_cb)(struct mailbox *, const struct index_record *,
+                      jmap_req_t *, int);
     struct mailbox *mailbox;
 };
 
@@ -244,6 +251,55 @@ struct restore_info {
     unsigned int msgno_todestroy;
     unsigned int msgno_torecreate;
 };
+
+static void restore_resource_cb(const char *resource, void *data, void *rock)
+{
+    struct restore_info *restore = (struct restore_info *) data;
+    struct restore_rock *rrock = (struct restore_rock *) rock;
+    struct mailbox *mailbox = rrock->mailbox;
+    jmap_req_t *req = rrock->req;
+    int r = 0, is_replace = 0;
+
+    switch (restore->type) {
+    case UPDATES:
+        if (!(rrock->jrestore->undo & UNDO_UPDATE)) goto done;
+        is_replace = 1;
+        break;
+
+    case DESTROYS:
+        if (!(rrock->jrestore->undo & UNDO_DESTROY)) goto done;
+        break;
+
+    case CREATES:
+        if (!(rrock->jrestore->undo & UNDO_CREATE)) goto done;
+        break;
+
+    default:
+        goto done;
+    }
+
+    if (restore->msgno_torecreate) {
+        message_t *msg = message_new_from_mailbox(mailbox,
+                                                  restore->msgno_torecreate);
+
+        r = rrock->recreate_cb(mailbox, msg_record(msg),
+                               resource, req, is_replace);
+        message_unref(&msg);
+    }
+
+    if (!r && restore->msgno_todestroy) {
+        message_t *msg = message_new_from_mailbox(mailbox,
+                                                  restore->msgno_todestroy);
+
+        r = rrock->destroy_cb(mailbox, msg_record(msg), req, is_replace);
+        message_unref(&msg);
+    }
+
+    if (!r) rrock->jrestore->num_undone[restore->type]++;
+
+  done:
+    free(restore);
+}
 
 static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 {
@@ -338,7 +394,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     message_unref(&msg);
 
     rrock->mailbox = mailbox;
-    hash_enumerate(&resources, rrock->restore_cb, rrock);
+    hash_enumerate(&resources, restore_resource_cb, rrock);
     free_hash_table(&resources, NULL);
 
     jmap_closembox(rrock->req, &mailbox);
@@ -346,71 +402,38 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
-static void restore_vcard(const char *resource, void *data, void *rock)
+static int recreate_vcard(struct mailbox *mailbox,
+                          const struct index_record *record,
+                          const char *resource, jmap_req_t *req, int is_replace)
 {
-    struct restore_info *restore = (struct restore_info *) data;
-    struct restore_rock *rrock = (struct restore_rock *) rock;
-    struct mailbox *mailbox = rrock->mailbox;
-    jmap_req_t *req = rrock->req;
-    int r = 0, is_replace = 0;
+    struct vparse_card *vcard = record_to_vcard(mailbox, record);
+    int r;
 
-    switch (restore->type) {
-    case UPDATES:
-        if (!(rrock->jrestore->undo & UNDO_UPDATE)) goto done;
-        is_replace = 1;
-        break;
-
-    case DESTROYS:
-        if (!(rrock->jrestore->undo & UNDO_DESTROY)) goto done;
-        break;
-
-    case CREATES:
-        if (!(rrock->jrestore->undo & UNDO_CREATE)) goto done;
-        break;
-
-    default:
+    if (!vcard || !vcard->objects) {
+        r = IMAP_INTERNAL;
         goto done;
     }
 
-    if (restore->msgno_torecreate) {
-        message_t *msg =
-            message_new_from_mailbox(mailbox, restore->msgno_torecreate);
-        const struct index_record *record = msg_record(msg);
-        struct vparse_card *vcard = record_to_vcard(mailbox, record);
+    strarray_t *flags = mailbox_extract_flags(mailbox, record, req->accountid);
+    struct entryattlist *annots = mailbox_extract_annots(mailbox, record);
 
-        if (!vcard) r = -1;
-        else {
-            strarray_t *flags =
-                mailbox_extract_flags(mailbox, record, req->accountid);
-            struct entryattlist *annots =
-                mailbox_extract_annots(mailbox, record);
-
-            r = carddav_store(mailbox, vcard->objects, resource,
-                              is_replace ? record->createdmodseq : 0,
-                              flags, annots,
-                              req->accountid, req->authstate, /*ignorequota*/ 0);
-            freeentryatts(annots);
-            strarray_free(flags);
-            vparse_free_card(vcard);
-        }
-
-        message_unref(&msg);
-    }
-
-    if (!r && restore->msgno_todestroy) {
-        message_t *msg =
-            message_new_from_mailbox(mailbox, restore->msgno_todestroy);
-        const struct index_record *record = msg_record(msg);
-
-        r = carddav_remove(mailbox, record->uid, is_replace, req->accountid);
-
-        message_unref(&msg);
-    }
-
-    if (!r) rrock->jrestore->num_undone[restore->type]++;
+    r = carddav_store(mailbox, vcard->objects, resource,
+                      is_replace ? record->createdmodseq : 0, flags, annots,
+                      req->accountid, req->authstate, /*ignorequota*/ 0);
+    freeentryatts(annots);
+    strarray_free(flags);
 
   done:
-    free(restore);
+    vparse_free_card(vcard);
+
+    return r;
+}
+
+static int destroy_vcard(struct mailbox *mailbox,
+                         const struct index_record *record,
+                         jmap_req_t *req, int is_replace)
+{
+    return carddav_remove(mailbox, record->uid, is_replace, req->accountid);
 }
 
 static int jmap_backup_restore_contacts(jmap_req_t *req)
@@ -427,9 +450,10 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
     }
 
     if (restore.undo) {
-        struct restore_rock rrock =
-            { req, &restore, MBTYPE_ADDRESSBOOK, &restore_vcard, NULL };
+        struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK,
+                                      &recreate_vcard, &destroy_vcard, NULL };
         char *addrhomeset = carddav_mboxname(req->accountid, NULL);
+
         mboxlist_mboxtree(addrhomeset,
                           restore_collection_cb, &rrock, MBOXTREE_SKIP_ROOT);
         free(addrhomeset);
