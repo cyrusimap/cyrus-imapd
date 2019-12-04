@@ -1285,6 +1285,7 @@ static json_t *participant_from_ical(icalproperty *prop,
                 break;
             case ICAL_ROLE_CHAIR:
                 json_object_set_new(roles, "chair", json_true());
+                json_object_set_new(roles, "attendee", json_true());
                 break;
             default:
                 json_object_set_new(roles, "attendee", json_true());
