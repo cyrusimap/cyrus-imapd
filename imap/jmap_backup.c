@@ -239,11 +239,9 @@ struct restore_rock {
     jmap_req_t *req;
     struct jmap_restore *jrestore;
     int mbtype;
-    char *(*resource_name_cb)(struct mailbox *, message_t *);
-    int (*recreate_cb)(struct mailbox *, const struct index_record *,
-                       const char *, jmap_req_t *, int);
-    int (*destroy_cb)(struct mailbox *, const struct index_record *,
-                      jmap_req_t *, int);
+    char *(*resource_name_cb)(message_t *);
+    int (*recreate_cb)(message_t *, const char *, jmap_req_t *, int);
+    int (*destroy_cb)(message_t *, jmap_req_t *, int);
     struct mailbox *mailbox;
 };
 
@@ -283,8 +281,7 @@ static void restore_resource_cb(const char *resource, void *data, void *rock)
         message_t *msg = message_new_from_mailbox(mailbox,
                                                   restore->msgno_torecreate);
 
-        r = rrock->recreate_cb(mailbox, msg_record(msg),
-                               resource, req, is_replace);
+        r = rrock->recreate_cb(msg, resource, req, is_replace);
         message_unref(&msg);
     }
 
@@ -292,7 +289,7 @@ static void restore_resource_cb(const char *resource, void *data, void *rock)
         message_t *msg = message_new_from_mailbox(mailbox,
                                                   restore->msgno_todestroy);
 
-        r = rrock->destroy_cb(mailbox, msg_record(msg), req, is_replace);
+        r = rrock->destroy_cb(msg, req, is_replace);
         message_unref(&msg);
     }
 
@@ -324,7 +321,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     for (recno = mailbox->i.num_records; recno > 0; recno--) {
         message_set_from_mailbox(mailbox, recno, msg);
 
-        resource = rrock->resource_name_cb(mailbox, msg);
+        resource = rrock->resource_name_cb(msg);
         if (!resource) continue;
 
         const struct index_record *record = msg_record(msg);
@@ -385,7 +382,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
-static char *dav_resource_name(struct mailbox *mailbox, message_t *msg)
+static char *dav_resource_name(message_t *msg)
 {
     const struct index_record *record = msg_record(msg);
     char *resource = NULL;
@@ -396,7 +393,7 @@ static char *dav_resource_name(struct mailbox *mailbox, message_t *msg)
     /* XXX  Should we fetch the resource name from the DAV DB instead? */
 
     /* Get resource from filename param in Content-Disposition header */
-    r = mailbox_cacherecord(mailbox, record);
+    r = mailbox_cacherecord(msg_mailbox(msg), record);
     if (r) return NULL;
 
     message_read_bodystructure(record, &body);
@@ -413,10 +410,11 @@ static char *dav_resource_name(struct mailbox *mailbox, message_t *msg)
     return resource;
 }
 
-static int recreate_vcard(struct mailbox *mailbox,
-                          const struct index_record *record,
-                          const char *resource, jmap_req_t *req, int is_replace)
+static int recreate_vcard(message_t *msg, const char *resource,
+                          jmap_req_t *req, int is_replace)
 {
+    struct mailbox *mailbox = msg_mailbox(msg);
+    const struct index_record *record = msg_record(msg);
     struct vparse_card *vcard = record_to_vcard(mailbox, record);
     int r;
 
@@ -440,11 +438,10 @@ static int recreate_vcard(struct mailbox *mailbox,
     return r;
 }
 
-static int destroy_vcard(struct mailbox *mailbox,
-                         const struct index_record *record,
-                         jmap_req_t *req, int is_replace)
+static int destroy_vcard(message_t *msg, jmap_req_t *req, int is_replace)
 {
-    return carddav_remove(mailbox, record->uid, is_replace, req->accountid);
+    return carddav_remove(msg_mailbox(msg), msg_uid(msg),
+                          is_replace, req->accountid);
 }
 
 static int jmap_backup_restore_contacts(jmap_req_t *req)
