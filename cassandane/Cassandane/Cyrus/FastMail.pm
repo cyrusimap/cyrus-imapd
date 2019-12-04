@@ -211,7 +211,7 @@ sub _fmjmap_err
 }
 
 sub test_ajaxui_jmapcontacts_contactgroup_set
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
@@ -329,7 +329,7 @@ sub _set_quotalimits
 }
 
 sub test_issue_LP52545479
-    :min_version_3_1 :needs_component_jmap
+    :min_version_3_1 :needs_component_jmap :JMAPExtensions
 {
     my ($self) = @_;
 
