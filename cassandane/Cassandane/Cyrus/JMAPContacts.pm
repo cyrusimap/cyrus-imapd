@@ -63,7 +63,8 @@ sub new
     $config->set(caldav_realm => 'Cassandane',
                  conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
-                 httpallowcompress => 'no');
+                 httpallowcompress => 'no',
+                 jmap_nonstandard_extensions => 'yes');
 
     return $class->SUPER::new({
         config => $config,

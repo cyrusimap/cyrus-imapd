@@ -65,7 +65,8 @@ sub new
                  caldav_historical_age => -1,
                  conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
-                 httpallowcompress => 'no');
+                 httpallowcompress => 'no',
+                 jmap_nonstandard_extensions => 'yes');
 
     return $class->SUPER::new({
         config => $config,
