@@ -59,6 +59,7 @@
 #include "hash.h"
 #include "http_jmap.h"
 #include "json_support.h"
+#include "times.h"
 #include "vcard_support.h"
 
 /* generated headers are not necessarily in current directory */
@@ -69,6 +70,8 @@ static int jmap_backup_restore_contacts(jmap_req_t *req);
 static int jmap_backup_restore_calendars(jmap_req_t *req);
 static int jmap_backup_restore_notes(jmap_req_t *req);
 static int jmap_backup_restore_mail(jmap_req_t *req);
+
+static char *_prodid = NULL;
 
 jmap_method_t jmap_backup_methods_standard[] = {
     { NULL, NULL, NULL, 0}
@@ -118,6 +121,18 @@ HIDDEN void jmap_backup_init(jmap_settings_t *settings)
         }
     }
 
+    /* Initialize PRODID value
+     *
+     * XXX - OS X 10.11.6 Contacts is not unfolding PRODID lines, so make
+     * sure that PRODID never exceeds the 75 octet limit without CRLF */
+    struct buf prodidbuf = BUF_INITIALIZER;
+    size_t max_len = 68; /* 75 - strlen("PRODID:") */
+    buf_printf(&prodidbuf, "-//CyrusIMAP.org//Cyrus %s//EN", CYRUS_VERSION);
+    if (buf_len(&prodidbuf) > max_len) {
+        buf_truncate(&prodidbuf, max_len - 6);
+        buf_appendcstr(&prodidbuf, "..//EN");
+    }
+    _prodid = buf_release(&prodidbuf);
 }
 
 HIDDEN void jmap_backup_capabilities(json_t *account_capabilities)
@@ -242,7 +257,7 @@ struct restore_rock {
     struct jmap_restore *jrestore;
     int mbtype;
     char *(*resource_name_cb)(message_t *, void *);
-    int (*recreate_cb)(message_t *, const char *, jmap_req_t *, int);
+    int (*recreate_cb)(message_t *, const char *, jmap_req_t *, int, void *);
     int (*destroy_cb)(message_t *, jmap_req_t *, int);
     void *rock;
     struct mailbox *mailbox;
@@ -284,7 +299,7 @@ static void restore_resource_cb(const char *resource, void *data, void *rock)
         message_t *msg = message_new_from_mailbox(mailbox,
                                                   restore->msgno_torecreate);
 
-        r = rrock->recreate_cb(msg, resource, req, is_replace);
+        r = rrock->recreate_cb(msg, resource, req, is_replace, rrock->rock);
         message_unref(&msg);
     }
 
@@ -413,7 +428,8 @@ static char *dav_resource_name(message_t *msg)
 
 struct contact_rock {
     struct carddav_db *carddavdb;
-    struct vparse_card *vcard;
+    struct vparse_card *group_vcard;
+    struct buf buf;
 };
 
 static char *contact_resource_name(message_t *msg, void *rock)
@@ -440,10 +456,11 @@ static char *contact_resource_name(message_t *msg, void *rock)
 }
 
 static int recreate_contact(message_t *msg, const char *resource,
-                            jmap_req_t *req, int is_replace)
+                            jmap_req_t *req, int is_replace, void *rock)
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
+    struct contact_rock *crock = (struct contact_rock *) rock;
     struct vparse_card *vcard = record_to_vcard(mailbox, record);
     int r;
 
@@ -461,6 +478,32 @@ static int recreate_contact(message_t *msg, const char *resource,
     freeentryatts(annots);
     strarray_free(flags);
 
+    if (!r && !is_replace) {
+        /* Add this card to the group vCard of recreated contacts */
+        if (!crock->group_vcard) {
+            /* Create the group vCard */
+            char datestr[RFC3339_DATETIME_MAX];
+            struct vparse_card *gcard = vparse_new_card("VCARD");
+
+            time_to_rfc3339(time(0), datestr, RFC3339_DATETIME_MAX);
+            buf_reset(&crock->buf);
+            buf_printf(&crock->buf, "Restored %.10s", datestr);
+
+            vparse_add_entry(gcard, NULL, "PRODID", _prodid);
+            vparse_add_entry(gcard, NULL, "VERSION", "3.0");
+            vparse_add_entry(gcard, NULL, "UID", makeuuid());
+            vparse_add_entry(gcard, NULL, "FN", buf_cstring(&crock->buf));
+            vparse_add_entry(gcard, NULL, "X-ADDRESSBOOKSERVER-KIND", "group");
+            crock->group_vcard = gcard;
+        }
+
+        buf_reset(&crock->buf);
+        buf_printf(&crock->buf, "urn:uuid:%s",
+                   vparse_stringval(vcard->objects, "uid"));
+        vparse_add_entry(crock->group_vcard, NULL, "X-ADDRESSBOOKSERVER-MEMBER",
+                         buf_cstring(&crock->buf));
+    }
+
   done:
     vparse_free_card(vcard);
 
@@ -471,6 +514,39 @@ static int destroy_contact(message_t *msg, jmap_req_t *req, int is_replace)
 {
     return carddav_remove(msg_mailbox(msg), msg_uid(msg),
                           is_replace, req->accountid);
+}
+
+static int restore_addressbook_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct restore_rock *rrock = (struct restore_rock *) rock;
+    struct contact_rock *crock = (struct contact_rock *) rrock->rock;
+    struct mailbox *mailbox = NULL;
+    int r;
+
+    if ((mbentry->mbtype & rrock->mbtype) != rrock->mbtype) return 0;
+
+    /* Open mailbox here since we need it later and it gets referenced counted */
+    r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/1);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
+        return r;
+    }
+
+    /* Do usual processing of the collection */
+    r = restore_collection_cb(mbentry, rock);
+
+    if (!r && crock->group_vcard) {
+        /* Store the group vCard os recreated contacts */
+        r = carddav_store(mailbox, crock->group_vcard, NULL, 0, NULL, NULL, 
+                          rrock->req->accountid, rrock->req->authstate,
+                          /*ignorequota*/ 0);
+    }
+    vparse_free_card(crock->group_vcard);
+    crock->group_vcard = NULL;
+
+    jmap_closembox(rrock->req, &mailbox);
+
+    return r;
 }
 
 static int jmap_backup_restore_contacts(jmap_req_t *req)
@@ -489,15 +565,16 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
     if (restore.undo) {
         char *addrhomeset = carddav_mboxname(req->accountid, NULL);
         struct contact_rock crock =
-            { carddav_open_userid(req->accountid), NULL };
+            { carddav_open_userid(req->accountid), NULL, BUF_INITIALIZER };
         struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK,
                                       &contact_resource_name, &recreate_contact,
                                       &destroy_contact, &crock, NULL };
 
         mboxlist_mboxtree(addrhomeset,
-                          restore_collection_cb, &rrock, MBOXTREE_SKIP_ROOT);
+                          restore_addressbook_cb, &rrock, MBOXTREE_SKIP_ROOT);
         free(addrhomeset);
         carddav_close(crock.carddavdb);
+        buf_free(&crock.buf);
     }
 
     /* Build response */
@@ -555,7 +632,8 @@ static char *note_resource_name(message_t *msg,
 static int recreate_note(message_t *msg,
                          const char *resource __attribute__((unused)),
                          jmap_req_t *req,
-                         int is_replace __attribute__((unused)))
+                         int is_replace __attribute__((unused)),
+                         void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
