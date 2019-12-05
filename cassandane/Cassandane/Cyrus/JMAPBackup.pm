@@ -164,7 +164,9 @@ sub test_restore_contacts
     $res = $jmap->CallMethods([
         ['Contact/get', {
             properties => ['firstName', 'lastName'],
-         }, "R6"]]);
+         }, "R6"],
+        ['ContactGroup/get', {}, "R6.1"]
+    ]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/get', $res->[0][0]);
     $self->assert_str_equals('R6', $res->[0][2]);
@@ -173,10 +175,19 @@ sub test_restore_contacts
     $self->assert_num_equals(scalar @expect, scalar @got);
     $self->assert_deep_equals(\@expect, \@got);
 
+    $self->assert_str_equals('ContactGroup/get', $res->[1][0]);
+    $self->assert_str_equals('R6.1', $res->[1][2]);
+    $self->assert_str_equals($contactC, $res->[1][1]{list}[0]{contactIds}[0]);
+
     xlog "get contact updates";
-    $res = $jmap->CallMethods([['Contact/changes', {
-                    sinceState => $state
-                }, "R6.5"]]);
+    $res = $jmap->CallMethods([
+        ['Contact/changes', {
+            sinceState => $state
+         }, "R6.5"],
+        ['ContactGroup/changes', {
+            sinceState => $state
+         }, "R6.6"]
+    ]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/changes', $res->[0][0]);
     $self->assert_str_equals('R6.5', $res->[0][2]);
@@ -188,7 +199,16 @@ sub test_restore_contacts
     $self->assert_num_equals(2, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($contactE, $res->[0][1]{destroyed}[0]);
-    $state = $res->[0][1]{newState};
+
+    $self->assert_str_equals('ContactGroup/changes', $res->[1][0]);
+    $self->assert_str_equals('R6.6', $res->[1][2]);
+    $self->assert_str_equals($state, $res->[1][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[1][1]{newState});
+    $self->assert_equals(JSON::false, $res->[1][1]{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{updated}});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{destroyed}});
+    $state = $res->[1][1]{newState};
 
     xlog "restore contacts to before initial creation";
     $res = $jmap->CallMethods([['Backup/restoreContacts', {
@@ -200,7 +220,7 @@ sub test_restore_contacts
     $self->assert_not_null($res);
     $self->assert_str_equals('Backup/restoreContacts', $res->[0][0]);
     $self->assert_str_equals('R7', $res->[0][2]);
-    $self->assert_num_equals(3, $res->[0][1]{numCreatesUndone});
+    $self->assert_num_equals(4, $res->[0][1]{numCreatesUndone});
     $self->assert_num_equals(0, $res->[0][1]{numUpdatesUndone});
     $self->assert_num_equals(0, $res->[0][1]{numDestroysUndone});
 
@@ -208,16 +228,27 @@ sub test_restore_contacts
     $res = $jmap->CallMethods([
         ['Contact/get', {
             properties => ['firstName', 'lastName'],
-         }, "R8"]]);
+         }, "R8"],
+        ['ContactGroup/get', {}, "R8.1"]
+    ]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/get', $res->[0][0]);
     $self->assert_str_equals('R8', $res->[0][2]);
     $self->assert_deep_equals([], $res->[0][1]{list});
 
+    $self->assert_str_equals('ContactGroup/get', $res->[1][0]);
+    $self->assert_str_equals('R8.1', $res->[1][2]);
+    $self->assert_deep_equals([], $res->[1][1]{list});
+
     xlog "get contact updates";
-    $res = $jmap->CallMethods([['Contact/changes', {
-                    sinceState => $state
-                }, "R8.5"]]);
+    $res = $jmap->CallMethods([
+        ['Contact/changes', {
+            sinceState => $state
+         }, "R8.5"],
+        ['ContactGroup/changes', {
+            sinceState => $state
+         }, "R8.6"]
+    ]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/changes', $res->[0][0]);
     $self->assert_str_equals('R8.5', $res->[0][2]);
@@ -227,6 +258,16 @@ sub test_restore_contacts
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(3, scalar @{$res->[0][1]{destroyed}});
+
+    $self->assert_str_equals('ContactGroup/changes', $res->[1][0]);
+    $self->assert_str_equals('R8.6', $res->[1][2]);
+    $self->assert_str_equals($state, $res->[1][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[1][1]{newState});
+    $self->assert_equals(JSON::false, $res->[1][1]{hasMoreChanges});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[1][1]{updated}});
+    $self->assert_num_equals(1, scalar @{$res->[1][1]{destroyed}});
+    $state = $res->[1][1]{newState};
 }
 
 1;
