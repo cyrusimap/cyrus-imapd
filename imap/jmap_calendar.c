@@ -1280,7 +1280,7 @@ static int jmap_calendar_set(struct jmap_req *req)
             }
         }
 
-        /* The myRights property is server-sete and MUST NOT be set. */
+        /* The myRights property is server-set and MUST NOT be set. */
         pe = jmap_readprop(arg, "myRights", 0,  invalid, "o", &myrights);
         if (pe > 0) {
             json_array_append_new(invalid, json_string("myRights"));
@@ -1479,7 +1479,7 @@ static int jmap_calendar_set(struct jmap_req *req)
 
         jmap_readprop(arg, "scheduleAddressSet", 0,  invalid, "o", &scheduleAddressSet);
 
-        /* The myRights property is server-sete and MUST NOT be set. */
+        /* The myRights property is server-set and MUST NOT be set. */
         pe = jmap_readprop(arg, "myRights", 0,  invalid, "o", &myrights);
         if (pe > 0) {
             json_array_append_new(invalid, json_string("myRights"));
