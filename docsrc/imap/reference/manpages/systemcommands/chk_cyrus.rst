@@ -61,7 +61,7 @@ Examples
 
 ..
 
-        Perform consistancy checks on *default* partition.
+        Perform consistency checks on *default* partition.
 
 .. parsed-literal::
 
@@ -69,7 +69,7 @@ Examples
 
 ..
 
-        Perform consistancy checks on *default* partition using specified
+        Perform consistency checks on *default* partition using specified
         configuration file.
 
 .. parsed-literal::
@@ -78,7 +78,7 @@ Examples
 
 ..
 
-        Perform consistancy checks on mailbox *user.marysmith*.
+        Perform consistency checks on mailbox *user.marysmith*.
 
 See Also
 ========

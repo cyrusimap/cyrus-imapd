@@ -1,4 +1,4 @@
-/* interp.h -- interpretor definition
+/* interp.h -- interpreter definition
  * Larry Greenfield
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
