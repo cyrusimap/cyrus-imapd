@@ -922,15 +922,11 @@ static int mailbox_open_index(struct mailbox *mailbox)
 static int mailbox_mboxlock_reopen(struct mailboxlist *listitem, int locktype)
 {
     struct mailbox *mailbox = &listitem->m;
-    int r;
 
     mailbox_release_resources(mailbox);
 
     mboxname_release(&listitem->l);
-    r = mboxname_lock(mailbox->name, &listitem->l, locktype);
-    if (r) return r;
-
-    return r;
+    return mboxname_lock(mailbox->name, &listitem->l, locktype);
 }
 
 /*
@@ -2102,8 +2098,7 @@ EXPORTED struct caldav_db *mailbox_open_caldav(struct mailbox *mailbox)
 {
     if (!mailbox->local_caldav) {
         mailbox->local_caldav = caldav_open_mailbox(mailbox);
-        int r = caldav_begin(mailbox->local_caldav);
-        if (r) {
+        if (caldav_begin(mailbox->local_caldav)) {
             caldav_abort(mailbox->local_caldav);
             caldav_close(mailbox->local_caldav);
             mailbox->local_caldav = NULL;
@@ -2116,8 +2111,7 @@ EXPORTED struct carddav_db *mailbox_open_carddav(struct mailbox *mailbox)
 {
     if (!mailbox->local_carddav) {
         mailbox->local_carddav = carddav_open_mailbox(mailbox);
-        int r = carddav_begin(mailbox->local_carddav);
-        if (r) {
+        if (carddav_begin(mailbox->local_carddav)) {
             carddav_abort(mailbox->local_carddav);
             carddav_close(mailbox->local_carddav);
             mailbox->local_carddav = NULL;
@@ -2130,8 +2124,7 @@ EXPORTED struct webdav_db *mailbox_open_webdav(struct mailbox *mailbox)
 {
     if (!mailbox->local_webdav) {
         mailbox->local_webdav = webdav_open_mailbox(mailbox);
-        int r = webdav_begin(mailbox->local_webdav);
-        if (r) {
+        if (webdav_begin(mailbox->local_webdav)) {
             webdav_abort(mailbox->local_webdav);
             webdav_close(mailbox->local_webdav);
             mailbox->local_webdav = NULL;
@@ -4392,11 +4385,10 @@ static int mailbox_index_repack(struct mailbox *mailbox, int version)
     const message_t *msg;
     struct mailbox_iter *iter = NULL;
     struct buf buf = BUF_INITIALIZER;
-    int r = IMAP_IOERROR;
 
     syslog(LOG_INFO, "Repacking mailbox %s version %d", mailbox->name, version);
 
-    r = mailbox_repack_setup(mailbox, version, &repack);
+    int r = mailbox_repack_setup(mailbox, version, &repack);
     if (r) goto done;
 
     iter = mailbox_iter_init(mailbox, 0, 0);
@@ -5368,30 +5360,25 @@ int mailbox_delete_alarms(struct mailbox *mailbox)
 #ifdef WITH_DAV
 static int mailbox_delete_caldav(struct mailbox *mailbox)
 {
-    struct caldav_db *caldavdb = NULL;
+    struct caldav_db *caldavdb = caldav_open_mailbox(mailbox);
 
-    caldavdb = caldav_open_mailbox(mailbox);
     if (caldavdb) {
         int r = caldav_delmbox(caldavdb, mailbox->name);
         caldav_close(caldavdb);
         if (r) return r;
     }
 
-    int r = caldav_alarm_delete_mailbox(mailbox->name);
-    if (r) return r;
-
-    return 0;
+    return caldav_alarm_delete_mailbox(mailbox->name);
 }
 
 static int mailbox_delete_carddav(struct mailbox *mailbox)
 {
-    struct carddav_db *carddavdb = NULL;
+    struct carddav_db *carddavdb = carddav_open_mailbox(mailbox);
 
-    carddavdb = carddav_open_mailbox(mailbox);
     if (carddavdb) {
         int r = carddav_delmbox(carddavdb, mailbox->name);
         carddav_close(carddavdb);
-        if (r) return r;
+        return r;
     }
 
     return 0;
@@ -5399,13 +5386,12 @@ static int mailbox_delete_carddav(struct mailbox *mailbox)
 
 static int mailbox_delete_webdav(struct mailbox *mailbox)
 {
-    struct webdav_db *webdavdb = NULL;
+    struct webdav_db *webdavdb = webdav_open_mailbox(mailbox);
 
-    webdavdb = webdav_open_mailbox(mailbox);
     if (webdavdb) {
         int r = webdav_delmbox(webdavdb, mailbox->name);
         webdav_close(webdavdb);
-        if (r) return r;
+        return r;
     }
 
     return 0;

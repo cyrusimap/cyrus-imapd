@@ -104,9 +104,8 @@ static void init_internal();
 
 EXPORTED mbentry_t *mboxlist_entry_create(void)
 {
-    mbentry_t *ret = xzmalloc(sizeof(mbentry_t));
+    return xzmalloc(sizeof(mbentry_t));
     /* xxx - initialiser functions here? */
-    return ret;
 }
 
 EXPORTED mbentry_t *mboxlist_entry_copy(const mbentry_t *src)
@@ -293,21 +292,17 @@ static int mboxlist_read(const char *name, const char **dataptr, size_t *datalen
     case CYRUSDB_OK:
         /* no entry required, just checking if it exists */
         return 0;
-        break;
 
     case CYRUSDB_AGAIN:
         return IMAP_AGAIN;
-        break;
 
     case CYRUSDB_NOTFOUND:
         return IMAP_MAILBOX_NONEXISTENT;
-        break;
 
     default:
         syslog(LOG_ERR, "DBERROR: error fetching mboxlist %s: %s",
                name, cyrusdb_strerror(r));
         return IMAP_IOERROR;
-        break;
     }
 
     /* never get here */
@@ -627,12 +622,11 @@ struct _find_uniqueid_data {
 
 static int _find_uniqueid(const mbentry_t *mbentry, void *rock) {
     struct _find_uniqueid_data *d = (struct _find_uniqueid_data *) rock;
-    int r = 0;
     if (!strcmpsafe(d->uniqueid, mbentry->uniqueid)) {
         d->mboxname = xstrdup(mbentry->name);
-        r = CYRUSDB_DONE;
+        return CYRUSDB_DONE;
     }
-    return r;
+    return 0;
 }
 
 // calling this function without a userid is fine, it will scan the entire server!
@@ -812,7 +806,7 @@ EXPORTED int mboxlist_delete(const char *name)
 
 EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
 {
-    int r = 0, r2 = 0;
+    int r;
     struct txn *tid = NULL;
 
     init_internal();
@@ -847,16 +841,10 @@ EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
     }
 
     if (tid) {
-        if (r) {
-            r2 = cyrusdb_abort(mbdb, tid);
-        } else {
-            r2 = cyrusdb_commit(mbdb, tid);
-        }
-    }
-
-    if (r2) {
-        syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_update: %s",
-               r ? "aborting" : "committing", cyrusdb_strerror(r2));
+        int r2 = r ? cyrusdb_abort(mbdb, tid) : cyrusdb_commit(mbdb, tid);
+        if (r2)
+            syslog(LOG_ERR, "DBERROR: error %s txn in mboxlist_update: %s",
+                   r ? "aborting" : "committing", cyrusdb_strerror(r2));
     }
 
     return r;
@@ -915,10 +903,8 @@ static int mboxlist_create_partition(const char *mboxname,
 {
     mbentry_t *parent = NULL;
 
-    if (!part) {
-        int r = mboxlist_findparent(mboxname, &parent);
-        if (!r) part = parent->partition;
-    }
+    if (!part && !mboxlist_findparent(mboxname, &parent))
+        part = parent->partition;
 
     /* use defaultpartition if specified */
     if (!part && config_defpartition)
@@ -955,7 +941,7 @@ static int mboxlist_create_namecheck(const char *mboxname,
                                      int isadmin, int force_subdirs)
 {
     mbentry_t *mbentry = NULL;
-    int r = 0;
+    int r;
 
     /* policy first */
     r = mboxname_policycheck(mboxname);
@@ -1094,7 +1080,7 @@ EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribut
 {
     char *part = NULL;
     char *acl = NULL;
-    int r = 0;
+    int r;
 
     init_internal();
 
@@ -2402,12 +2388,10 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
  * Check if the admin rights are present in the 'rights'
  */
 static int mboxlist_have_admin_rights(const char *rights) {
-    int access, have_admin_access;
+    int access;
 
     cyrus_acl_strtomask(rights, &access);
-    have_admin_access = access & ACL_ADMIN;
-
-    return have_admin_access;
+    return access & ACL_ADMIN;
 }
 
 /*
@@ -2955,7 +2939,6 @@ static int allmbox_p(void *rock,
                      size_t datalen)
 {
     struct allmb_rock *mbrock = (struct allmb_rock *)rock;
-    int r;
 
     /* skip any dollar keys */
     if (keylen && key[0] == '$') return 0;
@@ -2963,8 +2946,8 @@ static int allmbox_p(void *rock,
     /* free previous record */
     mboxlist_entry_free(&mbrock->mbentry);
 
-    r = mboxlist_parse_entry(&mbrock->mbentry, key, keylen, data, datalen);
-    if (r) return 0;
+    if (mboxlist_parse_entry(&mbrock->mbentry, key, keylen, data, datalen))
+        return 0;
 
     if (!(mbrock->flags & MBOXTREE_TOMBSTONES) && (mbrock->mbentry->mbtype & MBTYPE_DELETED))
         return 0;
@@ -2978,13 +2961,12 @@ static int allmbox_p(void *rock,
 EXPORTED int mboxlist_allmbox(const char *prefix, mboxlist_cb *proc, void *rock, int flags)
 {
     struct allmb_rock mbrock = { NULL, proc, rock, flags };
-    int r = 0;
 
     init_internal();
 
     if (!prefix) prefix = "";
 
-    r = cyrusdb_foreach(mbdb, prefix, strlen(prefix),
+    int r = cyrusdb_foreach(mbdb, prefix, strlen(prefix),
                         allmbox_p, allmbox_cb, &mbrock, 0);
 
     mboxlist_entry_free(&mbrock.mbentry);
@@ -3255,8 +3237,7 @@ static int mboxlist_find_category(struct find_rock *rock, const char *prefix, si
         r = cyrusdb_foreach(rock->db, prefix, len, &find_p, &find_cb, rock, NULL);
     }
 
-    if (r == CYRUSDB_DONE) r = 0;
-    return r;
+    return r == CYRUSDB_DONE ? 0 : r;
 }
 
 /*
@@ -3540,8 +3521,6 @@ EXPORTED int mboxlist_findallmulti_withp(struct namespace *namespace,
                                    const char *userid, const struct auth_state *auth_state,
                                    findall_p *p, findall_cb *cb, void *rock)
 {
-    int r = 0;
-
     init_internal();
 
     if (!namespace) namespace = mboxname_get_adminnamespace();
@@ -3562,9 +3541,7 @@ EXPORTED int mboxlist_findallmulti_withp(struct namespace *namespace,
         if (domp) cbrock.domain = domp + 1;
     }
 
-    r = mboxlist_do_find(&cbrock, patterns);
-
-    return r;
+    return mboxlist_do_find(&cbrock, patterns);
 }
 
 EXPORTED int mboxlist_findall(struct namespace *namespace,
@@ -3610,7 +3587,7 @@ EXPORTED int mboxlist_findone_withp(struct namespace *namespace,
                               const char *userid, const struct auth_state *auth_state,
                               findall_p *p, findall_cb *cb, void *rock)
 {
-    int r = 0;
+    int r;
 
     if (!namespace) namespace = mboxname_get_adminnamespace();
 
@@ -3809,7 +3786,7 @@ done:
 EXPORTED int mboxlist_unsetquota(const char *root)
 {
     struct quota q;
-    int r=0;
+    int r;
 
     init_internal();
 
@@ -3847,7 +3824,7 @@ EXPORTED int mboxlist_unsetquota(const char *root)
 EXPORTED modseq_t mboxlist_foldermodseq_dirty(struct mailbox *mailbox)
 {
     mbentry_t *mbentry = NULL;
-    modseq_t ret = 0;
+    modseq_t ret;
 
     init_internal();
 
@@ -3880,13 +3857,12 @@ EXPORTED int mboxlist_ensureOwnerRights(void *rock, const char *identifier,
  */
 static int mboxlist_rmquota(const mbentry_t *mbentry, void *rock)
 {
-    int r = 0;
     struct mailbox *mailbox = NULL;
     const char *oldroot = (const char *) rock;
 
     assert(oldroot != NULL);
 
-    r = mailbox_open_iwl(mbentry->name, &mailbox);
+    int r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) goto done;
 
     if (mailbox->quotaroot) {
@@ -3916,7 +3892,6 @@ static int mboxlist_rmquota(const mbentry_t *mbentry, void *rock)
  */
 static int mboxlist_changequota(const mbentry_t *mbentry, void *rock)
 {
-    int r = 0;
     struct mailbox *mailbox = NULL;
     const char *root = (const char *) rock;
     int res;
@@ -3924,7 +3899,7 @@ static int mboxlist_changequota(const mbentry_t *mbentry, void *rock)
 
     assert(root);
 
-    r = mailbox_open_iwl(mbentry->name, &mailbox);
+    int r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) goto done;
 
     mailbox_get_usage(mailbox, quota_usage);
@@ -4066,7 +4041,7 @@ static int
 mboxlist_opensubs(const char *userid,
                   struct db **ret)
 {
-    int r = 0, flags;
+    int flags;
     char *subsfname;
 
     /* Build subscription list filename */
@@ -4077,7 +4052,7 @@ mboxlist_opensubs(const char *userid,
         flags |= CYRUSDB_MBOXSORT;
     }
 
-    r = cyrusdb_open(SUBDB, subsfname, flags, ret);
+    int r = cyrusdb_open(SUBDB, subsfname, flags, ret);
     if (r != CYRUSDB_OK) {
         r = IMAP_IOERROR;
     }
@@ -4118,8 +4093,6 @@ EXPORTED int mboxlist_findsubmulti_withp(struct namespace *namespace,
                                    findall_p *p, findall_cb *cb, void *rock,
                                    int force)
 {
-    int r = 0;
-
     init_internal();
 
     if (!namespace) namespace = mboxname_get_adminnamespace();
@@ -4130,7 +4103,7 @@ EXPORTED int mboxlist_findsubmulti_withp(struct namespace *namespace,
     /* open the subscription file that contains the mailboxes the
        user is subscribed to */
     struct db *subs = NULL;
-    r = mboxlist_opensubs(userid, &subs);
+    int r = mboxlist_opensubs(userid, &subs);
     if (r) return r;
 
     cbrock.auth_state = auth_state;
@@ -4263,12 +4236,11 @@ EXPORTED int mboxlist_usersubs(const char *userid, mboxlist_cb *proc,
 {
     struct db *subs = NULL;
     struct submb_rock mbrock = { NULL, userid, flags, proc, rock };
-    int r = 0;
 
     init_internal();
 
     /* open subs DB */
-    r = mboxlist_opensubs(userid, &subs);
+    int r = mboxlist_opensubs(userid, &subs);
     if (r) return r;
 
     /* faster to do it all in a single slurp! */

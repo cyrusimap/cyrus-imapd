@@ -2154,15 +2154,12 @@ EXPORTED char *mboxname_conf_getpath(const mbname_t *mbname, const char *suffix)
 static bit64 mboxname_readval_old(const char *mboxname, const char *metaname)
 {
     bit64 fileval = 0;
-    mbname_t *mbname = NULL;
-    char *fname = NULL;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, metaname);
     const char *base = NULL;
     size_t len = 0;
     int fd = -1;
 
-    mbname = mbname_from_intname(mboxname);
-
-    fname = mboxname_conf_getpath(mbname, metaname);
     if (!fname) goto done;
 
     fd = open(fname, O_RDONLY);
@@ -2364,11 +2361,11 @@ static void mboxname_counters_to_buf(const struct mboxname_counters *vals, char 
 static int mboxname_load_counters(const char *mboxname, struct mboxname_counters *vals, int *fdp)
 {
     int fd = -1;
-    char *fname = NULL;
+    char *fname;
     struct stat sbuf, fbuf;
     const char *base = NULL;
     size_t len = 0;
-    mbname_t *mbname = NULL;
+    mbname_t *mbname;
     int r = 0;
 
     memset(vals, 0, sizeof(struct mboxname_counters));
@@ -2449,17 +2446,14 @@ done:
 
 static int mboxname_set_counters(const char *mboxname, struct mboxname_counters *vals, int fd)
 {
-    char *fname = NULL;
-    mbname_t *mbname = NULL;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    char *fname = mboxname_conf_getpath(mbname, "counters");
     char buf[MV_LENGTH];
     char newfname[MAX_MAILBOX_PATH];
     int newfd = -1;
     int n = 0;
     int r = 0;
 
-    mbname = mbname_from_intname(mboxname);
-
-    fname = mboxname_conf_getpath(mbname, "counters");
     if (!fname) {
         r = IMAP_MAILBOX_BADNAME;
         goto done;
@@ -2521,18 +2515,15 @@ static int mboxname_unload_counters(int fd)
 EXPORTED int mboxname_read_counters(const char *mboxname, struct mboxname_counters *vals)
 {
     int r = 0;
-    mbname_t *mbname = NULL;
+    mbname_t *mbname = mbname_from_intname(mboxname);
     struct stat sbuf;
-    char *fname = NULL;
+    char *fname = mboxname_conf_getpath(mbname, "counters");;
     const char *base = NULL;
     size_t len = 0;
     int fd = -1;
 
     memset(vals, 0, sizeof(struct mboxname_counters));
 
-    mbname = mbname_from_intname(mboxname);
-
-    fname = mboxname_conf_getpath(mbname, "counters");
     if (!fname) {
         r = IMAP_MAILBOX_BADNAME;
         goto done;
@@ -2754,7 +2745,6 @@ EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
 {
     struct mboxname_counters counters;
     int fd = -1;
-    int dirty = 0;
 
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
         return val;
@@ -2765,11 +2755,8 @@ EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
 
     if (counters.uidvalidity < val) {
         counters.uidvalidity = val;
-        dirty = 1;
-    }
-
-    if (dirty)
         mboxname_set_counters(mboxname, &counters, fd);
+    }
     else
         mboxname_unload_counters(fd);
 

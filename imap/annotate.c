@@ -622,7 +622,7 @@ static int annotate_dbname_mailbox(struct mailbox *mailbox, char **fnamep)
 
 static int annotate_dbname(const char *mboxname, char **fnamep)
 {
-    int r = 0;
+    int r;
     mbentry_t *mbentry = NULL;
 
     if (mboxname) {
@@ -646,8 +646,6 @@ static int _annotate_getdb(const char *mboxname,
     char *fname = NULL;
     struct db *db;
     int r;
-
-    *dbp = NULL;
 
     /*
      * The incoming (mboxname,uid) tuple tells us which scope we
@@ -1355,20 +1353,17 @@ out:
 
 static int annotate_state_need_mbentry(annotate_state_t *state)
 {
-    int r = 0;
-
     if (!state->mbentry && state->mailbox) {
-        r = mboxlist_lookup(state->mailbox->name, &state->ourmbentry, NULL);
+        int r = mboxlist_lookup(state->mailbox->name, &state->ourmbentry, NULL);
         if (r) {
             syslog(LOG_ERR, "Failed to lookup mbentry for %s: %s",
                     state->mailbox->name, error_message(r));
-            goto out;
+            return r;
         }
         state->mbentry = state->ourmbentry;
     }
 
-out:
-    return r;
+    return 0;
 }
 
 /***************************  Annotation Fetching  ***************************/
@@ -1520,7 +1515,7 @@ static int _annotate_may_fetch(annotate_state_t *state,
 
     my_rights = cyrus_acl_myrights(state->auth_state, acl);
 
-    return ((my_rights & needed) == needed);
+    return (my_rights & needed) == needed;
 }
 
 static void annotation_get_fromfile(annotate_state_t *state,
@@ -1764,7 +1759,7 @@ static void annotation_get_usermodseq(annotate_state_t *state,
 {
     struct buf value = BUF_INITIALIZER;
     struct mboxname_counters counters;
-    char *mboxname = NULL;
+    char *mboxname;
 
     memset(&counters, 0, sizeof(struct mboxname_counters));
 
@@ -1786,7 +1781,7 @@ static void annotation_get_usercounters(annotate_state_t *state,
 {
     struct buf value = BUF_INITIALIZER;
     struct mboxname_counters counters;
-    char *mboxname = NULL;
+    char *mboxname;
 
     assert(state);
     assert(state->userid);
@@ -2682,16 +2677,12 @@ static int read_old_value(annotate_db_t *d,
     } while (r == CYRUSDB_AGAIN);
 
     if (r == CYRUSDB_NOTFOUND) {
-        r = 0;
-        goto out;
+        return 0;
     }
     if (r || !data)
-        goto out;
+        return r;
 
-    r = split_attribs(data, datalen, valp, mdata);
-
-out:
-    return r;
+    return split_attribs(data, datalen, valp, mdata);
 }
 
 static int make_entry(struct buf *data,
@@ -3610,7 +3601,7 @@ EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
     char *olduserid = mboxname_to_userid(oldmailbox->name);
     char *newuserid = mboxname_to_userid(newmailbox->name);
     annotate_db_t *d = NULL;
-    int r = 0;
+    int r;
 
     init_internal();
 
@@ -3675,7 +3666,7 @@ static int _annotate_rewrite(struct mailbox *oldmailbox,
 
 EXPORTED int annotate_delete_mailbox(struct mailbox *mailbox)
 {
-    int r = 0;
+    int r;
     char *fname = NULL;
     annotate_db_t *d = NULL;
 
@@ -3761,7 +3752,7 @@ HIDDEN int annotate_msg_cleanup(struct mailbox *mailbox, unsigned int uid)
 {
     char key[MAX_MAILBOX_PATH+1];
     size_t keylen;
-    int r = 0;
+    int r;
     annotate_db_t *d = NULL;
 
     assert(uid);

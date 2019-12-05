@@ -326,11 +326,7 @@ static int sieve_isactive(const char *sievepath, const char *name)
     if(!link) link = activelink;
     else link++;
 
-    if (!strcmp(file, link)) {
-        return 1;
-    } else {
-        return 0;
-    }
+    return !strcmp(file, link);
 }
 
 struct dump_annotation_rock

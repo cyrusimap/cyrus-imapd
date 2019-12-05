@@ -731,39 +731,31 @@ static int verify_cb(const mbentry_t *mbentry, void *rockp)
     // not pass dlist_parsemap() unlike is the case with dump_db().
 
     struct found_list *found = (struct found_list *) rockp;
-    int r = 0;
+    int r;
 
-    if (r) {
-        printf("'%s' has a directory '%s' but no DB entry\n",
-                found->data[found->idx].mboxname,
-                found->data[found->idx].path
-            );
-    } else {
-        // Walk the directories to see if the mailbox from data does have
-        // paths on the filesystem.
-        do {
-            r = -1;
-            if (
-                    (found->idx >= found->size) ||              /* end of array */
-                    !(found->data[found->idx].type & MBOX) ||   /* end of mailboxes */
-                    (r = strcmp(mbentry->name, found->data[found->idx].mboxname)) < 0
-            ) {
-                printf("'%s' has a DB entry but no directory on partition '%s'\n",
-                        mbentry->name, mbentry->partition);
+    // Walk the directories to see if the mailbox from data does have
+    // paths on the filesystem.
+    do {
+        r = -1;
+        if (
+                (found->idx >= found->size) ||              /* end of array */
+                !(found->data[found->idx].type & MBOX) ||   /* end of mailboxes */
+                (r = strcmp(mbentry->name, found->data[found->idx].mboxname)) < 0
+        ) {
+            printf("'%s' has a DB entry but no directory on partition '%s'\n",
+                    mbentry->name, mbentry->partition);
 
-            }
-            else if (r > 0) {
-                printf("'%s' has a directory '%s' but no DB entry\n",
-                        found->data[found->idx].mboxname,
-                        found->data[found->idx].path
-                    );
+        }
+        else if (r > 0) {
+            printf("'%s' has a directory '%s' but no DB entry\n",
+                    found->data[found->idx].mboxname,
+                    found->data[found->idx].path
+                );
 
-                found->idx++;
-            }
-            else found->idx++;
-        } while (r > 0);
-
-    }
+            found->idx++;
+        }
+        else found->idx++;
+    } while (r > 0);
 
     return 0;
 }
