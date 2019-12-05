@@ -241,9 +241,10 @@ struct restore_rock {
     jmap_req_t *req;
     struct jmap_restore *jrestore;
     int mbtype;
-    char *(*resource_name_cb)(message_t *);
+    char *(*resource_name_cb)(message_t *, void *);
     int (*recreate_cb)(message_t *, const char *, jmap_req_t *, int);
     int (*destroy_cb)(message_t *, jmap_req_t *, int);
+    void *rock;
     struct mailbox *mailbox;
 };
 
@@ -323,7 +324,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     for (recno = mailbox->i.num_records; recno > 0; recno--) {
         message_set_from_mailbox(mailbox, recno, msg);
 
-        resource = rrock->resource_name_cb(msg);
+        resource = rrock->resource_name_cb(msg, rrock->rock);
         if (!resource) continue;
 
         const struct index_record *record = msg_record(msg);
@@ -392,8 +393,6 @@ static char *dav_resource_name(message_t *msg)
     struct param *param;
     int r;
 
-    /* XXX  Should we fetch the resource name from the DAV DB instead? */
-
     /* Get resource from filename param in Content-Disposition header */
     r = mailbox_cacherecord(msg_mailbox(msg), record);
     if (r) return NULL;
@@ -412,8 +411,36 @@ static char *dav_resource_name(message_t *msg)
     return resource;
 }
 
-static int recreate_vcard(message_t *msg, const char *resource,
-                          jmap_req_t *req, int is_replace)
+struct contact_rock {
+    struct carddav_db *carddavdb;
+    struct vparse_card *vcard;
+};
+
+static char *contact_resource_name(message_t *msg, void *rock)
+{
+    struct mailbox *mailbox = msg_mailbox(msg);
+    const struct index_record *record = msg_record(msg);
+    struct contact_rock *crock = (struct contact_rock *) rock;
+    struct carddav_data *cdata = NULL;
+    char *resource = NULL;
+
+    /* Get resource from CardDAV DB, if possible */
+    int r = carddav_lookup_imapuid(crock->carddavdb, mailbox->name,
+                                   record->uid, &cdata, /*tombstones*/ 1);
+    if (!r) {
+        resource = xstrdup(cdata->dav.resource);
+    }
+    else {
+        /* IMAP UID is for a resource that has been updated,
+           so we need to get the resource name from the resource itself */
+        resource = dav_resource_name(msg);
+    }
+
+    return resource;
+}
+
+static int recreate_contact(message_t *msg, const char *resource,
+                            jmap_req_t *req, int is_replace)
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
@@ -440,7 +467,7 @@ static int recreate_vcard(message_t *msg, const char *resource,
     return r;
 }
 
-static int destroy_vcard(message_t *msg, jmap_req_t *req, int is_replace)
+static int destroy_contact(message_t *msg, jmap_req_t *req, int is_replace)
 {
     return carddav_remove(msg_mailbox(msg), msg_uid(msg),
                           is_replace, req->accountid);
@@ -461,13 +488,16 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
 
     if (restore.undo) {
         char *addrhomeset = carddav_mboxname(req->accountid, NULL);
+        struct contact_rock crock =
+            { carddav_open_userid(req->accountid), NULL };
         struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK,
-                                      &dav_resource_name, &recreate_vcard,
-                                      &destroy_vcard, NULL };
+                                      &contact_resource_name, &recreate_contact,
+                                      &destroy_contact, &crock, NULL };
 
         mboxlist_mboxtree(addrhomeset,
                           restore_collection_cb, &rrock, MBOXTREE_SKIP_ROOT);
         free(addrhomeset);
+        carddav_close(crock.carddavdb);
     }
 
     /* Build response */
@@ -503,7 +533,8 @@ done:
     return 0;
 }
 
-static char *note_resource_name(message_t *msg)
+static char *note_resource_name(message_t *msg,
+                                void *rock __attribute__((unused)))
 {
     struct buf buf = BUF_INITIALIZER;
     char *resource = NULL;
@@ -612,7 +643,7 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
         char *notes = mboxname_user_mbox(req->accountid, subfolder);
         struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL,
                                       &note_resource_name, &recreate_note,
-                                      &destroy_note, NULL };
+                                      &destroy_note, NULL, NULL };
 
         mboxlist_mboxtree(notes, restore_collection_cb,
                           &rrock, MBOXTREE_SKIP_CHILDREN);
