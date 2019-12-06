@@ -4123,7 +4123,9 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
             curstage = stages.data[i];
             body = NULL;
             if (curstage->binary) {
-                r = message_parse_binary_file(curstage->f, &body);
+                /* XXX we might have fname here, but it's hidden inside opaque
+                 * curstage->stage field */
+                r = message_parse_binary_file(curstage->f, &body, NULL);
                 fclose(curstage->f);
                 curstage->f = NULL;
             }

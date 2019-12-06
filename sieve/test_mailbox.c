@@ -283,7 +283,7 @@ static int getbody(void *mc, const char **content_types, sieve_bodypart_t ***par
     if (!m->content.body) {
         /* parse the message body if we haven't already */
         r = message_parse_file(m->data, &m->content.base,
-                               &m->content.len, &m->content.body);
+                               &m->content.len, &m->content.body, NULL);
     }
 
     /* XXX currently struct bodypart as defined in message.h is the same as

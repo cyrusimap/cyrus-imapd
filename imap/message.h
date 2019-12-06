@@ -157,11 +157,13 @@ struct bodypart {
 extern void parse_cached_envelope(char *env, char *tokens[], int tokens_size);
 
 extern int message_parse_mapped(const char *msg_base, unsigned long msg_len,
-                                struct body *body);
-extern int message_parse_binary_file(FILE *infile, struct body **body);
+                                struct body *body, const char *efname);
+extern int message_parse_binary_file(FILE *infile, struct body **body,
+                                     const char *efname);
 extern int message_parse_file(FILE *infile,
                               const char **msg_base, size_t *msg_len,
-                              struct body **body);
+                              struct body **body,
+                              const char *efname);
 extern void message_parse_string(const char *hdr, char **hdrp);
 extern void message_pruneheader(char *buf, const strarray_t *headers,
                                 const strarray_t *headers_not);

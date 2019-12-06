@@ -330,7 +330,8 @@ static int getbody(void *mc, const char **content_types, sieve_bodypart_t ***par
         r = message_parse_file(fp,
                                &msg->content.base,
                                &msg->content.len,
-                               &msg->content.body);
+                               &msg->content.body,
+                               msg->filename);
         CU_ASSERT_EQUAL(r, 0);
         fclose(fp);
     }

@@ -106,14 +106,16 @@ struct msg {
 #define DEFAULT_CONTENT_TYPE "TEXT/PLAIN; CHARSET=us-ascii"
 
 static int message_parse_body(struct msg *msg,
+                              struct body *body,
+                              const char *defaultContentType,
+                              strarray_t *boundaries,
+                              const char *efname);
+static int message_parse_headers(struct msg *msg,
                                  struct body *body,
                                  const char *defaultContentType,
-                                 strarray_t *boundaries);
+                                 strarray_t *boundaries,
+                                 const char *efname);
 
-static int message_parse_headers(struct msg *msg,
-                                    struct body *body,
-                                    const char *defaultContentType,
-                                    strarray_t *boundaries);
 static void message_parse_address(const char *hdr, struct address **addrp);
 static void message_parse_encoding(const char *hdr, char **hdrp);
 static void message_parse_charset(const struct body *body,
@@ -128,11 +130,13 @@ static void message_parse_rfc822space(const char **s);
 static void message_parse_received_date(const char *hdr, char **hdrp);
 
 static void message_parse_multipart(struct msg *msg,
-                                       struct body *body,
-                                       strarray_t *boundaries);
+                                    struct body *body,
+                                    strarray_t *boundaries,
+                                    const char *efname);
 static void message_parse_content(struct msg *msg,
-                                     struct body *body,
-                                     strarray_t *boundaries);
+                                  struct body *body,
+                                  strarray_t *boundaries,
+                                  const char *efname);
 
 static char *message_getline(struct buf *, struct msg *msg);
 static int message_pendingboundary(const char *s, int slen, strarray_t *);
@@ -332,7 +336,7 @@ EXPORTED int message_parse(const char *fname, struct index_record *record)
     f = fopen(fname, "r");
     if (!f) return IMAP_IOERROR;
 
-    r = message_parse_file(f, NULL, NULL, &body);
+    r = message_parse_file(f, NULL, NULL, &body, fname);
     if (!r) r = message_create_record(record, body);
 
     fclose(f);
@@ -354,8 +358,9 @@ EXPORTED int message_parse(const char *fname, struct index_record *record)
  * and returned to the caller.  The caller MUST unmap the file.
  */
 EXPORTED int message_parse_file(FILE *infile,
-                       const char **msg_base, size_t *msg_len,
-                       struct body **body)
+                                const char **msg_base, size_t *msg_len,
+                                struct body **body,
+                                const char *efname)
 {
     int fd = fileno(infile);
     struct stat sbuf;
@@ -372,7 +377,11 @@ EXPORTED int message_parse_file(FILE *infile,
     *msg_len = 0;
 
     if (fstat(fd, &sbuf) == -1) {
-        syslog(LOG_ERR, "IOERROR: fstat on new message in spool: %m");
+        if (efname)
+            syslog(LOG_ERR, "IOERROR: fstat on new message in spool (%s): %m",
+                   efname);
+        else
+            syslog(LOG_ERR, "IOERROR: fstat on new message in spool: %m");
         fatal("can't fstat message file", EX_OSFILE);
     }
     map_refresh(fd, 1, msg_base, msg_len, sbuf.st_size,
@@ -382,7 +391,7 @@ EXPORTED int message_parse_file(FILE *infile,
         return IMAP_IOERROR; /* zero length file? */
 
     if (!*body) *body = (struct body *) xzmalloc(sizeof(struct body));
-    r = message_parse_mapped(*msg_base, *msg_len, *body);
+    r = message_parse_mapped(*msg_base, *msg_len, *body, efname);
 
     if (unmap) map_free(msg_base, msg_len);
 
@@ -402,7 +411,8 @@ EXPORTED int message_parse_file(FILE *infile,
  *
  * XXX can we do this with mmap()?
  */
-EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
+EXPORTED int message_parse_binary_file(FILE *infile, struct body **body,
+                                       const char *efname)
 {
     int fd = fileno(infile);
     struct stat sbuf;
@@ -410,7 +420,11 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
     size_t n;
 
     if (fstat(fd, &sbuf) == -1) {
-        syslog(LOG_ERR, "IOERROR: fstat on new message in spool: %m");
+        if (efname)
+            syslog(LOG_ERR, "IOERROR: fstat on new message in spool (%s): %m",
+                   efname);
+        else
+            syslog(LOG_ERR, "IOERROR: fstat on new message in spool: %m");
         fatal("can't fstat message file", EX_OSFILE);
     }
     msg.len = sbuf.st_size;
@@ -422,13 +436,17 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
 
     n = retry_read(fd, (char*) msg.base, msg.len);
     if (n != msg.len) {
-        syslog(LOG_ERR, "IOERROR: reading binary file in spool: %m");
+        if (efname)
+            syslog(LOG_ERR, "IOERROR: reading binary file in spool (%s): %m",
+                   efname);
+        else
+            syslog(LOG_ERR, "IOERROR: reading binary file in spool: %m");
         return IMAP_IOERROR;
     }
 
     if (!*body) *body = (struct body *) xzmalloc(sizeof(struct body));
     message_parse_body(&msg, *body,
-                       DEFAULT_CONTENT_TYPE, (strarray_t *)0);
+                       DEFAULT_CONTENT_TYPE, NULL, efname);
 
     (*body)->filesize = msg.len;
 
@@ -440,7 +458,11 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
     free((char*) msg.base);
 
     if (n != msg.len || fsync(fd)) {
-        syslog(LOG_ERR, "IOERROR: rewriting binary file in spool: %m");
+        if (efname)
+            syslog(LOG_ERR, "IOERROR: rewriting binary file in spool (%s): %m",
+                   efname);
+        else
+            syslog(LOG_ERR, "IOERROR: rewriting binary file in spool: %m");
         return IMAP_IOERROR;
     }
 
@@ -451,7 +473,7 @@ EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
  * Parse the message at 'msg_base' of length 'msg_len'.
  */
 EXPORTED int message_parse_mapped(const char *msg_base, unsigned long msg_len,
-                         struct body *body)
+                                  struct body *body, const char *efname)
 {
     struct msg msg;
 
@@ -460,17 +482,22 @@ EXPORTED int message_parse_mapped(const char *msg_base, unsigned long msg_len,
     msg.offset = 0;
     msg.encode = 0;
 
-    message_parse_body(&msg, body,
-                       DEFAULT_CONTENT_TYPE, (strarray_t *)0);
+    message_parse_body(&msg, body, DEFAULT_CONTENT_TYPE, NULL, efname);
 
     body->filesize = msg_len;
 
     message_guid_generate(&body->guid, msg_base, msg_len);
 
     if (body->filesize != body->header_size + body->content_size) {
-        syslog(LOG_NOTICE, "IOERROR: size mismatch on parse %s (%d, %d)",
-               message_guid_encode(&body->guid), (int)body->filesize,
-               (int)(body->header_size + body->content_size));
+        if (efname)
+            syslog(LOG_NOTICE, "IOERROR: size mismatch on parse %s (%s) (%d, %d)",
+                   message_guid_encode(&body->guid), efname,
+                   (int)body->filesize,
+                   (int)(body->header_size + body->content_size));
+        else
+            syslog(LOG_NOTICE, "IOERROR: size mismatch on parse %s (%d, %d)",
+                   message_guid_encode(&body->guid), (int)body->filesize,
+                   (int)(body->header_size + body->content_size));
     }
 
     return 0;
@@ -688,7 +715,8 @@ static void body_add_content_guid(const char *base, struct body *body)
  */
 static int message_parse_body(struct msg *msg, struct body *body,
                               const char *defaultContentType,
-                              strarray_t *boundaries)
+                              strarray_t *boundaries,
+                              const char *efname)
 {
     strarray_t newboundaries = STRARRAY_INITIALIZER;
     int sawboundary;
@@ -704,7 +732,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
 
 
     sawboundary = message_parse_headers(msg, body, defaultContentType,
-                                        boundaries);
+                                        boundaries, efname);
 
     /* Charset id and encoding id are stored in the binary
      * bodystructure, but we don't have that one here. */
@@ -722,7 +750,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
     /* Recurse according to type */
     if (strcmp(body->type, "MULTIPART") == 0) {
         if (!sawboundary) {
-            message_parse_multipart(msg, body, boundaries);
+            message_parse_multipart(msg, body, boundaries, efname);
         }
     }
     else if (strcmp(body->type, "MESSAGE") == 0 &&
@@ -736,7 +764,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
         }
         else {
             message_parse_body(msg, body->subpart,
-                               DEFAULT_CONTENT_TYPE, boundaries);
+                               DEFAULT_CONTENT_TYPE, boundaries, efname);
 
             /* Calculate our size/lines information */
             body->content_size = body->subpart->header_size +
@@ -750,12 +778,11 @@ static int message_parse_body(struct msg *msg, struct body *body,
 
             /* it's nice to have a GUID for the message/rfc822 itself */
             body_add_content_guid(base, body);
-
         }
     }
     else {
         if (!sawboundary) {
-            message_parse_content(msg, body, boundaries);
+            message_parse_content(msg, body, boundaries, efname);
         }
     }
 
@@ -770,7 +797,8 @@ static int message_parse_body(struct msg *msg, struct body *body,
  */
 static int message_parse_headers(struct msg *msg, struct body *body,
                                  const char *defaultContentType,
-                                 strarray_t *boundaries)
+                                 strarray_t *boundaries,
+                                 const char *efname)
 {
     struct buf headers = BUF_INITIALIZER;
     char *next;
@@ -822,8 +850,14 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 
             /* check if we've hit a limit and flag it */
             if (maxlines && body->header_lines > maxlines) {
-                syslog(LOG_ERR, "ERROR: message has more than %d header lines, not caching any more",
-                       maxlines);
+                if (efname)
+                    syslog(LOG_ERR, "ERROR: message (%s) has more than %d header lines"
+                                    "not caching any more",
+                           efname, maxlines);
+                else
+                    syslog(LOG_ERR, "ERROR: message has more than %d header lines"
+                                    "not caching any more",
+                           maxlines);
                 have_max = 1;
                 continue;
             }
@@ -1686,7 +1720,7 @@ static void message_parse_rfc822space(const char **s)
  * Parse the content of a MIME multipart body-part
  */
 static void message_parse_multipart(struct msg *msg, struct body *body,
-                                    strarray_t *boundaries)
+                                    strarray_t *boundaries, const char *efname)
 {
     struct body preamble, epilogue;
     struct param *boundary;
@@ -1708,7 +1742,7 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
 
     if (!boundary) {
         /* Invalid MIME--treat as zero-part multipart */
-        message_parse_content(msg, body, boundaries);
+        message_parse_content(msg, body, boundaries, efname);
         return;
     }
 
@@ -1717,7 +1751,7 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
     depth = boundaries->count;
 
     /* Parse preamble */
-    message_parse_content(msg, &preamble, boundaries);
+    message_parse_content(msg, &preamble, boundaries, efname);
 
     /* Parse the component body-parts */
     while (boundaries->count == depth &&
@@ -1725,7 +1759,7 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
         body->subpart = (struct body *)xrealloc((char *)body->subpart,
                                  (body->numparts+1)*sizeof(struct body));
         message_parse_body(msg, &body->subpart[body->numparts],
-                           defaultContentType, boundaries);
+                           defaultContentType, boundaries, efname);
         if (msg->offset == msg->len &&
             body->subpart[body->numparts].boundary_size == 0) {
             /* hit the end of the message, therefore end all pending
@@ -1737,7 +1771,7 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
 
     if (boundaries->count == depth-1) {
         /* Parse epilogue */
-        message_parse_content(msg, &epilogue, boundaries);
+        message_parse_content(msg, &epilogue, boundaries, efname);
     }
     else if (body->numparts) {
         /*
@@ -1786,7 +1820,14 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
 
     /* check if we've hit a limit and flag it */
     if (limit && depth == limit) {
-        syslog(LOG_ERR, "ERROR: mime boundary limit %i exceeded, not parsing anymore", limit);
+        if (efname)
+            syslog(LOG_ERR, "ERROR: mime boundary limit %i exceeded, "
+                            "not parsing anymore (%s)",
+                   limit, efname);
+        else
+            syslog(LOG_ERR, "ERROR: mime boundary limit %i exceeded, "
+                            "not parsing anymore",
+                   limit);
     }
 }
 
@@ -1794,7 +1835,8 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
  * Parse the content of a generic body-part
  */
 static void message_parse_content(struct msg *msg, struct body *body,
-                                  strarray_t *boundaries)
+                                  strarray_t *boundaries,
+                                  const char *efname __attribute__((unused)))
 {
     const char *line, *endline;
     unsigned long s_offset = msg->offset;
@@ -3902,7 +3944,7 @@ static int message_need(const message_t *cm, unsigned int need)
         r = message_need(m, M_MAP);
         if (r) return r;
         m->body = (struct body *)xzmalloc(sizeof(struct body));
-        r = message_parse_mapped(m->map.s, m->map.len, m->body);
+        r = message_parse_mapped(m->map.s, m->map.len, m->body, NULL);
         if (r) return r;
         found(M_CACHEBODY|M_FULLBODY);
     }
@@ -4556,7 +4598,7 @@ static int body_foreach_section(struct body *body, struct message *message,
             msg.len = body->header_size;
             msg.offset = 0;
             msg.encode = 0;
-            message_parse_headers(&msg, tmpbody, "text/plain", &boundaries);
+            message_parse_headers(&msg, tmpbody, "text/plain", &boundaries, NULL);
 
             disposition = tmpbody->disposition;
             disposition_params = tmpbody->disposition_params;

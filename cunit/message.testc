@@ -22,7 +22,7 @@ static void test_parse_trivial(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -106,7 +106,7 @@ static void test_parse_simple(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -277,7 +277,7 @@ static void test_parse_rxdate(void)
 
     /* Neither: no received_date */
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg_neither, sizeof(msg_neither)-1, &body);
+    r = message_parse_mapped(msg_neither, sizeof(msg_neither)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(body.received_date);
     message_free_body(&body);
@@ -285,7 +285,7 @@ static void test_parse_rxdate(void)
     /* Received only: first seen Received */
     memset(&body, 0x45, sizeof(body));
     r = message_parse_mapped(msg_only_received,
-                             sizeof(msg_only_received)-1, &body);
+                             sizeof(msg_only_received)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(body.received_date, FIRST_RX);
     message_free_body(&body);
@@ -293,7 +293,7 @@ static void test_parse_rxdate(void)
     /* X-DeliveredInternalDate only: use that */
     memset(&body, 0x45, sizeof(body));
     r = message_parse_mapped(msg_only_xdid,
-                             sizeof(msg_only_xdid)-1, &body);
+                             sizeof(msg_only_xdid)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(body.received_date, DELIVERED);
     message_free_body(&body);
@@ -301,7 +301,7 @@ static void test_parse_rxdate(void)
     /* both, Received first: use X-DeliveredInternalDate */
     memset(&body, 0x45, sizeof(body));
     r = message_parse_mapped(msg_received_then_xdid,
-                             sizeof(msg_received_then_xdid)-1, &body);
+                             sizeof(msg_received_then_xdid)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(body.received_date, DELIVERED);
     message_free_body(&body);
@@ -309,7 +309,7 @@ static void test_parse_rxdate(void)
     /* both, X-DeliveredInternalDate first: use X-DeliveredInternalDate */
     memset(&body, 0x45, sizeof(body));
     r = message_parse_mapped(msg_xdid_then_received,
-                             sizeof(msg_xdid_then_received)-1, &body);
+                             sizeof(msg_xdid_then_received)-1, &body, NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(body.received_date, DELIVERED);
     message_free_body(&body);
@@ -338,7 +338,7 @@ static void test_mime_trivial(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -430,7 +430,7 @@ HTML_PART "\r\n"
     struct bodypart **parts = NULL;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -542,7 +542,7 @@ static void test_rfc2231_continuations(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -591,7 +591,7 @@ static void test_rfc2231_extended_continuations(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -629,7 +629,7 @@ static void test_references(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -662,7 +662,7 @@ static void test_x_me_message_id(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -737,7 +737,7 @@ HTML_PART "\r\n"
     struct bodypart **parts = NULL;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -876,7 +876,7 @@ HTML_PART "\r\n"
     struct body *part;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -1091,7 +1091,7 @@ static void test_cache_simple(void)
     struct body *body = xzmalloc(sizeof(struct body));
 
     memset(body, 0x45, sizeof(struct body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
@@ -1129,7 +1129,7 @@ static void test_cache_appleheaders(void)
     struct body body;
 
     memset(&body, 0x45, sizeof(body));
-    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body, NULL);
 
     CU_ASSERT_EQUAL(r, 0);
 
