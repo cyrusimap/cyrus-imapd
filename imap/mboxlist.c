@@ -862,6 +862,13 @@ EXPORTED int mboxlist_update(mbentry_t *mbentry, int localonly)
     return r;
 }
 
+static void assert_namespacelocked(const char *mboxname)
+{
+    char *userid = mboxname_to_userid(mboxname);
+    assert(user_isnamespacelocked(userid));
+    free(userid);
+}
+
 static int _findparent(const char *mboxname, mbentry_t **mbentryp, int allow_all)
 {
     mbentry_t *mbentry = NULL;
@@ -1300,6 +1307,8 @@ static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
     r = mboxlist_create_namecheck(mboxname, userid, auth_state,
                                   isadmin, forceuser);
     if (r) goto done;
+
+    assert_namespacelocked(mboxname);
 
     if (copyacl) {
         acl = xstrdup(copyacl);
@@ -1747,6 +1756,8 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
 
     if (!isadmin && force) return IMAP_PERMISSION_DENIED;
 
+    assert_namespacelocked(name);
+
     /* delete of a user.X folder */
     mbname_t *mbname = mbname_from_intname(name);
     if (mbname_userid(mbname) && !strarray_size(mbname_boxes(mbname))) {
@@ -2081,6 +2092,9 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
     mbentry_t *newmbentry = NULL;
 
     init_internal();
+
+    assert_namespacelocked(mbentry->name);
+    assert_namespacelocked(newname);
 
     /* special-case: intermediate mailbox */
     if (mbentry->mbtype & MBTYPE_INTERMEDIATE) {
