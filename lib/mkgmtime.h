@@ -43,16 +43,8 @@
 #ifndef INCLUDED_MKGMTIME_H
 #define INCLUDED_MKGMTIME_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
-
 #include <time.h>
 
-extern time_t mkgmtime P((struct tm * const tmp));
+extern time_t mkgmtime(struct tm * const tmp);
 
 #endif /* INCLUDED_MKGMTIME_H */

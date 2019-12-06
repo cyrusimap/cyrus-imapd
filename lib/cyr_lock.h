@@ -43,14 +43,6 @@
 #ifndef INCLUDED_LOCK_H
 #define INCLUDED_LOCK_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
-
 #include <sys/stat.h>
 
 extern const char lock_method_desc[];
@@ -63,8 +55,8 @@ extern int lock_reopen_ex(int fd, const char *filename,
 #define lock_reopen(fd, filename, sbuf, failaction) \
         lock_reopen_ex(fd, filename, sbuf, failaction, NULL)
 
-extern int lock_setlock (int fd, int ex, int nb, const char *filename);
-extern int lock_unlock (int fd, const char *filename);
+extern int lock_setlock(int fd, int ex, int nb, const char *filename);
+extern int lock_unlock(int fd, const char *filename);
 
 /* compatibility defines for the older API */
 #define lock_blocking(fd, fn) \

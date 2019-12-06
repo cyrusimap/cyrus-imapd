@@ -43,14 +43,6 @@
 #ifndef INCLUDED_MESSAGE_H
 #define INCLUDED_MESSAGE_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
-
 #include <stdio.h>
 
 #include "prot.h"
@@ -144,8 +136,8 @@ struct param {
 };
 extern void param_free(struct param **paramp);
 
-extern int message_copy_strict P((struct protstream *from, FILE *to,
-                                  unsigned size, int allow_null));
+extern int message_copy_strict(struct protstream *from, FILE *to,
+                               unsigned size, int allow_null);
 
 extern int message_parse(const char *fname, struct index_record *record);
 
@@ -162,30 +154,30 @@ struct bodypart {
 };
 
 
-extern void parse_cached_envelope P((char *env, char *tokens[], int tokens_size));
+extern void parse_cached_envelope(char *env, char *tokens[], int tokens_size);
 
-extern int message_parse_mapped P((const char *msg_base, unsigned long msg_len,
-                                   struct body *body));
-extern int message_parse_binary_file P((FILE *infile, struct body **body));
-extern int message_parse_file P((FILE *infile,
-                                 const char **msg_base, size_t *msg_len,
-                                 struct body **body));
+extern int message_parse_mapped(const char *msg_base, unsigned long msg_len,
+                                struct body *body);
+extern int message_parse_binary_file(FILE *infile, struct body **body);
+extern int message_parse_file(FILE *infile,
+                              const char **msg_base, size_t *msg_len,
+                              struct body **body);
 extern void message_parse_string(const char *hdr, char **hdrp);
 extern void message_pruneheader(char *buf, const strarray_t *headers,
                                 const strarray_t *headers_not);
-extern void message_fetch_part P((struct message_content *msg,
-                                  const char **content_types,
-                                  struct bodypart ***parts));
+extern void message_fetch_part(struct message_content *msg,
+                               const char **content_types,
+                               struct bodypart ***parts);
 extern void message_write_nstring(struct buf *buf, const char *s);
 extern void message_write_nstring_map(struct buf *buf, const char *s, unsigned int len);
 extern void message_write_body(struct buf *buf, const struct body *body,
                                   int newformat);
 extern void message_write_xdrstring(struct buf *buf, const struct buf *s);
-extern int message_write_cache P((struct index_record *record, const struct body *body));
+extern int message_write_cache(struct index_record *record, const struct body *body);
 
-extern int message_create_record P((struct index_record *message_index,
-                                    const struct body *body));
-extern void message_free_body P((struct body *body));
+extern int message_create_record(struct index_record *message_index,
+                                 const struct body *body);
+extern void message_free_body(struct body *body);
 
 extern void message_parse_type(const char *hdr, char **typep, char **subtypep, struct param **paramp);
 extern void message_parse_disposition(const char *hdr, char **hdpr, struct param **paramp);
