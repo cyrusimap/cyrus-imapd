@@ -65,7 +65,6 @@
 #include "http_jmap.h"
 #include "http_proxy.h"
 #include "ical_support.h"
-#include "icu_wrap.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mboxlist.h"
@@ -660,33 +659,6 @@ HIDDEN void jmapical_duration_as_string(const struct jmapical_duration *dur, str
     buf_cstring(buf);
 }
 
-static icaltimezone *tz_from_tzid(const char *tzid)
-{
-    icaltimezone *tz = NULL;
-
-    if (!tzid)
-        return NULL;
-
-    /* libical doesn't return the UTC singleton for Etc/UTC */
-    if (!strcmp(tzid, "Etc/UTC") || !strcmp(tzid, "UTC"))
-        return icaltimezone_get_utc_timezone();
-
-    tz = icaltimezone_get_builtin_timezone(tzid);
-
-    if (!tz) {
-        /* see if its a MS Windows TZID */
-        char *my_tzid = icu_getIDForWindowsID(tzid);
-
-        if (!my_tzid) return NULL;
-
-        tz = icaltimezone_get_builtin_timezone(my_tzid);
-
-        free(my_tzid);
-    }
-
-    return tz;
-}
-
 /* Determine the Olson TZID, if any, of the ical property prop. */
 static const char *tzid_from_icalprop(icalproperty *prop, int guess) {
     const char *tzid = NULL;
@@ -696,13 +668,13 @@ static const char *tzid_from_icalprop(icalproperty *prop, int guess) {
     if (param) tzid = icalparameter_get_tzid(param);
     /* Check if the tzid already corresponds to an Olson name. */
     if (tzid) {
-        icaltimezone *tz = tz_from_tzid(tzid);
+        icaltimezone *tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
         if (!tz && guess) {
             /* Try to guess the timezone. */
             icalvalue *val = icalproperty_get_value(prop);
             icaltimetype dt = icalvalue_get_datetime(val);
             tzid = dt.zone ? icaltimezone_get_location((icaltimezone*) dt.zone) : NULL;
-            tzid = tzid && tz_from_tzid(tzid) ? tzid : NULL;
+            tzid = tzid && icaltimezone_get_cyrus_timezone_from_tzid(tzid) ? tzid : NULL;
         } else if (tz == icaltimezone_get_utc_timezone()) {
             /* XXX  libical may not set tzid or location */
             return tzid;
@@ -737,7 +709,7 @@ static struct icaltimetype dtstart_from_ical(icalcomponent *comp)
     if (!tzid) tzid = tzid_from_ical(comp, ICAL_DTEND_PROPERTY);
     if (!tzid) return dt;
 
-    icaltimezone* tz = tz_from_tzid(tzid);
+    icaltimezone* tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
     if (tz && tz != dt.zone) {
         icaltimezone *utc = icaltimezone_get_utc_timezone();
         if (dt.zone != utc) {
@@ -763,7 +735,7 @@ static struct icaltimetype dtend_from_ical(icalcomponent *comp)
     if (end_prop) {
         dtend = icalproperty_get_dtend(end_prop);
         const char *tzid = tzid_from_icalprop(end_prop, 1);
-        icaltimezone* tz = tzid ? tz_from_tzid(tzid) : NULL;
+        icaltimezone* tz = tzid ? icaltimezone_get_cyrus_timezone_from_tzid(tzid) : NULL;
         if (tz && tz != dtend.zone) {
             icaltimezone *utc = icaltimezone_get_utc_timezone();
             if (dtend.zone != utc) {
@@ -1001,7 +973,7 @@ recurrence_from_ical(icalcomponent *comp)
                 icalproperty_get_first_parameter(dtstart_prop, ICAL_TZID_PARAMETER);
             if (tzid_param) tzid = icalparameter_get_tzid(tzid_param);
         }
-        icaltimezone *tz = tz_from_tzid(tzid);
+        icaltimezone *tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
         icaltimetype dtuntil;
         if (rrule.until.is_date) {
             dtuntil = rrule.until;
@@ -1085,8 +1057,8 @@ override_exdate_from_ical(icalproperty *prop, const char *tzid_start)
 
     const char *tzid_xdate = tzid_from_icalprop(prop, 1);
     if (tzid_start && tzid_xdate && strcmp(tzid_start, tzid_xdate)) {
-        icaltimezone *tz_xdate = tz_from_tzid(tzid_xdate);
-        icaltimezone *tz_start = tz_from_tzid(tzid_start);
+        icaltimezone *tz_xdate = icaltimezone_get_cyrus_timezone_from_tzid(tzid_xdate);
+        icaltimezone *tz_start = icaltimezone_get_cyrus_timezone_from_tzid(tzid_start);
         if (tz_xdate && tz_start) {
             if (exdate.zone) exdate.zone = tz_xdate;
             exdate = icaltime_convert_to_zone(exdate, tz_start);
@@ -1165,7 +1137,7 @@ overrides_from_ical(icalcomponent *comp, ptrarray_t *icaloverrides,
                 if (tzid_param) {
                     const char *start_tzid = icalparameter_get_tzid(tzid_param);
                     if (start_tzid) {
-                        icaltimezone *start_tz = tz_from_tzid(start_tzid);
+                        icaltimezone *start_tz = icaltimezone_get_cyrus_timezone_from_tzid(start_tzid);
                         if (start_tz) {
                             icalrecurid = icaltime_convert_to_zone(icalrecurid, start_tz);
                         }
@@ -2718,7 +2690,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     jprop = json_object_get(event, "timeZone");
     if (json_is_string(jprop)) {
         const char *val = json_string_value(jprop);
-        tzstart = tz_from_tzid(val);
+        tzstart = icaltimezone_get_cyrus_timezone_from_tzid(val);
         if (!tzstart) {
             jmap_parser_invalid(parser, "timeZone");
         }
@@ -2743,7 +2715,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
             endzone_location_id = id;
             json_t *timeZone = json_object_get(jval, "timeZone");
             if (json_is_string(timeZone)) {
-                tzend = tz_from_tzid(json_string_value(timeZone));
+                tzend = icaltimezone_get_cyrus_timezone_from_tzid(json_string_value(timeZone));
                 if (!tzend || !tzstart) {
                     jmap_parser_invalid(parser, "timeZone");
                 }
@@ -4196,7 +4168,8 @@ recurrence_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *rrul
         struct jmapical_datetime until = JMAPICAL_DATETIME_INITIALIZER;
         if (jmapical_localdatetime_from_string(json_string_value(jprop), &until) >= 0) {
             int is_date = icalcomponent_get_dtstart(comp).is_date;
-            icaltimezone *tzstart = tz_from_tzid(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
+            icaltimezone *tzstart =
+                icaltimezone_get_cyrus_timezone_from_tzid(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
             icaltimetype untilutc;
             if (is_date) {
                 untilutc = jmapical_datetime_to_icaldate(&until);
@@ -4362,7 +4335,7 @@ validate_location(json_t *loc, struct jmap_parser *parser, json_t *links)
 
     jprop = json_object_get(loc, "timeZone");
     if (json_is_string(jprop)) {
-        if (!tz_from_tzid(json_string_value(jprop)))
+        if (!icaltimezone_get_cyrus_timezone_from_tzid(json_string_value(jprop)))
             jmap_parser_invalid(parser, "timeZone");
     }
     else if (JNOTNULL(jprop)) {
@@ -4586,7 +4559,8 @@ overrides_to_ical(icalcomponent *comp,
 
     /* Determine value type of main event DTSTART */
     int is_date = icalcomponent_get_dtstart(comp).is_date;
-    icaltimezone *tzstart = tz_from_tzid(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
+    icaltimezone *tzstart =
+        icaltimezone_get_cyrus_timezone_from_tzid(tzid_from_ical(comp, ICAL_DTSTART_PROPERTY));
 
     /* Convert current master event to JMAP */
     json_t *master = calendarevent_from_ical(comp, NULL, 0, NULL);
