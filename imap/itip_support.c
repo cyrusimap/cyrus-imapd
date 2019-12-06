@@ -1018,7 +1018,8 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
     strarray_append(&recipient_addresses, recipient);
     r = caldav_store_resource(&txn, ical, mailbox,
                               buf_cstring(&resource), cdata->dav.createdmodseq,
-                              caldavdb, NEW_STAG, sparam->userid, &recipient_addresses);
+                              caldavdb, NEW_STAG, sparam->userid,
+                              NULL, NULL, &recipient_addresses);
     strarray_fini(&recipient_addresses);
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
@@ -1041,7 +1042,8 @@ HIDDEN enum sched_deliver_outcome sched_deliver_local(const char *userid,
 
         /* Store the message in the recipient's Inbox */
         r = caldav_store_resource(&txn, sched_data->itip, inbox,
-                                  buf_cstring(&resource), 0, caldavdb, 0, NULL, NULL);
+                                  buf_cstring(&resource), 0, caldavdb, 0,
+                                  NULL, NULL, NULL, NULL);
         /* XXX  What do we do if storing to Inbox fails? */
     }
 

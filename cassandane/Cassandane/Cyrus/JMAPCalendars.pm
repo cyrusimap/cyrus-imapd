@@ -1281,6 +1281,9 @@ sub normalize_event
     if (not exists $event->{privacy}) {
         $event->{privacy} = "public";
     }
+    if (not exists $event->{isDraft}) {
+        $event->{isDraft} = JSON::false;
+    }
 
     # undefine dynamically generated values
     $event->{created} = undef;
@@ -7866,5 +7869,96 @@ sub test_no_shared_calendar
     $self->assert_deep_equals([], $res->[3][1]{list});
 }
 
+sub test_calendarevent_set_isdraft
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my $calid = "Default";
+
+    # Create events as draft and non-draft.
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    "calendarId" => $calid,
+                    "title"=> "draft",
+                    "start"=> "2019-12-05T09:00:00",
+                    "duration"=> "PT5M",
+                    "timeZone"=> "Etc/UTC",
+                    "isDraft" => JSON::true,
+                },
+                2 => {
+                    "calendarId" => $calid,
+                    "title"=> "non-draft",
+                    "start"=> "2019-12-05T10:00:00",
+                    "duration"=> "PT5M",
+                    "timeZone"=> "Etc/UTC",
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#1', '#2'], properties => ['isDraft'],
+        }, 'R2']
+    ]);
+    my $eventDraftId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventDraftId);
+    my $eventNonDraftId = $res->[0][1]{created}{2}{id};
+    $self->assert_not_null($eventNonDraftId);
+
+    my %events = map { $_->{id} => $_ } @{$res->[1][1]{list}};
+    $self->assert_equals(JSON::true, $events{$eventDraftId}{isDraft});
+    $self->assert_equals(JSON::false, $events{$eventNonDraftId}{isDraft});
+
+    # Updating an arbitrary property preserves draft flag.
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventDraftId => {
+                    description => "updated",
+                },
+                $eventNonDraftId => {
+                    description => "updated",
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventDraftId, $eventNonDraftId], properties => ['isDraft'],
+        }, 'R2']
+    ]);
+    $self->assert_not_null($res->[0][1]{updated}{$eventDraftId});
+    $self->assert_not_null($res->[0][1]{updated}{$eventNonDraftId});
+
+    %events = map { $_->{id} => $_ } @{$res->[1][1]{list}};
+    $self->assert_equals(JSON::true, $events{$eventDraftId}{isDraft});
+    $self->assert_equals(JSON::false, $events{$eventNonDraftId}{isDraft});
+
+    # Toggle isDraft flags (only allowed from draft to non-draft)
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventDraftId => {
+                    "isDraft" => JSON::false,
+                },
+                $eventNonDraftId => {
+                    "isDraft" => JSON::true,
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventDraftId, $eventNonDraftId], properties => ['isDraft'],
+        }, 'R2']
+    ]);
+    $self->assert_not_null($res->[0][1]{updated}{$eventDraftId});
+    $self->assert_not_null($res->[0][1]{notUpdated}{$eventNonDraftId});
+
+    %events = map { $_->{id} => $_ } @{$res->[1][1]{list}};
+    $self->assert_equals(JSON::false, $events{$eventDraftId}{isDraft});
+    $self->assert_equals(JSON::false, $events{$eventNonDraftId}{isDraft});
+}
 
 1;
