@@ -648,7 +648,8 @@ static int carddav_store_resource(struct transaction_t *txn,
 
     /* Store the resource */
     int r = dav_store_resource(txn, buf_cstring(buf), 0,
-                              mailbox, oldrecord, cdata->dav.createdmodseq, NULL);
+                              mailbox, oldrecord, cdata->dav.createdmodseq,
+                              NULL, NULL);
     buf_destroy(buf);
     return r;
 }
