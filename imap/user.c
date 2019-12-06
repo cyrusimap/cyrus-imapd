@@ -481,3 +481,40 @@ HIDDEN char *user_hash_subs(const char *userid)
 {
     return user_hash_meta(userid, FNAME_SUBSSUFFIX);
 }
+
+static const char *_namelock_name_from_userid(const char *userid)
+{
+    const char *p;
+    static struct buf buf = BUF_INITIALIZER;
+    if (!userid) userid = ""; // no userid == global lock
+
+    buf_setcstr(&buf, "*U*");
+
+    for (p = userid; *p; p++) {
+        switch(*p) {
+            case '.':
+                buf_putc(&buf, '^');
+                break;
+            default:
+                buf_putc(&buf, *p);
+                break;
+        }
+    }
+
+    return buf_cstring(&buf);
+}
+
+EXPORTED struct mboxlock *user_namespacelock(const char *userid)
+{
+    struct mboxlock *namelock;
+    const char *name = _namelock_name_from_userid(userid);
+    int r = mboxname_lock(name, &namelock, LOCK_EXCLUSIVE);
+    if (r) return NULL;
+    return namelock;
+}
+
+EXPORTED int user_isnamespacelocked(const char *userid)
+{
+    const char *name = _namelock_name_from_userid(userid);
+    return mboxname_islocked(name);
+}

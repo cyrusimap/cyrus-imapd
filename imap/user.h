@@ -44,6 +44,7 @@
 #define INCLUDED_USER_H
 
 #include "auth.h"
+#include "mboxname.h"
 
 /* path to user's sieve directory */
 const char *user_sieve_path(const char *user);
@@ -75,5 +76,8 @@ char *user_hash_subs(const char *user);
 
 /* find any sort of file for the user */
 char *user_hash_meta(const char *userid, const char *suffix);
+
+struct mboxlock *user_namespacelock(const char *userid);
+int user_isnamespacelocked(const char *userid);
 
 #endif
