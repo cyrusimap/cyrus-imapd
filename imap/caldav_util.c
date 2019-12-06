@@ -726,6 +726,8 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
                                    modseq_t createdmodseq,
                                    struct caldav_db *caldavdb,
                                    unsigned flags, const char *userid,
+                                   const strarray_t *add_imapflags,
+                                   const strarray_t *del_imapflags,
                                    const strarray_t *schedule_addresses)
 {
     int ret;
@@ -744,7 +746,10 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     char datestr[80], *mimehdr;
     const char *sched_tag;
     uint32_t newuid = 0;
-    strarray_t imapflags = STRARRAY_INITIALIZER;
+    strarray_t myimapflags = STRARRAY_INITIALIZER;
+
+    /* Copy add_imapflags, we might need to add some flags */
+    if (add_imapflags) strarray_cat(&myimapflags, add_imapflags);
 
     if (!utc_zone) utc_zone = icaltimezone_get_utc_timezone();
 
@@ -823,7 +828,7 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
     else sched_tag = cdata->sched_tag = NULL;
 
     /* If we are just stripping VTIMEZONEs from resource, flag it */
-    if (flags & TZ_STRIP) strarray_append(&imapflags, DFLAG_UNCHANGED);
+    if (flags & TZ_STRIP) strarray_append(&myimapflags, DFLAG_UNCHANGED);
     else if (mailbox->i.options & OPT_IMAP_SHAREDSEEN) {
         cdata->comp_flags.shared = 0;
     }
@@ -906,8 +911,9 @@ EXPORTED int caldav_store_resource(struct transaction_t *txn, icalcomponent *ica
 
     /* Store the resource */
     ret = dav_store_resource(txn, icalcomponent_as_ical_string(store_ical), 0,
-                             mailbox, oldrecord, createdmodseq, &imapflags);
-    strarray_fini(&imapflags);
+                             mailbox, oldrecord, createdmodseq, &myimapflags,
+                             del_imapflags);
+    strarray_fini(&myimapflags);
 
     newuid = mailbox->i.last_uid;
 

@@ -1172,7 +1172,8 @@ static int notify_put(struct transaction_t *txn, void *obj,
     else {
         /* Store the resource */
         r = dav_store_resource(txn, buf_cstring(xmlbuf), buf_len(xmlbuf),
-                               mailbox, oldrecord, wdata->dav.createdmodseq, NULL);
+                               mailbox, oldrecord, wdata->dav.createdmodseq,
+                               NULL, NULL);
     }
 
     buf_destroy(xmlbuf);
