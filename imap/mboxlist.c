@@ -1885,6 +1885,25 @@ EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
     return r;
 }
 
+EXPORTED int mboxlist_deletemailboxlock(const char *name, int isadmin,
+                                    const char *userid,
+                                    const struct auth_state *auth_state,
+                                    struct mboxevent *mboxevent,
+                                    int checkacl,
+                                    int local_only, int force,
+                                    int keep_intermediaries)
+{
+    char *lockuser = mboxname_to_userid(name);
+    struct mboxlock *namespacelock = user_namespacelock(lockuser);
+    free(lockuser);
+
+    int r = mboxlist_deletemailbox(name, isadmin, userid, auth_state, mboxevent,
+                                   checkacl, local_only, force, keep_intermediaries);
+
+    mboxname_release(&namespacelock);
+    return r;
+}
+
 static int _rename_check_specialuse(const char *oldname, const char *newname)
 {
     const char *protect = config_getstring(IMAPOPT_SPECIALUSE_PROTECT);

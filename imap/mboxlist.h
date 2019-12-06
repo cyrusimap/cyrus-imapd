@@ -235,6 +235,12 @@ int mboxlist_deletemailbox(const char *name, int isadmin, const char *userid,
                            struct mboxevent *mboxevent,
                            int checkacl,
                            int local_only, int force, int keep_intermediaries);
+/* same but wrap with a namespacelock */
+int mboxlist_deletemailboxlock(const char *name, int isadmin, const char *userid,
+                           const struct auth_state *auth_state,
+                           struct mboxevent *mboxevent,
+                           int checkacl,
+                           int local_only, int force, int keep_intermediaries);
 
 /* rename a tree of mailboxes - renames mailbox plus any children */
 int mboxlist_renametree(const char *oldname, const char *newname,
