@@ -65,6 +65,7 @@
 #include "msgrecord.h"
 #include "statuscache.h"
 #include "stristr.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 
@@ -3344,8 +3345,9 @@ static int jmap_mailbox_set(jmap_req_t *req)
         set.super.old_state = xstrdup(json_string_value(jstate));
         json_decref(jstate);
     }
-
+    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     _mboxset(req, &set);
+    mboxname_release(&namespacelock);
     jmap_ok(req, jmap_set_reply(&set.super));
 
 done:
