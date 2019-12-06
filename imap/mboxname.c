@@ -241,6 +241,8 @@ done:
 
 EXPORTED void mboxname_release(struct mboxlock **mboxlockptr)
 {
+    if (!*mboxlockptr) return;
+
     struct mboxlocklist *lockitem;
     struct mboxlock *lock = *mboxlockptr;
 
