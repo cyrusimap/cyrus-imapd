@@ -649,6 +649,7 @@ int autocreate_user(struct namespace *namespace, const char *userid)
     strarray_t *subscribe = NULL;
     int numcrt = 0;
     int numsub = 0;
+    struct mboxlock *namespacelock = user_namespacelock(userid);
 #ifdef USE_SIEVE
     const char *source_script;
 #endif
@@ -816,6 +817,7 @@ int autocreate_user(struct namespace *namespace, const char *userid)
 #endif
 
  done:
+    mboxname_release(&namespacelock);
     free(inboxname);
     strarray_free(create);
     strarray_free(subscribe);
