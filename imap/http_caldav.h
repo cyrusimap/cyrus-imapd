@@ -53,6 +53,8 @@ extern int caldav_store_resource(struct transaction_t *txn, icalcomponent *ical,
                                  struct mailbox *mailbox, const char *resource,
                                  modseq_t createdmodseq,
                                  struct caldav_db *caldavdb, unsigned flags,
+                                 const strarray_t *add_imapflags,
+                                 const strarray_t *del_imapflags,
                                  const char *userid, const strarray_t *schedule_addresses);
 
 extern icalcomponent *caldav_record_to_ical(struct mailbox *mailbox,
