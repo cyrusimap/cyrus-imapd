@@ -56,6 +56,7 @@
 #include "strhash.h"
 #include "stristr.h"
 #include "util.h"
+#include "icu_wrap.h"
 
 #ifdef HAVE_ICAL
 
@@ -216,6 +217,31 @@ icalproperty_get_datetimeperiod(icalproperty *prop)
     return ret;
 }
 
+EXPORTED icaltimezone *icaltimezone_get_cyrus_timezone_from_tzid(const char *tzid)
+{
+    if (!tzid)
+        return NULL;
+
+    /* Use UTC singleton for Etc/UTC */
+    if (!strcmp(tzid, "Etc/UTC") || !strcmp(tzid, "UTC"))
+        return icaltimezone_get_utc_timezone();
+
+    icaltimezone *tz = icaltimezone_get_builtin_timezone(tzid);
+    if (tz == NULL)
+        tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
+    if (tz == NULL) {
+        /* see if its a MS Windows TZID */
+        char *icutzid = icu_getIDForWindowsID(tzid);
+        if (icutzid) {
+            tz = icaltimezone_get_builtin_timezone(icutzid);
+            if (tz == NULL)
+                tz = icaltimezone_get_builtin_timezone_from_tzid(icutzid);
+            free(icutzid);
+        }
+    }
+    return tz;
+}
+
 static struct icaltimetype icalcomponent_get_mydatetime(icalcomponent *comp, icalproperty *prop)
 {
     icalcomponent *c;
@@ -226,37 +252,17 @@ static struct icaltimetype icalcomponent_get_mydatetime(icalcomponent *comp, ica
 
     if ((param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER)) != NULL) {
         const char *tzid = icalparameter_get_tzid(param);
-        if (!strcmpsafe(tzid, "Etc/UTC") || !strcmpsafe(tzid, "UTC")) {
-            /* Use UTC singleton for Etc/UTC */
-            ret = icaltime_set_timezone(&ret, icaltimezone_get_utc_timezone());
-        }
-        else {
-            /* Use Cyrus-internal timezone */
-            icaltimezone *mytz = icaltimezone_get_builtin_timezone(tzid);
-            if (mytz == NULL)
-                mytz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
-            if (mytz == NULL) {
-                /* see if its a MS Windows TZID */
-                char *icutzid = icu_getIDForWindowsID(tzid);
-                if (icutzid)
-                    mytz = icaltimezone_get_builtin_timezone_from_tzid(icutzid);
-                free(icutzid);
-            }
-            if (mytz != NULL) {
-                ret = icaltime_set_timezone(&ret, mytz);
-            }
-            else {
-                /* Use embedded VTIMEZONE */
-                icaltimezone *tz = NULL;
-                for (c = comp; c != NULL; c = icalcomponent_get_parent(c)) {
-                    tz = icalcomponent_get_timezone(c, tzid);
-                    if (tz != NULL)
-                        break;
-                }
+        icaltimezone *tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
+        if (tz == NULL) {
+            /* Use embedded VTIMEZONE */
+            for (c = comp; c != NULL; c = icalcomponent_get_parent(c)) {
+                tz = icalcomponent_get_timezone(c, tzid);
                 if (tz != NULL)
-                    ret =icaltime_set_timezone(&ret, tz);
+                    break;
             }
         }
+        if (tz != NULL)
+            ret = icaltime_set_timezone(&ret, tz);
     }
 
     return ret;
