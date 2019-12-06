@@ -51,6 +51,7 @@
 #include "strhash.h"
 #include "syslog.h"
 #include "times.h"
+#include "user.h"
 #include "webdav_db.h"
 #include "xstrlcpy.h"
 
@@ -363,17 +364,15 @@ static int lookup_notify_collection(const char *userid, mbentry_t **mbentry)
     return r;
 }
 
-
-static int create_notify_collection(const char *userid, struct mailbox **mailbox)
+static int _create_notify_collection(const char *userid, struct mailbox **mailbox)
 {
-    /* notifications collection */
+    /* lock the namespace lock and try again */
+    struct mboxlock *namespacelock = user_namespacelock(userid);
+
     mbentry_t *mbentry = NULL;
     int r = lookup_notify_collection(userid, &mbentry);
 
-    if (r == IMAP_INVALID_USER) {
-        goto done;
-    }
-    else if (r == IMAP_MAILBOX_NONEXISTENT) {
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
         if (!mbentry) goto done;
         else if (mbentry->server) {
             proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
@@ -389,7 +388,7 @@ static int create_notify_collection(const char *userid, struct mailbox **mailbox
         if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
                       mbentry->name, error_message(r));
     }
-    else if (mailbox) {
+    else if (!r && mailbox) {
         /* Open mailbox for writing */
         r = mailbox_open_iwl(mbentry->name, mailbox);
         if (r) {
@@ -399,6 +398,27 @@ static int create_notify_collection(const char *userid, struct mailbox **mailbox
     }
 
  done:
+    mboxname_release(&namespacelock);
+    mboxlist_entry_free(&mbentry);
+    return r;
+}
+
+static int create_notify_collection(const char *userid, struct mailbox **mailbox)
+{
+    /* notifications collection */
+    mbentry_t *mbentry = NULL;
+    int r = lookup_notify_collection(userid, &mbentry);
+    if (r) return _create_notify_collection(userid, mailbox);
+
+    if (mailbox) {
+        /* Open mailbox for writing */
+        r = mailbox_open_iwl(mbentry->name, mailbox);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                   mbentry->name, error_message(r));
+        }
+    }
+
     mboxlist_entry_free(&mbentry);
     return r;
 }
