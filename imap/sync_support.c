@@ -2737,9 +2737,45 @@ int sync_apply_mailbox(struct dlist *kin,
     options = sync_parse_options(options_str);
 
     r = mailbox_open_iwl(mboxname, &mailbox);
+    if (!r) r = sync_mailbox_version_check(&mailbox);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        char *userid = mboxname_to_userid(mboxname);
+        struct mboxlock *namespacelock = user_namespacelock(userid);
+        // try again under lock
+        r = mailbox_open_iwl(mboxname, &mailbox);
+        if (!r) r = sync_mailbox_version_check(&mailbox);
+        if (r == IMAP_MAILBOX_NONEXISTENT) { // did we win a race?
+            char *oldname = mboxlist_find_uniqueid(uniqueid, NULL, NULL);
+            // if they have the same name it's probably an intermediate being
+            // promoted.  Intermediates, the gift that keeps on giving.
+            if (oldname && strcmp(oldname, mboxname)) {
+                syslog(LOG_ERR, "SYNCNOTICE: failed to create mailbox %s with uniqueid %s (already used by %s)",
+                       mboxname, uniqueid, oldname);
+                free(oldname);
+                r = IMAP_MAILBOX_MOVED;
+            }
+            else {
+                r = mboxlist_createsync(mboxname, mbtype, partition,
+                                            sstate->userid, sstate->authstate,
+                                            options, uidvalidity, createdmodseq,
+                                            highestmodseq, acl,
+                                            uniqueid, sstate->local_only, 0, &mailbox);
+            }
+            /* set a highestmodseq of 0 so ALL changes are future
+             * changes and get applied */
+            if (!r) mailbox->i.highestmodseq = 0;
+        }
+        mboxname_release(&namespacelock);
+        free(userid);
+    }
+    if (r) {
+        syslog(LOG_ERR, "Failed to open mailbox %s to update: %s",
+               mboxname, error_message(r));
+        goto done;
+    }
 
     // immediate bail if we have an old state to compare
-    if (!r && since_modseq) {
+    if (since_modseq) {
         struct synccrcs mycrcs = mailbox_synccrcs(mailbox, 0);
         if (since_modseq != mailbox->i.highestmodseq ||
             !mailbox_crceq(since_crcs, mycrcs)) {
@@ -2750,35 +2786,8 @@ int sync_apply_mailbox(struct dlist *kin,
                    since_crcs.basic, since_crcs.annot,
                    mycrcs.basic, mycrcs.annot);
             r = IMAP_SYNC_CHANGED;
-        }
-    }
-
-    // otherwise check version and whether we need to create
-    if (!r) r = sync_mailbox_version_check(&mailbox);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-        char *oldname = mboxlist_find_uniqueid(uniqueid, NULL, NULL);
-        // if they have the same name it's probably an intermediate being
-        // promoted.  Intermediates, the gift that keeps on giving.
-        if (oldname && strcmp(oldname, mboxname)) {
-            syslog(LOG_ERR, "SYNCNOTICE: failed to create mailbox %s with uniqueid %s (already used by %s)",
-                   mboxname, uniqueid, oldname);
-            free(oldname);
-            r = IMAP_MAILBOX_MOVED;
             goto done;
         }
-        r = mboxlist_createsync(mboxname, mbtype, partition,
-                                sstate->userid, sstate->authstate,
-                                options, uidvalidity, createdmodseq,
-                                highestmodseq, acl,
-                                uniqueid, sstate->local_only, 0, &mailbox);
-        /* set a highestmodseq of 0 so ALL changes are future
-         * changes and get applied */
-        if (!r) mailbox->i.highestmodseq = 0;
-    }
-    if (r) {
-        syslog(LOG_ERR, "Failed to open mailbox %s to update: %s",
-               mboxname, error_message(r));
-        goto done;
     }
 
     if (mailbox->mbtype != mbtype) {
@@ -3251,7 +3260,7 @@ int sync_apply_unmailbox(struct dlist *kin, struct sync_state *sstate)
     const char *mboxname = kin->sval;
 
     /* Delete with admin privileges */
-    return mboxlist_deletemailbox(mboxname, sstate->userisadmin,
+    return mboxlist_deletemailboxlock(mboxname, sstate->userisadmin,
                                   sstate->userid, sstate->authstate,
                                   NULL, 0, sstate->local_only, 1, 0);
 }
@@ -3275,16 +3284,34 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     /* optional */
     dlist_getnum32(kin, "UIDVALIDITY", &uidvalidity);
 
-    r = mboxlist_lookup(oldmboxname, &mbentry, 0);
-    if (r) return r;
+    char *olduserid = mboxname_to_userid(oldmboxname);
+    char *newuserid = mboxname_to_userid(newmboxname);
+    struct mboxlock *oldlock = NULL;
+    struct mboxlock *newlock = NULL;
+    if (strcmpsafe(olduserid, newuserid) < 0) {
+        oldlock = user_namespacelock(olduserid);
+        newlock = user_namespacelock(newuserid);
+    }
+    else {
+        // doesn't hurt to double lock, it's refcounted
+        newlock = user_namespacelock(newuserid);
+        oldlock = user_namespacelock(olduserid);
+    }
 
-    r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
-                               uidvalidity, 1, sstate->userid,
-                               sstate->authstate, NULL, sstate->local_only, 1, 1,
-                               0/*keep_intermediaries*/,
-                               0/*move_subscription*/,
-                               1/*silent*/);
+    r = mboxlist_lookup(oldmboxname, &mbentry, 0);
+
+    if (!r) r = mboxlist_renamemailbox(mbentry, newmboxname, partition,
+                                       uidvalidity, 1, sstate->userid,
+                                       sstate->authstate, NULL, sstate->local_only, 1, 1,
+                                       0/*keep_intermediaries*/,
+                                       0/*move_subscription*/,
+                                       1/*silent*/);
+
     mboxlist_entry_free(&mbentry);
+    free(olduserid);
+    free(newuserid);
+    mboxname_release(&oldlock);
+    mboxname_release(&newlock);
 
     return r;
 }
@@ -3527,6 +3554,8 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
         return 0;
     }
 
+    struct mboxlock *namespacelock = user_namespacelock(userid);
+
     /* Nuke subscriptions */
     /* ignore failures here - the subs file gets deleted soon anyway */
     strarray_t *list = mboxlist_sublist(userid);
@@ -3551,6 +3580,7 @@ int sync_apply_unuser(struct dlist *kin, struct sync_state *sstate)
     r = user_deletedata(userid, 1);
 
  done:
+    mboxname_release(&namespacelock);
     strarray_free(list);
 
     return r;
@@ -3787,15 +3817,23 @@ int sync_restore_mailbox(struct dlist *kin,
             uidvalidity = 0;
         }
 
-        r = mboxlist_createsync(mboxname, mbtype, partition,
-                                sstate->userid, sstate->authstate,
-                                options, uidvalidity, createdmodseq,
-                                highestmodseq, acl,
-                                uniqueid, sstate->local_only, 0, &mailbox);
-        syslog(LOG_DEBUG, "%s: mboxlist_createsync %s: %s",
-            __func__, mboxname, error_message(r));
-
-        is_new_mailbox = 1;
+        char *userid = mboxname_to_userid(mboxname);
+        struct mboxlock *namespacelock = user_namespacelock(userid);
+        // try again under lock
+        r = mailbox_open_iwl(mboxname, &mailbox);
+        if (!r) r = sync_mailbox_version_check(&mailbox);
+        if (r == IMAP_MAILBOX_NONEXISTENT) { // did we win a race?
+            r = mboxlist_createsync(mboxname, mbtype, partition,
+                                    sstate->userid, sstate->authstate,
+                                    options, uidvalidity, createdmodseq,
+                                    highestmodseq, acl,
+                                    uniqueid, sstate->local_only, 0, &mailbox);
+            syslog(LOG_DEBUG, "%s: mboxlist_createsync %s: %s",
+                __func__, mboxname, error_message(r));
+            is_new_mailbox = 1;
+        }
+        mboxname_release(&namespacelock);
+        free(userid);
     }
     if (r) {
         syslog(LOG_ERR, "Failed to open mailbox %s to restore: %s",
