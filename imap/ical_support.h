@@ -137,6 +137,8 @@ extern int icalcomponent_apply_vpatch(icalcomponent *ical,
                                       icalcomponent *vpatch,
                                       int *num_changes, const char **errstr);
 
+extern icaltimezone *icaltimezone_lookup_tzid(const char *tzid);
+
 /* Functions that should be declared in libical */
 #define icaltimezone_set_zone_directory set_zone_directory
 
