@@ -74,6 +74,7 @@
 #include "smtpclient.h"
 #include "strhash.h"
 #include "tok.h"
+#include "user.h"
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
@@ -1999,22 +2000,30 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
         strarray_free(create);
     }
 
-    if (createsievefolder) {
-        /* Folder is already in internal namespace format */
-        r = mboxlist_createmailbox(internalname, 0, NULL,
-                                   1, userid, auth_state, 0, 0, 0, 1, NULL);
-        if (!r) {
-            mboxlist_changesub(internalname, userid, auth_state, 1, 1, 1);
-            syslog(LOG_DEBUG, "autosievefolder: User %s, folder %s creation succeeded",
-                   userid, internalname);
-            return 0;
-        } else {
-            syslog(LOG_ERR, "autosievefolder: User %s, folder %s creation failed. %s",
-                   userid, internalname, error_message(r));
-            return r;
-        }
+    // unless configured to create it, drop out now
+    if (!createsievefolder) return IMAP_MAILBOX_NONEXISTENT;
+
+    // lock the namespace and check again before trying to create
+    struct mboxlock *namespacelock = user_namespacelock(userid);
+
+    // did we lose the race?
+    r = mboxlist_lookup(internalname, 0, 0);
+    if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
+
+    r = mboxlist_createmailbox(internalname, 0, NULL,
+                               1, userid, auth_state, 0, 0, 0, 1, NULL);
+    if (r) {
+        syslog(LOG_ERR, "autosievefolder: User %s, folder %s creation failed. %s",
+               userid, internalname, error_message(r));
+        goto done;
     }
 
-    return IMAP_MAILBOX_NONEXISTENT;
+    mboxlist_changesub(internalname, userid, auth_state, 1, 1, 1);
+    syslog(LOG_DEBUG, "autosievefolder: User %s, folder %s creation succeeded",
+           userid, internalname);
+
+done:
+    mboxname_release(&namespacelock);
+    return r;
 }
 
