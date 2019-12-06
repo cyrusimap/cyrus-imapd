@@ -1376,6 +1376,26 @@ done:
     return r;
 }
 
+EXPORTED int mboxlist_createmailboxlock(const char *name, int mbtype,
+                           const char *partition,
+                           int isadmin, const char *userid,
+                           const struct auth_state *auth_state,
+                           int localonly, int forceuser, int dbonly,
+                           int notify, struct mailbox **mailboxptr)
+{
+    char *lockuser = mboxname_to_userid(name);
+    struct mboxlock *namespacelock = user_namespacelock(lockuser);
+    free(lockuser);
+
+    int r = mboxlist_createmailbox_unq(name, mbtype, partition, isadmin,
+                                      userid, auth_state, localonly,
+                                      forceuser, dbonly, notify, NULL,
+                                      mailboxptr);
+
+    mboxname_release(&namespacelock);
+    return r;
+}
+
 EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
                            const char *partition,
                            int isadmin, const char *userid,

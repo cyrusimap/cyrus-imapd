@@ -176,6 +176,15 @@ int mboxlist_createmailbox(const char *name, int mbtype,
                            int localonly, int forceuser, int dbonly,
                            int notify, struct mailbox **mailboxptr);
 
+/* create mailbox with wrapping namespacelock */
+int mboxlist_createmailboxlock(const char *name, int mbtype,
+                           const char *partition,
+                           int isadmin, const char *userid,
+                           const struct auth_state *auth_state,
+                           int localonly, int forceuser, int dbonly,
+                           int notify, struct mailbox **mailboxptr);
+
+
 /* create mailbox with uniqueid */
 int mboxlist_createmailbox_unq(const char *name, int mbtype,
                            const char *partition,
