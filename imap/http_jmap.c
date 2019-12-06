@@ -55,6 +55,7 @@
 #include "proxy.h"
 #include "times.h"
 #include "syslog.h"
+#include "user.h"
 #include "xstrlcpy.h"
 
 /* generated headers are not necessarily in current directory */
@@ -635,11 +636,11 @@ static int lookup_upload_collection(const char *accountid, mbentry_t **mbentry)
     return r;
 }
 
-
-HIDDEN int jmap_create_upload_collection(const char *accountid,
-                                         struct mailbox **mailbox)
+static int _create_upload_collection(const char *accountid,
+                                     struct mailbox **mailbox)
 {
     /* upload collection */
+    struct mboxlock *namespacelock = user_namespacelock(accountid);
     mbentry_t *mbentry = NULL;
     int r = lookup_upload_collection(accountid, &mbentry);
 
@@ -682,6 +683,28 @@ HIDDEN int jmap_create_upload_collection(const char *accountid,
     }
 
  done:
+    mboxname_release(&namespacelock);
+    mboxlist_entry_free(&mbentry);
+    return r;
+}
+
+HIDDEN int jmap_open_upload_collection(const char *accountid,
+                                       struct mailbox **mailbox)
+{
+    /* upload collection */
+    mbentry_t *mbentry = NULL;
+    int r = lookup_upload_collection(accountid, &mbentry);
+    if (r) return _create_upload_collection(accountid, mailbox);
+
+    if (mailbox) {
+        /* Open mailbox for writing */
+        r = mailbox_open_iwl(mbentry->name, mailbox);
+        if (r) {
+            syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+                   mbentry->name, error_message(r));
+        }
+    }
+
     mboxlist_entry_free(&mbentry);
     return r;
 }
@@ -751,7 +774,7 @@ static int jmap_upload(struct transaction_t *txn)
     }
     *slash = '\0';
 
-    r = jmap_create_upload_collection(accountid, &mailbox);
+    r = jmap_open_upload_collection(accountid, &mailbox);
     if (r) {
         syslog(LOG_ERR, "jmap_upload: can't open upload collection for %s: %s",
                error_message(r), accountid);
