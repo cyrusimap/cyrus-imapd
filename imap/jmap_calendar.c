@@ -2094,7 +2094,7 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     json_t *jsevent = NULL;
     jmap_req_t *req = rock->req;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
-    mbentry_t *mbentry = NULL;
+    msgrecord_t *mr = NULL;
 
     if (!cdata->dav.alive)
         return 0;
@@ -2103,10 +2103,18 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     if (cdata->comp_type != CAL_COMP_VEVENT)
         return 0;
 
-    mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+    if (!rock->mbentry ||
+            (cdata->dav.mailbox_byname &&
+             strcmp(rock->mbentry->name, cdata->dav.mailbox)) ||
+            (!cdata->dav.mailbox_byname &&
+             strcmp(rock->mbentry->uniqueid, cdata->dav.mailbox))) {
+        mboxlist_entry_free(&rock->mbentry);
+        rock->mbentry = jmap_mbentry_from_dav(req, &cdata->dav);
+    }
 
     /* Check mailbox ACL rights */
-    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS)) {
+    if (!rock->mbentry ||
+            !jmap_hasrights_mbentry(req, rock->mbentry, JACL_READITEMS)) {
         r = 0;
         goto done;
     }
@@ -2118,9 +2126,9 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     }
 
     /* Open calendar mailbox. */
-    if (!rock->mailbox || strcmp(mailbox_name(rock->mailbox), cdata->dav.mailbox)) {
+    if (!rock->mailbox || strcmp(rock->mailbox->uniqueid, rock->mbentry->uniqueid)) {
         jmap_closembox(req, &rock->mailbox);
-        r = jmap_openmbox(req, mbentry->name, &rock->mailbox, 0);
+        r = jmap_openmbox_by_uniqueid(req, rock->mbentry->uniqueid, &rock->mailbox, 0);
         if (r) goto done;
     }
 
@@ -2156,6 +2164,23 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     json_object_set_new(jsevent, "participantId", participant_id ?
             json_string(participant_id) : json_null());
 
+    /* Add isDraft to cached event, we remove it later if not requested */
+    mr = msgrecord_from_uid(rock->mailbox, cdata->dav.imap_uid);
+    if (!mr) {
+        syslog(LOG_ERR, "msgrecord_from_uid failed for %s:%d",
+                rock->mailbox->name, cdata->dav.imap_uid);
+        r = IMAP_INTERNAL;
+        goto done;
+    }
+    uint32_t system_flags = 0;
+    r = msgrecord_get_systemflags(mr, &system_flags);
+    if (r) {
+        syslog(LOG_ERR, "msgrecord_get_systemflags failed for %s:%d: %s",
+                rock->mailbox->name, cdata->dav.imap_uid, error_message(r));
+        goto done;
+    }
+    json_object_set_new(jsevent, "isDraft", json_boolean(system_flags & FLAG_DRAFT));
+
     /* Add to cache */
     hashu64_insert(cdata->dav.rowid, json_dumps(jsevent, 0), &rock->jmapcache);
 
@@ -2163,13 +2188,13 @@ gotevent:
 
     /* Add JMAP-only fields. */
     if (jmap_wantprop(rock->get->props, "x-href")) {
-        char *xhref = jmap_xhref(mbentry->name, cdata->dav.resource);
+        char *xhref = jmap_xhref(rock->mbentry->name, cdata->dav.resource);
         json_object_set_new(jsevent, "x-href", json_string(xhref));
         free(xhref);
     }
     if (jmap_wantprop(rock->get->props, "calendarId")) {
         json_object_set_new(jsevent, "calendarId",
-                            json_string(strrchr(mbentry->name, '.')+1));
+                            json_string(strrchr(rock->mbentry->name, '.')+1));
     }
 
     unsigned want_blobId = jmap_wantprop(rock->get->props, "blobId");
@@ -2195,9 +2220,9 @@ gotevent:
 
         if (want_blobId) {
             json_t *jblobid = json_null();
-            if (uniqueid &&
-                jmap_encode_rawdata_blobid('I', uniqueid, cdata->dav.imap_uid,
-                                           req->userid, NULL, NULL, &blobid)) {
+            if (rock->mbentry->uniqueid &&
+                jmap_encode_rawdata_blobid('I', rock->mbentry->uniqueid,
+                    cdata->dav.imap_uid, req->userid, NULL, NULL, &blobid)) {
                 jblobid = json_string(buf_cstring(&blobid));
             }
             json_object_set_new(jsevent, "blobId", jblobid);
@@ -2205,9 +2230,9 @@ gotevent:
         if (want_debugBlobId) {
             json_t *jblobid = json_null();
             if (httpd_userisadmin) {
-                if (uniqueid &&
-                    jmap_encode_rawdata_blobid('I', uniqueid, cdata->dav.imap_uid,
-                                               NULL, NULL, NULL, &blobid)) {
+                if (rock->mbentry->uniqueid &&
+                    jmap_encode_rawdata_blobid('I', rock->mbentry->uniqueid,
+                        cdata->dav.imap_uid, NULL, NULL, NULL, &blobid)) {
                     jblobid = json_string(buf_cstring(&blobid));
                 }
             }
@@ -2215,6 +2240,12 @@ gotevent:
         }
 
         buf_free(&blobid);
+    }
+
+    /* Remove isDraft if client didn't ask for it */
+    if (!jmap_is_using(req, JMAP_URN_CALENDARS) ||
+            !jmap_wantprop(rock->get->props, "isDraft")) {
+        json_object_del(jsevent, "isDraft");
     }
 
     if (rock->want_eventids == NULL) {
@@ -2234,8 +2265,8 @@ gotevent:
 
 done:
     strarray_fini(&schedule_addresses);
-    mboxlist_entry_free(&mbentry);
     if (ical) icalcomponent_free(ical);
+    msgrecord_unref(&mr);
     return r;
 }
 
@@ -2432,6 +2463,13 @@ static const jmap_property_t event_props[] = {
     {
         "status",
         NULL,
+        0
+    },
+
+    /* JMAP Calendars spec */
+    {
+        "isDraft",
+        JMAP_URN_CALENDARS,
         0
     },
 
@@ -2785,6 +2823,10 @@ static int setcalendarevents_create(jmap_req_t *req,
         return 0;
     }
 
+    /* Validate isDraft */
+    int is_draft = 0;
+    jmap_readprop(event, "isDraft", 0, invalid, "b", &is_draft);
+
     /* Determine mailbox and resource name of calendar event.
      * We attempt to reuse the UID as DAV resource name; but
      * only if it looks like a reasonable URL path segment. */
@@ -2863,9 +2905,11 @@ static int setcalendarevents_create(jmap_req_t *req,
     }
 
     /* Handle scheduling. */
-    r = setcalendarevents_schedule(req, mboxname, &schedule_addresses,
-                                   NULL, ical, JMAP_CREATE);
-    if (r) goto done;
+    if (!is_draft) {
+        r = setcalendarevents_schedule(req, mboxname, &schedule_addresses,
+                                       NULL, ical, JMAP_CREATE);
+        if (r) goto done;
+    }
 
     /* Remove METHOD property */
     remove_itip_properties(ical);
@@ -2882,8 +2926,12 @@ static int setcalendarevents_create(jmap_req_t *req,
         syslog(LOG_ERR, "mlookup(%s) failed: %s", mailbox_name(mbox), error_message(r));
     }
     else {
+        strarray_t add_imapflags = STRARRAY_INITIALIZER;
+        if (is_draft) strarray_append(&add_imapflags, "\\draft");
         r = caldav_store_resource(&txn, ical, mbox, resource, 0,
-                                  db, 0, httpd_userid, &schedule_addresses);
+                                  db, 0, &add_imapflags, /*del_imapflags*/NULL,
+                                  httpd_userid, &schedule_addresses);
+        strarray_fini(&add_imapflags);
     }
     mboxlist_entry_free(&txn.req_tgt.mbentry);
     spool_free_hdrcache(txn.req_hdrs);
@@ -3274,6 +3322,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     const char *calendarId = NULL;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     mbentry_t *mbentry = NULL;
+    strarray_t del_imapflags = STRARRAY_INITIALIZER;
 
     static int icalendar_max_size = -1;
     if (icalendar_max_size < 0) {
@@ -3321,7 +3370,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     resource = xstrdup(cdata->dav.resource);
 
     /* Open mailbox for writing */
-    r = jmap_openmbox(req, mboxname, &mbox, 1);
+    r = jmap_openmbox_by_uniqueid(req, mbentry->uniqueid, &mbox, 1);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         json_array_append_new(invalid, json_string("calendarId"));
         r = 0;
@@ -3353,6 +3402,23 @@ static int setcalendarevents_update(jmap_req_t *req,
         r = IMAP_INTERNAL;
         goto done;
     }
+    /* Validate isDraft */
+    json_t *jisDraft = json_object_get(event_patch, "isDraft");
+    if (json_is_boolean(jisDraft)) {
+        if (json_boolean_value(jisDraft)) {
+            if (!(record.system_flags & FLAG_DRAFT)) {
+                /* Can't set draft flag on non-draft */
+                json_array_append_new(invalid, json_string("isDraft"));
+            }
+        }
+        else if (record.system_flags & FLAG_DRAFT) {
+            strarray_append(&del_imapflags, "\\draft");
+        }
+    }
+    else if (JNOTNULL(jisDraft)) {
+        json_array_append_new(invalid, json_string("isDraft"));
+    }
+
     /* Apply patch */
     r = setcalendarevents_apply_patch(event_patch, oldical, eid->recurid,
                                       invalid, &schedule_addresses, &ical, update, err);
@@ -3393,9 +3459,11 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
 
     /* Handle scheduling. */
-    r = setcalendarevents_schedule(req, mboxname, &schedule_addresses,
-                                   oldical, ical, JMAP_UPDATE);
-    if (r) goto done;
+    if (!(record.system_flags & FLAG_DRAFT)) {
+        r = setcalendarevents_schedule(req, mboxname, &schedule_addresses,
+                                       oldical, ical, JMAP_UPDATE);
+        if (r) goto done;
+    }
 
 
     if (dstmbox) {
@@ -3441,7 +3509,8 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
     else {
         r = caldav_store_resource(&txn, ical, mbox, resource, record.createdmodseq,
-                                  db, 0, httpd_userid, &schedule_addresses);
+                                  db, 0, NULL, &del_imapflags,
+                                  httpd_userid, &schedule_addresses);
     }
     transaction_free(&txn);
     if (r && r != HTTP_CREATED && r != HTTP_NO_CONTENT) {
@@ -3472,6 +3541,7 @@ done:
     if (dstmbox) jmap_closembox(req, &dstmbox);
     if (ical) icalcomponent_free(ical);
     if (oldical) icalcomponent_free(oldical);
+    strarray_fini(&del_imapflags);
     strarray_fini(&schedule_addresses);
     free(dstmboxname);
     free(resource);
@@ -3566,10 +3636,11 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     }
 
     /* Handle scheduling. */
-    r = setcalendarevents_schedule(req, mboxname, &schedule_addresses,
-                                   oldical, ical, JMAP_DESTROY);
-    if (r) goto done;
-
+    if (!(record.system_flags & FLAG_DRAFT)) {
+        r = setcalendarevents_schedule(req, mboxname, &schedule_addresses,
+                                       oldical, ical, JMAP_DESTROY);
+        if (r) goto done;
+    }
 
     /* Expunge the resource from mailbox. */
     record.internal_flags |= FLAG_INTERNAL_EXPUNGED;

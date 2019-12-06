@@ -8459,7 +8459,9 @@ int meth_unlock(struct transaction_t *txn, void *params)
 int dav_store_resource(struct transaction_t *txn,
                        const char *data, size_t datalen,
                        struct mailbox *mailbox, struct index_record *oldrecord,
-                       modseq_t createdmodseq, strarray_t *imapflags)
+                       modseq_t createdmodseq,
+                       const strarray_t *add_imapflags,
+                       const strarray_t *del_imapflags)
 {
     int ret = HTTP_CREATED, r;
     hdrcache_t hdrcache = txn->req_hdrs;
@@ -8586,11 +8588,17 @@ int dav_store_resource(struct transaction_t *txn,
         }
 
         /* XXX - casemerge?  Doesn't matter with flags */
-        if (imapflags) {
+        if (add_imapflags) {
             if (flaglist)
-                strarray_cat(flaglist, imapflags);
+                strarray_cat(flaglist, add_imapflags);
             else
-                flaglist = strarray_dup(imapflags);
+                flaglist = strarray_dup(add_imapflags);
+        }
+        if (del_imapflags && flaglist) {
+            int i;
+            for (i = 0; i < strarray_size(del_imapflags); i++) {
+                strarray_remove_all_case(flaglist, strarray_nth(del_imapflags, i));
+            }
         }
 
         /* Append the message to the mailbox */
