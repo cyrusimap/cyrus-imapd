@@ -6875,7 +6875,9 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
         name[strlen(name)-1] = '\0';
     }
 
-    mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
+    char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
+    mbname_t *mbname = mbname_from_intname(intname);
+    free(intname);
 
     struct mboxlock *namespacelock = user_namespacelock(mbname_userid(mbname));
 
