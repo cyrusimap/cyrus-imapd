@@ -193,6 +193,8 @@ EXPORTED int user_deletedata(const char *userid, int wipe_user)
 {
     char *fname;
 
+    assert(user_isnamespacelocked(userid));
+
     /* delete seen state and mbox keys */
     if(wipe_user) {
         seen_delete_user(userid);
