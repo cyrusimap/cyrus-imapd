@@ -145,6 +145,8 @@ extern int icalcomponent_apply_vpatch(icalcomponent *ical,
 extern const char *icaltimezone_get_location_tzid(const icaltimezone *zone);
 extern const char *icaltime_get_location_tzid(icaltimetype t);
 
+extern icaltimezone *icaltimezone_get_cyrus_timezone_from_tzid(const char *tzid);
+
 /* Functions that should be declared in libical */
 #define icaltimezone_set_zone_directory set_zone_directory
 
