@@ -145,6 +145,8 @@ int dav_get_validators(struct mailbox *mailbox, void *data,
 int dav_store_resource(struct transaction_t *txn,
                        const char *data, size_t datalen,
                        struct mailbox *mailbox, struct index_record *oldrecord,
-                       modseq_t createdmodseq, strarray_t *imapflags);
+                       modseq_t createdmodseq,
+                       const strarray_t *add_imapflags,
+                       const strarray_t *del_imapflags);
 
 #endif /* DAV_UTIL_H */
