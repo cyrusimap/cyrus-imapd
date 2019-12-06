@@ -232,7 +232,7 @@ sub test_reconstruct_after_delivery
         xlog $out;
     }
 
-    $self->assert($out !~ m/ updating /);
+    $self->assert_does_not_match(qr/ updating /, $out);
 }
 
 

@@ -4916,7 +4916,7 @@ EOF
         'Content-Type' => 'application/xml',
         'Depth' => '1'
     );
-    $self->assert($res !~ "$id");
+    $self->assert_does_not_match(qr{$id}, $res);
 }
 
 sub test_calendarevent_set_schedule_request

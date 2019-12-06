@@ -90,7 +90,7 @@ sub check_conversations
 
     xlog "RESULT: $str";
     $self->assert_matches(qr/is OK/, $str);
-    $self->assert($str !~ m/is BROKEN/);
+    $self->assert_does_not_match(qr/is BROKEN/, $str);
 }
 
 #

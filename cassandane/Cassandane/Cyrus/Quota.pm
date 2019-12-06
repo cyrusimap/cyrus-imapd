@@ -1074,7 +1074,7 @@ sub test_quota_f_no_improved_mboxlist_sort
     xlog $str;
 
     #example.com!user.user1.Junk: quota root example.com!user.user1 --> (none)
-    $self->assert($str !~ m{ quota root \S+ --> \(none\)});
+    $self->assert_does_not_match(qr{ quota root \S+ --> \(none\)}, $str);
 }
 
 sub test_quota_f_unixhs

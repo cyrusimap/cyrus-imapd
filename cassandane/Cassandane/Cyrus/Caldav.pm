@@ -1599,8 +1599,7 @@ EOF
 
     my $res = $CalDAV->Request('REPORT', '/dav/principals', $xml, Depth => 0, 'Content-Type' => 'text/xml');
     my $text = Dumper($res);
-    # in an ideal world we would have assert_not_matches
-    $self->assert($text !~ m/reallyprivateuser/);
+    $self->assert_does_not_match(qr/reallyprivateuser/, $text);
 }
 
 sub test_freebusy
@@ -2120,13 +2119,13 @@ EOF
     $plustalk->select("user.manifold.#calendars.$bits[1]");
     my $res = $plustalk->fetch('1', '(rfc822.peek annotation (/* value.priv))');
 
-    $self->assert($res->{1}{'rfc822'} !~ m/VALARM/);
+    $self->assert_does_not_match(qr/VALARM/, $res->{1}{'rfc822'});
     $self->assert_matches(qr/VALARM/, $res->{1}{'annotation'}{'/vendor/cmu/cyrus-httpd/<http://cyrusimap.org/ns/>per-user-calendar-data'}{'value.priv'});
 
     $CalDAV->Request('PUT', "$cal->{id}/$uuid.ics", $allevent, 'Content-Type' => 'text/calendar');
 
     $res = $plustalk->fetch('2', '(rfc822.peek annotation (/* value.priv))');
-    $self->assert($res->{2}{'rfc822'} !~ m/VALARM/);
+    $self->assert_does_not_match(qr/VALARM/, $res->{2}{'rfc822'});
     $self->assert_matches(qr/VALARM/, $res->{2}{'annotation'}{'/vendor/cmu/cyrus-httpd/<http://cyrusimap.org/ns/>per-user-calendar-data'}{'value.priv'});
 }
 
