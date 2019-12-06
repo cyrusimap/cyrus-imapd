@@ -691,10 +691,6 @@ struct synccrcs mailbox_synccrcs(struct mailbox *mailbox, int recalc);
 
 extern int mailbox_add_dav(struct mailbox *mailbox);
 
-/* Rename a CID.  Note - this is just one mailbox! */
-extern int mailbox_cid_rename(struct mailbox *mailbox,
-                              conversation_id_t from_cid,
-                              conversation_id_t to_cid);
 extern int mailbox_add_conversations(struct mailbox *mailbox, int silent);
 extern int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *);
 extern int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t, int force);
