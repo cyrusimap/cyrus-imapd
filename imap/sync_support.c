@@ -2681,6 +2681,7 @@ int sync_apply_mailbox(struct dlist *kin,
     mbtype = mboxlist_string_to_mbtype(mboxtype);
 
     if (mbtype & (MBTYPE_INTERMEDIATE|MBTYPE_DELETED)) {
+        // XXX - make sure what's already there is either nothing or compatible...
         mbentry_t *newmbentry = NULL;
 
         newmbentry = mboxlist_entry_create();
