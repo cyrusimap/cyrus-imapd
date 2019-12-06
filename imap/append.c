@@ -228,10 +228,6 @@ EXPORTED int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
 
     as->mailbox = mailbox;
 
-    if (config_getswitch(IMAPOPT_OUTBOX_SENDLATER)) {
-        as->isoutbox = mboxname_isoutbox(mailbox->name);
-    }
-
     return 0;
 }
 
@@ -1074,20 +1070,6 @@ EXPORTED int append_fromstage_full(struct appendstate *as, struct body **body,
         }
     }
 
-    if (as->isoutbox) {
-        char num[10];
-        uint32_t uid;
-
-        r = msgrecord_get_uid(msgrec, &uid);
-        if (r) goto out;
-        r = msgrecord_get_internaldate(msgrec, &internaldate);
-        if (r) goto out;
-
-        snprintf(num, 10, "%u", uid);
-        r = notify_at(internaldate, "sendemail", "append", "", "", as->mailbox->name, 0, NULL, num);
-        if (r) goto out;
-    }
-
     /* Write the new message record */
     r = msgrecord_append(msgrec);
     if (r) return r;
@@ -1524,16 +1506,6 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
             if (!r) r = objectstore_put(as->mailbox, &record, destfname);   // put should just add the refcount.
         }
 #endif
-
-        if (as->isoutbox) {
-            char num[10];
-            time_t internaldate;
-            r = msgrecord_get_internaldate(dst_msgrec, &internaldate);
-            if (r) goto out;
-            snprintf(num, 10, "%u", dst_uid);
-            r = notify_at(internaldate, "sendemail", "append", "", "", as->mailbox->name, 0, NULL, num);
-            if (r) goto out;
-        }
 
         /* Write out index file entry */
         r = msgrecord_append(dst_msgrec);

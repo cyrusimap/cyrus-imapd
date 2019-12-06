@@ -193,11 +193,6 @@ int mboxname_issubmissionmailbox(const char *name, int mbtype);
  */
 int mboxname_ispushsubscriptionmailbox(const char *name, int mbtype);
 
-/* If (internal) mailbox is a user's mail outbox,
- * returns boolean
- */
-int mboxname_isoutbox(const char *name);
-
 /* check if one mboxname is a parent or same as the other */
 int mboxname_is_prefix(const char *longstr, const char *shortstr);
 /* check if one mboxname contains the parent of the other mboxname */

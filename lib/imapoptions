@@ -1707,9 +1707,6 @@ And the notification message will be available on \fIstdin\fR.
    value of the \fBdefaultpartion\fR option is \fBpart1\fR, then the
    \fBpartition-part1\fR field is required. */
 
-{ "outbox_sendlater", 0, SWITCH }
-/* If enabled, any message with a \Draft flag will be sent at the time of its INTERNALDATE */
-
 { "partition_select_mode", "freespace-most", STRINGLIST("random", "freespace-most", "freespace-percent-most", "freespace-percent-weighted", "freespace-percent-weighted-delta") }
 /* Partition selection mode.
 .PP

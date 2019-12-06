@@ -59,7 +59,6 @@ struct appendstate {
     struct mailbox *mailbox;
     /* do we own it? */
     int close_mailbox_when_done:1;
-    int isoutbox:1;
     int myrights;
     char userid[MAX_MAILBOX_BUFFER];
 
