@@ -71,6 +71,7 @@
 #include "parseaddr.h"
 #include "charset.h"
 #include "stristr.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -3384,11 +3385,20 @@ static int getconvmailbox(const char *mboxname, struct mailbox **mailboxptr)
     int r = mailbox_open_iwl(mboxname, mailboxptr);
     if (r != IMAP_MAILBOX_NONEXISTENT) return r;
 
-    /* create the mailbox */
     char *userid = mboxname_to_userid(mboxname);
-    r = mboxlist_createmailbox(mboxname, MBTYPE_COLLECTION, NULL, 1 /* admin */, userid, NULL,
-                               0, 0, 0, 0, mailboxptr);
+    struct mboxlock *namespacelock = user_namespacelock(userid);
+
+    // try again - maybe we lost the race!
+    r = mailbox_open_iwl(mboxname, mailboxptr);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        /* create the mailbox */
+        r = mboxlist_createmailbox(mboxname, MBTYPE_COLLECTION, NULL, 1 /* admin */, userid, NULL,
+                                   0, 0, 0, 0, mailboxptr);
+    }
+
+    mboxname_release(&namespacelock);
     free(userid);
+
     return r;
 }
 
