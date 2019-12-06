@@ -1009,8 +1009,8 @@ static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
 
             r = caldav_store_resource(&txn, ical, mailbox,
                                       cdata->dav.resource, record->createdmodseq,
-                                      caldavdb, NEW_STAG,
-                                      req->userid, &schedule_addresses);
+                                      caldavdb, NEW_STAG, req->userid,
+                                      NULL, NULL, &schedule_addresses);
             if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) r = 0;
 
             spool_free_hdrcache(txn.req_hdrs);
