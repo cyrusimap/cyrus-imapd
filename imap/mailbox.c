@@ -132,11 +132,6 @@ struct mailboxlist {
 
 static struct mailboxlist *open_mailboxes = NULL;
 
-#define zeromailbox(m) do { memset(&m, 0, sizeof(struct mailbox)); \
-                            (m).index_fd = -1; \
-                            (m).header_fd = -1; \
-} while (0)
-
 /* for repack */
 struct mailbox_repack {
     struct mailbox *mailbox;
@@ -226,7 +221,9 @@ static struct mailboxlist *create_listitem(const char *name)
 
     item->nopen = 1;
     item->l = NULL;
-    zeromailbox(item->m);
+    memset(&item->m, 0, sizeof(struct mailbox));
+    item->m.index_fd = -1;
+    item->m.header_fd = -1;
     item->m.name = xstrdup(name);
     /* ensure we never print insane times */
     gettimeofday(&item->m.starttime, 0);
