@@ -20,12 +20,13 @@ Access is via git.
 Major changes since the 3.0.x series
 ====================================
 
+.. XXX explicate JMAP support properly, not just "Support for JMAP"
+  * Support for RFCxyz JMAP Core and Email standards
+  * Experimental support for JMAP Calendar, Contacts, ... extensions
+
 * Sieve bug fixes and features.
 * Caldav and Carddav improvements.
 * Support for JMAP.
-.. XXX explicate these properly, not just "JMAP"
-.. * Support for JMAP Core and Email standards
-.. * Experimental support for JMAP Calendar, Contacts, ... extensions
 * Xapian bug fixes.
 * Improvements to Annotations handling.
 * DRAC support has been deprecated.
@@ -72,10 +73,13 @@ Updates to default configuration
 * The legacy GETANNOTATIONS/SETANNOTATIONS IMAP commands will no longer
   work unless `annotation_enable_legacy_commands` is enabled
 
+
 Security fixes
 ==============
+
 * Contains fix for `CVE-2017-14230 <http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2017-14230>`_
 * Contains fix for `CVE-2019-18928 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2019-18928>`_
+
 
 Significant bugfixes
 ====================
