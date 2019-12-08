@@ -49,7 +49,7 @@
 
 extern struct namespace jmap_namespace;
 
-extern int jmap_create_upload_collection(const char *accountid,
-                                         struct mailbox **mailbox);
+extern int jmap_open_upload_collection(const char *accountid,
+                                       struct mailbox **mailbox);
 
 #endif /* HTTP_JMAP_H */

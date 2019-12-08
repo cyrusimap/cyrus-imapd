@@ -6875,7 +6875,11 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
         name[strlen(name)-1] = '\0';
     }
 
-    mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
+    char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
+    mbname_t *mbname = mbname_from_intname(intname);
+    free(intname);
+
+    struct mboxlock *namespacelock = user_namespacelock(mbname_userid(mbname));
 
     const char *type = NULL;
 
@@ -7236,6 +7240,7 @@ localcreate:
     imapd_check(NULL, 0);
 
 done:
+    mboxname_release(&namespacelock);
     mailbox_close(&mailbox);
     buf_free(&specialuse);
     mbname_free(&mbname);
@@ -7281,9 +7286,9 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     int r;
     mbentry_t *mbentry = NULL;
     struct mboxevent *mboxevent = NULL;
+    mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
 
-    char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
-    r = mlookup(NULL, NULL, intname, &mbentry);
+    r = mlookup(NULL, NULL, mbname_intname(mbname), &mbentry);
 
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
         /* remote mailbox */
@@ -7294,7 +7299,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
             imapd_refer(tag, mbentry->server, name);
             referral_kick = 1;
             mboxlist_entry_free(&mbentry);
-            free(intname);
+            mbname_free(&mbname);
             return;
         }
 
@@ -7327,28 +7332,30 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
             prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
         }
 
-        free(intname);
+        mbname_free(&mbname);
         return;
     }
     mboxlist_entry_free(&mbentry);
+
+    struct mboxlock *namespacelock = user_namespacelock(mbname_userid(mbname));
 
     mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
 
     /* local mailbox */
     if (!r) {
         if (localonly || !mboxlist_delayed_delete_isenabled()) {
-            r = mboxlist_deletemailbox(intname,
+            r = mboxlist_deletemailbox(mbname_intname(mbname),
                                        imapd_userisadmin || imapd_userisproxyadmin,
                                        imapd_userid, imapd_authstate, mboxevent,
                                        1-force, localonly, 0, 0);
         } else if ((imapd_userisadmin || imapd_userisproxyadmin) &&
-                   mboxname_isdeletedmailbox(intname, NULL)) {
-            r = mboxlist_deletemailbox(intname,
+                   mbname_isdeleted(mbname)) {
+            r = mboxlist_deletemailbox(mbname_intname(mbname),
                                        imapd_userisadmin || imapd_userisproxyadmin,
                                        imapd_userid, imapd_authstate, mboxevent,
                                        0 /* checkacl */, localonly, 0, 0);
         } else {
-            r = mboxlist_delayed_deletemailbox(intname,
+            r = mboxlist_delayed_deletemailbox(mbname_intname(mbname),
                                                imapd_userisadmin || imapd_userisproxyadmin,
                                                imapd_userid, imapd_authstate, mboxevent,
                                                1-force, 0, 0, 0);
@@ -7362,17 +7369,18 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 
     /* was it a top-level user mailbox? */
     /* localonly deletes are only per-mailbox */
-    if (!r && !localonly && mboxname_isusermailbox(intname, 1)) {
-        char *userid = mboxname_to_userid(intname);
+    if (!r && !localonly && mboxname_isusermailbox(mbname_intname(mbname), 1)) {
+        const char *userid = mbname_userid(mbname);
         if (userid) {
             r = mboxlist_usermboxtree(userid, NULL, delmbox, NULL, 0);
             if (!r) r = user_deletedata(userid, 1);
-            free(userid);
         }
     }
 
+    mboxname_release(&namespacelock);
+
     if (!r && config_getswitch(IMAPOPT_DELETE_UNSUBSCRIBE)) {
-        mboxlist_changesub(intname, imapd_userid, imapd_authstate,
+        mboxlist_changesub(mbname_intname(mbname), imapd_userid, imapd_authstate,
                            /* add */ 0, /* force */ 0, /* notify? */ 1);
     }
 
@@ -7388,7 +7396,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
     }
-    free(intname);
+    mbname_free(&mbname);
 }
 
 struct renrock
@@ -7555,6 +7563,18 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
 
     olduser = mboxname_to_userid(oldmailboxname);
     newuser = mboxname_to_userid(newmailboxname);
+
+    struct mboxlock *oldnamespacelock = NULL;
+    struct mboxlock *newnamespacelock = NULL;
+
+    if (strcmpsafe(olduser, newuser) < 0) {
+        oldnamespacelock = user_namespacelock(olduser);
+        newnamespacelock = user_namespacelock(newuser);
+    }
+    else {
+        newnamespacelock = user_namespacelock(newuser);
+        oldnamespacelock = user_namespacelock(olduser);
+    }
 
     /* Keep temporary copy: master is trashed */
     strcpy(oldmailboxname2, oldmailboxname);
@@ -7875,6 +7895,8 @@ submboxes:
     }
 
 done:
+    mboxname_release(&oldnamespacelock);
+    mboxname_release(&newnamespacelock);
     mboxlist_entry_free(&mbentry);
     free(oldextname);
     free(newextname);
@@ -10862,21 +10884,25 @@ static void cmd_dump(char *tag, char *name, int uid_start)
 static void cmd_undump(char *tag, char *name)
 {
     int r = 0;
-    char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
+    mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
 
     /* administrators only please */
     if (!imapd_userisadmin)
         r = IMAP_PERMISSION_DENIED;
 
-    if (!r) r = mlookup(tag, name, intname, NULL);
+    struct mboxlock *namespacelock = user_namespacelock(mbname_userid(mbname));
 
-    if (!r) r = undump_mailbox(intname, imapd_in, imapd_out, imapd_authstate);
+    if (!r) r = mlookup(tag, name, mbname_intname(mbname), NULL);
+
+    if (!r) r = undump_mailbox(mbname_intname(mbname), imapd_in, imapd_out, imapd_authstate);
+
+    mboxname_release(&namespacelock);
 
     if (r) {
         prot_printf(imapd_out, "%s NO %s%s\r\n",
                     tag,
                     (r == IMAP_MAILBOX_NONEXISTENT &&
-                     mboxlist_createmailboxcheck(intname, 0, 0,
+                     mboxlist_createmailboxcheck(mbname_intname(mbname), 0, 0,
                                                  imapd_userisadmin,
                                                  imapd_userid, imapd_authstate,
                                                  NULL, NULL, 0) == 0)
@@ -10885,7 +10911,7 @@ static void cmd_undump(char *tag, char *name)
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
                     error_message(IMAP_OK_COMPLETED));
     }
-    free(intname);
+    mbname_free(&mbname);
 }
 
 static int getresult(struct protstream *p, const char *tag)
@@ -11852,7 +11878,7 @@ static int xfer_delete(struct xfer_header *xfer)
         /* note also that we need to remember to let proxyadmins do this */
         /* On a unified system, the subsequent MUPDATE PUSH on the remote
            should repopulate the local mboxlist entry */
-        r = mboxlist_deletemailbox(item->mbentry->name,
+        r = mboxlist_deletemailboxlock(item->mbentry->name,
                                    imapd_userisadmin || imapd_userisproxyadmin,
                                    imapd_userid, imapd_authstate, NULL, 0, 1, 0, 0);
         if (r) {
@@ -12031,7 +12057,7 @@ static void cmd_xfer(const char *tag, const char *name,
     struct xfer_header *xfer = NULL;
     struct xfer_list list = { &imapd_namespace, imapd_userid, NULL, 0, NULL };
     struct xfer_item *item, *next;
-    char *intname = NULL;
+    mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
 
     /* administrators only please */
     /* however, proxys can do this, if their authzid is an admin */
@@ -12052,20 +12078,13 @@ static void cmd_xfer(const char *tag, const char *name,
         mboxlist_findall(NULL, "*", 1, NULL, NULL, xfer_addmbox, &list);
     } else {
         /* mailbox pattern */
-        mbname_t *mbname;
-
-        intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
-
-        mbname = mbname_from_intname(intname);
         if (mbname_localpart(mbname) &&
             (mbname_isdeleted(mbname) || strarray_size(mbname_boxes(mbname)))) {
             /* targeted a user submailbox */
             list.allow_usersubs = 1;
         }
-        mbname_free(&mbname);
 
-        mboxlist_findall(NULL, intname, 1, NULL, NULL, xfer_addmbox, &list);
-        free(intname);
+        mboxlist_findall(NULL, mbname_intname(mbname), 1, NULL, NULL, xfer_addmbox, &list);
     }
 
     r = xfer_init(toserver, &xfer);
@@ -12078,11 +12097,10 @@ static void cmd_xfer(const char *tag, const char *name,
          * to the destination backend as an admin, we take advantage of the fact
          * that admins *always* use a consistent mailbox naming scheme.
          * So, 'name' should be used in any command we send to a backend, and
-         * 'intname' is the internal name to be used for mupdate and findall.
+         * 'mbentry->name' is the internal name to be used for mupdate and findall.
          */
 
         r = 0;
-        intname = mbentry->name;
         xfer->topart = xstrdup(topart ? topart : mbentry->partition);
 
         /* if we are not moving a user, just move the one mailbox */
@@ -12092,7 +12110,7 @@ static void cmd_xfer(const char *tag, const char *name,
                    mbentry->name, xfer->toserver, xfer->topart);
 
             /* is the selected mailbox the one we're moving? */
-            if (!strcmpsafe(intname, index_mboxname(imapd_index))) {
+            if (!strcmpsafe(mbentry->name, index_mboxname(imapd_index))) {
                 r = IMAP_MAILBOX_LOCKED;
                 goto next;
             }
@@ -12103,7 +12121,7 @@ static void cmd_xfer(const char *tag, const char *name,
 
             r = do_xfer(xfer);
         } else {
-            xfer->userid = mboxname_to_userid(intname);
+            xfer->userid = xstrdupnull(mbname_userid(mbname));
 
             syslog(LOG_INFO, "XFER: user '%s' -> %s!%s",
                    xfer->userid, xfer->toserver, xfer->topart);
@@ -12114,8 +12132,8 @@ static void cmd_xfer(const char *tag, const char *name,
             } else if (!strcmp(xfer->userid, imapd_userid)) {
                 /* don't move your own inbox, that could be troublesome */
                 r = IMAP_MAILBOX_NOTSUPPORTED;
-            } else if (!strncmpsafe(intname, index_mboxname(imapd_index),
-                             strlen(intname))) {
+            } else if (!strncmpsafe(mbentry->name, index_mboxname(imapd_index),
+                             strlen(mbentry->name))) {
                 /* selected mailbox is in the namespace we're moving */
                 r = IMAP_MAILBOX_LOCKED;
             }
@@ -12123,7 +12141,7 @@ static void cmd_xfer(const char *tag, const char *name,
 
             if (!xfer->use_replication) {
                 /* set the quotaroot if needed */
-                r = xfer_setquotaroot(xfer, intname);
+                r = xfer_setquotaroot(xfer, mbentry->name);
                 if (r) goto next;
 
                 /* backport the seen file if needed */
@@ -12136,15 +12154,18 @@ static void cmd_xfer(const char *tag, const char *name,
             r = mboxlist_usermboxtree(xfer->userid, NULL, xfer_addusermbox,
                                       xfer, MBOXTREE_DELETED);
 
+            struct mboxlock *namespacelock = user_namespacelock(xfer->userid);
             /* NOTE: mailboxes were added in reverse, so the inbox is
              * done last */
             r = do_xfer(xfer);
-            if (r) goto next;
 
-            /* this was a successful user move, and we need to delete
-               certain user meta-data (but not seen state!) */
-            syslog(LOG_INFO, "XFER: deleting user metadata");
-            user_deletedata(xfer->userid, 0);
+            if (!r) {
+                /* this was a successful user move, and we need to delete
+                   certain user meta-data (but not seen state!) */
+                syslog(LOG_INFO, "XFER: deleting user metadata");
+                user_deletedata(xfer->userid, 0);
+            }
+            mboxname_release(&namespacelock);
         }
 
       next:
@@ -12184,6 +12205,7 @@ static void cmd_xfer(const char *tag, const char *name,
     }
 
 done:
+    mbname_free(&mbname);
     if (xfer) xfer_done(&xfer);
 
     imapd_check(NULL, 0);

@@ -92,6 +92,7 @@
 #include "strhash.h"
 #include "stristr.h"
 #include "tok.h"
+#include "user.h"
 #include "util.h"
 #include "version.h"
 #include "webdav_db.h"
@@ -761,7 +762,8 @@ static void my_caldav_init(struct buf *serverinfo)
 
 static int _create_mailbox(const char *userid, const char *mailboxname,
                            int type, unsigned long comp_types,
-                           int useracl, int anyoneacl, const char *displayname)
+                           int useracl, int anyoneacl, const char *displayname,
+                           struct mboxlock **namespacelockp)
 {
     int r = 0;
     char rights[100];
@@ -770,6 +772,14 @@ static int _create_mailbox(const char *userid, const char *mailboxname,
     r = mboxlist_lookup(mailboxname, NULL, NULL);
     if (!r) return 0;
     if (r != IMAP_MAILBOX_NONEXISTENT) return r;
+
+    if (!*namespacelockp) {
+        *namespacelockp = user_namespacelock(userid);
+        // maybe we lost the race on this one
+        r = mboxlist_lookup(mailboxname, NULL, NULL);
+        if (!r) return 0;
+        if (r != IMAP_MAILBOX_NONEXISTENT) return r;
+    }
 
     /* Create locally */
     r = mboxlist_createmailbox(mailboxname, type,
@@ -844,6 +854,7 @@ int caldav_create_defaultcalendars(const char *userid)
 {
     int r;
     char *mailboxname;
+    struct mboxlock *namespacelock = NULL;
 
     /* calendar-home-set */
     mailboxname = caldav_mboxname(userid, NULL);
@@ -866,7 +877,8 @@ int caldav_create_defaultcalendars(const char *userid)
         mboxlist_entry_free(&mbentry);
 
         if (!r) r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, 0,
-                                    ACL_ALL | DACL_READFB, DACL_READFB, NULL);
+                                    ACL_ALL | DACL_READFB, DACL_READFB, NULL,
+                                    &namespacelock);
     }
 
     free(mailboxname);
@@ -878,7 +890,8 @@ int caldav_create_defaultcalendars(const char *userid)
 
         mailboxname = caldav_mboxname(userid, SCHED_DEFAULT);
         r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, comp_types,
-                            ACL_ALL | DACL_READFB, DACL_READFB, "personal");
+                            ACL_ALL | DACL_READFB, DACL_READFB, "personal",
+                            &namespacelock);
         free(mailboxname);
         if (r) goto done;
     }
@@ -888,14 +901,16 @@ int caldav_create_defaultcalendars(const char *userid)
         /* Scheduling Inbox */
         mailboxname = caldav_mboxname(userid, SCHED_INBOX);
         r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, 0,
-                            ACL_ALL | DACL_SCHED, DACL_SCHED, NULL);
+                            ACL_ALL | DACL_SCHED, DACL_SCHED, NULL,
+                            &namespacelock);
         free(mailboxname);
         if (r) goto done;
 
         /* Scheduling Outbox */
         mailboxname = caldav_mboxname(userid, SCHED_OUTBOX);
         r = _create_mailbox(userid, mailboxname, MBTYPE_CALENDAR, 0,
-                            ACL_ALL | DACL_SCHED, 0, NULL);
+                            ACL_ALL | DACL_SCHED, 0, NULL,
+                            &namespacelock);
         free(mailboxname);
         if (r) goto done;
     }
@@ -905,12 +920,14 @@ int caldav_create_defaultcalendars(const char *userid)
         /* Managed Attachment Collection */
         mailboxname = caldav_mboxname(userid, MANAGED_ATTACH);
         r = _create_mailbox(userid, mailboxname, MBTYPE_COLLECTION, 0,
-                            ACL_ALL, ACL_READ, NULL);
+                            ACL_ALL, ACL_READ, NULL,
+                            &namespacelock);
         free(mailboxname);
         if (r) goto done;
     }
 
   done:
+    if (namespacelock) mboxname_release(&namespacelock);
     return r;
 }
 

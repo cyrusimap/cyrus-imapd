@@ -296,7 +296,7 @@ static int jmap_blob_copy(jmap_req_t *req)
     }
 
     /* Check if we can upload to toAccountId */
-    r = jmap_create_upload_collection(req->accountid, &to_mbox);
+    r = jmap_open_upload_collection(req->accountid, &to_mbox);
     if (r == IMAP_PERMISSION_DENIED) {
         json_array_foreach(copy.create, i, val) {
             json_object_set(copy.not_created, json_string_value(val),

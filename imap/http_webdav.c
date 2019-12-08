@@ -54,6 +54,7 @@
 #include "proxy.h"
 #include "spool.h"
 #include "tok.h"
+#include "user.h"
 #include "util.h"
 #include "webdav_db.h"
 #include "xstrlcpy.h"
@@ -333,6 +334,11 @@ static int my_webdav_auth(const char *userid)
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_DAVDRIVEPREFIX));
     int r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
+        struct mboxlock *namespacelock = user_namespacelock(userid);
+        // did we lose the race?  Nothing to do!
+        r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
+        if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
+
         /* Find location of INBOX */
         char *inboxname = mboxname_user_mbox(userid, NULL);
         mbentry_t *mbentry = NULL;
@@ -344,6 +350,7 @@ static int my_webdav_auth(const char *userid)
             proxy_findserver(mbentry->server, &http_protocol, httpd_userid,
                              &backend_cached, NULL, NULL, httpd_in);
             mboxlist_entry_free(&mbentry);
+            mboxname_release(&namespacelock);
             goto done;
         }
         mboxlist_entry_free(&mbentry);
@@ -360,6 +367,8 @@ static int my_webdav_auth(const char *userid)
             syslog(LOG_ERR, "could not autoprovision DAV drive for userid %s: %s",
                    userid, error_message(r));
         }
+
+        mboxname_release(&namespacelock);
     }
 
  done:

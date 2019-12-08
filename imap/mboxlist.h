@@ -176,6 +176,15 @@ int mboxlist_createmailbox(const char *name, int mbtype,
                            int localonly, int forceuser, int dbonly,
                            int notify, struct mailbox **mailboxptr);
 
+/* create mailbox with wrapping namespacelock */
+int mboxlist_createmailboxlock(const char *name, int mbtype,
+                           const char *partition,
+                           int isadmin, const char *userid,
+                           const struct auth_state *auth_state,
+                           int localonly, int forceuser, int dbonly,
+                           int notify, struct mailbox **mailboxptr);
+
+
 /* create mailbox with uniqueid */
 int mboxlist_createmailbox_unq(const char *name, int mbtype,
                            const char *partition,
@@ -222,6 +231,12 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin, const char *userid
  * the planet */
 /* prepare MailboxDelete notification if mboxevent is not NULL */
 int mboxlist_deletemailbox(const char *name, int isadmin, const char *userid,
+                           const struct auth_state *auth_state,
+                           struct mboxevent *mboxevent,
+                           int checkacl,
+                           int local_only, int force, int keep_intermediaries);
+/* same but wrap with a namespacelock */
+int mboxlist_deletemailboxlock(const char *name, int isadmin, const char *userid,
                            const struct auth_state *auth_state,
                            struct mboxevent *mboxevent,
                            int checkacl,

@@ -65,6 +65,7 @@
 #include "smtpclient.h"
 #include "sync_support.h"
 #include "times.h"
+#include "user.h"
 #include "util.h"
 
 /* generated headers are not necessarily in current directory */
@@ -302,19 +303,26 @@ static int ensure_submission_collection(const char *accountid,
                                         mbentry_t **mbentryp,
                                         int *created)
 {
-    /* submission collection */
     mbentry_t *mbentry = NULL;
-    int r = lookup_submission_collection(accountid, &mbentry);
-
     if (created) *created = 0;
 
-    if (r == IMAP_INVALID_USER) {
-        goto done;
+    /* submission collection */
+    int r = lookup_submission_collection(accountid, &mbentry);
+    if (!r) { // happy path
+        if (mbentryp) *mbentryp = mbentry;
+        else mboxlist_entry_free(&mbentry);
+        return 0;
     }
-    else if (r == IMAP_PERMISSION_DENIED) {
-        goto done;
-    }
-    else if (r == IMAP_MAILBOX_NONEXISTENT) {
+
+    // otherwise, clean up ready for next attempt
+    mboxlist_entry_free(&mbentry);
+
+    struct mboxlock *namespacelock = user_namespacelock(accountid);
+
+    // did we lose the race?
+    r = lookup_submission_collection(accountid, &mbentry);
+
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
         if (created) *created = 1;
 
         if (!mbentry) goto done;
@@ -330,19 +338,15 @@ static int ensure_submission_collection(const char *accountid,
                                         NULL, 1 /* admin */, accountid,
                                         httpd_authstate,
                                         options, 0, 0, 0, 0, NULL, NULL);
-        /* we lost the race, that's OK */
-        if (r == IMAP_MAILBOX_LOCKED) r = 0;
-        else {
-            if (r) {
-                syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                        mbentry->name, error_message(r));
-            }
-            goto done;
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                   mbentry->name, error_message(r));
         }
     }
 
  done:
-    if (mbentryp) *mbentryp = mbentry;
+    mboxname_release(&namespacelock);
+    if (mbentryp && !r) *mbentryp = mbentry;
     else mboxlist_entry_free(&mbentry);
     return r;
 }

@@ -78,6 +78,7 @@
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
 #include "mupdate.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -524,8 +525,11 @@ static void do_dump(enum mboxop op, const char *part, int purge, int intermediar
 
         while (wipe_head) {
             struct mb_node *me = wipe_head;
-
             wipe_head = wipe_head->next;
+
+            char *userid = mboxname_to_userid(me->mailbox);
+            struct mboxlock *namespacelock = user_namespacelock(userid);
+
             if (!mboxlist_delayed_delete_isenabled()) {
                 ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1, 0);
             } else if (mboxname_isdeletedmailbox(me->mailbox, NULL)) {
@@ -533,6 +537,9 @@ static void do_dump(enum mboxop op, const char *part, int purge, int intermediar
             } else {
                 ret = mboxlist_delayed_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1, 0);
             }
+
+            mboxname_release(&namespacelock);
+            free(userid);
 
             if (ret) {
                 fprintf(stderr, "couldn't delete defunct mailbox %s\n",

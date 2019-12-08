@@ -259,6 +259,11 @@ EXPORTED void mboxname_release(struct mboxlock **mboxlockptr)
     remove_lockitem(lockitem);
 }
 
+EXPORTED int mboxname_islocked(const char *mboxname)
+{
+    return find_lockitem(mboxname) ? 1 : 0;
+}
+
 /******************** mbname stuff **********************/
 
 static void _mbdirty(mbname_t *mbname)

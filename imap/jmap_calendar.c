@@ -70,6 +70,7 @@
 #include "search_query.h"
 #include "stristr.h"
 #include "times.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 
@@ -984,6 +985,7 @@ static int setcalendars_destroy(jmap_req_t *req, const char *mboxname)
 
 static int jmap_calendar_set(struct jmap_req *req)
 {
+    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct jmap_set set;
     json_t *err = NULL;
@@ -1019,9 +1021,12 @@ static int jmap_calendar_set(struct jmap_req *req)
         json_t *err = json_pack("{s:s}", "type", "accountNoCalendars");
         json_array_append_new(req->response, json_pack("[s,o,s]",
                     "error", err, req->tag));
-        return 0;
-    } else if (r) return r;
-
+        r = 0;
+        goto done;
+    }
+    if (r) {
+        goto done;
+    }
 
     /* create */
     const char *key;
@@ -1182,7 +1187,6 @@ static int jmap_calendar_set(struct jmap_req *req)
         free(mboxname);
     }
 
-
     /* update */
     const char *uid;
     json_object_foreach(set.update, uid, arg) {
@@ -1277,7 +1281,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         if (pe > 0) {
             json_array_append_new(invalid, json_string("mayDelete"));
         }
-        
+
         /* Report any property errors and bail out. */
         if (json_array_size(invalid)) {
             json_t *err = json_pack("{s:s, s:o}",
@@ -1410,6 +1414,7 @@ static int jmap_calendar_set(struct jmap_req *req)
     jmap_ok(req, jmap_set_reply(&set));
 
 done:
+    mboxname_release(&namespacelock);
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
     return r;

@@ -76,6 +76,7 @@
 #include "strhash.h"
 #include "stristr.h"
 #include "times.h"
+#include "user.h"
 #include "util.h"
 #include "vcard_support.h"
 #include "version.h"
@@ -403,7 +404,57 @@ static void my_carddav_init(struct buf *serverinfo __attribute__((unused)))
 
 #define DEFAULT_ADDRBOOK "Default"
 
+static int _create_mailbox(const char *userid, const char *mailboxname, int type,
+                           const char *displayname, struct mboxlock **namespacelockp)
+{
+    int r = 0;
+    struct mailbox *mailbox = NULL;
+
+    r = mboxlist_lookup(mailboxname, NULL, NULL);
+    if (!r) return 0;
+    if (r != IMAP_MAILBOX_NONEXISTENT) return r;
+
+    if (!*namespacelockp) {
+        *namespacelockp = user_namespacelock(userid);
+        // maybe we lost the race on this one
+        r = mboxlist_lookup(mailboxname, NULL, NULL);
+        if (!r) return 0;
+        if (r != IMAP_MAILBOX_NONEXISTENT) return r;
+    }
+
+    /* Create locally */
+    r = mboxlist_createmailbox(mailboxname, type,
+                               NULL, 0,
+                               userid, httpd_authstate,
+                               0, 0, 0, 0, displayname ? &mailbox : NULL);
+
+    if (!r && displayname) {
+        annotate_state_t *astate = NULL;
+
+        r = mailbox_get_annotate_state(mailbox, 0, &astate);
+        if (!r) {
+            const char *disp_annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
+            struct buf value = BUF_INITIALIZER;
+
+            buf_init_ro_cstr(&value, displayname);
+            r = annotate_state_writemask(astate, disp_annot, userid, &value);
+            buf_free(&value);
+        }
+
+        mailbox_close(&mailbox);
+    }
+
+    if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
+                  mailboxname, error_message(r));
+
+    return r;
+}
+
+
+
 EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
+    struct mboxlock *namespacelock = NULL;
+
     /* addressbook-home-set */
     mbname_t *mbname = mbname_from_userid(userid);
     mbname_push_boxes(mbname, config_getstring(IMAPOPT_ADDRESSBOOKPREFIX));
@@ -424,15 +475,9 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
         }
         mboxlist_entry_free(&mbentry);
 
-        if (!r) {
-            r = mboxlist_createmailbox(mbname_intname(mbname),
-                                       MBTYPE_ADDRESSBOOK,
-                                       NULL, 0,
-                                       userid, httpd_authstate,
-                                       0, 0, 0, 0, NULL);
-            if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                          mbname_intname(mbname), error_message(r));
-        }
+        if (!r) r = _create_mailbox(userid, mbname_intname(mbname),
+                                    MBTYPE_ADDRESSBOOK, NULL,
+                                    &namespacelock);
     }
     if (r) goto done;
 
@@ -440,31 +485,13 @@ EXPORTED int carddav_create_defaultaddressbook(const char *userid) {
     mbname_push_boxes(mbname, DEFAULT_ADDRBOOK);
     r = mboxlist_lookup(mbname_intname(mbname), NULL, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        struct mailbox *mailbox = NULL;
-
-        r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_ADDRESSBOOK,
-                                   NULL, 0,
-                                   userid, httpd_authstate,
-                                   0, 0, 0, 0, &mailbox);
-        if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
-                      mbname_intname(mbname), error_message(r));
-        else {
-            annotate_state_t *astate = NULL;
-
-            r = mailbox_get_annotate_state(mailbox, 0, &astate);
-            if (!r) {
-                const char *annot = DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-                struct buf value = BUF_INITIALIZER;
-
-                buf_init_ro_cstr(&value, "personal");
-                r = annotate_state_writemask(astate, annot, userid, &value);
-            }
-
-            mailbox_close(&mailbox);
-        }
+        r = _create_mailbox(userid, mbname_intname(mbname),
+                            MBTYPE_ADDRESSBOOK, "personal",
+                            &namespacelock);
     }
 
  done:
+    mboxname_release(&namespacelock);
     mbname_free(&mbname);
     return r;
 }

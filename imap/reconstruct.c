@@ -293,7 +293,7 @@ int main(int argc, char **argv)
             char *intname = mboxname_from_external(argv[i], &recon_namespace, NULL);
 
             /* don't notify mailbox creation here */
-            r = mboxlist_createmailbox(intname, 0, start_part, 1,
+            r = mboxlist_createmailboxlock(intname, 0, start_part, 1,
                                        "cyrus", NULL, 0, 0, !xflag, 0, NULL);
             if (r) {
                 fprintf(stderr, "could not create %s\n", argv[i]);
@@ -360,7 +360,7 @@ int main(int argc, char **argv)
         /* create p (database only) and reconstruct it */
         /* partition is defined by the parent mailbox */
         /* don't notify mailbox creation here */
-        r = mboxlist_createmailbox(name, 0, NULL, 1,
+        r = mboxlist_createmailboxlock(name, 0, NULL, 1,
                                    "cyrus", NULL, 0, 0, !xflag, 0, NULL);
         if (r) {
             fprintf(stderr, "createmailbox %s: %s\n",

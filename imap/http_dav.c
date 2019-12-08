@@ -79,6 +79,7 @@
 #include "syslog.h"
 #include "strhash.h"
 #include "tok.h"
+#include "user.h"
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
@@ -4349,6 +4350,10 @@ static int dav_move_collection(struct transaction_t *txn,
         }
     }
 
+    char *userid = mboxname_to_userid(newmailboxname);
+    struct mboxlock *namespacelock = user_namespacelock(userid);
+    free(userid);
+
     r = mboxlist_createmailboxcheck(newmailboxname, 0, NULL, httpd_userisadmin,
                                     httpd_userid, httpd_authstate,
                                     NULL, NULL, 0 /* force */);
@@ -4422,11 +4427,13 @@ static int dav_move_collection(struct transaction_t *txn,
         if (mrock.root) {
             xml_response(HTTP_MULTI_STATUS, txn, mrock.root->doc);
             xmlFreeDoc(mrock.root->doc);
+            mboxname_release(&namespacelock);
             return 0;
         }
     }
 
   done:
+    mboxname_release(&namespacelock);
     switch (r) {
     case 0:
         return (overwrite < 0) ? HTTP_NO_CONTENT : HTTP_CREATED;
@@ -4992,6 +4999,9 @@ int meth_delete(struct transaction_t *txn, void *params)
             }
         }
 
+        char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
+        struct mboxlock *namespacelock = user_namespacelock(userid);
+
         mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
 
         if (mboxlist_delayed_delete_isenabled()) {
@@ -5009,13 +5019,14 @@ int meth_delete(struct transaction_t *txn, void *params)
                                        /* keep_intermediaries */0);
         }
         if (!r) {
-            char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
             r = caldav_update_shareacls(userid);
-            free(userid);
         }
         if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
         else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
         else if (r) ret = HTTP_SERVER_ERROR;
+
+        mboxname_release(&namespacelock);
+        free(userid);
 
         goto done;
     }
@@ -5653,6 +5664,10 @@ int meth_mkcol(struct transaction_t *txn, void *params)
         instr = root->children;
     }
 
+    char *userid = mboxname_to_userid(txn->req_tgt.mbentry->name);
+    struct mboxlock *namespacelock = user_namespacelock(userid);
+    free(userid);
+
     /* Create the mailbox */
     r = mboxlist_createmailbox(txn->req_tgt.mbentry->name,
                                mparams->mkcol.mbtype, partition,
@@ -5670,6 +5685,7 @@ int meth_mkcol(struct transaction_t *txn, void *params)
         if (!root) {
             ret = HTTP_SERVER_ERROR;
             txn->error.desc = "Unable to create XML response\r\n";
+            mboxname_release(&namespacelock);
             goto done;
         }
 
@@ -5707,9 +5723,11 @@ int meth_mkcol(struct transaction_t *txn, void *params)
                 xml_response(r, txn, outdoc);
             }
 
+            mboxname_release(&namespacelock);
             goto done;
         }
     }
+    mboxname_release(&namespacelock);
 
     if (!r) {
         if (mparams->mkcol.proc) r = mparams->mkcol.proc(mailbox);
