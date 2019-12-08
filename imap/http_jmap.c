@@ -694,7 +694,10 @@ HIDDEN int jmap_open_upload_collection(const char *accountid,
     /* upload collection */
     mbentry_t *mbentry = NULL;
     int r = lookup_upload_collection(accountid, &mbentry);
-    if (r) return _create_upload_collection(accountid, mailbox);
+    if (r) {
+        mboxlist_entry_free(&mbentry);
+        return _create_upload_collection(accountid, mailbox);
+    }
 
     if (mailbox) {
         /* Open mailbox for writing */
