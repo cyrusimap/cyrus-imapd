@@ -5352,7 +5352,8 @@ static json_t * _email_get_bodyvalue(struct body *part,
     raw[i] = '\0';
 
     /* Initialize return value */
-    buf_initm(&buf, raw, rawlen+1); // include trailing zero
+    buf_appendcstr(&buf, raw);
+    free(raw);
 
     /* Truncate buffer */
     if (buf_len(&buf) && max_body_bytes && max_body_bytes < buf_len(&buf)) {
