@@ -408,7 +408,10 @@ static int create_notify_collection(const char *userid, struct mailbox **mailbox
     /* notifications collection */
     mbentry_t *mbentry = NULL;
     int r = lookup_notify_collection(userid, &mbentry);
-    if (r) return _create_notify_collection(userid, mailbox);
+    if (r) {
+        mboxlist_entry_free(&mbentry);
+        return _create_notify_collection(userid, mailbox);
+    }
 
     if (mailbox) {
         /* Open mailbox for writing */
