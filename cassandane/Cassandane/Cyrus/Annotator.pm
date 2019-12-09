@@ -122,8 +122,8 @@ sub test_add_annot_deliver_tomailbox
 
     $self->start_my_instances();
 
-    xlog "Testing adding an annotation from the Annotator";
-    xlog "when delivering to a non-INBOX mailbox [IRIS-955]";
+    xlog $self, "Testing adding an annotation from the Annotator";
+    xlog $self, "when delivering to a non-INBOX mailbox [IRIS-955]";
 
     my $entry = '/comment';
     my $attrib = 'value.shared';
@@ -198,13 +198,13 @@ sub test_reconstruct_after_delivery
 
     $self->start_my_instances();
 
-    xlog "Testing reconstruct after delivery";
+    xlog $self, "Testing reconstruct after delivery";
 
-    xlog "Create folders";
+    xlog $self, "Create folders";
     my $imaptalk = $self->{store}->get_client();
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
@@ -212,7 +212,7 @@ sub test_reconstruct_after_delivery
     $imaptalk->create("INBOX.subfolder");
     $self->{instance}->deliver($msgs{1}, user => "cassandane");
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 
     # run a fresh reconstruct
@@ -229,7 +229,7 @@ sub test_reconstruct_after_delivery
             or die "Cannot open $out for reading: $!";
         $out = <$fh>;
         close $fh;
-        xlog $out;
+        xlog $self, $out;
     }
 
     $self->assert_does_not_match(qr/ updating /, $out);
@@ -253,7 +253,7 @@ sub test_fetch_after_annotate
 
     $imaptalk->select("INBOX");
 
-    xlog "Create Message A";
+    xlog $self, "Create Message A";
     $msg{A} = $self->{gen}->generate(subject => "Message A");
     $msg{A}->set_attributes(id => 1,
                             uid => 1,
@@ -265,7 +265,7 @@ sub test_fetch_after_annotate
 
     $self->{store}->set_fetch_attributes('uid', 'flags', 'modseq');
 
-    xlog "Fetch message A";
+    xlog $self, "Fetch message A";
     my %handlers1;
     {
         $handlers1{fetch} = sub {
@@ -277,7 +277,7 @@ sub test_fetch_after_annotate
     $imaptalk->_imap_cmd("uid fetch", 1, \%handlers1, '1', '(flags modseq)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "Clear the $flag from the message A.";
+    xlog $self, "Clear the $flag from the message A.";
     my %handlers2;
     {
         $handlers2{fetch} = sub {
@@ -290,7 +290,7 @@ sub test_fetch_after_annotate
     $imaptalk->_imap_cmd("uid fetch", 1, \%handlers2, '1', '(flags modseq)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "Run xrunannotator";
+    xlog $self, "Run xrunannotator";
     my %handlers3;
     {
         $handlers3{fetch} = sub {
@@ -322,7 +322,7 @@ sub test_annotator_callout_disabled
 
     $imaptalk->select("INBOX");
 
-    xlog "Create Message A";
+    xlog $self, "Create Message A";
     $msg{A} = $self->{gen}->generate(subject => "Message A");
     $msg{A}->set_attributes(id => 1,
                             uid => 1,
@@ -334,7 +334,7 @@ sub test_annotator_callout_disabled
 
     $self->{store}->set_fetch_attributes('uid', 'flags', 'modseq');
 
-    xlog "Fetch message A";
+    xlog $self, "Fetch message A";
     my %handlers1;
     {
         $handlers1{fetch} = sub {
@@ -346,7 +346,7 @@ sub test_annotator_callout_disabled
     $imaptalk->_imap_cmd("uid fetch", 1, \%handlers1, '1', '(flags modseq)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "Clear the $flag from the message A.";
+    xlog $self, "Clear the $flag from the message A.";
     my %handlers2;
     {
         $handlers2{fetch} = sub {
@@ -359,7 +359,7 @@ sub test_annotator_callout_disabled
     $imaptalk->_imap_cmd("uid fetch", 1, \%handlers2, '1', '(flags modseq)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "Run xrunannotator";
+    xlog $self, "Run xrunannotator";
     my %handlers3;
     {
         $handlers3{fetch} = sub {
@@ -371,7 +371,7 @@ sub test_annotator_callout_disabled
     $imaptalk->_imap_cmd("uid xrunannotator", 0, {}, '1');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "Nothing should have changed from the previous run of uid fetch.";
+    xlog $self, "Nothing should have changed from the previous run of uid fetch.";
     $imaptalk->_imap_cmd("uid fetch", 1, \%handlers3, '1', '(flags modseq)');
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 }
@@ -393,12 +393,12 @@ sub test_add_annot_splitconv
 
     $self->{store}->set_fetch_attributes('uid', 'cid', 'basecid', "annotation ($entry $attrib)");
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
     $self->check_messages(\%exp);
 
-    xlog "generating replies";
+    xlog $self, "generating replies";
     for (1..4) {
       $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
       $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
@@ -435,12 +435,12 @@ sub test_add_annot_splitconv_rerun
 
     $self->{store}->set_fetch_attributes('uid', 'cid', 'basecid', 'flags', "annotation ($entry $attrib)");
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
     $self->check_messages(\%exp);
 
-    xlog "generating replies";
+    xlog $self, "generating replies";
     for (1..4) {
       $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
       $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());

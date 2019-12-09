@@ -67,7 +67,7 @@ sub test_basic
 {
     my ($self) = @_;
 
-    xlog "Test the cyr_deny utility with the imap service";
+    xlog $self, "Test the cyr_deny utility with the imap service";
 
     # Data thanks to hipsteripsum.me
     my @cases = ({
@@ -97,13 +97,13 @@ sub test_basic
         });
 
 
-    xlog "Create all users";
+    xlog $self, "Create all users";
     foreach my $case (@cases)
     {
         $self->{instance}->create_user($case->{user});
     }
 
-    xlog "Running cyr_deny for some users";
+    xlog $self, "Running cyr_deny for some users";
     foreach my $case (@cases)
     {
         next unless defined $case->{opts};
@@ -114,11 +114,11 @@ sub test_basic
     my $svc = $self->{instance}->get_service('imap');
     foreach my $case (@cases)
     {
-        xlog "Trying to log in as user $case->{user}";
+        xlog $self, "Trying to log in as user $case->{user}";
         my $store = $svc->create_store(username => $case->{user});
         if ($case->{can_login})
         {
-            xlog "Expecting this to succeeed";
+            xlog $self, "Expecting this to succeeed";
             my $talk = $store->get_client();
             my $r = $talk->status('inbox', [ 'messages' ]);
             $self->assert_deep_equals({ messages => 0 }, $r);
@@ -126,7 +126,7 @@ sub test_basic
         }
         else
         {
-            xlog "Expecting this to fail";
+            xlog $self, "Expecting this to fail";
             eval { $store->get_client(); };
             my $exception = $@;
             $self->assert_matches(qr/no - login failed: authorization failure/i, $exception);
@@ -136,22 +136,22 @@ sub test_basic
 
 sub test_connected
 {
-    xlog "Test that cyr_deny shuts down any connected sessions";
-
     my ($self) = @_;
 
-    xlog "Create a user";
+    xlog $self, "Test that cyr_deny shuts down any connected sessions";
+
+    xlog $self, "Create a user";
     my $user = 'gastropub';
     $self->{instance}->create_user($user);
 
-    xlog "Set up a logged-in client for each of two users";
+    xlog $self, "Set up a logged-in client for each of two users";
     my $cass_talk = $self->{store}->get_client();
 
     my $svc = $self->{instance}->get_service('imap');
     my $user_store = $svc->create_store(username => $user);
     my $user_talk = $user_store->get_client();
 
-    xlog "Check that we can run a command in each of the two clients";
+    xlog $self, "Check that we can run a command in each of the two clients";
     my $res;
     $res = $cass_talk->status('inbox', [ 'messages' ]);
     $self->assert_deep_equals({ messages => 0 }, $res);
@@ -160,14 +160,14 @@ sub test_connected
 
     $user_talk->clear_response_code('alert');
 
-    xlog "Deny the user";
+    xlog $self, "Deny the user";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_deny', $user);
 
-    xlog "Check that we can run a command in the unaffected user";
+    xlog $self, "Check that we can run a command in the unaffected user";
     $res = $cass_talk->status('inbox', [ 'messages' ]);
     $self->assert_deep_equals({ messages => 0 }, $res);
 
-    xlog "Check that the affected user is disconnected";
+    xlog $self, "Check that the affected user is disconnected";
     $res = undef;
     # Either is_open will return undef, or die; both of these
     # are good.  If it returned 1 we should worry.

@@ -88,7 +88,7 @@ sub check_conversations
     my $str = <FH>;
     close(FH);
 
-    xlog "RESULT: $str";
+    xlog $self, "RESULT: $str";
     $self->assert_matches(qr/is OK/, $str);
     $self->assert_does_not_match(qr/is BROKEN/, $str);
 }
@@ -203,7 +203,7 @@ sub test_rename_user_bigconversation
 
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "Test user rename with a big conversation";
+    xlog $self, "Test user rename with a big conversation";
 
     my %exp;
 
@@ -240,7 +240,7 @@ sub test_rename_user_midsizeconversation
 
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "Test user rename with a big conversation";
+    xlog $self, "Test user rename with a big conversation";
 
     my %exp;
 
@@ -526,7 +526,7 @@ sub test_rename_user
     my ($self) = @_;
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "Test Cyrus extension which renames a user to a different partition";
+    xlog $self, "Test Cyrus extension which renames a user to a different partition";
 
     # set up a sub mailbox
     $admintalk->create('user.cassandane.submailbox');
@@ -593,7 +593,7 @@ sub test_rename_deepuser
 
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "Test user rename";
+    xlog $self, "Test user rename";
 
     $admintalk->create("user.cassandane.foo") || die;
     $admintalk->create("user.cassandane.bar") || die;
@@ -671,7 +671,7 @@ sub test_rename_deepuser_unixhs
 
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "Test user rename";
+    xlog $self, "Test user rename";
 
     $admintalk->create("user/cassandane/foo") || die;
     $admintalk->create("user/cassandane/bar") || die;

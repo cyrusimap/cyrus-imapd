@@ -73,19 +73,19 @@ sub test_append
 
     my %exp;
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A");
     $self->check_messages(\%exp);
 
-    xlog "generating message B";
+    xlog $self, "generating message B";
     $exp{B} = $self->make_message("Message B");
     $self->check_messages(\%exp);
 
-    xlog "generating message C";
+    xlog $self, "generating message C";
     $exp{C} = $self->make_message("Message C");
     $self->check_messages(\%exp);
 
-    xlog "generating message D";
+    xlog $self, "generating message D";
     $exp{D} = $self->make_message("Message D");
     $self->check_messages(\%exp);
 }
@@ -96,21 +96,21 @@ sub test_select
 
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "SELECTing INBOX";
+    xlog $self, "SELECTing INBOX";
     $imaptalk->select("INBOX");
     $self->assert(!$imaptalk->get_last_error());
 
-    xlog "SELECTing inbox";
+    xlog $self, "SELECTing inbox";
     $imaptalk->select("inbox");
     $self->assert(!$imaptalk->get_last_error());
 
-    xlog "CREATEing sub folders";
+    xlog $self, "CREATEing sub folders";
     $imaptalk->create("INBOX.sub");
     $self->assert(!$imaptalk->get_last_error());
     $imaptalk->create("inbox.blub");
     $self->assert(!$imaptalk->get_last_error());
 
-    xlog "SELECTing subfolders";
+    xlog $self, "SELECTing subfolders";
     $imaptalk->select("inbox.sub");
     $self->assert(!$imaptalk->get_last_error());
     $imaptalk->select("INbOX.blub");

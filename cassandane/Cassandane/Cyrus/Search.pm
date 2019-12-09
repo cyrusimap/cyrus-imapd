@@ -84,10 +84,10 @@ sub test_from
 {
     my ($self) = @_;
 
-    xlog "test SEARCH with the FROM predicate";
+    xlog $self, "test SEARCH with the FROM predicate";
     my $talk = $self->{store}->get_client();
 
-    xlog "append some messages";
+    xlog $self, "append some messages";
     my %exp;
     my %from_domains;
     my $N = 20;
@@ -97,15 +97,15 @@ sub test_from
         $exp{$_} = $msg;
         my ($dom) = ($msg->from() =~ m/(@[^>]*)>/);
         $from_domains{$dom} = 1;
-        xlog "Message uid " . $msg->uid() . " from domain " . $dom;
+        xlog $self, "Message uid " . $msg->uid() . " from domain " . $dom;
     }
-    xlog "check the messages got there";
+    xlog $self, "check the messages got there";
     $self->check_messages(\%exp);
 
     my @found;
     foreach my $dom (keys %from_domains)
     {
-        xlog "searching for: FROM $dom";
+        xlog $self, "searching for: FROM $dom";
         my $uids = $talk->search('from', { Quote => $dom })
             or die "Cannot search: $@";
         my $expected_uids = _fgrep_msgs(\%exp, 'from', $dom);
@@ -113,14 +113,14 @@ sub test_from
         map { $found[$_] = 1 } @$uids;
     }
 
-    xlog "checking all the message were found";
+    xlog $self, "checking all the message were found";
     for (1..$N)
     {
         $self->assert($found[$_],
                       "UID $_ was not returned from a SEARCH");
     }
 
-    xlog "Double-check the messages are still there";
+    xlog $self, "Double-check the messages are still there";
     $self->check_messages(\%exp);
 }
 

@@ -97,7 +97,7 @@ sub test_calendar_get
     my $id = $caldav->NewCalendar({ name => "calname", color => "aqua"});
     my $unknownId = "foo";
 
-    xlog "get existing calendar";
+    xlog $self, "get existing calendar";
     my $res = $jmap->CallMethods([['Calendar/get', {ids => [$id]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Calendar/get', $res->[0][0]);
@@ -106,7 +106,7 @@ sub test_calendar_get
     $self->assert_str_equals($id, $res->[0][1]{list}[0]{id});
     $self->assert_str_equals('aqua', $res->[0][1]{list}[0]{color});
 
-    xlog "get existing calendar with select properties";
+    xlog $self, "get existing calendar with select properties";
     $res = $jmap->CallMethods([['Calendar/get', { ids => [$id], properties => ["name"] }, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
@@ -114,14 +114,14 @@ sub test_calendar_get
     $self->assert_str_equals("calname", $res->[0][1]{list}[0]{name});
     $self->assert_null($res->[0][1]{list}[0]{color});
 
-    xlog "get unknown calendar";
+    xlog $self, "get unknown calendar";
     $res = $jmap->CallMethods([['Calendar/get', {ids => [$unknownId]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_num_equals(0, scalar(@{$res->[0][1]{list}}));
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{notFound}}));
     $self->assert_str_equals($unknownId, $res->[0][1]{notFound}[0]);
 
-    xlog "get all calendars";
+    xlog $self, "get all calendars";
     $res = $jmap->CallMethods([['Calendar/get', {ids => undef}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_num_equals(2, scalar(@{$res->[0][1]{list}}));
@@ -141,7 +141,7 @@ sub test_calendar_get_shared
 
     my $service = $self->{instance}->get_service("http");
 
-    xlog "create shared account";
+    xlog $self, "create shared account";
     $admintalk->create("user.manifold");
 
     my $mantalk = Net::CalDAVTalk->new(
@@ -157,14 +157,14 @@ sub test_calendar_get_shared
     $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
     $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $mantalk->NewCalendar({name => 'Manifold Calendar'});
     $self->assert_not_null($CalendarId);
 
-    xlog "share to user";
+    xlog $self, "share to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lr') or die;
 
-    xlog "get calendar";
+    xlog $self, "get calendar";
     my $res = $jmap->CallMethods([['Calendar/get', {accountId => 'manifold'}, "R1"]]);
     $self->assert_str_equals('manifold', $res->[0][1]{accountId});
     $self->assert_str_equals("Manifold Calendar", $res->[0][1]{list}[0]->{name});
@@ -172,26 +172,26 @@ sub test_calendar_get_shared
     $self->assert_equals(JSON::false, $res->[0][1]{list}[0]->{mayAddItems});
     my $id = $res->[0][1]{list}[0]->{id};
 
-    xlog "refetch calendar";
+    xlog $self, "refetch calendar";
     $res = $jmap->CallMethods([['Calendar/get', {accountId => 'manifold', ids => [$id]}, "R1"]]);
     $self->assert_str_equals($id, $res->[0][1]{list}[0]->{id});
 
-    xlog "create another shared calendar";
+    xlog $self, "create another shared calendar";
     my $CalendarId2 = $mantalk->NewCalendar({name => 'Manifold Calendar 2'});
     $self->assert_not_null($CalendarId2);
     $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lr') or die;
 
-    xlog "remove access rights to calendar";
+    xlog $self, "remove access rights to calendar";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => '') or die;
 
-    xlog "refetch calendar (should fail)";
+    xlog $self, "refetch calendar (should fail)";
     $res = $jmap->CallMethods([['Calendar/get', {accountId => 'manifold', ids => [$id]}, "R1"]]);
     $self->assert_str_equals($id, $res->[0][1]{notFound}[0]);
 
-    xlog "remove access rights to all shared calendars";
+    xlog $self, "remove access rights to all shared calendars";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => '') or die;
 
-    xlog "refetch calendar (should fail)";
+    xlog $self, "refetch calendar (should fail)";
     $res = $jmap->CallMethods([['Calendar/get', {accountId => 'manifold', ids => [$id]}, "R1"]]);
     $self->assert_str_equals("error", $res->[0][0]);
     $self->assert_str_equals("accountNotFound", $res->[0][1]{type});
@@ -208,7 +208,7 @@ sub test_calendar_get_default
     # XXX - A previous CalDAV test might have created the default
     # calendar already. To make this test self-sufficient, we need
     # to create a test user just for this test. How?
-    xlog "get default calendar";
+    xlog $self, "get default calendar";
     my $res = $jmap->CallMethods([['Calendar/get', {ids => ["Default"]}, "R1"]]);
     $self->assert_str_equals("Default", $res->[0][1]{list}[0]{id});
 }
@@ -220,7 +220,7 @@ sub test_calendar_set
 
     my $jmap = $self->{jmap};
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $res = $jmap->CallMethods([
             ['Calendar/set', { create => { "1" => {
                             name => "foo",
@@ -237,7 +237,7 @@ sub test_calendar_set
 
     my $id = $res->[0][1]{created}{"1"}{id};
 
-    xlog "get calendar $id";
+    xlog $self, "get calendar $id";
     $res = $jmap->CallMethods([['Calendar/get', {ids => [$id]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_num_equals(1, scalar(@{$res->[0][1]{list}}));
@@ -245,7 +245,7 @@ sub test_calendar_set
     $self->assert_str_equals('foo', $res->[0][1]{list}[0]{name});
     $self->assert_equals(JSON::true, $res->[0][1]{list}[0]{isVisible});
 
-    xlog "update calendar $id";
+    xlog $self, "update calendar $id";
     $res = $jmap->CallMethods([
             ['Calendar/set', {update => {"$id" => {
                             name => "bar",
@@ -257,19 +257,19 @@ sub test_calendar_set
     $self->assert_not_null($res->[0][1]{updated});
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get calendar $id";
+    xlog $self, "get calendar $id";
     $res = $jmap->CallMethods([['Calendar/get', {ids => [$id]}, "R1"]]);
     $self->assert_str_equals('bar', $res->[0][1]{list}[0]{name});
     $self->assert_equals(JSON::false, $res->[0][1]{list}[0]{isVisible});
 
-    xlog "destroy calendar $id";
+    xlog $self, "destroy calendar $id";
     $res = $jmap->CallMethods([['Calendar/set', {destroy => ["$id"]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{destroyed});
     $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
 
-    xlog "get calendar $id";
+    xlog $self, "get calendar $id";
     $res = $jmap->CallMethods([['Calendar/get', {ids => [$id]}, "R1"]]);
     $self->assert_str_equals($id, $res->[0][1]{notFound}[0]);
 }
@@ -281,7 +281,7 @@ sub test_calendar_set_state
 
     my $jmap = $self->{jmap};
 
-    xlog "create with invalid state token";
+    xlog $self, "create with invalid state token";
     my $res = $jmap->CallMethods([
             ['Calendar/set', {
                     ifInState => "badstate",
@@ -291,7 +291,7 @@ sub test_calendar_set_state
     $self->assert_str_equals('error', $res->[0][0]);
     $self->assert_str_equals('stateMismatch', $res->[0][1]{type});
 
-    xlog "create with wrong state token";
+    xlog $self, "create with wrong state token";
     $res = $jmap->CallMethods([
             ['Calendar/set', {
                     ifInState => "987654321",
@@ -301,7 +301,7 @@ sub test_calendar_set_state
     $self->assert_str_equals('error', $res->[0][0]);
     $self->assert_str_equals('stateMismatch', $res->[0][1]{type});
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     $res = $jmap->CallMethods([
             ['Calendar/set', { create => { "1" => {
                             name => "foo",
@@ -315,7 +315,7 @@ sub test_calendar_set_state
     my $id = $res->[0][1]{created}{"1"}{id};
     my $state = $res->[0][1]{newState};
 
-    xlog "update calendar $id with current state";
+    xlog $self, "update calendar $id with current state";
     $res = $jmap->CallMethods([
             ['Calendar/set', {
                     ifInState => $state,
@@ -328,7 +328,7 @@ sub test_calendar_set_state
     my $oldState = $state;
     $state = $res->[0][1]{newState};
 
-    xlog "setCalendar noops must keep state";
+    xlog $self, "setCalendar noops must keep state";
     $res = $jmap->CallMethods([
             ['Calendar/set', {}, "R1"],
             ['Calendar/set', {}, "R2"],
@@ -337,7 +337,7 @@ sub test_calendar_set_state
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_str_equals($state, $res->[0][1]{newState});
 
-    xlog "update calendar $id with expired state";
+    xlog $self, "update calendar $id with expired state";
     $res = $jmap->CallMethods([
             ['Calendar/set', {
                     ifInState => $oldState,
@@ -348,12 +348,12 @@ sub test_calendar_set_state
     $self->assert_str_equals("stateMismatch", $res->[0][1]{type});
     $self->assert_str_equals('R1', $res->[0][2]);
 
-    xlog "get calendar $id to make sure state didn't change";
+    xlog $self, "get calendar $id to make sure state didn't change";
     $res = $jmap->CallMethods([['Calendar/get', {ids => [$id]}, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]{state});
     $self->assert_str_equals('bar', $res->[0][1]{list}[0]{name});
 
-    xlog "destroy calendar $id with expired state";
+    xlog $self, "destroy calendar $id with expired state";
     $res = $jmap->CallMethods([
             ['Calendar/set', {
                     ifInState => $oldState,
@@ -364,7 +364,7 @@ sub test_calendar_set_state
     $self->assert_str_equals("stateMismatch", $res->[0][1]{type});
     $self->assert_str_equals('R1', $res->[0][2]);
 
-    xlog "destroy calendar $id with current state";
+    xlog $self, "destroy calendar $id with current state";
     $res = $jmap->CallMethods([
             ['Calendar/set', {
                     ifInState => $state,
@@ -384,7 +384,7 @@ sub test_calendar_set_shared
     my $admintalk = $self->{adminstore}->get_client();
 
     my $service = $self->{instance}->get_service("http");
-    xlog "create shared account";
+    xlog $self, "create shared account";
     $admintalk->create("user.manifold");
 
     $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
@@ -401,10 +401,10 @@ sub test_calendar_set_shared
         expandurl => 1,
     );
 
-    xlog "share calendar home read-only to user";
+    xlog $self, "share calendar home read-only to user";
     $admintalk->setacl("user.manifold.#calendars", cassandane => 'lr') or die;
 
-    xlog "create calendar (should fail)";
+    xlog $self, "create calendar (should fail)";
     my $res = $jmap->CallMethods([
             ['Calendar/set', {
                     accountId => 'manifold',
@@ -418,10 +418,10 @@ sub test_calendar_set_shared
     $self->assert_str_equals('manifold', $res->[0][1]{accountId});
     $self->assert_str_equals("accountReadOnly", $res->[0][1]{notCreated}{1}{type});
 
-    xlog "share calendar home read-writable to user";
+    xlog $self, "share calendar home read-writable to user";
     $admintalk->setacl("user.manifold.#calendars", cassandane => 'lrswipkxtecdn') or die;
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     $res = $jmap->CallMethods([
             ['Calendar/set', {
                     accountId => 'manifold',
@@ -436,10 +436,10 @@ sub test_calendar_set_shared
     my $CalendarId = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($CalendarId);
 
-    xlog "share calendar read-only to user";
+    xlog $self, "share calendar read-only to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lr') or die;
 
-    xlog "update calendar";
+    xlog $self, "update calendar";
     $res = $jmap->CallMethods([
             ['Calendar/set', {
                     accountId => 'manifold',
@@ -451,15 +451,15 @@ sub test_calendar_set_shared
     $self->assert_str_equals('manifold', $res->[0][1]{accountId});
     $self->assert(exists $res->[0][1]{updated}{$CalendarId});
 
-    xlog "destroy calendar $CalendarId (should fail)";
+    xlog $self, "destroy calendar $CalendarId (should fail)";
     $res = $jmap->CallMethods([['Calendar/set', {accountId => 'manifold', destroy => [$CalendarId]}, "R1"]]);
     $self->assert_str_equals('manifold', $res->[0][1]{accountId});
     $self->assert_str_equals("accountReadOnly", $res->[0][1]{notDestroyed}{$CalendarId}{type});
 
-    xlog "share read-writable to user";
+    xlog $self, "share read-writable to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lrswipkxtecdn') or die;
 
-    xlog "destroy calendar $CalendarId";
+    xlog $self, "destroy calendar $CalendarId";
     $res = $jmap->CallMethods([['Calendar/set', {accountId => 'manifold', destroy => [$CalendarId]}, "R1"]]);
     $self->assert_str_equals('manifold', $res->[0][1]{accountId});
     $self->assert_str_equals($CalendarId, $res->[0][1]{destroyed}[0]);
@@ -475,7 +475,7 @@ sub test_calendar_set_sharewith
 
     my $service = $self->{instance}->get_service("http");
 
-    xlog "create shared account";
+    xlog $self, "create shared account";
     $admintalk->create("user.master");
 
     my $mastalk = Net::CalDAVTalk->new(
@@ -491,20 +491,20 @@ sub test_calendar_set_sharewith
     $admintalk->setacl("user.master", admin => 'lrswipkxtecdan');
     $admintalk->setacl("user.master", manifold => 'lrswipkxtecdn');
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $mastalk->NewCalendar({name => 'Shared Calendar'});
     $self->assert_not_null($CalendarId);
 
-    xlog "share to user with permission to share";
+    xlog $self, "share to user with permission to share";
     $admintalk->setacl("user.master.#calendars.$CalendarId", "cassandane" => 'lrswipkxtecdan9') or die;
 
-    xlog "create third account";
+    xlog $self, "create third account";
     $admintalk->create("user.manifold");
 
     $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
     $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
 
-    xlog "and a forth";
+    xlog $self, "and a forth";
     $admintalk->create("user.paraphrase");
 
     $admintalk->setacl("user.paraphrase", admin => 'lrswipkxtecdan');
@@ -532,7 +532,7 @@ sub test_calendar_set_sharewith
         expandurl => 1,
     );
 
-    xlog "sharee gives third user access to shared calendar";
+    xlog $self, "sharee gives third user access to shared calendar";
     my $res = $jmap->CallMethods([
             ['Calendar/set', {
                     accountId => 'master',
@@ -557,26 +557,26 @@ sub test_calendar_set_sharewith
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{updated});
 
-    xlog "fetch invites";
+    xlog $self, "fetch invites";
     my ($adds) = $mantalk->SyncEventLinks("/dav/notifications/user/manifold");
     $self->assert_equals(1, scalar %$adds);
     ($adds) = $partalk->SyncEventLinks("/dav/notifications/user/paraphrase");
     $self->assert_equals(1, scalar %$adds);
 
-    xlog "check ACL";
+    xlog $self, "check ACL";
     my $acl = $admintalk->getacl("user.master.#calendars.$CalendarId");
     my %map = @$acl;
     $self->assert_str_equals('lrswipkxtecdan9', $map{cassandane});
     $self->assert_str_equals('lrs9', $map{manifold});
     $self->assert_str_equals('lrswiptedn9', $map{paraphrase});
 
-    xlog "check Outbox ACL";
+    xlog $self, "check Outbox ACL";
     $acl = $admintalk->getacl("user.master.#calendars.Outbox");
     %map = @$acl;
     $self->assert_null($map{manifold});  # we don't create Outbox ACLs for read-only
     $self->assert_str_equals('78', $map{paraphrase});
 
-    xlog "check Principal ACL";
+    xlog $self, "check Principal ACL";
     $acl = $admintalk->getacl("user.master.#calendars");
     %map = @$acl;
     # both users get ACLs on the Inbox
@@ -588,10 +588,10 @@ sub test_calendar_set_sharewith
     $Name = $partalk->GetProps('/dav/principals/user/master', 'D:displayname');
     $self->assert_str_equals('master', $Name);
 
-    xlog "Clear initial syslog";
+    xlog $self, "Clear initial syslog";
     $self->{instance}->getsyslog();
 
-    xlog "Update sharewith just for manifold";
+    xlog $self, "Update sharewith just for manifold";
     $jmap->CallMethods([
             ['Calendar/set', {
                     accountId => 'master',
@@ -604,7 +604,7 @@ sub test_calendar_set_sharewith
     $self->assert_matches(qr/manifold\.\#notifications/, "@lines");
     $self->assert((not grep { /paraphrase\.\#notifications/ } @lines), Data::Dumper::Dumper(\@lines));
 
-    xlog "Remove the access for manifold";
+    xlog $self, "Remove the access for manifold";
     $res = $jmap->CallMethods([
             ['Calendar/set', {
                     accountId => 'master',
@@ -619,27 +619,27 @@ sub test_calendar_set_sharewith
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{updated});
 
-    xlog "check ACL";
+    xlog $self, "check ACL";
     $acl = $admintalk->getacl("user.master.#calendars.$CalendarId");
     %map = @$acl;
     $self->assert_str_equals('lrswipkxtecdan9', $map{cassandane});
     $self->assert_str_equals('lrswiptedn9', $map{manifold});
     $self->assert_null($map{paraphrase});
 
-    xlog "check Outbox ACL";
+    xlog $self, "check Outbox ACL";
     $acl = $admintalk->getacl("user.master.#calendars.Outbox");
     %map = @$acl;
     $self->assert_str_equals('78', $map{manifold});
     $self->assert_null($map{paraphrase});
 
-    xlog "check Principal ACL";
+    xlog $self, "check Principal ACL";
     $acl = $admintalk->getacl("user.master.#calendars");
     %map = @$acl;
     # both users get ACLs on the Inbox
     $self->assert_str_equals('lr', $map{manifold});
     $self->assert_null($map{paraphrase});
 
-    xlog "Check propfind";
+    xlog $self, "Check propfind";
     $Name = eval { $partalk->GetProps('/dav/principals/user/master', 'D:displayname') };
     my $error = $@;
     $self->assert_null($Name);
@@ -699,13 +699,13 @@ sub test_calendar_set_issubscribed_shared
     my $admintalk = $self->{adminstore}->get_client();
     my $service = $self->{instance}->get_service("http");
 
-    xlog "create shared account";
+    xlog $self, "create shared account";
     $admintalk->create("user.other");
 
     $admintalk->setacl("user.other", admin => 'lrswipkxtecdan');
     $admintalk->setacl("user.other", other => 'lrswipkxtecdn');
 
-    xlog "create and share default calendar";
+    xlog $self, "create and share default calendar";
     my $othertalk = Net::CalDAVTalk->new(
         user => "other",
         password => 'pass',
@@ -755,7 +755,7 @@ sub test_calendar_changes
 
     my $jmap = $self->{jmap};
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $res = $jmap->CallMethods([
             ['Calendar/set', { create => {
                         "1" => {
@@ -778,7 +778,7 @@ sub test_calendar_changes
     my $id2 = $res->[0][1]{created}{"2"}{id};
     my $state = $res->[0][1]{newState};
 
-    xlog "get calendar updates without changes";
+    xlog $self, "get calendar updates without changes";
     $res = $jmap->CallMethods([['Calendar/changes', {
                     "sinceState" => $state
                 }, "R1"]]);
@@ -788,7 +788,7 @@ sub test_calendar_changes
     $self->assert_str_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_str_equals(0, scalar @{$res->[0][1]{destroyed}});
 
-    xlog "update name of calendar $id1, destroy calendar $id2";
+    xlog $self, "update name of calendar $id1, destroy calendar $id2";
     $res = $jmap->CallMethods([
             ['Calendar/set', {
                     ifInState => $state,
@@ -799,7 +799,7 @@ sub test_calendar_changes
     $self->assert_not_null($res->[0][1]{newState});
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
 
-    xlog "get calendar updates";
+    xlog $self, "get calendar updates";
     $res = $jmap->CallMethods([['Calendar/changes', {
                     "sinceState" => $state
                 }, "R1"]]);
@@ -814,13 +814,13 @@ sub test_calendar_changes
     $self->assert_str_equals($id2, $res->[0][1]{destroyed}[0]);
     $state = $res->[0][1]{newState};
 
-    xlog "update color of calendar $id1";
+    xlog $self, "update color of calendar $id1";
     $res = $jmap->CallMethods([
             ['Calendar/set', { update => { $id1 => { color => "aqua" }}}, "R1" ]
         ]);
     $self->assert(exists $res->[0][1]{updated}{$id1});
 
-    xlog "get calendar updates";
+    xlog $self, "get calendar updates";
     $res = $jmap->CallMethods([['Calendar/changes', {
                     "sinceState" => $state
                 }, "R1"]]);
@@ -830,13 +830,13 @@ sub test_calendar_changes
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $state = $res->[0][1]{newState};
 
-    xlog "update sortOrder of calendar $id1";
+    xlog $self, "update sortOrder of calendar $id1";
     $res = $jmap->CallMethods([
             ['Calendar/set', { update => { $id1 => { sortOrder => 5 }}}, "R1" ]
         ]);
     $self->assert(exists $res->[0][1]{updated}{$id1});
 
-    xlog "get calendar updates";
+    xlog $self, "get calendar updates";
     $res = $jmap->CallMethods([['Calendar/changes', {
                     "sinceState" => $state,
                 }, "R1"]]);
@@ -846,7 +846,7 @@ sub test_calendar_changes
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
     $state = $res->[0][1]{newState};
 
-    xlog "get empty calendar updates";
+    xlog $self, "get empty calendar updates";
     $res = $jmap->CallMethods([['Calendar/changes', {
                     "sinceState" => $state
                 }, "R1"]]);
@@ -864,7 +864,7 @@ sub test_calendar_set_error
 
     my $jmap = $self->{jmap};
 
-    xlog "create calendar with missing mandatory attributes";
+    xlog $self, "create calendar with missing mandatory attributes";
     my $res = $jmap->CallMethods([
             ['Calendar/set', { create => { "1" => {}}}, "R1"]
     ]);
@@ -874,7 +874,7 @@ sub test_calendar_set_error
     $self->assert_str_equals("invalidProperties", $errType);
     $self->assert_deep_equals([ "name", "color" ], $errProp);
 
-    xlog "create calendar with invalid optional attributes";
+    xlog $self, "create calendar with invalid optional attributes";
     $res = $jmap->CallMethods([
             ['Calendar/set', { create => { "1" => {
                             name => "foo", color => "coral",
@@ -894,7 +894,7 @@ sub test_calendar_set_error
             "mayDelete"
     ], $errProp);
 
-    xlog "update unknown calendar";
+    xlog $self, "update unknown calendar";
     $res = $jmap->CallMethods([
             ['Calendar/set', { update => { "unknown" => {
                             name => "foo"
@@ -903,7 +903,7 @@ sub test_calendar_set_error
     $errType = $res->[0][1]{notUpdated}{"unknown"}{type};
     $self->assert_str_equals("notFound", $errType);
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     $res = $jmap->CallMethods([
             ['Calendar/set', { create => { "1" => {
                             name => "foo",
@@ -914,7 +914,7 @@ sub test_calendar_set_error
     ]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
-    xlog "update calendar with immutable optional attributes";
+    xlog $self, "update calendar with immutable optional attributes";
     $res = $jmap->CallMethods([
             ['Calendar/set', { update => { $id => {
                             mayReadFreeBusy => \0, mayReadItems => \0,
@@ -932,14 +932,14 @@ sub test_calendar_set_error
             "mayDelete"
     ], $errProp);
 
-    xlog "destroy unknown calendar";
+    xlog $self, "destroy unknown calendar";
     $res = $jmap->CallMethods([
             ['Calendar/set', {destroy => ["unknown"]}, "R1"]
     ]);
     $errType = $res->[0][1]{notDestroyed}{"unknown"}{type};
     $self->assert_str_equals("notFound", $errType);
 
-    xlog "destroy calendar $id";
+    xlog $self, "destroy calendar $id";
     $res = $jmap->CallMethods([['Calendar/set', {destroy => ["$id"]}, "R1"]]);
     $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
 }
@@ -951,7 +951,7 @@ sub test_calendar_set_badname
 
     my $jmap = $self->{jmap};
 
-    xlog "create calendar with excessively long name";
+    xlog $self, "create calendar with excessively long name";
     # Exceed the maximum allowed 256 byte length by 1.
     my $badname = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum tincidunt risus quis urna aliquam sollicitudin. Pellentesque aliquet nisl ut neque viverra pellentesque. Donec tincidunt eros at ante malesuada porta. Nam sapien arcu, vehicula non posuere.";
 
@@ -977,7 +977,7 @@ sub test_calendar_set_destroydefault
 
     my @specialIds = ["Inbox", "Outbox", "Default", "Attachments"];
 
-    xlog "destroy special calendars";
+    xlog $self, "destroy special calendars";
     my $res = $jmap->CallMethods([
             ['Calendar/set', { destroy => @specialIds }, "R1"]
     ]);
@@ -1213,19 +1213,19 @@ sub putandget_vevent
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
-    xlog "get default calendar id";
+    xlog $self, "get default calendar id";
     my $res = $jmap->CallMethods([['Calendar/get', {ids => ["Default"]}, "R1"]]);
     $self->assert_str_equals("Default", $res->[0][1]{list}[0]{id});
     my $calid = $res->[0][1]{list}[0]{id};
     my $xhref = $res->[0][1]{list}[0]{"x-href"};
 
     # Create event via CalDAV to test CalDAV/JMAP interop.
-    xlog "create event (via CalDAV)";
+    xlog $self, "create event (via CalDAV)";
     my $href = "$xhref/$id.ics";
 
     $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
 
-    xlog "get event $id";
+    xlog $self, "get event $id";
     $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id], properties => $props}, "R1"]]);
 
     my $event = $res->[0][1]{list}[0];
@@ -1971,7 +1971,7 @@ sub createandget_event
     my $jmap = $self->{jmap};
     my $accountId = $params{accountId} || 'cassandane';
 
-    xlog "create event";
+    xlog $self, "create event";
     my $res = $jmap->CallMethods([['CalendarEvent/set', {
                     accountId => $accountId,
                     create => {"1" => $event}},
@@ -1979,7 +1979,7 @@ sub createandget_event
     $self->assert_not_null($res->[0][1]{created});
     my $id = $res->[0][1]{created}{"1"}{id};
 
-    xlog "get calendar event $id";
+    xlog $self, "get calendar event $id";
     $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
     my $ret = $res->[0][1]{list}[0];
     return $ret;
@@ -1992,11 +1992,11 @@ sub updateandget_event
     my $jmap = $self->{jmap};
     my $id = $event->{id};
 
-    xlog "update event $id";
+    xlog $self, "update event $id";
     my $res = $jmap->CallMethods([['CalendarEvent/set', {update => {$id => $event}}, "R1"]]);
     $self->assert_not_null($res->[0][1]{updated});
 
-    xlog "get calendar event $id";
+    xlog $self, "get calendar event $id";
     $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
     my $ret = $res->[0][1]{list}[0];
     return $ret;
@@ -2008,7 +2008,7 @@ sub createcalendar
 
     my $jmap = $self->{jmap};
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $res = $jmap->CallMethods([
             ['Calendar/set', { create => { "1" => {
                             name => "foo", color => "coral", sortOrder => 1, isVisible => \1
@@ -2903,7 +2903,7 @@ sub test_calendarevent_set_recurrence_patch
 
     my $jmap = $self->{jmap};
 
-    xlog "Create a recurring event with alert";
+    xlog $self, "Create a recurring event with alert";
     my $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create =>  {
@@ -2939,7 +2939,7 @@ sub test_calendarevent_set_recurrence_patch
     my $eventId = $res->[0][1]{created}{1}{id};
     $self->assert_not_null($eventId);
 
-    xlog "Patch alert in a recurrence override";
+    xlog $self, "Patch alert in a recurrence override";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -3469,7 +3469,7 @@ sub test_calendarevent_set_move
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
-    xlog "create calendars A and B";
+    xlog $self, "create calendars A and B";
     my $res = $jmap->CallMethods([
             ['Calendar/set', { create => {
                         "1" => {
@@ -3483,7 +3483,7 @@ sub test_calendarevent_set_move
     my $calidA = $res->[0][1]{created}{"1"}{id};
     my $calidB = $res->[0][1]{created}{"2"}{id};
 
-    xlog "create event in calendar $calidA";
+    xlog $self, "create event in calendar $calidA";
     $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
                         "1" => {
                             "calendarId" => $calidA,
@@ -3497,14 +3497,14 @@ sub test_calendarevent_set_move
     my $state = $res->[0][1]{newState};
     my $id = $res->[0][1]{created}{"1"}{id};
 
-    xlog "get calendar $id";
+    xlog $self, "get calendar $id";
     $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
     my $event = $res->[0][1]{list}[0];
     $self->assert_str_equals($id, $event->{id});
     $self->assert_str_equals($calidA, $event->{calendarId});
     $self->assert_str_equals($state, $res->[0][1]{state});
 
-    xlog "move event to unknown calendar";
+    xlog $self, "move event to unknown calendar";
     $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
                         $id => {
                             "calendarId" => "nope",
@@ -3513,13 +3513,13 @@ sub test_calendarevent_set_move
     $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{$id}{type});
     $self->assert_str_equals($state, $res->[0][1]{newState});
 
-    xlog "get calendar $id from untouched calendar $calidA";
+    xlog $self, "get calendar $id from untouched calendar $calidA";
     $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
     $event = $res->[0][1]{list}[0];
     $self->assert_str_equals($id, $event->{id});
     $self->assert_str_equals($calidA, $event->{calendarId});
 
-    xlog "move event to calendar $calidB";
+    xlog $self, "move event to calendar $calidB";
     $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
                         $id => {
                             "calendarId" => $calidB,
@@ -3528,7 +3528,7 @@ sub test_calendarevent_set_move
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $state = $res->[0][1]{newState};
 
-    xlog "get calendar $id";
+    xlog $self, "get calendar $id";
     $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
     $event = $res->[0][1]{list}[0];
     $self->assert_str_equals($id, $event->{id});
@@ -3544,7 +3544,7 @@ sub test_calendarevent_set_shared
     my $admintalk = $self->{adminstore}->get_client();
     my $service = $self->{instance}->get_service("http");
 
-    xlog "create shared account";
+    xlog $self, "create shared account";
     $admintalk->create("user.manifold");
 
     my $mantalk = Net::CalDAVTalk->new(
@@ -3560,11 +3560,11 @@ sub test_calendarevent_set_shared
     $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
     $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId1 = $mantalk->NewCalendar({name => 'Manifold Calendar'});
     $self->assert_not_null($CalendarId1);
 
-    xlog "share $CalendarId1 read-only to user";
+    xlog $self, "share $CalendarId1 read-only to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId1", "cassandane" => 'lr') or die;
 
     my $event =  {
@@ -3622,17 +3622,17 @@ sub test_calendarevent_set_shared
         }
     };
 
-    xlog "create event (should fail)";
+    xlog $self, "create event (should fail)";
     my $res = $jmap->CallMethods([['CalendarEvent/set',{
                     accountId => 'manifold',
                     create => {"1" => $event}},
     "R1"]]);
     $self->assert_not_null($res->[0][1]{notCreated}{1});
 
-    xlog "share $CalendarId1 read-writable to user";
+    xlog $self, "share $CalendarId1 read-writable to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId1", "cassandane" => 'lrswipkxtecdn') or die;
 
-    xlog "create event";
+    xlog $self, "create event";
     $res = $jmap->CallMethods([['CalendarEvent/set',{
                     accountId => 'manifold',
                     create => {"1" => $event}},
@@ -3640,7 +3640,7 @@ sub test_calendarevent_set_shared
     $self->assert_not_null($res->[0][1]{created});
     my $id = $res->[0][1]{created}{"1"}{id};
 
-    xlog "get calendar event $id";
+    xlog $self, "get calendar event $id";
     $res = $jmap->CallMethods([['CalendarEvent/get', {
                     accountId => 'manifold',
                     ids => [$id]},
@@ -3648,7 +3648,7 @@ sub test_calendarevent_set_shared
     my $ret = $res->[0][1]{list}[0];
     $self->assert_normalized_event_equals($event, $ret);
 
-    xlog "update event";
+    xlog $self, "update event";
     $res = $jmap->CallMethods([['CalendarEvent/set', {
                     accountId => 'manifold',
                     update => {
@@ -3659,7 +3659,7 @@ sub test_calendarevent_set_shared
     }}, "R1"]]);
     $self->assert_not_null($res->[0][1]{updated});
 
-    xlog "get calendar event $id";
+    xlog $self, "get calendar event $id";
     $res = $jmap->CallMethods([['CalendarEvent/get', {
                     accountId => 'manifold',
                     ids => [$id]},
@@ -3667,10 +3667,10 @@ sub test_calendarevent_set_shared
     $ret = $res->[0][1]{list}[0];
     $self->assert_normalized_event_equals($event2, $ret);
 
-    xlog "share $CalendarId1 read-only to user";
+    xlog $self, "share $CalendarId1 read-only to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId1", "cassandane" => 'lr') or die;
 
-    xlog "update event (should fail)";
+    xlog $self, "update event (should fail)";
     $res = $jmap->CallMethods([['CalendarEvent/set', {
                     accountId => 'manifold',
                     update => {
@@ -3681,10 +3681,10 @@ sub test_calendarevent_set_shared
     }}, "R1"]]);
     $self->assert(exists $res->[0][1]{notUpdated}{$id});
 
-    xlog "share calendar home read-writable to user";
+    xlog $self, "share calendar home read-writable to user";
     $admintalk->setacl("user.manifold.#calendars", "cassandane" => 'lrswipkxtecdn') or die;
 
-    xlog "create another calendar";
+    xlog $self, "create another calendar";
     $res = $jmap->CallMethods([
             ['Calendar/set', {
                     accountId => 'manifold',
@@ -3698,13 +3698,13 @@ sub test_calendarevent_set_shared
     my $CalendarId2 = $res->[0][1]{created}{"2"}{id};
     $self->assert_not_null($CalendarId2);
 
-    xlog "share $CalendarId1 read-writable to user";
+    xlog $self, "share $CalendarId1 read-writable to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId1", "cassandane" => 'lrswipkxtecdn') or die;
 
-    xlog "share $CalendarId2 read-only to user";
+    xlog $self, "share $CalendarId2 read-only to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lr') or die;
 
-    xlog "move event (should fail)";
+    xlog $self, "move event (should fail)";
     $res = $jmap->CallMethods([['CalendarEvent/set', {
                     accountId => 'manifold',
                     update => {
@@ -3715,10 +3715,10 @@ sub test_calendarevent_set_shared
     }}, "R1"]]);
     $self->assert(exists $res->[0][1]{notUpdated}{$id});
 
-    xlog "share $CalendarId2 read-writable to user";
+    xlog $self, "share $CalendarId2 read-writable to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lrswipkxtecdn') or die;
 
-    xlog "move event";
+    xlog $self, "move event";
     $res = $jmap->CallMethods([['CalendarEvent/set', {
                     accountId => 'manifold',
                     update => {
@@ -3729,20 +3729,20 @@ sub test_calendarevent_set_shared
     }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "share $CalendarId2 read-only to user";
+    xlog $self, "share $CalendarId2 read-only to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lr') or die;
 
-    xlog "destroy event (should fail)";
+    xlog $self, "destroy event (should fail)";
     $res = $jmap->CallMethods([['CalendarEvent/set', {
                     accountId => 'manifold',
                     destroy => [ $id ],
     }, "R1"]]);
     $self->assert(exists $res->[0][1]{notDestroyed}{$id});
 
-    xlog "share $CalendarId2 read-writable to user";
+    xlog $self, "share $CalendarId2 read-writable to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId2", "cassandane" => 'lrswipkxtecdn') or die;
 
-    xlog "destroy event";
+    xlog $self, "destroy event";
     $res = $jmap->CallMethods([['CalendarEvent/set', {
                     accountId => 'manifold',
                     destroy => [ $id ],
@@ -3759,7 +3759,7 @@ sub test_calendarevent_changes
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
-    xlog "create calendars A and B";
+    xlog $self, "create calendars A and B";
     my $res = $jmap->CallMethods([
             ['Calendar/set', { create => {
                         "1" => {
@@ -3774,7 +3774,7 @@ sub test_calendarevent_changes
     my $calidB = $res->[0][1]{created}{"2"}{id};
     my $state = $res->[0][1]{newState};
 
-    xlog "create event #1 in calendar $calidA and event #2 in calendar $calidB";
+    xlog $self, "create event #1 in calendar $calidA and event #2 in calendar $calidB";
     $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
                         "1" => {
                             "calendarId" => $calidA,
@@ -3796,7 +3796,7 @@ sub test_calendarevent_changes
     my $id1 = $res->[0][1]{created}{"1"}{id};
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
-    xlog "get calendar event updates";
+    xlog $self, "get calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
@@ -3806,7 +3806,7 @@ sub test_calendarevent_changes
     $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $state = $res->[0][1]{newState};
 
-    xlog "get zero calendar event updates";
+    xlog $self, "get zero calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', {sinceState => $state}, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
@@ -3816,7 +3816,7 @@ sub test_calendarevent_changes
     $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $state = $res->[0][1]{newState};
 
-    xlog "update event #1 and #2";
+    xlog $self, "update event #1 and #2";
     $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
                         $id1 => {
                             "calendarId" => $calidA,
@@ -3829,7 +3829,7 @@ sub test_calendarevent_changes
                     }}, "R1"]]);
     $self->assert_num_equals(2, scalar keys %{$res->[0][1]{updated}});
 
-    xlog "get exactly one update";
+    xlog $self, "get exactly one update";
     $res = $jmap->CallMethods([['CalendarEvent/changes', {
                     sinceState => $state,
                     maxChanges => 1
@@ -3842,7 +3842,7 @@ sub test_calendarevent_changes
     $self->assert_equals(JSON::true, $res->[0][1]{hasMoreChanges});
     $state = $res->[0][1]{newState};
 
-    xlog "get the final update";
+    xlog $self, "get the final update";
     $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
@@ -3852,7 +3852,7 @@ sub test_calendarevent_changes
     $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $state = $res->[0][1]{newState};
 
-    xlog "update event #1 and destroy #2";
+    xlog $self, "update event #1 and destroy #2";
     $res = $jmap->CallMethods([['CalendarEvent/set', {
                     update => {
                         $id1 => {
@@ -3866,7 +3866,7 @@ sub test_calendarevent_changes
     $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
 
-    xlog "get calendar event updates";
+    xlog $self, "get calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
@@ -3878,7 +3878,7 @@ sub test_calendarevent_changes
     $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $state = $res->[0][1]{newState};
 
-    xlog "get zero calendar event updates";
+    xlog $self, "get zero calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', {sinceState => $state}, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
@@ -3888,7 +3888,7 @@ sub test_calendarevent_changes
     $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $state = $res->[0][1]{newState};
 
-    xlog "move event #1 from calendar $calidA to $calidB";
+    xlog $self, "move event #1 from calendar $calidA to $calidB";
     $res = $jmap->CallMethods([['CalendarEvent/set', {
                     update => {
                         $id1 => {
@@ -3898,7 +3898,7 @@ sub test_calendarevent_changes
                 }, "R1"]]);
     $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
 
-    xlog "get calendar event updates";
+    xlog $self, "get calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{updated}});
@@ -3909,7 +3909,7 @@ sub test_calendarevent_changes
     $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
     $state = $res->[0][1]{newState};
 
-    xlog "update and remove event #1";
+    xlog $self, "update and remove event #1";
     $res = $jmap->CallMethods([['CalendarEvent/set', {
                     update => {
                         $id1 => {
@@ -3921,7 +3921,7 @@ sub test_calendarevent_changes
                 }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
 
-    xlog "get calendar event updates";
+    xlog $self, "get calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
@@ -3940,7 +3940,7 @@ sub test_calendarevent_changes_issue2558
 
     my $jmap = $self->{jmap};
 
-    xlog "get calendar event updates with bad state";
+    xlog $self, "get calendar event updates with bad state";
     my $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => '0' }, "R1"]]);
     $self->assert_str_equals('error', $res->[0][0]);
     $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
@@ -3955,7 +3955,7 @@ sub test_calendarevent_query
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
-    xlog "create calendars A and B";
+    xlog $self, "create calendars A and B";
     my $res = $jmap->CallMethods([
             ['Calendar/set', {
                     create => {
@@ -3971,7 +3971,7 @@ sub test_calendarevent_query
     my $calidB = $res->[0][1]{created}{"2"}{id};
     my $state = $res->[0][1]{newState};
 
-    xlog "create event #1 in calendar $calidA and event #2 in calendar $calidB";
+    xlog $self, "create event #1 in calendar $calidA and event #2 in calendar $calidB";
     $res = $jmap->CallMethods([['CalendarEvent/set', {
                     create => {
                         "1" => {
@@ -3998,15 +3998,15 @@ sub test_calendarevent_query
     my $id1 = $res->[0][1]{created}{"1"}{id};
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
-    xlog "Run squatter";
+    xlog $self, "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    xlog "get unfiltered calendar event list";
+    xlog $self, "get unfiltered calendar event list";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', { }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
-    xlog "get filtered calendar event list with flat filter";
+    xlog $self, "get filtered calendar event list with flat filter";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', {
                     "filter" => {
                         "after" => "2015-12-31T00:00:00Z",
@@ -4019,7 +4019,7 @@ sub test_calendarevent_query
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
-    xlog "get filtered calendar event list";
+    xlog $self, "get filtered calendar event list";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', {
                     "filter" => {
                         "operator" => "AND",
@@ -4039,7 +4039,7 @@ sub test_calendarevent_query
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
-    xlog "filter by calendar $calidA";
+    xlog $self, "filter by calendar $calidA";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', {
                     "filter" => {
                         "inCalendars" => [ $calidA ],
@@ -4048,7 +4048,7 @@ sub test_calendarevent_query
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
-    xlog "filter by calendar $calidA or $calidB";
+    xlog $self, "filter by calendar $calidA or $calidB";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', {
                     "filter" => {
                         "inCalendars" => [ $calidA, $calidB ],
@@ -4056,7 +4056,7 @@ sub test_calendarevent_query
                 }, "R1"] ]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by calendar NOT in $calidA and $calidB";
+    xlog $self, "filter by calendar NOT in $calidA and $calidB";
     $res = $jmap->CallMethods([['CalendarEvent/query', {
                     "filter" => {
                         "operator" => "NOT",
@@ -4066,17 +4066,17 @@ sub test_calendarevent_query
                     }}, "R1"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{ids}});
 
-    xlog "limit results";
+    xlog $self, "limit results";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', { limit => 1 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
 
-    xlog "skip result a position 1";
+    xlog $self, "skip result a position 1";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', { position => 1 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
 
-    xlog "set negative position";
+    xlog $self, "set negative position";
     $res = $jmap->CallMethods([ ['CalendarEvent/query', { position => -1 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
@@ -4093,7 +4093,7 @@ sub test_calendarevent_query_shared
 
     my $service = $self->{instance}->get_service("http");
 
-    xlog "create shared account";
+    xlog $self, "create shared account";
     $admintalk->create("user.manifold");
 
     my $mantalk = Net::CalDAVTalk->new(
@@ -4106,14 +4106,14 @@ sub test_calendarevent_query_shared
         expandurl => 1,
     );
 
-    xlog "share calendar home to user";
+    xlog $self, "share calendar home to user";
     $admintalk->setacl("user.manifold.#calendars", cassandane => 'lrswipkxtecdn');
 
     # run tests for both the main and shared account
     foreach ("cassandane", "manifold") {
         my $account = $_;
 
-        xlog "create calendars A and B";
+        xlog $self, "create calendars A and B";
         my $res = $jmap->CallMethods([
                 ['Calendar/set', {
                         accountId => $account,
@@ -4130,7 +4130,7 @@ sub test_calendarevent_query_shared
         my $calidB = $res->[0][1]{created}{"2"}{id};
         my $state = $res->[0][1]{newState};
 
-        xlog "create event #1 in calendar $calidA and event #2 in calendar $calidB";
+        xlog $self, "create event #1 in calendar $calidA and event #2 in calendar $calidB";
         $res = $jmap->CallMethods([['CalendarEvent/set', {
                         accountId => $account,
                         create => {
@@ -4157,16 +4157,16 @@ sub test_calendarevent_query_shared
         my $id1 = $res->[0][1]{created}{"1"}{id};
         my $id2 = $res->[0][1]{created}{"2"}{id};
 
-        xlog "Run squatter";
+        xlog $self, "Run squatter";
         $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-        xlog "get unfiltered calendar event list";
+        xlog $self, "get unfiltered calendar event list";
         $res = $jmap->CallMethods([ ['CalendarEvent/query', { accountId => $account }, "R1"] ]);
         $self->assert_num_equals(2, $res->[0][1]{total});
         $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
         $self->assert_str_equals($account, $res->[0][1]{accountId});
 
-        xlog "get filtered calendar event list with flat filter";
+        xlog $self, "get filtered calendar event list with flat filter";
         $res = $jmap->CallMethods([ ['CalendarEvent/query', {
                         accountId => $account,
                         "filter" => {
@@ -4180,7 +4180,7 @@ sub test_calendarevent_query_shared
         $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
         $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
-        xlog "get filtered calendar event list";
+        xlog $self, "get filtered calendar event list";
         $res = $jmap->CallMethods([ ['CalendarEvent/query', {
                         accountId => $account,
                         "filter" => {
@@ -4201,7 +4201,7 @@ sub test_calendarevent_query_shared
         $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
         $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
-        xlog "filter by calendar $calidA";
+        xlog $self, "filter by calendar $calidA";
         $res = $jmap->CallMethods([ ['CalendarEvent/query', {
                         accountId => $account,
                         "filter" => {
@@ -4211,7 +4211,7 @@ sub test_calendarevent_query_shared
         $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
         $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
-        xlog "filter by calendar $calidA or $calidB";
+        xlog $self, "filter by calendar $calidA or $calidB";
         $res = $jmap->CallMethods([ ['CalendarEvent/query', {
                         accountId => $account,
                         "filter" => {
@@ -4220,7 +4220,7 @@ sub test_calendarevent_query_shared
                     }, "R1"] ]);
         $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
-        xlog "filter by calendar NOT in $calidA and $calidB";
+        xlog $self, "filter by calendar NOT in $calidA and $calidB";
         $res = $jmap->CallMethods([['CalendarEvent/query', {
                         accountId => $account,
                         "filter" => {
@@ -4231,12 +4231,12 @@ sub test_calendarevent_query_shared
                         }}, "R1"]]);
         $self->assert_num_equals(0, scalar @{$res->[0][1]{ids}});
 
-        xlog "limit results";
+        xlog $self, "limit results";
         $res = $jmap->CallMethods([ ['CalendarEvent/query', { accountId => $account, limit => 1 }, "R1"] ]);
         $self->assert_num_equals(2, $res->[0][1]{total});
         $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
 
-        xlog "skip result a position 1";
+        xlog $self, "skip result a position 1";
         $res = $jmap->CallMethods([ ['CalendarEvent/query', { accountId => $account, position => 1 }, "R1"] ]);
         $self->assert_num_equals(2, $res->[0][1]{total});
         $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
@@ -4252,7 +4252,7 @@ sub test_calendarevent_query_datetime
     my $caldav = $self->{caldav};
     my $calid = 'Default';
 
-    xlog "create events";
+    xlog $self, "create events";
     my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
                         # Start: 2016-01-01T08:00:00Z End: 2016-01-01T09:00:00Z
                         "1" => {
@@ -4267,7 +4267,7 @@ sub test_calendarevent_query_datetime
                         },
                     }}, "R1"]]);
 
-    xlog "Run squatter";
+    xlog $self, "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
     # Exact start and end match
@@ -4360,7 +4360,7 @@ sub test_calendarevent_query_date
     my $caldav = $self->{caldav};
     my $calid = 'Default';
 
-    xlog "create events";
+    xlog $self, "create events";
     my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
                         # Start: 2016-01-01 End: 2016-01-03
                         "1" => {
@@ -4374,7 +4374,7 @@ sub test_calendarevent_query_date
                         },
                     }}, "R1"]]);
 
-    xlog "Run squatter";
+    xlog $self, "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
     # Match on start and end day
@@ -4539,7 +4539,7 @@ sub test_calendarevent_query_text
     my $id1 = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($id1);
 
-    xlog "Run squatter";
+    xlog $self, "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
     my %textqueries = (
@@ -4605,7 +4605,7 @@ sub test_calendarevent_query_unixepoch
     my $caldav = $self->{caldav};
     my $calid = 'Default';
 
-    xlog "create events";
+    xlog $self, "create events";
     my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
       "1" => {
         "calendarId" => $calid,
@@ -4619,7 +4619,7 @@ sub test_calendarevent_query_unixepoch
       },
     }}, "R1"]]);
 
-    xlog "Run squatter";
+    xlog $self, "Run squatter";
 
     $res = $jmap->CallMethods([['CalendarEvent/query', {
                     "filter" => {
@@ -4797,7 +4797,7 @@ sub test_calendarevent_set_caldav
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $res = $jmap->CallMethods([
             ['Calendar/set', { create => {
                         "1" => {
@@ -4806,7 +4806,7 @@ sub test_calendarevent_set_caldav
              }}, "R1"]]);
     my $calid = $res->[0][1]{created}{"1"}{id};
 
-    xlog "create event in calendar";
+    xlog $self, "create event in calendar";
     $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
                         "1" => {
                             "calendarId" => $calid,
@@ -4821,24 +4821,24 @@ sub test_calendarevent_set_caldav
                     }}, "R1"]]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
-    xlog "get x-href of event $id";
+    xlog $self, "get x-href of event $id";
     $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
     my $xhref = $res->[0][1]{list}[0]{"x-href"};
     my $state = $res->[0][1]{state};
 
-    xlog "GET event $id in CalDAV";
+    xlog $self, "GET event $id in CalDAV";
     $res = $caldav->Request('GET', $xhref);
     my $ical = $res->{content};
     $self->assert_matches(qr/SUMMARY:foo/, $ical);
 
-    xlog "DELETE event $id via CalDAV";
+    xlog $self, "DELETE event $id via CalDAV";
     $res = $caldav->Request('DELETE', $xhref);
 
-    xlog "get (non-existent) event $id";
+    xlog $self, "get (non-existent) event $id";
     $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
     $self->assert_str_equals($id, $res->[0][1]{notFound}[0]);
 
-    xlog "get calendar event updates";
+    xlog $self, "get calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
@@ -4860,10 +4860,10 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog "PUT event with UID $id";
+    xlog $self, "PUT event with UID $id";
     $res = $caldav->Request('PUT', "$calid/$id.ics", $ical, 'Content-Type' => 'text/calendar');
 
-    xlog "get calendar event updates";
+    xlog $self, "get calendar event updates";
     $res = $jmap->CallMethods([['CalendarEvent/changes', { sinceState => $state }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
@@ -4871,12 +4871,12 @@ EOF
     $self->assert_equals($id, $res->[0][1]{created}[0]);
     $state = $res->[0][1]{newState};
 
-    xlog "get x-href of event $id";
+    xlog $self, "get x-href of event $id";
     $res = $jmap->CallMethods([['CalendarEvent/get', {ids => [$id]}, "R1"]]);
     $xhref = $res->[0][1]{list}[0]{"x-href"};
     $state = $res->[0][1]{state};
 
-    xlog "update event $id";
+    xlog $self, "update event $id";
     $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
                         "$id" => {
                             "calendarId" => $calid,
@@ -4890,17 +4890,17 @@ EOF
                         }
                     }}, "R1"]]);
 
-    xlog "GET event $id in CalDAV";
+    xlog $self, "GET event $id in CalDAV";
     $res = $caldav->Request('GET', $xhref);
     $ical = $res->{content};
     $self->assert_matches(qr/SUMMARY:bam/, $ical);
 
-    xlog "destroy event $id";
+    xlog $self, "destroy event $id";
     $res = $jmap->CallMethods([['CalendarEvent/set', { destroy => [$id] }, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_equals($id, $res->[0][1]{destroyed}[0]);
 
-    xlog "PROPFIND calendar $calid for non-existent event $id in CalDAV";
+    xlog $self, "PROPFIND calendar $calid for non-existent event $id in CalDAV";
     # We'd like to GET the just destroyed event, to make sure that it also
     # vanished on the CalDAV layer. Unfortunately, that GET would cause
     # Net-DAVTalk to burst into flames with a 404 error. Instead, issue a
@@ -4947,7 +4947,7 @@ sub test_calendarevent_set_schedule_request
     # clean notification cache
     $self->{instance}->getnotify();
 
-    xlog "send invitation as organizer to attendee";
+    xlog $self, "send invitation as organizer to attendee";
     my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
                         "1" => {
                             "calendarId" => "Default",
@@ -5000,7 +5000,7 @@ sub test_calendarevent_set_schedule_reply
         },
     };
 
-    xlog "create event";
+    xlog $self, "create event";
     my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
         "1" => {
             "calendarId" => "Default",
@@ -5020,7 +5020,7 @@ sub test_calendarevent_set_schedule_reply
     # clean notification cache
     $self->{instance}->getnotify();
 
-    xlog "send reply as attendee to organizer";
+    xlog $self, "send reply as attendee to organizer";
     $participants->{att}->{participationStatus} = "tentative";
     $res = $jmap->CallMethods([['CalendarEvent/set', { update => {
         $id => {
@@ -5048,7 +5048,7 @@ sub test_calendarevent_set_schedule_cancel
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $res = $jmap->CallMethods([
             ['Calendar/set', { create => { "1" => {
                             name => "foo", color => "coral", sortOrder => 1, isVisible => \1
@@ -5056,7 +5056,7 @@ sub test_calendarevent_set_schedule_cancel
     ]);
     my $calid = $res->[0][1]{created}{"1"}{id};
 
-    xlog "send invitation as organizer";
+    xlog $self, "send invitation as organizer";
     $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
                         "1" => {
                             "calendarId" => $calid,
@@ -5094,7 +5094,7 @@ sub test_calendarevent_set_schedule_cancel
     # clean notification cache
     $self->{instance}->getnotify();
 
-    xlog "cancel event as organizer";
+    xlog $self, "cancel event as organizer";
     $res = $jmap->CallMethods([['CalendarEvent/set', { destroy => [$id]}, "R1"]]);
 
     my $data = $self->{instance}->getnotify();
@@ -5116,7 +5116,7 @@ sub test_calendarevent_set_schedule_omit
     my $jmap = $self->{jmap};
     my $caldav = $self->{caldav};
 
-    xlog "create event";
+    xlog $self, "create event";
     my $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
         "1" => {
             "calendarId" => "Default",
@@ -5169,7 +5169,7 @@ sub test_misc_creationids
 
     my $jmap = $self->{jmap};
 
-    xlog "create and get calendar and event";
+    xlog $self, "create and get calendar and event";
     my $res = $jmap->CallMethods([
         ['Calendar/set', { create => { "c1" => {
             name => "foo",
@@ -5294,7 +5294,7 @@ sub test_calendarevent_copy
     my $admintalk = $self->{adminstore}->get_client();
     my $service = $self->{instance}->get_service("http");
 
-    xlog "create shared accounts";
+    xlog $self, "create shared accounts";
     $admintalk->create("user.other");
 
     my $othercaldav = Net::CalDAVTalk->new(
@@ -5310,15 +5310,15 @@ sub test_calendarevent_copy
     $admintalk->setacl('user.other', admin => 'lrswipkxtecdan');
     $admintalk->setacl('user.other', other => 'lrswipkxtecdn');
     
-    xlog "create source calendar";
+    xlog $self, "create source calendar";
     my $srcCalendarId = $caldav->NewCalendar({name => 'Source Calendar'});
     $self->assert_not_null($srcCalendarId);
 
-    xlog "create destination calendar";
+    xlog $self, "create destination calendar";
     my $dstCalendarId = $othercaldav->NewCalendar({name => 'Destination Calendar'});
     $self->assert_not_null($dstCalendarId);
 
-    xlog "share calendar";
+    xlog $self, "share calendar";
     $admintalk->setacl("user.other.#calendars.$dstCalendarId", "cassandane" => 'lrswipkxtecdn') or die;
 
     my $event =  {
@@ -5339,14 +5339,14 @@ sub test_calendarevent_copy
         "alerts"=> undef,
     };
 
-    xlog "create event";
+    xlog $self, "create event";
     my $res = $jmap->CallMethods([['CalendarEvent/set',{
         create => {"1" => $event}},
     "R1"]]);
     $self->assert_not_null($res->[0][1]{created});
     my $eventId = $res->[0][1]{created}{"1"}{id};
 
-    xlog "copy event";
+    xlog $self, "copy event";
     $res = $jmap->CallMethods([['CalendarEvent/copy', {
         fromAccountId => 'cassandane',
         accountId => 'other',
@@ -5747,7 +5747,7 @@ sub test_calendar_treat_as_mailbox
 
     my $jmap = $self->{jmap};
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $res = $jmap->CallMethods([
             ['Calendar/set', { create => { "1" => {
                             name => "foo",
@@ -5770,7 +5770,7 @@ sub test_calendar_treat_as_mailbox
         'urn:ietf:params:jmap:mail',
     ];
 
-    xlog "rename as mailbox $id";
+    xlog $self, "rename as mailbox $id";
     $res = $jmap->CallMethods([
         ['Mailbox/set', { update => { $id => { name => "foobar" } } }, "R1"]
     ], $using);
@@ -5789,7 +5789,7 @@ sub test_calendar_schedule_address_set
 
     my $jmap = $self->{jmap};
 
-    xlog "create two calendars, one with an address set";
+    xlog $self, "create two calendars, one with an address set";
     my $res = $jmap->CallMethods([
             ['Calendar/set', { create => {
                  "1" => {
@@ -5820,7 +5820,7 @@ sub test_calendar_schedule_address_set
     $self->assert_not_null($res->[0][1]{created});
     $self->assert_null($res->[0][1]{notCreated});
 
-    xlog "get calendars";
+    xlog $self, "get calendars";
     $res = $jmap->CallMethods([['Calendar/get', {}, "R1"]]);
 
     my %byname = map { $_->{name} => $_ } @{$res->[0][1]{list}};
@@ -5843,7 +5843,7 @@ sub test_calendar_schedule_address_set
 
     # map to names and then check values
 
-    xlog "get calendars";
+    xlog $self, "get calendars";
     $res = $jmap->CallMethods([['Calendar/get', {}, "R1"]]);
 
     %byname = map { $_->{name} => $_ } @{$res->[0][1]{list}};
@@ -5854,7 +5854,7 @@ sub test_calendar_schedule_address_set
     $self->assert_deep_equals(['mailto:cassandane@example.com'], $byname{baz}{scheduleAddressSet});
 
     # use CalDAV to update the default address!
-    xlog "Use CalDAV to update the default address";
+    xlog $self, "Use CalDAV to update the default address";
     my $caldav = $self->{caldav};
     $caldav->Request(
       'PROPPATCH',
@@ -5870,7 +5870,7 @@ sub test_calendar_schedule_address_set
       )
     );
 
-    xlog "get calendars";
+    xlog $self, "get calendars";
     $res = $jmap->CallMethods([['Calendar/get', {}, "R1"]]);
 
     %byname = map { $_->{name} => $_ } @{$res->[0][1]{list}};
@@ -5954,7 +5954,7 @@ sub test_calendarevent_query_expandrecurrences
     my $caldav = $self->{caldav};
     my $calid = 'Default';
 
-    xlog "create events";
+    xlog $self, "create events";
     my $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create => {
@@ -5994,7 +5994,7 @@ sub test_calendarevent_query_expandrecurrences
         }, 'R1']
     ]);
 
-    xlog "Run squatter";
+    xlog $self, "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
     $res = $jmap->CallMethods([
@@ -6028,7 +6028,7 @@ sub test_calendarevent_get_recurrenceinstances
     my $caldav = $self->{caldav};
     my $calid = 'Default';
 
-    xlog "create event";
+    xlog $self, "create event";
     my $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create => {
@@ -6106,7 +6106,7 @@ sub test_calendarevent_set_recurrenceinstances
     my $caldav = $self->{caldav};
     my $calid = 'Default';
 
-    xlog "create event";
+    xlog $self, "create event";
     my $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create => {
@@ -6132,7 +6132,7 @@ sub test_calendarevent_set_recurrenceinstances
     # This test hard-codes the ids of recurrence instances.
     # This might break if we change the id scheme.
 
-    xlog "Override a regular recurrence instance";
+    xlog $self, "Override a regular recurrence instance";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -6154,7 +6154,7 @@ sub test_calendarevent_set_recurrenceinstances
         }, $res->[1][1]{list}[0]{recurrenceOverrides}
     );
 
-    xlog "Update an existing override";
+    xlog $self, "Update an existing override";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -6176,7 +6176,7 @@ sub test_calendarevent_set_recurrenceinstances
         }, $res->[1][1]{list}[0]{recurrenceOverrides}
     );
 
-    xlog "Revert an override into a regular recurrence";
+    xlog $self, "Revert an override into a regular recurrence";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -6193,7 +6193,7 @@ sub test_calendarevent_set_recurrenceinstances
     $self->assert(exists $res->[0][1]{updated}{'event1uid@local;2019-01-15T09:00:00'});
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 
-    xlog "Set regular recurrence excluded";
+    xlog $self, "Set regular recurrence excluded";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -6214,7 +6214,7 @@ sub test_calendarevent_set_recurrenceinstances
         }
     }, $res->[1][1]{list}[0]{recurrenceOverrides});
 
-    xlog "Reset overrides";
+    xlog $self, "Reset overrides";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -6231,7 +6231,7 @@ sub test_calendarevent_set_recurrenceinstances
     $self->assert(exists $res->[0][1]{updated}{'event1uid@local'});
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 
-    xlog "Destroy regular recurrence instance";
+    xlog $self, "Destroy regular recurrence instance";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             destroy => ['event1uid@local;2019-01-08T09:00:00'],
@@ -6258,7 +6258,7 @@ sub test_calendarevent_set_recurrenceinstances_rdate
     my $caldav = $self->{caldav};
     my $calid = 'Default';
 
-    xlog "create event with RDATE";
+    xlog $self, "create event with RDATE";
     my $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create => {
@@ -6287,7 +6287,7 @@ sub test_calendarevent_set_recurrenceinstances_rdate
     # This test hard-codes the ids of recurrence instances.
     # This might break if we change the id scheme.
 
-    xlog "Delete RDATE by setting it excluded";
+    xlog $self, "Delete RDATE by setting it excluded";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -6304,7 +6304,7 @@ sub test_calendarevent_set_recurrenceinstances_rdate
     $self->assert(exists $res->[0][1]{updated}{'event1uid@local;2019-01-10T14:00:00'});
     $self->assert_null($res->[1][1]{list}[0]{recurrenceOverrides});
 
-    xlog "Recreate RDATE";
+    xlog $self, "Recreate RDATE";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -6327,7 +6327,7 @@ sub test_calendarevent_set_recurrenceinstances_rdate
         $res->[1][1]{list}[0]{recurrenceOverrides}
     );
 
-    xlog "Destroy RDATE";
+    xlog $self, "Destroy RDATE";
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             destroy => ['event1uid@local;2019-01-10T14:00:00'],
@@ -6385,7 +6385,7 @@ sub test_calendarevent_blobid
 
     my $jmap = $self->{jmap};
 
-    xlog "create other user";
+    xlog $self, "create other user";
 
     my $admintalk = $self->{adminstore}->get_client();
     $admintalk->create("user.other");
@@ -6406,7 +6406,7 @@ sub test_calendarevent_blobid
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
-    xlog "create calendar event in other users calendar";
+    xlog $self, "create calendar event in other users calendar";
 
     my $res = $otherJmap->CallMethods([
         ['CalendarEvent/set', {
@@ -6437,11 +6437,11 @@ sub test_calendarevent_blobid
     my $eventId = $res->[0][1]{created}{1}{id};
     $self->assert_not_null($eventId);
 
-    xlog "share calendar";
+    xlog $self, "share calendar";
 
     $admintalk->setacl("user.other.#calendars.Default", cassandane => 'lrswipkxtecdn') or die;
 
-    xlog "set per-user event data for cassandane user";
+    xlog $self, "set per-user event data for cassandane user";
 
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -6464,7 +6464,7 @@ sub test_calendarevent_blobid
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId});
 
-    xlog "get event blobIds for cassandane and other user";
+    xlog $self, "get event blobIds for cassandane and other user";
 
     $res = $otherJmap->CallMethods([
         ['CalendarEvent/get', {
@@ -6486,11 +6486,11 @@ sub test_calendarevent_blobid
     my $cassBlobId = $res->[0][1]{list}[0]{blobId};
     $self->assert_not_null($cassBlobId);
 
-    xlog "compare blob ids";
+    xlog $self, "compare blob ids";
 
     $self->assert_str_not_equals($otherBlobId, $cassBlobId);
 
-    xlog "download blob with userdata";
+    xlog $self, "download blob with userdata";
 
     $res = $jmap->Download('other', $cassBlobId);
     $self->assert_str_equals("BEGIN:VCALENDAR", substr($res->{content}, 0, 15));
@@ -6504,7 +6504,7 @@ sub test_calendarevent_debugblobid
 
     my $jmap = $self->{jmap};
 
-    xlog "create other user";
+    xlog $self, "create other user";
 
     my $admintalk = $self->{adminstore}->get_client();
     $admintalk->create("user.other");
@@ -6525,7 +6525,7 @@ sub test_calendarevent_debugblobid
         'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 
-    xlog "create calendar event in other users calendar";
+    xlog $self, "create calendar event in other users calendar";
 
     my $res = $otherJmap->CallMethods([
         ['CalendarEvent/set', {
@@ -6556,11 +6556,11 @@ sub test_calendarevent_debugblobid
     my $eventId = $res->[0][1]{created}{1}{id};
     $self->assert_not_null($eventId);
 
-    xlog "share calendar";
+    xlog $self, "share calendar";
 
     $admintalk->setacl("user.other.#calendars.Default", cassandane => 'lrswipkxtecdn') or die;
 
-    xlog "set per-user event data for cassandane user";
+    xlog $self, "set per-user event data for cassandane user";
 
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -6583,7 +6583,7 @@ sub test_calendarevent_debugblobid
     ]);
     $self->assert(exists $res->[0][1]{updated}{$eventId});
 
-    xlog "get debugBlobId as regular user (should fail)";
+    xlog $self, "get debugBlobId as regular user (should fail)";
 
     my $using = [
         'urn:ietf:params:jmap:core',
@@ -6600,7 +6600,7 @@ sub test_calendarevent_debugblobid
     ], $using);
     $self->assert_null($res->[0][1]{list}[0]{debugBlobId});
 
-    xlog "get debugBlobId as admin user";
+    xlog $self, "get debugBlobId as admin user";
 
     my $adminJmap = Mail::JMAPTalk->new(
         user => 'admin',
@@ -6620,13 +6620,13 @@ sub test_calendarevent_debugblobid
     my $debugBlobId = $res->[0][1]{list}[0]{debugBlobId};
     $self->assert_not_null($debugBlobId);
 
-    xlog "download debugBlob with userdata";
+    xlog $self, "download debugBlob with userdata";
 
     $res = $adminJmap->Download('other', $debugBlobId);
     $self->assert_str_equals("multipart/mixed", substr($res->{headers}{'content-type'}, 0, 15));
     $self->assert_num_not_equals(-1, index($res->{content}, 'SUMMARY:event1'));
 
-    xlog "attempt to download debugBlob as non-admin";
+    xlog $self, "attempt to download debugBlob as non-admin";
 
     my $downloadUri = $jmap->downloaduri('other', $debugBlobId);
     my %Headers = (

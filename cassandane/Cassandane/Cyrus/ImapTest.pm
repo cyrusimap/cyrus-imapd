@@ -128,10 +128,10 @@ sub run_test
 
     if (!defined $basedir)
     {
-        xlog "ImapTests are not enabled.  To enabled them, please";
-        xlog "install ImapTest from http://www.imapwiki.org/ImapTest/";
-        xlog "and edit [imaptest]basedir in cassandane.ini";
-        xlog "This is not a failure";
+        xlog $self, "ImapTests are not enabled.  To enabled them, please";
+        xlog $self, "install ImapTest from http://www.imapwiki.org/ImapTest/";
+        xlog $self, "and edit [imaptest]basedir in cassandane.ini";
+        xlog $self, "This is not a failure";
         return;
     }
 
@@ -168,7 +168,7 @@ sub run_test
             open FH, '<', $errfile
                 or die "Cannot open $errfile for reading: $!";
             while (readline FH) {
-                xlog $_;
+                xlog $self, $_;
             }
             close FH;
         }

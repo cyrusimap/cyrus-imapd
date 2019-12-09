@@ -117,7 +117,7 @@ sub compile_sievec
 
     my $basedir = $self->{instance}->{basedir};
 
-    xlog "Checking preconditions for compiling sieve script $name";
+    xlog $self, "Checking preconditions for compiling sieve script $name";
 
     $self->assert(( ! -f "$basedir/$name.script" ));
     $self->assert(( ! -f "$basedir/$name.bc" ));
@@ -128,7 +128,7 @@ sub compile_sievec
     print FH $script;
     close(FH);
 
-    xlog "Running sievec on script $name";
+    xlog $self, "Running sievec on script $name";
     my $result = $self->{instance}->run_command(
             {
                 cyrus => 1,
@@ -145,14 +145,14 @@ sub compile_sievec
 
     if ($result eq 'success')
     {
-        xlog "Checking that sievec wrote the output .bc file";
+        xlog $self, "Checking that sievec wrote the output .bc file";
         $self->assert(( -f "$basedir/$name.bc" ));
-        xlog "Checking that sievec didn't write anything to stderr";
+        xlog $self, "Checking that sievec didn't write anything to stderr";
         $self->assert_equals(0, scalar(@errors));
     }
     elsif ($result eq 'failure')
     {
-        xlog "Checking that sievec didn't write the output .bc file";
+        xlog $self, "Checking that sievec didn't write the output .bc file";
         $self->assert(( ! -f "$basedir/$name.bc" ));
     }
 
@@ -168,7 +168,7 @@ sub compile_timsieved
                  $self->{instance}->{cyrus_prefix} . '/bin';
     my $srv = $self->{instance}->get_service('sieve');
 
-    xlog "Checking preconditions for compiling sieve script $name";
+    xlog $self, "Checking preconditions for compiling sieve script $name";
 
     $self->assert(( ! -f "$basedir/$name.script" ));
     $self->assert(( ! -f "$basedir/$name.errors" ));
@@ -186,7 +186,7 @@ sub compile_timsieved
         close(FH);
     }
 
-    xlog "Running installsieve on script $name";
+    xlog $self, "Running installsieve on script $name";
     my $result = $self->{instance}->run_command({
                 redirects => {
                     # No cyrus => 1 as installsieve is a Perl
@@ -210,7 +210,7 @@ sub compile_timsieved
 
     if ($result eq 'success')
     {
-        xlog "Checking that installsieve didn't write anything to stderr";
+        xlog $self, "Checking that installsieve didn't write anything to stderr";
         $self->assert_equals(0, scalar(@errors));
     }
 
@@ -232,7 +232,7 @@ sub test_vacation_with_following_rules
 
     my $target = "INBOX.target";
 
-    xlog "Install a sieve script filing all mail into a nonexistant folder";
+    xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
     $self->{instance}->install_sieve_script(<<'EOF'
 
 require ["fileinto", "reject", "vacation", "imapflags", "notify", "envelope", "relational", "regex", "subaddress", "copy", "mailbox", "mboxmetadata", "servermetadata", "date", "index", "comparator-i;ascii-numeric", "variables"];
@@ -260,7 +260,7 @@ if header :contains ["To","Cc","From","Subject","Date","Content-Type","Delivered
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg1);
 
@@ -274,34 +274,34 @@ sub test_deliver
 
     my $target = "INBOX.target";
 
-    xlog "Install a sieve script filing all mail into a nonexistant folder";
+    xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto"];
 fileinto "$target";
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg1);
 
-    xlog "Actually create the target folder";
+    xlog $self, "Actually create the target folder";
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create($target)
          or die "Cannot create $target: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Deliver another message";
+    xlog $self, "Deliver another message";
     my $msg2 = $self->{gen}->generate(subject => "Message 2");
     $self->{instance}->deliver($msg2);
     $msg2->set_attribute(uid => 1);
 
-    xlog "Check that only the 1st message made it to INBOX";
+    xlog $self, "Check that only the 1st message made it to INBOX";
     $self->{store}->set_folder('INBOX');
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 
-    xlog "Check that only the 2nd message made it to the target";
+    xlog $self, "Check that only the 2nd message made it to the target";
     $self->{store}->set_folder($target);
     $self->check_messages({ 1 => $msg2 }, check_guid => 0);
 }
@@ -314,30 +314,30 @@ sub test_deliver_specialuse
 
     my $target = "INBOX.target";
 
-    xlog "create the target folder";
+    xlog $self, "create the target folder";
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create($target, "(use (\\Trash))")
          or die "Cannot create $target: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Install a sieve script filing all mail into the Trash role";
+    xlog $self, "Install a sieve script filing all mail into the Trash role";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto"];
 fileinto "\\\\Trash";
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg);
     $msg->set_attribute(uid => 1);
 
-    xlog "Check that no messages are in INBOX";
+    xlog $self, "Check that no messages are in INBOX";
     $self->{store}->set_folder('INBOX');
     $self->check_messages({}, check_guid => 0);
 
-    xlog "Check that the message made it into the target folder";
+    xlog $self, "Check that the message made it into the target folder";
     $self->{store}->set_folder($target);
     $self->check_messages({ 1 => $msg }, check_guid => 0);
 }
@@ -350,35 +350,35 @@ sub test_deliver_compile
 
     my $target = "INBOX.target";
 
-    xlog "Create the target folder";
+    xlog $self, "Create the target folder";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($target)
          or die "Cannot create $target: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Install a sieve script filing all mail into the target folder";
+    xlog $self, "Install a sieve script filing all mail into the target folder";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto"];
 fileinto "$target";
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg1);
 
-    xlog "Delete the compiled bytecode";
+    xlog $self, "Delete the compiled bytecode";
     my $sieve_dir = $self->{instance}->get_sieve_script_dir('cassandane');
     my $fname = "$sieve_dir/test1.bc";
     unlink $fname or die "Cannot unlink $fname: $!";
 
     sleep 1; # so the two deliveries get different syslog timestamps
 
-    xlog "Deliver another message - lmtpd should rebuild the missing bytecode";
+    xlog $self, "Deliver another message - lmtpd should rebuild the missing bytecode";
     my $msg2 = $self->{gen}->generate(subject => "Message 2");
     $self->{instance}->deliver($msg2);
 
-    xlog "Check that both messages made it to the target";
+    xlog $self, "Check that both messages made it to the target";
     $self->{store}->set_folder($target);
     $self->check_messages({ 1 => $msg1, 2 => $msg2 }, check_guid => 0);
 }
@@ -458,7 +458,7 @@ sub test_badscript_sievec
 {
     my ($self) = @_;
 
-    xlog "Testing sieve script compile failures, via sievec";
+    xlog $self, "Testing sieve script compile failures, via sievec";
     $self->{compile_method} = 'sievec';
     $self->badscript_common();
 }
@@ -468,7 +468,7 @@ sub test_badscript_timsieved
 {
     my ($self) = @_;
 
-    xlog "Testing sieve script compile failures, via timsieved";
+    xlog $self, "Testing sieve script compile failures, via timsieved";
     $self->{compile_method} = 'timsieved';
     $self->badscript_common();
 }
@@ -478,7 +478,7 @@ sub test_dup_keep_keep
 {
     my ($self) = @_;
 
-    xlog "Testing duplicate suppression between 'keep' & 'keep'";
+    xlog $self, "Testing duplicate suppression between 'keep' & 'keep'";
 
     $self->{instance}->install_sieve_script(<<EOF
 keep;
@@ -486,11 +486,11 @@ keep;
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg1);
 
-    xlog "Check that only one copy of the message made it to INBOX";
+    xlog $self, "Check that only one copy of the message made it to INBOX";
     $self->{store}->set_folder('INBOX');
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
@@ -506,7 +506,7 @@ sub test_dup_keep_fileinto
 {
     my ($self) = @_;
 
-    xlog "Testing duplicate suppression between 'keep' & 'fileinto'";
+    xlog $self, "Testing duplicate suppression between 'keep' & 'fileinto'";
 
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto"];
@@ -515,11 +515,11 @@ fileinto "INBOX";
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg1);
 
-    xlog "Check that only one copy of the message made it to INBOX";
+    xlog $self, "Check that only one copy of the message made it to INBOX";
     $self->{store}->set_folder('INBOX');
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
@@ -530,22 +530,22 @@ sub test_deliver_fileinto_dot
 {
     my ($self) = @_;
 
-    xlog "Testing a sieve script which does a 'fileinto' a mailbox";
-    xlog "when the user has a dot in their name.  Bug 3664";
+    xlog $self, "Testing a sieve script which does a 'fileinto' a mailbox";
+    xlog $self, "when the user has a dot in their name.  Bug 3664";
     # NOTE: The commit https://github.com/cyrusimap/cyrus-imapd/commit/73af8e19546f235f6286cc9147a3ea74bde19ebb
     # in Cyrus-imapd changes this behaviour where in we don't do a '.' -> '^' anymore.
 
-    xlog "Create the dotted user";
+    xlog $self, "Create the dotted user";
     my $user = 'betty.boop';
     $self->{instance}->create_user($user);
 
-    xlog "Connect as the new user";
+    xlog $self, "Connect as the new user";
     my $svc = $self->{instance}->get_service('imap');
     $self->{store} = $svc->create_store(username => $user, folder => 'INBOX');
     $self->{store}->set_fetch_attributes('uid');
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "Create the target folder";
+    xlog $self, "Create the target folder";
 
     my $target = Cassandane::Mboxname->new(config => $self->{instance}->{config},
                                            userid => $user,
@@ -553,18 +553,18 @@ sub test_deliver_fileinto_dot
     $imaptalk->create($target)
          or die "Cannot create $target: $@";
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto"];
 fileinto "$target";
 EOF
     , username => 'betty.boop');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg1, users => [ $user ]);
 
-    xlog "Check that the message made it to target";
+    xlog $self, "Check that the message made it to target";
     $self->{store}->set_folder($target);
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
@@ -578,13 +578,13 @@ sub XXXtest_shared_delivery_addflag
 {
     my ($self) = @_;
 
-    xlog "Testing setting a flag on a sieve script on a";
-    xlog "shared folder.  Bug 3617 / issue #1453";
+    xlog $self, "Testing setting a flag on a sieve script on a";
+    xlog $self, "shared folder.  Bug 3617 / issue #1453";
 
     my $imaptalk = $self->{store}->get_client();
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Create the target folder";
+    xlog $self, "Create the target folder";
     my $admintalk = $self->{adminstore}->get_client();
     my $target = "shared.departments.cis";
     $admintalk->create($target)
@@ -597,7 +597,7 @@ sub XXXtest_shared_delivery_addflag
         or die "Cannot setacl for \"$target\": $@";
 
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     my $scriptname = 'cosbySweater';
     $self->{instance}->install_sieve_script(<<EOF
 require ["imapflags"];
@@ -610,15 +610,15 @@ EOF
     , username => undef,
     name => $scriptname);
 
-    xlog "Tell the folder to run the sieve script";
+    xlog $self, "Tell the folder to run the sieve script";
     $admintalk->setmetadata($target, "/shared/vendor/cmu/cyrus-imapd/sieve", $scriptname)
         or die "Cannot set metadata: $@";
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "quinoa");
     $self->{instance}->deliver($msg1, users => [], folder => $target);
 
-    xlog "Check that the message made it to target";
+    xlog $self, "Check that the message made it to target";
     $self->{store}->set_folder($target);
     $msg1->set_attribute(flags => [ '\\Recent', '\\Flagged' ]);
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
@@ -630,14 +630,14 @@ sub test_rfc5490_create
 {
     my ($self) = @_;
 
-    xlog "Testing the \"fileinto :create\" syntax";
+    xlog $self, "Testing the \"fileinto :create\" syntax";
 
     my $talk = $self->{store}->get_client();
 
     my $hitfolder = "INBOX.newfolder";
     my $missfolder = "INBOX";
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     my $scriptname = 'lazySusan';
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mailbox"];
@@ -660,7 +660,7 @@ EOF
     my %exp;
     foreach my $case (@cases)
     {
-        xlog "Deliver a message with subject \"$case->{subject}\"";
+        xlog $self, "Deliver a message with subject \"$case->{subject}\"";
         my $msg = $self->{gen}->generate(subject => $case->{subject});
         $msg->set_attribute(uid => $uid{$case->{filedto}});
         $uid{$case->{filedto}}++;
@@ -668,7 +668,7 @@ EOF
         $exp{$case->{filedto}}->{$case->{subject}} = $msg;
     }
 
-    xlog "Check that the messages made it";
+    xlog $self, "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
         $self->{store}->set_folder($folder);
@@ -682,7 +682,7 @@ sub test_rfc5490_mailboxexists
 {
     my ($self) = @_;
 
-    xlog "Testing the \"mailboxexists\" test";
+    xlog $self, "Testing the \"mailboxexists\" test";
 
     my $talk = $self->{store}->get_client();
 
@@ -690,7 +690,7 @@ sub test_rfc5490_mailboxexists
     my $testfolder = "INBOX.testfolder";
     my $missfolder = "INBOX";
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     my $scriptname = 'flatPack';
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mailbox"];
@@ -704,7 +704,7 @@ EOF
 
     my %uid = ($hitfolder => 1, $missfolder => 1);
     my %exp;
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     {
         my $msg = $self->{gen}->generate(subject => "msg1");
         $msg->set_attribute(uid => $uid{$missfolder});
@@ -713,10 +713,10 @@ EOF
         $exp{$missfolder}->{"msg1"} = $msg;
     }
 
-    xlog "Create the test folder";
+    xlog $self, "Create the test folder";
     $talk->create($testfolder);
 
-    xlog "Deliver a message now that the folder exists";
+    xlog $self, "Deliver a message now that the folder exists";
     {
         my $msg = $self->{gen}->generate(subject => "msg2");
         $msg->set_attribute(uid => $uid{$hitfolder});
@@ -725,7 +725,7 @@ EOF
         $exp{$hitfolder}->{"msg2"} = $msg;
     }
 
-    xlog "Check that the messages made it";
+    xlog $self, "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
         $self->{store}->set_folder($folder);
@@ -739,7 +739,7 @@ sub test_rfc5490_mailboxexists_variables
 {
     my ($self) = @_;
 
-    xlog "Testing the \"mailboxexists\" test with variables";
+    xlog $self, "Testing the \"mailboxexists\" test with variables";
 
     my $talk = $self->{store}->get_client();
 
@@ -747,7 +747,7 @@ sub test_rfc5490_mailboxexists_variables
     my $testfolder = "INBOX.testfolder";
     my $missfolder = "INBOX";
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     my $scriptname = 'flatPack';
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mailbox", "variables"];
@@ -763,7 +763,7 @@ EOF
 
     my %uid = ($hitfolder => 1, $missfolder => 1);
     my %exp;
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     {
         my $msg = $self->{gen}->generate(subject => "msg1");
         $msg->set_attribute(uid => $uid{$missfolder});
@@ -772,10 +772,10 @@ EOF
         $exp{$missfolder}->{"msg1"} = $msg;
     }
 
-    xlog "Create the test folder";
+    xlog $self, "Create the test folder";
     $talk->create($testfolder);
 
-    xlog "Deliver a message now that the folder exists";
+    xlog $self, "Deliver a message now that the folder exists";
     {
         my $msg = $self->{gen}->generate(subject => "msg2");
         $msg->set_attribute(uid => $uid{$hitfolder});
@@ -784,7 +784,7 @@ EOF
         $exp{$hitfolder}->{"msg2"} = $msg;
     }
 
-    xlog "Check that the messages made it";
+    xlog $self, "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
         $self->{store}->set_folder($folder);
@@ -798,14 +798,14 @@ sub test_rfc5490_metadata
 {
     my ($self) = @_;
 
-    xlog "Testing the \"metadata\" test";
+    xlog $self, "Testing the \"metadata\" test";
 
     my $talk = $self->{store}->get_client();
 
     my $hitfolder = "INBOX.newfolder";
     my $missfolder = "INBOX";
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mboxmetadata"];
 if metadata "INBOX" "/private/comment" "awesome" {
@@ -818,7 +818,7 @@ EOF
 
     my %uid = ($hitfolder => 1, $missfolder => 1);
     my %exp;
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     {
         my $msg = $self->{gen}->generate(subject => "msg1");
         $msg->set_attribute(uid => $uid{$missfolder});
@@ -827,10 +827,10 @@ EOF
         $exp{$missfolder}->{"msg1"} = $msg;
     }
 
-    xlog "Create the annotation";
+    xlog $self, "Create the annotation";
     $talk->setmetadata("INBOX", "/private/comment", "awesome");
 
-    xlog "Deliver a message now that the folder exists";
+    xlog $self, "Deliver a message now that the folder exists";
     {
         my $msg = $self->{gen}->generate(subject => "msg2");
         $msg->set_attribute(uid => $uid{$hitfolder});
@@ -839,7 +839,7 @@ EOF
         $exp{$hitfolder}->{"msg2"} = $msg;
     }
 
-    xlog "Check that the messages made it";
+    xlog $self, "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
         $self->{store}->set_folder($folder);
@@ -853,14 +853,14 @@ sub test_rfc5490_metadata_matches
 {
     my ($self) = @_;
 
-    xlog "Testing the \"metadata\" test";
+    xlog $self, "Testing the \"metadata\" test";
 
     my $talk = $self->{store}->get_client();
 
     my $hitfolder = "INBOX.newfolder";
     my $missfolder = "INBOX";
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mboxmetadata"];
 if metadata :contains "INBOX" "/private/comment" "awesome" {
@@ -869,14 +869,14 @@ if metadata :contains "INBOX" "/private/comment" "awesome" {
 EOF
     );
 
-    xlog "Set the initial annotation";
+    xlog $self, "Set the initial annotation";
     $talk->setmetadata("INBOX", "/private/comment", "awesomesauce");
 
     $talk->create($hitfolder);
 
     my %uid = ($hitfolder => 1, $missfolder => 1);
     my %exp;
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     {
         my $msg = $self->{gen}->generate(subject => "msg1");
         $msg->set_attribute(uid => $uid{$hitfolder});
@@ -885,10 +885,10 @@ EOF
         $exp{$hitfolder}->{"msg1"} = $msg;
     }
 
-    xlog "Create the annotation";
+    xlog $self, "Create the annotation";
     $talk->setmetadata("INBOX", "/private/comment", "awesome");
 
-    xlog "Deliver a message now that the folder exists";
+    xlog $self, "Deliver a message now that the folder exists";
     {
         my $msg = $self->{gen}->generate(subject => "msg2");
         $msg->set_attribute(uid => $uid{$hitfolder});
@@ -897,7 +897,7 @@ EOF
         $exp{$hitfolder}->{"msg2"} = $msg;
     }
 
-    xlog "Check that the messages made it";
+    xlog $self, "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
         $self->{store}->set_folder($folder);
@@ -911,14 +911,14 @@ sub test_rfc5490_metadataexists
 {
     my ($self) = @_;
 
-    xlog "Testing the \"metadataexists\" test";
+    xlog $self, "Testing the \"metadataexists\" test";
 
     my $talk = $self->{store}->get_client();
 
     my $hitfolder = "INBOX.newfolder";
     my $missfolder = "INBOX";
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mboxmetadata"];
 if metadataexists "INBOX" "/private/magic" {
@@ -931,7 +931,7 @@ EOF
 
     my %uid = ($hitfolder => 1, $missfolder => 1);
     my %exp;
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     {
         my $msg = $self->{gen}->generate(subject => "msg1");
         $msg->set_attribute(uid => $uid{$missfolder});
@@ -940,10 +940,10 @@ EOF
         $exp{$missfolder}->{"msg1"} = $msg;
     }
 
-    xlog "Create the annotation";
+    xlog $self, "Create the annotation";
     $talk->setmetadata("INBOX", "/private/magic", "hello");
 
-    xlog "Deliver a message now that the folder exists";
+    xlog $self, "Deliver a message now that the folder exists";
     {
         my $msg = $self->{gen}->generate(subject => "msg2");
         $msg->set_attribute(uid => $uid{$hitfolder});
@@ -952,7 +952,7 @@ EOF
         $exp{$hitfolder}->{"msg2"} = $msg;
     }
 
-    xlog "Check that the messages made it";
+    xlog $self, "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
         $self->{store}->set_folder($folder);
@@ -966,7 +966,7 @@ sub test_rfc5490_servermetadata
 {
     my ($self) = @_;
 
-    xlog "Testing the \"metadata\" test";
+    xlog $self, "Testing the \"metadata\" test";
 
     my $talk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
@@ -974,7 +974,7 @@ sub test_rfc5490_servermetadata
     my $hitfolder = "INBOX.newfolder";
     my $missfolder = "INBOX";
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "servermetadata"];
 if servermetadata "/shared/magic" "awesome" {
@@ -990,7 +990,7 @@ EOF
 
     my %uid = ($hitfolder => 1, $missfolder => 1);
     my %exp;
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     {
         my $msg = $self->{gen}->generate(subject => "msg1");
         $msg->set_attribute(uid => $uid{$missfolder});
@@ -999,10 +999,10 @@ EOF
         $exp{$missfolder}->{"msg1"} = $msg;
     }
 
-    xlog "Create the annotation";
+    xlog $self, "Create the annotation";
     $admintalk->setmetadata("", "/shared/magic", "awesome");
 
-    xlog "Deliver a message now that the folder exists";
+    xlog $self, "Deliver a message now that the folder exists";
     {
         my $msg = $self->{gen}->generate(subject => "msg2");
         $msg->set_attribute(uid => $uid{$hitfolder});
@@ -1011,7 +1011,7 @@ EOF
         $exp{$hitfolder}->{"msg2"} = $msg;
     }
 
-    xlog "Check that the messages made it";
+    xlog $self, "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
         $self->{store}->set_folder($folder);
@@ -1025,7 +1025,7 @@ sub test_rfc5490_servermetadataexists
 {
     my ($self) = @_;
 
-    xlog "Testing the \"servermetadataexists\" test";
+    xlog $self, "Testing the \"servermetadataexists\" test";
 
     my $talk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
@@ -1033,7 +1033,7 @@ sub test_rfc5490_servermetadataexists
     my $hitfolder = "INBOX.newfolder";
     my $missfolder = "INBOX";
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "servermetadata"];
 if servermetadataexists ["/shared/magic", "/shared/moo"] {
@@ -1047,7 +1047,7 @@ EOF
 
     my %uid = ($hitfolder => 1, $missfolder => 1);
     my %exp;
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     {
         my $msg = $self->{gen}->generate(subject => "msg1");
         $msg->set_attribute(uid => $uid{$missfolder});
@@ -1056,10 +1056,10 @@ EOF
         $exp{$missfolder}->{"msg1"} = $msg;
     }
 
-    xlog "Create the annotation";
+    xlog $self, "Create the annotation";
     $admintalk->setmetadata("", "/shared/moo", "hello");
 
-    xlog "Deliver a message now that the folder exists";
+    xlog $self, "Deliver a message now that the folder exists";
     {
         my $msg = $self->{gen}->generate(subject => "msg2");
         $msg->set_attribute(uid => $uid{$hitfolder});
@@ -1068,7 +1068,7 @@ EOF
         $exp{$hitfolder}->{"msg2"} = $msg;
     }
 
-    xlog "Check that the messages made it";
+    xlog $self, "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
         $self->{store}->set_folder($folder);
@@ -1082,14 +1082,14 @@ sub test_variables_basic
 {
     my ($self) = @_;
 
-    xlog "Actually create the target folder";
+    xlog $self, "Actually create the target folder";
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.target");
     $imaptalk->create("INBOX.target.Folder1");
     $imaptalk->create("INBOX.target.Folder2");
 
-    xlog "Install a sieve script filing all mail into a nonexistant folder";
+    xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "variables"];
 set "folder" "target";
@@ -1101,7 +1101,7 @@ fileinto "INBOX.\${folder}";
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
 
     # should go in Folder1
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
@@ -1138,10 +1138,10 @@ sub test_sieve_setflag
 {
     my ($self) = @_;
 
-    xlog "Actually create the target folder";
+    xlog $self, "Actually create the target folder";
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "Install a sieve script filing all mail into a nonexistant folder";
+    xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "imapflags"];
 if header :matches "Subject" "Message 2" {
@@ -1150,7 +1150,7 @@ if header :matches "Subject" "Message 2" {
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
 
     # should go in Folder1
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
@@ -1179,14 +1179,14 @@ sub test_variables_regex
 {
     my ($self) = @_;
 
-    xlog "Actually create the target folder";
+    xlog $self, "Actually create the target folder";
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.target");
     $imaptalk->create("INBOX.target.Folder1");
     $imaptalk->create("INBOX.target.Folder2");
 
-    xlog "Install a sieve script filing all mail into a nonexistant folder";
+    xlog $self, "Install a sieve script filing all mail into a nonexistant folder";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "variables", "regex"];
 set "folder" "target";
@@ -1198,7 +1198,7 @@ fileinto "INBOX.\${folder}";
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
 
     # should go in Folder1
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
@@ -1234,7 +1234,7 @@ sub test_nested_tests_and_discard
 {
     my ($self) = @_;
 
-    xlog "Install a sieve script discarding all mail";
+    xlog $self, "Install a sieve script discarding all mail";
     $self->{instance}->install_sieve_script(<<EOF
 if anyof (false,
           allof (not false,
@@ -1246,7 +1246,7 @@ if anyof (false,
 EOF
     );
 
-    xlog "Attempt to deliver a message";
+    xlog $self, "Attempt to deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg1);
 
@@ -1262,7 +1262,7 @@ sub test_editheader
 {
     my ($self) = @_;
 
-    xlog "Install a sieve script with editheader actions";
+    xlog $self, "Install a sieve script with editheader actions";
     $self->{instance}->install_sieve_script(<<EOF
 require ["editheader", "index"];
 addheader "X-Cassandane-Test" "prepend1";
@@ -1278,7 +1278,7 @@ deleteheader "X-Cassandane-Test2";
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg1);
 
@@ -1298,7 +1298,7 @@ sub test_duplicate
 {
     my ($self) = @_;
 
-    xlog "Install a sieve script with a duplicate check";
+    xlog $self, "Install a sieve script with a duplicate check";
     $self->{instance}->install_sieve_script(<<EOF
 require ["duplicate", "variables"];
 if allof (header :matches "subject" "ALERT: *",
@@ -1308,28 +1308,28 @@ if allof (header :matches "subject" "ALERT: *",
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     # This message sets the duplicate tracking entry
     my $msg1 = $self->{gen}->generate(subject => "ALERT: server down");
     $self->{instance}->deliver($msg1);
 
-    xlog "Deliver second message";
+    xlog $self, "Deliver second message";
     # This message should be discarded
     my $msg2 = $self->{gen}->generate(subject => "ALERT: server down");
     $self->{instance}->deliver($msg2);
 
-    xlog "Deliver third message";
+    xlog $self, "Deliver third message";
     # This message should be discarded
     my $msg3 = $self->{gen}->generate(subject => "ALERT: server down");
     $self->{instance}->deliver($msg3);
 
     sleep 3;
-    xlog "Deliver fourth message";
+    xlog $self, "Deliver fourth message";
     # This message should be delivered (after the expire time)
     my $msg4 = $self->{gen}->generate(subject => "ALERT: server down");
     $self->{instance}->deliver($msg4);
 
-    xlog "Deliver fifth message";
+    xlog $self, "Deliver fifth message";
     # This message should be discarded
     my $msg5 = $self->{gen}->generate(subject => "ALERT: server down");
     $self->{instance}->deliver($msg5);
@@ -1346,14 +1346,14 @@ sub test_ereject
 {
     my ($self) = @_;
 
-    xlog "Install a sieve script rejecting all mail";
+    xlog $self, "Install a sieve script rejecting all mail";
     $self->{instance}->install_sieve_script(<<EOF
 require ["ereject"];
 ereject "Go away!";
 EOF
     );
 
-    xlog "Attempt to deliver a message";
+    xlog $self, "Attempt to deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     my $res = $self->{instance}->deliver($msg1);
 
@@ -1372,7 +1372,7 @@ sub test_specialuse_exists
 {
     my ($self) = @_;
 
-    xlog "Testing the \"specialuse_exists\" test";
+    xlog $self, "Testing the \"specialuse_exists\" test";
 
     my $talk = $self->{store}->get_client();
 
@@ -1380,7 +1380,7 @@ sub test_specialuse_exists
     my $testfolder = "INBOX.testfolder";
     my $missfolder = "INBOX";
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     my $scriptname = 'flatPack';
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "special-use"];
@@ -1394,7 +1394,7 @@ EOF
 
     my %uid = ($hitfolder => 1, $missfolder => 1);
     my %exp;
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     {
         my $msg = $self->{gen}->generate(subject => "msg1");
         $msg->set_attribute(uid => $uid{$missfolder});
@@ -1403,10 +1403,10 @@ EOF
         $exp{$missfolder}->{"msg1"} = $msg;
     }
 
-    xlog "Create the test folder";
+    xlog $self, "Create the test folder";
     $talk->create($testfolder, "(USE (\\Junk))");
 
-    xlog "Deliver a message now that the folder exists";
+    xlog $self, "Deliver a message now that the folder exists";
     {
         my $msg = $self->{gen}->generate(subject => "msg2");
         $msg->set_attribute(uid => $uid{$hitfolder});
@@ -1415,7 +1415,7 @@ EOF
         $exp{$hitfolder}->{"msg2"} = $msg;
     }
 
-    xlog "Check that the messages made it";
+    xlog $self, "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
         $self->{store}->set_folder($folder);
@@ -1429,12 +1429,12 @@ sub test_specialuse
 {
     my ($self) = @_;
 
-    xlog "Testing the \":specialuse\" argument";
+    xlog $self, "Testing the \":specialuse\" argument";
 
     my $hitfolder = "INBOX.newfolder";
     my $missfolder = "INBOX";
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     my $scriptname = 'flatPack';
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "special-use"];
@@ -1442,15 +1442,15 @@ fileinto :specialuse "\\\\Junk" "$missfolder";
 EOF
     );
 
-    xlog "Create the hit folder";
+    xlog $self, "Create the hit folder";
     my $talk = $self->{store}->get_client();
     $talk->create($hitfolder, "(USE (\\Junk))");
 
-    xlog "Deliver a message now that the folder exists";
+    xlog $self, "Deliver a message now that the folder exists";
     my $msg = $self->{gen}->generate(subject => "msg1");
     $self->{instance}->deliver($msg);
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $talk->select($hitfolder);
     $self->assert_num_equals(1, $talk->get_response_code('exists'));
 }
@@ -1461,11 +1461,11 @@ sub test_specialuse_create
 {
     my ($self) = @_;
 
-    xlog "Testing the \":specialuse\" + \":create\" arguments";
+    xlog $self, "Testing the \":specialuse\" + \":create\" arguments";
 
     my $hitfolder = "INBOX.newfolder";
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     my $scriptname = 'flatPack';
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "special-use", "mailbox"];
@@ -1473,11 +1473,11 @@ fileinto :specialuse "\\\\Junk" :create "$hitfolder";
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg = $self->{gen}->generate(subject => "msg1");
     $self->{instance}->deliver($msg);
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     my $talk = $self->{store}->get_client();
     $talk->select($hitfolder);
     $self->assert_num_equals(1, $talk->get_response_code('exists'));
@@ -1491,7 +1491,7 @@ sub test_vacation_with_fcc
 
     my $target = "INBOX.Sent";
 
-    xlog "Install a sieve script with vacation action that uses :fcc";
+    xlog $self, "Install a sieve script with vacation action that uses :fcc";
     $self->{instance}->install_sieve_script(<<'EOF'
 require ["vacation", "fcc"];
 
@@ -1502,20 +1502,20 @@ I am out of the office today. I will answer your email as soon as I can.
 EOF
     );
 
-    xlog "Create the target folder";
+    xlog $self, "Create the target folder";
     my $talk = $self->{store}->get_client();
     $talk->create($target, "(USE (\\Sent))");
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1",
                                       to => Cassandane::Address->new(localpart => 'cassandane', domain => 'example.com'));
     $self->{instance}->deliver($msg1);
 
-    xlog "Check that a copy of the auto-reply message made it";
+    xlog $self, "Check that a copy of the auto-reply message made it";
     $talk->select($target);
     $self->assert_num_equals(1, $talk->get_response_code('exists'));
 
-    xlog "Check that the message is an auto-reply";
+    xlog $self, "Check that the message is an auto-reply";
     my $res = $talk->fetch(1, 'rfc822');
     my $msg2 = $res->{1}->{rfc822};
 
@@ -1533,7 +1533,7 @@ sub test_github_issue_complex_variables
 {
     my ($self) = @_;
 
-    xlog "Install a sieve script with complex variable work";
+    xlog $self, "Install a sieve script with complex variable work";
     $self->{instance}->install_sieve_script(<<'EOF');
 require ["fileinto", "reject", "vacation", "notify", "envelope", "body", "relational", "regex", "subaddress", "copy", "mailbox", "mboxmetadata", "servermetadata", "date", "index", "comparator-i;ascii-numeric", "variables", "imap4flags", "editheader", "duplicate", "vacation-seconds"];
 
@@ -1616,12 +1616,12 @@ X-GitHub-Reason: subscribed
 
 foo bar
 EOF
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = Cassandane::Message->new(raw => $raw);
     $self->{instance}->deliver($msg1);
 
     # if there's a delivery failure, it will be in the Inbox
-    xlog "Check there there are no messages in the Inbox";
+    xlog $self, "Check there there are no messages in the Inbox";
     my $talk = $self->{store}->get_client();
     $talk->select("INBOX");
     $self->assert_num_equals(0, $talk->get_response_code('exists'));
@@ -1636,7 +1636,7 @@ sub test_discard_match_on_body_raw
 {
     my ($self) = @_;
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["body"];
 
@@ -1762,7 +1762,7 @@ END:VEVENT
 END:VCALENDAR
 ------=_Part_91374_1856076643.1527870431792--
 EOF
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = Cassandane::Message->new(raw => $raw);
     $self->{instance}->deliver($msg1);
 
@@ -1777,7 +1777,7 @@ sub test_discard_match_on_body_text
 {
     my ($self) = @_;
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["body"];
 
@@ -1903,7 +1903,7 @@ END:VEVENT
 END:VCALENDAR
 ------=_Part_91374_1856076643.1527870431792--
 EOF
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = Cassandane::Message->new(raw => $raw);
     $self->{instance}->deliver($msg1);
 
@@ -1919,7 +1919,7 @@ sub test_fileinto_mailboxidexists
 {
     my ($self) = @_;
 
-    xlog "Testing the \"mailboxidexists\" test";
+    xlog $self, "Testing the \"mailboxidexists\" test";
 
     my $talk = $self->{store}->get_client();
 
@@ -1928,7 +1928,7 @@ sub test_fileinto_mailboxidexists
 
     my $testfolder = "INBOX.testfolder";
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     my $scriptname = 'flatPack';
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mailboxid"];
@@ -1942,7 +1942,7 @@ EOF
 
     my %uid = ($hitfolder => 1, $missfolder => 1);
     my %exp;
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     {
         my $msg = $self->{gen}->generate(subject => "msg1");
         $msg->set_attribute(uid => $uid{$missfolder});
@@ -1951,7 +1951,7 @@ EOF
         $exp{$missfolder}->{"msg1"} = $msg;
     }
 
-    xlog "Create the test folder";
+    xlog $self, "Create the test folder";
     $talk->create($testfolder);
     my $res = $talk->status($testfolder, ['mailboxid']);
     my $id = $res->{mailboxid}[0];
@@ -1964,7 +1964,7 @@ if mailboxidexists "$id"  {
 EOF
     );
 
-    xlog "Deliver a message now that the folder exists";
+    xlog $self, "Deliver a message now that the folder exists";
     {
         my $msg = $self->{gen}->generate(subject => "msg2");
         $msg->set_attribute(uid => $uid{$hitfolder});
@@ -1973,7 +1973,7 @@ EOF
         $exp{$hitfolder}->{"msg2"} = $msg;
     }
 
-    xlog "Check that the messages made it";
+    xlog $self, "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
         $self->{store}->set_folder($folder);
@@ -1987,14 +1987,14 @@ sub test_fileinto_mailboxid
 {
     my ($self) = @_;
 
-    xlog "Testing the \"mailboxid\" action";
+    xlog $self, "Testing the \"mailboxid\" action";
 
     my $talk = $self->{store}->get_client();
 
     my $hitfolder = "INBOX.newfolder";
     my $missfolder = "INBOX";
 
-    xlog "Install the sieve script";
+    xlog $self, "Install the sieve script";
     my $scriptname = 'flatPack';
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "mailboxid"];
@@ -2007,7 +2007,7 @@ EOF
 
     my %uid = ($hitfolder => 1, $missfolder => 1);
     my %exp;
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     {
         my $msg = $self->{gen}->generate(subject => "msg1");
         $msg->set_attribute(uid => $uid{$missfolder});
@@ -2025,7 +2025,7 @@ fileinto :mailboxid "$id" "INBOX";
 EOF
     );
 
-    xlog "Deliver a message now that the folder exists";
+    xlog $self, "Deliver a message now that the folder exists";
     {
         my $msg = $self->{gen}->generate(subject => "msg2");
         $msg->set_attribute(uid => $uid{$hitfolder});
@@ -2034,7 +2034,7 @@ EOF
         $exp{$hitfolder}->{"msg2"} = $msg;
     }
 
-    xlog "Check that the messages made it";
+    xlog $self, "Check that the messages made it";
     foreach my $folder (keys %exp)
     {
         $self->{store}->set_folder($folder);
@@ -2049,16 +2049,16 @@ sub test_encoded_char_variable_in_mboxname
 
     my $target = "INBOX.\N{U+2217}";
 
-    xlog "Testing encoded-character in a mailbox name";
+    xlog $self, "Testing encoded-character in a mailbox name";
 
-    xlog "Actually create the target folder";
+    xlog $self, "Actually create the target folder";
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create($target)
          or die "Cannot create $target: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Install script";
+    xlog $self, "Install script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "encoded-character", "variables"];
 set "star" "\${unicode:2217}";
@@ -2066,11 +2066,11 @@ fileinto "INBOX.\${star}";
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg1);
 
-    xlog "Check that the message made it to the target";
+    xlog $self, "Check that the message made it to the target";
     $self->{store}->set_folder($target);
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
@@ -2082,27 +2082,27 @@ sub test_utf8_mboxname
 
     my $target = "INBOX.A & B";
 
-    xlog "Testing '&' in a mailbox name";
+    xlog $self, "Testing '&' in a mailbox name";
 
-    xlog "Actually create the target folder";
+    xlog $self, "Actually create the target folder";
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create($target)
          or die "Cannot create $target: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Install script";
+    xlog $self, "Install script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["fileinto", "encoded-character"];
 fileinto "INBOX.A & B";
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg1);
 
-    xlog "Check that the message made it to the target";
+    xlog $self, "Check that the message made it to the target";
     $self->{store}->set_folder($target);
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
@@ -2115,13 +2115,13 @@ sub test_snooze
     my $snoozed = "INBOX.snoozed";
     my $awakened = "INBOX.awakened";
 
-    xlog "Create the snoozed folder";
+    xlog $self, "Create the snoozed folder";
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create($snoozed, "(USE (\\Snoozed))");
     $self->assert_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "Create the awakened folder";
+    xlog $self, "Create the awakened folder";
     $imaptalk->create($awakened)
          or die "Cannot create $awakened: $@";
     $self->{store}->set_fetch_attributes(qw(uid flags));
@@ -2131,7 +2131,7 @@ sub test_snooze
     $maildate->add(DateTime::Duration->new(minutes => 1));
     my $timestr = $maildate->strftime('%H:%M');
 
-    xlog "Install script";
+    xlog $self, "Install script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["x-cyrus-snooze"];
 snooze :mailbox "$awakened" :addflags [ "\\\\Flagged", "\$awakened" ] "$timestr";
@@ -2139,19 +2139,19 @@ snooze :mailbox "$awakened" :addflags [ "\\\\Flagged", "\$awakened" ] "$timestr"
 EOF
     );
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg1);
 
-    xlog "Check that the message made it to the snoozed folder";
+    xlog $self, "Check that the message made it to the snoozed folder";
     $self->{store}->set_folder($snoozed);
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 
-    xlog "Trigger re-delivery of snoozed email";
+    xlog $self, "Trigger re-delivery of snoozed email";
     $self->{instance}->run_command({ cyrus => 1 },
                                    'calalarmd', '-t' => $maildate->epoch() + 90 );
 
-    xlog "Check that the message made it to the awakened folder";
+    xlog $self, "Check that the message made it to the awakened folder";
     $self->{store}->set_folder($awakened);
     $msg1->set_attribute(flags => [ '\\Recent', '\\Flagged', '$awakened' ]);
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);

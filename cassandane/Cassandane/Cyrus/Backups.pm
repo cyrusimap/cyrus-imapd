@@ -81,7 +81,7 @@ sub do_backup
     if (defined $users) {
         $users = [ $users ] if not ref $users;
         die "users is not an array reference" if ref $users ne 'ARRAY';
-        xlog "backing up users: @{$users}";
+        xlog $self, "backing up users: @{$users}";
         $self->{instance}->run_command(
             { cyrus => 1},
             qw(sync_client -vv -n backup -u), @{$users});
@@ -90,14 +90,14 @@ sub do_backup
     if (defined $mailboxes) {
         $mailboxes = [ $mailboxes ] if not ref $mailboxes;
         die "mailboxes is not an array reference" if ref $mailboxes ne 'ARRAY';
-        xlog "backing up mailboxes: @{$mailboxes}";
+        xlog $self, "backing up mailboxes: @{$mailboxes}";
         $self->{instance}->run_command(
             { cyrus => 1 },
             qw(sync_client -vv -n backup -m), @{$mailboxes});
     }
 
     if (not defined $users and not defined $mailboxes) {
-        xlog "backing up all users";
+        xlog $self, "backing up all users";
         # n.b. this does not include shared mailboxes! see sync_client(8)
         $self->{instance}->run_command(
             { cyrus => 1 },

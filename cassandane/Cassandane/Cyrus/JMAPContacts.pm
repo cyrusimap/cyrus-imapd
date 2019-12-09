@@ -139,11 +139,11 @@ sub test_contact_changes
 
     my $jmap = $self->{jmap};
 
-    xlog "get contacts";
+    xlog $self, "get contacts";
     my $res = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     my $state = $res->[0][1]{state};
 
-    xlog "get contact updates";
+    xlog $self, "get contact updates";
     $res = $jmap->CallMethods([['Contact/changes', {
                     sinceState => $state,
                     addressbookId => "Default",
@@ -152,14 +152,14 @@ sub test_contact_changes
     $self->assert_str_equals($state, $res->[0][1]{newState});
     $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
 
-    xlog "create contact 1";
+    xlog $self, "create contact 1";
     $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id1 = $res->[0][1]{created}{"1"}{id};
 
-    xlog "get contact updates";
+    xlog $self, "get contact updates";
     $res = $jmap->CallMethods([['Contact/changes', {
                     sinceState => $state
                 }, "R2"]]);
@@ -174,14 +174,14 @@ sub test_contact_changes
     my $oldState = $state;
     $state = $res->[0][1]{newState};
 
-    xlog "create contact 2";
+    xlog $self, "create contact 2";
     $res = $jmap->CallMethods([['Contact/set', {create => {"2" => {firstName => "second", lastName => "prev"}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
-    xlog "get contact updates (since last change)";
+    xlog $self, "get contact updates (since last change)";
     $res = $jmap->CallMethods([['Contact/changes', {
                     sinceState => $state
                 }, "R2"]]);
@@ -194,7 +194,7 @@ sub test_contact_changes
     $self->assert_str_equals($id2, $res->[0][1]{created}[0]);
     $state = $res->[0][1]{newState};
 
-    xlog "get contact updates (in bulk)";
+    xlog $self, "get contact updates (in bulk)";
     $res = $jmap->CallMethods([['Contact/changes', {
                     sinceState => $oldState
                 }, "R2"]]);
@@ -205,7 +205,7 @@ sub test_contact_changes
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
 
-    xlog "get contact updates from initial state (maxChanges=1)";
+    xlog $self, "get contact updates from initial state (maxChanges=1)";
     $res = $jmap->CallMethods([['Contact/changes', {
                     sinceState => $oldState,
                     maxChanges => 1
@@ -219,7 +219,7 @@ sub test_contact_changes
     $self->assert_str_equals($id1, $res->[0][1]{created}[0]);
     my $interimState = $res->[0][1]{newState};
 
-    xlog "get contact updates from interim state (maxChanges=10)";
+    xlog $self, "get contact updates from interim state (maxChanges=10)";
     $res = $jmap->CallMethods([['Contact/changes', {
                     sinceState => $interimState,
                     maxChanges => 10
@@ -233,7 +233,7 @@ sub test_contact_changes
     $self->assert_str_equals($id2, $res->[0][1]{created}[0]);
     $state = $res->[0][1]{newState};
 
-    xlog "destroy contact 1, update contact 2";
+    xlog $self, "destroy contact 1, update contact 2";
     $res = $jmap->CallMethods([['Contact/set', {
                     destroy => [$id1],
                     update => {$id2 => {firstName => "foo"}}
@@ -242,7 +242,7 @@ sub test_contact_changes
     $self->assert_str_equals('Contact/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
 
-    xlog "get contact updates";
+    xlog $self, "get contact updates";
     $res = $jmap->CallMethods([['Contact/changes', {
                     sinceState => $state
                 }, "R2"]]);
@@ -255,7 +255,7 @@ sub test_contact_changes
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($id1, $res->[0][1]{destroyed}[0]);
 
-    xlog "destroy contact 2";
+    xlog $self, "destroy contact 2";
     $res = $jmap->CallMethods([['Contact/set', {destroy => [$id2]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
@@ -272,7 +272,7 @@ sub test_contact_changes_shared
     my $admintalk = $self->{adminstore}->get_client();
     my $service = $self->{instance}->get_service("http");
 
-    xlog "create shared account";
+    xlog $self, "create shared account";
     $admintalk->create("user.manifold");
 
     my $mantalk = Net::CardDAVTalk->new(
@@ -287,14 +287,14 @@ sub test_contact_changes_shared
 
     $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
     $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
-    xlog "share to user";
+    xlog $self, "share to user";
     $admintalk->setacl("user.manifold.#addressbooks.Default", "cassandane" => 'lrswipkxtecdn') or die;
 
-    xlog "get contacts";
+    xlog $self, "get contacts";
     my $res = $jmap->CallMethods([['Contact/get', { accountId => 'manifold' }, "R2"]]);
     my $state = $res->[0][1]{state};
 
-    xlog "get contact updates";
+    xlog $self, "get contact updates";
     $res = $jmap->CallMethods([['Contact/changes', {
                     accountId => 'manifold',
                     sinceState => $state
@@ -303,7 +303,7 @@ sub test_contact_changes_shared
     $self->assert_str_equals($state, $res->[0][1]{newState});
     $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
 
-    xlog "create contact 1";
+    xlog $self, "create contact 1";
     $res = $jmap->CallMethods([['Contact/set', {
                     accountId => 'manifold',
                     create => {"1" => {firstName => "first", lastName => "last"}}
@@ -313,7 +313,7 @@ sub test_contact_changes_shared
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id1 = $res->[0][1]{created}{"1"}{id};
 
-    xlog "get contact updates";
+    xlog $self, "get contact updates";
     $res = $jmap->CallMethods([['Contact/changes', {
                     accountId => 'manifold',
                     sinceState => $state
@@ -329,7 +329,7 @@ sub test_contact_changes_shared
     my $oldState = $state;
     $state = $res->[0][1]{newState};
 
-    xlog "create contact 2";
+    xlog $self, "create contact 2";
     $res = $jmap->CallMethods([['Contact/set', {
                     accountId => 'manifold',
                     create => {"2" => {firstName => "second", lastName => "prev"}}
@@ -339,7 +339,7 @@ sub test_contact_changes_shared
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
-    xlog "get contact updates (since last change)";
+    xlog $self, "get contact updates (since last change)";
     $res = $jmap->CallMethods([['Contact/changes', {
                     accountId => 'manifold',
                     sinceState => $state
@@ -353,7 +353,7 @@ sub test_contact_changes_shared
     $self->assert_str_equals($id2, $res->[0][1]{created}[0]);
     $state = $res->[0][1]{newState};
 
-    xlog "get contact updates (in bulk)";
+    xlog $self, "get contact updates (in bulk)";
     $res = $jmap->CallMethods([['Contact/changes', {
                     accountId => 'manifold',
                     sinceState => $oldState
@@ -365,7 +365,7 @@ sub test_contact_changes_shared
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
 
-    xlog "get contact updates from initial state (maxChanges=1)";
+    xlog $self, "get contact updates from initial state (maxChanges=1)";
     $res = $jmap->CallMethods([['Contact/changes', {
                     accountId => 'manifold',
                     sinceState => $oldState,
@@ -380,7 +380,7 @@ sub test_contact_changes_shared
     $self->assert_str_equals($id1, $res->[0][1]{created}[0]);
     my $interimState = $res->[0][1]{newState};
 
-    xlog "get contact updates from interim state (maxChanges=10)";
+    xlog $self, "get contact updates from interim state (maxChanges=10)";
     $res = $jmap->CallMethods([['Contact/changes', {
                     accountId => 'manifold',
                     sinceState => $interimState,
@@ -395,7 +395,7 @@ sub test_contact_changes_shared
     $self->assert_str_equals($id2, $res->[0][1]{created}[0]);
     $state = $res->[0][1]{newState};
 
-    xlog "destroy contact 1, update contact 2";
+    xlog $self, "destroy contact 1, update contact 2";
     $res = $jmap->CallMethods([['Contact/set', {
                     accountId => 'manifold',
                     destroy => [$id1],
@@ -405,7 +405,7 @@ sub test_contact_changes_shared
     $self->assert_str_equals('Contact/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
 
-    xlog "get contact updates";
+    xlog $self, "get contact updates";
     $res = $jmap->CallMethods([['Contact/changes', {
                     accountId => 'manifold',
                     sinceState => $state
@@ -419,7 +419,7 @@ sub test_contact_changes_shared
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($id1, $res->[0][1]{destroyed}[0]);
 
-    xlog "destroy contact 2";
+    xlog $self, "destroy contact 2";
     $res = $jmap->CallMethods([['Contact/set', {
                     accountId => 'manifold',
                     destroy => [$id2]
@@ -436,7 +436,7 @@ sub test_contact_set_nickname
 
     my $jmap = $self->{jmap};
 
-    xlog "create contacts";
+    xlog $self, "create contacts";
     my $res = $jmap->CallMethods([['Contact/set', {create => {
                         "1" => { firstName => "foo", lastName => "last1", nickname => "" },
                         "2" => { firstName => "bar", lastName => "last2", nickname => "string" },
@@ -463,7 +463,7 @@ sub test_contact_set_invalid
 
     my $jmap = $self->{jmap};
 
-    xlog "create contact with invalid properties";
+    xlog $self, "create contact with invalid properties";
     my $res = $jmap->CallMethods([
         ['Contact/set', {
             create => {
@@ -480,7 +480,7 @@ sub test_contact_set_invalid
     $self->assert_not_null($notCreated);
     $self->assert_num_equals(1, scalar @{$notCreated->{properties}});
 
-    xlog "create contacts";
+    xlog $self, "create contacts";
     $res = $jmap->CallMethods([
         ['Contact/set', {
             create => {
@@ -493,11 +493,11 @@ sub test_contact_set_invalid
     my $contact = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($contact);
 
-    xlog "get contact x-href";
+    xlog $self, "get contact x-href";
     $res = $jmap->CallMethods([['Contact/get', {}, "R3"]]);
     my $href = $res->[0][1]{list}[0]{"x-href"};
 
-    xlog "update contact with invalid properties";
+    xlog $self, "update contact with invalid properties";
     $res = $jmap->CallMethods([['Contact/set', {
         update => {
             $contact => {
@@ -512,7 +512,7 @@ sub test_contact_set_invalid
     $self->assert_not_null($notUpdated);
     $self->assert_num_equals(2, scalar @{$notUpdated->{properties}});
 
-    xlog "update contact with server-set properties";
+    xlog $self, "update contact with server-set properties";
     $res = $jmap->CallMethods([['Contact/set', {
         update => {
             $contact => {
@@ -533,7 +533,7 @@ sub test_contactgroup_set
 
     my $jmap = $self->{jmap};
 
-    xlog "create contacts";
+    xlog $self, "create contacts";
     my $res = $jmap->CallMethods([['Contact/set', {create => {
                         "1" => { firstName => "foo", lastName => "last1" },
                         "2" => { firstName => "bar", lastName => "last2" }
@@ -541,7 +541,7 @@ sub test_contactgroup_set
     my $contact1 = $res->[0][1]{created}{"1"}{id};
     my $contact2 = $res->[0][1]{created}{"2"}{id};
 
-    xlog "create contact group with no contact ids";
+    xlog $self, "create contact group with no contact ids";
     $res = $jmap->CallMethods([['ContactGroup/set', {create => {
                         "1" => {name => "group1"}
                     }}, "R2"]]);
@@ -550,7 +550,7 @@ sub test_contactgroup_set
     $self->assert_str_equals('R2', $res->[0][2]);
     my $id = $res->[0][1]{created}{"1"}{id};
 
-    xlog "get contact group $id";
+    xlog $self, "get contact group $id";
     $res = $jmap->CallMethods([['ContactGroup/get', { ids => [$id] }, "R3"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('ContactGroup/get', $res->[0][0]);
@@ -559,7 +559,7 @@ sub test_contactgroup_set
     $self->assert(exists $res->[0][1]{list}[0]{contactIds});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}[0]{contactIds}});
 
-    xlog "update contact group with invalid contact ids";
+    xlog $self, "update contact group with invalid contact ids";
     $res = $jmap->CallMethods([['ContactGroup/set', {update => {
                         $id => {name => "group1", contactIds => [$contact1, $contact2, 255]}
                     }}, "R4"]]);
@@ -569,13 +569,13 @@ sub test_contactgroup_set
     $self->assert_str_equals('contactIds[2]', $res->[0][1]{notUpdated}{$id}{properties}[0]);
     $self->assert_str_equals('R4', $res->[0][2]);
 
-    xlog "get contact group $id";
+    xlog $self, "get contact group $id";
     $res = $jmap->CallMethods([['ContactGroup/get', { ids => [$id] }, "R3"]]);
     $self->assert(exists $res->[0][1]{list}[0]{contactIds});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}[0]{contactIds}});
 
 
-    xlog "update contact group with valid contact ids";
+    xlog $self, "update contact group with valid contact ids";
     $res = $jmap->CallMethods([['ContactGroup/set', {update => {
                         $id => {name => "group1", contactIds => [$contact1, $contact2]}
                     }}, "R4"]]);
@@ -583,7 +583,7 @@ sub test_contactgroup_set
     $self->assert_str_equals('ContactGroup/set', $res->[0][0]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact group $id";
+    xlog $self, "get contact group $id";
     $res = $jmap->CallMethods([['ContactGroup/get', { ids => [$id] }, "R3"]]);
     $self->assert(exists $res->[0][1]{list}[0]{contactIds});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{list}[0]{contactIds}});
@@ -598,7 +598,7 @@ sub test_contact_query
 
     my $jmap = $self->{jmap};
 
-    xlog "create contacts";
+    xlog $self, "create contacts";
     my $res = $jmap->CallMethods([['Contact/set', {create => {
                         "1" =>
                         {
@@ -656,7 +656,7 @@ sub test_contact_query
     my $id3 = $res->[0][1]{created}{"3"}{id};
     my $id4 = $res->[0][1]{created}{"4"}{id};
 
-    xlog "create contact groups";
+    xlog $self, "create contact groups";
     $res = $jmap->CallMethods([['ContactGroup/set', {create => {
                         "1" => {name => "group1", contactIds => [$id1, $id2]},
                         "2" => {name => "group2", contactIds => [$id3]},
@@ -670,13 +670,13 @@ sub test_contact_query
     my $group2 = $res->[0][1]{created}{"2"}{id};
     my $group3 = $res->[0][1]{created}{"3"}{id};
 
-    xlog "get unfiltered contact list";
+    xlog $self, "get unfiltered contact list";
     $res = $jmap->CallMethods([ ['Contact/query', { }, "R1"] ]);
 
     $self->assert_num_equals(4, $res->[0][1]{total});
     $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by firstName";
+    xlog $self, "filter by firstName";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { firstName => "foo" }
                 }, "R1"] ]);
@@ -684,14 +684,14 @@ sub test_contact_query
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
-    xlog "filter by lastName";
+    xlog $self, "filter by lastName";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { lastName => "last" }
                 }, "R1"] ]);
     $self->assert_num_equals(4, $res->[0][1]{total});
     $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by firstName and lastName (one filter)";
+    xlog $self, "filter by firstName and lastName (one filter)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { firstName => "bam", lastName => "last" }
                 }, "R1"] ]);
@@ -699,7 +699,7 @@ sub test_contact_query
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($id4, $res->[0][1]{ids}[0]);
 
-    xlog "filter by firstName and lastName (AND filter)";
+    xlog $self, "filter by firstName and lastName (AND filter)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { operator => "AND", conditions => [{
                                 lastName => "last"
@@ -711,7 +711,7 @@ sub test_contact_query
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($id3, $res->[0][1]{ids}[0]);
 
-    xlog "filter by firstName (OR filter)";
+    xlog $self, "filter by firstName (OR filter)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { operator => "OR", conditions => [{
                                 firstName => "bar"
@@ -722,40 +722,40 @@ sub test_contact_query
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by text";
+    xlog $self, "filter by text";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { text => "some" }
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by email";
+    xlog $self, "filter by email";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { email => "example.com" }
                 }, "R1"] ]);
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by isFlagged (true)";
+    xlog $self, "filter by isFlagged (true)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { isFlagged => JSON::true }
                 }, "R1"] ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($id2, $res->[0][1]{ids}[0]);
 
-    xlog "filter by isFlagged (false)";
+    xlog $self, "filter by isFlagged (false)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { isFlagged => JSON::false }
                 }, "R1"] ]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by inContactGroup";
+    xlog $self, "filter by inContactGroup";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { inContactGroup => [$group1, $group3] }
                 }, "R1"] ]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by inContactGroup and firstName";
+    xlog $self, "filter by inContactGroup and firstName";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     filter => { inContactGroup => [$group1, $group3], firstName => "foo" }
                 }, "R1"] ]);
@@ -774,7 +774,7 @@ sub test_contact_query_shared
     my $admintalk = $self->{adminstore}->get_client();
     my $service = $self->{instance}->get_service("http");
 
-    xlog "create shared account";
+    xlog $self, "create shared account";
     $admintalk->create("user.manifold");
 
     my $mantalk = Net::CardDAVTalk->new(
@@ -789,10 +789,10 @@ sub test_contact_query_shared
 
     $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
     $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
-    xlog "share to user";
+    xlog $self, "share to user";
     $admintalk->setacl("user.manifold.#addressbooks.Default", "cassandane" => 'lrswipkxtecdn') or die;
 
-    xlog "create contacts";
+    xlog $self, "create contacts";
     my $res = $jmap->CallMethods([['Contact/set', {
                     accountId => 'manifold',
                     create => {
@@ -852,7 +852,7 @@ sub test_contact_query_shared
     my $id3 = $res->[0][1]{created}{"3"}{id};
     my $id4 = $res->[0][1]{created}{"4"}{id};
 
-    xlog "create contact groups";
+    xlog $self, "create contact groups";
     $res = $jmap->CallMethods([['ContactGroup/set', {
                     accountId => 'manifold',
                     create => {
@@ -868,15 +868,15 @@ sub test_contact_query_shared
     my $group2 = $res->[0][1]{created}{"2"}{id};
     my $group3 = $res->[0][1]{created}{"3"}{id};
 
-    xlog "get unfiltered contact list";
+    xlog $self, "get unfiltered contact list";
     $res = $jmap->CallMethods([ ['Contact/query', { accountId => 'manifold' }, "R1"] ]);
 
-xlog "check total";
+xlog $self, "check total";
     $self->assert_num_equals(4, $res->[0][1]{total});
-xlog "check ids";
+xlog $self, "check ids";
     $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by firstName";
+    xlog $self, "filter by firstName";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { firstName => "foo" }
@@ -885,7 +885,7 @@ xlog "check ids";
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($id1, $res->[0][1]{ids}[0]);
 
-    xlog "filter by lastName";
+    xlog $self, "filter by lastName";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { lastName => "last" }
@@ -893,7 +893,7 @@ xlog "check ids";
     $self->assert_num_equals(4, $res->[0][1]{total});
     $self->assert_num_equals(4, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by firstName and lastName (one filter)";
+    xlog $self, "filter by firstName and lastName (one filter)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { firstName => "bam", lastName => "last" }
@@ -902,7 +902,7 @@ xlog "check ids";
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($id4, $res->[0][1]{ids}[0]);
 
-    xlog "filter by firstName and lastName (AND filter)";
+    xlog $self, "filter by firstName and lastName (AND filter)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { operator => "AND", conditions => [{
@@ -915,7 +915,7 @@ xlog "check ids";
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($id3, $res->[0][1]{ids}[0]);
 
-    xlog "filter by firstName (OR filter)";
+    xlog $self, "filter by firstName (OR filter)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { operator => "OR", conditions => [{
@@ -927,7 +927,7 @@ xlog "check ids";
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by text";
+    xlog $self, "filter by text";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { text => "some" }
@@ -935,7 +935,7 @@ xlog "check ids";
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by email";
+    xlog $self, "filter by email";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { email => "example.com" }
@@ -943,7 +943,7 @@ xlog "check ids";
     $self->assert_num_equals(2, $res->[0][1]{total});
     $self->assert_num_equals(2, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by isFlagged (true)";
+    xlog $self, "filter by isFlagged (true)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { isFlagged => JSON::true }
@@ -951,21 +951,21 @@ xlog "check ids";
     $self->assert_num_equals(1, scalar @{$res->[0][1]{ids}});
     $self->assert_str_equals($id2, $res->[0][1]{ids}[0]);
 
-    xlog "filter by isFlagged (false)";
+    xlog $self, "filter by isFlagged (false)";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { isFlagged => JSON::false }
                 }, "R1"] ]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by inContactGroup";
+    xlog $self, "filter by inContactGroup";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { inContactGroup => [$group1, $group3] }
                 }, "R1"] ]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]{ids}});
 
-    xlog "filter by inContactGroup and firstName";
+    xlog $self, "filter by inContactGroup and firstName";
     $res = $jmap->CallMethods([ ['Contact/query', {
                     accountId => 'manifold',
                     filter => { inContactGroup => [$group1, $group3], firstName => "foo" }
@@ -981,7 +981,7 @@ sub test_contactgroup_changes
 
     my $jmap = $self->{jmap};
 
-    xlog "create contacts";
+    xlog $self, "create contacts";
     my $res = $jmap->CallMethods([['Contact/set', {create => {
                         "a" => {firstName => "a", lastName => "a"},
                         "b" => {firstName => "b", lastName => "b"},
@@ -996,11 +996,11 @@ sub test_contactgroup_changes
     my $contactC = $res->[0][1]{created}{"c"}{id};
     my $contactD = $res->[0][1]{created}{"d"}{id};
 
-    xlog "get contact groups state";
+    xlog $self, "get contact groups state";
     $res = $jmap->CallMethods([['ContactGroup/get', {}, "R2"]]);
     my $state = $res->[0][1]{state};
 
-    xlog "create contact group 1";
+    xlog $self, "create contact group 1";
     $res = $jmap->CallMethods([['ContactGroup/set', {create => {
                         "1" => {name => "first", contactIds => [$contactA, $contactB]}}}, "R1"]]);
     $self->assert_not_null($res);
@@ -1009,7 +1009,7 @@ sub test_contactgroup_changes
     my $id1 = $res->[0][1]{created}{"1"}{id};
 
 
-    xlog "get contact group updates";
+    xlog $self, "get contact group updates";
     $res = $jmap->CallMethods([['ContactGroup/changes', {
                     sinceState => $state
                 }, "R2"]]);
@@ -1024,7 +1024,7 @@ sub test_contactgroup_changes
     my $oldState = $state;
     $state = $res->[0][1]{newState};
 
-    xlog "create contact group 2";
+    xlog $self, "create contact group 2";
     $res = $jmap->CallMethods([['ContactGroup/set', {create => {
                         "2" => {name => "second", contactIds => [$contactC, $contactD]}}}, "R1"]]);
     $self->assert_not_null($res);
@@ -1032,7 +1032,7 @@ sub test_contactgroup_changes
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
-    xlog "get contact group updates (since last change)";
+    xlog $self, "get contact group updates (since last change)";
     $res = $jmap->CallMethods([['ContactGroup/changes', {
                     sinceState => $state
                 }, "R2"]]);
@@ -1045,7 +1045,7 @@ sub test_contactgroup_changes
     $self->assert_str_equals($id2, $res->[0][1]{created}[0]);
     $state = $res->[0][1]{newState};
 
-    xlog "get contact group updates (in bulk)";
+    xlog $self, "get contact group updates (in bulk)";
     $res = $jmap->CallMethods([['ContactGroup/changes', {
                     sinceState => $oldState
                 }, "R2"]]);
@@ -1056,7 +1056,7 @@ sub test_contactgroup_changes
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
 
-    xlog "get contact group updates from initial state (maxChanges=1)";
+    xlog $self, "get contact group updates from initial state (maxChanges=1)";
     $res = $jmap->CallMethods([['ContactGroup/changes', {
                     sinceState => $oldState,
                     maxChanges => 1
@@ -1070,7 +1070,7 @@ sub test_contactgroup_changes
     $self->assert_str_equals($id1, $res->[0][1]{created}[0]);
     my $interimState = $res->[0][1]{newState};
 
-    xlog "get contact group updates from interim state (maxChanges=10)";
+    xlog $self, "get contact group updates from interim state (maxChanges=10)";
     $res = $jmap->CallMethods([['ContactGroup/changes', {
                     sinceState => $interimState,
                     maxChanges => 10
@@ -1084,7 +1084,7 @@ sub test_contactgroup_changes
     $self->assert_str_equals($id2, $res->[0][1]{created}[0]);
     $state = $res->[0][1]{newState};
 
-    xlog "destroy contact group 1, update contact group 2";
+    xlog $self, "destroy contact group 1, update contact group 2";
     $res = $jmap->CallMethods([['ContactGroup/set', {
                     destroy => [$id1],
                     update => {$id2 => {name => "second (updated)"}}
@@ -1093,7 +1093,7 @@ sub test_contactgroup_changes
     $self->assert_str_equals('ContactGroup/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
 
-    xlog "get contact group updates";
+    xlog $self, "get contact group updates";
     $res = $jmap->CallMethods([['ContactGroup/changes', {
                     sinceState => $state
                 }, "R2"]]);
@@ -1106,7 +1106,7 @@ sub test_contactgroup_changes
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($id1, $res->[0][1]{destroyed}[0]);
 
-    xlog "destroy contact group 2";
+    xlog $self, "destroy contact group 2";
     $res = $jmap->CallMethods([['ContactGroup/set', {destroy => [$id2]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('ContactGroup/set', $res->[0][0]);
@@ -1123,7 +1123,7 @@ sub test_contactgroup_changes_shared
     my $admintalk = $self->{adminstore}->get_client();
     my $service = $self->{instance}->get_service("http");
 
-    xlog "create shared account";
+    xlog $self, "create shared account";
     $admintalk->create("user.manifold");
 
     my $mantalk = Net::CardDAVTalk->new(
@@ -1138,10 +1138,10 @@ sub test_contactgroup_changes_shared
 
     $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
     $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
-    xlog "share to user";
+    xlog $self, "share to user";
     $admintalk->setacl("user.manifold.#addressbooks.Default", "cassandane" => 'lrswipkxtecdn') or die;
 
-    xlog "create contacts";
+    xlog $self, "create contacts";
     my $res = $jmap->CallMethods([['Contact/set', {
                     accountId => 'manifold',
                     create => {
@@ -1158,11 +1158,11 @@ sub test_contactgroup_changes_shared
     my $contactC = $res->[0][1]{created}{"c"}{id};
     my $contactD = $res->[0][1]{created}{"d"}{id};
 
-    xlog "get contact groups state";
+    xlog $self, "get contact groups state";
     $res = $jmap->CallMethods([['ContactGroup/get', { accountId => 'manifold', }, "R2"]]);
     my $state = $res->[0][1]{state};
 
-    xlog "create contact group 1";
+    xlog $self, "create contact group 1";
     $res = $jmap->CallMethods([['ContactGroup/set', {
                     accountId => 'manifold',
                     create => {
@@ -1173,7 +1173,7 @@ sub test_contactgroup_changes_shared
     my $id1 = $res->[0][1]{created}{"1"}{id};
 
 
-    xlog "get contact group updates";
+    xlog $self, "get contact group updates";
     $res = $jmap->CallMethods([['ContactGroup/changes', {
                     accountId => 'manifold',
                     sinceState => $state
@@ -1189,7 +1189,7 @@ sub test_contactgroup_changes_shared
     my $oldState = $state;
     $state = $res->[0][1]{newState};
 
-    xlog "create contact group 2";
+    xlog $self, "create contact group 2";
     $res = $jmap->CallMethods([['ContactGroup/set', {
                     accountId => 'manifold',
                     create => {
@@ -1199,7 +1199,7 @@ sub test_contactgroup_changes_shared
     $self->assert_str_equals('R1', $res->[0][2]);
     my $id2 = $res->[0][1]{created}{"2"}{id};
 
-    xlog "get contact group updates (since last change)";
+    xlog $self, "get contact group updates (since last change)";
     $res = $jmap->CallMethods([['ContactGroup/changes', {
                     accountId => 'manifold',
                     sinceState => $state
@@ -1213,7 +1213,7 @@ sub test_contactgroup_changes_shared
     $self->assert_str_equals($id2, $res->[0][1]{created}[0]);
     $state = $res->[0][1]{newState};
 
-    xlog "get contact group updates (in bulk)";
+    xlog $self, "get contact group updates (in bulk)";
     $res = $jmap->CallMethods([['ContactGroup/changes', {
                     accountId => 'manifold',
                     sinceState => $oldState
@@ -1225,7 +1225,7 @@ sub test_contactgroup_changes_shared
     $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
 
-    xlog "get contact group updates from initial state (maxChanges=1)";
+    xlog $self, "get contact group updates from initial state (maxChanges=1)";
     $res = $jmap->CallMethods([['ContactGroup/changes', {
                     accountId => 'manifold',
                     sinceState => $oldState,
@@ -1240,7 +1240,7 @@ sub test_contactgroup_changes_shared
     $self->assert_str_equals($id1, $res->[0][1]{created}[0]);
     my $interimState = $res->[0][1]{newState};
 
-    xlog "get contact group updates from interim state (maxChanges=10)";
+    xlog $self, "get contact group updates from interim state (maxChanges=10)";
     $res = $jmap->CallMethods([['ContactGroup/changes', {
                     accountId => 'manifold',
                     sinceState => $interimState,
@@ -1255,7 +1255,7 @@ sub test_contactgroup_changes_shared
     $self->assert_str_equals($id2, $res->[0][1]{created}[0]);
     $state = $res->[0][1]{newState};
 
-    xlog "destroy contact group 1, update contact group 2";
+    xlog $self, "destroy contact group 1, update contact group 2";
     $res = $jmap->CallMethods([['ContactGroup/set', {
                     accountId => 'manifold',
                     destroy => [$id1],
@@ -1265,7 +1265,7 @@ sub test_contactgroup_changes_shared
     $self->assert_str_equals('ContactGroup/set', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
 
-    xlog "get contact group updates";
+    xlog $self, "get contact group updates";
     $res = $jmap->CallMethods([['ContactGroup/changes', {
                     accountId => 'manifold',
                     sinceState => $state
@@ -1279,7 +1279,7 @@ sub test_contactgroup_changes_shared
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
     $self->assert_str_equals($id1, $res->[0][1]{destroyed}[0]);
 
-    xlog "destroy contact group 2";
+    xlog $self, "destroy contact group 2";
     $res = $jmap->CallMethods([['ContactGroup/set', {
                     accountId => 'manifold',
                     destroy => [$id2]
@@ -1332,7 +1332,7 @@ sub test_contact_set
     $contact->{"x-hasPhoto"} = JSON::false;
     $contact->{"addressbookId"} = 'Default';
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     my $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
 
     $self->assert_not_null($fetch);
@@ -1341,177 +1341,177 @@ sub test_contact_set
     $contact->{"x-href"} = $fetch->[0][1]{list}[0]{"x-href"};
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
-    xlog "update isFlagged";
+    xlog $self, "update isFlagged";
     $contact->{isFlagged} = JSON::true;
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {isFlagged => JSON::true} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
-    xlog "update prefix";
+    xlog $self, "update prefix";
     $contact->{prefix} = 'foo';
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {prefix => 'foo'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
-    xlog "update suffix";
+    xlog $self, "update suffix";
     $contact->{suffix} = 'bar';
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {suffix => 'bar'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
-    xlog "update nickname";
+    xlog $self, "update nickname";
     $contact->{nickname} = 'nick';
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {nickname => 'nick'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
-    xlog "update birthday (with JMAP datetime error)";
+    xlog $self, "update birthday (with JMAP datetime error)";
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {birthday => '1979-04-01T00:00:00Z'} }}, "R1"]]);
     $self->assert_str_equals("invalidProperties", $res->[0][1]{notUpdated}{$id}{type});
     $self->assert_str_equals("birthday", $res->[0][1]{notUpdated}{$id}{properties}[0]);
 
-    xlog "update birthday";
+    xlog $self, "update birthday";
     $contact->{birthday} = '1979-04-01'; # Happy birthday, El Barto!
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {birthday => '1979-04-01'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
-    xlog "update anniversary (with JMAP datetime error)";
+    xlog $self, "update anniversary (with JMAP datetime error)";
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {anniversary => '1989-12-17T00:00:00Z'} }}, "R1"]]);
     $self->assert_str_equals("invalidProperties", $res->[0][1]{notUpdated}{$id}{type});
     $self->assert_str_equals("anniversary", $res->[0][1]{notUpdated}{$id}{properties}[0]);
 
-    xlog "update anniversary";
+    xlog $self, "update anniversary";
     $contact->{anniversary} = '1989-12-17'; # Happy anniversary, Simpsons!
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {anniversary => '1989-12-17'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
-    xlog "update company";
+    xlog $self, "update company";
     $contact->{company} = 'acme';
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {company => 'acme'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
-    xlog "update department";
+    xlog $self, "update department";
     $contact->{department} = 'looney tunes';
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {department => 'looney tunes'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
-    xlog "update jobTitle";
+    xlog $self, "update jobTitle";
     $contact->{jobTitle} = 'director of everything';
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {jobTitle => 'director of everything'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     # emails
-    xlog "update emails (with missing type error)";
+    xlog $self, "update emails (with missing type error)";
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {
                             emails => [{ value => "acme\@example.com" }]
                         } }}, "R1"]]);
     $self->assert_str_equals("invalidProperties", $res->[0][1]{notUpdated}{$id}{type});
     $self->assert_str_equals("emails[0].type", $res->[0][1]{notUpdated}{$id}{properties}[0]);
 
-    xlog "update emails (with missing value error)";
+    xlog $self, "update emails (with missing value error)";
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {
                             emails => [{ type => "other" }]
                         } }}, "R1"]]);
     $self->assert_str_equals("invalidProperties", $res->[0][1]{notUpdated}{$id}{type});
     $self->assert_str_equals("emails[0].value", $res->[0][1]{notUpdated}{$id}{properties}[0]);
 
-    xlog "update emails";
+    xlog $self, "update emails";
     $contact->{emails} = [{ type => "work", value => "acme\@example.com", isDefault => JSON::true }];
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {
                             emails => [{ type => "work", value => "acme\@example.com" }]
                         } }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     # phones
-    xlog "update phones (with missing type error)";
+    xlog $self, "update phones (with missing type error)";
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {
                             phones => [{ value => "12345678" }]
                         } }}, "R1"]]);
     $self->assert_str_equals("invalidProperties", $res->[0][1]{notUpdated}{$id}{type});
     $self->assert_str_equals("phones[0].type", $res->[0][1]{notUpdated}{$id}{properties}[0]);
 
-    xlog "update phones (with missing value error)";
+    xlog $self, "update phones (with missing value error)";
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {
                             phones => [{ type => "home" }]
                         } }}, "R1"]]);
     $self->assert_str_equals("invalidProperties", $res->[0][1]{notUpdated}{$id}{type});
     $self->assert_str_equals("phones[0].value", $res->[0][1]{notUpdated}{$id}{properties}[0]);
 
-    xlog "update phones";
+    xlog $self, "update phones";
     $contact->{phones} = [{ type => "home", value => "12345678" }];
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {
                             phones => [{ type => "home", value => "12345678" }]
                         } }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     # online
-    xlog "update online (with missing type error)";
+    xlog $self, "update online (with missing type error)";
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {
                             online => [{ value => "http://example.com/me" }]
                         } }}, "R1"]]);
     $self->assert_str_equals("invalidProperties", $res->[0][1]{notUpdated}{$id}{type});
     $self->assert_str_equals("online[0].type", $res->[0][1]{notUpdated}{$id}{properties}[0]);
 
-    xlog "update online (with missing value error)";
+    xlog $self, "update online (with missing value error)";
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {
                             online => [{ type => "uri" }]
                         } }}, "R1"]]);
     $self->assert_str_equals("invalidProperties", $res->[0][1]{notUpdated}{$id}{type});
     $self->assert_str_equals("online[0].value", $res->[0][1]{notUpdated}{$id}{properties}[0]);
 
-    xlog "update online";
+    xlog $self, "update online";
     $contact->{online} = [{ type => "uri", value => "http://example.com/me" }];
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {
                             online => [{ type => "uri", value => "http://example.com/me" }]
                         } }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     # addresses
-    xlog "update addresses";
+    xlog $self, "update addresses";
     $contact->{addresses} = [{
             type => "home",
             street => "acme lane 1",
@@ -1534,21 +1534,21 @@ sub test_contact_set
                         } }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
-    xlog "update notes";
+    xlog $self, "update notes";
     $contact->{notes} = 'baz';
     $res = $jmap->CallMethods([['Contact/set', {update => {$id => {notes => 'baz'} }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 
     # avatar
-    xlog "upload avatar";
+    xlog $self, "upload avatar";
     $res = $jmap->Upload("some photo", "image/jpeg");
     my $blobId = $res->{blobId};
     $contact->{"x-hasPhoto"} = JSON::true;
@@ -1559,7 +1559,7 @@ sub test_contact_set
         name => JSON::null
     };
 
-    xlog "attempt to update avatar with invalid type";
+    xlog $self, "attempt to update avatar with invalid type";
     $res = $jmap->CallMethods([['Contact/set', {update => {$id =>
                             {avatar => {
                                 blobId => $blobId,
@@ -1571,7 +1571,7 @@ sub test_contact_set
     $self->assert_null($res->[0][1]{updated});
     $self->assert_not_null($res->[0][1]{notUpdated}{$id});
 
-    xlog "update avatar";
+    xlog $self, "update avatar";
     $res = $jmap->CallMethods([['Contact/set', {update => {$id =>
                             {avatar => {
                                 blobId => $blobId,
@@ -1582,7 +1582,7 @@ sub test_contact_set
                      } }}, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get avatar $id";
+    xlog $self, "get avatar $id";
     $fetch = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_deep_equals($contact, $fetch->[0][1]{list}[0]);
 }
@@ -1754,16 +1754,16 @@ sub test_contact_set_emaillabel
         }]
     };
 
-    xlog "create contact";
+    xlog $self, "create contact";
     my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => $contact }}, "R1"]]);
     my $id = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($id);
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $res = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_str_equals('foo', $res->[0][1]{list}[0]{emails}[0]{label});
 
-    xlog "update contact";
+    xlog $self, "update contact";
     $res = $jmap->CallMethods([['Contact/set', {
         update => {
             $id => {
@@ -1778,7 +1778,7 @@ sub test_contact_set_emaillabel
     }, "R1"]]);
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $res = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_str_equals('personal', $res->[0][1]{list}[0]{emails}[0]{type});
     $self->assert_null($res->[0][1]{list}[0]{emails}[0]{label});
@@ -1792,7 +1792,7 @@ sub test_contact_set_state
 
     my $jmap = $self->{jmap};
 
-    xlog "create contact";
+    xlog $self, "create contact";
     my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
@@ -1800,7 +1800,7 @@ sub test_contact_set_state
     my $id = $res->[0][1]{created}{"1"}{id};
     my $state = $res->[0][1]{newState};
 
-    xlog "get contact $id";
+    xlog $self, "get contact $id";
     $res = $jmap->CallMethods([['Contact/get', {}, "R2"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/get', $res->[0][0]);
@@ -1808,7 +1808,7 @@ sub test_contact_set_state
     $self->assert_str_equals('first', $res->[0][1]{list}[0]{firstName});
     $self->assert_str_equals($state, $res->[0][1]{state});
 
-    xlog "update $id with state token $state";
+    xlog $self, "update $id with state token $state";
     $res = $jmap->CallMethods([['Contact/set', {
                     ifInState => $state,
                     update => {$id =>
@@ -1820,7 +1820,7 @@ sub test_contact_set_state
     my $oldState = $state;
     $state = $res->[0][1]{newState};
 
-    xlog "update $id with expired state token $oldState";
+    xlog $self, "update $id with expired state token $oldState";
     $res = $jmap->CallMethods([['Contact/set', {
                     ifInState => $oldState,
                     update => {$id =>
@@ -1829,11 +1829,11 @@ sub test_contact_set_state
     $self->assert_str_equals('error', $res->[0][0]);
     $self->assert_str_equals('stateMismatch', $res->[0][1]{type});
 
-    xlog "get contact $id to make sure state didn't change";
+    xlog $self, "get contact $id to make sure state didn't change";
     $res = $jmap->CallMethods([['Contact/get', {ids => [$id]}, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]{state});
 
-    xlog "destroy $id with expired state token $oldState";
+    xlog $self, "destroy $id with expired state token $oldState";
     $res = $jmap->CallMethods([['Contact/set', {
                     ifInState => $oldState,
                     destroy => [$id]
@@ -1841,7 +1841,7 @@ sub test_contact_set_state
     $self->assert_str_equals('error', $res->[0][0]);
     $self->assert_str_equals('stateMismatch', $res->[0][1]{type});
 
-    xlog "destroy contact $id with current state";
+    xlog $self, "destroy contact $id with current state";
     $res = $jmap->CallMethods([
             ['Contact/set', {
                     ifInState => $state,
@@ -1859,7 +1859,7 @@ sub test_contact_set_importance_later
 
     my $jmap = $self->{jmap};
 
-    xlog "create with no importance";
+    xlog $self, "create with no importance";
     my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last"}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
@@ -1897,7 +1897,7 @@ sub test_contact_set_importance_shared
     my $admintalk = $self->{adminstore}->get_client();
     my $service = $self->{instance}->get_service("http");
 
-    xlog "create shared account";
+    xlog $self, "create shared account";
     $admintalk->create("user.manifold");
 
     my $mantalk = Net::CardDAVTalk->new(
@@ -1912,10 +1912,10 @@ sub test_contact_set_importance_shared
 
     $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
     $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
-    xlog "share to user";
+    xlog $self, "share to user";
     $admintalk->setacl("user.manifold.#addressbooks.Default", "cassandane" => 'lrswipkxtecdn') or die;
 
-    xlog "create contact";
+    xlog $self, "create contact";
     my $res = $jmap->CallMethods([['Contact/set', {
                     accountId => 'manifold',
                     create => {"1" => {firstName => "first", lastName => "last"}}
@@ -1927,7 +1927,7 @@ sub test_contact_set_importance_shared
 
     $admintalk->setacl("user.manifold.#addressbooks.Default", "cassandane" => 'lrsn') or die;
 
-    xlog "update importance";
+    xlog $self, "update importance";
     $res = $jmap->CallMethods([['Contact/set', {
                     accountId => 'manifold',
                     update => {$id => {"importance" => -0.1}}
@@ -1945,7 +1945,7 @@ sub test_contact_set_importance_upfront
 
     my $jmap = $self->{jmap};
 
-    xlog "create with importance in initial create";
+    xlog $self, "create with importance in initial create";
     my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last", "importance" => -5.2}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
@@ -1980,7 +1980,7 @@ sub test_contact_set_importance_multiedit
 
     my $jmap = $self->{jmap};
 
-    xlog "create with no importance";
+    xlog $self, "create with no importance";
     my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last", "importance" => -5.2}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
@@ -2015,7 +2015,7 @@ sub test_contact_set_importance_zero_multi
 
     my $jmap = $self->{jmap};
 
-    xlog "create with no importance";
+    xlog $self, "create with no importance";
     my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last", "importance" => -5.2}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
@@ -2050,7 +2050,7 @@ sub test_contact_set_importance_zero_byself
 
     my $jmap = $self->{jmap};
 
-    xlog "create with no importance";
+    xlog $self, "create with no importance";
     my $res = $jmap->CallMethods([['Contact/set', {create => {"1" => {firstName => "first", lastName => "last", "importance" => -5.2}}}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Contact/set', $res->[0][0]);
@@ -2085,7 +2085,7 @@ sub test_misc_creationids
 
     my $jmap = $self->{jmap};
 
-    xlog "create and get contact group and contact";
+    xlog $self, "create and get contact group and contact";
     my $res = $jmap->CallMethods([
         ['Contact/set', {create => { "c1" => { firstName => "foo", lastName => "last1" }, }}, "R2"],
         ['ContactGroup/set', {create => { "g1" => {name => "group1", contactIds => ["#c1"]} }}, "R2"],
@@ -2121,7 +2121,7 @@ sub test_misc_categories
     );
 
 
-    xlog "create a contact with two categories";
+    xlog $self, "create a contact with two categories";
     my $id = 'ae2640cc-234a-4dd9-95cc-3106258445b9';
     my $href = "Default/$id.vcf";
     my $card = <<EOF;
@@ -2167,7 +2167,7 @@ sub test_contact_get_with_addressbookid
 
     my $jmap = $self->{jmap};
 
-    xlog "get contact with addressbookid";
+    xlog $self, "get contact with addressbookid";
     my $res = $jmap->CallMethods([['Contact/get',
                                    { addressbookId => "Default" }, "R3"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
@@ -2180,21 +2180,21 @@ sub test_contact_get_issue2292
 
     my $jmap = $self->{jmap};
 
-    xlog "create contact";
+    xlog $self, "create contact";
     my $res = $jmap->CallMethods([['Contact/set', {create => {
         "1" => { firstName => "foo", lastName => "last1" },
     }}, "R1"]]);
     $self->assert_not_null($res->[0][1]{created}{"1"});
 
-    xlog "get contact with no ids";
+    xlog $self, "get contact with no ids";
     $res = $jmap->CallMethods([['Contact/get', { }, "R3"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
 
-    xlog "get contact with empty ids";
+    xlog $self, "get contact with empty ids";
     $res = $jmap->CallMethods([['Contact/get', { ids => [] }, "R3"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
 
-    xlog "get contact with null ids";
+    xlog $self, "get contact with null ids";
     $res = $jmap->CallMethods([['Contact/get', { ids => undef }, "R3"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
 }
@@ -2206,21 +2206,21 @@ sub test_contactgroup_get_issue2292
 
     my $jmap = $self->{jmap};
 
-    xlog "create contact group";
+    xlog $self, "create contact group";
     my $res = $jmap->CallMethods([['ContactGroup/set', {create => {
         "1" => {name => "group1"}
     }}, "R2"]]);
     $self->assert_not_null($res->[0][1]{created}{"1"});
 
-    xlog "get contact group with no ids";
+    xlog $self, "get contact group with no ids";
     $res = $jmap->CallMethods([['ContactGroup/get', { }, "R3"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
 
-    xlog "get contact group with empty ids";
+    xlog $self, "get contact group with empty ids";
     $res = $jmap->CallMethods([['ContactGroup/get', { ids => [] }, "R3"]]);
     $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
 
-    xlog "get contact group with null ids";
+    xlog $self, "get contact group with null ids";
     $res = $jmap->CallMethods([['ContactGroup/get', { ids => undef }, "R3"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
 }
@@ -2234,7 +2234,7 @@ sub test_contact_copy
     my $admintalk = $self->{adminstore}->get_client();
     my $service = $self->{instance}->get_service("http");
 
-    xlog "create shared accounts";
+    xlog $self, "create shared accounts";
     $admintalk->create("user.other");
     $admintalk->create("user.other2");
 
@@ -2258,14 +2258,14 @@ sub test_contact_copy
         expandurl => 1,
     );
 
-    xlog "share addressbooks";
+    xlog $self, "share addressbooks";
     $admintalk->setacl("user.other.#addressbooks.Default",
                        "cassandane" => 'lrswipkxtecdn') or die;
     $admintalk->setacl("user.other2.#addressbooks.Default",
                        "cassandane" => 'lrswipkxtecdn') or die;
 
     # avatar
-    xlog "upload avatar";
+    xlog $self, "upload avatar";
     my $res = $jmap->Upload("some photo", "image/jpeg");
     my $blobid = $res->{blobId};
 
@@ -2281,14 +2281,14 @@ sub test_contact_copy
          }
     };
 
-    xlog "create card";
+    xlog $self, "create card";
     $res = $jmap->CallMethods([['Contact/set',{
         create => {"1" => $card}},
     "R1"]]);
     $self->assert_not_null($res->[0][1]{created});
     my $cardId = $res->[0][1]{created}{"1"}{id};
 
-    xlog "copy card $cardId w/o changes";
+    xlog $self, "copy card $cardId w/o changes";
     $res = $jmap->CallMethods([['Contact/copy', {
         fromAccountId => 'cassandane',
         accountId => 'other',
@@ -2317,7 +2317,7 @@ sub test_contact_copy
     $self->assert_str_equals($blobid, $res->[0][1]{list}[0]{avatar}{blobId});
     $self->assert_str_equals('foo', $res->[1][1]{list}[0]{firstName});
 
-    xlog "move card $cardId with changes";
+    xlog $self, "move card $cardId with changes";
     $res = $jmap->CallMethods([['Contact/copy', {
         fromAccountId => 'cassandane',
         accountId => 'other2',
@@ -2403,14 +2403,14 @@ sub test_contact_blobid
 
     my $jmap = $self->{jmap};
 
-    xlog "create contact";
+    xlog $self, "create contact";
     my $res = $jmap->CallMethods([['Contact/set', {create => {
         "1" => { firstName => "foo", lastName => "last1" },
     }}, "R1"]]);
     my $contactId = $res->[0][1]{created}{1}{id};
     $self->assert_not_null($contactId);
 
-    xlog "get contact blobId";
+    xlog $self, "get contact blobId";
     $res = $jmap->CallMethods([
         ['Contact/get', {
             ids => [$contactId],
@@ -2420,7 +2420,7 @@ sub test_contact_blobid
     my $blobId = $res->[0][1]{list}[0]{blobId};
     $self->assert_not_null($blobId);
 
-    xlog "download blob";
+    xlog $self, "download blob";
 
     $res = $jmap->Download('cassandane', $blobId);
     $self->assert_str_equals("BEGIN:VCARD", substr($res->{content}, 0, 11));

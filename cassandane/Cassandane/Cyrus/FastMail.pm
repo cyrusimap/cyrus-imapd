@@ -240,7 +240,7 @@ sub test_ajaxui_jmapcontacts_contactgroup_set
 
     my $res;
 
-    xlog "create contact group";
+    xlog $self, "create contact group";
     $res = $self->_fmjmap_ok('ContactGroup/set',
         accountId => 'cassandane',
         create => {
@@ -266,7 +266,7 @@ sub test_ajaxui_jmapcontacts_contactgroup_set
     $self->assert_num_equals(1, scalar @{$res->{list}});
     # check the rest?
 
-    xlog "create contact group";
+    xlog $self, "create contact group";
     $res = $self->_fmjmap_ok('ContactGroup/set',
         accountId => 'masteruser',
         create => {
@@ -283,7 +283,7 @@ sub test_ajaxui_jmapcontacts_contactgroup_set
     my $sgroupid = $res->{created}{"k2520"}{id};
     $self->assert_not_null($sgroupid);
 
-    xlog "create invalid shared contact group";
+    xlog $self, "create invalid shared contact group";
     $res = $self->_fmjmap_ok('ContactGroup/set',
         accountId => 'masteruser',
         create => {

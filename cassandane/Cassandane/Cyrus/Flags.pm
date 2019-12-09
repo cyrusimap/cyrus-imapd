@@ -85,7 +85,7 @@ sub test_deleted
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Append 3 messages";
+    xlog $self, "Append 3 messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -101,12 +101,12 @@ sub test_deleted
                             flags => []);
     $self->check_messages(\%msg);
 
-    xlog "Mark the middle message \\Deleted";
+    xlog $self, "Mark the middle message \\Deleted";
     $talk->store('2', '+flags', '(\\Deleted)');
     $msg{B}->set_attribute(flags => ['\\Deleted']);
     $self->check_messages(\%msg);
 
-    xlog "Expunge the middle message";
+    xlog $self, "Expunge the middle message";
     $talk->expunge();
     delete $msg{B};
     $msg{A}->set_attribute(id => 1);
@@ -138,7 +138,7 @@ sub test_seen
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Add two messages";
+    xlog $self, "Add two messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -150,22 +150,22 @@ sub test_seen
                             flags => []);
     $self->check_messages(\%msg);
 
-    xlog "Set \\Seen on message A";
+    xlog $self, "Set \\Seen on message A";
     $talk->store('1', '+flags', '(\\Seen)');
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
-    xlog "Clear \\Seen on message A";
+    xlog $self, "Clear \\Seen on message A";
     $talk->store('1', '-flags', '(\\Seen)');
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg);
 
-    xlog "Set \\Seen on message A again";
+    xlog $self, "Set \\Seen on message A again";
     $talk->store('1', '+flags', '(\\Seen)');
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
-    xlog "Reconnect, \\Seen should still be on message A";
+    xlog $self, "Reconnect, \\Seen should still be on message A";
     $self->{store}->disconnect();
     $self->{store}->connect();
     $self->{store}->_select();
@@ -199,7 +199,7 @@ sub test_seen_otheruser
     $self->{store}->set_fetch_attributes(qw(uid flags));
     $self->{adminstore}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Add two messages";
+    xlog $self, "Add two messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -216,24 +216,24 @@ sub test_seen_otheruser
     $admintalk->unselect();
     $admintalk->select('user.cassandane');
 
-    xlog "Set \\Seen on message A";
+    xlog $self, "Set \\Seen on message A";
     $talk->store('1', '+flags', '(\\Seen)');
     $self->check_messages(\%msg, store => $self->{adminstore});
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
-    xlog "Set \\Seen on message A as admin";
+    xlog $self, "Set \\Seen on message A as admin";
     $admintalk->store('1', '+flags', '(\\Seen)');
     $self->check_messages(\%msg, store => $self->{adminstore});
     $self->check_messages(\%msg);
 
-    xlog "Clear \\Seen on message A";
+    xlog $self, "Clear \\Seen on message A";
     $talk->store('1', '-flags', '(\\Seen)');
     $self->check_messages(\%msg, store => $self->{adminstore});
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg);
 
-    xlog "Clear \\Seen on message A as admin";
+    xlog $self, "Clear \\Seen on message A as admin";
     $admintalk->store('1', '-flags', '(\\Seen)');
     $self->check_messages(\%msg, store => $self->{adminstore});
     $self->check_messages(\%msg);
@@ -255,7 +255,7 @@ sub test_flagged
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Add two messages";
+    xlog $self, "Add two messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -267,22 +267,22 @@ sub test_flagged
                             flags => []);
     $self->check_messages(\%msg);
 
-    xlog "Set \\Flagged on message A";
+    xlog $self, "Set \\Flagged on message A";
     $talk->store('1', '+flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => ['\\Flagged']);
     $self->check_messages(\%msg);
 
-    xlog "Clear \\Flagged on message A";
+    xlog $self, "Clear \\Flagged on message A";
     $talk->store('1', '-flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg);
 
-    xlog "Set \\Flagged on message A again";
+    xlog $self, "Set \\Flagged on message A again";
     $talk->store('1', '+flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => ['\\Flagged']);
     $self->check_messages(\%msg);
 
-    xlog "Reconnect, \\Flagged should still be on message A";
+    xlog $self, "Reconnect, \\Flagged should still be on message A";
     $self->{store}->disconnect();
     $self->{store}->connect();
     $self->{store}->_select();
@@ -308,7 +308,7 @@ sub test_userflag
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Add two messages";
+    xlog $self, "Add two messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -320,22 +320,22 @@ sub test_userflag
                             flags => []);
     $self->check_messages(\%msg);
 
-    xlog "Set \$Foobar on message A";
+    xlog $self, "Set \$Foobar on message A";
     $talk->store('1', '+flags', '($Foobar)');
     $msg{A}->set_attribute(flags => ['$Foobar']);
     $self->check_messages(\%msg);
 
-    xlog "Clear \$Foobar on message A";
+    xlog $self, "Clear \$Foobar on message A";
     $talk->store('1', '-flags', '($Foobar)');
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg);
 
-    xlog "Set \$Foobar on message A again";
+    xlog $self, "Set \$Foobar on message A again";
     $talk->store('1', '+flags', '($Foobar)');
     $msg{A}->set_attribute(flags => ['$Foobar']);
     $self->check_messages(\%msg);
 
-    xlog "Reconnect, \$Foobar should still be on message A";
+    xlog $self, "Reconnect, \$Foobar should still be on message A";
     $self->{store}->disconnect();
     $self->{store}->connect();
     $self->{store}->_select();
@@ -362,7 +362,7 @@ sub test_expunge_removeflag
     my @flags = grep { !m{^\\} } @$perm;
     $self->assert_deep_equals([], \@flags);
 
-    xlog "Add two messages";
+    xlog $self, "Add two messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -374,12 +374,12 @@ sub test_expunge_removeflag
                             flags => []);
     $self->check_messages(\%msg);
 
-    xlog "Set \$Foobar on message A";
+    xlog $self, "Set \$Foobar on message A";
     $talk->store('1', '+flags', '($Foobar)');
     $msg{A}->set_attribute(flags => ['$Foobar']);
     $self->check_messages(\%msg);
 
-    xlog "Clear \$Foobar on message A";
+    xlog $self, "Clear \$Foobar on message A";
     $talk->store('1', '-flags', '($Foobar)');
     $msg{A}->set_attribute(flags => []);
     $self->check_messages(\%msg);
@@ -391,7 +391,7 @@ sub test_expunge_removeflag
 
     $self->check_messages(\%msg);
 
-    xlog "Flag is still in the mailbox";
+    xlog $self, "Flag is still in the mailbox";
 
     $perm = $talk->get_response_code('permanentflags');
     @flags = grep { !m{^\\} } @$perm;
@@ -427,7 +427,7 @@ sub test_max_userflags
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Add two messages";
+    xlog $self, "Add two messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -454,18 +454,18 @@ sub test_max_userflags
             }
         }
 
-        xlog "Set $flag on message A";
+        xlog $self, "Set $flag on message A";
         $talk->store('1', '+flags', "($flag)");
         $msg{A}->set_attribute(flags => [$flag]);
         $self->check_messages(\%msg);
 
-        xlog "Clear $flag on message A";
+        xlog $self, "Clear $flag on message A";
         $talk->store('1', '-flags', "($flag)");
         $msg{A}->set_attribute(flags => []);
         $self->check_messages(\%msg);
     }
 
-    xlog "Cannot set one more wafer-thin user flag";
+    xlog $self, "Cannot set one more wafer-thin user flag";
     my $flag = '$Farnarkle';
     $self->assert_null($allflags{$flag});
     my $r = $talk->store('1', '+flags', "($flag)");
@@ -477,14 +477,14 @@ sub test_max_userflags
     my @lines = $self->{instance}->getsyslog();
     $self->assert_matches(qr/IOERROR: out of flags/, "@lines");
 
-    xlog "Can set all the flags at once";
+    xlog $self, "Can set all the flags at once";
     my @flags = sort { $allflags{$a} <=> $allflags{$b} } (keys %allflags);
-    xlog "Set all the user flags on message A";
+    xlog $self, "Set all the user flags on message A";
     $talk->store('1', '+flags', '(' . join(' ',@flags) . ')');
     $msg{A}->set_attribute(flags => [@flags]);
     $self->check_messages(\%msg);
 
-    xlog "Reconnect, all the flags should still be on message A";
+    xlog $self, "Reconnect, all the flags should still be on message A";
     $self->{store}->disconnect();
     $self->{store}->connect();
     $self->{store}->_select();
@@ -505,14 +505,14 @@ sub test_search_allflags
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Add messages and flags";
+    xlog $self, "Add messages and flags";
 
     my %msg;
     for (my $i = 1 ; $i <= MAX_USER_FLAGS ; $i++)
     {
         my $flag = "flag$i";
         $msg{$i} = $self->make_message("Message $i");
-        xlog "Set $flag on message $i";
+        xlog $self, "Set $flag on message $i";
         $talk->store($i, '+flags', "($flag)");
     }
 
@@ -520,7 +520,7 @@ sub test_search_allflags
     $talk->fetch('1:*', '(uid flags)');
 
     for (my $i = 1 ; $i <= MAX_USER_FLAGS ; $i++) {
-        xlog "Can search for flag $i";
+        xlog $self, "Can search for flag $i";
         my $uids = $talk->search("keyword", "flag$i");
         $self->assert_equals(1, scalar(@$uids));
         $self->assert_equals($i, $uids->[0]);
@@ -543,7 +543,7 @@ sub test_multi_flags
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Add two messages";
+    xlog $self, "Add two messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -555,32 +555,32 @@ sub test_multi_flags
                             flags => []);
     $self->check_messages(\%msg);
 
-    xlog "Set many flags on message A";
+    xlog $self, "Set many flags on message A";
     $talk->store('1', '+flags', '(\\Answered \\Flagged \\Draft \\Deleted \\Seen)');
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Flagged \\Draft \\Deleted \\Seen)]);
     $self->check_messages(\%msg);
 
-    xlog "Clear \\Flagged on message A";
+    xlog $self, "Clear \\Flagged on message A";
     $talk->store('1', '-flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Draft \\Deleted \\Seen)]);
     $self->check_messages(\%msg);
 
-    xlog "Clear \\Draft and \\Deleted on message A";
+    xlog $self, "Clear \\Draft and \\Deleted on message A";
     $talk->store('1', '-flags', '(\\Draft \\Deleted)');
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Seen)]);
     $self->check_messages(\%msg);
 
-    xlog "Set \\Draft and \\Flagged on message A";
+    xlog $self, "Set \\Draft and \\Flagged on message A";
     $talk->store('1', '+flags', '(\\Draft \\Flagged)');
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Flagged \\Draft \\Seen)]);
     $self->check_messages(\%msg);
 
-    xlog "Set to just \\Answered and \\Seen on message A";
+    xlog $self, "Set to just \\Answered and \\Seen on message A";
     $talk->store('1', 'flags', '(\\Answered \\Seen)');
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Seen)]);
     $self->check_messages(\%msg);
 
-    xlog "Walk through every combination of flags";
+    xlog $self, "Walk through every combination of flags";
     my %rev_map = (
         1 => '\\Answered',
         2 => '\\Flagged',
@@ -595,13 +595,13 @@ sub test_multi_flags
         {
             push(@flags, $rev_map{$m}) if ($i & $m);
         }
-        xlog "Setting " . join(',',@flags) . " on message A";
+        xlog $self, "Setting " . join(',',@flags) . " on message A";
         $talk->store('1', 'flags', '(' . join(' ',@flags) . ')');
         $msg{A}->set_attribute(flags => \@flags);
         $self->check_messages(\%msg);
     }
 
-    xlog "Reconnect, all the flags should still be on message A";
+    xlog $self, "Reconnect, all the flags should still be on message A";
     $self->{store}->disconnect();
     $self->{store}->connect();
     $self->{store}->_select();
@@ -670,7 +670,7 @@ sub test_modseq
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags modseq));
 
-    xlog "Add two messages";
+    xlog $self, "Add two messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -683,47 +683,47 @@ sub test_modseq
     my $act0 = $self->check_messages(\%msg);
     my $hms0 = $self->get_highestmodseq();
 
-    xlog "Set \\Flagged on message A";
+    xlog $self, "Set \\Flagged on message A";
     $talk->store('1', '+flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => ['\\Flagged']);
     my $act1 = $self->check_messages(\%msg);
     my $hms1 = $self->get_highestmodseq();
-    xlog "A should have a new modseq higher than any other message";
+    xlog $self, "A should have a new modseq higher than any other message";
     $self->assert(get_modseq($act1, 'A') > get_modseq($act0, 'A'));
     $self->assert(get_modseq($act1, 'A') > get_modseq($act0, 'B'));
     $self->assert(get_modseq($act1, 'B') == get_modseq($act0, 'B'));
     $self->assert($hms1 > $hms0);
     $self->assert(get_modseq($act1, 'A') == $hms1);
 
-    xlog "Set \\Flagged on message A while already set";
+    xlog $self, "Set \\Flagged on message A while already set";
     $talk->store('1', '+flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => ['\\Flagged']);
     my $act2 = $self->check_messages(\%msg);
     my $hms2 = $self->get_highestmodseq();
-    xlog "A should have not changed modseq";
+    xlog $self, "A should have not changed modseq";
     $self->assert(get_modseq($act2, 'A') == get_modseq($act1, 'A'));
     $self->assert(get_modseq($act2, 'B') == get_modseq($act1, 'B'));
     $self->assert($hms2 == $hms1);
     $self->assert(get_modseq($act2, 'A') == $hms2);
 
-    xlog "Clear \\Flagged on message A";
+    xlog $self, "Clear \\Flagged on message A";
     $talk->store('1', '-flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => []);
     my $act3 = $self->check_messages(\%msg);
     my $hms3 = $self->get_highestmodseq();
-    xlog "A should have a new modseq higher than any other message";
+    xlog $self, "A should have a new modseq higher than any other message";
     $self->assert(get_modseq($act3, 'A') > get_modseq($act2, 'A'));
     $self->assert(get_modseq($act3, 'A') > get_modseq($act2, 'B'));
     $self->assert(get_modseq($act3, 'B') == get_modseq($act2, 'B'));
     $self->assert($hms3 > $hms2);
     $self->assert(get_modseq($act3, 'A') == $hms3);
 
-    xlog "Clear \\Flagged on message A while already clear";
+    xlog $self, "Clear \\Flagged on message A while already clear";
     $talk->store('1', '-flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => []);
     my $act4 = $self->check_messages(\%msg);
     my $hms4 = $self->get_highestmodseq();
-    xlog "A should have not changed modseq";
+    xlog $self, "A should have not changed modseq";
     $self->assert(get_modseq($act4, 'A') == get_modseq($act3, 'A'));
     $self->assert(get_modseq($act4, 'B') == get_modseq($act3, 'B'));
     $self->assert($hms4 == $hms3);
@@ -758,7 +758,7 @@ sub test_unchangedsince
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags modseq));
 
-    xlog "Add two messages";
+    xlog $self, "Add two messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -797,7 +797,7 @@ sub test_unchangedsince
     # Note: Mail::IMAPTalk::store() doesn't support modifiers
     # so we have to resort to the lower level interface.
 
-    xlog "Changing a flag with current modseq == UNCHANGEDSINCE";
+    xlog $self, "Changing a flag with current modseq == UNCHANGEDSINCE";
     %fetched = ();
     $modified = undef;
     $talk->_imap_cmd('store', 1, \%handlers,
@@ -807,20 +807,20 @@ sub test_unchangedsince
     #   - updates the flag
     $msg{A}->set_attribute(flags => ['\\Flagged']);
     my $act1 = $self->check_messages(\%msg);
-    xlog "returns an OK response?";
+    xlog $self, "returns an OK response?";
     $self->assert_str_equals('ok', $res1);
-    xlog "updated modseq?";
+    xlog $self, "updated modseq?";
     $self->assert(get_modseq($act1, 'A') > get_modseq($act0, 'A'));
-    xlog "returned no MODIFIED response code?";
+    xlog $self, "returned no MODIFIED response code?";
     $self->assert_null($modified);
-    xlog "sent an untagged FETCH response?";
+    xlog $self, "sent an untagged FETCH response?";
     $self->assert_num_equals(1, scalar keys %fetched);
     $self->assert_not_null($fetched{1});
-    xlog "the FETCH response has the new modseq?";
+    xlog $self, "the FETCH response has the new modseq?";
     $self->assert_num_equals(get_modseq($act1, 'A'),
                              get_modseq_from_fetch(\%fetched, 1));
 
-    xlog "Changing a flag with current modseq < UNCHANGEDSINCE";
+    xlog $self, "Changing a flag with current modseq < UNCHANGEDSINCE";
     %fetched = ();
     $modified = undef;
     $talk->_imap_cmd('store', 1, \%handlers,
@@ -830,20 +830,20 @@ sub test_unchangedsince
     #   - updates the flag
     $msg{A}->set_attribute(flags => []);
     my $act2 = $self->check_messages(\%msg);
-    xlog "returns an OK response?";
+    xlog $self, "returns an OK response?";
     $self->assert_str_equals('ok', $res2);
-    xlog "updated modseq?";
+    xlog $self, "updated modseq?";
     $self->assert(get_modseq($act2, 'A') > get_modseq($act0, 'A'));
-    xlog "returned no MODIFIED response code?";
+    xlog $self, "returned no MODIFIED response code?";
     $self->assert_null($modified);
-    xlog "sent an untagged FETCH response?";
+    xlog $self, "sent an untagged FETCH response?";
     $self->assert_num_equals(1, scalar keys %fetched);
     $self->assert_not_null($fetched{1});
-    xlog "the FETCH response has the new modseq?";
+    xlog $self, "the FETCH response has the new modseq?";
     $self->assert_num_equals(get_modseq($act2, 'A'),
                              get_modseq_from_fetch(\%fetched, 1));
 
-    xlog "Changing a flag with current modseq > UNCHANGEDSINCE";
+    xlog $self, "Changing a flag with current modseq > UNCHANGEDSINCE";
     %fetched = ();
     $modified = undef;
     $talk->_imap_cmd('store', 1, \%handlers,
@@ -853,14 +853,14 @@ sub test_unchangedsince
     #   - doesn't update the flag
     $msg{A}->set_attribute(flags => []);
     my $act3 = $self->check_messages(\%msg);
-    xlog "returns an OK response?";
+    xlog $self, "returns an OK response?";
     $self->assert_str_equals('ok', $res3);
-    xlog "didn't update modseq?";
+    xlog $self, "didn't update modseq?";
     $self->assert_num_equals(get_modseq($act3, 'A'), get_modseq($act2, 'A'));
-    xlog "reports the UID in the MODIFIED response code?";
+    xlog $self, "reports the UID in the MODIFIED response code?";
     $self->assert_not_null($modified);
     $self->assert_deep_equals($modified, [1]);
-    xlog "sent no FETCH untagged response?";
+    xlog $self, "sent no FETCH untagged response?";
     $self->assert_num_equals(0, scalar keys %fetched);
 }
 
@@ -895,7 +895,7 @@ sub test_unchangedsince_multi
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags modseq));
 
-    xlog "Add some messages";
+    xlog $self, "Add some messages";
     my %msg;
     for (my $i = 1 ; $i <= 26 ; $i++)
     {
@@ -906,7 +906,7 @@ sub test_unchangedsince_multi
                                       flags => []);
     }
 
-    xlog "Bump the modseq on M,N,O";
+    xlog $self, "Bump the modseq on M,N,O";
     $talk->store('13,14,15', '+flags', '(\\Draft)');
     $msg{M}->set_attribute(flags => ['\\Draft']);
     $msg{N}->set_attribute(flags => ['\\Draft']);
@@ -919,7 +919,7 @@ sub test_unchangedsince_multi
         $store2->connect();
         $store2->_select();
         my $talk2 = $store2->get_client();
-        xlog "Delete and expunge D,E,F from another session";
+        xlog $self, "Delete and expunge D,E,F from another session";
         for (my $i = 4 ; $i <= 6 ; $i++)
         {
             my $letter = chr(64 + $i);  # D, E, F
@@ -958,7 +958,7 @@ sub test_unchangedsince_multi
     # Note: Mail::IMAPTalk::store() doesn't support modifiers
     # so we have to resort to the lower level interface.
 
-    xlog "Changing a flag on multiple messages";
+    xlog $self, "Changing a flag on multiple messages";
     %fetched = ();
     $modified = undef;
     $talk->_imap_cmd('store', 1, \%handlers,
@@ -1001,10 +1001,10 @@ sub test_unchangedsince_multi
     my $act1 = $self->check_messages(\%msg);
 
 # TODO: this fails with current Cyrus code
-#     xlog "returns a NO response?";
+#     xlog $self, "returns a NO response?";
 #     $self->assert_str_equals('NO', $res1);
 
-    xlog "updated modseq?";
+    xlog $self, "updated modseq?";
     $self->assert(get_modseq($act1, 'A') > get_modseq($act0, 'A'));
     $self->assert(get_modseq($act1, 'B') > get_modseq($act0, 'B'));
     $self->assert(get_modseq($act1, 'C') > get_modseq($act0, 'C'));
@@ -1031,11 +1031,11 @@ sub test_unchangedsince_multi
     $self->assert(get_modseq($act1, 'Y') > get_modseq($act0, 'Y'));
     $self->assert(get_modseq($act1, 'Z') > get_modseq($act0, 'Z'));
 
-    xlog "returned MODIFIED response code?";
+    xlog $self, "returned MODIFIED response code?";
     $self->assert_not_null($modified);
     $self->assert_deep_equals($modified, ['13:15']);
 
-    xlog "sent untagged FETCH responses with the new modseq?";
+    xlog $self, "sent untagged FETCH responses with the new modseq?";
     # also tells about the 3 messages which were deleted since
     # the last command
     $self->assert_num_equals(23, scalar keys %fetched);
@@ -1059,7 +1059,7 @@ sub test_setseen
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Add three messages";
+    xlog $self, "Add three messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -1075,21 +1075,21 @@ sub test_setseen
                             flags => []);
     $self->check_messages(\%msg);
 
-    xlog "Fetch body of message A";
+    xlog $self, "Fetch body of message A";
     $talk->fetch('1', '(body[])');
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
-    xlog "Fetch body.peek of message B";
+    xlog $self, "Fetch body.peek of message B";
     $talk->fetch('2', '(body.peek[])');
     $self->check_messages(\%msg);
 
-    xlog "Fetch binary of message C";
+    xlog $self, "Fetch binary of message C";
     $talk->fetch('3', '(binary[])');
     $msg{C}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
-    xlog "Reconnect, \\Seen should still be on messages A and C";
+    xlog $self, "Reconnect, \\Seen should still be on messages A and C";
     $self->{store}->disconnect();
     $self->{store}->connect();
     $self->{store}->_select();
@@ -1107,7 +1107,7 @@ sub test_setseen_after_store
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Add two messages";
+    xlog $self, "Add two messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -1119,17 +1119,17 @@ sub test_setseen_after_store
                             flags => []);
     $self->check_messages(\%msg);
 
-    xlog "Fetch body of message A";
+    xlog $self, "Fetch body of message A";
     $talk->fetch('1', '(body[])');
     $msg{A}->set_attribute(flags => ['\\Seen']);
     $self->check_messages(\%msg);
 
-    xlog "Fetch remove the flag again, and immediately fetch the body";
+    xlog $self, "Fetch remove the flag again, and immediately fetch the body";
     $talk->store('1', '-flags.silent', "(\\Seen)");
     $talk->fetch('1', '(body[])');
     $self->check_messages(\%msg);
 
-    xlog "Reconnect, \\Seen should still be on message A";
+    xlog $self, "Reconnect, \\Seen should still be on message A";
     $self->{store}->disconnect();
     $self->{store}->connect();
     $self->{store}->_select();
@@ -1146,10 +1146,10 @@ sub test_setseen_notify
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Throw away existing notify";
+    xlog $self, "Throw away existing notify";
     $self->{instance}->getnotify();
 
-    xlog "Add a messages";
+    xlog $self, "Add a messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,

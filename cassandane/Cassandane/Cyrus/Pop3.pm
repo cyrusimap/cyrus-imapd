@@ -89,29 +89,29 @@ sub test_top_args
 {
     my ($self) = @_;
 
-    xlog "Testing whether the TOP command checks its arguments [Bug 3641]";
+    xlog $self, "Testing whether the TOP command checks its arguments [Bug 3641]";
     # Note, the POP client checks its arguments before sending
     # them so we have to reach around it to do bad things.
 
-    xlog "Ensure a message exists, before logging in to POP";
+    xlog $self, "Ensure a message exists, before logging in to POP";
     my %exp;
     $exp{A} = $self->make_message('Message A');
 
     my $client = $self->{pop_store}->get_client();
 
-    xlog "TOP with no arguments should return an error";
+    xlog $self, "TOP with no arguments should return an error";
     my $r = $client->command('TOP')->response();
     $self->assert_equals($r, Net::Cmd::CMD_ERROR);
     $self->assert_equals($client->code(), 500);
     $self->assert_matches(qr/Missing argument/, $client->message());
 
-    xlog "TOP with 1 argument should return an error";
+    xlog $self, "TOP with 1 argument should return an error";
     $r = $client->command('TOP', 1)->response();
     $self->assert_equals($r, Net::Cmd::CMD_ERROR);
     $self->assert_equals($client->code(), 500);
     $self->assert_matches(qr/Missing argument/, $client->message());
 
-    xlog "TOP with 2 correct arguments should actually work";
+    xlog $self, "TOP with 2 correct arguments should actually work";
     $r = $client->command('TOP', 1, 2)->response();
     $self->assert_equals($r, Net::Cmd::CMD_OK);
     $self->assert_equals($client->code(), 200);
@@ -121,17 +121,17 @@ sub test_top_args
                                                     attrs => { uid => 1 });
     $self->check_messages(\%exp, actual => \%actual);
 
-    xlog "TOP with 2 arguments, first one not a number, should return an error";
+    xlog $self, "TOP with 2 arguments, first one not a number, should return an error";
     $r = $client->command('TOP', '1xyz', 2)->response();
     $self->assert_equals($r, Net::Cmd::CMD_ERROR);
     $self->assert_equals($client->code(), 500);
 
-    xlog "TOP with 2 arguments, second one not a number, should return an error";
+    xlog $self, "TOP with 2 arguments, second one not a number, should return an error";
     $r = $client->command('TOP', 1, '2xyz')->response();
     $self->assert_equals($r, Net::Cmd::CMD_ERROR);
     $self->assert_equals($client->code(), 500);
 
-    xlog "TOP with 3 arguments should return an error";
+    xlog $self, "TOP with 3 arguments should return an error";
     $r = $client->command('TOP', 1, 2, 3)->response();
     $self->assert_equals($r, Net::Cmd::CMD_ERROR);
     $self->assert_equals($client->code(), 500);
@@ -143,11 +143,11 @@ sub test_subfolder_login
 {
     my ($self) = @_;
 
-    xlog "Testing whether + address login gets subfolder";
+    xlog $self, "Testing whether + address login gets subfolder";
 
     my $imapclient = $self->{store}->get_client();
 
-    xlog "Ensure a messages exist";
+    xlog $self, "Ensure a messages exist";
     my %exp;
     $exp{A} = $self->make_message('Message A');
 
@@ -159,7 +159,7 @@ sub test_subfolder_login
 
     my $popclient = $self->{pop_store}->get_client();
 
-    xlog "Test regular TOP gets the right message";
+    xlog $self, "Test regular TOP gets the right message";
     my $r = $popclient->command('TOP', 1, 2)->response();
     $self->assert_equals($r, Net::Cmd::CMD_OK);
     $self->assert_equals($popclient->code(), 200);
@@ -176,7 +176,7 @@ sub test_subfolder_login
     my $subclient = $substore->get_client();
 
 
-    xlog "Test subfolder TOP gets the right message";
+    xlog $self, "Test subfolder TOP gets the right message";
     my $subr = $subclient->command('TOP', 1, 2)->response();
     $self->assert_equals($subr, Net::Cmd::CMD_OK);
     $self->assert_equals($subclient->code(), 200);

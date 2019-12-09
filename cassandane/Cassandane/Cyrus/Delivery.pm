@@ -81,23 +81,23 @@ sub test_plus_address_exact
 {
     my ($self) = @_;
 
-    xlog "Testing behaviour of plus addressing where case matches";
+    xlog $self, "Testing behaviour of plus addressing where case matches";
 
     my $folder = "INBOX.telephone";
 
-    xlog "Create folders";
+    xlog $self, "Create folders";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
         or die "Cannot create $folder: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
     $self->{instance}->deliver($msgs{1}, user => "cassandane+telephone");
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $self->{store}->set_folder($folder);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
@@ -107,23 +107,23 @@ sub test_plus_address_underscore
 {
     my ($self) = @_;
 
-    xlog "Testing behaviour of plus addressing where case matches";
+    xlog $self, "Testing behaviour of plus addressing where case matches";
 
     my $folder = "INBOX.- minusland";
 
-    xlog "Create folders";
+    xlog $self, "Create folders";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
         or die "Cannot create $folder: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
     $self->{instance}->deliver($msgs{1}, user => "cassandane+-_minusland");
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $self->{store}->set_folder($folder);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
@@ -133,23 +133,23 @@ sub test_plus_address_case
 {
     my ($self) = @_;
 
-    xlog "Testing behaviour of plus addressing where case matches";
+    xlog $self, "Testing behaviour of plus addressing where case matches";
 
     my $folder = "INBOX.ApplePie";
 
-    xlog "Create folders";
+    xlog $self, "Create folders";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
         or die "Cannot create $folder: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
     $self->{instance}->deliver($msgs{1}, user => "cassandane+applepie");
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $self->{store}->set_folder($folder);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
@@ -159,23 +159,23 @@ sub test_plus_address_case_defdomain
 {
     my ($self) = @_;
 
-    xlog "Testing behaviour of plus addressing where case matches";
+    xlog $self, "Testing behaviour of plus addressing where case matches";
 
     my $folder = "INBOX.ApplePie";
 
-    xlog "Create folders";
+    xlog $self, "Create folders";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
         or die "Cannot create $folder: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
     $self->{instance}->deliver($msgs{1}, user => "cassandane+applepie\@defdomain");
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $self->{store}->set_folder($folder);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
@@ -185,17 +185,17 @@ sub test_plus_address_case_bogusdomain
 {
     my ($self) = @_;
 
-    xlog "Testing behaviour of plus addressing where case matches";
+    xlog $self, "Testing behaviour of plus addressing where case matches";
 
     my $folder = "INBOX.ApplePie";
 
-    xlog "Create folders";
+    xlog $self, "Create folders";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
         or die "Cannot create $folder: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
@@ -206,7 +206,7 @@ sub test_plus_address_case_bogusdomain
     # expect deliver to exit with EC_DATAERR
     $self->assert_not_equals(0, $r);
 
-    xlog "Check that the message didn't make it";
+    xlog $self, "Check that the message didn't make it";
     $self->{store}->set_folder($folder);
     $self->check_messages({}, check_guid => 0, keyed_on => 'uid');
 }
@@ -216,23 +216,23 @@ sub test_plus_address_bothupper
 {
     my ($self) = @_;
 
-    xlog "Testing behaviour of plus addressing where case matches";
+    xlog $self, "Testing behaviour of plus addressing where case matches";
 
     my $folder = "INBOX.FlatPack";
 
-    xlog "Create folders";
+    xlog $self, "Create folders";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
         or die "Cannot create $folder: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
     $self->{instance}->deliver($msgs{1}, user => "cassandane+FlatPack");
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $self->{store}->set_folder($folder);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
@@ -242,23 +242,23 @@ sub test_plus_address_partial
 {
     my ($self) = @_;
 
-    xlog "Testing behaviour of plus addressing where subfolder doesn't exist";
+    xlog $self, "Testing behaviour of plus addressing where subfolder doesn't exist";
 
     my $folder = "INBOX.lists";
 
-    xlog "Create folders";
+    xlog $self, "Create folders";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
         or die "Cannot create $folder: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
     $self->{instance}->deliver($msgs{1}, user => "cassandane+lists.nonexists");
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $self->{store}->set_folder($folder);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
@@ -268,23 +268,23 @@ sub test_plus_address_partial_case
 {
     my ($self) = @_;
 
-    xlog "Testing behaviour of plus addressing where subfolder doesn't exist";
+    xlog $self, "Testing behaviour of plus addressing where subfolder doesn't exist";
 
     my $folder = "INBOX.Twists";
 
-    xlog "Create folders";
+    xlog $self, "Create folders";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
         or die "Cannot create $folder: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
     $self->{instance}->deliver($msgs{1}, user => "cassandane+twists.nonexists");
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $self->{store}->set_folder($folder);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
@@ -294,23 +294,23 @@ sub test_plus_address_partial_bothupper
 {
     my ($self) = @_;
 
-    xlog "Testing behaviour of plus addressing where subfolder doesn't exist";
+    xlog $self, "Testing behaviour of plus addressing where subfolder doesn't exist";
 
     my $folder = "INBOX.Projects";
 
-    xlog "Create folders";
+    xlog $self, "Create folders";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
         or die "Cannot create $folder: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
     $self->{instance}->deliver($msgs{1}, user => "cassandane+Projects.Grass");
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $self->{store}->set_folder($folder);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
@@ -320,7 +320,7 @@ sub test_plus_address_partial_virtdom
 {
     my ($self) = @_;
 
-    xlog "Testing behaviour of plus addressing with virtdomains";
+    xlog $self, "Testing behaviour of plus addressing with virtdomains";
 
     my $admintalk = $self->{adminstore}->get_client();
 
@@ -331,18 +331,18 @@ sub test_plus_address_partial_virtdom
 
     my $folder = "INBOX.Projects";
 
-    xlog "Create folders";
+    xlog $self, "Create folders";
     $domtalk->create($folder)
         or die "Cannot create $folder: $@";
     $domstore->set_fetch_attributes('uid');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
     $self->{instance}->deliver($msgs{1}, user => "domuser+Projects.Grass\@example.com");
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $domstore->set_folder($folder);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
@@ -353,31 +353,31 @@ sub test_duplicate_suppression_off
 {
     my ($self) = @_;
 
-    xlog "Testing behaviour with duplicate suppression off";
+    xlog $self, "Testing behaviour with duplicate suppression off";
 
     # test data from hipsteripsum.me
     my $folder = "INBOX.thundercats";
 
-    xlog "Create the target folder";
+    xlog $self, "Create the target folder";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
         or die "Cannot create $folder: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
     $self->{instance}->deliver($msgs{1}, folder => $folder);
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $self->{store}->set_folder($folder);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 
-    xlog "Try to deliver the same message again";
+    xlog $self, "Try to deliver the same message again";
     $self->{instance}->deliver($msgs{1}, folder => $folder);
 
-    xlog "Check that second copy of the message made it";
+    xlog $self, "Check that second copy of the message made it";
     $msgs{2} = $msgs{1}->clone();
     $msgs{2}->set_attribute(uid => 2);
     $self->{store}->set_folder($folder);
@@ -390,43 +390,43 @@ sub test_duplicate_suppression_on
 {
     my ($self) = @_;
 
-    xlog "Testing behaviour with duplicate suppression on";
+    xlog $self, "Testing behaviour with duplicate suppression on";
 
     # test data from hipsteripsum.me
     my $folder1 = "INBOX.sustainable";
     my $folder2 = "INBOX.artisan";
 
-    xlog "Create the target folder";
+    xlog $self, "Create the target folder";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder1)
         or die "Cannot create $folder1: $@";
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
     $self->{instance}->deliver($msgs{1}, folder => $folder1);
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $self->{store}->set_folder($folder1);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 
-    xlog "Try to deliver the same message again";
+    xlog $self, "Try to deliver the same message again";
     $self->{instance}->deliver($msgs{1}, folder => $folder1);
 
-    xlog "Check that second copy of the message didn't make it";
+    xlog $self, "Check that second copy of the message didn't make it";
     $self->{store}->set_folder($folder1);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 
-    xlog "Rename the folder";
+    xlog $self, "Rename the folder";
     $imaptalk->rename($folder1, $folder2)
         or die "Cannot rename $folder1 to $folder2: $@";
 
-    xlog "Try to deliver the same message again";
+    xlog $self, "Try to deliver the same message again";
     $self->{instance}->deliver($msgs{1}, folder => $folder2);
 
-    xlog "Check that third copy of the message DIDN'T make it";
+    xlog $self, "Check that third copy of the message DIDN'T make it";
     # This is the whole point of duplicate_mailbox_mode = uniqueid.
     $self->{store}->set_folder($folder2);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
@@ -437,43 +437,43 @@ sub test_duplicate_suppression_on_delete
 {
     my ($self) = @_;
 
-    xlog "Testing behaviour with duplicate suppression on";
-    xlog "interaction with DELETE + CREATE [IRIS-723]";
+    xlog $self, "Testing behaviour with duplicate suppression on";
+    xlog $self, "interaction with DELETE + CREATE [IRIS-723]";
 
     # test data from hipsteripsum.me
     my $folder = "INBOX.mixtape";
 
-    xlog "Create the target folder";
+    xlog $self, "Create the target folder";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
         or die "Cannot create $folder: $@";
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msgs{1}, folder => $folder);
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $self->{store}->set_folder($folder);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 
-    xlog "Delete the folder";
+    xlog $self, "Delete the folder";
     $imaptalk->unselect();
     $imaptalk->delete($folder)
         or die "Cannot delete $folder: $@";
 
-    xlog "Create another folder of the same name";
+    xlog $self, "Create another folder of the same name";
     $imaptalk->create($folder)
         or die "Cannot create another $folder: $@";
 
-    xlog "Check that all messages are gone";
+    xlog $self, "Check that all messages are gone";
     $self->{store}->set_folder($folder);
     $self->check_messages({}, check_guid => 0, keyed_on => 'uid');
 
-    xlog "Try to deliver the same message to the new folder";
+    xlog $self, "Try to deliver the same message to the new folder";
     $self->{instance}->deliver($msgs{1}, folder => $folder);
 
-    xlog "Check that the message made it";
+    xlog $self, "Check that the message made it";
     $self->{store}->set_folder($folder);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
@@ -483,34 +483,34 @@ sub test_duplicate_suppression_on_badmbox
 {
     my ($self) = @_;
 
-    xlog "Testing behaviour with duplicate suppression on";
-    xlog "interaction with attempted delivery to a";
-    xlog "non-existant mailbox";
+    xlog $self, "Testing behaviour with duplicate suppression on";
+    xlog $self, "interaction with attempted delivery to a";
+    xlog $self, "non-existant mailbox";
 
     my $folder = "INBOX.nonesuch";
     # DO NOT create the target folder
 
     $self->{store}->set_fetch_attributes('uid');
 
-    xlog "Deliver a message";
+    xlog $self, "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
     $msgs{1}->set_attribute(uid => 1);
     $self->{instance}->deliver($msgs{1}, folder => $folder);
 
-    xlog "Check that the message made it, to INBOX";
+    xlog $self, "Check that the message made it, to INBOX";
     $self->{store}->set_folder('INBOX');
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 
-    xlog "Create a folder of the given name";
+    xlog $self, "Create a folder of the given name";
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
         or die "Cannot create $folder: $@";
 
-    xlog "Try to deliver the same message to the new folder";
+    xlog $self, "Try to deliver the same message to the new folder";
     $self->{instance}->deliver($msgs{1}, folder => $folder);
 
-    xlog "Check that the message made it, to the given folder";
+    xlog $self, "Check that the message made it, to the given folder";
     $self->{store}->set_folder($folder);
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }

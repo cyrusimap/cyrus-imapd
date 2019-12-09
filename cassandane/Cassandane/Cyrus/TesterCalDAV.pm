@@ -1647,7 +1647,7 @@ sub run_test
             open FH, '<', $file
                 or die "Cannot open $file for reading: $!";
             local $/ = undef;
-            xlog <FH>;
+            xlog $self, <FH>;
             close FH;
         }
     }

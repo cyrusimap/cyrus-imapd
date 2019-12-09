@@ -98,7 +98,7 @@ sub test_archive_messages
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Append 3 messages";
+    xlog $self, "Append 3 messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -124,7 +124,7 @@ sub test_archive_messages
     $self->assert(!-f "$basedir/archive/user/cassandane/2.");
     $self->assert(!-f "$basedir/archive/user/cassandane/3.");
 
-    xlog "Run cyr_expire but no messages should move";
+    xlog $self, "Run cyr_expire but no messages should move";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
 
     $self->assert(-f "$basedir/data/user/cassandane/1.");
@@ -136,7 +136,7 @@ sub test_archive_messages
     $self->assert(!-f "$basedir/archive/user/cassandane/3.");
 
 
-    xlog "Run cyr_expire to archive now";
+    xlog $self, "Run cyr_expire to archive now";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
 
     $self->assert(!-f "$basedir/data/user/cassandane/1.");
@@ -158,7 +158,7 @@ sub test_archivenow_messages
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Append 3 messages";
+    xlog $self, "Append 3 messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -185,7 +185,7 @@ sub test_archivenow_messages
     $self->assert(-f "$basedir/archive/user/cassandane/2.");
     $self->assert(-f "$basedir/archive/user/cassandane/3.");
 
-    xlog "Run cyr_expire with old and messages stay archived";
+    xlog $self, "Run cyr_expire with old and messages stay archived";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
 
     $self->assert(!-f "$basedir/data/user/cassandane/1.");
@@ -196,7 +196,7 @@ sub test_archivenow_messages
     $self->assert(-f "$basedir/archive/user/cassandane/2.");
     $self->assert(-f "$basedir/archive/user/cassandane/3.");
 
-    xlog "Run cyr_expire to archive now and messages stay archived";
+    xlog $self, "Run cyr_expire to archive now and messages stay archived";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
 
     $self->assert(!-f "$basedir/data/user/cassandane/1.");
@@ -222,7 +222,7 @@ sub test_archive_messages_archive_annotation
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid flags));
 
-    xlog "Append 3 messages";
+    xlog $self, "Append 3 messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{A}->set_attributes(id => 1,
@@ -248,7 +248,7 @@ sub test_archive_messages_archive_annotation
     $self->assert(!-f "$basedir/archive/user/cassandane/2.");
     $self->assert(!-f "$basedir/archive/user/cassandane/3.");
 
-    xlog "Run cyr_expire but no messages should move";
+    xlog $self, "Run cyr_expire but no messages should move";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '7d' );
 
     $self->assert(-f "$basedir/data/user/cassandane/1.");
@@ -263,7 +263,7 @@ sub test_archive_messages_archive_annotation
                             "/shared/vendor/cmu/cyrus-imapd/archive",
                             '3');
 
-    xlog "Run cyr_expire asking to archive now, but it shouldn't";
+    xlog $self, "Run cyr_expire asking to archive now, but it shouldn't";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' );
 
     $self->assert(-f "$basedir/data/user/cassandane/1.");
@@ -275,7 +275,7 @@ sub test_archive_messages_archive_annotation
     $self->assert(!-f "$basedir/archive/user/cassandane/3.");
 
 
-    xlog "Run cyr_expire asking to archive now, with skip annotation";
+    xlog $self, "Run cyr_expire asking to archive now, with skip annotation";
     $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-A' => '0' , '-a');
 
     $self->assert(!-f "$basedir/data/user/cassandane/1.");

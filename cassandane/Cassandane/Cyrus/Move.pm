@@ -85,18 +85,18 @@ sub test_move_new_user
     $talk->enable("QRESYNC");
     $talk->select("INBOX");
 
-    xlog "create a message and mark it \\Seen";
+    xlog $self, "create a message and mark it \\Seen";
     $self->make_message("Message foo");
     $talk->store("1", "+flags", "\\Seen");
 
-    xlog "moving to second user works";
+    xlog $self, "moving to second user works";
     $talk->move("1", "user.user2.sub");
     $talk->select("user.user2.sub");
     my $res = $talk->fetch("1", "(flags)");
     my $flags = $res->{1}->{flags};
     $self->assert(grep { $_ eq "\\Seen" } @$flags);
 
-    xlog "moving back works";
+    xlog $self, "moving back works";
     $talk->move("1", "INBOX");
     $talk->select("INBOX");
     $res = $talk->fetch("1", "(flags)");

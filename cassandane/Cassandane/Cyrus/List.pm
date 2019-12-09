@@ -112,7 +112,7 @@ sub _assert_list_data
 
     # check that expected data exists
     foreach my $mailbox (sort keys %{$expected_mailbox_flags}) {
-        xlog "expect mailbox: $mailbox";
+        xlog $self, "expect mailbox: $mailbox";
         $self->assert(
             exists $actual_hash{$mailbox},
             "'$mailbox': mailbox not found"
@@ -360,10 +360,10 @@ sub test_list_subscribed_return_children
 
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "listing...";
+    xlog $self, "listing...";
     my $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*", "RETURN", [qw(CHILDREN)]);
 
-    xlog "subscribed to: " . Dumper $subdata;
+    xlog $self, "subscribed to: " . Dumper $subdata;
     $self->_assert_list_data($subdata, '/', {
         'INBOX'                 => [qw( \\Subscribed \\HasNoChildren )],
         'Fruit/Banana'          => [qw( \\Subscribed \\HasNoChildren )],
@@ -390,10 +390,10 @@ sub test_list_subscribed_return_children_noaltns
 
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "listing...";
+    xlog $self, "listing...";
     my $subdata = $imaptalk->list([qw(SUBSCRIBED)], "", "*", "RETURN", [qw(CHILDREN)]);
 
-    xlog "subscribed to: " . Dumper $subdata;
+    xlog $self, "subscribed to: " . Dumper $subdata;
     $self->_assert_list_data($subdata, '/', {
         'INBOX'                 => [qw( \\Subscribed \\HasChildren )],
         'INBOX/Fruit/Banana'    => [qw( \\Subscribed \\HasNoChildren )],
@@ -700,7 +700,7 @@ sub test_percent
         $admintalk->setacl($Folder, 'cassandane' => 'lrswipkxtecd');
     }
 
-    xlog "List *";
+    xlog $self, "List *";
     my $data = $imaptalk->list("", "*");
     $self->_assert_list_data($data, '.', {
         'INBOX' => '\\HasChildren',
@@ -720,7 +720,7 @@ sub test_percent
         'shared stuff.something' => '\\HasNoChildren',
     });
 
-    #xlog "LIST %";
+    #xlog $self, "LIST %";
     #$data = $imaptalk->list("", "%");
     #$self->_assert_list_data($data, '.', {
         #'INBOX' => '\\HasChildren',
@@ -728,7 +728,7 @@ sub test_percent
         #'shared stuff' => '\\Noselect \\HasChildren',
     #});
 
-    xlog "List *%";
+    xlog $self, "List *%";
     $data = $imaptalk->list("", "*%");
     $self->_assert_list_data($data, '.', {
         'INBOX' => '\\HasChildren',
@@ -759,7 +759,7 @@ sub test_percent
         'shared stuff.something' => '\\HasNoChildren',
     });
 
-    xlog "LIST INBOX.*";
+    xlog $self, "LIST INBOX.*";
     $data = $imaptalk->list("INBOX.", "*");
     $self->_assert_list_data($data, '.', {
         'INBOX.INBOX' => '\\HasChildren',
@@ -774,7 +774,7 @@ sub test_percent
         'INBOX.sub2.achild' => '\\HasNoChildren',
     });
 
-    xlog "LIST INBOX.*%";
+    xlog $self, "LIST INBOX.*%";
     $data = $imaptalk->list("INBOX.", "*%");
     $self->_assert_list_data($data, '.', {
         'INBOX.INBOX' => '\\HasChildren',
@@ -796,7 +796,7 @@ sub test_percent
         'INBOX.sub2.achild' => '\\HasNoChildren',
     });
 
-    xlog "LIST INBOX.%";
+    xlog $self, "LIST INBOX.%";
     $data = $imaptalk->list("INBOX.", "%");
     $self->_assert_list_data($data, '.', {
         'INBOX.INBOX' => '\\HasChildren',
@@ -807,7 +807,7 @@ sub test_percent
         'INBOX.sub2' => '\\HasChildren',
     });
 
-    xlog "List user.*";
+    xlog $self, "List user.*";
     $data = $imaptalk->list("user.", "*");
     $self->_assert_list_data($data, '.', {
         'user.bar.Trash' => '\\HasNoChildren',
@@ -815,7 +815,7 @@ sub test_percent
         'user.foo.really.deep' => '\\HasNoChildren',
     });
 
-    xlog "List user.*%";
+    xlog $self, "List user.*%";
     $data = $imaptalk->list("user.", "*%");
     $self->_assert_list_data($data, '.', {
         'user.bar' => '\\Noselect \\HasChildren',
@@ -825,7 +825,7 @@ sub test_percent
         'user.foo.really.deep' => '\\HasNoChildren',
     });
 
-    #xlog "List user.%";
+    #xlog $self, "List user.%";
     #$data = $imaptalk->list("user.", "%");
     #$self->_assert_list_data($data, '.', {
     #    'user.bar' => '\\Noselect \\HasChildren',
@@ -868,7 +868,7 @@ sub test_percent_altns
         $admintalk->setacl($Folder, 'cassandane' => 'lrswipkxtecd');
     }
 
-    xlog "List *";
+    xlog $self, "List *";
     my $data = $imaptalk->list("", "*");
     $self->_assert_list_data($data, '/', {
         'INBOX' => '\\HasChildren',
@@ -888,7 +888,7 @@ sub test_percent_altns
         'Shared Folders/shared stuff@defdomain/something' => '\\HasNoChildren',
     });
 
-    xlog "List *%";
+    xlog $self, "List *%";
     $data = $imaptalk->list("", "*%");
     $self->_assert_list_data($data, '/', {
         'INBOX' => '\\HasChildren',
@@ -921,7 +921,7 @@ sub test_percent_altns
         'Shared Folders/shared stuff@defdomain/something' => '\\HasNoChildren',
     });
 
-    xlog "List %";
+    xlog $self, "List %";
     $data = $imaptalk->list("", "%");
     $self->_assert_list_data($data, '/', {
         'INBOX' => '\\HasChildren',
@@ -935,14 +935,14 @@ sub test_percent_altns
 
     # check some partials
 
-    xlog "List INBOX/*";
+    xlog $self, "List INBOX/*";
     $data = $imaptalk->list("INBOX/", "*");
     $self->_assert_list_data($data, '/', {
         'INBOX/sub' => '\\HasNoChildren',
         'INBOX/very/deep/one' => '\\HasNoChildren',
     });
 
-    xlog "List INBOX/*%";
+    xlog $self, "List INBOX/*%";
     $data = $imaptalk->list("INBOX/", "*%");
     $self->_assert_list_data($data, '/', {
         'INBOX/sub' => '\\HasNoChildren',
@@ -951,44 +951,44 @@ sub test_percent_altns
         'INBOX/very/deep/one' => '\\HasNoChildren',
     });
 
-    xlog "List INBOX/%";
+    xlog $self, "List INBOX/%";
     $data = $imaptalk->list("INBOX/", "%");
     $self->_assert_list_data($data, '/', {
         'INBOX/sub' => '\\HasNoChildren',
         'INBOX/very' => '\\Noselect \\HasChildren',
     });
 
-    xlog "List AEARLY/*";
+    xlog $self, "List AEARLY/*";
     $data = $imaptalk->list("AEARLY/", "*");
     $self->_assert_list_data($data, '/', {});
 
-    xlog "List AEARLY/*%";
+    xlog $self, "List AEARLY/*%";
     $data = $imaptalk->list("AEARLY/", "*%");
     $self->_assert_list_data($data, '/', {});
 
-    xlog "List AEARLY/%";
+    xlog $self, "List AEARLY/%";
     $data = $imaptalk->list("AEARLY/", "%");
     $self->_assert_list_data($data, '/', {});
 
-    xlog "List sub2/*";
+    xlog $self, "List sub2/*";
     $data = $imaptalk->list("sub2/", "*");
     $self->_assert_list_data($data, '/', {
         'sub2/achild' => '\\HasNoChildren',
     });
 
-    xlog "List sub2/*%";
+    xlog $self, "List sub2/*%";
     $data = $imaptalk->list("sub2/", "*%");
     $self->_assert_list_data($data, '/', {
         'sub2/achild' => '\\HasNoChildren',
     });
 
-    xlog "List sub2/%";
+    xlog $self, "List sub2/%";
     $data = $imaptalk->list("sub2/", "%");
     $self->_assert_list_data($data, '/', {
         'sub2/achild' => '\\HasNoChildren',
     });
 
-    xlog "List Alt Folders/*";
+    xlog $self, "List Alt Folders/*";
     $data = $imaptalk->list("Alt Folders/", "*");
     $self->_assert_list_data($data, '/', {
         'Alt Folders/INBOX' => '\\HasNoChildren \\Noinferiors',
@@ -997,7 +997,7 @@ sub test_percent_altns
         'Alt Folders/Inbox/subnobody/deep' => '\\HasNoChildren',
     });
 
-    xlog "List Alt Folders/*%";
+    xlog $self, "List Alt Folders/*%";
     $data = $imaptalk->list("Alt Folders/", "*%");
     $self->_assert_list_data($data, '/', {
         'Alt Folders/INBOX' => '\\HasNoChildren \\Noinferiors',
@@ -1009,7 +1009,7 @@ sub test_percent_altns
         'Alt Folders/Inbox/subnobody/deep' => '\\HasNoChildren',
     });
 
-    xlog "List Alt Folders/%";
+    xlog $self, "List Alt Folders/%";
     $data = $imaptalk->list("Alt Folders/", "%");
     $self->_assert_list_data($data, '/', {
         'Alt Folders/INBOX' => '\\HasNoChildren \\Noinferiors',
@@ -1017,13 +1017,13 @@ sub test_percent_altns
         'Alt Folders/Inbox' => '\\Noselect \\HasChildren',
     });
 
-    xlog "List Other Users";
+    xlog $self, "List Other Users";
     $data = $imaptalk->list("", "Other Users");
     $self->_assert_list_data($data, '/', {
         'Other Users' => '\\Noselect \\HasChildren',
     });
 
-    xlog "List Other Users/*";
+    xlog $self, "List Other Users/*";
     $data = $imaptalk->list("Other Users/", "*");
     $self->_assert_list_data($data, '/', {
         'Other Users/bar@defdomain/Trash' => '\\HasNoChildren',
@@ -1031,7 +1031,7 @@ sub test_percent_altns
         'Other Users/foo@defdomain/really/deep' => '\\HasNoChildren',
     });
 
-    xlog "List Other Users/*%";
+    xlog $self, "List Other Users/*%";
     $data = $imaptalk->list("Other Users/", "*%");
     $self->_assert_list_data($data, '/', {
         'Other Users/bar@defdomain' => '\\Noselect \\HasChildren',
@@ -1041,7 +1041,7 @@ sub test_percent_altns
         'Other Users/foo@defdomain/really/deep' => '\\HasNoChildren',
     });
 
-    xlog "List Other Users/%";
+    xlog $self, "List Other Users/%";
     $data = $imaptalk->list("Other Users/", "%");
     $self->_assert_list_data($data, '/', {
         'Other Users/bar@defdomain' => '\\Noselect \\HasChildren',
@@ -1170,7 +1170,7 @@ sub test_list_special_use_return_subscribed
     my $alldata = $imaptalk->list([qw( SPECIAL-USE )], "", "*",
                                   'RETURN', [qw(SUBSCRIBED)]);
 
-    xlog Dumper $alldata;
+    xlog $self, Dumper $alldata;
     $self->_assert_list_data($alldata, '/', {
         'SentMail'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
         'MyDrafts'              => [qw( \\Drafts \\HasNoChildren )],
@@ -1209,7 +1209,7 @@ sub test_virtdomains_return_subscribed_altns
     my $specialuse = $footalk->list([qw( SPECIAL-USE )], "", "*",
                                     'RETURN', [qw(SUBSCRIBED)]);
 
-    xlog Dumper $specialuse;
+    xlog $self, Dumper $specialuse;
     $self->_assert_list_data($specialuse, '/', {
         'Sent'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
         'Drafts'            => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
@@ -1234,7 +1234,7 @@ sub test_virtdomains_return_subscribed_altns
 
     my $alldata = $footalk->list("", "*", 'RETURN', [qw(SUBSCRIBED)]);
 
-    xlog Dumper $alldata;
+    xlog $self, Dumper $alldata;
     $self->_assert_list_data($alldata, '/', {
         'INBOX'         => [qw( \\HasNoChildren \\Subscribed )],
         'Drafts'        => [qw( \\HasNoChildren \\Subscribed )],
@@ -1279,7 +1279,7 @@ sub test_virtdomains_return_subscribed_noaltns
     my $specialuse = $footalk->list([qw( SPECIAL-USE )], "", "*",
                                     'RETURN', [qw(SUBSCRIBED)]);
 
-    xlog Dumper $specialuse;
+    xlog $self, Dumper $specialuse;
     $self->_assert_list_data($specialuse, '/', {
         'INBOX/Sent'              => [qw( \\Sent \\HasNoChildren \\Subscribed )],
         'INBOX/Drafts'            => [qw( \\Drafts \\HasNoChildren  \\Subscribed )],
@@ -1305,7 +1305,7 @@ sub test_virtdomains_return_subscribed_noaltns
 
     my $alldata = $footalk->list("", "*", 'RETURN', [qw(SUBSCRIBED)]);
 
-    xlog Dumper $alldata;
+    xlog $self, Dumper $alldata;
     $self->_assert_list_data($alldata, '/', {
         'INBOX'         => [qw( \\HasChildren \\Subscribed )],
         'INBOX/Drafts'  => [qw( \\HasNoChildren \\Subscribed )],
@@ -1405,7 +1405,7 @@ sub test_dotuser_gh1875_virt
 
     my $data = $footalk->list("", "*");
 
-    xlog Dumper $data;
+    xlog $self, Dumper $data;
     $self->_assert_list_data($data, '/', {
         'INBOX'             => [qw( \\HasChildren )],
         'INBOX/Sent'        => [qw( \\HasNoChildren )],
@@ -1432,7 +1432,7 @@ sub test_dotuser_gh1875_novirt
 
     my $data = $footalk->list("", "*");
 
-    xlog Dumper $data;
+    xlog $self, Dumper $data;
     $self->_assert_list_data($data, '/', {
         'INBOX'             => [qw( \\HasChildren )],
         'INBOX/Sent'        => [qw( \\HasNoChildren )],
@@ -1459,7 +1459,7 @@ sub test_dotuser_gh1875_virt_altns
 
     my $data = $footalk->list("", "*");
 
-    xlog Dumper $data;
+    xlog $self, Dumper $data;
     $self->_assert_list_data($data, '/', {
         'INBOX'       => [qw( \\HasNoChildren )],
         'Sent'        => [qw( \\HasNoChildren )],
@@ -1486,7 +1486,7 @@ sub test_dotuser_gh1875_novirt_altns
 
     my $data = $footalk->list("", "*");
 
-    xlog Dumper $data;
+    xlog $self, Dumper $data;
     $self->_assert_list_data($data, '/', {
         'INBOX'       => [qw( \\HasNoChildren )],
         'Sent'        => [qw( \\HasNoChildren )],

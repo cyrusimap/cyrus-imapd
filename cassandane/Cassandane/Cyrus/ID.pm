@@ -74,7 +74,7 @@ sub test_cmd_id
     return if not $imaptalk->capability()->{id};
 
     my $res = $imaptalk->id(name => "cassandane");
-    xlog Dumper $res;
+    xlog $self, Dumper $res;
 
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 }

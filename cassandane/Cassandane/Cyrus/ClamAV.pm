@@ -152,7 +152,7 @@ sub test_remove_infected_slow
             or die "Cannot open $out for reading: $!";
         $out = <$fh>;
         close $fh;
-        xlog $out;
+        xlog $self, $out;
     }
     # XXX is there a better way than hard coding UID:1 ?
     my ($v) = Cassandane::Instance->get_version();
@@ -218,7 +218,7 @@ sub test_notify_deleted
             $found_notifications ++;
 
             my $body = $msg->get_body();
-#            xlog "body:\n>>>>>>\n$body<<<<<<";
+#            xlog $self, "body:\n>>>>>>\n$body<<<<<<";
 
             # make sure report body includes all our infected tests
             foreach my $exp (values %cass_exp) {
@@ -288,14 +288,14 @@ sub test_custom_notify_deleted
             $found_notifications ++;
 
             my $subject = $msg->get_header('subject');
-#            xlog "subject: $subject";
+#            xlog $self, "subject: $subject";
 
             # make sure our custom subject was used (and correctly encoded)
             $self->assert_str_equals('=?UTF-8?Q?custom_=C2=BD_subject?=',
                                      $subject);
 
             my $body = $msg->get_body();
-#            xlog "body:\n>>>>>>\n$body<<<<<<";
+#            xlog $self, "body:\n>>>>>>\n$body<<<<<<";
 
             # make sure report body includes all our infected tests
             foreach my $exp (values %cass_exp) {

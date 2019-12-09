@@ -75,7 +75,7 @@ sub _force_db_creations
     eval {
         $self->{instance}->_find_binary('ctl_backups');
 
-        xlog "autovivify a backups.db";
+        xlog $self, "autovivify a backups.db";
         $self->{instance}->run_command({
             cyrus => 1,
         }, 'ctl_backups', 'list');

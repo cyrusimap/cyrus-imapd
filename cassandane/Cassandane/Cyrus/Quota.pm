@@ -224,9 +224,9 @@ sub test_using_storage
 {
     my ($self) = @_;
 
-    xlog "test increasing usage of the STORAGE quota resource as messages are added";
+    xlog $self, "test increasing usage of the STORAGE quota resource as messages are added";
     $self->_set_quotaroot('user.cassandane');
-    xlog "set ourselves a basic limit";
+    xlog $self, "set ourselves a basic limit";
     $self->_set_limits(storage => 100000);
     $self->_check_usages(storage => 0);
     my $talk = $self->{store}->get_client();
@@ -248,7 +248,7 @@ sub test_using_storage
             my $len = length($msg->as_string());
             $expecteds{$folder} += $len;
             $expected += $len;
-            xlog "added $len bytes of message";
+            xlog $self, "added $len bytes of message";
             $self->_check_usages(storage => int($expected/1024));
         }
     }
@@ -272,7 +272,7 @@ sub test_using_storage_late
 {
     my ($self) = @_;
 
-    xlog "test setting STORAGE quota resource after messages are added";
+    xlog $self, "test setting STORAGE quota resource after messages are added";
 
     $self->_set_quotaroot('user.cassandane');
     $self->_check_no_quota();
@@ -295,7 +295,7 @@ sub test_using_storage_late
             my $len = length($msg->as_string());
             $expecteds{$folder} += $len;
             $expected += $len;
-            xlog "added $len bytes of message";
+            xlog $self, "added $len bytes of message";
         }
     }
 
@@ -321,16 +321,16 @@ sub test_exceeding_storage
 {
     my ($self) = @_;
 
-    xlog "test exceeding the STORAGE quota limit";
+    xlog $self, "test exceeding the STORAGE quota limit";
 
     my $talk = $self->{store}->get_client();
 
-    xlog "set a low limit";
+    xlog $self, "set a low limit";
     $self->_set_quotaroot('user.cassandane');
     $self->_set_limits(storage => 210);
     $self->_check_usages(storage => 0);
 
-    xlog "adding messages to get just below the limit";
+    xlog $self, "adding messages to get just below the limit";
     my %msgs;
     my $slack = 200 * 1024;
     my $n = 1;
@@ -345,17 +345,17 @@ sub test_exceeding_storage
         my $len = length($msg->as_string());
         $slack -= $len;
         $expected += $len;
-        xlog "added $len bytes of message";
+        xlog $self, "added $len bytes of message";
         $msgs{$n} = $msg;
         $n++;
     }
-    xlog "check that the messages are all in the mailbox";
+    xlog $self, "check that the messages are all in the mailbox";
     $self->check_messages(\%msgs);
-    xlog "check that the usage is just below the limit";
+    xlog $self, "check that the usage is just below the limit";
     $self->_check_usages(storage => int($expected/1024));
     $self->_check_smmap('cassandane', 'OK');
 
-    xlog "add a message that exceeds the limit";
+    xlog $self, "add a message that exceeds the limit";
     my $nlines = int(($slack - 640) / 23) * 2;
     $nlines = 500 if ($nlines < 500);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -364,10 +364,10 @@ sub test_exceeding_storage
     $self->assert_str_equals('no', $talk->get_last_completion_response());
     $self->assert($talk->get_last_error() =~ m/over quota/i);
 
-    xlog "check that the exceeding message is not in the mailbox";
+    xlog $self, "check that the exceeding message is not in the mailbox";
     $self->check_messages(\%msgs);
 
-    xlog "check that the quota usage is still the same";
+    xlog $self, "check that the quota usage is still the same";
     $self->_check_usages(storage => int($expected/1024));
     $self->_check_smmap('cassandane', 'OK');
 }
@@ -376,16 +376,16 @@ sub test_move_near_limit
 {
     my ($self) = @_;
 
-    xlog "test move near the STORAGE quota limit";
+    xlog $self, "test move near the STORAGE quota limit";
 
     my $talk = $self->{store}->get_client();
 
-    xlog "set a low limit";
+    xlog $self, "set a low limit";
     $self->_set_quotaroot('user.cassandane');
     $self->_set_limits(storage => 210);
     $self->_check_usages(storage => 0);
 
-    xlog "adding messages to get just below the limit";
+    xlog $self, "adding messages to get just below the limit";
     my %msgs;
     my $slack = 200 * 1024;
     my $n = 1;
@@ -400,17 +400,17 @@ sub test_move_near_limit
         my $len = length($msg->as_string());
         $slack -= $len;
         $expected += $len;
-        xlog "added $len bytes of message";
+        xlog $self, "added $len bytes of message";
         $msgs{$n} = $msg;
         $n++;
     }
-    xlog "check that the messages are all in the mailbox";
+    xlog $self, "check that the messages are all in the mailbox";
     $self->check_messages(\%msgs);
-    xlog "check that the usage is just below the limit";
+    xlog $self, "check that the usage is just below the limit";
     $self->_check_usages(storage => int($expected/1024));
     $self->_check_smmap('cassandane', 'OK');
 
-    xlog "add a message that exceeds the limit";
+    xlog $self, "add a message that exceeds the limit";
     my $nlines = int(($slack - 640) / 23) * 2;
     $nlines = 500 if ($nlines < 500);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -421,12 +421,12 @@ sub test_move_near_limit
 
     $talk->create("INBOX.target");
 
-    xlog "try to copy the messages";
+    xlog $self, "try to copy the messages";
     $talk->copy("1:*", "INBOX.target");
     $self->assert_str_equals('no', $talk->get_last_completion_response());
     $self->assert($talk->get_last_error() =~ m/over quota/i);
 
-    xlog "move the messages";
+    xlog $self, "move the messages";
     $talk->move("1:*", "INBOX.target");
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 }
@@ -435,16 +435,16 @@ sub test_overquota
 {
     my ($self) = @_;
 
-    xlog "test account which is over STORAGE quota limit";
+    xlog $self, "test account which is over STORAGE quota limit";
 
     my $talk = $self->{store}->get_client();
 
-    xlog "set a low limit";
+    xlog $self, "set a low limit";
     $self->_set_quotaroot('user.cassandane');
     $self->_set_limits(storage => 210);
     $self->_check_usages(storage => 0);
 
-    xlog "adding messages to get just below the limit";
+    xlog $self, "adding messages to get just below the limit";
     my %msgs;
     my $slack = 200 * 1024;
     my $n = 1;
@@ -459,25 +459,25 @@ sub test_overquota
         my $len = length($msg->as_string());
         $slack -= $len;
         $expected += $len;
-        xlog "added $len bytes of message";
+        xlog $self, "added $len bytes of message";
         $msgs{$n} = $msg;
         $n++;
     }
-    xlog "check that the messages are all in the mailbox";
+    xlog $self, "check that the messages are all in the mailbox";
     $self->check_messages(\%msgs);
-    xlog "check that the usage is just below the limit";
+    xlog $self, "check that the usage is just below the limit";
     $self->_check_usages(storage => int($expected/1024));
     $self->_check_smmap('cassandane', 'OK');
 
-    xlog "reduce the quota limit";
+    xlog $self, "reduce the quota limit";
     $self->_set_limits(storage => 100);
 
-    xlog "check that usage is unchanged";
+    xlog $self, "check that usage is unchanged";
     $self->_check_usages(storage => int($expected/1024));
-    xlog "check that smmap reports over quota";
+    xlog $self, "check that smmap reports over quota";
     $self->_check_smmap('cassandane', 'TEMP');
 
-    xlog "try to add another message";
+    xlog $self, "try to add another message";
     my $overmsg = eval { $self->make_message("Message $n") };
     my $ex = $@;
     if ($ex) {
@@ -488,28 +488,28 @@ sub test_overquota
         $self->assert($talk->get_last_error() =~ m/over quota/i);
     }
 
-    xlog "check that the exceeding message is not in the mailbox";
+    xlog $self, "check that the exceeding message is not in the mailbox";
     $self->check_messages(\%msgs);
 
-    xlog "check that the quota usage is still unchanged";
+    xlog $self, "check that the quota usage is still unchanged";
     $self->_check_usages(storage => int($expected/1024));
     $self->_check_smmap('cassandane', 'TEMP');
 
     my $delmsg = delete $msgs{1};
     my $dellen = length($delmsg->as_string());
-    xlog "delete the first message ($dellen bytes)";
+    xlog $self, "delete the first message ($dellen bytes)";
     $talk->select("INBOX");
     $talk->store('1', '+flags', '(\\deleted)');
     $talk->close();
 
-    xlog "check that the deleted message is no longer in the mailbox";
+    xlog $self, "check that the deleted message is no longer in the mailbox";
     $self->check_messages(\%msgs);
 
-    xlog "check that the usage has gone down";
+    xlog $self, "check that the usage has gone down";
     $expected -= $dellen;
     $self->_check_usages(storage => int($expected/1024));
 
-    xlog "check that we are still over quota";
+    xlog $self, "check that we are still over quota";
     $self->_check_smmap('cassandane', 'TEMP');
 }
 
@@ -517,12 +517,12 @@ sub test_using_message
 {
     my ($self) = @_;
 
-    xlog "test increasing usage of the MESSAGE quota resource as messages are added";
+    xlog $self, "test increasing usage of the MESSAGE quota resource as messages are added";
 
     $self->_set_quotaroot('user.cassandane');
     my $talk = $self->{store}->get_client();
 
-    xlog "set ourselves a basic limit";
+    xlog $self, "set ourselves a basic limit";
     $self->_set_limits(message => 50000);
     $self->_check_usages(message => 0);
 
@@ -563,7 +563,7 @@ sub test_using_message_late
 {
     my ($self) = @_;
 
-    xlog "test setting MESSAGE quota resource after messages are added";
+    xlog $self, "test setting MESSAGE quota resource after messages are added";
 
     $self->_set_quotaroot('user.cassandane');
     my $talk = $self->{store}->get_client();
@@ -608,27 +608,27 @@ sub test_exceeding_message
 {
     my ($self) = @_;
 
-    xlog "test exceeding the MESSAGE quota limit";
+    xlog $self, "test exceeding the MESSAGE quota limit";
 
     my $talk = $self->{store}->get_client();
 
-    xlog "set a low limit";
+    xlog $self, "set a low limit";
     $self->_set_quotaroot('user.cassandane');
     $self->_set_limits(message => 10);
     $self->_check_usages(message => 0);
 
-    xlog "adding messages to get just below the limit";
+    xlog $self, "adding messages to get just below the limit";
     my %msgs;
     for (1..10)
     {
         $msgs{$_} = $self->make_message("Message $_");
     }
-    xlog "check that the messages are all in the mailbox";
+    xlog $self, "check that the messages are all in the mailbox";
     $self->check_messages(\%msgs);
-    xlog "check that the usage is just below the limit";
+    xlog $self, "check that the usage is just below the limit";
     $self->_check_usages(message => 10);
 
-    xlog "add a message that exceeds the limit";
+    xlog $self, "add a message that exceeds the limit";
     my $overmsg = eval { $self->make_message("Message 11") };
     # As opposed to storage checking, which is currently done after receiving t
     # (LITERAL) mail, message count checking is performed right away. This earl
@@ -643,7 +643,7 @@ sub test_exceeding_message
         $self->assert($talk->get_last_error() =~ m/over quota/i);
     }
 
-    xlog "check that the exceeding message is not in the mailbox";
+    xlog $self, "check that the exceeding message is not in the mailbox";
     $self->_check_usages(message => 10);
     $self->check_messages(\%msgs);
 }
@@ -652,20 +652,20 @@ sub test_using_annotstorage_msg
 {
     my ($self) = @_;
 
-    xlog "test setting X-ANNOTATION-STORAGE quota resource after";
-    xlog "per-message annotations are added";
+    xlog $self, "test setting X-ANNOTATION-STORAGE quota resource after";
+    xlog $self, "per-message annotations are added";
 
     $self->_set_quotaroot('user.cassandane');
     my $talk = $self->{store}->get_client();
 
-    xlog "set ourselves a basic limit";
+    xlog $self, "set ourselves a basic limit";
     $self->_set_limits('x-annotation-storage' => 100000);
     $self->_check_usages('x-annotation-storage' => 0);
 
     $talk->create("INBOX.sub1") || die "Failed to create subfolder";
     $talk->create("INBOX.sub2") || die "Failed to create subfolder";
 
-    xlog "make some messages to hang annotations on";
+    xlog $self, "make some messages to hang annotations on";
     my %expecteds = ();
     my $expected = 0;
     foreach my $folder ("INBOX", "INBOX.sub1", "INBOX.sub2")
@@ -687,13 +687,13 @@ sub test_using_annotstorage_msg
         }
     }
 
-    xlog "delete subfolder sub1";
+    xlog $self, "delete subfolder sub1";
     $talk->delete("INBOX.sub1") || die "Failed to delete subfolder";
     $expected -= delete($expecteds{"INBOX.sub1"});
 
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
-    xlog "delete messages in sub2";
+    xlog $self, "delete messages in sub2";
     $talk->select("INBOX.sub2");
     $talk->store('1:*', '+flags', '(\\deleted)');
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -701,16 +701,16 @@ sub test_using_annotstorage_msg
 
     $expected -= delete($expecteds{"INBOX.sub2"});
 
-    xlog "Unlike STORAGE, X-ANNOTATION-STORAGE quota is reduced immediately";
+    xlog $self, "Unlike STORAGE, X-ANNOTATION-STORAGE quota is reduced immediately";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
     $self->run_delayed_expunge();
     $talk = $self->{store}->get_client();
 
-    xlog "X-ANNOTATION-STORAGE quota should not have changed during delayed expunge";
+    xlog $self, "X-ANNOTATION-STORAGE quota should not have changed during delayed expunge";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
-    xlog "delete annotations on INBOX";
+    xlog $self, "delete annotations on INBOX";
     $talk->select("INBOX");
     $talk->store('1:*', 'annotation', ['/comment', ['value.priv', undef]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -724,8 +724,8 @@ sub test_using_annotstorage_msg_late
 {
     my ($self) = @_;
 
-    xlog "test increasing usage of the X-ANNOTATION-STORAGE quota";
-    xlog "resource as per-message annotations are added";
+    xlog $self, "test increasing usage of the X-ANNOTATION-STORAGE quota";
+    xlog $self, "resource as per-message annotations are added";
 
     $self->_set_quotaroot('user.cassandane');
     my $talk = $self->{store}->get_client();
@@ -735,7 +735,7 @@ sub test_using_annotstorage_msg_late
     $talk->create("INBOX.sub1") || die "Failed to create subfolder";
     $talk->create("INBOX.sub2") || die "Failed to create subfolder";
 
-    xlog "make some messages to hang annotations on";
+    xlog $self, "make some messages to hang annotations on";
     my %expecteds = ();
     my $expected = 0;
     foreach my $folder ("INBOX", "INBOX.sub1", "INBOX.sub2")
@@ -759,28 +759,28 @@ sub test_using_annotstorage_msg_late
     $self->_set_limits('x-annotation-storage' => 100000);
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
-    xlog "delete subfolder sub1";
+    xlog $self, "delete subfolder sub1";
     $talk->delete("INBOX.sub1") || die "Failed to delete subfolder";
     $expected -= delete($expecteds{"INBOX.sub1"});
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
-    xlog "delete messages in sub2";
+    xlog $self, "delete messages in sub2";
     $talk->select("INBOX.sub2");
     $talk->store('1:*', '+flags', '(\\deleted)');
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $talk->expunge();
 
-    xlog "X-ANNOTATION-STORAGE quota goes down immediately";
+    xlog $self, "X-ANNOTATION-STORAGE quota goes down immediately";
     $expected -= delete($expecteds{"INBOX.sub2"});
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
     $self->run_delayed_expunge();
     $talk = $self->{store}->get_client();
 
-    xlog "X-ANNOTATION-STORAGE quota should have been unchanged by expunge";
+    xlog $self, "X-ANNOTATION-STORAGE quota should have been unchanged by expunge";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
-    xlog "delete annotations on INBOX";
+    xlog $self, "delete annotations on INBOX";
     $talk->select("INBOX");
     $talk->store('1:*', 'annotation', ['/comment', ['value.priv', undef]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -793,19 +793,19 @@ sub test_using_annotstorage_mbox
 {
     my ($self) = @_;
 
-    xlog "test setting X-ANNOTATION-STORAGE quota resource after";
-    xlog "per-mailbox annotations are added";
+    xlog $self, "test setting X-ANNOTATION-STORAGE quota resource after";
+    xlog $self, "per-mailbox annotations are added";
 
     $self->_set_quotaroot('user.cassandane');
     my $talk = $self->{store}->get_client();
 
-    xlog "set ourselves a basic limit";
+    xlog $self, "set ourselves a basic limit";
     $self->_set_limits('x-annotation-storage' => 100000);
     $self->_check_usages('x-annotation-storage' => 0);
 
     $talk->create("INBOX.sub") || die "Failed to create subfolder";
 
-    xlog "store annotations";
+    xlog $self, "store annotations";
     my %expecteds = ();
     my $expected = 0;
     foreach my $folder ("INBOX", "INBOX.sub")
@@ -821,13 +821,13 @@ sub test_using_annotstorage_mbox
             $self->assert_str_equals('ok', $talk->get_last_completion_response());
             $expecteds{$folder} += length($moredata);
             $expected += length($moredata);
-            xlog "EXPECTING $expected on $folder";
+            xlog $self, "EXPECTING $expected on $folder";
             $self->_check_usages('x-annotation-storage' => int($expected/1024));
         }
     }
 
     # delete subfolder
-    xlog "Deleting a folder";
+    xlog $self, "Deleting a folder";
     $talk->delete("INBOX.sub") || die "Failed to delete subfolder";
     $expected -= delete($expecteds{"INBOX.sub"});
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
@@ -845,8 +845,8 @@ sub test_using_annotstorage_mbox_late
 {
     my ($self) = @_;
 
-    xlog "test increasing usage of the X-ANNOTATION-STORAGE quota";
-    xlog "resource as per-mailbox annotations are added";
+    xlog $self, "test increasing usage of the X-ANNOTATION-STORAGE quota";
+    xlog $self, "resource as per-mailbox annotations are added";
 
     $self->_set_quotaroot('user.cassandane');
     my $talk = $self->{store}->get_client();
@@ -855,7 +855,7 @@ sub test_using_annotstorage_mbox_late
 
     $talk->create("INBOX.sub") || die "Failed to create subfolder";
 
-    xlog "store annotations";
+    xlog $self, "store annotations";
     my %expecteds = ();
     my $expected = 0;
     foreach my $folder ("INBOX", "INBOX.sub")
@@ -1008,7 +1008,7 @@ sub test_quota_f_no_improved_mboxlist_sort
     $self->assert_str_equals('ok',
                                 $admintalk->get_last_completion_response());
 
-    xlog "set ourselves a basic usage quota";
+    xlog $self, "set ourselves a basic usage quota";
     $self->_set_limits(
         quotaroot => "user/$user",
         storage => 100000,
@@ -1038,7 +1038,7 @@ sub test_quota_f_no_improved_mboxlist_sort
     my $usertalk = $userstore->get_client();
 
     foreach my $submbox ('Drafts', 'Junk', 'Sent', 'Trash') {
-        xlog "creating $submbox...";
+        xlog $self, "creating $submbox...";
         $usertalk->create($submbox);
         $self->assert_str_equals('ok',
                                   $usertalk->get_last_completion_response());
@@ -1053,11 +1053,11 @@ sub test_quota_f_no_improved_mboxlist_sort
         }
     }
 
-    xlog "run quota -d";
+    xlog $self, "run quota -d";
     $self->{instance}->run_command({ cyrus => 1 },
                                    'quota', '-d', 'example.com');
 
-    xlog "run quota -d -f";
+    xlog $self, "run quota -d -f";
     my $outfile = $self->{instance}->{basedir} . '/quota.out';
     my @data = $self->{instance}->run_command({
         cyrus => 1,
@@ -1071,7 +1071,7 @@ sub test_quota_f_no_improved_mboxlist_sort
     local $/ = undef;
     my $str = <FH>;
     close(FH);
-    xlog $str;
+    xlog $self, $str;
 
     #example.com!user.user1.Junk: quota root example.com!user.user1 --> (none)
     $self->assert_does_not_match(qr{ quota root \S+ --> \(none\)}, $str);
@@ -1084,7 +1084,7 @@ sub test_quota_f_unixhs
 
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "set ourselves a basic usage quota";
+    xlog $self, "set ourselves a basic usage quota";
     $self->_set_limits(
         quotaroot => 'user/cassandane',
         storage => 100000,
@@ -1098,7 +1098,7 @@ sub test_quota_f_unixhs
         'x-annotation-storage' => 0,
     );
 
-    xlog "run quota -f";
+    xlog $self, "run quota -f";
     my @data = $self->{instance}->run_command({
         cyrus => 1,
         redirects => { stdout => $self->{instance}{basedir} . '/quota.out' },
@@ -1118,7 +1118,7 @@ sub test_quota_f
 
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "set ourselves a basic usage quota";
+    xlog $self, "set ourselves a basic usage quota";
     $self->_set_limits(
         quotaroot => 'user.cassandane',
         storage => 100000,
@@ -1132,7 +1132,7 @@ sub test_quota_f
         'x-annotation-storage' => 0,
     );
 
-    xlog "create some messages to use various quota resources";
+    xlog $self, "create some messages to use various quota resources";
     $self->{instance}->create_user("quotafuser");
     $self->_set_limits(
         quotaroot => 'user.quotafuser',
@@ -1165,7 +1165,7 @@ sub test_quota_f
     $cassandane_expected_annotation_storage += length($annotation);
     $admintalk->setmetadata('user.cassandane', '/private/comment', { Quote => $annotation });
 
-    xlog "check usages";
+    xlog $self, "check usages";
     $self->_check_usages(
         quotaroot => 'user.quotafuser',
         storage => int($quotafuser_expected_storage/1024),
@@ -1179,10 +1179,10 @@ sub test_quota_f
         'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
     );
 
-    xlog "create a bogus quota file";
+    xlog $self, "create a bogus quota file";
     $self->_zap_quota(quotaroot => 'user.quotafuser');
 
-    xlog "check usages";
+    xlog $self, "check usages";
     $self->_check_usages(
         quotaroot => 'user.quotafuser',
         storage => 0,
@@ -1196,10 +1196,10 @@ sub test_quota_f
         'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
     );
 
-    xlog "find and add the quota";
+    xlog $self, "find and add the quota";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
-    xlog "check usages";
+    xlog $self, "check usages";
     $self->_check_usages(
         quotaroot => 'user.quotafuser',
         storage => int($quotafuser_expected_storage/1024),
@@ -1213,10 +1213,10 @@ sub test_quota_f
         'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
     );
 
-    xlog "re-run the quota utility";
+    xlog $self, "re-run the quota utility";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
-    xlog "check usages";
+    xlog $self, "check usages";
     $self->_check_usages(
         quotaroot => 'user.quotafuser',
         storage => int($quotafuser_expected_storage/1024),
@@ -1241,13 +1241,13 @@ sub test_quota_f_vs_update
     my $msg;
     my $expected;
 
-    xlog "Set up a large but limited quota";
+    xlog $self, "Set up a large but limited quota";
     $self->_set_quotaroot($basefolder);
     $self->_set_limits(storage => 1000000);
     $self->_check_usages(storage => 0);
     my $talk = $self->{store}->get_client();
 
-    xlog "Create some sub folders";
+    xlog $self, "Create some sub folders";
     for my $f (@folders)
     {
         $talk->create("$basefolder.$f") || die "Failed $@";
@@ -1259,10 +1259,10 @@ sub test_quota_f_vs_update
     # unselect so quota -f can lock the mailboxes
     $talk->unselect();
 
-    xlog "Check that we have some quota usage";
+    xlog $self, "Check that we have some quota usage";
     $self->_check_usages(storage => int($expected/1024));
 
-    xlog "Start a quota -f scan";
+    xlog $self, "Start a quota -f scan";
     $self->{instance}->quota_Z_go($basefolder);
     $self->{instance}->quota_Z_go("$basefolder.a");
     $self->{instance}->quota_Z_go("$basefolder.b");
@@ -1276,26 +1276,26 @@ sub test_quota_f_vs_update
 
     # quota -f is now waiting to be allowed to proceed to "c"
 
-    xlog "Mailbox update behind the scan";
+    xlog $self, "Mailbox update behind the scan";
     $self->{store}->set_folder("$basefolder.b");
     $msg = $self->make_message("Cassandane b UPDATE",
                                   extra_lines => 2000+rand(3000));
     $expected += length($msg->as_string());
 
-    xlog "Mailbox update in front of the scan";
+    xlog $self, "Mailbox update in front of the scan";
     $self->{store}->set_folder("$basefolder.d");
     $msg = $self->make_message("Cassandane d UPDATE",
                                   extra_lines => 2000+rand(3000));
     $expected += length($msg->as_string());
 
-    xlog "Let quota -f continue and finish";
+    xlog $self, "Let quota -f continue and finish";
     $self->{instance}->quota_Z_go("$basefolder.c");
     $self->{instance}->quota_Z_go("$basefolder.d");
     $self->{instance}->quota_Z_go("$basefolder.e");
     $self->{instance}->quota_Z_wait("$basefolder.e");
     $self->{instance}->reap_command(@bits);
 
-    xlog "Check that we have the correct quota usage";
+    xlog $self, "Check that we have the correct quota usage";
     $self->_check_usages(storage => int($expected/1024));
 }
 
@@ -1303,16 +1303,16 @@ sub test_quota_f_nested_qr
 {
     my ($self) = @_;
 
-    xlog "Test that quota -f correctly calculates the STORAGE quota";
-    xlog "with a nested quotaroot and a folder whose name sorts after";
-    xlog "the nested quotaroot [Bug 3621]";
+    xlog $self, "Test that quota -f correctly calculates the STORAGE quota";
+    xlog $self, "with a nested quotaroot and a folder whose name sorts after";
+    xlog $self, "the nested quotaroot [Bug 3621]";
 
     my $inbox = "user.cassandane";
     # These names are significant - we need subfolders both before and
     # after the subfolder on which we will set the nested quotaroot
     my @folders = ( $inbox, "$inbox.aaa", "$inbox.nnn", "$inbox.zzz" );
 
-    xlog "add messages to use some STORAGE quota";
+    xlog $self, "add messages to use some STORAGE quota";
     my %exp;
     my $n = 5;
     foreach my $f (@folders)
@@ -1324,42 +1324,42 @@ sub test_quota_f_nested_qr
             $exp{$f} += length($msg->as_string());
         }
         $n += 5;
-        xlog "Expect " . $exp{$f} . " on " . $f;
+        xlog $self, "Expect " . $exp{$f} . " on " . $f;
     }
 
-    xlog "set a quota on inbox";
+    xlog $self, "set a quota on inbox";
     $self->_set_limits(quotaroot => $inbox, storage => 100000);
 
-    xlog "should have correct STORAGE quota";
+    xlog $self, "should have correct STORAGE quota";
     my $ex0 = $exp{$inbox} + $exp{"$inbox.aaa"} + $exp{"$inbox.nnn"} + $exp{"$inbox.zzz"};
     $self->_check_usages(quotaroot => $inbox, storage => int($ex0/1024));
 
-    xlog "set a quota on inbox.nnn - a nested quotaroot";
+    xlog $self, "set a quota on inbox.nnn - a nested quotaroot";
     $self->_set_limits(quotaroot => "$inbox.nnn", storage => 200000);
 
-    xlog "should have correct STORAGE quota for both roots";
+    xlog $self, "should have correct STORAGE quota for both roots";
     my $ex1 = $exp{$inbox} + $exp{"$inbox.aaa"} + $exp{"$inbox.zzz"};
     my $ex2 = $exp{"$inbox.nnn"};
     $self->_check_usages(quotaroot => $inbox, storage => int($ex1/1024));
     $self->_check_usages(quotaroot => "$inbox.nnn", storage => int($ex2/1024));
 
-    xlog "create a bogus quota file";
+    xlog $self, "create a bogus quota file";
     $self->_zap_quota(quotaroot => $inbox);
     $self->_zap_quota(quotaroot => "$inbox.nnn");
     $self->_check_usages(quotaroot => $inbox, storage => 0);
     $self->_check_usages(quotaroot => "$inbox.nnn", storage => 0);
 
-    xlog "run quota -f to find and add the quota";
+    xlog $self, "run quota -f to find and add the quota";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
-    xlog "check that STORAGE quota is restored for both roots";
+    xlog $self, "check that STORAGE quota is restored for both roots";
     $self->_check_usages(quotaroot => $inbox, storage => int($ex1/1024));
     $self->_check_usages(quotaroot => "$inbox.nnn", storage => int($ex2/1024));
 
-    xlog "run quota -f again";
+    xlog $self, "run quota -f again";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
-    xlog "check that STORAGE quota is still correct for both roots";
+    xlog $self, "check that STORAGE quota is still correct for both roots";
     $self->_check_usages(quotaroot => $inbox, storage => int($ex1/1024));
     $self->_check_usages(quotaroot => "$inbox.nnn", storage => int($ex2/1024));
 }
@@ -1368,7 +1368,7 @@ sub test_quota_f_prefix
 {
     my ($self) = @_;
 
-    xlog "Testing prefix matches with quota -f [IRIS-1029]";
+    xlog $self, "Testing prefix matches with quota -f [IRIS-1029]";
 
     my $admintalk = $self->{adminstore}->get_client();
 
@@ -1384,7 +1384,7 @@ sub test_quota_f_prefix
     $self->_set_limits(quotaroot => 'user.base', storage => 1000000);
     my $exp_base = 0;
 
-    xlog "Adding messages to user.base";
+    xlog $self, "Adding messages to user.base";
     $self->{adminstore}->set_folder("user.base");
     for (1..10) {
         my $msg = $self->make_message("base $_",
@@ -1393,7 +1393,7 @@ sub test_quota_f_prefix
         $exp_base += length($msg->as_string());
     }
 
-    xlog "Adding messages to user.base.subdir2";
+    xlog $self, "Adding messages to user.base.subdir2";
     $self->{adminstore}->set_folder("user.base.subdir2");
     for (1..10) {
         my $msg = $self->make_message("base subdir2 $_",
@@ -1407,7 +1407,7 @@ sub test_quota_f_prefix
     $self->_set_limits(quotaroot => 'user.baseplus', storage => 1000000);
     my $exp_baseplus = 0;
 
-    xlog "Adding messages to user.baseplus";
+    xlog $self, "Adding messages to user.baseplus";
     $self->{adminstore}->set_folder("user.baseplus");
     for (1..10) {
         my $msg = $self->make_message("baseplus $_",
@@ -1416,7 +1416,7 @@ sub test_quota_f_prefix
         $exp_baseplus += length($msg->as_string());
     }
 
-    xlog "Adding messages to user.baseplus.subdir";
+    xlog $self, "Adding messages to user.baseplus.subdir";
     $self->{adminstore}->set_folder("user.baseplus.subdir");
     for (1..10) {
         my $msg = $self->make_message("baseplus subdir $_",
@@ -1425,16 +1425,16 @@ sub test_quota_f_prefix
         $exp_baseplus += length($msg->as_string());
     }
 
-    xlog "Check that the quotas were updated as expected";
+    xlog $self, "Check that the quotas were updated as expected";
     $self->_check_usages(quotaroot => 'user.base',
                          storage => int($exp_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
                          storage => int($exp_baseplus/1024));
 
-    xlog "Run quota -f";
+    xlog $self, "Run quota -f";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
-    xlog "Check that the quotas were unchanged by quota -f";
+    xlog $self, "Check that the quotas were unchanged by quota -f";
     $self->_check_usages(quotaroot => 'user.base',
                          storage => int($exp_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
@@ -1442,64 +1442,64 @@ sub test_quota_f_prefix
 
     my $bogus_base = $exp_base + 20000 + rand(30000);
     my $bogus_baseplus = $exp_baseplus + 50000 + rand(80000);
-    xlog "Write incorrect values to the quota db";
+    xlog $self, "Write incorrect values to the quota db";
     $self->_zap_quota(quotaroot => 'user.base',
                       useds => { storage => $bogus_base });
     $self->_zap_quota(quotaroot => 'user.baseplus',
                       useds => { storage => $bogus_baseplus });
 
-    xlog "Check that the quotas are now bogus";
+    xlog $self, "Check that the quotas are now bogus";
     $self->_check_usages(quotaroot => 'user.base',
                          storage => int($bogus_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
                          storage => int($bogus_baseplus/1024));
 
-    xlog "Run quota -f with no prefix";
+    xlog $self, "Run quota -f with no prefix";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
-    xlog "Check that the quotas were all fixed";
+    xlog $self, "Check that the quotas were all fixed";
     $self->_check_usages(quotaroot => 'user.base',
                          storage => int($exp_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
                          storage => int($exp_baseplus/1024));
 
-    xlog "Write incorrect values to the quota db";
+    xlog $self, "Write incorrect values to the quota db";
     $self->_zap_quota(quotaroot => "user.base",
                       useds => { storage => $bogus_base });
     $self->_zap_quota(quotaroot => "user.baseplus",
                       useds => { storage => $bogus_baseplus });
 
-    xlog "Check that the quotas are now bogus";
+    xlog $self, "Check that the quotas are now bogus";
     $self->_check_usages(quotaroot => 'user.base',
                          storage => int($bogus_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
                          storage => int($bogus_baseplus/1024));
 
-    xlog "Run quota -f on user.base only";
+    xlog $self, "Run quota -f on user.base only";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f', 'user.base');
 
-    xlog "Check that only the user.base and user.baseplus quotas were fixed";
+    xlog $self, "Check that only the user.base and user.baseplus quotas were fixed";
     $self->_check_usages(quotaroot => 'user.base',
                          storage => int($exp_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
                          storage => int($exp_baseplus/1024));
 
-    xlog "Write incorrect values to the quota db";
+    xlog $self, "Write incorrect values to the quota db";
     $self->_zap_quota(quotaroot => "user.base",
                       useds => { storage => $bogus_base });
     $self->_zap_quota(quotaroot => "user.baseplus",
                       useds => { storage => $bogus_baseplus });
 
-    xlog "Check that the quotas are now bogus";
+    xlog $self, "Check that the quotas are now bogus";
     $self->_check_usages(quotaroot => 'user.base',
                          storage => int($bogus_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
                          storage => int($bogus_baseplus/1024));
 
-    xlog "Run quota -f on user.baseplus only";
+    xlog $self, "Run quota -f on user.baseplus only";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f', 'user.baseplus');
 
-    xlog "Check that only the user.baseplus quotas were fixed";
+    xlog $self, "Check that only the user.baseplus quotas were fixed";
     $self->_check_usages(quotaroot => 'user.base',
                          storage => int($bogus_base/1024));
     $self->_check_usages(quotaroot => 'user.baseplus',
@@ -1510,28 +1510,28 @@ sub bogus_test_upgrade_v2_4
 {
     my ($self) = @_;
 
-    xlog "test resources usage computing upon upgrading a cyrus v2.4 mailbox";
+    xlog $self, "test resources usage computing upon upgrading a cyrus v2.4 mailbox";
 
     $self->_set_quotaroot('user.cassandane');
     my $talk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "set ourselves a basic limit";
+    xlog $self, "set ourselves a basic limit";
     $self->_set_limits('x-annotation-storage' => 100000);
     $self->_check_usages('x-annotation-storage' => 0);
 
-    xlog "store annotations";
+    xlog $self, "store annotations";
     my $data = $self->make_random_data(10);
     my $expected_annotation_storage = length($data);
     $talk->setmetadata($self->{store}->{folder}, '/private/comment', { Quote => $data });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->_check_usages('x-annotation-storage' => int($expected_annotation_storage/1024));
 
-    xlog "restore cyrus v2.4 mailbox content and quota file";
+    xlog $self, "restore cyrus v2.4 mailbox content and quota file";
     $self->{instance}->unpackfile(abs_path('data/cyrus/quota_upgrade_v2_4.user.tar.gz'), 'data/user');
     $self->{instance}->unpackfile(abs_path('data/cyrus/quota_upgrade_v2_4.quota.tar.gz'), 'conf/quota/c');
 
-    xlog "upgrade to version 13 format (v2.5.0)";
+    xlog $self, "upgrade to version 13 format (v2.5.0)";
     $self->{instance}->run_command({ cyrus => 1 }, 'reconstruct', '-V' => 13);
 
     # count messages and size from restored mailbox
@@ -1570,8 +1570,8 @@ sub test_bz3529
 {
     my ($self) = @_;
 
-    xlog "testing annot storage quota when setting annots on multiple";
-    xlog "messages in a single STORE command, using quotalegacy backend.";
+    xlog $self, "testing annot storage quota when setting annots on multiple";
+    xlog $self, "messages in a single STORE command, using quotalegacy backend.";
 
     # double check that some other part of Cassandane didn't
     # accidentally futz with the expected quota db backend
@@ -1582,11 +1582,11 @@ sub test_bz3529
     $self->_set_quotaroot('user.cassandane');
     my $talk = $self->{store}->get_client();
 
-    xlog "set ourselves a basic limit";
+    xlog $self, "set ourselves a basic limit";
     $self->_set_limits('x-annotation-storage' => 100000);
     $self->_check_usages('x-annotation-storage' => 0);
 
-    xlog "make some messages to hang annotations on";
+    xlog $self, "make some messages to hang annotations on";
 #       $self->{store}->set_folder($folder);
     my $uid = 1;
     my %msgs;
@@ -1615,7 +1615,7 @@ sub test_replication_storage
 {
     my ($self) = @_;
 
-    xlog "testing replication of STORAGE quota";
+    xlog $self, "testing replication of STORAGE quota";
 
     my $mastertalk = $self->{master_adminstore}->get_client();
     my $replicatalk = $self->{replica_adminstore}->get_client();
@@ -1623,7 +1623,7 @@ sub test_replication_storage
     my $folder = "user.cassandane";
     my @res;
 
-    xlog "checking there are no initial quotas";
+    xlog $self, "checking there are no initial quotas";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('no', $mastertalk->get_last_completion_response());
     $self->assert($mastertalk->get_last_error() =~ m/Quota root does not exist/i);
@@ -1631,17 +1631,17 @@ sub test_replication_storage
     $self->assert_str_equals('no', $replicatalk->get_last_completion_response());
     $self->assert($replicatalk->get_last_error() =~ m/Quota root does not exist/i);
 
-    xlog "set a STORAGE quota on the master";
+    xlog $self, "set a STORAGE quota on the master";
     $mastertalk->setquota($folder, "(storage 12345)");
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
-    xlog "run replication";
+    xlog $self, "run replication";
     $self->run_replication();
     $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
-    xlog "check that the new quota is at both ends";
+    xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     $self->assert_deep_equals(['STORAGE', 0, 12345], \@res);
@@ -1649,17 +1649,17 @@ sub test_replication_storage
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
     $self->assert_deep_equals(['STORAGE', 0, 12345], \@res);
 
-    xlog "change the STORAGE quota on the master";
+    xlog $self, "change the STORAGE quota on the master";
     $mastertalk->setquota($folder, "(storage 67890)");
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
-    xlog "run replication";
+    xlog $self, "run replication";
     $self->run_replication();
     $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
-    xlog "check that the new quota is at both ends";
+    xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     $self->assert_deep_equals(['STORAGE', 0, 67890], \@res);
@@ -1667,17 +1667,17 @@ sub test_replication_storage
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
     $self->assert_deep_equals(['STORAGE', 0, 67890], \@res);
 
-    xlog "clear the STORAGE quota on the master";
+    xlog $self, "clear the STORAGE quota on the master";
     $mastertalk->setquota($folder, "()");
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
-    xlog "run replication";
+    xlog $self, "run replication";
     $self->run_replication();
     $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
-    xlog "check that the new quota is at both ends";
+    xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     $self->assert_deep_equals([], \@res);
@@ -1691,7 +1691,7 @@ sub test_replication_message
 {
     my ($self) = @_;
 
-    xlog "testing replication of MESSAGE quota";
+    xlog $self, "testing replication of MESSAGE quota";
 
     my $mastertalk = $self->{master_adminstore}->get_client();
     my $replicatalk = $self->{replica_adminstore}->get_client();
@@ -1699,7 +1699,7 @@ sub test_replication_message
     my $folder = "user.cassandane";
     my @res;
 
-    xlog "checking there are no initial quotas";
+    xlog $self, "checking there are no initial quotas";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('no', $mastertalk->get_last_completion_response());
     $self->assert($mastertalk->get_last_error() =~ m/Quota root does not exist/i);
@@ -1707,17 +1707,17 @@ sub test_replication_message
     $self->assert_str_equals('no', $replicatalk->get_last_completion_response());
     $self->assert($replicatalk->get_last_error() =~ m/Quota root does not exist/i);
 
-    xlog "set a STORAGE quota on the master";
+    xlog $self, "set a STORAGE quota on the master";
     $mastertalk->setquota($folder, "(message 12345)");
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
-    xlog "run replication";
+    xlog $self, "run replication";
     $self->run_replication();
     $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
-    xlog "check that the new quota is at both ends";
+    xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     $self->assert_deep_equals(['MESSAGE', 0, 12345], \@res);
@@ -1725,17 +1725,17 @@ sub test_replication_message
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
     $self->assert_deep_equals(['MESSAGE', 0, 12345], \@res);
 
-    xlog "change the MESSAGE quota on the master";
+    xlog $self, "change the MESSAGE quota on the master";
     $mastertalk->setquota($folder, "(message 67890)");
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
-    xlog "run replication";
+    xlog $self, "run replication";
     $self->run_replication();
     $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
-    xlog "check that the new quota is at both ends";
+    xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     $self->assert_deep_equals(['MESSAGE', 0, 67890], \@res);
@@ -1743,17 +1743,17 @@ sub test_replication_message
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
     $self->assert_deep_equals(['MESSAGE', 0, 67890], \@res);
 
-    xlog "clear the MESSAGE quota on the master";
+    xlog $self, "clear the MESSAGE quota on the master";
     $mastertalk->setquota($folder, "()");
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
-    xlog "run replication";
+    xlog $self, "run replication";
     $self->run_replication();
     $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
-    xlog "check that the new quota is at both ends";
+    xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     $self->assert_deep_equals([], \@res);
@@ -1767,7 +1767,7 @@ sub test_replication_annotstorage
 {
     my ($self) = @_;
 
-    xlog "testing replication of X-ANNOTATION-STORAGE quota";
+    xlog $self, "testing replication of X-ANNOTATION-STORAGE quota";
 
     my $folder = "user.cassandane";
     my $mastertalk = $self->{master_adminstore}->get_client();
@@ -1775,7 +1775,7 @@ sub test_replication_annotstorage
 
     my @res;
 
-    xlog "checking there are no initial quotas";
+    xlog $self, "checking there are no initial quotas";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('no', $mastertalk->get_last_completion_response());
     $self->assert($mastertalk->get_last_error() =~ m/Quota root does not exist/i);
@@ -1783,17 +1783,17 @@ sub test_replication_annotstorage
     $self->assert_str_equals('no', $replicatalk->get_last_completion_response());
     $self->assert($replicatalk->get_last_error() =~ m/Quota root does not exist/i);
 
-    xlog "set an X-ANNOTATION-STORAGE quota on the master";
+    xlog $self, "set an X-ANNOTATION-STORAGE quota on the master";
     $mastertalk->setquota($folder, "(x-annotation-storage 12345)");
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
-    xlog "run replication";
+    xlog $self, "run replication";
     $self->run_replication();
     $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
-    xlog "check that the new quota is at both ends";
+    xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     $self->assert_deep_equals(['X-ANNOTATION-STORAGE', 0, 12345], \@res);
@@ -1801,17 +1801,17 @@ sub test_replication_annotstorage
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
     $self->assert_deep_equals(['X-ANNOTATION-STORAGE', 0, 12345], \@res);
 
-    xlog "change the X-ANNOTATION-STORAGE quota on the master";
+    xlog $self, "change the X-ANNOTATION-STORAGE quota on the master";
     $mastertalk->setquota($folder, "(x-annotation-storage 67890)");
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
-    xlog "run replication";
+    xlog $self, "run replication";
     $self->run_replication();
     $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
-    xlog "check that the new quota is at both ends";
+    xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     $self->assert_deep_equals(['X-ANNOTATION-STORAGE', 0, 67890], \@res);
@@ -1819,7 +1819,7 @@ sub test_replication_annotstorage
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
     $self->assert_deep_equals(['X-ANNOTATION-STORAGE', 0, 67890], \@res);
 
-    xlog "add an annotation to use some quota";
+    xlog $self, "add an annotation to use some quota";
     my $data = $self->make_random_data(13);
     my $msg = $self->make_message("Message A", store => $self->{master_store});
     $mastertalk->store('1', 'annotation', ['/comment', ['value.priv', { Quote => $data }]]);
@@ -1830,37 +1830,37 @@ sub test_replication_annotstorage
 #     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     my $used = int(length($data)/1024);
 
-    xlog "run replication";
+    xlog $self, "run replication";
     $self->run_replication();
     $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
-    xlog "check the annotation used some quota on the master";
+    xlog $self, "check the annotation used some quota on the master";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     $self->assert_deep_equals([
         'X-ANNOTATION-STORAGE', $used, 67890
     ], \@res);
 
-    xlog "check the annotation used some quota on the replica";
+    xlog $self, "check the annotation used some quota on the replica";
     @res = $replicatalk->getquota($folder);
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
     $self->assert_deep_equals([
         'X-ANNOTATION-STORAGE', $used, 67890
     ], \@res);
 
-    xlog "clear the X-ANNOTATION-STORAGE quota on the master";
+    xlog $self, "clear the X-ANNOTATION-STORAGE quota on the master";
     $mastertalk->setquota($folder, "()");
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
-    xlog "run replication";
+    xlog $self, "run replication";
     $self->run_replication();
     $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
-    xlog "check that the new quota is at both ends";
+    xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     $self->assert_deep_equals([], \@res);
@@ -1874,52 +1874,52 @@ sub XXtest_getset_multiple
 {
     my ($self) = @_;
 
-    xlog "testing getting and setting multiple quota resources";
+    xlog $self, "testing getting and setting multiple quota resources";
 
     my $admintalk = $self->{adminstore}->get_client();
     my $folder = "user.cassandane";
     my @res;
 
-    xlog "checking there are no initial quotas";
+    xlog $self, "checking there are no initial quotas";
     @res = $admintalk->getquota($folder);
     $self->assert_str_equals('no', $admintalk->get_last_completion_response());
     $self->assert($admintalk->get_last_error() =~ m/Quota root does not exist/i);
 
-    xlog "set both X-ANNOT-COUNT and X-ANNOT-SIZE quotas";
+    xlog $self, "set both X-ANNOT-COUNT and X-ANNOT-SIZE quotas";
     $admintalk->setquota($folder, "(x-annot-count 20 x-annot-size 16384)");
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
-    xlog "get both resources back, and not STORAGE";
+    xlog $self, "get both resources back, and not STORAGE";
     @res = $admintalk->getquota($folder);
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
     $self->assert_deep_equals(['X-ANNOT-COUNT', 0, 20, 'X-ANNOT-SIZE', 0, 16384], \@res);
 
-    xlog "set the X-ANNOT-SIZE resource only";
+    xlog $self, "set the X-ANNOT-SIZE resource only";
     $admintalk->setquota($folder, "(x-annot-size 32768)");
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
-    xlog "get new -SIZE only and neither STORAGE nor -COUNT";
+    xlog $self, "get new -SIZE only and neither STORAGE nor -COUNT";
     @res = $admintalk->getquota($folder);
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
     $self->assert_deep_equals(['X-ANNOT-SIZE', 0, 32768], \@res);
 
-    xlog "set all of -COUNT -SIZE and STORAGE";
+    xlog $self, "set all of -COUNT -SIZE and STORAGE";
     $admintalk->setquota($folder, "(x-annot-count 123 storage 123456 x-annot-size 65536)");
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
-    xlog "get back all three new values";
+    xlog $self, "get back all three new values";
     @res = $admintalk->getquota($folder);
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
     $self->assert_deep_equals(['STORAGE', 0, 123456, 'X-ANNOT-COUNT', 0, 123, 'X-ANNOT-SIZE', 0, 65536], \@res);
 
-    xlog "clear all quotas";
+    xlog $self, "clear all quotas";
     $admintalk->setquota($folder, "()");
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
     # Note: the RFC does not define what happens if you remove all the
     # quotas from a quotaroot.  Cyrus leaves the quotaroot around until
     # quota -f is run to clean it up.
-    xlog "get back an empty set of quotas, but the quota root still exists";
+    xlog $self, "get back an empty set of quotas, but the quota root still exists";
     @res = $admintalk->getquota($folder);
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
     $self->assert_deep_equals([], \@res);
@@ -1930,7 +1930,7 @@ sub XXtest_replication_multiple
 {
     my ($self) = @_;
 
-    xlog "testing replication of multiple quotas";
+    xlog $self, "testing replication of multiple quotas";
 
     my $mastertalk = $self->{master_adminstore}->get_client();
     my $replicatalk = $self->{replica_adminstore}->get_client();
@@ -1938,7 +1938,7 @@ sub XXtest_replication_multiple
     my $folder = "user.cassandane";
     my @res;
 
-    xlog "checking there are no initial quotas";
+    xlog $self, "checking there are no initial quotas";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('no', $mastertalk->get_last_completion_response());
     $self->assert($mastertalk->get_last_error() =~ m/Quota root does not exist/i);
@@ -1946,17 +1946,17 @@ sub XXtest_replication_multiple
     $self->assert_str_equals('no', $replicatalk->get_last_completion_response());
     $self->assert($replicatalk->get_last_error() =~ m/Quota root does not exist/i);
 
-    xlog "set a X-ANNOT-COUNT and X-ANNOT-SIZE quotas on the master";
+    xlog $self, "set a X-ANNOT-COUNT and X-ANNOT-SIZE quotas on the master";
     $mastertalk->setquota($folder, "(x-annot-count 20 x-annot-size 16384)");
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
-    xlog "run replication";
+    xlog $self, "run replication";
     $self->run_replication();
     $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
-    xlog "check that the new quota is at both ends";
+    xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     $self->assert_deep_equals(['X-ANNOT-COUNT', 0, 20, 'X-ANNOT-SIZE', 0, 16384], \@res);
@@ -1964,17 +1964,17 @@ sub XXtest_replication_multiple
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
     $self->assert_deep_equals(['X-ANNOT-COUNT', 0, 20, 'X-ANNOT-SIZE', 0, 16384], \@res);
 
-    xlog "set the X-ANNOT-SIZE quota on the master";
+    xlog $self, "set the X-ANNOT-SIZE quota on the master";
     $mastertalk->setquota($folder, "(x-annot-size 32768)");
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
-    xlog "run replication";
+    xlog $self, "run replication";
     $self->run_replication();
     $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
-    xlog "check that the new quota is at both ends";
+    xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     $self->assert_deep_equals(['X-ANNOT-SIZE', 0, 32768], \@res);
@@ -1982,17 +1982,17 @@ sub XXtest_replication_multiple
     $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
     $self->assert_deep_equals(['X-ANNOT-SIZE', 0, 32768], \@res);
 
-    xlog "clear all the quotas";
+    xlog $self, "clear all the quotas";
     $mastertalk->setquota($folder, "()");
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
-    xlog "run replication";
+    xlog $self, "run replication";
     $self->run_replication();
     $self->check_replication('cassandane');
     $mastertalk = $self->{master_adminstore}->get_client();
     $replicatalk = $self->{replica_adminstore}->get_client();
 
-    xlog "check that the new quota is at both ends";
+    xlog $self, "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
     $self->assert_deep_equals([], \@res);
@@ -2006,21 +2006,21 @@ sub test_using_annotstorage_msg_copy_exdel
 {
     my ($self) = @_;
 
-    xlog "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
-    xlog "and original messages are deleted, expunge_mode=delayed version";
-    xlog "(BZ3527)";
+    xlog $self, "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
+    xlog $self, "and original messages are deleted, expunge_mode=delayed version";
+    xlog $self, "(BZ3527)";
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
     my $from_folder = 'INBOX.from';
     my $to_folder = 'INBOX.to';
 
-    xlog "Check the expunge mode is \"delayed\"";
+    xlog $self, "Check the expunge mode is \"delayed\"";
     my $expunge_mode = $self->{instance}->{config}->get('expunge_mode');
     $self->assert_str_equals('delayed', $expunge_mode);
 
     $self->_set_quotaroot('user.cassandane');
-    xlog "set ourselves a basic limit";
+    xlog $self, "set ourselves a basic limit";
     $self->_set_limits('x-annotation-storage' => 100000);
     $self->_check_usages('x-annotation-storage' => 0);
     my $talk = $self->{store}->get_client();
@@ -2028,7 +2028,7 @@ sub test_using_annotstorage_msg_copy_exdel
     my $store = $self->{store};
     $store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Create subfolders to copy from and to";
+    xlog $self, "Create subfolders to copy from and to";
     $talk = $store->get_client();
     $talk->create($from_folder)
         or die "Cannot create mailbox $from_folder: $@";
@@ -2037,7 +2037,7 @@ sub test_using_annotstorage_msg_copy_exdel
 
     $store->set_folder($from_folder);
 
-    xlog "Append some messages and store annotations";
+    xlog $self, "Append some messages and store annotations";
     my %exp;
     my $expected = 0;
     my $uid = 1;
@@ -2053,52 +2053,52 @@ sub test_using_annotstorage_msg_copy_exdel
         $uid++;
     }
 
-    xlog "Check the annotations are there";
+    xlog $self, "Check the annotations are there";
     $self->check_messages(\%exp);
-    xlog "Check the quota usage is correct";
+    xlog $self, "Check the quota usage is correct";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
-    xlog "COPY the messages";
+    xlog $self, "COPY the messages";
     $talk = $store->get_client();
     $talk->copy('1:*', $to_folder);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "Messages are now in the destination folder";
+    xlog $self, "Messages are now in the destination folder";
     $store->set_folder($to_folder);
     $store->_select();
     $self->check_messages(\%exp);
 
-    xlog "Check the quota usage is now doubled";
+    xlog $self, "Check the quota usage is now doubled";
     $self->_check_usages('x-annotation-storage' => int(2*$expected/1024));
 
-    xlog "Messages are still in the origin folder";
+    xlog $self, "Messages are still in the origin folder";
     $store->set_folder($from_folder);
     $store->_select();
     $self->check_messages(\%exp);
 
-    xlog "Delete the messages from the origin folder";
+    xlog $self, "Delete the messages from the origin folder";
     $store->set_folder($from_folder);
     $store->_select();
     $talk = $store->get_client();
     $talk->store('1:*', '+flags', '(\\Deleted)');
     $talk->expunge();
 
-    xlog "Messages are gone from the origin folder";
+    xlog $self, "Messages are gone from the origin folder";
     $store->set_folder($from_folder);
     $store->_select();
     $self->check_messages({});
 
-    xlog "Messages are still in the destination folder";
+    xlog $self, "Messages are still in the destination folder";
     $store->set_folder($to_folder);
     $store->_select();
     $self->check_messages(\%exp);
 
-    xlog "Check the quota usage has reduced again";
+    xlog $self, "Check the quota usage has reduced again";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
     $self->run_delayed_expunge();
 
-    xlog "Check the quota usage is still the same";
+    xlog $self, "Check the quota usage is still the same";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 }
 
@@ -2107,21 +2107,21 @@ sub test_using_annotstorage_msg_copy_eximm
 {
     my ($self) = @_;
 
-    xlog "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
-    xlog "and original messages are deleted, expunge_mode=immediate version";
-    xlog "(BZ3527)";
+    xlog $self, "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
+    xlog $self, "and original messages are deleted, expunge_mode=immediate version";
+    xlog $self, "(BZ3527)";
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
     my $from_folder = 'INBOX.from';
     my $to_folder = 'INBOX.to';
 
-    xlog "Check the expunge mode is \"immediate\"";
+    xlog $self, "Check the expunge mode is \"immediate\"";
     my $expunge_mode = $self->{instance}->{config}->get('expunge_mode');
     $self->assert_str_equals('immediate', $expunge_mode);
 
     $self->_set_quotaroot('user.cassandane');
-    xlog "set ourselves a basic limit";
+    xlog $self, "set ourselves a basic limit";
     $self->_set_limits('x-annotation-storage' => 100000);
     $self->_check_usages('x-annotation-storage' => 0);
     my $talk = $self->{store}->get_client();
@@ -2129,7 +2129,7 @@ sub test_using_annotstorage_msg_copy_eximm
     my $store = $self->{store};
     $store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Create subfolders to copy from and to";
+    xlog $self, "Create subfolders to copy from and to";
     $talk = $store->get_client();
     $talk->create($from_folder)
         or die "Cannot create mailbox $from_folder: $@";
@@ -2138,7 +2138,7 @@ sub test_using_annotstorage_msg_copy_eximm
 
     $store->set_folder($from_folder);
 
-    xlog "Append some messages and store annotations";
+    xlog $self, "Append some messages and store annotations";
     my %exp;
     my $expected = 0;
     my $uid = 1;
@@ -2154,47 +2154,47 @@ sub test_using_annotstorage_msg_copy_eximm
         $uid++;
     }
 
-    xlog "Check the annotations are there";
+    xlog $self, "Check the annotations are there";
     $self->check_messages(\%exp);
-    xlog "Check the quota usage is correct";
+    xlog $self, "Check the quota usage is correct";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
-    xlog "COPY the messages";
+    xlog $self, "COPY the messages";
     $talk = $store->get_client();
     $talk->copy('1:*', $to_folder);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "Messages are now in the destination folder";
+    xlog $self, "Messages are now in the destination folder";
     $store->set_folder($to_folder);
     $store->_select();
     $self->check_messages(\%exp);
 
-    xlog "Check the quota usage is now doubled";
+    xlog $self, "Check the quota usage is now doubled";
     $self->_check_usages('x-annotation-storage' => int(2*$expected/1024));
 
-    xlog "Messages are still in the origin folder";
+    xlog $self, "Messages are still in the origin folder";
     $store->set_folder($from_folder);
     $store->_select();
     $self->check_messages(\%exp);
 
-    xlog "Delete the messages from the origin folder";
+    xlog $self, "Delete the messages from the origin folder";
     $store->set_folder($from_folder);
     $store->_select();
     $talk = $store->get_client();
     $talk->store('1:*', '+flags', '(\\Deleted)');
     $talk->expunge();
 
-    xlog "Messages are gone from the origin folder";
+    xlog $self, "Messages are gone from the origin folder";
     $store->set_folder($from_folder);
     $store->_select();
     $self->check_messages({});
 
-    xlog "Messages are still in the destination folder";
+    xlog $self, "Messages are still in the destination folder";
     $store->set_folder($to_folder);
     $store->_select();
     $self->check_messages(\%exp);
 
-    xlog "Check the quota usage is back to single";
+    xlog $self, "Check the quota usage is back to single";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 }
 
@@ -2203,21 +2203,21 @@ sub test_using_annotstorage_msg_copy_dedel
 {
     my ($self) = @_;
 
-    xlog "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
-    xlog "and original folder is deleted, delete_mode=delayed version";
-    xlog "(BZ3527)";
+    xlog $self, "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
+    xlog $self, "and original folder is deleted, delete_mode=delayed version";
+    xlog $self, "(BZ3527)";
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
     my $from_folder = 'INBOX.from';
     my $to_folder = 'INBOX.to';
 
-    xlog "Check the delete mode is \"delayed\"";
+    xlog $self, "Check the delete mode is \"delayed\"";
     my $delete_mode = $self->{instance}->{config}->get('delete_mode');
     $self->assert_str_equals('delayed', $delete_mode);
 
     $self->_set_quotaroot('user.cassandane');
-    xlog "set ourselves a basic limit";
+    xlog $self, "set ourselves a basic limit";
     $self->_set_limits('x-annotation-storage' => 100000);
     $self->_check_usages('x-annotation-storage' => 0);
     my $talk = $self->{store}->get_client();
@@ -2225,7 +2225,7 @@ sub test_using_annotstorage_msg_copy_dedel
     my $store = $self->{store};
     $store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Create subfolders to copy from and to";
+    xlog $self, "Create subfolders to copy from and to";
     $talk = $store->get_client();
     $talk->create($from_folder)
         or die "Cannot create mailbox $from_folder: $@";
@@ -2234,7 +2234,7 @@ sub test_using_annotstorage_msg_copy_dedel
 
     $store->set_folder($from_folder);
 
-    xlog "Append some messages and store annotations";
+    xlog $self, "Append some messages and store annotations";
     my %exp;
     my $expected = 0;
     my $uid = 1;
@@ -2250,36 +2250,36 @@ sub test_using_annotstorage_msg_copy_dedel
         $uid++;
     }
 
-    xlog "Check the annotations are there";
+    xlog $self, "Check the annotations are there";
     $self->check_messages(\%exp);
-    xlog "Check the quota usage is correct";
+    xlog $self, "Check the quota usage is correct";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
-    xlog "COPY the messages";
+    xlog $self, "COPY the messages";
     $talk = $store->get_client();
     $talk->copy('1:*', $to_folder);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "Messages are now in the destination folder";
+    xlog $self, "Messages are now in the destination folder";
     $store->set_folder($to_folder);
     $store->_select();
     $self->check_messages(\%exp);
 
-    xlog "Check the quota usage is now doubled";
+    xlog $self, "Check the quota usage is now doubled";
     $self->_check_usages('x-annotation-storage' => int(2*$expected/1024));
 
-    xlog "Messages are still in the origin folder";
+    xlog $self, "Messages are still in the origin folder";
     $store->set_folder($from_folder);
     $store->_select();
     $self->check_messages(\%exp);
 
-    xlog "Delete the origin folder";
+    xlog $self, "Delete the origin folder";
     $talk = $store->get_client();
     $talk->unselect();
     $talk->delete($from_folder)
         or die "Cannot delete folder $from_folder: $@";
 
-    xlog "Messages are still in the destination folder";
+    xlog $self, "Messages are still in the destination folder";
     $store->set_folder($to_folder);
     $store->_select();
     $self->check_messages(\%exp);
@@ -2289,12 +2289,12 @@ sub test_using_annotstorage_msg_copy_dedel
     # quota is applied immediately.  Whether this is sensible is a
     # different question.
 
-    xlog "Check the quota usage is back to single";
+    xlog $self, "Check the quota usage is back to single";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
     $self->run_delayed_expunge();
 
-    xlog "Check the quota usage is still back to single";
+    xlog $self, "Check the quota usage is still back to single";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 }
 
@@ -2303,21 +2303,21 @@ sub test_using_annotstorage_msg_copy_deimm
 {
     my ($self) = @_;
 
-    xlog "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
-    xlog "and original folder is deleted, delete_mode=immediate version";
-    xlog "(BZ3527)";
+    xlog $self, "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
+    xlog $self, "and original folder is deleted, delete_mode=immediate version";
+    xlog $self, "(BZ3527)";
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
     my $from_folder = 'INBOX.from';
     my $to_folder = 'INBOX.to';
 
-    xlog "Check the delete mode is \"immediate\"";
+    xlog $self, "Check the delete mode is \"immediate\"";
     my $delete_mode = $self->{instance}->{config}->get('delete_mode');
     $self->assert_str_equals('immediate', $delete_mode);
 
     $self->_set_quotaroot('user.cassandane');
-    xlog "set ourselves a basic limit";
+    xlog $self, "set ourselves a basic limit";
     $self->_set_limits('x-annotation-storage' => 100000);
     $self->_check_usages('x-annotation-storage' => 0);
     my $talk = $self->{store}->get_client();
@@ -2325,7 +2325,7 @@ sub test_using_annotstorage_msg_copy_deimm
     my $store = $self->{store};
     $store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Create subfolders to copy from and to";
+    xlog $self, "Create subfolders to copy from and to";
     $talk = $store->get_client();
     $talk->create($from_folder)
         or die "Cannot create mailbox $from_folder: $@";
@@ -2334,7 +2334,7 @@ sub test_using_annotstorage_msg_copy_deimm
 
     $store->set_folder($from_folder);
 
-    xlog "Append some messages and store annotations";
+    xlog $self, "Append some messages and store annotations";
     my %exp;
     my $expected = 0;
     my $uid = 1;
@@ -2350,41 +2350,41 @@ sub test_using_annotstorage_msg_copy_deimm
         $uid++;
     }
 
-    xlog "Check the annotations are there";
+    xlog $self, "Check the annotations are there";
     $self->check_messages(\%exp);
-    xlog "Check the quota usage is correct";
+    xlog $self, "Check the quota usage is correct";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
-    xlog "COPY the messages";
+    xlog $self, "COPY the messages";
     $talk = $store->get_client();
     $talk->copy('1:*', $to_folder);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "Messages are now in the destination folder";
+    xlog $self, "Messages are now in the destination folder";
     $store->set_folder($to_folder);
     $store->_select();
     $self->check_messages(\%exp);
 
-    xlog "Check the quota usage is now doubled";
+    xlog $self, "Check the quota usage is now doubled";
     $self->_check_usages('x-annotation-storage' => int(2*$expected/1024));
 
-    xlog "Messages are still in the origin folder";
+    xlog $self, "Messages are still in the origin folder";
     $store->set_folder($from_folder);
     $store->_select();
     $self->check_messages(\%exp);
 
-    xlog "Delete the origin folder";
+    xlog $self, "Delete the origin folder";
     $talk = $store->get_client();
     $talk->unselect();
     $talk->delete($from_folder)
         or die "Cannot delete folder $from_folder: $@";
 
-    xlog "Messages are still in the destination folder";
+    xlog $self, "Messages are still in the destination folder";
     $store->set_folder($to_folder);
     $store->_select();
     $self->check_messages(\%exp);
 
-    xlog "Check the quota usage is back to single";
+    xlog $self, "Check the quota usage is back to single";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 }
 
@@ -2392,7 +2392,7 @@ sub test_reconstruct
 {
     my ($self) = @_;
 
-    xlog "test resources usage calculated when reconstructing an index";
+    xlog $self, "test resources usage calculated when reconstructing an index";
 
     $self->_set_quotaroot('user.cassandane');
     my $folder = 'INBOX';
@@ -2408,7 +2408,7 @@ sub test_reconstruct
     my $talk = $store->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "set ourselves a basic limit";
+    xlog $self, "set ourselves a basic limit";
     $self->_set_limits(
         storage => 100000,
         message => 50000,
@@ -2423,13 +2423,13 @@ sub test_reconstruct
     my $expected_storage = 0;
     my $expected_message = 0;
 
-    xlog "store annotations";
+    xlog $self, "store annotations";
     my $data = $self->make_random_data(10);
     $expected_annotation_storage += length($data);
     $talk->setmetadata($folder, $fentry, { Quote => $data });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "add some messages";
+    xlog $self, "add some messages";
     my $uid = 1;
     my %exp;
     for (1..10)
@@ -2452,17 +2452,17 @@ sub test_reconstruct
         $uid++;
     }
 
-    xlog "Check the messages are all there";
+    xlog $self, "Check the messages are all there";
     $self->check_messages(\%exp);
 
-    xlog "Check the mailbox annotation is still there";
+    xlog $self, "Check the mailbox annotation is still there";
     my $res = $talk->getmetadata($folder, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
         $folder => { $fentry => $data }
     }, $res);
 
-    xlog "Check the quota usage is as expected";
+    xlog $self, "Check the quota usage is as expected";
     $self->_check_usages(
         storage => int($expected_storage/1024),
         message => $expected_message,
@@ -2474,33 +2474,33 @@ sub test_reconstruct
     $talk = undef;
     $admintalk = undef;
 
-    xlog "Moving the cyrus.index file out of the way";
+    xlog $self, "Moving the cyrus.index file out of the way";
     my $mbdir = $self->{instance}->{basedir} . '/data/user/cassandane';
     my $cyrus_index = "$mbdir/cyrus.index";
     $self->assert(( -f $cyrus_index ));
     rename($cyrus_index, $cyrus_index . '.NOT')
         or die "Cannot rename $cyrus_index: $!";
 
-    xlog "Running reconstruct";
+    xlog $self, "Running reconstruct";
     $self->{instance}->run_command({ cyrus => 1 },
                                    'reconstruct', 'user.cassandane');
-    xlog "Running quota -f";
+    xlog $self, "Running quota -f";
     $self->{instance}->run_command({ cyrus => 1 },
                                    'quota', '-f', "user.cassandane");
 
     $talk = $store->get_client();
 
-    xlog "Check the messages are still all there";
+    xlog $self, "Check the messages are still all there";
     $self->check_messages(\%exp);
 
-    xlog "Check the mailbox annotation is still there";
+    xlog $self, "Check the mailbox annotation is still there";
     $res = $talk->getmetadata($folder, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
         $folder => { $fentry => $data }
     }, $res);
 
-    xlog "Check the quota usage is still as expected";
+    xlog $self, "Check the quota usage is still as expected";
     $self->_check_usages(
         storage => int($expected_storage/1024),
         message => $expected_message,
@@ -2516,8 +2516,8 @@ sub test_reconstruct_orphans
 {
     my ($self) = @_;
 
-    xlog "test resources usage calculated when reconstructing an index";
-    xlog "with messages disappearing, resulting in orphan annotations";
+    xlog $self, "test resources usage calculated when reconstructing an index";
+    xlog $self, "with messages disappearing, resulting in orphan annotations";
 
     $self->_set_quotaroot('user.cassandane');
     my $folder = 'INBOX';
@@ -2533,7 +2533,7 @@ sub test_reconstruct_orphans
     my $talk = $store->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "set ourselves a basic limit";
+    xlog $self, "set ourselves a basic limit";
     $self->_set_limits(
         storage => 100000,
         message => 50000,
@@ -2548,13 +2548,13 @@ sub test_reconstruct_orphans
     my $expected_storage = 0;
     my $expected_message = 0;
 
-    xlog "store annotations";
+    xlog $self, "store annotations";
     my $data = $self->make_random_data(10);
     $expected_annotation_storage += length($data);
     $talk->setmetadata($folder, $fentry, { Quote => $data });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "add some messages";
+    xlog $self, "add some messages";
     my $uid = 1;
     my %exp;
     for (1..10)
@@ -2577,17 +2577,17 @@ sub test_reconstruct_orphans
         $uid++;
     }
 
-    xlog "Check the messages are all there";
+    xlog $self, "Check the messages are all there";
     $self->check_messages(\%exp);
 
-    xlog "Check the mailbox annotation is still there";
+    xlog $self, "Check the mailbox annotation is still there";
     my $res = $talk->getmetadata($folder, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
         $folder => { $fentry => $data }
     }, $res);
 
-    xlog "Check the quota usage is as expected";
+    xlog $self, "Check the quota usage is as expected";
     $self->_check_usages(
         storage => int($expected_storage/1024),
         message => $expected_message,
@@ -2599,17 +2599,17 @@ sub test_reconstruct_orphans
     $talk = undef;
     $admintalk = undef;
 
-    xlog "Moving the cyrus.index file out of the way";
+    xlog $self, "Moving the cyrus.index file out of the way";
     my $mbdir = $self->{instance}->{basedir} . '/data/user/cassandane';
     my $cyrus_index = "$mbdir/cyrus.index";
     $self->assert(( -f $cyrus_index ));
     rename($cyrus_index, $cyrus_index . '.NOT')
         or die "Cannot rename $cyrus_index: $!";
 
-    xlog "Delete a couple of messages";
+    xlog $self, "Delete a couple of messages";
     foreach $uid (2, 7)
     {
-        xlog "Deleting uid $uid";
+        xlog $self, "Deleting uid $uid";
         unlink("$mbdir/$uid.");
 
         my $msg = delete $exp{$uid};
@@ -2621,26 +2621,26 @@ sub test_reconstruct_orphans
         $expected_message--;
     }
 
-    xlog "Running reconstruct";
+    xlog $self, "Running reconstruct";
     $self->{instance}->run_command({ cyrus => 1 },
                                    'reconstruct', 'user.cassandane');
-    xlog "Running quota -f";
+    xlog $self, "Running quota -f";
     $self->{instance}->run_command({ cyrus => 1 },
                                    'quota', '-f', "user.cassandane");
 
     $talk = $store->get_client();
 
-    xlog "Check the messages are still all there";
+    xlog $self, "Check the messages are still all there";
     $self->check_messages(\%exp);
 
-    xlog "Check the mailbox annotation is still there";
+    xlog $self, "Check the mailbox annotation is still there";
     $res = $talk->getmetadata($folder, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
         $folder => { $fentry => $data }
     }, $res);
 
-    xlog "Check the quota usage is still as expected";
+    xlog $self, "Check the quota usage is still as expected";
     $self->_check_usages(
         storage => int($expected_storage/1024),
         message => $expected_message,
@@ -2691,7 +2691,7 @@ sub test_rename_withannot
     my ($self) = @_;
     my ($cyrus_version) = Cassandane::Instance->get_version();
 
-    xlog "test resources usage survives rename";
+    xlog $self, "test resources usage survives rename";
 
     $self->_set_quotaroot('user.cassandane');
     my $src = 'INBOX.src';
@@ -2713,7 +2713,7 @@ sub test_rename_withannot
     $talk->create($src) || die "Failed to create subfolder";
     $store->set_folder($src);
 
-    xlog "set ourselves a basic limit";
+    xlog $self, "set ourselves a basic limit";
     $self->_set_limits(
         storage => 100000,
         message => 50000,
@@ -2728,13 +2728,13 @@ sub test_rename_withannot
     my $expected_storage = 0;
     my $expected_message = 0;
 
-    xlog "store annotations";
+    xlog $self, "store annotations";
     my $data = $self->make_random_data(10);
     $expected_annotation_storage += length($data);
     $talk->setmetadata($src, $fentry, { Quote => $data });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "add some messages";
+    xlog $self, "add some messages";
     my $uid = 1;
     my %exp;
     for (1..10)
@@ -2759,10 +2759,10 @@ sub test_rename_withannot
 
     my $res;
 
-    xlog "Check the messages are all there";
+    xlog $self, "Check the messages are all there";
     $self->check_messages(\%exp);
 
-    xlog "check that the used size matches";
+    xlog $self, "check that the used size matches";
     $res = $talk->getmetadata($src, $vendsize);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
@@ -2770,7 +2770,7 @@ sub test_rename_withannot
     }, $res);
 
     if ($cyrus_version >= 3) {
-        xlog "check that the annot size matches";
+        xlog $self, "check that the annot size matches";
         $res = $talk->getmetadata($src, $vendannot);
         $self->assert_str_equals('ok', $talk->get_last_completion_response());
         $self->assert_deep_equals({
@@ -2778,39 +2778,39 @@ sub test_rename_withannot
         }, $res);
     }
 
-    xlog "Check the mailbox annotation is still there";
+    xlog $self, "Check the mailbox annotation is still there";
     $res = $talk->getmetadata($src, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
         $src => { $fentry => $data }
     }, $res);
 
-    xlog "Check the quota usage is as expected";
+    xlog $self, "Check the quota usage is as expected";
     $self->_check_usages(
         storage => int($expected_storage/1024),
         message => $expected_message,
         'x-annotation-storage' => int($expected_annotation_storage/1024),
     );
 
-    xlog "rename $src to $dest";
+    xlog $self, "rename $src to $dest";
     $talk->rename($src, $dest);
     $store->set_folder($dest);
 
-    xlog "Check the messages are all there";
+    xlog $self, "Check the messages are all there";
     $self->check_messages(\%exp);
 
-    xlog "Check the old mailbox annotation is not there";
+    xlog $self, "Check the old mailbox annotation is not there";
     $res = $talk->getmetadata($src, $fentry);
     $self->assert_str_equals('no', $talk->get_last_completion_response());
 
-    xlog "Check the new mailbox annotation is there";
+    xlog $self, "Check the new mailbox annotation is there";
     $res = $talk->getmetadata($dest, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
         $dest => { $fentry => $data }
     }, $res);
 
-    xlog "check that the used size still matches";
+    xlog $self, "check that the used size still matches";
     $res = $talk->getmetadata($dest, $vendsize);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
@@ -2818,7 +2818,7 @@ sub test_rename_withannot
     }, $res);
 
     if ($cyrus_version >= 3) {
-        xlog "check that the annot size still matches";
+        xlog $self, "check that the annot size still matches";
         $res = $talk->getmetadata($dest, $vendannot);
         $self->assert_str_equals('ok', $talk->get_last_completion_response());
         $self->assert_deep_equals({
@@ -2826,7 +2826,7 @@ sub test_rename_withannot
         }, $res);
     }
 
-    xlog "Check the quota usage is still as expected";
+    xlog $self, "Check the quota usage is still as expected";
     $self->_check_usages(
         storage => int($expected_storage/1024),
         message => $expected_message,

@@ -67,7 +67,7 @@ sub set_up
         $self->{instance}->{buildinfo}->get('search', 'xapian_cjk_tokens')
         || "none";
 
-    xlog "Xapian CJK tokeniser '$self->{xapian_cjk_tokens}' detected.\n";
+    xlog $self, "Xapian CJK tokeniser '$self->{xapian_cjk_tokens}' detected.\n";
 
     use experimental 'smartmatch';
     my $skipdiacrit = $self->{instance}->{config}->get('search_skipdiacrit');
@@ -97,7 +97,7 @@ sub create_testmessages
 {
     my ($self) = @_;
 
-    xlog "Generate test messages.";
+    xlog $self, "Generate test messages.";
     # Some subjects with the same verb word stem
     $self->make_message("I am running") || die;
     $self->make_message("I run") || die;
@@ -129,7 +129,7 @@ sub create_testmessages
     $self->make_message("3", %params) || die;
 
     # Create the search database.
-    xlog "Run squatter";
+    xlog $self, "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 }
 
@@ -145,7 +145,7 @@ sub test_copy_messages
     $talk->select("INBOX");
     $talk->copy("1:*", "INBOX.foo");
 
-    xlog "Run squatter again";
+    xlog $self, "Run squatter again";
     $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
 }
 
@@ -157,12 +157,12 @@ sub test_stem_verbs
 
     my $talk = $self->{store}->get_client();
 
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     my $r = $talk->select("INBOX") || die;
     my $uidvalidity = $talk->get_response_code('uidvalidity');
     my $uids = $talk->search('1:*', 'NOT', 'DELETED');
 
-    xlog 'SEARCH for subject "runs"';
+    xlog $self, 'SEARCH for subject "runs"';
     $r = $talk->search('subject', { Quote => "runs" }) || die;
     if ($self->{fuzzyalways}) {
         $self->assert_num_equals(3, scalar @$r);
@@ -170,11 +170,11 @@ sub test_stem_verbs
         $self->assert_num_equals(1, scalar @$r);
     }
 
-    xlog 'SEARCH for FUZZY subject "runs"';
+    xlog $self, 'SEARCH for FUZZY subject "runs"';
     $r = $talk->search('fuzzy', ['subject', { Quote => "runs" }]) || die;
     $self->assert_num_equals(3, scalar @$r);
 
-    xlog 'XSNIPPETS for FUZZY subject "runs"';
+    xlog $self, 'XSNIPPETS for FUZZY subject "runs"';
     $r = $talk->xsnippets(
         [['INBOX', $uidvalidity, $uids]], 'utf-8',
         ['fuzzy', 'subject', { Quote => 'runs' }]
@@ -190,11 +190,11 @@ sub test_stem_any
 
     my $talk = $self->{store}->get_client();
 
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     $talk->select("INBOX") || die;
 
     my $r;
-    xlog 'SEARCH for body "connection"';
+    xlog $self, 'SEARCH for body "connection"';
     $r = $talk->search('body', { Quote => "connection" }) || die;
     if ($self->{fuzzyalways})  {
         $self->assert_num_equals(3, scalar @$r);
@@ -203,7 +203,7 @@ sub test_stem_any
     }
 
 
-    xlog "SEARCH for FUZZY body \"connection\"";
+    xlog $self, "SEARCH for FUZZY body \"connection\"";
     $r = $talk->search(
         "fuzzy", ["body", { Quote => "connection" }],
     ) || die;
@@ -216,7 +216,7 @@ sub test_snippet_wildcard
     my ($self) = @_;
 
     # Set up Xapian database
-    xlog "Generate and index test messages";
+    xlog $self, "Generate and index test messages";
     my %params = (
         mime_charset => "utf-8",
     );
@@ -238,23 +238,23 @@ sub test_snippet_wildcard
     my $talk = $self->{store}->get_client();
 
     my $term = "foo";
-    xlog "SEARCH for FUZZY body $term*";
+    xlog $self, "SEARCH for FUZZY body $term*";
     my $r = $talk->search(
         "fuzzy", ["body", { Quote => "$term*" }],
     ) || die;
     $self->assert_num_equals(2, scalar @$r);
     my $uids = $r;
 
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     $talk->select("INBOX") || die;
     my $uidvalidity = $talk->get_response_code('uidvalidity');
 
-    xlog "XSNIPPETS for $term";
+    xlog $self, "XSNIPPETS for $term";
     $r = $talk->xsnippets(
         [['INBOX', $uidvalidity, $uids]], 'utf-8',
         ['fuzzy', 'text', { Quote => "$term*" }]
     ) || die;
-    xlog Dumper($r);
+    xlog $self, Dumper($r);
     $self->assert_num_equals(2, scalar @{$r->{snippets}});
 }
 
@@ -265,10 +265,10 @@ sub test_mix_fuzzy_and_nonfuzzy
     $self->create_testmessages();
     my $talk = $self->{store}->get_client();
 
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     $talk->select("INBOX") || die;
 
-    xlog "SEARCH for from \"foo\@example.com\" with FUZZY body \"connection\"";
+    xlog $self, "SEARCH for from \"foo\@example.com\" with FUZZY body \"connection\"";
     my $r = $talk->search(
         "fuzzy", ["body", { Quote => "connection" }],
         "from", { Quote => "foo\@example.com" }
@@ -285,10 +285,10 @@ sub test_weird_crasher
 
     my $talk = $self->{store}->get_client();
 
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     $talk->select("INBOX") || die;
 
-    xlog "SEARCH for 'A 李 A'";
+    xlog $self, "SEARCH for 'A 李 A'";
     my $r = $talk->xconvmultisort( [ qw(reverse arrival) ], [ 'conversations', position => [1,10] ], 'utf-8', 'fuzzy', 'text', { Quote => "A 李 A" });
     $self->assert_not_null($r);
 }
@@ -305,7 +305,7 @@ sub test_stopwords
     my $talk = $self->{store}->get_client();
 
     # Set up Xapian database
-    xlog "Generate and index test messages.";
+    xlog $self, "Generate and index test messages.";
     my %params = (
         mime_charset => "utf-8",
     );
@@ -325,7 +325,7 @@ sub test_stopwords
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
     # Connect via IMAP
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     $talk->select("INBOX") || die;
     my $uidvalidity = $talk->get_response_code('uidvalidity');
     my $uids = $talk->search('1:*', 'NOT', 'DELETED');
@@ -360,7 +360,7 @@ sub test_normalize_snippets
     my $body = "foo gären советской diĝir naïve léger";
     my @terms = split / /, $body;
 
-    xlog "Generate and index test messages.";
+    xlog $self, "Generate and index test messages.";
     my %params = (
         mime_charset => "utf-8",
         body => $body
@@ -372,14 +372,14 @@ sub test_normalize_snippets
     my $talk = $self->{store}->get_client();
 
     # Connect to IMAP
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     my $r = $talk->select("INBOX") || die;
     my $uidvalidity = $talk->get_response_code('uidvalidity');
     my $uids = $talk->search('1:*', 'NOT', 'DELETED');
 
     # Assert that diacritics are matched and returned
     foreach my $term (@terms) {
-        xlog "XSNIPPETS for FUZZY text \"$term\"";
+        xlog $self, "XSNIPPETS for FUZZY text \"$term\"";
         $r = $talk->xsnippets(
             [['INBOX', $uidvalidity, $uids]], 'utf-8',
             ['fuzzy', 'text', { Quote => $term }]
@@ -390,7 +390,7 @@ sub test_normalize_snippets
     # Assert that search without diacritics matches
     if ($self->{skipdiacrit}) {
         my $term = "naive";
-        xlog "XSNIPPETS for FUZZY text \"$term\"";
+        xlog $self, "XSNIPPETS for FUZZY text \"$term\"";
         $r = $talk->xsnippets(
             [['INBOX', $uidvalidity, $uids]], 'utf-8',
             ['fuzzy', 'text', { Quote => $term }]
@@ -406,7 +406,7 @@ sub test_skipdiacrit
 
     # Set up test messages
     my $body = "Die Trauben gären.";
-    xlog "Generate and index test messages.";
+    xlog $self, "Generate and index test messages.";
     my %params = (
         mime_charset => "utf-8",
         body => $body
@@ -424,12 +424,12 @@ sub test_skipdiacrit
     my $talk = $self->{store}->get_client();
 
     # Connect to IMAP
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     my $r = $talk->select("INBOX") || die;
     my $uidvalidity = $talk->get_response_code('uidvalidity');
     my $uids = $talk->search('1:*', 'NOT', 'DELETED');
 
-    xlog 'Search for "garen"';
+    xlog $self, 'Search for "garen"';
     $r = $talk->search(
         "charset", "utf-8", "fuzzy", ["text", { Quote => "garen" }],
     ) || die;
@@ -439,7 +439,7 @@ sub test_skipdiacrit
         $self->assert_num_equals(1, scalar @$r);
     }
 
-    xlog 'Search for "gären"';
+    xlog $self, 'Search for "gären"';
     $r = $talk->search(
         "charset", "utf-8", "fuzzy", ["text", { Quote => "gären" }],
     ) || die;
@@ -482,7 +482,7 @@ sub test_snippets_termcover
     # This is the line we want to get as a snippet
     "I don't have a favourite cereal. My favourite breakfast is oat meal.";
 
-    xlog "Generate and index test messages.";
+    xlog $self, "Generate and index test messages.";
     my %params = (
         mime_charset => "utf-8",
         body => $body
@@ -494,7 +494,7 @@ sub test_snippets_termcover
     my $talk = $self->{store}->get_client();
 
     # Connect to IMAP
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     my $r = $talk->select("INBOX") || die;
     my $uidvalidity = $talk->get_response_code('uidvalidity');
     my $uids = $talk->search('1:*', 'NOT', 'DELETED');
@@ -539,7 +539,7 @@ sub test_cjk_words
 {
     my ($self) = @_;
 
-    xlog "Generate and index test messages.";
+    xlog $self, "Generate and index test messages.";
 
     my $body = "明末時已經有香港地方的概念";
     my %params = (
@@ -561,7 +561,7 @@ sub test_cjk_words
     my $talk = $self->{store}->get_client();
 
     # Connect to IMAP
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     my $r = $talk->select("INBOX") || die;
     my $uidvalidity = $talk->get_response_code('uidvalidity');
     my $uids = $talk->search('1:*', 'NOT', 'DELETED');
@@ -569,7 +569,7 @@ sub test_cjk_words
     my $term;
     # Search for a two-character CJK word
     $term = "已經";
-    xlog "XSNIPPETS for FUZZY text \"$term\"";
+    xlog $self, "XSNIPPETS for FUZZY text \"$term\"";
     $r = $talk->xsnippets(
         [['INBOX', $uidvalidity, $uids]], 'utf-8',
         ['fuzzy', 'text', { Quote => $term }]
@@ -579,7 +579,7 @@ sub test_cjk_words
     # Search for the CJK words 明末 and 時, note that the
     # word order is reversed to the original message
     $term = "時明末";
-    xlog "XSNIPPETS for FUZZY text \"$term\"";
+    xlog $self, "XSNIPPETS for FUZZY text \"$term\"";
     $r = $talk->xsnippets(
         [['INBOX', $uidvalidity, $uids]], 'utf-8',
         ['fuzzy', 'text', { Quote => $term }]
@@ -588,7 +588,7 @@ sub test_cjk_words
 
     # Search for the partial CJK word 月
     $term = "月";
-    xlog "XSNIPPETS for FUZZY text \"$term\"";
+    xlog $self, "XSNIPPETS for FUZZY text \"$term\"";
     $r = $talk->xsnippets(
         [['INBOX', $uidvalidity, $uids]], 'utf-8',
         ['fuzzy', 'text', { Quote => $term }]
@@ -597,7 +597,7 @@ sub test_cjk_words
 
     # Search for the interleaved, partial CJK word 額申
     $term = "額申";
-    xlog "XSNIPPETS for FUZZY text \"$term\"";
+    xlog $self, "XSNIPPETS for FUZZY text \"$term\"";
     $r = $talk->xsnippets(
         [['INBOX', $uidvalidity, $uids]], 'utf-8',
         ['fuzzy', 'text', { Quote => $term }]
@@ -607,7 +607,7 @@ sub test_cjk_words
     # Search for three of four words: "み, 月額, 申込",
     # in different order than the original.
     $term = "月額み申込";
-    xlog "XSNIPPETS for FUZZY text \"$term\"";
+    xlog $self, "XSNIPPETS for FUZZY text \"$term\"";
     $r = $talk->xsnippets(
         [['INBOX', $uidvalidity, $uids]], 'utf-8',
         ['fuzzy', 'text', { Quote => $term }]
@@ -620,7 +620,7 @@ sub test_subject_isutf8
 {
     my ($self) = @_;
 
-    xlog "Generate and index test messages.";
+    xlog $self, "Generate and index test messages.";
     # that's: "nuff réunion critères duff"
     my $subject = "=?utf-8?q?nuff_r=C3=A9union_crit=C3=A8res_duff?=";
     my $body = "empty";
@@ -634,7 +634,7 @@ sub test_subject_isutf8
     my $talk = $self->{store}->get_client();
 
     # Connect to IMAP
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     my $r = $talk->select("INBOX") || die;
 
     # Search subject without accents
@@ -669,7 +669,7 @@ sub test_subject_isutf8
     }
 
     while (my($term, $expectedCnt) = each %searches) {
-        xlog "SEARCH for FUZZY text \"$term\"";
+        xlog $self, "SEARCH for FUZZY text \"$term\"";
         $r = $talk->search(
             "charset", "utf-8", "fuzzy", ["text", { Quote => $term }],
         ) || die;
@@ -817,14 +817,14 @@ sub test_xapianv2
     # Apart from the tests in this module, at least also the following
     # imodules are relevant: Metadata for SORT, Thread for THREAD.
 
-    xlog "Generate message";
+    xlog $self, "Generate message";
     my $r = $self->make_message("I run", body => "Run, Forrest! Run!" ) || die;
     my $uid = $r->{attrs}->{uid};
 
-    xlog "Copy message into INBOX";
+    xlog $self, "Copy message into INBOX";
     $talk->copy($uid, "INBOX");
 
-    xlog "Run squatter";
+    xlog $self, "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
     $r = $talk->xconvmultisort(
@@ -835,13 +835,13 @@ sub test_xapianv2
     $self->assert_num_equals(2, scalar @{$r->{sort}[0]} - 1);
     $self->assert_num_equals(1, scalar @{$r->{sort}});
 
-    xlog "Create target mailbox";
+    xlog $self, "Create target mailbox";
     $talk->create("INBOX.target");
 
-    xlog "Copy message into INBOX.target";
+    xlog $self, "Copy message into INBOX.target";
     $talk->copy($uid, "INBOX.target");
 
-    xlog "Run squatter";
+    xlog $self, "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
     $r = $talk->xconvmultisort(
@@ -852,10 +852,10 @@ sub test_xapianv2
     $self->assert_num_equals(3, scalar @{$r->{sort}[0]} - 1);
     $self->assert_num_equals(1, scalar @{$r->{sort}});
 
-    xlog "Generate message";
+    xlog $self, "Generate message";
     $self->make_message("You run", body => "A running joke" ) || die;
 
-    xlog "Run squatter";
+    xlog $self, "Run squatter";
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
     $r = $talk->xconvmultisort(
@@ -865,18 +865,18 @@ sub test_xapianv2
     );
     $self->assert_num_equals(2, scalar @{$r->{sort}});
 
-    xlog "SEARCH FUZZY";
+    xlog $self, "SEARCH FUZZY";
     $r = $talk->search(
         "charset", "utf-8", "fuzzy", "text", "run",
     ) || die;
     $self->assert_num_equals(3, scalar @$r);
 
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     $r = $talk->select("INBOX") || die;
     my $uidvalidity = $talk->get_response_code('uidvalidity');
     my $uids = $talk->search('1:*', 'NOT', 'DELETED');
 
-    xlog "XSNIPPETS";
+    xlog $self, "XSNIPPETS";
     $r = $talk->xsnippets(
         [['INBOX', $uidvalidity, $uids]], 'utf-8',
         ['fuzzy', 'body', 'run'],
@@ -889,7 +889,7 @@ sub test_snippets_escapehtml
 {
     my ($self) = @_;
 
-    xlog "Generate and index test messages.";
+    xlog $self, "Generate and index test messages.";
     $self->make_message("Test1 subject with an unescaped & in it",
         mime_charset => "utf-8",
         mime_type => "text/html",
@@ -907,7 +907,7 @@ sub test_snippets_escapehtml
     my $talk = $self->{store}->get_client();
 
     # Connect to IMAP
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     my $r = $talk->select("INBOX") || die;
     my $uidvalidity = $talk->get_response_code('uidvalidity');
     my $uids = $talk->search('1:*', 'NOT', 'DELETED');
@@ -935,7 +935,7 @@ sub test_search_exactmatch
 {
     my ($self) = @_;
 
-    xlog "Generate and index test messages.";
+    xlog $self, "Generate and index test messages.";
     $self->make_message("test1",
         body => "Test1 body with some long text and there is even more ".
                 "and more and more and more and more and more and more ".
@@ -951,12 +951,12 @@ sub test_search_exactmatch
 
     my $talk = $self->{store}->get_client();
 
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     my $r = $talk->select("INBOX") || die;
     my $uidvalidity = $talk->get_response_code('uidvalidity');
     my $uids = $talk->search('1:*', 'NOT', 'DELETED');
 
-    xlog 'SEARCH for FUZZY exact match';
+    xlog $self, 'SEARCH for FUZZY exact match';
     my $query = '"some text"';
     $uids = $talk->search('fuzzy', 'body', $query) || die;
     $self->assert_num_equals(1, scalar @$uids);
@@ -976,7 +976,7 @@ sub test_search_subjectsnippet
 {
     my ($self) = @_;
 
-    xlog "Generate and index test messages.";
+    xlog $self, "Generate and index test messages.";
     $self->make_message("[plumbing] Re: log server v0 live",
         body => "Test1 body with some long text and there is even more ".
                 "and more and more and more and more and more and more ".
@@ -992,12 +992,12 @@ sub test_search_subjectsnippet
 
     my $talk = $self->{store}->get_client();
 
-    xlog "Select INBOX";
+    xlog $self, "Select INBOX";
     my $r = $talk->select("INBOX") || die;
     my $uidvalidity = $talk->get_response_code('uidvalidity');
     my $uids = $talk->search('1:*', 'NOT', 'DELETED');
 
-    xlog 'SEARCH for FUZZY snippets';
+    xlog $self, 'SEARCH for FUZZY snippets';
     my $query = 'servers';
     $uids = $talk->search('fuzzy', 'text', $query) || die;
     $self->assert_num_equals(1, scalar @$uids);
@@ -1034,14 +1034,14 @@ sub test_audit_unindexed
         return @entries;
     };
 
-    xlog "Create message UID 1 and index it in Xapian and cyrus.indexed.db.";
+    xlog $self, "Create message UID 1 and index it in Xapian and cyrus.indexed.db.";
     $self->make_message() || die;
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
 
-    xlog "Create message UID 2 but *don't* index it.";
+    xlog $self, "Create message UID 2 but *don't* index it.";
     $self->make_message() || die;
 
-    xlog "Read current cyrus.indexed.db.";
+    xlog $self, "Read current cyrus.indexed.db.";
     my $result = $self->{instance}->run_command(
         {
             cyrus => 1,
@@ -1055,7 +1055,7 @@ sub test_audit_unindexed
     my @entries = _readfile();
     $self->assert_num_equals(1, scalar @entries);
 
-    xlog "Add UID 2 to sequence set in cyrus.indexed.db";
+    xlog $self, "Add UID 2 to sequence set in cyrus.indexed.db";
     my($key, $val) = split(/\s/, $entries[0], 2);
     $val =~ s/\s+$//;
     $result = $self->{instance}->run_command(
@@ -1075,7 +1075,7 @@ sub test_audit_unindexed
     );
     $self->assert_str_equals('ok', $result);
 
-    xlog "Run squatter audit";
+    xlog $self, "Run squatter audit";
     $result = $self->{instance}->run_command(
         {
             cyrus => 1,
@@ -1093,7 +1093,7 @@ sub test_search_omit_html
 {
     my ($self) = @_;
 
-    xlog "Generate and index test messages.";
+    xlog $self, "Generate and index test messages.";
     $self->make_message("toplevel",
         mime_type => "text/html",
         body => "<html><body><div>hello</div></body></html>"
@@ -1137,7 +1137,7 @@ sub test_search_omit_ical
 {
     my ($self) = @_;
 
-    xlog "Generate and index test messages.";
+    xlog $self, "Generate and index test messages.";
 
     $self->make_message("test",
         mime_type => "multipart/related",

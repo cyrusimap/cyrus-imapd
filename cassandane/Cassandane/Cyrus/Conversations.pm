@@ -105,22 +105,22 @@ sub test_append
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
     $self->check_messages(\%exp);
 
-    xlog "generating message B";
+    xlog $self, "generating message B";
     $exp{B} = $self->make_message("Message B");
     $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
     $self->check_messages(\%exp);
 
-    xlog "generating message C";
+    xlog $self, "generating message C";
     $exp{C} = $self->make_message("Message C");
     $exp{C}->set_attributes(uid => 3, cid => $exp{C}->make_cid());
     my $actual = $self->check_messages(\%exp);
 
-    xlog "generating message D";
+    xlog $self, "generating message D";
     $exp{D} = $self->make_message("Message D");
     $exp{D}->set_attributes(uid => 4, cid => $exp{D}->make_cid());
     $self->check_messages(\%exp);
@@ -138,12 +138,12 @@ sub test_append_reply
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
     $self->check_messages(\%exp);
 
-    xlog "generating message B";
+    xlog $self, "generating message B";
     $exp{B} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
     $exp{B}->set_attributes(uid => 2, cid => $exp{A}->make_cid());
     $self->check_messages(\%exp);
@@ -161,12 +161,12 @@ sub test_append_reply_200
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
     $self->check_messages(\%exp);
 
-    xlog "generating replies";
+    xlog $self, "generating replies";
     for (1..99) {
       $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
       $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
@@ -202,13 +202,13 @@ sub test_normalise_nonascii_whitespace
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     # we saw in the wild a message with an encoded nbsp in the subject...
     $exp{A} = $self->make_message("=?UTF-8?Q?hello=C2=A0there?=");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
     $self->check_messages(\%exp);
 
-    xlog "generating message B";
+    xlog $self, "generating message B";
     # ... but the reply had replaced this with a normal space
     $exp{B} = $self->make_message("Re: hello there", references => [ $exp{A} ]);
     $exp{B}->set_attributes(uid => 2, cid => $exp{A}->make_cid());
@@ -227,12 +227,12 @@ sub test_reconstruct_splitconv
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
     $self->check_messages(\%exp);
 
-    xlog "generating replies";
+    xlog $self, "generating replies";
     for (1..20) {
       $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
       $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
@@ -297,18 +297,18 @@ sub test_replication_reply_200
 
     $self->assert($master_store->get_client()->capability()->{xconversations});
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A", store => $master_store);
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
-    xlog "checking message A on master";
+    xlog $self, "checking message A on master";
     $self->check_messages(\%exp, store => $master_store);
-    xlog "running replication";
+    xlog $self, "running replication";
     $self->run_replication();
     $self->check_replication('cassandane');
-    xlog "checking message A on replica";
+    xlog $self, "checking message A on replica";
     $self->check_messages(\%exp, store => $replica_store);
 
-    xlog "generating replies";
+    xlog $self, "generating replies";
     for (1..99) {
       $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ], store => $master_store);
       $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
@@ -333,7 +333,7 @@ sub test_replication_reply_200
     $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
 
     # corrupt the sync_annot_crc at both ends and check that we can fix it without syncback
-    xlog "Damaging annotations CRCs";
+    xlog $self, "Damaging annotations CRCs";
     _munge_annot_crc($self->{instance}, "/data/user/cassandane/cyrus.index", 1);
     _munge_annot_crc($self->{replica}, "/data/user/cassandane/cyrus.index", 2);
 
@@ -341,7 +341,7 @@ sub test_replication_reply_200
     $self->check_replication('cassandane');
     $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
 
-    xlog "Creating a message on the replica now to make sure it gets the right CID";
+    xlog $self, "Creating a message on the replica now to make sure it gets the right CID";
     $exp{"D"} = $self->make_message("Re: Message A", references => [ $exp{A} ], store => $replica_store);
     $exp{"D"}->set_attributes(uid => 202, cid => $exp{C}->make_cid(), basecid => $exp{A}->make_cid());
     $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
@@ -364,18 +364,18 @@ sub test_replication_reconstruct
 
     $self->assert($master_store->get_client()->capability()->{xconversations});
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A", store => $master_store);
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
-    xlog "checking message A on master";
+    xlog $self, "checking message A on master";
     $self->check_messages(\%exp, store => $master_store);
-    xlog "running replication";
+    xlog $self, "running replication";
     $self->run_replication();
     $self->check_replication('cassandane');
-    xlog "checking message A on replica";
+    xlog $self, "checking message A on replica";
     $self->check_messages(\%exp, store => $replica_store);
 
-    xlog "generating replies";
+    xlog $self, "generating replies";
     for (1..20) {
       $exp{"A$_"} = $self->make_message("Re: Message A", references => [ $exp{A} ], store => $master_store);
       $exp{"A$_"}->set_attributes(uid => 1+$_, cid => $exp{A}->make_cid());
@@ -404,7 +404,7 @@ sub test_replication_reconstruct
     $self->check_replication('cassandane');
     $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
 
-    xlog "Creating a message on the replica now to make sure it gets the right CID";
+    xlog $self, "Creating a message on the replica now to make sure it gets the right CID";
     $exp{"D"} = $self->make_message("Re: Message A", references => [ $exp{A} ], store => $replica_store);
     $exp{"D"}->set_attributes(uid => 22, cid => $exp{"A20"}->make_cid(), basecid => $exp{A}->make_cid());
     $self->check_messages(\%exp, keyed_on => 'uid', store => $replica_store);
@@ -423,17 +423,17 @@ sub bogus_test_append_clash
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
     $self->check_messages(\%exp);
 
-    xlog "generating message B";
+    xlog $self, "generating message B";
     $exp{B} = $self->make_message("Message B");
     $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
     my $actual = $self->check_messages(\%exp);
 
-    xlog "generating message C";
+    xlog $self, "generating message C";
     my $ElCid = choose_cid($exp{A}->get_attribute('cid'),
                            $exp{B}->get_attribute('cid'));
     $exp{C} = $self->make_message("Message C",
@@ -469,22 +469,22 @@ sub bogus_test_double_clash
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
     $self->check_messages(\%exp);
 
-    xlog "generating message B";
+    xlog $self, "generating message B";
     $exp{B} = $self->make_message("Message B");
     $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
     $self->check_messages(\%exp);
 
-    xlog "generating message C";
+    xlog $self, "generating message C";
     $exp{C} = $self->make_message("Message C");
     $exp{C}->set_attributes(uid => 3, cid => $exp{C}->make_cid());
     my $actual = $self->check_messages(\%exp);
 
-    xlog "generating message D";
+    xlog $self, "generating message D";
     my $ElCid = choose_cid($exp{A}->get_attribute('cid'),
                            $exp{B}->get_attribute('cid'),
                            $exp{C}->get_attribute('cid'));
@@ -518,7 +518,7 @@ sub bogus_test_replication_clash
     my ($self) = @_;
     my %exp;
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
@@ -535,7 +535,7 @@ sub bogus_test_replication_clash
     $self->assert($master_store->get_client()->capability()->{xconversations});
     $self->assert($replica_store->get_client()->capability()->{xconversations});
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A", store => $master_store);
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
     $self->run_replication();
@@ -543,7 +543,7 @@ sub bogus_test_replication_clash
     $self->check_messages(\%exp, store => $master_store);
     $self->check_messages(\%exp, store => $replica_store);
 
-    xlog "generating message B";
+    xlog $self, "generating message B";
     $exp{B} = $self->make_message("Message B", store => $master_store);
     $exp{B}->set_attributes(uid => 2, cid => $exp{B}->make_cid());
     $self->run_replication();
@@ -551,7 +551,7 @@ sub bogus_test_replication_clash
     $self->check_messages(\%exp, store => $master_store);
     $self->check_messages(\%exp, store => $replica_store);
 
-    xlog "generating message C";
+    xlog $self, "generating message C";
     $exp{C} = $self->make_message("Message C", store => $master_store);
     $exp{C}->set_attributes(uid => 3, cid => $exp{C}->make_cid());
     $self->run_replication();
@@ -559,7 +559,7 @@ sub bogus_test_replication_clash
     my $actual = $self->check_messages(\%exp, store => $master_store);
     $self->check_messages(\%exp, store => $replica_store);
 
-    xlog "generating message D";
+    xlog $self, "generating message D";
     my $ElCid = choose_cid($exp{A}->get_attribute('cid'),
                            $exp{B}->get_attribute('cid'),
                            $exp{C}->get_attribute('cid'));
@@ -597,7 +597,7 @@ sub test_xconvfetch
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($store->get_client()->capability()->{xconversations});
 
-    xlog "generating messages";
+    xlog $self, "generating messages";
     my $generator = Cassandane::ThreadedGenerator->new();
     $store->write_begin();
     while (my $msg = $generator->generate())
@@ -606,7 +606,7 @@ sub test_xconvfetch
     }
     $store->write_end();
 
-    xlog "reading the whole folder again to discover CIDs etc";
+    xlog $self, "reading the whole folder again to discover CIDs etc";
     my %cids;
     my %uids;
     $store->read_begin();
@@ -622,17 +622,17 @@ sub test_xconvfetch
         else
         {
             $cids{$cid} = $threadid;
-            xlog "Found CID $cid";
+            xlog $self, "Found CID $cid";
         }
         $self->assert_null($uids{$uid});
         $uids{$uid} = 1;
     }
     $store->read_end();
 
-    xlog "Using XCONVFETCH on each conversation";
+    xlog $self, "Using XCONVFETCH on each conversation";
     foreach my $cid (keys %cids)
     {
-        xlog "XCONVFETCHing CID $cid";
+        xlog $self, "XCONVFETCHing CID $cid";
 
         my $result = $store->xconvfetch_begin($cid);
         $self->assert_not_null($result->{xconvmeta});
@@ -652,7 +652,7 @@ sub test_xconvfetch
         $store->xconvfetch_end();
     }
 
-    xlog "checking that all the UIDs in the folder were XCONVFETCHed";
+    xlog $self, "checking that all the UIDs in the folder were XCONVFETCHed";
     foreach my $uid (keys %uids)
     {
         $self->assert_num_equals(3, $uids{$uid});
@@ -673,7 +673,7 @@ sub bogus_test_fm_webui_draft
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->{gen}->generate(subject => 'Draft message A');
     $exp{A}->remove_headers('Message-ID');
 #     $exp{A}->add_header('X-ME-Message-ID', '<fake.header@i.am.a.draft>');
@@ -685,7 +685,7 @@ sub bogus_test_fm_webui_draft
     $self->{store}->write_end();
     $self->check_messages(\%exp);
 
-    xlog "generating message B";
+    xlog $self, "generating message B";
     $exp{B} = $exp{A}->clone();
     $exp{B}->set_headers('Subject', 'Draft message B');
     $exp{B}->set_body("Completely different text here\r\n");
@@ -706,7 +706,7 @@ sub bogus_test_cross_user_copy
     my $bobuser = "bob";
     my $bobfolder = "user.$bobuser";
 
-    xlog "Testing COPY between folders owned by different users [IRIS-893]";
+    xlog $self, "Testing COPY between folders owned by different users [IRIS-893]";
 
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
@@ -720,7 +720,7 @@ sub bogus_test_cross_user_copy
     $adminclient->setacl('user.cassandane', $bobuser => 'lrswipkxtecda')
         or die "Cannot setacl on user.cassandane: $@";
 
-    xlog "generating two messages";
+    xlog $self, "generating two messages";
     my %exp;
     $exp{A} = $self->{gen}->generate(subject => 'Message A');
     my $cid = $exp{A}->make_cid();
@@ -729,12 +729,12 @@ sub bogus_test_cross_user_copy
                                      references => [ $exp{A} ]);
     $exp{B}->set_attribute(cid => $cid);
 
-    xlog "Writing messaged to user.cassandane";
+    xlog $self, "Writing messaged to user.cassandane";
     $self->{store}->write_begin();
     $self->{store}->write_message($exp{A});
     $self->{store}->write_message($exp{B});
     $self->{store}->write_end();
-    xlog "Check that the messages made it";
+    xlog $self, "Check that the messages made it";
     $self->check_messages(\%exp);
 
     my $bobstore = $srv->create_store(username => $bobuser);
@@ -745,7 +745,7 @@ sub bogus_test_cross_user_copy
     $bobclient->copy(2, $bobfolder)
         or die "Cannot COPY message to $bobfolder";
 
-    xlog "Check that the message made it to $bobfolder";
+    xlog $self, "Check that the message made it to $bobfolder";
     my %bobexp;
     $bobexp{B} = $exp{B}->clone();
     $bobexp{B}->set_attributes(uid => 1, cid => $exp{B}->make_cid());
@@ -772,10 +772,10 @@ sub test_replication_trashseen
 
     $self->assert($mtalk->capability()->{xconversations});
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A", store => $master_store);
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
-    xlog "checking message A on master";
+    xlog $self, "checking message A on master";
     $self->check_messages(\%exp, store => $master_store);
 
     $mtalk->create("INBOX.Trash");
@@ -785,7 +785,7 @@ sub test_replication_trashseen
     $mtalk->select('INBOX.Trash');
     $mtalk->store('1', '-flags', '\\Seen');
 
-    xlog "running replication";
+    xlog $self, "running replication";
     $self->run_replication();
     $self->check_replication('cassandane');
 }

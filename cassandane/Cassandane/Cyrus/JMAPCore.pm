@@ -116,7 +116,7 @@ sub test_get_session
     my $imaptalk = $self->{store}->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "setup shared accounts";
+    xlog $self, "setup shared accounts";
     $self->{instance}->create_user("account1");
     $self->{instance}->create_user("account2");
     $self->{instance}->create_user("account3");
@@ -298,7 +298,7 @@ sub test_created_ids
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    xlog "send bogus creation ids map";
+    xlog $self, "send bogus creation ids map";
     my $RawRequest = {
         headers => {
             'Authorization' => $jmap->auth_header(),
@@ -317,7 +317,7 @@ sub test_created_ids
     }
     $self->assert_str_equals('400', $RawResponse->{status});
 
-    xlog "create a mailbox without any client-supplied creation ids";
+    xlog $self, "create a mailbox without any client-supplied creation ids";
     my $JMAPRequest = {
         using => ['urn:ietf:params:jmap:mail'],
         methodCalls => [['Mailbox/set', {
@@ -335,7 +335,7 @@ sub test_created_ids
     $self->assert_not_null($mboxid1);
     $self->assert_null($JMAPResponse->{createdIds});
 
-    xlog "get mailbox using client-supplied creation id";
+    xlog $self, "get mailbox using client-supplied creation id";
     $JMAPRequest = {
         using => ['urn:ietf:params:jmap:mail'],
         methodCalls => [['Mailbox/get', { ids => ['#1'] }, 'R1']],
@@ -346,7 +346,7 @@ sub test_created_ids
     $self->assert_not_null($JMAPResponse->{createdIds});
     $self->assert_str_equals($mboxid1, $JMAPResponse->{createdIds}{1});
 
-    xlog "create a mailbox with empty client-supplied creation ids";
+    xlog $self, "create a mailbox with empty client-supplied creation ids";
     $JMAPRequest = {
         using => ['urn:ietf:params:jmap:mail'],
         methodCalls => [['Mailbox/set', {
@@ -364,7 +364,7 @@ sub test_created_ids
     my $mboxid2 = $JMAPResponse->{methodResponses}->[0][1]{created}{2}{id};
     $self->assert_str_equals($mboxid2, $JMAPResponse->{createdIds}{2});
 
-    xlog "create a mailbox with client-supplied creation ids";
+    xlog $self, "create a mailbox with client-supplied creation ids";
     $JMAPRequest = {
         using => ['urn:ietf:params:jmap:mail'],
         methodCalls => [['Mailbox/set', {
@@ -387,7 +387,7 @@ sub test_created_ids
     $self->assert_str_equals($mboxid2, $JMAPResponse->{createdIds}{2});
     $self->assert_str_equals($mboxid3, $JMAPResponse->{createdIds}{3});
 
-    xlog "get mailbox and check parentid";
+    xlog $self, "get mailbox and check parentid";
     $JMAPRequest = {
         using => ['urn:ietf:params:jmap:mail'],
         methodCalls => [['Mailbox/get', { ids => [$mboxid3], properties => ['parentId'] }, 'R1']],
@@ -412,10 +412,10 @@ sub test_echo
         stuff => { foo => "bar", empty => JSON::null }
     };
 
-    xlog "send ping";
+    xlog $self, "send ping";
     my $res = $jmap->CallMethods([['Core/echo', $req, "R1"]]);
 
-    xlog "check pong";
+    xlog $self, "check pong";
     $self->assert_not_null($res);
     $self->assert_str_equals('Core/echo', $res->[0][0]);
     $self->assert_deep_equals($req, $res->[0][1]);

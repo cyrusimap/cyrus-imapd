@@ -70,7 +70,7 @@ sub test_delete_subuser
     my $adminstore = $self->{adminstore};
     my $admintalk = $adminstore->get_client();
 
-    xlog "Test Cyrus extension which renames a user to a different partition";
+    xlog $self, "Test Cyrus extension which renames a user to a different partition";
 
     # create and prepare the user
     $self->{instance}->create_user('admin1');

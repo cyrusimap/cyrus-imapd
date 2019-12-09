@@ -73,12 +73,12 @@ sub test_status_after_expunge
 
     my $subfolder = 'INBOX.foo';
 
-    xlog "First create a sub folder";
+    xlog $self, "First create a sub folder";
     $talk->create($subfolder)
         or die "Cannot create folder $subfolder: $@";
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "Generate messages in $subfolder";
+    xlog $self, "Generate messages in $subfolder";
     $store->set_folder($subfolder);
     $store->_select();
     for (1..5) {
@@ -115,12 +115,12 @@ sub test_allowdeleted
 
     my $subfolder = 'INBOX.foo';
 
-    xlog "First create a sub folder";
+    xlog $self, "First create a sub folder";
     $talk->create($subfolder)
         or die "Cannot create folder $subfolder: $@";
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "Generate messages in $subfolder";
+    xlog $self, "Generate messages in $subfolder";
     $store->set_folder($subfolder);
     $store->_select();
     for (1..5) {
@@ -143,13 +143,13 @@ sub test_allowdeleted
     $self->assert_equals(2, $stat->{unseen});
     $self->assert_equals(2, $stat->{messages});
 
-    xlog "regular select finds 2 messages";
+    xlog $self, "regular select finds 2 messages";
     $talk->unselect();
     $talk->select($subfolder);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_num_equals(2, $talk->get_response_code('exists'));
 
-    xlog "include-expunged select finds 5 messages";
+    xlog $self, "include-expunged select finds 5 messages";
     $talk->unselect();
     # this API is janky
     $talk->select($subfolder, '(vendor.cmu-include-expunged)' => 1);
@@ -160,14 +160,14 @@ sub test_allowdeleted
     my @newemailids = map { $newemailids->{$_}{emailid}[0] } sort { $a <=> $b } keys %$newemailids;
     $self->assert_deep_equals(\@oldemailids, \@newemailids, Data::Dumper::Dumper(\@oldemailids, \@newemailids));
 
-    xlog "copy of deleted messages recreates them";
+    xlog $self, "copy of deleted messages recreates them";
     $talk->copy('1,3,5', $subfolder);
     $talk->unselect();
     $talk->select($subfolder);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_num_equals(5, $talk->get_response_code('exists'));
 
-    xlog "new mailbox contains the same emails";
+    xlog $self, "new mailbox contains the same emails";
     $newemailids = $talk->fetch('1:*', 'emailid');
     @newemailids = map { $newemailids->{$_}{emailid}[0] } sort { $a <=> $b } keys %$newemailids;
     $self->assert_deep_equals([sort @oldemailids], [sort @newemailids],

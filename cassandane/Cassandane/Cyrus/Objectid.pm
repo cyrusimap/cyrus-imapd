@@ -115,17 +115,17 @@ sub test_emailid_threadid
 
     $self->{store}->set_fetch_attributes('uid', 'cid');
 
-    xlog "generating message A";
+    xlog $self, "generating message A";
     $exp{A} = $self->make_message("Message A");
     $exp{A}->set_attributes(uid => 1, cid => $exp{A}->make_cid());
     $self->check_messages(\%exp);
 
-    xlog "generating message B";
+    xlog $self, "generating message B";
     $exp{B} = $self->make_message("Re: Message A", references => [ $exp{A} ]);
     $exp{B}->set_attributes(uid => 2, cid => $exp{A}->make_cid());
     $self->check_messages(\%exp);
 
-    xlog "generating message C";
+    xlog $self, "generating message C";
     $exp{C} = $self->make_message("Message C");
     $exp{C}->set_attributes(uid => 3, cid => $exp{C}->make_cid());
     $self->check_messages(\%exp);

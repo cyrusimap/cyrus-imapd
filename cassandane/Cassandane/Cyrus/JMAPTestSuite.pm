@@ -188,17 +188,17 @@ sub run_test
 
     if (!defined $basedir)
     {
-        xlog "JMAP Tests are not enabled.  To enabled them, please";
-        xlog "install JMAP-TestSuite from https://github.com/fastmail/JMAP-TestSuite";
-        xlog "and edit [jmaptestsuite]basedir in cassandane.ini";
-        xlog "This is not a failure";
+        xlog $self, "JMAP Tests are not enabled.  To enabled them, please";
+        xlog $self, "install JMAP-TestSuite from https://github.com/fastmail/JMAP-TestSuite";
+        xlog $self, "and edit [jmaptestsuite]basedir in cassandane.ini";
+        xlog $self, "This is not a failure";
         return;
     }
 
     if (!cyrus_version_supports_jmap())
     {
-        xlog "The version of Cyrus being tested does not support JMAP";
-        xlog "JMAP-TestSuite tests skipped";
+        xlog $self, "The version of Cyrus being tested does not support JMAP";
+        xlog $self, "JMAP-TestSuite tests skipped";
         return;
     }
 
@@ -268,7 +268,7 @@ sub run_test
                 or die "Cannot open $errfile for reading: $!";
             while (readline FH) {
                 chomp;
-                xlog $_;
+                xlog $self, $_;
             }
             close FH;
         }

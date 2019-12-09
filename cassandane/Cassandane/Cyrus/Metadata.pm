@@ -85,8 +85,8 @@ sub make_message_pair
     my $msg1 = $self->{gen}->generate(subject => 'Message One');
     my $guid0 = $msg0->get_guid();
     my $guid1 = $msg1->get_guid();
-    xlog "Message 'Message Zero' has GUID $guid0";
-    xlog "Message 'Message One' has GUID $guid1";
+    xlog $self, "Message 'Message Zero' has GUID $guid0";
+    xlog $self, "Message 'Message One' has GUID $guid1";
 
     # choose ordering of messages
     $self->assert_str_not_equals($guid0, $guid1);
@@ -287,9 +287,9 @@ sub test_capabilities
     my $imaptalk = $self->{store}->get_client();
 
     my $caps = $imaptalk->capability();
-    xlog "RFC5257 defines capability ANNOTATE-EXPERIMENT-1";
+    xlog $self, "RFC5257 defines capability ANNOTATE-EXPERIMENT-1";
     $self->assert_not_null($caps->{"annotate-experiment-1"});
-    xlog "RFC5464 defines capability METADATA";
+    xlog $self, "RFC5464 defines capability METADATA";
     $self->assert_not_null($caps->{"metadata"});
 }
 
@@ -323,12 +323,12 @@ sub test_shared
 
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "reading read_only Cyrus annotations";
+    xlog $self, "reading read_only Cyrus annotations";
     my $res = $imaptalk->getmetadata('INBOX', {depth => 'infinity'}, '/shared');
     my $r = $res->{INBOX};
     $self->assert_not_null($r);
 
-    xlog "checking specific entries";
+    xlog $self, "checking specific entries";
     # Note: lastupdate will be a time string close within the
     # last second, but I'm too lazy to check that properly
     $self->assert_not_null($r->{'/shared/vendor/cmu/cyrus-imapd/lastupdate'});
@@ -408,7 +408,7 @@ sub test_specialuse
 {
     my ($self) = @_;
 
-    xlog "testing /private/specialuse";
+    xlog $self, "testing /private/specialuse";
 
     my $imaptalk = $self->{store}->get_client();
     my $res;
@@ -460,7 +460,7 @@ sub test_specialuse
         },
     );
 
-    xlog "First create all the folders";
+    xlog $self, "First create all the folders";
     foreach my $tc (@testcases)
     {
         $imaptalk->create("INBOX.$tc->{folder}")
@@ -471,7 +471,7 @@ sub test_specialuse
     {
         my $folder = "INBOX.$tc->{folder}";
 
-        xlog "initial value for $folder is NIL";
+        xlog $self, "initial value for $folder is NIL";
         $res = $imaptalk->getmetadata($folder, $entry);
         $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
         $self->assert_not_null($res);
@@ -480,11 +480,11 @@ sub test_specialuse
             $folder => { $entry => undef }
         }, $res);
 
-        xlog "can set $folder to $tc->{specialuse}";
+        xlog $self, "can set $folder to $tc->{specialuse}";
         $imaptalk->setmetadata($folder, $entry, $tc->{specialuse});
         $self->assert_str_equals($tc->{result}, $imaptalk->get_last_completion_response());
 
-        xlog "can get the set value back";
+        xlog $self, "can get the set value back";
         $res = $imaptalk->getmetadata($folder, $entry);
         $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
         $self->assert_not_null($res);
@@ -495,7 +495,7 @@ sub test_specialuse
         $self->assert_deep_equals($expected, $res);
     }
 
-    xlog "can get same values in a new connection";
+    xlog $self, "can get same values in a new connection";
     $self->{store}->disconnect();
     $imaptalk = $self->{store}->get_client();
 
@@ -513,7 +513,7 @@ sub test_specialuse
         $self->assert_deep_equals($expected, $res);
     }
 
-    xlog "can delete values";
+    xlog $self, "can delete values";
     foreach my $tc (@testcases)
     {
         next unless ($tc->{result} eq 'ok');
@@ -538,7 +538,7 @@ sub test_createspecialuse
 {
     my ($self) = @_;
 
-    xlog "testing create specialuse";
+    xlog $self, "testing create specialuse";
 
     my $imaptalk = $self->{store}->get_client();
     my $res;
@@ -548,7 +548,7 @@ sub test_createspecialuse
     $imaptalk->create($folder, "(USE ($use))")
         or die "Cannot create mailbox $folder with special-use $use: $@";
 
-    xlog "initial value for $folder is $use";
+    xlog $self, "initial value for $folder is $use";
     $res = $imaptalk->getmetadata($folder, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
@@ -567,18 +567,18 @@ sub test_motd
 {
     my ($self) = @_;
 
-    xlog "testing /shared/motd";
+    xlog $self, "testing /shared/motd";
 
     my $imaptalk = $self->{store}->get_client();
     my $res;
     my $entry = '/shared/motd';
     my $value1 = "Hello World this is a value";
 
-    xlog "No ALERT was received when we connected";
+    xlog $self, "No ALERT was received when we connected";
     $self->assert($imaptalk->state() == Mail::IMAPTalk::Authenticated);
     $self->assert_null($imaptalk->get_response_code('alert'));
 
-    xlog "initial value is NIL";
+    xlog $self, "initial value is NIL";
     $res = $imaptalk->getmetadata("", $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
@@ -586,17 +586,17 @@ sub test_motd
         "" => { $entry => undef }
     }, $res);
 
-    xlog "cannot set the value as ordinary user";
+    xlog $self, "cannot set the value as ordinary user";
     $imaptalk->setmetadata("", $entry, $value1);
     $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
     $self->assert($imaptalk->get_last_error() =~ m/permission denied/i);
 
-    xlog "can set the value as admin";
+    xlog $self, "can set the value as admin";
     $imaptalk = $self->{adminstore}->get_client();
     $imaptalk->setmetadata("", $entry, $value1);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "can get the set value back";
+    xlog $self, "can get the set value back";
     $res = $imaptalk->getmetadata("", $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
@@ -605,7 +605,7 @@ sub test_motd
     };
     $self->assert_deep_equals($expected, $res);
 
-    xlog "a new connection will get an ALERT with the motd value";
+    xlog $self, "a new connection will get an ALERT with the motd value";
     $self->{adminstore}->disconnect();
     $imaptalk = $self->{adminstore}->get_client();
     $self->assert($imaptalk->state() == Mail::IMAPTalk::Authenticated);
@@ -613,7 +613,7 @@ sub test_motd
     $self->assert_not_null($alert);
     $self->assert_str_equals($value1, $alert);
 
-    xlog "the annot gives the same value in the new connection";
+    xlog $self, "the annot gives the same value in the new connection";
     $res = $imaptalk->getmetadata("", $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
@@ -622,7 +622,7 @@ sub test_motd
     };
     $self->assert_deep_equals($expected, $res);
 
-    xlog "can delete value";
+    xlog $self, "can delete value";
     $imaptalk->setmetadata("", $entry, undef);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
@@ -634,7 +634,7 @@ sub test_motd
     };
     $self->assert_deep_equals($expected, $res);
 
-    xlog "a new connection no longer gets an ALERT";
+    xlog $self, "a new connection no longer gets an ALERT";
     $self->{adminstore}->disconnect();
     $imaptalk = $self->{adminstore}->get_client();
     $self->assert($imaptalk->state() == Mail::IMAPTalk::Authenticated);
@@ -650,7 +650,7 @@ sub test_size
 {
     my ($self) = @_;
 
-    xlog "testing /shared/vendor/cmu/cyrus-imapd/size";
+    xlog $self, "testing /shared/vendor/cmu/cyrus-imapd/size";
 
     my $imaptalk = $self->{store}->get_client();
     my $res;
@@ -659,25 +659,25 @@ sub test_size
     $self->{store}->set_folder($folder_cass);
     my $entry = '/shared/vendor/cmu/cyrus-imapd/size';
 
-    xlog "initial value is numeric zero";
+    xlog $self, "initial value is numeric zero";
     $res = $imaptalk->getmetadata($folder_cass, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_deep_equals({
         $folder_cass => { $entry => "0" }
     }, $res);
 
-    xlog "cannot set the value as ordinary user";
+    xlog $self, "cannot set the value as ordinary user";
     $imaptalk->setmetadata($folder_cass, $entry, '123');
     $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
     $self->assert($imaptalk->get_last_error() =~ m/permission denied/i);
 
-    xlog "cannot set the value as admin either";
+    xlog $self, "cannot set the value as admin either";
     my $admintalk = $self->{adminstore}->get_client();
     $admintalk->setmetadata($folder_admin, $entry, '123');
     $self->assert_str_equals('no', $admintalk->get_last_completion_response());
     $self->assert($admintalk->get_last_error() =~ m/permission denied/i);
 
-    xlog "adding a message bumps the value by the message's size";
+    xlog $self, "adding a message bumps the value by the message's size";
     my $expected = 0;
     my %msg;
     $msg{A} = $self->make_message('Message A');
@@ -689,7 +689,7 @@ sub test_size
         $folder_cass => { $entry => "" . $expected }
     }, $res);
 
-    xlog "adding a 2nd message bumps the value by the message's size";
+    xlog $self, "adding a 2nd message bumps the value by the message's size";
     $msg{B} = $self->make_message('Message B');
     $expected += length($msg{B}->as_string());
 
@@ -707,7 +707,7 @@ sub test_uniqueid
 {
     my ($self) = @_;
 
-    xlog "testing /shared/vendor/cmu/cyrus-imapd/uniqueid";
+    xlog $self, "testing /shared/vendor/cmu/cyrus-imapd/uniqueid";
 
     my $imaptalk = $self->{store}->get_client();
     my $res;
@@ -719,7 +719,7 @@ sub test_uniqueid
     my %uuids_seen;
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
 
-    xlog "create the folders";
+    xlog $self, "create the folders";
     foreach my $f (@folders)
     {
         $imaptalk->create($f)
@@ -742,7 +742,7 @@ sub test_uniqueid
     # our chances of getting all the creates in one second
     for (my $i = 0 ; $i < scalar(@folders) ; $i++)
     {
-        xlog "uniqueid of " . $folders[$i] . " was \"" . $uuids[$i] .  "\"";
+        xlog $self, "uniqueid of " . $folders[$i] . " was \"" . $uuids[$i] .  "\"";
     }
 }
 
@@ -753,9 +753,9 @@ sub test_private
 
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "testing private metadata operations";
+    xlog $self, "testing private metadata operations";
 
-    xlog "testing specific entries";
+    xlog $self, "testing specific entries";
     my $res = $imaptalk->getmetadata('INBOX', {depth => 'infinity'}, '/private');
     my $r = $res->{INBOX};
     $self->assert_not_null($r);
@@ -800,40 +800,40 @@ sub test_embedded_nuls
 {
     my ($self) = @_;
 
-    xlog "testing getting and setting embedded NULs";
+    xlog $self, "testing getting and setting embedded NULs";
 
     my $imaptalk = $self->{store}->get_client();
     my $folder = 'INBOX.test_embedded_nuls';
     my $entry = '/private/comment';
     my $binary = "Hello\0World";
 
-    xlog "create a temporary mailbox";
+    xlog $self, "create a temporary mailbox";
     $imaptalk->create($folder)
         or die "Cannot create mailbox $folder: $@";
 
-    xlog "initially, NIL is reported";
+    xlog $self, "initially, NIL is reported";
     my $res = $imaptalk->getmetadata($folder, $entry)
         or die "Cannot get metadata: $@";
     $self->assert_num_equals(1, scalar keys %$res);
     $self->assert_null($res->{$folder}{$entry});
 
-    xlog "set and then get the same back again";
+    xlog $self, "set and then get the same back again";
     $imaptalk->setmetadata($folder, $entry, $binary);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $res = $imaptalk->getmetadata($folder, $entry);
     $self->assert_str_equals($binary, $res->{$folder}{$entry});
 
-    xlog "remove it again";
+    xlog $self, "remove it again";
     $imaptalk->setmetadata($folder, $entry, undef);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "check it's gone now";
+    xlog $self, "check it's gone now";
     $res = $imaptalk->getmetadata($folder, $entry)
         or die "Cannot get metadata: $@";
     $self->assert_num_equals(1, scalar keys %$res);
     $self->assert_null($res->{$folder}{$entry});
 
-    xlog "clean up temporary mailbox";
+    xlog $self, "clean up temporary mailbox";
     $imaptalk->delete($folder)
         or die "Cannot delete mailbox $folder: $@";
 }
@@ -842,11 +842,11 @@ sub test_permessage_getset
 {
     my ($self) = @_;
 
-    xlog "testing getting and setting message scope annotations";
+    xlog $self, "testing getting and setting message scope annotations";
 
     my $talk = $self->{store}->get_client();
 
-    xlog "Append 3 messages";
+    xlog $self, "Append 3 messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{B} = $self->make_message('Message B');
@@ -858,7 +858,7 @@ sub test_permessage_getset
     my $value2 = "Goodnight\0Irene";
     my $value3 = "Gump";
 
-    xlog "fetch an annotation - should be no values";
+    xlog $self, "fetch an annotation - should be no values";
     my $res = $talk->fetch('1:*',
                            ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -871,12 +871,12 @@ sub test_permessage_getset
             },
             $res);
 
-    xlog "store an annotation";
+    xlog $self, "store an annotation";
     $talk->store('1', 'annotation',
                  [$entry, [$attrib, $value1]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "fetch the annotation again, should see changes";
+    xlog $self, "fetch the annotation again, should see changes";
     $res = $talk->fetch('1:*',
                         ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -889,12 +889,12 @@ sub test_permessage_getset
             },
             $res);
 
-    xlog "store an annotation with an embedded NUL";
+    xlog $self, "store an annotation with an embedded NUL";
     $talk->store('3', 'annotation',
                  [$entry, [$attrib, $value2]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "fetch the annotation again, should see changes";
+    xlog $self, "fetch the annotation again, should see changes";
     $res = $talk->fetch('1:*',
                         ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -907,14 +907,14 @@ sub test_permessage_getset
             },
             $res);
 
-    xlog "store multiple annotations";
+    xlog $self, "store multiple annotations";
     # Note $value3 has no whitespace so we have to
     # convince Mail::IMAPTalk to quote it anyway
     $talk->store('1:*', 'annotation',
                  [$entry, [$attrib, { Quote => $value3 }]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "fetch the annotation again, should see changes";
+    xlog $self, "fetch the annotation again, should see changes";
     $res = $talk->fetch('1:*',
                         ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -927,14 +927,14 @@ sub test_permessage_getset
             },
             $res);
 
-    xlog "delete an annotation";
+    xlog $self, "delete an annotation";
     # Note $value3 has no whitespace so we have to
     # convince Mail::IMAPTalk to quote it anyway
     $talk->store('2', 'annotation',
                  [$entry, [$attrib, undef]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "fetch the annotation again, should see changes";
+    xlog $self, "fetch the annotation again, should see changes";
     $res = $talk->fetch('1:*',
                         ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -947,14 +947,14 @@ sub test_permessage_getset
             },
             $res);
 
-    xlog "delete all annotations";
+    xlog $self, "delete all annotations";
     # Note $value3 has no whitespace so we have to
     # convince Mail::IMAPTalk to quote it anyway
     $talk->store('1:*', 'annotation',
                  [$entry, [$attrib, undef]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "fetch the annotation again, should see changes";
+    xlog $self, "fetch the annotation again, should see changes";
     $res = $talk->fetch('1:*',
                         ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -972,10 +972,10 @@ sub test_permessage_unknown
 {
     my ($self) = @_;
 
-    xlog "testing getting and setting unknown annotations on a message";
-    xlog "where this is forbidden by the default config";
+    xlog $self, "testing getting and setting unknown annotations on a message";
+    xlog $self, "where this is forbidden by the default config";
 
-    xlog "Append a message";
+    xlog $self, "Append a message";
     my %msg;
     $msg{A} = $self->make_message('Message A');
 
@@ -983,7 +983,7 @@ sub test_permessage_unknown
     my $attrib = 'value.priv';
     my $value1 = "Hello World";
 
-    xlog "fetch annotation - should be no values";
+    xlog $self, "fetch annotation - should be no values";
     my $talk = $self->{store}->get_client();
     my $res = $talk->fetch('1:*',
                            ['annotation', [$entry, $attrib]]);
@@ -995,12 +995,12 @@ sub test_permessage_unknown
             },
             $res);
 
-    xlog "store annotation - should fail";
+    xlog $self, "store annotation - should fail";
     $talk->store('1', 'annotation',
                  [$entry, [$attrib, $value1]]);
     $self->assert_str_equals('no', $talk->get_last_completion_response());
 
-    xlog "fetch the annotation again, should see nothing";
+    xlog $self, "fetch the annotation again, should see nothing";
     $res = $talk->fetch('1:*',
                         ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -1017,10 +1017,10 @@ sub test_permessage_unknown_allowed
 {
     my ($self) = @_;
 
-    xlog "testing getting and setting unknown annotations on a message";
-    xlog "with config allowing this";
+    xlog $self, "testing getting and setting unknown annotations on a message";
+    xlog $self, "with config allowing this";
 
-    xlog "Append a message";
+    xlog $self, "Append a message";
     my %msg;
     $msg{A} = $self->make_message('Message A');
 
@@ -1028,7 +1028,7 @@ sub test_permessage_unknown_allowed
     my $attrib = 'value.priv';
     my $value1 = "Hello World";
 
-    xlog "fetch annotation - should be no values";
+    xlog $self, "fetch annotation - should be no values";
     my $talk = $self->{store}->get_client();
     my $res = $talk->fetch('1:*',
                            ['annotation', [$entry, $attrib]]);
@@ -1040,12 +1040,12 @@ sub test_permessage_unknown_allowed
             },
             $res);
 
-    xlog "store annotation - should succeed";
+    xlog $self, "store annotation - should succeed";
     $talk->store('1', 'annotation',
                  [$entry, [$attrib, $value1]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "fetch the annotation again, should see the value";
+    xlog $self, "fetch the annotation again, should see the value";
     $res = $talk->fetch('1:*',
                         ['annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -1075,10 +1075,10 @@ sub test_msg_replication_new_mas
 {
     my ($self) = @_;
 
-    xlog "testing replication of message scope annotations";
-    xlog "case new_mas: new message appears, on master only";
+    xlog $self, "testing replication of message scope annotations";
+    xlog $self, "case new_mas: new message appears, on master only";
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
@@ -1090,7 +1090,7 @@ sub test_msg_replication_new_mas
     $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
     $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Append a message and store an annotation";
+    xlog $self, "Append a message and store an annotation";
     my %master_exp;
     my %replica_exp;
     $master_exp{A} = $self->make_message('Message A', store => $master_store);
@@ -1098,21 +1098,21 @@ sub test_msg_replication_new_mas
     $master_exp{A}->set_attribute('uid', 1);
     $master_exp{A}->set_annotation($entry, $attrib, $value1);
 
-    xlog "Before replication, message is present on the master";
+    xlog $self, "Before replication, message is present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before replication, message is missing from the replica";
+    xlog $self, "Before replication, message is missing from the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     $self->run_replication();
     $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
-    xlog "After replication, message is still present on the master";
+    xlog $self, "After replication, message is still present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After replication, message is now present on the replica";
+    xlog $self, "After replication, message is now present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Check that annotations in the master and replica DB match";
+    xlog $self, "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
@@ -1120,10 +1120,10 @@ sub test_msg_replication_new_rep
 {
     my ($self) = @_;
 
-    xlog "testing replication of message scope annotations";
-    xlog "case new_rep: new message appears, on replica only";
+    xlog $self, "testing replication of message scope annotations";
+    xlog $self, "case new_rep: new message appears, on replica only";
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
@@ -1135,7 +1135,7 @@ sub test_msg_replication_new_rep
     $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
     $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Append a message and store an annotation";
+    xlog $self, "Append a message and store an annotation";
     my %master_exp;
     my %replica_exp;
     $replica_exp{A} = $self->make_message('Message A', store => $replica_store);
@@ -1143,21 +1143,21 @@ sub test_msg_replication_new_rep
     $replica_exp{A}->set_attribute('uid', 1);
     $replica_exp{A}->set_annotation($entry, $attrib, $value1);
 
-    xlog "Before replication, message is missing from the master";
+    xlog $self, "Before replication, message is missing from the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before replication, message is present on the replica";
+    xlog $self, "Before replication, message is present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     $self->run_replication();
     $self->check_replication('cassandane');
 
     $master_exp{A} = $replica_exp{A}->clone();
-    xlog "After replication, message is now present on the master";
+    xlog $self, "After replication, message is now present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After replication, message is still present on the replica";
+    xlog $self, "After replication, message is still present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Check that annotations in the master and replica DB match";
+    xlog $self, "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
@@ -1165,11 +1165,11 @@ sub test_msg_replication_new_bot_mse_gul
 {
     my ($self) = @_;
 
-    xlog "testing replication of message scope annotations";
-    xlog "case new_bot_mse_gul: new messages appear, on both master " .
+    xlog $self, "testing replication of message scope annotations";
+    xlog $self, "case new_bot_mse_gul: new messages appear, on both master " .
          "and replica, with equal modseqs, lower GUID on master.";
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
@@ -1182,7 +1182,7 @@ sub test_msg_replication_new_bot_mse_gul
     $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
     $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Append a message and store an annotation to each store";
+    xlog $self, "Append a message and store an annotation to each store";
     my ($msgA, $msgB) = $self->make_message_pair($master_store, $replica_store);
     my %master_exp = ( A => $msgA );
     my %replica_exp = ( B => $msgB );
@@ -1193,26 +1193,26 @@ sub test_msg_replication_new_bot_mse_gul
     $replica_exp{B}->set_attribute('uid', 1);
     $replica_exp{B}->set_annotation($entry, $attrib, $valueB);
 
-    xlog "Before replication, only message A is present on the master";
+    xlog $self, "Before replication, only message A is present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before replication, only message B is present on the replica";
+    xlog $self, "Before replication, only message B is present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     $self->run_replication();
     $self->check_replication('cassandane');
 
-    xlog "After replication, both messages are now present and renumbered on the master";
+    xlog $self, "After replication, both messages are now present and renumbered on the master";
     $master_exp{B} = $replica_exp{B}->clone();
     $master_exp{A}->set_attribute('uid', 2);
     $master_exp{B}->set_attribute('uid', 3);
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After replication, both messages are now present and renumbered on the replica";
+    xlog $self, "After replication, both messages are now present and renumbered on the replica";
     $replica_exp{A} = $master_exp{A}->clone();
     $replica_exp{A}->set_attribute('uid', 2);
     $replica_exp{B}->set_attribute('uid', 3);
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Check that annotations in the master and replica DB match";
+    xlog $self, "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
 
     # We should have generated a SYNCERROR or two
@@ -1224,11 +1224,11 @@ sub test_msg_replication_new_bot_mse_guh
 {
     my ($self) = @_;
 
-    xlog "testing replication of message scope annotations";
-    xlog "case new_bot_mse_guh: new messages appear, on both master " .
+    xlog $self, "testing replication of message scope annotations";
+    xlog $self, "case new_bot_mse_guh: new messages appear, on both master " .
          "and replica, with equal modseqs, higher GUID on master.";
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
@@ -1241,7 +1241,7 @@ sub test_msg_replication_new_bot_mse_guh
     $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
     $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Append a message and store an annotation to each store";
+    xlog $self, "Append a message and store an annotation to each store";
     my ($msgB, $msgA) = $self->make_message_pair($replica_store, $master_store);
     my %master_exp = ( A => $msgA );
     my %replica_exp = ( B => $msgB );
@@ -1252,26 +1252,26 @@ sub test_msg_replication_new_bot_mse_guh
     $replica_exp{B}->set_attribute('uid', 1);
     $replica_exp{B}->set_annotation($entry, $attrib, $valueB);
 
-    xlog "Before replication, only message A is present on the master";
+    xlog $self, "Before replication, only message A is present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before replication, only message B is present on the replica";
+    xlog $self, "Before replication, only message B is present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     $self->run_replication();
     $self->check_replication('cassandane');
 
-    xlog "After replication, both messages are now present and renumbered on the master";
+    xlog $self, "After replication, both messages are now present and renumbered on the master";
     $master_exp{B} = $replica_exp{B}->clone();
     $master_exp{B}->set_attribute('uid', 2);
     $master_exp{A}->set_attribute('uid', 3);
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After replication, both messages are now present and renumbered on the replica";
+    xlog $self, "After replication, both messages are now present and renumbered on the replica";
     $replica_exp{A} = $master_exp{A}->clone();
     $replica_exp{B}->set_attribute('uid', 2);
     $replica_exp{A}->set_attribute('uid', 3);
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Check that annotations in the master and replica DB match";
+    xlog $self, "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
 
     # We should have generated a SYNCERROR or two
@@ -1284,10 +1284,10 @@ sub test_msg_replication_mod_mas
 {
     my ($self) = @_;
 
-    xlog "testing replication of message scope annotations";
-    xlog "case mod_mas: message is modified, on master only";
+    xlog $self, "testing replication of message scope annotations";
+    xlog $self, "case mod_mas: message is modified, on master only";
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
@@ -1299,46 +1299,46 @@ sub test_msg_replication_mod_mas
     $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
     $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Append a message";
+    xlog $self, "Append a message";
     my %master_exp;
     my %replica_exp;
     $master_exp{A} = $self->make_message('Message A', store => $master_store);
     $master_exp{A}->set_attribute('uid', 1);
 
-    xlog "Before first replication, message is present on the master";
+    xlog $self, "Before first replication, message is present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before first replication, message is missing from the replica";
+    xlog $self, "Before first replication, message is missing from the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Replicate the message";
+    xlog $self, "Replicate the message";
     $self->run_replication();
     $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
-    xlog "After first replication, message is still present on the master";
+    xlog $self, "After first replication, message is still present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After first replication, message is now present on the replica";
+    xlog $self, "After first replication, message is now present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Set an annotation on the master";
+    xlog $self, "Set an annotation on the master";
     $self->set_msg_annotation($master_store, 1, $entry, $attrib, $value1);
     $master_exp{A}->set_annotation($entry, $attrib, $value1);
 
-    xlog "Before second replication, the message annotation is present on the master";
+    xlog $self, "Before second replication, the message annotation is present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before second replication, the message annotation is missing on the replica";
+    xlog $self, "Before second replication, the message annotation is missing on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     $self->run_replication();
     $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
-    xlog "After second replication, the message annotation is still present on the master";
+    xlog $self, "After second replication, the message annotation is still present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After second replication, the message annotation is now present on the replica";
+    xlog $self, "After second replication, the message annotation is now present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Check that annotations in the master and replica DB match";
+    xlog $self, "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
@@ -1347,10 +1347,10 @@ sub test_msg_replication_mod_rep
 {
     my ($self) = @_;
 
-    xlog "testing replication of message scope annotations";
-    xlog "case mod_rep: message is modified, on replica only";
+    xlog $self, "testing replication of message scope annotations";
+    xlog $self, "case mod_rep: message is modified, on replica only";
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
@@ -1362,46 +1362,46 @@ sub test_msg_replication_mod_rep
     $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
     $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Append a message";
+    xlog $self, "Append a message";
     my %master_exp;
     my %replica_exp;
     $master_exp{A} = $self->make_message('Message A', store => $master_store);
     $master_exp{A}->set_attribute('uid', 1);
 
-    xlog "Before first replication, message is present on the master";
+    xlog $self, "Before first replication, message is present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before first replication, message is missing from the replica";
+    xlog $self, "Before first replication, message is missing from the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Replicate the message";
+    xlog $self, "Replicate the message";
     $self->run_replication();
     $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
-    xlog "After first replication, message is still present on the master";
+    xlog $self, "After first replication, message is still present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After first replication, message is now present on the replica";
+    xlog $self, "After first replication, message is now present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Set an annotation on the master";
+    xlog $self, "Set an annotation on the master";
     $self->set_msg_annotation($master_store, 1, $entry, $attrib, $value1);
     $master_exp{A}->set_annotation($entry, $attrib, $value1);
 
-    xlog "Before second replication, the message annotation is present on the master";
+    xlog $self, "Before second replication, the message annotation is present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before second replication, the message annotation is missing on the replica";
+    xlog $self, "Before second replication, the message annotation is missing on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     $self->run_replication();
     $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
-    xlog "After second replication, the message annotation is still present on the master";
+    xlog $self, "After second replication, the message annotation is still present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After second replication, the message annotation is now present on the replica";
+    xlog $self, "After second replication, the message annotation is now present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Check that annotations in the master and replica DB match";
+    xlog $self, "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
@@ -1409,11 +1409,11 @@ sub test_msg_replication_mod_bot_msl
 {
     my ($self) = @_;
 
-    xlog "testing replication of message scope annotations";
-    xlog "case mod_bot_msl: message is modified, on both ends, " .
+    xlog $self, "testing replication of message scope annotations";
+    xlog $self, "case mod_bot_msl: message is modified, on both ends, " .
          "modseq lower on master";
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
@@ -1427,50 +1427,50 @@ sub test_msg_replication_mod_bot_msl
     $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
     $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Append a message";
+    xlog $self, "Append a message";
     my %master_exp;
     my %replica_exp;
     $master_exp{A} = $self->make_message('Message A', store => $master_store);
     $master_exp{A}->set_attribute('uid', 1);
 
-    xlog "Before first replication, message is present on the master";
+    xlog $self, "Before first replication, message is present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before first replication, message is missing from the replica";
+    xlog $self, "Before first replication, message is missing from the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Replicate the message";
+    xlog $self, "Replicate the message";
     $self->run_replication();
     $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
-    xlog "After first replication, message is still present on the master";
+    xlog $self, "After first replication, message is still present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After first replication, message is now present on the replica";
+    xlog $self, "After first replication, message is now present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Set an annotation once on the master, twice on the replica";
+    xlog $self, "Set an annotation once on the master, twice on the replica";
     $self->set_msg_annotation($master_store, 1, $entry, $attrib, $valueA);
     $master_exp{A}->set_annotation($entry, $attrib, $valueA);
     $self->set_msg_annotation($replica_store, 1, $entry, $attrib, $valueB1);
     $self->set_msg_annotation($replica_store, 1, $entry, $attrib, $valueB2);
     $replica_exp{A}->set_annotation($entry, $attrib, $valueB2);
 
-    xlog "Before second replication, one message annotation is present on the master";
+    xlog $self, "Before second replication, one message annotation is present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before second replication, a different message annotation is present on the replica";
+    xlog $self, "Before second replication, a different message annotation is present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Replicate the annotation change";
+    xlog $self, "Replicate the annotation change";
     $self->run_replication();
     $self->check_replication('cassandane');
 
     $master_exp{A}->set_annotation($entry, $attrib, $valueB2);
-    xlog "After second replication, the message annotation is updated on the master";
+    xlog $self, "After second replication, the message annotation is updated on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After second replication, the message annotation is still present on the replica";
+    xlog $self, "After second replication, the message annotation is still present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Check that annotations in the master and replica DB match";
+    xlog $self, "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
@@ -1478,11 +1478,11 @@ sub test_msg_replication_mod_bot_msh
 {
     my ($self) = @_;
 
-    xlog "testing replication of message scope annotations";
-    xlog "case mod_bot_msh: message is modified, on both ends, " .
+    xlog $self, "testing replication of message scope annotations";
+    xlog $self, "case mod_bot_msh: message is modified, on both ends, " .
          "modseq higher on master";
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
@@ -1496,50 +1496,50 @@ sub test_msg_replication_mod_bot_msh
     $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
     $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Append a message";
+    xlog $self, "Append a message";
     my %master_exp;
     my %replica_exp;
     $master_exp{A} = $self->make_message('Message A', store => $master_store);
     $master_exp{A}->set_attribute('uid', 1);
 
-    xlog "Before first replication, message is present on the master";
+    xlog $self, "Before first replication, message is present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before first replication, message is missing from the replica";
+    xlog $self, "Before first replication, message is missing from the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Replicate the message";
+    xlog $self, "Replicate the message";
     $self->run_replication();
     $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
-    xlog "After first replication, message is still present on the master";
+    xlog $self, "After first replication, message is still present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After first replication, message is now present on the replica";
+    xlog $self, "After first replication, message is now present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Set an annotation twice on the master, once on the replica";
+    xlog $self, "Set an annotation twice on the master, once on the replica";
     $self->set_msg_annotation($master_store, 1, $entry, $attrib, $valueA1);
     $self->set_msg_annotation($master_store, 1, $entry, $attrib, $valueA2);
     $master_exp{A}->set_annotation($entry, $attrib, $valueA2);
     $self->set_msg_annotation($replica_store, 1, $entry, $attrib, $valueB);
     $replica_exp{A}->set_annotation($entry, $attrib, $valueB);
 
-    xlog "Before second replication, one message annotation is present on the master";
+    xlog $self, "Before second replication, one message annotation is present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before second replication, a different message annotation is present on the replica";
+    xlog $self, "Before second replication, a different message annotation is present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Replicate the annotation change";
+    xlog $self, "Replicate the annotation change";
     $self->run_replication();
     $self->check_replication('cassandane');
 
     $replica_exp{A}->set_annotation($entry, $attrib, $valueA2);
-    xlog "After second replication, the message annotation is still present on the master";
+    xlog $self, "After second replication, the message annotation is still present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After second replication, the message annotation is updated on the replica";
+    xlog $self, "After second replication, the message annotation is updated on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Check that annotations in the master and replica DB match";
+    xlog $self, "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
@@ -1547,10 +1547,10 @@ sub test_msg_replication_exp_mas
 {
     my ($self) = @_;
 
-    xlog "testing replication of message scope annotations";
-    xlog "case exp_mas: message is expunged, on master only";
+    xlog $self, "testing replication of message scope annotations";
+    xlog $self, "case exp_mas: message is expunged, on master only";
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
@@ -1562,7 +1562,7 @@ sub test_msg_replication_exp_mas
     $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
     $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Append a message and store an annotation";
+    xlog $self, "Append a message and store an annotation";
     my %master_exp;
     my %replica_exp;
     $master_exp{A} = $self->make_message('Message A', store => $master_store);
@@ -1570,44 +1570,44 @@ sub test_msg_replication_exp_mas
     $master_exp{A}->set_attribute('uid', 1);
     $master_exp{A}->set_annotation($entry, $attrib, $value1);
 
-    xlog "Before first replication, message is present on the master";
+    xlog $self, "Before first replication, message is present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before first replication, message is missing from the replica";
+    xlog $self, "Before first replication, message is missing from the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Replicate the message";
+    xlog $self, "Replicate the message";
     $self->run_replication();
     $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
-    xlog "After first replication, message is still present on the master";
+    xlog $self, "After first replication, message is still present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After first replication, message is now present on the replica";
+    xlog $self, "After first replication, message is now present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Delete and expunge the message on the master";
+    xlog $self, "Delete and expunge the message on the master";
     my $talk = $master_store->get_client();
     $master_store->_select();
     $talk->store('1', '+flags', '(\\Deleted)');
     $talk->expunge();
 
     delete $master_exp{A};
-    xlog "Before second replication, the message is now missing on the master";
+    xlog $self, "Before second replication, the message is now missing on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before second replication, the message is still present on the replica";
+    xlog $self, "Before second replication, the message is still present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Replicate the expunge";
+    xlog $self, "Replicate the expunge";
     $self->run_replication();
     $self->check_replication('cassandane');
 
     delete $replica_exp{A};
-    xlog "After second replication, the message is still missing on the master";
+    xlog $self, "After second replication, the message is still missing on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After second replication, the message is now missing on the replica";
+    xlog $self, "After second replication, the message is now missing on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Check that annotations in the master and replica DB match";
+    xlog $self, "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
@@ -1615,10 +1615,10 @@ sub test_msg_replication_exp_rep
 {
     my ($self) = @_;
 
-    xlog "testing replication of message scope annotations";
-    xlog "case exp_rep: message is expunged, on replica only";
+    xlog $self, "testing replication of message scope annotations";
+    xlog $self, "case exp_rep: message is expunged, on replica only";
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
@@ -1630,7 +1630,7 @@ sub test_msg_replication_exp_rep
     $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
     $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Append a message and store an annotation";
+    xlog $self, "Append a message and store an annotation";
     my %master_exp;
     my %replica_exp;
     $master_exp{A} = $self->make_message('Message A', store => $master_store);
@@ -1638,44 +1638,44 @@ sub test_msg_replication_exp_rep
     $master_exp{A}->set_attribute('uid', 1);
     $master_exp{A}->set_annotation($entry, $attrib, $value1);
 
-    xlog "Before first replication, message is present on the master";
+    xlog $self, "Before first replication, message is present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before first replication, message is missing from the replica";
+    xlog $self, "Before first replication, message is missing from the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Replicate the message";
+    xlog $self, "Replicate the message";
     $self->run_replication();
     $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
-    xlog "After first replication, message is still present on the master";
+    xlog $self, "After first replication, message is still present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After first replication, message is now present on the replica";
+    xlog $self, "After first replication, message is now present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Delete and expunge the message on the replica";
+    xlog $self, "Delete and expunge the message on the replica";
     my $talk = $replica_store->get_client();
     $replica_store->_select();
     $talk->store('1', '+flags', '(\\Deleted)');
     $talk->expunge();
 
     delete $replica_exp{A};
-    xlog "Before second replication, the message is still present on the master";
+    xlog $self, "Before second replication, the message is still present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before second replication, the message is now missing on the replica";
+    xlog $self, "Before second replication, the message is now missing on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Replicate the expunge";
+    xlog $self, "Replicate the expunge";
     $self->run_replication();
     $self->check_replication('cassandane');
 
     delete $master_exp{A};
-    xlog "After second replication, the message is now missing on the master";
+    xlog $self, "After second replication, the message is now missing on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After second replication, the message is still missing on the replica";
+    xlog $self, "After second replication, the message is still missing on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Check that annotations in the master and replica DB match";
+    xlog $self, "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
@@ -1683,10 +1683,10 @@ sub test_msg_replication_exp_bot
 {
     my ($self) = @_;
 
-    xlog "testing replication of message scope annotations";
-    xlog "case exp_bot: message is expunged, on both ends";
+    xlog $self, "testing replication of message scope annotations";
+    xlog $self, "case exp_bot: message is expunged, on both ends";
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
@@ -1698,7 +1698,7 @@ sub test_msg_replication_exp_bot
     $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
     $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Append a message and store an annotation";
+    xlog $self, "Append a message and store an annotation";
     my %master_exp;
     my %replica_exp;
     $master_exp{A} = $self->make_message('Message A', store => $master_store);
@@ -1706,28 +1706,28 @@ sub test_msg_replication_exp_bot
     $master_exp{A}->set_attribute('uid', 1);
     $master_exp{A}->set_annotation($entry, $attrib, $value1);
 
-    xlog "Before first replication, message is present on the master";
+    xlog $self, "Before first replication, message is present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before first replication, message is missing from the replica";
+    xlog $self, "Before first replication, message is missing from the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Replicate the message";
+    xlog $self, "Replicate the message";
     $self->run_replication();
     $self->check_replication('cassandane');
 
     $replica_exp{A} = $master_exp{A}->clone();
-    xlog "After first replication, message is still present on the master";
+    xlog $self, "After first replication, message is still present on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After first replication, message is now present on the replica";
+    xlog $self, "After first replication, message is now present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Delete and expunge the message on the master";
+    xlog $self, "Delete and expunge the message on the master";
     my $talk = $master_store->get_client();
     $master_store->_select();
     $talk->store('1', '+flags', '(\\Deleted)');
     $talk->expunge();
 
-    xlog "Delete and expunge the message on the replica";
+    xlog $self, "Delete and expunge the message on the replica";
     $talk = $replica_store->get_client();
     $replica_store->_select();
     $talk->store('1', '+flags', '(\\Deleted)');
@@ -1735,21 +1735,21 @@ sub test_msg_replication_exp_bot
 
     delete $master_exp{A};
     delete $replica_exp{A};
-    xlog "Before second replication, the message is now missing on the master";
+    xlog $self, "Before second replication, the message is now missing on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "Before second replication, the message is now missing on the replica";
+    xlog $self, "Before second replication, the message is now missing on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Replicate the expunge";
+    xlog $self, "Replicate the expunge";
     $self->run_replication();
     $self->check_replication('cassandane');
 
-    xlog "After second replication, the message is still missing on the master";
+    xlog $self, "After second replication, the message is still missing on the master";
     $self->check_messages(\%master_exp, store => $master_store);
-    xlog "After second replication, the message is still missing on the replica";
+    xlog $self, "After second replication, the message is still missing on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    xlog "Check that annotations in the master and replica DB match";
+    xlog $self, "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
 }
 
@@ -1757,36 +1757,36 @@ sub test_msg_replication_new_mas_partial_wwsw
 {
     my ($self) = @_;
 
-    xlog "testing partial replication of message scope annotations";
-    xlog "case master to replica: write, write, sync, write";
+    xlog $self, "testing partial replication of message scope annotations";
+    xlog $self, "case master to replica: write, write, sync, write";
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
 
-    xlog "Append a message";
+    xlog $self, "Append a message";
     my %master_exp;
     my %replica_exp;
     $master_exp{A} = $self->make_message('Message A', store => $master_store);
     $master_exp{A}->set_attribute('uid', 1);
 
-    xlog "Run replication";
+    xlog $self, "Run replication";
     $self->run_replication();
     $self->check_msg_annotation_replication($master_store, $replica_store);
 
-    xlog "Write an annotation twice";
+    xlog $self, "Write an annotation twice";
     $self->set_msg_annotation($master_store, 1, '/comment', 'value.priv', 'c1');
     $self->set_msg_annotation($master_store, 1, '/comment', 'value.priv', 'c2');
 
-    xlog "Run replication";
+    xlog $self, "Run replication";
     $self->run_replication();
     $self->check_msg_annotation_replication($master_store, $replica_store);
 
-    xlog "Write another annotation";
+    xlog $self, "Write another annotation";
     $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.priv', 'a1');
 
-    xlog "Run replication";
+    xlog $self, "Run replication";
     $self->run_replication();
     $self->check_msg_annotation_replication($master_store, $replica_store);
 }
@@ -1795,42 +1795,42 @@ sub test_msg_replication_new_mas_partial_wwd
 {
     my ($self) = @_;
 
-    xlog "testing partial replication of message scope annotations";
-    xlog "case master to replica: write, write, delete";
+    xlog $self, "testing partial replication of message scope annotations";
+    xlog $self, "case master to replica: write, write, delete";
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
 
-    xlog "Append a message";
+    xlog $self, "Append a message";
     my %master_exp;
     my %replica_exp;
     $master_exp{A} = $self->make_message('Message A', store => $master_store);
     $master_exp{A}->set_attribute('uid', 1);
 
-    xlog "Run replication";
+    xlog $self, "Run replication";
     $self->run_replication();
     $self->check_msg_annotation_replication($master_store, $replica_store);
 
-    xlog "Write an annotation";
+    xlog $self, "Write an annotation";
     $self->set_msg_annotation($master_store, 1, '/comment', 'value.priv', 'c1');
 
-    xlog "Run replication";
+    xlog $self, "Run replication";
     $self->run_replication();
     $self->check_msg_annotation_replication($master_store, $replica_store);
 
-    xlog "Write another annotation";
+    xlog $self, "Write another annotation";
     $self->set_msg_annotation($master_store, 1, '/altsubject', 'value.priv', 'a1');
 
-    xlog "Run replication";
+    xlog $self, "Run replication";
     $self->run_replication();
     $self->check_msg_annotation_replication($master_store, $replica_store);
 
-    xlog "Delete the first annotation";
+    xlog $self, "Delete the first annotation";
     $self->set_msg_annotation($master_store, 1, '/comment', 'value.priv', '');
 
-    xlog "Run replication";
+    xlog $self, "Run replication";
     $self->run_replication();
     $self->check_msg_annotation_replication($master_store, $replica_store);
 }
@@ -1839,7 +1839,7 @@ sub test_msg_sort_order
 {
     my ($self) = @_;
 
-    xlog "testing RFC5257 SORT command ANNOTATION order criterion";
+    xlog $self, "testing RFC5257 SORT command ANNOTATION order criterion";
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -1853,7 +1853,7 @@ sub test_msg_sort_order
 
     $self->{store}->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Append some messages and store annotations";
+    xlog $self, "Append some messages and store annotations";
     my %exp;
     for (my $i = 0 ; $i < 20 ; $i++)
     {
@@ -1870,7 +1870,7 @@ sub test_msg_sort_order
 
     my $talk = $self->{store}->get_client();
 
-    xlog "run the SORT command with an ANNOTATION order criterion";
+    xlog $self, "run the SORT command with an ANNOTATION order criterion";
     my $res = $talk->sort("(ANNOTATION $entry $attrib)", 'utf-8', 'all');
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
@@ -1881,7 +1881,7 @@ sub test_msg_sort_search
 {
     my ($self) = @_;
 
-    xlog "testing RFC5257 SORT command ANNOTATION search criterion";
+    xlog $self, "testing RFC5257 SORT command ANNOTATION search criterion";
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -1896,7 +1896,7 @@ sub test_msg_sort_search
 
     $self->{store}->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Append some messages and store annotations";
+    xlog $self, "Append some messages and store annotations";
     my %exp;
     my $now = DateTime->now->epoch;
     for (my $i = 0 ; $i < 20 ; $i++)
@@ -1916,14 +1916,14 @@ sub test_msg_sort_search
 
     my $talk = $self->{store}->get_client();
 
-    xlog "run the SORT command with an ANNOTATION search criterion";
+    xlog $self, "run the SORT command with an ANNOTATION search criterion";
     my $res = $talk->sort("(DATE)", 'utf-8',
                           'ANNOTATION', $entry, $attrib, { Quote => "eed" });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(\@exp_search, $res);
 
-    xlog "run the SORT command with both ANNOTATION search & order criteria";
+    xlog $self, "run the SORT command with both ANNOTATION search & order criteria";
     $res = $talk->sort("(ANNOTATION $entry $attrib)", 'utf-8',
                        'ANNOTATION', $entry, $attrib, { Quote => "eed" });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -1967,7 +1967,7 @@ sub test_modseq
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid modseq));
 
-    xlog "Append 3 messages";
+    xlog $self, "Append 3 messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{B} = $self->make_message('Message B');
@@ -1977,7 +1977,7 @@ sub test_modseq
     my $attrib = 'value.priv';
     my $value1 = "Hello World";
 
-    xlog "fetch an annotation - should be no values";
+    xlog $self, "fetch an annotation - should be no values";
     my $hms0 = $self->get_highestmodseq();
     my $res = $talk->fetch('1:*',
                            ['modseq', 'annotation', [$entry, $attrib]]);
@@ -2000,12 +2000,12 @@ sub test_modseq
             },
             $res);
 
-    xlog "store an annotation";
+    xlog $self, "store an annotation";
     $talk->store('1', 'annotation',
                  [$entry, [$attrib, $value1]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "fetch an annotation - should be updated";
+    xlog $self, "fetch an annotation - should be updated";
     my $hms1 = $self->get_highestmodseq();
     $self->assert($hms1 > $hms0);
     $res = $talk->fetch('1:*',
@@ -2029,12 +2029,12 @@ sub test_modseq
             },
             $res);
 
-    xlog "delete an annotation";
+    xlog $self, "delete an annotation";
     $talk->store('1', 'annotation',
                  [$entry, [$attrib, undef]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "fetch an annotation - should be updated";
+    xlog $self, "fetch an annotation - should be updated";
     my $hms2 = $self->get_highestmodseq();
     $self->assert($hms2 > $hms1);
     $res = $talk->fetch('1:*',
@@ -2087,7 +2087,7 @@ sub test_unchangedsince
     $self->assert_num_equals(1, $talk->uid());
     $self->{store}->set_fetch_attributes(qw(uid modseq));
 
-    xlog "Append 3 messages";
+    xlog $self, "Append 3 messages";
     my %msg;
     $msg{A} = $self->make_message('Message A');
     $msg{B} = $self->make_message('Message B');
@@ -2127,7 +2127,7 @@ sub test_unchangedsince
     # Note: Mail::IMAPTalk::store() doesn't support modifiers
     # so we have to resort to the lower level interface.
 
-    xlog "setting an annotation with current modseq == UNCHANGEDSINCE";
+    xlog $self, "setting an annotation with current modseq == UNCHANGEDSINCE";
     %fetched = ();
     $modified = undef;
     $talk->_imap_cmd('store', 1, \%handlers,
@@ -2135,7 +2135,7 @@ sub test_unchangedsince
                  'annotation', [$entry, [$attrib, $value1]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "fetch an annotation - should be updated";
+    xlog $self, "fetch an annotation - should be updated";
     my $hms1 = $self->get_highestmodseq();
     $self->assert($hms1 > $hms0);
     my $res = $talk->fetch('1:*',
@@ -2159,7 +2159,7 @@ sub test_unchangedsince
             },
             $res);
 
-    xlog "setting an annotation with current modseq < UNCHANGEDSINCE";
+    xlog $self, "setting an annotation with current modseq < UNCHANGEDSINCE";
     %fetched = ();
     $modified = undef;
     $talk->_imap_cmd('store', 1, \%handlers,
@@ -2167,7 +2167,7 @@ sub test_unchangedsince
                  'annotation', [$entry, [$attrib, $value2]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "fetch an annotation - should be updated";
+    xlog $self, "fetch an annotation - should be updated";
     my $hms2 = $self->get_highestmodseq();
     $self->assert($hms2 > $hms1);
     $res = $talk->fetch('1:*',
@@ -2191,7 +2191,7 @@ sub test_unchangedsince
             },
             $res);
 
-    xlog "setting an annotation with current modseq > UNCHANGEDSINCE";
+    xlog $self, "setting an annotation with current modseq > UNCHANGEDSINCE";
     %fetched = ();
     $modified = undef;
     $talk->_imap_cmd('store', 1, \%handlers,
@@ -2199,10 +2199,10 @@ sub test_unchangedsince
                  'annotation', [$entry, [$attrib, $value3]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "didn't update modseq?";
+    xlog $self, "didn't update modseq?";
     my $hms3 = $self->get_highestmodseq();
     $self->assert($hms3 == $hms2);
-    xlog "fetch an annotation - should not be updated";
+    xlog $self, "fetch an annotation - should not be updated";
     $res = $talk->fetch('1:*',
                         ['modseq', 'annotation', [$entry, $attrib]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -2224,10 +2224,10 @@ sub test_unchangedsince
                      },
             },
             $res);
-    xlog "reports the UID in the MODIFIED response code?";
+    xlog $self, "reports the UID in the MODIFIED response code?";
     $self->assert_not_null($modified);
     $self->assert_deep_equals($modified, [1]);
-    xlog "sent no FETCH untagged response?";
+    xlog $self, "sent no FETCH untagged response?";
     $self->assert_num_equals(0, scalar keys %fetched);
 }
 
@@ -2236,10 +2236,10 @@ sub test_mbox_replication_new_mas
 {
     my ($self) = @_;
 
-    xlog "testing replication of mailbox scope annotations";
-    xlog "case new_mas: new message appears, on master only";
+    xlog $self, "testing replication of mailbox scope annotations";
+    xlog $self, "case new_mas: new message appears, on master only";
 
-    xlog "need a master and replica pair";
+    xlog $self, "need a master and replica pair";
     $self->assert_not_null($self->{replica});
     my $master_store = $self->{master_store};
     my $replica_store = $self->{replica_store};
@@ -2251,32 +2251,32 @@ sub test_mbox_replication_new_mas
     my $value1 = "Hello World";
     my $res;
 
-    xlog "store an annotation";
+    xlog $self, "store an annotation";
     $master_talk->setmetadata($folder, $entry, $value1);
     $self->assert_str_equals('ok', $master_talk->get_last_completion_response());
 
-    xlog "Before replication, annotation is present on the master";
+    xlog $self, "Before replication, annotation is present on the master";
     $res = $master_talk->getmetadata($folder, $entry);
     $self->assert_str_equals('ok', $master_talk->get_last_completion_response());
     $self->assert_deep_equals({ $folder => { $entry => $value1 } }, $res);
 
-    xlog "Before replication, annotation is missing from the replica";
+    xlog $self, "Before replication, annotation is missing from the replica";
     $res = $replica_talk->getmetadata($folder, $entry);
     $self->assert_str_equals('ok', $replica_talk->get_last_completion_response());
     $self->assert_deep_equals({ $folder => { $entry => undef } }, $res);
 
-    xlog "run replication";
+    xlog $self, "run replication";
     $self->run_replication();
     $self->check_replication('cassandane');
     $master_talk = $master_store->get_client();
     $replica_talk = $replica_store->get_client();
 
-    xlog "After replication, annotation is still present on the master";
+    xlog $self, "After replication, annotation is still present on the master";
     $res = $master_talk->getmetadata($folder, $entry);
     $self->assert_str_equals('ok', $master_talk->get_last_completion_response());
     $self->assert_deep_equals({ $folder => { $entry => $value1 } }, $res);
 
-    xlog "After replication, annotation is now present on the replica";
+    xlog $self, "After replication, annotation is now present on the replica";
     $res = $replica_talk->getmetadata($folder, $entry);
     $self->assert_str_equals('ok', $replica_talk->get_last_completion_response());
     $self->assert_deep_equals({ $folder => { $entry => $value1 } }, $res);
@@ -2295,7 +2295,7 @@ sub test_copy_messages
 {
     my ($self) = @_;
 
-    xlog "testing COPY with message scope annotations (BZ3528)";
+    xlog $self, "testing COPY with message scope annotations (BZ3528)";
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -2304,7 +2304,7 @@ sub test_copy_messages
 
     $self->{store}->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
-    xlog "Create subfolders to copy from and to";
+    xlog $self, "Create subfolders to copy from and to";
     my $store = $self->{store};
     my $talk = $store->get_client();
     $talk->create($from_folder)
@@ -2322,7 +2322,7 @@ sub test_copy_messages
         "organic quinoa"
     );
 
-    xlog "Append some messages and store annotations";
+    xlog $self, "Append some messages and store annotations";
     my %exp;
     my $uid = 1;
     while (defined $data_by_uid[$uid])
@@ -2336,37 +2336,37 @@ sub test_copy_messages
         $uid++;
     }
 
-    xlog "Check the annotations are there";
+    xlog $self, "Check the annotations are there";
     $self->check_messages(\%exp);
 
-    xlog "COPY the messages";
+    xlog $self, "COPY the messages";
     $talk = $store->get_client();
     $talk->copy('1:*', $to_folder);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "Messages are now in the destination folder";
+    xlog $self, "Messages are now in the destination folder";
     $store->set_folder($to_folder);
     $store->_select();
     $self->check_messages(\%exp);
 
-    xlog "Messages are still in the origin folder";
+    xlog $self, "Messages are still in the origin folder";
     $store->set_folder($from_folder);
     $store->_select();
     $self->check_messages(\%exp);
 
-    xlog "Delete the messages from the origin folder";
+    xlog $self, "Delete the messages from the origin folder";
     $store->set_folder($from_folder);
     $store->_select();
     $talk = $store->get_client();
     $talk->store('1:*', '+flags', '(\\Deleted)');
     $talk->expunge();
 
-    xlog "Messages are gone from the origin folder";
+    xlog $self, "Messages are gone from the origin folder";
     $store->set_folder($from_folder);
     $store->_select();
     $self->check_messages({});
 
-    xlog "Messages are still in the destination folder";
+    xlog $self, "Messages are still in the destination folder";
     $store->set_folder($to_folder);
     $store->_select();
     $self->check_messages(\%exp);
@@ -2377,8 +2377,8 @@ sub test_expunge_messages
 {
     my ($self) = @_;
 
-    xlog "testing expunge of messages with message scope";
-    xlog "annotations [IRIS-1553]";
+    xlog $self, "testing expunge of messages with message scope";
+    xlog $self, "annotations [IRIS-1553]";
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -2395,7 +2395,7 @@ sub test_expunge_messages
         "bushwick gastropub"
     );
 
-    xlog "Append some messages and store annotations";
+    xlog $self, "Append some messages and store annotations";
     my %exp;
     my $uid = 1;
     while (defined $data_by_uid[$uid])
@@ -2408,10 +2408,10 @@ sub test_expunge_messages
         $uid++;
     }
 
-    xlog "Check the annotations are there";
+    xlog $self, "Check the annotations are there";
     $self->check_messages(\%exp, keyed_on => 'uid');
 
-    xlog "Check the annotations are in the DB too";
+    xlog $self, "Check the annotations are in the DB too";
     my $r = $self->list_annotations(scope => 'message');
     $self->assert_deep_equals([
         {
@@ -2440,17 +2440,17 @@ sub test_expunge_messages
     $uid = 1;
     while (defined $data_by_uid[$uid])
     {
-        xlog "Delete message $uid";
+        xlog $self, "Delete message $uid";
         $talk->store($uid, '+flags', '(\\Deleted)');
         $talk->expunge();
 
-        xlog "Check the annotation is gone";
+        xlog $self, "Check the annotation is gone";
         delete $exp{$uid};
         $self->check_messages(\%exp);
         $uid++;
     }
 
-    xlog "Check the annotations are still in the DB";
+    xlog $self, "Check the annotations are still in the DB";
     $r = $self->list_annotations(scope => 'message');
     $self->assert_deep_equals([
         {
@@ -2478,7 +2478,7 @@ sub test_expunge_messages
 
     $self->run_delayed_expunge();
 
-    xlog "Check the annotations are gone from the DB";
+    xlog $self, "Check the annotations are gone from the DB";
     $r = $self->list_annotations(scope => 'message');
     $self->assert_deep_equals([], $r);
 }
@@ -2487,7 +2487,7 @@ sub test_cvt_cyrusdb
 {
     my ($self) = @_;
 
-    xlog "test cvt_cyrusdb between annotation db and flat files (BZ2686)";
+    xlog $self, "test cvt_cyrusdb between annotation db and flat files (BZ2686)";
 
     my $folder = 'INBOX';
     my $fentry = '/private/comment';
@@ -2500,12 +2500,12 @@ sub test_cvt_cyrusdb
     my $talk = $store->get_client();
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "store annotations";
+    xlog $self, "store annotations";
     my $data = $self->make_random_data(2, maxreps => 20, separators => $evilchars);
     $talk->setmetadata($folder, $fentry, $data);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "add some messages";
+    xlog $self, "add some messages";
     my $uid = 1;
     my %exp;
     for (1..10)
@@ -2521,17 +2521,17 @@ sub test_cvt_cyrusdb
         $uid++;
     }
 
-    xlog "Check the messages are all there";
+    xlog $self, "Check the messages are all there";
     $self->check_messages(\%exp);
 
-    xlog "Check the mailbox annotation is still there";
+    xlog $self, "Check the mailbox annotation is still there";
     my $res = $talk->getmetadata($folder, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
         $folder => { $fentry => $data }
     }, $res);
 
-    xlog "Shut down the instance";
+    xlog $self, "Shut down the instance";
     $self->{store}->disconnect();
     $self->{adminstore}->disconnect();
     $talk = undef;
@@ -2539,7 +2539,7 @@ sub test_cvt_cyrusdb
     $self->{instance}->stop();
     $self->{instance}->{re_use_dir} = 1;
 
-    xlog "Convert the global annotation db to flat";
+    xlog $self, "Convert the global annotation db to flat";
     my $basedir = $self->{instance}->{basedir};
     my $global_db = "$basedir/conf/annotations.db";
     my $global_flat = "$basedir/xann.txt";
@@ -2553,7 +2553,7 @@ sub test_cvt_cyrusdb
                                    $global_flat, 'flat');
     $self->assert(( -f $global_flat ));
 
-    xlog "Convert the mailbox annotation db to flat";
+    xlog $self, "Convert the mailbox annotation db to flat";
     my $mailbox_db = "$basedir/data/user/cassandane/cyrus.annotations";
     my $mailbox_flat = "$basedir/xcassann.txt";
 
@@ -2564,7 +2564,7 @@ sub test_cvt_cyrusdb
                                    $mailbox_flat, 'flat');
     $self->assert(( -f $mailbox_flat ));
 
-    xlog "Move aside the original annotation dbs";
+    xlog $self, "Move aside the original annotation dbs";
     rename($global_db, "$global_db.NOT")
         or die "Cannot rename $global_db to $global_db.NOT: $!";
     rename($mailbox_db, "$mailbox_db.NOT")
@@ -2572,28 +2572,28 @@ sub test_cvt_cyrusdb
     $self->assert(( ! -f $global_db ));
     $self->assert(( ! -f $mailbox_db ));
 
-    xlog "restore the global annotation db from flat";
+    xlog $self, "restore the global annotation db from flat";
     $self->{instance}->run_command({ cyrus => 1 },
                                    'cvt_cyrusdb',
                                    $global_flat, 'flat',
                                    $global_db, $format);
     $self->assert(( -f $global_db ));
 
-    xlog "restore the mailbox annotation db from flat";
+    xlog $self, "restore the mailbox annotation db from flat";
     $self->{instance}->run_command({ cyrus => 1 },
                                    'cvt_cyrusdb',
                                    $mailbox_flat, 'flat',
                                    $mailbox_db, $format);
     $self->assert(( -f $mailbox_db ));
 
-    xlog "Start the instance up again and reconnect";
+    xlog $self, "Start the instance up again and reconnect";
     $self->{instance}->start();
     $talk = $store->get_client();
 
-    xlog "Check the messages are still all there";
+    xlog $self, "Check the messages are still all there";
     $self->check_messages(\%exp);
 
-    xlog "Check the mailbox annotation is still there";
+    xlog $self, "Check the mailbox annotation is still there";
     $res = $talk->getmetadata($folder, $fentry);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_deep_equals({
@@ -2611,11 +2611,11 @@ sub folder_delete_mboxa_common
     my $fentry = '/private/comment';
     my $data = $self->make_random_data(0.3, maxreps => 15);
 
-    xlog "create a mailbox";
+    xlog $self, "create a mailbox";
     $imaptalk->create($folder)
         or die "Cannot create mailbox $folder: $@";
 
-    xlog "set and then get the same back again";
+    xlog $self, "set and then get the same back again";
     $imaptalk->setmetadata($folder, $fentry, $data)
         or die "Cannot setmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
@@ -2627,15 +2627,15 @@ sub folder_delete_mboxa_common
         $folder => { $fentry => $data }
     }, $res);
 
-    xlog "delete the mailbox";
+    xlog $self, "delete the mailbox";
     $imaptalk->delete($folder)
         or die "Cannot delete mailbox $folder: $@";
 
-    xlog "create a new mailbox with the same name";
+    xlog $self, "create a new mailbox with the same name";
     $imaptalk->create($folder)
         or die "Cannot create mailbox $folder: $@";
 
-    xlog "new mailbox reports NIL for the per-mailbox metadata";
+    xlog $self, "new mailbox reports NIL for the per-mailbox metadata";
     $res = $imaptalk->getmetadata($folder, $fentry)
         or die "Cannot getmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
@@ -2654,11 +2654,11 @@ sub folder_delete_mboxm_common
     my $fentry = '/private/comment';
     my $data = $self->make_random_data(0.3, maxreps => 15);
 
-    xlog "create a mailbox";
+    xlog $self, "create a mailbox";
     $imaptalk->create($folder)
         or die "Cannot create mailbox $folder: $@";
 
-    xlog "set and then get the same back again";
+    xlog $self, "set and then get the same back again";
     $imaptalk->setmetadata($folder, $fentry, $data)
         or die "Cannot setmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
@@ -2670,20 +2670,20 @@ sub folder_delete_mboxm_common
         $folder => { $fentry => $data }
     }, $res);
 
-    xlog "delete the mailbox";
+    xlog $self, "delete the mailbox";
     $imaptalk->delete($folder)
         or die "Cannot delete mailbox $folder: $@";
 
-    xlog "cannot get metadata for deleted mailbox";
+    xlog $self, "cannot get metadata for deleted mailbox";
     $res = $imaptalk->getmetadata($folder, $fentry);
     $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
     $self->assert($imaptalk->get_last_error() =~ m/does not exist/i);
 
-    xlog "create a new mailbox with the same name";
+    xlog $self, "create a new mailbox with the same name";
     $imaptalk->create($folder)
         or die "Cannot create mailbox $folder: $@";
 
-    xlog "new mailbox reports NIL for the per-mailbox metadata";
+    xlog $self, "new mailbox reports NIL for the per-mailbox metadata";
     $res = $imaptalk->getmetadata($folder, $fentry)
         or die "Cannot getmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
@@ -2704,11 +2704,11 @@ sub folder_delete_msg_common
     $self->{store}->set_fetch_attributes('uid', "annotation ($mentry $mattrib)");
     $self->{store}->set_folder($folder);
 
-    xlog "create a mailbox";
+    xlog $self, "create a mailbox";
     $imaptalk->create($folder)
         or die "Cannot create mailbox $folder: $@";
 
-    xlog "add some messages";
+    xlog $self, "add some messages";
     my $uid = 1;
     my %exp;
     for (1..10)
@@ -2724,19 +2724,19 @@ sub folder_delete_msg_common
         $uid++;
     }
 
-    xlog "Check the messages are all there";
+    xlog $self, "Check the messages are all there";
     $self->check_messages(\%exp);
 
-    xlog "delete the mailbox";
+    xlog $self, "delete the mailbox";
     $imaptalk->unselect();
     $imaptalk->delete($folder)
         or die "Cannot delete mailbox $folder: $@";
 
-    xlog "create a new mailbox with the same name";
+    xlog $self, "create a new mailbox with the same name";
     $imaptalk->create($folder)
         or die "Cannot create mailbox $folder: $@";
 
-    xlog "create some new messages";
+    xlog $self, "create some new messages";
     %exp = ();
     $uid = 1;
     for (1..10)
@@ -2748,7 +2748,7 @@ sub folder_delete_msg_common
         $uid++;
     }
 
-    xlog "new mailbox reports NIL for the per-message metadata";
+    xlog $self, "new mailbox reports NIL for the per-message metadata";
     $self->check_messages(\%exp);
 }
 
@@ -2757,8 +2757,8 @@ sub test_folder_delete_mboxa_dmimm
 {
     my ($self) = @_;
 
-    xlog "test that per-mailbox GETMETADATA annotations are";
-    xlog "deleted with the mailbox; delete_mode = immediate (BZ2685)";
+    xlog $self, "test that per-mailbox GETMETADATA annotations are";
+    xlog $self, "deleted with the mailbox; delete_mode = immediate (BZ2685)";
 
     $self->assert_str_equals('immediate',
                     $self->{instance}->{config}->get('delete_mode'));
@@ -2771,8 +2771,8 @@ sub test_folder_delete_mboxa_dmdel
 {
     my ($self) = @_;
 
-    xlog "test that per-mailbox GETMETADATA annotations are";
-    xlog "deleted with the mailbox; delete_mode = delayed (BZ2685)";
+    xlog $self, "test that per-mailbox GETMETADATA annotations are";
+    xlog $self, "deleted with the mailbox; delete_mode = delayed (BZ2685)";
 
     $self->assert_str_equals('delayed',
                     $self->{instance}->{config}->get('delete_mode'));
@@ -2785,8 +2785,8 @@ sub test_folder_delete_mboxm_dmimm
 {
     my ($self) = @_;
 
-    xlog "test that per-mailbox GETMETADATA annotations are";
-    xlog "deleted with the mailbox; delete_mode = immediate (BZ2685)";
+    xlog $self, "test that per-mailbox GETMETADATA annotations are";
+    xlog $self, "deleted with the mailbox; delete_mode = immediate (BZ2685)";
 
     $self->assert_str_equals('immediate',
                     $self->{instance}->{config}->get('delete_mode'));
@@ -2799,8 +2799,8 @@ sub test_folder_delete_mboxm_dmdel
 {
     my ($self) = @_;
 
-    xlog "test that per-mailbox GETMETADATA annotations are";
-    xlog "deleted with the mailbox; delete_mode = delayed (BZ2685)";
+    xlog $self, "test that per-mailbox GETMETADATA annotations are";
+    xlog $self, "deleted with the mailbox; delete_mode = delayed (BZ2685)";
 
     $self->assert_str_equals('delayed',
                     $self->{instance}->{config}->get('delete_mode'));
@@ -2813,8 +2813,8 @@ sub test_folder_delete_msg_dmimm
 {
     my ($self) = @_;
 
-    xlog "test that per-message annotations are";
-    xlog "deleted with the mailbox; delete_mode = immediate (BZ2685)";
+    xlog $self, "test that per-message annotations are";
+    xlog $self, "deleted with the mailbox; delete_mode = immediate (BZ2685)";
 
     $self->assert_str_equals('immediate',
                     $self->{instance}->{config}->get('delete_mode'));
@@ -2827,8 +2827,8 @@ sub test_folder_delete_msg_dmdel
 {
     my ($self) = @_;
 
-    xlog "test that per-message annotations are";
-    xlog "deleted with the mailbox; delete_mode = delayed (BZ2685)";
+    xlog $self, "test that per-message annotations are";
+    xlog $self, "deleted with the mailbox; delete_mode = delayed (BZ2685)";
 
     $self->assert_str_equals('delayed',
                     $self->{instance}->{config}->get('delete_mode'));
@@ -2840,9 +2840,9 @@ sub test_getmetadata_multiple_folders
 {
     my ($self) = @_;
 
-    xlog "test the Cyrus-specific extension to the GETMETADATA";
-    xlog "syntax which allows specifying a parenthesised list";
-    xlog "of folder names [IRIS-1109]";
+    xlog $self, "test the Cyrus-specific extension to the GETMETADATA";
+    xlog $self, "syntax which allows specifying a parenthesised list";
+    xlog $self, "of folder names [IRIS-1109]";
 
     my $imaptalk = $self->{store}->get_client();
     # data thanks to hipsteripsum.me
@@ -2850,7 +2850,7 @@ sub test_getmetadata_multiple_folders
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
     my %uuids;
 
-    xlog "Create folders";
+    xlog $self, "Create folders";
     foreach my $f (@folders)
     {
         $imaptalk->create($f)
@@ -2866,7 +2866,7 @@ sub test_getmetadata_multiple_folders
         $uuids{$f} = $uuid;
     }
 
-    xlog "Getting metadata with a list of folder names";
+    xlog $self, "Getting metadata with a list of folder names";
     my @f2;
     my %exp;
     foreach my $f (@folders)
@@ -2918,7 +2918,7 @@ sub test_getmetadata_maxsize
 {
     my ($self) = @_;
 
-    xlog "test the GETMETADATA command with the MAXSIZE option";
+    xlog $self, "test the GETMETADATA command with the MAXSIZE option";
 
     my $imaptalk = $self->{store}->get_client();
     # data thanks to hipsteripsum.me
@@ -2926,7 +2926,7 @@ sub test_getmetadata_maxsize
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
     my $res;
 
-    xlog "Create folder";
+    xlog $self, "Create folder";
     $imaptalk->create($folder)
         or die "Cannot create mailbox $folder: $@";
 
@@ -2938,30 +2938,30 @@ sub test_getmetadata_maxsize
     $self->assert_not_null($uuid);
     $self->assert($uuid =~ m/^[0-9a-z-]+$/);
 
-    xlog "Getting metadata with no MAXSIZE";
+    xlog $self, "Getting metadata with no MAXSIZE";
     $res = getmetadata($imaptalk, $folder, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals({ $folder => { $entry => $uuid } } , $res);
 
-    xlog "Getting metadata with a large MAXSIZE in the right place";
+    xlog $self, "Getting metadata with a large MAXSIZE in the right place";
     $res = getmetadata($imaptalk, [ MAXSIZE => 2048 ], $folder, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals({ $folder => { $entry => $uuid } } , $res);
 
-    xlog "Getting metadata with a small MAXSIZE in the right place";
+    xlog $self, "Getting metadata with a small MAXSIZE in the right place";
     $res = getmetadata($imaptalk, [ MAXSIZE => 8 ], $folder, $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_deep_equals({ longentries => length($uuid) } , $res);
 
-    xlog "Getting metadata with a large MAXSIZE in the wrong place";
+    xlog $self, "Getting metadata with a large MAXSIZE in the wrong place";
     $res = getmetadata($imaptalk, $folder, [ MAXSIZE => 2048 ], $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals({ $folder => { $entry => $uuid } } , $res);
 
-    xlog "Getting metadata with a small MAXSIZE in the wrong place";
+    xlog $self, "Getting metadata with a small MAXSIZE in the wrong place";
     $res = getmetadata($imaptalk, $folder, [ MAXSIZE => 8 ], $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_deep_equals({ longentries => length($uuid) } , $res);
@@ -2972,7 +2972,7 @@ sub test_getmetadata_depth
 {
     my ($self) = @_;
 
-    xlog "test the GETMETADATA command with DEPTH option";
+    xlog $self, "test the GETMETADATA command with DEPTH option";
 
     my $imaptalk = $self->{store}->get_client();
     # data thanks to hipsteripsum.me
@@ -2988,55 +2988,55 @@ sub test_getmetadata_depth
     my $rootentry = '/shared/selvage';
     my $res;
 
-    xlog "Create folder";
+    xlog $self, "Create folder";
     $imaptalk->create($folder)
         or die "Cannot create mailbox $folder: $@";
 
-    xlog "Setup metadata";
+    xlog $self, "Setup metadata";
     foreach my $entry (sort keys %entries)
     {
         $imaptalk->setmetadata($folder, $entry, $entries{$entry})
             or die "Cannot setmetadata: $@";
     }
 
-    xlog "Getting metadata with no DEPTH";
+    xlog $self, "Getting metadata with no DEPTH";
     $res = getmetadata($imaptalk, $folder, $rootentry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals({ $folder => { $rootentry => $entries{$rootentry} } } , $res);
 
-    xlog "Getting metadata with DEPTH 0 in the right place";
+    xlog $self, "Getting metadata with DEPTH 0 in the right place";
     $res = getmetadata($imaptalk, $folder, [ DEPTH => 0 ], $rootentry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals({ $folder => { $rootentry => $entries{$rootentry} } } , $res);
 
-    xlog "Getting metadata with DEPTH 1 in the right place";
+    xlog $self, "Getting metadata with DEPTH 1 in the right place";
     my @subset = ( qw(/shared/selvage /shared/selvage/portland /shared/selvage/leggings) );
     $res = getmetadata($imaptalk, $folder, [ DEPTH => 1 ], $rootentry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals({ $folder => { map { $_ => $entries{$_} } @subset } }, $res);
 
-    xlog "Getting metadata with DEPTH infinity in the right place";
+    xlog $self, "Getting metadata with DEPTH infinity in the right place";
     $res = getmetadata($imaptalk, $folder, [ DEPTH => 'infinity' ], $rootentry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals({ $folder => { %entries } } , $res);
 
-    xlog "Getting metadata with DEPTH 0 in the wrong place";
+    xlog $self, "Getting metadata with DEPTH 0 in the wrong place";
     $res = getmetadata($imaptalk, $folder, [ DEPTH => 0 ], $rootentry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals({ $folder => { $rootentry => $entries{$rootentry} } } , $res);
 
-    xlog "Getting metadata with DEPTH 1 in the wrong place";
+    xlog $self, "Getting metadata with DEPTH 1 in the wrong place";
     $res = getmetadata($imaptalk, $folder, [ DEPTH => 1 ], $rootentry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals({ $folder => { map { $_ => $entries{$_} } @subset } }, $res);
 
-    xlog "Getting metadata with DEPTH infinity in the wrong place";
+    xlog $self, "Getting metadata with DEPTH infinity in the wrong place";
     $res = getmetadata($imaptalk, $folder, [ DEPTH => 'infinity' ], $rootentry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
@@ -3047,7 +3047,7 @@ sub test_set_specialuse_twice
 {
     my ($self) = @_;
 
-    xlog "testing if we could /private/specialuse twice on a folder";
+    xlog $self, "testing if we could /private/specialuse twice on a folder";
 
     my $imaptalk = $self->{store}->get_client();
     my $entry = '/private/specialuse';
@@ -3062,11 +3062,11 @@ sub test_set_specialuse_twice
     my $specialuse6 = '\Drafts \Archive';
     my $res;
 
-    xlog "Create a folder $folder1";
+    xlog $self, "Create a folder $folder1";
     $imaptalk->create($folder1)
         or die "Cannot create mailbox $folder1: $@";
 
-    xlog "Create a folder $folder2";
+    xlog $self, "Create a folder $folder2";
     $imaptalk->create($folder2)
         or die "Cannot create mailbox $folder2: $@";
 
@@ -3079,43 +3079,43 @@ sub test_set_specialuse_twice
         }, $res);
 
 
-    xlog "Set $folder1 to be $specialuse1";
+    xlog $self, "Set $folder1 to be $specialuse1";
     $imaptalk->setmetadata($folder1, $entry, $specialuse1);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "Set $folder2 to be $specialuse4";
+    xlog $self, "Set $folder2 to be $specialuse4";
     $imaptalk->setmetadata($folder2, $entry, $specialuse4);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "Set $folder1 to $specialuse2, and it should work.";
+    xlog $self, "Set $folder1 to $specialuse2, and it should work.";
     $imaptalk->setmetadata($folder1, $entry, $specialuse2);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "Set $folder1 to $specialuse1, and it should work.";
+    xlog $self, "Set $folder1 to $specialuse1, and it should work.";
     $imaptalk->setmetadata($folder1, $entry, $specialuse1);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "Set $folder1 to $specialuse3, and it should work.";
+    xlog $self, "Set $folder1 to $specialuse3, and it should work.";
     $imaptalk->setmetadata($folder1, $entry, $specialuse2);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "Set $folder1 to $specialuse1, and it should work.";
+    xlog $self, "Set $folder1 to $specialuse1, and it should work.";
     $imaptalk->setmetadata($folder1, $entry, $specialuse1);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "Set $folder1 to $specialuse4, and it should not work.";
+    xlog $self, "Set $folder1 to $specialuse4, and it should not work.";
     $imaptalk->setmetadata($folder1, $entry, $specialuse4);
     $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
 
-    xlog "Set $folder1 to $specialuse5, and it should work.";
+    xlog $self, "Set $folder1 to $specialuse5, and it should work.";
     $imaptalk->setmetadata($folder1, $entry, $specialuse5);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "Set $folder2 to be $specialuse1";
+    xlog $self, "Set $folder2 to be $specialuse1";
     $imaptalk->setmetadata($folder2, $entry, $specialuse1);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    xlog "Now set $folder1 to $specialuse6, and it should work.";
+    xlog $self, "Now set $folder1 to $specialuse6, and it should work.";
     $imaptalk->setmetadata($folder1, $entry, $specialuse6);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 }

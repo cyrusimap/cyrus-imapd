@@ -93,7 +93,7 @@ sub getinbox
 
     my $jmap = $self->{jmap};
 
-    xlog "get existing mailboxes";
+    xlog $self, "get existing mailboxes";
     my $res = $jmap->CallMethods([['Mailbox/get', $args, "R1"]]);
     $self->assert_not_null($res);
 
@@ -116,7 +116,7 @@ sub test_mailbox_get
     $imaptalk->create("INBOX.foo.bar")
         or die "Cannot create mailbox INBOX.foo.bar: $@";
 
-    xlog "get existing mailboxes";
+    xlog $self, "get existing mailboxes";
     my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Mailbox/get', $res->[0][0]);
@@ -194,7 +194,7 @@ sub test_mailbox_get_inbox_sub
     $imaptalk->create("INBOX.INBOX.foo.bar")
         or die "Cannot create mailbox INBOX.INBOX.foo.bar: $@";
 
-    xlog "get existing mailboxes";
+    xlog $self, "get existing mailboxes";
     my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Mailbox/get', $res->[0][0]);
@@ -272,7 +272,7 @@ sub test_mailbox_get_specialuse
     $imaptalk->create("INBOX.Sent", "(USE (\\Sent))") || die;
     $imaptalk->create("INBOX.Trash", "(USE (\\Trash))") || die;
 
-    xlog "get mailboxes";
+    xlog $self, "get mailboxes";
     my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Mailbox/get', $res->[0][0]);
@@ -313,7 +313,7 @@ sub test_mailbox_get_properties
 
     my $jmap = $self->{jmap};
 
-    xlog "get mailboxes with name property";
+    xlog $self, "get mailboxes with name property";
     my $res = $jmap->CallMethods([['Mailbox/get', { properties => ["name"]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Mailbox/get', $res->[0][0]);
@@ -323,7 +323,7 @@ sub test_mailbox_get_properties
     $self->assert_str_equals("Inbox", $inbox->{name});
     $self->assert_num_equals(2, scalar keys %{$inbox}); # id and name
 
-    xlog "get mailboxes with erroneous property";
+    xlog $self, "get mailboxes with erroneous property";
     $res = $jmap->CallMethods([['Mailbox/get', { properties => ["name", 123]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('error', $res->[0][0]);
@@ -333,7 +333,7 @@ sub test_mailbox_get_properties
     $self->assert_str_equals("invalidArguments", $err->{type});
     $self->assert_str_equals("properties[1]", $err->{arguments}[0]);
 
-    xlog "get mailboxes with unknown property";
+    xlog $self, "get mailboxes with unknown property";
     $res = $jmap->CallMethods([['Mailbox/get', { properties => ["name", "123"]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('error', $res->[0][0]);
@@ -354,7 +354,7 @@ sub test_mailbox_get_ids
 
     $imaptalk->create("INBOX.foo") || die;
 
-    xlog "get all mailboxes";
+    xlog $self, "get all mailboxes";
     my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Mailbox/get', $res->[0][0]);
@@ -366,12 +366,12 @@ sub test_mailbox_get_ids
     $self->assert_not_null($inbox);
     $self->assert_not_null($foo);
 
-    xlog "get foo and unknown mailbox";
+    xlog $self, "get foo and unknown mailbox";
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$foo->{id}, "nope"] }, "R1"]]);
     $self->assert_str_equals($foo->{id}, $res->[0][1]{list}[0]->{id});
     $self->assert_str_equals("nope", $res->[0][1]{notFound}[0]);
 
-    xlog "get mailbox with erroneous id";
+    xlog $self, "get mailbox with erroneous id";
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [123]}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('error', $res->[0][0]);
@@ -399,14 +399,14 @@ sub test_mailbox_get_nocalendars
         'https://cyrusimap.org/ns/jmap/calendars',
     ];
 
-    xlog "get existing mailboxes";
+    xlog $self, "get existing mailboxes";
     my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]], $using);
     $self->assert_not_null($res);
     $self->assert_str_equals('Mailbox/get', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
     my $mboxes = $res->[0][1]{list};
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     $res = $jmap->CallMethods([
             ['Calendar/set', { create => { "1" => {
                             name => "foo",
@@ -417,7 +417,7 @@ sub test_mailbox_get_nocalendars
     ], $using);
     $self->assert_not_null($res->[0][1]{created});
 
-    xlog "get updated mailboxes";
+    xlog $self, "get updated mailboxes";
     $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]], $using);
     $self->assert_not_null($res);
     $self->assert_num_equals(scalar @{$mboxes}, scalar @{$res->[0][1]{list}});
@@ -462,7 +462,7 @@ sub test_mailbox_get_shared
     $footalk->setmetadata("INBOX.box1", "/private/specialuse", "\\Trash");
     $self->assert_equals('ok', $footalk->get_last_completion_response());
 
-    xlog "get mailboxes for foo account";
+    xlog $self, "get mailboxes for foo account";
     my $res = $jmap->CallMethods([['Mailbox/get', { accountId => "foo" }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
 
@@ -473,17 +473,17 @@ sub test_mailbox_get_shared
     my $box1 = $m{'box1'};
     $self->assert_str_equals('trash', $box1->{role});
 
-    xlog "get mailboxes for inaccessible bar account";
+    xlog $self, "get mailboxes for inaccessible bar account";
     $res = $jmap->CallMethods([['Mailbox/get', { accountId => "bar" }, "R1"]]);
     $self->assert_str_equals("error", $res->[0][0]);
     $self->assert_str_equals("accountNotFound", $res->[0][1]{type});
 
-    xlog "get mailboxes for inexistent account";
+    xlog $self, "get mailboxes for inexistent account";
     $res = $jmap->CallMethods([['Mailbox/get', { accountId => "baz" }, "R1"]]);
     $self->assert_str_equals("error", $res->[0][0]);
     $self->assert_str_equals("accountNotFound", $res->[0][1]{type});
 
-    xlog "get mailboxes for visible account";
+    xlog $self, "get mailboxes for visible account";
     $res = $jmap->CallMethods([['Mailbox/get', { accountId => "foobar" }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
     %m = map { lc($_->{name}) => $_ } @{$res->[0][1]{list}};
@@ -536,7 +536,7 @@ sub test_mailbox_get_shared_inbox
     $footalk->setmetadata("INBOX.box1", "/private/specialuse", "\\Trash");
     $self->assert_equals('ok', $footalk->get_last_completion_response());
 
-    xlog "get mailboxes for foo account";
+    xlog $self, "get mailboxes for foo account";
     my $res = $jmap->CallMethods([['Mailbox/get', { accountId => "foo" }, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
 
@@ -547,17 +547,17 @@ sub test_mailbox_get_shared_inbox
     my $box1 = $m{'box1'};
     $self->assert_str_equals('trash', $box1->{role});
 
-    xlog "get mailboxes for inaccessible bar account";
+    xlog $self, "get mailboxes for inaccessible bar account";
     $res = $jmap->CallMethods([['Mailbox/get', { accountId => "bar" }, "R1"]]);
     $self->assert_str_equals("error", $res->[0][0]);
     $self->assert_str_equals("accountNotFound", $res->[0][1]{type});
 
-    xlog "get mailboxes for inexistent account";
+    xlog $self, "get mailboxes for inexistent account";
     $res = $jmap->CallMethods([['Mailbox/get', { accountId => "baz" }, "R1"]]);
     $self->assert_str_equals("error", $res->[0][0]);
     $self->assert_str_equals("accountNotFound", $res->[0][1]{type});
 
-    xlog "get mailboxes for visible account";
+    xlog $self, "get mailboxes for visible account";
     $res = $jmap->CallMethods([['Mailbox/get', { accountId => "foobar" }, "R1"]]);
     %m = map { lc($_->{name}) => $_ } @{$res->[0][1]{list}};
     $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
@@ -579,21 +579,21 @@ sub test_mailbox_query
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "list mailboxes without filter";
+    xlog $self, "list mailboxes without filter";
     my $res = $jmap->CallMethods([['Mailbox/query', {}, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals('Mailbox/query', $res->[0][0]);
     $self->assert_str_equals('R1', $res->[0][2]);
 
-    xlog "create mailboxes";
+    xlog $self, "create mailboxes";
     $imaptalk->create("INBOX.A") || die;
     $imaptalk->create("INBOX.B") || die;
 
-    xlog "fetch mailboxes";
+    xlog $self, "fetch mailboxes";
     $res = $jmap->CallMethods([['Mailbox/get', { }, 'R1' ]]);
     my %mboxids = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
 
-    xlog "list mailboxes without filter and sort by name ascending";
+    xlog $self, "list mailboxes without filter and sort by name ascending";
     $res = $jmap->CallMethods([['Mailbox/query', {
         sort => [{ property => "name" }]},
     "R1"]]);
@@ -602,7 +602,7 @@ sub test_mailbox_query
     $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
     $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[2]);
 
-    xlog "list mailboxes without filter and sort by name descending";
+    xlog $self, "list mailboxes without filter and sort by name descending";
     $res = $jmap->CallMethods([['Mailbox/query', {
         sort => [{ property => "name", isAscending => JSON::false}],
     }, "R1"]]);
@@ -611,12 +611,12 @@ sub test_mailbox_query
     $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
     $self->assert_str_equals($mboxids{'A'}, $res->[0][1]{ids}[2]);
 
-    xlog "filter mailboxes by hasAnyRole == true";
+    xlog $self, "filter mailboxes by hasAnyRole == true";
     $res = $jmap->CallMethods([['Mailbox/query', {filter => {hasAnyRole => JSON::true}}, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[0]);
 
-    xlog "filter mailboxes by hasAnyRole == false";
+    xlog $self, "filter mailboxes by hasAnyRole == false";
     $res = $jmap->CallMethods([['Mailbox/query', {
         filter => {hasAnyRole => JSON::false},
         sort => [{ property => "name"}],
@@ -625,21 +625,21 @@ sub test_mailbox_query
     $self->assert_str_equals($mboxids{'A'}, $res->[0][1]{ids}[0]);
     $self->assert_str_equals($mboxids{'B'}, $res->[0][1]{ids}[1]);
 
-    xlog "create mailbox underneath A";
+    xlog $self, "create mailbox underneath A";
     $imaptalk->create("INBOX.A.AA") || die;
 
-    xlog "(re)fetch mailboxes";
+    xlog $self, "(re)fetch mailboxes";
     $res = $jmap->CallMethods([['Mailbox/get', { }, 'R1' ]]);
     %mboxids = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
 
-    xlog "filter mailboxes by parentId";
+    xlog $self, "filter mailboxes by parentId";
     $res = $jmap->CallMethods([['Mailbox/query', {filter => {parentId => $mboxids{'A'}}}, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($mboxids{'AA'}, $res->[0][1]{ids}[0]);
 
     # Without windowing the name-sorted results are: A, AA, B, Inbox
 
-    xlog "list mailboxes (with limit)";
+    xlog $self, "list mailboxes (with limit)";
     $res = $jmap->CallMethods([
         ['Mailbox/query', {
             sort => [{ property => "name" }],
@@ -650,7 +650,7 @@ sub test_mailbox_query
     $self->assert_str_equals($mboxids{'A'}, $res->[0][1]{ids}[0]);
     $self->assert_num_equals(0, $res->[0][1]->{position});
 
-    xlog "list mailboxes (with anchor and limit)";
+    xlog $self, "list mailboxes (with anchor and limit)";
     $res = $jmap->CallMethods([
         ['Mailbox/query', {
             sort => [{ property => "name" }],
@@ -663,7 +663,7 @@ sub test_mailbox_query
     $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
     $self->assert_num_equals(2, $res->[0][1]->{position});
 
-    xlog "list mailboxes (with positive anchor offset)";
+    xlog $self, "list mailboxes (with positive anchor offset)";
     $res = $jmap->CallMethods([
         ['Mailbox/query', {
             sort => [{ property => "name" }],
@@ -676,7 +676,7 @@ sub test_mailbox_query
     $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[1]);
     $self->assert_num_equals(2, $res->[0][1]->{position});
 
-    xlog "list mailboxes (with negative anchor offset)";
+    xlog $self, "list mailboxes (with negative anchor offset)";
     $res = $jmap->CallMethods([
         ['Mailbox/query', {
             sort => [{ property => "name" }],
@@ -690,7 +690,7 @@ sub test_mailbox_query
     $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[2]);
     $self->assert_num_equals(1, $res->[0][1]->{position});
 
-    xlog "list mailboxes (with position)";
+    xlog $self, "list mailboxes (with position)";
     $res = $jmap->CallMethods([
         ['Mailbox/query', {
             sort => [{ property => "name" }],
@@ -700,7 +700,7 @@ sub test_mailbox_query
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($mboxids{'Inbox'}, $res->[0][1]{ids}[0]);
 
-    xlog "list mailboxes (with negative position)";
+    xlog $self, "list mailboxes (with negative position)";
     $res = $jmap->CallMethods([
         ['Mailbox/query', {
             sort => [{ property => "name" }],
@@ -828,7 +828,7 @@ sub test_mailbox_query_limit_zero
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "list mailboxes with limit 0";
+    xlog $self, "list mailboxes with limit 0";
     my $res = $jmap->CallMethods([
         ['Mailbox/query', { limit => 0 }, "R1"]
     ]);
@@ -843,19 +843,19 @@ sub test_mailbox_query_parentid_null
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "create mailbox tree";
+    xlog $self, "create mailbox tree";
     $imaptalk->create("INBOX.Ham") || die;
     $imaptalk->create("INBOX.Spam", "(USE (\\Junk))") || die;
     $imaptalk->create("INBOX.Ham.Zonk") || die;
     $imaptalk->create("INBOX.Ham.Bonk") || die;
 
-    xlog "(re)fetch mailboxes";
+    xlog $self, "(re)fetch mailboxes";
     my $res = $jmap->CallMethods([['Mailbox/get', { properties => ["name"] }, 'R1' ]]);
     $self->assert_num_equals(5, scalar @{$res->[0][1]{list}});
     my %mboxids = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
     $self->assert(exists $mboxids{'Inbox'});
 
-    xlog "list mailboxes, filtered by parentId null";
+    xlog $self, "list mailboxes, filtered by parentId null";
     $res = $jmap->CallMethods([
         ['Mailbox/query', {
             filter => { parentId => undef },
@@ -906,19 +906,19 @@ sub test_mailbox_query_filteroperator
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "create mailbox tree";
+    xlog $self, "create mailbox tree";
     $imaptalk->create("INBOX.Ham") || die;
     $imaptalk->create("INBOX.Spam", "(USE (\\Junk))") || die;
     $imaptalk->create("INBOX.Ham.Zonk") || die;
     $imaptalk->create("INBOX.Ham.Bonk") || die;
 
-    xlog "(re)fetch mailboxes";
+    xlog $self, "(re)fetch mailboxes";
     my $res = $jmap->CallMethods([['Mailbox/get', { properties => ["name"] }, 'R1' ]]);
     $self->assert_num_equals(5, scalar @{$res->[0][1]{list}});
     my %mboxids = map { $_->{name} => $_->{id} } @{$res->[0][1]{list}};
     $self->assert(exists $mboxids{'Inbox'});
 
-    xlog "Subscribe mailbox Ham";
+    xlog $self, "Subscribe mailbox Ham";
     $res = $jmap->CallMethods([
         ['Mailbox/set', {
             update => {
@@ -930,7 +930,7 @@ sub test_mailbox_query_filteroperator
     ]);
     $self->assert(exists $res->[0][1]{updated}{$mboxids{'Ham'}});
 
-    xlog "list mailboxes filtered by parentId OR role";
+    xlog $self, "list mailboxes filtered by parentId OR role";
     $res = $jmap->CallMethods([['Mailbox/query', {
         filter => {
             operator => "OR",
@@ -947,7 +947,7 @@ sub test_mailbox_query_filteroperator
     $self->assert_str_equals($mboxids{'Spam'}, $res->[0][1]{ids}[1]);
     $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[2]);
 
-    xlog "list mailboxes filtered by name";
+    xlog $self, "list mailboxes filtered by name";
     $res = $jmap->CallMethods([['Mailbox/query', {
         filter => {
             name => 'Zonk',
@@ -956,7 +956,7 @@ sub test_mailbox_query_filteroperator
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[0]);
 
-    xlog "list mailboxes filtered by isSubscribed";
+    xlog $self, "list mailboxes filtered by isSubscribed";
     $res = $jmap->CallMethods([['Mailbox/query', {
         filter => {
             isSubscribed => JSON::true,
@@ -965,7 +965,7 @@ sub test_mailbox_query_filteroperator
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[0]);
 
-    xlog "list mailboxes filtered by isSubscribed is false";
+    xlog $self, "list mailboxes filtered by isSubscribed is false";
     $res = $jmap->CallMethods([['Mailbox/query', {
         filter => {
             isSubscribed => JSON::false,
@@ -978,7 +978,7 @@ sub test_mailbox_query_filteroperator
     $self->assert_str_equals($mboxids{'Spam'}, $res->[0][1]{ids}[2]);
     $self->assert_str_equals($mboxids{'Zonk'}, $res->[0][1]{ids}[3]);
 
-    xlog "list mailboxes filtered by parentId AND hasAnyRole false";
+    xlog $self, "list mailboxes filtered by parentId AND hasAnyRole false";
     $res = $jmap->CallMethods([['Mailbox/query', {
         filter => {
             operator => "AND",
@@ -993,7 +993,7 @@ sub test_mailbox_query_filteroperator
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     $self->assert_str_equals($mboxids{'Ham'}, $res->[0][1]{ids}[0]);
 
-    xlog "list mailboxes filtered by NOT (parentId AND role)";
+    xlog $self, "list mailboxes filtered by NOT (parentId AND role)";
     $res = $jmap->CallMethods([['Mailbox/query', {
         filter => {
             operator => "NOT",
@@ -1023,7 +1023,7 @@ sub test_mailbox_query_issue2286
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "list mailboxes without filter";
+    xlog $self, "list mailboxes without filter";
     my $res = $jmap->CallMethods([['Mailbox/query', { limit => -5 }, "R1"]]);
     $self->assert_str_equals('error', $res->[0][0]);
     $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
@@ -1229,14 +1229,14 @@ sub test_mailbox_set
 
     my $jmap = $self->{jmap};
 
-    xlog "get inbox";
+    xlog $self, "get inbox";
     my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
     my $inbox = $res->[0][1]{list}[0];
     $self->assert_str_equals("Inbox", $inbox->{name});
 
     my $state = $res->[0][1]{state};
 
-    xlog "create mailbox";
+    xlog $self, "create mailbox";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "foo",
@@ -1249,7 +1249,7 @@ sub test_mailbox_set
     $self->assert_not_null($res->[0][1]{created});
     my $id = $res->[0][1]{created}{"1"}{id};
 
-    xlog "get mailbox $id";
+    xlog $self, "get mailbox $id";
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
     $self->assert_str_equals($id, $res->[0][1]{list}[0]->{id});
 
@@ -1269,7 +1269,7 @@ sub test_mailbox_set
     $self->assert_num_equals(0, $mbox->{totalThreads});
     $self->assert_num_equals(0, $mbox->{unreadThreads});
 
-    xlog "update mailbox";
+    xlog $self, "update mailbox";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { update => { $id => {
                             name => "bar",
@@ -1282,14 +1282,14 @@ sub test_mailbox_set
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert(exists $res->[0][1]{updated}{$id});
 
-    xlog "get mailbox $id";
+    xlog $self, "get mailbox $id";
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
     $self->assert_str_equals($id, $res->[0][1]{list}[0]->{id});
     $mbox = $res->[0][1]{list}[0];
     $self->assert_str_equals("bar", $mbox->{name});
     $self->assert_num_equals(20, $mbox->{sortOrder});
 
-    xlog "destroy mailbox";
+    xlog $self, "destroy mailbox";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { destroy => [ $id ] }, "R1"]
     ]);
@@ -1298,7 +1298,7 @@ sub test_mailbox_set
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
 
-    xlog "get mailbox $id";
+    xlog $self, "get mailbox $id";
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
     $self->assert_str_equals($id, $res->[0][1]{notFound}[0]);
 }
@@ -1375,7 +1375,7 @@ sub test_mailbox_set_inbox_children
     $imaptalk->create("INBOX.INBOX.foo.bar")
         or die "Cannot create mailbox INBOX.INBOX.foo.bar: $@";
 
-    xlog "get existing mailboxes";
+    xlog $self, "get existing mailboxes";
     my $res = $jmap->CallMethods([['Mailbox/get', { properties => ['name', 'parentId']}, "R1"]]);
     $self->assert_not_null($res);
     $self->assert_str_equals('Mailbox/get', $res->[0][0]);
@@ -1667,7 +1667,7 @@ sub test_mailbox_get_shared_parents
     $admintalk->setacl("user.foo.box1.box11", "cassandane", "lr") or die;
     $admintalk->setacl("user.foo.box3.box32", "cassandane", "lr") or die;
 
-    xlog "get mailboxes for foo account";
+    xlog $self, "get mailboxes for foo account";
     my $res = $jmap->CallMethods([['Mailbox/get', { accountId => "foo" }, "R1"]]);
     $self->assert_num_equals(4, scalar @{$res->[0][1]{list}});
 
@@ -1686,7 +1686,7 @@ sub test_mailbox_set_name_missing
 
     my $jmap = $self->{jmap};
 
-    xlog "create mailbox";
+    xlog $self, "create mailbox";
     my $res = $jmap->CallMethods([
         ['Mailbox/set', { create => {
                 "1" => { role => undef },
@@ -1708,14 +1708,14 @@ sub test_mailbox_set_name_collision
 
     my $jmap = $self->{jmap};
 
-    xlog "get inbox";
+    xlog $self, "get inbox";
     my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
     my $inbox = $res->[0][1]{list}[0];
     $self->assert_str_equals("Inbox", $inbox->{name});
 
     my $state = $res->[0][1]{state};
 
-    xlog "create three mailboxes named foo (two will fail)";
+    xlog $self, "create three mailboxes named foo (two will fail)";
     $res = $jmap->CallMethods([
         ['Mailbox/set', { create => {
             "1" => {
@@ -1741,7 +1741,7 @@ sub test_mailbox_set_name_collision
     my $fooid = $res->[0][1]{created}{(keys %{$res->[0][1]{created}})[0]}{id};
     $self->assert_not_null($fooid);
 
-    xlog "create mailbox bar";
+    xlog $self, "create mailbox bar";
     $res = $jmap->CallMethods([
         ['Mailbox/set', { create => {
             "1" => {
@@ -1756,7 +1756,7 @@ sub test_mailbox_set_name_collision
 
     # This MUST work per spec, but Cyrus /set does not support
     # invalid interim states...
-    xlog "rename bar to foo and foo to bar";
+    xlog $self, "rename bar to foo and foo to bar";
     $res = $jmap->CallMethods([
         ['Mailbox/set', { update => {
             $fooid => {
@@ -1769,7 +1769,7 @@ sub test_mailbox_set_name_collision
     ]);
     $self->assert_num_equals(2, scalar keys %{$res->[0][1]{updated}});
 
-    xlog "get mailboxes";
+    xlog $self, "get mailboxes";
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$fooid, $barid] }, "R1"]]);
 
     # foo is bar
@@ -1789,50 +1789,50 @@ sub test_mailbox_set_name_interop
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "create mailbox via IMAP";
+    xlog $self, "create mailbox via IMAP";
     $imaptalk->create("INBOX.foo")
         or die "Cannot create mailbox INBOX.foo: $@";
 
-    xlog "get foo mailbox";
+    xlog $self, "get foo mailbox";
     my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
     my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
     my $foo = $m{"foo"};
     my $id = $foo->{id};
     $self->assert_str_equals("foo", $foo->{name});
 
-    xlog "rename mailbox foo to oof via JMAP";
+    xlog $self, "rename mailbox foo to oof via JMAP";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { update => { $id => { name => "oof" }}}, "R1"]
     ]);
     $self->assert_not_null($res->[0][1]{updated});
 
-    xlog "get mailbox via IMAP";
+    xlog $self, "get mailbox via IMAP";
     my $data = $imaptalk->list("INBOX.oof", "%");
     $self->assert_num_equals(1, scalar @{$data});
 
-    xlog "rename mailbox oof to bar via IMAP";
+    xlog $self, "rename mailbox oof to bar via IMAP";
     $imaptalk->rename("INBOX.oof", "INBOX.bar")
         or die "Cannot rename mailbox: $@";
 
-    xlog "get mailbox $id";
+    xlog $self, "get mailbox $id";
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
     $self->assert_str_equals("bar", $res->[0][1]{list}[0]->{name});
 
-    xlog "rename mailbox bar to baz via JMAP";
+    xlog $self, "rename mailbox bar to baz via JMAP";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { update => { $id => { name => "baz" }}}, "R1"]
     ]);
     $self->assert_not_null($res->[0][1]{updated});
 
-    xlog "get mailbox via IMAP";
+    xlog $self, "get mailbox via IMAP";
     $data = $imaptalk->list("INBOX.baz", "%");
     $self->assert_num_equals(1, scalar @{$data});
 
-    xlog "rename mailbox baz to IFeel\N{WHITE SMILING FACE} via IMAP";
+    xlog $self, "rename mailbox baz to IFeel\N{WHITE SMILING FACE} via IMAP";
     $imaptalk->rename("INBOX.baz", "INBOX.IFeel\N{WHITE SMILING FACE}")
         or die "Cannot rename mailbox: $@";
 
-    xlog "get mailbox $id";
+    xlog $self, "get mailbox $id";
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
     $self->assert_str_equals("IFeel\N{WHITE SMILING FACE}", $res->[0][1]{list}[0]->{name});
 }
@@ -1844,7 +1844,7 @@ sub test_mailbox_set_name_unicode_nfc
 
     my $jmap = $self->{jmap};
 
-    xlog "get inbox";
+    xlog $self, "get inbox";
     my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
     my $inbox = $res->[0][1]{list}[0];
     $self->assert_str_equals("Inbox", $inbox->{name});
@@ -1854,7 +1854,7 @@ sub test_mailbox_set_name_unicode_nfc
     my $name = "\N{ANGSTROM SIGN}ngstr\N{LATIN SMALL LETTER O WITH DIAERESIS}m";
     my $want = "\N{LATIN CAPITAL LETTER A WITH RING ABOVE}ngstr\N{LATIN SMALL LETTER O WITH DIAERESIS}m";
 
-    xlog "create mailboxes with name not conforming to Net Unicode (NFC)";
+    xlog $self, "create mailboxes with name not conforming to Net Unicode (NFC)";
     $res = $jmap->CallMethods([['Mailbox/set', { create => { "1" => {
         name => "\N{ANGSTROM SIGN}ngstr\N{LATIN SMALL LETTER O WITH DIAERESIS}m",
         parentId => $inbox->{id},
@@ -1863,7 +1863,7 @@ sub test_mailbox_set_name_unicode_nfc
     $self->assert_not_null($res->[0][1]{created}{1});
     my $id = $res->[0][1]{created}{1}{id};
 
-    xlog "get mailbox $id";
+    xlog $self, "get mailbox $id";
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
     $self->assert_str_equals($want, $res->[0][1]{list}[0]->{name});
 }
@@ -1877,14 +1877,14 @@ sub test_mailbox_set_role
     my $jmap = $self->{jmap};
     my $imaptalk = $self->{store}->get_client();
 
-    xlog "get inbox";
+    xlog $self, "get inbox";
     my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
     my $inbox = $res->[0][1]{list}[0];
     $self->assert_str_equals("Inbox", $inbox->{name});
 
     my $state = $res->[0][1]{state};
 
-    xlog "try to create mailbox with inbox role";
+    xlog $self, "try to create mailbox with inbox role";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "foo",
@@ -1899,7 +1899,7 @@ sub test_mailbox_set_role
     $self->assert_str_equals("invalidProperties", $errType);
     $self->assert_deep_equals([ "role" ], $errProp);
 
-    xlog "create mailbox with trash role";
+    xlog $self, "create mailbox with trash role";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "foo",
@@ -1913,17 +1913,17 @@ sub test_mailbox_set_role
 
     my $id = $res->[0][1]{created}{"1"}{id};
 
-    xlog "get mailbox $id";
+    xlog $self, "get mailbox $id";
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id] }, "R1"]]);
 
     $self->assert_str_equals("trash", $res->[0][1]{list}[0]->{role});
 
-    xlog "get mailbox $id via IMAP";
+    xlog $self, "get mailbox $id via IMAP";
     my $data = $imaptalk->xlist("INBOX.foo", "%");
     my %annots = map { $_ => 1 } @{$data->[0]->[0]};
     $self->assert(exists $annots{"\\Trash"});
 
-    xlog "try to create another mailbox with trash role";
+    xlog $self, "try to create another mailbox with trash role";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "bar",
@@ -1936,7 +1936,7 @@ sub test_mailbox_set_role
     $self->assert_str_equals("invalidProperties", $errType);
     $self->assert_deep_equals([ "role" ], $errProp);
 
-    xlog "try to create a mailbox with an unknown role";
+    xlog $self, "try to create a mailbox with an unknown role";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "bam",
@@ -1949,13 +1949,13 @@ sub test_mailbox_set_role
     $self->assert_str_equals("invalidProperties", $errType);
     $self->assert_deep_equals([ "role" ], $errProp);
 
-    xlog "create a specialuse Sent mailbox via IMAP";
+    xlog $self, "create a specialuse Sent mailbox via IMAP";
     $imaptalk->create("INBOX.Sent", "(USE (\\Sent))") || die;
 
-    xlog "create a specialuse Archive and Junk mailbox via IMAP";
+    xlog $self, "create a specialuse Archive and Junk mailbox via IMAP";
     $imaptalk->create("INBOX.Multi", "(USE (\\Archive \\Junk))") || die;
 
-    xlog "get mailboxes";
+    xlog $self, "get mailboxes";
     $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
     my %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
     my $sent = $m{"Sent"};
@@ -1963,7 +1963,7 @@ sub test_mailbox_set_role
     $self->assert_str_equals("sent", $sent->{role});
     $self->assert_str_equals("archive", $multi->{role});
 
-    xlog "remove a mailbox role";
+    xlog $self, "remove a mailbox role";
     $res = $jmap->CallMethods([
         ['Mailbox/set', {
             update => { "$id" => {
@@ -2004,7 +2004,7 @@ sub test_mailbox_set_parent
     my $jmap = $self->{jmap};
 
     # Create mailboxes
-    xlog "create mailbox foo";
+    xlog $self, "create mailbox foo";
     my $res = $jmap->CallMethods([['Mailbox/set', {
         create => {
             "1" => {
@@ -2014,7 +2014,7 @@ sub test_mailbox_set_parent
         }
     }, "R1"]]);
     my $id1 = $res->[0][1]{created}{"1"}{id};
-    xlog "create mailbox foo.bar";
+    xlog $self, "create mailbox foo.bar";
     $res = $jmap->CallMethods([['Mailbox/set', {
         create => {
             "2" => {
@@ -2024,7 +2024,7 @@ sub test_mailbox_set_parent
         }
     }, "R1"]]);
     my $id2 = $res->[0][1]{created}{"2"}{id};
-    xlog "create mailbox foo.bar.baz";
+    xlog $self, "create mailbox foo.bar.baz";
     $res = $jmap->CallMethods([['Mailbox/set', {
         create => {
             "3" => {
@@ -2044,7 +2044,7 @@ sub test_mailbox_set_parent
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id3] }, "R1"]]);
     $self->assert_str_equals($id2, $res->[0][1]{list}[0]->{parentId});
 
-    xlog "move foo.bar to bar";
+    xlog $self, "move foo.bar to bar";
     $res = $jmap->CallMethods([['Mailbox/set', {
         update => {
             $id2 => {
@@ -2056,7 +2056,7 @@ sub test_mailbox_set_parent
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id2] }, "R1"]]);
     $self->assert_null($res->[0][1]{list}[0]->{parentId});
 
-    xlog "move bar.baz to foo.baz";
+    xlog $self, "move bar.baz to foo.baz";
     $res = $jmap->CallMethods([['Mailbox/set', {
         update => {
             $id3 => {
@@ -2069,7 +2069,7 @@ sub test_mailbox_set_parent
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id3] }, "R1"]]);
     $self->assert_str_equals($id1, $res->[0][1]{list}[0]->{parentId});
 
-    xlog "move foo to bar.foo";
+    xlog $self, "move foo to bar.foo";
     $res = $jmap->CallMethods([['Mailbox/set', {
         update => {
             $id1 => {
@@ -2082,7 +2082,7 @@ sub test_mailbox_set_parent
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id1] }, "R1"]]);
     $self->assert_str_equals($id2, $res->[0][1]{list}[0]->{parentId});
 
-    xlog "move foo to non-existent parent";
+    xlog $self, "move foo to non-existent parent";
     $res = $jmap->CallMethods([['Mailbox/set', {
         update => {
             $id1 => {
@@ -2099,7 +2099,7 @@ sub test_mailbox_set_parent
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id1] }, "R1"]]);
     $self->assert_str_equals($id2, $res->[0][1]{list}[0]->{parentId});
 
-    xlog "attempt to destroy bar (which has child foo)";
+    xlog $self, "attempt to destroy bar (which has child foo)";
     $res = $jmap->CallMethods([['Mailbox/set', {
         destroy => [$id2]
     }, "R1"]]);
@@ -2108,7 +2108,7 @@ sub test_mailbox_set_parent
     $res = $jmap->CallMethods([['Mailbox/get', { ids => [$id2] }, "R1"]]);
     $self->assert_null($res->[0][1]{list}[0]->{parentId});
 
-    xlog "destroy all";
+    xlog $self, "destroy all";
     $res = $jmap->CallMethods([['Mailbox/set', {
         destroy => [$id3, $id1, $id2]
     }, "R1"]]);
@@ -2126,15 +2126,15 @@ sub test_mailbox_set_parent_acl
     my $jmap = $self->{jmap};
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "get inbox";
+    xlog $self, "get inbox";
     my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
     my $inbox = $res->[0][1]{list}[0];
     $self->assert_str_equals("Inbox", $inbox->{name});
 
-    xlog "get inbox ACL";
+    xlog $self, "get inbox ACL";
     my $parentacl = $admintalk->getacl("user.cassandane");
 
-    xlog "create mailbox";
+    xlog $self, "create mailbox";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "foo",
@@ -2143,10 +2143,10 @@ sub test_mailbox_set_parent_acl
     ]);
     $self->assert_not_null($res->[0][1]{created});
 
-    xlog "get new mailbox ACL";
+    xlog $self, "get new mailbox ACL";
     my $myacl = $admintalk->getacl("user.cassandane.foo");
 
-    xlog "assert ACL matches parent ACL";
+    xlog $self, "assert ACL matches parent ACL";
     $self->assert_deep_equals($parentacl, $myacl);
 }
 
@@ -2159,22 +2159,22 @@ sub test_mailbox_set_destroy_empty
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    xlog "Generate a email in INBOX via IMAP";
+    xlog $self, "Generate a email in INBOX via IMAP";
     $self->make_message("Email A") || die;
 
-    xlog "get email list";
+    xlog $self, "get email list";
     my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     my $msgid = $res->[0][1]->{ids}[0];
 
-    xlog "get inbox";
+    xlog $self, "get inbox";
     $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
     my $inbox = $res->[0][1]{list}[0];
     $self->assert_str_equals("Inbox", $inbox->{name});
 
     my $state = $res->[0][1]{state};
 
-    xlog "create mailbox";
+    xlog $self, "create mailbox";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "foo",
@@ -2188,7 +2188,7 @@ sub test_mailbox_set_destroy_empty
     $self->assert_not_null($res->[0][1]{created});
     my $mboxid = $res->[0][1]{created}{"1"}{id};
 
-    xlog "copy email to newly created mailbox";
+    xlog $self, "copy email to newly created mailbox";
     $res = $jmap->CallMethods([['Email/set', {
         update => { $msgid => { mailboxIds => {
             $inbox->{id} => JSON::true,
@@ -2197,14 +2197,14 @@ sub test_mailbox_set_destroy_empty
     }, "R1"]]);
     $self->assert_not_null($res->[0][1]{updated});
 
-    xlog "attempt to destroy mailbox with email";
+    xlog $self, "attempt to destroy mailbox with email";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { destroy => [ $mboxid ] }, "R1"]
     ]);
     $self->assert_not_null($res->[0][1]{notDestroyed}{$mboxid});
     $self->assert_str_equals('mailboxHasEmail', $res->[0][1]{notDestroyed}{$mboxid}{type});
 
-    xlog "remove email from mailbox";
+    xlog $self, "remove email from mailbox";
     $res = $jmap->CallMethods([['Email/set', {
         update => { $msgid => { mailboxIds => {
             $inbox->{id} => JSON::true,
@@ -2212,7 +2212,7 @@ sub test_mailbox_set_destroy_empty
     }, "R1"]]);
     $self->assert_not_null($res->[0][1]{updated});
 
-    xlog "destroy empty mailbox";
+    xlog $self, "destroy empty mailbox";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { destroy => [ $mboxid ] }, "R1"]
     ]);
@@ -2228,22 +2228,22 @@ sub test_mailbox_set_destroy_removemsgs
     my $store = $self->{store};
     my $talk = $store->get_client();
 
-    xlog "Generate a email in INBOX via IMAP";
+    xlog $self, "Generate a email in INBOX via IMAP";
     $self->make_message("Email A") || die;
 
-    xlog "get email list";
+    xlog $self, "get email list";
     my $res = $jmap->CallMethods([['Email/query', {}, "R1"]]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]->{ids}});
     my $msgid = $res->[0][1]->{ids}[0];
 
-    xlog "get inbox";
+    xlog $self, "get inbox";
     $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
     my $inbox = $res->[0][1]{list}[0];
     $self->assert_str_equals("Inbox", $inbox->{name});
 
     my $state = $res->[0][1]{state};
 
-    xlog "create mailbox";
+    xlog $self, "create mailbox";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "foo",
@@ -2257,7 +2257,7 @@ sub test_mailbox_set_destroy_removemsgs
     $self->assert_not_null($res->[0][1]{created});
     my $mboxid = $res->[0][1]{created}{"1"}{id};
 
-    xlog "copy email to newly created mailbox";
+    xlog $self, "copy email to newly created mailbox";
     $res = $jmap->CallMethods([['Email/set', {
         update => { $msgid => { mailboxIds => {
             $inbox->{id} => JSON::true,
@@ -2266,7 +2266,7 @@ sub test_mailbox_set_destroy_removemsgs
     }, "R1"]]);
     $self->assert_not_null($res->[0][1]{updated});
 
-    xlog "destroy mailbox with email";
+    xlog $self, "destroy mailbox with email";
     $res = $jmap->CallMethods([[
         'Mailbox/set', {
             destroy => [ $mboxid ],
@@ -2291,7 +2291,7 @@ sub test_mailbox_set_shared
     # Share inbox but do not allow to create subfolders
     $admintalk->setacl("user.foo", "cassandane", "lr") or die;
 
-    xlog "get mailboxes for foo account";
+    xlog $self, "get mailboxes for foo account";
     my $res = $jmap->CallMethods([['Mailbox/get', { accountId => "foo" }, "R1"]]);
     my $inboxId = $res->[0][1]{list}[0]{id};
 
@@ -2304,14 +2304,14 @@ sub test_mailbox_set_shared
         }
     }, "R1"];
 
-    xlog "update shared INBOX (should fail)";
+    xlog $self, "update shared INBOX (should fail)";
     $res = $jmap->CallMethods([ $update ]);
     $self->assert(exists $res->[0][1]{notUpdated}{$inboxId});
 
-    xlog "Add update ACL rights to shared INBOX";
+    xlog $self, "Add update ACL rights to shared INBOX";
     $admintalk->setacl("user.foo", "cassandane", "lrw") or die;
 
-    xlog "update shared INBOX (should succeed)";
+    xlog $self, "update shared INBOX (should succeed)";
     $res = $jmap->CallMethods([ $update ]);
     $self->assert(exists $res->[0][1]{updated}{$inboxId});
 
@@ -2324,14 +2324,14 @@ sub test_mailbox_set_shared
         }
     }, "R1"];
 
-    xlog "create mailbox child (should fail)";
+    xlog $self, "create mailbox child (should fail)";
     $res = $jmap->CallMethods([ $create ]);
     $self->assert_not_null($res->[0][1]{notCreated}{1});
 
-    xlog "Add update ACL rights to shared INBOX";
+    xlog $self, "Add update ACL rights to shared INBOX";
     $admintalk->setacl("user.foo", "cassandane", "lrwk") or die;
 
-    xlog "create mailbox child (should succeed)";
+    xlog $self, "create mailbox child (should succeed)";
     $res = $jmap->CallMethods([ $create ]);
     $self->assert_not_null($res->[0][1]{created}{1});
     my $childId = $res->[0][1]{created}{1}{id};
@@ -2341,14 +2341,14 @@ sub test_mailbox_set_shared
         destroy => [ $childId ],
     }, 'R1' ];
 
-    xlog "destroy shared mailbox child (should fail)";
+    xlog $self, "destroy shared mailbox child (should fail)";
     $res = $jmap->CallMethods([ $destroy ]);
     $self->assert(exists $res->[0][1]{notDestroyed}{$childId});
 
-    xlog "Add delete ACL rights";
+    xlog $self, "Add delete ACL rights";
     $admintalk->setacl("user.foo.x", "cassandane", "lrwkx") or die;
 
-    xlog "destroy shared mailbox child (should succeed)";
+    xlog $self, "destroy shared mailbox child (should succeed)";
     $res = $jmap->CallMethods([ $destroy ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
 }
@@ -2491,7 +2491,7 @@ sub test_mailbox_changes
     my $foo;
     my $drafts;
 
-    xlog "get mailbox list";
+    xlog $self, "get mailbox list";
     $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
     $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
@@ -2499,12 +2499,12 @@ sub test_mailbox_changes
     $inbox = $m{"Inbox"}->{id};
     $self->assert_not_null($inbox);
 
-    xlog "get mailbox updates (expect error)";
+    xlog $self, "get mailbox updates (expect error)";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => 0 }, "R1"]]);
     $self->assert_str_equals("invalidArguments", $res->[0][1]->{type});
     $self->assert_str_equals("sinceState", $res->[0][1]->{arguments}[0]);
 
-    xlog "get mailbox updates (expect no changes)";
+    xlog $self, "get mailbox updates (expect no changes)";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
@@ -2514,17 +2514,17 @@ sub test_mailbox_changes
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $self->assert_null($res->[0][1]{updatedProperties});
 
-    xlog "create mailbox via IMAP";
+    xlog $self, "create mailbox via IMAP";
     $imaptalk->create("INBOX.foo")
         or die "Cannot create mailbox INBOX.foo: $@";
 
-    xlog "get mailbox list";
+    xlog $self, "get mailbox list";
     $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
     %m = map { $_->{name} => $_ } @{$res->[0][1]{list}};
     $foo = $m{"foo"}->{id};
     $self->assert_not_null($foo);
 
-    xlog "get mailbox updates";
+    xlog $self, "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
@@ -2536,7 +2536,7 @@ sub test_mailbox_changes
     $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
-    xlog "create drafts mailbox";
+    xlog $self, "create drafts mailbox";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "drafts",
@@ -2547,7 +2547,7 @@ sub test_mailbox_changes
     $drafts = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($drafts);
 
-    xlog "get mailbox updates";
+    xlog $self, "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
@@ -2559,7 +2559,7 @@ sub test_mailbox_changes
     $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
-    xlog "rename mailbox foo to bar";
+    xlog $self, "rename mailbox foo to bar";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { update => { $foo => {
                             name => "bar",
@@ -2568,7 +2568,7 @@ sub test_mailbox_changes
     ]);
     $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
 
-    xlog "get mailbox updates";
+    xlog $self, "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
@@ -2580,7 +2580,7 @@ sub test_mailbox_changes
     $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
-    xlog "delete mailbox bar";
+    xlog $self, "delete mailbox bar";
     $res = $jmap->CallMethods([
             ['Mailbox/set', {
                     destroy => [ $foo ],
@@ -2588,7 +2588,7 @@ sub test_mailbox_changes
     ]);
     $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
 
-    xlog "rename mailbox drafts to stfard";
+    xlog $self, "rename mailbox drafts to stfard";
     $res = $jmap->CallMethods([
             ['Mailbox/set', {
                     update => { $drafts => { name => "stfard" } },
@@ -2596,7 +2596,7 @@ sub test_mailbox_changes
     ]);
     $self->assert_num_equals(1, scalar keys %{$res->[0][1]{updated}});
 
-    xlog "get mailbox updates, limit to 1";
+    xlog $self, "get mailbox updates, limit to 1";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state, maxChanges => 1 }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
@@ -2608,7 +2608,7 @@ sub test_mailbox_changes
     $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
-    xlog "get mailbox updates, limit to 1";
+    xlog $self, "get mailbox updates, limit to 1";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state, maxChanges => 1 }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
@@ -2620,7 +2620,7 @@ sub test_mailbox_changes
     $self->assert_null($res->[0][1]{updatedProperties});
     $state = $res->[0][1]->{newState};
 
-    xlog "get mailbox updates (expect no changes)";
+    xlog $self, "get mailbox updates (expect no changes)";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
@@ -2637,7 +2637,7 @@ sub test_mailbox_changes_counts
     my ($self) = @_;
     my $jmap = $self->{jmap};
 
-    xlog "create drafts mailbox";
+    xlog $self, "create drafts mailbox";
     my $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "drafts",
@@ -2665,15 +2665,15 @@ sub test_mailbox_changes_counts
         },
     };
 
-    xlog "get mailbox updates";
+    xlog $self, "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $state = $res->[0][1]{newState};
 
-    xlog "Create a draft";
+    xlog $self, "Create a draft";
     $res = $jmap->CallMethods([['Email/set', { create => { "1" => $draft }}, "R1"]]);
     my $msgid = $res->[0][1]{created}{"1"}{id};
 
-    xlog "update email";
+    xlog $self, "update email";
     $res = $jmap->CallMethods([['Email/set', {
             update => { $msgid => {
                     keywords => {
@@ -2685,7 +2685,7 @@ sub test_mailbox_changes_counts
     }, "R1"]]);
     $self->assert(exists $res->[0][1]->{updated}{$msgid});
 
-    xlog "get mailbox updates";
+    xlog $self, "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{updatedProperties});
@@ -2694,10 +2694,10 @@ sub test_mailbox_changes_counts
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 
-    xlog "update mailbox";
+    xlog $self, "update mailbox";
     $res = $jmap->CallMethods([['Mailbox/set', { update => { $mboxid => { name => "bar" }}}, "R1"]]);
 
-    xlog "get mailbox updates";
+    xlog $self, "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_null($res->[0][1]{updatedProperties});
@@ -2706,12 +2706,12 @@ sub test_mailbox_changes_counts
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 
-    xlog "update email";
+    xlog $self, "update email";
     $res = $jmap->CallMethods([['Email/set', { update => { $msgid => { 'keywords/$flagged' => JSON::true }}
     }, "R1"]]);
     $self->assert(exists $res->[0][1]->{updated}{$msgid});
 
-    xlog "get mailbox updates";
+    xlog $self, "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{updatedProperties});
@@ -2720,10 +2720,10 @@ sub test_mailbox_changes_counts
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 
-    xlog "update mailbox";
+    xlog $self, "update mailbox";
     $res = $jmap->CallMethods([['Mailbox/set', { update => { $mboxid => { name => "baz" }}}, "R1"]]);
 
-    xlog "get mailbox updates";
+    xlog $self, "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_null($res->[0][1]{updatedProperties});
@@ -2732,7 +2732,7 @@ sub test_mailbox_changes_counts
     $self->assert_deep_equals([], $res->[0][1]{destroyed});
     $state = $res->[0][1]{newState};
 
-    xlog "get mailbox updates (expect no changes)";
+    xlog $self, "get mailbox updates (expect no changes)";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]{newState});
     $self->assert_null($res->[0][1]{updatedProperties});
@@ -2743,11 +2743,11 @@ sub test_mailbox_changes_counts
 
     $draft->{subject} = "memo2";
 
-    xlog "Create another draft";
+    xlog $self, "Create another draft";
     $res = $jmap->CallMethods([['Email/set', { create => { "1" => $draft }}, "R1"]]);
     $msgid = $res->[0][1]{created}{"1"}{id};
 
-    xlog "get mailbox updates";
+    xlog $self, "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { sinceState => $state }, "R1"]]);
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $self->assert_not_null($res->[0][1]{updatedProperties});
@@ -2771,22 +2771,22 @@ sub test_mailbox_changes_shared
     $self->{instance}->create_user("foo");
     $admintalk->setacl("user.foo", "cassandane", "lrwkxd") or die;
 
-    xlog "get mailbox list";
+    xlog $self, "get mailbox list";
     my $res = $jmap->CallMethods([['Mailbox/get', { accountId => 'foo' }, "R1"]]);
     my $state = $res->[0][1]->{state};
     $self->assert_not_null($state);
 
-    xlog "get mailbox updates (expect no changes)";
+    xlog $self, "get mailbox updates (expect no changes)";
     $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_equals($state, $res->[0][1]->{newState});
     $self->assert_null($res->[0][1]->{updatedProperties});
 
-    xlog "create mailbox box1 via IMAP";
+    xlog $self, "create mailbox box1 via IMAP";
     $admintalk->create("user.foo.box1") or die;
     $admintalk->setacl("user.foo.box1", "cassandane", "lrwkxd") or die;
 
-    xlog "get mailbox updates";
+    xlog $self, "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
@@ -2797,11 +2797,11 @@ sub test_mailbox_changes_shared
     $state = $res->[0][1]->{newState};
     my $box1 = $res->[0][1]->{created}[0];
 
-    xlog "destroy mailbox via JMAP";
+    xlog $self, "destroy mailbox via JMAP";
     $res = $jmap->CallMethods([['Mailbox/set', { accountId => "foo", destroy => [ $box1 ] }, 'R1' ]]);
     $self->assert_str_equals($box1, $res->[0][1]{destroyed}[0]);
 
-    xlog "get mailbox updates";
+    xlog $self, "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
@@ -2812,11 +2812,11 @@ sub test_mailbox_changes_shared
     $self->assert_null($res->[0][1]->{updatedProperties});
     $state = $res->[0][1]->{newState};
 
-    xlog "create mailbox box2 via IMAP";
+    xlog $self, "create mailbox box2 via IMAP";
     $admintalk->create("user.foo.box2") or die;
     $admintalk->setacl("user.foo.box2", "cassandane", "lrwkxinepd") or die;
 
-    xlog "get mailbox updates";
+    xlog $self, "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
@@ -2828,7 +2828,7 @@ sub test_mailbox_changes_shared
 
     my $box2 = $res->[0][1]->{created}[0];
 
-    xlog "Create a draft";
+    xlog $self, "Create a draft";
     my $draft =  {
         mailboxIds => { $box2 => JSON::true },
         from => [ { name => "Yosemite Sam", email => "sam\@acme.local" } ] ,
@@ -2848,7 +2848,7 @@ sub test_mailbox_changes_shared
     }, "R1"]]);
     my $msgid = $res->[0][1]{created}{"1"}{id};
 
-    xlog "get mailbox updates";
+    xlog $self, "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
@@ -2858,10 +2858,10 @@ sub test_mailbox_changes_shared
     $self->assert_not_null($res->[0][1]->{updatedProperties});
     $state = $res->[0][1]->{newState};
 
-    xlog "Remove lookup rights on box2";
+    xlog $self, "Remove lookup rights on box2";
     $admintalk->setacl("user.foo.box2", "cassandane", "") or die;
 
-    xlog "get mailbox updates";
+    xlog $self, "get mailbox updates";
     $res = $jmap->CallMethods([['Mailbox/changes', { accountId => 'foo', sinceState => $state }, "R1"]]);
     $self->assert_str_equals($state, $res->[0][1]->{oldState});
     $self->assert_str_not_equals($state, $res->[0][1]->{newState});
@@ -2881,14 +2881,14 @@ sub test_mailbox_set_issue2377
 
     my $jmap = $self->{jmap};
 
-    xlog "get inbox";
+    xlog $self, "get inbox";
     my $res = $jmap->CallMethods([['Mailbox/get', { }, "R1"]]);
     my $inbox = $res->[0][1]{list}[0];
     $self->assert_str_equals("Inbox", $inbox->{name});
 
     my $state = $res->[0][1]{state};
 
-    xlog "create mailbox";
+    xlog $self, "create mailbox";
     $res = $jmap->CallMethods([
             ['Mailbox/set', { create => { "1" => {
                             name => "foo",
@@ -2906,7 +2906,7 @@ sub test_mailbox_querychanges_intermediary_added
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    xlog "Fetch initial mailbox state";
+    xlog $self, "Fetch initial mailbox state";
     my $res = $jmap->CallMethods([['Mailbox/query', {
         sort => [{ property => "name" }],
     }, "R1"]]);
@@ -2915,10 +2915,10 @@ sub test_mailbox_querychanges_intermediary_added
     my $state = $res->[0][1]->{queryState};
     $self->assert_not_null($state);
 
-    xlog "Create intermediate mailboxes via IMAP";
+    xlog $self, "Create intermediate mailboxes via IMAP";
     $imap->create("INBOX.A.B.Z") or die;
 
-    xlog "Fetch updated mailbox state";
+    xlog $self, "Fetch updated mailbox state";
     $res = $jmap->CallMethods([['Mailbox/queryChanges', {
         sinceQueryState => $state,
         sort => [{ property => "name" }],
@@ -2927,7 +2927,7 @@ sub test_mailbox_querychanges_intermediary_added
     my @ids = map { $_->{id} } @{$res->[0][1]->{added}};
     $self->assert_num_equals(3, scalar @ids);
 
-    xlog "Make sure intermediate mailboxes got reported";
+    xlog $self, "Make sure intermediate mailboxes got reported";
     $res = $jmap->CallMethods([
         ['Mailbox/get', {
             ids => \@ids, properties => ['name'],
@@ -2945,10 +2945,10 @@ sub test_mailbox_querychanges_intermediary_removed
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    xlog "Create intermediate mailboxes via IMAP";
+    xlog $self, "Create intermediate mailboxes via IMAP";
     $imap->create("INBOX.A.B.Z") or die;
 
-    xlog "Fetch initial mailbox state";
+    xlog $self, "Fetch initial mailbox state";
     my $res = $jmap->CallMethods([['Mailbox/query', {
         sort => [{ property => "name" }],
     }, "R1"]]);
@@ -2957,10 +2957,10 @@ sub test_mailbox_querychanges_intermediary_removed
     my $state = $res->[0][1]->{queryState};
     $self->assert_not_null($state);
 
-    xlog "Delete intermediate mailboxes via IMAP";
+    xlog $self, "Delete intermediate mailboxes via IMAP";
     $imap->delete("INBOX.A.B.Z") or die;
 
-    xlog "Fetch updated mailbox state";
+    xlog $self, "Fetch updated mailbox state";
     $res = $jmap->CallMethods([['Mailbox/queryChanges', {
         sinceQueryState => $state,
         sort => [{ property => "name" }],
@@ -2983,10 +2983,10 @@ sub test_mailbox_get_intermediate
     push @using, 'https://cyrusimap.org/ns/jmap/mail';
     $jmap->DefaultUsing(\@using);
 
-    xlog "Create intermediate mailbox via IMAP";
+    xlog $self, "Create intermediate mailbox via IMAP";
     $imap->create("INBOX.A.Z") or die;
 
-    xlog "Get mailboxes";
+    xlog $self, "Get mailboxes";
     my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
     $self->assert_num_equals(3, scalar @{$res->[0][1]{list}});
 
@@ -3024,10 +3024,10 @@ sub test_mailbox_get_inboxsub
     push @using, 'https://cyrusimap.org/ns/jmap/mail';
     $jmap->DefaultUsing(\@using);
 
-    xlog "Create INBOX subfolder via IMAP";
+    xlog $self, "Create INBOX subfolder via IMAP";
     $imap->create("INBOX.INBOX.foo") or die;
 
-    xlog "Get mailboxes";
+    xlog $self, "Get mailboxes";
     my $res = $jmap->CallMethods([['Mailbox/get', {}, "R1"]]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{list}});
 
@@ -3060,14 +3060,14 @@ sub test_mailbox_intermediary_imaprename_preservetree
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    xlog "Create mailboxes";
+    xlog $self, "Create mailboxes";
     $imap->create("INBOX.i1.i2.i3.foo") or die;
     $imap->create("INBOX.i1.i2.bar") or die;
     my $res = $jmap->CallMethods([['Mailbox/get', {
         properties => ['name', 'parentId'],
     }, "R1"]]);
 
-    xlog "Assert mailbox tree";
+    xlog $self, "Assert mailbox tree";
     my %mboxByName = map { $_->{name} => $_ } @{$res->[0][1]{list}};
     $self->assert_num_equals(6, scalar keys %mboxByName);
     $self->assert_not_null($mboxByName{'Inbox'});
@@ -3082,10 +3082,10 @@ sub test_mailbox_intermediary_imaprename_preservetree
     $self->assert_str_equals($mboxByName{i3}->{id}, $mboxByName{foo}->{parentId});
     $self->assert_str_equals($mboxByName{i2}->{id}, $mboxByName{bar}->{parentId});
 
-    xlog "Rename mailbox";
+    xlog $self, "Rename mailbox";
     $imap->rename("INBOX.i1.i2.i3.foo", "INBOX.i1.i4.baz") or die;
 
-    xlog "Assert mailbox tree";
+    xlog $self, "Assert mailbox tree";
     $res = $jmap->CallMethods([['Mailbox/get', {
         properties => ['name', 'parentId'],
     }, "R1"]]);
@@ -3112,7 +3112,7 @@ sub test_mailbox_set_intermediary_createchild
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    xlog "Create mailboxes";
+    xlog $self, "Create mailboxes";
     $imap->create("INBOX.i1.i2.i3.foo") or die;
     my $res = $jmap->CallMethods([
         ['Mailbox/get', {
@@ -3133,7 +3133,7 @@ sub test_mailbox_set_intermediary_createchild
     ]);
     $self->assert_not_null($res->[0][1]{created}{1}{id});
 
-    xlog "Assert mailbox tree";
+    xlog $self, "Assert mailbox tree";
     $res = $jmap->CallMethods([
         ['Mailbox/get', {
             properties => ['name', 'parentId'],
@@ -3162,7 +3162,7 @@ sub test_mailbox_set_intermediary_rename
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    xlog "Create mailboxes";
+    xlog $self, "Create mailboxes";
     $imap->create("INBOX.i1.i2.foo") or die;
     my $res = $jmap->CallMethods([
         ['Mailbox/get', {
@@ -3174,7 +3174,7 @@ sub test_mailbox_set_intermediary_rename
     my $mboxIdParent = $mboxByName{'i2'}->{parentId};
     $self->assert_not_null($mboxIdParent);
 
-    xlog "Rename intermediate";
+    xlog $self, "Rename intermediate";
     $res = $jmap->CallMethods([
         ['Mailbox/set', {
             update => {
@@ -3192,7 +3192,7 @@ sub test_mailbox_set_intermediary_rename
     $self->assert_str_equals('i3', $res->[1][1]{list}[0]{name});
     $self->assert_str_equals($mboxIdParent, $res->[1][1]{list}[0]{parentId});
 
-    xlog "Assert mailbox tree";
+    xlog $self, "Assert mailbox tree";
     $res = $jmap->CallMethods([
         ['Mailbox/get', {
             properties => ['name', 'parentId'],
@@ -3217,7 +3217,7 @@ sub test_mailbox_set_intermediary_annotation
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    xlog "Create mailboxes";
+    xlog $self, "Create mailboxes";
     $imap->create("INBOX.i1.foo") or die;
     my $res = $jmap->CallMethods([
         ['Mailbox/get', {
@@ -3229,7 +3229,7 @@ sub test_mailbox_set_intermediary_annotation
     $self->assert_num_equals(0, $mboxByName{'i1'}->{sortOrder});
     $self->assert_null($mboxByName{'i1'}->{parentId});
 
-    xlog "Set annotation on intermediate";
+    xlog $self, "Set annotation on intermediate";
     $res = $jmap->CallMethods([
         ['Mailbox/set', {
             update => {
@@ -3246,7 +3246,7 @@ sub test_mailbox_set_intermediary_annotation
     $self->assert(exists $res->[0][1]{updated}{$mboxId});
     $self->assert_num_equals(7, $res->[1][1]{list}[0]->{sortOrder});
 
-    xlog "Assert mailbox tree";
+    xlog $self, "Assert mailbox tree";
     $res = $jmap->CallMethods([
         ['Mailbox/get', {
             properties => ['name', 'parentId'],
@@ -3269,7 +3269,7 @@ sub test_mailbox_set_intermediary_destroy_child
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    xlog "Create mailboxes";
+    xlog $self, "Create mailboxes";
     $imap->create("INBOX.i1.i2.foo") or die;
     my $res = $jmap->CallMethods([
         ['Mailbox/get', {
@@ -3282,7 +3282,7 @@ sub test_mailbox_set_intermediary_destroy_child
     my $mboxId2 = $mboxByName{'i2'}->{id};
     my $state = $res->[0][1]{state};
 
-    xlog "Destroy child of intermediate";
+    xlog $self, "Destroy child of intermediate";
     $res = $jmap->CallMethods([
         ['Mailbox/set', {
             destroy => [$mboxIdFoo],
@@ -3292,7 +3292,7 @@ sub test_mailbox_set_intermediary_destroy_child
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $state = $res->[0][1]{newState};
 
-    xlog "Assert mailbox tree and changes";
+    xlog $self, "Assert mailbox tree and changes";
     $res = $jmap->CallMethods([
         ['Mailbox/get', {
             properties => ['name', 'parentId'],
@@ -3322,7 +3322,7 @@ sub test_mailbox_set_intermediary_move_child
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    xlog "Create mailboxes";
+    xlog $self, "Create mailboxes";
     $imap->create("INBOX.i1.i2.foo") or die;
     $imap->create("INBOX.i1.i3.bar") or die;
     my $res = $jmap->CallMethods([
@@ -3338,7 +3338,7 @@ sub test_mailbox_set_intermediary_move_child
     my $mboxIdBar = $mboxByName{'bar'}->{id};
     my $state = $res->[0][1]{state};
 
-    xlog "Move child of intermediary to another intermediary";
+    xlog $self, "Move child of intermediary to another intermediary";
     $res = $jmap->CallMethods([
         ['Mailbox/set', {
             update => {
@@ -3352,7 +3352,7 @@ sub test_mailbox_set_intermediary_move_child
     $self->assert_str_not_equals($state, $res->[0][1]{newState});
     $state = $res->[0][1]{newState};
 
-    xlog "Assert mailbox tree and changes";
+    xlog $self, "Assert mailbox tree and changes";
     $res = $jmap->CallMethods([
         ['Mailbox/get', {
             properties => ['name', 'parentId'],
@@ -3388,7 +3388,7 @@ sub test_mailbox_set_intermediary_destroy
     my $jmap = $self->{jmap};
     my $imap = $self->{store}->get_client();
 
-    xlog "Create mailboxes";
+    xlog $self, "Create mailboxes";
     $imap->create("INBOX.i1.i2.foo") or die;
     $imap->create("INBOX.i1.bar") or die;
     my $res = $jmap->CallMethods([
@@ -3400,7 +3400,7 @@ sub test_mailbox_set_intermediary_destroy
     my $mboxIdFoo = $mboxByName{'foo'}->{id};
     my $mboxId2 = $mboxByName{'i2'}->{id};
 
-    xlog "Destroy intermediate";
+    xlog $self, "Destroy intermediate";
     $res = $jmap->CallMethods([
         ['Mailbox/set', {
             destroy => [$mboxId2, $mboxIdFoo],
@@ -3408,7 +3408,7 @@ sub test_mailbox_set_intermediary_destroy
     ]);
     $self->assert_num_equals(2, scalar @{$res->[0][1]{destroyed}});
 
-    xlog "Assert mailbox tree and changes";
+    xlog $self, "Assert mailbox tree and changes";
     $res = $jmap->CallMethods([
         ['Mailbox/get', {
             properties => ['name', 'parentId'],

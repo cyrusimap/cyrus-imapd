@@ -57,12 +57,12 @@ sub test_unrelated
 {
     my ($self) = @_;
 
-    xlog "test THREAD with no inter-message references";
-    xlog "and all different subjects";
+    xlog $self, "test THREAD with no inter-message references";
+    xlog $self, "and all different subjects";
     my $talk = $self->{store}->get_client();
     my $res;
 
-    xlog "append some messages";
+    xlog $self, "append some messages";
     my %exp;
     my $N = 20;
     for (1..$N)
@@ -70,18 +70,18 @@ sub test_unrelated
         my $msg = $self->make_message("Message $_");
         $exp{$_} = $msg;
     }
-    xlog "check the messages got there";
+    xlog $self, "check the messages got there";
     $self->check_messages(\%exp);
 
-    xlog "The REFERENCES algorithm gives each message in a singleton thread";
+    xlog $self, "The REFERENCES algorithm gives each message in a singleton thread";
     $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
     $self->assert_deep_equals([ map { [ $_ ] } (1..$N) ], $res);
 
-    xlog "The ORDEREDSUBJECT algorithm gives each message in a singleton thread";
+    xlog $self, "The ORDEREDSUBJECT algorithm gives each message in a singleton thread";
     $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
     $self->assert_deep_equals([ map { [ $_ ] } (1..$N) ], $res);
 
-    xlog "Double-check the messages are still there";
+    xlog $self, "Double-check the messages are still there";
     $self->check_messages(\%exp);
 }
 
@@ -89,12 +89,12 @@ sub test_subjects
 {
     my ($self) = @_;
 
-    xlog "test THREAD with no inter-message references";
-    xlog "but apparently similar subjects";
+    xlog $self, "test THREAD with no inter-message references";
+    xlog $self, "but apparently similar subjects";
     my $talk = $self->{store}->get_client();
     my $res;
 
-    xlog "append some messages";
+    xlog $self, "append some messages";
     my %exp;
     my %exp_by_sub;
     my $N = 20;
@@ -107,7 +107,7 @@ sub test_subjects
         push(@{$exp_by_sub{$sub}}, $msg);
         $exp{$_} = $msg;
     }
-    xlog "check the messages got there";
+    xlog $self, "check the messages got there";
     $self->check_messages(\%exp);
 
     my @expthreads;
@@ -118,16 +118,16 @@ sub test_subjects
         push(@expthreads, [ $parent, map { [ $_ ] } @thread ] );
     }
 
-    xlog "The REFERENCES algorithm gives one thread per subject, even";
-    xlog "though the References headers are completely missing";
+    xlog $self, "The REFERENCES algorithm gives one thread per subject, even";
+    xlog $self, "though the References headers are completely missing";
     $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
     $self->assert_deep_equals(\@expthreads, $res);
 
-    xlog "The ORDEREDSUBJECT algorithm gives one thread per subject";
+    xlog $self, "The ORDEREDSUBJECT algorithm gives one thread per subject";
     $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
     $self->assert_deep_equals(\@expthreads, $res);
 
-    xlog "Double-check the messages are still there";
+    xlog $self, "Double-check the messages are still there";
     $self->check_messages(\%exp);
 }
 
@@ -135,12 +135,12 @@ sub test_references_chain
 {
     my ($self) = @_;
 
-    xlog "test THREAD with a linear chain of inter-message references";
-    xlog "and apparently similar subjects";
+    xlog $self, "test THREAD with a linear chain of inter-message references";
+    xlog $self, "and apparently similar subjects";
     my $talk = $self->{store}->get_client();
     my $res;
 
-    xlog "append some messages";
+    xlog $self, "append some messages";
     my %exp;
     my %exp_by_sub;
     my $N = 20;
@@ -163,12 +163,12 @@ sub test_references_chain
         push(@{$exp_by_sub{$sub}}, $msg);
         $exp{$_} = $msg;
     }
-    xlog "check the messages got there";
+    xlog $self, "check the messages got there";
     $self->check_messages(\%exp);
 
     my @expthreads;
 
-    xlog "The REFERENCES algorithm gives the true thread structure which is deep";
+    xlog $self, "The REFERENCES algorithm gives the true thread structure which is deep";
     foreach my $sub (@subjects)
     {
         push(@expthreads, [ map { $_->uid } @{$exp_by_sub{$sub}} ]);
@@ -184,7 +184,7 @@ sub test_references_chain
 #          thread are siblings of the second message and hence children of
 #          the message at the root.  Hence, there are no grandchildren in
 #          ORDEREDSUBJECT threading.
-    xlog "The ORDEREDSUBJECT algorithm gives a false more flat view of the structure";
+    xlog $self, "The ORDEREDSUBJECT algorithm gives a false more flat view of the structure";
     @expthreads = ();
     foreach my $sub (@subjects)
     {
@@ -195,7 +195,7 @@ sub test_references_chain
     $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
     $self->assert_deep_equals(\@expthreads, $res);
 
-    xlog "Double-check the messages are still there";
+    xlog $self, "Double-check the messages are still there";
     $self->check_messages(\%exp);
 }
 
@@ -203,12 +203,12 @@ sub test_references_star
 {
     my ($self) = @_;
 
-    xlog "test THREAD with a star configuration of inter-message references";
-    xlog "and apparently similar subjects";
+    xlog $self, "test THREAD with a star configuration of inter-message references";
+    xlog $self, "and apparently similar subjects";
     my $talk = $self->{store}->get_client();
     my $res;
 
-    xlog "append some messages";
+    xlog $self, "append some messages";
     my %exp;
     my %exp_by_sub;
     my $N = 20;
@@ -231,7 +231,7 @@ sub test_references_star
         push(@{$exp_by_sub{$sub}}, $msg);
         $exp{$uid} = $msg;
     }
-    xlog "check the messages got there";
+    xlog $self, "check the messages got there";
     $self->check_messages(\%exp, keyed_on => 'uid');
 
     my @expthreads;
@@ -242,15 +242,15 @@ sub test_references_star
         push(@expthreads, [ $parent, map { [ $_ ] } @thread ] );
     }
 
-    xlog "The REFERENCES algorithm gives the true thread structure which is flat";
+    xlog $self, "The REFERENCES algorithm gives the true thread structure which is flat";
     $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
     $self->assert_deep_equals(\@expthreads, $res);
 
-    xlog "The ORDEREDSUBJECT algorithm gives the same flat view";
+    xlog $self, "The ORDEREDSUBJECT algorithm gives the same flat view";
     $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
     $self->assert_deep_equals(\@expthreads, $res);
 
-    xlog "Double-check the messages are still there";
+    xlog $self, "Double-check the messages are still there";
     $self->check_messages(\%exp, keyed_on => 'uid');
 }
 
@@ -258,40 +258,40 @@ sub test_references_missing_parent
 {
     my ($self) = @_;
 
-    xlog "test THREAD with two messages which share a common parent";
-    xlog "which is not seen on the server";
+    xlog $self, "test THREAD with two messages which share a common parent";
+    xlog $self, "which is not seen on the server";
     my $talk = $self->{store}->get_client();
     my $res;
     my %exp;
 
-    xlog "Message A is never seen by the server";
+    xlog $self, "Message A is never seen by the server";
     my $msgA = $self->{gen}->generate(subject => "put a bird on it");
 
-    xlog "Generate message B, which References message A";
+    xlog $self, "Generate message B, which References message A";
     my $msgB = $self->make_message("Re: " . $msgA->subject,
                                    uid => 1,
                                    references => [ $msgA ]);
     $exp{1} = $msgB;
 
-    xlog "Generate message C, which References message A";
+    xlog $self, "Generate message C, which References message A";
     my $msgC = $self->make_message("Re: " . $msgA->subject,
                                    uid => 2,
                                    references => [ $msgA ]);
     $exp{2} = $msgC;
 
-    xlog "check the messages got there";
+    xlog $self, "check the messages got there";
     $self->check_messages(\%exp, keyed_on => 'uid');
 
-    xlog "The REFERENCES algorithm gives the true thread";
-    xlog "structure which is flat with a missing common parent";
+    xlog $self, "The REFERENCES algorithm gives the true thread";
+    xlog $self, "structure which is flat with a missing common parent";
     $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
     $self->assert_deep_equals([[[1],[2]]], $res);
 
-    xlog "The ORDEREDSUBJECT algorithm gives a false more flat view of the structure";
+    xlog $self, "The ORDEREDSUBJECT algorithm gives a false more flat view of the structure";
     $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
     $self->assert_deep_equals([[1, 2]], $res);
 
-    xlog "Double-check the messages are still there";
+    xlog $self, "Double-check the messages are still there";
     $self->check_messages(\%exp, keyed_on => 'uid');
 }
 
@@ -300,13 +300,13 @@ sub test_references_loop
 {
     my ($self) = @_;
 
-    xlog "test THREAD with a loop configuration of inter-message references";
-    xlog "and a missing common parent (Bug 3784)";
+    xlog $self, "test THREAD with a loop configuration of inter-message references";
+    xlog $self, "and a missing common parent (Bug 3784)";
     my $talk = $self->{store}->get_client();
     my $res;
     my %exp;
 
-    xlog "Generate message B, which References itself and some other messages";
+    xlog $self, "Generate message B, which References itself and some other messages";
     my $msgB = $self->{gen}->generate(subject => "Re: put a bird on it", uid => 1);
     $msgB->set_headers('Message-Id', '<477CBE0D020000330001972A@gwia1.boku.ac.at>');
     $msgB->set_headers('References',
@@ -318,7 +318,7 @@ sub test_references_loop
     $self->_save_message($msgB);
     $exp{1} = $msgB;
 
-    xlog "Generate message C, which References itself and some other messages";
+    xlog $self, "Generate message C, which References itself and some other messages";
     my $msgC = $self->{gen}->generate(subject => "Re: put a bird on it", uid => 2);
     $msgC->set_headers('Message-Id', '<478B52E10200003300019E06@gwia1.boku.ac.at>');
     $msgC->set_headers('References',
@@ -333,19 +333,19 @@ sub test_references_loop
     $self->_save_message($msgC);
     $exp{2} = $msgC;
 
-    xlog "check the messages got there";
+    xlog $self, "check the messages got there";
     $self->check_messages(\%exp, keyed_on => 'uid');
 
-    xlog "The REFERENCES algorithm gives the true thread";
-    xlog "structure which is flat";
+    xlog $self, "The REFERENCES algorithm gives the true thread";
+    xlog $self, "structure which is flat";
     $res = $talk->thread('REFERENCES', 'US-ASCII', 'ALL');
     $self->assert_deep_equals([[[1], [2]]], $res);
 
-    xlog "The ORDEREDSUBJECT algorithm gives a false more flat view of the structure";
+    xlog $self, "The ORDEREDSUBJECT algorithm gives a false more flat view of the structure";
     $res = $talk->thread('ORDEREDSUBJECT', 'US-ASCII', 'ALL');
     $self->assert_deep_equals([[1, 2]], $res);
 
-    xlog "Double-check the messages are still there";
+    xlog $self, "Double-check the messages are still there";
     $self->check_messages(\%exp, keyed_on => 'uid');
 }
 

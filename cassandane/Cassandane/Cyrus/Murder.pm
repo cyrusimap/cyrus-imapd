@@ -151,7 +151,7 @@ sub test_list_specialuse
     my $bresult = $backend->list([qw(SPECIAL-USE)], "", "*",
         'RETURN', [qw(SUBSCRIBED)]);
     $self->assert_str_equals('ok', $backend->get_last_completion_response());
-    xlog Dumper $bresult;
+    xlog $self, Dumper $bresult;
 
     # check the responses
     my %found;
@@ -176,7 +176,7 @@ sub test_list_specialuse
     my $fresult = $frontend->list([qw(SPECIAL-USE)], "", "*",
         'RETURN', [qw(SUBSCRIBED)]);
     $self->assert_str_equals('ok', $frontend->get_last_completion_response());
-    xlog Dumper $fresult;
+    xlog $self, Dumper $fresult;
 
     # expect the same results as on backend
     $self->assert_deep_equals($bresult, $fresult);
@@ -211,7 +211,7 @@ sub test_xlist
     # ask the backend about them
     my $bresult = $backend->xlist("", "*");
     $self->assert_str_equals('ok', $backend->get_last_completion_response());
-    xlog "backend: " . Dumper $bresult;
+    xlog $self, "backend: " . Dumper $bresult;
 
     # check the responses
     my %found;
@@ -245,7 +245,7 @@ sub test_xlist
     # ask the frontend about them
     my $fresult = $frontend->xlist("", "*");
     $self->assert_str_equals('ok', $frontend->get_last_completion_response());
-    xlog "frontend: " . Dumper $fresult;
+    xlog $self, "frontend: " . Dumper $fresult;
 
     # expect the same results as on backend
     $self->assert_deep_equals($bresult, $fresult);
@@ -350,7 +350,7 @@ sub test_rename_with_location
 
     my $backend2_servername = $self->{backend2}->get_servername();
 
-    xlog "backend2 servername: $backend2_servername";
+    xlog $self, "backend2 servername: $backend2_servername";
 
     # not allowed to change mailbox name if location also specified
     $frontend_adminstore->rename('user.cassandane', 'user.foo', "$backend2_servername!");

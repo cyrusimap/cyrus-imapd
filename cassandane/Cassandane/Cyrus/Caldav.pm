@@ -228,26 +228,26 @@ sub test_rename
 
     my $CalDAV = $self->{caldav};
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
     $self->assert_not_null($CalendarId);
 
-    xlog "fetch again";
+    xlog $self, "fetch again";
     my $Calendar = $CalDAV->GetCalendar($CalendarId);
     $self->assert_not_null($Calendar);
 
-    xlog "check name matches";
+    xlog $self, "check name matches";
     $self->assert_str_equals('foo', $Calendar->{name});
 
-    xlog "change name";
+    xlog $self, "change name";
     my $NewId = $CalDAV->UpdateCalendar({ id => $CalendarId, name => 'bar'});
     $self->assert_str_equals($CalendarId, $NewId);
 
-    xlog "fetch again";
+    xlog $self, "fetch again";
     my $NewCalendar = $CalDAV->GetCalendar($NewId);
     $self->assert_not_null($NewCalendar);
 
-    xlog "check new name stuck";
+    xlog $self, "check new name stuck";
     $self->assert_str_equals('bar', $NewCalendar->{name});
 }
 
@@ -260,15 +260,15 @@ sub test_url_nodomains
 
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
     $self->assert_not_null($CalendarId);
 
-    xlog "fetch again";
+    xlog $self, "fetch again";
     my $Calendar = $CalDAV->GetCalendar($CalendarId);
     $self->assert_not_null($Calendar);
 
-    xlog "check that the href has no domain";
+    xlog $self, "check that the href has no domain";
     $self->assert_str_equals("/dav/calendars/user/cassandane/$CalendarId/", $Calendar->{href});
 }
 
@@ -281,15 +281,15 @@ sub test_url_virtdom_nodomain
 
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
     $self->assert_not_null($CalendarId);
 
-    xlog "fetch again";
+    xlog $self, "fetch again";
     my $Calendar = $CalDAV->GetCalendar($CalendarId);
     $self->assert_not_null($Calendar);
 
-    xlog "check that the href has no domain";
+    xlog $self, "check that the href has no domain";
     $self->assert_str_equals("/dav/calendars/user/cassandane/$CalendarId/", $Calendar->{href});
 }
 
@@ -311,15 +311,15 @@ sub test_url_virtdom_extradomain
         expandurl => 1,
     );
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $caltalk->NewCalendar({name => 'foo'});
     $self->assert_not_null($CalendarId);
 
-    xlog "fetch again";
+    xlog $self, "fetch again";
     my $Calendar = $caltalk->GetCalendar($CalendarId);
     $self->assert_not_null($Calendar);
 
-    xlog "check that the href has domain";
+    xlog $self, "check that the href has domain";
     $self->assert_str_equals("/dav/calendars/user/cassandane\@example.com/$CalendarId/", $Calendar->{href});
 }
 
@@ -344,15 +344,15 @@ sub test_url_virtdom_domain
         expandurl => 1,
     );
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $caltalk->NewCalendar({name => 'foo'});
     $self->assert_not_null($CalendarId);
 
-    xlog "fetch again";
+    xlog $self, "fetch again";
     my $Calendar = $caltalk->GetCalendar($CalendarId);
     $self->assert_not_null($Calendar);
 
-    xlog "check that the href has domain";
+    xlog $self, "check that the href has domain";
     $self->assert_str_equals("/dav/calendars/user/test\@example.com/$CalendarId/", $Calendar->{href});
 }
 
@@ -365,18 +365,18 @@ sub test_user_rename
 
     my $admintalk = $self->{adminstore}->get_client();
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $CalDAV->NewCalendar({name => 'foo'});
     $self->assert_not_null($CalendarId);
 
-    xlog "fetch again";
+    xlog $self, "fetch again";
     my $Calendar = $CalDAV->GetCalendar($CalendarId);
     $self->assert_not_null($Calendar);
 
-    xlog "check name matches";
+    xlog $self, "check name matches";
     $self->assert_str_equals('foo', $Calendar->{name});
 
-    xlog "rename user";
+    xlog $self, "rename user";
     $admintalk->rename("user.cassandane", "user.newuser");
 
     my $service = $self->{instance}->get_service("http");
@@ -390,11 +390,11 @@ sub test_user_rename
         expandurl => 1,
     );
 
-    xlog "fetch as new user $CalendarId";
+    xlog $self, "fetch as new user $CalendarId";
     my $NewCalendar = $newtalk->GetCalendar($CalendarId);
     $self->assert_not_null($NewCalendar);
 
-    xlog "check new name stuck";
+    xlog $self, "check new name stuck";
     $self->assert_str_equals($NewCalendar->{name}, 'foo');
 }
 
@@ -419,18 +419,18 @@ sub test_user_rename_dom
         expandurl => 1,
     );
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $oldtalk->NewCalendar({name => 'foo'});
     $self->assert_not_null($CalendarId);
 
-    xlog "fetch again";
+    xlog $self, "fetch again";
     my $Calendar = $oldtalk->GetCalendar($CalendarId);
     $self->assert_not_null($Calendar);
 
-    xlog "check name matches";
+    xlog $self, "check name matches";
     $self->assert_str_equals($Calendar->{name}, 'foo');
 
-    xlog "rename user";
+    xlog $self, "rename user";
     $admintalk->rename("user.test\@example.com", "user.test2\@example2.com");
 
     my $newtalk = Net::CalDAVTalk->new(
@@ -443,11 +443,11 @@ sub test_user_rename_dom
         expandurl => 1,
     );
 
-    xlog "fetch as new user $CalendarId";
+    xlog $self, "fetch as new user $CalendarId";
     my $NewCalendar = $newtalk->GetCalendar($CalendarId);
     $self->assert_not_null($NewCalendar);
 
-    xlog "check new name stuck";
+    xlog $self, "check new name stuck";
     $self->assert_str_equals($NewCalendar->{name}, 'foo');
 }
 
@@ -742,15 +742,15 @@ EOF
     $testtalk->Request('PROPPATCH', "/dav/principals/user/test", $xml,
                        'Content-Type' => 'text/xml');
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $testtalk->NewCalendar({name => 'Team Calendar'});
     $self->assert_not_null($CalendarId);
 
-    xlog "set calendar-user-address-set for all sharees";
+    xlog $self, "set calendar-user-address-set for all sharees";
     $testtalk->Request('PROPPATCH', "/dav/calendars/user/test/$CalendarId", $xml,
                        'Content-Type' => 'text/xml');
 
-    xlog "share to user";
+    xlog $self, "share to user";
     $admintalk->setacl("user.test.#calendars.$CalendarId",
                        "cassandane" => 'lrswipcdn');
 
@@ -764,13 +764,13 @@ EOF
         expandurl => 1,
     );
 
-    xlog "subscribe to shared calendar";
+    xlog $self, "subscribe to shared calendar";
     my $imapstore = $self->{instance}->get_service('imap')->create_store(
                         username => "cassandane");
     my $imaptalk = $imapstore->get_client();
     $imaptalk->subscribe("user.test.#calendars.$CalendarId");
 
-    xlog "get calendars as cassandane";
+    xlog $self, "get calendars as cassandane";
     my $CasCal = $CalDAV->GetCalendars();
     my $sharedCalendarId = $CasCal->[1]{href};
 
@@ -853,15 +853,15 @@ EOF
     $testtalk->Request('PROPPATCH', "/dav/principals/user/test", $xml,
                        'Content-Type' => 'text/xml');
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $testtalk->NewCalendar({name => 'Team Calendar'});
     $self->assert_not_null($CalendarId);
 
-    xlog "set calendar-user-address-set for all sharees";
+    xlog $self, "set calendar-user-address-set for all sharees";
     $testtalk->Request('PROPPATCH', "/dav/calendars/user/test/$CalendarId", $xml,
                        'Content-Type' => 'text/xml');
 
-    xlog "share to user";
+    xlog $self, "share to user";
     $admintalk->setacl("user.test.#calendars.$CalendarId",
                        "cassandane" => 'lrswipcdn');
 
@@ -875,13 +875,13 @@ EOF
         expandurl => 1,
     );
 
-    xlog "subscribe to shared calendar";
+    xlog $self, "subscribe to shared calendar";
     my $imapstore = $self->{instance}->get_service('imap')->create_store(
                         username => "cassandane");
     my $imaptalk = $imapstore->get_client();
     $imaptalk->subscribe("user.test.#calendars.$CalendarId");
 
-    xlog "get calendars as cassandane";
+    xlog $self, "get calendars as cassandane";
     my $CasCal = $CalDAV->GetCalendars();
     my $sharedCalendarId = $CasCal->[1]{href};
 
@@ -964,11 +964,11 @@ EOF
     $testtalk->Request('PROPPATCH', "/dav/principals/user/test", $xml,
                        'Content-Type' => 'text/xml');
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $testtalk->NewCalendar({name => 'Team Calendar'});
     $self->assert_not_null($CalendarId);
 
-    xlog "share to user";
+    xlog $self, "share to user";
     $admintalk->setacl("user.test.#calendars.$CalendarId",
                        "cassandane" => 'lrswipcdn');
 
@@ -982,13 +982,13 @@ EOF
         expandurl => 1,
     );
 
-    xlog "subscribe to shared calendar";
+    xlog $self, "subscribe to shared calendar";
     my $imapstore = $self->{instance}->get_service('imap')->create_store(
                         username => "cassandane");
     my $imaptalk = $imapstore->get_client();
     $imaptalk->subscribe("user.test.#calendars.$CalendarId");
 
-    xlog "get calendars as cassandane";
+    xlog $self, "get calendars as cassandane";
     my $CasCal = $CalDAV->GetCalendars();
     my $sharedCalendarId = $CasCal->[1]{href};
 
@@ -1015,7 +1015,7 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog "add event as sharer, inviting sharee";
+    xlog $self, "add event as sharer, inviting sharee";
     $testtalk->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
     $self->assert_caldav_notified(
@@ -1023,7 +1023,7 @@ EOF
         { recipient => "friend\@example.com", is_update => JSON::false, method => 'REQUEST' },
     );
 
-    xlog "update PARTSTAT as sharee";
+    xlog $self, "update PARTSTAT as sharee";
     $href = "$sharedCalendarId/$uuid.ics";
     $card =~ s/PARTSTAT=NEEDS-ACTION/PARTSTAT=ACCEPTED/;
 
@@ -1071,11 +1071,11 @@ EOF
     $testtalk->Request('PROPPATCH', "/dav/principals/user/test", $xml,
                        'Content-Type' => 'text/xml');
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $testtalk->NewCalendar({name => 'Team Calendar'});
     $self->assert_not_null($CalendarId);
 
-    xlog "share to user";
+    xlog $self, "share to user";
     $admintalk->setacl("user.test.#calendars.$CalendarId",
                        "cassandane" => 'lrswipcdn');
 
@@ -1089,13 +1089,13 @@ EOF
         expandurl => 1,
     );
 
-    xlog "subscribe to shared calendar";
+    xlog $self, "subscribe to shared calendar";
     my $imapstore = $self->{instance}->get_service('imap')->create_store(
                         username => "cassandane");
     my $imaptalk = $imapstore->get_client();
     $imaptalk->subscribe("user.test.#calendars.$CalendarId");
 
-    xlog "get calendars as cassandane";
+    xlog $self, "get calendars as cassandane";
     my $CasCal = $CalDAV->GetCalendars();
     my $sharedCalendarId = $CasCal->[1]{href};
 
@@ -1122,7 +1122,7 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog "add event as sharee, inviting sharer";
+    xlog $self, "add event as sharee, inviting sharer";
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
     $self->assert_caldav_notified(
@@ -1130,7 +1130,7 @@ EOF
         { recipient => "friend\@example.com", is_update => JSON::false, method => 'REQUEST' },
     );
 
-    xlog "update PARTSTAT as sharer";
+    xlog $self, "update PARTSTAT as sharer";
     $href = "/dav/calendars/user/test/$CalendarId/$uuid.ics";
     $card =~ s/PARTSTAT=NEEDS-ACTION/PARTSTAT=ACCEPTED/;
 
@@ -1574,13 +1574,13 @@ sub test_propfind_principal
         expandurl => 1,
     );
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $caltalk->NewCalendar({name => 'foo'});
     $self->assert_not_null($CalendarId);
 
     my $CalDAV = $self->{caldav};
 
-    xlog "principal property search";
+    xlog $self, "principal property search";
 
     my $xml = <<EOF;
 <B:principal-property-search xmlns:B="DAV:">
@@ -1806,51 +1806,51 @@ sub test_fastmailsharing
         expandurl => 1,
     );
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $mantalk->NewCalendar({name => 'Manifold Calendar'});
     $self->assert_not_null($CalendarId);
 
-    xlog "share to user";
+    xlog $self, "share to user";
     $admintalk->setacl("user.manifold.#calendars.$CalendarId", "cassandane" => 'lrswipcdn');
 
-    xlog "get calendars as cassandane";
+    xlog $self, "get calendars as cassandane";
     my $CasCal = $CalDAV->GetCalendars();
     $self->assert_num_equals(2, scalar @$CasCal);
     my $names = join "/", sort map { $_->{name} } @$CasCal;
     $self->assert_str_equals($names, "Manifold Calendar/personal");
 
-    xlog "get calendars as manifold";
+    xlog $self, "get calendars as manifold";
     my $ManCal = $mantalk->GetCalendars();
     $self->assert_num_equals(2, scalar @$ManCal);
     $names = join "/", sort map { $_->{name} } @$ManCal;
     $self->assert_str_equals($names, "Manifold Calendar/personal");
 
-    xlog "Update calendar name as cassandane";
+    xlog $self, "Update calendar name as cassandane";
     my ($CasId) = map { $_->{id} } grep { $_->{name} eq 'Manifold Calendar' } @$CasCal;
     $CalDAV->UpdateCalendar({id => $CasId, name => "Cassandane Name"});
 
-    xlog "changed as cassandane";
+    xlog $self, "changed as cassandane";
     $CasCal = $CalDAV->GetCalendars();
     $self->assert_num_equals(2, scalar @$CasCal);
     $names = join "/", sort map { $_->{name} } @$CasCal;
     $self->assert_str_equals($names, "Cassandane Name/personal");
 
-    xlog "unchanged as manifold";
+    xlog $self, "unchanged as manifold";
     $ManCal = $mantalk->GetCalendars();
     $self->assert_num_equals(2, scalar @$ManCal);
     $names = join "/", sort map { $_->{name} } @$ManCal;
     $self->assert_str_equals($names, "Manifold Calendar/personal");
 
-    xlog "delete calendar as cassandane";
+    xlog $self, "delete calendar as cassandane";
     $CalDAV->DeleteCalendar($CasId);
 
-    xlog "changed as cassandane";
+    xlog $self, "changed as cassandane";
     $CasCal = $CalDAV->GetCalendars();
     $self->assert_num_equals(1, scalar @$CasCal);
     $names = join "/", sort map { $_->{name} } @$CasCal;
     $self->assert_str_equals($names, "personal");
 
-    xlog "unchanged as manifold";
+    xlog $self, "unchanged as manifold";
     $ManCal = $mantalk->GetCalendars();
     $self->assert_num_equals(2, scalar @$ManCal);
     $names = join "/", sort map { $_->{name} } @$ManCal;
@@ -1908,61 +1908,61 @@ EOF
 </D:invite-reply>
 EOF
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $mantalk->NewCalendar({name => 'Manifold Calendar'});
     $self->assert_not_null($CalendarId);
 
-    xlog "share to user";
+    xlog $self, "share to user";
     $mantalk->Request('POST', $CalendarId, $invite,
                       'Content-Type' => 'application/davsharing+xml');
 
-    xlog "fetch invite";
+    xlog $self, "fetch invite";
     my ($adds) = $CalDAV->SyncEventLinks("/dav/notifications/user/cassandane");
     $self->assert_equals(scalar %$adds, 1);
     my $notification = (keys %$adds)[0];
 
-    xlog "accept invite";
+    xlog $self, "accept invite";
     $CalDAV->Request('POST', $notification, $reply,
                      'Content-Type' => 'application/davsharing+xml');
 
-    xlog "get calendars as manifold";
+    xlog $self, "get calendars as manifold";
     my $ManCal = $mantalk->GetCalendars();
     $self->assert_num_equals(2, scalar @$ManCal);
     my $names = join "/", sort map { $_->{name} } @$ManCal;
     $self->assert_str_equals($names, "Manifold Calendar/personal");
 
-    xlog "get calendars as cassandane";
+    xlog $self, "get calendars as cassandane";
     my $CasCal = $CalDAV->GetCalendars();
     $self->assert_num_equals(2, scalar @$CasCal);
     $names = join "/", sort map { $_->{name} } @$CasCal;
     $self->assert_str_equals($names, "Manifold Calendar/personal");
 
-    xlog "Update calendar name as cassandane";
+    xlog $self, "Update calendar name as cassandane";
     my ($CasId) = map { $_->{id} } grep { $_->{name} eq 'Manifold Calendar' } @$CasCal;
     $CalDAV->UpdateCalendar({id => $CasId, name => "Cassandane Name"});
 
-    xlog "changed as cassandane";
+    xlog $self, "changed as cassandane";
     $CasCal = $CalDAV->GetCalendars();
     $self->assert_num_equals(2, scalar @$CasCal);
     $names = join "/", sort map { $_->{name} } @$CasCal;
     $self->assert_str_equals($names, "Cassandane Name/personal");
 
-    xlog "unchanged as manifold";
+    xlog $self, "unchanged as manifold";
     $ManCal = $mantalk->GetCalendars();
     $self->assert_num_equals(2, scalar @$ManCal);
     $names = join "/", sort map { $_->{name} } @$ManCal;
     $self->assert_str_equals($names, "Manifold Calendar/personal");
 
-    xlog "delete calendar as cassandane";
+    xlog $self, "delete calendar as cassandane";
     $CalDAV->DeleteCalendar($CasId);
 
-    xlog "changed as cassandane";
+    xlog $self, "changed as cassandane";
     $CasCal = $CalDAV->GetCalendars();
     $self->assert_num_equals(1, scalar @$CasCal);
     $names = join "/", sort map { $_->{name} } @$CasCal;
     $self->assert_str_equals($names, "personal");
 
-    xlog "unchanged as manifold";
+    xlog $self, "unchanged as manifold";
     $ManCal = $mantalk->GetCalendars();
     $self->assert_num_equals(2, scalar @$ManCal);
     $names = join "/", sort map { $_->{name} } @$ManCal;
@@ -2020,30 +2020,30 @@ EOF
 </D:invite-reply>
 EOF
 
-    xlog "create calendar";
+    xlog $self, "create calendar";
     my $CalendarId = $mantalk->NewCalendar({name => 'Manifold Calendar'});
     $self->assert_not_null($CalendarId);
 
-    xlog "share to user";
+    xlog $self, "share to user";
     $mantalk->Request('POST', $CalendarId, $invite,
                       'Content-Type' => 'application/davsharing+xml');
 
-    xlog "fetch invite";
+    xlog $self, "fetch invite";
     my ($adds) = $CalDAV->SyncEventLinks("/dav/notifications/user/cassandane");
     $self->assert_equals(scalar %$adds, 1);
     my $notification = (keys %$adds)[0];
 
-    xlog "accept invite";
+    xlog $self, "accept invite";
     $CalDAV->Request('POST', $notification, $reply,
                      'Content-Type' => 'application/davsharing+xml');
 
-    xlog "get calendars as manifold";
+    xlog $self, "get calendars as manifold";
     my $ManCal = $mantalk->GetCalendars();
     $self->assert_num_equals(2, scalar @$ManCal);
     my $names = join "/", sort map { $_->{name} } @$ManCal;
     $self->assert_str_equals($names, "Manifold Calendar/personal");
 
-    xlog "get calendars as cassandane";
+    xlog $self, "get calendars as cassandane";
     my $CasCal = $CalDAV->GetCalendars();
     $self->assert_num_equals(2, scalar @$CasCal);
     $names = join "/", sort map { $_->{name} } @$CasCal;
@@ -2106,7 +2106,7 @@ EOF
     my $allevent = $event;
     $allevent =~ s/XXDATESXX/$allday/;
 
-    xlog "Create an event as cassandane with an alarm";
+    xlog $self, "Create an event as cassandane with an alarm";
     my ($cal) = grep { $_->{name} eq 'Manifold Calendar' } @$CasCal;
     $CalDAV->Request('PUT', "$cal->{id}/$uuid.ics", $nonallevent, 'Content-Type' => 'text/calendar');
 
@@ -2546,7 +2546,7 @@ sub test_rfc6638_3_2_1_setpartstat_agentclient
     my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
     $self->assert_not_null($CalendarId);
 
-    xlog "attempt to set the partstat to something other than NEEDS-ACTION, agent was client";
+    xlog $self, "attempt to set the partstat to something other than NEEDS-ACTION, agent was client";
     $self->_put_event($CalendarId, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=ACCEPTED;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
@@ -2566,7 +2566,7 @@ sub bogus_test_rfc6638_3_2_1_setpartstat_agentserver
     my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
     $self->assert_not_null($CalendarId);
 
-    xlog "attempt to set the partstat to something other than NEEDS-ACTION";
+    xlog $self, "attempt to set the partstat to something other than NEEDS-ACTION";
     # XXX - the server should reject this
     $self->_put_event($CalendarId, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
@@ -2588,7 +2588,7 @@ sub test_rfc6638_3_2_1_1_create
     my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
     $self->assert_not_null($CalendarId);
 
-    xlog "default schedule agent -> REQUEST";
+    xlog $self, "default schedule agent -> REQUEST";
     $self->_put_event($CalendarId, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test1\@example.com
@@ -2600,7 +2600,7 @@ EOF
         { recipient => "test2\@example.com", is_update => JSON::false, method => 'REQUEST' },
     );
 
-    xlog "schedule agent SERVER -> REQUEST";
+    xlog $self, "schedule agent SERVER -> REQUEST";
     $self->_put_event($CalendarId, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=SERVER:MAILTO:test1\@example.com
@@ -2612,7 +2612,7 @@ EOF
         { recipient => "test2\@example.com", is_update => JSON::false, method => 'REQUEST' },
     );
 
-    xlog "schedule agent CLIENT -> nothing";
+    xlog $self, "schedule agent CLIENT -> nothing";
     $self->_put_event($CalendarId, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=CLIENT:MAILTO:test1\@example.com
@@ -2621,7 +2621,7 @@ ORGANIZER;CN=Test User:MAILTO:cassandane\@example.com
 EOF
     $self->assert_caldav_notified();
 
-    xlog "schedule agent NONE -> nothing";
+    xlog $self, "schedule agent NONE -> nothing";
     $self->_put_event($CalendarId, lines => <<EOF);
 ATTENDEE;CN=Test User;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
 ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE;SCHEDULE-AGENT=NONE:MAILTO:test1\@example.com
@@ -2660,7 +2660,7 @@ sub test_rfc6638_3_2_1_2_modify
   #   |   |           |           | ADD       |           |           |
   #   +---+-----------+-----------+-----------+-----------+-----------+
 
-    xlog "<Absent> / <Removed>";
+    xlog $self, "<Absent> / <Removed>";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2675,7 +2675,7 @@ EOF
         $self->assert_caldav_notified();
     }
 
-    xlog "<Absent> / SERVER";
+    xlog $self, "<Absent> / SERVER";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2693,7 +2693,7 @@ EOF
         );
     }
 
-    xlog "<Absent> / CLIENT";
+    xlog $self, "<Absent> / CLIENT";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2709,7 +2709,7 @@ EOF
         $self->assert_caldav_notified();
     }
 
-    xlog "<Absent> / NONE";
+    xlog $self, "<Absent> / NONE";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2725,7 +2725,7 @@ EOF
         $self->assert_caldav_notified();
     }
 
-    xlog "SERVER / <Removed>";
+    xlog $self, "SERVER / <Removed>";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2743,7 +2743,7 @@ EOF
         );
     }
 
-    xlog "SERVER / SERVER";
+    xlog $self, "SERVER / SERVER";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2762,7 +2762,7 @@ EOF
         );
     }
 
-    xlog "SERVER / CLIENT";
+    xlog $self, "SERVER / CLIENT";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2781,7 +2781,7 @@ EOF
         );
     }
 
-    xlog "SERVER / NONE";
+    xlog $self, "SERVER / NONE";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2800,7 +2800,7 @@ EOF
         );
     }
 
-    xlog "CLIENT / <Removed>";
+    xlog $self, "CLIENT / <Removed>";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2816,7 +2816,7 @@ EOF
         $self->assert_caldav_notified();
     }
 
-    xlog "CLIENT / SERVER";
+    xlog $self, "CLIENT / SERVER";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2837,7 +2837,7 @@ EOF
         );
     }
 
-    xlog "CLIENT / CLIENT";
+    xlog $self, "CLIENT / CLIENT";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2854,7 +2854,7 @@ EOF
         $self->assert_caldav_notified();
     }
 
-    xlog "CLIENT / NONE";
+    xlog $self, "CLIENT / NONE";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2871,7 +2871,7 @@ EOF
         $self->assert_caldav_notified();
     }
 
-    xlog "NONE / <Removed>";
+    xlog $self, "NONE / <Removed>";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2887,7 +2887,7 @@ EOF
         $self->assert_caldav_notified();
     }
 
-    xlog "NONE / SERVER";
+    xlog $self, "NONE / SERVER";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2908,7 +2908,7 @@ EOF
         );
     }
 
-    xlog "NONE / CLIENT";
+    xlog $self, "NONE / CLIENT";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2925,7 +2925,7 @@ EOF
         $self->assert_caldav_notified();
     }
 
-    xlog "NONE / NONE";
+    xlog $self, "NONE / NONE";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2944,7 +2944,7 @@ EOF
 
     # XXX - check that the SCHEDULE-STATUS property is set correctly...
 
-    xlog "Forbidden organizer change";
+    xlog $self, "Forbidden organizer change";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2972,7 +2972,7 @@ sub test_rfc6638_3_2_1_3_remove
     my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
     $self->assert_not_null($CalendarId);
 
-    xlog "default => CANCEL";
+    xlog $self, "default => CANCEL";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -2987,7 +2987,7 @@ EOF
         );
     }
 
-    xlog "SERVER => CANCEL";
+    xlog $self, "SERVER => CANCEL";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -3002,7 +3002,7 @@ EOF
         );
     }
 
-    xlog "CLIENT => nothing";
+    xlog $self, "CLIENT => nothing";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -3015,7 +3015,7 @@ EOF
         $self->assert_caldav_notified();
     }
 
-    xlog "NONE => nothing";
+    xlog $self, "NONE => nothing";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -3038,7 +3038,7 @@ sub test_rfc6638_3_2_2_1_attendee_allowed_changes
     my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
     $self->assert_not_null($CalendarId);
 
-    xlog "change summary";
+    xlog $self, "change summary";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -3057,7 +3057,7 @@ EOF
         #$self->assert_matches(qr/allowed-attendee-scheduling-object-change/, $err);
     }
 
-    xlog "change organizer";
+    xlog $self, "change organizer";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -3085,7 +3085,7 @@ sub test_rfc6638_3_2_2_2_attendee_create
     my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
     $self->assert_not_null($CalendarId);
 
-    xlog "agent <default>";
+    xlog $self, "agent <default>";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -3098,7 +3098,7 @@ EOF
         );
     }
 
-    xlog "agent SERVER";
+    xlog $self, "agent SERVER";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -3111,7 +3111,7 @@ EOF
         );
     }
 
-    xlog "agent CLIENT";
+    xlog $self, "agent CLIENT";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -3122,7 +3122,7 @@ EOF
         $self->assert_caldav_notified();
     }
 
-    xlog "agent NONE";
+    xlog $self, "agent NONE";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -3143,7 +3143,7 @@ sub test_rfc6638_3_2_2_3_attendee_modify
     my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
     $self->assert_not_null($CalendarId);
 
-    xlog "attendee-modify";
+    xlog $self, "attendee-modify";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -3162,7 +3162,7 @@ EOF
         );
     }
 
-    xlog "attendee-modify CLIENT";
+    xlog $self, "attendee-modify CLIENT";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -3179,7 +3179,7 @@ EOF
         $self->assert_caldav_notified();
     }
 
-    xlog "attendee-modify NONE";
+    xlog $self, "attendee-modify NONE";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -3206,7 +3206,7 @@ sub test_attendee_exdate
     my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
     $self->assert_not_null($CalendarId);
 
-    xlog "recurring event";
+    xlog $self, "recurring event";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -3248,7 +3248,7 @@ sub test_remove_oneattendee_recurring
     my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
     $self->assert_not_null($CalendarId);
 
-    xlog "recurring event";
+    xlog $self, "recurring event";
     {
         my $uuid = $CalDAV->genuuid();
         $self->_put_event($CalendarId, uuid => $uuid, lines => <<EOF);
@@ -3349,7 +3349,7 @@ sub test_delete_recur_extraattendee
     my $CalendarId = $CalDAV->NewCalendar({name => 'test'});
     $self->assert_not_null($CalendarId);
 
-    xlog "set up event";
+    xlog $self, "set up event";
     my $uuid = $CalDAV->genuuid();
     my $overrides = <<EOF;
 BEGIN:VEVENT
@@ -3659,7 +3659,7 @@ sub test_netcaldavtalktests_fromical
     my $basedir = $cassini->val('caldavtalk', 'basedir');
 
     unless ($basedir) {
-        xlog "Not running test, no caldavtalk";
+        xlog $self, "Not running test, no caldavtalk";
         return;
     }
 
@@ -3683,7 +3683,7 @@ sub test_netcaldavtalktests_fromical
         my $data = decode_json($api);
         my $uid = $data->[0]{uid};
 
-        xlog "put $name as text/calendar and fetch back as JSON";
+        xlog $self, "put $name as text/calendar and fetch back as JSON";
         $CalDAV->Request("PUT", "$CalendarId/$uid.ics", $ical, 'Content-Type' => 'text/calendar');
         my $serverapi = $CalDAV->Request("GET", "$CalendarId/$uid.ics", '', 'Accept' => 'application/event+json');
         my $serverdata = decode_json($serverapi->{content});
@@ -3702,7 +3702,7 @@ sub test_netcaldavtalktests_fromje
     my $basedir = $cassini->val('caldavtalk', 'basedir');
 
     unless ($basedir) {
-        xlog "Not running test, no caldavtalk";
+        xlog $self, "Not running test, no caldavtalk";
         return;
     }
 
@@ -3725,7 +3725,7 @@ sub test_netcaldavtalktests_fromje
         my $data = decode_json($api);
         my $uid = $data->[0]{uid};
 
-        xlog "put $name as application/event+json and fetch back as JSON";
+        xlog $self, "put $name as application/event+json and fetch back as JSON";
         $CalDAV->Request("PUT", "$CalendarId/$uid.ics", $api, 'Content-Type' => 'application/event+json');
         my $serverapi = $CalDAV->Request("GET", "$CalendarId/$uid.ics", '', 'Accept' => 'application/event+json');
         my $serverdata = decode_json($serverapi->{content});

@@ -76,7 +76,7 @@ sub test_list_inbox
     my $adminstore = $self->{adminstore};
     my $admintalk = $adminstore->get_client();
 
-    xlog "Test Cyrus extension which renames a user to a different partition";
+    xlog $self, "Test Cyrus extension which renames a user to a different partition";
 
     # create and prepare the user
     $admintalk->create('user.test@inbox.com');

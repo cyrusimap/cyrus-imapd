@@ -1589,7 +1589,7 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog "PUT VEVENT";
+    xlog $self, "PUT VEVENT";
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
     # clean notification cache
@@ -1597,7 +1597,7 @@ EOF
 
     # trigger processing of alarms: wall clock for calalarmd is 10 seconds *after*
     # the occurrence of the exception. This will trigger it to fire its alarm.
-    xlog "run calalarmd";
+    xlog $self, "run calalarmd";
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $rstartdt->epoch() + 10 );
 
     $self->assert_alarms({summary => 'exception', start => $recurstart});
@@ -1664,13 +1664,13 @@ END:VEVENT
 END:VCALENDAR
 EOF
 
-    xlog "PUT rescheduled VEVENT";
+    xlog $self, "PUT rescheduled VEVENT";
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar');
 
     # clean notification cache
     $self->{instance}->getnotify();
 
-    xlog "Re-run calalarmd";
+    xlog $self, "Re-run calalarmd";
     # trigger processing of alarms: wall clock now is 10 seconds after the
     # newly scheduled exception time
     $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd', '-t' => $rstartdt->epoch() + 10 );
