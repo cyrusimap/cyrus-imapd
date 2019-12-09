@@ -304,7 +304,20 @@ while (<>) {
     if ($mode == 0) {
         # look for { option, default, type [enums] }; don't output until we
         # hit a comment
-        if (m|{\s*\"(.*?)\"\s*,\s*\"?(.*?)\"?\s*,\s*(.*?)\s*(\(.*\))?\s*}|) {
+        # n.b. we explicitly do not match deprecated options here
+        if (m|
+                {           # opening curly
+                \s*         # skip leading whitespace
+                \"(.*?)\"   # $1: option name (don't capture quotes)
+                \s*,\s*     # comma, optional whitespace
+                \"?(.*?)\"? # $2: default value (don't capture quotes)
+                \s*,\s*     # comma, optional whitespace
+                (.*?)       # $3: option type
+                \s*         # optional whitespace
+                (\(.*\))?   # $4: list of permitted values, n.b. perl syntax!
+                \s*         # optional whitespace
+                }           # closing curly
+            |x) {
             $opt = $1;
             my $def = $2 eq "NULL" ? "<none>" : $2;
             if ($def eq "") { $def = "<empty string>" }
@@ -351,7 +364,7 @@ while (<>) {
             $opt = '';
         } elsif (m|\s*(.*)\s*|) {
             my $stripped = $1;
-	    chomp($stripped);
+            chomp($stripped);
             print print_man2rst($stripped);
         }
     }

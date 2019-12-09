@@ -137,7 +137,20 @@ while (<STDIN>) {
     # Namely, we need to initialize the union itself, not the members of
     # the union, and we need to ensure we are initializing the union with
     # something of a type that is in the union.
-    if (m|{\s*\"(.*?)\"\s*,\s*(\"?.*?\"?)\s*,\s*(.*?)\s*(\(.*\))?\s*(,.*)?}|) {
+    if (m|
+            {           # opening curly
+            \s*         # skip leading whitespace
+            \"(.*?)\"   # $1: option name (don't capture quotes)
+            \s*,\s*     # comma, optional whitespace
+            (\"?.*?\"?) # $2: default value (do capture quotes)
+            \s*,\s*     # comma, optional whitespace
+            (.*?)       # $3: option type
+            \s*         # optional whitespace
+            (\(.*\))?   # $4: list of permitted values, n.b. perl syntax!
+            \s*         # optional whitespace
+            (,.*)?      # $5: deprecation info
+            }           # closing curly
+        |x) {
         my $opt = $1;
         my $def;
         my $depver = "NULL";
@@ -250,7 +263,15 @@ while (<STDIN>) {
 
         if ($5) {
             # option is deprecated
-            if ($5 =~ m|,\s*(\"[^,]+\")\s*(,\s*\"(.+)\")?|) {
+            if ($5 =~ m|
+                    ,\s*            # comma and optional whitespace
+                    (\"[^,]+\")     # $1: 'deprecated since' version string
+                    \s*             # optional whitespace
+                    (               # $2: (unused)
+                        ,\s*        # comma and optional whitespace
+                        \"(.+)\"    # $3: 'in favour of' option name
+                    )?
+                |x) {
                 $depver = $1;
                 $newopt = $3 if $3;
             } else {
