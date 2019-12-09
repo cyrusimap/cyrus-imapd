@@ -11687,7 +11687,6 @@ static int xfer_finalsync(struct xfer_header *xfer)
     struct dlist *kl = NULL;
     struct xfer_item *item;
     struct mailbox *mailbox = NULL;
-    mbentry_t newentry;
     unsigned flags = SYNC_FLAG_LOGGING | SYNC_FLAG_LOCALONLY;
     int r;
 
@@ -11742,14 +11741,16 @@ static int xfer_finalsync(struct xfer_header *xfer)
 
         /* Step 3.5: Set mailbox as MOVING on local server */
         /* XXX - this code is awful... need a sane way to manage mbentries */
-        newentry.name = item->mbentry->name;
-        newentry.acl = item->mbentry->acl;
-        newentry.uniqueid = item->mbentry->uniqueid;
-        newentry.uidvalidity = item->mbentry->uidvalidity;
-        newentry.mbtype = item->mbentry->mbtype|MBTYPE_MOVING;
-        newentry.server = xfer->toserver;
-        newentry.partition = xfer->topart;
-        r = mboxlist_update(&newentry, 1);
+        mbentry_t *newmbentry = mboxlist_entry_create();
+        newmbentry->name = xstrdupnull(item->mbentry->name);
+        newmbentry->acl = xstrdupnull(item->mbentry->acl);
+        newmbentry->uniqueid = xstrdupnull(item->mbentry->uniqueid);
+        newmbentry->uidvalidity = item->mbentry->uidvalidity;
+        newmbentry->mbtype = item->mbentry->mbtype|MBTYPE_MOVING;
+        newmbentry->server = xstrdupnull(xfer->toserver);
+        newmbentry->partition = xstrdupnull(xfer->topart);
+        r = mboxlist_update(newmbentry, 1);
+        mboxlist_entry_free(&newmbentry);
 
         if (r) {
             syslog(LOG_ERR,
