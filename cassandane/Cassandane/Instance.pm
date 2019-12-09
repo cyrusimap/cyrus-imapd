@@ -2024,6 +2024,8 @@ sub getsyslog
     my ($self) = @_;
     my $logname = $self->{name};
     if ($self->{_syslogfh}) {
+        # hopefully unobtrusively, let busy log finish writing
+        usleep(100_000); # 100ms (0.1s) as us
         my @lines = grep { m/$logname/ } $self->{_syslogfh}->getlines();
         chomp for @lines;
         return @lines;
