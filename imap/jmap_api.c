@@ -566,18 +566,20 @@ static json_t *lookup_capabilities(const char *accountid,
                                    struct auth_state *authstate,
                                    hash_table *mboxrights)
 {
-    json_t *capas = json_object();
-
     // we need to know if we can write children of the inbox
     mbentry_t *inboxentry = NULL;
+
     char *inboxname = mboxname_user_mbox(accountid, NULL);
     if (mboxlist_lookup(inboxname, &inboxentry, NULL)) {
-        json_decref(capas);
+        free(inboxname);
         return json_null();
     }
     free(inboxname);
+
     int inboxrights = _rights_for_mbentry(authstate, inboxentry, mboxrights);
     mboxlist_entry_free(&inboxentry);
+
+    json_t *capas = json_object();
 
     int mayCreateTopLevel = (inboxrights & ACL_CREATE) ? 1 : 0;
 
