@@ -90,7 +90,7 @@ static void _ensure_mapped(struct mappedfile *mf, size_t offset, int update)
     }
 
     /* always give refresh another go, we may be map_nommap */
-    buf_init_mmap(&mf->map_buf, /*onceonly*/0, mf->fd, mf->fname,
+    buf_refresh_mmap(&mf->map_buf, /*onceonly*/0, mf->fd, mf->fname,
                   offset, /*mboxname*/NULL);
 
     mf->map_size = offset;

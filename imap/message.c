@@ -4500,7 +4500,7 @@ static int message_map_file(message_t *m, const char *fname)
         return EINVAL;
     }
     buf_free(&m->map);
-    buf_init_mmap(&m->map, /*onceonly*/1, fd, fname, sbuf.st_size,
+    buf_refresh_mmap(&m->map, /*onceonly*/1, fd, fname, sbuf.st_size,
                   m->mailbox ? m->mailbox->name : NULL);
     close(fd);
 

@@ -588,7 +588,7 @@ static int load_notification_template(struct buf *dst)
         return 0;
     }
 
-    buf_init_mmap(dst, 1, fd, template_fname, MAP_UNKNOWN_LEN, NULL);
+    buf_refresh_mmap(dst, 1, fd, template_fname, MAP_UNKNOWN_LEN, NULL);
     close(fd);
 
     /* using a custom template, validate it! */

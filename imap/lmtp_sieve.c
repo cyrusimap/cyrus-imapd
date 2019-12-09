@@ -1704,7 +1704,7 @@ static int jmapquery(void *sc, void *mc, const char *json)
     if (!jfilter) return 0;
 
     /* mmap the staged message file */
-    buf_init_mmap(&msg, 1, fileno(md->f), md->id, md->size, NULL);
+    buf_refresh_mmap(&msg, 1, fileno(md->f), md->id, md->size, NULL);
 
     /* Run query */
     r = jmap_email_matchmime(&msg, jfilter, userid, time(NULL), &err);

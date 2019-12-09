@@ -834,7 +834,7 @@ static int _map_local_record(const struct mailbox *mailbox, const char *fname, s
         fatal("can't fstat message file", EX_OSFILE);
     }
 
-    buf_init_mmap(buf, /*onceonly*/1, msgfd, fname, sbuf.st_size, mailbox->name);
+    buf_refresh_mmap(buf, /*onceonly*/1, msgfd, fname, sbuf.st_size, mailbox->name);
     close(msgfd);
 
     return 0;

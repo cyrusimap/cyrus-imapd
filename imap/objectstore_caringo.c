@@ -142,7 +142,7 @@ int objectstore_put (struct mailbox *mailbox, const struct index_record *record,
             syslog(LOG_ERR, "IOERROR: fstat on %s", fname);
         }
 
-        buf_init_mmap(&buffer, /*onceonly*/1, msgfd, fname, sbuf.st_size, mailbox->name);
+        buf_refresh_mmap(&buffer, /*onceonly*/1, msgfd, fname, sbuf.st_size, mailbox->name);
         close(msgfd);
         rc = write_named_object  (buffer.s, sbuf.st_size, obj_def->user, obj_def->filename) ;
         if (rc == HTTP_CREATED ) {

@@ -135,7 +135,7 @@ EXPORTED int backup_read_message_data(struct backup *backup,
         if (fd != -1) {
             struct buf buf = BUF_INITIALIZER;
 
-            buf_init_mmap(&buf, 1, fd, fname, MAP_UNKNOWN_LEN, NULL);
+            buf_refresh_mmap(&buf, 1, fd, fname, MAP_UNKNOWN_LEN, NULL);
             close(fd);
 
             r = proc(&buf, rock);

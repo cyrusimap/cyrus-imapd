@@ -703,7 +703,7 @@ static void _emailsubmission_create(jmap_req_t *req,
         goto done;
     }
 
-    buf_init_mmap(&buf, 1, fd_msg, fname, sbuf.st_size, mbox->name);
+    buf_refresh_mmap(&buf, 1, fd_msg, fname, sbuf.st_size, mbox->name);
     if (!buf_len(&buf)) {
         syslog(LOG_ERR, "_email_submissioncreate: can't mmap %s: %m", fname);
         r = IMAP_IOERROR;
