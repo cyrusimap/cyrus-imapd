@@ -2485,7 +2485,6 @@ static struct buf *_icaltimezone_as_tzif(icalcomponent* ical, bit32 leapcnt,
     bit32 leap_init = 0, leap_sec = 0;
 
     tzif = buf_new();
-    buf_init(tzif);
 
     vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
     if (!vtz) return tzif;

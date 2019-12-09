@@ -694,7 +694,6 @@ static int message_parse_body(struct msg *msg, struct body *body,
     int sawboundary;
 
     memset(body, 0, sizeof(struct body));
-    buf_init(&body->cacheheaders);
 
     /* No passed-in boundary structure, create a new, empty one */
     if (!boundaries) {
@@ -1998,8 +1997,7 @@ EXPORTED int message_write_cache(struct index_record *record, const struct body 
 
     /* initialise data structures */
     buf_reset(&cacheitem_buffer);
-    for (i = 0; i < NUM_CACHE_FIELDS; i++)
-        buf_init(&ib[i]);
+    memset(ib, 0, sizeof(ib));
 
     toplevel.type = "MESSAGE";
     toplevel.subtype = "RFC822";
@@ -2887,12 +2885,11 @@ static int message_read_address(struct protstream *strm, struct address **addrp)
     if ((c = prot_getc(strm)) == '(') {
         /* parse list */
         struct address *addr;
-        struct buf buf;
         unsigned nameoff = 0, rtoff = 0, mboxoff = 0, domoff = 0;
 
         do {
+            struct buf buf = BUF_INITIALIZER;
             *addrp = addr = (struct address *) xzmalloc(sizeof(struct address));
-            buf_init(&buf);
 
             /* opening '(' */
             c = prot_getc(strm);
@@ -2911,13 +2908,15 @@ static int message_read_address(struct protstream *strm, struct address **addrp)
 
             /* addr parts must now point into our freeme string */
             if (buf.len) {
-                char *freeme = addr->freeme = buf.s;
+                char *freeme = addr->freeme = buf_release(&buf);
 
                 if (addr->name) addr->name = freeme+nameoff;
                 if (addr->route) addr->route = freeme+rtoff;
                 if (addr->mailbox) addr->mailbox = freeme+mboxoff;
                 if (addr->domain) addr->domain = freeme+domoff;
             }
+
+            buf_free(&buf);
 
             /* get ready to append the next address */
             addrp = &addr->next;

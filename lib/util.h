@@ -320,7 +320,6 @@ void buf_remove(struct buf *buf, unsigned int off, unsigned int len);
 int buf_cmp(const struct buf *, const struct buf *);
 int buf_findchar(const struct buf *, unsigned int off, int c);
 int buf_findline(const struct buf *buf, const char *line);
-void buf_init(struct buf *buf);
 void buf_init_ro(struct buf *buf, const char *base, size_t len);
 void buf_initm(struct buf *buf, char *base, int len);
 void buf_init_ro_cstr(struct buf *buf, const char *str);

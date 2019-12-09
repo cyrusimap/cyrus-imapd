@@ -140,7 +140,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
     /* beginning of multi-line text */
 <INITIAL>text:{ws}?(#.*)?{CRLF} {
                                   BEGIN MULTILINE;
-                                  buf_init(&buf);
+                                  buf_reset(&buf);
                               }
 
     /* beginning of quoted string */
@@ -152,7 +152,7 @@ weekday         [W|w][E|e][E|e][K|k][D|d][A|a][Y|y]
                                   }
                                   else {
                                       BEGIN QSTRING;
-                                      buf_init(&buf);
+                                      buf_reset(&buf);
                                   }
                               }
 

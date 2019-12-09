@@ -1058,7 +1058,9 @@ EXPORTED char *buf_newcstring(struct buf *buf)
 EXPORTED char *buf_release(struct buf *buf)
 {
     char *ret = (char *)buf_cstring(buf);
-    buf_init(buf);
+    buf->alloc = 0;
+    buf->s = NULL;
+    buf_free(buf);
     return ret;
 }
 
@@ -1077,7 +1079,9 @@ EXPORTED const char *buf_cstringnull_ifempty(const struct buf *buf)
 EXPORTED char *buf_releasenull(struct buf *buf)
 {
     char *ret = (char *)buf_cstringnull(buf);
-    buf_init(buf);
+    buf->alloc = 0;
+    buf->s = NULL;
+    buf_free(buf);
     return ret;
 }
 
@@ -1430,6 +1434,7 @@ EXPORTED void buf_insertcstr(struct buf *dst, unsigned int off, const char *str)
     struct buf str_buf = BUF_INITIALIZER;
     buf_init_ro_cstr(&str_buf, str);
     buf_replace_buf(dst, off, 0, &str_buf);
+    buf_free(&str_buf);
 }
 
 EXPORTED void buf_insertmap(struct buf *dst, unsigned int off,
@@ -1438,12 +1443,14 @@ EXPORTED void buf_insertmap(struct buf *dst, unsigned int off,
     struct buf map_buf = BUF_INITIALIZER;
     buf_init_ro(&map_buf, base, len);
     buf_replace_buf(dst, off, 0, &map_buf);
+    buf_free(&map_buf);
 }
 
 EXPORTED void buf_remove(struct buf *dst, unsigned int off, unsigned int len)
 {
     struct buf empty_buf = BUF_INITIALIZER;
     buf_replace_buf(dst, off, len, &empty_buf);
+    buf_free(&empty_buf);
 }
 
 /*
@@ -1468,14 +1475,6 @@ EXPORTED int buf_cmp(const struct buf *a, const struct buf *b)
     return r;
 }
 
-EXPORTED void buf_init(struct buf *buf)
-{
-    buf->alloc = 0;
-    buf->len = 0;
-    buf->flags = 0;
-    buf->s = NULL;
-}
-
 /*
  * Initialise a struct buf to point to read-only data.  The key here is
  * setting buf->alloc=0 which indicates CoW is in effect, i.e. the data
@@ -1483,10 +1482,9 @@ EXPORTED void buf_init(struct buf *buf)
  */
 EXPORTED void buf_init_ro(struct buf *buf, const char *base, size_t len)
 {
-    buf->alloc = 0;
-    buf->len = len;
-    buf->flags = 0;
+    buf_free(buf);
     buf->s = (char *)base;
+    buf->len = len;
 }
 
 /*
@@ -1496,9 +1494,9 @@ EXPORTED void buf_init_ro(struct buf *buf, const char *base, size_t len)
  */
 EXPORTED void buf_initm(struct buf *buf, char *base, int len)
 {
-    buf->alloc = buf->len = len;
-    buf->flags = 0;
+    buf_free(buf);
     buf->s = base;
+    buf->alloc = buf->len = len;
 }
 
 /*
@@ -1506,10 +1504,9 @@ EXPORTED void buf_initm(struct buf *buf, char *base, int len)
  */
 EXPORTED void buf_init_ro_cstr(struct buf *buf, const char *str)
 {
-    buf->alloc = 0;
-    buf->len = (str ? strlen(str) : 0);
-    buf->flags = 0;
+    buf_free(buf);
     buf->s = (char *)str;
+    buf->len = (str ? strlen(str) : 0);
 }
 
 /*
@@ -1526,17 +1523,12 @@ EXPORTED void buf_refresh_mmap(struct buf *buf, int onceonly, int fd,
                 size, fname, mboxname);
 }
 
-static void _buf_free_data(struct buf *buf)
+EXPORTED void buf_free(struct buf *buf)
 {
     if (buf->alloc)
         free(buf->s);
     else if (buf->flags & BUF_MMAP)
         map_free((const char **)&buf->s, &buf->len);
-}
-
-EXPORTED void buf_free(struct buf *buf)
-{
-    _buf_free_data(buf);
     buf->alloc = 0;
     buf->s = NULL;
     buf->len = 0;
@@ -1545,9 +1537,9 @@ EXPORTED void buf_free(struct buf *buf)
 
 EXPORTED void buf_move(struct buf *dst, struct buf *src)
 {
-    _buf_free_data(dst);
+    buf_free(dst);
     *dst = *src;
-    buf_init(src);
+    memset(src, 0, sizeof(struct buf));
 }
 
 EXPORTED int buf_findchar(const struct buf *buf, unsigned int off, int c)

@@ -1979,7 +1979,7 @@ static void search_annotation_duplicate(union search_value *new,
     new->annot = (struct searchannot *)xmemdup(old->annot, sizeof(*old->annot));
     new->annot->entry = xstrdup(new->annot->entry);
     new->annot->attrib = xstrdup(new->annot->attrib);
-    buf_init(&new->annot->value);
+    memset(&new->annot->value, 0, sizeof(struct buf));
     buf_append(&new->annot->value, &old->annot->value);
 }
 

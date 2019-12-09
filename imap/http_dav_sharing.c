@@ -94,13 +94,12 @@ static struct buf *from_xml(xmlDocPtr doc)
 {
     struct buf *buf = buf_new();
     xmlChar *xml = NULL;
-    int len;
+    int len = 0;
 
     /* Dump XML response tree into a text buffer */
     xmlDocDumpFormatMemoryEnc(doc, &xml, &len, "utf-8",
                               config_httpprettytelemetry);
     if (xml) buf_initm(buf, (char *) xml, len);
-    else buf_init(buf);
 
     return buf;
 }

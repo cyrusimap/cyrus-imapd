@@ -577,7 +577,6 @@ static int begin_message(search_text_receiver_t *rx,
     message_get_uid(msg, &d->uid);
     d->doc_is_open = 0;
     d->doc_name[0] = '\0';
-    buf_init(&d->pending_text);
 
     d->mailbox_stats.indexed_messages++;
     d->total_stats.indexed_messages++;
