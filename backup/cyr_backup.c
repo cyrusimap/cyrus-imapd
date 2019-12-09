@@ -773,7 +773,6 @@ static int json_mailbox_cb(const struct backup_mailbox *mailbox, void *rock)
 {
     json_t *jmailboxes = (json_t *) rock;
     json_t *jmailbox = json_object();
-    json_t *jmessages = json_array();
     char ts_last_appenddate[32] = "[unknown]";
 
     strftime(ts_last_appenddate, sizeof(ts_last_appenddate), "%F %T",
@@ -786,6 +785,7 @@ static int json_mailbox_cb(const struct backup_mailbox *mailbox, void *rock)
 
     if (mailbox->records && mailbox->records->count) {
         struct backup_mailbox_message *iter;
+        json_t *jmessages = json_array();
 
         for (iter = mailbox->records->head; iter; iter = iter->next) {
             json_t *jrecord = json_object();
