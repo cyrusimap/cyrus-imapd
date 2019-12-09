@@ -301,6 +301,8 @@ while (<>) {
                 (.*?)       # $3: option type
                 \s*         # optional whitespace
                 (\(.*\))?   # $4: list of permitted values, n.b. perl syntax!
+                \s*,\s*     # comma, optional whitespace
+                \"[^\"]+\"  # last modified version
                 \s*         # optional whitespace
                 }           # closing curly
             |x) {

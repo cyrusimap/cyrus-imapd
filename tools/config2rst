@@ -315,6 +315,8 @@ while (<>) {
                 (.*?)       # $3: option type
                 \s*         # optional whitespace
                 (\(.*\))?   # $4: list of permitted values, n.b. perl syntax!
+                \s*,\s*     # comma, optional whitespace
+                \"([^\"]+)\" # $5: last modified version (don't capture quotes)
                 \s*         # optional whitespace
                 }           # closing curly
             |x) {
@@ -325,6 +327,7 @@ while (<>) {
             # later, from an include directive.
             $save = "\n    .. startblob $opt\n\n";
             $save .= print_man2rst('\fC' . $opt . ':\fR ' . $def . "\n");
+            # XXX report version this option was last modified by
             $enums = $4;
         }
 
