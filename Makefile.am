@@ -529,7 +529,6 @@ dist_noinst_SCRIPTS = \
 	tools/arbitronsort.pl \
 	tools/compile_st.pl \
 	tools/config2header \
-	tools/config2man \
 	tools/config2rst \
 	tools/config2sample \
 	tools/fixsearchpath.pl \
