@@ -2766,19 +2766,19 @@ static void send_dav_invite(const char *userid, void *val, void *rock)
         }
 
         if (!r) {
-            /* Notify sharee (use resource buffer to create invite text) */
             static const char *displayname_annot =
                 DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
-            buf_reset(&irock->resource);
+            struct buf buf = BUF_INITIALIZER;
             r = annotatemore_lookupmask(irock->mboxname, displayname_annot,
-                                        irock->owner, &irock->resource);
+                                        irock->owner, &buf);
             /* Fall back to last part of mailbox name */
-            if (r || !buf_len(&irock->resource)) {
-                buf_setcstr(&irock->resource, strrchr(irock->mboxname, '.') + 1);
+            if (r || !buf_len(&buf)) {
+                buf_setcstr(&buf, strrchr(irock->mboxname, '.') + 1);
             }
             r = dav_create_invite(&irock->notify, irock->ns, &irock->tgt,
                                   irock->live_props, userid, access,
-                                  BAD_CAST buf_cstring(&irock->resource));
+                                  BAD_CAST buf_cstring(&buf));
+            buf_free(&buf);
         }
         if (!r) {
             /* Create a resource name for the notifications -
