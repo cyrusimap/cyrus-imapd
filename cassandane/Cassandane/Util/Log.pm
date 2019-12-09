@@ -55,9 +55,9 @@ openlog('cassandane', '', LOG_LOCAL6)
 
 sub xlog
 {
-    my ($pkg, $file, $line) = caller;
-    $pkg =~ s/^Cassandane:://;
-    my $msg = "=====> " . $pkg . "[" . $line . "] " . join(' ', @_);
+    my (undef, undef, $line, $sub) = caller(1);
+    $sub =~ s/^Cassandane:://;
+    my $msg = "=====> $sub\[$line] " . join(' ', @_);
     print STDERR "$msg\n";
     syslog(LOG_ERR, "$msg");
 }
