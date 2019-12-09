@@ -551,14 +551,12 @@ static int _conversations_set_key(struct conversations_state *state,
                                   const arrayu64_t *cids, time_t stamp)
 {
     int r;
-    struct buf buf;
+    struct buf buf = BUF_INITIALIZER;
     int version = CONVERSATIONS_VERSION;
     int i;
 
     /* XXX: should this be a delete operation? */
     assert(cids->count);
-
-    buf_init(&buf);
 
     if (state->db == NULL)
         return IMAP_IOERROR;
