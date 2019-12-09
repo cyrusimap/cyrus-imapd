@@ -257,7 +257,7 @@ struct restore_rock {
     struct jmap_restore *jrestore;
     int mbtype;
     char *(*resource_name_cb)(message_t *, void *);
-    int (*recreate_cb)(message_t *, const char *, jmap_req_t *, int, void *);
+    int (*recreate_cb)(message_t *, jmap_req_t *, int, void *);
     int (*destroy_cb)(message_t *, jmap_req_t *, int);
     void *rock;
     struct mailbox *mailbox;
@@ -269,7 +269,8 @@ struct restore_info {
     unsigned int msgno_torecreate;
 };
 
-static void restore_resource_cb(const char *resource, void *data, void *rock)
+static void restore_resource_cb(const char *resource __attribute__((unused)),
+                                void *data, void *rock)
 {
     struct restore_info *restore = (struct restore_info *) data;
     struct restore_rock *rrock = (struct restore_rock *) rock;
@@ -299,7 +300,7 @@ static void restore_resource_cb(const char *resource, void *data, void *rock)
         message_t *msg = message_new_from_mailbox(mailbox,
                                                   restore->msgno_torecreate);
 
-        r = rrock->recreate_cb(msg, resource, req, is_replace, rrock->rock);
+        r = rrock->recreate_cb(msg, req, is_replace, rrock->rock);
         message_unref(&msg);
     }
 
@@ -400,6 +401,97 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
+static int recreate_resource(message_t *msg, jmap_req_t *req, int is_replace,
+                             void *rock __attribute__((unused)))
+
+{
+    struct mailbox *mailbox = msg_mailbox(msg);
+    const struct index_record *record = msg_record(msg);
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+    struct stagemsg *stage = NULL;
+    struct appendstate as;
+    const char *fname;
+    FILE *f = NULL;
+    int r;
+
+    /* use latest version of the resource as the source for our append stage */
+    r = message_get_fname(msg, &fname);
+    if (r) return r;
+
+    f = append_newstage_full(mailbox->name, time(0), 0, &stage, fname);
+    if (!f) return IMAP_INTERNAL;
+
+    /* setup for appending the message to the mailbox. */
+    qdiffs[QUOTA_MESSAGE] = 1;
+    qdiffs[QUOTA_STORAGE] = msg_size(msg);
+    r = append_setup_mbox(&as, mailbox, req->accountid, req->authstate,
+                          ACL_INSERT, qdiffs, NULL, 0, EVENT_MESSAGE_NEW);
+    if (!r) {
+        /* get existing flags and annotations */
+        strarray_t *flags = mailbox_extract_flags(mailbox, record, req->accountid);
+        struct entryattlist *annots = mailbox_extract_annots(mailbox, record);
+        struct body *body = NULL;
+
+        /* mark as undeleted */
+        strarray_remove_all_case(flags, "\\Deleted");
+
+        /* append the message to the mailbox. */
+        r = append_fromstage(&as, &body, stage, /*internaldate*/0,
+                             is_replace ? record->createdmodseq : 0,
+                             flags, /*nolink*/0, annots);
+
+        freeentryatts(annots);
+        strarray_free(flags);
+        message_free_body(body);
+        free(body);
+
+        if (r) append_abort(&as);
+        else r = append_commit(&as);
+    }
+    append_removestage(stage);
+
+    return r;
+}
+
+static int destroy_resource(message_t *msg, jmap_req_t *req, int is_replace)
+{
+    struct mailbox *mailbox = msg_mailbox(msg);
+    const struct index_record *record = msg_record(msg);
+    struct index_record newrecord;
+    int r = 0;
+
+    /* copy the existing index_record */
+    memcpy(&newrecord, record, sizeof(struct index_record));
+
+    if (is_replace) {
+        int userflag;
+        r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag, 1);
+        newrecord.user_flags[userflag/32] |= 1<<(userflag&31);
+    }
+
+    if (!r) {
+        /* mark expunged */
+        newrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+
+        /* store back to the mailbox */
+        r = mailbox_rewrite_index_record(mailbox, &newrecord);
+    }
+
+    if (!r) {
+        /* report mailbox event */
+        struct mboxevent *mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+        mboxevent_extract_record(mboxevent, mailbox, &newrecord);
+        mboxevent_extract_mailbox(mboxevent, mailbox);
+        mboxevent_set_numunseen(mboxevent, mailbox, -1);
+        mboxevent_set_access(mboxevent, NULL, NULL,
+                             req->accountid, mailbox->name, 0);
+        mboxevent_notify(&mboxevent);
+        mboxevent_free(&mboxevent);
+    }
+
+    return r;
+}
+
 static char *dav_resource_name(message_t *msg)
 {
     const struct index_record *record = msg_record(msg);
@@ -455,31 +547,25 @@ static char *contact_resource_name(message_t *msg, void *rock)
     return resource;
 }
 
-static int recreate_contact(message_t *msg, const char *resource,
-                            jmap_req_t *req, int is_replace, void *rock)
+static int recreate_contact(message_t *msg, jmap_req_t *req,
+                            int is_replace, void *rock)
 {
-    struct mailbox *mailbox = msg_mailbox(msg);
-    const struct index_record *record = msg_record(msg);
-    struct contact_rock *crock = (struct contact_rock *) rock;
-    struct vparse_card *vcard = record_to_vcard(mailbox, record);
-    int r;
+    struct vparse_card *vcard = NULL;
 
-    if (!vcard || !vcard->objects) {
-        r = IMAP_INTERNAL;
-        goto done;
-    }
-
-    strarray_t *flags = mailbox_extract_flags(mailbox, record, req->accountid);
-    struct entryattlist *annots = mailbox_extract_annots(mailbox, record);
-
-    r = carddav_store(mailbox, vcard->objects, resource,
-                      is_replace ? record->createdmodseq : 0, flags, annots,
-                      req->accountid, req->authstate, /*ignorequota*/ 0);
-    freeentryatts(annots);
-    strarray_free(flags);
+    int r = recreate_resource(msg, req, is_replace, rock);
 
     if (!r && !is_replace) {
         /* Add this card to the group vCard of recreated contacts */
+        struct mailbox *mailbox = msg_mailbox(msg);
+        const struct index_record *record = msg_record(msg);
+        struct contact_rock *crock = (struct contact_rock *) rock;
+
+        vcard = record_to_vcard(mailbox, record);
+        if (!vcard || !vcard->objects) {
+            r = IMAP_INTERNAL;
+            goto done;
+        }
+
         if (!crock->group_vcard) {
             /* Create the group vCard */
             char datestr[RFC3339_DATETIME_MAX];
@@ -508,12 +594,6 @@ static int recreate_contact(message_t *msg, const char *resource,
     vparse_free_card(vcard);
 
     return r;
-}
-
-static int destroy_contact(message_t *msg, jmap_req_t *req, int is_replace)
-{
-    return carddav_remove(msg_mailbox(msg), msg_uid(msg),
-                          is_replace, req->accountid);
 }
 
 static int restore_addressbook_cb(const mbentry_t *mbentry, void *rock)
@@ -568,7 +648,7 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
             { carddav_open_userid(req->accountid), NULL, BUF_INITIALIZER };
         struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK,
                                       &contact_resource_name, &recreate_contact,
-                                      &destroy_contact, &crock, NULL };
+                                      &destroy_resource, &crock, NULL };
 
         mboxlist_mboxtree(addrhomeset,
                           restore_addressbook_cb, &rrock, MBOXTREE_SKIP_ROOT);
@@ -629,80 +709,6 @@ static char *note_resource_name(message_t *msg,
     return resource;
 }
 
-static int recreate_note(message_t *msg,
-                         const char *resource __attribute__((unused)),
-                         jmap_req_t *req,
-                         int is_replace __attribute__((unused)),
-                         void *rock __attribute__((unused)))
-{
-    struct mailbox *mailbox = msg_mailbox(msg);
-    const struct index_record *record = msg_record(msg);
-    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
-    struct stagemsg *stage = NULL;
-    struct appendstate as;
-    const char *fname;
-    FILE *f = NULL;
-    int r;
-
-    /* use latest version of the note as the source for our append stage */
-    r = message_get_fname(msg, &fname);
-    if (r) return r;
-
-    f = append_newstage_full(mailbox->name, time(0), 0, &stage, fname);
-    if (!f) return IMAP_INTERNAL;
-
-    /* setup for appending the message to the mailbox. */
-    qdiffs[QUOTA_MESSAGE] = 1;
-    qdiffs[QUOTA_STORAGE] = msg_size(msg);
-    r = append_setup_mbox(&as, mailbox, req->accountid, req->authstate,
-                          ACL_INSERT, qdiffs, NULL, 0, EVENT_MESSAGE_NEW);
-    if (!r) {
-        /* get existing flags and annotations */
-        strarray_t *flags = mailbox_extract_flags(mailbox, record, req->accountid);
-        struct entryattlist *annots = mailbox_extract_annots(mailbox, record);
-        struct body *body = NULL;
-
-        /* mark as undeleted */
-        strarray_remove_all_case(flags, "\\Deleted");
-
-        /* append the message to the mailbox. */
-        r = append_fromstage(&as, &body, stage, 0, 0, flags, 0, annots);
-
-        freeentryatts(annots);
-        strarray_free(flags);
-        message_free_body(body);
-        free(body);
-
-        if (r) append_abort(&as);
-        else r = append_commit(&as);
-    }
-    append_removestage(stage);
-
-    return r;
-}
-
-static int destroy_note(message_t *msg,
-                        jmap_req_t *req __attribute__((unused)),
-                        int is_replace __attribute__((unused)))
-{
-    struct mailbox *mailbox = msg_mailbox(msg);
-    const struct index_record *record = msg_record(msg);
-    struct index_record newrecord;
-    int r;
-
-    /* copy the existing index_record */
-    memcpy(&newrecord, record, sizeof(struct index_record));
-
-    /* mark expunged */
-    newrecord.system_flags |= FLAG_DELETED;
-    newrecord.internal_flags |= FLAG_INTERNAL_EXPUNGED;
-
-    /* store back to the mailbox */
-    r = mailbox_rewrite_index_record(mailbox, &newrecord);
-
-    return r;
-}
-
 static int jmap_backup_restore_notes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -720,8 +726,8 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
     if (subfolder && restore.undo) {
         char *notes = mboxname_user_mbox(req->accountid, subfolder);
         struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL,
-                                      &note_resource_name, &recreate_note,
-                                      &destroy_note, NULL, NULL };
+                                      &note_resource_name, &recreate_resource,
+                                      &destroy_resource, NULL, NULL };
 
         mboxlist_mboxtree(notes, restore_collection_cb,
                           &rrock, MBOXTREE_SKIP_CHILDREN);
