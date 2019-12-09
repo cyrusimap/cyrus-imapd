@@ -3288,6 +3288,7 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     char *newuserid = mboxname_to_userid(newmboxname);
     struct mboxlock *oldlock = NULL;
     struct mboxlock *newlock = NULL;
+    /* make sure we grab these locks in a stable order! */
     if (strcmpsafe(olduserid, newuserid) < 0) {
         oldlock = user_namespacelock(olduserid);
         newlock = user_namespacelock(newuserid);
