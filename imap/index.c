@@ -696,6 +696,7 @@ static void index_refresh_locked(struct index_state *state)
             assert(im->uid == record->uid);
         }
         else {
+            memset(im, 0, sizeof(struct index_map));
             im->uid = record->uid;
         }
 
@@ -708,6 +709,12 @@ static void index_refresh_locked(struct index_state *state)
         for (i = 0; i < MAX_USER_FLAGS/32; i++)
             im->user_flags[i] = record->user_flags[i];
 
+        /* re-calculate seen flags */
+        if (state->internalseen)
+            im->isseen = (im->system_flags & FLAG_SEEN) ? 1 : 0;
+        else
+            im->isseen = seqset_ismember(seenlist, im->uid) ? 1 : 0;
+
         /* for expunged records, just track the modseq */
         if (im->internal_flags & FLAG_INTERNAL_EXPUNGED) {
             num_expunged++;
@@ -719,12 +726,6 @@ static void index_refresh_locked(struct index_state *state)
                 delayed_modseq = im->modseq - 1;
         }
         else {
-            /* re-calculate seen flags */
-            if (state->internalseen)
-                im->isseen = (im->system_flags & FLAG_SEEN) ? 1 : 0;
-            else
-                im->isseen = seqset_ismember(seenlist, im->uid) ? 1 : 0;
-
             if (msgno > state->exists) {
                 /* don't auto-tell new records */
                 im->told_modseq = im->modseq;
@@ -750,8 +751,6 @@ static void index_refresh_locked(struct index_state *state)
             }
         }
 
-        msgno++;
-
         /* make sure we don't overflow the memory we mapped */
         if (msgno > state->mapsize) {
             char buf[2048];
@@ -759,6 +758,8 @@ static void index_refresh_locked(struct index_state *state)
                     state->mapsize, mailbox->i.exists, mailbox->i.num_records);
             fatal(buf, EX_IOERR);
         }
+
+        msgno++;
     }
     mailbox_iter_done(&iter);
 
