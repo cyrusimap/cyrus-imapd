@@ -125,6 +125,13 @@ sub new
     return $self;
 }
 
+# return an id for use by xlog
+sub id
+{
+    my ($self) = @_;
+    return $self->{_name}; # XXX something cleverer?
+}
+
 # will magically cause some special actions to be taken during test
 # setup.  This used to be a horrible hack to enable a replica instance
 # if the test name contained the word "replication", but now it's more
@@ -409,7 +416,7 @@ sub _create_instances
         {
             my $cyrus_replica_prefix = $cassini->val('cyrus replica', 'prefix');
             if (defined $cyrus_replica_prefix and -d $cyrus_replica_prefix) {
-                xlog "replica instance: using [cyrus replica] configuration";
+                xlog $self, "replica instance: using [cyrus replica] configuration";
                 $instance_params{installation} = 'replica';
             }
 
@@ -455,7 +462,7 @@ sub _create_instances
 
             my $cyrus_murder_prefix = $cassini->val('cyrus murder', 'prefix');
             if (defined $cyrus_murder_prefix and -d $cyrus_murder_prefix) {
-                xlog "murder instance: using [cyrus murder] configuration";
+                xlog $self, "murder instance: using [cyrus murder] configuration";
                 $instance_params{installation} = 'murder';
             }
 
@@ -536,7 +543,7 @@ sub _create_instances
 
             my $cyrus_backup_prefix = $cassini->val('cyrus backup', 'prefix');
             if (defined $cyrus_backup_prefix and -d $cyrus_backup_prefix) {
-                xlog "backup instance: using [cyrus backup] configuration";
+                xlog $self, "backup instance: using [cyrus backup] configuration";
                 $instance_params{installation} = 'backup';
             }
 
@@ -602,7 +609,7 @@ sub _jmap_setup
         die $e;
     }
 
-    xlog "JMAP setup complete!";
+    xlog $self, "JMAP setup complete!";
 }
 
 sub set_up
@@ -618,11 +625,11 @@ sub set_up
             if $self->{_want}->{jmap};
     }
     else {
-        xlog "Instances not started due to :NoStartInstances magic!";
-        xlog "JMAP not setup due to :NoStartInstances magic!"
+        xlog $self, "Instances not started due to :NoStartInstances magic!";
+        xlog $self, "JMAP not setup due to :NoStartInstances magic!"
             if $self->{_want}->{jmap};
     }
-    xlog "Calling test function";
+    xlog $self, "Calling test function";
 }
 
 sub _start_instances
@@ -729,7 +736,7 @@ sub tear_down
 {
     my ($self) = @_;
 
-    xlog "Beginning tear_down";
+    xlog $self, "Beginning tear_down";
 
     foreach my $s (@stores)
     {
@@ -848,7 +855,7 @@ sub check_messages
     $check_guid = 1 unless defined $check_guid;
     my $keyed_on = $params{keyed_on} || 'subject';
 
-    xlog "check_messages: " . join(' ', %params);
+    xlog $self, "check_messages: " . join(' ', %params);
 
     if (!defined $actual)
     {
@@ -869,14 +876,14 @@ sub check_messages
     foreach my $expmsg (values %$expected)
     {
         my $key = $expmsg->$keyed_on();
-        xlog "message \"$key\"";
+        xlog $self, "message \"$key\"";
         my $actmsg = $actual->{$key};
 
         $self->assert_not_null($actmsg);
 
         if ($check_guid)
         {
-            xlog "checking guid";
+            xlog $self, "checking guid";
             $self->assert_str_equals($expmsg->get_guid(),
                                      $actmsg->get_guid());
         }
@@ -884,7 +891,7 @@ sub check_messages
         # Check required headers
         foreach my $h (qw(x-cassandane-unique))
         {
-            xlog "checking header $h";
+            xlog $self, "checking header $h";
             $self->assert_not_null($actmsg->get_header($h));
             $self->assert_str_equals($expmsg->get_header($h),
                                      $actmsg->get_header($h));
@@ -896,7 +903,7 @@ sub check_messages
         foreach my $a (qw(id uid cid))
         {
             next unless defined $expmsg->get_attribute($a);
-            xlog "checking attribute $a";
+            xlog $self, "checking attribute $a";
             $self->assert_str_equals($expmsg->get_attribute($a),
                                      $actmsg->get_attribute($a));
         }
@@ -905,7 +912,7 @@ sub check_messages
         foreach my $a (qw(flags modseq))
         {
             next unless defined $expmsg->get_attribute($a);
-            xlog "checking attribute $a";
+            xlog $self, "checking attribute $a";
             $self->assert_deep_equals($expmsg->get_attribute($a),
                                       $actmsg->get_attribute($a));
         }
@@ -913,7 +920,7 @@ sub check_messages
         # check annotations
         foreach my $ea ($expmsg->list_annotations())
         {
-            xlog "checking annotation ($ea->{entry} $ea->{attrib})";
+            xlog $self, "checking annotation ($ea->{entry} $ea->{attrib})";
             $self->assert($actmsg->has_annotation($ea));
             my $expval = $expmsg->get_annotation($ea);
             my $actval = $actmsg->get_annotation($ea);
@@ -990,7 +997,7 @@ sub run_replication
 
     die "Unrecognised options: " . join(' ', keys %opts) if (scalar %opts);
 
-    xlog "running replication";
+    xlog $self, "running replication";
 
     # Disconnect during replication to ensure no imapd
     # is locking the mailbox, which gives us a spurious
@@ -1049,7 +1056,7 @@ sub run_delayed_expunge
 {
     my ($self) = @_;
 
-    xlog "Performing delayed expunge";
+    xlog $self, "Performing delayed expunge";
 
     $self->_disconnect_all();
 

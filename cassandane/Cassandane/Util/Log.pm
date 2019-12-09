@@ -40,6 +40,7 @@
 package Cassandane::Util::Log;
 use strict;
 use warnings;
+use Scalar::Util qw(blessed);
 use Sys::Syslog qw(:standard :macros);
 
 use Exporter ();
@@ -55,9 +56,19 @@ openlog('cassandane', '', LOG_LOCAL6)
 
 sub xlog
 {
+    my $id;
+    # if the first argument is an object with an id() method,
+    # include the id it returns in the log message
+    if (ref $_[0] && blessed $_[0] && $_[0]->can('id')) {
+        my $obj = shift @_;
+        $id = $obj->id();
+    }
+
     my (undef, undef, $line, $sub) = caller(1);
     $sub =~ s/^Cassandane:://;
-    my $msg = "=====> $sub\[$line] " . join(' ', @_);
+    my $msg = "=====> $sub\[$line] ";
+    $msg .= "($id) " if $id;
+    $msg .= join(' ', @_);
     print STDERR "$msg\n";
     syslog(LOG_ERR, "$msg");
 }
