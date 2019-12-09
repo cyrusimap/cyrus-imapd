@@ -94,20 +94,14 @@ EXPORTED int sieve_script_parse(sieve_interp_t *interp, FILE *script,
         return res;
     }
 
-    sieve_script_t *s = (sieve_script_t *) xmalloc(sizeof(sieve_script_t));
+    sieve_script_t *s = (sieve_script_t *) xzmalloc(sizeof(sieve_script_t));
     s->interp = *interp;
     s->script_context = script_context;
 
     /* initialize support bits */
     s->support = SIEVE_CAPA_BASE;
 
-    /* initialize error buffer */
-    buf_init(&s->sieveerr);
-
-    s->err = s->ignore_err = 0;
-
     sieverestart(script);
-    s->cmds = NULL;
     extern int sievelineno;
     sievelineno = 1;            /* reset line number */
     if (sieveparse(s)) {
