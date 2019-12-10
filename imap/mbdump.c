@@ -830,7 +830,8 @@ EXPORTED int undump_mailbox(const char *mbname,
                    struct protstream *pin, struct protstream *pout,
                    struct auth_state *auth_state __attribute((unused)))
 {
-    struct buf file, data;
+    struct buf file = BUF_INITIALIZER;
+    struct buf data = BUF_INITIALIZER;
     int c;
     int r = 0;
     int curfile = -1;
@@ -848,9 +849,6 @@ EXPORTED int undump_mailbox(const char *mbname,
     quota_t newquotas[QUOTA_NUMRESOURCES];
     quota_t quotalimit = -1;
     annotate_state_t *astate = NULL;
-
-    memset(&file, 0, sizeof(file));
-    memset(&data, 0, sizeof(data));
 
     /* Set a Quota (may be -1 for "unlimited") */
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
