@@ -1722,7 +1722,7 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
 
         if (mime != mime_types) {
             /* Not the storage format - convert into requested MIME type */
-            struct buf inbuf, *outbuf;
+            struct buf inbuf = BUF_INITIALIZER;
 
             if (!fctx->obj) {
                 buf_init_ro(&inbuf, data, datalen);
@@ -1730,7 +1730,7 @@ int propfind_getdata(const xmlChar *name, xmlNsPtr ns,
                 buf_free(&inbuf);
             }
 
-            outbuf = mime->from_object(fctx->obj);
+            struct buf *outbuf = mime->from_object(fctx->obj);
             datalen = buf_len(outbuf);
             data = freeme = buf_release(outbuf);
             buf_destroy(outbuf);
@@ -3204,6 +3204,7 @@ static int proppatch_toresource(xmlNodePtr prop, unsigned set,
                      &propstat[PROPSTAT_ERROR], prop->name, prop->ns, NULL, 0);
     }
 
+    buf_free(&value);
     if (freeme) xmlFree(freeme);
 
     return 0;
@@ -3353,6 +3354,7 @@ int proppatch_todb(xmlNodePtr prop, unsigned set,
                      &propstat[PROPSTAT_ERROR], prop->name, prop->ns, NULL, 0);
     }
 
+    buf_free(&value);
     if (freeme) xmlFree(freeme);
 
     return 0;
@@ -4477,7 +4479,8 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     time_t lastmod = 0;
     unsigned meth_move = (txn->meth == METH_MOVE);
     void *src_davdb = NULL, *dest_davdb = NULL, *obj = NULL;
-    struct buf msg_buf = BUF_INITIALIZER, body_buf;
+    struct buf msg_buf = BUF_INITIALIZER;
+    struct buf body_buf = BUF_INITIALIZER;
 
     memset(&dest_tgt, 0, sizeof(struct request_target_t));
 
@@ -4800,6 +4803,7 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     if (src_mbox) mailbox_close(&src_mbox);
 
     buf_free(&msg_buf);
+    buf_free(&body_buf);
     xmlFreeURI(dest_uri);
     free(dest_tgt.userid);
     mboxlist_entry_free(&dest_tgt.mbentry);
@@ -5275,8 +5279,7 @@ int meth_get_head(struct transaction_t *txn, void *params)
 
             if (mime != gparams->mime_types) {
                 /* Not the storage format - create resource object */
-                struct buf inbuf;
-
+                struct buf inbuf = BUF_INITIALIZER;
                 buf_init_ro(&inbuf, data, datalen);
                 obj = gparams->mime_types[0].to_object(&inbuf);
                 buf_free(&inbuf);
@@ -6888,7 +6891,7 @@ int meth_patch(struct transaction_t *txn, void *params)
 
     case HTTP_OK: {
         unsigned offset;
-        struct buf buf;
+        struct buf buf = BUF_INITIALIZER;
 
         /* Load message containing the resource */
         mailbox_map_record(mailbox, &oldrecord, &msg_buf);
@@ -7157,7 +7160,7 @@ int meth_put(struct transaction_t *txn, void *params)
             }
             else {
                 unsigned offset;
-                struct buf buf;
+                struct buf buf = BUF_INITIALIZER;
 
                 /* Load message containing the resource */
                 mailbox_map_record(mailbox, &oldrecord, &msg_buf);
