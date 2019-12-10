@@ -2007,7 +2007,6 @@ static int export_calendar(struct transaction_t *txn)
                  comp;
                  comp = icalcomponent_get_next_component(ical,
                                                          ICAL_ANY_COMPONENT)) {
-                struct buf *cal_str;
                 icalcomponent_kind kind = icalcomponent_isa(comp);
 
                 /* Don't duplicate any VTIMEZONEs in our iCalendar */
@@ -2063,7 +2062,7 @@ static int export_calendar(struct transaction_t *txn)
                     buf_printf_markup(buf, 0, sep);
                     write_body(0, txn, buf_cstring(buf), buf_len(buf));
                 }
-                cal_str = mime->from_object(comp);
+                struct buf *cal_str = mime->from_object(comp);
                 write_body(0, txn, buf_base(cal_str), buf_len(cal_str));
                 buf_destroy(cal_str);
             }
@@ -6553,7 +6552,7 @@ static int proppatch_timezone(xmlNodePtr prop, unsigned set,
         }
         else if (set) {
             icalcomponent *ical = NULL;
-            struct buf buf;
+            struct buf buf = BUF_INITIALIZER;
 
             freeme = xmlNodeGetContent(prop);
             tz = (const char *) freeme;
@@ -6718,7 +6717,7 @@ static int proppatch_availability(xmlNodePtr prop, unsigned set,
         }
         else if (set) {
             icalcomponent *ical = NULL;
-            struct buf buf;
+            struct buf buf = BUF_INITIALIZER;
 
             freeme = xmlNodeGetContent(prop);
             avail = (const char *) freeme;
@@ -8353,7 +8352,6 @@ static int meth_get_head_fb(struct transaction_t *txn, void *params)
         const char *proto, *host;
         icalcomponent *fb;
         icalproperty *url;
-        struct buf *cal_str;
 
         /* Construct URL */
         buf_reset(&txn->buf);
@@ -8380,7 +8378,7 @@ static int meth_get_head_fb(struct transaction_t *txn, void *params)
         txn->flags.cc |= CC_NOTRANSFORM;
 
         /* Output the iCalendar object */
-        cal_str = mime->from_object(cal);
+        struct buf *cal_str = mime->from_object(cal);
         icalcomponent_free(cal);
 
         write_body(HTTP_OK, txn, buf_base(cal_str), buf_len(cal_str));
