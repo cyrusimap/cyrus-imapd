@@ -67,10 +67,6 @@ EXPORTED void dav_getpath(struct buf *fname, struct mailbox *mailbox)
 EXPORTED void dav_getpath_byuserid(struct buf *fname, const char *userid)
 {
     char *path = user_hash_meta(userid, FNAME_DAVSUFFIX);
-
-    if (buf_cstringnull(fname)) {
-        buf_setcstr(fname, path);
-        free(path);
-    }
-    else buf_initm(fname, path, strlen(path));
+    buf_setcstr(fname, path);
+    free(path);
 }
