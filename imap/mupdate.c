@@ -298,13 +298,6 @@ static struct conn *conn_new(int fd)
     /* set my allowable security properties */
     sasl_setprop(C->saslconn, SASL_SEC_PROPS, mysasl_secprops(SASL_SEC_NOANONYMOUS));
 
-    /* Clear Buffers */
-    memset(&(C->tag), 0, sizeof(struct buf));
-    memset(&(C->cmd), 0, sizeof(struct buf));
-    memset(&(C->arg1), 0, sizeof(struct buf));
-    memset(&(C->arg2), 0, sizeof(struct buf));
-    memset(&(C->arg3), 0, sizeof(struct buf));
-
     return C;
 }
 
