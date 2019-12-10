@@ -3385,6 +3385,7 @@ done:
 
     mailbox_close(&mailbox);
 
+    buf_free(&value);
     freeentryatts(entryatts);
     free(name);
 
