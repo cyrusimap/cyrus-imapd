@@ -1577,68 +1577,6 @@ static int manage_attachments(struct transaction_t *txn,
 }
 
 
-static void get_schedule_addresses(struct transaction_t *txn,
-                                   strarray_t *addresses)
-{
-    struct buf buf = BUF_INITIALIZER;
-
-    /* allow override of schedule-address per-message (FM specific) */
-    const char **hdr = spool_getheader(txn->req_hdrs, "Schedule-Address");
-
-    if (hdr) {
-        if (!strncasecmp(hdr[0], "mailto:", 7))
-            strarray_append(addresses, hdr[0]+7);
-        else
-            strarray_append(addresses, hdr[0]);
-    }
-    else {
-        /* find schedule address based on the destination calendar's user */
-
-        /* check calendar-user-address-set for target user's mailbox */
-        const char *annotname =
-            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-        int r = annotatemore_lookupmask(txn->req_tgt.mbentry->name, annotname,
-                                        txn->req_tgt.userid, &buf);
-        if (r || !buf.len) {
-            /* check calendar-user-address-set for target user's principal */
-            char *mailboxname = caldav_mboxname(txn->req_tgt.userid, NULL);
-            buf_reset(&buf);
-            r = annotatemore_lookupmask(mailboxname, annotname,
-                                        txn->req_tgt.userid, &buf);
-            free(mailboxname);
-        }
-
-        if (!r && buf.len) {
-            strarray_t *values = strarray_split(buf_cstring(&buf), ",", STRARRAY_TRIM);
-            int i;
-            for (i = 0; i < strarray_size(values); i++) {
-                const char *item = strarray_nth(values, i);
-                if (!strncasecmp(item, "mailto:", 7)) item += 7;
-                strarray_append(addresses, item);
-            }
-            strarray_free(values);
-        }
-        else if (strchr(txn->req_tgt.userid, '@')) {
-            /* userid corresponding to target */
-            strarray_append(addresses, txn->req_tgt.userid);
-        }
-        else {
-            /* append fully qualified userids */
-            struct strlist *domains;
-
-            for (domains = cua_domains; domains; domains = domains->next) {
-                buf_reset(&buf);
-                buf_printf(&buf, "%s@%s", txn->req_tgt.userid, domains->s);
-
-                strarray_appendm(addresses, buf_release(&buf));
-            }
-        }
-    }
-
-    buf_free(&buf);
-}
-
-
 /* Perform scheduling actions for a DELETE request */
 static int caldav_delete_cal(struct transaction_t *txn,
                              struct mailbox *mailbox,
@@ -1676,7 +1614,8 @@ static int caldav_delete_cal(struct transaction_t *txn,
             return HTTP_SERVER_ERROR;
         }
 
-        get_schedule_addresses(txn, &schedule_addresses);
+        get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
+                               txn->req_tgt.userid, &schedule_addresses);
 
         /* XXX - after legacy records are gone, we can strip this and just not send a
          * cancellation if deleting a record which was never replied to... */
@@ -4406,7 +4345,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
                 }
             }
 
-            get_schedule_addresses(txn, &schedule_addresses);
+            get_schedule_addresses(txn->req_hdrs, txn->req_tgt.mbentry->name,
+                                   txn->req_tgt.userid, &schedule_addresses);
 
             char *userid = (txn->req_tgt.flags == TGT_DAV_SHARED) ?
                 xstrdup(txn->req_tgt.userid) :

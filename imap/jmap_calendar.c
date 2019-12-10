@@ -2428,6 +2428,7 @@ done:
 }
 
 static int setcalendarevents_schedule(jmap_req_t *req,
+                                      const char *mboxname,
                                       strarray_t *schedule_addresses,
                                       icalcomponent *oldical,
                                       icalcomponent *ical,
@@ -2444,37 +2445,9 @@ static int setcalendarevents_schedule(jmap_req_t *req,
     if (!organizer) return 0;
     if (!strncasecmp(organizer, "mailto:", 7)) organizer += 7;
 
-    const char **hdr =
-        spool_getheader(req->txn->req_hdrs, "Schedule-Address");
-    if (hdr) strarray_append(schedule_addresses, hdr[0]);
+    get_schedule_addresses(req->txn->req_hdrs, mboxname,
+                           req->userid, schedule_addresses);
 
-    if (!strarray_size(schedule_addresses)) {
-        const char *annotname =
-            DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-user-address-set";
-        char *mailboxname = caldav_mboxname(req->userid, NULL);
-        struct buf attrib = BUF_INITIALIZER;
-        int r = annotatemore_lookupmask(mailboxname, annotname,
-                                        req->userid, &attrib);
-        if (!r && buf_len(&attrib)) {
-            strarray_t *values = strarray_split(buf_cstring(&attrib), ",", STRARRAY_TRIM);
-            int i;
-            for (i = 0; i < strarray_size(values); i++) {
-                const char *item = strarray_nth(values, i);
-                if (!strncasecmp(item, "mailto:", 7)) item += 7;
-                strarray_append(schedule_addresses, item);
-            }
-            strarray_free(values);
-        }
-        else if (strchr(req->userid, '@')) {
-            strarray_append(schedule_addresses, req->userid);
-        }
-        else {
-            const char *domain = httpd_extradomain ? httpd_extradomain : config_defdomain;
-            strarray_appendm(schedule_addresses, strconcat(req->userid, "@", domain, NULL));
-        }
-        free(mailboxname);
-        buf_free(&attrib);
-    }
     /* Validate create/update. */
     if (oldical && (mode & (JMAP_CREATE|JMAP_UPDATE))) {
         /* Don't allow ORGANIZER to be updated */
@@ -2666,7 +2639,7 @@ static int setcalendarevents_create(jmap_req_t *req,
     }
 
     /* Handle scheduling. */
-    r = setcalendarevents_schedule(req, &schedule_addresses,
+    r = setcalendarevents_schedule(req, mboxname, &schedule_addresses,
                                    NULL, ical, JMAP_CREATE);
     if (r) goto done;
 
@@ -3187,7 +3160,7 @@ static int setcalendarevents_update(jmap_req_t *req,
     }
 
     /* Handle scheduling. */
-    r = setcalendarevents_schedule(req, &schedule_addresses,
+    r = setcalendarevents_schedule(req, mboxname, &schedule_addresses,
                                    oldical, ical, JMAP_UPDATE);
     if (r) goto done;
 
@@ -3339,7 +3312,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     }
 
     /* Handle scheduling. */
-    r = setcalendarevents_schedule(req, &schedule_addresses,
+    r = setcalendarevents_schedule(req, mboxname, &schedule_addresses,
                                    oldical, ical, JMAP_DESTROY);
     if (r) goto done;
 
