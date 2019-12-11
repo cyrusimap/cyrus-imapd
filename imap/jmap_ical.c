@@ -496,7 +496,7 @@ HIDDEN int jmapical_duration_has_zero_time(const struct jmapical_duration *dur)
            dur->seconds == 0 && dur->nanos == 0;
 }
 
-static struct icaldurationtype duration_to_icalduration(const struct jmapical_duration *dur)
+HIDDEN struct icaldurationtype jmapical_duration_to_icalduration(const struct jmapical_duration *dur)
 {
     struct icaldurationtype icaldur = icaldurationtype_null_duration();
 
@@ -522,9 +522,9 @@ HIDDEN void jmapical_duration_from_icalduration(struct icaldurationtype icaldur,
     dur->seconds = icaldur.seconds;
 }
 
-HIDDEN void jmapical_duration_between(time_t t1, bit64 t1nanos,
-                                      time_t t2, bit64 t2nanos,
-                                      struct jmapical_duration *dur)
+HIDDEN void jmapical_duration_between_unixtime(time_t t1, bit64 t1nanos,
+                                               time_t t2, bit64 t2nanos,
+                                               struct jmapical_duration *dur)
 {
     const icaltimezone *utc = icaltimezone_get_utc_timezone();
     int is_neg = t1 > t2 || (t1 == t2 && t1nanos > t2nanos);
@@ -550,6 +550,21 @@ HIDDEN void jmapical_duration_between(time_t t1, bit64 t1nanos,
     icaldur.is_neg = is_neg;
     jmapical_duration_from_icalduration(icaldur, dur);
     dur->nanos = nanos;
+}
+
+HIDDEN void jmapical_duration_between_utctime(const struct jmapical_datetime *t1,
+                                              const struct jmapical_datetime *t2,
+                                              struct jmapical_duration *dur)
+{
+    const icaltimezone *utc = icaltimezone_get_utc_timezone();
+
+    icaltimetype t1ical = jmapical_datetime_to_icaltime(t1, utc);
+    icaltimetype t2ical = jmapical_datetime_to_icaltime(t2, utc);
+
+    time_t t1unix = icaltime_as_timet_with_zone(t1ical, utc);
+    time_t t2unix = icaltime_as_timet_with_zone(t2ical, utc);
+
+    jmapical_duration_between_unixtime(t1unix, t1->nano, t2unix, t2->nano, dur);
 }
 
 HIDDEN int jmapical_duration_from_string(const char *val, struct jmapical_duration *dur)
@@ -581,7 +596,7 @@ HIDDEN int jmapical_duration_from_string(const char *val, struct jmapical_durati
 
 HIDDEN void jmapical_duration_as_string(const struct jmapical_duration *dur, struct buf *buf)
 {
-    struct icaldurationtype icaldur = duration_to_icalduration(dur);
+    struct icaldurationtype icaldur = jmapical_duration_to_icalduration(dur);
     char *tmp = icaldurationtype_as_ical_string_r(icaldur);
 
     buf_setcstr(buf, tmp);
@@ -2108,8 +2123,8 @@ static void duration_from_vevent(icalcomponent *comp, struct jmapical_duration *
                 subseconds_from_icalprop(prop, &startnanos);
             }
             struct jmapical_duration utcduration = JMAPICAL_DURATION_INITIALIZER;
-            jmapical_duration_between(tstart, startnanos, tend, endnanos, &utcduration);
-            icaldur = duration_to_icalduration(&utcduration);
+            jmapical_duration_between_unixtime(tstart, startnanos, tend, endnanos, &utcduration);
+            icaldur = jmapical_duration_to_icalduration(&utcduration);
             nanos = utcduration.nanos;
         }
         else if ((prop = icalcomponent_get_first_property(comp, ICAL_DURATION_PROPERTY))) {
@@ -2743,7 +2758,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     insert_icaltimeprop(comp, dtstart, start.nano, 1, ICAL_DTSTART_PROPERTY);
     if (tzstart != tzend) {
         /* Add DTEND */
-        struct icaldurationtype icaldur = duration_to_icalduration(&dur);
+        struct icaldurationtype icaldur = jmapical_duration_to_icalduration(&dur);
         bit64 endnanos = start.nano + dur.nanos;
         icaldur.seconds += endnanos / 1000000000;
         endnanos %= 1000000000;
@@ -2753,7 +2768,7 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
         if (prop) xjmapid_to_ical(prop, endzone_location_id);
     } else {
         /* Add DURATION */
-        struct icaldurationtype icaldur = duration_to_icalduration(&dur);
+        struct icaldurationtype icaldur = jmapical_duration_to_icalduration(&dur);
         icalproperty *prop = icalproperty_new_duration(icaldur);
         subseconds_to_icalprop(prop, dur.nanos);
         icalcomponent_add_property(comp, prop);
@@ -3718,7 +3733,7 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
                 jmap_parser_pop(parser);
 
                 /* Add offset trigger */
-                trigger.duration = duration_to_icalduration(&offset);
+                trigger.duration = jmapical_duration_to_icalduration(&offset);
                 prop = icalproperty_new_trigger(trigger);
                 subseconds_to_icalprop(prop, offset.nanos);
                 param = icalparameter_new_related(rel);

@@ -1451,7 +1451,7 @@ static int jmap_calendar_set(struct jmap_req *req)
         pe = jmap_readprop(arg, "timeZone", 0, invalid, "s", &tzid);
         if (pe > 0) {
             /* Verify we have tzid record in the database */
-            if (zoneinfo_lookup(tzid, NULL) != 0) {
+            if (icaltimezone_lookup_tzid(tzid) == NULL) {
                 json_array_append_new(invalid, json_string("timeZone"));
             }
         }
@@ -1872,6 +1872,7 @@ struct getcalendarevents_rock {
     hashu64_table jmapcache;
     ptrarray_t *want_eventids;
     int check_acl;
+    hash_table utctimes_fallbacktz_by_mboxname;
 };
 
 struct recurid_instanceof_rock {
@@ -1957,6 +1958,95 @@ static int _recurid_is_instanceof(icaltimetype recurid, icalcomponent *ical, int
     return found;
 }
 
+static void getcalendarevents_get_utctimes_internal(json_t *jsevent,
+                                                    const char *startstr,
+                                                    const char *durstr,
+                                                    const char *tzid,
+                                                    icaltimezone *utctimes_fallbacktz)
+{
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+
+    /* Read start */
+    struct jmapical_datetime startdt = JMAPICAL_DATETIME_INITIALIZER;
+    if (jmapical_localdatetime_from_string(startstr, &startdt) == -1) return;
+
+    /* Read timeZone */
+    icaltimezone *tz = NULL;
+    if (tzid) tz = icaltimezone_lookup_tzid(tzid);
+    if (!tz) tz = utctimes_fallbacktz;
+    if (!tz) tz = utc;
+
+    /* Read duration */
+    struct jmapical_duration dur = JMAPICAL_DURATION_INITIALIZER;
+    if (durstr && jmapical_duration_from_string(durstr, &dur) == -1) return;
+
+    /* Determine end */
+    struct jmapical_datetime enddt = JMAPICAL_DATETIME_INITIALIZER;
+    icaltimetype startical = jmapical_datetime_to_icaltime(&startdt, tz);
+    struct icaldurationtype durical = jmapical_duration_to_icalduration(&dur);
+    icaltimetype endical = icaltime_add(startical, durical);
+    if (startdt.nano + dur.nanos >= 1000000000) {
+        endical = icaltime_add(endical, icaldurationtype_from_int(1));
+        jmapical_datetime_from_icaltime(endical, &enddt);
+        enddt.nano = (startdt.nano + dur.nanos) - 1000000000;
+    }
+    else {
+        jmapical_datetime_from_icaltime(endical, &enddt);
+        enddt.nano = startdt.nano + dur.nanos;
+    }
+
+    /* Convert start and end to UTC */
+    if (tz != utc) {
+        icaltimetype icalloc = jmapical_datetime_to_icaltime(&startdt, tz);
+        icaltimetype icalutc = icaltime_convert_to_zone(icalloc, utc);
+        bit64 nano = startdt.nano;
+        jmapical_datetime_from_icaltime(icalutc, &startdt);
+        startdt.nano = nano;
+
+        icalloc = jmapical_datetime_to_icaltime(&enddt, tz);
+        icalutc = icaltime_convert_to_zone(icalloc, utc);
+        nano = enddt.nano;
+        jmapical_datetime_from_icaltime(icalutc, &enddt);
+        enddt.nano = nano;
+    }
+
+    /* Set utcStart, utcEnd */
+    struct buf buf = BUF_INITIALIZER;
+    jmapical_utcdatetime_as_string(&startdt, &buf);
+    json_object_set_new(jsevent, "utcStart", json_string(buf_cstring(&buf)));
+    jmapical_utcdatetime_as_string(&enddt, &buf);
+    json_object_set_new(jsevent, "utcEnd", json_string(buf_cstring(&buf)));
+    buf_free(&buf);
+}
+
+static void getcalendarevents_get_utctimes(json_t *jsevent,
+                                           icaltimezone *utctimes_fallbacktz)
+{
+    const char *start = json_string_value(json_object_get(jsevent, "start"));
+    const char *dur = json_string_value(json_object_get(jsevent, "duration"));
+    const char *tzid = json_string_value(json_object_get(jsevent, "timeZone"));
+
+    /* Set utcStart, utcEnd on main event */
+    getcalendarevents_get_utctimes_internal(jsevent, start, dur, tzid, utctimes_fallbacktz);
+
+    /* Set utcStart, utcEnd on recurrence overrides, if any */
+    json_t *joverrides = json_object_get(jsevent, "recurrenceOverrides");
+    if (JNOTNULL(joverrides)) {
+        const char *recurid;
+        json_t *jovr;
+        json_object_foreach(joverrides, recurid, jovr) {
+            const char *startovr = json_string_value(json_object_get(jovr, "start"));
+            if (!startovr) startovr = recurid;
+            const char *durovr = json_string_value(json_object_get(jovr, "duration"));
+            if (!durovr) durovr = dur;
+            const char *tzidovr = json_string_value(json_object_get(jovr, "tzid"));
+            if (!tzidovr) tzidovr = tzid;
+            getcalendarevents_get_utctimes_internal(jovr, startovr, durovr,
+                                                    tzidovr, utctimes_fallbacktz);
+        }
+    }
+}
+
 static void getcalendarevents_filterinstance(json_t *myevent,
                                              hash_table *props,
                                              const char *id,
@@ -1973,26 +2063,18 @@ static void getcalendarevents_filterinstance(json_t *myevent,
 static int getcalendarevents_getinstances(json_t *jsevent,
                                            struct caldav_data *cdata,
                                            icalcomponent *ical,
+                                           icaltimezone *utctimes_fallbacktz,
                                            struct getcalendarevents_rock *rock)
 {
     jmap_req_t *req = rock->req;
+    hash_table *props = rock->get->props;
     icalcomponent *myical = NULL;
     int r = 0;
 
     int i;
     for (i = 0; i < ptrarray_size(rock->want_eventids); i++) {
         struct event_id *eid = ptrarray_nth(rock->want_eventids, i);
-
-        if (eid->recurid == NULL) {
-            /* Client requested main event */
-            json_t *myevent = json_deep_copy(jsevent);
-            jmap_filterprops(myevent, rock->get->props);
-            json_object_set_new(myevent, "id", json_string(cdata->ical_uid));
-            json_object_set_new(myevent, "uid", json_string(cdata->ical_uid));
-            json_object_set_new(myevent, "@type", json_string("jsevent"));
-            json_array_append_new(rock->get->list, myevent);
-            continue;
-        }
+        if (eid->recurid == NULL) continue;
 
         /* Client requested event recurrence instance */
         json_t *override = json_object_get(
@@ -2001,7 +2083,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
             if (json_object_get(override, "excluded") != json_true()) {
                 /* Instance is a recurrence override */
                 json_t *myevent = jmap_patchobject_apply(jsevent, override, NULL);
-                getcalendarevents_filterinstance(myevent, rock->get->props, eid->raw, cdata->ical_uid);
+                getcalendarevents_filterinstance(myevent, props, eid->raw, cdata->ical_uid);
                 if (json_object_get(override, "start") == NULL) {
                     json_object_set_new(myevent, "start", json_string(eid->recurid));
                 }
@@ -2049,8 +2131,11 @@ static int getcalendarevents_getinstances(json_t *jsevent,
             buf_free(&buf);
 
             json_t *myevent = json_deep_copy(jsevent);
-            getcalendarevents_filterinstance(myevent, rock->get->props, eid->raw, cdata->ical_uid);
             json_object_set_new(myevent, "start", jstart);
+            if (jmap_wantprop(props, "utcStart") || jmap_wantprop(props, "utcEnd")) {
+                getcalendarevents_get_utctimes(myevent, utctimes_fallbacktz);
+            }
+            getcalendarevents_filterinstance(myevent, props, eid->raw, cdata->ical_uid);
             json_object_set_new(myevent, "recurrenceId", json_string(eid->recurid));
             json_array_append_new(rock->get->list, myevent);
         }
@@ -2061,6 +2146,26 @@ done:
     return r;
 }
 
+static icaltimezone *calendarevent_get_utctimes_fallbacktz(const char *mboxname,
+                                                           const char *userid)
+{
+    struct buf attrib = BUF_INITIALIZER;
+    static const char *tzid_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+    icaltimezone *tz = NULL;
+    annotatemore_lookupmask(mboxname, tzid_annot, userid, &attrib);
+    if (buf_len(&attrib)) {
+        tz = icaltimezone_lookup_tzid(buf_cstring(&attrib));
+        buf_reset(&attrib);
+    }
+    buf_free(&attrib);
+    /* XXX - read from DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone" ? */
+    /* XXX - how to convert VTIMEZONE to icaltimezone* ? */
+    if (!tz) tz = icaltimezone_get_utc_timezone();
+    return tz;
+}
+
+
 static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
 {
     struct getcalendarevents_rock *rock = vrock;
@@ -2068,8 +2173,10 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
     icalcomponent* ical = NULL;
     json_t *jsevent = NULL;
     jmap_req_t *req = rock->req;
+    hash_table *props = rock->get->props;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
     msgrecord_t *mr = NULL;
+    icaltimezone *utctimes_fallbacktz = NULL;
 
     if (!cdata->dav.alive)
         return 0;
@@ -2158,16 +2265,16 @@ static int getcalendarevents_cb(void *vrock, struct caldav_data *cdata)
 gotevent:
 
     /* Add JMAP-only fields. */
-    if (jmap_wantprop(rock->get->props, "x-href")) {
+    if (jmap_wantprop(props, "x-href")) {
         char *xhref = jmap_xhref(cdata->dav.mailbox, cdata->dav.resource);
         json_object_set_new(jsevent, "x-href", json_string(xhref));
         free(xhref);
     }
-    if (jmap_wantprop(rock->get->props, "calendarId")) {
+    if (jmap_wantprop(props, "calendarId")) {
         json_object_set_new(jsevent, "calendarId",
                             json_string(strrchr(cdata->dav.mailbox, '.')+1));
     }
-    if (jmap_wantprop(rock->get->props, "blobId")) {
+    if (jmap_wantprop(props, "blobId")) {
         json_t *jblobid = json_null();
         struct buf blobid = BUF_INITIALIZER;
         if (jmap_encode_rawdata_blobid('I', rock->mailbox->uniqueid,
@@ -2178,7 +2285,7 @@ gotevent:
         buf_free(&blobid);
         json_object_set_new(jsevent, "blobId", jblobid);
     }
-    if (jmap_wantprop(rock->get->props, "debugBlobId")) {
+    if (jmap_wantprop(props, "debugBlobId")) {
         json_t *jblobid = json_null();
         if (httpd_userisadmin) {
             struct buf blobid = BUF_INITIALIZER;
@@ -2192,23 +2299,49 @@ gotevent:
         json_object_set_new(jsevent, "debugBlobId", jblobid);
     }
 
+    /* Set utcStart and utcEnd */
+    if (jmap_wantprop(props, "utcStart") || jmap_wantprop(props, "utcEnd")) {
+        /* Lookup fall-back time zone on calendar collection */
+        utctimes_fallbacktz = hash_lookup(cdata->dav.mailbox,
+                                          &rock->utctimes_fallbacktz_by_mboxname);
+        if (!utctimes_fallbacktz) {
+            utctimes_fallbacktz =
+                calendarevent_get_utctimes_fallbacktz(cdata->dav.mailbox, req->userid);
+            hash_insert(cdata->dav.mailbox, utctimes_fallbacktz,
+                         &rock->utctimes_fallbacktz_by_mboxname);
+        }
+        getcalendarevents_get_utctimes(jsevent, utctimes_fallbacktz);
+    }
+
     /* Remove isDraft if client didn't ask for it */
-    if (!jmap_is_using(req, JMAP_URN_CALENDARS) ||
-            !jmap_wantprop(rock->get->props, "isDraft")) {
+    if (!jmap_is_using(req, JMAP_URN_CALENDARS) || !jmap_wantprop(props, "isDraft")) {
         json_object_del(jsevent, "isDraft");
     }
 
     if (rock->want_eventids == NULL) {
         /* Client requested all events */
-        jmap_filterprops(jsevent, rock->get->props);
+        jmap_filterprops(jsevent, props);
         json_object_set_new(jsevent, "id", json_string(cdata->ical_uid));
         json_object_set_new(jsevent, "uid", json_string(cdata->ical_uid));
         json_object_set_new(jsevent, "@type", json_string("jsevent"));
         json_array_append_new(rock->get->list, jsevent);
     }
     else {
-        /* Client requested specific event ids */
-        r = getcalendarevents_getinstances(jsevent, cdata, ical, rock);
+        /* Expand main event, if requested */
+        int i;
+        for (i = 0; i < ptrarray_size(rock->want_eventids); i++) {
+            struct event_id *eid = ptrarray_nth(rock->want_eventids, i);
+            if (eid->recurid == NULL) {
+                json_t *myevent = json_deep_copy(jsevent);
+                jmap_filterprops(myevent, props);
+                json_object_set_new(myevent, "id", json_string(cdata->ical_uid));
+                json_object_set_new(myevent, "uid", json_string(cdata->ical_uid));
+                json_object_set_new(myevent, "@type", json_string("jsevent"));
+                json_array_append_new(rock->get->list, myevent);
+            }
+        }
+        /* Expand instances, if requested */
+        r = getcalendarevents_getinstances(jsevent, cdata, ical, utctimes_fallbacktz, rock);
         json_decref(jsevent);
         if (r) goto done;
     }
@@ -2422,6 +2555,16 @@ static const jmap_property_t event_props[] = {
         JMAP_URN_CALENDARS,
         0
     },
+    {
+        "utcStart",
+        JMAP_URN_CALENDARS,
+        JMAP_PROP_SKIP_GET
+    },
+    {
+        "utcEnd",
+        JMAP_URN_CALENDARS,
+        JMAP_PROP_SKIP_GET
+    },
 
     /* FM specific */
     {
@@ -2473,9 +2616,12 @@ static int jmap_calendarevent_get(struct jmap_req *req)
                                            NULL /* mbox */,
                                            HASHU64_TABLE_INITIALIZER, /* cache */
                                            NULL, /* want_eventids */
-                                           checkacl };
+                                           checkacl,
+                                           HASH_TABLE_INITIALIZER /* utctimes_fallbacktz */
+    };
 
     construct_hashu64_table(&rock.jmapcache, 512, 0);
+    construct_hash_table(&rock.utctimes_fallbacktz_by_mboxname, 64, 0);
 
     /* Parse request */
     jmap_get_parse(req, &parser, event_props, /*allow_null_ids*/1,
@@ -2572,6 +2718,7 @@ done:
     if (db) caldav_close(db);
     if (rock.mailbox) jmap_closembox(req, &rock.mailbox);
     free_hashu64_table(&rock.jmapcache, free);
+    free_hash_table(&rock.utctimes_fallbacktz_by_mboxname, NULL); /* values owned by libical */
     return r;
 }
 
@@ -2664,6 +2811,96 @@ static void remove_itip_properties(icalcomponent *ical)
 
 }
 
+static void setcalendarevents_set_utctimes(json_t *event,
+                                           json_t *invalid)
+{
+    struct jmapical_datetime startdt = JMAPICAL_DATETIME_INITIALIZER;
+    struct jmapical_duration dur = JMAPICAL_DURATION_INITIALIZER;
+    icaltimezone *tz = NULL;
+    struct buf buf = BUF_INITIALIZER;
+
+    /* Validate utcStart */
+    json_t *jutcStart = json_object_get(event, "utcStart");
+    if (json_is_string(jutcStart)) {
+        if (jmapical_utcdatetime_from_string(json_string_value(jutcStart), &startdt) == -1) {
+            json_array_append_new(invalid, json_string("utcStart"));
+        }
+    }
+    else json_array_append_new(invalid, json_string("utcStart")); // must be set
+
+    /* Validate utcEnd and determine duration */
+    json_t *jutcEnd = json_object_get(event, "utcEnd");
+    if (json_is_string(jutcEnd)) {
+        struct jmapical_datetime enddt = JMAPICAL_DATETIME_INITIALIZER;
+        if (jmapical_utcdatetime_from_string(json_string_value(jutcEnd), &enddt) >= 0) {
+            jmapical_duration_between_utctime(&startdt, &enddt, &dur);
+            if (dur.is_neg) {
+                json_array_append_new(invalid, json_string("utcEnd"));
+            }
+        }
+        else json_array_append_new(invalid, json_string("utcEnd"));
+    }
+    else if (JNOTNULL(jutcEnd)) {
+        json_array_append_new(invalid, json_string("utcEnd"));
+    }
+
+    /* Return early for bogus values */
+    if (json_array_size(invalid)) goto done;
+
+    /* Determine timeZone */
+    json_t *jtimeZone = json_object_get(event, "timeZone");
+    if (json_is_string(jtimeZone)) {
+        const char *tzid = json_string_value(jtimeZone);
+        tz = icaltimezone_lookup_tzid(tzid);
+        if (!tz) goto done; /* bogus timeZone */
+    }
+    else if (!jtimeZone || json_is_null(jtimeZone)) {
+        tz = icaltimezone_get_utc_timezone();
+    }
+
+    /* Convert UTC start to local start */
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+    if (tz != utc) {
+        icaltimetype startical = jmapical_datetime_to_icaltime(&startdt, utc);
+        bit64 nano = startdt.nano;
+        startical = icaltime_convert_to_zone(startical, tz);
+        jmapical_datetime_from_icaltime(startical, &startdt);
+        startdt.nano = nano;
+    }
+
+    /* Set start */
+    json_t *jstart = json_object_get(event, "start");
+    jmapical_localdatetime_as_string(&startdt, &buf);
+    if (json_is_string(jstart)) {
+        if (strcmp(json_string_value(jstart), buf_cstring(&buf))) {
+            json_array_append_new(invalid, json_string("utcStart"));
+        }
+    }
+    else if (!jstart) {
+        json_object_set_new(event, "start", json_string(buf_cstring(&buf)));
+    }
+
+    /* Set duration */
+    json_t *jduration = json_object_get(event, "duration");
+    jmapical_duration_as_string(&dur, &buf);
+    if (json_is_string(jduration) && jutcEnd) {
+        if (strcmp(json_string_value(jduration), buf_cstring(&buf))) {
+            json_array_append_new(invalid, json_string("utcEnd"));
+        }
+    }
+    else if (!jduration && !jmapical_duration_has_zero_time(&dur)) {
+        json_object_set_new(event, "duration", json_string(buf_cstring(&buf)));
+    }
+
+    /* Set timeZone */
+    if (!jtimeZone || json_is_null(jtimeZone)) {
+        json_object_set_new(event, "timeZone", json_string("Etc/UTC"));
+    }
+
+done:
+    buf_free(&buf);
+}
+
 static int setcalendarevents_create(jmap_req_t *req,
                                     const char *account_id,
                                     json_t *event,
@@ -2750,11 +2987,12 @@ static int setcalendarevents_create(jmap_req_t *req,
         goto done;
     }
 
-    /* Convert the JMAP calendar event to ical. */
+    /* Set uid */
     if (!json_object_get(event, "uid")) {
         json_object_set_new(event, "uid", json_string(uid));
     }
 
+    /* Set created, updated */
     if (!json_object_get(event, "created") || !json_object_get(event, "updated")) {
         char datestr[RFC3339_DATETIME_MAX+1];
         time_to_rfc3339(time(NULL), datestr, RFC3339_DATETIME_MAX);
@@ -2766,9 +3004,15 @@ static int setcalendarevents_create(jmap_req_t *req,
             json_object_set_new(event, "updated", json_string(datestr));
         }
     }
-    ical = jmapical_toical(event, NULL, invalid);
 
-    // check that participantId is either not present or is a valid participant
+    /* Check utcStart and utcEnd */
+    if (JNOTNULL(json_object_get(event, "utcStart")) ||
+        JNOTNULL(json_object_get(event, "utcEnd"))) {
+
+        setcalendarevents_set_utctimes(event, invalid);
+    }
+
+    /* Check if participantId is either not present or is a valid participant */
     json_t *jparticipantId = json_object_get(event, "participantId");
     if (json_is_string(jparticipantId)) {
         const char *participant_id = json_string_value(jparticipantId);
@@ -2781,6 +3025,9 @@ static int setcalendarevents_create(jmap_req_t *req,
     else if (JNOTNULL(jparticipantId)) {
         json_array_append_new(invalid, json_string("participantId"));
     }
+
+    /* Convert JSEvent to iCalendar */
+    ical = jmapical_toical(event, NULL, invalid);
 
     if (json_array_size(invalid)) {
         r = 0;
@@ -2939,12 +3186,59 @@ static int eventpatch_updates_recurrenceoverrides(json_t *event_patch)
     return 0;
 }
 
+static int eventpatch_updates_utctimes(json_t *event_patch)
+{
+    if (JNOTNULL(json_object_get(event_patch, "utcStart"))) {
+        return 1;
+    }
+    if (JNOTNULL(json_object_get(event_patch, "utcEnd"))) {
+        return 1;
+    }
+
+    json_t *joverride;
+    const char *recurid;
+    json_object_foreach(json_object_get(event_patch, "recurrenceOverrides"), recurid, joverride) {
+        if (JNOTNULL(json_object_get(joverride, "utcStart"))) {
+            return 1;
+        }
+        if (JNOTNULL(json_object_get(joverride, "utcEnd"))) {
+            return 1;
+        }
+    }
+
+    const char *prop;
+    json_t *jval;
+    json_object_foreach(event_patch, prop, jval) {
+        if (!strncmp(prop, "recurrenceOverrides/", 20)) {
+            const char *p = strchr(prop + 21, '/');
+            if (p) {
+                if (!strcmp(p + 1, "utcStart")) {
+                    return 1;
+                }
+                if (!strcmp(p + 1, "utcEnd")) {
+                    return 1;
+                }
+            }
+            else {
+                if (JNOTNULL(json_object_get(jval, "utcStart"))) {
+                    return 1;
+                }
+                if (JNOTNULL(json_object_get(jval, "utcEnd"))) {
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
 static int setcalendarevents_apply_patch(json_t *event_patch,
                                          icalcomponent *oldical,
                                          const char *recurid,
                                          json_t *invalid,
                                          strarray_t *schedule_addresses,
                                          icalcomponent **newical,
+                                         icaltimezone *utctimes_fallbacktz,
                                          json_t *update,
                                          json_t **err)
 {
@@ -3011,6 +3305,18 @@ static int setcalendarevents_apply_patch(json_t *event_patch,
             *err = json_pack("{s:s}", "type", "invalidPatch");
             goto done;
         }
+
+        /* Handle UTC time updates */
+        if (json_object_get(event_patch, "utcStart") || json_object_get(event_patch, "utcEnd")) {
+            if (!json_object_get(event_patch, "start")) {
+                json_object_del(new_instance, "start");
+            }
+            if (json_object_get(event_patch, "utcEnd") && !json_object_get(event_patch, "duration")) {
+                json_object_del(new_instance, "duration");
+            }
+            setcalendarevents_set_utctimes(new_instance, invalid);
+        }
+
         json_object_del(new_instance, "recurrenceRule");
         json_object_del(new_instance, "recurrenceOverrides");
         new_override = jmap_patchobject_create(old_event, new_instance);
@@ -3159,11 +3465,74 @@ static int setcalendarevents_apply_patch(json_t *event_patch,
             json_decref(old_mainevent);
         }
         else {
-            /* The happy path - just apply the patch as provided */
+            /* Apply the patch as provided */
             new_event = jmap_patchobject_apply(old_event, event_patch, invalid);
             if (!new_event) {
                 *err = json_pack("{s:s}", "type", "invalidPatch");
                 goto done;
+            }
+        }
+
+        /* Handle UTC time updates */
+        if (eventpatch_updates_utctimes(event_patch)) {
+            json_t *jnew_overrides = json_object_get(new_event, "recurrenceOverrides");
+            if (JNOTNULL(jnew_overrides)) {
+                /* Reject UTC times if they differ from old event */
+                getcalendarevents_get_utctimes(old_event, utctimes_fallbacktz);
+                json_t *jnew_utcStart = json_object_get(new_event, "utcStart");
+                json_t *jnew_utcEnd = json_object_get(new_event, "utcEnd");
+                if (JNOTNULL(jnew_utcStart)) {
+                    json_t *jold_utcStart = json_object_get(old_event, "utcStart");
+                    if (!json_equal(jold_utcStart, jnew_utcStart)) {
+                        json_array_append_new(invalid, json_string("utcStart"));
+                    }
+                }
+                if (JNOTNULL(jnew_utcEnd)) {
+                    json_t *jold_utcEnd = json_object_get(old_event, "utcEnd");
+                    if (!json_equal(jold_utcEnd, jnew_utcEnd)) {
+                        json_array_append_new(invalid, json_string("utcEnd"));
+                    }
+                }
+                json_t *jold_overrides = json_object_get(old_event, "recurrenceOverrides");
+                json_t *jnew_override;
+                const char *recurid;
+                struct buf buf = BUF_INITIALIZER;
+                json_object_foreach(jnew_overrides, recurid, jnew_override) {
+                    json_t *jold_override = json_object_get(jold_overrides, recurid);
+                    jnew_utcStart = json_object_get(jnew_override, "utcStart");
+                    jnew_utcEnd = json_object_get(jnew_override, "utcEnd");
+
+                    if (JNOTNULL(jnew_utcStart)) {
+                        json_t *jold_utcStart = json_object_get(jold_override, "utcStart");
+                        if (!jold_utcStart || !json_equal(jold_utcStart, jnew_utcStart)) {
+                            buf_setcstr(&buf, "recurrenceOverrides/");
+                            buf_appendcstr(&buf, recurid);
+                            buf_appendcstr(&buf, "/utcStart");
+                            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                            buf_reset(&buf);
+                        }
+                    }
+                    if (JNOTNULL(jnew_utcEnd)) {
+                        json_t *jold_utcEnd = json_object_get(jold_override, "utcEnd");
+                        if (!jold_utcEnd || !json_equal(jold_utcEnd, jnew_utcEnd)) {
+                            buf_setcstr(&buf, "recurrenceOverrides/");
+                            buf_appendcstr(&buf, recurid);
+                            buf_appendcstr(&buf, "/utcEnd");
+                            json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                            buf_reset(&buf);
+                        }
+                    }
+                }
+                buf_free(&buf);
+            } else {
+                /* Allow updating UTC times for non-recurring events */
+                if (!json_object_get(event_patch, "start")) {
+                    json_object_del(new_event, "start");
+                }
+                if (json_object_get(event_patch, "utcEnd") && !json_object_get(event_patch, "duration")) {
+                    json_object_del(new_event, "duration");
+                }
+                setcalendarevents_set_utctimes(new_event, invalid);
             }
         }
     }
@@ -3318,9 +3687,14 @@ static int setcalendarevents_update(jmap_req_t *req,
         json_array_append_new(invalid, json_string("isDraft"));
     }
 
+    /* Read UTC times fallback timezone from source mailbox */
+    icaltimezone *utctimes_fallbacktz =
+        calendarevent_get_utctimes_fallbacktz(mbox->name, req->userid);
+
     /* Apply patch */
     r = setcalendarevents_apply_patch(event_patch, oldical, eid->recurid,
-                                      invalid, &schedule_addresses, &ical, update, err);
+                                      invalid, &schedule_addresses, &ical,
+                                      utctimes_fallbacktz, update, err);
     if (json_array_size(invalid)) {
         r = 0;
         goto done;
