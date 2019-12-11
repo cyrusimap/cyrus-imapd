@@ -166,14 +166,21 @@ struct jmapical_duration {
 /* True if all components are zero */
 extern int jmapical_duration_has_zero_time(const struct jmapical_duration *dur);
 
+/* Convert Duration to ical duration, truncating subseconds */
+extern struct icaldurationtype jmapical_duration_to_icalduration(const struct jmapical_duration *dur);
+
 /* Convert ical duration to Duration with zero subseconds */
 extern void jmapical_duration_from_icalduration(struct icaldurationtype icaldur,
                                                 struct jmapical_duration *dur);
 
 /* Calculate time-range between t1 and t2 into Duration dur */
-extern void jmapical_duration_between(time_t t1, bit64 t1nanos,
-                                      time_t t2, bit64 t2nanos,
-                                      struct jmapical_duration *dur);
+extern void jmapical_duration_between_unixtime(time_t t1, bit64 t1nanos,
+                                               time_t t2, bit64 t2nanos,
+                                               struct jmapical_duration *dur);
+
+extern void jmapical_duration_between_utctime(const struct jmapical_datetime *t1,
+                                              const struct jmapical_datetime *t2,
+                                              struct jmapical_duration *dur);
 
 extern void jmapical_duration_as_string(const struct jmapical_duration *dur, struct buf *buf);
 extern int jmapical_duration_from_string(const char *val, struct jmapical_duration *dur);
