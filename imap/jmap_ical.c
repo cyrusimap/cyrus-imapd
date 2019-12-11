@@ -547,7 +547,7 @@ HIDDEN int jmapical_duration_has_zero_time(const struct jmapical_duration *dur)
            dur->seconds == 0 && dur->nanos == 0;
 }
 
-static struct icaldurationtype duration_to_icalduration(const struct jmapical_duration *dur)
+HIDDEN struct icaldurationtype jmapical_duration_to_icalduration(const struct jmapical_duration *dur)
 {
     struct icaldurationtype icaldur = icaldurationtype_null_duration();
 
@@ -573,9 +573,9 @@ HIDDEN void jmapical_duration_from_icalduration(struct icaldurationtype icaldur,
     dur->seconds = icaldur.seconds;
 }
 
-HIDDEN void jmapical_duration_between(time_t t1, bit64 t1nanos,
-                                      time_t t2, bit64 t2nanos,
-                                      struct jmapical_duration *dur)
+HIDDEN void jmapical_duration_between_unixtime(time_t t1, bit64 t1nanos,
+                                               time_t t2, bit64 t2nanos,
+                                               struct jmapical_duration *dur)
 {
     const icaltimezone *utc = icaltimezone_get_utc_timezone();
     int is_neg = t1 > t2 || (t1 == t2 && t1nanos > t2nanos);
@@ -601,6 +601,21 @@ HIDDEN void jmapical_duration_between(time_t t1, bit64 t1nanos,
     icaldur.is_neg = is_neg;
     jmapical_duration_from_icalduration(icaldur, dur);
     dur->nanos = nanos;
+}
+
+HIDDEN void jmapical_duration_between_utctime(const struct jmapical_datetime *t1,
+                                              const struct jmapical_datetime *t2,
+                                              struct jmapical_duration *dur)
+{
+    const icaltimezone *utc = icaltimezone_get_utc_timezone();
+
+    icaltimetype t1ical = jmapical_datetime_to_icaltime(t1, utc);
+    icaltimetype t2ical = jmapical_datetime_to_icaltime(t2, utc);
+
+    time_t t1unix = icaltime_as_timet_with_zone(t1ical, utc);
+    time_t t2unix = icaltime_as_timet_with_zone(t2ical, utc);
+
+    jmapical_duration_between_unixtime(t1unix, t1->nano, t2unix, t2->nano, dur);
 }
 
 HIDDEN int jmapical_duration_from_string(const char *val, struct jmapical_duration *dur)
@@ -632,7 +647,7 @@ HIDDEN int jmapical_duration_from_string(const char *val, struct jmapical_durati
 
 HIDDEN void jmapical_duration_as_string(const struct jmapical_duration *dur, struct buf *buf)
 {
-    struct icaldurationtype icaldur = duration_to_icalduration(dur);
+    struct icaldurationtype icaldur = jmapical_duration_to_icalduration(dur);
     char *tmp = icaldurationtype_as_ical_string_r(icaldur);
 
     buf_setcstr(buf, tmp);
@@ -2156,7 +2171,7 @@ static void duration_from_vevent(icalcomponent *comp, struct jmapical_duration *
     if (!icaltime_is_null_time(dtend)) {
         time_t tstart = icaltime_as_timet_with_zone(dtstart, dtstart.zone);
         time_t tend = icaltime_as_timet_with_zone(dtend, dtend.zone);
-        jmapical_duration_between(tstart, 0, tend, 0, dur);
+        jmapical_duration_between_unixtime(tstart, 0, tend, 0, dur);
     }
 }
 
@@ -2804,14 +2819,14 @@ startend_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *event)
     insert_icaltimeprop(comp, dtstart, 1, ICAL_DTSTART_PROPERTY);
     if (tzstart != tzend) {
         /* Add DTEND */
-        struct icaldurationtype icaldur = duration_to_icalduration(&dur);
+        struct icaldurationtype icaldur = jmapical_duration_to_icalduration(&dur);
         icaltimetype dtend = icaltime_add(dtstart, icaldur);
         dtend = icaltime_convert_to_zone(dtend, tzend);
         icalproperty *prop = insert_icaltimeprop(comp, dtend, 1, ICAL_DTEND_PROPERTY);
         if (prop) xjmapid_to_ical(prop, endzone_location_id);
     } else {
         /* Add DURATION */
-        struct icaldurationtype icaldur = duration_to_icalduration(&dur);
+        struct icaldurationtype icaldur = jmapical_duration_to_icalduration(&dur);
         icalproperty *prop = icalproperty_new_duration(icaldur);
         icalcomponent_add_property(comp, prop);
     }
@@ -3790,7 +3805,7 @@ alerts_to_ical(icalcomponent *comp, struct jmap_parser *parser, json_t *alerts)
                 jmap_parser_pop(parser);
 
                 /* Add offset trigger */
-                trigger.duration = duration_to_icalduration(&offset);
+                trigger.duration = jmapical_duration_to_icalduration(&offset);
                 prop = icalproperty_new_trigger(trigger);
                 param = icalparameter_new_related(rel);
                 icalproperty_add_parameter(prop, param);
