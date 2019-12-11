@@ -35,17 +35,18 @@ configuring Cyrus easier.
 
 .. option:: conf
 
-    Print only the configuration options which are not the same as
-    default (regardless of whether you have specified them or not).
-
-.. option:: conf-default
-
-    Print all default configuration options, ignoring those set locally.
+    Print the configuration options which have been set to a value
+    other than their default, and their value.
 
 .. option:: conf-all
 
-    Print ALL configuration options - including default options.  This
-    command shows which options will be in effect at runtime.
+    Print ALL configuration options and their configured values (including
+    those using their default value).  This command shows which options
+    will be in effect at runtime.
+
+.. option:: conf-default
+
+    Print the default values for all available configuration options.
 
 .. option:: conf-lint
 
