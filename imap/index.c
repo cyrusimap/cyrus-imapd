@@ -639,7 +639,7 @@ static void index_refresh_locked(struct index_state *state)
 
     need_records = state->want_expunged ? mailbox->i.num_records : mailbox->i.exists;
     if (state->last_uid) {
-        need_records += (mailbox->i.last_uid - state->last_uid);
+        need_records = state->exists + (mailbox->i.last_uid - state->last_uid);
     }
 
     /* make sure we have space */
