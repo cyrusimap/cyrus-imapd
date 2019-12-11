@@ -257,8 +257,7 @@ struct restore_rock {
     struct jmap_restore *jrestore;
     int mbtype;
     char *(*resource_name_cb)(message_t *, void *);
-    int (*recreate_cb)(message_t *, jmap_req_t *, int, void *);
-    int (*destroy_cb)(message_t *, jmap_req_t *, int);
+    int (*restore_cb)(message_t *, message_t *, jmap_req_t *, int, void *);
     void *rock;
     struct mailbox *mailbox;
 };
@@ -276,6 +275,8 @@ static void restore_resource_cb(const char *resource __attribute__((unused)),
     struct restore_rock *rrock = (struct restore_rock *) rock;
     struct mailbox *mailbox = rrock->mailbox;
     jmap_req_t *req = rrock->req;
+    message_t *recreatemsg = NULL;
+    message_t *destroymsg = NULL;
     int r = 0, is_replace = 0;
 
     switch (restore->type) {
@@ -297,20 +298,17 @@ static void restore_resource_cb(const char *resource __attribute__((unused)),
     }
 
     if (restore->msgno_torecreate) {
-        message_t *msg = message_new_from_mailbox(mailbox,
-                                                  restore->msgno_torecreate);
-
-        r = rrock->recreate_cb(msg, req, is_replace, rrock->rock);
-        message_unref(&msg);
+        recreatemsg = message_new_from_mailbox(mailbox, restore->msgno_torecreate);
     }
 
-    if (!r && restore->msgno_todestroy) {
-        message_t *msg = message_new_from_mailbox(mailbox,
-                                                  restore->msgno_todestroy);
-
-        r = rrock->destroy_cb(msg, req, is_replace);
-        message_unref(&msg);
+    if (restore->msgno_todestroy) {
+        destroymsg = message_new_from_mailbox(mailbox, restore->msgno_todestroy);
     }
+
+    r = rrock->restore_cb(recreatemsg, destroymsg, req, is_replace, rrock->rock);
+
+    if (recreatemsg) message_unref(&recreatemsg);
+    if (destroymsg) message_unref(&destroymsg);
 
     if (!r) rrock->jrestore->num_undone[restore->type]++;
 
@@ -401,9 +399,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
-static int recreate_resource(message_t *msg, jmap_req_t *req, int is_replace,
-                             void *rock __attribute__((unused)))
-
+static int recreate_resource(message_t *msg, jmap_req_t *req, int is_replace)
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
@@ -547,51 +543,59 @@ static char *contact_resource_name(message_t *msg, void *rock)
     return resource;
 }
 
-static int recreate_contact(message_t *msg, jmap_req_t *req,
-                            int is_replace, void *rock)
+static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
+                           jmap_req_t *req, int is_replace, void *rock)
 {
-    struct vparse_card *vcard = NULL;
+    int r = 0;
 
-    int r = recreate_resource(msg, req, is_replace, rock);
+    if (recreatemsg) {
+        r = recreate_resource(recreatemsg, req, is_replace);
 
-    if (!r && !is_replace) {
-        /* Add this card to the group vCard of recreated contacts */
-        struct mailbox *mailbox = msg_mailbox(msg);
-        const struct index_record *record = msg_record(msg);
-        struct contact_rock *crock = (struct contact_rock *) rock;
+        if (!r && !is_replace) {
+            /* Add this card to the group vCard of recreated contacts */
+            struct mailbox *mailbox = msg_mailbox(recreatemsg);
+            const struct index_record *record = msg_record(recreatemsg);
+            struct contact_rock *crock = (struct contact_rock *) rock;
+            struct vparse_card *vcard = record_to_vcard(mailbox, record);
 
-        vcard = record_to_vcard(mailbox, record);
-        if (!vcard || !vcard->objects) {
-            r = IMAP_INTERNAL;
-            goto done;
+            if (!vcard || !vcard->objects) {
+                r = IMAP_INTERNAL;
+            }
+            else {
+                if (!crock->group_vcard) {
+                    /* Create the group vCard */
+                    char datestr[RFC3339_DATETIME_MAX];
+                    struct vparse_card *gcard = vparse_new_card("VCARD");
+
+                    time_to_rfc3339(time(0), datestr, RFC3339_DATETIME_MAX);
+                    buf_reset(&crock->buf);
+                    buf_printf(&crock->buf, "Restored %.10s", datestr);
+
+                    vparse_add_entry(gcard, NULL, "PRODID", _prodid);
+                    vparse_add_entry(gcard, NULL, "VERSION", "3.0");
+                    vparse_add_entry(gcard, NULL, "UID", makeuuid());
+                    vparse_add_entry(gcard, NULL,
+                                     "FN", buf_cstring(&crock->buf));
+                    vparse_add_entry(gcard, NULL,
+                                     "X-ADDRESSBOOKSERVER-KIND", "group");
+                    crock->group_vcard = gcard;
+                }
+
+                buf_reset(&crock->buf);
+                buf_printf(&crock->buf, "urn:uuid:%s",
+                           vparse_stringval(vcard->objects, "uid"));
+                vparse_add_entry(crock->group_vcard, NULL,
+                                 "X-ADDRESSBOOKSERVER-MEMBER",
+                                 buf_cstring(&crock->buf));
+            }
+
+            vparse_free_card(vcard);
         }
-
-        if (!crock->group_vcard) {
-            /* Create the group vCard */
-            char datestr[RFC3339_DATETIME_MAX];
-            struct vparse_card *gcard = vparse_new_card("VCARD");
-
-            time_to_rfc3339(time(0), datestr, RFC3339_DATETIME_MAX);
-            buf_reset(&crock->buf);
-            buf_printf(&crock->buf, "Restored %.10s", datestr);
-
-            vparse_add_entry(gcard, NULL, "PRODID", _prodid);
-            vparse_add_entry(gcard, NULL, "VERSION", "3.0");
-            vparse_add_entry(gcard, NULL, "UID", makeuuid());
-            vparse_add_entry(gcard, NULL, "FN", buf_cstring(&crock->buf));
-            vparse_add_entry(gcard, NULL, "X-ADDRESSBOOKSERVER-KIND", "group");
-            crock->group_vcard = gcard;
-        }
-
-        buf_reset(&crock->buf);
-        buf_printf(&crock->buf, "urn:uuid:%s",
-                   vparse_stringval(vcard->objects, "uid"));
-        vparse_add_entry(crock->group_vcard, NULL, "X-ADDRESSBOOKSERVER-MEMBER",
-                         buf_cstring(&crock->buf));
     }
 
-  done:
-    vparse_free_card(vcard);
+    if (!r && destroymsg) {
+        r = destroy_resource(destroymsg, req, is_replace);
+    }
 
     return r;
 }
@@ -647,8 +651,8 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
         struct contact_rock crock =
             { carddav_open_userid(req->accountid), NULL, BUF_INITIALIZER };
         struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK,
-                                      &contact_resource_name, &recreate_contact,
-                                      &destroy_resource, &crock, NULL };
+                                      &contact_resource_name, &restore_contact,
+                                      &crock, NULL };
 
         mboxlist_mboxtree(addrhomeset,
                           restore_addressbook_cb, &rrock, MBOXTREE_SKIP_ROOT);
@@ -709,6 +713,23 @@ static char *note_resource_name(message_t *msg,
     return resource;
 }
 
+static int restore_note(message_t *recreatemsg, message_t *destroymsg,
+                        jmap_req_t *req, int is_replace,
+                        void *rock __attribute__((unused)))
+{
+    int r = 0;
+
+    if (recreatemsg) {
+        r = recreate_resource(recreatemsg, req, is_replace);
+    }
+
+    if (!r && destroymsg) {
+        r = destroy_resource(destroymsg, req, is_replace);
+    }
+
+    return r;
+}
+
 static int jmap_backup_restore_notes(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -726,8 +747,8 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
     if (subfolder && restore.undo) {
         char *notes = mboxname_user_mbox(req->accountid, subfolder);
         struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL,
-                                      &note_resource_name, &recreate_resource,
-                                      &destroy_resource, NULL, NULL };
+                                      &note_resource_name, &restore_note,
+                                      NULL, NULL };
 
         mboxlist_mboxtree(notes, restore_collection_cb,
                           &rrock, MBOXTREE_SKIP_CHILDREN);
