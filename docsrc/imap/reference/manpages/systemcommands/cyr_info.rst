@@ -38,15 +38,24 @@ configuring Cyrus easier.
     Print the configuration options which have been set to a value
     other than their default, and their value.
 
+    With **-s version**, configuration options whose behaviour has
+    changed since *version* will be highlighted.
+
 .. option:: conf-all
 
     Print ALL configuration options and their configured values (including
     those using their default value).  This command shows which options
     will be in effect at runtime.
 
+    With **-s version**, configuration options which have been added or
+    whose behaviour has changed since *version* will be highlighted.
+
 .. option:: conf-default
 
     Print the default values for all available configuration options.
+
+    With **-s version**, configuration options which have been added or
+    whose behaviour has changed since *version* will be highlighted.
 
 .. option:: conf-lint
 
@@ -75,6 +84,15 @@ Options
 .. option:: -n servicename
 
     Read the configuration as if for the service named *name*.
+
+.. option:: -s version
+
+    Highlight configuration options that have been added or whose behaviour
+    has been modified since *version*.  Use this option after a server upgrade,
+    specifying your previous version, to find which options you need to review
+    and maybe change before starting up the upgraded server.
+
+    For use with the **conf**, **conf-all**, and **conf-default** sub-commands.
 
 Examples
 ========
