@@ -6796,7 +6796,6 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
 
     int r = 0;
     int i, flag;
-    struct mailbox_iter *iter = NULL;
     struct mailbox *mailbox = NULL;
     struct found_uids files = FOUND_UIDS_INITIALIZER;
     struct found_uids discovered = FOUND_UIDS_INITIALIZER;
@@ -7060,7 +7059,6 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
     }
 
 close:
-    mailbox_iter_done(&iter);
     free_found(&files);
     free_found(&discovered);
     free_found(&annots);
