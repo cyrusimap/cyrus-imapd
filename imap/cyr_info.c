@@ -132,6 +132,14 @@ static void do_conf(int only_changed)
                 printf("\n");
                 break;
 
+            case OPT_DURATION:
+                if (only_changed) {
+                    if (0 == strcmpsafe(imapopts[i].def.s, imapopts[i].val.s))
+                        break;
+                }
+                printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.s);
+                break;
+
             case OPT_ENUM:
                 if (only_changed) {
                     if (imapopts[i].def.e == imapopts[i].val.e) break;
@@ -221,10 +229,12 @@ static void do_defconf(void)
                 printf("\n");
                 break;
 
+
             case OPT_INT:
                 printf("%s: %ld\n", imapopts[i].optname, imapopts[i].def.i);
                 break;
 
+            case OPT_DURATION:
             case OPT_STRING:
             case OPT_STRINGLIST:
                 printf("%s: %s\n", imapopts[i].optname, imapopts[i].def.s ? imapopts[i].def.s : "");
