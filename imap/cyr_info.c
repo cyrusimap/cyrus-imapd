@@ -388,6 +388,12 @@ static uint32_t parse_since_version(const char *str)
     unsigned parts[3] = {0}, i;
     const char *p;
     int saw_digit = 0;
+    size_t pnlen = strlen(PACKAGE_NAME);
+
+    /* politely strip 'cyrus-imapd[- ]' from start of version string */
+    if (!strncmp(str, PACKAGE_NAME, pnlen)
+            && (str[pnlen] == '-' || str[pnlen] == ' '))
+        str += pnlen + 1;
 
     for (p = str, i = 0; *p; p++) {
         if (cyrus_isdigit(*p)) {
