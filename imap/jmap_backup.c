@@ -399,7 +399,8 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     return 0;
 }
 
-static int recreate_resource(message_t *msg, jmap_req_t *req, int is_replace)
+static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
+                             jmap_req_t *req, int is_replace)
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
@@ -410,17 +411,19 @@ static int recreate_resource(message_t *msg, jmap_req_t *req, int is_replace)
     FILE *f = NULL;
     int r;
 
+    if (!tomailbox) tomailbox = mailbox;
+
     /* use latest version of the resource as the source for our append stage */
     r = message_get_fname(msg, &fname);
     if (r) return r;
 
-    f = append_newstage_full(mailbox->name, time(0), 0, &stage, fname);
+    f = append_newstage_full(tomailbox->name, time(0), 0, &stage, fname);
     if (!f) return IMAP_INTERNAL;
 
     /* setup for appending the message to the mailbox. */
     qdiffs[QUOTA_MESSAGE] = 1;
     qdiffs[QUOTA_STORAGE] = msg_size(msg);
-    r = append_setup_mbox(&as, mailbox, req->accountid, req->authstate,
+    r = append_setup_mbox(&as, tomailbox, req->accountid, req->authstate,
                           ACL_INSERT, qdiffs, NULL, 0, EVENT_MESSAGE_NEW);
     if (!r) {
         /* get existing flags and annotations */
@@ -550,7 +553,7 @@ static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
     int r = 0;
 
     if (recreatemsg) {
-        r = recreate_resource(recreatemsg, req, is_replace);
+        r = recreate_resource(recreatemsg, NULL, req, is_replace);
 
         if (!r && !is_replace) {
             /* Add this card to the group vCard of recreated contacts */
@@ -621,7 +624,7 @@ static int restore_addressbook_cb(const mbentry_t *mbentry, void *rock)
     r = restore_collection_cb(mbentry, rock);
 
     if (!r && crock->group_vcard) {
-        /* Store the group vCard os recreated contacts */
+        /* Store the group vCard of recreated contacts */
         r = carddav_store(mailbox, crock->group_vcard, NULL, 0, NULL, NULL, 
                           rrock->req->accountid, rrock->req->authstate,
                           /*ignorequota*/ 0);
@@ -805,7 +808,7 @@ static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
     }
     else {
         /* No scheduling - simple recreation will do */
-        r = recreate_resource(recreatemsg, req, destroymsg != NULL);
+        r = recreate_resource(recreatemsg, NULL, req, destroymsg != NULL);
     }
 
     return r;
@@ -923,7 +926,7 @@ static int restore_note(message_t *recreatemsg, message_t *destroymsg,
     int r = 0;
 
     if (recreatemsg) {
-        r = recreate_resource(recreatemsg, req, is_replace);
+        r = recreate_resource(recreatemsg, NULL, req, is_replace);
     }
 
     if (!r && destroymsg) {
