@@ -281,49 +281,93 @@ sub test_restore_calendars
 
     xlog "create calendar";
     my $res = $jmap->CallMethods([
-            ['Calendar/set', { create => { "1" => {
-                name => "foo",
-                color => "coral",
-                sortOrder => 1,
-                isVisible => \1
-             }}}, "R1"]
+        ['Calendar/set', {
+            create => {
+                "1" => {
+                    name => "foo",
+                    color => "coral",
+                    sortOrder => 1,
+                    isVisible => \1
+                },
+                "2" => {
+                    name => "bar",
+                    color => "aqua",
+                    sortOrder => 2,
+                    isVisible => \1
+                }
+            }
+         }, "R1"]
     ]);
     my $calid = $res->[0][1]{created}{"1"}{id};
+    my $calid2 = $res->[0][1]{created}{"2"}{id};
 
     xlog "send invitation as organizer";
-    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
-                        "1" => {
-                            "calendarId" => $calid,
-                            "title" => "foo",
-                            "description" => "foo's description",
-                            "freeBusyStatus" => "busy",
-                            "showWithoutTime" => JSON::false,
-                            "start" => "2015-10-06T16:45:00",
-                            "timeZone" => "Australia/Melbourne",
-                            "duration" => "PT15M",
-                            "replyTo" => {
-                                imip => "mailto:cassandane\@example.com",
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                "1" => {
+                    "calendarId" => $calid,
+                    "title" => "foo",
+                    "description" => "foo's description",
+                    "freeBusyStatus" => "busy",
+                    "showWithoutTime" => JSON::false,
+                    "start" => "2015-10-06T16:45:00",
+                    "timeZone" => "Australia/Melbourne",
+                    "duration" => "PT15M",
+                    "replyTo" => {
+                        imip => "mailto:cassandane\@example.com",
+                    },
+                    "participants" => {
+                        "org" => {
+                            "name" => "Cassandane",
+                            "email" => "cassandane\@example.com",
+                            roles => {
+                                'owner' => JSON::true,
                             },
-                            "participants" => {
-                                "org" => {
-                                    "name" => "Cassandane",
-                                    "email" => "cassandane\@example.com",
-                                    roles => {
-                                        'owner' => JSON::true,
-                                    },
-                                },
-                                "att" => {
-                                    "name" => "Bugs Bunny",
-                                    "email" => "bugs\@example.com",
-                                    roles => {
-                                        'attendee' => JSON::true,
-                                    },
-                                },
+                        },
+                        "att" => {
+                            "name" => "Bugs Bunny",
+                            "email" => "bugs\@example.com",
+                            roles => {
+                                'attendee' => JSON::true,
                             },
-                        }
-                    }}, "R1"]]);
+                        },
+                    },
+                },
+                "2" => {
+                    "calendarId" => $calid2,
+                    "title" => "bar",
+                    "description" => "bar's description",
+                    "freeBusyStatus" => "busy",
+                    "showWithoutTime" => JSON::false,
+                    "start" => "2019-10-06T16:45:00",
+                    "timeZone" => "Australia/Melbourne",
+                    "duration" => "PT15M",
+                    "replyTo" => {
+                        imip => "mailto:cassandane\@example.com",
+                    },
+                    "participants" => {
+                        "org" => {
+                            "name" => "Cassandane",
+                            "email" => "cassandane\@example.com",
+                            roles => {
+                                'owner' => JSON::true,
+                            },
+                        },
+                        "att" => {
+                        "name" => "Bugs Bunny",
+                        "email" => "bugs\@example.com",
+                        roles => {
+                            'attendee' => JSON::true,
+                        },
+                    },
+                },
+            }
+        }}, "R1"]
+    ]);
     my $id = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($id);
+    $self->assert(exists $res->[0][1]{created}{'2'});
 
     sleep 1;
     xlog "update event title";
@@ -332,13 +376,18 @@ sub test_restore_calendars
             update => {
                 $id => { 'title' => "foo2", 'sequence' => 1 },
             },
-       }, 'R2'],
-       ['CalendarEvent/get', {
+         }, 'R2'],
+        ['Calendar/set', {
+            destroy => ["$calid2"]
+         }, "R2.5"],
+        ['CalendarEvent/get', {
             properties => ['title', 'sequence'],
-       }, 'R3'],
+         }, 'R3'],
     ]);
     $self->assert(exists $res->[0][1]{updated}{$id});
-    $self->assert_not_null($res->[1][1]{list}[0]);
+    $self->assert_str_equals($calid2, $res->[1][1]{destroyed}[0]);
+    $self->assert_num_equals(1, scalar(@{$res->[2][1]{list}}));
+    $self->assert_str_equals('foo2', $res->[2][1]{list}[0]{title});
 
     # clean notification cache
     $self->{instance}->getnotify();
@@ -360,12 +409,16 @@ sub test_restore_calendars
     $self->assert_str_equals('R4', $res->[0][2]);
     $self->assert_num_equals(0, $res->[0][1]{numCreatesUndone});
     $self->assert_num_equals(1, $res->[0][1]{numUpdatesUndone});
-    $self->assert_num_equals(0, $res->[0][1]{numDestroysUndone});
+    $self->assert_num_equals(1, $res->[0][1]{numDestroysUndone});
 
     $self->assert_str_equals('CalendarEvent/get', $res->[1][0]);
     $self->assert_str_equals('R5', $res->[1][2]);
-    $self->assert_str_equals('foo', $res->[1][1]{list}[0]{title});
-    $self->assert_num_equals(2, $res->[1][1]{list}[0]{sequence});
+    $self->assert_num_equals(2, scalar(@{$res->[1][1]{list}}));
+
+    my @got = sort { $a->{title} cmp $b->{title} } @{$res->[1][1]{list}};
+    $self->assert_str_equals('bar', $got[0]{title});
+    $self->assert_str_equals('foo', $got[1]{title});
+    $self->assert_num_equals(2, $got[1]{sequence});
 
     my $data = $self->{instance}->getnotify();
     my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
@@ -395,7 +448,7 @@ sub test_restore_calendars
     $self->assert_not_null($res);
     $self->assert_str_equals('Backup/restoreCalendars', $res->[0][0]);
     $self->assert_str_equals('R6', $res->[0][2]);
-    $self->assert_num_equals(1, $res->[0][1]{numCreatesUndone});
+    $self->assert_num_equals(2, $res->[0][1]{numCreatesUndone});
     $self->assert_num_equals(0, $res->[0][1]{numUpdatesUndone});
     $self->assert_num_equals(0, $res->[0][1]{numDestroysUndone});
 
