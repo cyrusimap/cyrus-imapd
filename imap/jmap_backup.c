@@ -768,25 +768,22 @@ static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
         strarray_t schedule_addresses = STRARRAY_INITIALIZER;
         icalcomponent *ical =
             record_to_ical(mailbox, record, &schedule_addresses);
-        icalcomponent *comp = icalcomponent_get_first_real_component(ical);
         icalcomponent *oldical = NULL;
-        int sequence;
 
-        /* Need to bump SEQUENCE and rewrite resource */
         if (oldrecord) {
             oldical = record_to_ical(mailbox, oldrecord, NULL);
-            sequence = icalcomponent_get_sequence(oldical);
-        }
-        else {
-            sequence = icalcomponent_get_sequence(ical);
-        }
 
-        icalcomponent_set_sequence(comp, ++sequence);
+            /* Need to bump SEQUENCE number for an update */
+            int sequence = icalcomponent_get_sequence(oldical);
+            icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+            icalcomponent_set_sequence(comp, ++sequence);
+        }
 
         r = do_scheduling(req, mailbox->name, cdata->organizer,
                           &schedule_addresses, oldical, ical, /*is_destroy*/0);
 
         if (!r) {
+            /* Rewrite updated resource */
             struct transaction_t txn;
 
             memset(&txn, 0, sizeof(struct transaction_t));
