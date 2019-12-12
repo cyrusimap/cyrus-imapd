@@ -257,7 +257,7 @@ struct restore_rock {
     struct jmap_restore *jrestore;
     int mbtype;
     char *(*resource_name_cb)(message_t *, void *);
-    int (*restore_cb)(message_t *, message_t *, jmap_req_t *, int, void *);
+    int (*restore_cb)(message_t *, message_t *, jmap_req_t *, void *);
     void *rock;
     struct mailbox *mailbox;
 };
@@ -277,12 +277,11 @@ static void restore_resource_cb(const char *resource __attribute__((unused)),
     jmap_req_t *req = rrock->req;
     message_t *recreatemsg = NULL;
     message_t *destroymsg = NULL;
-    int r = 0, is_replace = 0;
+    int r = 0;
 
     switch (restore->type) {
     case UPDATES:
         if (!(rrock->jrestore->undo & UNDO_UPDATE)) goto done;
-        is_replace = 1;
         break;
 
     case DESTROYS:
@@ -305,10 +304,10 @@ static void restore_resource_cb(const char *resource __attribute__((unused)),
         destroymsg = message_new_from_mailbox(mailbox, restore->msgno_todestroy);
     }
 
-    r = rrock->restore_cb(recreatemsg, destroymsg, req, is_replace, rrock->rock);
+    r = rrock->restore_cb(recreatemsg, destroymsg, req, rrock->rock);
 
-    if (recreatemsg) message_unref(&recreatemsg);
-    if (destroymsg) message_unref(&destroymsg);
+    message_unref(&recreatemsg);
+    message_unref(&destroymsg);
 
     if (!r) rrock->jrestore->num_undone[restore->type]++;
 
@@ -544,8 +543,9 @@ static char *contact_resource_name(message_t *msg, void *rock)
 }
 
 static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
-                           jmap_req_t *req, int is_replace, void *rock)
+                           jmap_req_t *req, void *rock)
 {
+    int is_replace = (destroymsg != NULL);
     int r = 0;
 
     if (recreatemsg) {
@@ -714,9 +714,9 @@ static char *note_resource_name(message_t *msg,
 }
 
 static int restore_note(message_t *recreatemsg, message_t *destroymsg,
-                        jmap_req_t *req, int is_replace,
-                        void *rock __attribute__((unused)))
+                        jmap_req_t *req, void *rock __attribute__((unused)))
 {
+    int is_replace = (destroymsg != NULL);
     int r = 0;
 
     if (recreatemsg) {
