@@ -357,7 +357,7 @@ static int my_webdav_auth(const char *userid)
 
         if (!r) {
             r = mboxlist_createmailbox(mbname_intname(mbname), MBTYPE_COLLECTION,
-                                       NULL, 0,
+                                       NULL, httpd_userisadmin || httpd_userisproxyadmin,
                                        userid, httpd_authstate,
                                        0, 0, 0, 0, NULL);
             if (r) syslog(LOG_ERR, "IOERROR: failed to create %s (%s)",
