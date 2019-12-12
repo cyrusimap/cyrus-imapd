@@ -2011,7 +2011,7 @@ static int autosieve_createfolder(const char *userid, const struct auth_state *a
     if (r != IMAP_MAILBOX_NONEXISTENT) goto done;
 
     r = mboxlist_createmailbox(internalname, 0, NULL,
-                               1, userid, auth_state, 0, 0, 0, 1, NULL);
+                               0, userid, auth_state, 0, 0, 0, 1, NULL);
     if (r) {
         syslog(LOG_ERR, "autosievefolder: User %s, folder %s creation failed. %s",
                userid, internalname, error_message(r));
