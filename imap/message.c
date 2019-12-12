@@ -3384,19 +3384,17 @@ static int getconvmailbox(const char *mboxname, struct mailbox **mailboxptr)
     int r = mailbox_open_iwl(mboxname, mailboxptr);
     if (r != IMAP_MAILBOX_NONEXISTENT) return r;
 
-    char *userid = mboxname_to_userid(mboxname);
-    struct mboxlock *namespacelock = user_namespacelock(userid);
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
 
     // try again - maybe we lost the race!
     r = mailbox_open_iwl(mboxname, mailboxptr);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
         /* create the mailbox */
-        r = mboxlist_createmailbox(mboxname, MBTYPE_COLLECTION, NULL, 1 /* admin */, userid, NULL,
+        r = mboxlist_createmailbox(mboxname, MBTYPE_COLLECTION, NULL, 1 /* admin */, NULL, NULL,
                                    0, 0, 0, 0, mailboxptr);
     }
 
     mboxname_release(&namespacelock);
-    free(userid);
 
     return r;
 }

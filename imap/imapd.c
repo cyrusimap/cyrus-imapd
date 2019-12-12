@@ -6875,11 +6875,9 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
         name[strlen(name)-1] = '\0';
     }
 
-    char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
-    mbname_t *mbname = mbname_from_intname(intname);
-    free(intname);
+    mbname_t *mbname = mbname_from_extname(name, &imapd_namespace, imapd_userid);
 
-    struct mboxlock *namespacelock = user_namespacelock(mbname_userid(mbname));
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbname_intname(mbname));
 
     const char *type = NULL;
 
@@ -7337,7 +7335,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     }
     mboxlist_entry_free(&mbentry);
 
-    struct mboxlock *namespacelock = user_namespacelock(mbname_userid(mbname));
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbname_intname(mbname));
 
     mboxevent = mboxevent_new(EVENT_MAILBOX_DELETE);
 
@@ -7567,13 +7565,13 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location)
     struct mboxlock *oldnamespacelock = NULL;
     struct mboxlock *newnamespacelock = NULL;
 
-    if (strcmpsafe(olduser, newuser) < 0) {
-        oldnamespacelock = user_namespacelock(olduser);
-        newnamespacelock = user_namespacelock(newuser);
+    if (strcmpsafe(oldmailboxname, newmailboxname) < 0) {
+        oldnamespacelock = mboxname_usernamespacelock(oldmailboxname);
+        newnamespacelock = mboxname_usernamespacelock(newmailboxname);
     }
     else {
-        newnamespacelock = user_namespacelock(newuser);
-        oldnamespacelock = user_namespacelock(olduser);
+        newnamespacelock = mboxname_usernamespacelock(newmailboxname);
+        oldnamespacelock = mboxname_usernamespacelock(oldmailboxname);
     }
 
     /* Keep temporary copy: master is trashed */
@@ -10890,7 +10888,7 @@ static void cmd_undump(char *tag, char *name)
     if (!imapd_userisadmin)
         r = IMAP_PERMISSION_DENIED;
 
-    struct mboxlock *namespacelock = user_namespacelock(mbname_userid(mbname));
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(mbname_intname(mbname));
 
     if (!r) r = mlookup(tag, name, mbname_intname(mbname), NULL);
 

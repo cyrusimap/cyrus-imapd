@@ -267,7 +267,7 @@ EXPORTED int mboxname_islocked(const char *mboxname)
 EXPORTED struct mboxlock *mboxname_usernamespacelock(const char *mboxname)
 {
     mbname_t *mbname = mbname_from_intname(mboxname);
-    mboxlock *lock = user_namespacelock(mbname_userid(mbname));
+    struct mboxlock *lock = user_namespacelock(mbname_userid(mbname));
     mbname_free(&mbname);
     return lock;
 }

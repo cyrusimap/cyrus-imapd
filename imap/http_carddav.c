@@ -415,7 +415,7 @@ static int _create_mailbox(const char *userid, const char *mailboxname, int type
     if (r != IMAP_MAILBOX_NONEXISTENT) return r;
 
     if (!*namespacelockp) {
-        *namespacelockp = user_namespacelock(userid);
+        *namespacelockp = mboxname_usernamespacelock(mailboxname);
         // maybe we lost the race on this one
         r = mboxlist_lookup(mailboxname, NULL, NULL);
         if (!r) return 0;

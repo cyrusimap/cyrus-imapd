@@ -527,8 +527,7 @@ static void do_dump(enum mboxop op, const char *part, int purge, int intermediar
             struct mb_node *me = wipe_head;
             wipe_head = wipe_head->next;
 
-            char *userid = mboxname_to_userid(me->mailbox);
-            struct mboxlock *namespacelock = user_namespacelock(userid);
+            struct mboxlock *namespacelock = mboxname_usernamespacelock(me->mailbox);
 
             if (!mboxlist_delayed_delete_isenabled()) {
                 ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, NULL, 0, 1, 1, 0);
@@ -539,7 +538,6 @@ static void do_dump(enum mboxop op, const char *part, int purge, int intermediar
             }
 
             mboxname_release(&namespacelock);
-            free(userid);
 
             if (ret) {
                 fprintf(stderr, "couldn't delete defunct mailbox %s\n",

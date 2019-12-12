@@ -2739,8 +2739,7 @@ int sync_apply_mailbox(struct dlist *kin,
     r = mailbox_open_iwl(mboxname, &mailbox);
     if (!r) r = sync_mailbox_version_check(&mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        char *userid = mboxname_to_userid(mboxname);
-        struct mboxlock *namespacelock = user_namespacelock(userid);
+        struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
         // try again under lock
         r = mailbox_open_iwl(mboxname, &mailbox);
         if (!r) r = sync_mailbox_version_check(&mailbox);
@@ -2766,7 +2765,6 @@ int sync_apply_mailbox(struct dlist *kin,
             if (!r) mailbox->i.highestmodseq = 0;
         }
         mboxname_release(&namespacelock);
-        free(userid);
     }
     if (r) {
         syslog(LOG_ERR, "Failed to open mailbox %s to update: %s",
@@ -3284,19 +3282,18 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
     /* optional */
     dlist_getnum32(kin, "UIDVALIDITY", &uidvalidity);
 
-    char *olduserid = mboxname_to_userid(oldmboxname);
-    char *newuserid = mboxname_to_userid(newmboxname);
     struct mboxlock *oldlock = NULL;
     struct mboxlock *newlock = NULL;
+
     /* make sure we grab these locks in a stable order! */
-    if (strcmpsafe(olduserid, newuserid) < 0) {
-        oldlock = user_namespacelock(olduserid);
-        newlock = user_namespacelock(newuserid);
+    if (strcmpsafe(oldmboxname, newmboxname) < 0) {
+        oldlock = mboxname_usernamespacelock(oldmboxname);
+        newlock = mboxname_usernamespacelock(newmboxname);
     }
     else {
         // doesn't hurt to double lock, it's refcounted
-        newlock = user_namespacelock(newuserid);
-        oldlock = user_namespacelock(olduserid);
+        newlock = mboxname_usernamespacelock(newmboxname);
+        oldlock = mboxname_usernamespacelock(oldmboxname);
     }
 
     r = mboxlist_lookup(oldmboxname, &mbentry, 0);
@@ -3309,8 +3306,6 @@ int sync_apply_rename(struct dlist *kin, struct sync_state *sstate)
                                        1/*silent*/);
 
     mboxlist_entry_free(&mbentry);
-    free(olduserid);
-    free(newuserid);
     mboxname_release(&oldlock);
     mboxname_release(&newlock);
 
@@ -3819,8 +3814,7 @@ int sync_restore_mailbox(struct dlist *kin,
             uidvalidity = 0;
         }
 
-        char *userid = mboxname_to_userid(mboxname);
-        struct mboxlock *namespacelock = user_namespacelock(userid);
+        struct mboxlock *namespacelock = mboxname_usernamespacelock(mboxname);
         // try again under lock
         r = mailbox_open_iwl(mboxname, &mailbox);
         if (!r) r = sync_mailbox_version_check(&mailbox);
@@ -3835,7 +3829,6 @@ int sync_restore_mailbox(struct dlist *kin,
             is_new_mailbox = 1;
         }
         mboxname_release(&namespacelock);
-        free(userid);
     }
     if (r) {
         syslog(LOG_ERR, "Failed to open mailbox %s to restore: %s",

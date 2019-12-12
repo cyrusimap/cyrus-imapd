@@ -1392,9 +1392,7 @@ EXPORTED int mboxlist_createmailboxlock(const char *name, int mbtype,
                            int localonly, int forceuser, int dbonly,
                            int notify, struct mailbox **mailboxptr)
 {
-    char *lockuser = mboxname_to_userid(name);
-    struct mboxlock *namespacelock = user_namespacelock(lockuser);
-    free(lockuser);
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
 
     int r = mboxlist_createmailbox_unq(name, mbtype, partition, isadmin,
                                       userid, auth_state, localonly,
@@ -1904,9 +1902,7 @@ EXPORTED int mboxlist_deletemailboxlock(const char *name, int isadmin,
                                     int local_only, int force,
                                     int keep_intermediaries)
 {
-    char *lockuser = mboxname_to_userid(name);
-    struct mboxlock *namespacelock = user_namespacelock(lockuser);
-    free(lockuser);
+    struct mboxlock *namespacelock = mboxname_usernamespacelock(name);
 
     int r = mboxlist_deletemailbox(name, isadmin, userid, auth_state, mboxevent,
                                    checkacl, local_only, force, keep_intermediaries);
