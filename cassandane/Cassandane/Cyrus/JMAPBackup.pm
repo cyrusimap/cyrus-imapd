@@ -48,7 +48,7 @@ use Mail::JMAPTalk 0.13;
 use Data::Dumper;
 use Storable 'dclone';
 use File::Basename;
-use Test::Deep;
+use XML::Spice;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -62,6 +62,7 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane',
+                 caldav_historical_age => -1,
                  conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no',
@@ -83,6 +84,7 @@ sub set_up
         'urn:ietf:params:jmap:core',
         'https://cyrusimap.org/ns/jmap/backup',
         'https://cyrusimap.org/ns/jmap/contacts',
+        'https://cyrusimap.org/ns/jmap/calendars',
     ]);
 }
 
@@ -268,6 +270,148 @@ sub test_restore_contacts
     $self->assert_num_equals(0, scalar @{$res->[1][1]{updated}});
     $self->assert_num_equals(1, scalar @{$res->[1][1]{destroyed}});
     $state = $res->[1][1]{newState};
+}
+
+sub test_restore_calendars
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create calendar";
+    my $res = $jmap->CallMethods([
+            ['Calendar/set', { create => { "1" => {
+                name => "foo",
+                color => "coral",
+                sortOrder => 1,
+                isVisible => \1
+             }}}, "R1"]
+    ]);
+    my $calid = $res->[0][1]{created}{"1"}{id};
+
+    xlog "send invitation as organizer";
+    $res = $jmap->CallMethods([['CalendarEvent/set', { create => {
+                        "1" => {
+                            "calendarId" => $calid,
+                            "title" => "foo",
+                            "description" => "foo's description",
+                            "freeBusyStatus" => "busy",
+                            "showWithoutTime" => JSON::false,
+                            "start" => "2015-10-06T16:45:00",
+                            "timeZone" => "Australia/Melbourne",
+                            "duration" => "PT15M",
+                            "replyTo" => {
+                                imip => "mailto:cassandane\@example.com",
+                            },
+                            "participants" => {
+                                "org" => {
+                                    "name" => "Cassandane",
+                                    "email" => "cassandane\@example.com",
+                                    roles => {
+                                        'owner' => JSON::true,
+                                    },
+                                },
+                                "att" => {
+                                    "name" => "Bugs Bunny",
+                                    "email" => "bugs\@example.com",
+                                    roles => {
+                                        'attendee' => JSON::true,
+                                    },
+                                },
+                            },
+                        }
+                    }}, "R1"]]);
+    my $id = $res->[0][1]{created}{"1"}{id};
+    $self->assert_not_null($id);
+
+    sleep 1;
+    xlog "update event title";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $id => { 'title' => "foo2", 'sequence' => 1 },
+            },
+       }, 'R2'],
+       ['CalendarEvent/get', {
+            properties => ['title', 'sequence'],
+       }, 'R3'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+    $self->assert_not_null($res->[1][1]{list}[0]);
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "restore calendar prior to most recent changes";
+    $res = $jmap->CallMethods([
+        ['Backup/restoreCalendars', {
+            undoPeriod => "PT1S",
+            undoCreate => JSON::true,
+            undoUpdate => JSON::true,
+            undoDestroy => JSON::true
+         }, "R4"],
+        ['CalendarEvent/get', {
+            properties => ['title', 'sequence'],
+         }, "R5"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Backup/restoreCalendars', $res->[0][0]);
+    $self->assert_str_equals('R4', $res->[0][2]);
+    $self->assert_num_equals(0, $res->[0][1]{numCreatesUndone});
+    $self->assert_num_equals(1, $res->[0][1]{numUpdatesUndone});
+    $self->assert_num_equals(0, $res->[0][1]{numDestroysUndone});
+
+    $self->assert_str_equals('CalendarEvent/get', $res->[1][0]);
+    $self->assert_str_equals('R5', $res->[1][2]);
+    $self->assert_str_equals('foo', $res->[1][1]{list}[0]{title});
+    $self->assert_num_equals(2, $res->[1][1]{list}[0]{sequence});
+
+    my $data = $self->{instance}->getnotify();
+    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+
+    my $payload = decode_json($imip->{MESSAGE});
+    my $ical = $payload->{ical};
+
+    $self->assert_str_equals("bugs\@example.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:REQUEST");
+
+    # clean notification cache
+    $self->{instance}->getnotify();
+
+    xlog "restore calendar to before initial creation";
+    $res = $jmap->CallMethods([
+        ['Backup/restoreCalendars', {
+            undoPeriod => "P1D",
+            undoCreate => JSON::true,
+            undoUpdate => JSON::true,
+            undoDestroy => JSON::true
+         }, "R6"],
+        ['CalendarEvent/get', {
+            properties => ['title'],
+         }, "R7"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Backup/restoreCalendars', $res->[0][0]);
+    $self->assert_str_equals('R6', $res->[0][2]);
+    $self->assert_num_equals(1, $res->[0][1]{numCreatesUndone});
+    $self->assert_num_equals(0, $res->[0][1]{numUpdatesUndone});
+    $self->assert_num_equals(0, $res->[0][1]{numDestroysUndone});
+
+    $self->assert_str_equals('CalendarEvent/get', $res->[1][0]);
+    $self->assert_str_equals('R7', $res->[1][2]);
+    $self->assert_deep_equals([], $res->[1][1]{list});
+
+    $data = $self->{instance}->getnotify();
+    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    $self->assert_not_null($imip);
+
+    $payload = decode_json($imip->{MESSAGE});
+    $ical = $payload->{ical};
+
+    $self->assert_str_equals("bugs\@example.com", $payload->{recipient});
+    $self->assert($ical =~ "METHOD:CANCEL");
 }
 
 1;
