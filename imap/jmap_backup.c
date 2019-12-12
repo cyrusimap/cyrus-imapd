@@ -546,7 +546,7 @@ static char *contact_resource_name(message_t *msg, void *rock)
 static int restore_contact(message_t *recreatemsg, message_t *destroymsg,
                            jmap_req_t *req, void *rock)
 {
-    int is_replace = (destroymsg != NULL);
+    int is_replace = recreatemsg && destroymsg;
     int r = 0;
 
     if (recreatemsg) {
@@ -850,6 +850,7 @@ static int restore_ical(message_t *recreatemsg, message_t *destroymsg,
                         jmap_req_t *req, void *rock)
 {
     struct caldav_db *caldavdb = (struct caldav_db *) rock;
+    int is_replace = recreatemsg && destroymsg;
     int r = 0;
 
     if (recreatemsg) {
@@ -857,7 +858,7 @@ static int restore_ical(message_t *recreatemsg, message_t *destroymsg,
     }
 
     if (!r && destroymsg) {
-        r = destroy_ical(destroymsg, req, destroymsg != NULL, caldavdb);
+        r = destroy_ical(destroymsg, req, is_replace, caldavdb);
     }
 
     return r;
@@ -921,7 +922,7 @@ static char *note_resource_name(message_t *msg,
 static int restore_note(message_t *recreatemsg, message_t *destroymsg,
                         jmap_req_t *req, void *rock __attribute__((unused)))
 {
-    int is_replace = (destroymsg != NULL);
+    int is_replace = recreatemsg && destroymsg;
     int r = 0;
 
     if (recreatemsg) {
