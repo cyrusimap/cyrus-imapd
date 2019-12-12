@@ -128,6 +128,7 @@ int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
                   int locktype);
 void mboxname_release(struct mboxlock **mboxlockptr);
 int mboxname_islocked(const char *mboxname);
+struct mboxlock *mboxname_usernamespacelock(const char *mboxname);
 
 /* Create namespace based on config options. */
 int mboxname_init_namespace(struct namespace *namespace, int isadmin);
