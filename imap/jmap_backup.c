@@ -57,6 +57,7 @@
 #include "caldav_db.h"
 #include "carddav_db.h"
 #include "hash.h"
+#include "http_caldav_sched.h"
 #include "http_jmap.h"
 #include "json_support.h"
 #include "times.h"
@@ -671,6 +672,197 @@ done:
     return 0;
 }
 
+static char *ical_resource_name(message_t *msg, void *rock)
+{
+    struct mailbox *mailbox = msg_mailbox(msg);
+    const struct index_record *record = msg_record(msg);
+    struct caldav_db *caldavdb = (struct caldav_db *) rock;
+    struct caldav_data *cdata = NULL;
+    char *resource = NULL;
+
+    /* Get resource from CalDAV DB, if possible */
+    int r = caldav_lookup_imapuid(caldavdb, mailbox->name,
+                                  record->uid, &cdata, /*tombstones*/ 1);
+    if (!r) {
+        resource = xstrdup(cdata->dav.resource);
+    }
+    else {
+        /* IMAP UID is for a resource that has been updated,
+           so we need to get the resource name from the resource itself */
+        resource = dav_resource_name(msg);
+    }
+
+    return resource;
+}
+
+static int do_scheduling(jmap_req_t *req,
+                         const char *mboxname, const char *organizer,
+                         strarray_t *schedule_addresses,
+                         icalcomponent *oldical, icalcomponent *ical,
+                         int is_destroy)
+{
+    icalcomponent *src = is_destroy ? oldical : ical;
+    icalcomponent *comp = icalcomponent_get_first_real_component(src);
+
+    /* XXX Hack for Outlook */
+    if (!icalcomponent_get_first_invitee(comp)) return 0;
+
+    get_schedule_addresses(req->txn->req_hdrs, mboxname,
+                           req->userid, schedule_addresses);
+
+    if (strarray_find_case(schedule_addresses, organizer, 0) >= 0) {
+        /* Organizer scheduling object resource */
+        sched_request(req->userid, schedule_addresses, organizer, oldical, ical);
+    } else {
+        /* Attendee scheduling object resource */
+        int omit_reply = 0;
+
+        if (oldical && is_destroy) {
+            icalproperty *prop;
+
+            for (prop = icalcomponent_get_first_property(comp,
+                                                         ICAL_ATTENDEE_PROPERTY);
+                 prop;
+                 prop = icalcomponent_get_next_property(comp,
+                                                        ICAL_ATTENDEE_PROPERTY)) {
+                const char *addr = icalproperty_get_attendee(prop);
+
+                if (!addr || strncasecmp(addr, "mailto:", 7) ||
+                    strcasecmp(strarray_nth(schedule_addresses, 0), addr+7)) {
+                    continue;
+                }
+
+                icalparameter *param =
+                    icalproperty_get_first_parameter(prop,
+                                                     ICAL_PARTSTAT_PARAMETER);
+                omit_reply = !param ||
+                    icalparameter_get_partstat(param) == ICAL_PARTSTAT_NEEDSACTION;
+                break;
+            }
+        }
+
+        if (!omit_reply && strarray_size(schedule_addresses))
+            sched_reply(req->userid, schedule_addresses, oldical, ical);
+    }
+
+    return 0;
+}
+
+static int recreate_ical(message_t *recreatemsg, message_t *destroymsg,
+                         jmap_req_t *req, struct caldav_db *caldavdb)
+{
+    struct mailbox *mailbox = msg_mailbox(recreatemsg);
+    const struct index_record *record = msg_record(recreatemsg);
+    const struct index_record *oldrecord =
+        destroymsg ? msg_record(destroymsg) : NULL;
+    struct caldav_data *cdata = NULL;
+    int r;
+
+    r = caldav_lookup_imapuid(caldavdb, mailbox->name,
+                              oldrecord ? oldrecord->uid : record->uid,
+                              &cdata, /*tombstones*/ 1);
+    if (r) return r;
+
+    if (cdata->organizer) {
+        /* Send scheduling message */
+        strarray_t schedule_addresses = STRARRAY_INITIALIZER;
+        icalcomponent *ical =
+            record_to_ical(mailbox, record, &schedule_addresses);
+        icalcomponent *comp = icalcomponent_get_first_real_component(ical);
+        icalcomponent *oldical = NULL;
+        int sequence;
+
+        /* Need to bump SEQUENCE and rewrite resource */
+        if (oldrecord) {
+            oldical = record_to_ical(mailbox, oldrecord, NULL);
+            sequence = icalcomponent_get_sequence(oldical);
+        }
+        else {
+            sequence = icalcomponent_get_sequence(ical);
+        }
+
+        icalcomponent_set_sequence(comp, ++sequence);
+
+        r = do_scheduling(req, mailbox->name, cdata->organizer,
+                          &schedule_addresses, oldical, ical, /*is_destroy*/0);
+
+        if (!r) {
+            struct transaction_t txn;
+
+            memset(&txn, 0, sizeof(struct transaction_t));
+            txn.req_hdrs = spool_new_hdrcache();
+
+            r = caldav_store_resource(&txn, ical, mailbox,
+                                      cdata->dav.resource, record->createdmodseq,
+                                      caldavdb, NEW_STAG,
+                                      req->userid, &schedule_addresses);
+            if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) r = 0;
+
+            spool_free_hdrcache(txn.req_hdrs);
+            buf_free(&txn.buf);
+        }
+
+        if (oldical) icalcomponent_free(oldical);
+        icalcomponent_free(ical);
+        strarray_fini(&schedule_addresses);
+    }
+    else {
+        /* No scheduling - simple recreation will do */
+        r = recreate_resource(recreatemsg, req, destroymsg != NULL);
+    }
+
+    return r;
+}
+
+static int destroy_ical(message_t *destroymsg, jmap_req_t *req,
+                        int is_replace, struct caldav_db *caldavdb)
+{
+    int r = 0;
+
+    if (!is_replace) {
+        struct mailbox *mailbox = msg_mailbox(destroymsg);
+        const struct index_record *record = msg_record(destroymsg);
+        struct caldav_data *cdata = NULL;
+
+        r = caldav_lookup_imapuid(caldavdb, mailbox->name,
+                                  record->uid, &cdata, /*tombstones*/ 0);
+
+        if (!r && cdata->organizer) {
+            /* Send scheduling message */
+            strarray_t schedule_addresses = STRARRAY_INITIALIZER;
+            icalcomponent *ical =
+                record_to_ical(mailbox, record, &schedule_addresses);
+
+            r = do_scheduling(req, mailbox->name, cdata->organizer,
+                              &schedule_addresses, ical, NULL, /*is_destroy*/1);
+
+            icalcomponent_free(ical);
+            strarray_fini(&schedule_addresses);
+        }
+    }
+
+    if (!r) r = destroy_resource(destroymsg, req, is_replace);
+
+    return r;
+}
+
+static int restore_ical(message_t *recreatemsg, message_t *destroymsg,
+                        jmap_req_t *req, void *rock)
+{
+    struct caldav_db *caldavdb = (struct caldav_db *) rock;
+    int r = 0;
+
+    if (recreatemsg) {
+        r = recreate_ical(recreatemsg, destroymsg, req, caldavdb);
+    }
+
+    if (!r && destroymsg) {
+        r = destroy_ical(destroymsg, req, destroymsg != NULL, caldavdb);
+    }
+
+    return r;
+}
+
 static int jmap_backup_restore_calendars(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -682,6 +874,19 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
     if (err) {
         jmap_error(req, err);
         goto done;
+    }
+
+    if (restore.undo) {
+        char *calhomeset = caldav_mboxname(req->accountid, NULL);
+        struct caldav_db *caldavdb = caldav_open_userid(req->accountid);
+        struct restore_rock rrock = { req, &restore, MBTYPE_CALENDAR,
+                                      &ical_resource_name, &restore_ical,
+                                      caldavdb, NULL };
+
+        mboxlist_mboxtree(calhomeset,
+                          restore_collection_cb, &rrock, MBOXTREE_SKIP_ROOT);
+        free(calhomeset);
+        caldav_close(caldavdb);
     }
 
     /* Build response */
