@@ -61,6 +61,7 @@
 #include "http_jmap.h"
 #include "json_support.h"
 #include "times.h"
+#include "user.h"
 #include "vcard_support.h"
 
 /* generated headers are not necessarily in current directory */
@@ -675,16 +676,22 @@ done:
     return 0;
 }
 
+struct calendar_rock {
+    struct caldav_db *caldavdb;
+    char *inboxname;
+    char *outboxname;
+};
+
 static char *ical_resource_name(message_t *msg, void *rock)
 {
     struct mailbox *mailbox = msg_mailbox(msg);
     const struct index_record *record = msg_record(msg);
-    struct caldav_db *caldavdb = (struct caldav_db *) rock;
+    struct calendar_rock *crock = (struct calendar_rock *) rock;
     struct caldav_data *cdata = NULL;
     char *resource = NULL;
 
     /* Get resource from CalDAV DB, if possible */
-    int r = caldav_lookup_imapuid(caldavdb, mailbox->name,
+    int r = caldav_lookup_imapuid(crock->caldavdb, mailbox->name,
                                   record->uid, &cdata, /*tombstones*/ 1);
     if (!r) {
         resource = xstrdup(cdata->dav.resource);
@@ -849,16 +856,105 @@ static int destroy_ical(message_t *destroymsg, jmap_req_t *req,
 static int restore_ical(message_t *recreatemsg, message_t *destroymsg,
                         jmap_req_t *req, void *rock)
 {
-    struct caldav_db *caldavdb = (struct caldav_db *) rock;
+    struct calendar_rock *crock = (struct calendar_rock *) rock;
     int is_replace = recreatemsg && destroymsg;
     int r = 0;
 
     if (recreatemsg) {
-        r = recreate_ical(recreatemsg, destroymsg, req, caldavdb);
+        r = recreate_ical(recreatemsg, destroymsg, req, crock->caldavdb);
     }
 
     if (!r && destroymsg) {
-        r = destroy_ical(destroymsg, req, is_replace, caldavdb);
+        r = destroy_ical(destroymsg, req, is_replace, crock->caldavdb);
+    }
+
+    return r;
+}
+
+static int recreate_calendar(const mbentry_t *mbentry,
+                             struct restore_rock *rrock)
+{
+    jmap_req_t *req = rrock->req;
+    char *newmboxname = caldav_mboxname(req->accountid, makeuuid());
+    struct mboxlock *namespacelock = user_namespacelock(req->accountid);
+    struct mailbox *newmailbox = NULL, *mailbox = NULL;
+    int r;
+
+    /* XXX  Look for existing calendar with same name */
+
+    /* Create the calendar */
+    r = mboxlist_createmailbox(newmboxname, MBTYPE_CALENDAR,
+                               /*partition*/NULL, /*isadmin*/0,
+                               req->accountid, req->authstate,
+                               /*localonly*/0, /*forceuser*/0,
+                               /*dbonly*/0, /*notify*/0, &newmailbox);
+    mboxname_release(&namespacelock);
+
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to create mailbox %s", newmboxname);
+        free(newmboxname);
+        return r;
+    }
+
+    r = jmap_openmbox(req, mbentry->name, &mailbox, /*rw*/1);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
+    }
+    else {
+        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
+        const message_t *msg;
+
+        while ((msg = mailbox_iter_step(iter))) {
+            /* XXX  Look for existing resource with same UID */
+
+            r = recreate_resource((message_t *) msg, newmailbox,
+                                  req, 0/*is_replace*/);
+            if (!r) rrock->jrestore->num_undone[DESTROYS]++;
+        }
+        mailbox_iter_done(&iter);
+
+        jmap_closembox(req, &mailbox);
+
+        r = mboxlist_deletemailboxlock(mbentry->name, /*isadmin*/0,
+                                       req->accountid, req->authstate,
+                                       /*mboxevent*/NULL, /*checkacl*/0,
+                                       /*localonly*/0, /*force*/0,
+                                       /*keep_intermediaries*/0);
+    }
+
+    mailbox_close(&newmailbox);
+    free(newmboxname);
+
+    return r;
+}
+
+static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct restore_rock *rrock = (struct restore_rock *) rock;
+    struct calendar_rock *crock = (struct calendar_rock *) rrock->rock;
+    time_t timestamp = 0;
+    int r = 0;
+
+    if ((mbentry->mbtype & rrock->mbtype) != rrock->mbtype) return 0;
+
+    if (!strcmp(mbentry->name, crock->inboxname) ||
+        !strcmp(mbentry->name, crock->outboxname)) {
+        /* Ignore scheduling Inbox and Outbox */
+        return 0;
+    }
+
+    if (mboxname_isdeletedmailbox(mbentry->name, &timestamp)) {
+        if (timestamp > rrock->jrestore->cutoff) {
+            /* Calendar was destroyed after cutoff - restore resources */
+            r = recreate_calendar(mbentry, rrock);
+        }
+        else {
+            /* Calendar was destroyed before cutoff - not interested */
+        }
+    }
+    else {
+        /* Do usual processing of the collection */
+        r = restore_collection_cb(mbentry, rock);
     }
 
     return r;
@@ -879,15 +975,20 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
 
     if (restore.undo) {
         char *calhomeset = caldav_mboxname(req->accountid, NULL);
-        struct caldav_db *caldavdb = caldav_open_userid(req->accountid);
+        struct calendar_rock crock =
+            { caldav_open_userid(req->accountid),
+              caldav_mboxname(req->accountid, SCHED_INBOX),
+              caldav_mboxname(req->accountid, SCHED_OUTBOX) };
         struct restore_rock rrock = { req, &restore, MBTYPE_CALENDAR,
                                       &ical_resource_name, &restore_ical,
-                                      caldavdb, NULL };
+                                      &crock, NULL };
 
-        mboxlist_mboxtree(calhomeset,
-                          restore_collection_cb, &rrock, MBOXTREE_SKIP_ROOT);
+        mboxlist_mboxtree(calhomeset, restore_calendar_cb, &rrock,
+                          MBOXTREE_SKIP_ROOT | MBOXTREE_DELETED);
         free(calhomeset);
-        caldav_close(caldavdb);
+        free(crock.inboxname);
+        free(crock.outboxname);
+        caldav_close(crock.caldavdb);
     }
 
     /* Build response */
