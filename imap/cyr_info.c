@@ -86,6 +86,8 @@ static void usage(void)
     fprintf(stderr, "  * conf-default  - listing of all default config values\n");
     fprintf(stderr, "  * conf-lint     - unknown config keys\n");
     fprintf(stderr, "  * proc          - listing of all open processes\n");
+    fprintf(stderr, "  * version       - Cyrus version\n");
+    fprintf(stderr, "\n");
     cyrus_done();
     exit(-1);
 }
@@ -455,10 +457,16 @@ int main(int argc, char *argv[])
         }
     }
 
-    cyrus_init(alt_config, srvname, 0, 0);
-
     if (optind >= argc)
         usage();
+
+    /* we don't need to read config to handle this one */
+    if (!strcmp(argv[optind], "version")) {
+        printf("%s %s\n", PACKAGE_NAME, CYRUS_VERSION);
+        return 0;
+    }
+
+    cyrus_init(alt_config, srvname, 0, 0);
 
     if (!strcmp(argv[optind], "proc"))
         do_proc();
