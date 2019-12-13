@@ -7144,7 +7144,7 @@ localcreate:
 #ifdef USE_AUTOCREATE
     // Clausing autocreate for the INBOX
     if (r == IMAP_PERMISSION_DENIED) {
-        if (!strarray_size(mbname_boxes(mbname))) {
+        if (!strarray_size(mbname_boxes(mbname)) && !strcmpsafe(http_userid, mbname_userid(mbname))) {
             int autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATE_QUOTA);
 
             if (autocreatequotastorage > 0) {
@@ -7181,34 +7181,16 @@ localcreate:
                     newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
 
                     (void) mboxlist_setquotas(mbname_intname(mbname), newquotas, 0, 0);
-                } // (autocreatequotastorage > 0) || (autocreatequotamessage > 0)
-
-            } else {
-                prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
-                goto done;
-
+                }
             }
+        }
+    }
+#endif
 
-        } else { // (!strcasecmp(name, "INBOX"))
-            prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(IMAP_PERMISSION_DENIED));
-            goto done;
-        } // (!strcasecmp(name, "INBOX"))
-
-    } else if (r) { // (r == IMAP_PERMISSION_DENIED)
-        prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-        goto done;
-
-    } else { // (r == IMAP_PERMISSION_DENIED)
-        /* no error: carry on */
-    } // (r == IMAP_PERMISSION_DENIED)
-
-#else // USE_AUTOCREATE
     if (r) {
         prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
         goto done;
-
-    } // (r)
-#endif // USE_AUTOCREATE
+    }
 
     /* Close newly created mailbox before writing annotations */
     mailboxid = xstrdup(mailbox->uniqueid);
