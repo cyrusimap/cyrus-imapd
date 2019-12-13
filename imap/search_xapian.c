@@ -1059,9 +1059,11 @@ static int xapiandb_lock_open(struct mailbox *mailbox, struct xapiandb_lock *loc
             /*dostat*/1, &lock->activetiers);
 
     /* open the databases */
-    const char **paths = lock->activedirs ? (const char **) lock->activedirs->data : NULL;
-    r = xapian_db_open(paths, &lock->db);
-    if (r) goto out;
+    if (lock->activedirs->count) {
+        const char **paths = (const char **) lock->activedirs->data;
+        r = xapian_db_open(paths, &lock->db);
+        if (r) goto out;
+    }
 
 out:
     if (r) xapiandb_lock_release(lock);
@@ -1831,11 +1833,8 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     xapian_builder_t *bb = (xapian_builder_t *)bx;
     int r = 0;
 
-    if (bb->lock.db == NULL) {
-        syslog(LOG_ERR, "search_xapian: can't find index for mailbox: %s",
-                bb->mailbox ?  bb->mailbox->name : "<unknown>");
-        return IMAP_NOTFOUND;       /* there's no index for this user */
-    }
+    if (!bb->lock.db) goto out; // no index for this user
+
     bb->proc = proc;
     bb->rock = rock;
 

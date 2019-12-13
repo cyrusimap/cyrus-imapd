@@ -1205,7 +1205,7 @@ int xapian_list_lang_stats(xapian_db_t *db, ptrarray_t* lstats)
     struct search_lang_stats *stat;
     double cummulated_weight = 0;
 
-    if (db->stem_language_weights) {
+    if (db && db->stem_language_weights) {
         for (const std::pair<std::string, double>& it : *db->stem_language_weights) {
             stat = (struct search_lang_stats *) xzmalloc(sizeof(struct search_lang_stats));
             stat->iso_lang = xstrdup(it.first.c_str());
