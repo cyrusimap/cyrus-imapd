@@ -14945,4 +14945,18 @@ sub test_email_set_language_header
         $res->[1][1]{list}[0]{bodyStructure}{language});
 }
 
+sub test_email_query_text_nomail
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+
+    xlog "search for some text";
+    my $res = $jmap->CallMethods([['Email/query', { filter => { text => 'foo' } }, "R1"]]);
+
+    # check that the query succeeded
+    $self->assert_str_equals($res->[0][0], "Email/query");
+}
+
+
 1;
