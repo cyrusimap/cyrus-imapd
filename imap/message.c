@@ -4810,7 +4810,7 @@ EXPORTED int message_get_msgno(message_t *m, uint32_t *msgnop)
     return 0;
 }
 
-EXPORTED int msg_msgno(const message_t *m)
+EXPORTED uint32_t msg_msgno(const message_t *m)
 {
     assert(!message_need(m, M_INDEX))
     return m->msgno;
