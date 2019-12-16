@@ -201,7 +201,7 @@ repeat:
     r = _parse_param_key(state, &haseq);
     if (r) return r;
 
-    if (state->multiparam && strarray_find(state->multiparam, state->param->name, 0))
+    if (state->multiparam && strarray_find_case(state->multiparam, state->param->name, 0) >= 0)
         multiparam = 1;
 
     /* now get the value */
