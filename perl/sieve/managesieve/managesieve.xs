@@ -296,7 +296,7 @@ sieve_get_handle(char *servername, SV *username_cb, SV *authname_cb, SV *passwor
            check if SASL mech list changed */
         if (detect_mitm(obj, mechlist)) {
             globalerr = "possible MITM attack: "
-                "list of available SASL mechamisms changed";
+                "list of available SASL mechanisms changed";
             free(ret);
             free(mechlist);
             XSRETURN_UNDEF;
