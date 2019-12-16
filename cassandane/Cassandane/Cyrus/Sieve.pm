@@ -547,10 +547,10 @@ EOF
     # autosievefolder should have failed to create the target, because the
     # user doesn't have permission to create a folder in the global shared
     # namespace
-    my $imaptalk = $self->{store}->get_client();
-    $imaptalk->select($target);
-    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
-    $self->assert_matches(qr/does not exist/i, $imaptalk->get_last_error());
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->select($target);
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+    $self->assert_matches(qr/does not exist/i, $admintalk->get_last_error());
 
     # then the fileinto should fail, and the message be delivered to inbox
     # instead
@@ -584,10 +584,10 @@ EOF
     # autosievefolder should have failed to create the target, because the
     # user doesn't have permission to create a folder in another user's
     # account
-    my $imaptalk = $self->{store}->get_client();
-    $imaptalk->select($target);
-    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
-    $self->assert_matches(qr/does not exist/i, $imaptalk->get_last_error());
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->select($target);
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+    $self->assert_matches(qr/does not exist/i, $admintalk->get_last_error());
 
     # then the fileinto should fail, and the message be delivered to inbox
     # instead
@@ -615,10 +615,10 @@ EOF
     # autosievefolder should have failed to create the target, because the
     # user doesn't have permission to create a folder in the global shared
     # namespace
-    my $imaptalk = $self->{store}->get_client();
-    $imaptalk->select($target);
-    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
-    $self->assert_matches(qr/does not exist/i, $imaptalk->get_last_error());
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->select($target);
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+    $self->assert_matches(qr/does not exist/i, $admintalk->get_last_error());
 
     # then the fileinto should fail, and the message be delivered to inbox
     # instead
@@ -649,10 +649,10 @@ EOF
     # autosievefolder should have failed to create the target, because the
     # user doesn't have permission to create a folder in another user's
     # account
-    my $imaptalk = $self->{store}->get_client();
-    $imaptalk->select($target);
-    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
-    $self->assert_matches(qr/does not exist/i, $imaptalk->get_last_error());
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->select($target);
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+    $self->assert_matches(qr/does not exist/i, $admintalk->get_last_error());
 
     # then the fileinto should fail, and the message be delivered to inbox
     # instead
