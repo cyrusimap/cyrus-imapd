@@ -160,7 +160,7 @@ static int parseheader(FILE *f, char **headname, char **contents)
                 if (c == '\r' && peek == '\n') {
                     c = getc(f);
                 } else {
-                    c = peek; /* single newline seperator */
+                    c = peek; /* single newline separator */
                 }
                 if (c != ' ' && c != '\t') {
                     /* this is the end of the header */
