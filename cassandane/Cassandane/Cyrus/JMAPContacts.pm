@@ -2427,4 +2427,32 @@ sub test_contact_blobid
     $self->assert_num_not_equals(-1, index($res->{content}, 'FN:foo last1'));
 }
 
+sub test_contact_set_issue2953
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create contacts";
+    my $res = $jmap->CallMethods([
+        ['Contact/set', {
+            create => {
+                1 => {
+                    online => [{
+                        type => 'username',
+                        value => 'foo,bar',
+                        label => 'Github',
+                    }],
+                },
+            },
+        }, 'R1'],
+        ['Contact/get', {
+            ids => ['#1'], properties => ['online'],
+        }, 'R2'],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{1});
+    $self->assert_str_equals('foo,bar', $res->[1][1]{list}[0]{online}[0]{value});
+}
+
 1;
