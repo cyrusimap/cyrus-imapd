@@ -524,20 +524,17 @@ EOF
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
 
-sub test_deliver_fileinto_autocreate_badmbox
-    :needs_component_sieve :NoStartInstances
+sub test_deliver_fileinto_create_globalshared
+    :needs_component_sieve
 {
     my ($self) = @_;
 
-    $self->{instance}->{config}->set('anysievefolder' => 'yes');
-    $self->_start_instances();
-
-    my $target = "Fancy";  # user has no perm to write here,
-                           # their script should say "INBOX.Fancy"
+    # sieve script should not be able to create a new global shared mailbox
+    my $target = "TopLevel";
 
     $self->{instance}->install_sieve_script(<<EOF
-require ["fileinto"];
-fileinto "$target";
+require ["fileinto", "mailbox"];
+fileinto :create "$target";
 EOF
     , username => 'cassandane');
 
@@ -547,6 +544,40 @@ EOF
     # autosievefolder should have failed to create the target, because the
     # user doesn't have permission to create a folder in the global shared
     # namespace
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select($target);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert_matches(qr/does not exist/i, $imaptalk->get_last_error());
+
+    # then the fileinto should fail, and the message be delivered to inbox
+    # instead
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+}
+
+sub test_deliver_fileinto_create_otheruser
+    :needs_component_sieve
+{
+    my ($self) = @_;
+
+    $self->{instance}->create_user('other');
+
+    # sieve script should not be able to create a mailbox in some other
+    # user's account
+    my $target = "user.other.SomeFolder";
+
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "mailbox"];
+fileinto :create "$target";
+EOF
+    , username => 'cassandane');
+
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1, users => [ 'cassandane' ]);
+
+    # autosievefolder should have failed to create the target, because the
+    # user doesn't have permission to create a folder in another user's
+    # account
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->select($target);
     $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
