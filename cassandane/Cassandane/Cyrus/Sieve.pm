@@ -2328,13 +2328,12 @@ sub test_snooze
     my $localtz = DateTime::TimeZone->new( name => 'local' );
     my $maildate = DateTime->now(time_zone => $localtz);
     $maildate->add(DateTime::Duration->new(minutes => 1));
-    my $timestr = $maildate->strftime('%H:%M');
+    my $timestr = $maildate->strftime('%T');
 
     xlog $self, "Install script";
     $self->{instance}->install_sieve_script(<<EOF
 require ["x-cyrus-snooze"];
 snooze :mailbox "$awakened" :addflags [ "\\\\Flagged", "\$awakened" ] "$timestr";
-#snooze "$timestr";
 EOF
     );
 
