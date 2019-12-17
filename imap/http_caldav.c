@@ -897,7 +897,6 @@ static int caldav_parse_path(const char *path, struct request_target_t *tgt,
     return 0;
 }
 
-
 static modseq_t caldav_get_modseq(struct mailbox *mailbox,
                                   void *data, const char *userid)
 {
