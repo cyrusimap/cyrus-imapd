@@ -1442,7 +1442,7 @@ static int open_attachments(const char *userid, struct mailbox **attachments,
     }
     else {
         /* Open the WebDAV DB corresponding to the attachments collection */
-        *webdavdb = mailbox_open_webdav(*attachments);
+        *webdavdb = webdav_open_mailbox(*attachments);
         if (!*webdavdb) {
             syslog(LOG_ERR,
                    "webdav_open_mailbox(%s) failed", (*attachments)->name);
@@ -1588,6 +1588,7 @@ static int manage_attachments(struct transaction_t *txn,
 
   done:
     free_hash_table(&mattach_table, free);
+    if (webdavdb) webdav_close(webdavdb);
     mailbox_close(&attachments);
 
     return ret;
@@ -3297,6 +3298,7 @@ static int caldav_post_attach(struct transaction_t *txn, int rights)
     if (aprop) icalproperty_free(aprop);
     if (ical) icalcomponent_free(ical);
     if (caldavdb) caldav_close(caldavdb);
+    if (webdavdb) webdav_close(webdavdb);
     mailbox_close(&attachments);
     mailbox_close(&calendar);
 
