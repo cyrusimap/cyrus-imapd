@@ -3589,6 +3589,30 @@ static int mailbox_update_email_alarms(struct mailbox *mailbox,
 
     return r;
 }
+
+EXPORTED int mailbox_add_email_alarms(struct mailbox *mailbox)
+{
+    const message_t *msg;
+    int r = 0;
+
+    if (!(mailbox->i.options & OPT_IMAP_HAS_ALARMS))
+        return 0;
+
+    if (mboxname_isdeletedmailbox(mailbox->name, NULL))
+        return 0;
+
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, ITER_SKIP_UNLINKED);
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+        struct index_record copyrecord = *record;
+        r = mailbox_update_email_alarms(mailbox, NULL, &copyrecord);
+        if (r) break;
+        /* in THEORY there maybe changes here that we should be saving... */
+    }
+    mailbox_iter_done(&iter);
+
+    return r;
+}
 #endif // WITH_JMAP
 
 EXPORTED struct conversations_state *mailbox_get_cstate(struct mailbox *mailbox)
@@ -5356,7 +5380,7 @@ static int mailbox_delete_internal(struct mailbox **mailboxptr)
 }
 
 #ifdef WITH_JMAP
-int mailbox_delete_alarms(struct mailbox *mailbox)
+static int mailbox_delete_alarms(struct mailbox *mailbox)
 {
     if (!(mailbox->i.options & OPT_IMAP_HAS_ALARMS))
         return 0;

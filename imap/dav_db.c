@@ -272,22 +272,52 @@ EXPORTED int dav_attach_mailbox(sqldb_t *db, struct mailbox *mailbox)
 /*
  * mboxlist_usermboxtree() callback function to create DAV DB entries for a mailbox
  */
-static int _dav_reconstruct_mb(const mbentry_t *mbentry, void *rock __attribute__((unused)))
+static int _dav_reconstruct_mb(const mbentry_t *mbentry, void *rock)
 {
+    const char *userid = (const char *) rock;
+    struct buf attrib = BUF_INITIALIZER;
+    int (*addproc)(struct mailbox *) = NULL;
     int r = 0;
 
     signals_poll();
 
+    switch (mbentry->mbtype) {
 #ifdef WITH_DAV
-    if (mbentry->mbtype & MBTYPES_DAV) {
+    case MBTYPE_CALENDAR:
+    case MBTYPE_COLLECTION:
+    case MBTYPE_ADDRESSBOOK:
+        addproc = &mailbox_add_dav;
+        break;
+#endif
+#ifdef WITH_JMAP
+    case MBTYPE_SUBMISSION:
+        addproc = &mailbox_add_email_alarms;
+        break;
+
+    case MBTYPE_EMAIL:
+        r = annotatemore_lookup(mbentry->name, "/specialuse", userid, &attrib);
+        if (!r && buf_len(&attrib)) {
+            strarray_t *specialuse =
+                strarray_split(buf_cstring(&attrib), NULL, 0);
+
+            if (strarray_find(specialuse, "\\Snoozed", 0) >= 0) {
+                addproc = &mailbox_add_email_alarms;
+            }
+            strarray_free(specialuse);
+        }
+        buf_free(&attrib);
+        break;
+#endif
+    }
+
+    if (addproc) {
         struct mailbox *mailbox = NULL;
         /* Open/lock header */
         r = mailbox_open_iwl(mbentry->name, &mailbox);
         // needs to be writable to remove bogus lastalarm data
-        if (!r) r = mailbox_add_dav(mailbox);
+        if (!r) r = addproc(mailbox);
         mailbox_close(&mailbox);
     }
-#endif
 
     return r;
 }
@@ -329,7 +359,8 @@ EXPORTED int dav_reconstruct_user(const char *userid, const char *audit_tool)
 
     sqldb_t *userdb = dav_open_userid(userid);
     sqldb_begin(userdb, "reconstruct");
-    int r = mboxlist_usermboxtree(userid, NULL, _dav_reconstruct_mb, NULL, 0);
+    int r = mboxlist_usermboxtree(userid, NULL,
+                                  _dav_reconstruct_mb, (void *) userid, 0);
     if (r)
         sqldb_rollback(userdb, "reconstruct");
     else
