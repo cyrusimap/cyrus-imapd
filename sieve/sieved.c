@@ -158,7 +158,7 @@ static void print_stringlist(const char *label, strarray_t *list)
 
 static void print_time(uint64_t t)
 {
-    printf(" %02lu:%02lu", t / 60, t % 60);
+    printf(" %02lu:%02lu:%02lu", t / 3600, (t % 3600) / 60, t % 60);
 }
 
 static void print_vallist(const char *label, arrayu64_t *list,
@@ -770,8 +770,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
 
         case B_SNOOZE: {
-            const char *days[] =
-                { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
             const char *sep = "";
             int i;
 
@@ -780,10 +778,10 @@ static void dump2(bytecode_input_t *d, int bc_len)
                          cmd.u.sn.mailbox);
             print_stringlist("\n\tADDFLAGS", cmd.u.sn.addflags);
             print_stringlist("\n\tREMOVEFLAGS", cmd.u.sn.removeflags);
-            printf("\n\tDAYSOFWEEK [");
+            printf("\n\tWEEKDAYS [");
             for (i = 0; i < 7; i++) {
                 if (cmd.u.sn.days & (1<<i)) {
-                    printf("%s %s", sep, days[i]);
+                    printf("%s %u", sep, i);
                     sep = ",";
                 }
             }

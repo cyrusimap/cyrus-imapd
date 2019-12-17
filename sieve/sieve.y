@@ -338,7 +338,7 @@ extern void sieverestart(FILE *f);
 %token JMAPQUERY
 
 /* x-cyrus-snooze */
-%token SNOOZE MAILBOX ADDFLAGS REMOVEFLAGS DAYSOFWEEK
+%token SNOOZE MAILBOX ADDFLAGS REMOVEFLAGS WEEKDAYS
 %type <nval> weekdaylist weekdays weekday time
 %type <nl> timelist times time1
 %type <cl> sntags
@@ -1220,12 +1220,12 @@ sntags: /* empty */              { $$ = new_command(SNOOZE, sscript); }
 
                                      $$->u.sn.removeflags = $3;
                                  }
-        | sntags DAYSOFWEEK weekdaylist
+        | sntags WEEKDAYS weekdaylist
                                  {
                                      if ($$->u.sn.days != 0) {
                                          sieveerror_c(sscript,
                                                       SIEVE_DUPLICATE_TAG,
-                                                      ":daysofweek");
+                                                      ":weekdays");
                                      }
 
                                      $$->u.sn.days = $3;
@@ -2426,12 +2426,10 @@ static commandlist_t *build_deleteheader(sieve_script_t *sscript,
 
 static int verify_weekday(sieve_script_t *sscript, char *day)
 {
-    const char *days[] = { "SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT" };
-    int i;
+    int n = day[0] - '0';
 
-    ucase(day);
-    for (i = 0; i < 7; i++) {
-        if (!strcmp(day, days[i])) return (1<<i);
+    if (n >= 0 && n <= 6 && day[1] == '\0') {
+        return (1 << n);
     }
 
     sieveerror_f(sscript, "'%s': not a valid weekday for snooze", day);
@@ -2440,11 +2438,11 @@ static int verify_weekday(sieve_script_t *sscript, char *day)
 
 static int verify_time(sieve_script_t *sscript, char *time)
 {
-    unsigned n, hour = -1, minute = -1;
+    struct tm tm;
+    char *r = strptime(time, "%T", &tm);
 
-    n = sscanf(time, "%02u:%02u", &hour, &minute);
-    if (n == 2 && hour < 24 && minute < 60) {
-        return (60 * hour + minute);
+    if (r && *r == '\0') {
+        return (3600 * tm.tm_hour + 60 * tm.tm_min + tm.tm_sec);
     }
 
     sieveerror_f(sscript, "'%s': not a valid time for snooze", time);

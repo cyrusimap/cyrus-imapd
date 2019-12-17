@@ -1175,7 +1175,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                    STRING mailbox / mailboxid
                    STRINGLIST addflags
                    STRINGLIST removeflags
-                   VALUE daysofweek + (is_mboxid << 7)
+                   VALUE weekdays + (is_mboxid << 7)
                    VALUELIST times
                 */
                 retval->data[codep++].u.op = B_SNOOZE;

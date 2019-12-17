@@ -137,8 +137,10 @@ typedef union
  * version 0x18 scripts implemented x-cyrus-jmapquery
  * version 0x19 scripts implemented x-cyrus-snooze
  * version 0x1A scripts store fileinto mailbox names in UTF8 rather than mUTF7
+ * version 0x1B scripts re-implemented x-cyrus-snooze times as HH:MM:SS
+ *                                                    AND :weekdays as [0, 6]
  */
-#define BYTECODE_VERSION 0x1A
+#define BYTECODE_VERSION 0x1B
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */

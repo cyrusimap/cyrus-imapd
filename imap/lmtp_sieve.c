@@ -1219,11 +1219,11 @@ static int sieve_snooze(void *ac,
 
     if (sn->days & (1 << tm->tm_wday)) {
         /* We have times for today - see if a future one is still available */
-        unsigned now_min = 60 * tm->tm_hour + tm->tm_min;
+        unsigned today_sec = 3600 * tm->tm_hour + 60 * tm->tm_min + tm->tm_sec;
 
         for (i = 0; i < arrayu64_size(sn->times); i++) {
             t = arrayu64_nth(sn->times, i);
-            if (t >= now_min) {
+            if (t >= today_sec) {
                 day_inc = 0;
                 break;
             }
@@ -1243,9 +1243,9 @@ static int sieve_snooze(void *ac,
     }
 
     tm->tm_mday += day_inc;
-    tm->tm_hour = t / 60;
-    tm->tm_min = t % 60;
-    tm->tm_sec = 0;
+    tm->tm_hour = t / 3600;
+    tm->tm_min = (t % 3600) / 60;
+    tm->tm_sec = t % 60;
     until = mktime(tm);
     time_to_iso8601(until, tbuf, sizeof(tbuf), 1);
 
