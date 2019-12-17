@@ -8322,5 +8322,233 @@ sub test_calendarevent_set_utcstart_recur
     $self->assert_not_null($res->[3][1]{notUpdated}{$eventId});
 }
 
+sub test_calendarevent_set_peruser
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    # These properties are set per-user.
+    my $proplist = [
+        'freeBusyStatus',
+        'color',
+        'keywords',
+        'useDefaultAlerts',
+        'alerts',
+    ];
+
+    xlog "Create an event and assert default per-user props";
+    my $defaultPerUserProps = {
+        freeBusyStatus => 'busy',
+        # color omitted by default
+        keywords => undef,
+        useDefaultAlerts => JSON::false,
+        alerts => undef,
+    };
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                1 => {
+                    uid => 'eventuid1local',
+                    calendarId => 'Default',
+                    title => "event1",
+                    start => "2019-12-10T23:30:00",
+                    duration => "PT1H",
+                    timeZone => "Australia/Melbourne",
+                    recurrenceRule => {
+                        frequency => 'daily',
+                        count => 5,
+                    },
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => ['#1'],
+            properties => $proplist,
+        }, 'R2']
+    ]);
+    my $eventId = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($eventId);
+    my $event = $res->[1][1]{list}[0];
+    delete @{$event}{qw/id uid @type/};
+    $self->assert_deep_equals($defaultPerUserProps, $event);
+
+    xlog "Create other user and share owner calendar";
+    my $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.cassandane.#calendars.Default", "other", "lrsiwntex") or die;
+    my $service = $self->{instance}->get_service("http");
+    my $otherJMAPTalk = Mail::JMAPTalk->new(
+        user => 'other',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $otherJMAPTalk->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/calendars',
+        'urn:ietf:params:jmap:calendars',
+    ]);
+
+    xlog "Set and assert per-user properties for owner";
+    my $ownerPerUserProps = {
+        freeBusyStatus => 'free',
+        color => 'blue',
+        keywords => {
+            'ownerKeyword' => JSON::true,
+        },
+        useDefaultAlerts => JSON::true,
+        alerts => {
+            alert1 => {
+                '@type' => 'Alert',
+                trigger => {
+                    '@type' => 'OffsetTrigger',
+                    relativeTo => 'start',
+                    offset => "-PT5M",
+                },
+                action => "email",
+            },
+        },
+    };
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => $ownerPerUserProps,
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => $proplist,
+        }, 'R2']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $event = $res->[1][1]{list}[0];
+    delete @{$event}{qw/id uid @type/};
+    $self->assert_deep_equals($ownerPerUserProps, $event);
+
+    xlog "Assert other user per-user properties for shared event";
+    $res = $otherJMAPTalk->CallMethods([
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [$eventId],
+            properties => $proplist,
+        }, 'R1']
+    ]);
+    $event = $res->[0][1]{list}[0];
+    $self->assert_not_null($event);
+    delete @{$event}{qw/id uid @type/};
+    $self->assert_deep_equals({
+        # inherited from owner
+        color => 'blue',
+        keywords => {
+            'ownerKeyword' => JSON::true,
+        },
+        # not inherited from owner
+        freeBusyStatus => 'busy',
+        useDefaultAlerts => JSON::false,
+        alerts => undef,
+    }, $event);
+
+    xlog "Update and assert per-user props as other user";
+    my $otherPerUserProps = {
+        keywords => {
+            'otherKeyword' => JSON::true,
+        },
+        color => 'red',
+        freeBusyStatus => 'free',
+        useDefaultAlerts => JSON::true,
+        alerts => {
+            alert2 => {
+                '@type' => 'Alert',
+                trigger => {
+                    '@type' => 'AbsoluteTrigger',
+                    when => "2019-03-04T04:05:06Z",
+                },
+                action => "display",
+            },
+        },
+    };
+    $res = $otherJMAPTalk->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => $otherPerUserProps,
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+
+            accountId => 'cassandane',
+            ids => [$eventId],
+            properties => $proplist,
+        }, 'R2']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $event = $res->[1][1]{list}[0];
+    delete @{$event}{qw/id uid @type/};
+    $self->assert_deep_equals($otherPerUserProps, $event);
+
+    xlog "Assert that owner kept their per-user props";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => $proplist,
+        }, 'R1']
+    ]);
+    $event = $res->[0][1]{list}[0];
+    delete @{$event}{qw/id uid @type/};
+    $self->assert_deep_equals($ownerPerUserProps, $event);
+
+    xlog "Remove per-user props as other user";
+    $otherPerUserProps = {
+        keywords => undef,
+        freeBusyStatus => 'free',
+        useDefaultAlerts => JSON::true,
+        alerts => {
+            alert2 => {
+                '@type' => 'Alert',
+                trigger => {
+                    '@type' => 'AbsoluteTrigger',
+                    when => "2019-03-04T04:05:06Z",
+                },
+                action => "display",
+            },
+        },
+    };
+    $res = $otherJMAPTalk->CallMethods([
+        ['CalendarEvent/set', {
+            accountId => 'cassandane',
+            update => {
+                $eventId => {
+                    keywords => undef,
+                    color => undef,
+                },
+            },
+        }, 'R1'],
+        ['CalendarEvent/get', {
+            accountId => 'cassandane',
+            ids => [$eventId],
+            properties => $proplist,
+        }, 'R2']
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$eventId});
+    $event = $res->[1][1]{list}[0];
+    delete @{$event}{qw/id uid @type/};
+    $self->assert_deep_equals($otherPerUserProps, $event);
+
+    xlog "Assert that owner kept their per-user props";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => $proplist,
+        }, 'R1']
+    ]);
+    $event = $res->[0][1]{list}[0];
+    delete @{$event}{qw/id uid @type/};
+    $self->assert_deep_equals($ownerPerUserProps, $event);
+
+}
 
 1;
