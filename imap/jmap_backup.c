@@ -893,38 +893,40 @@ static int recreate_calendar(const mbentry_t *mbentry,
 
     if (r) {
         syslog(LOG_ERR, "IOERROR: failed to create mailbox %s", newmboxname);
-        free(newmboxname);
-        return r;
     }
-
-    r = jmap_openmbox(req, mbentry->name, &mailbox, /*rw*/1);
-    if (r) {
-        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
-    }
-    else {
-        struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
-        const message_t *msg;
-
-        while ((msg = mailbox_iter_step(iter))) {
-            /* XXX  Look for existing resource with same UID */
-
-            r = recreate_resource((message_t *) msg, newmailbox,
-                                  req, 0/*is_replace*/);
-            if (!r) rrock->jrestore->num_undone[DESTROYS]++;
-        }
-        mailbox_iter_done(&iter);
-
-        jmap_closembox(req, &mailbox);
-
-        r = mboxlist_deletemailboxlock(mbentry->name, /*isadmin*/0,
-                                       req->accountid, req->authstate,
-                                       /*mboxevent*/NULL, /*checkacl*/0,
-                                       /*localonly*/0, /*force*/0,
-                                       /*keep_intermediaries*/0);
-    }
-
-    mailbox_close(&newmailbox);
     free(newmboxname);
+
+    if (!r) {
+        r = jmap_openmbox(req, mbentry->name, &mailbox, /*rw*/1);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
+        }
+    }
+    if (r) goto done;
+
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
+    const message_t *msg;
+
+    while ((msg = mailbox_iter_step(iter))) {
+        /* XXX  Look for existing resource with same UID */
+
+        r = recreate_resource((message_t *) msg, newmailbox,
+                              req, 0/*is_replace*/);
+        if (!r) rrock->jrestore->num_undone[DESTROYS]++;
+    }
+    mailbox_iter_done(&iter);
+
+    jmap_closembox(req, &mailbox);
+
+    /* XXX  Do we want to do this? */
+    r = mboxlist_deletemailboxlock(mbentry->name, /*isadmin*/0,
+                                   req->accountid, req->authstate,
+                                   /*mboxevent*/NULL, /*checkacl*/0,
+                                   /*localonly*/0, /*force*/0,
+                                   /*keep_intermediaries*/0);
+
+  done:
+    mailbox_close(&newmailbox);
 
     return r;
 }
