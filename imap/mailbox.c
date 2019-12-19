@@ -3528,6 +3528,7 @@ static int mailbox_update_webdav(struct mailbox *mailbox,
             resource = param->value;
         }
     }
+    if (!resource) resource = message_guid_encode(&new->guid);
 
     webdavdb = mailbox_open_webdav(mailbox);
 
