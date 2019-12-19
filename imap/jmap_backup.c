@@ -1354,6 +1354,8 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
                 syslog(LOG_ERR,
                        "IOERROR: failed to create mailbox %s", newmboxname);
             }
+
+            /* XXX  Copy over any role (specialuse) */
         }
     }
     mbname_free(&mbname);
