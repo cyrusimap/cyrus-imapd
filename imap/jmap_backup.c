@@ -323,7 +323,6 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
     struct restore_rock *rrock = (struct restore_rock *) rock;
     hash_table resources = HASH_TABLE_INITIALIZER;
     struct mailbox *mailbox = NULL;
-    message_t *msg = message_new();
     char *resource = NULL;
     int recno, r;
 
@@ -337,6 +336,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
 
     construct_hash_table(&resources, 64, 0);
 
+    message_t *msg = message_new();
     for (recno = mailbox->i.num_records; recno > 0; recno--) {
         message_set_from_mailbox(mailbox, recno, msg);
 
