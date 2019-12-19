@@ -54,6 +54,7 @@
 
 #include "acl.h"
 #include "append.h"
+#include "arrayu64.h"
 #include "caldav_db.h"
 #include "carddav_db.h"
 #include "hash.h"
@@ -1072,6 +1073,322 @@ done:
     return 0;
 }
 
+struct mail_rock {
+    hash_table *messages;
+    hash_table *drafts;
+    struct buf buf;
+};
+
+struct removed_mail {
+    char *mboxname;
+    time_t removed;
+    uint32_t msgno;
+    uint32_t size;
+};
+
+struct draft {
+    ptrarray_t messages;
+    int ignore;
+};
+
+static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
+{
+    struct restore_rock *rrock = (struct restore_rock *) rock;
+    struct mail_rock *mrock = rrock->rock;
+    struct mailbox *mailbox = NULL;
+    const message_t *msg;
+    time_t timestamp = 0;
+    int userflag = -1, isdestroyed_mbox = 0;
+    int r;
+
+    if (mbentry->mbtype != MBTYPE_EMAIL) return 0;
+
+    if (mboxname_isnotesmailbox(mbentry->name, MBTYPE_EMAIL)) return 0;
+
+    if (mboxname_isdeletedmailbox(mbentry->name, &timestamp)) {
+        if (timestamp <= rrock->jrestore->cutoff) {
+            /* Mailbox was destroyed before cutoff - not interested */
+            return 0;
+        }
+
+        isdestroyed_mbox = 1;
+    }
+
+    r = jmap_openmbox(rrock->req, mbentry->name, &mailbox, /*rw*/1);
+    if (r) {
+        syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mbentry->name);
+        return 0;
+    }
+
+    if (!mailbox_user_flag(mailbox, "$restored", &userflag, 0)) {
+        /* Remove $restored flag from mailbox */
+        mailbox_remove_user_flag(mailbox, userflag);
+    }
+
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
+    while ((msg = mailbox_iter_step(iter))) {
+        const struct index_record *record = msg_record(msg);
+        const char *msgid = NULL;
+        int isdestroyed_msg = isdestroyed_mbox;
+
+        if (!message_get_messageid((message_t *) msg, &mrock->buf)) {
+            msgid = buf_cstring(&mrock->buf);
+        }
+
+        /* Remove $restored flag from message */
+        if (userflag >= 0) {
+            struct index_record *newrecord = (struct index_record *) record;
+            newrecord->user_flags[userflag/32] &= ~(1<<userflag%31);
+        }
+
+        if ((record->system_flags & FLAG_DELETED) ||
+            (record->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+            /* Destroyed message */
+
+            if (record->last_updated <= rrock->jrestore->cutoff) {
+                /* Message has been destroyed before cutoff - ignore */
+                continue;
+            }
+
+            isdestroyed_msg = 1;
+        }
+
+        if (isdestroyed_msg) {
+            ptrarray_t *messages = NULL;
+
+            if (record->system_flags & FLAG_DRAFT) {
+                /* Destroyed draft */
+                if (!msgid) {
+                    /* No way to track this message */
+                    continue;
+                }
+
+                /* See if we already have the Message-ID */
+                struct draft *draft = hash_lookup(msgid, mrock->drafts);
+
+                if (!draft) {
+                    /* Create message list for this Message-ID */
+                    draft = xzmalloc(sizeof(struct draft));
+                    hash_insert(msgid, draft, mrock->drafts);
+                }
+
+                if (!draft->ignore) messages = &draft->messages;
+            }
+            else {
+                /* See if we already have this message GUID */
+                const char *guid = message_guid_encode(&record->guid);
+
+                messages = hash_lookup(guid, mrock->messages);
+                if (!messages) {
+                    /* Create message list for this GUID */
+                    messages = ptrarray_new();
+                    hash_insert(guid, messages, mrock->messages);
+                }
+            }
+
+            if (messages) {
+                /* Add this destroyed message to its list */
+                struct removed_mail *rmail =
+                    xmalloc(sizeof(struct removed_mail));
+                rmail->mboxname = xstrdup(mbentry->name);
+                rmail->removed = record->last_updated;
+                rmail->msgno = record->recno;
+                rmail->size = record->size;
+                ptrarray_append(messages, rmail);
+            }
+        }
+        else if (msgid && !(record->system_flags & FLAG_DRAFT)) {
+            /* Non-draft - see if we already have the Message-ID */
+            struct draft *draft = hash_lookup(msgid, mrock->drafts);
+
+            if (!draft) {
+                /* Create message list for this Message-ID */
+                draft = xzmalloc(sizeof(struct draft));
+                hash_insert(msgid, draft, mrock->drafts);
+            }
+
+            /* Ignore any drafts with this Message-ID */
+            draft->ignore = 1;
+        }
+    }
+
+    mailbox_iter_done(&iter);
+    jmap_closembox(rrock->req, &mailbox);
+
+    return 0;
+}
+
+static int rmail_cmp(const void **a, const void **b)
+{
+    const struct removed_mail *rmail_a = (const struct removed_mail *) *a;
+    const struct removed_mail *rmail_b = (const struct removed_mail *) *b;
+
+    /* Sort latest first */
+    return (rmail_b->removed - rmail_a->removed);
+}
+
+static void restore_mailbox_plan_cb(const char *guid __attribute__((unused)),
+                                    void *data, void *rock)
+{
+    ptrarray_t *messages = (ptrarray_t *) data;
+    hash_table *mailboxes = (hash_table *) rock;
+    time_t last_removed;
+    int i;
+
+    ptrarray_sort(messages, &rmail_cmp);
+
+    /* Add the latest draft (and any with the same removed date) to the plan */
+    for (i = 0; i < ptrarray_size(messages); i++) {
+        struct removed_mail *rmail = ptrarray_nth(messages, i);
+
+        if (i == 0) last_removed = rmail->removed;
+
+        if (rmail->removed == last_removed) {
+            arrayu64_t *msgnos = hash_lookup(rmail->mboxname, mailboxes);
+            if (!msgnos) {
+                /* Create msgno list for this mailbox */
+                msgnos = arrayu64_new();
+                hash_insert(rmail->mboxname, msgnos, mailboxes);
+            }
+
+            /* Add this msgno to the mailbox */
+            arrayu64_append(msgnos, rmail->msgno);
+        }
+
+        free(rmail->mboxname);
+        free(rmail);
+    }
+
+    ptrarray_free(messages);
+}
+
+static void restore_choose_draft_cb(const char *msgid __attribute__((unused)),
+                                    void *data, void *rock)
+{
+    struct draft *draft = (struct draft *) data;
+    ptrarray_t *messages = &draft->messages;
+    struct removed_mail *maxdraft = NULL;
+    int i = 0, num_last = 0;
+
+    /* Add the largest of the last 5 drafts to the plan */
+    if (!draft->ignore) {
+        ptrarray_sort(messages, &rmail_cmp);
+        maxdraft = ptrarray_nth(messages, i++);
+        num_last = 5;
+    }
+
+    for (; i < ptrarray_size(messages); i++) {
+        struct removed_mail *rmail = ptrarray_nth(messages, i);
+        struct removed_mail *freeme = rmail;
+
+        if (i < num_last && rmail->size > maxdraft->size) {
+            freeme = maxdraft;
+            maxdraft = rmail;
+        }
+
+        free(freeme->mboxname);
+        free(freeme);
+    }
+
+    if (maxdraft) {
+        hash_table *mailboxes = (hash_table *) rock;
+        arrayu64_t *msgnos = hash_lookup(maxdraft->mboxname, mailboxes);
+        if (!msgnos) {
+            /* Create msgno list for this mailbox */
+            msgnos = arrayu64_new();
+            hash_insert(maxdraft->mboxname, msgnos, mailboxes);
+        }
+
+        /* Add this msgno to the mailbox */
+        arrayu64_append(msgnos, maxdraft->msgno);
+
+        free(maxdraft->mboxname);
+        free(maxdraft);
+    }
+
+    ptrarray_fini(messages);
+    free(draft);
+}
+
+static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
+{
+    arrayu64_t *msgnos = (arrayu64_t *) data;
+    struct restore_rock *rrock = (struct restore_rock *) rock;
+    jmap_req_t *req = rrock->req;
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    struct mailbox *newmailbox = NULL, *mailbox = NULL;
+    int i, r = 0;
+
+    if (mbname_isdeleted(mbname)) {
+        /* Look for existing mailbox with same (undeleted) name */
+        const char *newmboxname = NULL;
+        mbentry_t *mbentry = NULL;
+
+        mbname_set_isdeleted(mbname, 0);
+        newmboxname = mbname_intname(mbname);
+
+        r = mboxlist_lookup(newmboxname, &mbentry, NULL);
+        mboxlist_entry_free(&mbentry);
+
+        if (!r) {
+            /* Open existing mailbox */
+            r = mailbox_open_iwl(newmboxname, &newmailbox);
+
+            if (r) {
+                syslog(LOG_ERR,
+                       "IOERROR: failed to open mailbox %s", newmboxname);
+            }
+        }
+        else {
+            /* Create the mailbox */
+            struct mboxlock *namespacelock = user_namespacelock(req->accountid);
+
+            r = mboxlist_createmailbox(newmboxname, MBTYPE_EMAIL,
+                                       /*partition*/NULL, /*isadmin*/0,
+                                       req->accountid, req->authstate,
+                                       /*localonly*/0, /*forceuser*/0,
+                                       /*dbonly*/0, /*notify*/0, &newmailbox);
+            mboxname_release(&namespacelock);
+
+            if (r) {
+                syslog(LOG_ERR,
+                       "IOERROR: failed to create mailbox %s", newmboxname);
+            }
+        }
+    }
+    mbname_free(&mbname);
+
+    if (!r) {
+        r = jmap_openmbox(req, mboxname, &mailbox, /*rw*/newmailbox == NULL);
+        if (r) {
+            syslog(LOG_ERR, "IOERROR: failed to open mailbox %s", mboxname);
+        }
+    }
+    if (r) goto done;
+
+    message_t *msg = message_new();
+    for (i = 0; i < arrayu64_size(msgnos); i++) {
+        uint32_t msgno = arrayu64_nth(msgnos, i);
+
+        message_set_from_mailbox(mailbox, msgno, msg);
+        r = recreate_resource(msg, newmailbox, req, 0/*isreplace*/);
+        if (!r) {
+            const struct index_record *record = msg_record(msg);
+            int restore_type =
+                (record->system_flags & FLAG_DRAFT) ? DRAFT_DESTROYS : DESTROYS;
+
+            rrock->jrestore->num_undone[restore_type]++;
+        }
+    }
+    message_unref(&msg);
+
+    jmap_closembox(req, &mailbox);
+
+  done:
+    mailbox_close(&newmailbox);
+    arrayu64_free(msgnos);
+}
+
 static int jmap_backup_restore_mail(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -1084,6 +1401,39 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
         jmap_error(req, err);
         goto done;
     }
+
+    hash_table mailboxes = HASH_TABLE_INITIALIZER;
+    hash_table messages = HASH_TABLE_INITIALIZER;
+    hash_table drafts = HASH_TABLE_INITIALIZER;
+    char *inbox = mboxname_user_mbox(req->accountid, NULL);
+    struct mail_rock mrock =
+      { construct_hash_table(&messages, 128, 0),
+        construct_hash_table(&drafts, 1024, 0), // every Message-ID of non-drafts
+        BUF_INITIALIZER };
+    struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL,
+                                  NULL, NULL, &mrock, NULL };
+
+    /* Find all destroyed messages within our window -
+       remove $restored flag from all messages as a side-effect */
+    mboxlist_mboxtree(inbox, restore_message_list_cb, &rrock,
+                      MBOXTREE_DELETED);
+    buf_free(&mrock.buf);
+    free(inbox);
+
+    /* Find the most recent removedDate for each destroyed message
+       and group messages by mailbox */
+    construct_hash_table(&mailboxes, 32, 0);
+    hash_enumerate(&messages, &restore_mailbox_plan_cb, &mailboxes);
+    free_hash_table(&messages, NULL);
+
+    /* Find the largest of the 5 most recent destroyed copies of a draft
+       and add them to the proper mailbox plan */
+    hash_enumerate(&drafts, &restore_choose_draft_cb, &mailboxes);
+    free_hash_table(&drafts, NULL);
+
+    /* Restore destroyed messages by mailbox */
+    hash_enumerate(&mailboxes, &restore_mailbox_cb, &rrock);
+    free_hash_table(&mailboxes, NULL);
 
     /* Build response */
     jmap_ok(req, jmap_restore_reply(&restore));
