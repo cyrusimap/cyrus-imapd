@@ -5241,3 +5241,8 @@ EXPORTED int message_get_cachebody(message_t *m, const struct body **bodyp)
     *bodyp = m->body;
     return 0;
 }
+
+EXPORTED int message_get_body(message_t *m, struct buf *buf)
+{
+    return message_get_field(m, "rawbody", MESSAGE_RAW, buf);
+}
