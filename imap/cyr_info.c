@@ -46,6 +46,7 @@
 #include <unistd.h>
 #endif
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sysexits.h>
@@ -69,18 +70,24 @@ struct service_item {
 
 static void usage(void)
 {
-    fprintf(stderr, "cyr_info [-C <altconfig>] [-M <cyrus.conf>] [-n servicename] command\n");
+    fprintf(stderr, "cyr_info [-C <altconfig>] [-M <cyrus.conf>] [-n servicename] [-s oldversion] command\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "If you give a service name, it will show config as if you were\n");
-    fprintf(stderr, "running that service, i.e. imap\n");
+    fprintf(stderr, "If you give a service name (-n), it will show config as if you\n");
+    fprintf(stderr, "were running that service, i.e. imap\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "If you give an old version (-s), it will highlight config\n");
+    fprintf(stderr, "options that are new or whose behaviour has changed since that\n");
+    fprintf(stderr, "version.\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Where command is one of:\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "  * conf-all      - listing of all config values\n");
     fprintf(stderr, "  * conf          - listing of non-default config values\n");
+    fprintf(stderr, "  * conf-all      - listing of all config values\n");
     fprintf(stderr, "  * conf-default  - listing of all default config values\n");
     fprintf(stderr, "  * conf-lint     - unknown config keys\n");
     fprintf(stderr, "  * proc          - listing of all open processes\n");
+    fprintf(stderr, "  * version       - Cyrus version\n");
+    fprintf(stderr, "\n");
     cyrus_done();
     exit(-1);
 }
@@ -110,7 +117,15 @@ static void print_overflow(const char *key, const char *val,
     printf("%s: %s\n", key, val);
 }
 
-static void do_conf(int only_changed)
+static void highlight(uint32_t version)
+{
+    printf("(%u.%u.%u) ",
+            (version >> 24) & 0xff,
+            (version >> 16) & 0xff,
+            (version >>  8) & 0xff);
+}
+
+static void do_conf(int only_changed, int want_since, uint32_t since)
 {
     int i;
     unsigned j;
@@ -123,6 +138,8 @@ static void do_conf(int only_changed)
                 if (only_changed) {
                     if (imapopts[i].def.x == imapopts[i].val.x) break;
                 }
+                if (want_since && since < imapopts[i].last_modified)
+                    highlight(imapopts[i].last_modified);
                 printf("%s:", imapopts[i].optname);
                 for (j = 0; imapopts[i].enum_options[j].name; j++) {
                     if (imapopts[i].val.x & (1<<j)) {
@@ -132,10 +149,22 @@ static void do_conf(int only_changed)
                 printf("\n");
                 break;
 
+            case OPT_DURATION:
+                if (only_changed) {
+                    if (0 == strcmpsafe(imapopts[i].def.s, imapopts[i].val.s))
+                        break;
+                }
+                if (want_since && since < imapopts[i].last_modified)
+                    highlight(imapopts[i].last_modified);
+                printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.s);
+                break;
+
             case OPT_ENUM:
                 if (only_changed) {
                     if (imapopts[i].def.e == imapopts[i].val.e) break;
                 }
+                if (want_since && since < imapopts[i].last_modified)
+                    highlight(imapopts[i].last_modified);
                 printf("%s:", imapopts[i].optname);
                 for (j = 0; imapopts[i].enum_options[j].name; j++) {
                     if (imapopts[i].val.e == imapopts[i].enum_options[j].val) {
@@ -150,6 +179,8 @@ static void do_conf(int only_changed)
                 if (only_changed) {
                     if (imapopts[i].def.i == imapopts[i].val.i) break;
                 }
+                if (want_since && since < imapopts[i].last_modified)
+                    highlight(imapopts[i].last_modified);
                 printf("%s: %ld\n", imapopts[i].optname, imapopts[i].val.i);
                 break;
 
@@ -172,6 +203,8 @@ static void do_conf(int only_changed)
                     }
                     free(freeme);
                 }
+                if (want_since && since < imapopts[i].last_modified)
+                    highlight(imapopts[i].last_modified);
                 printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.s ? imapopts[i].val.s : "");
                 break;
 
@@ -179,6 +212,8 @@ static void do_conf(int only_changed)
                 if (only_changed) {
                     if (imapopts[i].def.b == imapopts[i].val.b) break;
                 }
+                if (want_since && since < imapopts[i].last_modified)
+                    highlight(imapopts[i].last_modified);
                 printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.b ? "yes" : "no");
                 break;
 
@@ -191,7 +226,7 @@ static void do_conf(int only_changed)
     config_foreachoverflowstring(print_overflow, NULL);
 }
 
-static void do_defconf(void)
+static void do_defconf(int want_since, uint32_t since)
 {
     int i;
     unsigned j;
@@ -199,6 +234,8 @@ static void do_defconf(void)
     /* XXX: this is semi-sorted, but the overflow strings aren't sorted at all */
 
     for (i = 1; i < IMAPOPT_LAST; i++) {
+        if (want_since && since < imapopts[i].last_modified)
+            highlight(imapopts[i].last_modified);
         switch (imapopts[i].t) {
             case OPT_BITFIELD:
                 printf("%s:", imapopts[i].optname);
@@ -221,10 +258,12 @@ static void do_defconf(void)
                 printf("\n");
                 break;
 
+
             case OPT_INT:
                 printf("%s: %ld\n", imapopts[i].optname, imapopts[i].def.i);
                 break;
 
+            case OPT_DURATION:
             case OPT_STRING:
             case OPT_STRINGLIST:
                 printf("%s: %s\n", imapopts[i].optname, imapopts[i].def.s ? imapopts[i].def.s : "");
@@ -346,14 +385,54 @@ static void do_lint(void)
     }
 }
 
+static uint32_t parse_since_version(const char *str)
+{
+    unsigned parts[3] = {0}, i;
+    const char *p;
+    int saw_digit = 0;
+    size_t pnlen = strlen(PACKAGE_NAME);
+
+    /* politely strip 'cyrus-imapd[- ]' from start of version string */
+    if (!strncmp(str, PACKAGE_NAME, pnlen)
+            && (str[pnlen] == '-' || str[pnlen] == ' '))
+        str += pnlen + 1;
+
+    for (p = str, i = 0; *p; p++) {
+        if (cyrus_isdigit(*p)) {
+            saw_digit++;
+            parts[i] *= 10;
+            parts[i] += *p - '0';
+            if (parts[i] > 255) usage();
+        }
+        else if (*p == '.') {
+            if (!saw_digit) usage();
+            saw_digit = 0;
+            if (++i > 2) break;
+        }
+        else if (*p == '-') {
+            break;
+        }
+        else {
+            usage();
+        }
+    }
+
+    return (parts[0] & 0xff) * 0x01000000
+        +  (parts[1] & 0xff) * 0x00010000
+        +  (parts[2] & 0xff) * 0x00000100
+        +  0;
+}
+
 int main(int argc, char *argv[])
 {
     extern char *optarg;
     int opt;
-    char *alt_config = NULL;
-    char *srvname = "cyr_info";
+    const char *alt_config = NULL;
+    const char *srvname = "cyr_info";
+    uint32_t since = 0;
+    int want_since = 0;
 
-    while ((opt = getopt(argc, argv, "C:M:n:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:M:n:s:")) != EOF) {
         switch (opt) {
         case 'C': /* alt config file */
             alt_config = optarg;
@@ -367,25 +446,36 @@ int main(int argc, char *argv[])
             srvname = optarg;
             break;
 
+        case 's':
+            want_since = 1;
+            since = parse_since_version(optarg);
+            break;
+
         default:
             usage();
             break;
         }
     }
 
-    cyrus_init(alt_config, srvname, 0, 0);
-
     if (optind >= argc)
         usage();
+
+    /* we don't need to read config to handle this one */
+    if (!strcmp(argv[optind], "version")) {
+        printf("%s %s\n", PACKAGE_NAME, CYRUS_VERSION);
+        return 0;
+    }
+
+    cyrus_init(alt_config, srvname, 0, 0);
 
     if (!strcmp(argv[optind], "proc"))
         do_proc();
     else if (!strcmp(argv[optind], "conf-all"))
-        do_conf(0);
+        do_conf(0, want_since, since);
     else if (!strcmp(argv[optind], "conf"))
-        do_conf(1);
+        do_conf(1, want_since, since);
     else if (!strcmp(argv[optind], "conf-default"))
-        do_defconf();
+        do_defconf(want_since, since);
     else if (!strcmp(argv[optind], "conf-lint"))
         do_lint();
     else

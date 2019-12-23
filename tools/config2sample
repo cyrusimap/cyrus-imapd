@@ -1,8 +1,6 @@
-#!/bin/sh
-exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
-#!perl -w
+#!/usr/bin/perl
 #
-# Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+# Copyright (c) 1994-2019 Carnegie Mellon University.  All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -67,6 +65,7 @@ our $inl = 0;
 our $section = 0;
 
 my $blank = "rst";
+# XXX get rid of cvs id cruft
 my $version = "\$Revision: 1.6 $blank";
 
 sub print_values {
@@ -291,7 +290,22 @@ while (<>) {
     if ($mode == 0) {
         # look for { option, default, type [enums] }; don't output until we
         # hit a comment
-        if (m|{\s*\"(.*?)\"\s*,\s*\"?(.*?)\"?\s*,\s*(.*?)\s*(\(.*\))?\s*}|) {
+        # n.b. we explicitly do not match deprecated options here
+        if (m|
+                {           # opening curly
+                \s*         # skip leading whitespace
+                \"(.*?)\"   # $1: option name (don't capture quotes)
+                \s*,\s*     # comma, optional whitespace
+                \"?(.*?)\"? # $2: default value (don't capture quotes)
+                \s*,\s*     # comma, optional whitespace
+                (.*?)       # $3: option type
+                \s*         # optional whitespace
+                (\(.*\))?   # $4: list of permitted values, n.b. perl syntax!
+                \s*,\s*     # comma, optional whitespace
+                \"[^\"]+\"  # last modified version
+                \s*         # optional whitespace
+                }           # closing curly
+            |x) {
             $opt = $1;
             my $def = $2 eq "NULL" ? "<none>" : $2;
             if ($def eq "") { $def = "<empty string>" }
