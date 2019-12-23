@@ -40,6 +40,7 @@
 package Cassandane::Cyrus::Info;
 use strict;
 use warnings;
+use Data::Dumper;
 
 use lib '.';
 use base qw(Cassandane::Cyrus::TestCase);
@@ -122,7 +123,7 @@ sub test_info_lint
 {
     my ($self) = @_;
 
-    xlog $self, "test 'cyr_info lint' in the simplest case";
+    xlog $self, "test 'cyr_info conf-lint' in the simplest case";
 
     my @output = $self->run_cyr_info('conf-lint');
     $self->assert_deep_equals([], \@output);
@@ -137,11 +138,37 @@ sub test_info_lint_junk
 {
     my ($self) = @_;
 
-    xlog $self, "test 'cyr_info lint' with junk in the config";
+    xlog $self, "test 'cyr_info conf-lint' with junk in the config";
 
     my @output = $self->run_cyr_info('conf-lint');
     $self->assert_deep_equals(["trust_fund: street art\n"], \@output);
 }
 
+sub test_info_lint_channels
+    :NoStartInstances
+{
+    my ($self) = @_;
+
+    $self->config_set(
+        'sync_log_channels' => 'banana',
+        'banana_sync_host' => 'banana.internal',
+        'banana_sync_trust_fund' => 'street art',
+        'banana_tcp_keepalive' => 'yes',
+    );
+
+    $self->_start_instances();
+
+    xlog $self, "test 'cyr_info conf-lint' with channel-specific sync config";
+
+    my @output = $self->run_cyr_info('conf-lint');
+
+    $self->assert_deep_equals(
+        [ sort(
+            "banana_sync_trust_fund: street art\n",
+            "banana_tcp_keepalive: yes\n",
+        ) ],
+        [ sort @output ]
+    );
+}
 
 1;
