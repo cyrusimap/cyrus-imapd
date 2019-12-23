@@ -330,10 +330,16 @@ static int known_saslkey(const char *key __attribute__((unused)))
     return 1;
 }
 
+struct lint_callback_rock {
+    struct service_item *known_services;
+    strarray_t *known_channels;
+};
+
 static void lint_callback(const char *key, const char *val, void *rock)
 {
-    struct service_item *known_services = (struct service_item *)rock;
+    struct lint_callback_rock *cbrock = (struct lint_callback_rock *) rock;
     struct service_item *svc;
+    int i;
 
     if (known_overflowkey(key)) return;
 
@@ -341,11 +347,32 @@ static void lint_callback(const char *key, const char *val, void *rock)
         if (known_saslkey(key+5)) return;
     }
 
-    for (svc = known_services; svc; svc = svc->next) {
+    for (svc = cbrock->known_services; svc; svc = svc->next) {
         if (!strncmp(key, svc->prefix, svc->prefixlen)) {
             /* check if it's a known key */
             if (known_regularkey(key+svc->prefixlen)) return;
             if (known_overflowkey(key+svc->prefixlen)) return;
+        }
+    }
+
+    for (i = 0; i < strarray_size(cbrock->known_channels); i++) {
+        const char *channel = strarray_nth(cbrock->known_channels, i);
+        size_t channel_len = strlen(channel);
+        if (!strcmp(channel, "\"\"")) {
+            /* ignore default channel, it cannot be a prefix */
+            continue;
+        }
+        else if (!strncmp(key, channel, channel_len)) {
+            /* channel prefix must be separated by an underscore */
+            if (strlen(key) <= channel_len + 1) break;
+            if (key[channel_len] != '_') break;
+
+            /* channel prefix only applies to sync_* options */
+            if (strncmp(key + channel_len + 1, "sync_", strlen("sync_"))) break;
+
+            /* check if it's a known key */
+            if (known_regularkey(key + channel_len + 1)) return;
+            if (known_overflowkey(key + channel_len + 1)) return;
         }
     }
 
@@ -366,23 +393,29 @@ static void add_service(const char *name,
 
 static void do_lint(void)
 {
-    struct service_item *ks = NULL;
+    struct lint_callback_rock rock = {0};
 
     /* pull the config from cyrus.conf to get service names */
-    masterconf_getsection("SERVICES", &add_service, &ks);
+    masterconf_getsection("SERVICES", &add_service, &rock.known_services);
+
+    /* read channels from sync_log_channels config */
+    rock.known_channels = strarray_split(config_getstring(IMAPOPT_SYNC_LOG_CHANNELS),
+                                         " ", 0);
 
     /* check all overflow strings */
-    config_foreachoverflowstring(lint_callback, ks);
+    config_foreachoverflowstring(lint_callback, &rock);
 
     /* XXX - check directories and permissions? */
 
     /* clean up */
+    struct service_item *ks = rock.known_services;
     while (ks) {
         struct service_item *next = ks->next;
         free(ks->prefix);
         free(ks);
         ks = next;
     }
+    strarray_free(rock.known_channels);
 }
 
 static uint32_t parse_since_version(const char *str)
