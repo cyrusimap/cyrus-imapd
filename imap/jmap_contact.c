@@ -2870,9 +2870,7 @@ static int _blob_to_card(struct jmap_req *req,
     if (!blobid) goto done;
 
     /* Find body part containing blob */
-    if (!strcmp(req->method, "Contact/copy")) {
-        accountid = json_string_value(json_object_get(req->args, "fromAccountId"));
-    }
+    accountid = json_string_value(json_object_get(file, "accountId"));
     r = jmap_findblob(req, accountid, blobid,
                       &mbox, &mr, &body, &part, &blob_buf);
     if (r) goto done;
@@ -3537,6 +3535,12 @@ static void _contact_copy(jmap_req_t *req,
     /* Patch JMAP event */
     json_t *src_card = jmap_contact_from_vcard(vcard->objects, src_mbox, &record);
     if (src_card) {
+        json_t *avatar = json_object_get(src_card, "avatar");
+        if (avatar) {
+            /* _blob_to_card() needs to know in which account to find blob */
+            json_object_set(avatar, "accountId",
+                            json_object_get(req->args, "fromAccountId"));
+        }
         json_object_del(src_card, "x-href");  // immutable and WILL change
         json_object_del(src_card, "x-hasPhoto");  // immutable and WILL change
         dst_card = jmap_patchobject_apply(src_card, jcard, NULL);
