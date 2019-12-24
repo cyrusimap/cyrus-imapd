@@ -66,6 +66,7 @@ sub new
                  conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no',
+                 notesmailbox => 'Notes',
                  jmap_nonstandard_extensions => 'yes');
 
     return $class->SUPER::new({
@@ -86,6 +87,7 @@ sub set_up
         'https://cyrusimap.org/ns/jmap/backup',
         'https://cyrusimap.org/ns/jmap/contacts',
         'https://cyrusimap.org/ns/jmap/calendars',
+        'https://cyrusimap.org/ns/jmap/notes',
     ]);
 }
 
@@ -692,6 +694,156 @@ sub test_restore_mail
     $self->assert_str_equals("$emailId5", $res->[2][1]{notFound}[1]);
     $self->assert_str_equals("$draftId1", $res->[2][1]{notFound}[2]);
     $self->assert_str_equals("$draftId3", $res->[2][1]{notFound}[3]);
+}
+
+sub test_restore_notes
+    :min_version_3_1 :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog "create notes";
+    my $res = $jmap->CallMethods([['Notes/set', {create => {
+                        "a" => {title => "a"},
+                        "b" => {title => "b"},
+                        "c" => {title => "c"},
+                        "d" => {title => "d"}
+                    }}, "R1"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('R1', $res->[0][2]);
+    my $noteA = $res->[0][1]{created}{"a"}{id};
+    my $noteB = $res->[0][1]{created}{"b"}{id};
+    my $noteC = $res->[0][1]{created}{"c"}{id};
+    my $noteD = $res->[0][1]{created}{"d"}{id};
+
+    xlog "destroy note A, update note B";
+    $res = $jmap->CallMethods([['Notes/set', {
+                    destroy => [$noteA],
+                    update => {$noteB => {title => "B"}}
+                }, "R2"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('R2', $res->[0][2]);
+
+    xlog "get notes";
+    $res = $jmap->CallMethods([
+        ['Notes/get', {
+            properties => ['title', 'isFlagged'],
+         }, "R3"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Notes/get', $res->[0][0]);
+    $self->assert_str_equals('R3', $res->[0][2]);
+
+    my @expect = sort { $a->{title} cmp $b->{title} } @{$res->[0][1]{list}};
+
+    sleep 1;
+    xlog "destroy note C, update notes B and D, create note E";
+    $res = $jmap->CallMethods([['Notes/set', {
+                    destroy => [$noteC],
+                    update => {
+                        $noteB => {isFlagged => JSON::true},
+                        $noteD => {isFlagged => JSON::true},
+                    },
+                    create => {
+                        "e" => {title => "e"}
+                    }
+                }, "R4"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Notes/set', $res->[0][0]);
+    $self->assert_str_equals('R4', $res->[0][2]);
+    my $noteE = $res->[0][1]{created}{"e"}{id};
+    my $state = $res->[0][1]{newState};
+
+    xlog "restore notes prior to most recent changes";
+    $res = $jmap->CallMethods([['Backup/restoreNotes', {
+                    undoPeriod => "PT1S",
+                    undoCreate => JSON::true,
+                    undoUpdate => JSON::true,
+                    undoDestroy => JSON::true
+                }, "R5"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Backup/restoreNotes', $res->[0][0]);
+    $self->assert_str_equals('R5', $res->[0][2]);
+    $self->assert_num_equals(1, $res->[0][1]{numCreatesUndone});
+    $self->assert_num_equals(2, $res->[0][1]{numUpdatesUndone});
+    $self->assert_num_equals(1, $res->[0][1]{numDestroysUndone});
+
+    xlog "get restored notes";
+    $res = $jmap->CallMethods([
+        ['Notes/get', {
+            properties => ['title', 'isFlagged'],
+         }, "R6"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Notes/get', $res->[0][0]);
+    $self->assert_str_equals('R6', $res->[0][2]);
+
+    my @got = sort { $a->{title} cmp $b->{title} } @{$res->[0][1]{list}};
+    $self->assert_num_equals(scalar @expect, scalar @got);
+    $self->assert_deep_equals(\@expect, \@got);
+
+    xlog "get note updates";
+    $res = $jmap->CallMethods([
+        ['Notes/changes', {
+            sinceState => $state
+         }, "R6.5"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Notes/changes', $res->[0][0]);
+    $self->assert_str_equals('R6.5', $res->[0][2]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{created}});
+    $self->assert_str_equals($noteC, $res->[0][1]{created}[0]);
+    $self->assert_num_equals(2, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{destroyed}});
+    $self->assert_str_equals($noteE, $res->[0][1]{destroyed}[0]);
+    $state = $res->[0][1]{newState};
+
+    xlog "restore notes to before initial creation";
+    $res = $jmap->CallMethods([['Backup/restoreNotes', {
+                    undoPeriod => "P1D",
+                    undoCreate => JSON::true,
+                    undoUpdate => JSON::true,
+                    undoDestroy => JSON::true
+                }, "R7"]]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Backup/restoreNotes', $res->[0][0]);
+    $self->assert_str_equals('R7', $res->[0][2]);
+    $self->assert_num_equals(3, $res->[0][1]{numCreatesUndone});
+    $self->assert_num_equals(0, $res->[0][1]{numUpdatesUndone});
+    $self->assert_num_equals(0, $res->[0][1]{numDestroysUndone});
+
+    xlog "get restored notes";
+    $res = $jmap->CallMethods([
+        ['Notes/get', {
+            properties => ['title', 'isFlagged'],
+         }, "R8"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Notes/get', $res->[0][0]);
+    $self->assert_str_equals('R8', $res->[0][2]);
+    $self->assert_deep_equals([], $res->[0][1]{list});
+
+    xlog "get note updates";
+    $res = $jmap->CallMethods([
+        ['Notes/changes', {
+            sinceState => $state
+         }, "R8.5"]
+    ]);
+    $self->assert_not_null($res);
+    $self->assert_str_equals('Notes/changes', $res->[0][0]);
+    $self->assert_str_equals('R8.5', $res->[0][2]);
+    $self->assert_str_equals($state, $res->[0][1]{oldState});
+    $self->assert_str_not_equals($state, $res->[0][1]{newState});
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreChanges});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
+    $self->assert_num_equals(0, scalar @{$res->[0][1]{updated}});
+    $self->assert_num_equals(3, scalar @{$res->[0][1]{destroyed}});
+    $state = $res->[0][1]{newState};
 }
 
 1;
