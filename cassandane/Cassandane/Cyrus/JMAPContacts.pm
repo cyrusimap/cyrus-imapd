@@ -2237,6 +2237,7 @@ sub test_contact_copy
     xlog $self, "create shared accounts";
     $admintalk->create("user.other");
     $admintalk->create("user.other2");
+    $admintalk->create("user.other3");
 
     my $othercarddav = Net::CardDAVTalk->new(
         user => "other",
@@ -2258,10 +2259,22 @@ sub test_contact_copy
         expandurl => 1,
     );
 
+    my $other3carddav = Net::CardDAVTalk->new(
+        user => "other3",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
     xlog $self, "share addressbooks";
     $admintalk->setacl("user.other.#addressbooks.Default",
                        "cassandane" => 'lrswipkxtecdn') or die;
     $admintalk->setacl("user.other2.#addressbooks.Default",
+                       "cassandane" => 'lrswipkxtecdn') or die;
+    $admintalk->setacl("user.other3.#addressbooks.Default",
                        "cassandane" => 'lrswipkxtecdn') or die;
 
     # avatar
@@ -2316,6 +2329,7 @@ sub test_contact_copy
     $self->assert_str_equals('foo', $res->[0][1]{list}[0]{firstName});
     $self->assert_str_equals($blobid, $res->[0][1]{list}[0]{avatar}{blobId});
     $self->assert_str_equals('foo', $res->[1][1]{list}[0]{firstName});
+    $self->assert_str_equals($blobid, $res->[1][1]{list}[0]{avatar}{blobId});
 
     xlog $self, "move card $cardId with changes";
     $res = $jmap->CallMethods([['Contact/copy', {
@@ -2328,8 +2342,7 @@ sub test_contact_copy
                 avatar => JSON::null,
                 nickname => "xxxxx"
             },
-        },
-        onSuccessDestroyOriginal => JSON::true,
+        }
     },
     "R1"]]);
     $self->assert_not_null($res->[0][1]{created});
@@ -2348,6 +2361,63 @@ sub test_contact_copy
     $self->assert_str_equals('foo', $res->[0][1]{list}[0]{firstName});
     $self->assert_str_equals('xxxxx', $res->[0][1]{list}[0]{nickname});
     $self->assert_null($res->[0][1]{list}[0]{avatar});
+    $self->assert_str_equals('foo', $res->[1][1]{list}[0]{firstName});
+
+    my $other3Jmap = Mail::JMAPTalk->new(
+        user => 'other3',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/jmap/',
+    );
+    $other3Jmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+
+    # avatar
+    xlog $self, "upload avatar for other3";
+    $res = $other3Jmap->Upload("some other photo", "image/jpeg");
+    $blobid = $res->{blobId};
+
+    $admintalk->setacl("user.other3.#jmap",
+                       "cassandane" => 'lrswipkxtecdn') or die;
+
+    xlog $self, "move card $cardId with different avatar";
+    $res = $jmap->CallMethods([['Contact/copy', {
+        fromAccountId => 'cassandane',
+        accountId => 'other3',
+        create => {
+            1 => {
+                id => $cardId,
+                addressbookId => "Default",
+                avatar => {
+                    blobId => "$blobid",
+                    size => 16,
+                    type => "image/jpeg",
+                    name => JSON::null
+                }
+            },
+        },
+        onSuccessDestroyOriginal => JSON::true,
+    },
+    "R1"]]);
+    $self->assert_not_null($res->[0][1]{created});
+    $copiedCardId = $res->[0][1]{created}{"1"}{id};
+
+    $res = $jmap->CallMethods([
+        ['Contact/get', {
+            accountId => 'other3',
+            ids => [$copiedCardId],
+        }, 'R1'],
+        ['Contact/get', {
+            accountId => undef,
+            ids => [$cardId],
+        }, 'R2'],
+    ]);
+    $self->assert_str_equals('foo', $res->[0][1]{list}[0]{firstName});
+    $self->assert_str_equals($blobid, $res->[0][1]{list}[0]{avatar}{blobId});
     $self->assert_str_equals($cardId, $res->[1][1]{notFound}[0]);
 }
 
