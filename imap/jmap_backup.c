@@ -435,6 +435,7 @@ static int recreate_resource(message_t *msg, struct mailbox *tomailbox,
 
         /* mark as undeleted */
         strarray_remove_all_case(flags, "\\Deleted");
+        strarray_remove_all_case(flags, "DAV:unbind");
 
         /* append the message to the mailbox. */
         r = append_fromstage(&as, &body, stage, /*internaldate*/0,
